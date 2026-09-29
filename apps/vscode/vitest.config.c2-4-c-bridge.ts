@@ -389,6 +389,23 @@ export default defineConfig({
 			// PendingPromptsController + real drain + real runTurn
 			// re-entry chain.
 			"src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01 / PCRS02C01:
+			// Real-host production-shape seam proof. Closes the
+			// HALT_ACT_EVIDENCE_CONTRACT_MISMATCH raised against the
+			// PCRS02 suite committed in 4a4359bd5: drives the REAL
+			// `LocalRuntimeHost.runTurn` chain with the
+			// `onExecuteTurnPreludeEnter` hook wired through the
+			// production capture helper, then asserts the prelude
+			// capture fires at the first executable line of
+			// `executeTurn` (the corrected placement). Also asserts
+			// the STALL fingerprint (prelude fires, agent_turn_done
+			// absent when agent.run hangs), and ablations both with
+			// and without the prelude hook. Runs only under this
+			// bridge config because the test imports the REAL
+			// `LocalRuntimeHost` via the
+			// `@cline-internal/core/runtime/host/local-runtime-host`
+			// alias declared only here.
+			"src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

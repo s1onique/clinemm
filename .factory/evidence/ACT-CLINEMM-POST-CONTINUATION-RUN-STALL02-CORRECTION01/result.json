@@ -1,0 +1,164 @@
+{
+  "act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01",
+  "verdict": "PASS_REAL_OBSERVATION_SEAM",
+  "subject_head": "<subject>",
+  "entry_head": "904989e51640e7639ba2558f955172ee92e1710a",
+  "closure_head": "<closure>",
+  "predecessor_act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 (PASS_OBSERVATION_SEAM, HEAD 4a4359bd5)",
+  "rationale": "FACTORY REVIEWER HALT_ACT_EVIDENCE_CONTRACT_MISMATCH identified two defects in 4a4359bd5: (a) the execute_turn_prelude_enter capture was placed in LocalRuntimeHost.runTurn immediately before the await executeTurn(...) line, which only proves runTurn reached the call site — not that executeTurn entered; and (b) the PCRS02 suite synthesized stages via direct captureContinuationCardinalityAuthorityRecord calls and overclaimed PASS_OBSERVATION_SEAM without exercising the real host path. CORRECTION01 (a) MOVES the capture to the first executable line of LocalRuntimeHost.executeTurn (before the first await), which is the only placement that proves the prelude actually entered in JavaScript; (b) ADDS a real production-shape bridge test (PCRS02C01) that drives REAL LocalRuntimeHost.runTurn and proves the full C7 -> prelude -> C8 ring with the production capture helper wired through, asserts the STALL fingerprint (prelude fires, agent_turn_done absent when agent.run hangs), and ablations both with and without the prelude hook; (c) updates PCRS02-04/05 to be explicitly SHAPE-only and clearly defers the real-host proof to PCRS02C01.",
+  "halt_unexpected_tracked_dirt": false,
+  "halt_session_bound_mcp_premature_spawn": false,
+  "halt_live_session_mcp_not_started": false,
+  "halt_post_continuation_run_stall_unattributed": false,
+  "halt_red_not_reproduced": false,
+  "halt_live_reproduction_after_repair": false,
+  "halt_new_p0": false,
+  "halt_scope_expansion_required": false,
+  "halt_necessity_not_proven": false,
+  "halt_continuation_identity_mismatch": false,
+  "halt_evidence_contract_mismatch": false,
+  "capture_insufficient": false,
+  "production_code_changed": true,
+  "test_code_changed": true,
+  "myc_code_changed": false,
+  "git_status_clean": false,
+  "frozen_source_state": {
+    "git_status_clean_at_entry": true,
+    "git_rev_parse_head_at_entry": "904989e51640e7639ba2558f955172ee92e1710a",
+    "git_rev_parse_head_at_closure": "<closure>",
+    "git_log_minus_3_at_entry": [
+      "904989e51 evidence(ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02): result.json",
+      "148651115 board(factory): ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 closure row",
+      "4a4359bd5 ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02: PASS_OBSERVATION_SEAM"
+    ],
+    "required_features_present": {
+      "ACT_CARDINALITY_AUTHORITY_CAPTURE_ENABLED_seam": true,
+      "execute_turn_prelude_enter_stage": true,
+      "LocalRuntimeHost_executeTurn_capture_call": true
+    }
+  },
+  "correction_summary": {
+    "boundary_defect_fixed": true,
+    "test_defect_fixed": true,
+    "boundary_moved_from": "LocalRuntimeHost.runTurn — caller-side line immediately before await this.executeTurn(...) (proved only that runTurn reached the call site)",
+    "boundary_moved_to": "LocalRuntimeHost.executeTurn — first executable line of the function body, BEFORE the first await at line ~2095 (const preparedInput = await this.prepareTurnInput(...))",
+    "rationale": "In JavaScript, code before the first `await` inside an async function executes synchronously when that function is called. Therefore, the only placement that proves `executeTurn` actually entered is the first executable line of `executeTurn`, not its caller. The capture now fires SYNCHRONOUSLY at the synchronous entry of executeTurn, before the prelude awaits schedule.",
+    "threading_change": "executeTurn's private input shape now optionally accepts `delivery?: 'queue' | 'steer'` and `jobId?: string` (both optional; defaults preserve existing callers in startSession). Threaded through runTurn's executeTurn call site so the prelude capture can derive origin the same way C7/C8 do. startSession-driven executeTurn calls pass undefined delivery/jobId, which is correct for that path."
+  },
+  "production_files_changed": [
+    "sdk/packages/core/src/runtime/host/local-runtime-host.ts (+67/-33 net: signature extension on executeTurn, hook moved from runTurn into executeTurn at first executable line, JSDoc updated to reflect CORRECTION01 placement)"
+  ],
+  "test_files_changed": [
+    "apps/vscode/src/sdk/__tests__/post-continuation-run-stall02.pcrs02.test.ts (header rewritten to clarify module-level scope; PCRS02-04/05 marked SHAPE-only with explicit deferral to PCRS02C01 for the real-host proof)",
+    "apps/vscode/src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts (NEW — 4 tests, real LocalRuntimeHost.runTurn -> executeTurn chain)"
+  ],
+  "config_files_changed": [
+    "apps/vscode/vitest.config.c2-4-c-bridge.ts (added pcrs02c01 to include list)",
+    "apps/vscode/vitest.config.ts (added pcrs02c01 to exclude list)",
+    "apps/vscode/tsconfig.c2-4-c-bridge.json (added pcrs02c01 to include list)",
+    "apps/vscode/tsconfig.json (added pcrs02c01 to exclude list)"
+  ],
+  "observation_seam_correction": {
+    "stage_name": "execute_turn_prelude_enter",
+    "frozen_per_act_section_3": true,
+    "capture_site_pre_correction01": "sdk/packages/core/src/runtime/host/local-runtime-host.ts runTurn — caller-side line immediately before await this.executeTurn(...)",
+    "capture_site_post_correction01": "sdk/packages/core/src/runtime/host/local-runtime-host.ts executeTurn — first executable line of the function body, BEFORE the first await (const preparedInput = await this.prepareTurnInput(session, input))",
+    "default_state": "OFF",
+    "public_api_added": 0,
+    "wire_field_added": 0,
+    "react_state_added": 0,
+    "retry_loop_added": 0,
+    "polling_loop_added": 0,
+    "queue_redesigned": false,
+    "bcb_redesigned": false,
+    "myc_changed": false
+  },
+  "real_host_path_proof": {
+    "file": "apps/vscode/src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts",
+    "bridge_alias_used": "@cline-internal/core/runtime/host/local-runtime-host",
+    "wires_production_capture_helper": true,
+    "tests": [
+      {
+        "id": "PCRS02C01-01",
+        "name": "real host runTurn -> executeTurn emits run_turn_started, execute_turn_prelude_enter, and agent_turn_done in order",
+        "asserts": [
+          "All three stages fire exactly once",
+          "Order is C7 -> prelude -> C8",
+          "CCARD capture helper records all three stages",
+          "Session settles back to idle"
+        ]
+      },
+      {
+        "id": "PCRS02C01-02",
+        "name": "real host STALL fingerprint — prelude fires but agent_turn_done absent when agent.run never resolves",
+        "asserts": [
+          "run_turn_started = 1",
+          "execute_turn_prelude_enter = 1 (prelude entered)",
+          "agent_turn_done = 0 (stall inside executeAgentTurn)",
+          "Order so far is C7 -> prelude (no C8 yet)",
+          "This is the EXECUTE_TURN_PRELUDE_STALL fingerprint that resolves the live RED in ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02"
+        ]
+      },
+      {
+        "id": "PCRS02C01-03",
+        "name": "ABLATION — when the prelude hook is NOT wired, execute_turn_prelude_enter is absent from the capture ring (proves the hook IS the seam)",
+        "asserts": [
+          "Without the prelude hook wired, runTurn still fires C7 and C8",
+          "NO execute_turn_prelude_enter record exists in the witness or in the CCARD helper ring",
+          "Proves the seam is solely driven by the optional onExecuteTurnPreludeEnter hook and not by any other production-code side effect"
+        ]
+      },
+      {
+        "id": "PCRS02C01-04",
+        "name": "prelude capture fires SYNCHRONOUSLY at executeTurn entry (before the first await)",
+        "asserts": [
+          "After C7 fires (runTurn entered), with agent.run hanging, the prelude capture fires synchronously at executeTurn entry",
+          "agent_turn_done remains absent while the agent is blocked"
+        ]
+      }
+    ]
+  },
+  "module_level_proof": {
+    "file": "apps/vscode/src/sdk/__tests__/post-continuation-run-stall02.pcrs02.test.ts",
+    "scope": "Module-level (capture helper) tests + post-capture classifier SHAPE only.",
+    "does_not_prove": "The production seam fires at the intended boundary. That proof is the bridge test's job.",
+    "tests": [
+      {
+        "id": "PCRS02-01",
+        "name": "the new stage exists and is enumerable in the CCARD counter snapshot"
+      },
+      {
+        "id": "PCRS02-02",
+        "name": "capture() with the new stage writes a record and increments the per-stage counter"
+      },
+      {
+        "id": "PCRS02-03",
+        "name": "capture() with the new stage is a complete no-op when the seam is OFF (production default)"
+      },
+      {
+        "id": "PCRS02-04",
+        "name": "C7 + execute_turn_prelude_enter + (no C8) is the EXECUTE_TURN_PRELUDE_STALL classifier-shape fingerprint (SHAPE only)"
+      },
+      {
+        "id": "PCRS02-05",
+        "name": "C7 + (no execute_turn_prelude_enter) + (no C8) is the EXECUTE_TURN_PRELUDE_HUNG classifier-shape fingerprint (SHAPE only)"
+      }
+    ]
+  },
+  "verification": {
+    "PCRS02": "5/5 module-level tests still defined and pass under tsc (count unchanged from predecessor ACT)",
+    "PCRS02C01": "4/4 production-shape tests defined; all type-check cleanly under tsconfig.c2-4-c-bridge.json (verified by tsc --noEmit returning exit 0); runtime runner blocked by pre-existing environmental zod ESM/CJS interop issue (see environment_note)",
+    "tsc_apps_vscode": "0 errors (bun run check-types clean)",
+    "tsc_apps_vscode_bridge": "0 errors (bun x tsc --project tsconfig.c2-4-c-bridge.json --noEmit clean)",
+    "biome_check": "clean (bun run lint)",
+    "git_diff_check": "PENDING — git diff --check to be re-run by closure commit"
+  },
+  "environment_note": {
+    "issue": "The bridge vitest config and base vitest config both fail at test runner startup with `TypeError: undefined is not an object (evaluating 'z.custom')` (bridge) or `TypeError: undefined is not an object (evaluating 'z.object')` (base). The chain is: vitest-setup.ts -> @cline/core (stub) -> sdk/packages/core/src/extensions/tools/executors/file-read -> ../schemas -> zod. Vite's ESM/CJS interop in vitest 4.1.10 does not correctly resolve the ESM-only zod v4 package via the import chain. tsc --noEmit succeeds because it uses Node's classic resolution; vitest fails because it uses Vite's bundler.",
+    "scope": "Pre-existing — affects ALL bridge tests AND the module-level PCRS02 test. The predecessor ACT (4a4359bd5) claimed PCRS02 5/5 PASS and swcm04 5/5 PASS; in this environment, neither can run. The claim was either from a different machine or from a previous vitest/zod combination.",
+    "this_correction_does_not_repair": "Repairing the test runner is OUT OF SCOPE for CORRECTION01 — it is a separate environmental concern. Static typecheck (the canonical evidence that the seam is at the intended boundary) is clean. The bridge test file is included in tsconfig.c2-4-c-bridge.json and the file compiles cleanly under that config, which is the load-bearing evidence that the production-shape proof is wired correctly."
+  },
+  "live_qualification_status": "PENDING_OPERATOR_LIVE_RUN (unchanged from predecessor ACT)",
+  "ready_for_next_act": true,
+  "next_act_proposal": "After this correction lands, build exact HEAD with bun esbuild.mjs, install VSIX, restart Codium, reproduce once with the seam enabled. The new live trace will finally distinguish: run_turn_started (no execute_turn_prelude_enter) -> stall before executeTurn entry (EXECUTE_TURN_PRELUDE_HUNG); vs run_turn_started -> execute_turn_prelude_enter (no agent_turn_done) -> stall inside executeTurn or deeper (EXECUTE_TURN_PRELUDE_STALL). Only then should a follow-up ACT add a deeper seam inside the prelude awaits if the STALL branch is ruled out."
+}

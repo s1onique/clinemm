@@ -158,7 +158,19 @@
 		// test can deterministically force BOTH orderings:
 		// enqueue-during-run and turn-done-then-enqueue. Drives the
 		// REAL LocalRuntimeHost + REAL PendingPromptsController.
-		"src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01 / PCRS02C01:
+		// Real-host production-shape seam proof for the
+		// `execute_turn_prelude_enter` capture. Drives the REAL
+		// `LocalRuntimeHost.runTurn` chain with the
+		// `onExecuteTurnPreludeEnter` hook wired through the
+		// production capture helper. Asserts the corrected
+		// placement (first executable line of `executeTurn`),
+		// the STALL fingerprint (prelude fires, agent_turn_done
+		// absent), the synchronous-boundary property, and the
+		// ablation (no prelude record when the hook is not
+		// wired).
+		"src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

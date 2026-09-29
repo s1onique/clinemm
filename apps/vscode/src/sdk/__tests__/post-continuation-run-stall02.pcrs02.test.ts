@@ -1,15 +1,43 @@
 /**
- * ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 — RED witness + GREEN regression.
+ * ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 + CORRECTION01 —
+ * Module-level (capture helper) tests + post-capture classifier
+ * shape.
  *
- * Pins the BOUNDED enter-only observation seam that makes the first
- * currently-unobservable boundary after C7 (`run_turn_started`)
- * observable in the CCARD JSONL.
+ * This file proves only:
+ *   - the stage is enumerable in the CCARD counter snapshot,
+ *   - the capture helper records the stage and increments the
+ *     counter, and
+ *   - the post-capture classifier SHAPE recognizes both
+ *     EXECUTE_TURN_PRELUDE_STALL and EXECUTE_TURN_PRELUDE_HUNG
+ *     fingerprints.
  *
- * Frozen invariant (per §3 of ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02):
- *   C7 (run_turn_started) fires at runTurn entry.
- *   execute_turn_prelude_enter fires at runTurn exit (after the
- *     queue/steer short-circuit), IMMEDIATELY BEFORE the
- *     `await executeTurn(...)` await on `LocalRuntimeHost.runTurn`.
+ * It does NOT prove the production seam fires at the intended
+ * boundary. That proof lives in
+ * `apps/vscode/src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts`,
+ * which exercises the REAL `LocalRuntimeHost.runTurn` →
+ * `executeTurn` chain with the production hook wired.
+ *
+ * Why both files exist:
+ *   The CORRECTION01 review (HALT_ACT_EVIDENCE_CONTRACT_MISMATCH)
+ *   identified that the previous PCRS02 suite synthesized the
+ *   stages via direct `captureContinuationCardinalityAuthorityRecord`
+ *   calls and overclaimed "PASS_OBSERVATION_SEAM" because the
+ *   real-host seam was never exercised. The production-shape
+ *   proof has been split out into a bridge test (runs under
+ *   `vitest.config.c2-4-c-bridge.ts`) so it can drive the real
+ *   `LocalRuntimeHost` class via the `@cline-internal/core/...`
+ *   alias. The module-level tests here remain useful as
+ *   regression checks on the capture helper itself.
+ *
+ * Frozen invariant (CORRECTION01):
+ *   C7 (run_turn_started) fires at runTurn entry (post
+ *     queue/steer short-circuit).
+ *   execute_turn_prelude_enter fires at the FIRST EXECUTABLE LINE
+ *     of `LocalRuntimeHost.executeTurn`, BEFORE the first await
+ *     (`prepareTurnInput`). This is the placement that proves
+ *     `executeTurn` actually entered (JavaScript code before the
+ *     first `await` in an async function runs synchronously at
+ *     call time).
  *   C8 (agent_turn_done) fires after `executeTurn(...)` resolves.
  *
  * Live-stall discriminator:
@@ -19,7 +47,7 @@
  *     EXECUTE_TURN_PRELUDE_HUNG (stall is in the prelude awaits
  *     themselves).
  *
- * Tests:
+ * Tests in this file (module-level):
  *   PCRS02-01: the new stage exists and is enumerable in the CCARD
  *               counter snapshot.
  *   PCRS02-02: capture() with the new stage writes a record and
@@ -27,9 +55,13 @@
  *   PCRS02-03: capture() with the new stage is a complete no-op
  *               when the seam is OFF (production default).
  *   PCRS02-04: C7 + execute_turn_prelude_enter + (no C8) is the
- *               EXECUTE_TURN_PRELUDE_STALL fingerprint.
+ *               EXECUTE_TURN_PRELUDE_STALL fingerprint (SHAPE
+ *               only — see the bridge test for the real seam
+ *               proof).
  *   PCRS02-05: C7 + (no execute_turn_prelude_enter) + (no C8) is
- *               the EXECUTE_TURN_PRELUDE_HUNG fingerprint.
+ *               the EXECUTE_TURN_PRELUDE_HUNG fingerprint (SHAPE
+ *               only — see the bridge test for the real seam
+ *               proof).
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -103,10 +135,22 @@ describe("PCRS02 — execute_turn_prelude_enter bounded observation seam", () =>
 		expect(getContinuationCardinalityAuthorityCounters().stages.execute_turn_prelude_enter.count).toBe(0)
 	})
 
-	it("PCRS02-04: C7 + execute_turn_prelude_enter + (no C8) is the EXECUTE_TURN_PRELUDE_STALL fingerprint", () => {
-		// Discriminator for the live RED in
-		// `.factory/evidence/ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02`.
-		// The post-capture join (operator-side) will see:
+	it("PCRS02-04: C7 + execute_turn_prelude_enter + (no C8) is the EXECUTE_TURN_PRELUDE_STALL classifier-shape fingerprint (module-level only; real-host proof lives in PCRS02C01)", () => {
+		// SHAPE-ONLY discriminator. The post-capture join
+		// (operator-side) will recognize this counter pattern as
+		// "stall inside executeAgentTurn". The post-capture
+		// classifier is OUT OF SCOPE for this file — only the
+		// counter shape is asserted here.
+		//
+		// This test does NOT exercise the production seam. The
+		// production seam proof (that LocalRuntimeHost.runTurn
+		// actually emits `execute_turn_prelude_enter` at the first
+		// executable line of `executeTurn`) lives in
+		// `post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts`.
+		//
+		// The live RED in
+		// `.factory/evidence/ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02`
+		// has the expected operator-side counter pattern:
 		//   run_turn_started.count = 3
 		//   execute_turn_prelude_enter.count = 1 (only run #3)
 		//   agent_turn_done.count = 2
@@ -131,10 +175,22 @@ describe("PCRS02 — execute_turn_prelude_enter bounded observation seam", () =>
 		expect(counters.stages.agent_turn_done.count).toBe(0)
 	})
 
-	it("PCRS02-05: C7 + (no execute_turn_prelude_enter) + (no C8) is the EXECUTE_TURN_PRELUDE_HUNG fingerprint", () => {
-		// Mirror branch: the prelude did NOT enter, but the runTurn
-		// itself did. The stall is in the prelude awaits
-		// (`prepareTurnInput` → `ensureSessionPersisted` → ...).
+	it("PCRS02-05: C7 + (no execute_turn_prelude_enter) + (no C8) is the EXECUTE_TURN_PRELUDE_HUNG classifier-shape fingerprint (module-level only; real-host proof lives in PCRS02C01)", () => {
+		// SHAPE-ONLY discriminator. The post-capture join
+		// (operator-side) will recognize this counter pattern as
+		// "stall inside the prelude awaits". The classifier itself
+		// is OUT OF SCOPE for this file — only the counter shape
+		// is asserted here.
+		//
+		// This test does NOT exercise the production seam. The
+		// production seam proof lives in
+		// `post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts`.
+		// Resolving the HUNG branch on a real stall requires
+		// blocking `prepareTurnInput` itself, which is private to
+		// `LocalRuntimeHost`. The HUNG branch can only be
+		// definitively discriminated by a follow-up ACT that adds
+		// a deeper seam inside the prelude awaits once the STALL
+		// branch is ruled out.
 		setContinuationCardinalityAuthorityCaptureEnabled(true)
 		const sessionId = "1790633775136_8mrnl"
 		captureContinuationCardinalityAuthorityRecord({

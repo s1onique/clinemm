@@ -107,6 +107,16 @@ export default defineConfig({
 			// deep-relative alias to bypass the @cline/core bundle
 			// minifier name-collision.
 			"src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01 / PCRS02C01:
+			// Real-host production-shape seam proof for the
+			// `execute_turn_prelude_enter` capture. Drives the REAL
+			// `LocalRuntimeHost.runTurn` chain via the
+			// `@cline-internal/core/runtime/host/local-runtime-host`
+			// alias declared only in `vitest.config.c2-4-c-bridge.ts`.
+			// Excluded here to keep the base config's `@cline/core`
+			// stub alias in scope; runs under the dedicated bridge
+			// config.
+			"src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02:
 			// real production-class event bus (RuntimeHostEventBus)
 			// composition witness. The deep-relative import is intentional

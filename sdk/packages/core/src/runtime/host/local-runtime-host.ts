@@ -334,9 +334,10 @@ export interface LocalRuntimeHostOptions {
 		 * ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 (bounded
 		 * diagnostic-only observation seam):
 		 *
-		 * Fired at the top of `executeTurn(session, input)` in
-		 * `LocalRuntimeHost`, BEFORE the await chain
-		 * (`prepareTurnInput` → `ensureSessionPersisted` →
+		 * Fired at the FIRST EXECUTABLE LINE of
+		 * `executeTurn(session, input)` in `LocalRuntimeHost`,
+		 * BEFORE the await chain (`prepareTurnInput` →
+		 * `ensureSessionPersisted` →
 		 * `refreshActiveSessionGitMetadata` →
 		 * `syncOAuthCredentials` → `markTurnRunning` →
 		 * `executeAgentTurn`) begins. This is the FIRST currently-
@@ -353,11 +354,27 @@ export interface LocalRuntimeHostOptions {
 		 *     C8): `EXECUTE_TURN_PRELUDE_HUNG` (stall is in the
 		 *     prelude awaits themselves).
 		 *
-		 * FROZEN per §3 of ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02.
-		 * Adding a new capture hook is a breaking change for any
-		 * production wiring that asserts the optional hook set, so
-		 * this name is fixed. When undefined (default), the
-		 * production path is a complete no-op.
+		 * CORRECTION01 (this ACT): the capture site was MOVED from
+		 * the caller-side line in `runTurn` (immediately before the
+		 * `executeTurn(...)` await) to the first executable line
+		 * inside `executeTurn` itself. The caller-side placement
+		 * proved only that `runTurn` reached the call site; it
+		 * could not prove `executeTurn` had begun executing. In
+		 * JavaScript, code before the first `await` inside an async
+		 * function executes synchronously when that function is
+		 * called; firing the hook on the first executable line of
+		 * `executeTurn` is the only placement that proves the
+		 * prelude entered.
+		 *
+		 * FROZEN per §3 of
+		 * ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 (stage name and
+		 * option name are FIXED — see the production-shape witness
+		 * at
+		 * apps/vscode/src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts
+		 * which pins the corrected placement).
+		 *
+		 * When undefined (production default), the production path
+		 * is a complete no-op.
 		 */
 		onExecuteTurnPreludeEnter?: (input: {
 			sessionId: string;
@@ -1265,44 +1282,33 @@ export class LocalRuntimeHost implements RuntimeHost {
 				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 			});
 		}
-		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 (bounded
-		// diagnostic-only observation seam):
-		//
-		// Fires IMMEDIATELY BEFORE the `executeTurn(...)` await,
-		// AFTER the queue/steer short-circuit and AFTER the C7
-		// capture above. The C7/C8 round-trip alone cannot
-		// distinguish a stall inside `executeTurn`'s prelude
-		// (`prepareTurnInput` → `ensureSessionPersisted` →
-		// `refreshActiveSessionGitMetadata` → `syncOAuthCredentials`
-		// → `markTurnRunning` → `executeAgentTurn`) from a stall
-		// inside `executeAgentTurn` itself. This capture makes the
-		// prelude observable so the post-capture discriminator can
-		// resolve:
-		//
-		//   C7 fired → execute_turn_prelude_enter fired → (no C8):
-		//     EXECUTE_TURN_PRELUDE_STALL (stall inside
-		//     executeAgentTurn).
-		//
-		//   C7 fired → execute_turn_prelude_enter NOT fired → (no
-		//     C8): EXECUTE_TURN_PRELUDE_HUNG (stall inside the
-		//     prelude awaits themselves).
-		//
-		// Default-off; no public API; no wire field. When the
-		// optional hook is undefined (production default), the
-		// call site is a complete no-op.
-		if (this.pendingPromptCaptureHooks?.onExecuteTurnPreludeEnter) {
-			this.pendingPromptCaptureHooks.onExecuteTurnPreludeEnter({
-				sessionId: input.sessionId,
-				delivery,
-				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
-			});
-		}
+		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01:
+		// The `execute_turn_prelude_enter` capture was MOVED from
+		// this caller-side site (immediately before the
+		// `executeTurn(...)` await) to the FIRST executable line
+		// inside `executeTurn(...)`. The previous caller-side
+		// placement only proved `runTurn` reached the call site
+		// before `executeTurn`; it could NOT distinguish a stall
+		// inside the prelude awaits (which execute synchronously
+		// before the first await) from one inside `executeAgentTurn`.
+		// The new placement fires before the first `await` in
+		// `executeTurn`, proving the prelude actually entered. See
+		// `local-runtime-host.ts:2095` for the corrected capture
+		// site and `apps/vscode/src/sdk/__tests__/post-continuation-
+		// run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts`
+		// for the production-shape proof.
 		try {
 			const result = await this.executeTurn(session, {
 				prompt: input.prompt,
 				mode: input.mode,
 				userImages: input.userImages,
 				userFiles: input.userFiles,
+				// Threaded into `executeTurn` so the prelude capture
+				// (fired at the first executable line of executeTurn)
+				// can derive origin the same way C7/C8 do. The hook
+				// is opt-in and a no-op when undefined.
+				...(delivery !== undefined ? { delivery } : {}),
+				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 			});
 			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0+P1 fix):
 			// C8 — agent_turn_done capture (host-side seam). Fires
@@ -2090,8 +2096,50 @@ export class LocalRuntimeHost implements RuntimeHost {
 			mode?: SendSessionInput["mode"];
 			userImages?: string[];
 			userFiles?: string[];
+			// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01:
+			// Threaded from `runTurn` so the `execute_turn_prelude_enter`
+			// capture (fired at the first executable line of this method,
+			// BEFORE the first await below) can derive origin the same way
+			// C7/C8 do. The hook is opt-in and a no-op when undefined.
+			delivery?: "queue" | "steer";
+			jobId?: string;
 		},
 	): Promise<AgentResult> {
+		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01:
+		// This is the FIRST EXECUTABLE LINE of `executeTurn`. The
+		// hook fires here, BEFORE the first `await` below, which in
+		// JavaScript means it fires SYNCHRONOUSLY when `executeTurn`
+		// is called. That is the only placement that proves the
+		// prelude actually entered — code before the first await in
+		// an async function runs synchronously at call time; code
+		// after the first await runs only when the awaited promise
+		// resolves.
+		//
+		// Discriminator fingerprint (with C7 = `run_turn_started`
+		// and C8 = `agent_turn_done`):
+		//   C7 fired → prelude fired → (no C8):
+		//     EXECUTE_TURN_PRELUDE_STALL — stall is inside
+		//     `executeAgentTurn` → `AgentRuntime.execute` →
+		//     model.stream / beforeModel hooks / prepareTurn /
+		//     compaction.
+		//   C7 fired → prelude did NOT fire → (no C8):
+		//     EXECUTE_TURN_PRELUDE_HUNG — stall is in the prelude
+		//     awaits themselves. (Operator can verify this in a
+		//     future live run by adding a deep-await-instrumented
+		//     stage between the prelude awaits.)
+		//
+		// Default-off; no public API; no wire field. When the
+		// optional hook is undefined (production default), the call
+		// site is a complete no-op (a single property access +
+		// branch). Production capture-OFF preserves bit-identical
+		// path semantics.
+		if (this.pendingPromptCaptureHooks?.onExecuteTurnPreludeEnter) {
+			this.pendingPromptCaptureHooks.onExecuteTurnPreludeEnter({
+				sessionId: session.sessionId,
+				delivery: input.delivery,
+				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+			});
+		}
 		const preparedInput = await this.prepareTurnInput(session, input);
 		const prompt = preparedInput.prompt.trim();
 		const images = preparedInput?.userImages?.length;

@@ -149,6 +149,13 @@
 		// `@cline-internal/core/...` aliases declared in
 		// `tsconfig.c2-4-c-bridge.json` only).
 		"src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01 / PCRS02C01:
+		// Real-host production-shape seam proof for the
+		// `execute_turn_prelude_enter` capture. Bridge-only (uses the
+		// `@cline-internal/core/runtime/host/local-runtime-host` alias
+		// declared in `tsconfig.c2-4-c-bridge.json` only). Excluded
+		// here to keep the base `@cline/core` stub alias in scope.
+		"src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01:
 		// Real production wire bridge test — runs under
 		// tsconfig.c2-4-c-bridge.json + vitest.config.c2-4-c-bridge.ts
