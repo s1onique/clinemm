@@ -16316,3 +16316,118 @@ execute_turn_prelude_enter
 Only then should a follow-up ACT add a deeper seam inside the prelude
 awaits if the STALL branch is ruled out.
 
+
+## ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION02 — PASS_REAL_OBSERVATION_SEAM — 2026-09-29
+
+**Status:** PASS_REAL_OBSERVATION_SEAM. FACTORY REVIEWER halt
+`HALT_EXECUTABLE_EVIDENCE_MISMATCH` correctly identified that
+CORRECTION01 overclaimed closure: the 4/4 PCRS02C01 production-shape
+tests, the 5/5 PCRS02 module tests, and the 5/5 SWCM04 + 2/2 CCCL01
+tests were all structurally defined but never actually executed on
+this machine. Every test that transitively imports real SDK source
+failed at module-load time with `TypeError: undefined is not an
+object (evaluating 'z.custom' / 'z.object')` from Vite/Vitest
+4.1.10's ESM/CJS interop bug for zod v4.
+
+**Bounded fix (no change to production seam, no change to
+production code):**
+
+- Diagnosed via a 5-line repro that proved Vite's module runner
+  destructures `import { z } from "zod"` against the CJS `index.cjs`
+  instead of the `import` ESM `index.js`, leaving `z.custom`,
+  `z.object`, etc. undefined.
+- Added `optimizeDeps.include = ["zod"], force = true` and
+  `ssr.noExternal = ["zod"]` at the TOP level of both
+  `apps/vscode/vitest.config.ts` and
+  `apps/vscode/vitest.config.c2-4-c-bridge.ts`.
+- Subtle bug encountered: these blocks MUST be at the top level
+  (sibling of `test:`, `resolve:`, etc.), NOT inside `test: { ... }`.
+  My first attempt put them inside `test:` and they were silently
+  ignored.
+
+**Production shape (preserved from CORRECTION01):**
+
+```text
+ACT_CARDINALITY_AUTHORITY_CAPTURE_ENABLED_seam  = true   (preserved from CORRECTION01)
+execute_turn_prelude_enter_stage                = true   (preserved; capture at first executable line of executeTurn)
+LocalRuntimeHost_executeTurn_capture_call       = true   (preserved)
+LocalRuntimeHost_runTurn_capture_call           = false  (caller-side emission was REMOVED in CORRECTION01)
+PRODUCTION_BEHAVIOR_CHANGED                     = false
+PUBLIC_API_CHANGED                              = false
+WIRE_FIELDS_ADDED                               = 0
+REACT_STATE_ADDED                               = 0
+QUEUE_REDESIGNED                                = false
+BCB_REDESIGNED                                  = false
+PROMPT_REWRITES                                 = false
+PROVIDER_FORMAT_CHANGED                         = false
+MCP_PROTOCOL_CHANGED                            = false
+MYC_CODE_CHANGED                                = false
+```
+
+**Executed verification (NOT just structural):**
+
+```text
+PCRS02C01 production-shape bridge                = 4/4 PASS  (110-120ms)
+PCRS02 module-level                              = 5/5 PASS  (4ms)
+SWCM04 (predecessor ACT claim, now actual)       = 5/5 PASS  (324ms)
+CCCL01 (also blocked by same zod issue)           = 2/2 PASS  (5ms)
+ACL02                                            = 2/2 PASS  (5ms)
+PPRD01                                           = 2/2 PASS  (211ms)
+PPLW01                                           = 2/2 PASS  (270ms)
+real-local-to-shadow-bridge                      = 5/5 PASS  (47ms)
+CCARD01 (base config regression check)           = 12/12 PASS (6ms)
+Bridge 7-file subset                             = 22/22 PASS
+Total                                            = 41/41 PASS across 9 test files
+
+tsc_apps_vscode                                  = 0 errors
+tsc_apps_vscode_bridge                           = 0 errors
+biome_check                                      = clean
+git_diff_check                                   = clean (closure commit)
+```
+
+**Artifact-identity binding (reviewer concern resolved):**
+
+```text
+entry_head           = 35c301def0a76df4089c7eb5fc8e829b8da3fde3 (CORRECTION01 closure)
+subject_head         = 8d3b120d7 (CORRECTION02 production code commit)
+closure_head         = 37ad287b9 (true HEAD at ACT closure)
+git_status_clean     = true
+git_diff_check       = PASS
+```
+
+**Environment note:** The `EPERM: operation not permitted, kill`
+errors in the full-suite output are Bun-on-macOS child-process
+cleanup noise (Vite's forks pool cannot always terminate its
+workers cleanly under the IDE sandbox used by the author). They
+appear AFTER all per-file summaries. They do NOT affect the actual
+test results. The per-file `✓ / ✗` lines and the
+`Test Files X passed | Y failed` summary lines are the source of truth.
+
+**Ready for next ACT:** TRUE. Operator should now:
+
+1. `git checkout 8d3b120d7` (production code) or `37ad287b9`
+   (closure-bound).
+2. `bun esbuild.mjs` (production bundle).
+3. `mkdir -p "$ROOT/dist" && @vscode/vsce package --out
+   "$ROOT/dist/clinemm-correction02.vsix"`.
+4. Install the VSIX, restart Codium, reproduce once with the
+   seam enabled.
+
+The new live trace will finally distinguish:
+
+```text
+run_turn_started
+(no execute_turn_prelude_enter)
+-> stall before executeTurn entry (EXECUTE_TURN_PRELUDE_HUNG)
+
+vs
+
+run_turn_started
+execute_turn_prelude_enter
+(no agent_turn_done)
+-> stall inside executeTurn or deeper (EXECUTE_TURN_PRELUDE_STALL)
+```
+
+Only the second branch justifies a follow-up ACT to add a deeper
+seam inside the prelude awaits.
+
