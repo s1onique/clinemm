@@ -1,7 +1,7 @@
 {
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01-CORRECTION01",
   "entryHead": "e3a0f92668aa6a23503f0e9290d0de17aa91c96e",
-  "subjectHead": "15c1f27b34e35055dbf49d84afeb0f2d20de96e8",
+  "subjectHead": "450fa23688d18c3c4c4a01e009e622589101e166",
   "verdict": "PASS_CAPTURE_EXTENSION_GREEN",
   "reviewerP0": "PRODUCTION_SEMANTICS_CHANGED \u2014 lifecycle event rename reversed",
   "fixSummary": "Reverted the \u00a721 GREEN lifecycle event rename (command_job_terminalize \u2192 command_job_terminal_committed). The \u00a721 GREEN file's TCE-P04 source-presence regex test was rewritten to test real production-seam behavioral invariants (no duplicate CCARD terminal records per jobId, ownerId === launch-time ownerSessionId, terminalKind absent, replay classifies INSUFFICIENT_IDENTITY).",
@@ -77,7 +77,8 @@
   "subjectCommits": [
     "d6fd51a0959c1b2c8f8e8136d49d6f11f99aaa0e",
     "c93ed838239ea597308cb0bc46a3805dc7f02ac6",
-    "15c1f27b34e35055dbf49d84afeb0f2d20de96e8"
+    "15c1f27b34e3506119fbf49d84afeb0f2d20de96e8",
+    "450fa23688d18c3c4c4a01e009e622589101e166"
   ],
   "note": "SUBJECT_HEAD is the tip of the CORRECTION01 commit chain. TCE executable evidence binds to d6fd51a09 (1st commit) and c93ed8382 (2nd commit); this 3rd commit only updates result.json."
 }
