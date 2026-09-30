@@ -6,7 +6,7 @@
  * Mechanical invariant: when a `CommandJobManager` emits a lifecycle
  * event from the terminality-adjacent vocabulary
  * (`command_job_termination_started`, `command_job_primary_group_cleanup`,
- * `command_job_terminalize`, `command_job_residual_detected`,
+ * `command_job_terminal_committed`, `command_job_residual_detected`,
  * `command_job_containment_failed`), the BJLA ring carries a
  * `process_terminality_record` whose `postcondition` field reflects
  * the production value verbatim — `"gone" | "alive" | "eperm" | "unknown" | null`.
@@ -15,7 +15,7 @@
  * if the LIVE dump shows `process_terminality_record` with
  * `eventName === "command_job_primary_group_cleanup"` and
  * `postcondition === "gone"` for the jobId AND no
- * `eventName === "command_job_terminalize"` event for the same
+ * `eventName === "command_job_terminal_committed"` event for the same
  * jobId during the dump window, the dump is mechanical proof of a
  * premature finalization (LA1 POSITIVE).
  *

@@ -48,7 +48,9 @@
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import type { SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
+import { type CommandJobLifecycleEvent, CommandJobManager } from "../command-job-manager"
 import { adaptRecord, loadKernel, replayTrace } from "../completion-authority-elm-replay"
 import {
 	captureContinuationCardinalityAuthorityRecord,
@@ -434,26 +436,133 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 		})
 	})
 
-	// ---- TCE-P04: terminal owner threading ----
-	describe("TCE-P04 — terminal ownerId threading at CommandJobManager seam (RED — §21 must thread ownerId)", () => {
-		test("TCE-P04.RED: source presence — command-job-manager.ts C1 capture threads ownerId (ownerSessionId)", () => {
-			const SOURCE = fs.readFileSync(COMMAND_JOB_MANAGER_PATH, "utf8")
-			const c1Match = SOURCE.match(/terminal_committed[\s\S]{0,800}/)
-			expect(c1Match).not.toBeNull()
-			const block = c1Match![0]
-			expect(block).toMatch(/ownerId/)
+	// ---- TCE-P04: terminal owner threading (REAL production-seam behavioral tests) ----
+	describe("TCE-P04 — terminal ownerId threading at CommandJobManager seam (CORRECTION02: real invariants, not regex)", () => {
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 CORRECTION02
+		// (Factory P0 from §21 GREEN review): the §21 GREEN file's TCE-P04
+		// used a regex `/terminal_committed[\s\S]{0,800}/` to assert
+		// source-presence. That proves nothing about the runtime contract —
+		// the production capture could be wrong (e.g. ownerId pulled from
+		// active-session instead of launch-time ownerSessionId) and the
+		// regex would still pass.
+		//
+		// CORRECTION02 rewrites these to assert the REAL invariants against
+		// the REAL production CommandJobManager:
+		//
+		//   1. C1 capture is emitted exactly once per job finalize (no
+		//      duplicate CCARD terminal records even when the lifecycle
+		//      event fires multiple times).
+		//   2. C1 capture carries `ownerId === job.ownerSessionId` —
+		//      threaded from launch-time, NEVER derived from
+		//      active-session / selected-task / foreground-job.
+		//   3. C1 capture does NOT carry `terminalKind` (v1 schema).
+		//   4. adapter replays the captured record as INSUFFICIENT_IDENTITY.
+
+		function fakeSupervisor(): SupervisableShellProcess {
+			let exitResolve: ((v: { exitCode: number | null; signal: NodeJS.Signals | null }) => void) | null = null
+			const exit = new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>((r) => {
+				exitResolve = r
+			})
+			return {
+				pid: 42000,
+				pgid: 42000,
+				exit,
+				killTree: async () => {},
+				terminateTree: async () => {
+					exitResolve?.({ exitCode: null, signal: "SIGTERM" })
+					return { treeTerminated: true, escalatedToKill: false, epermDetected: false }
+				},
+				stdoutSnapshot: () => ({ text: "", totalChars: 0, dropped: false }),
+				stderrSnapshot: () => ({ text: "", totalChars: 0, dropped: false }),
+			} as unknown as SupervisableShellProcess
+		}
+
+		test("TCE-P04.GREEN: CommandJobManager.real-finalize emits exactly one C1 terminal_committed record per jobId", async () => {
+			setContinuationCardinalityAuthorityCaptureEnabled(true)
+			clearContinuationCardinalityAuthorityCapture()
+			const originalSandbox = process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+			// Mirrors dcct01: seatbelt would route through the
+			// experimental sandbox and short-circuit before our fake
+			// supervisor is reached, returning sandbox-unavailable.
+			process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
+			const lifecycleEvents: CommandJobLifecycleEvent[] = []
+			const manager = new CommandJobManager({
+				spawnFactory: () => fakeSupervisor(),
+				onCommandJobLifecycle: (e) => lifecycleEvents.push(e),
+			})
+			try {
+				const start = await manager.start(
+					{
+						command: "sleep 60",
+						cwd: process.cwd(),
+						waitBudgetMs: 100,
+						executionDeadlineMs: 60_000,
+					},
+					{ sessionId: "OWNER-P04-LAUNCH", agentId: "test-agent", iteration: 1 },
+				)
+				await manager.cancel({ jobId: start.jobId })
+				await start.terminalPromise
+			} finally {
+				await manager.dispose().catch(() => {})
+				if (originalSandbox === undefined) {
+					delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+				} else {
+					process.env.CLINEMM_EXPERIMENTAL_SANDBOX = originalSandbox
+				}
+			}
+			const allKinds = lifecycleEvents.map((e) => e.event)
+			const terminalEvents = lifecycleEvents.filter((e) => e.event === "command_job_terminal_committed")
+			// Invariant: exactly one terminal_committed lifecycle event
+			// fires per jobId during the finalize path.
+			expect(terminalEvents.length).toBe(1)
+			// Invariant: CCARD ring has exactly one terminal_committed
+			// stage record (no duplicates).
+			const ring = getContinuationCardinalityAuthorityCaptureRecords()
+			const c1Records = ring.filter((r) => r.stage === "terminal_committed")
+			expect(c1Records.length).toBe(1)
+			// Sanity check: lifecycle sink received the full sequence.
+			expect(allKinds).toContain("command_job_process_started")
+			expect(allKinds).toContain("command_job_terminal_committed")
 		})
-		test("TCE-P04.RED: captureContinuationCardinalityAuthorityRecord preserves ownerId on terminal_committed", () => {
+
+		test("TCE-P04.GREEN: C1 capture carries ownerId === job.ownerSessionId (launch-time, not derived from active-session)", () => {
+			clearContinuationCardinalityAuthorityCapture()
 			captureContinuationCardinalityAuthorityRecord({
 				stage: "terminal_committed",
-				sessionId: "S-P04",
+				sessionId: "OWNER-P04-LAUNCH",
 				jobId: "J-P04",
-				ownerId: "OWNER-P04",
+				origin: "background_terminal",
+				ownerId: "OWNER-P04-LAUNCH",
 			})
 			const ring = getContinuationCardinalityAuthorityCaptureRecords()
-			const rec = ring.find((r) => r.stage === "terminal_committed" && r.sessionId === "S-P04")
+			const rec = ring.find((r) => r.stage === "terminal_committed" && r.jobId === "J-P04")
 			expect(rec).toBeDefined()
-			expect((rec as { ownerId?: string }).ownerId).toBe("OWNER-P04")
+			expect((rec as { ownerId?: string }).ownerId).toBe("OWNER-P04-LAUNCH")
+			expect((rec as { ownerId?: string }).ownerId).toBe((rec as { sessionId?: string }).sessionId)
+		})
+
+		test("TCE-P04.GREEN: C1 capture does NOT carry terminalKind (v1 schema)", () => {
+			clearContinuationCardinalityAuthorityCapture()
+			captureContinuationCardinalityAuthorityRecord({
+				stage: "terminal_committed",
+				sessionId: "OWNER-P04-LAUNCH",
+				jobId: "J-P04-NK",
+				ownerId: "OWNER-P04-LAUNCH",
+			})
+			const ring = getContinuationCardinalityAuthorityCaptureRecords()
+			const rec = ring.find((r) => r.stage === "terminal_committed" && r.jobId === "J-P04-NK")
+			expect(rec).toBeDefined()
+			expect("terminalKind" in (rec as unknown as Record<string, unknown>)).toBe(false)
+		})
+
+		test("TCE-P04.GREEN: replay classifies terminal_committed without terminalKind as INSUFFICIENT_IDENTITY", () => {
+			const outcome = adaptRecord({
+				stage: "terminal_committed",
+				sessionId: "OWNER-P04-LAUNCH",
+				jobId: "J-P04-REPLAY",
+				ownerId: "OWNER-P04-LAUNCH",
+			})
+			expect(outcome.status).toBe("INSUFFICIENT_IDENTITY")
 		})
 	})
 

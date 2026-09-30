@@ -5115,7 +5115,7 @@ export class Controller {
 	 *
 	 * The gauge moves on:
 	 *   - `command_job_process_started`            — POST `active.set`  (correction07)
-	 *   - `command_job_terminalize`         — POST `active.delete` (correction07, clean path)
+	 *   - `command_job_terminal_committed`         — POST `active.delete` (correction07, clean path)
 	 *   - `command_job_containment_failed`         — POST `active.delete` (correction06, failure path)
 	 *
 	 * correction05 / Factory P0 follow-up: under the new

@@ -924,7 +924,7 @@ export interface TaskHeaderTelemetryStrip {
 	 * at every emit point, achieved by (a) emitting
 	 * `command_job_process_started` and
 	 * `command_job_primary_group_registered` AFTER
-	 * `this.active.set`, (b) emitting `command_job_terminalize`
+	 * `this.active.set`, (b) emitting `command_job_terminal_committed`
 	 * AFTER `this.active.delete` on the clean path (mirrors the
 	 * post-delete `command_job_containment_failed` on the failure
 	 * path from correction06), and (c) using `this.active.size`

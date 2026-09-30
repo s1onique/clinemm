@@ -160,7 +160,7 @@ describe("ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01 / containment-incident
 			expect(tracker.currentActiveOwnedCommandJobs).toBe(0)
 			expect(events.filter((e) => e.event === "command_job_containment_failed").length).toBe(0)
 			expect(events.filter((e) => e.event === "command_job_residual_detected").length).toBe(0)
-			expect(events.filter((e) => e.event === "command_job_terminalize").length).toBe(1)
+			expect(events.filter((e) => e.event === "command_job_terminal_committed").length).toBe(1)
 			expect(incidents).toHaveLength(0)
 		} finally {
 			await manager.dispose()

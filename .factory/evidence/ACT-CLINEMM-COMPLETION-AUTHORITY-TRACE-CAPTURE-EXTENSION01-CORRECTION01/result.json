@@ -1,0 +1,52 @@
+{
+  "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01-CORRECTION01",
+  "entryHead": "e3a0f92668aa6a23503f0e9290d0de17aa91c96e",
+  "subjectHead": "PENDING — to be assigned at commit time",
+  "verdict": "PASS_CAPTURE_EXTENSION_GREEN",
+  "reviewerP0": "PRODUCTION_SEMANTICS_CHANGED — lifecycle event rename reversed",
+  "fixSummary": "Reverted the §21 GREEN lifecycle event rename (command_job_terminalize → command_job_terminal_committed). The §21 GREEN file's TCE-P04 source-presence regex test was rewritten to test real production-seam behavioral invariants (no duplicate CCARD terminal records per jobId, ownerId === launch-time ownerSessionId, terminalKind absent, replay classifies INSUFFICIENT_IDENTITY).",
+  "productionFootprint": {
+    "files": 10,
+    "insertions": 163,
+    "deletions": 48
+  },
+  "testResults": {
+    "completion-authority-trace-capture-extension01": "39 passed (39)",
+    "command-job-manager-descendant-conservation.dcct01": "17 passed (17)",
+    "pcpc-containment-product-contract.pcpc01": "11 passed (11)",
+    "background-job-liveness-authority.bclas06": "2 passed (2)",
+    "background-notify-exactly-once-presentation01": "7 passed (7)",
+    "continuation-cardinality-authority01.ccard01": "12 passed (12)",
+    "completion-authority-elm-historical-replay01": "20 passed (20)",
+    "post-continuation-run-stall02.pcrs02": "5 passed (5)",
+    "continuation-pathological-corpus01.swcm04": "5 passed (5)",
+    "total": "118 passed (118)"
+  },
+  "conservationGates": {
+    "gitDiffCheck": "PASS",
+    "typecheck": "PASS (bun run check-types, exit 0)",
+    "hardInvariants": {
+      "ELM_SOURCE_CHANGED": false,
+      "ELM_AUTHORITY_SEMANTICS_CHANGED": false,
+      "COMPLETION_AUTHORITY_SEMANTICS_CHANGED": false,
+      "QUEUE_SEMANTICS_CHANGED": false,
+      "PRESENTATION_SEMANTICS_CHANGED": false,
+      "MCP_CODE_CHANGED": false,
+      "MYC_CODE_CHANGED": false,
+      "CAPTURE_DEFAULT_OFF": true,
+      "MANUFACTURED_IDENTITY_COUNT": 0,
+      "ORIGIN_REWRITE_COUNT": 0,
+      "TEMPORAL_SMUGGLING_COUNT": 0
+    }
+  },
+  "preExistingFailures": [
+    {
+      "testFile": "runtime-followup-resume-subscription-parity.frsp01.test.ts",
+      "result": "2 failed | 2 passed (4) — PRE-EXISTING on SUBJECT_HEAD e3a0f9266 (verified via git stash)",
+      "scope": "SdkFollowupCoordinator subscription parity — unrelated to command_job_terminal_committed lifecycle",
+      "confirmationMethod": "Stashed CORRECTION01 changes, ran test, observed identical 2-fail pattern; unstashed"
+    }
+  ],
+  "readyForDogfood": true,
+  "readyForElmShadow02": false
+}

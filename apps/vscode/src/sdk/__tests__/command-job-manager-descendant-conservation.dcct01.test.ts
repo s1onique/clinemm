@@ -194,7 +194,7 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / lifecycle
 		expect(kinds).toContain("command_job_termination_started")
 		expect(kinds).toContain("command_job_primary_group_probe")
 		expect(kinds).toContain("command_job_primary_group_cleanup")
-		expect(kinds).toContain("command_job_terminalize")
+		expect(kinds).toContain("command_job_terminal_committed")
 	})
 
 	it("DCCT-07: lifecycle events never carry command text", async () => {
@@ -338,7 +338,7 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / bounded i
 
 		// terminal_committed DOES fire on `gone` — the bounded
 		// invariant authorizes clean closure.
-		const terminalEvents = events.filter((e) => e.event === "command_job_terminalize")
+		const terminalEvents = events.filter((e) => e.event === "command_job_terminal_committed")
 		expect(terminalEvents.length).toBe(1)
 		// No residual detected on a clean closure.
 		const residualEvents = events.filter((e) => e.event === "command_job_residual_detected")
@@ -346,7 +346,7 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / bounded i
 
 		// Ordering witness: cleanupIdx ≤ terminalIdx.
 		const cleanupIdx = events.findIndex((e) => e.event === "command_job_primary_group_cleanup")
-		const terminalIdx = events.findIndex((e) => e.event === "command_job_terminalize")
+		const terminalIdx = events.findIndex((e) => e.event === "command_job_terminal_committed")
 		expect(cleanupIdx).toBeGreaterThanOrEqual(0)
 		expect(terminalIdx).toBeGreaterThanOrEqual(0)
 		expect(cleanupIdx).toBeLessThanOrEqual(terminalIdx)
@@ -397,7 +397,7 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / bounded i
 		expect(cleanupEv.postcondition).toBe("alive")
 
 		// Load-bearing: terminal_committed is DENIED on `alive`.
-		const terminalEvents = events.filter((e) => e.event === "command_job_terminalize")
+		const terminalEvents = events.filter((e) => e.event === "command_job_terminal_committed")
 		expect(terminalEvents.length).toBe(0)
 
 		// residual_detected MUST fire so the host can surface the
@@ -459,7 +459,7 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / bounded i
 		if (!cleanupEv || cleanupEv.event !== "command_job_primary_group_cleanup") return
 		expect(cleanupEv.postcondition).toBe("eperm")
 
-		const terminalEvents = events.filter((e) => e.event === "command_job_terminalize")
+		const terminalEvents = events.filter((e) => e.event === "command_job_terminal_committed")
 		expect(terminalEvents.length).toBe(0)
 		const residualEvents = events.filter((e) => e.event === "command_job_residual_detected")
 		expect(residualEvents.length).toBe(1)
@@ -512,7 +512,7 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / bounded i
 		if (!cleanupEv || cleanupEv.event !== "command_job_primary_group_cleanup") return
 		expect(cleanupEv.postcondition).toBe("unknown")
 
-		const terminalEvents = events.filter((e) => e.event === "command_job_terminalize")
+		const terminalEvents = events.filter((e) => e.event === "command_job_terminal_committed")
 		expect(terminalEvents.length).toBe(0)
 		const residualEvents = events.filter((e) => e.event === "command_job_residual_detected")
 		expect(residualEvents.length).toBe(1)
@@ -625,7 +625,7 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / correctio
 		//   finalize A (clean) → gauge 1
 		//   finalize B (alive) → gauge 0
 		//
-		// The clean path exercises `command_job_terminalize`
+		// The clean path exercises `command_job_terminal_committed`
 		// (post-delete, carries the post-delta gauge). The
 		// failure path exercises `command_job_containment_failed`
 		// (correction06: also post-delete, also carries the
@@ -687,7 +687,7 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / correctio
 		await manager.cancel({ jobId: a.jobId })
 		await a.terminalPromise
 		expect(manager.activeCount).toBe(1)
-		const terminalCommitted = events.filter((e) => e.event === "command_job_terminalize")
+		const terminalCommitted = events.filter((e) => e.event === "command_job_terminal_committed")
 		expect(terminalCommitted.length).toBe(1)
 		// The clean-path terminal_committed event carries the
 		// post-delete gauge (1, post-decrement-from-2).

@@ -14,7 +14,7 @@
  *                 epoch is NOT part of lifetime
  *   authority:    coordinator-owned marker/set
  *                 NOT CommandJob-owned state
- *   trigger:      per-job command_job_terminalize
+ *   trigger:      per-job command_job_terminal_committed
  *   transport:    PendingPromptsController.enqueue via the host
  *                 (bounded generated prompt string)
  *   persistence:  EPHEMERAL_ONLY

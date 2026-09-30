@@ -76,7 +76,7 @@ export type CommandJobState =
 	 * `CLEAN_TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE`
 	 * is preserved: only the four "clean" terminal classes
 	 * (without `containment_failed`) authorize a clean
-	 * finalization lifecycle event.
+	 * `command_job_terminal_committed`.
 	 *
 	 * Memory hygiene: a `containment_failed` job still moves
 	 * from `active` → `terminal` (so the manager does not
@@ -436,7 +436,7 @@ export interface CommandJobManagerOptions {
 	 *   - `command_job_primary_group_cleanup`
 	 *   - `command_job_helper_cleanup_attempted` (correction05)
 	 *   - `command_job_terminal_requested`
-	 *   - `command_job_terminal_commit` (correction05: only on `gone`)
+	 *   - `command_job_terminal_committed` (correction05: only on `gone`)
 	 *   - `command_job_residual_detected`
 	 *   - `command_job_containment_failed` (correction06: post-delete
 	 *     gauge-conservation event on the failure path)
@@ -559,7 +559,7 @@ export type CommandJobLifecycleEventInput =
 			 *      (EPERM fallback fired)
 			 *   2. `command_job_primary_group_cleanup`
 			 *      (authoritative kernel probe — gone|alive|eperm|unknown)
-			 *   3. `command_job_terminal_commit` (only if postcondition===gone)
+			 *   3. `command_job_terminal_committed` (only if postcondition===gone)
 			 */
 			readonly event: "command_job_helper_cleanup_attempted"
 			readonly jobId: string
@@ -576,7 +576,7 @@ export type CommandJobLifecycleEventInput =
 			readonly tsMs: number
 	  }
 	| {
-			readonly event: "command_job_terminalize"
+			readonly event: "command_job_terminal_committed"
 			readonly jobId: string
 			readonly terminationReason: TerminationReason
 			readonly exitCode: number | null
@@ -608,7 +608,7 @@ export type CommandJobLifecycleEventInput =
 			 *
 			 * Distinct from `command_job_residual_detected`
 			 * (pre-delete observation of the kernel state) and
-			 * from `command_job_terminal_commit` (clean
+			 * from `command_job_terminal_committed` (clean
 			 * terminalization, fires only on `gone`).
 			 *
 			 * Chronological order on the failure path:
@@ -723,7 +723,7 @@ export type CommandJobLifecycleEvent =
 			readonly activeCommandJobs: number
 	  }
 	| {
-			readonly event: "command_job_terminalize"
+			readonly event: "command_job_terminal_committed"
 			readonly jobId: string
 			readonly terminationReason: TerminationReason
 			readonly exitCode: number | null
@@ -1287,7 +1287,7 @@ export class CommandJobManager {
 		if (
 			event.event === "command_job_termination_started" ||
 			event.event === "command_job_primary_group_cleanup" ||
-			event.event === "command_job_terminalize" ||
+			event.event === "command_job_terminal_committed" ||
 			event.event === "command_job_residual_detected" ||
 			event.event === "command_job_containment_failed"
 		) {
@@ -2376,7 +2376,7 @@ export class CommandJobManager {
 			//   1. command_job_helper_cleanup_attempted (this one)
 			//   2. command_job_primary_group_cleanup (kernel probe
 			//      from finalize() — fail-closed set)
-			//   3. command_job_terminal_commit (only on gone)
+			//   3. command_job_terminal_committed (only on gone)
 			const cleanupPgid = readPgidFromSupervisor(job.process)
 			if (typeof cleanupPgid === "number") {
 				this.emitCommandJobLifecycle({
@@ -2437,7 +2437,7 @@ export class CommandJobManager {
 		// `TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE`
 		// false by construction: any cancelled job whose PGID
 		// was still on the OS would terminate with `state =
-		// "cancelled"` AND `command_job_terminal_commit`
+		// "cancelled"` AND `command_job_terminal_committed`
 		// denied — exactly the case Factory caught. The
 		// over-write below makes the state machine honest.
 		if (detail.exitCode !== undefined && detail.exitCode !== null) {
@@ -2470,7 +2470,7 @@ export class CommandJobManager {
 		//
 		//   postcondition === "gone"
 		//     → emit `command_job_primary_group_cleanup`
-		//     → emit `command_job_terminal_commit`
+		//     → emit `command_job_terminal_committed`
 		//     → `gone` is the ONLY path that proves the bounded
 		//       invariant
 		//
@@ -2481,7 +2481,7 @@ export class CommandJobManager {
 		//       incident the host can surface)
 		//     → latch `job.terminationFailed` so callers reading the
 		//       terminal snapshot can read the verdict out-of-band
-		//     → DO NOT emit `command_job_terminal_commit` (this
+		//     → DO NOT emit `command_job_terminal_committed` (this
 		//       state is terminal but uncommitted — the group is
 		//       still on the OS)
 		//
@@ -2625,7 +2625,7 @@ export class CommandJobManager {
 		// (correction07 / Factory
 		// HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
 		//
-		// emit `command_job_terminal_commit` AFTER the
+		// emit `command_job_terminal_committed` AFTER the
 		// active-map delete on the clean path. Previously the
 		// emit happened BEFORE the delete (correction05) — the
 		// lifecycle emitter's `getActiveCommandJobs().length`
@@ -2637,11 +2637,11 @@ export class CommandJobManager {
 		//   1. command_job_primary_group_cleanup  (probe)
 		//   2. command_job_residual_detected      (pre-delete obs, failure path only)
 		//   3. active.delete                      (mutation)
-		//   4. command_job_terminal_commit     (post-delete — clean path) OR
+		//   4. command_job_terminal_committed     (post-delete — clean path) OR
 		//      command_job_containment_failed     (post-delete — failure path, correction06)
 		if (invariantProven) {
 			this.emitCommandJobLifecycle({
-				event: "command_job_terminalize",
+				event: "command_job_terminal_committed",
 				jobId: job.id,
 				terminationReason: job.terminationReason,
 				exitCode: job.exitCode ?? null,
@@ -2685,7 +2685,7 @@ export class CommandJobManager {
 		// introduced.
 		//
 		// On the clean path this event is NOT emitted — the
-		// `command_job_terminal_commit` event already carries
+		// `command_job_terminal_committed` event already carries
 		// the post-delete gauge and the tracker decrements off
 		// it.
 		//
