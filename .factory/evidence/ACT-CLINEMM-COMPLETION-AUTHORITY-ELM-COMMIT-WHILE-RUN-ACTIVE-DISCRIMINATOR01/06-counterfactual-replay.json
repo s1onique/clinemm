@@ -1,0 +1,130 @@
+{
+  "sourceTracePath": "/tmp/rilr-cwad-counterfactual.jsonl",
+  "sourceTraceSha256": "fc203d0cf39c1223fa9ea67dcd210324a1390e223c1a8ac640aebd0477cb7bea",
+  "eventsTotal": 5,
+  "events": [
+    {
+      "seq": 1,
+      "at": 1,
+      "sourceStage": "task_started",
+      "sourceOrigin": "explicit_user",
+      "classification": "DIRECT",
+      "reason": "mapped to task_started",
+      "elmMsg": {
+        "tag": "task_started",
+        "taskId": "s-cwad-cf"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": null,
+          "submitCount": 0,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "at": 2,
+      "sourceStage": "run_turn_started",
+      "sourceOrigin": "unknown",
+      "classification": "DIRECT",
+      "reason": "mapped to run_started",
+      "elmMsg": {
+        "tag": "run_started",
+        "runId": "run-cwad-cf",
+        "origin": "unknown"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": "run-cwad-cf",
+          "submitCount": 0,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "at": 3,
+      "sourceStage": "agent_turn_done",
+      "sourceOrigin": "explicit_user",
+      "classification": "DIRECT",
+      "reason": "mapped to agent_turn_done",
+      "elmMsg": {
+        "tag": "agent_turn_done",
+        "runId": "run-cwad-cf"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": null,
+          "submitCount": 0,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "at": 4,
+      "sourceStage": "submit_and_exit_seen",
+      "sourceOrigin": "pending_prompt_drain",
+      "classification": "DIRECT",
+      "reason": "mapped to submit_and_exit_seen",
+      "elmMsg": {
+        "tag": "submit_and_exit_seen",
+        "submitId": "submit-cwad-cf"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": null,
+          "submitCount": 1,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        }
+      }
+    },
+    {
+      "seq": 5,
+      "at": 5,
+      "sourceStage": "task_completion_committed",
+      "sourceOrigin": "pending_prompt_drain",
+      "classification": "DIRECT",
+      "reason": "mapped to task_completion_committed",
+      "elmMsg": {
+        "tag": "task_completion_committed",
+        "completionId": "completion-cwad-cf"
+      },
+      "after": {
+        "model": {
+          "task": "completion_committed",
+          "activeRun": null,
+          "submitCount": 1,
+          "committedCompletion": "completion-cwad-cf",
+          "presentedCompletion": null
+        }
+      }
+    }
+  ],
+  "firstDivergenceSeq": null,
+  "firstDivergenceKind": null,
+  "firstDivergenceStage": null,
+  "finalModel": {
+    "task": "completion_committed",
+    "activeRun": null,
+    "submitCount": 1,
+    "committedCompletion": "completion-cwad-cf",
+    "presentedCompletion": null
+  },
+  "tsCompletionCommitted": true,
+  "tsCompletionCommittedSeq": 5,
+  "manufacturedIdentityCount": 0,
+  "originRewriteCount": 0,
+  "unmodeledEventCount": 0,
+  "insufficientIdentityCount": 0,
+  "deterministicSha256": "480e75f223f8c6f22b5049a07ac0f297ca7b9781af331f78f79a758838584866"
+}

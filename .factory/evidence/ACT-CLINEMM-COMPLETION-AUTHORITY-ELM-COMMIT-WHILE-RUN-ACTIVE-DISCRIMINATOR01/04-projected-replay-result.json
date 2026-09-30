@@ -1,0 +1,131 @@
+{
+  "sourceTracePath": "/tmp/rilr01-live-1790809530345_lrsk9.replayable.jsonl",
+  "sourceTraceSha256": "ad5c8b26c89bc6287aa92072823e43451efe6751749328faeb0be4289bc0f12b",
+  "eventsTotal": 5,
+  "events": [
+    {
+      "seq": 2,
+      "at": 1790809530777,
+      "sourceStage": "task_started",
+      "sourceOrigin": "explicit_user",
+      "classification": "DIRECT",
+      "reason": "mapped to task_started",
+      "elmMsg": {
+        "tag": "task_started",
+        "taskId": "1790809530345_lrsk9"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": null,
+          "submitCount": 0,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "at": 1790809530796,
+      "sourceStage": "run_turn_started",
+      "sourceOrigin": "unknown",
+      "classification": "DIRECT",
+      "reason": "mapped to run_started",
+      "elmMsg": {
+        "tag": "run_started",
+        "runId": "run_h7wXy0mx",
+        "origin": "unknown"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": "run_h7wXy0mx",
+          "submitCount": 0,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        }
+      }
+    },
+    {
+      "seq": 7,
+      "at": 1790809536498,
+      "sourceStage": "submit_and_exit_seen",
+      "sourceOrigin": "pending_prompt_drain",
+      "classification": "DIRECT",
+      "reason": "mapped to submit_and_exit_seen",
+      "elmMsg": {
+        "tag": "submit_and_exit_seen",
+        "submitId": "submit-1790809530345_lrsk9-1"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": "run_h7wXy0mx",
+          "submitCount": 1,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        }
+      }
+    },
+    {
+      "seq": 8,
+      "at": 1790809536499,
+      "sourceStage": "task_completion_committed",
+      "sourceOrigin": "pending_prompt_drain",
+      "classification": "ELM_REJECTS_TS_SEQUENCE",
+      "reason": "Elm kernel emitted violation=TaskCompletionCommittedWhileHeld active_run after task_completion_committed mapped to task_completion_committed",
+      "elmMsg": {
+        "tag": "task_completion_committed",
+        "completionId": "completion-1790809530345_lrsk9-1"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": "run_h7wXy0mx",
+          "submitCount": 1,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        },
+        "violation": "TaskCompletionCommittedWhileHeld active_run"
+      }
+    },
+    {
+      "seq": 9,
+      "at": 1790809536550,
+      "sourceStage": "agent_turn_done",
+      "sourceOrigin": "explicit_user",
+      "classification": "DIRECT",
+      "reason": "mapped to agent_turn_done",
+      "elmMsg": {
+        "tag": "agent_turn_done",
+        "runId": "run_h7wXy0mx"
+      },
+      "after": {
+        "model": {
+          "task": "active",
+          "activeRun": null,
+          "submitCount": 1,
+          "committedCompletion": null,
+          "presentedCompletion": null
+        }
+      }
+    }
+  ],
+  "firstDivergenceSeq": 8,
+  "firstDivergenceKind": "ELM_REJECTS_TS_SEQUENCE",
+  "firstDivergenceStage": "task_completion_committed",
+  "finalModel": {
+    "task": "active",
+    "activeRun": null,
+    "submitCount": 1,
+    "committedCompletion": null,
+    "presentedCompletion": null
+  },
+  "tsCompletionCommitted": true,
+  "tsCompletionCommittedSeq": 8,
+  "manufacturedIdentityCount": 0,
+  "originRewriteCount": 0,
+  "unmodeledEventCount": 0,
+  "insufficientIdentityCount": 0,
+  "deterministicSha256": "900b629f58b5cf576a90ea3c4962fbb21477d14f4e5399b717e8401713cfa197"
+}

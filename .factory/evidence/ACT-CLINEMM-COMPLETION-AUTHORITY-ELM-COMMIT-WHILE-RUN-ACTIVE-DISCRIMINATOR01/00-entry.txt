@@ -1,0 +1,34 @@
+ACT=ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01
+
+ENTRY_HEAD=4f702adbcd70e0aee04c52be087703e52a7aad10
+SUBJECT_HEAD=4f702adbcd70e0aee04c52be087703e52a7aad10
+REAL_SESSION_ID=1790809530345_lrsk9
+
+REAL_TRACE_SHA256=ec77301dd854dffe4d8121643852fd9a33ab7dddac8b2d70c9b0da1d9d0ddccd
+
+EVIDENCE_CLASSES:
+  01-real-live-trace.jsonl       = REAL + LIVE + REAL_PRODUCTION_SEAM
+  01-real-live-counters.json     = REAL + LIVE (counter snapshot of the same run)
+  02-replayable-projection.jsonl = DERIVED_REAL_PROJECTION (frozen)
+  03-real-replay-result.json     = REAL_OFFLINE_REPLAY (Elm kernel run over 01)
+  04-projected-replay-result.json= REAL_OFFLINE_REPLAY (Elm kernel run over 02)
+  05-c10-c8-events.jsonl         = SYNTHETIC_REAL (production-shape bridge test events
+                                    between C10 and C8 capture)
+  06-counterfactual-b-replay.json= SIMULATED_COUNTERFACTUAL (replay with C8 before C10)
+  07-existing-contracts.md       = STRUCTURAL (existing TS invariants regarding ordering)
+  08-discriminator-result.md     = STRUCTURAL + SYNTHETIC_REAL (CWRA-01..06 outputs)
+  09-final-report.md             = STRUCTURAL (final ACT closure)
+
+FIRST_REAL_SEMANTIC_DIVERGENCE_SEQ=8
+FIRST_REAL_SEMANTIC_DIVERGENCE_STAGE=task_completion_committed
+FIRST_REAL_SEMANTIC_DIVERGENCE_KIND=ELM_REJECTS_TS_SEQUENCE
+
+ELM_KERNEL_HEAD=7f7e74bcbb51c5bddb5f65610e04773e82c25c2d
+ELM_KERNEL_SHA256_VENDOR=40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168
+
+PRODUCTION_SEMANTICS_CHANGED=false
+ELM_AUTHORITY_SEMANTICS_CHANGED=false
+QUEUE_SEMANTICS_CHANGED=false
+PRESENTATION_SEMANTICS_CHANGED=false
+MCP_CODE_CHANGED=false
+MYC_CODE_CHANGED=false

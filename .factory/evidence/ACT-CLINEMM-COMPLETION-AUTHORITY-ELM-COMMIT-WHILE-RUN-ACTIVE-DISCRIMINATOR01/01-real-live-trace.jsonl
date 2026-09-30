@@ -1,0 +1,9 @@
+{"seq":1,"at":1790809530777,"stage":"execute_turn_prelude_enter","origin":"explicit_user","sessionId":"1790809530345_lrsk9"}
+{"seq":2,"at":1790809530777,"stage":"task_started","origin":"explicit_user","sessionId":"1790809530345_lrsk9","taskId":"1790809530345_lrsk9"}
+{"seq":3,"at":1790809530796,"stage":"run_turn_started","origin":"unknown","sessionId":"1790809530345_lrsk9","runId":"run_h7wXy0mx"}
+{"seq":4,"at":1790809534118,"stage":"terminal_committed","origin":"background_terminal","sessionId":"1790809530345_lrsk9","jobId":"cmd_muoprc007q0rheb3","ownerId":"1790809530345_lrsk9"}
+{"seq":5,"at":1790809534208,"stage":"terminal_committed","origin":"background_terminal","sessionId":"1790809530345_lrsk9","jobId":"cmd_muoprc009q8xzueq","ownerId":"1790809530345_lrsk9"}
+{"seq":6,"at":1790809534209,"stage":"terminal_committed","origin":"background_terminal","sessionId":"1790809530345_lrsk9","jobId":"cmd_muoprc00590kvsni","ownerId":"1790809530345_lrsk9"}
+{"seq":7,"at":1790809536498,"stage":"submit_and_exit_seen","origin":"pending_prompt_drain","sessionId":"1790809530345_lrsk9","taskId":"1790809530345_lrsk9","submitId":"submit-1790809530345_lrsk9-1"}
+{"seq":8,"at":1790809536499,"stage":"task_completion_committed","origin":"pending_prompt_drain","sessionId":"1790809530345_lrsk9","taskId":"1790809530345_lrsk9","completionId":"completion-1790809530345_lrsk9-1"}
+{"seq":9,"at":1790809536550,"stage":"agent_turn_done","origin":"explicit_user","sessionId":"1790809530345_lrsk9","runId":"run_h7wXy0mx"}

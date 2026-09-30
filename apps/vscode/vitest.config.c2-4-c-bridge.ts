@@ -417,6 +417,11 @@ export default defineConfig({
 			// `@cline-internal/core/runtime/host/local-runtime-host`
 			// alias declared only here.
 			"src/sdk/__tests__/completion-authority-run-identity-live-repair01.test.ts",
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01:
+			// Production-shape CWRA-01..06 discriminator. Real LocalRuntimeHost
+			// + real SdkSessionEventCoordinator + real CCARD capture seam.
+			// Runs only under this bridge config.
+			"src/sdk/__tests__/completion-authority-commit-while-run-active-discriminator01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

@@ -162,6 +162,14 @@
 		// alias requirement as PCRS02C01. Excluded from the base
 		// config; typechecked only under the bridge config.
 		"src/sdk/__tests__/completion-authority-run-identity-live-repair01.test.ts",
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01:
+		// production-shape CWRA-01..06 discriminator. Real LocalRuntimeHost
+		// + real SdkSessionEventCoordinator + real CCARD capture seam.
+		// Bridge-only (uses the `@cline-internal/core/runtime/host/local-runtime-host`
+		// alias declared in `tsconfig.c2-4-c-bridge.json` only). Excluded
+		// from the base config to keep the base `@cline/core` stub alias
+		// in scope. See ACT §17 conservation gates.
+		"src/sdk/__tests__/completion-authority-commit-while-run-active-discriminator01.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01:
 		// Real production wire bridge test — runs under
 		// tsconfig.c2-4-c-bridge.json + vitest.config.c2-4-c-bridge.ts

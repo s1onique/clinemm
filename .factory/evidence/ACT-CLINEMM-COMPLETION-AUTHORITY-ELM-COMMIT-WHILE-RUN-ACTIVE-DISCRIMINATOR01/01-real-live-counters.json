@@ -1,0 +1,71 @@
+{
+  "total": 9,
+  "stages": {
+    "terminal_committed": {
+      "count": 3,
+      "origins": [
+        "background_terminal"
+      ]
+    },
+    "notify_consume_enter": {
+      "count": 0,
+      "origins": []
+    },
+    "wake_created": {
+      "count": 0,
+      "origins": []
+    },
+    "pending_prompt_enqueued": {
+      "count": 0,
+      "origins": []
+    },
+    "pending_prompt_dequeued": {
+      "count": 0,
+      "origins": []
+    },
+    "continuation_scheduled": {
+      "count": 0,
+      "origins": []
+    },
+    "run_turn_started": {
+      "count": 1,
+      "origins": [
+        "unknown"
+      ]
+    },
+    "execute_turn_prelude_enter": {
+      "count": 1,
+      "origins": [
+        "explicit_user"
+      ]
+    },
+    "agent_turn_done": {
+      "count": 1,
+      "origins": [
+        "explicit_user"
+      ]
+    },
+    "submit_and_exit_seen": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "task_completion_committed": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "task_started": {
+      "count": 1,
+      "origins": [
+        "explicit_user"
+      ]
+    },
+    "continuation_started": {
+      "count": 0,
+      "origins": []
+    }
+  }
+}
