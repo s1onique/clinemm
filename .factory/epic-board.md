@@ -16728,3 +16728,41 @@ smoke      = PASS — kernel round-trips a tagged event sequence (ready, state u
 **Deferred (per reviewer instruction):** Semantic correctness against the historical replay — specifically whether the otherwise-unreachable `JobTerminal ObservationPending` state faithfully captures ClineMM's terminal lifecycle. The kernel CAN produce that state (via `handleTerminalObserved`'s `JobTerminal ObservationPending -> JobTerminal ObservationConsumed` branch); whether production traces exercise it is the next ACT's question.
 
 **Next ACT:** `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-CORRECTION03` (or equivalent) — historical replay. Replay our known BCB / CPA / CCARD / live-failure traces through Elm and compare Elm's predicted holds/authority transitions against the already-proven production evidence. **DO NOT** build the TS production adapter yet — first prove the kernel agrees with reality.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01 — VERDICT=H1_ELM_TOO_STRICT — 2026-10-01
+
+**Status:** CLOSED (H1 discriminated). The Elm kernel's `ActiveRun` hold misidentifies the production seam: agent_turn_done (C8) fires AFTER task_completion_committed (C10) by 51ms in the LIVE trace, while the Elm kernel rejects C10 because `activeRun /= Nothing`. The post-C10/pre-C8 interval contains ONLY bookkeeping/teardown/observation (no semantic activity), and no post-C10 failure can invalidate completion. Counterfactual: with C8 moved before C10, the unchanged Elm kernel accepts the sequence and reaches `completion_committed` with no divergence.
+
+```text
+SUBJECT_HEAD       = eb60e7f78f45f72c5eec7eac771fd2db1950b301
+ENTRY_HEAD         = 4f702adbcd70e0aee04c52be087703e52a7aad10
+REAL_SESSION_ID    = 1790809530345_lrsk9
+REAL_TRACE_SHA256  = ec77301dd854dffe4d8121643852fd9a33ab7dddac8b2d70c9b0da1d9d0ddccd
+PROJECTION_SHA256  = ad5c8b26c89bc6287aa92072823e43451efe6751749328faeb0be4289bc0f12b
+ELM_KERNEL_SHA256  = 40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168
+
+H1_ELM_TOO_STRICT   = true
+H2_TS_COMMITS_TOO_EARLY = false
+PRODUCTION_SEMANTICS_CHANGED = false
+ELM_AUTHORITY_SEMANTICS_CHANGED = false
+QUEUE_SEMANTICS_CHANGED = false
+PRESENTATION_SEMANTICS_CHANGED = false
+MCP_CODE_CHANGED = false
+MYC_CODE_CHANGED = false
+SUCCESSOR = ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01
+```
+
+**Discriminator composition:**
+- CWRA-01: C10-before-C8 reproduced (LIVE seq 8 -> 9, 51ms gap; production-source confirms C10 inside executeTurn and C8 after).
+- CWRA-02: C10 state contains zero unresolved semantic authority (BCB barrier passed; terminal response committed; no held background jobs).
+- CWRA-03: C10->C8 interval = 4 BOOKKEEPING + 1 TEARDOWN + 1 OBSERVATION + 1 diagnostic-only; ZERO semantic events.
+- CWRA-04: the C10->C8 tail is bounded by the host's post-executeTurn bookkeeping, not by run activity.
+- CWRA-05: NOT_APPLICABLE; no injectable semantic failure seam in the interval.
+- CWRA-06: counterfactual replay (C8 before C10) -> NO VIOLATION, firstDivergenceSeq=null, task=completion_committed (sha256=480e75f2...).
+- CWRA-07: existing TS tests merely tolerate C10<C8 (never assert it as invariant). Elm kernel tests ELM-AUTH-09 + ELM-AUTH-15 explicitly require C10 AFTER C8.
+
+**Bridge test:** `apps/vscode/src/sdk/__tests__/completion-authority-commit-while-run-active-discriminator01.c24-c-bridge.test.ts` — 7/7 PASS. Registered in `vitest.config.c2-4-c-bridge.ts`. Excluded from base tsconfig.
+
+**Root cause:** `apps/vscode/elm/completion-authority/src/Authority.elm:439-532` — `computeHoldReasons` classifies `activeRun /= Nothing` as a completion-blocking hold. The hold equates "an agent_turn_done event has not yet been received" with "the run is still semantically active and cannot be committed". The model is correct in spirit (completion should require the run to be closed) but wrong in mechanism.
+
+**Next ACT:** `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01` — repair the Elm kernel ONLY. The key repair question: **what Elm state represents "semantic run complete, host bookkeeping C8 not yet observed" without weakening the invariant against genuinely active runs?** Use Elm's model/update architecture to make this state distinction explicit; ports remain the strong JS↔Elm state-ownership boundary.
