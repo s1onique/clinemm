@@ -54,9 +54,8 @@ import {
 	getDiagnosticHostId,
 	getDiagnosticManagerId,
 } from "./background-job-liveness-authority"
-import { setHeldContinuationPromptForSession } from "./canonical-event-subscription"
 import { type CommandJobLifecycleEvent, CommandJobManager, type CommandJobState } from "./command-job-manager"
-import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
+import { createProductionPendingPromptCapture } from "./continuation-cardinality-authority.session-host-capture"
 import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
@@ -460,131 +459,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// gate (dogfood-only) lives inside the capture module —
 			// when OFF every callback is a no-op, so the production
 			// default is zero-overhead.
-			pendingPromptCapture: (() => {
-				// ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01:
-				// Origin derivation preserves historical `delivery`
-				// semantics as the PRIMARY disambiguator and uses
-				// `jobId` presence only as the FALLBACK for C7/C8
-				// where `delivery` has intentionally disappeared
-				// (the bounded repair drops the drain -> send
-				// `delivery` propagation; drained prompts arrive at
-				// `runTurn` with `delivery === undefined` and `jobId`
-				// set, terminal-wake path).
-				//
-				// C4/C5/C6 still observe entry-level `delivery` and
-				// call deriveOrigin with the same `delivery` value
-				// they always did — historical semantics are
-				// preserved exactly. C7/C8 call deriveOrigin with
-				// `delivery === undefined` and `jobId` set, where
-				// the jobId fallback recovers `pending_prompt_drain`.
-				//
-				// Order matters: `delivery` first, `jobId` second.
-				// Putting jobId first would re-classify
-				// `deriveOrigin("steer", "job-1")` from
-				// `deferred_continuation` to `pending_prompt_drain`
-				// — a semantic regression that exceeds the OOM
-				// repair's required boundary.
-				const deriveOrigin = (
-					delivery: "queue" | "steer" | undefined,
-					jobId?: string,
-				): "pending_prompt_drain" | "deferred_continuation" | "explicit_user" => {
-					if (delivery === "queue") return "pending_prompt_drain"
-					if (delivery === "steer") return "deferred_continuation"
-					if (jobId !== undefined) return "pending_prompt_drain"
-					return "explicit_user"
-				}
-				return {
-					onEnqueue: (input) => {
-						captureContinuationCardinalityAuthorityRecord({
-							stage: "pending_prompt_enqueued",
-							origin: deriveOrigin(input.delivery, input.jobId),
-							sessionId: input.sessionId,
-							promptId: input.promptId,
-							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
-						})
-					},
-					onBeforeDrain: (input) => {
-						// C5 — pending_prompt_dequeued fires AFTER
-						// the destructive shift but BEFORE the send
-						// dispatch.
-						captureContinuationCardinalityAuthorityRecord({
-							stage: "pending_prompt_dequeued",
-							origin: deriveOrigin(input.delivery, input.jobId),
-							sessionId: input.sessionId,
-							promptId: input.promptId,
-							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
-						})
-					},
-					onBeforeDispatch: (input) => {
-						// C6 — continuation_scheduled fires
-						// IMMEDIATELY BEFORE the actual `deps.send(...)`
-						// call. INDEPENDENT of C5 (so C5=1 with C6=2
-						// is observable as a duplicate-dispatch
-						// fingerprint).
-						captureContinuationCardinalityAuthorityRecord({
-							stage: "continuation_scheduled",
-							origin: deriveOrigin(input.delivery, input.jobId),
-							sessionId: input.sessionId,
-							promptId: input.promptId,
-							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
-						})
-						// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-D:
-						// Stage the held continuation prompt so the
-						// canonical `run-started` event for the same
-						// session can join it (one held prompt per
-						// session, consumed exactly once). Diagnostic-
-						// only: no effect when capture seam is OFF
-						// (the underlying helper is a no-op).
-						setHeldContinuationPromptForSession(input.sessionId, input.promptId)
-					},
-					onRunTurnStarted: (input) => {
-						// C7 — origin derived from actual delivery +
-						// jobId presence (post-repair disambiguator).
-						captureContinuationCardinalityAuthorityRecord({
-							stage: "run_turn_started",
-							origin: deriveOrigin(input.delivery, input.jobId),
-							sessionId: input.sessionId,
-							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
-						})
-					},
-					onAgentTurnDone: (input) => {
-						// C8 — same derivation as C7.
-						captureContinuationCardinalityAuthorityRecord({
-							stage: "agent_turn_done",
-							origin: deriveOrigin(input.delivery, input.jobId),
-							sessionId: input.sessionId,
-							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
-						})
-					},
-					onExecuteTurnPreludeEnter: (input: {
-						sessionId: string
-						delivery: "queue" | "steer" | undefined
-						jobId?: string
-					}) => {
-						// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02:
-						// The first currently-unobservable boundary
-						// after C7 (`run_turn_started`). Fires
-						// IMMEDIATELY BEFORE the `executeTurn(...)`
-						// await inside `LocalRuntimeHost.runTurn`,
-						// AFTER the queue/steer short-circuit. Same
-						// origin derivation as C7/C8. The pairing with
-						// C7 is the load-bearing discriminator:
-						//   C7 + execute_turn_prelude_enter + (no C8)
-						//     → EXECUTE_TURN_PRELUDE_STALL
-						//   C7 + (no execute_turn_prelude_enter) +
-						//     (no C8)
-						//     → EXECUTE_TURN_PRELUDE_HUNG
-						// Default-off (capture helper is a no-op when
-						// the CCARD seam is OFF).
-						captureContinuationCardinalityAuthorityRecord({
-							stage: "execute_turn_prelude_enter",
-							origin: deriveOrigin(input.delivery, input.jobId),
-							sessionId: input.sessionId,
-							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
-						})
-					},
-				}
-			})(),
+			pendingPromptCapture: createProductionPendingPromptCapture(),
 		})
 
 		Logger.log("[VscodeSessionHost] Initialized with ClineCore + VSCode extra tools")

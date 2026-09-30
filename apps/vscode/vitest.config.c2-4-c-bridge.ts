@@ -406,6 +406,17 @@ export default defineConfig({
 			// `@cline-internal/core/runtime/host/local-runtime-host`
 			// alias declared only here.
 			"src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-RUN-IDENTITY-LIVE-REPAIR01:
+			// real `LocalRuntimeHost` + real canonical-event
+			// subscription + real CCARD capture seam. Mirrors the
+			// production `pendingPromptCapture` wiring and asserts
+			// the run-identity invariants (single run_turn_started
+			// authority, agent_turn_done correlates to its start).
+			// Runs only under this bridge config because the test
+			// imports the REAL `LocalRuntimeHost` via the
+			// `@cline-internal/core/runtime/host/local-runtime-host`
+			// alias declared only here.
+			"src/sdk/__tests__/completion-authority-run-identity-live-repair01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

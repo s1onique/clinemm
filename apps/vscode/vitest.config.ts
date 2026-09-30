@@ -117,6 +117,13 @@ export default defineConfig({
 			// stub alias in scope; runs under the dedicated bridge
 			// config.
 			"src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-RUN-IDENTITY-LIVE-REPAIR01:
+			// real `LocalRuntimeHost` + real canonical-event
+			// subscription + real CCARD capture seam. Runs under
+			// `vitest.config.c2-4-c-bridge.ts` because the test uses
+			// the `@cline-internal/core/runtime/host/local-runtime-host`
+			// alias declared only there.
+			"src/sdk/__tests__/completion-authority-run-identity-live-repair01.test.ts",
 			// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02:
 			// real production-class event bus (RuntimeHostEventBus)
 			// composition witness. The deep-relative import is intentional

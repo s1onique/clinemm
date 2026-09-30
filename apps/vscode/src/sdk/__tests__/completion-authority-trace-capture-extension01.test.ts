@@ -307,7 +307,19 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §A: adapte
 			expect(ADAPTER).toContain("run_turn_started")
 		})
 		test("QUEUE_SEMANTICS_CHANGED sentinel — vscode-session-host C7 capture still exists", () => {
-			const SOURCE = fs.readFileSync(SESSION_HOST_PATH, "utf8")
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-RUN-IDENTITY-LIVE-REPAIR01:
+			// the C7 capture is now threaded through
+			// `apps/vscode/src/sdk/continuation-cardinality-authority.runtime-capture.ts`
+			// (extracted from `vscode-session-host.ts` so the
+			// production seam is testable). The sentinel now
+			// checks the helper module. Queue semantics are
+			// unchanged — the capture still happens at the C7
+			// boundary.
+			const RUNTIME_CAPTURE_PATH = path.resolve(
+				REPO_ROOT,
+				"apps/vscode/src/sdk/continuation-cardinality-authority.runtime-capture.ts",
+			)
+			const SOURCE = fs.readFileSync(RUNTIME_CAPTURE_PATH, "utf8")
 			expect(SOURCE).toContain('stage: "run_turn_started"')
 		})
 		test("PRESENTATION_SEMANTICS_CHANGED sentinel — webview ChatRow still readable", () => {

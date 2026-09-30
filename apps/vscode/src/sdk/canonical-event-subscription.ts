@@ -79,6 +79,14 @@ export function subscribeCanonicalRuntimeEventsToShadow(
 		if (event.type === "run-started") {
 			const runId = event.snapshot?.runId
 			if (typeof runId === "string" && runId.length > 0) {
+				// ACT-CLINEMM-COMPLETION-AUTHORITY-RUN-IDENTITY-LIVE-REPAIR01 §7:
+				// Retain the factual runtime runId keyed by
+				// sessionId so the downstream `agent_turn_done`
+				// capture can correlate to its start. Diagnostic-
+				// only — does not influence run-whether /
+				// completion / continuation / queueing /
+				// presentation / MCP / myc.
+				runIdBySessionId.set(sessionId, runId)
 				// ALWAYS emit run_turn_started (the SOLE
 				// authoritative runId-bearing record). The
 				// caller-side pre-execute C7 capture at
@@ -176,6 +184,61 @@ export function clearHeldContinuationPromptForSession(sessionId: string): void {
  */
 export function getHeldContinuationPromptForSession(sessionId: string): string | undefined {
 	return heldContinuationPromptsBySessionId.get(sessionId)
+}
+
+/**
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-RUN-IDENTITY-LIVE-REPAIR01 §7:
+ * DIAGNOSTIC-ONLY sessionId → runId retention map. Populated by
+ * the `run-started` event handler above (the SOLE place the
+ * factual AgentRuntime runId is observable). Read by the
+ * `agent_turn_done` capture seam at
+ * `apps/vscode/src/sdk/vscode-session-host.ts` so the terminal
+ * record can correlate to its start.
+ *
+ * Hard rules:
+ *   - The runtime creates `runId` only inside
+ *     `AgentRuntime.execute(...)`. Before that point, the value is
+ *     undefined. We retain the value here so a downstream
+ *     `agent_turn_done` capture that runs after `run-started` has
+ *     already arrived can carry the same identity.
+ *   - If multiple runs overlap (rare; per ACT §7 we do NOT use a
+ *     single mutable "currentRunId" global), the LAST observed
+ *     `run-started` for the sessionId wins. This matches the
+ *     session-serial invariant: one active turn per session at a
+ *     time.
+ *   - On session teardown the host MUST call
+ *     `clearRunIdForSession(sessionId)` so stale values cannot
+ *     bleed into a future session.
+ *
+ * State ownership: module-level, default empty. Diagnostic-only:
+ * never read on any production code path that influences
+ * run-whether / run-completion / continuation / completion
+ * authorization / queueing / presentation / MCP / myc. The
+ * `captureContinuationCardinalityAuthorityRecord` helper is a
+ * no-op when the capture seam is OFF, so zero semantic delta when
+ * disabled.
+ */
+const runIdBySessionId = new Map<string, string>()
+
+/**
+ * Read the retained runId for `sessionId`. Returns `undefined` if
+ * the runtime has not yet emitted `run-started` for the session
+ * (or if it was cleared). Diagnostic-only: production MUST NOT
+ * branch on this value for any semantic decision.
+ */
+export function getRunIdForSession(sessionId: string): string | undefined {
+	if (typeof sessionId !== "string" || sessionId.length === 0) return undefined
+	return runIdBySessionId.get(sessionId)
+}
+
+/**
+ * Clear the retained runId for `sessionId`. Called from the
+ * session-teardown seam so stale runIds cannot bleed into the next
+ * session.
+ */
+export function clearRunIdForSession(sessionId: string): void {
+	if (typeof sessionId !== "string" || sessionId.length === 0) return
+	runIdBySessionId.delete(sessionId)
 }
 
 // ===========================================================================

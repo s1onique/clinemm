@@ -1,0 +1,10 @@
+{"seq":1,"at":1,"stage":"run_turn_started","origin":"explicit_user","sessionId":"1790805281100_jbf6y"}
+{"seq":2,"at":2,"stage":"task_started","origin":"unknown","sessionId":"1790805281100_jbf6y","taskId":"1790805281100_jbf6y"}
+{"seq":3,"at":3,"stage":"task_started","origin":"unknown","sessionId":"1790805281100_jbf6y","taskId":"1790805281100_jbf6y"}
+{"seq":4,"at":4,"stage":"run_turn_started","origin":"unknown","sessionId":"1790805281100_jbf6y","runId":"run__JQJjkS2"}
+{"seq":5,"at":5,"stage":"execute_turn_prelude_enter","origin":"explicit_user","sessionId":"1790805281100_jbf6y"}
+{"seq":6,"at":6,"stage":"submit_and_exit_seen","origin":"unknown","sessionId":"1790805281100_jbf6y","submitId":"submit__JQJjkS2_1"}
+{"seq":7,"at":7,"stage":"task_completion_committed","origin":"unknown","sessionId":"1790805281100_jbf6y","completionId":"completion__JQJjkS2_1","ownerId":"1790805281100_jbf6y"}
+{"seq":8,"at":8,"stage":"task_completion_committed","origin":"unknown","sessionId":"1790805281100_jbf6y","completionId":"completion__JQJjkS2_2","ownerId":"1790805281100_jbf6y"}
+{"seq":9,"at":9,"stage":"continuation_scheduled","origin":"pending_prompt_drain","sessionId":"1790805281100_jbf6y","promptId":"prompt__JQJjkS2_drain"}
+{"seq":10,"at":10,"stage":"agent_turn_done","origin":"pending_prompt_drain","sessionId":"1790805281100_jbf6y"}
