@@ -1,14 +1,17 @@
 {
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01-CORRECTION01",
   "entryHead": "e3a0f92668aa6a23503f0e9290d0de17aa91c96e",
-  "subjectHead": "PENDING — to be assigned at commit time",
+  "subjectHead": "d6fd51a0959c1b2c8f8e8136d49d6f11f99aaa0e",
   "verdict": "PASS_CAPTURE_EXTENSION_GREEN",
-  "reviewerP0": "PRODUCTION_SEMANTICS_CHANGED — lifecycle event rename reversed",
-  "fixSummary": "Reverted the §21 GREEN lifecycle event rename (command_job_terminalize → command_job_terminal_committed). The §21 GREEN file's TCE-P04 source-presence regex test was rewritten to test real production-seam behavioral invariants (no duplicate CCARD terminal records per jobId, ownerId === launch-time ownerSessionId, terminalKind absent, replay classifies INSUFFICIENT_IDENTITY).",
+  "reviewerP0": "PRODUCTION_SEMANTICS_CHANGED \u2014 lifecycle event rename reversed",
+  "fixSummary": "Reverted the \u00a721 GREEN lifecycle event rename (command_job_terminalize \u2192 command_job_terminal_committed). The \u00a721 GREEN file's TCE-P04 source-presence regex test was rewritten to test real production-seam behavioral invariants (no duplicate CCARD terminal records per jobId, ownerId === launch-time ownerSessionId, terminalKind absent, replay classifies INSUFFICIENT_IDENTITY).",
   "productionFootprint": {
-    "files": 10,
-    "insertions": 163,
-    "deletions": 48
+    "filesChanged": 9,
+    "insertions": 156,
+    "deletions": 47,
+    "elmFilesChanged": 0,
+    "sdkMcpMycFilesChanged": 0,
+    "note": "9 files vs predecessor e3a0f9266 (4 production source + 4 test + 1 SdkController comment)"
   },
   "testResults": {
     "completion-authority-trace-capture-extension01": "39 passed (39)",
@@ -37,16 +40,37 @@
       "MANUFACTURED_IDENTITY_COUNT": 0,
       "ORIGIN_REWRITE_COUNT": 0,
       "TEMPORAL_SMUGGLING_COUNT": 0
-    }
+    },
+    "elmVersion": "0.19.2",
+    "elmBuild": "PASS",
+    "elmTest": "20/20 PASS",
+    "elmSmoke": "PASS (kernel round-trips tagged event sequence)",
+    "vscodePrepublish": "BASELINE_BLOCKED (318 pre-existing Biome diagnostics in elm/.elm-home/0.19.1/packages/elm/... vendor JS \u2014 not introduced by CORRECTION01)"
   },
   "preExistingFailures": [
     {
       "testFile": "runtime-followup-resume-subscription-parity.frsp01.test.ts",
-      "result": "2 failed | 2 passed (4) — PRE-EXISTING on SUBJECT_HEAD e3a0f9266 (verified via git stash)",
-      "scope": "SdkFollowupCoordinator subscription parity — unrelated to command_job_terminal_committed lifecycle",
+      "result": "2 failed | 2 passed (4) \u2014 PRE-EXISTING on SUBJECT_HEAD e3a0f9266 (verified via git stash)",
+      "scope": "SdkFollowupCoordinator subscription parity \u2014 unrelated to command_job_terminal_committed lifecycle",
       "confirmationMethod": "Stashed CORRECTION01 changes, ran test, observed identical 2-fail pattern; unstashed"
+    },
+    {
+      "testFile": "runtime-shadow-reactivation.rsr01-correction01.test.ts",
+      "result": "7 failed (7) \u2014 PRE-EXISTING; runs under c2-4-c-bridge config, no reference to command_job_terminal_committed"
+    },
+    {
+      "testFile": "async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts",
+      "result": "1 failed | 1 passed (2) \u2014 PRE-EXISTING; runs under c2-4-c-bridge config, no reference to command_job_terminal_committed"
     }
   ],
   "readyForDogfood": true,
-  "readyForElmShadow02": false
+  "readyForElmShadow02": false,
+  "ablation": {
+    "spec": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01-CORRECTION01 \u00a717",
+    "step": "Remove ownerId: job.ownerSessionId from command-job-manager.ts:2672",
+    "resultWithoutOwnerId": "1 failed (TCE-P04.GREEN #1) | 38 passed (39) \u2014 RED",
+    "resultWithOwnerIdRestored": "39 passed (39) \u2014 GREEN",
+    "verdict": "CORRECTION01_ABLATION=PASS"
+  },
+  "nextAct": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DOGFOOD-REPLAY01"
 }

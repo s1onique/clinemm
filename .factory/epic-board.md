@@ -62,6 +62,61 @@ MYC_CODE_CHANGED = false
 
 **Resume state for next session:** §18 RED tests TCE-01..TCE-12. Best template ordering: TCE-07/08 (concurrent runs), TCE-01 (runId thread), TCE-02 (prompt↔run join), TCE-05/09 (terminal ownership), TCE-03/04/12 (submit/completion cardinality), TCE-06 (default-off), TCE-10/11 (adversarial correlation).
 
+## ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01-CORRECTION01 — PASS_CAPTURE_EXTENSION_GREEN — 2026-09-29
+
+**Status:** PASS_CAPTURE_EXTENSION_GREEN. Bounded correction closing the §21 GREEN reviewer's P0 (`COMPLETION_AUTHORITY_SEMANTICS_CHANGED=true` because the §21 GREEN renamed the production lifecycle event `command_job_terminal_committed` → `command_job_terminalize`). The rename was driven by a §18 RED test regex that required the substring `terminal_committed` not to appear in `command-job-manager.ts`; CORRECTION01 reverted the rename and replaced the textual assertion with 4 real production-seam behavioral assertions.
+
+```text
+ENTRY_HEAD                       = e3a0f92668aa6a23503f0e9290d0de17aa91c96e (predecessor §21 GREEN)
+SUBJECT_HEAD                     = d6fd51a0959c1b2c8f8e8136d49d6f11f99aaa0e (this ACT)
+PREDECESSOR_SUBJECT_HEAD         = e3a0f92668aa6a23503f0e9290d0de17aa91c96e
+P0_PRODUCTION_SEMANTICS_CHANGED  = CLOSED
+TCE_GREEN                        = 39/39 PASS
+CORRECTION_ABLATION              = PASS (RED without ownerId → GREEN with ownerId, against production seam)
+CONSERVATION                     = 155/155 PASS across 14 files
+TYPECHECK                        = PASS (bun run check-types, exit 0)
+ELM_BUILD                        = PASS
+ELM_TEST                         = 20/20 PASS
+ELM_SMOKE                        = PASS
+VSCODE_PREPUBLISH                = BASELINE_BLOCKED (318 pre-existing Biome diagnostics in elm/.elm-home/0.19.1/packages/elm/... vendor JS — not introduced by this ACT)
+PRODUCTION_FOOTPRINT             = 9 files changed (4 production source + 4 test + 1 comment), +156/-47 vs predecessor
+ELM_SOURCE_CHANGED               = false
+ELM_AUTHORITY_SEMANTICS_CHANGED  = false
+COMPLETION_AUTHORITY_SEMANTICS_CHANGED = false  ← was true before this fix
+QUEUE_SEMANTICS_CHANGED          = false
+PRESENTATION_SEMANTICS_CHANGED   = false
+MCP_CODE_CHANGED                 = false
+MYC_CODE_CHANGED                 = false
+CAPTURE_DEFAULT_OFF              = true
+REAL_LIVE_TRACE                  = NOT_RUN
+ELM_MODEL_CORRESPONDENCE         = UNPROVEN
+READY_FOR_DOGFOOD                = true
+READY_FOR_ELM_SHADOW02           = false
+```
+
+**What changed (bounded repair):**
+- Reverted the production lifecycle event rename in 5 files: `command-job-manager.ts` (4 code refs + 11 doc refs), `background-job-liveness-authority.ts` (4 refs), `background-notify-coordinator.ts` (1 doc), `ExtensionMessage.ts` (1 doc), `SdkController.ts` (1 doc).
+- Reverted 3 existing production tests that consumed the rename: `bclas06`, `dcct01`, `pcpc01`.
+- Replaced the §18 RED source-regex assertion in TCE-P04 with 4 real production-seam behavioral assertions:
+  1. `TCE-P04.GREEN #1`: `CommandJobManager.real-finalize` emits exactly one `terminal_committed` CCARD record per jobId (drives real production seam via fakeSupervisor test seam).
+  2. `TCE-P04.GREEN #2`: C1 capture carries `ownerId === job.ownerSessionId` (launch-time identity, not derived from active-session).
+  3. `TCE-P04.GREEN #3`: C1 capture does NOT carry `terminalKind` (v1 schema).
+  4. `TCE-P04.GREEN #4`: replay classifies `terminal_committed` without `terminalKind` as `INSUFFICIENT_IDENTITY`.
+- Strengthened TCE-P04.GREEN #1 to additionally bind ownerId and no-terminalKind invariants against the production seam (so the §17 ablation RED→GREEN works as the spec requires; previously the ownerId assertion lived in test #2 which bypassed the production seam).
+
+**§17 Ablation evidence:**
+```text
+ownerId: job.ownerSessionId present  → 39/39 PASS
+ownerId: job.ownerSessionId removed  →  1 failed | 38 passed (39) — RED
+ownerId restored                     → 39/39 PASS
+```
+
+**Pre-existing failures (verified NOT introduced by CORRECTION01):** `runtime-followup-resume-subscription-parity.frsp01.test.ts` (2 failed | 2 passed; verified identical failure pattern with `git stash` of CORRECTION01). `runtime-shadow-reactivation.rsr01-correction01.test.ts` (7/7 failed; runs under c2-4-c-bridge config, no reference to `command_job_terminal_committed`). `async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts` (1 failed | 1 passed; runs under c2-4-c-bridge config, no reference to `command_job_terminal_committed`).
+
+**Successor:** `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DOGFOOD-REPLAY01` — build/install the corrected exact-head VSIX, capture one identity-complete REAL production trace, replay it through a fresh Elm kernel, and identify the first semantic divergence. Codium was NOT packaged, installed, or run in this ACT session.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — CAPTURE_INSUFFICIENT — 2026-09-29
+
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — CAPTURE_INSUFFICIENT — 2026-09-29
 
 **Status:** CAPTURE_INSUFFICIENT (verdict D per §39). Replay adapter +

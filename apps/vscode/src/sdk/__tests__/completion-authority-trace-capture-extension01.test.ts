@@ -520,6 +520,17 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 			const ring = getContinuationCardinalityAuthorityCaptureRecords()
 			const c1Records = ring.filter((r) => r.stage === "terminal_committed")
 			expect(c1Records.length).toBe(1)
+			// Invariant: C1 capture carries ownerId === launch-time
+			// job.ownerSessionId (the value we passed into manager.start
+			// at line 501). This binds §17's ownerId necessity:
+			// removing `ownerId: job.ownerSessionId` from
+			// command-job-manager.ts:2667 flips this assertion RED.
+			expect((c1Records[0] as { ownerId?: string }).ownerId).toBe("OWNER-P04-LAUNCH")
+			// Invariant: terminal_committed stage does NOT carry
+			// terminalKind (v1 schema). Removing/adding the
+			// terminalKind field in the production seam would
+			// flip this assertion.
+			expect("terminalKind" in (c1Records[0] as unknown as Record<string, unknown>)).toBe(false)
 			// Sanity check: lifecycle sink received the full sequence.
 			expect(allKinds).toContain("command_job_process_started")
 			expect(allKinds).toContain("command_job_terminal_committed")
