@@ -1,7 +1,7 @@
 {
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01-CORRECTION01",
   "entryHead": "e3a0f92668aa6a23503f0e9290d0de17aa91c96e",
-  "subjectHead": "d6fd51a0959c1b2c8f8e8136d49d6f11f99aaa0e",
+  "subjectHead": "c93ed838239ea597308cb0bc46a3805dc7f02ac6",
   "verdict": "PASS_CAPTURE_EXTENSION_GREEN",
   "reviewerP0": "PRODUCTION_SEMANTICS_CHANGED \u2014 lifecycle event rename reversed",
   "fixSummary": "Reverted the \u00a721 GREEN lifecycle event rename (command_job_terminalize \u2192 command_job_terminal_committed). The \u00a721 GREEN file's TCE-P04 source-presence regex test was rewritten to test real production-seam behavioral invariants (no duplicate CCARD terminal records per jobId, ownerId === launch-time ownerSessionId, terminalKind absent, replay classifies INSUFFICIENT_IDENTITY).",
@@ -11,7 +11,8 @@
     "deletions": 47,
     "elmFilesChanged": 0,
     "sdkMcpMycFilesChanged": 0,
-    "note": "9 files vs predecessor e3a0f9266 (4 production source + 4 test + 1 SdkController comment)"
+    "note": "9 files vs predecessor e3a0f9266 (4 production source + 4 test + 1 SdkController comment)",
+    "commitMessage": "CORRECTION01 commit 1: revert lifecycle rename + replace regex with real production-seam invariants (d6fd51a09). CORRECTION01 commit 2: strengthen TCE-P04 ownerId/no-terminalKind production-seam binding + ablation evidence (c93ed8382)."
   },
   "testResults": {
     "completion-authority-trace-capture-extension01": "39 passed (39)",
@@ -72,5 +73,9 @@
     "resultWithOwnerIdRestored": "39 passed (39) \u2014 GREEN",
     "verdict": "CORRECTION01_ABLATION=PASS"
   },
-  "nextAct": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DOGFOOD-REPLAY01"
+  "nextAct": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DOGFOOD-REPLAY01",
+  "subjectCommits": [
+    "d6fd51a0959c1b2c8f8e8136d49d6f11f99aaa0e",
+    "c93ed838239ea597308cb0bc46a3805dc7f02ac6"
+  ]
 }
