@@ -1,7 +1,7 @@
 {
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01-CORRECTION01",
   "entryHead": "e3a0f92668aa6a23503f0e9290d0de17aa91c96e",
-  "subjectHead": "82b1e9c2265ed5c0c338b76d01f3bf403c3cb223",
+  "subjectHead": "46ee4b6309c632136ba7518cd74829937ad9bff8",
   "verdict": "PASS_CAPTURE_EXTENSION_GREEN",
   "reviewerP0": "PRODUCTION_SEMANTICS_CHANGED \u2014 lifecycle event rename reversed",
   "fixSummary": "Reverted the \u00a721 GREEN lifecycle event rename (command_job_terminalize \u2192 command_job_terminal_committed). The \u00a721 GREEN file's TCE-P04 source-presence regex test was rewritten to test real production-seam behavioral invariants (no duplicate CCARD terminal records per jobId, ownerId === launch-time ownerSessionId, terminalKind absent, replay classifies INSUFFICIENT_IDENTITY).",
