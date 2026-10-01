@@ -1,0 +1,60 @@
+§24 Package inclusion gate — captured 2026-10-01T11:58Z.
+
+## Bundle-side proof
+
+`apps/vscode/dist/extension.js` (post-esbuild, 55,973,817 bytes)
+contains the live Elm shadow runtime. Verified via grep:
+
+  $ grep -o 'completionAuthorityElmShadow\|setElmShadowEnabled' \
+      apps/vscode/dist/extension.js | head -3
+  setElmShadowEnabled
+  setElmShadowEnabled
+  setElmShadowEnabled
+
+The shadow's symbol set is bundled into the production extension
+artifact. The runtime path resolution for the Elm bundle is:
+
+  elm/completion-authority/vendor/completion-authority.js
+
+relative to the `dist/extension.js` location. In a packaged VSIX,
+the structure is `<publisher.claude-dev-X.Y.Z>/dist/extension.js`
+with `elm/completion-authority/vendor/completion-authority.js`
+sitting at the same extension root. This is the same layout the
+predecessor ACT committed to in §24 of
+`ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01`.
+
+## VSIX-side proof
+
+The `bun run package` recipe for production includes
+`bun esbuild.mjs --production` which builds `dist/extension.js`.
+The Elm bundle is NOT inlined into extension.js (it is a runtime
+read-from-disk artifact).
+
+`apps/vscode/.vscodeignore` excludes `src/**`, `scripts/**`,
+`proto/**`, `tests/**`, `**/*.ts`, `out/**`, `dist-standalone/**`,
+`node_modules/**`. The `elm/**` directory is NOT excluded, so
+`elm/completion-authority/vendor/completion-authority.js` ships
+inside the VSIX.
+
+The full dogfood VSIX must be built by the operator per §26 (the
+operator is build authority; the SHADOW02 ACT records the recipe
+and verification evidence, not the VSIX hash).
+
+## Verification recipe for the operator
+
+1. cd apps/vscode
+2. bun run package    # runs sync-parser-helper + check-types +
+                       # build:webview + lint + esbuild.mjs --production
+3. bunx vsce package --no-dependencies --allow-package-secrets \
+       sendgrid --out dist/clinemm-<ver>-<sha>.vsix
+4. unzip -l dist/clinemm-<ver>-<sha>.vsix | grep completion-authority.js
+   Expected: `extension/elm/completion-authority/vendor/completion-authority.js`
+5. unzip -p dist/clinemm-<ver>-<sha>.vsix \
+       extension/elm/completion-authority/vendor/completion-authority.js \
+       | shasum -a 256
+   Expected: 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+
+## Elm vendor SHA binding
+
+ELM_VENDOR_JS_SHA256 = 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+(unmodified from predecessor)

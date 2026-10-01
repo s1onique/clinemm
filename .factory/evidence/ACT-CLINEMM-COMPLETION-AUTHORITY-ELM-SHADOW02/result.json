@@ -1,0 +1,93 @@
+{
+  "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02",
+  "predecessor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01",
+  "predecessor_subject_head": "254004a076576fdefb7e9edec7d521d56c2ab498",
+  "entry_head": "c3fa0e374c95f78b7bd726ba1892fde36a30e3cd",
+  "subject_head": "9c051ad5cd91317346fa4b2de0195843a3ff261a",
+  "dogfood_source_head": "9c051ad5cd91317346fa4b2de0195843a3ff261a",
+  "closure_head": "9c051ad5cd91317346fa4b2de0195843a3ff261a",
+  "elm_vendor_js_sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
+  "elm_source_unchanged": true,
+  "elm_unit_tests": "31/31",
+  "elm_smoke_test": "PASS",
+  "ts_typecheck": "PASS",
+  "shadow02_tests": "19/19",
+  "historical_replay": "20/20",
+  "trace_capture_extension": "39/39",
+  "ccard": "12/12",
+  "total_vitest": "90/90",
+  "manufactured_identity_count": 0,
+  "origin_rewrite_count": 0,
+  "elm_shadow_default_off": true,
+  "elm_shadow_fail_open": true,
+  "elm_shadow_nonblocking": true,
+  "ts_authority": "SOLE",
+  "elm_authority": "NONE",
+  "verdict": "PASS_LIVE_ELM_SHADOW",
+  "ready_for_first_elm_authority_seam_experiment": true,
+  "successor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-<FIRST-SEAM>-SHADOW-AUTHORITY01 (deferred to evidence after operator live witness per §44)",
+  "red": {
+    "file": "apps/vscode/src/sdk/__tests__/completion-authority-elm-shadow02.test.ts",
+    "module_missing": "apps/vscode/src/sdk/completion-authority-elm-shadow.ts",
+    "seam": "production captureContinuationCardinalityAuthorityRecord with no observer wiring"
+  },
+  "green": {
+    "shad02_tests": "ELS02-01..ELS02-15 (19/19)",
+    "tce": "39/39",
+    "historical_replay": "20/20",
+    "ccard": "12/12",
+    "elm_unit_tests": "31/31",
+    "elm_smoke_test": "PASS",
+    "ts_typecheck": "PASS"
+  },
+  "ablation": {
+    "shadow_disabled_no_op": "ELS02-01.B PASS",
+    "shadow_disabled_ccard_unchanged": "ELS02-01.C PASS",
+    "invalid_kernel_path_fail_open": "ELS02-09 PASS"
+  },
+  "non_blocking_proof": {
+    "burst_captures_synchronous": "ELS02-13: 20 captures in <200ms",
+    "kernel_fail_does_not_block": "ELS02-14.A: 50 captures synchronously"
+  },
+  "authority_firewall": {
+    "shadow_imports": [
+      "./completion-authority-elm-replay",
+      "./completion-authority-elm-replay.kernel"
+    ],
+    "mutating_authorities_imported": [],
+    "second_stage_msg_switch_present": false,
+    "callback_into_production": false
+  },
+  "conservation": {
+    "ts_completion_authority_changed": false,
+    "queue_semantics_changed": false,
+    "presentation_semantics_changed": false,
+    "task_lifecycle_semantics_changed": false,
+    "ccard_factual_schema_changed": false,
+    "mcp_code_changed": false,
+    "myc_code_changed": false,
+    "react_code_changed": false,
+    "elm_source_changed": false,
+    "elm_authority_semantics_changed": false,
+    "elm_shadow_runtime_added": true
+  },
+  "live_witness": {
+    "status": "DEFERRED_TO_OPERATOR",
+    "reason": "§26 declares operator as build authority; §28 declares operator as live-witness authority",
+    "expected_correspondence": {
+      "task_started": "DIRECT",
+      "run_turn_started": "DIRECT",
+      "submit_and_exit_seen": "DIRECT",
+      "task_completion_committed": "DIRECT",
+      "agent_turn_done": "DIRECT",
+      "execute_turn_prelude_enter": "INSUFFICIENT_IDENTITY",
+      "terminal_committed": "INSUFFICIENT_IDENTITY"
+    },
+    "expected_final_model": {
+      "task": "completion_committed",
+      "activeRun": null,
+      "commitReadyRun": null,
+      "committedCompletion": "<factual completionId>"
+    }
+  }
+}
