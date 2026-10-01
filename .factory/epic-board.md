@@ -17012,3 +17012,68 @@ ABLATION = N/A (correction is in build authority; ablating the cd line re-introd
 - System `elm` must be 0.19.2; CORRECTION02's `HALT_ELM_VERSION_MISMATCH` is the authoritative guard.
 
 **Successor:** install + LIVE Elm-shadow qualification of the `4.1.16-fb87426fb` dogfood (requires launching `codium-cline` against the staged extension profile — out of scope for the bounded CORRECTION05 defect repair).
+
+## ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION06 — PASS_DUPLICATE_PREPUBLISH_SUPPRESSION — 2026-10-01
+
+**Status:** PASS_DUPLICATE_PREPUBLISH_SUPPRESSION. Bounded correction closing the canonical dogfood's second-prepublish defect surfaced by the `bfc5ed0e89f` (CORRECTION05) run. Reviewer P0 finding: `vsce package` automatically re-invokes `scripts.vscode:prepublish` (NPM lifecycle integration) AFTER the orchestrator already ran it via `run_canonical_build`. The second prepublish executes across the post-Elm-build mutation boundary, where Biome lints the compiler-generated `runtime-assets/*.js` against the linter's known `apps/vscode` glob and surfaces 74 errors, aborting packaging.
+
+```
+ENTRY_HEAD                       = bfc5ed0e89faf... (board companion; CORRECTION05 closure)
+SUBJECT_HEAD                     = d03efc5b44e9e40c33e516592be5f88aeb653a3d (this ACT)
+PREDECESSOR_SUBJECT_HEAD         = fb87426fb96c4680e6998da74532e4110bc766f7 (CORRECTION05)
+PRE_CORRECTION06_DOGFOOD_VERDICT = NOT_GREEN (74 Biome errors against runtime-assets/*.js)
+TYPECHECK                        = PASS (scripts/* unchanged beyond one wrapper removal)
+VSCODE_PREPUBLISH                = NOT_RUN (script-level; not on this ACT's scope)
+DOGFOOD                          = NOT_RUN on this ACT -- structural claim only; rebake + LIVE deferred
+PRODUCTION_FOOTPRINT             = 2 files changed (1 lib + 1 test), +524/-21 vs predecessor
+ELM_BUILD                        = N/A (no Elm source change; Elm-side work was finished in CORRECTION05)
+ELM_SOURCE_CHANGED               = false
+ELM_AUTHORITY_SEMANTICS_CHANGED  = false
+COMPLETION_AUTHORITY_CHANGED     = false
+MCP_CODE_CHANGED                 = false
+MYC_CODE_CHANGED                 = false
+CORRECTION04_INVARIANT_PRESERVED = true (helper still mutates stage only)
+CORRECTION03_INVARIANT_PRESERVED = true (skip_typecheck shortcut still routes through protos+build:webview+esbuild)
+SOURCE_PACKAGE_JSON_BYTE_IDENTICAL = true (DOGFOOD03 / DOGFOOD03b)
+PYTHON_TESTS                     = 66/66 PASS (was 58/58; +8 for CORRECTION06 invariants C06-I1..I4)
+```
+
+**What changed (bounded repair):**
+- `scripts/build_dogfood_vsix_lib.py::build_dogfood_vsix`: removed the `if skip_typecheck:` guard around `disable_vscode_prepublish_hook(stage_apps / "package.json")`. The helper is now invoked UNCONDITIONALLY after `run_canonical_build` and before `build_elm_kernel` / `stage_elm_kernel_runtime_asset` / `vsce_package`. The canonical prepublish is the only run; vsce cannot re-trigger it because the staged hook is `true`.
+- `disable_vscode_prepublish_hook` docstring: rewrote to reflect the structural (rather than typecheck-shortcut) rationale; references CORRECTION04's history and CORRECTION06's widening.
+- `build_dogfood_vsix` step list: step 11 is now CORRECTION06's hook neuter; downstream steps renumbered.
+
+**Why this is preferable to lint-ignoring the Elm output:**
+The generated JS is not the bug; running the build gate twice across a mutation boundary is. Precedent: Microsoft's `vscode-documentdb` builds first, removes `scripts.vscode:prepublish` from the staged manifest, then invokes `vsce package`. Same separation of concerns.
+
+**Why this does not weaken the canonical-prepublish contract:**
+The neutering is stage-only. The canonical worktree's `apps/vscode/package.json` byte content is unchanged (DOGFOOD03b is asserted in the orchestrator's post-build tree check, BEFORE staging writes happen). When a real operator releases to the marketplace, they will run `vsce package` against a real local `apps/vscode` checkout where the `vscode:prepublish` script is intact and runs the full `bun run check-types` + esbuild + lint gate exactly once. The dogfood orchestrator only mutates the STAGED copy.
+
+**Tests added (8 new; 66/66 total):**
+- `TestCorrection06DisablePrepublishHookHelper`:
+  - `test_neuters_vscode_prepublish_hook_to_noop` — helper sets hook to `"true"`.
+  - `test_neuter_preserves_other_keys` — manifest stays well-formed for vsce.
+  - `test_neuter_is_idempotent` — second call is a no-op on bytes.
+- `TestCorrection06OrchestratorUnconditionalNeuter`:
+  - `test_neuter_runs_with_skip_typecheck_true` — regression guard for CORRECTION04 path.
+  - `test_neuter_runs_with_skip_typecheck_false` — **NEW BEHAVIOUR**; pre-CORRECTION06 this would fail.
+  - `test_neuter_occurs_after_canonical_build_before_vsce` — C06-I4 ordering.
+  - `test_neuter_call_site_in_orchestrator_source` — **mutation guard** against re-introducing `if skip_typecheck:`. Verified: temporarily restoring the guard makes this test fail with a clear message; restoring CORRECTION06 makes it pass.
+  - `test_existing_skip_typecheck_behavior_conserved` — CORRECTION03 conservation: skip_typecheck still routes through protos+build:webview+esbuild, NOT vscode:prepublish.
+
+**New SUBJECT_HEAD binding (replaces `4.1.16-fb87426fb` as canonical candidate):**
+The previous `4.1.16-fb87426fb` artifact was the CORRECTION05 closure head. That artifact's builder path now demonstrates a CORRECTION06 failure. Do not resurrect `4.1.16-fb87426fb` as the canonical LIVE artifact. The next canonical artifact must bind to `d03efc5b4` and rebake from there.
+
+**Subordinate CORRECTION chain (still proven/useful):**
+- CORRECTION01 (vendor-elm + registry bootstrap) — SUPERSEDED by CORRECTION02; retained as evidence.
+- CORRECTION02 (system-elm + HALT messages) — ACTIVE.
+- CORRECTION03 (PACKAGING-DISCOVERY → stage to runtime-assets/) — ACTIVE.
+- CORRECTION04 (WORKTREE-KERNEL-BUILD → build before staging) — ACTIVE.
+- CORRECTION05 (ELM-PROJECT-CWD + sidecar-format) — ACTIVE.
+- **CORRECTION06 (DUPLICATE-PREPUBLISH-SUPPRESSION → unconditional hook neuter) — NEW; this ACT.**
+
+**Successor (for the next session):**
+1. Rebake canonical dogfood from `d03efc5b4` HEAD with `python3 scripts/build-dogfood-vsix.py`.
+2. Confirm exit 0, capture artifact path + sha256, verify payload contains `extension/runtime-assets/completion-authority.js` with byte-exact SHA `034f70b7...` (unchanged from CORRECTION05).
+3. Install + LIVE Elm-shadow qualification of the new artifact.
+4. Only then: `LIVE Elm-shadow`.
