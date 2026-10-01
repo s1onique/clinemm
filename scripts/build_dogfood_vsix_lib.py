@@ -182,21 +182,30 @@ def write_package_version(package_json: Path, version: str) -> None:
 
 def disable_vscode_prepublish_hook(package_json: Path) -> None:
     """Replace ``scripts["vscode:prepublish"]`` with a no-op in the
-    *staged* package.json. Used on the staged manifest only
-    (DOGFOOD-VSIX-QUALIFICATION01 deliberate dogfood shortcut).
+    *staged* package.json. Used on the staged manifest only.
 
     Why: ``@vscode/vsce package`` automatically invokes the
     package's ``vscode:prepublish`` npm script (NPM lifecycle
-    integration). For dogfood qualification where the typecheck
-    is intentionally bypassed, that hook must be neutralised in
-    the STAGED copy only -- the source tree's package.json is
-    never touched.
+    integration). The dogfood orchestrator already ran the real
+    prepublish exactly once via :func:`run_canonical_build`; the
+    hook must be neutralised in the STAGED copy before ``vsce
+    package`` re-runs it across a mutation boundary that has
+    since introduced compiler-generated runtime assets (which
+    would trip the linter). This is a *stage-only* mutation;
+    the source tree's package.json is never touched.
+
+    CORRECTION04 originally scoped this to the ``skip_typecheck``
+    shortcut only (where the second prepublish would also
+    re-trigger the typecheck gate). CORRECTION06 widened it to
+    UNCONDITIONAL — the gate-vsce duplication is a structural
+    defect, not a typecheck-shortcut defect, and it bites any
+    post-Elm-build package.
 
     This is a sibling to :func:`write_package_version` -- same
     staging-only invariant. The staged package.json is captured
     by DOGFOOD03b before, and asserted after, this mutation.
 
-    ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION04.
+    ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION06.
     """
     if not package_json.is_file():
         raise BuildError(
@@ -937,16 +946,21 @@ def build_dogfood_vsix(
      10. D07 (stage patch) — stamps the staged ``package.json``.
          Fails closed if the staged manifest is missing
          (DOGFOOD04b).
-     11. D05 (VSCE authority) — runs the pinned ``vsce package``.
-     12. DOGFOOD-KERNEL — builds the Elm kernel from tracked sources
+     11. CORRECTION06 — neuters ``scripts.vscode:prepublish`` in the
+         STAGED package.json *unconditionally* so that ``vsce package``
+         does not re-run the gate across a mutation boundary that has
+         since introduced compiler-generated runtime assets. The
+         canonical prepublish above (step 8) is the only run.
+     12. D05 (VSCE authority) — runs the pinned ``vsce package``.
+     13. DOGFOOD-KERNEL — builds the Elm kernel from tracked sources
          via ``build-elm.sh`` against the staged worktree (CORRECTION04),
          then stages the kernel into the non-gitignored runtime-assets/
          directory (CORRECTION03).
-     13. D08 — verifies the embedded manifest version (DOGFOOD05).
-     14. D09 — verifies payload sanity (DOGFOOD06, DOGFOOD07).
-     15. D10 — finalizes the artifact and computes its SHA-256.
-     16. D11 (optional) — installs and verifies the listing (DOGFOOD08).
-     17. D12 — tears down the worktree and tempdir (DOGFOOD09).
+     14. D08 — verifies the embedded manifest version (DOGFOOD05).
+     15. D09 — verifies payload sanity (DOGFOOD06, DOGFOOD07).
+     16. D10 — finalizes the artifact and computes its SHA-256.
+     17. D11 (optional) — installs and verifies the listing (DOGFOOD08).
+     18. D12 — tears down the worktree and tempdir (DOGFOOD09).
     """
     if run_cmd is None:
         run_cmd = _default_run
@@ -1019,13 +1033,31 @@ def build_dogfood_vsix(
         # ---- D07 stage-specific patch (DOGFOOD04, DOGFOOD04b) ------------
         write_package_version(stage_apps / "package.json", dogfood_version)
 
-        # ---- D05 (cont.) VSCE_AUTHORITY ---------------------------------
+        # ---- D05 (cont.) VSCE_AUTHORITY: neuter the staged hook --------
+        # ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION06
+        # (DUPLICATE-PREPUBLISH-SUPPRESSION).
+        #
+        # ``vsce package`` automatically invokes ``scripts.vscode:prepublish``
+        # (NPM lifecycle integration). The orchestrator already ran the
+        # real prepublish exactly once above (via run_canonical_build).
+        # If the hook is left in place, vsce will run the gate AGAIN
+        # against the post-Elm-build working tree, surfacing 74 Biome
+        # errors against compiler-generated runtime-assets JS and
+        # aborting packaging. The canonical prepublish must run
+        # exactly once across the mutation boundary; the staged hook
+        # is therefore neutered *unconditionally* (not gated on
+        # skip_typecheck as CORRECTION04 had it) before the Elm build
+        # + stage step introduces generated runtime assets.
+        #
+        # Precedent: Microsoft's vscode-documentdb builds, removes
+        # scripts.vscode:prepublish from the staged manifest, then
+        # invokes vsce package. Same separation of concerns.
+        #
+        # The mutation targets the staged manifest only; the source
+        # package.json byte-equality assertion above (DOGFOOD03 /
+        # DOGFOOD03b) is therefore preserved.
         stage_out = stage_apps / "dist" / final_path.name
-        # CORRECTION04: when skip_typecheck is set, neuter the
-        # vscode:prepublish hook in the STAGED package.json so that
-        # ``vsce package`` does not re-trigger the typecheck gate.
-        if skip_typecheck:
-            disable_vscode_prepublish_hook(stage_apps / "package.json")
+        disable_vscode_prepublish_hook(stage_apps / "package.json")
 
         # ---- DOGFOOD-KERNEL: build + stage the Elm runtime asset -------
         # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION04

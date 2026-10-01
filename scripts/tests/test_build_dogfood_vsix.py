@@ -96,6 +96,7 @@ from build_dogfood_vsix_lib import (  # noqa: E402
     compute_sha256,
     default_dogfood_vsix_name,
     derive_dogfood_version,
+    disable_vscode_prepublish_hook,
     read_package_version,
     remove_worktree_quietly,
     run_canonical_build,
@@ -159,6 +160,22 @@ def _write_package_json(directory: Path, *, version: str) -> Path:
         )
         + "\n"
     )
+    return path
+
+
+def _seed_staged_prepublish_hook(apps_dir: Path) -> Path:
+    """Add a realistic ``scripts.vscode:prepublish`` block to an
+    already-written staged manifest. In real builds the staged
+    manifest is a copy of the canonical ``apps/vscode/package.json``
+    which already declares the hook; the CORRECTION06 disable helper
+    only mutates the hook if it is present, so tests that drive the
+    full orchestrator must seed it explicitly.
+    """
+    path = apps_dir / "package.json"
+    data = json.loads(path.read_text())
+    scripts = data.setdefault("scripts", {})
+    scripts["vscode:prepublish"] = "bun run check-types"
+    path.write_text(json.dumps(data, indent=2) + "\n")
     return path
 
 
@@ -712,8 +729,462 @@ class TestDogfood05cOrchestratorUsesCanonicalBuildHelper(unittest.TestCase):
 
 
 # =============================================================================
-# DOGFOOD06 — payload must include extension/dist/extension.js
+# DOGFOOD-CORRECTION06 — disable_vscode_prepublish_hook is unconditional.
+#
+# ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION06
+# (DUPLICATE-PREPUBLISH-SUPPRESSION).
+#
+# ``vsce package`` automatically invokes ``scripts.vscode:prepublish`` (NPM
+# lifecycle integration). The dogfood orchestrator already runs the canonical
+# prepublish exactly once via ``run_canonical_build``. A second invocation --
+# against a working tree that has since been mutated by Elm build + runtime-
+# asset stage -- surfaces Biome lint errors against compiler-generated
+# runtime-assets/*.js and aborts packaging.
+#
+# CORRECTION06 widens the hook-neutering from "skip_typecheck only" (which
+# CORRECTION04 introduced) to UNCONDITIONAL. The fix targets the structural
+# defect (one build gate per package) rather than the typecheck shortcut.
+#
+# Invariants pinned by this section:
+#
+#   C06-I1  ``disable_vscode_prepublish_hook`` neuters ``scripts.vscode:
+#           prepublish`` to a no-op on the staged manifest.
+#   C06-I2  The orchestrator invokes the neutering unconditionally --
+#           both with skip_typecheck=True AND skip_typecheck=False.
+#   C06-I3  The canonical (source) package.json is NEVER mutated.
+#   C06-I4  Ordering: neutering occurs AFTER the canonical build
+#           (run_canonical_build) and BEFORE ``vsce package`` /
+#           Elm build / Elm stage.
 # =============================================================================
+
+
+class TestCorrection06DisablePrepublishHookHelper(unittest.TestCase):
+    """C06-I1: unit-level coverage of the helper itself.
+
+    CORRECTION06 widened the call site but did not change the helper's
+    contract. These tests pin the helper's behaviour so a future
+    refactor cannot silently weaken it.
+    """
+
+    def test_neuters_vscode_prepublish_hook_to_noop(self) -> None:
+        """The helper rewrites the staged hook to a no-op (``true``)."""
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-correction06-helper-"
+        ) as td:
+            apps = Path(td) / "apps" / "vscode"
+            apps.mkdir(parents=True)
+            staged_pkg = apps / "package.json"
+            # Pre-seed the manifest with a realistic scripts block.
+            staged_pkg.write_text(
+                json.dumps(
+                    {
+                        "name": "clinemm",
+                        "version": "4.1.10",
+                        "scripts": {
+                            "vscode:prepublish": "bun run check-types",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n"
+            )
+
+            disable_vscode_prepublish_hook(staged_pkg)
+
+            data = json.loads(staged_pkg.read_text())
+            self.assertIn("scripts", data)
+            self.assertEqual(
+                data["scripts"]["vscode:prepublish"],
+                "true",
+                msg=(
+                    "disable_vscode_prepublish_hook must neuter the "
+                    "vscode:prepublish hook to a no-op (true)"
+                ),
+            )
+
+    def test_neuter_preserves_other_keys(self) -> None:
+        """Sibling invariant to write_package_version: the helper does
+        NOT collapse other keys. The staged manifest stays well-formed
+        for the subsequent vsce package call."""
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-correction06-helper-"
+        ) as td:
+            apps = Path(td) / "apps" / "vscode"
+            apps.mkdir(parents=True)
+            pkg = apps / "package.json"
+            pkg.write_text(
+                json.dumps(
+                    {
+                        "name": "clinemm",
+                        "version": "4.1.10",
+                        "publisher": "s1onique",
+                        "scripts": {
+                            "vscode:prepublish": "bun run check-types",
+                            "build": "bun esbuild.mjs --production",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n"
+            )
+
+            disable_vscode_prepublish_hook(pkg)
+
+            data = json.loads(pkg.read_text())
+            self.assertEqual(data["name"], "clinemm")
+            self.assertEqual(data["version"], "4.1.10")
+            self.assertEqual(data["publisher"], "s1onique")
+            self.assertEqual(data["scripts"]["vscode:prepublish"], "true")
+            self.assertEqual(
+                data["scripts"]["build"], "bun esbuild.mjs --production"
+            )
+
+    def test_neuter_is_idempotent(self) -> None:
+        """Calling the helper twice keeps the hook neutered and does
+        not corrupt the manifest."""
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-correction06-helper-"
+        ) as td:
+            apps = Path(td) / "apps" / "vscode"
+            apps.mkdir(parents=True)
+            staged_pkg = apps / "package.json"
+            staged_pkg.write_text(
+                json.dumps(
+                    {
+                        "name": "clinemm",
+                        "version": "4.1.10",
+                        "scripts": {
+                            "vscode:prepublish": "bun run check-types",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n"
+            )
+
+            disable_vscode_prepublish_hook(staged_pkg)
+            first = staged_pkg.read_bytes()
+            disable_vscode_prepublish_hook(staged_pkg)
+            second = staged_pkg.read_bytes()
+
+            self.assertEqual(
+                first,
+                second,
+                msg=(
+                    "disable_vscode_prepublish_hook must be idempotent "
+                    "(second call must not change bytes)"
+                ),
+            )
+            data = json.loads(second)
+            self.assertEqual(data["scripts"]["vscode:prepublish"], "true")
+
+
+class TestCorrection06OrchestratorUnconditionalNeuter(unittest.TestCase):
+    """C06-I2 / C06-I3 / C06-I4: orchestrator MUST neuter the
+    staged vscode:prepublish hook unconditionally, regardless of
+    skip_typecheck, before vsce package. Source pkg.json must be
+    byte-identical.
+    """
+
+    def _drive_orchestrator(self, *, skip_typecheck):
+        visible_trace = []
+        neuter_observations = []
+
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-correction06-orch-"
+        ) as tmp:
+            tmp = Path(tmp)
+            repo = tmp / "repo"
+            repo.mkdir()
+            source_pkg = _write_package_json(
+                repo / "apps" / "vscode", version="4.1.10"
+            )
+            pinned_source_pkg_bytes = source_pkg.read_bytes()
+            out = tmp / "out"
+            out.mkdir()
+
+            def fake_cmd(argv, cwd):
+                if argv[:3] == ["git", "rev-parse", "--short"]:
+                    return "2f3bdfeee"
+                if argv[:2] == ["git", "rev-parse"]:
+                    return (
+                        "abcdef1234567890abcdef1234567890abcdef12"
+                    )
+                if argv[:2] == ["git", "status"]:
+                    return ""
+                if argv[:3] == ["git", "worktree", "add"]:
+                    wstage = Path(argv[4])
+                    wstage.mkdir(parents=True, exist_ok=True)
+                    apps = wstage / "apps" / "vscode"
+                    apps.mkdir(parents=True, exist_ok=True)
+                    _write_package_json(apps, version="4.1.10")
+                    _seed_staged_prepublish_hook(apps)
+                    _write_tracked_elm_sources(wstage)
+                    (apps / "dist").mkdir(parents=True, exist_ok=True)
+                    dogfood_version = derive_dogfood_version(
+                        "4.1.10", "2f3bdfeee"
+                    )
+                    staged_vsix = apps / "dist" / default_dogfood_vsix_name(
+                        "clinemm", dogfood_version
+                    )
+                    _make_vsix(staged_vsix, version=dogfood_version)
+                    return ""
+                if argv[:3] == ["git", "worktree", "remove"]:
+                    shutil.rmtree(argv[4], ignore_errors=True)
+                    return ""
+                return ""
+
+            def fake_visible(argv, cwd):
+                visible_trace.append((list(argv), Path(cwd)))
+                if argv[:3] == ["git", "worktree", "add"]:
+                    wstage = Path(argv[4])
+                    wstage.mkdir(parents=True, exist_ok=True)
+                    apps = wstage / "apps" / "vscode"
+                    apps.mkdir(parents=True, exist_ok=True)
+                    _write_package_json(apps, version="4.1.10")
+                    _seed_staged_prepublish_hook(apps)
+                    _write_tracked_elm_sources(wstage)
+                    return
+
+            import build_dogfood_vsix_lib as lib
+
+            original_disable = lib.disable_vscode_prepublish_hook
+
+            def recording_disable(staged_pkg):
+                original_disable(staged_pkg)
+                try:
+                    data = json.loads(staged_pkg.read_text())
+                    hook_value = (
+                        data.get("scripts", {}).get("vscode:prepublish")
+                        if isinstance(data, dict)
+                        else None
+                    )
+                except (OSError, json.JSONDecodeError):
+                    hook_value = None
+                neuter_observations.append((hook_value, staged_pkg))
+
+            original_build = lib.build_elm_kernel
+            original_vsce = lib.vsce_package
+
+            def recording_build(stage, *, run_visible=None):
+                visible_trace.append(
+                    (["BUILD-ELM-KERNEL-INVOKED"], Path(stage))
+                )
+                apps = stage
+                src_dir = (
+                    apps / "elm" / "completion-authority" / "vendor"
+                )
+                src_dir.mkdir(parents=True, exist_ok=True)
+                js_bytes = b"recording-build-payload-bytes"
+                src_dir.joinpath(
+                    "completion-authority.js"
+                ).write_bytes(js_bytes)
+                sha = compute_sha256_bytes(js_bytes)
+                src_dir.joinpath(
+                    "completion-authority.js.sha256"
+                ).write_text(sha + "\n")
+
+            def recording_vsce(stage_apps_vscode, staged_vsix_out, **_kw):
+                visible_trace.append(
+                    (
+                        ["VSCE-PACKAGE-INVOKED", str(staged_vsix_out)],
+                        Path(stage_apps_vscode),
+                    )
+                )
+
+            lib.disable_vscode_prepublish_hook = recording_disable
+            lib.build_elm_kernel = recording_build
+            lib.vsce_package = recording_vsce
+            try:
+                try:
+                    build_dogfood_vsix(
+                        repo=repo,
+                        output_dir=out,
+                        run_cmd=fake_cmd,
+                        run_visible=fake_visible,
+                        skip_typecheck=skip_typecheck,
+                    )
+                except BuildError:
+                    pass
+            finally:
+                lib.disable_vscode_prepublish_hook = original_disable
+                lib.build_elm_kernel = original_build
+                lib.vsce_package = original_vsce
+
+            current_source_bytes = source_pkg.read_bytes()
+            self.assertEqual(
+                current_source_bytes,
+                pinned_source_pkg_bytes,
+                msg=(
+                    "CORRECTION06: source package.json must NEVER be "
+                    "mutated by the orchestrator (DOGFOOD03 / "
+                    f"DOGFOOD03b); got {len(current_source_bytes)} != "
+                    f"{len(pinned_source_pkg_bytes)}"
+                ),
+            )
+
+        return source_pkg, visible_trace, neuter_observations
+
+    def test_neuter_runs_with_skip_typecheck_true(self):
+        """The helper is invoked when skip_typecheck=True (regression
+        guard for the existing CORRECTION04 path)."""
+        _source_pkg, _visible_trace, neuter_observations = (
+            self._drive_orchestrator(skip_typecheck=True)
+        )
+        self.assertTrue(
+            len(neuter_observations) >= 1,
+            msg=(
+                "disable_vscode_prepublish_hook must be invoked by "
+                "the orchestrator when skip_typecheck=True; got "
+                f"observations={neuter_observations!r}"
+            ),
+        )
+        for hook_value, _staged_pkg in neuter_observations:
+            self.assertEqual(
+                hook_value,
+                "true",
+                msg=(
+                    "disable_vscode_prepublish_hook must set the "
+                    "staged hook to 'true'; "
+                    f"got hook_value={hook_value!r}"
+                ),
+            )
+
+    def test_neuter_runs_with_skip_typecheck_false(self):
+        """CORRECTION06 NEW BEHAVIOUR: helper is invoked even when
+        skip_typecheck=False (canonical prepublish has just run).
+        This is the fix."""
+        _source_pkg, _visible_trace, neuter_observations = (
+            self._drive_orchestrator(skip_typecheck=False)
+        )
+        self.assertTrue(
+            len(neuter_observations) >= 1,
+            msg=(
+                "CORRECTION06: disable_vscode_prepublish_hook must "
+                "be invoked by the orchestrator unconditionally; "
+                "with skip_typecheck=False it is the only thing "
+                "preventing vsce package from re-running prepublish. "
+                f"Got observations={neuter_observations!r}"
+            ),
+        )
+        for hook_value, _staged_pkg in neuter_observations:
+            self.assertEqual(
+                hook_value,
+                "true",
+                msg=(
+                    "CORRECTION06: disable_vscode_prepublish_hook "
+                    "must set the staged hook to 'true'; "
+                    f"got hook_value={hook_value!r}"
+                ),
+            )
+
+    def test_neuter_occurs_after_canonical_build_before_vsce(self):
+        """C06-I4: canonical prepublish runs BEFORE vsce package."""
+        _source_pkg, visible_trace, _neuter_observations = (
+            self._drive_orchestrator(skip_typecheck=False)
+        )
+
+        prepublish_idx = None
+        vsce_idx = None
+        for i, (argv, _cwd) in enumerate(visible_trace):
+            if argv[:3] == ["bun", "run", "vscode:prepublish"]:
+                prepublish_idx = i
+            if argv and argv[0] == "VSCE-PACKAGE-INVOKED":
+                vsce_idx = i
+
+        self.assertIsNotNone(
+            prepublish_idx,
+            msg=(
+                "run_canonical_build must invoke "
+                f"vscode:prepublish; trace={visible_trace!r}"
+            ),
+        )
+        self.assertIsNotNone(
+            vsce_idx,
+            msg=(
+                "vsce_package must be invoked by the orchestrator; "
+                f"trace={visible_trace!r}"
+            ),
+        )
+        self.assertLess(
+            prepublish_idx,
+            vsce_idx,
+            msg=(
+                "CORRECTION06 ordering invariant: the canonical "
+                "prepublish must run BEFORE vsce package "
+                "(so the neutering between them suppresses the "
+                f"duplication). Got prepublish_idx={prepublish_idx} "
+                f"vsce_idx={vsce_idx}"
+            ),
+        )
+
+    def test_neuter_call_site_in_orchestrator_source(self):
+        """Static source-grep guard: the orchestrator must call
+        disable_vscode_prepublish_hook(stage_apps / "package.json")
+        UNCONDITIONALLY (NOT inside an ``if skip_typecheck:`` block)."""
+        import re as _re
+
+        source = (
+            Path(__file__).resolve().parent.parent
+            / "build_dogfood_vsix_lib.py"
+        ).read_text(encoding="utf-8")
+
+        marker_re = _re.compile(
+            r"^def build_dogfood_vsix\(", _re.MULTILINE
+        )
+        start = marker_re.search(source)
+        if start is None:
+            self.fail("could not locate build_dogfood_vsix")
+        body = source[start.start(): start.start() + 8_000]
+
+        self.assertIn(
+            "disable_vscode_prepublish_hook(stage_apps / \"package.json\")",
+            body,
+            msg=(
+                "build_dogfood_vsix must call "
+                "disable_vscode_prepublish_hook(stage_apps / "
+                "'package.json') for CORRECTION06"
+            ),
+        )
+
+        forbidden_re = _re.compile(
+            r"if\s+skip_typecheck\s*:\s*\n"
+            r"(?:\s|#[^\n]*\n)*"
+            r"disable_vscode_prepublish_hook\(",
+            _re.MULTILINE,
+        )
+        self.assertIsNone(
+            forbidden_re.search(body),
+            msg=(
+                "CORRECTION06: disable_vscode_prepublish_hook must "
+                "be invoked UNCONDITIONALLY in build_dogfood_vsix. "
+                "Re-introducing `if skip_typecheck:` around the "
+                "neutering regresses CORRECTION06's structural fix."
+            ),
+        )
+
+    def test_existing_skip_typecheck_behavior_conserved(self):
+        """Conservation: the skip_typecheck shortcut still routes
+        through the lower-level protos+build:webview+esbuild path,
+        NOT vscode:prepublish. This is the CORRECTION03 invariant
+        that CORRECTION06 must NOT regress."""
+        _source_pkg, visible_trace, _neuter_observations = (
+            self._drive_orchestrator(skip_typecheck=True)
+        )
+        # When skip_typecheck=True, the canonical build invokes the
+        # lower-level path; it should NOT invoke the full
+        # vscode:prepublish hook (which would re-trigger the
+        # typecheck gate).
+        for argv, _cwd in visible_trace:
+            self.assertNotEqual(
+                argv[:3] if len(argv) >= 3 else [],
+                ["bun", "run", "vscode:prepublish"],
+                msg=(
+                    "CORRECTION03 conservation: skip_typecheck=True "
+                    "must NOT route through vscode:prepublish (which "
+                    "runs the full typecheck); got argv={argv!r}"
+                ),
+            )
 
 
 class TestDogfood06PayloadExtensionJs(unittest.TestCase):
