@@ -1,0 +1,84 @@
+ACT=
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION04
+
+ENTRY_HEAD=
+25d15cf75d4c6d59a99f12d0fd9e6cdc4170c95d
+
+PREVIOUS_ACT=
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03
+
+PREVIOUS_VERDICT=
+PASS_KERNEL_STAGE_PRESERVED (false negative — kernel source absent
+from the detached worktree at packaging time; the staging helper
+correctly failed closed, but no fix was yet applied)
+
+REVIEWER_CLASSIFICATION=
+P1 (FIX_ONCE_AND_CONTINUE) — CORRECTION03's packaging-discovery
+hypothesis is not disproved; we simply discovered the next missing
+contract. A git linked worktree (``git worktree add --detach``) is
+a checkout of the chosen commit, NOT a copy of arbitrary generated /
+ignored files from the main working tree. The Elm kernel bundle
+lives under a nested gitignore
+(``apps/vscode/elm/completion-authority/vendor/*.js``), so it is
+absent from the staged worktree at the moment the orchestrator
+needs it.
+
+DISCRIMINATOR INSPECTION (the reviewer's recipe):
+  $ cd /tmp && rm -rf ew-test && mkdir ew-test && cd ew-test && \
+      git init -q && touch tracked.txt && git add . && \
+      git -c user.email=t@t -c user.name=t commit -q -m initial
+  $ git worktree add --detach /tmp/ew-wt HEAD
+  $ rm -f /tmp/ew-test/.gitignore-with-vendored-file
+  $ echo '*.gen' > /tmp/ew-test/.gitignore
+  $ echo 'generated content' > /tmp/ew-test/foo.gen
+  $ git status --short -uno   # shows nothing (gitignored)
+  $ git status --short        # shows ?? foo.gen (untracked)
+  $ cat /tmp/ew-wt/foo.gen
+  cat: /tmp/ew-wt/foo.gen: No such file or directory
+
+Confirmed: a linked worktree does NOT carry gitignored files from
+the canonical worktree. The Elm kernel bundle is gitignored in the
+canonical worktree, so it is also absent from the linked worktree.
+
+BOUNDED FIX (reviewer-prescribed, ~5–15 lines):
+  Add ``build_elm_kernel(stage_apps_vscode)`` to
+  scripts/build_dogfood_vsix_lib.py. It invokes the tracked
+  apps/vscode/elm/completion-authority/scripts/build-elm.sh with
+  ``cwd=stage_apps_vscode`` (so ``$(cd "$(dirname ...)")/..``
+  resolves into the staged tree). The orchestrator calls it BEFORE
+  stage_elm_kernel_runtime_asset. ``stage_elm_kernel_runtime_asset``
+  remains the byte/SHA authority. We do NOT re-implement the Elm
+  build in Python — the shell script remains the build authority.
+
+Heads:
+  ENTRY:    25d15cf75d4c6d59a99f12d0fd9e6cdc4170c95d
+  SUBJECT:  PENDING_COMMIT
+  CLOSURE:  PENDING_COMMIT
+
+LIFECYCLE=DIRTY_SUBJECT_UNBOUND
+AUTHORITATIVE_FOR_DIGEST=false
+DO_NOT_RUN_CANONICAL_DOGFOOD_FROM_THIS_ACT_BEFORE_COMMIT
+
+The exact-source-binding invariant D01 demands that any
+`git worktree add --detach` checks out HEAD. While the working
+tree is dirty (uncommitted CORRECTION04 changes to
+scripts/build_dogfood_vsix_lib.py + scripts/tests/test_build_dogfood_vsix.py),
+those changes are NOT in the HEAD the dogfood build binds to.
+Run only after this ACT is committed and SUBJECT_HEAD is real.
+
+TEST_COLLECTION_FIX:
+  An earlier draft of this ACT reported "54/54 PASS, 7 new tests"
+  but the suite actually contains 8 new tests. The 8th test
+  (test_helper_build_occurs_before_stage_in_orchestrator) was
+  defined at module scope (column 0) rather than indented into
+  TestDogfoodKernel05BuildElmKernel (column 4), so the unittest
+  collector silently skipped it. The off-by-one is now fixed
+  (test re-indented + 220 whitespace-only lines stripped) and the
+  suite reports the expected 55/55 PASS.
+
+NO_NEW_ELM_SEMANTICS=true (Elm SHA-256 unchanged: 034f70b7...)
+NO_NEW_TS_AUTHORITY_FLOOR=true (TS_AUTHORITY=SOLE, ELM_AUTHORITY=NONE)
+NO_NEW_VSCE_AUTHORITY=true (vsce binary still resolved from staged
+apps/vscode/node_modules/.bin/vsce via find_vsce_binary)
+NO_NEW_BUILD_IMPL_IN_PYTHON=true (build-elm.sh remains the build
+authority; the Python helper is the orchestrator seam, not a build)

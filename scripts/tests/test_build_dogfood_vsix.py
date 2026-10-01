@@ -92,6 +92,7 @@ from build_dogfood_vsix_lib import (  # noqa: E402
     assert_clean_worktree,
     assert_clean_worktree_equal,
     build_dogfood_vsix,
+    build_elm_kernel,
     compute_sha256,
     default_dogfood_vsix_name,
     derive_dogfood_version,
@@ -978,6 +979,406 @@ class TestDogfoodKernel04StageRuntimeAsset(unittest.TestCase):
             with self.assertRaises(BuildError) as ctx:
                 stage_elm_kernel_runtime_asset(stage)
             self.assertIn("sidecar mismatch", str(ctx.exception))
+
+
+# =============================================================================
+# DOGFOOD-KERNEL-05 — build_elm_kernel must run inside the staged worktree
+# ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION04
+# (WORKTREE-KERNEL-BUILD). A git linked worktree (``git worktree add
+# --detach``) is a checkout of the chosen commit, NOT a copy of
+# arbitrary generated / ignored files. The Elm kernel bundle lives
+# under a nested gitignore (``apps/vscode/elm/completion-authority/
+# vendor/*.js``), so it is absent from the staged worktree at the
+# moment the orchestrator needs it. We must build the kernel FROM
+# the tracked Elm sources inside the staged worktree immediately
+# before staging it.
+# =============================================================================
+
+
+def _write_tracked_elm_sources(root: Path) -> Path:
+    """Create the minimal tracked Elm layout so ``build_elm_kernel``
+    can locate ``elm/completion-authority/scripts/build-elm.sh``.
+    Returns the apps/vscode root inside ``root``."""
+    apps = root / "apps" / "vscode"
+    scripts_dir = (
+        apps / "elm" / "completion-authority" / "scripts"
+    )
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    script = scripts_dir / "build-elm.sh"
+    script.write_text(
+        "#!/usr/bin/env bash\n"
+        "# stub for DOGFOOD-KERNEL-05 tests; real build is in the\n"
+        "# canonical repo and runs via the same helper.\n"
+        "exit 0\n"
+    )
+    script.chmod(0o755)
+    return apps
+
+
+class TestDogfoodKernel05BuildElmKernel(unittest.TestCase):
+    """DOGFOOD-KERNEL-05: pin the bounded contract
+    ``build_elm_kernel(stage_apps_vscode)``:
+
+    1. ``build occurs before stage`` — orchestrator command trace
+       shows ``build-elm.sh`` invoked BEFORE `stage_elm_kernel_runtime_asset`.
+    2. ``build failure aborts package`` — a faked non-zero exit
+       raises ``BuildError`` and the package step never runs.
+    3. ``build success + missing artifact still fails closed`` — even
+       if the runner exits 0 but writes nothing, the downstream
+       staging call still raises ``BuildError``. The byte/SHA
+       authority remains :func:`stage_elm_kernel_runtime_asset`.
+    4. ``canonical worktree remains untouched`` — the helper runs
+       with ``cwd=stage_apps_vscode``, never ``cwd=canonical_repo``.
+
+    No new Elm build implementation in Python: ``build_elm_kernel`` only
+    invokes the tracked shell script (or its test seam substitute).
+    """
+
+    def test_helper_invokes_tracked_build_elm_script(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-05-"
+        ) as td:
+            stage = Path(td)
+            apps = _write_tracked_elm_sources(stage)
+            trace: list[tuple[list[str], Path]] = []
+
+            def record(argv, cwd):
+                trace.append((list(argv), Path(cwd)))
+
+            build_elm_kernel(apps, run_visible=record)
+
+            self.assertEqual(len(trace), 1)
+            argv, cwd = trace[0]
+            self.assertEqual(len(argv), 1)
+            self.assertTrue(
+                argv[0].endswith(
+                    "elm/completion-authority/scripts/build-elm.sh"
+                ),
+                msg=f"unexpected argv[0]: {argv[0]!r}",
+            )
+            self.assertEqual(cwd, Path(apps))
+
+    def test_helper_fails_closed_when_build_script_missing(self) -> None:
+        """No tracked ``build-elm.sh`` => ``BuildError`` from the
+        helper itself, before the runner is even invoked."""
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-05-"
+        ) as td:
+            apps = Path(td) / "apps" / "vscode"
+            apps.mkdir(parents=True)
+            with self.assertRaises(BuildError) as ctx:
+                build_elm_kernel(apps, run_visible=lambda a, c: None)
+            self.assertIn("Elm build script missing", str(ctx.exception))
+
+    def test_helper_propagates_build_failure(self) -> None:
+        """When the runner simulates a non-zero exit (e.g. Elm not on
+        PATH inside the staged worktree), the helper propagates the
+        error. Tests substitute ``run_visible`` to assert the same
+        contract that ``_default_run`` provides in production.
+        """
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-05-"
+        ) as td:
+            apps = _write_tracked_elm_sources(Path(td))
+
+            def boom(argv, cwd):
+                raise BuildError(
+                    f"simulated elm build failure: {argv}"
+                )
+
+            with self.assertRaises(BuildError) as ctx:
+                build_elm_kernel(apps, run_visible=boom)
+            self.assertIn(
+                "simulated elm build failure", str(ctx.exception)
+            )
+
+    def test_helper_does_not_touch_canonical_repo(self) -> None:
+        """Canonical worktree invariant: ``build_elm_kernel`` never
+        invokes a subprocess with ``cwd=canonical_repo``. We feed a
+        distinct canonical repo path and assert none of the
+        recorded (argv, cwd) pairs have cwd inside it.
+        """
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-05-"
+        ) as outer:
+            canonical = Path(outer) / "canonical"
+            canonical.mkdir()
+            (canonical / "apps" / "vscode" / "elm").mkdir(parents=True)
+            stage_apps = _write_tracked_elm_sources(
+                Path(outer) / "stage"
+            )
+
+            def record(argv, cwd):
+                self.assertFalse(
+                    Path(cwd).resolve().is_relative_to(
+                        canonical.resolve()
+                    ),
+                    msg=(
+                        "build_elm_kernel must not invoke subprocesses "
+                        "with cwd inside the canonical repo; got "
+                        f"cwd={cwd} argv={argv}"
+                    ),
+                )
+
+            build_elm_kernel(stage_apps, run_visible=record)
+
+    def test_helper_build_failure_aborts_package(self) -> None:
+        """End-to-end via the orchestrator: a failing ``build_elm_kernel``
+        short-circuits the build before ``vsce_package`` runs.
+
+        We patch ``lib.build_elm_kernel`` to raise ``BuildError`` and
+        assert (a) the orchestrator surfaces the same error, and
+        (b) ``vsce package`` does NOT appear in the visible trace.
+        """
+        visible_trace: list[tuple[list[str], Path]] = []
+
+        def fake_cmd(argv, cwd):
+            if argv[:3] == ["git", "rev-parse", "--short"]:
+                return "2f3bdfeee"
+            if argv[:2] == ["git", "rev-parse"]:
+                return (
+                    "abcdef1234567890abcdef1234567890abcdef12"
+                )
+            if argv[:3] == ["git", "worktree", "add"]:
+                wstage = Path(argv[4])
+                wstage.mkdir(parents=True, exist_ok=True)
+                apps = wstage / "apps" / "vscode"
+                apps.mkdir(parents=True, exist_ok=True)
+                _write_package_json(apps, version="4.1.10")
+                _write_tracked_elm_sources(wstage)
+                (apps / "dist").mkdir(parents=True, exist_ok=True)
+                dogfood_version = derive_dogfood_version(
+                    "4.1.10", "2f3bdfeee"
+                )
+                staged_vsix = apps / "dist" / default_dogfood_vsix_name(
+                    "clinemm", dogfood_version
+                )
+                _make_vsix(staged_vsix, version=dogfood_version)
+                return ""
+            if argv[:3] == ["git", "worktree", "remove"]:
+                shutil.rmtree(argv[4], ignore_errors=True)
+                return ""
+            return ""
+
+        def fake_visible(argv, cwd):
+            visible_trace.append((list(argv), Path(cwd)))
+            if argv[:3] == ["git", "worktree", "add"]:
+                wstage = Path(argv[4])
+                wstage.mkdir(parents=True, exist_ok=True)
+                apps = wstage / "apps" / "vscode"
+                apps.mkdir(parents=True, exist_ok=True)
+                _write_package_json(apps, version="4.1.10")
+                _write_tracked_elm_sources(wstage)
+                return
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            repo = tmp / "repo"
+            repo.mkdir()
+            _write_package_json(
+                repo / "apps" / "vscode", version="4.1.10"
+            )
+            out = tmp / "out"
+            out.mkdir()
+
+            import build_dogfood_vsix_lib as lib
+
+            original = lib.build_elm_kernel
+
+            def failing_build(stage, *, run_visible=None):
+                raise BuildError("simulated elm build abort")
+
+            lib.build_elm_kernel = failing_build
+            try:
+                with self.assertRaises(BuildError) as ctx:
+                    build_dogfood_vsix(
+                        repo=repo,
+                        output_dir=out,
+                        run_cmd=fake_cmd,
+                        run_visible=fake_visible,
+                    )
+            finally:
+                lib.build_elm_kernel = original
+
+        self.assertIn(
+            "simulated elm build abort", str(ctx.exception)
+        )
+        for argv, _ in visible_trace:
+            self.assertFalse(
+                len(argv) >= 2 and argv[1] == "package",
+                msg=(
+                    "vsce package must not run after build_elm_kernel "
+                    f"failure; got argv={argv!r}"
+                ),
+            )
+    def test_helper_build_occurs_before_stage_in_orchestrator(self) -> None:
+            """Orchestrator ordering invariant: ``build_elm_kernel`` is
+            invoked BEFORE ``stage_elm_kernel_runtime_asset``."""
+            visible_trace: list[tuple[list[str], Path]] = []
+
+            def fake_cmd(argv, cwd):
+                if argv[:3] == ["git", "rev-parse", "--short"]:
+                    return "2f3bdfeee"
+                if argv[:2] == ["git", "rev-parse"]:
+                    return (
+                        "abcdef1234567890abcdef1234567890abcdef12"
+                    )
+                if argv[:3] == ["git", "worktree", "add"]:
+                    wstage = Path(argv[4])
+                    wstage.mkdir(parents=True, exist_ok=True)
+                    apps = wstage / "apps" / "vscode"
+                    apps.mkdir(parents=True, exist_ok=True)
+                    _write_package_json(apps, version="4.1.10")
+                    _write_tracked_elm_sources(wstage)
+                    (apps / "dist").mkdir(parents=True, exist_ok=True)
+                    dogfood_version = derive_dogfood_version(
+                        "4.1.10", "2f3bdfeee"
+                    )
+                    staged_vsix = apps / "dist" / default_dogfood_vsix_name(
+                        "clinemm", dogfood_version
+                    )
+                    _make_vsix(staged_vsix, version=dogfood_version)
+                    return ""
+                if argv[:3] == ["git", "worktree", "remove"]:
+                    shutil.rmtree(argv[4], ignore_errors=True)
+                    return ""
+                return ""
+
+            def fake_visible(argv, cwd):
+                visible_trace.append((list(argv), Path(cwd)))
+                if argv[:3] == ["git", "worktree", "add"]:
+                    wstage = Path(argv[4])
+                    wstage.mkdir(parents=True, exist_ok=True)
+                    apps = wstage / "apps" / "vscode"
+                    apps.mkdir(parents=True, exist_ok=True)
+                    _write_package_json(apps, version="4.1.10")
+                    _write_tracked_elm_sources(wstage)
+                    return
+
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                repo = tmp / "repo"
+                repo.mkdir()
+                _write_package_json(
+                    repo / "apps" / "vscode", version="4.1.10"
+                )
+                out = tmp / "out"
+                out.mkdir()
+
+                import build_dogfood_vsix_lib as lib
+
+                original = lib.build_elm_kernel
+
+                def recording_build(stage, *, run_visible=None):
+                    visible_trace.append(
+                        (["BUILD-ELM-KERNEL-INVOKED"], Path(stage))
+                    )
+                    apps = stage
+                    src_dir = (
+                        apps / "elm" / "completion-authority" / "vendor"
+                    )
+                    src_dir.mkdir(parents=True, exist_ok=True)
+                    js_bytes = b"recording-build-payload-bytes"
+                    src_dir.joinpath(
+                        "completion-authority.js"
+                    ).write_bytes(js_bytes)
+                    sha = compute_sha256_bytes(js_bytes)
+                    src_dir.joinpath(
+                        "completion-authority.js.sha256"
+                    ).write_text(sha + "\n")
+
+                lib.build_elm_kernel = recording_build
+                try:
+                    try:
+                        build_dogfood_vsix(
+                            repo=repo,
+                            output_dir=out,
+                            run_cmd=fake_cmd,
+                            run_visible=fake_visible,
+                        )
+                    except BuildError:
+                        pass
+                finally:
+                    lib.build_elm_kernel = original
+
+            build_idx = None
+            for i, (argv, _) in enumerate(visible_trace):
+                if argv and argv[0] == "BUILD-ELM-KERNEL-INVOKED":
+                    build_idx = i
+                    break
+            self.assertIsNotNone(
+                build_idx,
+                msg="build_elm_kernel was not invoked by the orchestrator",
+            )
+            for argv, _ in visible_trace[:build_idx]:
+                self.assertNotEqual(
+                    argv[:2] if len(argv) >= 2 else argv,
+                    ["vsce", "package"],
+                    msg=(
+                        "vsce package must not run before "
+                        f"build_elm_kernel; got argv={argv!r}"
+                    ),
+                )
+
+
+class TestDogfoodKernel05bBuildSuccessMissingArtifactFailsClosed(
+    unittest.TestCase
+):
+    """``build_elm_kernel`` returning success must NOT bypass the
+    :func:`stage_elm_kernel_runtime_asset` fail-closed contract.
+
+    The staging helper is the *only* authority for byte/SHA
+    validation. A build that claims success but produces no
+    ``.js`` artifact must still be caught at staging time.
+    """
+
+    def test_build_success_no_artifact_still_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-05b-"
+        ) as td:
+            apps = _write_tracked_elm_sources(Path(td))
+
+            def fake_success(argv, cwd):
+                return None
+
+            build_elm_kernel(apps, run_visible=fake_success)
+            with self.assertRaises(BuildError) as ctx:
+                stage_elm_kernel_runtime_asset(apps)
+            self.assertIn(
+                "Elm kernel source missing", str(ctx.exception)
+            )
+
+    def test_build_success_writes_artifact_staging_passes(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-05b-"
+        ) as td:
+            apps = _write_tracked_elm_sources(Path(td))
+
+            js_bytes = b"kernel-bytes-from-build-034f70b7"
+            expected_sha = compute_sha256_bytes(js_bytes)
+
+            def fake_build(argv, cwd):
+                src_dir = (
+                    apps
+                    / "elm"
+                    / "completion-authority"
+                    / "vendor"
+                )
+                src_dir.mkdir(parents=True, exist_ok=True)
+                src_dir.joinpath(
+                    "completion-authority.js"
+                ).write_bytes(js_bytes)
+                src_dir.joinpath(
+                    "completion-authority.js.sha256"
+                ).write_text(expected_sha + "\n")
+
+            build_elm_kernel(apps, run_visible=fake_build)
+            returned_sha = stage_elm_kernel_runtime_asset(apps)
+            self.assertEqual(returned_sha, expected_sha)
+            staged = (
+                apps / "runtime-assets" / "completion-authority.js"
+            )
+            self.assertEqual(staged.read_bytes(), js_bytes)
 
 
 def compute_sha256_bytes(data: bytes) -> str:

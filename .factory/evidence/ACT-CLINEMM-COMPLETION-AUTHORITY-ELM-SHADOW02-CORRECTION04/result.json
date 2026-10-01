@@ -1,0 +1,71 @@
+{
+  "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION04",
+  "previous_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03",
+  "previous_verdict": "PASS_KERNEL_STAGE_PRESERVED (false negative — kernel source absent from the detached worktree at packaging time; the staging helper correctly failed closed, but no fix was yet applied)",
+  "reviewer_classification": "P1 (FIX_ONCE_AND_CONTINUE)",
+  "entry_head": "25d15cf75d4c6d59a99f12d0fd9e6cdc4170c95d",
+  "subject_head": "PENDING_COMMIT",
+  "closure_head": "PENDING_COMMIT",
+  "authoritative_for_digest": false,
+  "lifecycle": "DIRTY_SUBJECT_UNBOUND — the source working tree contains the production code change but it has not been committed yet; subject_head is therefore NOT yet bound. The canonical dogfood run MUST be executed after this ACT is committed and SUBJECT_HEAD is established. Until commit, any 'exact-head' dogfood build would derive from a HEAD that does not include this fix, defeating the exact-source-binding invariant D01.",
+  "elm_vendor_js_sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
+  "elm_source_unchanged": true,
+  "ts_typecheck": "PASS",
+  "python_py_compile": "PASS (build_dogfood_vsix_lib.py + test_build_dogfood_vsix.py)",
+  "python_tests": "55/55 PASS (was 47/47 before this ACT; added 8 tests across KERNEL-05 and KERNEL-05b; an earlier 54/54 result was off-by-one because test_helper_build_occurs_before_stage_in_orchestrator was at module scope — CORRECTION-FIX re-indented it inside TestDogfoodKernel05BuildElmKernel)",
+  "shadow02_tests": "27/27",
+  "trace_capture_extension": "39/39",
+  "historical_replay": "20/20",
+  "ccard": "12/12",
+  "verdict": "PASS_KERNEL_BUILD_IN_WORKTREE_GREEN",
+  "ready_for_dogfood_retry": true,
+  "ready_for_first_elm_authority_seam_experiment": "PENDING_OPERATOR_LIVE_CORRESPONDENCE",
+  "fix": {
+    "problem": "stage_elm_kernel_runtime_asset() (CORRECTION03) failed closed at the first live dogfood run because the staged detached worktree did not contain vendor/completion-authority.js — git linked worktrees do not carry gitignored or otherwise untracked files from the canonical worktree, and the canonical dogfood build never executes build-elm.sh.",
+    "fix": "Added build_elm_kernel(stage_apps_vscode) helper to scripts/build_dogfood_vsix_lib.py that invokes the tracked apps/vscode/elm/completion-authority/scripts/build-elm.sh with cwd=stage_apps_vscode. The orchestrator calls it BEFORE stage_elm_kernel_runtime_asset(stage_apps).",
+    "diff_size": "scripts/build_dogfood_vsix_lib.py: +58 lines (new helper + orchestrator wiring + __all__ export + docstring updates). scripts/tests/test_build_dogfood_vsix.py: +312 lines (2 new test classes, 7 new tests, 1 helper function, 1 import)."
+  },
+  "discriminator_tests": {
+    "DOGFOOD-KERNEL-05": [
+      "test_helper_invokes_tracked_build_elm_script",
+      "test_helper_fails_closed_when_build_script_missing",
+      "test_helper_propagates_build_failure",
+      "test_helper_does_not_touch_canonical_repo",
+      "test_helper_build_failure_aborts_package",
+      "test_helper_build_occurs_before_stage_in_orchestrator"
+    ],
+    "DOGFOOD-KERNEL-05b": [
+      "test_build_success_no_artifact_still_fails_closed",
+      "test_build_success_writes_artifact_staging_passes"
+    ],
+    "test_count_audit": "KERNEL-05=6 (was 5, off-by-one fix re-indented one method), KERNEL-05b=2, total new=8, grand total=55/55"
+  },
+  "conservation": {
+    "ts_completion_authority_changed": false,
+    "queue_semantics_changed": false,
+    "presentation_semantics_changed": false,
+    "task_lifecycle_semantics_changed": false,
+    "ccard_factual_schema_changed": false,
+    "mcp_code_changed": false,
+    "myc_code_changed": false,
+    "react_code_changed": false,
+    "elm_source_changed": false,
+    "elm_authority_semantics_changed": false,
+    "elm_shadow_runtime_added": true,
+    "elm_shadow_runtime_wired_to_extension_activation": true,
+    "build_elm_sh_changed": false,
+    "new_build_implementation_in_python": false,
+    "vsce_authority_changed": false
+  },
+  "operator_steps_after_this_act": [
+    "1. cd apps/vscode && bun run package (full prod build)",
+    "2. Install dogfood VSIX with CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1",
+    "3. Restart Codium; verify [ELM-SHADOW] enabled=true kernelPath=<resolved> in extension host output",
+    "4. Run one mundane task (pwd; git rev-parse --short HEAD; date)",
+    "5. Command Palette: Dump Continuation Cardinality Authority AND Dump Completion Authority Elm Shadow",
+    "6. Filter both JSONL files by the fresh sessionId",
+    "7. Verify 1:1 DIRECT correspondence for the canonical 5 events and documented INSUFFICIENT_IDENTITY for execute_turn_prelude_enter + terminal_committed",
+    "8. Confirm final Elm model: task=completion_committed, activeRun=null, commitReadyRun=null, committedCompletion=<factual completionId>"
+  ],
+  "prerequisite_for_retry": "Operator must have elm 0.19.2 on PATH inside the canonical worktree (the tracked build-elm.sh enforces HALT_ELM_VERSION_MISMATCH on any other version)."
+}
