@@ -1,0 +1,66 @@
+/**
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01
+ *
+ * Source-preservation tests. These lock the bounded authority-seam
+ * wiring so it cannot be silently removed in a future refactor.
+ *
+ * Per ACT §20 "Repository / factory discipline": maximum one
+ * review/fix cycle; the architecture must not regress.
+ */
+
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+import { describe, expect, it } from "vitest"
+
+const REPO_ROOT = "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm"
+const COORDINATOR_PATH = join(REPO_ROOT, "apps/vscode/src/sdk/sdk-session-event-coordinator.ts")
+const AUTHORITY_MODULE_PATH = join(REPO_ROOT, "apps/vscode/src/sdk/completion-authority-elm-authority.ts")
+
+describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — source preservation", () => {
+	it("EAS01-PRES-01: authority module exists and exports the closed discriminated union", () => {
+		const source = readFileSync(AUTHORITY_MODULE_PATH, "utf8")
+		expect(source).toMatch(/export\s+type\s+ElmCompletionAuthorityDecision\s*=/)
+		expect(source).toMatch(/kind:\s*"authorize"/)
+		expect(source).toMatch(/kind:\s*"hold"/)
+		expect(source).toMatch(/kind:\s*"failure"/)
+	})
+
+	it("EAS01-PRES-02: authority module exports a default-always-authorize dependency-injection seam", () => {
+		const source = readFileSync(AUTHORITY_MODULE_PATH, "utf8")
+		expect(source).toMatch(/defaultGetElmCompletionAuthorityDecision/)
+		expect(source).toMatch(/export\s+function\s+defaultGetElmCompletionAuthorityDecision/)
+	})
+
+	it("EAS01-PRES-03: coordinator imports the authority decision type", () => {
+		const source = readFileSync(COORDINATOR_PATH, "utf8")
+		expect(source).toMatch(/from\s+["']\.\/completion-authority-elm-authority["']/)
+		expect(source).toMatch(/ElmCompletionAuthorityDecision/)
+	})
+
+	it("EAS01-PRES-04: coordinator constructor option name matches across type and capture", () => {
+		const source = readFileSync(COORDINATOR_PATH, "utf8")
+		// Option declared on the options interface
+		expect(source).toMatch(/getElmCompletionAuthorityDecision\?:/)
+		// Option captured into the class private field
+		expect(source).toMatch(/private\s+readonly\s+getElmCompletionAuthorityDecision:/)
+		// Option captured in constructor
+		expect(source).toMatch(/options\.getElmCompletionAuthorityDecision\s*\?\?/)
+	})
+
+	it("EAS01-PRES-05: coordinator consults Elm authority at BOTH commit-effect sites", () => {
+		const source = readFileSync(COORDINATOR_PATH, "utf8")
+		// Site 1: deferred-completion re-entry
+		expect(source).toMatch(/checkElmCompletionAuthority\(["']session-event-turn-complete-completed["']\)/)
+		// The Elm check MUST appear at least twice (once at each site).
+		const matches = source.match(/checkElmCompletionAuthority\(["']session-event-turn-complete-completed["']\)/g)
+		expect(matches?.length).toBeGreaterThanOrEqual(2)
+	})
+
+	it("EAS01-PRES-06: helper is fail-closed on Elm failure (no silent TS fallback)", () => {
+		const source = readFileSync(COORDINATOR_PATH, "utf8")
+		expect(source).toMatch(/no silent TS fallback/i)
+		// The helper surfaces the bounded classification when Elm reports failure.
+		expect(source).toMatch(/Elm completion-authority returned FAILURE/)
+		expect(source).toMatch(/classification=\${decision\.classification}/)
+	})
+})

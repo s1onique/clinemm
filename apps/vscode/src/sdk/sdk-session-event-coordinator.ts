@@ -8,6 +8,10 @@ import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
 import { getDiagnosticHostId, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import { type BackgroundOwnerCorrelationActiveJob, captureBackgroundOwnerCorrelationRecord } from "./background-owner-correlation"
+import {
+	defaultGetElmCompletionAuthorityDecision,
+	type ElmCompletionAuthorityDecision,
+} from "./completion-authority-elm-authority"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import {
 	enterExtensionHostHotloopHandleSessionEvent,
@@ -402,6 +406,45 @@ export interface SdkSessionEventCoordinatorOptions {
 	}) => Promise<{
 		kind: "delivered" | "rejected" | "session_gone" | "no_held_job_ids"
 	}>
+	/**
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01:
+	 *
+	 * Elm-authority decision seam. The coordinator consults this
+	 * synchronously IMMEDIATELY BEFORE invoking the production
+	 * `setTurnPhase("completed", ...)` commit effect at both
+	 * commit-effect sites:
+	 *
+	 *   1. The deferred-completion-barrier re-entry site
+	 *      (`reevaluateDeferredCompletionBarrier`).
+	 *   2. The initial-dispatch C10 commit site (the
+	 *      `submit_and_exit_seen` → C10 capture → `setTurnPhase`
+	 *      path in `handleSessionEvent`).
+	 *
+	 * Authority contract (per ACT §3, §7, §9):
+	 *   - `kind: "authorize"`  → invoke the existing TS commit
+	 *     effect exactly once (no behavior change).
+	 *   - `kind: "hold"`       → DO NOT invoke the commit effect.
+	 *     The TS predicate chain has already cleared, so Elm is
+	 *     the sole remaining barrier; the held completion commits
+	 *     on the next BCB/BNCA re-evaluation that does not
+	 *     re-trigger this hold.
+	 *   - `kind: "failure"`    → DO NOT invoke the commit effect.
+	 *     No silent TS fallback. Elm unavailability is logged
+	 *     explicitly via `Logger.warn` with the classification.
+	 *
+	 * Default behavior when absent: a function that always returns
+	 * `kind: "authorize"` — the legacy TS predicate chain remains
+	 * the sole authority. This makes every pre-ACT test (BCB01,
+	 * BNCA, CPA01, etc.) byte-identical: no test is forced to
+	 * wire the option.
+	 *
+	 * The production enable helper
+	 * (`dogfood-diagnostic-profile.applyElmAuthorityProfile`)
+	 * arms this option at extension activation time when
+	 * `CLINEMM_COMPLETION_AUTHORITY_ELM=1` is set in the operator's
+	 * environment.
+	 */
+	getElmCompletionAuthorityDecision?: () => ElmCompletionAuthorityDecision
 }
 
 /**
@@ -501,8 +544,19 @@ export class SdkSessionEventCoordinator {
 	 */
 	private nextCompletionCommitEventId = 0
 
+	/**
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01:
+	 * The Elm-authority decision provider, captured at construction.
+	 * The fallback default is a function that always returns
+	 * `kind: "authorize"` so the legacy TS predicate chain remains
+	 * the sole authority when this option is absent.
+	 */
+	private readonly getElmCompletionAuthorityDecision: () => ElmCompletionAuthorityDecision
+
 	constructor(private readonly options: SdkSessionEventCoordinatorOptions) {
 		this.translateSessionEvent = options.translateSessionEvent ?? translateSessionEvent
+		this.getElmCompletionAuthorityDecision =
+			options.getElmCompletionAuthorityDecision ?? defaultGetElmCompletionAuthorityDecision
 	}
 
 	/**
@@ -604,6 +658,51 @@ export class SdkSessionEventCoordinator {
 	 *      `session-event-turn-complete-completed` commits `completed`
 	 *      exactly once and the marker is cleared
 	 */
+	/**
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01:
+	 *
+	 * Consults the Elm-authority decision provider. Returns true iff
+	 * the production commit effect MAY proceed. When the provider
+	 * returns `kind: "hold"` or `kind: "failure"`, logs an explicit
+	 * bounded diagnostic and returns false.
+	 *
+	 * This helper is a single-character delta at both commit sites:
+	 * the existing TS predicate chain clears first; Elm is the FINAL
+	 * gate.
+	 *
+	 * The legacy default
+	 * (`defaultGetElmCompletionAuthorityDecision`) returns
+	 * `kind: "authorize"` so when the option is absent on the
+	 * coordinator (every pre-ACT test), this helper is a true
+	 * no-op — the legacy TS path is byte-identical.
+	 */
+	private checkElmCompletionAuthority(writerId: TurnStateWriterId): boolean {
+		let decision: ElmCompletionAuthorityDecision
+		try {
+			decision = this.getElmCompletionAuthorityDecision()
+		} catch (err) {
+			Logger.warn(
+				`[SdkController] Elm completion-authority decision provider threw at writerId=${writerId}; suppressing commit effect (no silent TS fallback): ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			)
+			return false
+		}
+		if (decision.kind === "authorize") return true
+		if (decision.kind === "hold") {
+			Logger.warn(
+				`[SdkController] Elm completion-authority returned HOLD at writerId=${writerId} (reason=${decision.reason}); suppressing commit effect`,
+			)
+			return false
+		}
+		// failure: per ACT §3, no silent TS fallback. Suppress the
+		// commit effect and surface the bounded classification.
+		Logger.warn(
+			`[SdkController] Elm completion-authority returned FAILURE at writerId=${writerId} (classification=${decision.classification}); suppressing commit effect (no silent TS fallback)`,
+		)
+		return false
+	}
+
 	reevaluateDeferredCompletionBarrier(): void {
 		const marker = this.deferredCompletionBarrier
 		if (!marker) return
@@ -769,6 +868,15 @@ export class SdkSessionEventCoordinator {
 			`[SdkController] outstanding obligations resolved; releasing held completion for session ${activeSession.sessionId} (epoch=${marker.epoch})`,
 		)
 		this.deferredCompletionBarrier = undefined
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01: Elm is the
+		// FINAL gate. When the option is the legacy default
+		// (`kind: "authorize"`), the helper returns true and the
+		// existing TS effect runs unchanged. When the production
+		// helper arms Elm-authority mode, Elm's decision owns this
+		// commit.
+		if (!this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
+			return
+		}
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 	}
 
@@ -1438,6 +1546,16 @@ export class SdkSessionEventCoordinator {
 									// Monotonic, per-coordinator-instance. One C10 -> one completionId.
 									completionId: `completion-${activeSession.sessionId}-${++this.nextCompletionCommitEventId}`,
 								})
+								// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01:
+								// Elm is the FINAL gate. The CCARD capture above
+								// already happened (the shadow observer saw the
+								// record); Elm has the same model state. When
+								// Elm-authority mode is OFF the helper is a no-op
+								// and the existing TS effect runs unchanged.
+								// When ON, Elm's decision owns this commit.
+								if (!this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
+									return
+								}
 								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 							}
 						} else {
