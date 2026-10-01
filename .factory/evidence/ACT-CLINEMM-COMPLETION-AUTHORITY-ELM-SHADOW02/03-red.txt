@@ -1,0 +1,32 @@
+§16 RED gate — captured 2026-10-01T11:22:38Z.
+
+Command:
+  cd apps/vscode && bun vitest run \
+    src/sdk/__tests__/completion-authority-elm-shadow02.test.ts
+
+Expected (§16): "production shadow module missing; observer wiring
+missing; real seam RED reproduces".
+
+Observed:
+  src/sdk/__tests__/completion-authority-elm-shadow02.test.ts [FAIL]
+  Error: Cannot find module '../completion-authority-elm-shadow'
+  Require stack:
+  - .../completion-authority-elm-shadow02.test.ts
+   ❯ loadShadowModule src/sdk/__tests__/completion-authority-elm-shadow02.test.ts:66:19
+
+  Test Files  1 failed (1)
+       Tests  no tests
+
+RED verified: the real-factual-seam observer module is missing, so the
+shadow seam cannot be reached. The CCARD module itself is untouched —
+no production semantics are altered in RED.
+
+The "[vitest-pool]: Failed to terminate forks worker" line is the
+same harmless EPERM cleanup quirk observed on the historical-replay
+test (see §3 historical-replay green). The vitest worker process did
+not exit cleanly on sandbox-constrained macOS, but the test result is
+the expected RED.
+
+ACTION: §17 implementation can begin. The shadow module
+`apps/vscode/src/sdk/completion-authority-elm-shadow.ts` must be
+created and the bounded CCARD helper restructure applied.

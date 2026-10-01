@@ -1,0 +1,16 @@
+ENTRY_HEAD=c3fa0e374c95f78b7bd726ba1892fde36a30e3cd
+PREDECESSOR_ACT=ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01
+PREDECESSOR_SUBJECT_HEAD=254004a076576fdefb7e9edec7d521d56c2ab498
+
+ELM_VENDOR_JS_SHA256=034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+
+FROZEN_SEMANTIC_ARTIFACT_HASHES (SHA-256):
+  src/Authority.elm                        c9b1b0f9431c74e77b87701a4c08a1d501ca4f28433d1d2f5b3928bcd358c724
+  src/Domain.elm                           08d94352aa4ab23a3cfd4d2348fe0a1bd02715d885daa0efafbeda36b5695891
+  src/Codec.elm                            4867a16254dbd48340e60e80d3593df5dc34299728c465910195063696892502
+  src/Main.elm                             fae9be55d4b1480cdab821804f92797328cf52ebca0c5a031ba72eb5c92c3f77
+  tests/CompletionAuthorityTest.elm        6b6c44a067cda9b16da055f67ec951e51062ff8a0f58d797de8cb8e81f5bb1b0
+  vendor/completion-authority.js           034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+
+git status --short: clean
+git diff --check: clean

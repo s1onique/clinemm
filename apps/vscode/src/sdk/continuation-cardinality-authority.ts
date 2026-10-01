@@ -68,6 +68,14 @@
  * post-capture cardinality tests.
  */
 
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02: static import of
+// the Elm shadow observer. The shadow module does NOT load the Elm
+// bundle on import — it loads only when `setElmShadowEnabled(true,
+// ...)` is called. So importing it here does not change the CCARD
+// cold-start cost for default-off production. The shadow has zero
+// authority: it observes and reports, never mutates.
+import * as ShadowModule from "./completion-authority-elm-shadow"
+
 export type ContinuationCardinalityStage =
 	| "terminal_committed"
 	| "notify_consume_enter"
@@ -228,9 +236,27 @@ let nextSeq = 1
 
 /**
  * Append one cardinality-observation record. Bounded FIFO eviction.
- * No-op when the capture seam is OFF (default). Increments the
+ * No-op when the capture seam is OFF AND the Elm shadow observer
+ * does not want this record either (default). Increments the
  * per-stage counter on the way through so a cheap post-capture
  * count is available without re-reading the ring.
+ *
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02:
+ *   The helper also forwards a copy of the constructed record to
+ *   the Elm shadow observer as a fire-and-forget call AFTER the
+ *   ring is updated. The shadow has zero authority: it observes
+ *   the same record the ring sees and never feeds back into
+ *   production state. When the shadow is disabled (default) the
+ *   forwarded call is a complete no-op.
+ *
+ *   When only the shadow is enabled (captureEnabled=false), the
+ *   helper still constructs the record once (no ring push, no
+ *   counter increment) so the shadow sees it. This preserves the
+ *   §13 invariant:
+ *     captureEnabled=false + shadow=false -> exact old no-op
+ *     captureEnabled=true + shadow=false -> exact old behavior
+ *     captureEnabled=true + shadow=true -> one record, two fans
+ *     captureEnabled=false + shadow=true -> one record, shadow only
  */
 export function captureContinuationCardinalityAuthorityRecord(record: {
 	readonly stage: ContinuationCardinalityStage
@@ -248,10 +274,16 @@ export function captureContinuationCardinalityAuthorityRecord(record: {
 	readonly submitId?: string
 	readonly completionId?: string
 }): void {
-	if (!captureEnabled) return
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02: query the
+	// shadow gate via the shadow module's exported predicate. The
+	// shadow module stores its state on globalThis, so this read
+	// sees the same state that the production activation helper
+	// (and the test) configured.
+	const shadowWants = !captureEnabled ? isElmShadowObserverActive() : true
+	if (!captureEnabled && !shadowWants) return
 	const origin: ContinuationCardinalityOrigin = record.origin ?? "unknown"
 	const rec: ContinuationCardinalityAuthorityRecord = {
-		seq: nextSeq++,
+		seq: captureEnabled ? nextSeq++ : -1,
 		at: Date.now(),
 		stage: record.stage,
 		origin,
@@ -267,13 +299,24 @@ export function captureContinuationCardinalityAuthorityRecord(record: {
 		...(record.submitId !== undefined ? { submitId: record.submitId } : {}),
 		...(record.completionId !== undefined ? { completionId: record.completionId } : {}),
 	}
-	buffer.push(rec)
-	if (buffer.length > bufferSize) {
-		buffer.shift()
+	if (captureEnabled) {
+		buffer.push(rec)
+		if (buffer.length > bufferSize) {
+			buffer.shift()
+		}
+		const counter = stageCounters[record.stage]
+		counter.count++
+		counter.origins.add(origin)
 	}
-	const counter = stageCounters[record.stage]
-	counter.count++
-	counter.origins.add(origin)
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02: forward a
+	// copy of the constructed record to the Elm shadow observer as
+	// a fire-and-forget call. The shadow never feeds back into
+	// production state.
+	try {
+		observeElmShadowFireAndForget(rec as unknown as Record<string, unknown>)
+	} catch {
+		// Never propagate from the diagnostic observer.
+	}
 }
 
 /**
@@ -306,5 +349,54 @@ export function setContinuationCardinalityAuthorityCaptureBufferSize(size: numbe
 	bufferSize = clamped
 	if (buffer.length > bufferSize) {
 		buffer.length = bufferSize
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02 — Elm shadow observer gate.
+//
+// The shadow runtime is optional and lazily loaded. When the shadow
+// module is not present in the codebase or has not yet been enabled,
+// these helpers are silent no-ops and the CCARD helper remains a
+// complete no-op when captureEnabled is false.
+//
+// The CCARD module NEVER imports the shadow module statically so the
+// Elm bundle is not pulled into every consumer.
+// -----------------------------------------------------------------------------
+
+interface ShadowGate {
+	isElmShadowObserverActive(): boolean
+	observeElmShadowFireAndForget(record: Record<string, unknown>): void
+}
+
+function resolveShadowGate(): ShadowGate | null {
+	const required = ShadowModule as Partial<ShadowGate>
+	if (
+		required &&
+		typeof required.isElmShadowObserverActive === "function" &&
+		typeof required.observeElmShadowFireAndForget === "function"
+	) {
+		return required as ShadowGate
+	}
+	return null
+}
+
+function isElmShadowObserverActive(): boolean {
+	const gate = resolveShadowGate()
+	if (!gate) return false
+	try {
+		return Boolean(gate.isElmShadowObserverActive())
+	} catch {
+		return false
+	}
+}
+
+function observeElmShadowFireAndForget(record: Record<string, unknown>): void {
+	const gate = resolveShadowGate()
+	if (!gate) return
+	try {
+		gate.observeElmShadowFireAndForget(record)
+	} catch {
+		// Never propagate.
 	}
 }

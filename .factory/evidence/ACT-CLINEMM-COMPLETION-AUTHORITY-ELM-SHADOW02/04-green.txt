@@ -1,0 +1,59 @@
+§17 GREEN stage — captured 2026-10-01T11:45Z.
+
+All gates GREEN:
+
+ELM_TEST=31/31
+ELM_SMOKE=PASS
+HISTORICAL_REPLAY=20/20
+TYPECHECK=PASS (full project typecheck)
+SHADOW02=19/19 (ELS02-01..ELS02-15)
+TCE=39/39 (completion-authority-trace-capture-extension01.test.ts)
+CCARD=12/12 (continuation-cardinality-authority01.ccard01.test.ts)
+TOTAL=90/90 across 4 vitest files
+
+ELM_VENDOR_JS_SHA256 unchanged: 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+ELM source SHA-256 unchanged.
+
+Conservation:
+  TS_COMPLETION_AUTHORITY_CHANGED=false
+  QUEUE_SEMANTICS_CHANGED=false
+  PRESENTATION_SEMANTICS_CHANGED=false
+  TASK_LIFECYCLE_SEMANTICS_CHANGED=false
+  CCARD_FACTUAL_SCHEMA_CHANGED=false
+  MCP_CODE_CHANGED=false
+  MYC_CODE_CHANGED=false
+  REACT_CODE_CHANGED=false
+  ELM_SOURCE_CHANGED=false
+  ELM_AUTHORITY_SEMANTICS_CHANGED=false
+  ELM_SHADOW_RUNTIME_ADDED=true
+  ELM_SHADOW_DEFAULT_OFF=true
+  MANUFACTURED_IDENTITY_COUNT=0
+  ORIGIN_REWRITE_COUNT=0
+
+Authority firewall:
+  Shadow module imports: only ./completion-authority-elm-replay and
+  ./completion-authority-elm-replay.kernel. Zero imports of
+  mutating authorities (queue, presentation, CommandJobManager,
+  PendingPromptsController, MCP, myc, React/webview).
+
+  Shadow runtime constructor pattern: the only inputs are
+  (record) and the only outputs are bounded ring rows + counter
+  snapshot. No callbacks into production code.
+
+Implementation summary:
+  apps/vscode/src/sdk/completion-authority-elm-shadow.ts (NEW, 478 lines)
+  apps/vscode/src/sdk/continuation-cardinality-authority.ts
+    (BOUNDED MODIFICATION: shadow-gated return + forward call)
+  apps/vscode/src/sdk/__tests__/completion-authority-elm-shadow02.test.ts (NEW, 19 tests)
+
+§22 non-blocking proof:
+  ELS02-13 burst 20 captures synchronously in <200ms.
+  Shadow is enqueue + return; never awaits Elm output.
+
+§23 error containment proof:
+  ELS02-09: invalid kernel path → fail-open, CCARD ring holds 1.
+  ELS02-14.B: malformed outbound → ring captures decode_error,
+  CCARD ring unaffected.
+  ELS02-14.A: 50 captures synchronously always return; CCARD
+  ring holds 50.
+
