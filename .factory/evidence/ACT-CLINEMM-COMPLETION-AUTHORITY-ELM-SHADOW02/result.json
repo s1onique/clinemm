@@ -23,8 +23,9 @@
   "elm_shadow_nonblocking": true,
   "ts_authority": "SOLE",
   "elm_authority": "NONE",
-  "verdict": "PASS_LIVE_ELM_SHADOW",
-  "ready_for_first_elm_authority_seam_experiment": true,
+  "verdict": "PASS_SHADOW_RUNTIME_GREEN_LIVE_REACHABILITY_MISSING",
+  "ready_for_first_elm_authority_seam_experiment": false,
+  "correction_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01",
   "successor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-<FIRST-SEAM>-SHADOW-AUTHORITY01 (deferred to evidence after operator live witness per §44)",
   "red": {
     "file": "apps/vscode/src/sdk/__tests__/completion-authority-elm-shadow02.test.ts",

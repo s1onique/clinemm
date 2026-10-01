@@ -1,0 +1,38 @@
+ACT=
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01
+
+ENTRY_HEAD=
+fe189d032f32064ab645b288c75e0669924df0f2
+
+SUBJECT_HEAD=
+1ce2aab8c40c72dc78d0f8aa130a52af802e64b6
+
+CLOSURE_HEAD=
+1ce2aab8c40c72dc78d0f8aa130a52af802e64b6
+
+PREVIOUS_ACT=
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02
+
+PREVIOUS_VERDICT=
+PASS_SHADOW_RUNTIME_GREEN_LIVE_REACHABILITY_MISSING
+
+REVIEWER_CLASSIFICATION=
+P0 evidence/reachability blocker (live enable path missing).
+
+CORRECTION_SCOPE (bounded):
+  1. Production enable seam during extension activation.
+  2. Resolved packaged Elm kernel path from extension root.
+  3. Env-only enablement via CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1
+     (also true/yes per the SHADOW02 frozen contract).
+  4. Dump command + registry entry + package.json contribution.
+  5. ELS02-16 source-presence tests proving the wiring exists.
+  6. (Operator-runs) install/restart + one mundane task + freeze both
+     streams + verify 1:1 DIRECT correspondence per §28-§36.
+
+NO_NEW_ELM_SEMANTICS=true
+
+NO_NEW_TS_AUTHORITY_FLOOR=true (TS_AUTHORITY=SOLE, ELM_AUTHORITY=NONE)
+
+ELM_VENDOR_JS_SHA256=
+034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+(unmodified)

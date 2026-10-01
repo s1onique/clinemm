@@ -7,10 +7,12 @@ import * as vscode from "vscode"
 import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
 import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
+import { dumpExtensionSideElmShadowDiagnostic } from "@/sdk/completion-authority-elm-shadow-runtime"
 import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
+	applyElmShadowDiagnosticProfile,
 	applyExtensionHostAllocationProfilerProfile,
 	applyExtensionHostCpuProfilerProfile,
 	applyExtensionHostHotloopDiagnosticProfile,
@@ -61,6 +63,7 @@ import { WebviewProvider } from "./core/webview"
 import { createClineAPI } from "./exports"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import type { ExtensionContext } from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
@@ -256,6 +259,45 @@ export async function activate(context: vscode.ExtensionContext) {
 	// BEFORE the first CommandJobManager.finalize /
 	// BackgroundNotifyCoordinator.consumeTerminal / etc.
 	applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01:
+	// arm the Elm shadow observer at the SAME EARLIEST
+	// initialization seam, BEFORE SdkController construction.
+	// The shadow is DEFAULT-OFF. The operator opts in via the
+	// CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 env var. The
+	// kernel path is resolved relative to the bundled
+	// `dist/extension.js` location. In a packaged VSIX the
+	// structure is `<publisher>-<ver>/dist/extension.js` +
+	// `<publisher>-<ver>/elm/completion-authority/vendor/...`,
+	// so `..` from `dist/` lands on the extension root. We
+	// resolve via the esbuild banner-provided `_importMetaUrl`
+	// (see esbuild.mjs banner) so this works under the bundled
+	// CJS target.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const _banner = (globalThis as any)
+	const _importMetaUrl: string | undefined =
+		typeof _banner._importMetaUrl === "string"
+			? (_banner._importMetaUrl as string)
+			: undefined
+	const elmShadowKernelPath = _importMetaUrl
+		? path.resolve(
+				path.dirname(fileURLToPath(_importMetaUrl)),
+				"..",
+				"elm",
+				"completion-authority",
+				"vendor",
+				"completion-authority.js",
+			)
+		: null
+	const elmShadowActivation = applyElmShadowDiagnosticProfile(
+		process.env,
+		elmShadowKernelPath,
+	)
+	if (elmShadowActivation.enabled) {
+		console.log(
+			`[ELM-SHADOW] enabled=true kernelPath=${elmShadowActivation.kernelPath}`,
+		)
+	}
 
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
 	// arm the EHLOOP01 (Extension Host Hotloop) counter seam at
@@ -998,6 +1040,32 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[CCARD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Continuation cardinality authority dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01:
+		// Dump command for the Elm shadow observer diagnostic. Mirrors
+		// the CCARD dump pattern: unconditional (operator can always
+		// inspect whatever the shadow captured), dump != clear (no
+		// ring mutation). The dump serializes the bounded ring to
+		// <globalStorageUri>/completion-authority-elm-shadow.jsonl
+		// AND the counter snapshot to
+		// <globalStorageUri>/completion-authority-elm-shadow.counters.json.
+		// No toggle command — enablement is owned by
+		// `applyElmShadowDiagnosticProfile` in dogfood-diagnostic-profile.ts.
+		// REMOVAL_TRIGGER: PASS_LIVE_ELM_SHADOW with operator-rendered
+		// 1:1 live correspondence, OR successor evidence supersedes.
+		vscode.commands.registerCommand(commands.DumpCompletionAuthorityElmShadow, async () => {
+			try {
+				const { ringFile, countersFile, recordCount, counters } =
+					await dumpExtensionSideElmShadowDiagnostic(context)
+				void vscode.window.showInformationMessage(
+					`Completion authority Elm shadow: ${recordCount} observation${recordCount === 1 ? "" : "s"} (states=${counters.states}, violations=${counters.violations}, decodeErrors=${counters.decodeErrors}, kernelErrors=${counters.kernelErrors}) → ${ringFile} (+ ${countersFile}).`,
+				)
+			} catch (err) {
+				Logger.error("[ELM-SHADOW] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Completion authority Elm shadow dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

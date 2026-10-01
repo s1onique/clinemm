@@ -1,0 +1,79 @@
+{
+  "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01",
+  "previous_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02",
+  "previous_verdict": "PASS_SHADOW_RUNTIME_GREEN_LIVE_REACHABILITY_MISSING",
+  "reviewer_classification": "P0 evidence/reachability blocker",
+  "entry_head": "fe189d032f32064ab645b288c75e0669924df0f2",
+  "subject_head": "1ce2aab8c40c72dc78d0f8aa130a52af802e64b6",
+  "closure_head": "1ce2aab8c40c72dc78d0f8aa130a52af802e64b6",
+  "elm_vendor_js_sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
+  "elm_source_unchanged": true,
+  "elm_unit_tests": "31/31 (unchanged from predecessor)",
+  "elm_smoke_test": "PASS (unchanged)",
+  "ts_typecheck": "PASS",
+  "shadow02_tests": "25/25 (added ELS02-16.A..F wiring tests)",
+  "historical_replay": "20/20",
+  "trace_capture_extension": "39/39",
+  "ccard": "12/12",
+  "total_vitest": "96/96 across 4 vitest files",
+  "manufactured_identity_count": 0,
+  "origin_rewrite_count": 0,
+  "elm_shadow_default_off": true,
+  "elm_shadow_fail_open": true,
+  "elm_shadow_nonblocking": true,
+  "ts_authority": "SOLE",
+  "elm_authority": "NONE",
+  "production_enable_seam": {
+    "diagnostic_profile_resolver": "applyElmShadowDiagnosticProfile added to dogfood-diagnostic-profile.ts",
+    "extension_activation_call_site": "extension.ts:activate calls applyElmShadowDiagnosticProfile(process.env, kernelPath) before SdkController construction",
+    "kernel_path_resolution": "path.resolve(path.dirname(fileURLToPath(_importMetaUrl)), '..', 'elm', 'completion-authority', 'vendor', 'completion-authority.js')",
+    "kernel_path_verified_sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
+    "env_var": "CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW (1/true/yes -> ON, else OFF)",
+    "fail_closed_on_missing_kernel_path": true,
+    "registry_entry": "cline.debug.dumpCompletionAuthorityElmShadow",
+    "package_json_contribution": "cline.debug.dumpCompletionAuthorityElmShadow declared",
+    "runtime_dump_module": "completion-authority-elm-shadow-runtime.ts (dumpExtensionSideElmShadowDiagnostic)",
+    "dump_files": [
+      "<globalStorageUri>/completion-authority-elm-shadow.jsonl",
+      "<globalStorageUri>/completion-authority-elm-shadow.counters.json"
+    ]
+  },
+  "verdict_subject": "PASS_LIVE_ELM_SHADOW_REACHABILITY_GREEN",
+  "ready_for_first_elm_authority_seam_experiment": "PENDING_OPERATOR_LIVE_CORRESPONDENCE",
+  "operator_live_required": {
+    "install": "install dogfood VSIX with CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1",
+    "activation_check": "verify shadow enabled=true kernel sha256=034f70b7...",
+    "task": "run one mundane task (pwd, git rev-parse --short HEAD, date)",
+    "dump": "Cline Debug: Dump Continuation Cardinality Authority AND Dump Completion Authority Elm Shadow",
+    "filter": "by fresh sessionId",
+    "expected_correspondence": {
+      "task_started": "DIRECT",
+      "run_turn_started": "DIRECT",
+      "submit_and_exit_seen": "DIRECT",
+      "task_completion_committed": "DIRECT",
+      "agent_turn_done": "DIRECT",
+      "execute_turn_prelude_enter": "INSUFFICIENT_IDENTITY (no runId without ENTER/active-run input)",
+      "terminal_committed": "INSUFFICIENT_IDENTITY (no terminalKind)"
+    },
+    "expected_final_model": {
+      "task": "completion_committed",
+      "activeRun": null,
+      "commitReadyRun": null,
+      "committedCompletion": "<factual completionId>"
+    }
+  },
+  "conservation": {
+    "ts_completion_authority_changed": false,
+    "queue_semantics_changed": false,
+    "presentation_semantics_changed": false,
+    "task_lifecycle_semantics_changed": false,
+    "ccard_factual_schema_changed": false,
+    "mcp_code_changed": false,
+    "myc_code_changed": false,
+    "react_code_changed": false,
+    "elm_source_changed": false,
+    "elm_authority_semantics_changed": false,
+    "elm_shadow_runtime_added": true,
+    "elm_shadow_runtime_wired_to_extension_activation": true
+  }
+}

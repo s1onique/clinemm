@@ -111,6 +111,18 @@ const ClineCommands = {
 	// cardinality to 1, OR CAPTURE_INSUFFICIENT, OR
 	// HALT_RED_NOT_REPRODUCED, OR successor evidence supersedes it.
 	DumpContinuationCardinalityAuthority: prefix + ".debug.dumpContinuationCardinalityAuthority",
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01:
+	// Debug dump command for the Elm completion-authority shadow
+	// observer. Default-off diagnostic; the operator opts in via
+	// CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1. The dump
+	// serializes the bounded ring + counter snapshot to
+	// <globalStorageUri>/completion-authority-elm-shadow.jsonl +
+	// .counters.json. No toggle command (enablement is owned by
+	// `applyElmShadowDiagnosticProfile` in
+	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER:
+	// PASS_LIVE_ELM_SHADOW with operator-rendered 1:1 live
+	// correspondence, OR successor evidence supersedes.
+	DumpCompletionAuthorityElmShadow: prefix + ".debug.dumpCompletionAuthorityElmShadow",
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
 	// Dump command for the EHLOOP01 (Extension Host Hotloop) counter
 	// diagnostic. Mirrors the BJLA / BOCOR / CCARD dump pattern:

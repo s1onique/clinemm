@@ -28,6 +28,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import * as shadow from "../completion-authority-elm-shadow"
+import * as dogfoodProfile from "../dogfood-diagnostic-profile"
 import {
 	captureContinuationCardinalityAuthorityRecord,
 	clearContinuationCardinalityAuthorityCapture,
@@ -584,5 +585,109 @@ describe("ELS02-15 — Elm shadow runtime has zero second hand-written stage→M
 		for (const a of mutatingAuthorities) {
 			expect(source.toLowerCase()).not.toContain(a.toLowerCase())
 		}
+	})
+})
+
+// ----------------------------------------------------------------------------
+// ELS02-16 — production activation wiring (CORRECTION01)
+// ----------------------------------------------------------------------------
+
+describe("ELS02-16 — production activation wiring exists in extension.ts + dogfood-diagnostic-profile.ts + registry.ts", () => {
+	test("ELS02-16.A: applyElmShadowDiagnosticProfile exists in dogfood-diagnostic-profile.ts and is env-gated", () => {
+		const profilePath = path.resolve(
+			REPO_ROOT,
+			"apps/vscode/src/sdk/dogfood-diagnostic-profile.ts",
+		)
+		const source = fs.readFileSync(profilePath, "utf8")
+		expect(source).toMatch(/export\s+function\s+applyElmShadowDiagnosticProfile/)
+		expect(source).toMatch(/CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW/)
+	})
+
+	test("ELS02-16.B: extension.ts:activate calls applyElmShadowDiagnosticProfile and registers the dump command", () => {
+		const extPath = path.resolve(REPO_ROOT, "apps/vscode/src/extension.ts")
+		const source = fs.readFileSync(extPath, "utf8")
+		expect(source).toMatch(/applyElmShadowDiagnosticProfile/)
+		expect(source).toMatch(/DumpCompletionAuthorityElmShadow/)
+	})
+
+	test("ELS02-16.C: registry.ts exposes DumpCompletionAuthorityElmShadow command id", () => {
+		const regPath = path.resolve(REPO_ROOT, "apps/vscode/src/registry.ts")
+		const source = fs.readFileSync(regPath, "utf8")
+		expect(source).toMatch(/DumpCompletionAuthorityElmShadow\s*:\s*prefix\s*\+/)
+	})
+
+	test("ELS02-16.D: package.json declares the dump command for the contribution point", () => {
+		const pkg = JSON.parse(
+			fs.readFileSync(path.resolve(REPO_ROOT, "apps/vscode/package.json"), "utf8"),
+		) as { contributes?: { commands?: Array<{ command?: string }> } }
+		const ids = (pkg.contributes?.commands ?? []).map((c) => c.command ?? "")
+		expect(ids).toContain("cline.debug.dumpCompletionAuthorityElmShadow")
+	})
+
+	test("ELS02-16.E: dump runtime module exists and serializes the ring + counter snapshot", () => {
+		const runtimePath = path.resolve(
+			REPO_ROOT,
+			"apps/vscode/src/sdk/completion-authority-elm-shadow-runtime.ts",
+		)
+		expect(fs.existsSync(runtimePath)).toBe(true)
+		const source = fs.readFileSync(runtimePath, "utf8")
+		expect(source).toMatch(/completion-authority-elm-shadow\.jsonl/)
+		expect(source).toMatch(/completion-authority-elm-shadow\.counters\.json/)
+	})
+
+	test("ELS02-16.F: applyElmShadowDiagnosticProfile honors the env contract (1/true/yes -> ON, else OFF)", () => {
+		const apply = dogfoodProfile.applyElmShadowDiagnosticProfile as (
+			env: Record<string, string | undefined>,
+			kernelPath: string | null,
+		) => {
+			enabled: boolean
+			flipped: boolean
+			kernelPath: string | null
+			resolvedReason: string
+		}
+		// Default off
+		const a = apply({}, KERNEL_PATH)
+		expect(a.enabled).toBe(false)
+		expect(a.kernelPath).toBeNull()
+		// "1" -> ON
+		const b = apply(
+			{ CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW: "1" },
+			KERNEL_PATH,
+		)
+		expect(b.enabled).toBe(true)
+		expect(b.kernelPath).toBe(KERNEL_PATH)
+		expect(b.resolvedReason).toBe("env")
+		// "true" -> ON
+		const c = apply(
+			{ CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW: "true" },
+			KERNEL_PATH,
+		)
+		expect(c.enabled).toBe(true)
+		// "yes" -> ON
+		const d = apply(
+			{ CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW: "yes" },
+			KERNEL_PATH,
+		)
+		expect(d.enabled).toBe(true)
+		// "0" -> OFF
+		const e = apply(
+			{ CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW: "0" },
+			KERNEL_PATH,
+		)
+		expect(e.enabled).toBe(false)
+		// "no" -> OFF
+		const f = apply(
+			{ CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW: "no" },
+			KERNEL_PATH,
+		)
+		expect(f.enabled).toBe(false)
+		// env on but kernel path missing -> fail-closed OFF
+		const g = apply(
+			{ CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW: "1" },
+			null,
+		)
+		expect(g.enabled).toBe(false)
+		// Reset for downstream tests
+		apply({}, null)
 	})
 })

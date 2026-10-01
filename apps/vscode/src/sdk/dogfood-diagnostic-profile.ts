@@ -146,6 +146,7 @@ import {
 	setTaskHeaderSelectorInputCaptureEnabled,
 } from "./task-header-selector-input-capture"
 import type { TurnStateWriterProvenanceDiagnosticContext } from "./turn-state-writer-provenance-runtime"
+import * as ElmShadowModule from "./completion-authority-elm-shadow"
 
 const ENV_VARS: Readonly<Record<DiagnosticKnob, string>> = {
 	v: "CLINEMM_CAPTURE_V2_PATH",
@@ -919,6 +920,93 @@ export function applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfood
 
 function _isContinuationCardinalityAuthorityCaptureEnabledForActivation(): boolean {
 	return _isContinuationCardinalityAuthorityCaptureEnabled()
+}
+
+// ===========================================================================
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01 — central
+// activation helper for the Elm shadow observer seam.
+//
+// CONTRACT — frozen in this ACT (mirrors the SHADOW02 frozen contract;
+// no override matrix):
+//   - The shadow runtime is DEFAULT-OFF. There is NO automatic
+//     enablement merely because the build is dogfood.
+//   - The shadow is enabled STRICTLY by the operator setting the
+//     environment variable:
+//       CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1
+//       CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=true
+//       CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=yes
+//     Anything else (including unset, "0", "false", "no", "") keeps
+//     the shadow OFF.
+//   - When OFF, the kernel is never loaded; no Elm.Main.init runs;
+//     no shadow session map exists; no outbound port is subscribed.
+//   - When ON, the shadow module is enabled with the resolved
+//     kernel path (the absolute filesystem path to the compiled
+//     `vendor/completion-authority.js`). The first CCARD record
+//     observed for a new session triggers a fresh `loadKernel`.
+//   - The activation helper is called from extension.ts:activate
+//     BEFORE SdkController construction. There is exactly ONE
+//     production activation path, no copied orchestration in tests.
+//   - Public installs (isDogfood=false) may opt-in via the env var.
+//     The frozen contract requires explicit opt-in; this differs
+//     from the BJLA / BOCOR / CCARD profile resolvers which gate
+//     strictly on isDogfood.
+// ===========================================================================
+
+function _parseEnvTruthy(value: string | undefined): boolean {
+	if (value === undefined) return false
+	const v = value.trim().toLowerCase()
+	return v === "1" || v === "true" || v === "yes"
+}
+
+/**
+ * THE single production activation helper for the Elm shadow seam.
+ * Called from extension.ts:activate (sibling to BJLA / BOCOR / CCARD
+ * activations); there is exactly ONE production activation path.
+ *
+ * Returns:
+ *   enabled    — true iff the shadow is now armed (post-call state).
+ *   flipped    — true iff this call changed the previous state.
+ *   kernelPath — the resolved path passed to the shadow module, or
+ *                null when disabled (no kernel should be loaded).
+ *
+ * The kernel path is passed by the caller (extension.ts:activate)
+ * because the shadow module itself is `vscode`-free and does not
+ * know how to derive the packaged extension root.
+ */
+export function applyElmShadowDiagnosticProfile(
+	env: NodeJS.ProcessEnv | undefined,
+	kernelPath: string | null,
+): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+	readonly kernelPath: string | null
+	readonly resolvedReason: "env" | "default_off"
+} {
+	const should = _parseEnvTruthy(env?.CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW)
+	const wasEnabled = ElmShadowModule.isElmShadowEnabled()
+	if (should) {
+		if (!kernelPath) {
+			// fail-closed: env requested ON but caller did not supply a
+			// kernel path. Disable and report.
+			ElmShadowModule.setElmShadowEnabled(false, null)
+			return { enabled: false, flipped: wasEnabled, kernelPath: null, resolvedReason: "env" }
+		}
+		ElmShadowModule.setElmShadowEnabled(true, kernelPath)
+		return {
+			enabled: true,
+			flipped: !wasEnabled,
+			kernelPath,
+			resolvedReason: "env",
+		}
+	}
+	// Default off path.
+	ElmShadowModule.setElmShadowEnabled(false, null)
+	return {
+		enabled: false,
+		flipped: wasEnabled,
+		kernelPath: null,
+		resolvedReason: "default_off",
+	}
 }
 
 // ===========================================================================
