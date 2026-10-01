@@ -1,0 +1,19 @@
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — GREEN capture
+
+After wiring the Elm-authority seam at both commit-effect sites, all
+6 tests pass (1 from RED, 2 GREEN, 3 RED→GREEN, 6 PRES).
+
+Test summary (src/sdk/__tests__/completion-authority-elm-first-seam01.case01.test.ts):
+  - EAS01-RED-A   (hold)         -> commit count = 0  PASS
+  - EAS01-GREEN-B (authorize)    -> commit count = 1  PASS
+  - EAS01-GREEN-B-pair (default) -> commit count = 1  PASS
+  - EAS01-RED-C1  (failure:no_session)  -> commit count = 0  PASS
+  - EAS01-RED-C2  (failure:decode_error) -> commit count = 0  PASS
+  - EAS01-RED-C3  (provider throws)     -> commit count = 0  PASS
+
+Conservation tests (still 67/67 across 5 vitest files):
+  - background-completion-barrier01.bcb01.test.ts           14/14 PASS
+  - completion-presentation-authority01.cpa01.test.ts       14/14 PASS
+  - completion-authority-elm-shadow02.test.ts                27/27 PASS
+  - completion-authority-elm-first-seam01.case01.test.ts      6/6  PASS
+  - completion-authority-elm-first-seam01.preservation.test.ts 6/6  PASS

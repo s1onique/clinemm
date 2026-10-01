@@ -1,0 +1,28 @@
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — RED capture
+
+RED test: EAS01-RED-A "Elm NOT_READY suppresses the real production commit"
+
+Captured before the GREEN implementation. The test wires
+getElmCompletionAuthorityDecision: () => ({kind: "hold", ...}) on the
+real SdkSessionEventCoordinator at the real C10-dispatch seam. With
+NO production code change, the existing TS predicate chain still
+owns the decision: the commit effect fires once (1), not zero (0).
+
+The single test failure was:
+
+  AssertionError: expected 1 to be +0 // Object.is equality
+  - Expected
+  + Received
+  - 0
+  + 1
+   ❯ src/sdk/__tests__/completion-authority-elm-first-seam01.case01.test.ts:247
+
+This is the expected RED. It proves that on the baseline (no Elm
+authority seam), TS owns the decision. After the GREEN implementation,
+the same test passes: changing the injected decision changes whether
+the real production effect executes.
+
+Commit count under NOT_READY injection (RED):
+  expected: 0
+  received: 1
+  reason:   CURRENT_TS_AUTHORITY_IGNORES_ELM_DECISION (the baseline)

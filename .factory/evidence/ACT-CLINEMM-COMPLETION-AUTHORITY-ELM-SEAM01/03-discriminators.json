@@ -1,0 +1,51 @@
+{
+  "discriminator_a": {
+    "name": "Elm NOT_READY suppresses the real production commit",
+    "test": "EAS01-RED-A",
+    "injected_decision": {"kind": "hold", "reason": "test_red", "holdReasons": ["test_red"]},
+    "ts_predicate_state": "all eight predicates evaluate to commit (zero holds)",
+    "commit_effect_call_count": 0,
+    "phase_at_completion": "not completed",
+    "result": "PASS"
+  },
+  "discriminator_b": {
+    "name": "Elm COMMIT preserves the existing effect (no regression)",
+    "test": "EAS01-GREEN-B",
+    "injected_decision": {"kind": "authorize", "reason": "no_hold_reasons"},
+    "ts_predicate_state": "all eight predicates evaluate to commit",
+    "commit_effect_call_count": 1,
+    "phase_at_completion": "completed",
+    "result": "PASS"
+  },
+  "discriminator_c1": {
+    "name": "Elm failure(no_session) suppresses effect with classification",
+    "test": "EAS01-RED-C1",
+    "injected_decision": {"kind": "failure", "classification": "elm_authority_no_session"},
+    "ts_predicate_state": "all eight predicates evaluate to commit",
+    "commit_effect_call_count": 0,
+    "phase_at_completion": "not completed",
+    "result": "PASS"
+  },
+  "discriminator_c2": {
+    "name": "Elm failure(decode_error) suppresses effect with classification",
+    "test": "EAS01-RED-C2",
+    "injected_decision": {"kind": "failure", "classification": "elm_authority_decode_error"},
+    "commit_effect_call_count": 0,
+    "result": "PASS"
+  },
+  "discriminator_c3": {
+    "name": "Elm decision provider throws -> no silent fallback",
+    "test": "EAS01-RED-C3",
+    "injected_decision": "(throws)",
+    "commit_effect_call_count": 0,
+    "result": "PASS"
+  },
+  "control_pair": {
+    "name": "Authority off (default) -> byte-identical to legacy",
+    "test": "EAS01-GREEN-B-pair",
+    "injected_decision": null,
+    "commit_effect_call_count": 1,
+    "result": "PASS"
+  },
+  "causal_proof": "RED test reproduced CURRENT_TS_AUTHORITY_IGNORES_ELM_DECISION on the baseline. After GREEN, the same test passes: changing the injected decision changes the real production effect behavior. This is the causal discriminator required by ACT §9."
+}
