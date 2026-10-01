@@ -1,0 +1,238 @@
+{
+  "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01",
+  "entryHead": "6adf921310195a7e8681c24f126004a6238d40ab",
+  "predecessorVerdict": "H1_ELM_TOO_STRICT",
+  "realSessionId": "1790809530345_lrsk9",
+  "realTraceSha256": "ec77301dd854dffe4d8121643852fd9a33ab7dddac8b2d70c9b0da1d9d0ddccd",
+  "realProjectionSha256": "ad5c8b26c89bc6287aa92072823e43451efe6751749328faeb0be4289bc0f12b",
+  "rootCause": "computeHoldReasons always emitted ActiveRun whenever activeRun != Nothing, conflating 'run event not yet closed' with 'completion must remain held'. After the production C9 submit, the BCB barrier has already cleared; the residual activeRun is bookkeeping for a run whose AgentTurnDone (C8) has not yet been delivered but whose semantic completion has been declared (C10).",
+  "originalRepair": "ActiveRun is suppressed from the hold set ONLY in handleTaskCompletionCommitted when model.submitCount >= 1.",
+  "originalRepairFailure": "submitCount is a monotonic task-level counter. The R11 adversarial sequence (R1 submit+close, R2 run, TaskCompletionCommitted C2) demonstrated that a stale R1 submit authorizes R2's commit, because submitCount=1 from R1 persists into the R2 phase.",
+  "refinedRepair": "ActiveRun is suppressed from the hold set ONLY in handleTaskCompletionCommitted when model.commitReadyRun == model.activeRun. commitReadyRun is a Maybe RunRef bound at SubmitAndExitSeen to the activeRun at that instant, and invalidated on every event that transitions activeRun (RunStarted, AgentTurnDone, ExecuteTurnPreludeEnter, ContinuationStarted).",
+  "r11AdversarialSequence": {
+    "chronology": [
+      "TaskStarted T",
+      "RunStarted R1",
+      "SubmitAndExitSeen S1",
+      "AgentTurnDone R1",
+      "RunStarted R2",
+      "TaskCompletionCommitted C2"
+    ],
+    "expected": "TaskCompletionCommittedWhileHeld ActiveRun",
+    "preRefinement": "got Nothing (PASS for original R11-test logic, but this meant the model incorrectly accepted C2 because submitCount=1 from R1 satisfied the suppression)",
+    "postRefinement": "got Just (TaskCompletionCommittedWhileHeld ActiveRun) \u2014 commitReadyRun was invalidated by RunStarted R2 and AgentTurnDone R1, so the suppression no longer applies"
+  },
+  "red": {
+    "tests": [
+      {
+        "name": "ELM-CWRA-R01 exact REAL chronology must commit",
+        "status": "RED_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R02 late AgentTurnDone is bookkeeping",
+        "status": "RED_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R03 active run without submit still blocks",
+        "status": "GREEN_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R04 other holds remain blocking after submit",
+        "status": "RED_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R05 no submit intent, no completion",
+        "status": "GREEN_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R06 mismatched late AgentTurnDone is rejected",
+        "status": "GREEN_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R07 duplicate completion remains invalid",
+        "status": "RED_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R08 old happy path remains valid",
+        "status": "GREEN_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R09 exact REAL 5-event projection",
+        "status": "RED_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R10 no new permissive resurrection",
+        "status": "RED_PRE_REPAIR",
+        "greenAfter": true
+      },
+      {
+        "name": "ELM-CWRA-R11 stale submit must not authorize a later active run",
+        "status": "RED_POST_ORIGINAL_REPAIR (exposed the new P0)",
+        "greenAfter": true,
+        "note": "RED on the ORIGINAL submitCount-based repair; forced the run-scope refinement."
+      }
+    ]
+  },
+  "green": {
+    "elmTest": {
+      "passed": 31,
+      "failed": 0,
+      "durationMs": 164
+    },
+    "smokeTest": "PASS",
+    "historicalReplayTest": {
+      "passed": 20,
+      "failed": 0
+    },
+    "checkTypes": "PASS"
+  },
+  "ablation": {
+    "ablationWithOriginalRepair": {
+      "passed": 24,
+      "failed": 6,
+      "redTests": [
+        "R01",
+        "R02",
+        "R04",
+        "R07",
+        "R09",
+        "R10"
+      ]
+    },
+    "ablationWithRefinedRepair": {
+      "passed": 25,
+      "failed": 6,
+      "redTests": [
+        "R01",
+        "R02",
+        "R04",
+        "R07",
+        "R09",
+        "R10"
+      ],
+      "r11GreenEvenAblated": true
+    },
+    "restorationGreenWithRefinedRepair": {
+      "passed": 31,
+      "failed": 0,
+      "durationMs": 164
+    },
+    "necessity": "proven"
+  },
+  "realProjectionReplay": {
+    "eventsTotal": 5,
+    "firstDivergenceSeq": null,
+    "firstDivergenceKind": null,
+    "firstDivergenceStage": null,
+    "manufacturedIdentityCount": 0,
+    "originRewriteCount": 0,
+    "unmodeledEventCount": 0,
+    "insufficientIdentityCount": 0,
+    "finalModel": {
+      "task": "completion_committed",
+      "activeRun": null,
+      "submitCount": 1,
+      "commitReadyRun": null,
+      "committedCompletion": "completion-1790809530345_lrsk9-1",
+      "presentedCompletion": null
+    },
+    "classification": "DERIVED_REAL_PROJECTION + REAL_OFFLINE_REPLAY"
+  },
+  "realFullReplay": {
+    "eventsTotal": 9,
+    "firstDivergenceSeq": 1,
+    "firstDivergenceKind": "INSUFFICIENT_IDENTITY",
+    "firstDivergenceStage": "execute_turn_prelude_enter",
+    "elmRejectsTsSequenceCount": 0,
+    "knownInsufficientIdentity": [
+      {
+        "seq": 1,
+        "stage": "execute_turn_prelude_enter"
+      },
+      {
+        "seq": 4,
+        "stage": "terminal_committed"
+      },
+      {
+        "seq": 5,
+        "stage": "terminal_committed"
+      },
+      {
+        "seq": 6,
+        "stage": "terminal_committed"
+      }
+    ],
+    "finalModel": {
+      "task": "completion_committed",
+      "activeRun": null,
+      "submitCount": 1,
+      "commitReadyRun": null,
+      "committedCompletion": "completion-1790809530345_lrsk9-1",
+      "presentedCompletion": null
+    },
+    "classification": "REAL + LIVE + REAL_PRODUCTION_SEAM (REAL_OFFLINE_REPLAY)"
+  },
+  "counterfactualReplay": {
+    "eventsTotal": 5,
+    "firstDivergenceSeq": null,
+    "firstDivergenceKind": null,
+    "firstDivergenceStage": null,
+    "finalModel": {
+      "task": "completion_committed",
+      "activeRun": null,
+      "submitCount": 1,
+      "commitReadyRun": null,
+      "committedCompletion": "completion-cwad-cf",
+      "presentedCompletion": null
+    },
+    "classification": "SIMULATED_COUNTERFACTUAL + REAL_OFFLINE_REPLAY",
+    "oldC8BeforeC10Path": "PASS",
+    "kernelSha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e"
+  },
+  "adversarialConservation": "See 08-adversarial-conservation.md. All 24 pre-existing tests GREEN. The repair makes exactly one previously-invalid semantic class valid: completion established + AgentTurnDone bookkeeping not yet observed (with the submit's run binding matching the current active run).",
+  "elmArtifact": {
+    "authoritySha256": "c9b1b0f9431c74e77b87701a4c08a1d501ca4f28433d1d2f5b3928bcd358c724",
+    "domainSha256": "08d94352aa4ab23a3cfd4d2348fe0a1bd02715d885daa0efafbeda36b5695891",
+    "codecSha256": "4867a16254dbd48340e60e80d3593df5dc34299728c465910195063696892502",
+    "mainSha256": "fae9be55d4b1480cdab821804f92797328cf52ebca0c5a031ba72eb5c92c3f77",
+    "elmJsonSha256": "f80085e147781d502776a7e0c60f4860e0fde8e9e067337b2cc5eab451be1091",
+    "vendorJsSha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e"
+  },
+  "tsProductionSemanticsChanged": false,
+  "elmAuthoritySemanticsChanged": true,
+  "elmChangeBoundedToActiveRunCompletionRule": true,
+  "queueSemanticsChanged": false,
+  "presentationSemanticsChanged": false,
+  "mcpCodeChanged": false,
+  "mycCodeChanged": false,
+  "manufacturedIdentityCount": 0,
+  "originRewriteCount": 0,
+  "verdict": "PASS_ELM_COMMIT_WHILE_RUN_ACTIVE_REPAIR_R11_REFINED",
+  "elmModelCorrespondence": "SUPPORTED_FOR_REAL_TRACE_1790809530345_lrsk9_AND_R11_STALE_SUBMIT_CASE",
+  "readyForElmShadow02": true,
+  "successorAct": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02",
+  "evidenceClasses": {
+    "realPredecessorTrace": "REAL + LIVE + REAL_PRODUCTION_SEAM",
+    "fiveEventProjection": "DERIVED_REAL_PROJECTION",
+    "elmReplay": "REAL_OFFLINE_REPLAY",
+    "counterfactual": "SIMULATED_COUNTERFACTUAL",
+    "elmUnitTests": "EXECUTED",
+    "sourceRecon": "STRUCTURAL"
+  },
+  "refinementProvenance": {
+    "identifiedBy": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01 review (HALT_STALE_SUBMIT_AUTHORIZES_LATER_RUN)",
+    "exposedBy": "ELM-CWRA-R11 added during review cycle",
+    "fixShape": "Replace task-level submitCount >= 1 suppression with run-scoped commitReadyRun == activeRun suppression; bind commitReadyRun at SubmitAndExitSeen; invalidate it on RunStarted, AgentTurnDone, ExecuteTurnPreludeEnter, ContinuationStarted"
+  },
+  "subjectHead": "254004a076576fdefb7e9edec7d521d56c2ab498",
+  "closureHead": "ef3f26ef3e50010bb01403f4f24680d3e51c80fa"
+}

@@ -1,0 +1,142 @@
+{
+  "sourceTracePath": "/tmp/cwad-counterfactual.jsonl",
+  "sourceTraceSha256": "678ec47c76d68ab049f9bf501f2ca14152b53b616368cf47763f764a510712a7",
+  "kernelPath": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/elm/completion-authority/vendor/completion-authority.js",
+  "kernelSha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
+  "replay": {
+    "sourceTracePath": "/tmp/cwad-counterfactual.jsonl",
+    "sourceTraceSha256": "678ec47c76d68ab049f9bf501f2ca14152b53b616368cf47763f764a510712a7",
+    "eventsTotal": 5,
+    "events": [
+      {
+        "seq": 1,
+        "at": 1,
+        "sourceStage": "task_started",
+        "sourceOrigin": "explicit_user",
+        "classification": "DIRECT",
+        "reason": "mapped to task_started",
+        "elmMsg": {
+          "tag": "task_started",
+          "taskId": "s-cwad-cf"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": null,
+            "submitCount": 0,
+            "commitReadyRun": null,
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 2,
+        "at": 2,
+        "sourceStage": "run_turn_started",
+        "sourceOrigin": "unknown",
+        "classification": "DIRECT",
+        "reason": "mapped to run_started",
+        "elmMsg": {
+          "tag": "run_started",
+          "runId": "run-cwad-cf",
+          "origin": "unknown"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": "run-cwad-cf",
+            "submitCount": 0,
+            "commitReadyRun": null,
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 3,
+        "at": 3,
+        "sourceStage": "agent_turn_done",
+        "sourceOrigin": "explicit_user",
+        "classification": "DIRECT",
+        "reason": "mapped to agent_turn_done",
+        "elmMsg": {
+          "tag": "agent_turn_done",
+          "runId": "run-cwad-cf"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": null,
+            "submitCount": 0,
+            "commitReadyRun": null,
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 4,
+        "at": 4,
+        "sourceStage": "submit_and_exit_seen",
+        "sourceOrigin": "pending_prompt_drain",
+        "classification": "DIRECT",
+        "reason": "mapped to submit_and_exit_seen",
+        "elmMsg": {
+          "tag": "submit_and_exit_seen",
+          "submitId": "submit-cwad-cf"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": null,
+            "submitCount": 1,
+            "commitReadyRun": null,
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 5,
+        "at": 5,
+        "sourceStage": "task_completion_committed",
+        "sourceOrigin": "pending_prompt_drain",
+        "classification": "DIRECT",
+        "reason": "mapped to task_completion_committed",
+        "elmMsg": {
+          "tag": "task_completion_committed",
+          "completionId": "completion-cwad-cf"
+        },
+        "after": {
+          "model": {
+            "task": "completion_committed",
+            "activeRun": null,
+            "submitCount": 1,
+            "commitReadyRun": null,
+            "committedCompletion": "completion-cwad-cf",
+            "presentedCompletion": null
+          }
+        }
+      }
+    ],
+    "firstDivergenceSeq": null,
+    "firstDivergenceKind": null,
+    "firstDivergenceStage": null,
+    "finalModel": {
+      "task": "completion_committed",
+      "activeRun": null,
+      "submitCount": 1,
+      "commitReadyRun": null,
+      "committedCompletion": "completion-cwad-cf",
+      "presentedCompletion": null
+    },
+    "tsCompletionCommitted": true,
+    "tsCompletionCommittedSeq": 5,
+    "manufacturedIdentityCount": 0,
+    "originRewriteCount": 0,
+    "unmodeledEventCount": 0,
+    "insufficientIdentityCount": 0,
+    "deterministicSha256": "05c03c5a2ec186974fe2062e4c7c960e9f7266bf81375a3b01fc97dd6ce02955"
+  }
+}

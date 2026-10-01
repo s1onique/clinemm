@@ -1,0 +1,174 @@
+{
+  "sourceTracePath": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01/01-real-live-trace.jsonl",
+  "sourceTraceSha256": "ec77301dd854dffe4d8121643852fd9a33ab7dddac8b2d70c9b0da1d9d0ddccd",
+  "kernelPath": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/elm/completion-authority/vendor/completion-authority.js",
+  "kernelSha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
+  "replay": {
+    "sourceTracePath": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01/01-real-live-trace.jsonl",
+    "sourceTraceSha256": "ec77301dd854dffe4d8121643852fd9a33ab7dddac8b2d70c9b0da1d9d0ddccd",
+    "eventsTotal": 9,
+    "events": [
+      {
+        "seq": 1,
+        "at": 1790809530777,
+        "sourceStage": "execute_turn_prelude_enter",
+        "sourceOrigin": "explicit_user",
+        "classification": "INSUFFICIENT_IDENTITY",
+        "reason": "execute_turn_prelude_enter has no runId in REAL trace"
+      },
+      {
+        "seq": 2,
+        "at": 1790809530777,
+        "sourceStage": "task_started",
+        "sourceOrigin": "explicit_user",
+        "classification": "DIRECT",
+        "reason": "mapped to task_started",
+        "elmMsg": {
+          "tag": "task_started",
+          "taskId": "1790809530345_lrsk9"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": null,
+            "submitCount": 0,
+            "commitReadyRun": null,
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 3,
+        "at": 1790809530796,
+        "sourceStage": "run_turn_started",
+        "sourceOrigin": "unknown",
+        "classification": "DIRECT",
+        "reason": "mapped to run_started",
+        "elmMsg": {
+          "tag": "run_started",
+          "runId": "run_h7wXy0mx",
+          "origin": "unknown"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": "run_h7wXy0mx",
+            "submitCount": 0,
+            "commitReadyRun": null,
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 4,
+        "at": 1790809534118,
+        "sourceStage": "terminal_committed",
+        "sourceOrigin": "background_terminal",
+        "classification": "INSUFFICIENT_IDENTITY",
+        "reason": "terminal_committed terminalKind=undefined is not Elm TerminalKind enum (\"owned\" / \"background_not_owned\")"
+      },
+      {
+        "seq": 5,
+        "at": 1790809534208,
+        "sourceStage": "terminal_committed",
+        "sourceOrigin": "background_terminal",
+        "classification": "INSUFFICIENT_IDENTITY",
+        "reason": "terminal_committed terminalKind=undefined is not Elm TerminalKind enum (\"owned\" / \"background_not_owned\")"
+      },
+      {
+        "seq": 6,
+        "at": 1790809534209,
+        "sourceStage": "terminal_committed",
+        "sourceOrigin": "background_terminal",
+        "classification": "INSUFFICIENT_IDENTITY",
+        "reason": "terminal_committed terminalKind=undefined is not Elm TerminalKind enum (\"owned\" / \"background_not_owned\")"
+      },
+      {
+        "seq": 7,
+        "at": 1790809536498,
+        "sourceStage": "submit_and_exit_seen",
+        "sourceOrigin": "pending_prompt_drain",
+        "classification": "DIRECT",
+        "reason": "mapped to submit_and_exit_seen",
+        "elmMsg": {
+          "tag": "submit_and_exit_seen",
+          "submitId": "submit-1790809530345_lrsk9-1"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": "run_h7wXy0mx",
+            "submitCount": 1,
+            "commitReadyRun": "run_h7wXy0mx",
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 8,
+        "at": 1790809536499,
+        "sourceStage": "task_completion_committed",
+        "sourceOrigin": "pending_prompt_drain",
+        "classification": "DIRECT",
+        "reason": "mapped to task_completion_committed",
+        "elmMsg": {
+          "tag": "task_completion_committed",
+          "completionId": "completion-1790809530345_lrsk9-1"
+        },
+        "after": {
+          "model": {
+            "task": "completion_committed",
+            "activeRun": "run_h7wXy0mx",
+            "submitCount": 1,
+            "commitReadyRun": "run_h7wXy0mx",
+            "committedCompletion": "completion-1790809530345_lrsk9-1",
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 9,
+        "at": 1790809536550,
+        "sourceStage": "agent_turn_done",
+        "sourceOrigin": "explicit_user",
+        "classification": "DIRECT",
+        "reason": "mapped to agent_turn_done",
+        "elmMsg": {
+          "tag": "agent_turn_done",
+          "runId": "run_h7wXy0mx"
+        },
+        "after": {
+          "model": {
+            "task": "completion_committed",
+            "activeRun": null,
+            "submitCount": 1,
+            "commitReadyRun": null,
+            "committedCompletion": "completion-1790809530345_lrsk9-1",
+            "presentedCompletion": null
+          }
+        }
+      }
+    ],
+    "firstDivergenceSeq": 1,
+    "firstDivergenceKind": "INSUFFICIENT_IDENTITY",
+    "firstDivergenceStage": "execute_turn_prelude_enter",
+    "finalModel": {
+      "task": "completion_committed",
+      "activeRun": null,
+      "submitCount": 1,
+      "commitReadyRun": null,
+      "committedCompletion": "completion-1790809530345_lrsk9-1",
+      "presentedCompletion": null
+    },
+    "tsCompletionCommitted": true,
+    "tsCompletionCommittedSeq": 8,
+    "manufacturedIdentityCount": 0,
+    "originRewriteCount": 0,
+    "unmodeledEventCount": 0,
+    "insufficientIdentityCount": 4,
+    "deterministicSha256": "61929a78e41617c6fb380e7c590cb07811a1eee34ac357e8cc2354212f938699"
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "sourceTracePath": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01/02-replayable-projection.jsonl",
+  "sourceTraceSha256": "ad5c8b26c89bc6287aa92072823e43451efe6751749328faeb0be4289bc0f12b",
+  "kernelPath": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/elm/completion-authority/vendor/completion-authority.js",
+  "kernelSha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
+  "replay": {
+    "sourceTracePath": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01/02-replayable-projection.jsonl",
+    "sourceTraceSha256": "ad5c8b26c89bc6287aa92072823e43451efe6751749328faeb0be4289bc0f12b",
+    "eventsTotal": 5,
+    "events": [
+      {
+        "seq": 2,
+        "at": 1790809530777,
+        "sourceStage": "task_started",
+        "sourceOrigin": "explicit_user",
+        "classification": "DIRECT",
+        "reason": "mapped to task_started",
+        "elmMsg": {
+          "tag": "task_started",
+          "taskId": "1790809530345_lrsk9"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": null,
+            "submitCount": 0,
+            "commitReadyRun": null,
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 3,
+        "at": 1790809530796,
+        "sourceStage": "run_turn_started",
+        "sourceOrigin": "unknown",
+        "classification": "DIRECT",
+        "reason": "mapped to run_started",
+        "elmMsg": {
+          "tag": "run_started",
+          "runId": "run_h7wXy0mx",
+          "origin": "unknown"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": "run_h7wXy0mx",
+            "submitCount": 0,
+            "commitReadyRun": null,
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 7,
+        "at": 1790809536498,
+        "sourceStage": "submit_and_exit_seen",
+        "sourceOrigin": "pending_prompt_drain",
+        "classification": "DIRECT",
+        "reason": "mapped to submit_and_exit_seen",
+        "elmMsg": {
+          "tag": "submit_and_exit_seen",
+          "submitId": "submit-1790809530345_lrsk9-1"
+        },
+        "after": {
+          "model": {
+            "task": "active",
+            "activeRun": "run_h7wXy0mx",
+            "submitCount": 1,
+            "commitReadyRun": "run_h7wXy0mx",
+            "committedCompletion": null,
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 8,
+        "at": 1790809536499,
+        "sourceStage": "task_completion_committed",
+        "sourceOrigin": "pending_prompt_drain",
+        "classification": "DIRECT",
+        "reason": "mapped to task_completion_committed",
+        "elmMsg": {
+          "tag": "task_completion_committed",
+          "completionId": "completion-1790809530345_lrsk9-1"
+        },
+        "after": {
+          "model": {
+            "task": "completion_committed",
+            "activeRun": "run_h7wXy0mx",
+            "submitCount": 1,
+            "commitReadyRun": "run_h7wXy0mx",
+            "committedCompletion": "completion-1790809530345_lrsk9-1",
+            "presentedCompletion": null
+          }
+        }
+      },
+      {
+        "seq": 9,
+        "at": 1790809536550,
+        "sourceStage": "agent_turn_done",
+        "sourceOrigin": "explicit_user",
+        "classification": "DIRECT",
+        "reason": "mapped to agent_turn_done",
+        "elmMsg": {
+          "tag": "agent_turn_done",
+          "runId": "run_h7wXy0mx"
+        },
+        "after": {
+          "model": {
+            "task": "completion_committed",
+            "activeRun": null,
+            "submitCount": 1,
+            "commitReadyRun": null,
+            "committedCompletion": "completion-1790809530345_lrsk9-1",
+            "presentedCompletion": null
+          }
+        }
+      }
+    ],
+    "firstDivergenceSeq": null,
+    "firstDivergenceKind": null,
+    "firstDivergenceStage": null,
+    "finalModel": {
+      "task": "completion_committed",
+      "activeRun": null,
+      "submitCount": 1,
+      "commitReadyRun": null,
+      "committedCompletion": "completion-1790809530345_lrsk9-1",
+      "presentedCompletion": null
+    },
+    "tsCompletionCommitted": true,
+    "tsCompletionCommittedSeq": 8,
+    "manufacturedIdentityCount": 0,
+    "originRewriteCount": 0,
+    "unmodeledEventCount": 0,
+    "insufficientIdentityCount": 0,
+    "deterministicSha256": "9202d5322cc5d55c35976946653b5f716fb6e4791ff9f92464f978e3fcc40255"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "kernel": {
     "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/elm/completion-authority/vendor/completion-authority.js",
-    "sha256": "40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168"
+    "sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e"
   },
   "sourceShas": {
     "stall": "2fab1cc4c2f88162cc9e4ccd0186d0dbff48f603bd445adb1a1fc1066b9e0ddd",
@@ -26,10 +26,11 @@
         "task": "idle",
         "activeRun": null,
         "submitCount": 0,
+        "commitReadyRun": null,
         "committedCompletion": null,
         "presentedCompletion": null
       },
-      "deterministicSha256": "ee20f57b1f7a441447ce550c3d735364ae35f9ff918d5d5e5e8f48b08b1ea47b"
+      "deterministicSha256": "fb0173074c2dd21ef949ea059517e18c34a1c30e4c3b674abe5d7663cc83e2da"
     },
     {
       "tag": "R2",
@@ -48,10 +49,11 @@
         "task": "idle",
         "activeRun": null,
         "submitCount": 0,
+        "commitReadyRun": null,
         "committedCompletion": null,
         "presentedCompletion": null
       },
-      "deterministicSha256": "c1542f3fd7282300922d7bd33f5afe40b0b4de7284339104d02454e04ccee025"
+      "deterministicSha256": "813f0d393a935a5bdc9144f89d54a5e7ae17494119eb02ffe924d3123ea4b9f0"
     },
     {
       "tag": "R3",
@@ -70,10 +72,11 @@
         "task": "idle",
         "activeRun": null,
         "submitCount": 0,
+        "commitReadyRun": null,
         "committedCompletion": null,
         "presentedCompletion": null
       },
-      "deterministicSha256": "ee20f57b1f7a441447ce550c3d735364ae35f9ff918d5d5e5e8f48b08b1ea47b"
+      "deterministicSha256": "fb0173074c2dd21ef949ea059517e18c34a1c30e4c3b674abe5d7663cc83e2da"
     },
     {
       "tag": "R4",
@@ -92,10 +95,11 @@
         "task": "idle",
         "activeRun": null,
         "submitCount": 0,
+        "commitReadyRun": null,
         "committedCompletion": null,
         "presentedCompletion": null
       },
-      "deterministicSha256": "46cf4b09a48b2f3b9348fefa558c02a0f5f9d758eb0e261dd94cb58446b27006"
+      "deterministicSha256": "d2d99889e67aed1c63ca67dc6aca214f595d61b5416a972a2ad09b96e3552f40"
     }
   ]
 }

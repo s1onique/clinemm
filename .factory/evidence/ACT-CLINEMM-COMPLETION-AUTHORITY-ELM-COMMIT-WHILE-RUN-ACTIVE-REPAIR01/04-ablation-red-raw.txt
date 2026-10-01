@@ -1,0 +1,116 @@
+CompilingCompiling > Starting tests
+(node:23930) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+elm-test 0.19.2-0
+-----------------
+
+Running 30 tests. To reproduce these results, run: elm-test --fuzz 100 --seed 162701354682792 tests/CompletionAuthorityTest.elm
+
+(node:23929) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23924) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23934) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23931) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23933) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23937) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23936) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23927) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23925) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23928) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23938) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23935) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23939) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23932) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23926) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2m↓ CompletionAuthorityTest
+[22m[2m↓ ACT invariants
+[22m[2m↓ ELM-CWRA (commit-while-run-active repair)
+[22m[2m↓ ELM-CWRA-R01 exact REAL chronology must commit
+[22m[31m✗ TaskStarted -> RunStarted R1 -> SubmitAndExitSeen S -> TaskCompletionCommitted C -> committed, no violation
+[39m
+    Just (TaskCompletionCommittedWhileHeld ActiveRun)
+    ╷
+    │ Expect.equal
+    ╵
+    Nothing
+
+
+[2m↓ CompletionAuthorityTest
+[22m[2m↓ ACT invariants
+[22m[2m↓ ELM-CWRA (commit-while-run-active repair)
+[22m[2m↓ ELM-CWRA-R02 late AgentTurnDone is bookkeeping, does not undo completion
+[22m[31m✗ REAL 5-event projection: TaskStarted -> RunStarted -> SubmitAndExitSeen -> TaskCompletionCommitted -> AgentTurnDone -> Completed
+[39m
+    Just (TaskCompletionCommittedWhileHeld ActiveRun)
+    ╷
+    │ Expect.equal
+    ╵
+    Nothing
+
+
+[2m↓ CompletionAuthorityTest
+[22m[2m↓ ACT invariants
+[22m[2m↓ ELM-CWRA (commit-while-run-active repair)
+[22m[2m↓ ELM-CWRA-R04 other holds remain blocking after submit
+[22m[31m✗ RunStarted R1 + SubmitAndExitSeen + PendingPrompt + TaskCompletionCommitted -> rejected (PendingPrompt or ScheduledContinuation)
+[39m
+    expected TaskCompletionCommittedWhileHeld PendingPrompt or ScheduledContinuation, got Just "TaskCompletionCommittedWhileHeld active_run"
+
+
+[2m↓ CompletionAuthorityTest
+[22m[2m↓ ACT invariants
+[22m[2m↓ ELM-CWRA (commit-while-run-active repair)
+[22m[2m↓ ELM-CWRA-R07 duplicate completion remains invalid
+[22m[31m✗ REAL chronology + duplicate TaskCompletionCommitted -> DuplicateCompletionRef
+[39m
+    expected DuplicateCompletionRef, got Just "TaskCompletionCommittedWhileHeld active_run"
+
+
+[2m↓ CompletionAuthorityTest
+[22m[2m↓ ACT invariants
+[22m[2m↓ ELM-CWRA (commit-while-run-active repair)
+[22m[2m↓ ELM-CWRA-R09 exact REAL 5-event projection
+[22m[31m✗ REAL projection: zero violations, task=CompletionCommitted, committedCompletion=Just C, activeRun=Nothing, submitCount=1
+[39m
+    Just (TaskCompletionCommittedWhileHeld ActiveRun)
+    ╷
+    │ Expect.equal
+    ╵
+    Nothing
+
+
+[2m↓ CompletionAuthorityTest
+[22m[2m↓ ACT invariants
+[22m[2m↓ ELM-CWRA (commit-while-run-active repair)
+[22m[2m↓ ELM-CWRA-R10 no new permissive resurrection
+[22m[31m✗ REAL chronology + CompletionPresented + RunStarted R2 -> EventAfterCompletion (no permissive resurrection)
+[39m
+    Active
+    ╷
+    │ Expect.equal
+    ╵
+    Completed
+
+
+[4m[31m
+TEST RUN FAILED[39m[24m[31m
+
+[39m[2mDuration: [22m134 ms
+[2mPassed:   [22m24
+[2mFailed:   [22m6
+

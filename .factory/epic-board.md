@@ -16766,3 +16766,130 @@ SUCCESSOR = ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR0
 **Root cause:** `apps/vscode/elm/completion-authority/src/Authority.elm:439-532` — `computeHoldReasons` classifies `activeRun /= Nothing` as a completion-blocking hold. The hold equates "an agent_turn_done event has not yet been received" with "the run is still semantically active and cannot be committed". The model is correct in spirit (completion should require the run to be closed) but wrong in mechanism.
 
 **Next ACT:** `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01` — repair the Elm kernel ONLY. The key repair question: **what Elm state represents "semantic run complete, host bookkeeping C8 not yet observed" without weakening the invariant against genuinely active runs?** Use Elm's model/update architecture to make this state distinction explicit; ports remain the strong JS↔Elm state-ownership boundary.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01 — VERDICT=PASS_ELM_COMMIT_WHILE_RUN_ACTIVE_REPAIR — 2026-10-01
+
+**Status:** CLOSED (Elm-only repair succeeded). The Elm kernel now accepts the production-realistic C10-before-late-C8 chronology while preserving all 24 pre-existing tests. The discriminator's H1 verdict is corroborated and remediated.
+
+**Strategy (per RUN-01):** ActiveRun is suppressed from the hold set ONLY at the `TaskCompletionCommitted` decision when `model.submitCount >= 1`. submitCount is the existing factual boundary for the production C9 gate (emitted only when `wasTerminalResponseCommittedThisTurn() && !outstandingAutonomousWork` per `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1231`); observing `submitCount >= 1` therefore proves the BCB barrier cleared, and the residual `activeRun` is bookkeeping for a run whose `AgentTurnDone` (C8) has not yet been delivered but whose semantic completion has been declared (C10).
+
+**Repair shape:** One helper added (`Authority.completionCommitHoldReasons`) used only by `handleTaskCompletionCommitted`. All other entry points continue to use the unchanged `computeHoldReasons`. The `ActiveRun` constructor is NOT removed; it remains a HoldReason for ALL non-`TaskCompletionCommitted` queries.
+
+```text
+SUBJECT_HEAD                = <commit containing final Elm repair + tests>
+ENTRY_HEAD                  = 6adf921310195a7e8681c24f126004a6238d40ab
+REAL_SESSION_ID             = 1790809530345_lrsk9
+REAL_TRACE_SHA256           = ec77301dd854dffe4d8121643852fd9a33ab7dddac8b2d70c9b0da1d9d0ddccd
+PROJECTION_SHA256           = ad5c8b26c89bc6287aa92072823e43451efe6751749328faeb0be4289bc0f12b
+ELM_AUTHORITY_SHA256        = 80feb132431adf1f61e0c49c15fe0bdb4352bdc171b50e26aff11a28bae3a3a1
+ELM_DOMAIN_SHA256           = 0f5d395edad8b43dd885b5be0294a5bf24bf9591e1100837dafbae9c88f5cdf8
+ELM_CODEC_SHA256            = 29fe5e0fad163347dc41c4c80fc01d5d61f2269bb69e08c53b0b734eff777808
+ELM_MAIN_SHA256             = fae9be55d4b1480cdab821804f92797328cf52ebca0c5a031ba72eb5c92c3f77
+ELM_JSON_SHA256             = f80085e147781d502776a7e0c60f4860e0fde8e9e067337b2cc5eab451be1091
+ELM_VENDOR_JS_SHA256        = dcbf85f983ac9d7f3343ab756c686286509e975571c79b006b3cd7e44ad90676
+
+PRODUCTION_SEMANTICS_CHANGED = false
+ELM_AUTHORITY_SEMANTICS_CHANGED = true
+ELM_CHANGE_BOUNDED_TO_ACTIVE_RUN_COMPLETION_RULE = true
+QUEUE_SEMANTICS_CHANGED = false
+PRESENTATION_SEMANTICS_CHANGED = false
+MCP_CODE_CHANGED = false
+MYC_CODE_CHANGED = false
+MANUFACTURED_IDENTITY_COUNT = 0
+ORIGIN_REWRITE_COUNT = 0
+
+RED    = REPRODUCED (6/10 new tests RED pre-repair; primary R01 reproduced predecessor divergence exactly)
+GREEN  = PASSED (30/30 elm-test, 20/20 historical replay, 39/39 trace capture, check-types PASS)
+ABLATION = PASSED (revert → 6 RED; restore → GREEN; necessity proven)
+
+REAL_PROJECTION_FIRST_DIVERGENCE = null (was: ELM_REJECTS_TS_SEQUENCE at seq=8 in predecessor)
+REAL_FULL_TRACE_ELM_REJECTIONS = 0 (only INSUFFICIENT_IDENTITY remains for known capture limits at execute_turn_prelude_enter seq=1 and terminal_committed ×3)
+OLD_C8_BEFORE_C10_PATH = PASS (counterfactual: firstDivergence=null, finalModel=completion_committed)
+
+VERDICT = PASS_ELM_COMMIT_WHILE_RUN_ACTIVE_REPAIR
+ELM_MODEL_CORRESPONDENCE = SUPPORTED_FOR_REAL_TRACE_1790809530345_lrsk9
+READY_FOR_ELM_SHADOW02 = true
+SUCCESSOR = ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02
+```
+
+**Files changed (production semantic):**
+- `apps/vscode/elm/completion-authority/src/Authority.elm` — added `completionCommitHoldReasons`; updated `handleTaskCompletionCommitted` to use it.
+- `apps/vscode/elm/completion-authority/src/Authority.elm.sha256` — mechanical (consequence of repair).
+- `apps/vscode/elm/completion-authority/tests/CompletionAuthorityTest.elm` — added 10 new tests (ELM-CWRA-R01..R10).
+- `apps/vscode/elm/completion-authority/vendor/completion-authority.js` — rebuilt; SHA `40aeeb28...` → `dcbf85f9...`.
+
+**Files changed (test-only helper):**
+- `apps/vscode/src/sdk/__tests__/replay-projection-once.mts` — one-off Bun script used to drive §12/§13 replays and dump evidence JSON. Test-only, not imported by runtime TS.
+
+**Files changed (evidence):**
+- `.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01/` — full evidence package (10 files + result.json).
+- `.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01/test-replay-summary.json` — mechanically regenerated by existing `export:` test after vendor SHA changed. No semantic change.
+
+**Source-delta gate:** `git diff --name-only $ENTRY_HEAD..HEAD` shows zero changes to `apps/vscode/src/sdk/` (production source), zero changes to `apps/vscode/src/` (non-test), zero changes to `MCP/`, `myc/`, `webview/`, `CCARD/`, capture adapter, replay adapter. Scope is Elm-only.
+
+**Stop condition met.** Do not wire Elm into production in this ACT. Do not package a VSIX. Do not dogfood yet.
+
+The next ACT is `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02` where TS remains authoritative and Elm observes the same factual production stream live through a narrow port boundary. The discriminator's "TS remains authoritative" architecture (per `apps/vscode/src/dev/debug-harness/README.md`) is preserved; this repair only widens what the Elm kernel considers a valid completion-authority transition.
+
+---
+
+**REFINEMENT (review cycle, same ACT):** The original `submitCount >= 1` suppression was REJECTED during review (HALT_STALE_SUBMIT_AUTHORIZES_LATER_RUN). The expert identified that `submitCount` is a monotonic task-level counter and supplied the R11 adversarial sequence:
+
+```text
+TaskStarted T
+RunStarted R1
+SubmitAndExitSeen S1
+AgentTurnDone R1
+RunStarted R2
+TaskCompletionCommitted C2
+```
+
+Under the original repair, `submitCount == 1` from R1's stale submit would authorize R2's commit (R2 is genuinely active and not completion-ready). The review added `ELM-CWRA-R11` which reproduced this P0 (RED on the original repair). The refinement replaced the task-level counter gate with a run-scoped binding field `commitReadyRun : Maybe RunRef`:
+
+- Set to `model.activeRun` at `SubmitAndExitSeen`.
+- Invalidated to `Nothing` on every event that transitions `activeRun` (RunStarted, AgentTurnDone, ExecuteTurnPreludeEnter, ContinuationStarted).
+- Suppression gate is now `commitReadyRun == model.activeRun`.
+
+Post-refinement GREEN: 31/31 elm-test, 20/20 historical replay, smoke PASS, check-types PASS. Ablation confirmed: revert → 6 RED; restore → GREEN.
+
+**Final artifact binding:**
+```text
+SUBJECT_HEAD                = 254004a076576fdefb7e9edec7d521d56c2ab498
+ENTRY_HEAD                  = 6adf921310195a7e8681c24f126004a6238d40ab
+ELM_AUTHORITY_SHA256        = c9b1b0f9431c74e77b87701a4c08a1d501ca4f28433d1d2f5b3928bcd358c724
+ELM_DOMAIN_SHA256           = 08d94352aa4ab23a3cfd4d2348fe0a1bd02715d885daa0efafbeda36b5695891
+ELM_CODEC_SHA256            = 4867a16254dbd48340e60e80d3593df5dc34299728c465910195063696892502
+ELM_MAIN_SHA256             = fae9be55d4b1480cdab821804f92797328cf52ebca0c5a031ba72eb5c92c3f77
+ELM_JSON_SHA256             = f80085e147781d502776a7e0c60f4860e0fde8e9e067337b2cc5eab451be1091
+ELM_VENDOR_JS_SHA256        = 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+
+PRODUCTION_SEMANTICS_CHANGED = false
+ELM_AUTHORITY_SEMANTICS_CHANGED = true
+ELM_CHANGE_BOUNDED_TO_ACTIVE_RUN_COMPLETION_RULE = true
+QUEUE_SEMANTICS_CHANGED = false
+PRESENTATION_SEMANTICS_CHANGED = false
+MCP_CODE_CHANGED = false
+MYC_CODE_CHANGED = false
+MANUFACTURED_IDENTITY_COUNT = 0
+ORIGIN_REWRITE_COUNT = 0
+
+RED    = REPRODUCED (R01-R10 pre-R11; R11 exposed new P0; R11 GREEN post-refinement)
+GREEN  = PASSED (31/31 elm-test, 20/20 historical replay, smoke PASS, check-types PASS)
+ABLATION = PASSED (revert → 6 RED; restore → GREEN)
+
+REAL_PROJECTION_FIRST_DIVERGENCE = null
+REAL_FULL_TRACE_ELM_REJECTIONS = 0
+OLD_C8_BEFORE_C10_PATH = PASS
+R11_STALE_SUBMIT_CROSS_RUN = REJECTED (the new P0)
+
+VERDICT = PASS_ELM_COMMIT_WHILE_RUN_ACTIVE_REPAIR_R11_REFINED
+ELM_MODEL_CORRESPONDENCE = SUPPORTED_FOR_REAL_TRACE_1790809530345_lrsk9_AND_R11_STALE_SUBMIT_CASE
+READY_FOR_ELM_SHADOW02 = true
+SUCCESSOR = ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02
+```
+
+The post-refinement kernel simultaneously satisfies:
+1. The REAL chronology `TaskStarted -> RunStarted -> SubmitAndExitSeen -> TaskCompletionCommitted -> late AgentTurnDone` (5-event projection) reaches `task=completion_committed, activeRun=null, committedCompletion=Just C` with zero divergence.
+2. The cross-run chronology `TaskStarted -> RunStarted R1 -> SubmitAndExitSeen S1 -> AgentTurnDone R1 -> RunStarted R2 -> TaskCompletionCommitted C2` correctly rejects C2 with `TaskCompletionCommittedWhileHeld ActiveRun` (the R11 invariant).
+3. All 24 pre-existing tests remain GREEN.
+4. Ablation confirms necessity: removing the suppression reintroduces the predecessor divergence.
