@@ -234,5 +234,5 @@
     "fixShape": "Replace task-level submitCount >= 1 suppression with run-scoped commitReadyRun == activeRun suppression; bind commitReadyRun at SubmitAndExitSeen; invalidate it on RunStarted, AgentTurnDone, ExecuteTurnPreludeEnter, ContinuationStarted"
   },
   "subjectHead": "254004a076576fdefb7e9edec7d521d56c2ab498",
-  "closureHead": "ef3f26ef3e50010bb01403f4f24680d3e51c80fa"
+  "closureHead": "5605c5dbcf38c0669a017670db50141dbebe2168"
 }
