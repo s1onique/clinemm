@@ -135,7 +135,13 @@
 			"!!**/generated",
 			"!!**/proto",
 			"!!**/tests/specs",
-			"!!assets/icons/*.svg"
+			"!!assets/icons/*.svg",
+			// apps/vscode/elm/ is a self-contained Elm sub-project:
+			// every .js / .json under it is either a third-party runtime
+			// (.elm-home), the Elm compiler scratch dir (elm-stuff/), or the
+			// compiled output of `elm make` (vendor/*.js). Source-of-truth
+			// code is in *.elm files which biome does not lint anyway.
+			"!!elm"
 		]
 	},
 	"plugins": [

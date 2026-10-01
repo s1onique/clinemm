@@ -6,8 +6,8 @@ import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal
 import * as vscode from "vscode"
 import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
-import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
 import { dumpExtensionSideElmShadowDiagnostic } from "@/sdk/completion-authority-elm-shadow-runtime"
+import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
 import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
@@ -281,14 +281,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		"vendor",
 		"completion-authority.js",
 	)
-	const elmShadowActivation = applyElmShadowDiagnosticProfile(
-		process.env,
-		elmShadowKernelPath,
-	)
+	const elmShadowActivation = applyElmShadowDiagnosticProfile(process.env, elmShadowKernelPath)
 	if (elmShadowActivation.enabled) {
-		console.log(
-			`[ELM-SHADOW] enabled=true kernelPath=${elmShadowActivation.kernelPath}`,
-		)
+		Logger.log(`[ELM-SHADOW] enabled=true kernelPath=${elmShadowActivation.kernelPath}`)
 	}
 
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
@@ -1049,8 +1044,7 @@ ${ctx.cellJson || "{}"}
 		// 1:1 live correspondence, OR successor evidence supersedes.
 		vscode.commands.registerCommand(commands.DumpCompletionAuthorityElmShadow, async () => {
 			try {
-				const { ringFile, countersFile, recordCount, counters } =
-					await dumpExtensionSideElmShadowDiagnostic(context)
+				const { ringFile, countersFile, recordCount, counters } = await dumpExtensionSideElmShadowDiagnostic(context)
 				void vscode.window.showInformationMessage(
 					`Completion authority Elm shadow: ${recordCount} observation${recordCount === 1 ? "" : "s"} (states=${counters.states}, violations=${counters.violations}, decodeErrors=${counters.decodeErrors}, kernelErrors=${counters.kernelErrors}) → ${ringFile} (+ ${countersFile}).`,
 				)
