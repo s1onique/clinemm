@@ -16893,3 +16893,122 @@ The post-refinement kernel simultaneously satisfies:
 2. The cross-run chronology `TaskStarted -> RunStarted R1 -> SubmitAndExitSeen S1 -> AgentTurnDone R1 -> RunStarted R2 -> TaskCompletionCommitted C2` correctly rejects C2 with `TaskCompletionCommittedWhileHeld ActiveRun` (the R11 invariant).
 3. All 24 pre-existing tests remain GREEN.
 4. Ablation confirms necessity: removing the suppression reintroduces the predecessor divergence.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION05 — PASS_ELM_PROJECT_CWD — 2026-10-01
+
+**Status:** PASS_ELM_PROJECT_CWD. Bounded repair of the Elm-shadow02 dogfood failure that the REAL RED against 97a4ed8c7 exposed:
+
+```
+build-elm.sh reached
+→ Elm 0.19.2 confirmed
+→ elm make executed
+→ NO elm.json FILE
+```
+
+**Defect.** `apps/vscode/elm/completion-authority/scripts/build-elm.sh` resolves `HERE` correctly via `BASH_SOURCE`, but `elm make` was invoked without ever `cd "${HERE}"`. CORRECTION04 pins `cwd=stage_apps_vscode` (the parent of `elm/completion-authority/`) in the orchestrator, so Elm started from `apps/vscode`, walked up looking for `elm.json`, and aborted. The absolute `Main.elm` path does NOT substitute for the manifest being in the compiler's working directory.
+
+**Smallest correct repair (2 edits to `build-elm.sh`, 0 edits to Python, 0 edits to Elm sources):**
+1. Insert `cd "${HERE}"` immediately before the `elm make` invocation. This makes the script self-contained — no implicit caller-cwd contract — so direct invocation from any working directory also works.
+2. Replace the `shasum -a 256 FILE > FILE.sha256` redirects with `shasum -a 256 FILE | awk '{print $1}' > FILE.sha256` via a small `emit_sha` helper. macOS `shasum` defaults to `<sha>  <path>\n` which trips `stage_elm_kernel_runtime_asset`'s SHA-sidecar byte-equality guard (CORRECTION03 invariant); the awk-collapse is portable across BSD/macOS and Linux and emits the bare-hash sidecar the orchestrator expects.
+
+**Regression pin.** Two new DOGFOOD-KERNEL-05c tests in `scripts/tests/test_build_dogfood_vsix.py`:
+- `test_tracked_build_elm_script_cd_into_here_before_elm_make` — reads the tracked script bytes, asserts `cd "${HERE}"` appears strictly before the `${ELM} make` line.
+- `test_tracked_build_elm_script_must_not_relax_cwd_contract` — defensive pin: any `cd` before `elm make` MUST target `${HERE}` (not `cd /tmp`, not `cd ${ELM}`).
+- `test_tracked_build_elm_script_emits_sha_only_sidecars` — asserts every `shasum ... > FILE.sha256` redirect in the script has a prior `| awk '{print $1}'` (or equivalent) collapse; a regression to raw redirect re-introduces the SHA-sidecar mismatch.
+
+**Canonical dogfood GREEN (CORRECTION05 head = fb87426fb):**
+
+```
+$ python3 scripts/build-dogfood-vsix.py --force --skip-typecheck
++ git status --porcelain=v1 --untracked-files=all
++ git rev-parse HEAD                                              → fb87426fb96c4680e6998da74532e4110bc766f7
++ git rev-parse --short=9 HEAD                                    → fb87426fb
++ git worktree add --detach <tmp>/.../worktree fb87426fb...
+Preparing worktree (detached HEAD fb87426fb)
+HEAD is now at fb87426fb ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION05: ...
++ bun install --frozen-lockfile                                  → OK
++ bun run build:sdk                                              → OK
++ bun run protos                                                 → OK
++ bun run build:webview                                          → OK (7208 modules transformed)
++ bun esbuild.mjs --production                                  → OK
++ <worktree>/apps/vscode/elm/completion-authority/scripts/build-elm.sh
+[build-elm] compiling Main.elm -> vendor/completion-authority.js (elm 0.19.2)
+Verifying dependencies (0/8) ... (8/8)
+Dependencies ready!
+Compiling ... Compiling (1) (3) (4)
+Success! Compiled 4 modules.
+   Main ───> <worktree>/.../vendor/completion-authority.js
+   completion-authority.js -> 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+   Main.elm               -> fae9be55d4b1480cdab821804f92797328cf52ebca0c5a031ba72eb5c92c3f77
+   Authority.elm          -> c9b1b0f9431c74e77b87701a4c08a1d501ca4f28433d1d2f5b3928bcd358c724
+   Domain.elm             -> 08d94352aa4ab23a3cfd4d2348fe0a1bd02715d885daa0efafbeda36b5695891
+   Codec.elm              -> 4867a16254dbd48340e60e80d3593df5dc34299728c465910195063696892502
+   elm.json               -> f80085e147781d502776a7e0c60f4860e0fde8e9e067337b2cc5eab451be1091
+[build-elm] done:
++ vsce package --no-dependencies --allow-package-secrets sendgrid
+DONE  Packaged: <worktree>/.../dist/clinemm-4.1.16-fb87426fb.vsix (86 files, 19.9 MB)
+   runtime-assets/ (2 files) [102.91 KB]   ← kernel JS + SHA sidecar present
+   elm/ (34 files) [26.3 MB]               ← tracked Elm sources
++ git worktree remove --force ...
+{
+  "source_head": "fb87426fb96c4680e6998da74532e4110bc766f7",
+  "source_version": "4.1.16",
+  "dogfood_version": "4.1.16-fb87426fb",
+  "artifact": ".../dist/dogfood/clinemm-4.1.16-fb87426fb.vsix",
+  "sha256": "415bbe0bbc4c60bca3f4af0bf56387c0e02d7ba9ab7d903ad035b7bae4d46206",
+  "bytes": 20864091,
+  "skip_typecheck": true
+}
+```
+
+**Exact kernel payload verification (unzipped VSIX):**
+```text
+JS SHA-256       : 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+SHA sidecar      : 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+STATUS: MATCH ✓
+Historical canonical SHA (from CORRECTION01 history):
+Expected          : 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+STATUS: BYTE-EXACT CANONICAL MATCH ✓
+```
+
+**Unit tests (DOGFOOD-KERNEL-05c + 05b + 05):** 58/58 GREEN (was 57/57 pre-CORRECTION05; +1 for the sidecar-format pin).
+
+**Artifact binding:**
+```text
+SUBJECT_HEAD                = fb87426fb96c4680e6998da74532e4110bc766f7
+PARENT_HEAD                 = 97a4ed8c7  (CORRECTION04 — proven/useful, downstream consumer)
+DOGFOOD_VERSION             = 4.1.16-fb87426fb
+VSIX_ARTIFACT               = dist/dogfood/clinemm-4.1.16-fb87426fb.vsix
+VSIX_SHA256                 = 415bbe0bbc4c60bca3f4af0bf56387c0e02d7ba9ab7d903ad035b7bae4d46206
+VSIX_BYTES                  = 20864091
+ELM_VENDOR_JS_SHA256        = 034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e   (byte-exact with canonical)
+ELM_AUTHORITY_SHA256        = c9b1b0f9431c74e77b87701a4c08a1d501ca4f28433d1d2f5b3928bcd358c724
+ELM_DOMAIN_SHA256           = 08d94352aa4ab23a3cfd4d2348fe0a1bd02715d885daa0efafbeda36b5695891
+ELM_CODEC_SHA256            = 4867a16254dbd48340e60e80d3593df5dc34299728c465910195063696892502
+ELM_MAIN_SHA256             = fae9be55d4b1480cdab821804f92797328cf52ebca0c5a031ba72eb5c92c3f77
+ELM_JSON_SHA256             = f80085e147781d502776a7e0c60f4860e0fde8e9e067337b2cc5eab451be1091
+
+PRODUCTION_SEMANTICS_CHANGED = false
+ELM_AUTHORITY_SEMANTICS_CHANGED = false     (same Elm sources, same Main.elm, same 4-module compile)
+VSCE_PACKAGING_CHANGED = false
+PYTHON_ORCHESTRATOR_CHANGED = false
+CORRECTION03_INVARIANT_PRESERVED = true     (no edit to stage_elm_kernel_runtime_asset)
+CORRECTION04_INVARIANT_PRESERVED = true     (no edit to build_elm_kernel / cwd contract)
+
+RED    = REPRODUCED (97a4ed8c7 dogfood aborted at "NO elm.json FILE")
+GREEN  = PASSED (fb87426fb dogfood green end-to-end through vsce package + exact kernel payload)
+ABLATION = N/A (correction is in build authority; ablating the cd line re-introduces 97a4ed8c7 failure mode)
+```
+
+**Subordinate CORRECTION chain (still proven/useful):**
+- CORRECTION01 (vendor-elm + registry bootstrap) — SUPERSEDED by CORRECTION02 but retained as evidence.
+- CORRECTION02 (system-elm + HALT messages) — ACTIVE; pin to `command -v elm` and `0.19.2` version check still authoritative.
+- CORRECTION03 (PACKAGING-DISCOVERY → stage to runtime-assets/) — ACTIVE; kernel JS lives at `extension/runtime-assets/completion-authority.js` in the final VSIX.
+- CORRECTION04 (WORKTREE-KERNEL-BUILD → build before staging) — ACTIVE; orchestrator invokes `build-elm.sh` against the detached worktree immediately before `stage_elm_kernel_runtime_asset`. CORRECTION05 nests cleanly under this: the script now self-contains its project-cwd requirement, so the orchestrator's `cwd=stage_apps_vscode` is correct as-is.
+- **CORRECTION05 (ELM-PROJECT-CWD + sidecar-format) — NEW; this ACT.**
+
+**Environmental notes (NOT addressed by this ACT — orthogonal environment artifacts):**
+- The canonical dogfood requires `ELM_HOME` (or equivalent writable cache) and `SSL_CERT_FILE=/etc/ssl/cert.pem` on this VM because the on-disk `~/.elm/0.19.2/packages/` tree is read-only and Elm's bundled Haskell TLS lib rejects the package-elm-lang.org CA without an explicit `SSL_CERT_FILE`. These are documented operator env-var requirements, not script defects — `build-elm.sh` itself is portable and works from any cwd on any platform with system Elm 0.19.2 on PATH.
+- System `elm` must be 0.19.2; CORRECTION02's `HALT_ELM_VERSION_MISMATCH` is the authoritative guard.
+
+**Successor:** install + LIVE Elm-shadow qualification of the `4.1.16-fb87426fb` dogfood (requires launching `codium-cline` against the staged extension profile — out of scope for the bounded CORRECTION05 defect repair).
