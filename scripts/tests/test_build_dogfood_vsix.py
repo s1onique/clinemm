@@ -724,6 +724,10 @@ class TestDogfood06PayloadExtensionJs(unittest.TestCase):
             {
                 "extension/dist/extension.js",
                 "extension/webview-ui/build/assets/index.js",
+                # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-PACKAGING-RESOURCE-FIX:
+                # Elm kernel entries also required by the payload gate.
+                "extension/elm/completion-authority/vendor/completion-authority.js",
+                "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
             }
         )
 
@@ -753,6 +757,10 @@ class TestDogfood07PayloadWebviewAssets(unittest.TestCase):
                 "extension/dist/extension.js",
                 "extension/webview-ui/build/assets/index.js",
                 "extension/webview-ui/build/assets/index.css",
+                # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-PACKAGING-RESOURCE-FIX:
+                # Elm kernel entries also required by the payload gate.
+                "extension/elm/completion-authority/vendor/completion-authority.js",
+                "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
             }
         )
 
@@ -760,6 +768,70 @@ class TestDogfood07PayloadWebviewAssets(unittest.TestCase):
         with self.assertRaises(BuildError) as ctx:
             verify_vsix_payload({"extension/dist/extension.js"})
         self.assertIn("webview-ui/build/assets", str(ctx.exception))
+
+
+# =============================================================================
+# DOGFOOD-KERNEL — payload must include the Elm kernel bundle
+#
+# ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-PACKAGING-RESOURCE-FIX
+# pins the runtime invariant that the Elm kernel JS bundle is present
+# in the VSIX. The activation code in
+# apps/vscode/src/extension.ts:activate loads
+# `elm/completion-authority/vendor/completion-authority.js` relative
+# to context.extensionUri.fsPath when
+# CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 is set, so a missing
+# kernel bundle at activation time is a P1 packaging defect that
+# must be caught at build time. verify_vsix_payload enforces this.
+# =============================================================================
+
+
+class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
+    """D09 / DOGFOOD-KERNEL: missing
+    ``extension/elm/completion-authority/vendor/completion-authority.js``
+    is a build failure that must raise BuildError. The
+    ``.sha256`` sidecar is also required so the runtime can verify
+    the kernel bytes."""
+
+    def test_present_passes(self) -> None:
+        # Should not raise.
+        verify_vsix_payload(
+            {
+                "extension/dist/extension.js",
+                "extension/webview-ui/build/assets/index.js",
+                "extension/elm/completion-authority/vendor/completion-authority.js",
+                "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+            }
+        )
+
+    def test_missing_kernel_js_fails(self) -> None:
+        with self.assertRaises(BuildError) as ctx:
+            verify_vsix_payload(
+                {
+                    "extension/dist/extension.js",
+                    "extension/webview-ui/build/assets/index.js",
+                    # kernel JS missing on purpose
+                    "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+                }
+            )
+        self.assertIn(
+            "extension/elm/completion-authority/vendor/completion-authority.js",
+            str(ctx.exception),
+        )
+
+    def test_missing_kernel_sha_fails(self) -> None:
+        with self.assertRaises(BuildError) as ctx:
+            verify_vsix_payload(
+                {
+                    "extension/dist/extension.js",
+                    "extension/webview-ui/build/assets/index.js",
+                    "extension/elm/completion-authority/vendor/completion-authority.js",
+                    # kernel sha missing on purpose
+                }
+            )
+        self.assertIn(
+            "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+            str(ctx.exception),
+        )
 
 
 # =============================================================================
