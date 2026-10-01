@@ -98,6 +98,7 @@ from build_dogfood_vsix_lib import (  # noqa: E402
     read_package_version,
     remove_worktree_quietly,
     run_canonical_build,
+    stage_elm_kernel_runtime_asset,
     verify_install_listing,
     verify_vsix_manifest,
     verify_vsix_payload,
@@ -724,10 +725,12 @@ class TestDogfood06PayloadExtensionJs(unittest.TestCase):
             {
                 "extension/dist/extension.js",
                 "extension/webview-ui/build/assets/index.js",
-                # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-PACKAGING-RESOURCE-FIX:
-                # Elm kernel entries also required by the payload gate.
-                "extension/elm/completion-authority/vendor/completion-authority.js",
-                "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+                # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03:
+                # Elm kernel entries are staged into the package-owned
+                # runtime-assets/ directory (NOT the original
+                # gitignored vendor/ location).
+                "extension/runtime-assets/completion-authority.js",
+                "extension/runtime-assets/completion-authority.js.sha256",
             }
         )
 
@@ -757,10 +760,12 @@ class TestDogfood07PayloadWebviewAssets(unittest.TestCase):
                 "extension/dist/extension.js",
                 "extension/webview-ui/build/assets/index.js",
                 "extension/webview-ui/build/assets/index.css",
-                # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-PACKAGING-RESOURCE-FIX:
-                # Elm kernel entries also required by the payload gate.
-                "extension/elm/completion-authority/vendor/completion-authority.js",
-                "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+                # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03:
+                # Elm kernel entries are staged into the package-owned
+                # runtime-assets/ directory (NOT the original
+                # gitignored vendor/ location).
+                "extension/runtime-assets/completion-authority.js",
+                "extension/runtime-assets/completion-authority.js.sha256",
             }
         )
 
@@ -773,21 +778,33 @@ class TestDogfood07PayloadWebviewAssets(unittest.TestCase):
 # =============================================================================
 # DOGFOOD-KERNEL — payload must include the Elm kernel bundle
 #
-# ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-PACKAGING-RESOURCE-FIX
-# pins the runtime invariant that the Elm kernel JS bundle is present
-# in the VSIX. The activation code in
+# ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03
+# (PACKAGING-DISCOVERY) pins the runtime invariant that the Elm
+# kernel JS bundle is present in the VSIX at the staged runtime
+# asset location (``extension/runtime-assets/completion-authority.js``
+# + ``.sha256`` sidecar). The activation code in
 # apps/vscode/src/extension.ts:activate loads
-# `elm/completion-authority/vendor/completion-authority.js` relative
-# to context.extensionUri.fsPath when
+# `runtime-assets/completion-authority.js` relative to
+# context.extensionUri.fsPath when
 # CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 is set, so a missing
 # kernel bundle at activation time is a P1 packaging defect that
 # must be caught at build time. verify_vsix_payload enforces this.
+#
+# Why the staged location and not the original
+# `elm/completion-authority/vendor/completion-authority.js`:
+# the source kernel lives under a nested .gitignore
+# (`vendor/*.js`, `vendor/*.sha256`). vsce applies .gitignore
+# semantics during file DISCOVERY, before .vscodeignore runs, so
+# the original location is invisible to vsce regardless of any
+# `.vscodeignore !negation`. The staging happens in
+# stage_elm_kernel_runtime_asset() inside the temporary detached
+# worktree, immediately before `vsce package`.
 # =============================================================================
 
 
 class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
     """D09 / DOGFOOD-KERNEL: missing
-    ``extension/elm/completion-authority/vendor/completion-authority.js``
+    ``extension/runtime-assets/completion-authority.js``
     is a build failure that must raise BuildError. The
     ``.sha256`` sidecar is also required so the runtime can verify
     the kernel bytes."""
@@ -798,8 +815,8 @@ class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
             {
                 "extension/dist/extension.js",
                 "extension/webview-ui/build/assets/index.js",
-                "extension/elm/completion-authority/vendor/completion-authority.js",
-                "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+                "extension/runtime-assets/completion-authority.js",
+                "extension/runtime-assets/completion-authority.js.sha256",
             }
         )
 
@@ -810,11 +827,11 @@ class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
                     "extension/dist/extension.js",
                     "extension/webview-ui/build/assets/index.js",
                     # kernel JS missing on purpose
-                    "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+                    "extension/runtime-assets/completion-authority.js.sha256",
                 }
             )
         self.assertIn(
-            "extension/elm/completion-authority/vendor/completion-authority.js",
+            "extension/runtime-assets/completion-authority.js",
             str(ctx.exception),
         )
 
@@ -824,14 +841,152 @@ class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
                 {
                     "extension/dist/extension.js",
                     "extension/webview-ui/build/assets/index.js",
-                    "extension/elm/completion-authority/vendor/completion-authority.js",
+                    "extension/runtime-assets/completion-authority.js",
                     # kernel sha missing on purpose
                 }
             )
         self.assertIn(
-            "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+            "extension/runtime-assets/completion-authority.js.sha256",
             str(ctx.exception),
         )
+
+    def test_legacy_vendor_path_no_longer_satisfies(self) -> None:
+        """ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03:
+        the OLD vendor path (under the nested .gitignore) is no
+        longer a valid VSIX location for the kernel. The runtime
+        loads from ``runtime-assets/``; if the staged copy is
+        missing, the build must fail even if the unfiltered
+        vendor/ path were somehow present. This pins the new
+        contract: only the staged location counts."""
+        with self.assertRaises(BuildError) as ctx:
+            verify_vsix_payload(
+                {
+                    "extension/dist/extension.js",
+                    "extension/webview-ui/build/assets/index.js",
+                    # ONLY the legacy vendor path is present, not
+                    # the staged runtime-assets/ location — must fail.
+                    "extension/elm/completion-authority/vendor/completion-authority.js",
+                    "extension/elm/completion-authority/vendor/completion-authority.js.sha256",
+                }
+            )
+        self.assertIn(
+            "extension/runtime-assets/completion-authority.js",
+            str(ctx.exception),
+        )
+
+
+class TestDogfoodKernel04StageRuntimeAsset(unittest.TestCase):
+    """DOGFOOD-KERNEL-04: stage_elm_kernel_runtime_asset must copy
+    the source Elm kernel JS + SHA sidecar from the gitignored
+    ``elm/completion-authority/vendor/`` directory into the
+    package-owned ``runtime-assets/`` directory inside the staged
+    worktree, and the SHA of the staged JS bytes must equal the
+    staged ``.sha256`` sidecar.
+
+    ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03
+    (PACKAGING-DISCOVERY). This is the bounded fix that replaces
+    the inert `.vscodeignore !negation` strategy — by staging into
+    a non-gitignored package-owned directory we sidestep vsce's
+    .gitignore-vs-.vscodeignore precedence entirely.
+    """
+
+    @staticmethod
+    def _write_source(root: Path, *, js_bytes: bytes, sha: str) -> None:
+        src_dir = root / "elm" / "completion-authority" / "vendor"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        (src_dir / "completion-authority.js").write_bytes(js_bytes)
+        (src_dir / "completion-authority.js.sha256").write_text(sha + "\n")
+
+    def test_stages_js_and_sha_and_sha_matches(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-04-"
+        ) as td:
+            stage = Path(td)
+            js_bytes = (
+                b"this-is-a-fake-elm-kernel-payload-034f70b7b725738b"
+            )
+            expected_sha = compute_sha256_bytes(js_bytes)
+            self._write_source(
+                stage, js_bytes=js_bytes, sha=expected_sha
+            )
+
+            returned_sha = stage_elm_kernel_runtime_asset(stage)
+
+            staged_js = (
+                stage / "runtime-assets" / "completion-authority.js"
+            )
+            staged_sha = (
+                stage / "runtime-assets" /
+                "completion-authority.js.sha256"
+            )
+            self.assertTrue(staged_js.is_file(), "staged JS missing")
+            self.assertTrue(
+                staged_sha.is_file(), "staged SHA sidecar missing"
+            )
+            self.assertEqual(staged_js.read_bytes(), js_bytes)
+            self.assertEqual(
+                staged_sha.read_text().strip(), expected_sha
+            )
+            self.assertEqual(returned_sha, expected_sha)
+
+    def test_missing_source_js_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-04-"
+        ) as td:
+            stage = Path(td)
+            # Only the SHA sidecar is present; the JS is missing.
+            src_dir = stage / "elm" / "completion-authority" / "vendor"
+            src_dir.mkdir(parents=True, exist_ok=True)
+            (src_dir / "completion-authority.js.sha256").write_text(
+                "deadbeef" * 8 + "\n"
+            )
+            with self.assertRaises(BuildError) as ctx:
+                stage_elm_kernel_runtime_asset(stage)
+            self.assertIn(
+                "Elm kernel source missing", str(ctx.exception)
+            )
+
+    def test_missing_source_sha_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-04-"
+        ) as td:
+            stage = Path(td)
+            src_dir = stage / "elm" / "completion-authority" / "vendor"
+            src_dir.mkdir(parents=True, exist_ok=True)
+            (src_dir / "completion-authority.js").write_bytes(b"x" * 16)
+            # No .sha256 sidecar.
+            with self.assertRaises(BuildError) as ctx:
+                stage_elm_kernel_runtime_asset(stage)
+            self.assertIn(
+                "Elm kernel source SHA missing", str(ctx.exception)
+            )
+
+    def test_sha_sidecar_mismatch_fails_closed(self) -> None:
+        """If the .sha256 sidecar disagrees with the staged JS
+        bytes, fail closed. This guards against a future
+        build-elm.sh format change silently emitting a stale
+        sidecar."""
+        with tempfile.TemporaryDirectory(
+            prefix="clinemm-dogfood-kernel-04-"
+        ) as td:
+            stage = Path(td)
+            js_bytes = b"actual-payload-bytes"
+            wrong_sha = compute_sha256_bytes(b"different-payload-bytes")
+            self._write_source(
+                stage, js_bytes=js_bytes, sha=wrong_sha
+            )
+            with self.assertRaises(BuildError) as ctx:
+                stage_elm_kernel_runtime_asset(stage)
+            self.assertIn("sidecar mismatch", str(ctx.exception))
+
+
+def compute_sha256_bytes(data: bytes) -> str:
+    """Helper: lowercase hex SHA-256 of raw bytes. Duplicates
+    build_dogfood_vsix_lib.compute_sha256 for bytes input without
+    taking a Path round-trip."""
+    import hashlib
+
+    return hashlib.sha256(data).hexdigest()
 
 
 # =============================================================================

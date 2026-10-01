@@ -259,7 +259,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// BackgroundNotifyCoordinator.consumeTerminal / etc.
 	applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
 
-	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01:
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03:
 	// arm the Elm shadow observer at the SAME EARLIEST
 	// initialization seam, BEFORE SdkController construction.
 	// The shadow is DEFAULT-OFF. The operator opts in via the
@@ -267,20 +267,27 @@ export async function activate(context: vscode.ExtensionContext) {
 	// kernel path is resolved from `context.extensionUri.fsPath`
 	// (the authoritative installed extension root, which is
 	// the directory containing `dist/extension.js` AND
+	// `runtime-assets/completion-authority.js` in the packaged
+	// VSIX). This is stronger than the `_importMetaUrl` banner
+	// approach — `extensionUri` is provided directly by VS Code
+	// and survives esbuild bundling without depending on the
+	// banner's variable scope (top-level CJS `const` is
+	// module-scoped, NOT a property on globalThis).
+	//
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03
+	// (PACKAGING-DISCOVERY): the kernel is NOT loaded from
 	// `elm/completion-authority/vendor/completion-authority.js`
-	// in the packaged VSIX). This is stronger than the
-	// `_importMetaUrl` banner approach — `extensionUri` is
-	// provided directly by VS Code and survives esbuild
-	// bundling without depending on the banner's variable
-	// scope (top-level CJS `const` is module-scoped, NOT a
-	// property on globalThis).
-	const elmShadowKernelPath = path.join(
-		context.extensionUri.fsPath,
-		"elm",
-		"completion-authority",
-		"vendor",
-		"completion-authority.js",
-	)
+	// anymore. That source path is filtered out by the nested
+	// `apps/vscode/elm/completion-authority/.gitignore` during
+	// `vsce`'s discovery step (vsce applies .gitignore semantics
+	// before .vscodeignore, so .vscodeignore !negations cannot
+	// resurrect it). The dogfood VSIX builder
+	// (scripts/build_dogfood_vsix_lib.py > stage_elm_kernel_runtime_asset)
+	// copies the kernel into `runtime-assets/completion-authority.js`
+	// inside the temporary worktree immediately before `vsce package`,
+	// and the runtime loads it from there. Same bytes, different
+	// packaging path.
+	const elmShadowKernelPath = path.join(context.extensionUri.fsPath, "runtime-assets", "completion-authority.js")
 	const elmShadowActivation = applyElmShadowDiagnosticProfile(process.env, elmShadowKernelPath)
 	if (elmShadowActivation.enabled) {
 		Logger.log(`[ELM-SHADOW] enabled=true kernelPath=${elmShadowActivation.kernelPath}`)
