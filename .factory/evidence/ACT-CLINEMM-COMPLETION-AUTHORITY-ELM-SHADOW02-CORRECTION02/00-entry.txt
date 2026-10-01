@@ -1,0 +1,46 @@
+ACT=
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION02
+
+ENTRY_HEAD=
+3167c06d2edb4eda2546947bb77819059a2037cf
+
+PREVIOUS_ACT=
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01
+
+PREVIOUS_VERDICT=
+PASS_LIVE_ELM_SHADOW_REACHABILITY_GREEN (false positive)
+
+REVIEWER_CLASSIFICATION=
+P0 (HALT_KERNEL_PATH_RUNTIME_BINDING_UNPROVEN) — CORRECTION01
+resolved the enable path, but the kernel-path resolver read the
+esbuild banner's `_importMetaUrl` variable as if it were a
+`globalThis` property. Top-level CJS `const` is module-scoped, not
+on `globalThis`. In production, `elmShadowKernelPath` would be
+`null`, the fail-closed branch would disable the shadow even with
+the env flag set, and the dev console would not log the
+expected `[ELM-SHADOW] enabled=true ...` line.
+
+DISCRIMINATOR INSPECTION (the reviewer's recipe):
+  $ rg -n -m5 '(_importMetaUrl|pathToFileURL\(__filename\))' \
+      apps/vscode/dist/extension.js
+  1:const _importMetaUrl=require('url').pathToFileURL(__filename)
+  186128:    require2 = (0, import_module.createRequire)(_importMetaUrl);
+  ...
+
+Confirmed: the banner writes a top-level `const` (module-scoped),
+not a globalThis property. The previous CORRECTION01's read was
+broken at runtime.
+
+BOUNDED FIX (reviewer-prescribed, ~5 lines):
+  Replace the broken `_importMetaUrl` resolver with
+  `context.extensionUri.fsPath` — the authoritative VS Code
+  extension root provided directly by the activation API.
+
+Heads:
+  ENTRY:    3167c06d2edb4eda2546947bb77819059a2037cf
+  SUBJECT:  PENDING_COMMIT
+  CLOSURE:  PENDING_COMMIT
+
+NO_NEW_ELM_SEMANTICS=true (Elm SHA-256 unchanged: 034f70b7...)
+
+NO_NEW_TS_AUTHORITY_FLOOR=true (TS_AUTHORITY=SOLE, ELM_AUTHORITY=NONE)

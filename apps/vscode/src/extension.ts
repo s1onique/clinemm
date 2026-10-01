@@ -63,7 +63,6 @@ import { WebviewProvider } from "./core/webview"
 import { createClineAPI } from "./exports"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import type { ExtensionContext } from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
@@ -265,30 +264,23 @@ export async function activate(context: vscode.ExtensionContext) {
 	// initialization seam, BEFORE SdkController construction.
 	// The shadow is DEFAULT-OFF. The operator opts in via the
 	// CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 env var. The
-	// kernel path is resolved relative to the bundled
-	// `dist/extension.js` location. In a packaged VSIX the
-	// structure is `<publisher>-<ver>/dist/extension.js` +
-	// `<publisher>-<ver>/elm/completion-authority/vendor/...`,
-	// so `..` from `dist/` lands on the extension root. We
-	// resolve via the esbuild banner-provided `_importMetaUrl`
-	// (see esbuild.mjs banner) so this works under the bundled
-	// CJS target.
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const _banner = (globalThis as any)
-	const _importMetaUrl: string | undefined =
-		typeof _banner._importMetaUrl === "string"
-			? (_banner._importMetaUrl as string)
-			: undefined
-	const elmShadowKernelPath = _importMetaUrl
-		? path.resolve(
-				path.dirname(fileURLToPath(_importMetaUrl)),
-				"..",
-				"elm",
-				"completion-authority",
-				"vendor",
-				"completion-authority.js",
-			)
-		: null
+	// kernel path is resolved from `context.extensionUri.fsPath`
+	// (the authoritative installed extension root, which is
+	// the directory containing `dist/extension.js` AND
+	// `elm/completion-authority/vendor/completion-authority.js`
+	// in the packaged VSIX). This is stronger than the
+	// `_importMetaUrl` banner approach — `extensionUri` is
+	// provided directly by VS Code and survives esbuild
+	// bundling without depending on the banner's variable
+	// scope (top-level CJS `const` is module-scoped, NOT a
+	// property on globalThis).
+	const elmShadowKernelPath = path.join(
+		context.extensionUri.fsPath,
+		"elm",
+		"completion-authority",
+		"vendor",
+		"completion-authority.js",
+	)
 	const elmShadowActivation = applyElmShadowDiagnosticProfile(
 		process.env,
 		elmShadowKernelPath,

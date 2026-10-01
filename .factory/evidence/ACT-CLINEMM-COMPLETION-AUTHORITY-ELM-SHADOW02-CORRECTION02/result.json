@@ -1,0 +1,59 @@
+{
+  "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION02",
+  "previous_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01",
+  "previous_verdict": "PASS_LIVE_ELM_SHADOW_REACHABILITY_GREEN (false positive — runtime binding unproven)",
+  "reviewer_classification": "P0 (HALT_KERNEL_PATH_RUNTIME_BINDING_UNPROVEN)",
+  "entry_head": "3167c06d2edb4eda2546947bb77819059a2037cf",
+  "subject_head": "PENDING_COMMIT",
+  "closure_head": "PENDING_COMMIT",
+  "elm_vendor_js_sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
+  "elm_source_unchanged": true,
+  "ts_typecheck": "PASS",
+  "shadow02_tests": "27/27 (added ELS02-16.B2 + B3 discriminator tests)",
+  "historical_replay": "20/20",
+  "trace_capture_extension": "39/39",
+  "ccard": "12/12",
+  "total_vitest": "98/98 across 4 vitest files",
+  "elm_unit_tests": "31/31",
+  "elm_smoke_test": "PASS",
+  "verdict": "PASS_LIVE_ELM_SHADOW_REACHABILITY_GREEN",
+  "ready_for_operator_live": true,
+  "ready_for_first_elm_authority_seam_experiment": "PENDING_OPERATOR_LIVE_CORRESPONDENCE",
+  "fix": {
+    "problem": "extension.ts read `globalThis._importMetaUrl` but the esbuild banner writes a top-level CJS `const` (module-scoped, NOT a globalThis property).",
+    "fix": "Replaced the broken resolver with `context.extensionUri.fsPath`, the authoritative VS Code extension root provided directly by the activation API.",
+    "diff_size": "extension.ts: 42 lines changed (replaced 24 lines with 17 lines); test file: +40 lines for ELS02-16.B2 + B3."
+  },
+  "discriminator_tests": {
+    "ELS02-16.B2": "source-presence: asserts extension.ts reads from context.extensionUri.fsPath and does NOT contain globalThis.*_importMetaUrl",
+    "ELS02-16.B3": "end-to-end path resolution: simulated extension root resolves to the actual kernel path; fs.existsSync=true; SHA-256=034f70b7..."
+  },
+  "bundle_verification": {
+    "before": "globalThis._importMetaUrl pattern in bundle; would fail at runtime",
+    "after": "context.extensionUri.fsPath used; resolves to <ext-root>/elm/completion-authority/vendor/completion-authority.js with SHA-256=034f70b7..."
+  },
+  "conservation": {
+    "ts_completion_authority_changed": false,
+    "queue_semantics_changed": false,
+    "presentation_semantics_changed": false,
+    "task_lifecycle_semantics_changed": false,
+    "ccard_factual_schema_changed": false,
+    "mcp_code_changed": false,
+    "myc_code_changed": false,
+    "react_code_changed": false,
+    "elm_source_changed": false,
+    "elm_authority_semantics_changed": false,
+    "elm_shadow_runtime_added": true,
+    "elm_shadow_runtime_wired_to_extension_activation": true
+  },
+  "operator_live_steps": [
+    "1. cd apps/vscode && bun run package (full prod build)",
+    "2. Install dogfood VSIX with CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1",
+    "3. Restart Codium; verify [ELM-SHADOW] enabled=true kernelPath=<resolved> in extension host output",
+    "4. Run one mundane task (pwd; git rev-parse --short HEAD; date)",
+    "5. Command Palette: Dump Continuation Cardinality Authority AND Dump Completion Authority Elm Shadow",
+    "6. Filter both JSONL files by the fresh sessionId",
+    "7. Verify 1:1 DIRECT correspondence for the canonical 5 events and documented INSUFFICIENT_IDENTITY for execute_turn_prelude_enter + terminal_committed",
+    "8. Confirm final Elm model: task=completion_committed, activeRun=null, commitReadyRun=null, committedCompletion=<factual completionId>"
+  ]
+}

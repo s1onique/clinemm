@@ -610,6 +610,46 @@ describe("ELS02-16 — production activation wiring exists in extension.ts + dog
 		expect(source).toMatch(/DumpCompletionAuthorityElmShadow/)
 	})
 
+	test("ELS02-16.B2: extension.ts resolves the kernel path from context.extensionUri.fsPath (NOT from a broken globalThis._importMetaUrl banner read)", () => {
+		const extPath = path.resolve(REPO_ROOT, "apps/vscode/src/extension.ts")
+		const source = fs.readFileSync(extPath, "utf8")
+		// The authoritative resolver is context.extensionUri.fsPath.
+		expect(source).toMatch(/context\.extensionUri\.fsPath/)
+		// The path must be joined to the elm/completion-authority/vendor
+		// suffix that is shipped by the VSIX.
+		expect(source).toMatch(/elm[\s\S]*?completion-authority[\s\S]*?vendor[\s\S]*?completion-authority\.js/)
+		// We must NOT read from the esbuild banner's variable as if it
+		// were a globalThis property — that was the CORRECTION01 P0 bug.
+		expect(source).not.toMatch(/globalThis[\s\S]*?_importMetaUrl/)
+		expect(source).not.toMatch(/\(globalThis as any\)/)
+	})
+
+	test("ELS02-16.B3: when env is ON and extension root contains the elm bundle, the resolved kernel path exists with the frozen SHA-256", () => {
+		// Simulate the resolver logic from extension.ts: the kernel
+		// path is path.join(extensionUri.fsPath, "elm", "completion-authority",
+		// "vendor", "completion-authority.js"). For this test the
+		// "extension root" is the apps/vscode directory; the kernel is
+		// expected at apps/vscode/elm/.../vendor/completion-authority.js.
+		const simulatedExtensionRoot = path.resolve(
+			REPO_ROOT,
+			"apps/vscode",
+		)
+		const simulatedKernelPath = path.join(
+			simulatedExtensionRoot,
+			"elm",
+			"completion-authority",
+			"vendor",
+			"completion-authority.js",
+		)
+		expect(fs.existsSync(simulatedKernelPath)).toBe(true)
+		const crypto = require("node:crypto") as typeof import("node:crypto")
+		const sha256 = crypto
+			.createHash("sha256")
+			.update(fs.readFileSync(simulatedKernelPath))
+			.digest("hex")
+		expect(sha256).toBe("034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e")
+	})
+
 	test("ELS02-16.C: registry.ts exposes DumpCompletionAuthorityElmShadow command id", () => {
 		const regPath = path.resolve(REPO_ROOT, "apps/vscode/src/registry.ts")
 		const source = fs.readFileSync(regPath, "utf8")

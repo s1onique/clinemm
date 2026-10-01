@@ -40,6 +40,7 @@
   },
   "verdict_subject": "PASS_LIVE_ELM_SHADOW_REACHABILITY_GREEN",
   "ready_for_first_elm_authority_seam_experiment": "PENDING_OPERATOR_LIVE_CORRESPONDENCE",
+  "correction_note": "CORRECTION01's verdict was a false positive. The kernel path resolver read globalThis._importMetaUrl but the esbuild banner writes a top-level CJS const (module-scoped, not on globalThis). In production activation the kernel path was always null and the shadow was always fail-closed OFF. CORRECTION02 fixes this by using context.extensionUri.fsPath.",
   "operator_live_required": {
     "install": "install dogfood VSIX with CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1",
     "activation_check": "verify shadow enabled=true kernel sha256=034f70b7...",
