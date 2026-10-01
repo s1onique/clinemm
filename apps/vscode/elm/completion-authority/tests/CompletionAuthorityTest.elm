@@ -199,6 +199,7 @@ suite =
                             Expect.fail "expected foreign closure (identity cross-talk guard)"
             ]
         , correction02
+        , elmCwraRepair
         ]
 
 
@@ -413,5 +414,284 @@ correction02 =
 
                         other ->
                             Expect.fail ("expected EventAfterCompletion, got " ++ Debug.toString (Maybe.map Authority.violationName other))
+            ]
+        ]
+
+
+-- ===========================================================================
+-- ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01
+-- ELM-CWRA-R01..R10: real-chronology repair RED/GREEN tests.
+--
+-- R01 (the primary RED) reproduces the predecessor divergence: the REAL
+-- chronology `TaskStarted -> RunStarted -> SubmitAndExitSeen ->
+-- TaskCompletionCommitted` must reach `task=CompletionCommitted`.
+-- Pre-repair this is rejected with `TaskCompletionCommittedWhileHeld
+-- ActiveRun` because the run is still `activeRun`.
+--
+-- R02 asserts the late `AgentTurnDone` is bookkeeping and does not undo
+-- completion.
+--
+-- R03..R10 are conservation tests.
+-- ===========================================================================
+
+
+elmCwraRepair : Test
+elmCwraRepair =
+    describe "ELM-CWRA (commit-while-run-active repair)"
+        [ describe "ELM-CWRA-R01 exact REAL chronology must commit"
+            [ test "TaskStarted -> RunStarted R1 -> SubmitAndExitSeen S -> TaskCompletionCommitted C -> committed, no violation" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m2
+                        ( m4, _, v ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m3
+                    in
+                    Expect.all
+                        [ \() -> Expect.equal Nothing v
+                        , \() -> Expect.equal CompletionCommitted m4.task
+                        , \() -> Expect.equal (Just (CompletionRef "c1")) m4.committedCompletion
+                        ] ()
+            ]
+        , describe "ELM-CWRA-R02 late AgentTurnDone is bookkeeping, does not undo completion"
+            [ test "REAL 5-event projection: TaskStarted -> RunStarted -> SubmitAndExitSeen -> TaskCompletionCommitted -> AgentTurnDone -> Completed" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m2
+                        ( m4, _, v4 ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m3
+                        ( m5, _, v5 ) =
+                            updateWithViolations (AgentTurnDone (RunRef "r1")) m4
+                    in
+                    Expect.all
+                        [ \() -> Expect.equal Nothing v4
+                        , \() -> Expect.equal Nothing v5
+                        , \() -> Expect.equal CompletionCommitted m5.task
+                        , \() -> Expect.equal Nothing m5.activeRun
+                        , \() -> Expect.equal (Just (CompletionRef "c1")) m5.committedCompletion
+                        ] ()
+            ]
+        , describe "ELM-CWRA-R03 active run without submit still blocks"
+            [ test "TaskStarted -> RunStarted R1 -> TaskCompletionCommitted C -> TaskCompletionCommittedWhileHeld ActiveRun" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( _, _, v ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m2
+                    in
+                    case v of
+                        Just (TaskCompletionCommittedWhileHeld ActiveRun) ->
+                            Expect.pass
+
+                        other ->
+                            Expect.fail ("expected TaskCompletionCommittedWhileHeld ActiveRun, got " ++ Debug.toString (Maybe.map Authority.violationName other))
+            ]
+        , describe "ELM-CWRA-R04 other holds remain blocking after submit"
+            [ test "RunStarted R1 + SubmitAndExitSeen + PendingPrompt + TaskCompletionCommitted -> rejected (PendingPrompt or ScheduledContinuation)" <|
+                \_ ->
+                    let
+                        p = PromptRef "p1"
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m2
+                        ( m4, _, _ ) =
+                            updateWithViolations (PendingPromptEnqueued p PromptPendingPromptDrain) m3
+                        ( _, _, v ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m4
+                    in
+                    case v of
+                        Just (TaskCompletionCommittedWhileHeld PendingPrompt) ->
+                            Expect.pass
+
+                        Just (TaskCompletionCommittedWhileHeld ScheduledContinuation) ->
+                            Expect.pass
+
+                        other ->
+                            Expect.fail ("expected TaskCompletionCommittedWhileHeld PendingPrompt or ScheduledContinuation, got " ++ Debug.toString (Maybe.map Authority.violationName other))
+            ]
+        , describe "ELM-CWRA-R05 no submit intent, no completion"
+            [ test "TaskStarted -> RunStarted R1 + TaskCompletionCommitted C -> rejected with ActiveRun (no submit seen)" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( _, _, v ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m2
+                    in
+                    case v of
+                        Just (TaskCompletionCommittedWhileHeld ActiveRun) ->
+                            Expect.pass
+
+                        other ->
+                            Expect.fail ("expected TaskCompletionCommittedWhileHeld ActiveRun, got " ++ Debug.toString (Maybe.map Authority.violationName other))
+            ]
+        , describe "ELM-CWRA-R06 mismatched late AgentTurnDone is rejected"
+            [ test "RunStarted R1 + SubmitAndExitSeen + TaskCompletionCommitted C + AgentTurnDone R2 -> RunClosedByOtherRef" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m2
+                        ( m4, _, _ ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m3
+                        ( _, _, v ) =
+                            updateWithViolations (AgentTurnDone (RunRef "r2")) m4
+                    in
+                    case v of
+                        Just (RunClosedByOtherRef _ _) ->
+                            Expect.pass
+
+                        other ->
+                            Expect.fail ("expected RunClosedByOtherRef, got " ++ Debug.toString (Maybe.map Authority.violationName other))
+            ]
+        , describe "ELM-CWRA-R07 duplicate completion remains invalid"
+            [ test "REAL chronology + duplicate TaskCompletionCommitted -> DuplicateCompletionRef" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m2
+                        ( m4, _, _ ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m3
+                        ( _, _, v ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c2")) m4
+                    in
+                    case v of
+                        Just (DuplicateCompletionRef _ _) ->
+                            Expect.pass
+
+                        other ->
+                            Expect.fail ("expected DuplicateCompletionRef, got " ++ Debug.toString (Maybe.map Authority.violationName other))
+            ]
+        , describe "ELM-CWRA-R08 old happy path remains valid"
+            [ test "TaskStarted + RunStarted R1 + AgentTurnDone R1 + SubmitAndExitSeen + TaskCompletionCommitted -> committed, AuthorizeCompletionPresentation effect" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (AgentTurnDone (RunRef "r1")) m2
+                        ( m4, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m3
+                        ( m5, _, v ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m4
+                        ( _, effects, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s2")) m5
+                    in
+                    Expect.all
+                        [ \() -> Expect.equal Nothing v
+                        , \() -> Expect.equal CompletionCommitted m5.task
+                        , \() -> Expect.equal True (List.member AuthorizeCompletionPresentation effects)
+                        ] ()
+            ]
+        , describe "ELM-CWRA-R09 exact REAL 5-event projection"
+            [ test "REAL projection: zero violations, task=CompletionCommitted, committedCompletion=Just C, activeRun=Nothing, submitCount=1" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m2
+                        ( m4, _, v4 ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m3
+                        ( m5, _, v5 ) =
+                            updateWithViolations (AgentTurnDone (RunRef "r1")) m4
+                    in
+                    Expect.all
+                        [ \() -> Expect.equal Nothing v4
+                        , \() -> Expect.equal Nothing v5
+                        , \() -> Expect.equal CompletionCommitted m5.task
+                        , \() -> Expect.equal Nothing m5.activeRun
+                        , \() -> Expect.equal (Just (CompletionRef "c1")) m5.committedCompletion
+                        , \() -> Expect.equal 1 m5.submitCount
+                        ] ()
+            ]
+        , describe "ELM-CWRA-R10 no new permissive resurrection"
+            [ test "REAL chronology + CompletionPresented + RunStarted R2 -> EventAfterCompletion (no permissive resurrection)" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m2
+                        ( m4, _, _ ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c1")) m3
+                        ( m5, _, _ ) =
+                            updateWithViolations (CompletionPresented (CompletionRef "c1")) m4
+                        ( _, _, v ) =
+                            updateWithViolations (RunStarted (RunRef "r2") OriginExplicitUser) m5
+                    in
+                    Expect.all
+                        [ \() -> Expect.equal Completed m5.task
+                        , \() ->
+                            case v of
+                                Just (EventAfterCompletion _) ->
+                                    Expect.pass
+
+                                other ->
+                                    Expect.fail ("expected EventAfterCompletion, got " ++ Debug.toString (Maybe.map Authority.violationName other))
+                        ] ()
+            ]
+        , describe "ELM-CWRA-R11 stale submit must not authorize a later active run"
+            [ test "R1 submitted+closed, then RunStarted R2 with no new submit -> TaskCompletionCommittedWhileHeld ActiveRun" <|
+                \_ ->
+                    let
+                        ( m1, _, _ ) =
+                            updateWithViolations (TaskStarted (TaskRef "t1")) emptyModel
+                        ( m2, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r1") OriginExplicitUser) m1
+                        ( m3, _, _ ) =
+                            updateWithViolations (SubmitAndExitSeen (SubmitRef "s1")) m2
+                        ( m4, _, _ ) =
+                            updateWithViolations (AgentTurnDone (RunRef "r1")) m3
+                        ( m5, _, _ ) =
+                            updateWithViolations (RunStarted (RunRef "r2") OriginExplicitUser) m4
+                        ( _, _, v ) =
+                            updateWithViolations (TaskCompletionCommitted (CompletionRef "c2")) m5
+                    in
+                    Expect.all
+                        [ \() -> Expect.equal (Just (RunRef "r2")) m5.activeRun
+                        , \() -> Expect.equal 1 m5.submitCount
+                        , \() -> Expect.equal Nothing m5.committedCompletion
+                        , \() ->
+                            case v of
+                                Just (TaskCompletionCommittedWhileHeld ActiveRun) ->
+                                    Expect.pass
+
+                                other ->
+                                    Expect.fail
+                                        ("expected TaskCompletionCommittedWhileHeld ActiveRun, got "
+                                            ++ Debug.toString (Maybe.map Authority.violationName other)
+                                        )
+                        ] ()
             ]
         ]

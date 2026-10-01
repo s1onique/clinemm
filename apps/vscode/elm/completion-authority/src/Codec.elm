@@ -213,6 +213,14 @@ encodeModel model =
                     Encode.null
           )
         , ( "submitCount", Encode.int model.submitCount )
+        , ( "commitReadyRun"
+          , case model.commitReadyRun of
+                Just r ->
+                    Encode.string (runRefToString r)
+
+                Nothing ->
+                    Encode.null
+          )
         , ( "committedCompletion"
           , case model.committedCompletion of
                 Just c ->

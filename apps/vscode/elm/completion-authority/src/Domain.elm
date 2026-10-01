@@ -334,6 +334,7 @@ type alias Model =
     , jobs : List ( JobRef, JobState )
     , prompts : List ( PromptRef, PromptState )
     , submitCount : Int
+    , commitReadyRun : Maybe RunRef
     , committedCompletion : Maybe CompletionRef
     , presentedCompletion : Maybe CompletionRef
     }
@@ -356,6 +357,7 @@ emptyModel =
     , jobs = []
     , prompts = []
     , submitCount = 0
+    , commitReadyRun = Nothing
     , committedCompletion = Nothing
     , presentedCompletion = Nothing
     }

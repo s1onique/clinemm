@@ -126,7 +126,13 @@ handleMsg msg model =
                 handleContinuationStarted promptRef runRef model
 
             SubmitAndExitSeen _ ->
-                ( { model | submitCount = model.submitCount + 1 }, [], Nothing )
+                ( { model
+                    | submitCount = model.submitCount + 1
+                    , commitReadyRun = model.activeRun
+                  }
+                , []
+                , Nothing
+                )
 
             TaskCompletionCommitted completionRef ->
                 handleTaskCompletionCommitted completionRef model
@@ -141,6 +147,7 @@ handleMsg msg model =
                 ( { model
                     | activeRun = Just runRef
                     , runs = upsertRunState runRef RunActive model.runs
+                    , commitReadyRun = Nothing
                   }
                 , []
                 , Nothing
@@ -154,6 +161,7 @@ handleRunStarted newRef _ model =
             ( { model
                 | activeRun = Just newRef
                 , runs = ( newRef, RunActive ) :: upsertRunState active RunDone model.runs
+                , commitReadyRun = Nothing
               }
             , []
             , Just (RunStartedWhileRunActive active newRef)
@@ -163,6 +171,7 @@ handleRunStarted newRef _ model =
             ( { model
                 | activeRun = Just newRef
                 , runs = ( newRef, RunActive ) :: model.runs
+                , commitReadyRun = Nothing
               }
             , []
             , Nothing
@@ -182,6 +191,7 @@ handleAgentTurnDone closingRef model =
                     | activeRun = Nothing
                     , runs = upsertRunState closingRef RunDone model.runs
                     , prompts = consumePromptForRun closingRef model.prompts
+                    , commitReadyRun = Nothing
                   }
                 , []
                 , Nothing
@@ -190,6 +200,7 @@ handleAgentTurnDone closingRef model =
             else
                 ( { model
                     | runs = upsertRunState closingRef RunDone model.runs
+                    , commitReadyRun = Nothing
                   }
                 , []
                 , Just (RunClosedByOtherRef active closingRef)
@@ -198,6 +209,7 @@ handleAgentTurnDone closingRef model =
         Nothing ->
             ( { model
                 | runs = upsertRunState closingRef RunDone model.runs
+                , commitReadyRun = Nothing
               }
             , []
             , Just (IdentityMismatch (runRefToString closingRef))
@@ -344,6 +356,7 @@ handleContinuationStarted promptRef runRef model =
                 | prompts = newPrompts
                 , activeRun = Just runRef
                 , runs = upsertRunState runRef RunActive model.runs
+                , commitReadyRun = Nothing
               }
             , []
             , Nothing
@@ -354,6 +367,7 @@ handleContinuationStarted promptRef runRef model =
                 | prompts = newPrompts
                 , activeRun = Just runRef
                 , runs = upsertRunState runRef RunActive model.runs
+                , commitReadyRun = Nothing
               }
             , []
             , Just (ContinuationStartedWithoutSchedule promptRef runRef)
@@ -364,6 +378,7 @@ handleContinuationStarted promptRef runRef model =
                 | prompts = newPrompts
                 , activeRun = Just runRef
                 , runs = upsertRunState runRef RunActive model.runs
+                , commitReadyRun = Nothing
               }
             , []
             , Just (ContinuationStartedWithoutSchedule promptRef runRef)
@@ -372,6 +387,25 @@ handleContinuationStarted promptRef runRef model =
 
 {-| CORRECTION02 (P0-4): commit is rejected while any hold applies.
 The model is left unchanged.
+
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01:
+`ActiveRun` is suppressed from the hold list IF
+`model.commitReadyRun == model.activeRun`. The submit is the production
+C9 boundary, emitted only when
+`wasTerminalResponseCommittedThisTurn() && !outstandingAutonomousWork`
+(per `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1231`).
+Therefore, observing a submit AND the submit binding still points at
+the currently active run proves the BCB barrier cleared for THIS run
+in production; the residual `activeRun` is the bookkeeping artifact
+of a run whose `AgentTurnDone` (C8) has not yet been delivered but
+whose semantic completion has been declared (C10). All other hold
+reasons remain blocking.
+
+The run-scoped binding (rather than the earlier task-level counter)
+prevents a stale submit from an earlier, already-closed run from
+authorizing a later run's completion. The binding is invalidated by
+`RunStarted` and `AgentTurnDone` (and `ExecuteTurnPreludeEnter`,
+`ContinuationStarted`).
 -}
 handleTaskCompletionCommitted : CompletionRef -> Model -> ( Model, List Effect, Maybe Violation )
 handleTaskCompletionCommitted completionRef model =
@@ -383,7 +417,7 @@ handleTaskCompletionCommitted completionRef model =
             )
 
         Nothing ->
-            case computeHoldReasons model of
+            case completionCommitHoldReasons model of
                 firstReason :: _ ->
                     ( model
                     , []
@@ -398,6 +432,32 @@ handleTaskCompletionCommitted completionRef model =
                     , []
                     , Nothing
                     )
+
+
+{-| Hold reasons that block `TaskCompletionCommitted`.
+
+Identical to `computeHoldReasons` except: `ActiveRun` is removed from
+the set when `commitReadyRun == Just activeRun` for the model's current
+`activeRun`. The submit boundary is the production C9 gate; once
+observed (with the current `activeRun` as the binding), the BCB barrier
+has cleared for THIS run and the residual `activeRun` is bookkeeping
+for late `AgentTurnDone`, not semantic.
+
+The `commitReadyRun` field is bound at `SubmitAndExitSeen` to the
+`activeRun` at that instant, and is invalidated on any subsequent
+`RunStarted` or `AgentTurnDone` that touches the active run. This
+prevents a stale submit from an earlier run from authorizing a later
+run's completion (the temporal-identity class the predecessor P0
+identified).
+-}
+completionCommitHoldReasons : Model -> List HoldReason
+completionCommitHoldReasons model =
+    let
+        suppressActiveRun =
+            model.commitReadyRun == model.activeRun
+    in
+    computeHoldReasons model
+        |> List.filter (\r -> not (suppressActiveRun && r == ActiveRun))
 
 
 handleCompletionPresented : CompletionRef -> Model -> ( Model, List Effect, Maybe Violation )
