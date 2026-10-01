@@ -1391,6 +1391,228 @@ def compute_sha256_bytes(data: bytes) -> str:
 
 
 # =============================================================================
+# DOGFOOD-KERNEL-05c — build-elm.sh must enter its HERE (the Elm project
+# root) before invoking `elm make`.
+# ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION05
+# (ELM-PROJECT-CWD). The dogfood orchestrator invokes the tracked
+# ``build-elm.sh`` with ``cwd=stage_apps_vscode`` (the parent of
+# ``elm/completion-authority``), so Elm's compiler would otherwise
+# start from ``apps/vscode`` and fail with ``-- NO elm.json FILE --``
+# (the manifest lives at ``${HERE}/elm.json``). The fix is to enter
+# ``HERE`` inside the shell script — the Python orchestrator stays
+# untouched. This test pins that invariant against the tracked
+# script bytes; no fake-Elm subprocess is required.
+# =============================================================================
+
+
+def _read_tracked_build_elm_script() -> str:
+    """Return the text of the canonical ``build-elm.sh`` (the
+    tracked one, not the test stub). The script lives at
+    ``apps/vscode/elm/completion-authority/scripts/build-elm.sh``
+    relative to the repository root — we resolve that from the
+    library location, not from CWD, so the test is robust against
+    being invoked from any working directory.
+    """
+    # build_dogfood_vsix_lib.py is at scripts/build_dogfood_vsix_lib.py
+    # so the repo root is its parent.parent.
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    script = (
+        repo_root
+        / "apps"
+        / "vscode"
+        / "elm"
+        / "completion-authority"
+        / "scripts"
+        / "build-elm.sh"
+    )
+    return script.read_text(encoding="utf-8")
+
+
+class TestDogfoodKernel05cBuildElmEntersProjectRoot(unittest.TestCase):
+    """DOGFOOD-KERNEL-05c: pin the bounded contract that the tracked
+    ``build-elm.sh`` enters its ``HERE`` directory (the Elm project
+    root, where ``elm.json`` lives) before invoking ``elm make``.
+
+    The orchestrator pins ``cwd=stage_apps_vscode`` — the parent of
+    ``elm/`` — in :func:`build_elm_kernel`. Without an explicit
+    ``cd "${HERE}"`` inside the shell script, Elm would start from
+    the wrong directory and abort with ``-- NO elm.json FILE --``.
+    We pin the textual invariant directly against the tracked
+    script; the existing DOGFOOD-KERNEL-05 tests already pin the
+    orchestrator's ``cwd`` contract.
+    """
+
+    def test_tracked_build_elm_script_cd_into_here_before_elm_make(
+        self,
+    ) -> None:
+        script_text = _read_tracked_build_elm_script()
+        # Locate the actual elm make invocation line and assert a
+        # `cd "${HERE}"` appears strictly before it. We accept any
+        # intervening comments / whitespace; the constraint is
+        # ordering, not adjacency.
+        elm_make_idx = script_text.find('"${ELM}" make')
+        self.assertNotEqual(
+            elm_make_idx,
+            -1,
+            msg=(
+                "tracked build-elm.sh no longer contains the "
+                'expected "${ELM}" make invocation'
+            ),
+        )
+        cd_here_idx = script_text.find('cd "${HERE}"')
+        self.assertNotEqual(
+            cd_here_idx,
+            -1,
+            msg=(
+                "CORRECTION05 regression: tracked build-elm.sh "
+                'must `cd "${HERE}"` (the Elm project root) '
+                "before invoking elm make; otherwise Elm starts "
+                "from the orchestrator's cwd and aborts with "
+                '"-- NO elm.json FILE --"'
+            ),
+        )
+        self.assertLess(
+            cd_here_idx,
+            elm_make_idx,
+            msg=(
+                "CORRECTION05 regression: `cd \"${HERE}\"` must "
+                "appear BEFORE the elm make line, not after"
+            ),
+        )
+
+    def test_tracked_build_elm_script_must_not_relax_cwd_contract(
+        self,
+    ) -> None:
+        """Defensive pin: the script must not silently `cd` to a
+        directory other than ``HERE`` before invoking elm make.
+        The orchestrator pins ``stage_apps_vscode`` as the caller
+        cwd; the script is responsible for entering the Elm
+        project root on its own. A drift like ``cd "${ELM}"`` or
+        ``cd /tmp`` would re-introduce the same defect under a
+        different name.
+        """
+        script_text = _read_tracked_build_elm_script()
+        elm_make_idx = script_text.find('"${ELM}" make')
+        self.assertNotEqual(elm_make_idx, -1)
+        prefix = script_text[:elm_make_idx]
+        # Strip comment lines (`#`) so this test is robust against
+        # explanatory comment drift.
+        code_lines = [
+            line
+            for line in prefix.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        cd_lines = [
+            line.strip()
+            for line in code_lines
+            if line.strip().startswith("cd ")
+        ]
+        self.assertTrue(
+            any('"${HERE}"' in line for line in cd_lines),
+            msg=(
+                "CORRECTION05 regression: tracked build-elm.sh "
+                "must enter the Elm project root via "
+                '`cd "${HERE}"` (not e.g. `cd /tmp` or '
+                "`cd ${ELM}`) before invoking elm make; "
+                f"observed cd lines: {cd_lines!r}"
+            ),
+        )
+
+    def test_tracked_build_elm_script_emits_sha_only_sidecars(
+        self,
+    ) -> None:
+        """CORRECTION05 follow-on: the tracked build-elm.sh must
+        emit sidecars whose content is the bare lowercase hex
+        SHA-256 followed by a single newline — never the
+        ``<sha>  <path>`` shape that macOS ``shasum`` defaults to.
+
+        The dogfood orchestrator's
+        :func:`stage_elm_kernel_runtime_asset` reads the sidecar
+        with ``.strip()`` and compares it byte-for-byte against
+        ``compute_sha256(staged_js)``. A drift to
+        ``shasum -a 256 FILE > FILE.sha256`` (no ``awk``) would
+        re-introduce the SHA-sidecar mismatch guard failure.
+
+        The test accepts either an explicit helper function or an
+        inline ``awk '{print $1}'`` collapse — both produce the
+        SHA-only shape that the orchestrator expects.
+        """
+        script_text = _read_tracked_build_elm_script()
+        # The file MUST contain an awk-based collapse to bare hash.
+        # Common acceptable forms:
+        #   * shasum -a 256 FILE | awk '{print $1}' > FILE.sha256
+        #   * shasum -a 256 FILE | cut -d' ' -f1 > FILE.sha256
+        #   * sha256sum FILE | awk '{print $1}' > FILE.sha256
+        # We accept any of these as long as the sidecar write is
+        # followed by a transform that strips everything after the
+        # first whitespace-separated token.
+        lowered = script_text.lower()
+        self.assertTrue(
+            "awk" in lowered or "cut -d' ' -f1" in lowered,
+            msg=(
+                "CORRECTION05 sidecar-format regression: "
+                "tracked build-elm.sh must collapse the shasum "
+                "output to the bare hash (e.g. via "
+                "`awk '{print $1}'`) before writing the "
+                ".sha256 sidecar; otherwise macOS shasum "
+                "emits `<sha>  <path>` and the orchestrator's "
+                "SHA-sidecar mismatch guard will abort the "
+                "package."
+            ),
+        )
+        # Conversely, the raw `shasum ... > FILE.sha256` form
+        # (without any pipeline) must NOT appear, since that is
+        # exactly the macOS-default shape the orchestrator
+        # rejects. We accept either:
+        #   shasum ... | awk '{print $1}' > FILE.sha256
+        # or any other pipeline-collapsed form.
+        import re as _re
+
+        # Capture every `shasum ... > ...sha256` line. If any
+        # such line exists without an intervening `|` (pipeline)
+        # that reaches an `awk`/`cut`/`tr` collapse before the
+        # `>`, that is a regression.
+        raw_lines = [
+            ln
+            for ln in script_text.splitlines()
+            if "shasum" in ln and ">" in ln and ".sha256" in ln
+        ]
+        bad_lines = []
+        for ln in raw_lines:
+            # Split at the `>` redirect; everything before is
+            # the producer side.
+            producer = ln.split(">", 1)[0]
+            # The producer must contain a `|` (pipeline) AND must
+            # end with a bare-hash extractor (awk '{print $1}',
+            # cut -d' ' -f1, or similar).
+            if "|" not in producer:
+                bad_lines.append(ln)
+                continue
+            tail = producer.split("|")[-1].strip()
+            if not (
+                "awk '{print $1}'" in tail
+                or 'awk "{print $1}"' in tail
+                or "cut -d' ' -f1" in tail
+                or 'cut -d" " -f1' in tail
+            ):
+                bad_lines.append(ln)
+        self.assertEqual(
+            bad_lines,
+            [],
+            msg=(
+                "CORRECTION05 sidecar-format regression: "
+                "tracked build-elm.sh has one or more "
+                "`shasum ... > FILE.sha256` redirects WITHOUT a "
+                "prior `| awk '{print $1}'` collapse; macOS "
+                "shasum defaults to `<sha>  <path>` and trips "
+                "the orchestrator's SHA-sidecar mismatch "
+                "guard. offending lines: "
+                f"{bad_lines!r}"
+            ),
+        )
+
+
+# =============================================================================
 # DOGFOOD08 — install listing must contain the expected ns@version
 # =============================================================================
 
