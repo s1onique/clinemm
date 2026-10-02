@@ -17174,3 +17174,38 @@ CLOSURE_HEAD  = 1337cbd416e6921d55617608cb59bc65fcc5eb98  (rebound after correct
 
 **MYC-CLINEMM03 status:** unchanged — still HOLD (per ACT preamble).
 
+
+---
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — board-cursor closure (2026-10-02, verifier signoff)
+
+**Status:** CLOSED_HALTED_CLEAN. Verifier review signoff = `PASS_WITH_NONBLOCKING_RESIDUE`.
+
+**Board cursor:**
+
+```
+HOLD:        ACT-MYC-CLINEMM03-LIVE-PRIME-QUALIFICATION-RESUME01
+NOW:         ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+CLOSED:      ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — HALT_AUTHORITY_NOT_CAUSAL (closed halted clean)
+```
+
+**Residue handled in this closure commit (not a separate ACT):**
+- Renamed structured evidence field `authority_proven: true` → two distinct booleans:
+  - `causal_discriminators.di_seam_authority_proven: true`
+  - `causal_discriminators.real_elm_authority_proven: false`
+  - `scope_discipline.di_seam_authority_proven: true`
+  - `scope_discipline.real_elm_provider_causal_proof: false`
+  - Removed `scope_discipline.execution_authority_moved_to_elm` (the overclaim that triggered the verifier halt).
+- P2 blank-line EOF confirmed NON-BLOCKING.
+
+**Successor ACT brief:** `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER` will:
+1. Implement the synchronous Elm-kernel authority provider (mirror the per-session model cache from `completion-authority-elm-shadow.ts` but synchronous, no queueMicrotask/setTimeout(0)).
+2. Wire `applyElmAuthorityProfile(env, kernelPath)` resolver in `dogfood-diagnostic-profile.ts` (mirrors `applyElmShadowDiagnosticProfile`).
+3. Wire `applyElmAuthorityProfile` into `extension.ts:activate` BEFORE SdkController construction.
+4. Re-run EAS01-RED-A and EAS01-GREEN-B **with the REAL Elm provider** — these become the causal proof of Elm authority.
+5. Build the dogfood VSIX via `python3 scripts/build-dogfood-vsix.py` (requires Elm 0.19.2 on PATH; CORRECTION02/05/06 active).
+6. Install on a real Codium/VSCode host.
+7. LIVE mundane task with `CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 CLINEMM_COMPLETION_AUTHORITY_ELM=1`. Capture `commit-effect count = 1`, `decodeErrors = 0`, `kernelErrors = 0`, final task state = `completed`.
+8. Ablation RUN A (off) + RUN B (on) — same external result.
+
+Only after step 4 succeeds is this ACT promoted from HALT to PASS_FIRST_ELM_AUTHORITY_SEAM.

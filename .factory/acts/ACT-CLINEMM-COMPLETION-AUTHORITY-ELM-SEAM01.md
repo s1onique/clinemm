@@ -209,5 +209,18 @@ ENTRY_HEAD     = 3542fbabf005fd7d0b25e96c2a89af4f9b1f7c20
 SUBJECT_HEAD   = 01281245e87769604117915bf8ab55fe91bb29ec  (seam wiring + tests)
 EVIDENCE_HEAD  = 248bfa6b13580336818807051aaa42fc3df6abf1  (evidence package)
 CORRECTION01   = 1337cbd416e6921d55617608cb59bc65fcc5eb98  (P1 portable REPO_ROOT)
-CLOSURE_HEAD   = 1337cbd416e6921d55617608cb59bc65fcc5eb98  (rebound after correction)
+CLOSURE_HEAD   = (see current commit; includes verifier-residue rename: authority_proven -> di_seam_authority_proven + real_elm_authority_proven)
 ```
+
+## Verifier signoff (2026-10-02)
+
+`PASS_WITH_NONBLOCKING_RESIDUE`. Reclassification correct. P1 residue (the ambiguous `authority_proven: true` field in the structured evidence) batched into this ACT's closure commit per reviewer direction (no separate ACT). P2 blank-line EOF confirmed NON-BLOCKING.
+
+Board cursor moves to:
+
+```
+NOW = ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+MYC = HOLD
+```
+
+No more review of the halted SEAM01 unless the successor uncovers evidence that contradicts its DI-seam proof.
