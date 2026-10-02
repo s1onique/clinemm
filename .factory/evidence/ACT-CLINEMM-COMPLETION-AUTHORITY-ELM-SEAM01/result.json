@@ -2,7 +2,7 @@
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01",
   "entry_head": "3542fbabf005fd7d0b25e96c2a89af4f9b1f7c20",
   "subject_head": "01281245e87769604117915bf8ab55fe91bb29ec",
-  "closure_head": "03c91c914d033ab4254e976fe321c07def35d59e",
+  "closure_head": "1337cbd416e6921d55617608cb59bc65fcc5eb98",
   "elm_vendor_js_sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
   "elm_source_changed": false,
   "elm_authority_semantics_changed": false,
@@ -80,11 +80,11 @@
     "diff_check": "PASS (git diff --check: 0 whitespace issues)",
     "elm_tests": "n/a (ELM_SOURCE_CHANGED=false; vendor JS SHA unchanged)"
   },
-  "verdict": "PASS_FIRST_ELM_AUTHORITY_SEAM_ARCHITECTURE_LIVE_QUALIFICATION_DEFERRED",
+  "verdict": "HALT_AUTHORITY_NOT_CAUSAL",
   "verdict_components": {
-    "first_elm_authority_seam": "PASS (causal discriminator + decision contract + seam wiring + conservation all GREEN)",
-    "live_qualification": "DEFERRED (requires real Elm 0.19.2 on PATH, dogfood VSIX build, real install, mundane-task run)",
-    "verdict_status": "Architecture complete; LIVE qualification is environment-dependent and must be executed by operator per the SHADOW02-CORRECTION02/CORRECTION04 precedent"
+    "di_seam_causal_proof": "PASS \u2014 the existing getElmCompletionAuthorityDecision seam is causally proven via synthetic injected provider; baseline RED reproduced (commit_count=1) before wiring, GREEN after wiring; the real setTurnPhase(\"completed\", ...) effect obeys the injected decision.",
+    "real_elm_authority_proof": "NOT PROVEN \u2014 the test proofs exercise an INJECTED SYNTHETIC provider, not a real instantiated Elm kernel; elm_authority_runtime_added=false; elm_authority_runtime_wired_to_extension_activation=false; production_enable_seam=NOT YET WIRED.",
+    "verdict_status": "Factory doctrine (\u00a78.4): the active decision path must include an actual Elm kernel somewhere in the chain. Synthetic-provider proof cannot earn the phrase \"Elm has authority.\""
   },
   "files_changed": {
     "production": [
@@ -106,9 +106,22 @@
     "mcp_modified": false,
     "myc_modified": false,
     "react_modified": false,
-    "execution_authority_moved_to_elm": true,
+    "execution_authority_moved_to_elm": false,
     "bounded_seam_only": true,
-    "ts_owned_effects_only": true
+    "ts_owned_effects_only": true,
+    "execution_authority_di_seam_causal_proven": true,
+    "real_elm_provider_causal_proof": false
   },
-  "successor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-LIVE-QUALIFICATION01 \u2014 wire applyElmAuthorityProfile, build dogfood VSIX, install, capture LIVE evidence under CLINEMM_COMPLETION_AUTHORITY_ELM=1"
+  "successor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER",
+  "reopen_condition": "real installed/compiled Elm kernel -> synchronous per-session authority query -> bounded ElmCompletionAuthorityDecision -> existing getElmCompletionAuthorityDecision seam -> real setTurnPhase(\"completed\", ...) completion effect",
+  "successor_act_mission": "Implement the synchronous Elm-kernel authority provider (mirrors the per-session model cache from completion-authority-elm-shadow.ts but synchronous, no queueMicrotask or setTimeout(0)). Wire applyElmAuthorityProfile(env, kernelPath) in dogfood-diagnostic-profile.ts (mirrors applyElmShadowDiagnosticProfile). Wire applyElmAuthorityProfile into extension.ts:activate BEFORE SdkController construction. Re-run the existing causal discriminators EAS01-RED-A and EAS01-GREEN-B with the REAL Elm provider (not the synthetic one). Build the dogfood VSIX (requires Elm 0.19.2 on PATH; CORRECTION02/05/06 active). Install on a real Codium/VSCode. Run a LIVE mundane task with CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_COMPLETION_AUTHORITY_ELM=1. Capture Elm-shadow + Elm-authority dumps. Verify commit-effect count = 1, decodeErrors = 0, kernelErrors = 0. Run RUN A (authority off) and RUN B (authority on) ablation: same external result. Only then does PASS_FIRST_ELM_AUTHORITY_SEAM become honest.",
+  "correction_applied_in_seam01": {
+    "defect": "preservation test hard-codes workstation REPO_ROOT path",
+    "severity": "P1",
+    "fix_commit": "1337cbd41",
+    "fix_description": "replaced literal REPO_ROOT with portable dirname(fileURLToPath(import.meta.url))-based resolution; 12/12 PASS after fix"
+  },
+  "correction_heads": [
+    "1337cbd416e6921d55617608cb59bc65fcc5eb98"
+  ]
 }

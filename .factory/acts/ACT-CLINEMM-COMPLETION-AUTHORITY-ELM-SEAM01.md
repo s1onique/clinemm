@@ -1,6 +1,6 @@
 # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01
 
-> Status: **PASS_FIRST_ELM_AUTHORITY_SEAM_ARCHITECTURE_LIVE_QUALIFICATION_DEFERRED**
+> Status: **HALT_AUTHORITY_NOT_CAUSAL**
 
 > Mission: transfer ONE bounded production decision from TypeScript
 > to Elm. The completion-commit eligibility decision transfers; Elm
@@ -8,6 +8,64 @@
 > The legacy TS predicate chain remains in place (BCB01 + CORRECTION01
 > + BNCA + PPCA); Elm sits ON TOP and decides whether the production
 > `setTurnPhase("completed", ...)` commit effect runs.
+
+## Verifier correction (factory reviewer)
+
+This ACT was originally submitted with verdict `PASS_FIRST_ELM_AUTHORITY_SEAM_ARCHITECTURE_LIVE_QUALIFICATION_DEFERRED`. The Factory reviewer correctly caught a load-bearing contradiction:
+
+- The structured evidence said `elm_authority_runtime_added: false`, `elm_authority_runtime_wired_to_extension_activation: false`, and `production_enable_seam: NOT YET WIRED`.
+- The same evidence claimed `execution_authority_moved_to_elm: true` and `authority_proven: true`.
+- Those claims cannot both be true.
+
+The discriminators prove the **DI seam is causal** — changing the injected provider changes the real `setTurnPhase("completed", ...)` effect. But the injected function in the proofs is synthetic:
+
+```ts
+getElmCompletionAuthorityDecision: () => ({
+    kind: "hold",
+    ...
+})
+```
+
+There is no Elm kernel in that causal chain. Per Factory doctrine (§8.4), the active decision path must include an actual instantiated Elm program somewhere in the chain. A JS function that merely returns an Elm-shaped result is not itself Elm execution.
+
+The verdict is therefore corrected to:
+
+```
+HALT_AUTHORITY_NOT_CAUSAL
+```
+
+with this exact reopen condition:
+
+```
+real installed/compiled Elm kernel
+    -> synchronous per-session authority query
+    -> bounded ElmCompletionAuthorityDecision
+    -> existing getElmCompletionAuthorityDecision seam
+    -> real setTurnPhase("completed", ...) completion effect
+```
+
+A new successor ACT is created:
+
+```
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+```
+
+It re-runs the existing causal discriminators EAS01-RED-A and EAS01-GREEN-B with the **real** Elm provider somewhere in the proof composition. Only then does PASS_FIRST_ELM_AUTHORITY_SEAM become honest.
+
+### Defect fixed in this ACT (P1)
+
+The preservation test originally hard-coded `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm` as the REPO_ROOT path — a portability defect (workstation path leaked into test source). Replaced with `dirname(fileURLToPath(import.meta.url))`-based resolution; 12/12 PASS after fix. Commit `1337cbd41`.
+
+The blank line at EOF reported by `git diff --check` is P2 NON-BLOCKING — no separate ACT required.
+
+## ORIGINAL mission (corrected scope)
+
+Transfer ONE bounded production decision from TypeScript
+to Elm. The completion-commit eligibility decision transfers; Elm
+becomes the FINAL pre-effect gate at both production commit sites.
+The legacy TS predicate chain remains in place (BCB01 + CORRECTION01
++ BNCA + PPCA); Elm sits ON TOP and decides whether the production
+`setTurnPhase("completed", ...)` commit effect runs.
 
 ## What was committed
 
@@ -116,18 +174,33 @@ The first six steps require environment-specific tooling not available in this s
 ## VERDICT
 
 ```
-PASS_FIRST_ELM_AUTHORITY_SEAM_ARCHITECTURE_LIVE_QUALIFICATION_DEFERRED
+HALT_AUTHORITY_NOT_CAUSAL
 ```
 
-This is a PARTIAL PASS. The architecture is causal (the discriminator proof is the gold standard for this ACT), the seam is wired, the conservation is GREEN. LIVE qualification is environment-dependent and is the explicit successor ACT.
+The architecture is causally proven — the synthetic-string provider is a real production-side DI seam; changing the injected decision changes the real `setTurnPhase("completed", ...)` effect. That is a valid causal proof of the DI hook.
+
+But it is **not** a causal proof of Elm authority. The injected function in the discriminators is synthetic; no real Elm kernel participates in the active decision path. Per Factory doctrine (§8.4), the active decision path must include an actual instantiated Elm program somewhere in the chain. A JS function that merely returns an Elm-shaped result is not itself Elm execution.
+
+LIVE qualification is therefore a separate problem from the missing real-Elm-provider work. The LIVE qualifier alone (RUN A ablation + RUN B authority-on) is insufficient — the discriminators themselves must include a real Elm provider before PASS_FIRST_ELM_AUTHORITY_SEAM becomes honest.
 
 ## Successor ACT
 
 ```
-ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-LIVE-QUALIFICATION01
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
 ```
 
-Mission: wire `applyElmAuthorityProfile` resolver in `dogfood-diagnostic-profile.ts` (mirrors `applyElmShadowDiagnosticProfile`). Implement the synchronous Elm-kernel query (mirror the per-session model cache from `completion-authority-elm-shadow.ts`). Wire into `extension.ts:activate` BEFORE SdkController construction. Build dogfood VSIX. Install on real host. LIVE mundane task.
+Mission (in order):
+
+1. Implement the synchronous Elm-kernel authority provider. Mirror the per-session model cache from `completion-authority-elm-shadow.ts` but synchronous (no queueMicrotask, no setTimeout(0)). Read directly from the shadow observer's already-synchronous per-session model state.
+2. Wire `applyElmAuthorityProfile(env, kernelPath)` resolver in `dogfood-diagnostic-profile.ts` (mirrors `applyElmShadowDiagnosticProfile`).
+3. Wire `applyElmAuthorityProfile` into `extension.ts:activate` BEFORE `SdkController` construction.
+4. Re-run EAS01-RED-A and EAS01-GREEN-B **with the real Elm provider** (not synthetic) — these become the causal proof of Elm authority.
+5. Build the dogfood VSIX via `python3 scripts/build-dogfood-vsix.py` (requires Elm 0.19.2 on PATH; CORRECTION02/05/06 are active).
+6. Install on a real Codium/VSCode host.
+7. Run LIVE mundane task with `CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 CLINEMM_COMPLETION_AUTHORITY_ELM=1`. Capture `commit-effect count = 1`, `decodeErrors = 0`, `kernelErrors = 0`, final task state = `completed`.
+8. Run ablation: RUN A (`CLINEMM_COMPLETION_AUTHORITY_ELM=0`) and RUN B (`CLINEMM_COMPLETION_AUTHORITY_ELM=1`) — same external result.
+
+Only after step 4 succeeds is this ACT promoted from HALT to PASS_FIRST_ELM_AUTHORITY_SEAM.
 
 ## Subject / closure
 
@@ -135,4 +208,6 @@ Mission: wire `applyElmAuthorityProfile` resolver in `dogfood-diagnostic-profile
 ENTRY_HEAD     = 3542fbabf005fd7d0b25e96c2a89af4f9b1f7c20
 SUBJECT_HEAD   = 01281245e87769604117915bf8ab55fe91bb29ec  (seam wiring + tests)
 EVIDENCE_HEAD  = 248bfa6b13580336818807051aaa42fc3df6abf1  (evidence package)
+CORRECTION01   = 1337cbd416e6921d55617608cb59bc65fcc5eb98  (P1 portable REPO_ROOT)
+CLOSURE_HEAD   = 1337cbd416e6921d55617608cb59bc65fcc5eb98  (rebound after correction)
 ```
