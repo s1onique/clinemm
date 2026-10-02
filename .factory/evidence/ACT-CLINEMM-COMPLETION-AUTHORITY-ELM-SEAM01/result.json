@@ -2,7 +2,7 @@
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01",
   "entry_head": "3542fbabf005fd7d0b25e96c2a89af4f9b1f7c20",
   "subject_head": "01281245e87769604117915bf8ab55fe91bb29ec",
-  "closure_head": "42705f6b3f1d9b13c1943da98bc2bd419feb3a10",
+  "closure_head": "67bfa907518bef39fdc1f4309a0d7667bb219b6b",
   "elm_vendor_js_sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
   "elm_source_changed": false,
   "elm_authority_semantics_changed": false,
@@ -135,5 +135,5 @@
     "commit": "67bfa907518bef39fdc1f4309a0d7667bb219b6b"
   },
   "closure_head_chicken_and_egg": true,
-  "closure_head_note": "Each binding commit would itself change HEAD; the canonical closure_head is the commit that last updated the field. Recursive self-binding is intentionally not chased. The tree at HEAD == the evidence at HEAD, byte-for-byte, modulo self-reference (the next update would only change closure_head, not the actual evidence)."
+  "closure_head_note": "Pinned to the residue-rename commit. Each later commit only self-binds closure_head (no other evidence change). The tree at HEAD == the evidence at HEAD byte-for-byte except for the self-referential field."
 }
