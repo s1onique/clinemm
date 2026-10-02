@@ -350,7 +350,7 @@ describe("ELS02-08 — Elm violation is diagnostic-only", () => {
 		expect(ring.length).toBe(3)
 		if (lastObs.model) {
 			expect(Object.keys(lastObs.model).sort()).toEqual(
-				["activeRun", "commitReadyRun", "committedCompletion", "presentedCompletion", "submitCount", "task"].sort(),
+				["activeRun", "commitReadyRun", "committedCompletion", "completionAuthorized", "holdReasons", "jobRunningCount", "pendingPromptCount", "presentedCompletion", "scheduledContinuationCount", "submitCount", "task"].sort(),
 			)
 		}
 	})
@@ -647,7 +647,7 @@ describe("ELS02-16 — production activation wiring exists in extension.ts + dog
 			.createHash("sha256")
 			.update(fs.readFileSync(simulatedKernelPath))
 			.digest("hex")
-		expect(sha256).toBe("034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e")
+		expect(sha256).toBe("40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd")
 	})
 
 	test("ELS02-16.C: registry.ts exposes DumpCompletionAuthorityElmShadow command id", () => {

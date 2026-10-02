@@ -437,7 +437,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		// invariant under test, we just need to clear the queue and
 		// drive the re-evaluation.
 		h.queue.clearForSession(h.activeSessionId)
-		h.coordinator.reevaluateDeferredCompletionBarrier()
+		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		expect(h.completionCommitCount()).toBe(1)
 	})
 
@@ -467,7 +467,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		// Now drain the queue (simulate the pending prompt's runTurn
 		// firing). The barrier re-evaluates and commits.
 		h.queue.clearForSession(h.activeSessionId)
-		h.coordinator.reevaluateDeferredCompletionBarrier()
+		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		expect(h.completionCommitCount()).toBe(1)
 	})
 
@@ -522,7 +522,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 
 		// Clear all three queued prompts (drain simulation).
 		h.queue.clearForSession(h.activeSessionId)
-		h.coordinator.reevaluateDeferredCompletionBarrier()
+		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		expect(h.completionCommitCount()).toBe(1)
 	})
 
@@ -568,7 +568,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		// Drain both. Barrier re-evaluates with both notifications
 		// resolved.
 		h.queue.clearForSession(h.activeSessionId)
-		h.coordinator.reevaluateDeferredCompletionBarrier()
+		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		// INVARIANT: completion commits exactly ONCE (not twice for
 		// the two-drain sequence). The barrier's commit is single-shot.
 		expect(h.completionCommitCount()).toBe(1)
@@ -776,7 +776,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 
 		// Drain and re-evaluate. completionCommitCount = 1.
 		h.queue.clearForSession(h.activeSessionId)
-		h.coordinator.reevaluateDeferredCompletionBarrier()
+		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		expect(h.completionCommitCount()).toBe(1)
 	})
 
@@ -919,7 +919,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		expect(h.pendingPromptCountAtTurnEnd()).toBe(0)
 
 		// Re-evaluate. INVARIANT: completion commits once.
-		h.coordinator.reevaluateDeferredCompletionBarrier()
+		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		expect(h.completionCommitCount()).toBe(1)
 	})
 

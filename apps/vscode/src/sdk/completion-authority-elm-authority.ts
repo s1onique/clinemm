@@ -61,7 +61,12 @@ export const defaultElmCompletionAuthorityDecision: ElmCompletionAuthorityDecisi
  * helper arms the authority mode, the host (SdkController) replaces
  * this with a real Elm-kernel query function. Until then, the legacy
  * TS predicate chain is the sole authority (byte-identical).
+ *
+ * The optional `sessionId` argument is consumed by the real-Elm
+ * authority runtime (ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-
+ * CORRECTION01-REAL-ELM-PROVIDER) to scope the per-session kernel.
+ * The default ignores it.
  */
-export function defaultGetElmCompletionAuthorityDecision(): ElmCompletionAuthorityDecision {
+export function defaultGetElmCompletionAuthorityDecision(_sessionId?: string): ElmCompletionAuthorityDecision {
 	return defaultElmCompletionAuthorityDecision
 }

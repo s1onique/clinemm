@@ -1,7 +1,7 @@
 {
   "kernel": {
     "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/elm/completion-authority/vendor/completion-authority.js",
-    "sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e"
+    "sha256": "40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd"
   },
   "sourceShas": {
     "stall": "2fab1cc4c2f88162cc9e4ccd0186d0dbff48f603bd445adb1a1fc1066b9e0ddd",
@@ -28,9 +28,17 @@
         "submitCount": 0,
         "commitReadyRun": null,
         "committedCompletion": null,
-        "presentedCompletion": null
+        "presentedCompletion": null,
+        "completionAuthorized": false,
+        "holdReasons": [
+          "pending_prompt",
+          "scheduled_continuation"
+        ],
+        "jobRunningCount": 0,
+        "pendingPromptCount": 1,
+        "scheduledContinuationCount": 1
       },
-      "deterministicSha256": "fb0173074c2dd21ef949ea059517e18c34a1c30e4c3b674abe5d7663cc83e2da"
+      "deterministicSha256": "bfbff02372211e74b5eccddcb7dd60e8a2a5267aa9937e9f961b7e051ec15dd4"
     },
     {
       "tag": "R2",
@@ -51,9 +59,17 @@
         "submitCount": 0,
         "commitReadyRun": null,
         "committedCompletion": null,
-        "presentedCompletion": null
+        "presentedCompletion": null,
+        "completionAuthorized": false,
+        "holdReasons": [
+          "pending_prompt",
+          "scheduled_continuation"
+        ],
+        "jobRunningCount": 0,
+        "pendingPromptCount": 1,
+        "scheduledContinuationCount": 1
       },
-      "deterministicSha256": "813f0d393a935a5bdc9144f89d54a5e7ae17494119eb02ffe924d3123ea4b9f0"
+      "deterministicSha256": "6815b53b747c184b249c2b4aee7e432dd010a3d43437bedb9a275540bc3c7407"
     },
     {
       "tag": "R3",
@@ -74,9 +90,17 @@
         "submitCount": 0,
         "commitReadyRun": null,
         "committedCompletion": null,
-        "presentedCompletion": null
+        "presentedCompletion": null,
+        "completionAuthorized": false,
+        "holdReasons": [
+          "pending_prompt",
+          "scheduled_continuation"
+        ],
+        "jobRunningCount": 0,
+        "pendingPromptCount": 1,
+        "scheduledContinuationCount": 1
       },
-      "deterministicSha256": "fb0173074c2dd21ef949ea059517e18c34a1c30e4c3b674abe5d7663cc83e2da"
+      "deterministicSha256": "bfbff02372211e74b5eccddcb7dd60e8a2a5267aa9937e9f961b7e051ec15dd4"
     },
     {
       "tag": "R4",
@@ -97,9 +121,17 @@
         "submitCount": 0,
         "commitReadyRun": null,
         "committedCompletion": null,
-        "presentedCompletion": null
+        "presentedCompletion": null,
+        "completionAuthorized": false,
+        "holdReasons": [
+          "pending_prompt",
+          "scheduled_continuation"
+        ],
+        "jobRunningCount": 0,
+        "pendingPromptCount": 1,
+        "scheduledContinuationCount": 1
       },
-      "deterministicSha256": "d2d99889e67aed1c63ca67dc6aca214f595d61b5416a972a2ad09b96e3552f40"
+      "deterministicSha256": "52c8461e1327897241d48cb8cb47b1fca2b084ffbaeff5442b168d8946e3e427"
     }
   ]
 }

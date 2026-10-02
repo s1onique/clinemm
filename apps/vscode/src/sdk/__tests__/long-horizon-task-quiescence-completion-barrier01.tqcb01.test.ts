@@ -362,7 +362,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			})
 			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
 
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.tracker.currentPhase).toBe("completed")
 			expect(h.completionCommitCount()).toBe(1)
 
@@ -573,7 +573,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			// extends to the running-owned-job aggregate. The
 			// notify=false sibling D is STILL RUNNING → the
 			// barrier MUST still hold.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			expect(h.tracker.currentPhase).not.toBe("completed")
 			expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeDefined()

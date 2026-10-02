@@ -357,7 +357,7 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			// (the non-notify path). For the notify=true
 			// case the wakes-in-queue counter is the
 			// load-bearing check.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			h.notifyCoordinator.dispose()
@@ -381,13 +381,13 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			expect(h.wakeSink.queued.length).toBe(4)
 
 			// Barrier still HELD (4 unobserved).
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Agent observes all 4.
 			expect(h.observeAllPendingWakes()).toBe(4)
 			expect(h.getPendingPromptCountRead()).toBe(0)
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -424,21 +424,21 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 
 			// Even with 0 running jobs, barrier HOLDS on
 			// the 4 unobserved terminal identities.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Agent observes each terminal observation.
 			h.consumeNonNotifyTerminalObservation("J1-bcb15")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			h.consumeNonNotifyTerminalObservation("J2-bcb15")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			h.consumeNonNotifyTerminalObservation("J3-bcb15")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			h.consumeNonNotifyTerminalObservation("J4-bcb15")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -473,14 +473,14 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			expect(h.getPendingPromptCountRead()).toBe(2)
 			expect(h.getUnconsumedCount()).toBe(2) // the 2 non-notify observations
 
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Observe wakes + consume observations.
 			h.observeAllPendingWakes()
 			h.consumeNonNotifyTerminalObservation("F1-bcb16")
 			h.consumeNonNotifyTerminalObservation("F2-bcb16")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -507,7 +507,7 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			// information content to consume).
 			h.drainFireAndForgetJob("J-bcb17-cancel", { skipTerminalObservation: true })
 			expect(h.getUnconsumedCount()).toBe(0)
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -535,13 +535,13 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			expect(prompt).toContain("ExitCode: 1")
 
 			// Barrier HOLDS: failed result IS information.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			expect(h.getPendingPromptCountRead()).toBe(1)
 
 			// Agent observes the failure wake.
 			h.observeAllPendingWakes()
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 
 			h.notifyCoordinator.dispose()
@@ -574,13 +574,13 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 
 			// Reevaluate twice — only 1 commit when wakes are
 			// consumed, not 2.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			h.observeAllPendingWakes()
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			// Second reevaluate MUST NOT commit again.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 
 			h.notifyCoordinator.dispose()

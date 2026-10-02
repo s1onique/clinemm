@@ -85,6 +85,7 @@ import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscripti
 import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
+import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
 import {
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	composeEffectiveDiagnosticKnobs,
@@ -2507,6 +2508,21 @@ export class Controller {
 				getActiveSession: () => this.sessions?.getActiveSession(),
 				logger: Logger,
 			}),
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
+			// wire the SYNCHRONOUS REAL Elm authority runtime into
+			// the production seam. `applyElmAuthorityProfile` runs in
+			// extension.ts:activate BEFORE SdkController construction
+			// and arms the runtime. The provider and flush helper
+			// exposed by the runtime are the same instances the
+			// production coordinator consults at the
+			// `checkElmCompletionAuthority` seam. When the runtime
+			// is OFF (the default), both helpers are no-ops and the
+			// legacy TS predicate chain remains the sole authority
+			// (byte-identical to the predecessor ACT).
+			getElmCompletionAuthorityDecision: (sessionId?: string) =>
+					ElmAuthorityModule.getElmAuthorityCompletionDecision(sessionId ?? ""),
+				flushElmAuthorityForSession: (sessionId: string) =>
+					ElmAuthorityModule.flushElmAuthorityForSession(sessionId),
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder
@@ -3924,7 +3940,7 @@ export class Controller {
 		// Mirrors the same pattern used elsewhere in the
 		// lifecycle callback wiring.
 		if (previousRunning !== anyRunning) {
-			Controller.maybeReevaluateDeferredContinuation(
+			await Controller.maybeReevaluateDeferredContinuation(
 				previousRunning,
 				anyRunning,
 				anyRunning ? this.backgroundCommandTaskId : undefined,
@@ -4898,7 +4914,7 @@ export class Controller {
 	 * (and the Cancel button's gating) reflects the in-flight command.
 	 * Idempotent: a no-op transition does NOT trigger a post.
 	 */
-	updateBackgroundCommandState(
+	async updateBackgroundCommandState(
 		running: boolean,
 		taskId?: string,
 		/**
@@ -4919,7 +4935,7 @@ export class Controller {
 		 * semantics (BCTCP-CTL-02, BTCONT-CTL-04).
 		 */
 		terminalState?: Exclude<CommandJobState, "running">,
-	): void {
+	): Promise<void> {
 		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
 		// (correction01): the scalar `backgroundCommandRunning` is
 		// now DERIVED from the per-job projection map. The new
@@ -4995,7 +5011,7 @@ export class Controller {
 		// when the LAST job goes terminal the controller derives
 		// the >0->0 flip and forwards the predicate-shaped
 		// signal to BTCONT.
-		Controller.maybeReevaluateDeferredContinuation(
+		await Controller.maybeReevaluateDeferredContinuation(
 			previousRunning,
 			anyRunning,
 			anyRunning ? taskId : undefined,
@@ -5049,12 +5065,12 @@ export class Controller {
 	 *     previousRunning, running, taskId, this.sessionEvents,
 	 *   )
 	 */
-	static maybeReevaluateDeferredContinuation(
+	static async maybeReevaluateDeferredContinuation(
 		previousRunning: boolean,
 		running: boolean,
 		taskId: string | undefined,
 		sessionEvents: SdkSessionEventCoordinator,
-	): void {
+	): Promise<void> {
 		if (previousRunning && !running && taskId === undefined) {
 			sessionEvents.reevaluateDeferredContinuation()
 		}
@@ -5066,7 +5082,7 @@ export class Controller {
 		// barrier (RUNNING job + queued prompt + active notify
 		// marker); the barrier fires the held `completed` phase
 		// transition exactly once when all three are zero.
-		sessionEvents.reevaluateDeferredCompletionBarrier()
+		await sessionEvents.reevaluateDeferredCompletionBarrier()
 	}
 
 	/**

@@ -41,6 +41,17 @@ function evaluateBundleOnce(kernelPath: string): void {
 
 export function loadKernel(kernelPath: string): KernelHandle {
 	const fullPath = path.isAbsolute(kernelPath) ? kernelPath : path.resolve(kernelPath)
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
+	// Fail-closed at the loadKernel seam when the kernel file does not
+	// exist. The pre-existing `evaluateBundleOnce` early-return path
+	// would silently re-use a previously-loaded bundle; this gate makes
+	// a bad path surface as `KERNEL_LOAD_FAIL` to the runtime so the
+	// authority runtime records the failure and returns `failure`
+	// to the coordinator. Without this gate the runtime would happily
+	// hand out state from a kernel loaded earlier in the process.
+	if (!fs.existsSync(fullPath)) {
+		throw new Error(`KERNEL_LOAD_FAIL: kernel path does not exist: ${fullPath}`)
+	}
 	evaluateBundleOnce(fullPath)
 	if (!_ElmRef) {
 		throw new Error("KERNEL_LOAD_FAIL: Elm reference is null after evaluateBundleOnce")

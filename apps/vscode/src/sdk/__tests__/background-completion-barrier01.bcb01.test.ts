@@ -420,13 +420,13 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// wake still in queue → still HELD (CORRECTION01
 			// second conjunct).
 			h.drainNotifyJob("J-bcb02")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Now the agent's finalization turn observes the
 			// wake (delivered to conversation) → barrier releases.
 			h.observeAllPendingWakes()
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -449,15 +449,15 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 
 			// Drain J1, re-evaluate, must still HOLD.
 			h.drainNotifyJob("J1-bcb03")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			h.drainNotifyJob("J2-bcb03")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			h.drainNotifyJob("J3-bcb03")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Last drain. 4 wakes are now queued (Path A
@@ -466,7 +466,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// (CORRECTION01 second conjunct).
 			h.drainNotifyJob("J4-bcb03")
 			expect(h.wakeSink.queued.length).toBe(4)
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Information cardinality preserved: 4 unique
@@ -478,7 +478,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 
 			// Now the finalization turn observes all 4 wakes.
 			h.observeAllPendingWakes()
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -518,15 +518,15 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 
 			// Drain each job; barrier holds until ALL terminal.
 			h.drainFireAndForgetJob("J1-bcb11")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			h.drainFireAndForgetJob("J2-bcb11")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			h.drainFireAndForgetJob("J3-bcb11")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Last drain: 4 terminal observations are now
@@ -535,7 +535,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// Barrier HOLDS until the agent observes them all
 			// (CORRECTION01 second conjunct: unconsumed_owned_terminal_results == 0).
 			h.drainFireAndForgetJob("J4-bcb11")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(4)
 
@@ -546,7 +546,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			h.consumeNonNotifyTerminalObservation("J2-bcb11")
 			h.consumeNonNotifyTerminalObservation("J3-bcb11")
 			h.consumeNonNotifyTerminalObservation("J4-bcb11")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -564,7 +564,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// Don't emit completion yet. Barrier must NOT be
 			// engaged — barrier only engages on submit_and_exit.
 			h.drainFireAndForgetJob("J-bcb12")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			expect(h.tracker.currentPhase).not.toBe("completed")
 			// CORRECTION01: terminal observation is registered
@@ -579,7 +579,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 
 			// Agent observes the terminal observation.
 			h.consumeNonNotifyTerminalObservation("J-bcb12")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -604,19 +604,19 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			h.registerFireAndForgetJob("J2-bcb06")
 			expect(h.ownedJobs.length).toBe(1)
 
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Drain J2 → barrier HOLDS: 1 wake + 1 obs still
 			// unconsumed.
 			h.drainFireAndForgetJob("J2-bcb06")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Observe J1's wake AND J2's terminal observation.
 			h.observeAllPendingWakes()
 			h.consumeNonNotifyTerminalObservation("J2-bcb06")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 
 			h.notifyCoordinator.dispose()
@@ -649,7 +649,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 
 			// Single re-evaluation with 4 unobserved wakes:
 			// barrier HOLDS (CORRECTION01 second conjunct).
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			expect(h.wakeSink.queued.length).toBe(4)
 
@@ -662,7 +662,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 
 			// Finalization turn observes all 4 wakes.
 			expect(h.observeAllPendingWakes()).toBe(4)
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -693,7 +693,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 
 			// Finalization turn observes the wake.
 			h.observeAllPendingWakes()
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -720,7 +720,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			const idx = h.ownedJobs.findIndex((j) => j.jobId === "J-bcb07")
 			if (idx >= 0) h.ownedJobs.splice(idx, 1)
 
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 
 			h.notifyCoordinator.dispose()
@@ -744,13 +744,13 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			expect(prompt).toContain("J-bcb08-fail")
 
 			// Barrier HOLDS: 1 wake queued, not yet observed.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Agent observes the failure wake (information
 			// content delivered to the conversation).
 			h.observeAllPendingWakes()
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 
 			h.notifyCoordinator.dispose()
@@ -787,11 +787,11 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 
 			h.drainNotifyJob("J-bcb10")
 			// Barrier HOLDS: 1 wake queued (CORRECTION01).
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			// Agent observes the wake.
 			h.observeAllPendingWakes()
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -799,7 +799,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// marker has been cleared. The duplicate drain
 			// must NOT trigger another `task_completion_committed`.
 			h.drainNotifyJob("J-bcb10")
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 			// CORRECTION01: a late wake may be enqueued by
@@ -885,13 +885,13 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// when the fire-and-forget job reaches
 			// terminal. Barrier HOLDS until the agent
 			// observes it.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)).toBeGreaterThan(0)
 
 			// Agent observes the terminal observation.
 			h.consumeNonNotifyTerminalObservation(jobId)
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")
 
@@ -965,7 +965,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 				expect(h.completionCommitCount()).toBe(0)
 				// Agent observes all wakes.
 				h.observeAllPendingWakes()
-				h.coordinator.reevaluateDeferredCompletionBarrier()
+				await h.coordinator.reevaluateDeferredCompletionBarrier()
 			}
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")

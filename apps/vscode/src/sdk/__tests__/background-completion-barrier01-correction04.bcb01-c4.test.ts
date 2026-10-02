@@ -252,13 +252,13 @@ describe("BCB01-C4 — HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION closure", (
 			// production call site after terminal-idle). With
 			// CORRECTION04, this fires the bounded coalesced
 			// continuation trigger now.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			await new Promise((r) => setImmediate(r))
 			// ONE continuation fired, listing J1.
 			expect(h.sendLog.length).toBe(1)
 			expect(h.sendLog[0].prompt).toContain("J1")
 			// Step 6: second reevaluation. Deduped.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			await new Promise((r) => setImmediate(r))
 			expect(h.sendLog.length).toBe(1)
 		})
@@ -293,7 +293,7 @@ describe("BCB01-C4 — HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION closure", (
 			h.ownedJobs.length = 0
 			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(3)
 			// Single reevaluation fires ONE continuation (NOT 3).
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			await new Promise((r) => setImmediate(r))
 			expect(h.sendLog.length).toBe(1)
 			expect(h.sendLog[0].prompt).toContain("J1")
@@ -336,14 +336,14 @@ describe("BCB01-C4 — HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION closure", (
 			//    the continuation trigger.
 			h.ownedJobs.length = 0
 			const epochBefore = h.translatorState.getMinter().epoch
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			await new Promise((r) => setImmediate(r))
 			expect(h.sendLog.length).toBe(1)
 			expect(h.coordinator.wasCompletionContinuationSentForTesting(h.activeSessionId, h.activeTaskId, epochBefore)).toBe(
 				true,
 			)
 			// Second reevaluation in the same epoch: deduped.
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			await new Promise((r) => setImmediate(r))
 			expect(h.sendLog.length).toBe(1)
 		})

@@ -75,6 +75,7 @@
 // cold-start cost for default-off production. The shadow has zero
 // authority: it observes and reports, never mutates.
 import * as ShadowModule from "./completion-authority-elm-shadow"
+import * as AuthorityModule from "./completion-authority-elm-authority-runtime"
 
 export type ContinuationCardinalityStage =
 	| "terminal_committed"
@@ -317,6 +318,17 @@ export function captureContinuationCardinalityAuthorityRecord(record: {
 	} catch {
 		// Never propagate from the diagnostic observer.
 	}
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
+	// forward a copy to the SYNCHRONOUS REAL Elm authority observer
+	// (synchronous enqueue, microtask-bounded drain deferred to the
+	// gate). Chronology discipline is enforced inside the runtime
+	// (`AUTHORITY_STAGES`): the authority kernel never receives
+	// post-decision stages.
+	try {
+		enqueueElmAuthorityRecord(rec as unknown as Record<string, unknown>)
+	} catch {
+		// Never propagate from the diagnostic observer.
+	}
 }
 
 /**
@@ -396,6 +408,54 @@ function observeElmShadowFireAndForget(record: Record<string, unknown>): void {
 	if (!gate) return
 	try {
 		gate.observeElmShadowFireAndForget(record)
+	} catch {
+		// Never propagate.
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+//
+// Elm authority gate. The authority runtime is optional; when present,
+// the helper forwards a copy of the record into the per-session queue.
+// The actual Elm send + outbound drain is performed by
+// `flushElmAuthorityForSession` which the coordinator awaits at
+// `checkElmCompletionAuthority`. The authority runtime is default-off,
+// so when the runtime module is absent or disabled this helper is a
+// complete no-op.
+// -----------------------------------------------------------------------------
+
+interface AuthorityGate {
+	isElmAuthorityEnabled(): boolean
+	enqueueElmAuthorityRecord(record: Record<string, unknown>): void
+	flushElmAuthorityForSession(sessionId: string): Promise<void>
+	getElmAuthorityCompletionDecision(sessionId: string): {
+		kind: "authorize" | "hold" | "failure"
+		reason?: string
+		holdReasons?: readonly string[]
+		classification?: string
+	}
+}
+
+function resolveAuthorityGate(): AuthorityGate | null {
+	const required = AuthorityModule as Partial<AuthorityGate>
+	if (
+		required &&
+		typeof required.isElmAuthorityEnabled === "function" &&
+		typeof required.enqueueElmAuthorityRecord === "function" &&
+		typeof required.flushElmAuthorityForSession === "function" &&
+		typeof required.getElmAuthorityCompletionDecision === "function"
+	) {
+		return required as AuthorityGate
+	}
+	return null
+}
+
+function enqueueElmAuthorityRecord(record: Record<string, unknown>): void {
+	const gate = resolveAuthorityGate()
+	if (!gate) return
+	try {
+		gate.enqueueElmAuthorityRecord(record)
 	} catch {
 		// Never propagate.
 	}

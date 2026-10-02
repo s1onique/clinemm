@@ -25,6 +25,7 @@ import Domain exposing (..)
 import Authority
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
+import List
 
 
 decoder : Decoder Msg
@@ -236,6 +237,23 @@ encodeModel model =
 
                 Nothing ->
                     Encode.null
+          )
+        , ( "completionAuthorized"
+          , Encode.bool (Authority.completionAuthorized model)
+          )
+        , ( "holdReasons"
+          , Encode.list
+                encodeHoldReason
+                (Authority.computeHoldReasons model)
+          )
+        , ( "jobRunningCount"
+          , Encode.int (Authority.jobRunningCount model)
+          )
+        , ( "pendingPromptCount"
+          , Encode.int (Authority.pendingPromptCount model)
+          )
+        , ( "scheduledContinuationCount"
+          , Encode.int (Authority.scheduledContinuationCount model)
           )
         ]
 

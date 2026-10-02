@@ -12,6 +12,7 @@ import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
+	applyElmAuthorityProfile,
 	applyElmShadowDiagnosticProfile,
 	applyExtensionHostAllocationProfilerProfile,
 	applyExtensionHostCpuProfilerProfile,
@@ -291,6 +292,24 @@ export async function activate(context: vscode.ExtensionContext) {
 	const elmShadowActivation = applyElmShadowDiagnosticProfile(process.env, elmShadowKernelPath)
 	if (elmShadowActivation.enabled) {
 		Logger.log(`[ELM-SHADOW] enabled=true kernelPath=${elmShadowActivation.kernelPath}`)
+	}
+
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
+	// arm the SYNCHRONOUS REAL Elm authority runtime at the SAME
+	// EARLIEST initialization seam as the shadow, BEFORE SdkController
+	// construction. The authority runtime is DEFAULT-OFF. The operator
+	// opts in via the CLINEMM_COMPLETION_AUTHORITY_ELM=1 env var.
+	// The kernel path is the SAME packaged runtime-asset the shadow
+	// uses; both runtimes load the same compiled Elm bundle into
+	// independent Elm.Main.init({}) instances. When ON, the runtime
+	// is the final pre-effect gate for the production
+	// setTurnPhase("completed", ...) commit effect.
+	const elmAuthorityKernelPath = elmShadowKernelPath
+	const elmAuthorityActivation = applyElmAuthorityProfile(process.env, elmAuthorityKernelPath)
+	if (elmAuthorityActivation.enabled) {
+		Logger.log(
+			`[ELM-AUTHORITY] enabled=true kernelPath=${elmAuthorityActivation.kernelPath}`,
+		)
 	}
 
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:

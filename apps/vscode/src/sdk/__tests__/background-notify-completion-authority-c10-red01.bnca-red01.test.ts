@@ -246,7 +246,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 
 		// Now the barrier releases (deferredCompletionBarrier fires
 		// via reevaluateDeferredCompletionBarrier).
-		h.coordinator.reevaluateDeferredCompletionBarrier()
+		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		expect(h.completionCommitCount()).toBe(1)
 		expect(h.tracker.currentPhase).toBe("completed")
 

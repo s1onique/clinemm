@@ -444,7 +444,17 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * `CLINEMM_COMPLETION_AUTHORITY_ELM=1` is set in the operator's
 	 * environment.
 	 */
-	getElmCompletionAuthorityDecision?: () => ElmCompletionAuthorityDecision
+	getElmCompletionAuthorityDecision?: (sessionId?: string) => ElmCompletionAuthorityDecision
+	/**
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
+	 * Optional microtask-flush helper the coordinator awaits before
+	 * consulting the authority decision. Drains the per-session
+	 * authority queue (records delivered via the CCARD capture path) into
+	 * the live Elm kernel. When absent, the coordinator falls back to
+	 * a no-op flush (the legacy seam remains synchronous). When authority
+	 * is OFF, the helper is a no-op regardless of records.
+	 */
+	flushElmAuthorityForSession?: (sessionId: string) => Promise<void>
 }
 
 /**
@@ -551,7 +561,7 @@ export class SdkSessionEventCoordinator {
 	 * `kind: "authorize"` so the legacy TS predicate chain remains
 	 * the sole authority when this option is absent.
 	 */
-	private readonly getElmCompletionAuthorityDecision: () => ElmCompletionAuthorityDecision
+	private readonly getElmCompletionAuthorityDecision: (sessionId?: string) => ElmCompletionAuthorityDecision
 
 	constructor(private readonly options: SdkSessionEventCoordinatorOptions) {
 		this.translateSessionEvent = options.translateSessionEvent ?? translateSessionEvent
@@ -676,10 +686,26 @@ export class SdkSessionEventCoordinator {
 	 * coordinator (every pre-ACT test), this helper is a true
 	 * no-op — the legacy TS path is byte-identical.
 	 */
-	private checkElmCompletionAuthority(writerId: TurnStateWriterId): boolean {
+	private async checkElmCompletionAuthority(writerId: TurnStateWriterId): Promise<boolean> {
+		const activeSession = this.options.sessions.getActiveSession()
+		const sessionId = activeSession?.sessionId
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
+		// flush the per-session authority queue before reading the decision so
+		// the Elm kernel has processed all records delivered up to the
+		// consult point. The flush is a no-op when authority is OFF.
+		try {
+			await this.options.flushElmAuthorityForSession?.(sessionId ?? "")
+		} catch (err) {
+			Logger.warn(
+				`[SdkController] Elm completion-authority flush threw at writerId=${writerId}; suppressing commit effect (no silent TS fallback): ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			)
+			return false
+		}
 		let decision: ElmCompletionAuthorityDecision
 		try {
-			decision = this.getElmCompletionAuthorityDecision()
+			decision = this.getElmCompletionAuthorityDecision(sessionId)
 		} catch (err) {
 			Logger.warn(
 				`[SdkController] Elm completion-authority decision provider threw at writerId=${writerId}; suppressing commit effect (no silent TS fallback): ${
@@ -703,7 +729,7 @@ export class SdkSessionEventCoordinator {
 		return false
 	}
 
-	reevaluateDeferredCompletionBarrier(): void {
+	async reevaluateDeferredCompletionBarrier(): Promise<void> {
 		const marker = this.deferredCompletionBarrier
 		if (!marker) return
 		const activeSession = this.options.sessions.getActiveSession()
@@ -874,7 +900,7 @@ export class SdkSessionEventCoordinator {
 		// existing TS effect runs unchanged. When the production
 		// helper arms Elm-authority mode, Elm's decision owns this
 		// commit.
-		if (!this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
+		if (!await this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
 			return
 		}
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
@@ -1553,7 +1579,7 @@ export class SdkSessionEventCoordinator {
 								// Elm-authority mode is OFF the helper is a no-op
 								// and the existing TS effect runs unchanged.
 								// When ON, Elm's decision owns this commit.
-								if (!this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
+								if (!await this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
 									return
 								}
 								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")

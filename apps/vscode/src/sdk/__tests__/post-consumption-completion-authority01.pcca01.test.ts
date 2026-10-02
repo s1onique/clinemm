@@ -341,7 +341,7 @@ describe("PCCA01 — POST-CONSUMPTION COMPLETION AUTHORITY", () => {
 			const idx = h.ownedJobs.findIndex((j) => j.jobId === jobId)
 			if (idx >= 0) h.ownedJobs.splice(idx, 1)
 
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 
 			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(1)
 			expect(h.completionCommitCount()).toBe(0)
@@ -548,7 +548,7 @@ describe("PCCA01 — POST-CONSUMPTION COMPLETION AUTHORITY", () => {
 			const idx = h.ownedJobs.findIndex((j) => j.jobId === jobId)
 			if (idx >= 0) h.ownedJobs.splice(idx, 1)
 
-			h.coordinator.reevaluateDeferredCompletionBarrier()
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
 
 			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(1)
 			expect(h.completionCommitCount()).toBe(0)

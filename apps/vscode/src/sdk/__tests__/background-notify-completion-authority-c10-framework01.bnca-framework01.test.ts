@@ -261,7 +261,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-FRA
 
 		// Re-evaluation also MUST NOT release the barrier
 		// (the wake was delivered; wake-driven turn owns completion).
-		h.coordinator.reevaluateDeferredCompletionBarrier()
+		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		expect(h.completionCommitCount()).toBe(0)
 		expect(h.tracker.currentPhase).not.toBe("completed")
 
