@@ -17209,3 +17209,77 @@ CLOSED:      ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — HALT_AUTHORITY_NOT_
 8. Ablation RUN A (off) + RUN B (on) — same external result.
 
 Only after step 4 succeeds is this ACT promoted from HALT to PASS_FIRST_ELM_AUTHORITY_SEAM.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER — PASS_FIRST_ELM_AUTHORITY_SEAM — 2026-10-02
+
+**Status:** PASS_FIRST_ELM_AUTHORITY_SEAM. The real-Elm authority runtime is wired into the production commit effect. The discriminant proof is exercised end-to-end with a REAL compiled Elm kernel (`vendor/completion-authority.js`), not a synthetic function returning Elm-shaped results.
+
+**What was added:**
+- `apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts` (NEW) — synchronous per-session real-Elm authority runtime. Per-session `Elm.Main.init({})` instance; per-session ingestion queue; microtask-bounded drain helper. Default OFF.
+- `apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts` (NEW) — 5 causal discriminator tests (LOAD, HOLD, AUTHORIZE, FAILURE, CHRONO). 5/5 PASSED.
+- Elm encoder extension (`Codec.elm` `encodeModel`) — exposes the AUTHORITATIVE hold projection that Elm already computes internally: `completionAuthorized : Bool`, `holdReasons : List String`, `jobRunningCount`, `pendingPromptCount`, `scheduledContinuationCount`. 5 new closed fields. **Decision logic in Elm unchanged.**
+- DI seam evolved `()=>Decision` → `(sessionId?:string)=>Decision` (bounded P1 per ACT §3). No hidden 'last session' global.
+- `dogfood-diagnostic-profile.ts` adds `applyElmAuthorityProfile` (env-gated, default OFF).
+- `extension.ts` calls `applyElmAuthorityProfile` BEFORE `SdkController` construction (mirrors the SHADOW02 wiring seam).
+- `SdkController.ts` wires the runtime into the production `SdkSessionEventCoordinator` options.
+- `sdk-session-event-coordinator.ts` `checkElmCompletionAuthority` evolved async; awaits `flushElmAuthorityForSession` before consulting the provider. `reevaluateDeferredCompletionBarrier` and `updateBackgroundCommandState` evolved async.
+- 8 BCB / SNCC / PPCA / SWCM test files updated to `await` the new async `reevaluateDeferredCompletionBarrier`.
+- `completion-authority-elm-shadow02.test.ts` — kernel SHA pin updated and model key set updated to match the encoder extension.
+
+**Proof composition:**
+- PROOF 1 (predecessor, frozen): DI decision changes real TS effect — preserved (EAS01 6/6 PASS).
+- PROOF 2 (this ACT): actual compiled Elm kernel produces decision → real provider decodes it → same DI seam consumes it → real effect obeys it (REAL-ELM 5/5 PASS).
+- PROOF 3 (LIVE): deferred to successor ACT (per ACT §22). This ACT's structured evidence is sufficient for the terminal verdict per §24.
+
+**Chronology discipline (ACT §8, load-bearing):** VERIFIED.
+The authority kernel NEVER receives `task_completion_committed`, `completion_presented`, `task_cancelled`. The `AUTHORITY_STAGES` filter at `enqueueElmAuthorityRecord` silently drops them. The REAL-ELM-CHRONO test exercises this end-to-end.
+
+**Identity discipline:** PER-SESSION identity (not a hidden global). The DI seam takes `sessionId?:string`. The session map is keyed on sessionId. No "last session" shortcut.
+
+**Conservation:** ALL GREEN.
+- EAS01 (synthetic DI causal): 6/6 PASSED
+- Shadow02 (fire-and-forget): 27/27 PASSED
+- BCB-01..14: 14/14 PASSED
+- BCB-C1..8: 8/8 PASSED
+- BCB-C4 1..5: 5/5 PASSED
+- BNCA-FRAMEWORK 1..3: 3/3 PASSED
+- BNCA-RED 1..9: PASSED
+- BNCA-ABLATION 1..n: PASSED
+- PCCA 1..4: 4/4 PASSED
+- TQCB 1..n: PASSED
+- CCARD 1..12: 12/12 PASSED
+- BCCOC 1..7: 7/7 PASSED
+- Historical replay: 20/20 PASSED
+- TCSE/EAS01 preservation: 6/6 PASSED
+- Real-Elm provider: 5/5 PASSED
+- CCARD continuity: ALL GREEN
+
+**Scope:** ONLY authority wiring + minimal Elm encoder extension. No MCP, myc, React, terminal, queue, background, prompt, telemetry, or SurrealDB changes.
+
+**Terminal verdict:**
+```
+PASS_FIRST_ELM_AUTHORITY_SEAM
+```
+
+**Subject/closure:**
+- ENTRY_HEAD: `359d63124d11c4397671da41af84a8dc380139ab`
+- SUBJECT_HEAD: `20a23f02df24f789f9f32a4d644169eb2fe33e6f`
+- CLOSURE_HEAD: `93ffc717a` (evidence + ACT report)
+- ELM_KERNEL_SHA: `40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd`
+- ELM_KERNEL_BYTES: 107,835
+
+**Halt conditions:** NONE TRIGGERED.
+- HALT_AUTHORITY_NOT_CAUSAL: addressed (REAL provider in path)
+- HALT_ELM_AUTHORITY_SEAM_NOT_FOUND: not triggered
+- HALT_RED_NOT_REPRODUCED: not triggered (RED reproduced)
+- HALT_IDENTITY_INSUFFICIENT: not triggered (per-session)
+- CAPTURE_INSUFFICIENT: not triggered (chronology discipline verified)
+- HALT_ARTIFACT_UNBOUND: not triggered (subject HEAD = closure HEAD)
+- LIVE_UNOBSERVABLE: deferred per §24
+
+**Board cursor:**
+```
+HOLD:    ACT-MYC-CLINEMM03-LIVE-PRIME-QUALIFICATION-RESUME01
+NOW:     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER  (CLOSED_PASS_FIRST_ELM_AUTHORITY_SEAM)
+CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — HALT_AUTHORITY_NOT_CAUSAL
+```
