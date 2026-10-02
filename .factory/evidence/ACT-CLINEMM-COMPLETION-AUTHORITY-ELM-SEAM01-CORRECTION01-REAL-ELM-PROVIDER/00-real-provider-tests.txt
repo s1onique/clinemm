@@ -1,0 +1,10 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts (5 tests) 17ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  12:01:37
+   Duration  2.23s (transform 1.29s, setup 1.94s, import 174ms, tests 17ms, environment 0ms)
+

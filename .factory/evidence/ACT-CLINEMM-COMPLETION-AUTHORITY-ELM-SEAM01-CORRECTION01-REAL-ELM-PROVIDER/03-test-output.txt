@@ -1,0 +1,34 @@
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+TEST OUTPUT (vitest run; see 00-real-provider-tests.txt for raw)
+
+REAL ELM in the active decision path (REAL-ELM provider discriminator):
+
+  ✓ REAL-ELM-LOAD: compiled kernel loads; runtime reports enabled
+  ✓ REAL-ELM-HOLD: factual records induce Elm HOLD; commit suppressed
+  ✓ REAL-ELM-AUTHORIZE: factual clean state → Elm AUTHORIZE → exactly one commit
+  ✓ REAL-ELM-FAILURE: bad kernel path → decision=failure → 0 commit
+  ✓ REAL-ELM-CHRONO: authority kernel never receives task_completion_committed
+
+  Tests  5 passed (5)
+  Test Files  1 passed (1)
+
+Conservation tests (existing):
+
+  REAL-ELM synthetic DI discriminator (EAS01):
+    ✓ EAS01-RED-A: TS legacy path commits; Elm-wired hold suppresses effect
+    ✓ EAS01-GREEN-B: Elm says authorize -> exactly one production commit effect fires
+    ✓ EAS01-GREEN-B-pair: Elm off-by-default produces exactly one commit (byte-identical to legacy)
+    ✓ EAS01-RED-C1: Elm says failure(elm_authority_no_session) -> 0 commit effect calls, explicit classification
+    ✓ EAS01-RED-C2: Elm says failure(elm_authority_decode_error) -> 0 commit effect calls
+    ✓ EAS01-RED-C3: Elm decision provider throws -> 0 commit effect calls, no silent fallback
+
+    Tests  6 passed (6)
+
+  Shadow (SHADOW02):
+    Tests  27 passed (27)
+
+  BCB01:
+    Tests  14 passed (14)
+
+  TYPECHECK (apps/vscode): 0 errors
+  LINT (biome): 0 errors

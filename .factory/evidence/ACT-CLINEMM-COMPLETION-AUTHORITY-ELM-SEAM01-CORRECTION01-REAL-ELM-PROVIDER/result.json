@@ -1,0 +1,60 @@
+{
+  "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER",
+  "verdict": "PASS_FIRST_ELM_AUTHORITY_SEAM",
+  "subject_head": "20a23f02df24f789f9f32a4d644169eb2fe33e6f",
+  "entry_head": "359d63124d11c4397671da41af84a8dc380139ab",
+  "closure_head": "20a23f02df24f789f9f32a4d644169eb2fe33e6f",
+  "elm_kernel_sha256": "40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd",
+  "elm_kernel_bytes": 107835,
+  "elm_source_change": {
+    "files": ["Codec.elm"],
+    "kind": "encoder extension only (no decision-logic change)",
+    "added_model_fields": [
+      "completionAuthorized",
+      "holdReasons",
+      "jobRunningCount",
+      "pendingPromptCount",
+      "scheduledContinuationCount"
+    ]
+  },
+  "ts_production_changes": [
+    "apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts (NEW)",
+    "apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts (NEW)",
+    "apps/vscode/src/sdk/completion-authority-elm-authority.ts (seam evolved)",
+    "apps/vscode/src/sdk/continuation-cardinality-authority.ts (authority gate)",
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts (async gate + flush option)",
+    "apps/vscode/src/sdk/SdkController.ts (provider wiring)",
+    "apps/vscode/src/extension.ts (activation seam)",
+    "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts (applyElmAuthorityProfile)"
+  ],
+  "conservation_tests": {
+    "easm_synthetic_dissc": "6/6 passed",
+    "shadow0_2": "27/27 passed",
+    "bcb_0_1": "14/14 passed",
+    "bcb_correction_0_1": "8/8 passed",
+    "bcb_correction_0_4": "5/5 passed",
+    "bnca_framework_0_1": "3/3 passed",
+    "bnca_red_0_1": "PASSED",
+    "pcca_0_1": "4/4 passed",
+    "historical_replay": "20/20 passed",
+    "tcse_eas01_preservation": "6/6 passed"
+  },
+  "real_elm_discriminators": {
+    "REAL_ELM_LOAD": "PASSED",
+    "REAL_ELM_HOLD": "PASSED",
+    "REAL_ELM_AUTHORIZE": "PASSED",
+    "REAL_ELM_FAIL": "PASSED",
+    "REAL_ELM_CHRONO": "PASSED"
+  },
+  "gates": {
+    "typecheck": "PASSED",
+    "lint": "PASSED",
+    "diff_check": "PASSED"
+  },
+  "harness_change_audit": {
+    "sha_changed": true,
+    "rationale": "Code.elm encoder extension added 5 fields. Decision authority and transition logic unchanged. The new SHA is the post-mutation recompile."
+  },
+  "chronology_discipline": "PASSED — AUTHORITY_STAGES excludes task_completion_committed, completion_presented, task_cancelled. Real-Elm-CHRONO test verifies.",
+  "scope_prohibitions_honored": true
+}

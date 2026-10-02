@@ -1,0 +1,57 @@
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+ARTIFACT IDENTITIES
+
+GLUE ELM_KERNEL_SHA256 (predecessor):
+  034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e
+
+GLUE ENCODED MODEL KEYSET (pre  Encoder extension):
+  ActiveRun
+  commitReadyRun
+  committedCompletion
+  presentedCompletion
+  submitCount
+  task
+
+= 8 keys
+
+GLUE ENCODED MODEL KEYSET (post Encoder extension):
+  activeRun
+  commitReadyRun
+  committedCompletion
+  presentedCompletion
+  submitCount
+  task
+  completionAuthorized       [NEW]
+  holdReasons               [NEW]  -- List HoldReason name
+  jobRunningCount            [NEW]
+  pendingPromptCount         [NEW]
+  scheduledContinuationCount [NEW]
+
+= 11 keys
+
+AUTHORITY-STAGES FILTER (no chronology loop):
+  task_started
+  run_started
+  agent_turn_done
+  terminal_committed
+  notify_consume_enter
+  wake_created
+  pending_prompt_enqueued
+  pending_prompt_dequeued
+  continuation_scheduled
+  continuation_started
+  submit_and_exit_seen
+
+  EXCLUDED (POST-DECISION stages, ACT §8):
+    task_completion_committed
+    completion_presented
+    task_cancelled
+
+GLUE ELM_KERNEL_SHA256 (current ACT):
+  40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd
+
+ELM_KERNEL_BYTES:
+  107,835
+
+GLUE CODEC ELM GLUE STRING:
+  "decode the AUTHORITATIVE Elm projection (no TS re-implementation of computeHoldReasons)"

@@ -1,0 +1,53 @@
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+RECON
+
+CURRENT_EVENT_ORDER:
+  prod  (predecessor ACT) - on  cc@captureContinuationCardinalityAuthorityRecord(stage=task_completion_committed)
+       -> enqueue Elm authority kernel instance for the session
+       -> observe Elm shadow kernel instance for the session (fire-and-forget)
+  prod  -> checkElmCompletionAuthority(writerId)
+       -> flushElmAuthorityForSession(sessionId)         [NEW GATE]
+       -> getElmCompletionAuthorityDecision(sessionId) [returns closed union]
+       -> if hold/failure: log + skip commit effect
+       -> if authorize: setTurnPhase("completed", undefined, writerId) [REAL EFFECT]
+
+COMMIT_RECORD_SEMANTICS:
+  stage=task_completion_committed is a POST-DECISION factual record.
+  Telling the authority kernel that the commit happened before the gate
+  asks 'may commit happen?' is a self-fulfilling loop. The runtime
+  enforces chronology discipline at the enqueue seam (AUTHORITY_STAGES
+  set): task_completion_committed / completion_presented / task_cancelled
+  are silently dropped before reaching the authority kernel.
+
+SAFE_PRE_EFFECT_ELM_STATE:
+  All CCARD stages EXCEPT task_completion_committed, completion_presented,
+  task_cancelled. These are the pre-effect facts Elm knows about.
+
+CURRENT_ELM_DECISION_OUTPUT:
+  The Elm kernel already owns the closed HoldReason enum and the
+  AuthorizeTaskCompletion effect. Per Authority.elm line 599-610
+  completionAuthorized = List.isEmpty reasons. The decision is
+  explicit in Elm. No TS reimplementation of computeHoldReasons.
+
+SHADOW_SYNC_STATUS:
+  Shadow continues fire-and-forget (setTimeout(0) per inbound, observable
+  from a separate microtask). Authority MUST NOT depend on the shadow's
+  async ring; it owns its own per-session kernel instance.
+
+AUTHORITY_SYNC_PATH:
+  Per-session queue (Map<sessionId, Record[]>) in
+  completion-authority-elm-authority-runtime.ts. Records enqueued
+  synchronously at the CCARD capture site. Gate awaits one microtask
+  per record to drain the Elm outbound queue. Decision is read
+  synchronously from lastDecision after the flush.
+
+WIRE_CHANGE_REQUIRED:
+  Extension wiring (applyElmAuthorityProfile before SdkController
+  construction); coordinator option addition (existing seam); SdkController
+  wires both helpers in the coordinator options.
+
+ELM_SOURCE_CHANGE_REQUIRED:
+  Yes — minimum encoder extension to expose the AUTHORITATIVE
+  computeHoldReasons closure as holdReasons : List String and
+  completionAuthorized : Bool. See Codec.elm `encodeModel`.
+  Decision logic unchanged.
