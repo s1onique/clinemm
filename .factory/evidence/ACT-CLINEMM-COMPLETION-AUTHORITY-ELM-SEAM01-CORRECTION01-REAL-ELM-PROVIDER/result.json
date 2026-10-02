@@ -1,11 +1,18 @@
 {
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER",
-  "verdict": "PASS_FIRST_ELM_AUTHORITY_SEAM",
+  "verdict": "REAL_ELM_CAUSAL_PROVEN_REAL_ELM_OWNERSHIP_FIXED_HALT_ARTIFACT_UNBOUND",
+  "real_elm_causal_proven": true,
+  "real_elm_ownership_fixed": true,
+  "halt_artifact_unbound": true,
+  "p1_ts_owned_vetoes": "removed",
   "subject_head": "20a23f02df24f789f9f32a4d644169eb2fe33e6f",
   "entry_head": "359d63124d11c4397671da41af84a8dc380139ab",
-  "closure_head": "20a23f02df24f789f9f32a4d644169eb2fe33e6f",
+  "closure_head_initial": "7acd60d3e3552c9f094c30b3e0a2cce50e50ab3",
   "elm_kernel_sha256": "40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd",
   "elm_kernel_bytes": 107835,
+  "elm_compiler_used": "0.19.1 (vendored)",
+  "elm_compiler_canonical": "0.19.2 (NOT USED — env has no 0.19.2 binary)",
+  "artifact_identity_concern": "kernel was compiled with vendored 0.19.1, not the canonical 0.19.2 that build-elm.sh requires. Causal tests are not bound to the canonical-pipeline-compiled bytes that will ship.",
   "elm_source_change": {
     "files": ["Codec.elm"],
     "kind": "encoder extension only (no decision-logic change)",
@@ -18,9 +25,9 @@
     ]
   },
   "ts_production_changes": [
-    "apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts (NEW)",
+    "apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts (NEW; decodeElmDecision is now a pure translator; no domain vetoes)",
     "apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts (NEW)",
-    "apps/vscode/src/sdk/completion-authority-elm-authority.ts (seam evolved)",
+    "apps/vscode/src/sdk/completion-authority-elm-authority.ts (ElmCompletionAuthorityDecision.failure now carries reason)",
     "apps/vscode/src/sdk/continuation-cardinality-authority.ts (authority gate)",
     "apps/vscode/src/sdk/sdk-session-event-coordinator.ts (async gate + flush option)",
     "apps/vscode/src/sdk/SdkController.ts (provider wiring)",
@@ -28,16 +35,18 @@
     "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts (applyElmAuthorityProfile)"
   ],
   "conservation_tests": {
-    "easm_synthetic_dissc": "6/6 passed",
-    "shadow0_2": "27/27 passed",
-    "bcb_0_1": "14/14 passed",
-    "bcb_correction_0_1": "8/8 passed",
-    "bcb_correction_0_4": "5/5 passed",
+    "eas01_9_perview_correction_first_seam_correction01": "12/12 passed",
+    "real_elm_provider_0_1": "5/5 passed",
+    "shadow_0_2": "27/27 passed",
+    "historical_replay_0_1": "20/20 passed",
     "bnca_framework_0_1": "3/3 passed",
-    "bnca_red_0_1": "PASSED",
+    "bnca_red_0_1": "5/5 passed",
+    "bnca_green_0_1": "PASSED",
+    "bnca_ablation_0_1": "PASSED",
     "pcca_0_1": "4/4 passed",
-    "historical_replay": "20/20 passed",
-    "tcse_eas01_preservation": "6/6 passed"
+    "tqcb_0_1": "15/15 passed",
+    "ccard_0_1": "12/12 passed",
+    "bccoc_0_1": "7/7 passed"
   },
   "real_elm_discriminators": {
     "REAL_ELM_LOAD": "PASSED",
@@ -51,10 +60,10 @@
     "lint": "PASSED",
     "diff_check": "PASSED"
   },
-  "harness_change_audit": {
-    "sha_changed": true,
-    "rationale": "Code.elm encoder extension added 5 fields. Decision authority and transition logic unchanged. The new SHA is the post-mutation recompile."
-  },
+  "ts_owned_vetoes": "NONE — decodeElmDecision is now a pure translator over `holdReasons : List String`",
   "chronology_discipline": "PASSED — AUTHORITY_STAGES excludes task_completion_committed, completion_presented, task_cancelled. Real-Elm-CHRONO test verifies.",
-  "scope_prohibitions_honored": true
+  "scope_prohibitions_honored": true,
+  "live_qualification_run_by_this_act": false,
+  "live_qualification_run_by": "human operator (next step)",
+  "human_operator_action": "build canonical 0.19.2 kernel, re-pin SHA, build exact-head VSIX, install, run LIVE mundane task with CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_COMPLETION_AUTHORITY_ELM=1, capture authority counters + CCARD + shadow"
 }

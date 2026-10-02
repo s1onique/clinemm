@@ -36,6 +36,7 @@ export type ElmCompletionAuthorityDecision =
 	| { readonly kind: "hold"; readonly reason: string; readonly holdReasons: readonly string[] }
 	| {
 			readonly kind: "failure"
+			readonly reason: string
 			readonly classification:
 				| "elm_authority_no_session"
 				| "elm_authority_decode_error"

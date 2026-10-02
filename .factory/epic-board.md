@@ -17283,3 +17283,74 @@ HOLD:    ACT-MYC-CLINEMM03-LIVE-PRIME-QUALIFICATION-RESUME01
 NOW:     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER  (CLOSED_PASS_FIRST_ELM_AUTHORITY_SEAM)
 CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — HALT_AUTHORITY_NOT_CAUSAL
 ```
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER — REVIEWER ADJUDICATION — 2026-10-02
+
+**Status (post-reviewer):** REAL_ELM_CAUSAL_PROVEN + REAL_ELM_OWNERSHIP_FIXED. HALT_ARTIFACT_UNBOUND. The previous PASS_FIRST_ELM_AUTHORITY_SEAM claim was premature.
+
+A Factory reviewer caught two issues with the original ACT submission. Both addressed in this amendment.
+
+### P1 — TS contained extra domain vetoes (FIXED)
+
+Original `decodeElmDecision` had two TS-side vetoes that duplicated decisions Elm already owns:
+- `task === "Completed" || task === "Cancelled" -> hold`
+- `committedCompletion !== null && committedCompletion !== undefined -> hold`
+
+Elm's `computeHoldReasons` does NOT consider `task` or `committedCompletion`; Elm's `completionAuthorized` is `List.isEmpty computeHoldReasons model`. The TS-side vetoes were defensive but violated the doctrine that TS owns no domain logic.
+
+**Fix:** TS is now a PURE TRANSLATOR. It does ONE thing: pull `holdReasons : List String` from the Elm model, coerce to `string[]`, map empty → `{authorize}` / non-empty → `{hold}`. Plus a single self-consistency check: if `completionAuthorized === false` while `holdReasons` is empty, the Elm model is internally inconsistent → fail-closed. The `task` and `committedCompletion` fields are NOT consulted by TS. The `ElmCompletionAuthorityDecision.failure` variant gained `reason: string`. The synthetic EAS01 tests were updated to keep the seam stable.
+
+### P0 — exact-head VSIX + LIVE not run (HONEST HALT)
+
+The ACT contract requires:
+```
+exact-head VSIX
+→ exact artifact installed
+→ authority flag ON
+→ real Elm provider reached LIVE
+→ authorize
+→ one production completion effect
+→ no fallback
+→ zero decode/kernel errors
+```
+
+This ACT did not run the canonical 0.19.2 build, did not build the VSIX, did not install it, did not run a LIVE mundane task. The verdict has been adjusted to `HALT_ARTIFACT_UNBOUND`.
+
+### Artifact-identity concern
+
+The kernel was compiled with **Elm 0.19.1** (vendored binary at `vendor/elm`), NOT the canonical **0.19.2** that `apps/vscode/elm/completion-authority/scripts/build-elm.sh` requires. The env on this machine has no Elm 0.19.2 binary, and network access for `brew install elm@0.19.2` is blocked.
+
+This means the causal-discriminator tests are NOT bound to the exact compiler-produced bytes that will ship in the canonical VSIX. The kernel SHA pinned in the shadow02 test reflects 0.19.1 output.
+
+The human operator will build with 0.19.2 on a network-enabled host, re-pin the kernel SHA in the shadow02 test, and re-run the REAL-ELM 5/5 discriminators against the 0.19.2 bytes before the LIVE qualification.
+
+### What is proven NOW
+
+```
+actual compiled Elm.Main.init({})
+→ factual messages
+→ Elm holdReasons/completionAuthorized projection (held in Elm)
+→ provider decoder (TS does ONLY empty/non-empty translation)
+→ coordinator authority seam
+→ HOLD suppresses commit
+→ AUTHORIZE commits exactly once
+→ FAILURE commits zero
+```
+
+### What is deferred (human operator)
+
+- Canonical 0.19.2 rebuild → kernel SHA re-pin → re-run discriminators
+- Exact-head VSIX build (via `python3 scripts/build-dogfood-vsix.py`)
+- Install VSIX into a Codium/VSCode host
+- LIVE mundane task with the ON-env
+- Capture authority counters + CCARD + shadow
+- Verify `realElmProviderCalls > 0, authorize, fallbackUsed = 0, completion count = 1, decodeErrors = 0, kernelErrors = 0`
+
+These steps are the human operator's job. The structured evidence above is sufficient to grant `PASS_FIRST_ELM_AUTHORITY_SEAM` once the LIVE phase produces the expected counters.
+
+**Board cursor:**
+```
+HOLD:    ACT-MYC-CLINEMM03-LIVE-PRIME-QUALIFICATION-RESUME01
+NOW:     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER  (CLOSED_REAL_ELM_PROVEN_HALT_ARTIFACT_UNBOUND)
+CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — HALT_AUTHORITY_NOT_CAUSAL
+```

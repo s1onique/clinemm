@@ -200,7 +200,7 @@ function decideElmAuthorityCompletion(
 	const sess = state.sessions.get(sessionId)
 	if (!sess) {
 		bumpCounter(state, "failure")
-		return { kind: "failure", classification: "elm_authority_no_session" }
+		return { kind: "failure", reason: "elm_authority_no_session", classification: "elm_authority_no_session" }
 	}
 	if (sess.failed) {
 		return sess.lastDecision
@@ -305,6 +305,7 @@ async function processOneAuthorityRecord(
 		const msg = err instanceof Error ? err.message : String(err)
 		const failure: ElmCompletionAuthorityDecision = {
 			kind: "failure",
+			reason: msg,
 			classification: buildFailureClassification(msg),
 		}
 		bumpCounter(state, "kernelErrors")
@@ -328,6 +329,7 @@ async function processOneAuthorityRecord(
 		sess.failed = true
 		const failure: ElmCompletionAuthorityDecision = {
 			kind: "failure",
+			reason: err instanceof Error ? err.message : String(err),
 			classification: buildFailureClassification(err instanceof Error ? err.message : String(err)),
 		}
 		sess.lastDecision = failure
@@ -343,6 +345,7 @@ async function processOneAuthorityRecord(
 		sess.failed = true
 		const failure: ElmCompletionAuthorityDecision = {
 			kind: "failure",
+			reason: err instanceof Error ? err.message : String(err),
 			classification: buildFailureClassification(err instanceof Error ? err.message : String(err)),
 		}
 		sess.lastDecision = failure
@@ -357,6 +360,7 @@ async function processOneAuthorityRecord(
 		sess.failed = true
 		const failure: ElmCompletionAuthorityDecision = {
 			kind: "failure",
+			reason: decodeError.error,
 			classification: "elm_authority_decode_error",
 		}
 		sess.lastDecision = failure
@@ -374,6 +378,9 @@ async function processOneAuthorityRecord(
 	}
 	bumpCounter(state, "states")
 	const decision = decodeElmDecision(lastState.model)
+	if (decision.kind === "failure" && decision.classification === "elm_authority_decode_error") {
+		bumpCounter(state, "decodeErrors")
+	}
 	sess.lastDecision = decision
 }
 
@@ -411,44 +418,71 @@ export function hasElmAuthoritySession(sessionId: string): boolean {
 /**
  * Decode the latest Elm model into the closed TS union.
  *
+ * **This function is a PURE TRANSLATOR — it owns NO domain logic.**
+ *
  * The ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
  * Elm encoder (`Codec.elm`) emits the AUTHORITATIVE hold projection as
  * `holdReasons : List String` (the closed list computed by
  * `Authority.computeHoldReasons` — the SAME projection that drives
  * Elm's own `Effect` derivation in `update`). It also emits
- * `completionAuthorized : Bool` as a redundant boolean. TS decodes
- * the list and translates the kind into the closed discriminated
- * union. TS does NOT recompute the projection. The Elm kernel is
- * the only place the projection is known.
+ * `completionAuthorized : Bool` as a redundant boolean cross-check.
+ *
+ * TS only:
+ *   1. pulls the `holdReasons : List String` field out of the Elm model
+ *   2. coerces it to a `string[]`
+ *   3. maps the empty-list / non-empty-list to {authorize} / {hold}
+ *
+ * TS does NOT:
+ *   - look at `task` (task terminal state is a Stage, not a decision input)
+ *   - look at `committedCompletion` (post-effect state; would re-introduce
+ *     the self-fulfilling loop the AUTHORITY_STAGES filter exists to prevent)
+ *   - look at `presentedCompletion`, `submitCount`, `activeRun`,
+ *     `commitReadyRun` (all Elm diagnostic fields)
+ *   - recompute ANY projection
+ *
+ * Failure modes:
+ *   - `holdReasons` is missing or wrong type → counted as `decodeError`
+ *     and returned as `{ kind: "failure", reason: "elm_authority_decode_error", classification: "elm_authority_decode_error" }`
+ *     (fail-closed; defaultElmCompletionAuthorityDecision is NOT used as
+ *     a silent fallback because the runtime's whole purpose is to be the
+ *     authority — silent fallback re-introduces the same risk the ACT was
+ *     opened against).
+ *   - `holdReasons` contains a non-string entry → counted as `decodeError`
+ *     and fail-closed.
  */
 function decodeElmDecision(model: Record<string, unknown>): ElmCompletionAuthorityDecision {
-	const task = model.task
-	if (task === "Completed" || task === "Cancelled") {
+	const rawReasons = model.holdReasons
+	if (!Array.isArray(rawReasons)) {
 		return {
-			kind: "hold",
-			reason: `task_state_${String(task).toLowerCase()}`,
-			holdReasons: ["task_terminal_state"],
+			kind: "failure",
+			classification: "elm_authority_decode_error",
+			reason: "holdReasons_missing_or_wrong_type",
 		}
 	}
-	// AUTHORITATIVE hold reasons from Elm. The encoder guarantees a
-	// closed string list per Elm `HoldReason` (see Authority.elm).
-	const rawReasons = Array.isArray(model.holdReasons) ? (model.holdReasons as readonly unknown[]) : []
 	const holdReasons: string[] = []
 	for (const r of rawReasons) {
-		if (typeof r === "string") holdReasons.push(r)
+		if (typeof r !== "string") {
+			return {
+				kind: "failure",
+				classification: "elm_authority_decode_error",
+				reason: "holdReasons_contains_non_string",
+			}
+		}
+		holdReasons.push(r)
 	}
 	if (holdReasons.length > 0) {
 		return { kind: "hold", reason: holdReasons[0], holdReasons }
 	}
-	// Secondary safety net: the authority kernel never receives
-	// `task_completion_committed` (AUTHORITY_STAGES filter). If
-	// `committedCompletion` is set anyway, treat as held.
-	const committedCompletion = model.committedCompletion
-	if (committedCompletion !== null && committedCompletion !== undefined) {
+	// Cross-check the redundant Elm signal: if `completionAuthorized` is
+	// present and explicitly `false` while `holdReasons` is empty, the
+	// Elm model is internally inconsistent — fail closed. This is a
+	// self-consistency check, NOT a TS-owned domain decision.
+	const authorized = model.completionAuthorized
+	if (authorized === false) {
 		return {
-			kind: "hold",
-			reason: "elm_already_committed",
-			holdReasons: ["elm_already_committed"],
+			kind: "failure",
+			classification: "elm_authority_decode_error",
+			reason: "completionAuthorized_inconsistent_with_holdReasons",
 		}
 	}
 	return { kind: "authorize", reason: "no_hold_reasons" }

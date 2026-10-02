@@ -273,6 +273,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — first production autho
 			const h = makeHarness({
 				getElmCompletionAuthorityDecision: () => ({
 					kind: "failure",
+					reason: "elm_authority_no_session",
 					classification: "elm_authority_no_session",
 				}),
 			})
@@ -288,6 +289,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — first production autho
 			const h = makeHarness({
 				getElmCompletionAuthorityDecision: () => ({
 					kind: "failure",
+					reason: "elm_authority_decode_error",
 					classification: "elm_authority_decode_error",
 				}),
 			})
