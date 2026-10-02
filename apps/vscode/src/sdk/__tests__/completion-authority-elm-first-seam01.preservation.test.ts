@@ -9,10 +9,14 @@
  */
 
 import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-const REPO_ROOT = "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm"
+// Resolve the repo root relative to this test file (portable across worktrees / operator machines).
+// File: apps/vscode/src/sdk/__tests__/<this>.ts → 5 levels up reaches the monorepo root.
+const HERE = dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = join(HERE, "..", "..", "..", "..", "..")
 const COORDINATOR_PATH = join(REPO_ROOT, "apps/vscode/src/sdk/sdk-session-event-coordinator.ts")
 const AUTHORITY_MODULE_PATH = join(REPO_ROOT, "apps/vscode/src/sdk/completion-authority-elm-authority.ts")
 
