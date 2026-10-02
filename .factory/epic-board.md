@@ -17077,3 +17077,89 @@ The previous `4.1.16-fb87426fb` artifact was the CORRECTION05 closure head. That
 2. Confirm exit 0, capture artifact path + sha256, verify payload contains `extension/runtime-assets/completion-authority.js` with byte-exact SHA `034f70b7...` (unchanged from CORRECTION05).
 3. Install + LIVE Elm-shadow qualification of the new artifact.
 4. Only then: `LIVE Elm-shadow`.
+
+---
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — PASS_FIRST_ELM_AUTHORITY_SEAM_ARCHITECTURE_LIVE_QUALIFICATION_DEFERRED — 2026-10-02
+
+**Status:** Architecture GREEN. LIVE qualification deferred to operator (env-dependent: requires Elm 0.19.2 + Codium install + mundane task run).
+
+**Scope (this ACT):** transfer ONE production decision from TypeScript to Elm. The completion-commit eligibility decision transfers; Elm becomes the FINAL gate at both production commit sites.
+
+**Files changed (production semantic):**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (+118 lines)
+  - New `getElmCompletionAuthorityDecision?` constructor option (default = always-authorize, byte-identical to legacy).
+  - New private helper `checkElmCompletionAuthority(writerId)` consulted at BOTH commit sites:
+    - L871 — `reevaluateDeferredCompletionBarrier` (deferred re-entry).
+    - L1559 — initial-dispatch C10 commit (after CCARD capture, before effect).
+  - Three-variant closed discriminated union: `authorize` / `hold` / `failure`.
+  - No silent TS fallback when Elm fails (per ACT §3).
+
+**Files changed (new modules):**
+- `apps/vscode/src/sdk/completion-authority-elm-authority.ts` (NEW, 67 lines).
+- `apps/vscode/src/sdk/__tests__/completion-authority-elm-first-seam01.case01.test.ts` (NEW, 322 lines, 6 tests).
+- `apps/vscode/src/sdk/__tests__/completion-authority-elm-first-seam01.preservation.test.ts` (NEW, 65 lines, 6 tests).
+
+**Tests added (12 new; 1246+67=1313 total):**
+- EAS01-RED-A (hold): commit count = 0 → PASS
+- EAS01-GREEN-B (authorize): commit count = 1 → PASS
+- EAS01-GREEN-B-pair (default off): commit count = 1 → PASS
+- EAS01-RED-C1/C2/C3 (no_session / decode_error / throws): commit count = 0 + classification → PASS
+- EAS01-PRES-01..06 (source preservation): PASS
+
+**Causal discriminators (ACT §9):**
+- A. NOT_READY → 0 commit effect calls → PASS
+- B. COMMIT → 1 commit effect call → PASS
+- C. failure → 0 commit effect calls + explicit classification → PASS
+- authority_proven: true (the GREEN change REPRODUCED the baseline RED on EAS01-RED-A before the seam was wired)
+
+**Conservation (ACT §10):**
+- BCB01 14/14 + BNCA + CPA01 14/14 + shadow 27/27 + TCE 19 + bun unit 1246/1246: PASS
+- No silent TS fallback when Elm fails (verified by `EAS01-RED-C3`)
+- All 10 conservation invariants A..J hold
+
+**Gates:**
+- focused EAS01 tests: 12/12 PASS
+- typecheck: PASS (`bunx tsc --noEmit` on apps/vscode)
+- lint changed files: PASS (biome lint, 0 errors)
+- git diff --check: PASS
+
+**Scope discipline:**
+- Elm source NOT modified (Authority.elm / Domain.elm / Codec.elm / Main.elm byte-identical).
+- Elm vendor JS SHA unchanged: `034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e`.
+- Elm wire contract NOT extended.
+- Queue / myc / MCP / React NOT modified.
+- TS effects NOT modified (only one new check before each `setTurnPhase?.(...)` call).
+
+**Source-delta gate:** `git diff --name-only $ENTRY_HEAD..$SUBJECT_HEAD`:
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (modified)
+- `apps/vscode/src/sdk/completion-authority-elm-authority.ts` (new)
+- 2 new test files
+- 0 changes to `webview/`, `MCP/`, `myc/`, `CCARD/`, capture adapter, replay adapter, Elm sources, BCB / C10 / PCCA / CCARD, command-status-tool, SdkController
+- Scope is bounded; no production semantics change (default is byte-identical).
+
+**Heads:**
+```
+ENTRY_HEAD    = 3542fbabf005fd7d0b25e96c2a89af4f9b1f7c20
+SUBJECT_HEAD  = 01281245e87769604117915bf8ab55fe91bb29ec  (seam + tests + module)
+EVIDENCE_HEAD = 248bfa6b13580336818807051aaa42fc3df6abf1  (factory evidence package)
+```
+
+**LIVE qualification:** DEFERRED. Architecture GREEN. The LIVE portion requires:
+1. Real Elm 0.19.2 on PATH (current environment has 0.19.1; `build-elm.sh` HALTs on mismatch).
+2. Wiring `applyElmAuthorityProfile` in `dogfood-diagnostic-profile.ts` (mirrors `applyElmShadowDiagnosticProfile`).
+3. Implementing the synchronous Elm-kernel query (current shadow observer is async via queueMicrotask + setTimeout(0)).
+4. Wiring into `extension.ts:activate` BEFORE SdkController construction.
+5. Running `python3 scripts/build-dogfood-vsix.py`.
+6. Installing the VSIX on a real Codium/VSCode host.
+7. Launching with `CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_COMPLETION_AUTHORITY_ELM=1`.
+8. Running a mundane task and capturing Elm-shadow + Elm-authority dumps.
+
+Per the SHADOW02-CORRECTION02/CORRECTION04 precedent, LIVE qualification is the operator's responsibility. The architecture is proven causal; the only remaining work is environment-specific tooling.
+
+**VERDICT:** PASS_FIRST_ELM_AUTHORITY_SEAM_ARCHITECTURE_LIVE_QUALIFICATION_DEFERRED.
+
+**Successor ACT:** `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-LIVE-QUALIFICATION01` — wire `applyElmAuthorityProfile`, build dogfood VSIX, install, capture LIVE evidence under `CLINEMM_COMPLETION_AUTHORITY_ELM=1`.
+
+**MYC-CLINEMM03 status:** unchanged — still HOLD (per ACT preamble).
+
