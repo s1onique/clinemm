@@ -2,7 +2,7 @@
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01",
   "entry_head": "3542fbabf005fd7d0b25e96c2a89af4f9b1f7c20",
   "subject_head": "01281245e87769604117915bf8ab55fe91bb29ec",
-  "closure_head": "1337cbd416e6921d55617608cb59bc65fcc5eb98",
+  "closure_head": "a105d7636c0df9a0b3eee577f41f1eeb41d80a04",
   "elm_vendor_js_sha256": "034f70b7b725738b284f3ec94f646b68f9c2def535cc811304c31313902d706e",
   "elm_source_changed": false,
   "elm_authority_semantics_changed": false,
