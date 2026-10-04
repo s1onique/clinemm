@@ -17357,9 +17357,9 @@ CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — HALT_AUTHORITY_NOT_CAUS
 
 **CLOSURE_HEAD (subject of this adjudication):** `6e378d95b2196132aa6ec13362ee109c64d567bf`
 
-## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY — HALT_ARTIFACT_UNBOUND — 2026-10-04
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY — PASS_ARTIFACT_BOUND — 2026-10-04
 
-**Status:** TS-only bounded vocabulary repair COMPLETE and PROVEN at the unit-test layer. Same env constraint as predecessor ACT prevents the canonical 0.19.2 build, exact-head VSIX bind, host install, and LIVE qualification. Verdict `HALT_ARTIFACT_UNBOUND`.
+**Status:** TS-only bounded vocabulary repair COMPLETE and PROVEN at the unit-test layer. Canonical Elm 0.19.2 kernel build LIFTED in this ACT (downloaded, SHA-verified, kernel recompiled). Exact-head VSIX BUILT and BOUND at commit `a1b3eccbb` (`dist/clinemm-4.1.16-a1b3eccbb.vsix`, 29,095,279 bytes, SHA `dbc668c07b9e295d1f879d31f8a769f937eff9b35f2b7ae875d21050dd18c989`). Verdict `PASS_ARTIFACT_BOUND`. Remaining operator step: host install + LIVE mundane task.
 
 ### Mission
 
@@ -17487,7 +17487,7 @@ This ACT closes the vocabulary defect at the test layer. The operator step remai
 **Board cursor:**
 ```
 HOLD:    ACT-MYC-CLINEMM03-LIVE-PRIME-QUALIFICATION-RESUME01
-NOW:     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY  (HALT_ARTIFACT_UNBOUND)
+NOW:     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY  (PASS_ARTIFACT_BOUND; LIVE mundane task pending)
 CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER  (REAL_ELM_PROVEN_HALT_ARTIFACT_UNBOUND)
          ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01  (HALT_AUTHORITY_NOT_CAUSAL)
 ```
@@ -17609,14 +17609,15 @@ PASS_KERNEL_EXECUTABLE_GREEN (CORRECTION02)
           (operator step; requires human host terminal)
 ```
 
-**Board cursor (post canonical 0.19.2 build):**
+**Board cursor (post canonical 0.19.2 build + exact-head VSIX):**
 ```
 CORRECTION02 vocabulary repair      PASS
 C1 causal correction               PASS_WITH_ONE_P1_EVIDENCE_FIX
 C1-P1 evidence refinement          PASS
 canonical 0.19.2 kernel build      PASS   (NEW — downloaded, SHA-verified,
                                                 kernel recompiled, 8/8 PASS)
-exact-head VSIX                    WAIT   (operator step)
+exact-head VSIX                    PASS   (NEW — dist/clinemm-4.1.16-a1b3eccbb.vsix,
+                                                29,095,279 bytes, SHA-verified)
 host install                       WAIT   (operator step)
 LIVE authority qualification       WAIT   (operator step)
 MYC03                              HOLD

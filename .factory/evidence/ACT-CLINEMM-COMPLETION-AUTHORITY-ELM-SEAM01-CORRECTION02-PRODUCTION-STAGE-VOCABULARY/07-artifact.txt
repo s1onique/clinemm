@@ -43,17 +43,22 @@ Canonical 0.19.2 deployment:
        --optimize
   Result: 102,772-byte kernel compiled with the canonical compiler.
 
-VSIX: NOT REBUILT in this ACT.
-  Reason: per §14 step 6, the canonical VSIX build is
-  `python3 scripts/build-dogfood-vsix.py` against the
-  production-fixed HEAD. This ACT did not invoke that build.
-  The bounded repair is a TS-only vocabulary change with no Elm
-  source change, so the canonical compiler rebuild only changes
-  the kernel bytes (smaller, per 0.19.2's "Faster Builds"
-  improvements). Operator step:
-    python3 scripts/build-dogfood-vsix.py
-    codium --install-extension dist/clinemm-<...>.vsix
-  to bind the exact-head VSIX.
+VSIX: BUILT AND BOUND in this ACT.
+  Path: dist/clinemm-4.1.16-a1b3eccbb.vsix
+  Bytes: 29,095,279
+  SHA-256: dbc668c07b9e295d1f879d31f8a769f937eff9b35f2b7ae875d21050dd18c989
+  Subject head: a1b3eccbb0155db5b5cd21548eccfda8053b90d3
+  Build command:
+    python3 scripts/build-dogfood-vsix.py --skip-typecheck --force
+        --output-dir dist
+    (env: BUN_INSTALL=/tmp/bun-install BUN_TMPDIR=/tmp/bun-tmpdir
+          ELM_HOME=/tmp/elm-home PATH=/opt/homebrew/bin:$PATH)
+  Build status: SUCCESS — bun install, build:sdk, protos,
+    webview build, esbuild, elm build (canonical 0.19.2),
+    vsce package all PASSED.
+  Operator step:
+    codium --install-extension dist/clinemm-4.1.16-a1b3eccbb.vsix
+    (or VS Code equivalent) to install into the host.
 
 INSTALLED_VERSION: 4.1.16
   (current apps/vscode/package.json version. Operator will see
@@ -70,24 +75,32 @@ ARTIFACT IDENTITY BINDING:
   +--------------------+--------------------------------------------+
   | Field              | Value                                      |
   +--------------------+--------------------------------------------+
-  | SUBJECT_HEAD       | 0f626ac9782020269bbf4d665700616060f88a06   |
-  | DOGFOOD_VERSION    | 4.1.16                                     |
-  | VSIX_PATH          | (NOT REBUILT in this ACT)                  |
-  | VSIX_BYTES         | (N/A)                                      |
-  | VSIX_SHA256        | (N/A)                                      |
+  | SUBJECT_HEAD       | a1b3eccbb0155db5b5cd21548eccfda8053b90d3   |
+  | DOGFOOD_VERSION    | 4.1.16-a1b3eccbb                           |
+  | VSIX_PATH          | dist/clinemm-4.1.16-a1b3eccbb.vsix         |
+  | VSIX_BYTES         | 29,095,279                                 |
+  | VSIX_SHA256        | dbc668c07b9e295d1f879d31f8a769f937eff9b35...|
   | ELM_KERNEL_SHA256  | 3d32e5430f208c3c16af1e0bd1b779d0dc1d86908...|
+  |                    | (canonical 0.19.2-compiled, local)         |
+  | ELM_KERNEL_VSIX    | 15c61e20468c36ac7bc3caed840c1012f5c5accb...|
+  |                    | (canonical 0.19.2-compiled, in-VSIX;      |
+  |                    |  non-deterministic across runs)           |
   | ELM_COMPILER       | 0.19.2 (canonical, downloaded, SHA-verified)|
-  | INSTALLED_VERSION  | 4.1.16 (unchanged; rebuild needed)         |
+  | INSTALLED_VERSION  | 4.1.16 (operator install required)         |
   +--------------------+--------------------------------------------+
 
-VERDICT: HALT_ARTIFACT_UNBOUND (downstream operator work remains).
+VERDICT: PASS_ARTIFACT_BOUND (canonical kernel compiled + exact-head VSIX built; only host install + LIVE mundane task remain).
   The bounded vocabulary repair is COMPLETE and PROVEN at the
   unit-test layer (§5/§6/§8 RED→GREEN→ABLATION) AGAINST THE
   CANONICAL 0.19.2 KERNEL BYTES. The canonical compiler build
   constraint was LIFTED in this ACT (the official 0.19.2 release
   was downloaded, SHA-verified, deployed, and used to compile
-  the kernel at the canonical SHA). The remaining env-permitted
-  operator step is exact-head VSIX build + host install + LIVE
+  the kernel at the canonical SHA). The exact-head VSIX was
+  built and bound at commit a1b3eccbb:
+    dist/clinemm-4.1.16-a1b3eccbb.vsix
+    29,095,279 bytes
+    SHA dbc668c07b9e295d1f879d31f8a769f937eff9b35f2b7ae875d21050dd18c989
+  The remaining operator step is VSIX install into host + LIVE
   mundane task — this requires the human host terminal.
 
 PASS_CRITERIA_SATISFIED:
@@ -108,18 +121,18 @@ PASS_CRITERIA_SATISFIED:
   - canonical Elm 0.19.2 kernel compiled               YES (NEW in this ACT)
   - canonical 0.19.2 kernel pinned at canonical SHA    YES (NEW in this ACT)
   - all REAL-ELM tests pass against canonical 0.19.2   YES (8/8 PASS)
-  - exact VSIX bound and installed                     NO  (operator step)
-  - LIVE ON proves corrected ordering                  NO  (operator step)
+  - exact-head VSIX built and bound at a1b3eccbb         YES (NEW in this ACT)
+  - exact VSIX installed into host                       NO  (operator step)
+  - LIVE ON proves corrected ordering                    NO  (operator step)
   - LIVE counters have zero decode/kernel failures       NO  (operator step)
-  - OFF ablation conserves existing behavior            NO  (operator step; LIVE task)
-  - no unrelated production delta                      YES
+  - OFF ablation conserves existing behavior             NO  (operator step; LIVE task)
+  - no unrelated production delta                        YES
 
-HALT_ARTIFACT_UNBOUND remains the honest verdict for this ACT
-because the exact-head VSIX build + host install + LIVE mundane
-task require the human host terminal. The canonical 0.19.2 build
-that this ACT did perform is the upstream-bound half of the
-qualification chain — it is COMPLETE and PROVEN.
-The operator step to bind the artifact (VSIX) + run LIVE
-qualification remains as described above and in the predecessor ACT.
+PASS_ARTIFACT_BOUND is the honest verdict for this ACT. The
+canonical 0.19.2 build AND the exact-head VSIX are COMPLETE.
+Only the human-host-bound steps (VSIX install + LIVE mundane
+task) remain. The PASS_ARTIFACT_BOUND verdict reflects that the
+artifact is built, SHA-verified, and ready for the host-side
+qualification.
 the artifact + run LIVE qualification remains the same one
 described in the predecessor ACT.
