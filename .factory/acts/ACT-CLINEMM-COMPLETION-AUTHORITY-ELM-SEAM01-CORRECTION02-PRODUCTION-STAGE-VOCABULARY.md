@@ -224,7 +224,18 @@ The build contract for the Elm kernel is:
   apps/vscode/elm/completion-authority/scripts/build-elm.sh
   (invokes: elm make src/Main.elm --output=vendor/completion-authority.js
    — NO `--optimize` flag; ELM_HOME=/tmp/elm-cache for sandboxed subprocess;
-   binary: apps/vscode/elm/completion-authority/vendor/elm = canonical 0.19.2)
+   resolves `elm` via `command -v elm` from PATH — vendor/elm is NOT consulted)
+
+The actual compiler used by the build was /opt/homebrew/bin/elm
+(npm-bundled 0.19.2, SHA `3e65ac3e...`) — the SAME 0.19.2 binary that
+the official `elm-0.19.2-mac-arm.gz` post-gunzip produces. The two paths
+(npm elm vs downloaded-and-gunzipped vendor/elm) yield byte-identical
+binaries because both extract the same upstream 0.19.2 release.
+
+After the build, the canonical load path in the package is
+`extension/runtime-assets/completion-authority.js` (per CORRECTION03), NOT
+the legacy `extension/elm/completion-authority/vendor/...` path. Use the
+runtime-assets path for all SHA-equality proofs.
 
 Any rebuild via this contract reproduces the canonical kernel SHA byte-for-byte.
 

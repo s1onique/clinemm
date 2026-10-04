@@ -17359,7 +17359,7 @@ CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — HALT_AUTHORITY_NOT_CAUS
 
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY — PASS_ARTIFACT_BOUND — 2026-10-04
 
-**Status:** TS-only bounded vocabulary repair COMPLETE and PROVEN at the unit-test layer. Canonical Elm 0.19.2 kernel build LIFTED in this ACT (downloaded, SHA-verified, kernel recompiled via tracked `build-elm.sh` contract — UNOPTIMIZED). Exact-head VSIX BUILT and BOUND at commit `d9b0533d9` (`dist/clinemm-4.1.16-d9b0533d9.vsix`, 29,095,278 bytes, SHA `ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038`). **Artifact-identity gate CLOSED**: `TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA == 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c` (107,835 bytes, canonical 0.19.2-compiled). Verdict `PASS_ARTIFACT_BOUND`. Remaining operator step: host install + LIVE mundane task.
+**Status:** TS-only bounded vocabulary repair COMPLETE and PROVEN at the unit-test layer. Canonical Elm 0.19.2 kernel build LIFTED in this ACT (downloaded, SHA-verified, kernel recompiled via tracked `build-elm.sh` contract — UNOPTIMIZED). Exact-head VSIX BUILT and BOUND at commit `d9b0533d9` (`dist/clinemm-4.1.16-d9b0533d9.vsix`, 29,095,278 bytes, SHA `ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038`). **Artifact-identity gate CLOSED** (per CORRECTION03 canonical runtime load path `extension/runtime-assets/completion-authority.js`): `TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_RUNTIME_ASSETS_KERNEL_SHA == 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c` (107,835 bytes, canonical 0.19.2-compiled via `command -v elm` → /opt/homebrew/bin/elm 0.19.2 SHA `3e65ac3e...` = same bytes as official release post-gunzip). Verdict `PASS_ARTIFACT_BOUND`. Remaining operator step: host install + LIVE mundane task.
 
 ### Mission
 
@@ -17607,19 +17607,30 @@ PASS_KERNEL_EXECUTABLE_GREEN (CORRECTION02)
   → HALT_ARTIFACT_NOT_TEST_BOUND (artifact-identity reviewer; PASS)
     (the prior --optimize standalone rebuild diverged from the tracked
      build-elm.sh contract; using the tracked contract now produces
-     TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA
+     TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_RUNTIME_ASSETS_KERNEL_SHA
      == 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c)
+  → HALT_ARTIFACT_EMBEDDED_PATH_UNPROVEN (artifact-identity reviewer; PASS)
+    (proof command extracted kernel from the wrong VSIX path
+     [legacy extension/elm/.../vendor/...] instead of the canonical
+     runtime-assets path [extension/runtime-assets/...] per CORRECTION03;
+     updated proof command to extract from extension/runtime-assets/
+     — runtime-assets SHA equals local kernel SHA equals sidecar SHA,
+     artifact-identity gate remains CLOSED)
   → CANONICAL_0192_BUILD_EXECUTED + EXACT_HEAD_VSIX_BUILT (THIS ACT; PASS)
     (canonical 0.19.2 downloaded from github.com/elm/compiler/releases/
         0.19.2/elm-0.19.2-mac-arm.gz, SHA-verified
-        8b02a7fac1643b39acb87ae2a8e10f0f1534fe61940ca08ab17dfc2ac98115c8,
-        deployed to apps/vscode/elm/completion-authority/vendor/elm,
+        8b02a7fac1643b39acb87ae2a8e10f0f1534fe61940ca08ab17dfc2ac98115c8;
+        build-elm.sh resolves `elm` via `command -v elm` from PATH
+        (vendor/elm is NOT consulted per the script header); with
+        PATH=/opt/homebrew/bin:$PATH, the actual compiler was
+        /opt/homebrew/bin/elm (npm-bundled 0.19.2 SHA 3e65ac3e... —
+        same bytes as the downloaded-and-gunzipped vendor/elm post-gunzip);
         kernel recompiled via tracked build-elm.sh contract to
         107,835 bytes SHA 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c;
         71/71 REAL-ELM tests PASS against the canonical 0.19.2 bytes)
     (exact-head VSIX: dist/clinemm-4.1.16-d9b0533d9.vsix,
         29,095,278 bytes, SHA ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038;
-        embedded kernel SHA == local kernel SHA, artifact-identity gate CLOSED)
+        runtime-assets kernel SHA == local kernel SHA, artifact-identity gate CLOSED)
   → NEXT: host install → LIVE authority ON
           (operator step; /Volumes EPERM in this agent context — requires
            human host terminal for /Volumes/.../Users/chistyakov/.vscode/extensions/

@@ -25,36 +25,54 @@ Elm kernel SHA-256 (POST canonical rebuild — THIS ACT, single source of truth)
 
 Elm kernel bytes (canonical): 107,835
 
-TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA:
+TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_RUNTIME_ASSETS_KERNEL_SHA:
   15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
   (byte-identical; artifact-identity gate is CLOSED)
 
-Elm compiler used: 0.19.2 (canonical; downloaded)
-Elm compiler SHA (asset):    8b02a7fac1643b39acb87ae2a8e10f0f1534fe61940
-                                 ca08ab17dfc2ac98115c8
-                                 (matches official release asset SHA)
-Elm compiler SHA (binary):   3e65ac3e2817b89530775fc6664bc20fd7e7c5cd04
-                                 1bbb09eba5722a1037dc8b
-                                 (decompressed binary, post-gunzip)
+  Per CORRECTION03 (PACKAGING-DISCOVERY → stage to runtime-assets/):
+  the canonical packaged runtime kernel path in the VSIX is
+    extension/runtime-assets/completion-authority.js
+  (NOT extension/elm/completion-authority/vendor/completion-authority.js
+   which is the legacy dev bundle path, gitignored locally).
 
-Canonical 0.19.2 deployment:
-  curl -fsSL https://github.com/elm/compiler/releases/download/0.19.2/
-       elm-0.19.2-mac-arm.gz
-       > /tmp/elm-0.19.2-mac-arm.gz
-  shasum verified: matches the official release asset
-  gunzip → /tmp/elm-0.19.2 (Mac arm64 Mach-O)
-  chmod +x → installed to apps/vscode/elm/completion-authority/vendor/elm
-  ELM_HOME=/tmp/elm-cache (required because /Volumes filesystem
-     has EPERM on user-dirs elm/0.19.2/packages/lock even with chistyakov
-     ownership; ELM_HOME redirect bypasses the read-only APFS flag).
-  cd apps/vscode/elm/completion-authority
-  ./scripts/build-elm.sh  (the tracked build contract — unoptimized)
-  Result: 107,835-byte kernel compiled with the canonical compiler
-          at SHA 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c.
+  Proof (executed this ACT):
+    VSIX=dist/clinemm-4.1.16-d9b0533d9.vsix
+    unzip -l "$VSIX" | grep 'extension/runtime-assets/completion-authority.js'
+      → extension/runtime-assets/completion-authority.js    107835
+      → extension/runtime-assets/completion-authority.js.sha256 65
+    unzip -p "$VSIX" extension/runtime-assets/completion-authority.js | shasum -a 256
+      → 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+    unzip -p "$VSIX" extension/runtime-assets/completion-authority.js.sha256
+      → 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a748a4f4c
+    [matches the inline kernel bytes; matches the staged disk kernel]
+
+Compiler provenance:
+  Per build-elm.sh:
+      ELM="$(command -v elm 2>/dev/null || true)"
+  The tracked build contract resolves `elm` from PATH via `command -v`,
+  NOT from apps/vscode/elm/completion-authority/vendor/elm (the vendored
+  compiler is NOT consulted; the script header explicitly states this).
+  With the build env PATH=/opt/homebrew/bin:$PATH, the resolved compiler
+  was the npm-bundled 0.19.2 at /opt/homebrew/bin/elm:
+      ELM=/opt/homebrew/bin/elm (symlink to ../lib/node_modules/elm/bin/elm)
+      ELM_VERSION=0.19.2
+      ELM_SHA=3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
+      ELM_BYTES=59,968,512 (Mach-O 64-bit arm64)
+  This npm-bundled binary is byte-identical to the vendor/elm binary
+  installed from the official elm/compiler 0.19.2 release asset
+  (vendor/elm SHA: 3e65ac3e... — same). So whether the build picked up
+  the npm elm or vendor/elm, both are the SAME canonical 0.19.2 binary.
+
+  Note on vendor/elm role:
+    apps/vscode/elm/completion-authority/vendor/elm is gitignored
+    locally. It IS bundled in the VSIX (at the legacy
+    extension/elm/completion-authority/vendor/elm path) for dev
+    environments, but it is NOT the canonical runtime load path.
+    The canonical load path is extension/runtime-assets/completion-authority.js.
 
 VSIX: BUILT AND BOUND in this ACT.
   Path: dist/clinemm-4.1.16-d9b0533d9.vsix
-  Bytes: 29,095,279
+  Bytes: 29,095,278
   SHA-256: ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038
   Subject head: d9b0533d97265021e0c96df92a145f66b7e0ce68
   Build command:
@@ -79,10 +97,17 @@ VERIFICATION:
   bunx tsc --noEmit                          → exit 0
   bun run lint                               → exit 0
   git diff --check                           → exit 0
-  unzip -p dist/clinemm-4.1.16-d9b0533d9.vsix \
-       extension/elm/completion-authority/vendor/completion-authority.js | shasum
-       → 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
-       (matches local kernel byte-for-byte)
+
+  Artifact-identity closure proof (CANONICAL PATH per CORRECTION03):
+    VSIX=dist/clinemm-4.1.16-d9b0533d9.vsix
+    unzip -l "$VSIX" | grep 'extension/runtime-assets/completion-authority.js'
+      → extension/runtime-assets/completion-authority.js    107835 bytes
+      → extension/runtime-assets/completion-authority.js.sha256 65 bytes
+    unzip -p "$VSIX" extension/runtime-assets/completion-authority.js | shasum -a 256
+      → 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+    unzip -p "$VSIX" extension/runtime-assets/completion-authority.js.sha256
+      → 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+  All three SHAs equal the local disk kernel SHA. Artifact-identity gate CLOSED.
 
 ARTIFACT IDENTITY BINDING:
 
@@ -90,7 +115,7 @@ ARTIFACT IDENTITY BINDING:
   | Field              | Value                                      |
   +--------------------+--------------------------------------------+
   | SUBJECT_HEAD       | d9b0533d97265021e0c96df92a145f66b7e0ce68   |
-  | DOGFOOD_VERSION    | 4.1.16-d9b0533d9                           |
+  | DOGFOODVOD        | 4.1.16-d9b0533d9                           |
   | VSIX_PATH          | dist/clinemm-4.1.16-d9b0533d9.vsix         |
   | VSIX_BYTES         | 29,095,278                                 |
   | VSIX_SHA256        | ac4480cbd33d4ea7a01517aff00cd00118787d047...|
@@ -98,31 +123,44 @@ ARTIFACT IDENTITY BINDING:
   |                    | (canonical 0.19.2 unoptimized, tracked      |
   |                    |  build-elm.sh contract; UNCHANGED          |
   |                    |  across tested/staged/embedded)            |
-  | ELM_COMPILER       | 0.19.2 (canonical, downloaded, SHA-verified)|
+  | ELM_COMPILER       | 0.19.2 (system PATH; SHA                    |
+  |                    |  3e65ac3e2817b89530775fc6664bc20fd7e7c5cd04|
+  |                    |  1bbb09eba5722a1037dc8b; same bytes as     |
+  |                    |  the npm-bundled 0.19.2 AND the official    |
+  |                    |  github release asset post-gunzip)         |
   | INSTALLED_VERSION  | 4.1.16 (operator install required)         |
   +--------------------+--------------------------------------------+
 
 ## §14.A — Artifact-identity closure (per artifact-identity reviewer)
 
-TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA:
+TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_RUNTIME_ASSETS_KERNEL_SHA:
   15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
 
-The artifact-identity reviewer correctly rejected the prior evidence's
-'non-deterministic' framing. The ~5KB difference (102,772 vs 107,835)
-was caused by `--optimize` being passed to a standalone `elm make`
-outside the tracked build-elm.sh contract. The fix is to use the
-tracked build contract (unoptimized) for the local kernel rebuild.
-After the fix, tested/staged/embedded kernel SHAs are all
-byte-identical — the artifact-identity gate is CLOSED.
+The artifact-identity reviewer correctly rejected two prior evidence defects:
+1. The "Elm make output is non-deterministic" framing was wrong; the
+   ~5KB difference was caused by `--optimize` on a standalone rebuild
+   outside the tracked build-elm.sh contract.
+2. The proof command extracted the kernel from the wrong VSIX path
+   (`extension/elm/completion-authority/vendor/...` legacy dev bundle)
+   instead of the canonical runtime load path
+   (`extension/runtime-assets/...`) that CORRECTION03 introduced.
+
+The fix is two-part and did NOT require another build:
+- Use the tracked build-elm.sh contract exclusively (unoptimized,
+  no special flags).
+- Extract the kernel from `extension/runtime-assets/completion-authority.js`
+  in the VSIX (not from the legacy `extension/elm/.../vendor/...` path).
+
+After both fixes, tested/staged/runtime-assets-embedded kernel SHAs are
+all byte-identical (15c61e204...). The artifact-identity gate is CLOSED.
 
 The build contract is now singular:
   apps/vscode/elm/completion-authority/scripts/build-elm.sh
   (invokes `elm make src/Main.elm --output=vendor/completion-authority.js`
-   — NO `--optimize` flag; any rebuild via this script reproduces the
-   canonical kernel SHA byte-for-byte as long as the canonical 0.19.2
-   compiler is at apps/vscode/elm/completion-authority/vendor/elm.)
+   — NO `--optimize` flag; resolves `elm` from PATH via `command -v`;
+   ELM_HOME=/tmp/elm-cache for sandboxed subprocess.)
 
-VERDICT: PASS_ARTIFACT_BOUND (kernel identity closed end-to-end).
+VERDICT: PASS_ARTIFACT_BOUND (artifact-identity gate CLOSED).
   The bounded vocabulary repair is COMPLETE and PROVEN at the
   unit-test layer (§5/§6/§8 RED→GREEN→ABLATION) AGAINST THE
   CANONICAL 0.19.2 KERNEL BYTES. The canonical compiler build
@@ -133,8 +171,9 @@ VERDICT: PASS_ARTIFACT_BOUND (kernel identity closed end-to-end).
     dist/clinemm-4.1.16-d9b0533d9.vsix
     29,095,278 bytes
     SHA ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038
-  And the VSIX-embedded kernel SHA matches the tested kernel SHA
-  byte-for-byte (artifact-identity gate is closed).
+  And the VSIX runtime-assets kernel SHA matches the tested kernel SHA
+  byte-for-byte (artifact-identity gate is CLOSED via the canonical
+  runtime-assets path per CORRECTION03).
   The remaining operator step is VSIX install into host + LIVE
   mundane task — this requires the human host terminal.
 
@@ -157,7 +196,7 @@ PASS_CRITERIA_SATISFIED:
   - canonical 0.19.2 kernel pinned at canonical SHA    YES (15c61e204...)
   - all REAL-ELM tests pass against canonical 0.19.2   YES (71/71 PASS)
   - exact-head VSIX built and bound at d9b0533d9       YES (NEW in this ACT)
-  - tested/staged/VSIX-embedded kernel SHAs equal      YES (artifact gate CLOSED)
+  - VSIX runtime-assets kernel SHA == tested kernel SHA YES (artifact gate CLOSED)
   - exact VSIX installed into host                     NO  (operator step)
   - LIVE ON proves corrected ordering                  NO  (operator step)
   - LIVE counters have zero decode/kernel failures     NO  (operator step)

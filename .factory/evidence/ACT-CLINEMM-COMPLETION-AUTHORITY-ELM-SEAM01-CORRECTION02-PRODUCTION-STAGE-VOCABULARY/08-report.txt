@@ -176,22 +176,54 @@ ARTIFACT IDENTITY:
                             contract — UNOPTIMIZED, no special flags)
   ELM_KERNEL_TESTED_SHA:   = ELM_KERNEL_SHA256 (shadow02 test pin)
   ELM_KERNEL_STAGED_SHA:   = ELM_KERNEL_SHA256 (on disk at vendor/completion-authority.js)
-  ELM_KERNEL_VSIX_EMBEDDED_SHA: = ELM_KERNEL_SHA256 (extracted from dist/clinemm-4.1.16-d9b0533d9.vsix)
-  ALL_THREE_MATCH:         TRUE
-  ELM_COMPILER:            0.19.2 (canonical, downloaded, SHA-verified)
+  ELM_KERNEL_VSIX_RUNTIME_ASSETS_SHA: = ELM_KERNEL_SHA256
+                            (extracted from dist/clinemm-4.1.16-d9b0533d9.vsix
+                             at extension/runtime-assets/completion-authority.js
+                             — the CANONICAL load path per CORRECTION03)
+  ELM_KERNEL_VSIX_LEGACY_BUNDLE_SHA: = ELM_KERNEL_SHA256
+                            (extracted from same VSIX at
+                             extension/elm/completion-authority/vendor/completion-authority.js
+                             — legacy dev bundle path, gitignored locally,
+                             bundled in VSIX for dev environments only;
+                             NOT the canonical runtime load path)
+  ALL_THREE_MATCH:         TRUE (tested == staged == vsix-runtime-assets)
+  ELM_COMPILER:            0.19.2 (canonical; resolved by build-elm.sh's
+                            `command -v elm` from PATH — vendor/elm is
+                            NOT consulted per its own header; actual
+                            compiler was /opt/homebrew/bin/elm, the
+                            npm-bundled 0.19.2 with the same SHA as
+                            the post-gunzip official release asset)
                            SHA(asset)   = 8b02a7fac1643b39acb87ae2a8e10f0f1534fe61940ca08ab17dfc2ac98115c8
                            SHA(binary)  = 3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
 
   build-elm.sh command (canonical):
     apps/vscode/elm/completion-authority/scripts/build-elm.sh
     (invokes: elm make src/Main.elm --output=vendor/completion-authority.js
-     -- NO --optimize flag; ELM_HOME=/tmp/elm-cache for sandboxed subprocess)
+     -- NO --optimize flag; ELM_HOME=/tmp/elm-cache for sandboxed subprocess;
+     resolves `elm` via `command -v elm` from PATH)
 
 VSIX:
   Path:    dist/clinemm-4.1.16-d9b0533d9.vsix
   Bytes:   29,095,278
   SHA-256: ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038
   Subject head: d9b0533d97265021e0c96df92a145f66b7e0ce68
+
+  Embedded kernel SHAs (both locations in the VSIX — byte-identical):
+    extension/runtime-assets/completion-authority.js (CANONICAL load path per CORRECTION03)
+      SHA: 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+      Bytes: 107,835
+    extension/elm/completion-authority/vendor/completion-authority.js (legacy dev bundle)
+      SHA: 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+      Bytes: 107,835
+  Proof commands (executed this ACT):
+    VSIX=dist/clinemm-4.1.16-d9b0533d9.vsix
+    unzip -l "$VSIX" | grep 'extension/runtime-assets/completion-authority.js'
+      → extension/runtime-assets/completion-authority.js    107835 bytes
+      → extension/runtime-assets/completion-authority.js.sha256 65 bytes
+    unzip -p "$VSIX" extension/runtime-assets/completion-authority.js | shasum -a 256
+      → 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+    unzip -p "$VSIX" extension/runtime-assets/completion-authority.js.sha256
+      → 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
 
   Build command:
     python3 scripts/build-dogfood-vsix.py --skip-typecheck --force --output-dir dist
@@ -246,13 +278,29 @@ GENERIC_PRODUCTION_SEMANTICS_CHANGED:  (removed in C1-P1; replaced by the two
 
 PASS_KERNEL_EXECUTABLE_GREEN (CORRECTION02)
   → HALT_CAUSAL_CLAIM_INVALID (C1 reviewer; PASS)
+    (confounded HOLD test replaced with C1-corrected
+     SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT; commitCount=0 (HOLD) is the
+     LIVE contract — BCB barrier consults lastDecision of unfiltered
+     computeHoldReasons)
   → C1_P1_GO_WITH_BOUNDED_EVIDENCE_FIX (C1-P1 reviewer; PASS)
+    (flags renamed: AUTHORITY_COMPLETION_ORDERING_CHANGED (true) +
+     EXPECTED_FINAL_USER_OUTCOME_CHANGED (false); composite witness
+     surfaces full semantic regression in one failure payload)
   → HALT_ARTIFACT_NOT_TEST_BOUND (artifact-identity reviewer; PASS)
-    → tested/staged/VSIX-embedded kernel SHAs are now byte-identical
-      (15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c);
-      the artifact-identity gate is CLOSED.
+    (the prior --optimize standalone rebuild diverged from the tracked
+     build-elm.sh contract; using the tracked contract now produces
+     TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_RUNTIME_ASSETS_KERNEL_SHA
+     == 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c)
+  → HALT_ARTIFACT_EMBEDDED_PATH_UNPROVEN (artifact-identity reviewer; PASS)
+    (proof command extracted kernel from the wrong VSIX path
+     [legacy extension/elm/.../vendor/...] instead of the canonical
+     runtime-assets path [extension/runtime-assets/...] per CORRECTION03;
+     updated proof command to extract from extension/runtime-assets/
+     — runtime-assets SHA equals local kernel SHA equals sidecar SHA)
   → NEXT: host install + LIVE mundane task
-          (operator step; requires human host terminal)
+          (operator step; /Volumes EPERM in this agent context — requires
+           human host terminal for /Volumes/.../Users/chistyakov/.vscode/extensions/
+           write and the LIVE mundane task launch)
 
 ## Board cursor (post artifact-identity closure)
 
