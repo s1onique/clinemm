@@ -17670,3 +17670,270 @@ MYC03                              HOLD
 - `.factory/epic-board.md` (this C1-P1 section + flag block update)
 
 **Production code:** UNCHANGED. No new TS production changes; no Elm changes.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01 — HALT_CCARD_COMMIT_STAGE_MISBOUND — 2026-10-04
+
+**Status:** HALT. Reviewer verdict on the new LIVE dump (commit `5f9330c55`
+landed `dumpExtensionSideElmAuthorityCounters` and made the prior
+`HALT_LIVE_AUTHORITY_REGRESSION` UNOBSERVABLE row at epic-board.md:12672
+observable for the first time). The LIVE counters and CCARD chronology
+contradict the §17 invariant's factual reading. This halt WITHDRAWS
+`HALT_LIVE_AUTHORITY_NOT_ENFORCING` (incorrect attribution) and
+RECLASSIFIES the prior UNOBSERVABLE halt to this halt (the dump adapter
+now exists).
+
+### Verdict
+
+```text
+HALT_CCARD_COMMIT_STAGE_MISBOUND
+```
+
+### Counters (LIVE)
+
+```text
+states          = 3
+hold            = 1
+authorize       = 0
+failure         = 0
+fallbackUsed    = 0
+lastDecision    = hold
+lastHoldReasons = ["active_run"]
+```
+
+### CCARD chronology (LIVE)
+
+```text
+seq 7 submit_and_exit_seen
+seq 8 task_completion_committed   ← emitted BEFORE Elm gate
+seq 9 agent_turn_done
+```
+
+### First real divergence
+
+The capture-before-gate ordering at
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1565` (the
+`captureContinuationCardinalityAuthorityRecord({ stage: "task_completion_committed" })`
+call). All downstream CCARD events are downstream of this single ordering
+defect. The capture fires BEFORE `await checkElmCompletionAuthority(...)`
+(line 1582) and BEFORE `setTurnPhase("completed", …)` (line 1585).
+
+Therefore: the stage name `task_completion_committed` overstates what
+actually occurred. It is closer to `task_completion_commit_attempted` or
+`task_completion_commit_candidate`. When Elm returns HOLD (the LIVE
+case), the capture was emitted but the effect was suppressed — yet the
+shadow still transitions to `task = completion_committed`.
+
+### §17 invariant violated at the LIVE boundary
+
+```text
+task_completion_committed must not occur while Elm authority still has an
+active run
+```
+
+CORRECTION02 §17 (epic-board.md:17451-17458) proved this at the unit-test
+layer via the shadow's `commitCount` counter. But `commitCount` is a
+post-separation Elm-kernel projection, NOT a gate on the capture itself.
+The LIVE record was emitted while `activeRun = run_ElGUdKMC`. The unit
+test layer never tested the actual production capture boundary; only the
+shadow's downstream counter.
+
+### Bounded next repair
+
+**Do NOT touch Elm authority logic.** The Elm seam itself is composed-green
+under available evidence (see Reviewer summary below). The defect is in
+the observation vocabulary at the capture seam. Two bounded options, both
+single-line + 3 RED tests:
+
+- **Option A (preferred)**: move the `task_completion_committed` capture
+  to AFTER the Elm gate and AFTER the `setTurnPhase("completed", …)` effect.
+  HOLD ⇒ no factual capture. AUTHORIZE ⇒ exactly one.
+- **Option B**: rename existing stage to `task_completion_commit_attempted`
+  + add a NEW post-effect stage `task_completion_committed`.
+
+The factual contract for the Option A move is "successful traversal of the
+production completion-effect seam", not "the call-site ran". `setTurnPhase`
+is an optional callback (`this.options.setTurnPhase?.(...)`); the test
+`CCARD-MISB-02` must require the callback to be wired if its presence is
+already a production invariant. This ACT does NOT redesign the
+optionality.
+
+### Files that will likely change
+
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`
+- `apps/vscode/src/sdk/continuation-cardinality-authority.ts` (option B only)
+- `apps/vscode/src/sdk/__tests__/ccard-commit-stage-boundary-misbound01.test.ts`
+  (NEW, 3 tests: HOLD suppression, AUTHORIZE-one-committed, conservation
+  discriminator. NO new diagnostic counters; the third test is a structural
+  / behavioral conservation pin)
+
+### Hard prohibitions
+
+- DO NOT reopen Elm `Authority.elm` semantics.
+- DO NOT change `checkElmCompletionAuthority` /
+  `flushElmAuthorityForSession` / `getElmCompletionAuthorityDecision`
+  shapes.
+- DO NOT change BCB / BNCA / PCCA / CPA / PCRS02 / PCRS02C01 / CCARD
+  invariants.
+- DO NOT add new RPC, schema_version bump, or UI surface change.
+- DO NOT touch the Elm kernel bundle / canonical runtime load path.
+
+### Conservation (predicted — apply after the bounded repair)
+
+`real_elm_provider01`, `source-stage-vocabulary01`, `first_seam01_case01`,
+`first_seam01_preservation`, `shadow02`, `historical_replay01`,
+`bcb01 + 4 corrections`, `bnca (8 suites)`, `pcca01`, `tqcb01`,
+`ccard01` — same suite as CORRECTION02 closure
+(epic-board.md:17432-17444). Must pass.
+
+### Operator step (unchanged from CORRECTION02)
+
+```bash
+python3 scripts/build-dogfood-vsix.py
+codium --install-extension dist/clinemm-<...>.vsix
+
+CLINEMM_RUNTIME_PROFILE=dogfood \
+CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 \
+CLINEMM_COMPLETION_AUTHORITY_ELM=1 \
+  # mundane task; capture authority counters + CCARD + shadow
+  # verify: HOLD -> commitCount = 0; AUTHORIZE -> commitCount = 1
+```
+
+### Reviewer summary
+
+The Elm authority seam is **composed-green under available evidence**:
+LIVE counters prove the real provider was consulted and returned HOLD;
+the source and existing discriminators prove HOLD suppresses the
+completion effect. LIVE effect-suppression itself is not directly
+observable until the CCARD boundary is repaired. The defect is a
+vocabulary/timing mis-labeling: the CCARD record is emitted at a
+commit-ATTEMPT boundary, not a commit-COMPLETED boundary. This
+mis-labeling is a real P0 because (a) it violates the Factory rule
+against promoting request/attempt → committed fact, (b) it produces a
+SHADOW transition not anchored to a real completion effect, and (c) it
+would mask any future regression where the authority gate is bypassed or
+weakened.
+
+The bounded repair is a single-file capture move (or rename) with 3 RED
+tests at the production capture seam. It does NOT touch Elm semantics.
+
+### Withdrawals
+
+- **Withdrawn**: `HALT_LIVE_AUTHORITY_NOT_ENFORCING` (incorrect attribution).
+- **Reclassified**: `HALT_LIVE_AUTHORITY_REGRESSION` (epic-board.md:12672,
+  UNOBSERVABLE row) → this halt.
+
+### Board cursor (update)
+
+```text
+HOLD:    ACT-MYC-CLINEMM03-LIVE-PRIME-QUALIFICATION-RESUME01
+NOW:     ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01  (HALT_CCARD_COMMIT_STAGE_MISBOUND)
+CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY  (PASS_ARTIFACT_BOUND; reopened as a HALT-driven successor — the LIVE dump surfaced the capture-before-gate defect that the unit-test layer did not exercise)
+         ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER  (REAL_ELM_PROVEN_HALT_ARTIFACT_UNBOUND)
+         ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01  (HALT_AUTHORITY_NOT_CAUSAL)
+```
+
+**C1:** Operator installs exact-head VSIX, runs mundane task with
+`CLINEMM_COMPLETION_AUTHORITY_ELM=1`, captures counters + CCARD + shadow.
+HOLD ⇒ `commitCount = 0`. AUTHORIZE ⇒ `commitCount = 1`. `decodeErrors =
+0`, `kernelErrors = 0`, `fallbackUsed = 0`. Only after this LIVE
+re-qualification does the predecessor ACT chain close cleanly.
+
+**Files changed (this halt):**
+- `.factory/acts/ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01.md` (NEW halt + bounded next repair brief)
+- `.factory/epic-board.md` (this section; cursor update)
+
+### Execution summary (2026-10-04, same board session)
+
+**GREEN achieved on the production capture seam.**
+
+Per ACT §10 (Conservation, predicted), applied Option A:
+
+```text
+1. RED tests written first (ccard-commit-stage-boundary-misbound01.test.ts):
+   CCARD-MISB-01 (HOLD)            RED pre-fix: emits 1 (expected 0)
+   CCARD-MISB-02 (AUTHORIZE)        GREEN both before and after
+   CCARD-MISB-03 (2x HOLD + 1x AUTH) RED pre-fix on first HOLD (emits 1)
+
+2. Production change applied:
+   apps/vscode/src/sdk/sdk-session-event-coordinator.ts  +18 / -12
+   Move `captureContinuationCardinalityAuthorityRecord(...)` AFTER the
+   Elm authority gate AND AFTER `setTurnPhase?.("completed", …)`.
+   Comment block updated to reference the repair and the halt.
+
+3. GREEN tests:
+   CCARD-MISB-01                    GREEN (HOLD emits 0 committed records)
+   CCARD-MISB-02                    GREEN (AUTHORIZE emits exactly 1)
+   CCARD-MISB-03                    GREEN (HOLDs emit 0; AUTHORIZE mints
+                                              completion-<session>-1)
+   → 3/3 PASS
+
+4. Conservation suite (same as CORRECTION02 §10):
+   real_elm_provider01                                 5/5 PASS
+   source-stage-vocabulary01                           3/3 PASS
+   first-seam01.case01                                 6/6 PASS
+   first-seam01.preservation                           6/6 PASS
+   shadow02                                            27/27 PASS
+   historical_replay01                                 20/20 PASS
+   bcb01 + 4 corrections                               38/38 PASS
+   bnca (8 suites)                                     20/20 PASS
+   pcca01                                              4/4 PASS
+   tqcb01                                              15/15 PASS
+   ccard01                                             13/13 PASS
+   pcrs02                                              5/5 PASS
+   ccard-commit-stage-boundary-misbound01 (NEW)        3/3 PASS
+   → 165/165 PASS (no regressions)
+
+5. typecheck (`tsc -p tsconfig.json --noEmit`): PASS
+
+6. Workspace state at end of execution:
+   - A  .factory/acts/ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01.md
+   - M  .factory/epic-board.md                                (this section + cursor)
+   - A  apps/vscode/src/sdk/__tests__/ccard-commit-stage-boundary-misbound01.test.ts (NEW, 3 tests)
+   - M  apps/vscode/src/sdk/sdk-session-event-coordinator.ts  (capture moved; comment updated)
+
+**C1 still pending**: operator installs exact-head VSIX, runs mundane
+task with `CLINEMM_COMPLETION_AUTHORITY_ELM=1`, captures counters +
+CCARD + shadow. Expected LIVE re-qualification contract:
+- `commitCount = 0` when Elm returns HOLD
+- `commitCount = 1` when Elm returns AUTHORIZE
+- `decodeErrors = 0`, `kernelErrors = 0`, `fallbackUsed = 0`
+
+Until C1 lands, this halt cursor remains ACTIVE. The unit-test layer
+now provably gates the production capture seam at the load-bearing
+boundary; the LIVE re-qualification is the final close-out signal.
+
+### Reviewer-revision summary (2026-10-04, same board session, post-execution)
+
+**P1 evidence-label fix** applied to
+`apps/vscode/src/sdk/__tests__/ccard-commit-stage-boundary-misbound01.test.ts`:
+
+```text
+REAL_PRODUCTION_SEAM        — the production effect/capture seam is
+                             exercised against the real
+                             SdkSessionEventCoordinator code
+SYNTHETIC authority decision — the Elm decision is injected via
+                             getElmCompletionAuthorityDecision;
+                             no real instantiated Elm kernel
+                             participates in this test
+Not REAL_ELM                — this ACT does NOT independently re-prove
+                             real Elm causality; that proof is frozen
+                             from the predecessor ACT
+                             (di_seam_causal_proof: TRUE;
+                             real_elm_authority_proof: FALSE)
+```
+
+**P2 comment-residue fix**: removed the misleading assertion that the
+CCARD capture buffer is what `dumpExtensionSideElmAuthorityCounters`
+reads. The dump helper serializes Elm-authority counters, NOT the
+CCARD capture buffer. The test reads the buffer via
+`getContinuationCardinalityAuthorityCaptureRecords()`.
+
+Both edits are comment-only; no production code touched. Re-ran
+`bun run test:vitest` on the new file: 3/3 PASS. Re-ran
+`tsc -p tsconfig.json --noEmit`: PASS.
+
+### Commit (per reviewer directive)
+
+```bash
+git commit -m 'ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01: bind committed capture after authority effect'
+```

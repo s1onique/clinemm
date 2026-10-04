@@ -1556,12 +1556,29 @@ export class SdkSessionEventCoordinator {
 										})
 								}
 							} else {
-								// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+								// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 +
+								// ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01:
 								// C10 — task_completion_committed capture. Fires
 								// at the actual completion commit seam (the
 								// canonical phase transition). One record per
 								// user-visible COMPLETED. The host-side capture
 								// gate makes this a complete no-op when OFF.
+								//
+								// REPAIR: the capture now fires AFTER the Elm
+								// authority gate AND AFTER the
+								// `setTurnPhase("completed", …)` effect. The
+								// previous (pre-fix) ordering emitted the record
+								// BEFORE the gate, which meant a HOLD decision
+								// still produced a "committed" shadow transition
+								// (see HALT_CCARD_COMMIT_STAGE_MISBOUND, commit
+								// `5f9330c55` LIVE dump). The factual contract for
+								// the move is "successful traversal of the
+								// production completion-effect seam", not "the
+								// call-site ran".
+								if (!await this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
+									return
+								}
+								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 								captureContinuationCardinalityAuthorityRecord({
 									stage: "task_completion_committed",
 									origin: "pending_prompt_drain",
@@ -1572,17 +1589,6 @@ export class SdkSessionEventCoordinator {
 									// Monotonic, per-coordinator-instance. One C10 -> one completionId.
 									completionId: `completion-${activeSession.sessionId}-${++this.nextCompletionCommitEventId}`,
 								})
-								// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01:
-								// Elm is the FINAL gate. The CCARD capture above
-								// already happened (the shadow observer saw the
-								// record); Elm has the same model state. When
-								// Elm-authority mode is OFF the helper is a no-op
-								// and the existing TS effect runs unchanged.
-								// When ON, Elm's decision owns this commit.
-								if (!await this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
-									return
-								}
-								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 							}
 						} else {
 							// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01-CORRECTION01:
