@@ -1,0 +1,31 @@
+GATES
+
+focused tests:
+  POSTRUN tests                       = 5/5 PASS
+  CCARD-MISB tests                    = 3/3 PASS
+  completion-authority-elm-real-provider01 = 3/3 PASS
+  completion-authority-elm-source-stage-vocabulary01 = 18/18 PASS
+  completion-authority-elm-shadow02    = 22/22 PASS
+  completion-authority-elm-first-seam01 = 6/6 PASS
+  completion-authority-elm-authority-counter-dump01 = 5/5 PASS
+  completion-authority-elm-historical-replay01 = 22/22 PASS
+  background-completion-barrier01-correction02 = 6/6 PASS
+  background-completion-barrier01-correction03 = 5/5 PASS
+  background-completion-barrier01-correction04 = 4/4 PASS
+  background-notify-completion-authority-c10-framework01 = 3/3 PASS
+  background-notify-completion-authority-c10-framework-ablation01 = 2/2 PASS
+  background-notify-completion-authority-c10-framework-dispatch-failed01 = 4/4 PASS
+  background-notify-completion-authority-c10-framework-dispatch-failed-ablation01 = 4/4 PASS
+  background-notify-completion-authority-c10-red01 = 1/1 PASS
+  (3 pre-existing vscode-package failures unrelated to this ACT)
+
+typecheck:
+  bunx tsc --noEmit = PASS (no errors)
+
+lint:
+  biome lint src/sdk/continuation-cardinality-authority.runtime-capture.ts src/sdk/sdk-session-event-coordinator.ts src/sdk/SdkController.ts src/sdk/__tests__/post-run-completion-authority-reevaluation01.pcra01.test.ts = 4 files, no diagnostic-level=error
+
+format:
+  biome format --write (one-time) = 3 files reformatted
+
+git diff --check = CLEAN

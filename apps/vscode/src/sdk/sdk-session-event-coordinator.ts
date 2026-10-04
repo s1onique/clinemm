@@ -12,6 +12,7 @@ import {
 	defaultGetElmCompletionAuthorityDecision,
 	type ElmCompletionAuthorityDecision,
 } from "./completion-authority-elm-authority"
+import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import {
 	enterExtensionHostHotloopHandleSessionEvent,
@@ -900,10 +901,87 @@ export class SdkSessionEventCoordinator {
 		// existing TS effect runs unchanged. When the production
 		// helper arms Elm-authority mode, Elm's decision owns this
 		// commit.
-		if (!await this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
+		if (!(await this.checkElmCompletionAuthority("session-event-turn-complete-completed"))) {
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
+			// Elm authority HOLD or FAILURE in the re-evaluation
+			// path. The marker was just cleared above by the
+			// "All four conservation checks pass" branch — but the
+			// Elm authority must STILL authorize before commit. If
+			// Elm returns HOLD here (e.g. another `agent_turn_done`
+			// race), re-register the marker so the next causal
+			// trigger (e.g. the upcoming `agent_turn_done`) will
+			// re-evaluate. Reuses the existing marker shape so the
+			// existing reevaluation path covers Elm holds too.
+			this.deferredCompletionBarrier = {
+				sessionId: activeSession.sessionId,
+				taskId: this.options.getTask?.()?.taskId,
+				epoch: this.options.messageTranslatorState.getMinter().epoch,
+				deferredAt: Date.now(),
+			}
 			return
 		}
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+	}
+
+	/**
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
+	 *
+	 * Post-run authority re-evaluation trigger. Production invokes
+	 * this after `LocalRuntimeHost.runTurn` resolves with the factual
+	 * `agent_turn_done` capture (the C8 seam at
+	 * sdk/packages/core/src/runtime/host/local-runtime-host.ts:1320).
+	 *
+	 * Ordering (P0, ACT §8):
+	 *   1. `flushElmAuthorityForSession(sessionId)` — drains the
+	 *      per-session queue so Elm processes the `agent_turn_done`
+	 *      record and clears `activeRun`. This MUST happen before the
+	 *      authority consult or the second decision would read stale
+	 *      HOLD state. The flush is a no-op when Elm authority is OFF.
+	 *   2. `reevaluateDeferredCompletionBarrier()` — re-runs the full
+	 *      TS conservation predicate chain. If all predicates clear
+	 *      AND a deferred-completion-barrier marker is present, the
+	 *      re-evaluation consults Elm again. If Elm now AUTHORIZEs
+	 *      (because `activeRun` was just cleared by step 1), commit
+	 *      fires exactly once.
+	 *
+	 * This is the load-bearing post-run liveness seam the LIVE RED
+	 * identified was missing. No timing: the call is driven by the
+	 * factual `agent_turn_done` event, not by polling.
+	 *
+	 * Authority OFF: when the Elm authority runtime is disabled
+	 * (the default), this seam MUST be a true no-op. The early-return
+	 * guard at the top of this method short-circuits before any flush
+	 * or reevaluation — so legacy behavior is byte-identical to the
+	 * predecessor ACT (no new re-evaluation cause for legacy TS
+	 * barriers).
+	 */
+	async notifyAgentTurnDone(sessionId: string): Promise<void> {
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01 P1 fix:
+		// When Elm authority is OFF (the default), this seam MUST be a
+		// no-op. Without this guard, `reevaluateDeferredCompletionBarrier`
+		// would re-run the TS conservation chain against a pre-existing
+		// TS-created `deferredCompletionBarrier` and (since the legacy
+		// Elm `default` provider returns `authorize` when OFF) commit
+		// completion. That would introduce a NEW re-evaluation cause
+		// for legacy TS barriers in the OFF path, which is a semantic
+		// change beyond the ACT's scope.
+		//
+		// With this guard, the trigger is a true no-op when Elm
+		// authority is OFF: legacy behavior is byte-identical to the
+		// predecessor ACT.
+		if (!ElmAuthorityModule.isElmAuthorityEnabled()) {
+			return
+		}
+		try {
+			await this.options.flushElmAuthorityForSession?.(sessionId)
+		} catch (err) {
+			Logger.warn(
+				`[SdkController] Elm completion-authority flush threw in notifyAgentTurnDone for session=${sessionId}; proceeding to reevaluate anyway (no silent TS fallback): ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			)
+		}
+		await this.reevaluateDeferredCompletionBarrier()
 	}
 
 	/**
@@ -1575,7 +1653,28 @@ export class SdkSessionEventCoordinator {
 								// the move is "successful traversal of the
 								// production completion-effect seam", not "the
 								// call-site ran".
-								if (!await this.checkElmCompletionAuthority("session-event-turn-complete-completed")) {
+								if (!(await this.checkElmCompletionAuthority("session-event-turn-complete-completed"))) {
+									// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
+									// Elm authority HOLD or FAILURE returns false from
+									// checkElmCompletionAuthority. Register the
+									// deferred-completion-barrier marker with the SAME
+									// (sessionId, taskId, epoch) triple the existing TS-
+									// predicate branch uses. This is the liveness repair
+									// the LIVE RED identified: previously the marker was
+									// only set on TS-predicate holds, so an Elm HOLD
+									// (e.g. active_run) that became releasable on
+									// agent_turn_done had no marker to reevaluate. The
+									// marker is identical to the existing one (epoch-bound,
+									// one outstanding per identity), so the existing
+									// reevaluateDeferredCompletionBarrier() path - already
+									// wired through SdkController - transparently extends
+									// to Elm holds. Reuses the existing path per ACT §7 OPTION 1.
+									this.deferredCompletionBarrier = {
+										sessionId: activeSession.sessionId,
+										taskId: this.options.getTask?.()?.taskId,
+										epoch: this.options.messageTranslatorState.getMinter().epoch,
+										deferredAt: Date.now(),
+									}
 									return
 								}
 								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")

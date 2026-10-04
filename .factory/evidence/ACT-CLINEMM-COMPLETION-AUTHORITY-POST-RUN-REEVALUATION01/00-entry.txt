@@ -1,0 +1,19 @@
+ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01
+ENTRY_HEAD    = 79b691b9cf1456f1b07f64519f5ff6c4974ae82c (main, frozen)
+SUBJECT_HEAD  = this ACT (post-completion)
+ACT_STATUS    = PASS_FIRST_ELM_AUTHORITY_SEAM
+CLOSURE_HEAD  = this ACT (post-completion)
+
+RECON:
+  AGENT_DONE_PRODUCER             = LocalRuntimeHost.runTurn (sdk/packages/core/src/runtime/host/local-runtime-host.ts:1320)
+  AGENT_DONE_HOST_HOOK            = pendingPromptCaptureHooks.onAgentTurnDone -> recordAgentTurnDone
+  AGENT_DONE_CCARD_CAPTURE        = captureContinuationCardinalityAuthorityRecord({stage:"agent_turn_done",...})
+  AUTHORITY_ENQUEUE_POINT         = enqueueElmAuthorityRecord (continuation-cardinality-authority.ts:454)
+  AUTHORITY_FLUSH_POINT           = flushElmAuthorityForSession (completion-authority-elm-authority-runtime.ts:273)
+  EXISTING_COMPLETION_HOLD_MARKER = deferredCompletionBarrier{sessionId,taskId,epoch,deferredAt} (sdk-session-event-coordinator.ts:1526)
+  EXISTING_REEVALUATION_ENTRYPOINTS = reevaluateDeferredCompletionBarrier (sdk-session-event-coordinator.ts:732)
+  DOES_ELM_HOLD_CREATE_EXISTING_MARKER = YES (after this ACT; previously NO - this was the gap)
+  DOES_AGENT_DONE_TRIGGER_REEVALUATION = YES (after this ACT; previously NO - this was the gap)
+  SESSION_ID_AVAILABLE            = YES (recordAgentTurnDone receives sessionId)
+  TASK_ID_AVAILABLE               = YES (coordinator.reevaluateDeferredCompletionBarrier resolves taskId via options.getTask)
+  FIRST_DIVERGENCE                = handleSessionEvent checkElmCompletionAuthority consult on Elm HOLD returned without registering a marker; agent_turn_done capture path did not call notifyAgentTurnDone

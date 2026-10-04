@@ -1,0 +1,12 @@
+RED -> GREEN
+
+The redact of this ACT was built incrementally. First commit added the marker registration on Elm HOLD plus the notifyAgentTurnDone method - 5/5 tests RED. Then the test was written to wire the trigger; 5/5 tests still RED (notifyAgentTurnDone is undefined). After the notifyAgentTurnDone method was added to the coordinator, 5/5 tests turned GREEN.
+
+Test output (final):
+  POSTRUN-RED-01 - post-run reevaluation drives one commit: PASS [12.76ms]
+  POSTRUN-ORDER-02 - agent_turn_done flushed BEFORE second decision: PASS [4.15ms]
+  POSTRUN-EXACTLY-ONCE-03 - multiple reevaluation triggers => exactly one commit: PASS [4.05ms]
+  POSTRUN-ISOLATION-04 - cross-session isolation: PASS [8.24ms]
+  POSTRUN-OFF-CONSERVATION-05 - Elm authority OFF => existing behavior unchanged: PASS [0.11ms]
+
+5 pass, 0 fail, 23 expect() calls, 629ms total.

@@ -84,8 +84,9 @@ import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
-import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
+import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
+import { setAgentTurnDoneSemanticTrigger } from "./continuation-cardinality-authority.runtime-capture"
 import {
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	composeEffectiveDiagnosticKnobs,
@@ -2520,9 +2521,37 @@ export class Controller {
 			// legacy TS predicate chain remains the sole authority
 			// (byte-identical to the predecessor ACT).
 			getElmCompletionAuthorityDecision: (sessionId?: string) =>
-					ElmAuthorityModule.getElmAuthorityCompletionDecision(sessionId ?? ""),
-				flushElmAuthorityForSession: (sessionId: string) =>
-					ElmAuthorityModule.flushElmAuthorityForSession(sessionId),
+				ElmAuthorityModule.getElmAuthorityCompletionDecision(sessionId ?? ""),
+			flushElmAuthorityForSession: (sessionId: string) => ElmAuthorityModule.flushElmAuthorityForSession(sessionId),
+		})
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
+		// Wire the post-run liveness seam. When the host's
+		// `LocalRuntimeHost.runTurn` post-resolution
+		// `onAgentTurnDone` callback fires (via `recordAgentTurnDone`
+		// in continuation-cardinality-authority.runtime-capture.ts),
+		// the trigger invokes `this.sessionEvents.notifyAgentTurnDone`
+		// which:
+		//   1. flushes Elm authority so the `agent_turn_done` record
+		//      is processed (activeRun cleared) before the consult
+		//   2. re-evaluates the deferred-completion barrier
+		// The trigger is a SEMANTIC event (independent of the
+		// CCARD diagnostic `captureEnabled` flag). It fires only
+		// after the `agent_turn_done` capture is acknowledged by
+		// the production capture path - no timing or polling.
+		// P1 fix (per review): gate the new post-run liveness seam on
+		// Elm authority enablement. The legacy `deferredCompletionBarrier`
+		// already exists and is created by the TS completion predicate
+		// chain; without this guard, the new agent-turn-done trigger
+		// would (in the OFF path) gain a NEW re-evaluation cause for
+		// legacy TS barriers, which is a semantic change we did not
+		// intend. With this guard, the trigger is a true no-op when
+		// Elm authority is OFF, so legacy behavior is byte-identical
+		// to the predecessor ACT.
+		setAgentTurnDoneSemanticTrigger((sessionId) => {
+			if (!ElmAuthorityModule.isElmAuthorityEnabled()) {
+				return
+			}
+			void this.sessionEvents.notifyAgentTurnDone(sessionId)
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder

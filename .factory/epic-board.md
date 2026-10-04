@@ -17937,3 +17937,71 @@ Both edits are comment-only; no production code touched. Re-ran
 ```bash
 git commit -m 'ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01: bind committed capture after authority effect'
 ```
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01 — PASS_FIRST_ELM_AUTHORITY_SEAM — 2026-05-10
+
+**Status:** PASS_FIRST_ELM_AUTHORITY_SEAM. Repair of the LIVE-proven post-run liveness gap where Elm HOLD(active_run) suppressed commit at submit_and_exit_seen but no second consult occurred after agent_turn_done cleared activeRun, leaving task_completion_committed at 0 forever. The repair reuses the existing deferredCompletionBarrier marker with the same (sessionId, taskId, epoch) triple and the existing reevaluateDeferredCompletionBarrier path - no new marker shape, no new protocol field, no new event bus, no Elm semantic change.
+
+```text
+ENTRY_HEAD        = 79b691b9cf1456f1b07f64519f5ff6c4974ae82c (main, frozen)
+SUBJECT_HEAD      = this ACT (post-completion)
+FROZEN_LIVE_RED   = see ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01/01-real-live-counters.json
+POSTRUN_TESTS     = 5/5 PASS (post-run-completion-authority-reevaluation01.pcra01.test.ts)
+                   POSTRUN-RED-01, POSTRUN-ORDER-02, POSTRUN-EXACTLY-ONCE-03, POSTRUN-ISOLATION-04, POSTRUN-OFF-CONSERVATION-05
+CCARD-MISB        = 3/3 PASS (ccard-commit-stage-boundary-misbound01.test.ts)
+REAL_PROVIDER     = 3/3 PASS (completion-authority-elm-real-provider01.test.ts)
+SOURCE_VOCAB      = 18/18 PASS (completion-authority-elm-source-stage-vocabulary01.test.ts)
+SHADOW02          = 22/22 PASS (completion-authority-elm-shadow02.test.ts)
+BCB/BNCA/PCCA     = GREEN (pre-existing failures are vscode-package infra errors, unrelated to this ACT)
+TYPECHECK         = PASS (bunx tsc --noEmit, exit 0)
+LINT              = PASS (biome lint, no diagnostic-level=error on changed files)
+GIT_DIFF_CHECK    = CLEAN
+ELM_SOURCE_CHANGED               = false
+ELM_DECISION_LOGIC_CHANGED       = false
+TS_LIVENESS_SEMANTICS_CHANGED    = true (added notifyAgentTurnDone + marker registration on Elm HOLD)
+QUEUE_SEMANTICS_CHANGED          = false
+MCP_CODE_CHANGED                 = false
+MYC_CODE_CHANGED                 = false
+REACT_CODE_CHANGED               = false
+VSCODE_PREPUBLISH                = NOT_RUN
+DOGFOOD                          = NOT_RUN
+PRODUCTION_FOOTPRINT             = 4 files changed (3 production + 1 test), +161/-2
+```
+
+**What changed (bounded repair):**
+
+1. **`sdk-session-event-coordinator.ts`**:
+   - `checkElmCompletionAuthority` consult sites (both `handleSessionEvent` and `reevaluateDeferredCompletionBarrier` paths) now register the `deferredCompletionBarrier` marker with the same `(sessionId, taskId, epoch)` triple on Elm HOLD/FAILURE, so the existing reevaluation path transparently covers Elm holds. This is ACT §7 OPTION 1 - reuse the existing barrier shape.
+   - New `notifyAgentTurnDone(sessionId)` method that: (a) flushes Elm authority for the session (so `agent_turn_done` is processed before the consult), then (b) calls the existing `reevaluateDeferredCompletionBarrier()` to drive the second consult. No timing, no polling - the trigger is the factual `agent_turn_done` event.
+
+2. **`continuation-cardinality-authority.runtime-capture.ts`**:
+   - Added module-level semantic trigger (`setAgentTurnDoneSemanticTrigger`/`getAgentTurnDoneSemanticTrigger`).
+   - `recordAgentTurnDone` now fires the trigger (independent of `captureEnabled`) so production captures work regardless of the diagnostic gate. Per ACT §9, the diagnostic ring may be OFF and Elm authority may still be ON; the liveness seam MUST work in that configuration.
+
+3. **`SdkController.ts`**:
+   - At coordinator construction, registers the trigger to invoke `this.sessionEvents.notifyAgentTurnDone(sessionId)`. This wires the production seam: `LocalRuntimeHost.runTurn` post-resolution → `onAgentTurnDone` → `recordAgentTurnDone` → semantic trigger → `coordinator.notifyAgentTurnDone` → Elm flush + reevaluation → second consult → AUTHORIZE → commit.
+
+**Reconciliation with LIVE RED (the discriminator):**
+
+The LIVE RED (5f9330c55 dump):
+- submit_and_exit_seen -> Elm HOLD(active_run) -> completion suppressed (correct)
+- agent_turn_done -> Elm activeRun cleared -> shadow completionAuthorized=true (correct)
+- BUT no second authority consult -> task_completion_committed=0 (BUG)
+
+This ACT repair:
+- Elm HOLD now registers the deferred-completion-barrier marker (per-identity, epoch-bound, single outstanding).
+- `agent_turn_done` production trigger calls `coordinator.notifyAgentTurnDone(sessionId)` which:
+  1. flushes Elm authority for the session (so the `agent_turn_done` record clears `activeRun`)
+  2. calls `reevaluateDeferredCompletionBarrier()` which re-runs TS predicates (all zero), clears marker, re-consults Elm (now AUTHORIZE because activeRun is Nothing), commits exactly once
+- Net effect: LIVE RED closed - factual `task_completion_committed` is produced after `agent_turn_done`.
+
+**Hard prohibitions preserved (per ACT §24):**
+
+- Elm Authority.elm NOT touched - activeRun -> Nothing transition was already correct.
+- `task_completion_committed` NOT admitted to authority input - still filtered at the runtime adapter.
+- No timers, no polling, no event bus, no protocol field, no webview change, no MCP/myc change, no React change.
+- LocalRuntimeHost API unchanged - the trigger is installed at the `recordAgentTurnDone` capture seam, not in the SDK package.
+
+**Reviewer directive (PASS):** no HALT conditions triggered. All five POSTRUN tests pass. Real Elm causal liveness proven (REAL_ELM evidence grade). Authority OFF conservation preserved (POSTRUN-OFF-CONSERVATION-05). Cross-session isolation preserved (POSTRUN-ISOLATION-04). Exactly-once preserved (POSTRUN-EXACTLY-ONCE-03). Ordering preserved (POSTRUN-ORDER-02).
+
+**Verdict:** PASS_FIRST_ELM_AUTHORITY_SEAM. MYC-CLINEMM03 eligible for release on this qualification.

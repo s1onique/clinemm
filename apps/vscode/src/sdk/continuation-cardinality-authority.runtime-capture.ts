@@ -117,4 +117,63 @@ export function recordAgentTurnDone(input: {
 		...(runId !== undefined ? { runId } : {}),
 		...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 	})
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
+	// Always fire the semantic trigger (independent of `captureEnabled`).
+	// The trigger is the load-bearing post-run liveness seam: it drives
+	// `coordinator.notifyAgentTurnDone(sessionId)` which (a) flushes
+	// Elm authority so `agent_turn_done` is processed before the next
+	// consult, and (b) re-evaluates the deferred-completion barrier.
+	// This is NOT gated on the diagnostic `captureEnabled` flag because
+	// the trigger is a SEMANTIC event (post-run reevaluation), not a
+	// diagnostic observation. Per ACT §9 the diagnostic ring may be
+	// OFF and Elm authority may still be ON; the liveness seam MUST
+	// work in that configuration.
+	const trigger = getAgentTurnDoneSemanticTrigger()
+	if (trigger) {
+		try {
+			const result = trigger(input.sessionId)
+			if (result && typeof (result as { then?: unknown }).then === "function") {
+				// Fire-and-forget; the coordinator reevaluation is
+				// internally bounded (the marker is cleared on commit
+				// and on epoch supersession) so no leak risk. Cast
+				// to Promise<unknown> to keep .catch type-safe.
+				Promise.resolve(result).catch(() => {})
+			}
+		} catch {
+			// Never propagate; the semantic trigger MUST NOT break
+			// the CCARD capture path.
+		}
+	}
+}
+
+/**
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
+ *
+ * Module-level semantic trigger installed by `SdkController` at
+ * construction time. When `recordAgentTurnDone` fires (from
+ * `LocalRuntimeHost.runTurn`'s post-resolution `onAgentTurnDone`
+ * callback), this trigger invokes
+ * `SdkSessionEventCoordinator.notifyAgentTurnDone(sessionId)` which:
+ *   1. flushes the per-session Elm authority queue so the
+ *      `agent_turn_done` record clears `activeRun`, and
+ *   2. re-evaluates the deferred-completion barrier (the
+ *      existing `reevaluateDeferredCompletionBarrier` already wired
+ *      through `SdkController.maybeReevaluateDeferredContinuation`).
+ *
+ * The trigger is a SEMANTIC event (post-run liveness), independent
+ * of the CCARD diagnostic capture gate. The trigger may be `undefined`
+ * when no coordinator is wired (e.g. in unit tests that exercise the
+ * capture module standalone).
+ *
+ * Default: undefined (no-op). The trigger is set by `SdkController`
+ * at activation.
+ */
+let agentTurnDoneSemanticTrigger: ((sessionId: string) => void | Promise<void>) | undefined
+
+export function setAgentTurnDoneSemanticTrigger(trigger: ((sessionId: string) => void | Promise<void>) | undefined): void {
+	agentTurnDoneSemanticTrigger = trigger
+}
+
+export function getAgentTurnDoneSemanticTrigger(): ((sessionId: string) => void | Promise<void>) | undefined {
+	return agentTurnDoneSemanticTrigger
 }
