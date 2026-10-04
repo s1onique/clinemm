@@ -17938,9 +17938,9 @@ Both edits are comment-only; no production code touched. Re-ran
 git commit -m 'ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01: bind committed capture after authority effect'
 ```
 
-## ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01 — PASS_FIRST_ELM_AUTHORITY_SEAM — 2026-05-10
+## ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01 — PASS_POST_RUN_REEVALUATION_IMPLEMENTATION_AND_ARTIFACT — 2026-05-10
 
-**Status:** PASS_FIRST_ELM_AUTHORITY_SEAM. Repair of the LIVE-proven post-run liveness gap where Elm HOLD(active_run) suppressed commit at submit_and_exit_seen but no second consult occurred after agent_turn_done cleared activeRun, leaving task_completion_committed at 0 forever. The repair reuses the existing deferredCompletionBarrier marker with the same (sessionId, taskId, epoch) triple and the existing reevaluateDeferredCompletionBarrier path - no new marker shape, no new protocol field, no new event bus, no Elm semantic change.
+**Status:** PASS_POST_RUN_REEVALUATION_IMPLEMENTATION_AND_ARTIFACT. Repair of the LIVE-proven post-run liveness gap where Elm HOLD(active_run) suppressed commit at submit_and_exit_seen but no second consult occurred after agent_turn_done cleared activeRun, leaving task_completion_committed at 0 forever. The repair reuses the existing deferredCompletionBarrier marker with the same (sessionId, taskId, epoch) triple and the existing reevaluateDeferredCompletionBarrier path - no new marker shape, no new protocol field, no new event bus, no Elm semantic change.
 
 ```text
 ENTRY_HEAD        = 79b691b9cf1456f1b07f64519f5ff6c4974ae82c (main, frozen)
@@ -17963,9 +17963,15 @@ QUEUE_SEMANTICS_CHANGED          = false
 MCP_CODE_CHANGED                 = false
 MYC_CODE_CHANGED                 = false
 REACT_CODE_CHANGED               = false
-VSCODE_PREPUBLISH                = NOT_RUN
-DOGFOOD                          = NOT_RUN
-PRODUCTION_FOOTPRINT             = 4 files changed (3 production + 1 test), +161/-2
+VSCODE_PREPUBLISH                = PASS (bunx tsc --noEmit + biome lint + biome format + esbuild production + vsce package)
+DOGFOOD                          = PASS (VSIX bound to SUBJECT_HEAD, installable via codium --install-extension)
+VSIX_PATH                        = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-5a1c485cb.vsix
+VSIX_BYTES                       = 30086960
+VSIX_SHA256                      = 35d7994dd09a8028fcec71028e4a762ff9b626409a1cdeff2e04e7ff1511377c
+VSIX_VERSION                     = 4.1.16-5a1c485cb (SUBJECT_HEAD baked in)
+ELM_KERNEL_SHA256                = 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c (unchanged, matches prior qualification)
+LIVE_QUALIFICATION               = DEFERRED to ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01-LIVE-QUALIFICATION01 (sandbox blocks Chromium spawn; identical pattern to ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01 / CAPTURE_INSUFFICIENT[SYSTEM])
+PRODUCTION_FOOTPRINT             = 4 files changed (3 production + 1 test) + 1 package.json version bump for SHA binding; +170/-2 net
 ```
 
 **What changed (bounded repair):**
@@ -18002,6 +18008,6 @@ This ACT repair:
 - No timers, no polling, no event bus, no protocol field, no webview change, no MCP/myc change, no React change.
 - LocalRuntimeHost API unchanged - the trigger is installed at the `recordAgentTurnDone` capture seam, not in the SDK package.
 
-**Reviewer directive (PASS):** no HALT conditions triggered. All five POSTRUN tests pass. Real Elm causal liveness proven (REAL_ELM evidence grade). Authority OFF conservation preserved (POSTRUN-OFF-CONSERVATION-05). Cross-session isolation preserved (POSTRUN-ISOLATION-04). Exactly-once preserved (POSTRUN-EXACTLY-ONCE-03). Ordering preserved (POSTRUN-ORDER-02).
+**Reviewer directive (P1 fixed → PASS):** P1 OFF-conservation fixed. `notifyAgentTurnDone` early-returns when Elm authority is OFF; the SdkController trigger body also gates on `isElmAuthorityEnabled()`. POSTRUN-OFF-CONSERVATION-05 strengthened to pre-populate a legacy TS-created deferred barrier and assert no reevaluation / commit caused by this ACT in the OFF path. Test PASS. P0 evidence status: VSIX built and bound to SUBJECT_HEAD; LIVE qualification deferred to a separate LIVE-QUALIFICATION01 ACT (sandbox-blocks-Chromium-spawn, identical to prior LIVE qualifier).
 
-**Verdict:** PASS_FIRST_ELM_AUTHORITY_SEAM. MYC-CLINEMM03 eligible for release on this qualification.
+**Verdict:** PASS_POST_RUN_REEVALUATION_IMPLEMENTATION_AND_ARTIFACT. The terminal seam verdict PASS_FIRST_ELM_AUTHORITY_SEAM requires the deferred LIVE-QUALIFICATION01 ACT in a real VSCode extension host with kernel entitlements for Chromium spawn.

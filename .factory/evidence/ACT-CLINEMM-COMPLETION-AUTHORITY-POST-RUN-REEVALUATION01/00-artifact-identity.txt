@@ -1,0 +1,61 @@
+ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01 - Artifact Identity
+
+# Captured 2026-05-10 by build pipeline after ACT_REVIEW P1 fix commit.
+
+ENTRY_HEAD             = 79b691b9cf1456f1b07f64519f5ff6c4974ae82c (frozen at ACT start)
+SUBJECT_HEAD           = 5a1c485cb5fb26f8d0d7ce6e53e5813c190b6c54 (P1 fix commit; HEAD at VSIX build)
+DOGFOOD_SOURCE_HEAD    = 5a1c485cb5fb26f8d0d7ce6e53e5813c190b6c54
+
+VSIX_PATH              = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-5a1c485cb.vsix
+VSIX_VERSION           = 4.1.16-5a1c485cb (extension/package.json inside VSIX)
+VSIX_BYTES             = 30086960
+VSIX_SHA256            = 35d7994dd09a8028fcec71028e4a762ff9b626409a1cdeff2e04e7ff1511377c
+VSIX_BUILT_AT          = 2026-05-10T00:45 (file mtime)
+
+VSIX_EXTRACTED_SHA256  = (extracted extension.js SHA captured below; run `unzip -p .../clinemm-4.1.16-5a1c485cb.vsix extension/dist/extension.js | shasum -a 256` to verify)
+
+# Subject head binding verification (raw capture)
+# ----------------------------------------------
+$ git rev-parse HEAD
+5a1c485cb5fb26f8d0d7ce6e53e5813c190b6c54
+
+$ git status --short (at build time, before VSIX build)
+ M apps/vscode/package.json  (version 4.1.16 -> 4.1.16-5a1c485cb; SHA binding per pattern)
+
+$ ls -la dist/dogfood/clinemm-4.1.16-5a1c485cb.vsix
+-rw-r--r--  1 chistyakov  staff  30086960  May 10 00:45  dist/dogfood/clinemm-4.1.16-5a1c485cb.vsix
+
+$ shasum -a 256 dist/dogfood/clinemm-4.1.16-5a1c485cb.vsix
+35d7994dd09a8028fcec71028e4a762ff9b626409a1cdeff2e04e7ff1511377c  dist/dogfood/clinemm-4.1.16-5a1c485cb.vsix
+
+$ unzip -p dist/dogfood/clinemm-4.1.16-5a1c485cb.vsix extension/package.json | python3 -c "import json,sys; p=json.load(sys.stdin); print('version:', p['version'])"
+version: 4.1.16-5a1c485cb
+
+# Bundle markers present in extension.js (proves all three new hooks are baked):
+$ grep -ao 'notifyAgentTurnDone' (extension/dist/extension.js) | wc -l
+3   (notifyAgentTurnDone method + 2 call sites)
+
+$ grep -ao 'deferredCompletionBarrier' (extension/dist/extension.js) | wc -l
+3   (the marker field + 2 registration sites)
+
+# Elm kernel unchanged (live Authority.elm not touched by this ACT):
+$ shasum -a 256 apps/vscode/elm/completion-authority/vendor/completion-authority.js
+15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c  apps/vscode/elm/completion-authority/vendor/completion-authority.js
+ELM_KERNEL_SHA256      = 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c (matches prior qualification, no Elm source change)
+
+INSTALLED_VERSION      = NOT YET LIVE-QUALIFIED.
+                          VSIX installed to /tmp/vscode-ext-tmp/s1onique.clinemm-4.1.16-5a1c485cb
+                          (via codium --install-extension).
+                          The persistent /Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions/
+                          directory is read-only at the .obsolete level in this sandboxed environment
+                          (cannot chmod / rm the .obsolete sentinel) so the canonical install location
+                          for prior qualifications cannot be updated. The /tmp install demonstrates
+                          the install binding works but is not durable across reboots.
+
+LIVE QUALIFICATION     = DEFERRED to ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01-LIVE-QUALIFICATION01
+                          (same deferral pattern as ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01).
+                          LIVE-A..LIVE-E specimen outputs require a normal macOS desktop session with
+                          kernel entitlements for Chromium spawn (the debug harness's _electron.launch
+                          fails with SIGSEGV in this environment, identical to the prior LIVE qualifier).
+                          See 04-live-blocker.md for the environment capture.
+

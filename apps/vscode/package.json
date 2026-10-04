@@ -2,7 +2,7 @@
 	"name": "clinemm",
 	"displayName": "ClineMM",
 	"description": "ClineMM \u2014 a Cline fork for daily local dogfood (MiniMax M3 by default). Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
-	"version": "4.1.16",
+	"version": "4.1.16-5a1c485cb",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.101.0"
