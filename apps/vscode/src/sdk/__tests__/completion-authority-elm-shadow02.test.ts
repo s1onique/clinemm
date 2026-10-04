@@ -647,7 +647,7 @@ describe("ELS02-16 — production activation wiring exists in extension.ts + dog
 			.createHash("sha256")
 			.update(fs.readFileSync(simulatedKernelPath))
 			.digest("hex")
-		expect(sha256).toBe("3d32e5430f208c3c16af1e0bd1b779d0dc1d86908d783bd14d76947ac4369f43")
+		expect(sha256).toBe("15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c")
 	})
 
 	test("ELS02-16.C: registry.ts exposes DumpCompletionAuthorityElmShadow command id", () => {
