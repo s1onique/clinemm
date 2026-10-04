@@ -1,0 +1,60 @@
+RED -> GREEN
+
+The red was a fresh test file that exercises the LIVE-shaped case which
+the prior POSTRUN01 suite (5/5 GREEN) could not cover. The prior suite
+used `getUnconsumedOwnedTerminalResultCount: () => 0`, so the
+second-conjunct (BCB01 §0.1 `unconsumed_owned_terminal_results == 0`)
+guard at sdk-session-event-coordinator.ts:821-822 and the early-return at
+L848-874 inside `reevaluateDeferredCompletionBarrier` were never reached.
+
+The new test file
+`post-run-completion-authority-reevaluation01-correction01-precheck-liveness.pcrl01.test.ts`
+is a production-shaped RED with the real compiled Elm kernel wired into
+the real production coordinator option bag (REAL_ELM evidence grade at the
+coordinator boundary; SYNTHETIC_REAL at the delivery boundary — see
+00-entry.txt).
+
+The harness defaults `getUnconsumedOwnedTerminalResultCount` to 1
+(matching the LIVE chronology where the terminal result became unconsumed
+in the post-submit / pre-agent_turn_done window). Test cases that need a
+clean state flip the count to 0 via `__setUnconsumed`.
+
+PCRL-01 was adjusted to mirror the actual LIVE chronology: at
+submit_and_exit_seen time the unconsumed count was 0 (so BCB barrier
+clears and Elm consult #1 fires -> HOLD), then between submit and
+agent_turn_done the count transitions to 1, then at agent_turn_done the
+reevaluation hits the L848 guard and fires the continuation enqueue and
+returns BEFORE checkElmCompletionAuthority.
+
+Initial wrong hypothesis (now rejected):
+  Dedupe (lastCompletionContinuationSessionEpoch) at L1616 was suspected
+  of consuming the epoch at submit_and_exit_seen under the same
+  (sessionId, taskId, epoch) as the post-run continuation at L848, thereby
+  suppressing the post-run continuation.
+  Rejected by: PCRL-01's harness sets unconsumed=0 at submit, so the
+  initial-dispatch site at L1616 does NOT fire (that site enqueues when
+  unconsumedOwnedTerminalResultsForC10 > 0). The post-run continuation at
+  L848 IS enqueued fresh; the test captures it in continuationSendLog
+  (length === 1 at the end of PCRL-01). The dedupe hypothesis is
+  contradicted by the corrected test setup and is REJECTED.
+
+Final test output:
+  PCRL-01 - LIVE-shaped precheck classification          : PASS [25ms]
+  PCRL-02 - clean state still releases (POSTRUN conservation) : PASS [4ms]
+  PCRL-03 - dedupe reset between submit and agent_turn_done : PASS [4ms]
+  PCRL-04 - repeated reevaluation is idempotent on dedupe : PASS [5ms]
+  PCRL-05 - precheck is legitimate (no second Elm consult) : PASS [0ms]
+
+5 pass, 0 fail.
+
+The production code is unchanged. The RED established the post-run
+reevaluation IS correct as currently implemented. The bounded coalesced
+continuation enqueue at L848-874 IS reached when the precheck triggers.
+No repair required at this ACT.
+
+The remaining LIVE gap (pending_prompt_enqueued = 0 in the LIVE specimen)
+is OUT OF SCOPE per the ACT's production-delta budget (§17) and the
+reviewer's evidence-grade analysis: the test does NOT exercise the real
+sdkHost.send -> PendingPromptsController -> onEnqueue chain. The next
+first divergence is downstream continuation delivery, which is the
+mandatory starting point for the next ACT.

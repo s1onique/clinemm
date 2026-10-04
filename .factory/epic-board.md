@@ -18011,3 +18011,94 @@ This ACT repair:
 **Reviewer directive (P1 fixed → PASS):** P1 OFF-conservation fixed. `notifyAgentTurnDone` early-returns when Elm authority is OFF; the SdkController trigger body also gates on `isElmAuthorityEnabled()`. POSTRUN-OFF-CONSERVATION-05 strengthened to pre-populate a legacy TS-created deferred barrier and assert no reevaluation / commit caused by this ACT in the OFF path. Test PASS. P0 evidence status: VSIX built and bound to SUBJECT_HEAD; LIVE qualification deferred to a separate LIVE-QUALIFICATION01 ACT (sandbox-blocks-Chromium-spawn, identical to prior LIVE qualifier).
 
 **Verdict:** PASS_POST_RUN_REEVALUATION_IMPLEMENTATION_AND_ARTIFACT. The terminal seam verdict PASS_FIRST_ELM_AUTHORITY_SEAM requires the deferred LIVE-QUALIFICATION01 ACT in a real VSCode extension host with kernel entitlements for Chromium spawn.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01-CORRECTION01-PRECHECK-LIVENESS — HALT_CONTINUATION_DELIVERY (precheck classified; downstream delivery unresolved) — 2026-05-10
+
+**Mission:** Resolve the LIVE-proven gap where Elm reaches AUTHORIZE state but no second authority consult/commit occurs. Per the LIVE two-step factory instructions: classify the exact TS precheck that prevents consult #2, distinguish legitimate conservation hold from broken continuation liveness, repair only the first proven divergence.
+
+**Status:** HALT_CONTINUATION_DELIVERY. The post-run reevaluation IS correct as currently implemented. The first divergence (no second Elm consult) IS a legitimate TS conservation predicate (`unconsumedOwnedTerminalResultCount > 0`, BCB01 §0.1 second conjunct). The continuation mechanism at `sdk-session-event-coordinator.ts:848-855` IS reached (PCRL-01 captures it in the harness). However, the LIVE specimen's `pending_prompt_enqueued = 0` proves the downstream delivery seam (`enqueueCompletionContinuation` → `sdkHost.send` → `PendingPromptsController.onEnqueue` → capture) is unresolved. PCRL-03 proves the liveness leg in SYNTHETIC_REAL (consumption → commit works once unconsumed transitions 1→0), but the production delivery chain is OUT OF SCOPE for this ACT.
+
+```text
+ENTRY_HEAD                     = cec85a7321dec1b0460f0347ef22c2477eabf9e9 (main, frozen)
+SUBJECT_HEAD                   = this ACT (post-completion)
+PCRL_TESTS                     = 5/5 PASS (post-run-completion-authority-reevaluation01-correction01-precheck-liveness.pcrl01.test.ts)
+                               PCRL-01 LIVE-shaped, PCRL-02 clean state,
+                               PCRL-03 dedupe-reset, PCRL-04 idempotent,
+                               PCRL-05 precheck legitimate
+POSTRUN_CONSERVATION           = 5/5 PASS
+BCB01                          = 14/14 PASS (no regression)
+BCB01-CORRECTION01..04         = 8/8 + 5/5 + 6/6 + 5/5 PASS
+FIRST_SEAM01                   = 6/6 + 6/6 PASS
+PCCA01                         = 4/4 PASS
+ELM-REAL-PROVIDER              = 5/5 PASS
+ELM-SHADOW02                   = 27/27 PASS
+ELM-SOURCE-VOCAB               = 3/3 PASS
+ELM-HISTORICAL-REPLAY          = 20/20 PASS
+ELM-COUNTER-DUMP               = 5/5 PASS
+BNCA-C10-FRAMEWORK             = 3/3 + 2/2 + 4/4 + 4/4 PASS
+BNCA-C10-RED                   = 1/1 PASS
+FULL_BUN_UNIT_SUITE            = 1246/0 PASS (94 files; 4 flaky retried as serial)
+TYPECHECK                      = PASS (bunx tsc --noEmit, exit 0)
+LINT                           = PASS (biome lint, no diagnostic-level=error)
+FORMAT                         = PASS (1 file reformatted)
+GIT_DIFF_CHECK                 = CLEAN
+ELM_SOURCE_CHANGED             = false
+ELM_DECISION_LOGIC_CHANGED     = false
+TS_CONSERVATION_SEMANTICS_CHANGED = false
+TS_LIVENESS_SEMANTICS_CHANGED  = false
+QUEUE_SEMANTICS_CHANGED        = false
+MCP_CODE_CHANGED               = false
+MYC_CODE_CHANGED               = false
+REACT_CODE_CHANGED             = false
+PRODUCTION_CODE_CHANGED        = NONE (no fix applied; post-run reevaluation is already correct)
+NEW_TEST_FILES                 = apps/vscode/src/sdk/__tests__/post-run-completion-authority-reevaluation01-correction01-precheck-liveness.pcrl01.test.ts (5 tests)
+VSIX_BUILT                     = NO (no production code change)
+LIVE_QUALIFICATION              = OUT OF SCOPE for this ACT; existing POSTRUN01 dogfood VSIX (5a1c485cb) remains the live candidate
+
+VERDICT: HALT_CONTINUATION_DELIVERY
+
+Reconciliation with LIVE RED:
+- The LIVE specimen (session 1791154077800_000t4) showed:
+  * consult #1 -> HOLD (hold=1, total=1) at submit_and_exit_seen
+  * lastDecision=authorize (Elm state progressed after agent_turn_done)
+  * authorize=0 (no second consult)
+  * task_completion_committed=0
+  * continuation_started=0, pending_prompt_enqueued=0 (downstream delivery gap)
+- PCRL-01 reproduces this shape at the coordinator boundary: at submit, BCB clears (unconsumed=0) + Elm consult #1 -> HOLD; between submit and agent_turn_done, unconsumed transitions to 1; at agent_turn_done, reevaluation hits the L848 unconsumed-terminal guard, fires bounded continuation enqueue, returns BEFORE checkElmCompletionAuthority. No second Elm consult. No commit. The continuation callback IS reached (continuationSendLog=1 in harness). The harness stubs enqueueCompletionContinuation to return {kind:"delivered"}, so PCRL-01 does NOT prove the callback reaches sdkHost.send -> PendingPromptsController -> onEnqueue in production.
+- Earlier dedupe-suppression hypothesis (initial-dispatch at L1616 consumes the epoch at submit_and_exit_seen, suppressing the post-run continuation at L848) is REJECTED: PCRL-01 sets unconsumed=0 at submit, so initial-dispatch does NOT fire, lastCompletionContinuationSessionEpoch is NOT consumed at submit, and the post-run continuation at L848 IS enqueued fresh.
+- PCRL-02..05 establish the precheck IS legitimate and the existing continuation mechanism reaches commit through consumption (PCRL-03). The post-run reevaluation requires no production change.
+
+EVIDENCE GRADE HONESTY:
+- PCRL01 is SYNTHETIC_REAL at the delivery boundary:
+    real Elm kernel               = YES (REAL_KERNEL_PATH)
+    real coordinator              = YES (real SdkSessionEventCoordinator)
+    real enqueueCompletionContinuation = NO (stubbed)
+    real sdkHost.send             = NO
+    real PendingPromptsController = NO
+    real onEnqueue capture        = NO
+- PCRL-01 proves the coordinator callback is invoked; PCRL-01 does NOT prove the callback reaches the model or causes pending_prompt_enqueued in production.
+
+Hard prohibitions preserved (per ACT §24):
+- Elm Authority.elm NOT touched - the Elm logic was already correct.
+- No production code change at all.
+- No timers, no polling, no event bus, no protocol field.
+- LocalRuntimeHost API unchanged.
+- No new public state.
+
+LIVE specimen's pending_prompt_enqueued=0 is consistent with a downstream delivery interruption. Per the reviewer's evidence-grade analysis, the next first divergence is:
+  enqueueCompletionContinuationIfHeld
+    -> enqueueCompletionContinuation
+      -> activeSession.sdkHost.send({ delivery: "queue" })
+        -> PendingPromptsController
+          -> pending_prompt_enqueued (capture)
+            -> continuation_started
+The next ACT (ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01) must exercise that seam honestly with the real queue/delivery chain.
+
+Discipline validation:
+- Did not repair a leading hypothesis (no production change). Earlier dedupe-suppression hypothesis was rejected by the corrected test setup.
+- Production-shaped RED proves the existing implementation is correct at the coordinator boundary.
+- Conservation: all POSTRUN/BCB01/BNCA/PCCA/first-seam suites pass with no regression.
+- Typecheck, lint, format, diff-check all pass.
+- Test file is removable; if removed, no production behavior changes.
+
+Terminal PASS_FIRST_ELM_AUTHORITY_SEAM was NOT earned by this ACT: terminal PASS requires a real installed Extension Host run reaching final completion (task_completion_committed=1). The current installed LIVE specimen did NOT complete. The upstream continuation callback is reached (PCRL-01) but the downstream delivery seam is unresolved in LIVE. MYC-CLINEMM03 remains HOLD pending the continuation-delivery ACT.

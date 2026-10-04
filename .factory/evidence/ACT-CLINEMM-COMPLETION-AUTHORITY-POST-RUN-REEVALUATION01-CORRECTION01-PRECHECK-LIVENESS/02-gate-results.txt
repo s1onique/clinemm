@@ -1,0 +1,64 @@
+GATES
+
+VERDICT = HALT_CONTINUATION_DELIVERY
+
+focused tests (SYNTHETIC_REAL at delivery boundary):
+  PCRL-01 - LIVE-shaped precheck classification              : PASS
+            (coordinator boundary: continuationSendLog=1, commitCount=0;
+             does NOT prove real sdkHost.send / PendingPromptsController delivery)
+  PCRL-02 - clean state still releases (POSTRUN conservation): PASS
+  PCRL-03 - dedupe reset between submit and agent_turn_done  : PASS
+  PCRL-04 - repeated reevaluation is idempotent on dedupe    : PASS
+  PCRL-05 - precheck is legitimate (no second Elm consult)   : PASS
+  total: 5/5 PASS
+
+conservation suites (no regression introduced):
+  POSTRUN tests                                          = 5/5 PASS
+  CCARD-MISB tests                                       = 3/3 PASS (covered by PCRL02)
+  completion-authority-elm-real-provider01               = 3/3 PASS
+  completion-authority-elm-source-stage-vocabulary01      = 18/18 PASS
+  completion-authority-elm-shadow02                       = 22/22 PASS
+  completion-authority-elm-first-seam01 (case01)          = 6/6 PASS
+  completion-authority-elm-first-seam01 (preservation)    = 6/6 PASS
+  completion-authority-elm-authority-counter-dump01       = 5/5 PASS
+  completion-authority-elm-historical-replay01            = 22/22 PASS
+  background-completion-barrier01                         = 14/14 PASS
+  background-completion-barrier01-correction01            = 8/8 PASS
+  background-completion-barrier01-correction02            = 5/5 PASS
+  background-completion-barrier01-correction03            = 6/6 PASS
+  background-completion-barrier01-correction04            = 5/5 PASS
+  post-consumption-completion-authority01                  = 4/4 PASS
+  PCRL01 (NEW this ACT)                                   = 5/5 PASS
+  background-notify-completion-authority-c10-framework01  = 3/3 PASS
+  background-notify-completion-authority-c10-framework-ablation01 = 2/2 PASS
+  background-notify-completion-authority-c10-framework-dispatch-failed01 = 4/4 PASS
+  background-notify-completion-authority-c10-framework-dispatch-failed-ablation01 = 4/4 PASS
+  background-notify-completion-authority-c10-red01       = 1/1 PASS
+
+typecheck:
+  bunx tsc --noEmit = PASS (no errors)
+
+lint:
+  biome lint src/sdk/__tests__/post-run-completion-authority-reevaluation01-correction01-precheck-liveness.pcrl01.test.ts = 1 file, no diagnostic-level=error
+
+format:
+  biome format --write (one-time) = 1 file reformatted
+
+git diff --check = CLEAN
+
+full suite:
+  bun run test:unit (94 files, 1246 tests) = 1246/0 PASS
+  (4 flaky files passed on serial retry: hook-factory, taskcancel, taskcomplete, taskresume)
+
+EVIDENCE GRADE HONESTY:
+  PCRL01 proves coordinator-boundary liveness only:
+    real Elm kernel               = YES (REAL_KERNEL_PATH)
+    real coordinator              = YES
+    real enqueueCompletionContinuation = NO (stubbed)
+    real sdkHost.send             = NO
+    real PendingPromptsController = NO
+    real onEnqueue capture        = NO
+
+  The downstream continuation delivery seam is unresolved in LIVE
+  (pending_prompt_enqueued = 0). The next ACT must exercise that seam
+  honestly. See 03-final-report.md NEXT ACT for the starting boundary.

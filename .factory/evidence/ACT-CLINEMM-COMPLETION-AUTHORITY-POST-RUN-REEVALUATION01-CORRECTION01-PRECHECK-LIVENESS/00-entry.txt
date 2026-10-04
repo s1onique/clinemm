@@ -1,0 +1,235 @@
+ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01-CORRECTION01-PRECHECK-LIVENESS
+ENTRY_HEAD    = cec85a7321dec1b0460f0347ef22c2477eabf9e9 (main, frozen at ACT start)
+SUBJECT_HEAD  = this ACT (post-completion)
+ACT_STATUS    = HALT_CONTINUATION_DELIVERY
+CLOSURE_HEAD  = this ACT (post-completion)
+
+FROZEN_LIVE_RED:
+  session              = 1791154077800_000t4
+  run                  = run_kYcP208W
+  terminal jobId       = cmd_muuew7yq3gbi7raf
+  terminal origin      = background_terminal
+  CCARD chronology     =
+      seq 1 execute_turn_prelude_enter
+      seq 2 task_started
+      seq 3 run_turn_started
+      seq 4 terminal_committed
+      seq 5 submit_and_exit_seen
+      seq 6 agent_turn_done
+  authority counters (post-run):
+      total          = 1
+      states         = 4
+      decodeErrors   = 0
+      kernelErrors   = 0
+      authorize      = 0
+      hold           = 1
+      failure        = 0
+      fallbackUsed   = 0
+      sessionsActive = 1
+      lastDecision   = authorize
+      lastHoldReasons= []
+  completion effects:
+      task_completion_committed = 0
+      continuation_started      = 0
+      notify_consume_enter      = 0
+      pending_prompt_enqueued   = 0
+Shadow projection across LIVE chronology:
+  task_started          -> completionAuthorized=true
+  run_turn_started      -> activeRun=run_kYcP208W completionAuthorized=false holdReasons=[active_run]
+  submit_and_exit_seen  -> activeRun=run_kYcP208W commitReadyRun=run_kYcP208W
+                            completionAuthorized=false holdReasons=[active_run]
+  agent_turn_done       -> activeRun=null commitReadyRun=null
+                            completionAuthorized=true holdReasons=[]
+  shadow health         -> violations=0 decodeErrors=0 kernelErrors=0
+
+RECON:
+  REEVALUATION_GUARD_ORDER (sdk-session-event-coordinator.ts:733-924):
+    1. !this.deferredCompletionBarrier                    -> early return
+    2. !this.options.sessions.getActiveSession()         -> clear marker, return
+    3. marker.sessionId !== activeSession.sessionId       -> clear marker, return
+    4. marker.taskId !== taskId                           -> clear marker, return
+    5. marker.epoch !== currentEpoch                      -> clear marker, return
+    6. pendingPromptAuthorityUnknown / pendingPrompts>0 / perJobOutstandingNotifyWork
+                                                          -> outstandingAutonomousWork=true -> return
+    7. hasRunningBackgroundJobForOwner (ownerStillRunning)-> return
+    8. unconsumedOwnedTerminalResultCount > 0             -> ENQUEUE continuation (void) then RETURN
+                                                          (THIS IS THE LIVE-SHAPED BLOCKER)
+    9. outstandingAutonomousWork (redundant guard)        -> return
+   10. perJobSuppressOriginatingCompletion               -> return (BNCA suppression)
+   11. ALL CLEAR                                          -> clear marker, then
+                                                               checkElmCompletionAuthority() -> commit
+
+  MARKER_AT_AGENT_DONE         = present
+  ACTIVE_SESSION_MATCH         = YES
+  TASK_MATCH                   = YES
+  EPOCH_MATCH                  = YES
+  OWNER_STILL_RUNNING_VALUE    = false
+  UNCONSUMED_TERMINAL_COUNT    = 1 (jobId=cmd_muuew7yq3gbi7raf, background_terminal)
+  PENDING_PROMPT_COUNT         = 0
+  PENDING_PROMPT_AUTHORITY     = available=true count=0
+  ACTIVE_NOTIFY_COUNT          = 0
+  PER_JOB_SUPPRESSION          = false
+  COMPLETION_CONTINUATION_ALREADY_SENT = NO (initial-dispatch site L1604-1616
+                                              enqueues when unconsumedOwnedTerminalResultsForC10>0
+                                              at submit_and_exit_seen. In LIVE, unconsumed=0
+                                              at submit (terminal result had already been
+                                              delivered to the queue prior to submit), so
+                                              the initial-dispatch continuation did NOT
+                                              fire. lastCompletionContinuationSessionEpoch
+                                              was NOT consumed at submit.)
+  REACHED_ELM_AUTHORITY_CHECK  = NO (return at L848-874 BEFORE L904)
+
+  FIRST_DIVERGENCE = "ELM_AUTHORITY_CHECK_REACHED = NO" because the
+                     unconsumedOwnedTerminalResultCount > 0 branch (L848-874)
+                     fires its own continuation enqueue and returns. The
+                     continuation that is enqueued here is the load-bearing
+                     liveness leg, but the LIVE `pending_prompt_enqueued = 0`
+                     counter shows that this enqueue did NOT result in a
+                     PendingPromptsController.enqueue in production. The
+                     downstream delivery seam (continuation enqueue -> real
+                     sdkHost.send -> PendingPromptsController.onEnqueue ->
+                     capture `pending_prompt_enqueued`) is therefore the
+                     next first divergence.
+
+CLASSIFICATION:
+  PRECHECK_IS_LEGITIMATE              = YES (unconsumedOwnedTerminalResultCount > 0
+                                              is a legitimate TS conservation predicate
+                                              per BCB01 §0.1 second conjunct; refusing
+                                              direct commit until the terminal result
+                                              is observed is required)
+  PRECHECK_IS_DEFECT                  = NO
+  CONTINUATION_CALLBACK_REACHED       = YES (PCRL-01 SYNTHETIC_REAL: reevaluation fires
+                                              enqueueCompletionContinuationIfHeld; the test
+                                              captures the call in continuationSendLog)
+  REAL_DELIVERY_REACHED               = NOT_TESTED_IN_THIS_ACT (the test stub
+                                              enqueueCompletionContinuation returns
+                                              {kind:"delivered"} and does NOT exercise
+                                              the actual sdkHost.send -> PendingPromptsController
+                                              -> onEnqueue chain)
+  LIVENESS_LEG_THROUGH_CONSUMPTION    = SYNTHETIC_REAL PASS (PCRL-03 proves the
+                                              post-run reevaluation reaches commit when
+                                              unconsumed transitions 1->0 between submit
+                                              and agent_turn_done)
+  FIRST_BROKEN_TRANSITION             = downstream continuation delivery
+                                              (LIVE pending_prompt_enqueued = 0 even
+                                              though continuationStarted = 0; the real
+                                              delivery seam is unresolved)
+  PRODUCTION_DELTA_REQUIRED_AT_THIS_ACT = NO (no fix applied; existing implementation
+                                               is honest about its scope)
+
+EARLIER HYPOTHESIS (NOW REJECTED):
+  Hypothesis: dedupe (lastCompletionContinuationSessionEpoch) suppresses the
+              post-run continuation at L848 because initial-dispatch at L1616
+              already fired under the same (sessionId, taskId, epoch).
+  Rejected by: PCRL-01's harness sets unconsumed=0 at submit_and_exit_seen,
+               so initial-dispatch (which fires when unconsumed>0 at submit)
+               does NOT fire in the test, and lastCompletionContinuationSessionEpoch
+               was NOT consumed at submit. The post-run continuation at L848 IS
+               enqueued fresh (continuationSendLog.length === 1). The dedupe
+               hypothesis is contradicted by the corrected test setup and is
+               REJECTED. The actual cause is downstream delivery failure.
+
+PRODUCTION-SHAPED RED:
+  test file                = apps/vscode/src/sdk/__tests__/post-run-completion-authority-reevaluation01-correction01-precheck-liveness.pcrl01.test.ts
+  evidence grade           = SYNTHETIC_REAL at the delivery boundary. The harness
+                             stubs enqueueCompletionContinuation to capture the call
+                             and return {kind:"delivered"}; it does NOT exercise the
+                             real sdkHost.send / PendingPromptsController / onEnqueue
+                             chain. PCRL-01 proves the callback IS invoked by the
+                             coordinator; PCRL-03 proves the consumption -> commit
+                             leg works once unconsumed drops to 0.
+  test count               = 5 (PCRL-01..PCRL-05)
+  result                   = 5/5 PASS
+  PCRL-01 LIVE-shaped      = GREEN (submits with unconsumed=0 -> Elm HOLD;
+                                  unconsumed=1 at agent_turn_done -> reevaluation
+                                  returns at L848 BEFORE checkElmCompletionAuthority;
+                                  continuation IS enqueued, captured in
+                                  continuationSendLog)
+  PCRL-02 clean state      = GREEN (POSTRUN-RED-01 conservation: consult #1 HOLD,
+                                  agent_turn_done, consult #2 AUTHORIZE, commit = 1)
+  PCRL-03 dedupe-reset     = GREEN (clearing unconsumed before agent_turn_done lets
+                                  post-run reevaluation reach commit)
+  PCRL-04 idempotent       = GREEN (two notifyAgentTurnDone calls in a row produce
+                                  exactly one continuation enqueue and no commit)
+  PCRL-05 precheck legit   = GREEN (reevaluate with unconsumed>0 produces no Elm
+                                  consult and no commit; precheck IS legitimate)
+
+  HONEST EVIDENCE GRADE OF PCRL_TESTS:
+    real Elm kernel          = YES (REAL_KERNEL_PATH)
+    real coordinator         = YES (real SdkSessionEventCoordinator via option bag)
+    real enqueueCompletionContinuation = NO (stubbed in harness)
+    real sdkHost.send        = NO (no real LocalRuntimeHost in scope)
+    real PendingPromptsController     = NO
+    real onEnqueue capture            = NO
+    PCRL-01 proves           = coordinator calls the callback when precheck fires
+    PCRL-01 does NOT prove   = the callback reaches the model or causes
+                              pending_prompt_enqueued in production
+
+CONSERVATION SUITES RUN:
+  POSTRUN                                  = 5/5
+  BCB01                                    = 14/14
+  BCB01-CORRECTION01                       = 8/8
+  BCB01-CORRECTION02                       = 5/5
+  BCB01-CORRECTION03                       = 6/6
+  BCB01-CORRECTION04                       = 5/5
+  completion-authority-elm-first-seam01    = 6/6 + 6/6
+  post-consumption-completion-authority01  = 4/4
+  PCRL01 (new)                             = 5/5
+  full bun:test unit suite (94 files)     = 1246/0 PASS
+
+PRODUCTION CODE CHANGE:
+  none
+
+REPAIR:
+  files                  = NONE
+  exact transition       = NONE (post-run reevaluation is already correct)
+  Elm changed            = false
+  protocol changed       = false
+  new public state       = none
+  continuation mechanism = reused as-is (CORRECTION03 trigger at L848-874)
+
+ABLATION:
+  removed PCRL-01 test         = N/A (no production code change)
+  restoring PCRL-01's pre-fix  = N/A (no fix was applied)
+
+NEXT ACT (per reviewer directive):
+  ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01 must start at:
+    enqueueCompletionContinuationIfHeld
+      -> enqueueCompletionContinuation
+        -> activeSession.sdkHost.send({ delivery: "queue" })
+          -> PendingPromptsController
+            -> pending_prompt_enqueued (capture)
+              -> continuation_started
+  and must exercise the real queue/delivery seam, not a callback that
+  returns {kind:"delivered"}.
+  Freeze the existing LIVE facts:
+    terminal_committed       = 1
+    post-run Elm state       = AUTHORIZE
+    continuation callback    = required
+    pending_prompt_enqueued  = 0
+    continuation_started     = 0
+    completion               = 0
+
+VERDICT:
+  HALT_CONTINUATION_DELIVERY
+
+  The post-run reevaluation IS correct as currently implemented. The
+  first divergence (no second Elm consult) IS the legitimate BCB01 §0.1
+  conservation predicate at sdk-session-event-coordinator.ts:848-874.
+  The bounded coalesced continuation mechanism at L848-874 IS reached
+  (PCRL-01). The continuation mechanism is NOT what is broken: the
+  upstream continuation enqueue is invoked, but the downstream delivery
+  to PendingPromptsController (and therefore the pending_prompt_enqueued
+  capture) does not happen in LIVE. Per the ACT's discipline ("do not
+  repair a leading hypothesis") and per the reviewer's evidence-grade
+  analysis, no production code change is made in this ACT. The next
+  first divergence is downstream continuation delivery, which is OUT OF
+  SCOPE for this ACT's production-delta budget (§17) and requires its
+  own ACT.
+
+  Per frozen ACT contract, terminal PASS_FIRST_ELM_AUTHORITY_SEAM
+  requires a real installed Extension Host run reaching final completion.
+  VS Code extensions execute in an Extension Host, so that installed-host
+  execution remains the relevant qualification boundary. The current
+  installed LIVE specimen demonstrably did NOT complete
+  (task_completion_committed=0), so terminal PASS is not yet earned.
