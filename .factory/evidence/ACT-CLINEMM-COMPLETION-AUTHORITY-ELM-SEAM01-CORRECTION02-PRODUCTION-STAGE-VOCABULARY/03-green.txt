@@ -1,4 +1,4 @@
-GREEN — POST-FIX
+GREEN — POST-FIX — C1-CORRECTED
 
 Repair:
   apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts:90
@@ -21,30 +21,46 @@ Post-fix GREEN output:
     src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts
 
   Test Files  2 passed (2)
-       Tests  9 passed (9)
+       Tests  8 passed (8)  [3 source-vocab + 5 real-provider]
 
-  Detail (new test file):
+  Detail (new test file, C1-corrected):
     ✓ REAL-ELM-PROD-VOCAB-ADAPTER
         adaptRecord maps source run_turn_started -> Elm run_started.
-    ✓ REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+    ✓ REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER  (TRANSPORT)
         AUTHORITY_STAGES accepts the production source stage.
-        counters.states = 2 (both records reached Elm).
-    ✓ REAL-ELM-PROD-VOCAB-HOLD
-        commit count = 0.
-        lastDecision = "hold".
-    ✓ REAL-ELM-PROD-VOCAB-AUTHORIZE
-        commit count = 1.
-        lastDecision = "authorize".
+        counters.states >= 2 (both records reached Elm).
+        NO commit inference.
+    ✓ REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT  (SEMANTIC, C1)
+        Sequence: task_started → run_turn_started → submit_and_exit_seen
+        (NO pending_prompt_enqueued, NO agent_turn_done).
+        counters.states >= 2  (run_turn_started reached Elm)
+        counters.hold   >= 1  (Elm observed active run)
+        counters.lastDecision = "hold"
+        commitCount      = 0
+        final phase      != "completed"
+        (BCB barrier consults lastDecision = "hold", suppresses commit;
+         the production suppression rule completionCommitHoldReasons at
+         Authority.elm:453-460 is dead code at the BCB barrier site
+         because task_completion_committed is excluded from
+         AUTHORITY_STAGES; the LIVE contract is HOLD-while-active.)
 
   Detail (existing real-provider tests):
     ✓ REAL-ELM-LOAD
     ✓ REAL-ELM-HOLD        (now uses run_turn_started)
-    ✓ REAL-ELM-AUTHORIZE
+    ✓ REAL-ELM-AUTHORIZE   (the agent_turn_done path; commitCount = 1)
     ✓ REAL-ELM-FAILURE
     ✓ REAL-ELM-CHRONO
 
-ELM_SOURCE_CHANGED: false
-ELM_DECISION_LOGIC_CHANGED: false
-PRODUCTION_SEMANTICS_CHANGED: no semantic delta to Elm kernel
-TS_DOMAIN_LOGIC_CHANGED: none (pure vocabulary boundary repair)
-QUEUE_SEMANTICS_CHANGED: none
+ELM_SOURCE_CHANGED:                false
+ELM_DECISION_LOGIC_CHANGED:        false
+TS_AUTHORITY_INPUT_SEMANTICS_CHANGED: true  (filter admits production source stage)
+EXPECTED_EXTERNAL_BEHAVIOR_CHANGED: false  (the LIVE contract — active run
+                                                 blocks commit until
+                                                 agent_turn_done — was
+                                                 already enforced via
+                                                 the BCB barrier's
+                                                 checkElmCompletionAuthority
+                                                 consult of lastDecision;
+                                                 Elm now correctly observes
+                                                 the contract.)
+QUEUE_SEMANTICS_CHANGED:            none

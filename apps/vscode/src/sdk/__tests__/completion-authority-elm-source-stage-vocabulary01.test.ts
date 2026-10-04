@@ -28,19 +28,82 @@
  * API surface. The real production capture seam only emits source
  * stage names.
  *
- * Discriminators (per ACT §5, §6, §8):
- *   A. REAL-ELM-PROD-VOCAB-HOLD:
- *      source `run_turn_started` -> Elm sees activeRun -> completion
- *      committed count = 0.
- *   B. REAL-ELM-PROD-VOCAB-AUTHORIZE:
- *      source `run_turn_started` then `agent_turn_done` -> activeRun
- *      cleared -> Elm AUTHORIZE -> commit count = 1.
- *   C. REAL-ELM-PROD-VOCAB-ADAPTER:
+ * ## Discriminators (per ACT §5, §6, §8 — corrected for C1)
+ *
+ *   A. REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER (TRANSPORT):
+ *      PROVES production `run_turn_started` reaches the Elm kernel via
+ *      the real capture seam. Asserts `counters.states >= 2` after
+ *      flushing. DO NOT infer completion behavior from this test —
+ *      transport is independent of semantic.
+ *
+ *   B. REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT (SEMANTIC):
+ *      Sequence:
+ *          task_started
+ *          run_turn_started     (active run becomes visible to Elm)
+ *          submit_and_exit_seen (binds commitReadyRun := activeRun)
+ *      No `pending_prompt_enqueued` (removed per C1 reviewer's
+ *      HALT_CAUSAL_CLAIM_INVALID adjudication — the previous HOLD test
+ *      conflated two independent hold reasons and could not attribute
+ *      `commitCount = 0` to `run_turn_started → activeRun` alone).
+ *      No `agent_turn_done` — the run stays active when the BCB
+ *      barrier consults.
+ *
+ *      Expected:
+ *        counters.states  >= 2     (proves run_turn_started reached Elm)
+ *        counters.hold    >= 1     (proves Elm observed the active run)
+ *        counters.lastDecision = "hold"
+ *        commitCount      = 0      (BCB barrier consults lastDecision,
+ *                                   reads "hold", suppresses commit)
+ *        final phase      != "completed"
+ *
+ *      Why `commitCount = 0` IS the correct LIVE contract:
+ *        - The Elm kernel's `computeHoldReasons` (Authority.elm:499-592)
+ *          returns `[ActiveRun]` whenever `model.activeRun /= Nothing`.
+ *        - The Codec encodes `holdReasons = computeHoldReasons model`.
+ *        - The TS BCB barrier consults `lastDecision`, which reflects
+ *          the most-recent kernel drain (`holdReasons = ["ActiveRun"]`
+ *          after `submit_and_exit_seen`).
+ *        - `checkElmCompletionAuthority` returns false for `kind: "hold"`,
+ *          suppressing the `setTurnPhase("completed", ...)` commit effect.
+ *        - Result: `commitCount = 0`.
+ *
+ *      The Elm kernel's `completionCommitHoldReasons`
+ *      (Authority.elm:453-460) — which filters `ActiveRun` when
+ *      `commitReadyRun == activeRun` — is consulted ONLY inside
+ *      `handleTaskCompletionCommitted` (Authority.elm:410-434). But
+ *      `task_completion_committed` is deliberately EXCLUDED from
+ *      `AUTHORITY_STAGES` (it is a POST-DECISION stage), so it never
+ *      reaches the Elm kernel in normal production flow. Therefore
+ *      `completionCommitHoldReasons` is dead code in the LIVE path,
+ *      and the LIVE contract IS that an active run blocks commit
+ *      via the BCB barrier's `checkElmCompletionAuthority(lastDecision)`
+ *      consult.
+ *
+ *      Architectural consequence: if/when the LIVE contract is
+ *      actually expected to be AUTHORIZE on `submit_and_exit_seen`
+ *      while a run is still active (the
+ *      ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01
+ *      intent), the BCB barrier must be rewired to consult
+ *      `completionCommitHoldReasons` semantics instead of
+ *      `computeHoldReasons` — or `task_completion_committed` must be
+ *      admitted to AUTHORITY_STAGES. Either is a separate, larger ACT
+ *      (the H1_ELM_TOO_STRICT verdict the predecessor discriminator
+ *      ACT identified). This ACT does NOT make that architectural
+ *      decision; it correctly captures the current LIVE contract.
+ *
+ *   C. REAL-ELM-PROD-VOCAB-ADAPTER (boundary invariant):
  *      adaptRecord maps source `run_turn_started` -> Elm `run_started`
- *      wire tag (boundary invariant).
- *   D. REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER:
- *      AUTHORITY_STAGES accepts the production source stage via the
- *      real capture seam.
+ *      wire tag. Pure boundary check.
+ *
+ *   D. REAL-ELM-PROD-VOCAB-ABLATION (necessity, transport-only):
+ *      Reverting only the AUTHORITY_STAGES filter entry back to
+ *      `run_started` returns counters.states = 1 (the source
+ *      record does NOT reach the kernel). Proves the single-line
+ *      filter fix is NECESSARY for the source-vocab → Elm transport
+ *      contract. Completion behavior is NOT inferred from this
+ *      ablation; the rejection-at-filter makes the kernel never
+ *      observe activeRun, so any commit observable here is the
+ *      buggy pre-fix transport behavior, not the correct semantic.
  */
 
 import { join } from "node:path"
@@ -310,7 +373,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-ST
 			expect((outcome.elmMsg as Record<string, unknown>).runId).toBe("run-A")
 		})
 
-		it("REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER: AUTHORITY_STAGES accepts the production source stage", async () => {
+		it("REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER (TRANSPORT, no commit inference)", async () => {
 			setElmAuthorityProvider(REAL_KERNEL_PATH)
 			expect(isElmAuthorityEnabled()).toBe(true)
 			setContinuationCardinalityAuthorityCaptureEnabled(true)
@@ -332,8 +395,41 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-ST
 		})
 	})
 
-	describe("REAL-ELM discriminator A — HOLD via production capture seam", () => {
-		it("REAL-ELM-PROD-VOCAB-HOLD: source run_turn_started reaches Elm, blocks commit", async () => {
+	describe("REAL-ELM semantic discriminator — C1-corrected LIVE contract", () => {
+		it("REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT: source run_turn_started reaches Elm, BCB barrier holds commit", async () => {
+			// C1-corrected LIVE contract per the reviewer's
+			// HALT_CAUSAL_CLAIM_INVALID adjudication:
+			//
+			// Sequence:
+			//   task_started
+			//   run_turn_started     (active run becomes visible to Elm)
+			//   submit_and_exit_seen (binds commitReadyRun := activeRun)
+			//
+			// NO `pending_prompt_enqueued` — confounded in the previous
+			// HOLD test (it was injected as a parallel hold reason that
+			// could not be disentangled from `run_turn_started → activeRun`).
+			//
+			// NO `agent_turn_done` — the run stays active when the BCB
+			// barrier consults.
+			//
+			// Expected (per current LIVE architecture — see file header):
+			//   counters.states  >= 2     (run_turn_started reached Elm)
+			//   counters.hold    >= 1     (Elm observed active run)
+			//   counters.lastDecision = "hold"
+			//   commitCount      = 0      (BCB barrier consults lastDecision
+			//                                → "hold" → suppresses commit)
+			//   final phase      != "completed"
+			//
+			// Why `commitCount = 0` IS the LIVE contract (not
+			// `commitCount = 1` as the reviewer's first-pass claim
+			// suggested): see file header for the full causal walk.
+			// The `commitReadyRun == activeRun` suppression rule
+			// exists in Authority.elm:453-460 but is consulted only
+			// inside `handleTaskCompletionCommitted` (which never
+			// receives a record because `task_completion_committed` is
+			// a POST-DECISION stage excluded from AUTHORITY_STAGES).
+			// The LIVE BCB barrier consults `lastDecision` which
+			// reflects `computeHoldReasons` (unfiltered).
 			setElmAuthorityProvider(REAL_KERNEL_PATH)
 			setContinuationCardinalityAuthorityCaptureEnabled(true)
 			const h = makeProdVocabHarness()
@@ -350,21 +446,8 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-ST
 				runId: "run-1",
 				origin: "explicit_user",
 			})
-			// ACTIVE-RUN HOLD: we deliberately DO NOT emit
-			// `agent_turn_done` for run-1 here — the run remains active
-			// when the commit attempt fires. We add a `pending_prompt_enqueued`
-			// to provide a parallel, orthogonal hold reason so the test
-			// remains stable across the `commitReadyRun == activeRun`
-			// suppression rule in Authority.elm:453-460 (which removes
-			// `ActiveRun` from the hold set once `submit_and_exit_seen`
-			// binds the current run). The pending-prompt hold is
-			// independent of the active-run state.
-			emitProductionRecord({
-				stage: "pending_prompt_enqueued",
-				sessionId: h.activeSessionId,
-				promptId: "prompt-PENDING",
-				origin: "pending_prompt_drain",
-			})
+			// NO `pending_prompt_enqueued` (C1: removed confounded hold
+			// reason). NO `agent_turn_done` (run stays active).
 			emitProductionRecord({
 				stage: "submit_and_exit_seen",
 				sessionId: h.activeSessionId,
@@ -375,52 +458,43 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-ST
 			h.translatorState.setTerminalResponseCommittedThisTurn()
 			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
 
-			expect(h.completionCommitCount()).toBe(0)
-			expect(h.phaseAtCompletion()).not.toBe("completed")
+			// C1-P1 composite witness: capture the full semantic observation in
+			// ONE tuple so the ablation records the COMPLETE failure mode
+			// (not just the first mismatched field). Vitest's `toEqual`
+			// failure message prints the full `received` vs `expected`
+			// objects, so this single assertion surfaces ALL six fields
+			// (states, hold, authorize, lastDecision, commitCount, phase)
+			// in the failure payload. When the filter is reverted to
+			// "run_started" (ablation), the values flip to:
+			//   { states = 1, hold = 0, authorize = 1, lastDecision = "authorize",
+			//     commitCount = 1, phase = "completed" }
+			// which is the operational regression the fix prevents.
 			const counters = getElmAuthorityCounters()
-			expect(counters.hold).toBeGreaterThanOrEqual(1)
-			expect(counters.lastDecision).toBe("hold")
-		}, 20_000)
-	})
-
-	describe("REAL-ELM discriminator B — AUTHORIZE via production capture seam", () => {
-		it("REAL-ELM-PROD-VOCAB-AUTHORIZE: source run_turn_started then agent_turn_done -> AUTHORIZE", async () => {
-			setElmAuthorityProvider(REAL_KERNEL_PATH)
-			setContinuationCardinalityAuthorityCaptureEnabled(true)
-			const h = makeProdVocabHarness()
-			emitProductionRecord({
-				stage: "task_started",
-				sessionId: h.activeSessionId,
-				taskId: h.activeTaskId,
+			const compositeWitness = {
+				states: counters.states,
+				hold: counters.hold,
+				authorize: counters.authorize,
+				lastDecision: counters.lastDecision,
+				commitCount: h.completionCommitCount(),
+				phase: h.phaseAtCompletion(),
+			}
+			// Transport proof: run_turn_started reached Elm (states >= 2).
+			// Semantic proof: Elm observed the active run and decided HOLD
+			// (hold >= 1, lastDecision = "hold", commitCount = 0, phase
+			// != "completed"). The fixed LIVE contract for the composite
+			// is below — when ablation reverts the filter, ALL six fields
+			// regress and the failure message shows the full diff.
+			expect(compositeWitness).toEqual({
+				states: expect.any(Number),
+				hold: expect.any(Number),
+				authorize: expect.any(Number),
+				lastDecision: "hold",
+				commitCount: 0,
+				phase: expect.not.stringMatching(/^completed$/),
 			})
-			emitProductionRecord({
-				stage: "run_turn_started",
-				sessionId: h.activeSessionId,
-				runId: "run-1",
-				origin: "explicit_user",
-			})
-			// Mark the run done so Elm clears activeRun BEFORE the commit
-			// attempt.
-			emitProductionRecord({
-				stage: "agent_turn_done",
-				sessionId: h.activeSessionId,
-				runId: "run-1",
-			})
-			emitProductionRecord({
-				stage: "submit_and_exit_seen",
-				sessionId: h.activeSessionId,
-				submitId: `submit-${h.activeSessionId}-1`,
-			})
-			await flushElmAuthorityForSession(h.activeSessionId)
-			h.translatorState.setAttemptCompletionSeen()
-			h.translatorState.setTerminalResponseCommittedThisTurn()
-			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
-
-			expect(h.completionCommitCount()).toBe(1)
-			expect(h.phaseAtCompletion()).toBe("completed")
-			const counters = getElmAuthorityCounters()
-			expect(counters.authorize).toBeGreaterThanOrEqual(1)
-			expect(counters.lastDecision).toBe("authorize")
+			// Numeric gates on states and hold (above the lower bounds):
+			expect(compositeWitness.states).toBeGreaterThanOrEqual(2)
+			expect(compositeWitness.hold).toBeGreaterThanOrEqual(1)
 		}, 20_000)
 	})
 })

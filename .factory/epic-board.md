@@ -17493,3 +17493,146 @@ CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVI
 ```
 
 **CLOSURE_HEAD (subject of this ACT):** `0f626ac9782020269bbf4d665700616060f88a06`
+
+### C1 Correction (2026-10-04) — HALT_CAUSAL_CLAIM_INVALID → bounded A1+A2 correction cycle
+
+Reviewer C1 verdict: `HALT_CAUSAL_CLAIM_INVALID` on the active-run causal claim. The original HOLD test confounded `run_turn_started → activeRun` with `pending_prompt_enqueued` as a second independent hold reason; the test comment itself cited the `commitReadyRun == activeRun` suppression rule at `Authority.elm:453-460`. The confounded claim — that `commitCount=0` could not be attributed to `run_turn_started → activeRun` because `pending_prompt_enqueued` was the active hold reason — was INVERTED relative to the truth: post-fix, Elm's `holdReasons` is `["ActiveRun"]` alone (no pending prompt), and the BCB barrier at `checkElmCompletionAuthority` consults `lastDecision` which reflects `computeHoldReasons` (UNFILTERED). The `commitReadyRun == activeRun` suppression rule lives in `completionCommitHoldReasons` (Authority.elm:453-460) and is consulted ONLY inside `handleTaskCompletionCommitted`; `task_completion_committed` is excluded from `AUTHORITY_STAGES` (POST-DECISION), so the rule is dead code at the BCB barrier site.
+
+#### What changed (this commit, C1-corrected)
+
+- Replaced confounded `REAL-ELM-PROD-VOCAB-HOLD` test with `REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT` (sequence: `task_started → run_turn_started → submit_and_exit_seen`; no `pending_prompt_enqueued`, no `agent_turn_done`). New assertions: `counters.states >= 2` (transport), `counters.hold >= 1` (semantic), `counters.lastDecision = "hold"`, `commitCount = 0`, `phaseAtCompletion != "completed"`. The corrected test still observes `commitCount = 0` post-fix because the BCB barrier consults `lastDecision` (which reflects `computeHoldReasons`, the unfiltered projection).
+- Renamed `REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER` to `REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER` (transport-only; explicitly decoupled from completion inference).
+- Removed `REAL-ELM-PROD-VOCAB-AUTHORIZE` test (redundant — `agent_turn_done` path is already covered by `real-provider01.test.ts > REAL-ELM-AUTHORIZE`).
+- Re-ran ablation (revert filter to `run_started`): BOTH tests RED with character-identical errors (`counters.states = 1` for transport; `counters.hold = 0` for semantic). Necessity proven for BOTH transport and semantic.
+- Updated evidence files `02-red.txt`, `03-green.txt`, `04-ablation.txt`, `08-report.txt`, `result.json`, ACT body markdown.
+
+```
+elm_decision_logic_changed:           false
+ts_authority_input_semantics_changed: true   (filter admits production source stage;
+                                                  Elm's observed input set changes
+                                                  correspondingly; no decision logic change)
+authority_completion_ordering_changed: true  (the authority-enabled BCB path now
+                                                  correctly observes the active run and
+                                                  holds commits at the BCB barrier via
+                                                  lastDecision consult of computeHoldReasons;
+                                                  before this fix the dropped run-start
+                                                  silently permitted an early commit on
+                                                  the authority-enabled production path —
+                                                  the order in which commit eligibility is
+                                                  evaluated vs blocked has changed)
+expected_final_user_outcome_changed:  false  (the user-observable final outcome is
+                                                  unchanged: an active run still blocks
+                                                  commit until agent_turn_done, just as
+                                                  before the fix; Elm's lastDecision
+                                                  semantics are unchanged)
+elm_source_changed:                   no
+generic_production_semantics_changed: (removed in C1-P1; replaced by the two
+                                       semantically precise flags above)
+```
+
+#### LIVE contract correctly captured (C1)
+
+`active_run_blocks_commit_until_agent_turn_done_via_BCB_barrier_lastDecision_consult`
+
+#### Architectural observation (successor ACT material)
+
+The H1_ELM_TOO_STRICT verdict from `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01` identified the gap between the BCB barrier's `lastDecision` consult (which reflects `computeHoldReasons`, the unfiltered projection) and the Elm kernel's `completionCommitHoldReasons` (which filters `ActiveRun` when `commitReadyRun == activeRun`). The latter is dead code at the BCB barrier site. Addressing the gap requires either rewiring `checkElmCompletionAuthority` to consult `completionCommitHoldReasons` semantics, OR admitting `task_completion_committed` to `AUTHORITY_STAGES` (forbidden per the self-fulfilling-loop NOTE). OUT OF SCOPE for this ACT.
+
+#### Operator step (C1-corrected verification targets)
+
+```
+realElmProviderCalls > 0
+hold >= 1 (active run — BCB barrier consults lastDecision = "hold")
+fallbackUsed = 0
+decodeErrors = 0
+kernelErrors = 0
+commitCount = 0 (BCB barrier holds while active)
+After agent_turn_done arrives:
+  commitCount = 1
+  phase = completed
+```
+
+#### Reviewer chain (C1)
+
+```
+PASS_KERNEL_EXECUTABLE_GREEN (CORRECTION02)
+  → HALT_CAUSAL_CLAIM_INVALID (C1 reviewer)
+  → bounded A1+A2 correction cycle (this commit; PASS)
+  → NEXT: canonical 0.19.2 rebuild + exact-head VSIX + LIVE qualification
+          (operator step; same env constraint as predecessor ACT)
+```
+
+#### C1-P1 (evidence-contract refinement) — 2026-10-04
+
+Reviewer C1-P1 verdict: `GO WITH ONE BOUNDED P1 EVIDENCE FIX`. The original four flags used the generic `PRODUCTION_SEMANTICS_CHANGED: NO` + `EXPECTED_EXTERNAL_BEHAVIOR_CHANGED: NO` pair, which conflated two distinct questions. Refined to semantically precise flags:
+
+```
+elm_decision_logic_changed:           false   (kept)
+ts_authority_input_semantics_changed: true    (kept)
+authority_completion_ordering_changed: true   (NEW — replaces generic
+                                                  production_semantics_changed: NO;
+                                                  before the fix the dropped
+                                                  run-start could permit an early
+                                                  commit; now the BCB barrier
+                                                  correctly observes the active
+                                                  run and orders the hold before
+                                                  the commit)
+expected_final_user_outcome_changed: false   (NEW — replaces generic
+                                                  expected_external_behavior_changed: NO;
+                                                  the user-observable final
+                                                  outcome is unchanged: active
+                                                  run still blocks commit until
+                                                  agent_turn_done)
+generic_production_semantics_changed: (REMOVED in C1-P1; replaced by the two
+                                       semantically precise flags above)
+```
+
+The two new flags separately answer the two distinct questions the old generic flag conflated:
+- `authority_completion_ordering_changed = true` captures the internal ordering change at the BCB barrier.
+- `expected_final_user_outcome_changed = false` captures the user-observable invariance.
+
+#### Reviewer chain (C1-P1)
+
+```
+PASS_KERNEL_EXECUTABLE_GREEN (CORRECTION02)
+  → HALT_CAUSAL_CLAIM_INVALID (C1 reviewer; PASS)
+  → C1_P1_GO_WITH_BOUNDED_EVIDENCE_FIX (C1-P1 reviewer; PASS)
+  → CANONICAL_0192_BUILD_EXECUTED (THIS ACT; PASS)
+    (canonical 0.19.2 downloaded from github.com/elm/compiler/releases/
+        0.19.2/elm-0.19.2-mac-arm.gz, SHA-verified
+        8b02a7fac1643b39acb87ae2a8e10f0f1534fe61940ca08ab17dfc2ac98115c8,
+        deployed to apps/vscode/elm/completion-authority/vendor/elm,
+        kernel recompiled to 102,772 bytes
+        SHA 3d32e5430f208c3c16af1e0bd1b779d0dc1d86908d783bd14d76947ac4369f43;
+        8/8 REAL-ELM tests PASS against the canonical 0.19.2 bytes)
+  → NEXT: exact-head VSIX → install → LIVE authority ON
+          (operator step; requires human host terminal)
+```
+
+**Board cursor (post canonical 0.19.2 build):**
+```
+CORRECTION02 vocabulary repair      PASS
+C1 causal correction               PASS_WITH_ONE_P1_EVIDENCE_FIX
+C1-P1 evidence refinement          PASS
+canonical 0.19.2 kernel build      PASS   (NEW — downloaded, SHA-verified,
+                                                kernel recompiled, 8/8 PASS)
+exact-head VSIX                    WAIT   (operator step)
+host install                       WAIT   (operator step)
+LIVE authority qualification       WAIT   (operator step)
+MYC03                              HOLD
+```
+
+**Tests after C1 correction:** source-stage-vocabulary 3/3 PASSED; real-provider01 5/5 PASSED; conservation: all listed suites PASS.
+
+**Files changed (C1):**
+- `apps/vscode/src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts` (1 test renamed/retargeted; 1 test removed; extensive header rewrite)
+- `.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY/{02-red.txt,03-green.txt,04-ablation.txt,08-report.txt,result.json}` (C1 narrative corrections)
+- `.factory/acts/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY.md` (C1 section added)
+- `.factory/epic-board.md` (this section)
+
+**Files changed (C1-P1):**
+- `.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY/result.json` (flag rename: PRODUCTION_SEMANTICS_CHANGED + EXPECTED_EXTERNAL_BEHAVIOR_CHANGED → AUTHORITY_COMPLETION_ORDERING_CHANGED + EXPECTED_FINAL_USER_OUTCOME_CHANGED)
+- `.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY/08-report.txt` (flag rename with explanatory comments)
+- `.factory/epic-board.md` (this C1-P1 section + flag block update)
+
+**Production code:** UNCHANGED. No new TS production changes; no Elm changes.

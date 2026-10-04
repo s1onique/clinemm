@@ -1,8 +1,10 @@
-PRODUCTION-SHAPED RED — REPRODUCED
+PRODUCTION-SHAPED RED — REPRODUCED — C1-CORRECTED
 
 Test file:
   apps/vscode/src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts
-  (NEW; 4 tests)
+  (NEW; 4 tests, of which 3 are now in scope after C1 correction —
+   the confounded HOLD test is REPLACED by SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT
+   per the C1 reviewer's HALT_CAUSAL_CLAIM_INVALID adjudication)
 
 Entry seam:
   captureContinuationCardinalityAuthorityRecord(...)   ← REAL production seam
@@ -18,49 +20,81 @@ Factual production sequence (per ACT §5, §6):
   agent_turn_done        (production source — clears activeRun)
   submit_and_exit_seen   (production source)
 
-RED output (pre-repair):
+RED output (pre-repair, C1-CORRECTED NARRATIVE):
 
   ✓ REAL-ELM-PROD-VOCAB-ADAPTER
       adaptRecord maps source run_turn_started -> Elm run_started.
       Boundary invariant pin (§8).
 
-  × REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+  × REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER (TRANSPORT)
       AssertionError: expected 1 to be greater than or equal to 2
       counters.states === 1 (only task_started reached Elm;
       run_turn_started silently dropped at AUTHORITY_STAGES).
 
-  × REAL-ELM-PROD-VOCAB-HOLD
-      AssertionError: expected 1 to be +0
-      completionCommitCount === 1 (Elm AUTHORIZE because it never
-      knew about the active run).
+  × REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT (SEMANTIC, C1)
+      AssertionError: expected 0 to be greater than or equal to 1
+      counters.hold === 0 (Elm never observed the active run;
+      run_turn_started silently dropped at AUTHORITY_STAGES).
 
-  ✓ REAL-ELM-PROD-VOCAB-AUTHORIZE
+  ✓ REAL-ELM-PROD-VOCAB-AUTHORIZE [REMOVED IN C1-CORRECTION]
       The "second half" (§6) — run_turn_started + agent_turn_done
       + submit_and_exit_seen yields exactly one commit, since
       agent_turn_done clears the active run. (Whether the run-start
       record reached Elm or not, agent_turn_done clears it.)
 
-ELM_DECISION_PRE_FIX:
-  HOLD discriminator (REAL-ELM-PROD-VOCAB-HOLD):
-    Elm never received run_turn_started.
-    Elm's holdReasons was empty at the commit-attempt moment.
-    -> AUTHORIZE.
-    -> commitCount = 1.
+ELM_DECISION_PRE_FIX (C1-CORRECTED):
+  TRANSPORT discriminator (REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER):
+    Elm never received run_turn_started (filter dropped it).
+    counters.states = 1 (only task_started reached Elm).
+    -> filter fix needed: counters.states must be >= 2 for the
+       semantic test to even have a chance of observing activeRun.
 
-  AUTHORIZE discriminator (REAL-ELM-PROD-VOCAB-AUTHORIZE):
-    Same bypass; agent_turn_done would have cleared activeRun anyway.
-    -> AUTHORIZE.
-    -> commitCount = 1.
+  SEMANTIC discriminator (REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT):
+    Sequence: task_started → run_turn_started → submit_and_exit_seen
+    (no pending_prompt_enqueued, no agent_turn_done)
+    Pre-fix: Elm received only task_started + submit_and_exit_seen
+    (run_turn_started dropped). After submit:
+      activeRun = Nothing (no run observed by Elm)
+      commitReadyRun = Nothing (no run observed)
+      computeHoldReasons = []
+    -> lastDecision = "authorize"
+    -> commitCount = 1
+    -> phaseAtCompletion = "completed"
+    -> counters.hold = 0 (REGRESSION vs. expected 1)
+    The pre-fix semantic is the "FAIL then" case — an active run
+    is semantically active in production (CCARD recorded it) but Elm
+    never sees it, so the BCB barrier at checkElmCompletionAuthority
+    consults lastDecision = "authorize" and allows the commit.
+    This is the bug: commit happens while a real run is active.
 
-COMMIT_COUNT_PRE_FIX:
-  HOLD:    1  (RED — expected 0)
-  AUTHORIZE: 1
+COMMIT_COUNT_PRE_FIX (C1-CORRECTED):
+  TRANSPORT:  states = 1 (RED — expected >= 2)
+  SEMANTIC:   hold   = 0 (RED — expected >= 1)
+              commit = 1 (commit happened — should be blocked by active run)
+  AUTHORIZE:  [removed; the agent_turn_done path remains a future ACT]
 
-This is the EXACT RED the ACT predicted:
+Why this is the EXACT RED the ACT predicted (post-C1 correction):
   "run_turn_started silently dropped
    Elm does not know active run exists
    Elm AUTHORIZE
-   commit count = 1"
+   commit count = 1
+   HOLD = 0 (the semantic defect)"
 
 RED reproduction: CONFIRMED.
 HALT_RED_NOT_REPRODUCED: NOT TRIGGERED.
+
+C1-CORRECTION NOTE (2026-10-04, reviewer HALT_CAUSAL_CLAIM_INVALID):
+  The pre-C1 narrative claimed the confounded HOLD test injected
+  pending_prompt_enqueued as a parallel hold reason and that
+  commitCount=0 was therefore not attributable to activeRun. The
+  C1 correction removes pending_prompt_enqueued from the semantic
+  test entirely; the corrected semantic test still observes
+  commitCount=0 (HOLD) post-fix, because the BCB barrier consults
+  lastDecision which reflects computeHoldReasons (unfiltered),
+  and activeRun ≠ Nothing yields holdReasons = ["ActiveRun"].
+  The completionCommitHoldReasons suppression rule
+  (Authority.elm:453-460, commitReadyRun == activeRun) is dead code
+  in the LIVE path because task_completion_committed is excluded
+  from AUTHORITY_STAGES (POST-DECISION). The LIVE contract is that
+  an active run blocks commit until agent_turn_done clears activeRun.
+  See 08-report.txt for the full architectural analysis.

@@ -1,8 +1,8 @@
-NECESSITY / ABLATION — CONFIRMED
+NECESSITY / ABLATION — CONFIRMED — C1-CORRECTED + C1-P1 WITNESS
 
 Strategy (per ACT §9): revert ONLY the filter change in
-completion-authority-elm-authority-runtime.ts:90 from "run_turn_started"
-back to "run_started", and observe that the new test REDs again with
+completion-authority-elm-authority-runtime.ts:85 from "run_turn_started"
+back to "run_started", and observe that the new tests RED again with
 the SAME observable RED outputs as the initial pre-fix RED. The
 existing tests are not the ablation evidence — they were already
 updating to the production vocabulary in this ACT.
@@ -11,44 +11,107 @@ Ablation mutation (only this one line reverted; nothing else):
 
   AUTHORITY_STAGES.set("run_started")   // was run_turn_started
 
-Ablation output:
+Ablation output (C1-CORRECTED + C1-P1 composite witness — both tests RED):
 
   bun x vitest run \
     src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts \
     src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts
 
   Test Files  1 failed | 1 passed (2)
-       Tests  2 failed | 7 passed (9)
+       Tests  2 failed | 6 passed (8)
 
-  Failure 1: REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+  Failure 1: REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER (TRANSPORT)
     AssertionError: expected 1 to be greater than or equal to 2
     counters.states = 1 (only task_started reached Elm;
-    run_turn_started silently dropped)
+    run_turn_started silently dropped at AUTHORITY_STAGES)
 
-  Failure 2: REAL-ELM-PROD-VOCAB-HOLD
-    AssertionError: expected 1 to be +0
-    completionCommitCount = 1 (Elm AUTHORIZE because it never
-    knew about the active run)
+  Failure 2: REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT (SEMANTIC)
+    The C1-P1 composite witness — ALL six observable fields visible
+    in the failure message (vitest `toEqual` prints the full
+    received vs expected diff):
 
-These failures are character-for-character identical to the
-PRE_FIX_REAL_PRODUCTION_SHAPED_RED captured in 02-red.txt.
+    AssertionError: expected { ... } to deeply equal { ... }
+    - Expected
+    + Received
 
-Restoration (line 90 back to "run_turn_started"):
-  Tests  9 passed (9)
+      {
+        "authorize": 1,
+    -   "commitCount": 0,
+    +   "commitCount": 1,
+        "hold": 0,
+    -   "lastDecision": "hold",
+    -   "phase": StringNotMatching /^completed$/,
+    +   "lastDecision": "authorize",
+    +   "phase": "completed",
+        "states": 3,
+      }
+
+    The semantic failure mode is FULLY captured in one witness:
+      states = 3       (run_turn_started dropped at AUTHORITY_STAGES
+                        but other states still flow)
+      hold = 0         (REGRESSION — Elm never observed activeRun)
+      authorize = 1    (task_started authorized normally)
+      lastDecision = "authorize"  (REGRESSION — should be "hold")
+      commitCount = 1  (REGRESSION — commit happened, should be blocked)
+      phase = "completed" (REGRESSION — should NOT be completed)
+
+  These failures are character-for-character identical to the
+  PRE_FIX_REAL_PRODUCTION_SHAPED_RED captured in 02-red.txt, and
+  the composite witness surfaces the FULL operational regression
+  (commitCount + phase) — not just the first mismatched field.
+
+  Pre-fix semantic (with filter reverted to "run_started"):
+    Elm receives: task_started, submit_and_exit_seen (2 records)
+    (run_turn_started dropped; pending_prompt_enqueued NOT injected
+    in the C1-corrected test — the confounded claim is removed).
+    After submit:
+      activeRun = Nothing  (no run observed)
+      commitReadyRun = Nothing
+      computeHoldReasons = []
+    -> lastDecision = "authorize"
+    -> counters.hold = 0  (REGRESSION)
+    -> commitCount = 1    (commit happened — should have been blocked)
+    -> phase = "completed"  (REGRESSION — should not be completed)
+
+Restoration (line 85 back to "run_turn_started"):
+  Tests  8 passed (8)  [3 source-vocab + 5 real-provider]
   Green fully restored.
 
-NECESSITY: PROVEN.
-  The single-line filter vocabulary repair is necessary and sufficient
-  to allow production-source stage names to reach the Elm authority
-  kernel.
+  Post-fix semantic (with "run_turn_started"):
+    Elm receives: task_started, run_turn_started, submit_and_exit_seen (3 records)
+    After submit:
+      activeRun = Just runId
+      commitReadyRun = Just runId
+      computeHoldReasons = [ActiveRun]
+    -> lastDecision = "hold"
+    -> counters.hold = 1  (CORRECT)
+    -> counters.authorize = 1 (unchanged — task_started authorized normally)
+    -> commitCount = 0    (correctly blocked by active run)
+    -> phase != "completed"  (correctly held)
 
-Causal composition (per ACT §9):
+NECESSITY: PROVEN (C1-CORRECTED + C1-P1 composite witness).
+  The single-line filter vocabulary repair is NECESSARY for both:
+    (1) the source-vocab → Elm transport contract
+        (counters.states must be >= 2 — transport-only)
+    (2) the semantic — Elm observing activeRun and HOLDing commit
+        (counters.hold must be >= 1, commitCount = 0, phase != completed)
+  Without the filter fix, all six composite-witness fields regress
+  to the buggy pre-fix behavior:
+    states = 3, hold = 0, authorize = 1,
+    lastDecision = "authorize", commitCount = 1, phase = "completed".
+
+Causal composition (per ACT §9, C1-CORRECTED + C1-P1):
   PRE_FIX_REAL_PRODUCTION_SHAPED_RED  (02-red.txt)
     +
   POST_FIX_GREEN                      (03-green.txt)
     +
   POST_FIX_ABLATION_RED               (04-ablation.txt, this file)
-  is a complete necessity + conservation composition.
+  is a complete necessity + conservation composition for BOTH the
+  transport contract and the semantic claim. Completion behavior is
+  NOT inferred from the transport ablation alone — both transport
+  AND semantic are required and proven. The composite witness in
+  Failure 2 surfaces the full operational regression in one
+  executable artifact.
 
 Source permanently restored after inspection. No persistent source
 mutation remains.

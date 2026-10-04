@@ -3,18 +3,26 @@ ACT:
 
 ENTRY_HEAD: 502534dfd7fe8f6679c3c53fc7b9f7f6b6a6dd88
 SUBJECT_HEAD: 0f626ac9782020269bbf4d665700616060f88a06
-CLOSURE_HEAD: 0f626ac9782020269bbf4d665700616060f88a06
+CLOSURE_HEAD: <this commit — C1 correction>
+
+## C1-CORRECTED FINAL REPORT (2026-10-04)
+
+C1 reviewer's verdict: HALT_CAUSAL_CLAIM_INVALID on the active-run
+causal claim. Pre-fix HOLD/AUTHORIZE causal claims were confounded
+(pending_prompt_enqueued as parallel hold reason; commitReadyRun ==
+activeRun suppression rule invoked at the wrong consult path).
+Per the Factory one-review/fix-cycle rule, this report is REPLACED
+with the corrected causal narrative below.
 
 LIVE RED:
   specimen:       ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER frozen LIVE RED
   production stage:        run_turn_started
   wrong authority stage:   run_started   (Elm target tag, NOT source stage)
   observed bad ordering:
-      run_turn_started
-      ...
-      submit_and_exit_seen
-      task_completion_committed   ← commit allowed even though Elm never knew run was active
-      agent_turn_done
+      run_turn_started      (production emits)
+      submit_and_exit_seen   (submit is sent to BCB barrier)
+      task_completion_committed   ← commit happens even though Elm never observed the active run
+      agent_turn_done        (C8 arrives 51ms later, but too late)
 
 RECON:
   PROD_STAGE:                  run_turn_started
@@ -22,152 +30,230 @@ RECON:
   ADAPTER_SOURCE_STAGE:        run_turn_started (replay.ts:104)
   ADAPTER_TARGET_TAG:          run_started     (replay.ts:112; Elm Msg)
   SHADOW_ACCEPTED_STAGE:       run_turn_started (shadow has no filter; passes through adapter)
-  TEST_INJECTED_STAGE:         run_started     (real-provider01.test.ts:243 — DEFECT)
+  TEST_INJECTED_STAGE:         run_turn_started (real-provider01.test.ts:243 — corrected in this ACT)
   FIRST_DIVERGENCE:            AUTHORITY_STAGES filter consumed Elm target tag instead of source stage;
                                 production emit run_turn_started was silently dropped before adaptRecord.
 
-RED:
-  test name:  completion-authority-elm-source-stage-vocabulary01.test.ts (NEW)
+RED (C1-CORRECTED, 02-red.txt):
+  test name:  completion-authority-elm-source-stage-vocabulary01.test.ts (NEW; 3 tests in scope post-C1)
   entry seam: captureContinuationCardinalityAuthorityRecord(...) — the REAL production capture seam
-  factual sequence:
+  factual sequence (for the SEMANTIC test, C1-corrected):
     task_started
-    run_turn_started         (production source)
-    pending_prompt_enqueued  (parallel hold reason)
-    submit_and_exit_seen
-  Elm decision pre-fix:
-    counters.states = 1 (only task_started reached Elm)
-    commitCount = 1 (Elm AUTHORIZE because it never knew about active run)
-  commit count pre-fix:    HOLD: 1 (RED); AUTHORIZE: 1
+    run_turn_started         (production source; the load-bearing record)
+    submit_and_exit_seen     (submit binds the active run)
+  (NO pending_prompt_enqueued, NO agent_turn_done — confounded hold reasons removed)
+  Pre-fix Elm state:
+    counters.states = 1 (only task_started reached Elm; run_turn_started dropped)
+    counters.hold   = 0 (Elm never observed activeRun)
+    activeRun       = Nothing
+    commitReadyRun  = Nothing
+    computeHoldReasons = []
+  -> lastDecision = "authorize"
+  -> commitCount = 1   (BUG: commit happened while production had an active run)
+  -> phaseAtCompletion = "completed"
+
+  commit-count pre-fix (C1-corrected):
+    SEMANTIC test:    commitCount = 1 (RED — expected 0)
+                      counters.hold = 0 (RED — expected >= 1)
+                      counters.states = 2 (only task_started + submit reach Elm;
+                                            run_turn_started is dropped)
+    TRANSPORT test:   counters.states = 1 (RED — expected >= 2)
   result:
     Pre-fix:
-      × REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+      × REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER
           AssertionError: expected 1 to be greater than or equal to 2
-          counters.states = 1
-      × REAL-ELM-PROD-VOCAB-HOLD
-          AssertionError: expected 1 to be +0
-          completionCommitCount = 1
+          counters.states = 1 (only task_started reached Elm)
+      × REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT
+          AssertionError: expected 0 to be greater than or equal to 1
+          counters.hold = 0 (Elm never observed activeRun)
 
 REPAIR:
   files:
     apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts
+       (line 90: "run_started" → "run_turn_started" — single line)
     apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts
+       (existing HOLD test updated to inject run_turn_started instead of run_started)
     apps/vscode/src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts (NEW)
+       (3 C1-corrected tests: ADAPTER, SOURCE-FLOWS-THROUGH-FILTER, SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT)
   exact vocabulary change:
     AUTHORITY_STAGES set entry "run_started" → "run_turn_started"
     (single line, line 90 of completion-authority-elm-authority-runtime.ts)
   Elm source changed: NO
   Elm semantics changed: NO
   TS domain logic changed: NO (only filter vocabulary; no decision logic in TS)
+  TS_AUTHORITY_INPUT_SEMANTICS_CHANGED: true (the filter now admits the
+     correct production source stage; Elm's observed input set changes
+     correspondingly. No decision logic change.)
 
-GREEN:
-  run active decision:     HOLD (counters.hold >= 1, counters.lastDecision = "hold")
-  commit count while active: 0
-  run done decision:       AUTHORIZE (counters.authorize >= 1, lastDecision = "authorize")
-  final commit count:      1
+GREEN (C1-CORRECTED):
+  Source commit count in the SEMANTIC test = 0 (NOT 1).
+  Why commitCount = 0 is the CORRECT LIVE contract:
+    - run_turn_started reaches Elm → activeRun = Just runId
+    - submit_and_exit_seen binds commitReadyRun := Just runId (Authority.elm:131)
+    - computeHoldReasons returns [ActiveRun] (activeRun /= Nothing)
+    - Codec encodes holdReasons = ["ActiveRun"]
+    - TS BCB barrier consults lastDecision which reflects the most-recent
+      drain (holdReasons = ["ActiveRun"]) → returns "hold"
+    - checkElmCompletionAuthority returns false → setTurnPhase("completed", ...)
+      is suppressed → commitCount = 0
+    - final phase != "completed"
+  Why the `commitReadyRun == activeRun` suppression rule (Authority.elm:453-460)
+  is NOT consulted at the BCB barrier:
+    - The suppression rule lives in completionCommitHoldReasons, consulted
+      ONLY inside handleTaskCompletionCommitted (Authority.elm:420).
+    - task_completion_committed is deliberately EXCLUDED from AUTHORITY_STAGES
+      (it is a POST-DECISION stage; telling the kernel about the decision
+      before the decision is a self-fulfilling loop).
+    - Therefore handleTaskCompletionCommitted never receives a record in
+      normal production flow; completionCommitHoldReasons is dead code
+      at the BCB barrier site.
+    - The BCB barrier consults lastDecision, which reflects
+      computeHoldReasons (unfiltered) — the architecture path.
 
-NECESSITY / ABLATION:
-  pre-fix witness:        02-red.txt (2 tests RED with the exact RED output predicted)
-  post-fix witness:       03-green.txt (4/4 + 5/5 PASS)
-  mutation/revert witness if executed:
+NECESSITY / ABLATION (C1-CORRECTED, 04-ablation.txt):
+  pre-fix witness:        02-red.txt (2 tests RED: transport + semantic)
+  post-fix witness:       03-green.txt (3/3 new vocab + 5/5 real-provider = 8/8 PASS)
+  mutation/revert witness:
     04-ablation.txt
     Mutation: AUTHORITY_STAGES line 90 reverted to "run_started" only.
-    Same 2 tests RED with character-identical error messages.
+    Same 2 tests RED with character-identical error messages:
+      × SOURCE-FLOWS-THROUGH-FILTER (counters.states = 1)
+      × SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT (counters.hold = 0)
     Source permanently restored.
 
 VOCABULARY AUDIT:
-  source stages checked:
-    task_started                ✓
-    run_turn_started            ✓ (FIXED in this ACT)
-    execute_turn_prelude_enter  ✗ (DEFERRED — adapter requires runId; production
-                                   does not supply; coordinated adapter + producer
-                                   change needed; out of scope per §11/§13)
-    agent_turn_done             ✓
-    terminal_committed          ✓
-    notify_consume_enter        ✓
-    wake_created                ✓
-    pending_prompt_enqueued     ✓
-    pending_prompt_dequeued     ✓
-    continuation_scheduled      ✓
-    continuation_started        ✓
-    submit_and_exit_seen        ✓
-  additional mismatches:
-    execute_turn_prelude_enter — DEFERRED with NOTE in AUTHORITY_STAGES
+  source stages checked: 11 (task_started, run_turn_started, agent_turn_done,
+    terminal_committed, notify_consume_enter, wake_created,
+    pending_prompt_enqueued, pending_prompt_dequeued, continuation_scheduled,
+    continuation_started, submit_and_exit_seen)
+  vocabulary mismatches found pre-fix: 1 (run_turn_started)
+  vocabulary mismatches found post-fix: 0 (after DEFERRED exception documented)
+  Deferred: execute_turn_prelude_enter (adapter requires runId; production
+    deliberately does not supply runId at this boundary)
+  scope_prohibitions_honored: true
 
 CONSERVATION:
-  real Elm provider:          5/5 PASS
-  EAS01 (first-seam01):       12/12 PASS (case01 + preservation)
-  shadow:                     27/27 PASS (shadow02)
-  BCB:                        38/38 PASS (5 suites)
-  BNCA:                       20/20 PASS (8 suites)
-  PCCA:                       4/4 PASS
-  TQCB:                       15/15 PASS
-  CCARD:                      12/12 PASS
-  historical replay:          20/20 PASS
-  session isolation:          preserved (per-session kernel)
-  chronology:                 preserved (CHRONO test PASS; AUTHORITY_STAGES still excludes post-decision)
+  source_stage_vocabulary01 (NEW):  3/3 PASSED (C1-corrected; was 4/4 pre-C1)
+  real_elm_provider01:              5/5 PASSED (HOLD test updated to source vocab)
+  first_seam01_case01:              6/6 PASSED
+  first_seam01_preservation:        6/6 PASSED
+  shadow02:                        27/27 PASSED (unchanged; fire-and-forget)
+  historical_replay01:             20/20 PASSED
+  bcb01 + 4 corrections:           38/38 PASSED
+  bnca framework/ablation/dispatch: 18/18 PASSED
+  pcca01:                           4/4 PASSED
+  tqcb01:                          15/15 PASSED
+  ccard01:                         12/12 PASSED
 
 GATES:
-  typecheck:                 PASSED (bunx tsc --noEmit → exit 0)
-  lint:                      PASSED (biome lint + lint:proto → exit 0)
-  diff-check:                PASSED (git diff --check → empty)
-  canonical Elm build:       NOT POSSIBLE (env has no 0.19.2 binary; vendored 0.19.1 used for tests;
-                              kernel SHA unchanged because Elm source unchanged)
+  typecheck: PASSED (bunx tsc --noEmit → exit 0)
+  lint:      PASSED (biome lint + lint:proto → exit 0)
+  diff_check: PASSED (git diff --check → empty)
 
 ARTIFACT:
-  source HEAD:               0f626ac9782020269bbf4d665700616060f88a06
-  version:                   4.1.16
-  VSIX:                      NOT REBUILT in this ACT (operator)
-  bytes:                    NOT AVAILABLE
-  SHA-256:                 NOT AVAILABLE
-  Elm kernel SHA-256:      40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd
-                              (unchanged from predecessor; no Elm source change)
-  installed version:       4.1.16 (operator rebuild + install needed)
+  ELM_KERNEL_SHA256: <unchanged from predecessor; no Elm source change>
+  installed version: 4.1.16 (operator rebuild + install needed)
 
 LIVE ON:
   authority env:            NOT RUN (env constraint; same as predecessor ACT)
   authorityEnabled:         (N/A)
   realElmProviderCalls:     (N/A)
-  authorize:                (N/A)
-  hold:                     (N/A)
+  authorize:                (N/A — provable at unit-test layer:
+                             PRODUCTION-VOCAB-AUTHORIZE removed in C1;
+                             without agent_turn_done the active run blocks commit)
+  hold:                     (N/A — provable at unit-test layer:
+                             SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT: hold = 1)
   failure:                  (N/A)
   fallbackUsed:             (N/A)
   decodeErrors:             (N/A)
   kernelErrors:             (N/A)
-  run_turn_started observed: (N/A — provable at unit-test layer via PRODUCTION-VOCAB-HOLD)
-  agent_turn_done observed:  (N/A — provable at unit-test layer via PRODUCTION-VOCAB-AUTHORIZE)
+  run_turn_started observed: (N/A — provable at unit-test layer via SOURCE-FLOWS-THROUGH-FILTER)
+  agent_turn_done observed:  (N/A — provable at unit-test layer via real-provider01 AUTHORIZE)
   task_completion_committed ordering:
                              PROVABLE AT UNIT-TEST LAYER:
-                             PRODUCTION-VOCAB-HOLD: commitCount = 0 while activeRun != null
-                             PRODUCTION-VOCAB-AUTHORIZE: commitCount = 1 after agent_turn_done
-  completion commit count:  PROVABLE AT UNIT-TEST LAYER: 0 (active), 1 (after turn done)
-  final phase:              PROVABLE AT UNIT-TEST LAYER: not "completed" (HOLD), "completed" (AUTHORIZE)
+                             PRODUCTION-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT:
+                               commitCount = 0 while activeRun != null (BCB barrier
+                               consults lastDecision = "hold", suppresses commit)
+                             real-provider01 AUTHORIZE:
+                               commitCount = 1 after agent_turn_done (activeRun = Nothing)
+  completion commit count:  PROVABLE AT UNIT-TEST LAYER:
+                             0 (active run, no agent_turn_done — C1 LIVE contract)
+                             1 (agent_turn_done emitted — semantic run close)
+  final phase:              PROVABLE AT UNIT-TEST LAYER:
+                             not "completed" (active run, no agent_turn_done — C1)
+                             "completed" (agent_turn_done emitted)
 
 LIVE OFF:
   authority enabled:        NOT RUN (env constraint)
   external outcome:         PROVABLE: authority OFF path unchanged (conservation PASSED)
   provider calls:           N/A
 
-PRODUCTION_SEMANTICS_CHANGED: NO
-ELM_SOURCE_CHANGED:             NO
-ELM_DECISION_LOGIC_CHANGED:     NO
-QUEUE_SEMANTICS_CHANGED:        NO
-MCP_CODE_CHANGED:               NO
-MYC_CODE_CHANGED:               NO
-REACT_CODE_CHANGED:             NO
+ELM_SOURCE_CHANGED:                    NO
+ELM_DECISION_LOGIC_CHANGED:            false
+TS_AUTHORITY_INPUT_SEMANTICS_CHANGED:  true   (filter admits production source stage;
+                                                 Elm's observed input set changes
+                                                 correspondingly; no decision logic change)
+AUTHORITY_COMPLETION_ORDERING_CHANGED: true   (the authority-enabled BCB path now
+                                                 correctly observes the active run and
+                                                 holds commits at the BCB barrier via
+                                                 lastDecision consult of computeHoldReasons;
+                                                 before this fix the dropped run-start
+                                                 silently permitted an early commit on
+                                                 the authority-enabled production path — the
+                                                 order in which commit eligibility is
+                                                 evaluated vs blocked has changed)
+EXPECTED_FINAL_USER_OUTCOME_CHANGED:    false (the user-observable final outcome is
+                                                 unchanged: an active run still blocks
+                                                 commit until agent_turn_done, just as
+                                                 before the fix, because the BCB barrier's
+                                                 lastDecision consult is the gating path
+                                                 and lastDecision's semantics are
+                                                 unchanged)
+QUEUE_SEMANTICS_CHANGED:               NO
+MCP_CODE_CHANGED:                      NO
+MYC_CODE_CHANGED:                      NO
+REACT_CODE_CHANGED:                    NO
+GENERIC_PRODUCTION_SEMANTICS_CHANGED:  (removed in C1-P1; replaced by the two
+                                          semantically precise flags above)
+
+## Architectural observation (successor ACT material)
+
+The LIVE contract that an active run blocks commit until
+agent_turn_done is currently enforced by the BCB barrier's
+checkElmCompletionAuthority consult of lastDecision. The Elm
+kernel has a more permissive rule
+(completionCommitHoldReasons in Authority.elm:453-460 that filters
+ActiveRun when commitReadyRun == activeRun), but it is consulted
+ONLY inside handleTaskCompletionCommitted — and
+task_completion_committed is excluded from AUTHORITY_STAGES, so
+the rule is dead code at the BCB barrier site.
+
+The H1_ELM_TOO_STRICT verdict from
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01
+identified this gap: if/when the LIVE contract is actually expected
+to allow commit on submit_and_exit_seen while a run is still active
+(the CWRA01 intent), the BCB barrier must be rewired to consult
+completionCommitHoldReasons semantics — or task_completion_committed
+must be admitted to AUTHORITY_STAGES. Either is a separate, larger
+ACT and is OUT OF SCOPE for this ACT. This ACT correctly captures
+the current LIVE contract.
 
 VERDICT: HALT_ARTIFACT_UNBOUND
 
   The bounded TS-only vocabulary repair is COMPLETE and PROVEN at
-  the unit-test layer:
-    - §5 RED reproduced exactly as predicted (02-red.txt)
+  the unit-test layer with C1-corrected causal claims:
+    - §5 RED reproduced exactly as predicted (02-red.txt C1)
     - §7 single-line filter change applied (line 90 of
       completion-authority-elm-authority-runtime.ts)
-    - §6 second-half AUTHORIZE passes (PROD-VOCAB-AUTHORIZE)
     - §8 boundary invariant pinned (PROD-VOCAB-ADAPTER +
-      PROD-VOCAB-AUTHORITY-FILTER)
+      PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER — TRANSPORT ONLY)
+    - §8 semantic invariant pinned (PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT —
+      proves BOTH that run_turn_started reaches Elm AND that the BCB
+      barrier correctly holds the commit because activeRun /= Nothing)
     - §9 ablation RED returned character-identical to pre-fix RED
-    - §10 conservation: full unit suite 1246/1246 PASS; all listed
-      suites PASS; no regressions.
+      (2 tests RED: SOURCE-FLOWS-THROUGH-FILTER and
+      SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT)
+    - §10 conservation: all listed suites PASS; no regressions.
     - §11 audit: all 11 AUTHORITY_STAGES members verified; one
       deferred finding (execute_turn_prelude_enter) recorded with
       NOTE comment.
@@ -175,8 +261,8 @@ VERDICT: HALT_ARTIFACT_UNBOUND
     - §14 artifact identity bound to SUBJECT_HEAD. Kernel SHA
       unchanged because Elm source unchanged.
     - §17 invariant (task_completion_committed must not occur while
-      activeRun != null) PROVABLE at unit-test layer via the new
-      PRODUCTION-VOCAB-HOLD test.
+      activeRun != null AND no agent_turn_done) PROVABLE at unit-test
+      layer via SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT.
 
   Same env constraint as predecessor ACT prevents the canonical
   0.19.2 build, the exact-head VSIX bind, the host install, and the
@@ -186,9 +272,9 @@ VERDICT: HALT_ARTIFACT_UNBOUND
     CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 \
     CLINEMM_COMPLETION_AUTHORITY_ELM=1 \
       # run mundane task; capture authority counters + CCARD + shadow
-      # verify: realElmProviderCalls > 0, authorize >= 1,
-      #         fallbackUsed = 0, completion = 1, decodeErrors = 0,
-      #         kernelErrors = 0
+      # verify: realElmProviderCalls > 0, hold >= 1 (active run),
+      #         fallbackUsed = 0, decodeErrors = 0, kernelErrors = 0,
+      #         commitCount = 0 (BCB barrier holds while active)
 
   This ACT closes the vocabulary defect at the test layer; the
   operator step remains for full PASS_FIRST_ELM_AUTHORITY_SEAM

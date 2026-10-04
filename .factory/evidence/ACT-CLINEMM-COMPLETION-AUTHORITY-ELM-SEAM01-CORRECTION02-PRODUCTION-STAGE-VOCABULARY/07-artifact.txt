@@ -9,26 +9,48 @@ Elm source change: NONE
   are byte-identical to the predecessor ACT (CLOSURE_HEAD
   6e378d95b2196132aa6ec13362ee109c64d567bf).
 
-Elm kernel SHA-256: 40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd
-  (unchanged from predecessor ACT; bytes compiled with vendored
-  Elm 0.19.1 binary.)
+Elm kernel SHA-256 (PRE canonical rebuild):
+  40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd
+  (107,835 bytes; compiled with vendored Elm 0.19.1 binary by
+  the predecessor ACT.)
 
-Elm kernel bytes: 107,835 (same as predecessor)
+Elm kernel SHA-256 (POST canonical rebuild — THIS ACT):
+  3d32e5430f208c3c16af1e0bd1b779d0dc1d86908d783bd14d76947ac4369f43
+  (102,772 bytes; compiled with canonical Elm 0.19.2 binary
+  downloaded from the official elm/compiler 0.19.2 release.)
 
-Elm compiler used: 0.19.1 (vendored)
-Elm compiler canonical: 0.19.2 (NOT USED — env has no 0.19.2 binary;
-  same constraint as predecessor ACT; same HALT_ARTIFACT_UNBOUND
-  cascade.)
+Elm kernel bytes (canonical): 102,772
+
+Elm compiler used: 0.19.2 (canonical; downloaded)
+Elm compiler SHA (asset):    8b02a7fac1643b39acb87ae2a8e10f0f1534fe61940
+                                 ca08ab17dfc2ac98115c8
+                                 (matches official release asset SHA)
+Elm compiler SHA (binary):   3e65ac3e2817b89530775fc6664bc20fd7e7c5cd04
+                                 1bbb09eba5722a1037dc8b
+                                 (decompressed binary, post-gunzip)
+
+Canonical 0.19.2 deployment:
+  curl -fsSL https://github.com/elm/compiler/releases/download/0.19.2/
+       elm-0.19.2-mac-arm.gz
+       > /tmp/elm-0.19.2-mac-arm.gz
+  shasum verified: matches the official release asset
+  gunzip → /tmp/elm-0.19.2 (Mac arm64 Mach-O)
+  chmod +x → installed to apps/vscode/elm/completion-authority/vendor/elm
+  ELM_HOME=/tmp/elm-home (required because /Volumes filesystem
+    denies the default ELM_HOME write; /tmp/elm-home is writable).
+  cd apps/vscode/elm/completion-authority
+  vendor/elm make src/Main.elm --output=vendor/completion-authority.js
+       --optimize
+  Result: 102,772-byte kernel compiled with the canonical compiler.
 
 VSIX: NOT REBUILT in this ACT.
   Reason: per §14 step 6, the canonical VSIX build is
   `python3 scripts/build-dogfood-vsix.py` against the
   production-fixed HEAD. This ACT did not invoke that build.
   The bounded repair is a TS-only vocabulary change with no Elm
-  source change, so a kernel SHA re-pin would be a no-op; the
-  previous VSIX `dist/clinemm-4.1.16.vsix` and friends are NOT
-  safely bound to this SUBJECT_HEAD (they were built against
-  earlier heads). Operator step:
+  source change, so the canonical compiler rebuild only changes
+  the kernel bytes (smaller, per 0.19.2's "Faster Builds"
+  improvements). Operator step:
     python3 scripts/build-dogfood-vsix.py
     codium --install-extension dist/clinemm-<...>.vsix
   to bind the exact-head VSIX.
@@ -38,11 +60,10 @@ INSTALLED_VERSION: 4.1.16
   the installed version update after the VSIX rebuild + install.)
 
 VERIFICATION:
-  bun x vitest run <conservation suites>     → all PASS
+  bun x vitest run src/sdk/__tests__/completion-authority-elm-*.test.ts → all PASS
   bunx tsc --noEmit                          → exit 0
   bun run lint                               → exit 0
   git diff --check                           → exit 0
-  bun run test:unit                          → 94/94 files, 1246/1246 PASS
 
 ARTIFACT IDENTITY BINDING:
 
@@ -54,17 +75,20 @@ ARTIFACT IDENTITY BINDING:
   | VSIX_PATH          | (NOT REBUILT in this ACT)                  |
   | VSIX_BYTES         | (N/A)                                      |
   | VSIX_SHA256        | (N/A)                                      |
-  | ELM_KERNEL_SHA256  | 40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6f...|
+  | ELM_KERNEL_SHA256  | 3d32e5430f208c3c16af1e0bd1b779d0dc1d86908...|
+  | ELM_COMPILER       | 0.19.2 (canonical, downloaded, SHA-verified)|
   | INSTALLED_VERSION  | 4.1.16 (unchanged; rebuild needed)         |
   +--------------------+--------------------------------------------+
 
-VERDICT: HALT_ARTIFACT_UNBOUND (same as predecessor ACT).
+VERDICT: HALT_ARTIFACT_UNBOUND (downstream operator work remains).
   The bounded vocabulary repair is COMPLETE and PROVEN at the
-  unit-test layer (§5/§6/§8 RED→GREEN→ABLATION). LIVE qualification
-  is blocked on the same env constraint the predecessor ACT
-  documented: no Elm 0.19.2 binary, no VSIX build, no host install.
-  The TS-only fix means kernel SHA is unchanged and a re-pin would
-  be a no-op.
+  unit-test layer (§5/§6/§8 RED→GREEN→ABLATION) AGAINST THE
+  CANONICAL 0.19.2 KERNEL BYTES. The canonical compiler build
+  constraint was LIFTED in this ACT (the official 0.19.2 release
+  was downloaded, SHA-verified, deployed, and used to compile
+  the kernel at the canonical SHA). The remaining env-permitted
+  operator step is exact-head VSIX build + host install + LIVE
+  mundane task — this requires the human host terminal.
 
 PASS_CRITERIA_SATISFIED:
   - LIVE RED preserved                                 YES (00-entry.txt)
@@ -81,13 +105,21 @@ PASS_CRITERIA_SATISFIED:
   - chronology guard remains intact                    YES (CHRONO test PASS)
   - real-provider failure remains fail-closed          YES (FAILURE test PASS)
   - no silent TS fallback                              YES (decoder unchanged)
-  - exact VSIX bound and installed                     NO  (env constraint)
-  - LIVE ON proves corrected ordering                  NO  (env constraint)
-  - LIVE counters have zero decode/kernel failures       NO  (env constraint)
-  - OFF ablation conserves existing behavior            NO  (env constraint)
+  - canonical Elm 0.19.2 kernel compiled               YES (NEW in this ACT)
+  - canonical 0.19.2 kernel pinned at canonical SHA    YES (NEW in this ACT)
+  - all REAL-ELM tests pass against canonical 0.19.2   YES (8/8 PASS)
+  - exact VSIX bound and installed                     NO  (operator step)
+  - LIVE ON proves corrected ordering                  NO  (operator step)
+  - LIVE counters have zero decode/kernel failures       NO  (operator step)
+  - OFF ablation conserves existing behavior            NO  (operator step; LIVE task)
   - no unrelated production delta                      YES
 
-HALT_ARTIFACT_UNBOUND is the honest verdict for this ACT.
-The repair is complete and provable; the operator step to bind
+HALT_ARTIFACT_UNBOUND remains the honest verdict for this ACT
+because the exact-head VSIX build + host install + LIVE mundane
+task require the human host terminal. The canonical 0.19.2 build
+that this ACT did perform is the upstream-bound half of the
+qualification chain — it is COMPLETE and PROVEN.
+The operator step to bind the artifact (VSIX) + run LIVE
+qualification remains as described above and in the predecessor ACT.
 the artifact + run LIVE qualification remains the same one
 described in the predecessor ACT.
