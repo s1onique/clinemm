@@ -6,6 +6,7 @@ import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal
 import * as vscode from "vscode"
 import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
+import { dumpExtensionSideElmAuthorityCounters } from "@/sdk/completion-authority-elm-authority-runtime-host"
 import { dumpExtensionSideElmShadowDiagnostic } from "@/sdk/completion-authority-elm-shadow-runtime"
 import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
 import {
@@ -307,9 +308,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const elmAuthorityKernelPath = elmShadowKernelPath
 	const elmAuthorityActivation = applyElmAuthorityProfile(process.env, elmAuthorityKernelPath)
 	if (elmAuthorityActivation.enabled) {
-		Logger.log(
-			`[ELM-AUTHORITY] enabled=true kernelPath=${elmAuthorityActivation.kernelPath}`,
-		)
+		Logger.log(`[ELM-AUTHORITY] enabled=true kernelPath=${elmAuthorityActivation.kernelPath}`)
 	}
 
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
@@ -1078,6 +1077,39 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[ELM-SHADOW] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Completion authority Elm shadow dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-AUTHORITY-COUNTER-DUMP01:
+		// Dump command for the SYNCHRONOUS REAL Elm authority counter
+		// snapshot. Mirrors the SHADOW dump pattern: unconditional
+		// (operator can always inspect whatever the runtime captured),
+		// dump != clear (no counter mutation). The dump serializes
+		// `getElmAuthorityCounters()` to
+		// <globalStorageUri>/completion-authority-elm-authority.counters.json.
+		// No toggle command — enablement is owned by
+		// `applyElmAuthorityProfile` in dogfood-diagnostic-profile.ts
+		// (env-gated via CLINEMM_COMPLETION_AUTHORITY_ELM=1). The
+		// message shows the same diagnostic fields a 1:1 review needs
+		// (total / authorize / hold / failure / fallbackUsed /
+		// decodeErrors / kernelErrors / lastDecision) so the operator
+		// can tell whether the failure is provider-not-armed,
+		// record-not-ingested, HOLD-observed-but-ignored, or
+		// fallback/default authorize — without opening the JSON.
+		// REMOVAL_TRIGGER: PASS_LIVE_ELM_AUTHORITY with
+		// operator-rendered 1:1 live correspondence AND the cause is
+		// RED on HOLD/FAILURE for operator review, OR successor
+		// evidence supersedes.
+		vscode.commands.registerCommand(commands.DumpCompletionAuthorityElmAuthority, async () => {
+			try {
+				const { countersFile, counters } = await dumpExtensionSideElmAuthorityCounters(context)
+				void vscode.window.showInformationMessage(
+					`Completion authority Elm authority: total=${counters.total} authorize=${counters.authorize} hold=${counters.hold} failure=${counters.failure} fallbackUsed=${counters.fallbackUsed} decodeErrors=${counters.decodeErrors} kernelErrors=${counters.kernelErrors} lastDecision=${counters.lastDecision ?? "null"} → ${countersFile}.`,
+				)
+			} catch (err) {
+				Logger.error("[ELM-AUTHORITY] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Completion authority Elm authority dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

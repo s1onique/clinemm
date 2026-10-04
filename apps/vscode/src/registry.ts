@@ -123,6 +123,20 @@ const ClineCommands = {
 	// PASS_LIVE_ELM_SHADOW with operator-rendered 1:1 live
 	// correspondence, OR successor evidence supersedes.
 	DumpCompletionAuthorityElmShadow: prefix + ".debug.dumpCompletionAuthorityElmShadow",
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-AUTHORITY-COUNTER-DUMP01:
+	// Debug dump command for the SYNCHRONOUS REAL Elm authority
+	// runtime counter snapshot. Mirrors the SHADOW dump pattern:
+	// unconditional (operator can always inspect whatever the
+	// runtime captured), dump != clear (no counter mutation). The
+	// dump serializes `getElmAuthorityCounters()` to
+	// <globalStorageUri>/completion-authority-elm-authority.counters.json.
+	// No toggle command (enablement is owned by
+	// `applyElmAuthorityProfile` in dogfood-diagnostic-profile.ts;
+	// env-gated via CLINEMM_COMPLETION_AUTHORITY_ELM=1). REMOVAL_TRIGGER:
+	// PASS_LIVE_ELM_AUTHORITY with operator-rendered 1:1 live
+	// correspondence AND the cause is RED on HOLD/FAILURE for
+	// operator review, OR successor evidence supersedes.
+	DumpCompletionAuthorityElmAuthority: prefix + ".debug.dumpCompletionAuthorityElmAuthority",
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
 	// Dump command for the EHLOOP01 (Extension Host Hotloop) counter
 	// diagnostic. Mirrors the BJLA / BOCOR / CCARD dump pattern:

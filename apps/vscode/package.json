@@ -262,6 +262,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpCompletionAuthorityElmAuthority",
+				"title": "Cline Debug: Dump Completion Authority Elm Authority",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.debug.dumpExtensionHostHotloopDiagnostic",
 				"title": "Cline Debug: Dump Extension Host Hotloop Diagnostic",
 				"category": "Cline"
