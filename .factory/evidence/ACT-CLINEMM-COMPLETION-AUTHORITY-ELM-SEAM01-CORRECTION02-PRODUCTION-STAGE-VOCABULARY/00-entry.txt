@@ -1,0 +1,19 @@
+ENTRY_HEAD: 502534dfd7fe8f6679c3c53fc7b9f7f6b6a6dd88
+
+Classification entering ACT:
+  LIVE
+  REAL_PRODUCTION_SEAM
+  HALT_AUTHORITY_INPUT_VOCABULARY_MISMATCH
+
+Frozen LIVE RED (predecessor):
+  production stage:    run_turn_started
+  wrong authority stage:  run_started   (filtered out, never reaches Elm authority kernel)
+  observed bad ordering:
+      run_turn_started
+      ...
+      submit_and_exit_seen
+      task_completion_committed   ← commit allowed even though Elm never knew run was active
+      agent_turn_done
+
+Working tree clean at entry. Pre-existing artifact identity remains:
+  subject_head pre-ACT: 6e378d95b2196132aa6ec13362ee109c64d567bf (CLOSURE_HEAD of predecessor ACT)

@@ -1,0 +1,66 @@
+§10 — CONSERVATION
+
+A. REAL-ELM provider tests (completion-authority-elm-real-provider01):
+   5/5 PASS
+     REAL-ELM-LOAD
+     REAL-ELM-HOLD       (now uses run_turn_started — production source)
+     REAL-ELM-AUTHORIZE
+     REAL-ELM-FAILURE
+     REAL-ELM-CHRONO
+
+B. NEW source-stage-vocabulary tests (completion-authority-elm-source-stage-vocabulary01):
+   4/4 PASS
+     REAL-ELM-PROD-VOCAB-ADAPTER
+     REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+     REAL-ELM-PROD-VOCAB-HOLD
+     REAL-ELM-PROD-VOCAB-AUTHORIZE
+
+C. Existing synthetic EAS01 / first-seam tests:
+   first-seam01.case01.test.ts          6/6 PASS
+   first-seam01.preservation.test.ts    6/6 PASS
+   → 12/12 PASS
+
+D. Shadow02:
+   completion-authority-elm-shadow02.test.ts  27/27 PASS
+   (Shadow unchanged; unaffected by repair.)
+
+E. Historical replay:
+   completion-authority-elm-historical-replay01.test.ts  20/20 PASS
+
+F. Background completion barrier (BCB):
+   background-completion-barrier01.bcb01.test.ts             14/14 PASS
+   background-completion-barrier01-correction01.bcb01-c.test.ts  8/8 PASS
+   background-completion-barrier01-correction02.bcb01-c2.test.ts 5/5 PASS
+   background-completion-barrier01-correction03.bcb01-c3.test.ts 6/6 PASS
+   background-completion-barrier01-correction04.bcb01-c4.test.ts 5/5 PASS
+   → 38/38 PASS
+
+G. Background notify completion authority (BNCA):
+   8 suites, 20/20 PASS
+
+H. Post-consumption completion authority (PCCA):
+   4/4 PASS
+
+I. Long-horizon task quiescence completion barrier (TQCB):
+   15/15 PASS
+
+J. CCARD (continuation-cardinality-authority):
+   12/12 PASS
+
+K. Full unit suite (bun run test:unit):
+   94 files, 1246/1246 PASS
+   No regressions introduced by the bounded repair.
+
+CONSERVATION_INVARIANTS:
+  - authority OFF unchanged                                YES
+  - shadow unaffected (fire-and-forget path, no change)    YES
+  - no duplicate completion                                YES
+  - background completion still blocked appropriately      YES (BCB passes)
+  - session isolation preserved                            YES (real-provider tests use distinct sessionIds)
+  - no silent TS fallback in authority mode                YES (FAILURE path remains fail-closed)
+  - chronology guard preserved                             YES (CHRONO test passes; AUTHORITY_STAGES still excludes post-decision stages)
+  - post-decision stages still excluded                    YES
+  - no React changes                                       YES (no React files touched)
+  - no MCP/myc changes                                     YES (no MCP/myc files touched)
+  - no Elm source changes                                  YES (no .elm files touched)
+  - no Elm decision-logic changes                          YES (Authority.elm, Domain.elm, Main.elm untouched)

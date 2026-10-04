@@ -1,0 +1,76 @@
+RECON — SOURCE VOCABULARY CONTRACT (boundary table)
+
+  PROD_STAGE              = run_turn_started
+      evidence:
+        - apps/vscode/src/sdk/continuation-cardinality-authority.ts:87
+            (ContinuationCardinalityStage union member)
+        - production capture site (LocalRuntimeHost.executeTurn via
+          runtime-capture / session-host-capture hooks) uses this name.
+
+  AUTHORITY_FILTER_STAGE  = run_started        ← DEFECT
+      evidence:
+        - apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts:90
+            const AUTHORITY_STAGES = new Set<string>([
+                ...
+                "run_started",           ← BUG
+                ...
+            ])
+        - enqueueElmAuthorityRecord at line 253 short-circuits with
+          `if (!AUTHORITY_STAGES.has(stage)) return`
+          so run_turn_started is silently dropped BEFORE adaptRecord runs.
+
+  ADAPTER_SOURCE_STAGE    = run_turn_started
+      evidence:
+        - apps/vscode/src/sdk/completion-authority-elm-replay.ts:104
+            case "run_turn_started":
+
+  ADAPTER_TARGET_TAG      = run_started
+      evidence:
+        - apps/vscode/src/sdk/completion-authority-elm-replay.ts:112
+            tag: stage === "run_turn_started" ? "run_started" : "execute_turn_prelude_enter"
+        - Elm-side: Codec.elm:43 maps wire tag "run_started" to Msg.
+          Authority.elm:104 handles RunStarted -> handleRunStarted.
+          Domain.elm:297 declares RunStarted RunRef RunOrigin.
+
+  SHADOW_ACCEPTED_STAGE   = run_turn_started
+      evidence:
+        - apps/vscode/src/sdk/completion-authority-elm-shadow.ts has NO
+          stage whitelist. It funnels every record through adaptRecord.
+          Shadow observes production run_turn_started correctly.
+
+  TEST_INJECTED_STAGE     = run_started        ← TEST DEFECT
+      evidence:
+        - apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts:243
+            await enqueueElmAuthorityRecord({
+                stage: "run_started",       ← uses Elm target tag, not production source
+                sessionId: ...,
+                runId: "run-1",
+                origin: "explicit_user",
+            })
+        - This is why the test "passed" — it matched the buggy filter
+          rather than production reality.
+
+FIRST_DIVERGENCE:
+  Authority filter (`AUTHORITY_STAGES`) accepts Elm target tag
+  `run_started` instead of source stage `run_turn_started`.
+  Production capture emits `run_turn_started`, which the filter drops
+  before `adaptRecord` ever sees it.
+  The adapter itself is correct: it does map `run_turn_started` ->
+  Elm `run_started` at replay.ts:112. Elm semantics are unchanged.
+
+Hypothesis (to be confirmed by RED): ACTIVATED.
+  - The bounded repair is a single string change in
+    completion-authority-elm-authority-runtime.ts:90
+      run_started   ->   run_turn_started
+  - Plus the existing HOLD test's injected stage must be updated
+    from `run_started` to `run_turn_started` (the production
+    vocabulary) so the test exercises the real capture seam shape.
+
+Boundary invariant:
+  SOURCE vocabulary != TARGET vocabulary.
+  AUTHORITY_STAGES must contain source stage names.
+  Elm target tags remain Elm target tags.
+  │ Production: run_turn_started │
+       └─> AUTHORITY_STAGES accepts "run_turn_started"
+            └─> adaptRecord maps to Elm "run_started"
+                 └─> Elm sees activeRun = True

@@ -1,0 +1,50 @@
+GREEN — POST-FIX
+
+Repair:
+  apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts:90
+    before: "run_started"
+    after:  "run_turn_started"
+  (single line change in the AUTHORITY_STAGES set; no other source change)
+
+Updated test vocabulary:
+  apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts
+  Old injected stage "run_started" -> "run_turn_started"
+  (with comment explaining the source-vs-target vocabulary distinction).
+  This converts the previously hand-normalized test into one that
+  exercises the production-source vocabulary, matching the real capture
+  seam.
+
+Post-fix GREEN output:
+
+  bun x vitest run \
+    src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts \
+    src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts
+
+  Test Files  2 passed (2)
+       Tests  9 passed (9)
+
+  Detail (new test file):
+    ✓ REAL-ELM-PROD-VOCAB-ADAPTER
+        adaptRecord maps source run_turn_started -> Elm run_started.
+    ✓ REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+        AUTHORITY_STAGES accepts the production source stage.
+        counters.states = 2 (both records reached Elm).
+    ✓ REAL-ELM-PROD-VOCAB-HOLD
+        commit count = 0.
+        lastDecision = "hold".
+    ✓ REAL-ELM-PROD-VOCAB-AUTHORIZE
+        commit count = 1.
+        lastDecision = "authorize".
+
+  Detail (existing real-provider tests):
+    ✓ REAL-ELM-LOAD
+    ✓ REAL-ELM-HOLD        (now uses run_turn_started)
+    ✓ REAL-ELM-AUTHORIZE
+    ✓ REAL-ELM-FAILURE
+    ✓ REAL-ELM-CHRONO
+
+ELM_SOURCE_CHANGED: false
+ELM_DECISION_LOGIC_CHANGED: false
+PRODUCTION_SEMANTICS_CHANGED: no semantic delta to Elm kernel
+TS_DOMAIN_LOGIC_CHANGED: none (pure vocabulary boundary repair)
+QUEUE_SEMANTICS_CHANGED: none

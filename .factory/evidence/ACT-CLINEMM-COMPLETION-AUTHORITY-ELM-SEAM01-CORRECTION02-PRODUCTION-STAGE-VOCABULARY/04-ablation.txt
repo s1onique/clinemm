@@ -1,0 +1,54 @@
+NECESSITY / ABLATION — CONFIRMED
+
+Strategy (per ACT §9): revert ONLY the filter change in
+completion-authority-elm-authority-runtime.ts:90 from "run_turn_started"
+back to "run_started", and observe that the new test REDs again with
+the SAME observable RED outputs as the initial pre-fix RED. The
+existing tests are not the ablation evidence — they were already
+updating to the production vocabulary in this ACT.
+
+Ablation mutation (only this one line reverted; nothing else):
+
+  AUTHORITY_STAGES.set("run_started")   // was run_turn_started
+
+Ablation output:
+
+  bun x vitest run \
+    src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts \
+    src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts
+
+  Test Files  1 failed | 1 passed (2)
+       Tests  2 failed | 7 passed (9)
+
+  Failure 1: REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+    AssertionError: expected 1 to be greater than or equal to 2
+    counters.states = 1 (only task_started reached Elm;
+    run_turn_started silently dropped)
+
+  Failure 2: REAL-ELM-PROD-VOCAB-HOLD
+    AssertionError: expected 1 to be +0
+    completionCommitCount = 1 (Elm AUTHORIZE because it never
+    knew about the active run)
+
+These failures are character-for-character identical to the
+PRE_FIX_REAL_PRODUCTION_SHAPED_RED captured in 02-red.txt.
+
+Restoration (line 90 back to "run_turn_started"):
+  Tests  9 passed (9)
+  Green fully restored.
+
+NECESSITY: PROVEN.
+  The single-line filter vocabulary repair is necessary and sufficient
+  to allow production-source stage names to reach the Elm authority
+  kernel.
+
+Causal composition (per ACT §9):
+  PRE_FIX_REAL_PRODUCTION_SHAPED_RED  (02-red.txt)
+    +
+  POST_FIX_GREEN                      (03-green.txt)
+    +
+  POST_FIX_ABLATION_RED               (04-ablation.txt, this file)
+  is a complete necessity + conservation composition.
+
+Source permanently restored after inspection. No persistent source
+mutation remains.

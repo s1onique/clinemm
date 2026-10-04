@@ -1,0 +1,55 @@
+§11 — AUTHORITY SOURCE-STAGE NAME AUDIT
+
+Comparator: AUTHORITY_STAGES set (after repair) vs.
+            ContinuationCardinalityStage union members
+            (excluding POST-DECISION stages: task_completion_committed,
+             completion_presented, task_cancelled — these are deliberately
+             excluded per chronology discipline).
+
+| AUTHORITY_STAGES member | union member? | adapter accepts? |
+|-------------------------|---------------|------------------|
+| task_started            | YES           | YES              |
+| run_turn_started        | YES (FIXED)   | YES (→ run_started)|
+| agent_turn_done         | YES           | YES              |
+| terminal_committed      | YES           | YES (jobId+owner)|
+| notify_consume_enter    | YES           | YES              |
+| wake_created            | YES           | YES              |
+| pending_prompt_enqueued | YES           | YES              |
+| pending_prompt_dequeued | YES           | YES              |
+| continuation_scheduled  | YES           | YES              |
+| continuation_started    | YES           | YES              |
+| submit_and_exit_seen    | YES           | YES              |
+
+Additional mismatch discovered during audit:
+  execute_turn_prelude_enter
+    - present in ContinuationCardinalityStage union (line 99)
+    - present in production capture (session-host-capture.ts:108,
+      canonical-event-subscription.ts handled separately)
+    - accepted by Elm Msg decoder (Authority.elm:146 sets activeRun)
+    - NOT present in AUTHORITY_STAGES
+  Verdict: DEFERRED.
+
+  Reason: the adapter (completion-authority-elm-replay.ts:106) requires
+  a non-null `runId` for `execute_turn_prelude_enter`, AND production
+  deliberately does NOT supply `runId` for this stage because the
+  runtime runId does not yet exist at that boundary
+  (canonical-event-subscription.ts:71-78 explicitly says so).
+
+  Adding `execute_turn_prelude_enter` to AUTHORITY_STAGES was tested
+  during this ACT: the adapter returns INSUFFICIENT_IDENTITY silently
+  (no Elm Msg emitted, no decode error, no kernel error). The fix is
+  NOT bounded to a single line: it requires either (a) Elm accepting
+  prelude-without-runId (semantic change — out of scope per ACT §13),
+  or (b) production synthesizing one (architecture change — out of
+  scope per ACT §21).
+
+  Per ACT §11: "if they expose a different causal problem, record and
+  defer unless P0." This is a different causal problem — the data
+  shape, not the vocabulary — and is recorded as DEFERRED with a
+  clarifying NOTE comment in the AUTHORITY_STAGES set.
+
+No other mismatches found.
+
+The audit preserves the bounded-scope of the ACT: the single repair
+remains a single line (run_started -> run_turn_started at
+authority-runtime.ts:90).

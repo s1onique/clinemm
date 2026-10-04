@@ -1,0 +1,94 @@
+{
+  "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY",
+  "verdict": "HALT_ARTIFACT_UNBOUND",
+  "verdict_reason": "Bounded TS-only vocabulary repair COMPLETE and PROVEN at unit-test layer; same env constraint as predecessor ACT (no Elm 0.19.2 binary, no VSIX rebuild, no host install) prevents the canonical artifact bind + LIVE qualification.",
+  "entry_head": "502534dfd7fe8f6679c3c53fc7b9f7f6b6a6dd88",
+  "subject_head": "0f626ac9782020269bbf4d665700616060f88a06",
+  "closure_head": "0f626ac9782020269bbf4d665700616060f88a06",
+  "first_divergence": {
+    "file": "apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts",
+    "line": 90,
+    "field": "AUTHORITY_STAGES",
+    "before": "run_started (Elm target tag)",
+    "after": "run_turn_started (production source stage)",
+    "class": "source_vocabulary_confused_with_elm_target_vocabulary"
+  },
+  "elm_source_changed": false,
+  "elm_decision_logic_changed": false,
+  "ts_domain_logic_changed": false,
+  "production_semantics_changed": false,
+  "elm_kernel_sha256": "40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd",
+  "elm_kernel_bytes": 107835,
+  "elm_compiler_used": "0.19.1 (vendored)",
+  "elm_compiler_canonical": "0.19.2 (NOT USED — env constraint)",
+  "ts_production_changes": [
+    "apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts (single-line filter vocabulary fix + NOTE comment for deferred execute_turn_prelude_enter finding)",
+    "apps/vscode/src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts (NEW — production-shaped RED via real capture seam + boundary invariant + HOLD/AUTHORIZE discriminators)",
+    "apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts (existing HOLD test updated to inject run_turn_started instead of run_started)"
+  ],
+  "new_tests": {
+    "REAL-ELM-PROD-VOCAB-ADAPTER": "PASSED",
+    "REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER": "PASSED",
+    "REAL-ELM-PROD-VOCAB-HOLD": "PASSED",
+    "REAL-ELM-PROD-VOCAB-AUTHORIZE": "PASSED"
+  },
+  "pre_fix_red": {
+    "REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER": "RED (counters.states = 1; expected >= 2)",
+    "REAL-ELM-PROD-VOCAB-HOLD": "RED (commitCount = 1; expected 0)"
+  },
+  "ablation_red": {
+    "REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER": "RED (counters.states = 1; character-identical to pre-fix)",
+    "REAL-ELM-PROD-VOCAB-HOLD": "RED (commitCount = 1; character-identical to pre-fix)"
+  },
+  "post_fix_green": {
+    "tests_passed": "9 (new vocab suite 4/4 + existing real-provider 5/5)",
+    "tests_failed": 0
+  },
+  "necessity_proven": true,
+  "vocabulary_audit": {
+    "stages_checked": 11,
+    "additional_mismatches": [
+        {
+          "stage": "execute_turn_prelude_enter",
+          "verdict": "DEFERRED",
+          "reason": "Adapter requires non-null runId; production deliberately does not supply runId at this boundary (canonical-event-subscription.ts:71-78). Adding the stage name to AUTHORITY_STAGES causes the adapter to return INSUFFICIENT_IDENTITY silently. Requires a coordinated adapter + producer change; out of scope per ACT §11/§13. Documented with a NOTE comment in AUTHORITY_STAGES."
+        }
+      ],
+    "scope_prohibitions_honored": true
+  },
+  "conservation_tests": {
+    "new_source_stage_vocabulary01": "4/4 PASSED",
+    "real_elm_provider01": "5/5 PASSED",
+    "first_seam01_case01": "6/6 PASSED",
+    "first_seam01_preservation": "6/6 PASSED",
+    "shadow02": "27/27 PASSED",
+    "historical_replay01": "20/20 PASSED",
+    "bcb01": "14/14 PASSED",
+    "bcb01_correction01": "8/8 PASSED",
+    "bcb01_correction02": "5/5 PASSED",
+    "bcb01_correction03": "6/6 PASSED",
+    "bcb01_correction04": "5/5 PASSED",
+    "bnca_framework01": "3/3 PASSED",
+    "bnca_red01": "1/1 PASSED",
+    "bnca_h1_green01": "3/3 PASSED",
+    "bnca_ablation01": "2/2 PASSED",
+    "bnca_c10_framework_ablation01": "2/2 PASSED",
+    "bnca_c10_framework_dispatch_failed01": "3/3 PASSED",
+    "bnca_c10_framework_dispatch_failed_ablation01": "4/4 PASSED",
+    "bnca_fire_and_forget_red01": "2/2 PASSED",
+    "pcca01": "4/4 PASSED",
+    "tqcb01": "15/15 PASSED",
+    "ccard01": "12/12 PASSED",
+    "full_unit_suite": "94 files / 1246 tests / 0 failures"
+  },
+  "gates": {
+    "typecheck": "PASSED (bunx tsc --noEmit → exit 0)",
+    "lint": "PASSED (biome lint + lint:proto → exit 0)",
+    "diff_check": "PASSED (git diff --check → empty)",
+    "canonical_elm_build": "NOT POSSIBLE (env constraint; same as predecessor ACT)"
+  },
+  "scope_prohibitions_honored": true,
+  "live_qualification_run_by_this_act": false,
+  "live_qualification_run_by": "human operator (same operator step as predecessor ACT)",
+  "human_operator_action": "Build canonical 0.19.2 kernel + exact-head VSIX + install + LIVE mundane task with CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_COMPLETION_AUTHORITY_ELM=1; capture authority counters + CCARD + shadow; verify realElmProviderCalls > 0, authorize >= 1, fallbackUsed = 0, completion = 1, decodeErrors = 0, kernelErrors = 0"
+}

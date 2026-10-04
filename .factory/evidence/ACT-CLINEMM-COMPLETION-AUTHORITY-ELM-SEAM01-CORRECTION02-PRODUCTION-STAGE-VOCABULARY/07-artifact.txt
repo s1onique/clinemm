@@ -1,0 +1,93 @@
+§14 — ARTIFACT IDENTITY
+
+SUBJECT_HEAD: 0f626ac9782020269bbf4d665700616060f88a06
+CLOSURE_HEAD: 0f626ac9782020269bbf4d665700616060f88a06
+  (no rebase/amendment after qualification — see §14 step 3)
+
+Elm source change: NONE
+  apps/vscode/elm/completion-authority/src/{Authority,Codec,Domain,Main}.elm
+  are byte-identical to the predecessor ACT (CLOSURE_HEAD
+  6e378d95b2196132aa6ec13362ee109c64d567bf).
+
+Elm kernel SHA-256: 40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd
+  (unchanged from predecessor ACT; bytes compiled with vendored
+  Elm 0.19.1 binary.)
+
+Elm kernel bytes: 107,835 (same as predecessor)
+
+Elm compiler used: 0.19.1 (vendored)
+Elm compiler canonical: 0.19.2 (NOT USED — env has no 0.19.2 binary;
+  same constraint as predecessor ACT; same HALT_ARTIFACT_UNBOUND
+  cascade.)
+
+VSIX: NOT REBUILT in this ACT.
+  Reason: per §14 step 6, the canonical VSIX build is
+  `python3 scripts/build-dogfood-vsix.py` against the
+  production-fixed HEAD. This ACT did not invoke that build.
+  The bounded repair is a TS-only vocabulary change with no Elm
+  source change, so a kernel SHA re-pin would be a no-op; the
+  previous VSIX `dist/clinemm-4.1.16.vsix` and friends are NOT
+  safely bound to this SUBJECT_HEAD (they were built against
+  earlier heads). Operator step:
+    python3 scripts/build-dogfood-vsix.py
+    codium --install-extension dist/clinemm-<...>.vsix
+  to bind the exact-head VSIX.
+
+INSTALLED_VERSION: 4.1.16
+  (current apps/vscode/package.json version. Operator will see
+  the installed version update after the VSIX rebuild + install.)
+
+VERIFICATION:
+  bun x vitest run <conservation suites>     → all PASS
+  bunx tsc --noEmit                          → exit 0
+  bun run lint                               → exit 0
+  git diff --check                           → exit 0
+  bun run test:unit                          → 94/94 files, 1246/1246 PASS
+
+ARTIFACT IDENTITY BINDING:
+
+  +--------------------+--------------------------------------------+
+  | Field              | Value                                      |
+  +--------------------+--------------------------------------------+
+  | SUBJECT_HEAD       | 0f626ac9782020269bbf4d665700616060f88a06   |
+  | DOGFOOD_VERSION    | 4.1.16                                     |
+  | VSIX_PATH          | (NOT REBUILT in this ACT)                  |
+  | VSIX_BYTES         | (N/A)                                      |
+  | VSIX_SHA256        | (N/A)                                      |
+  | ELM_KERNEL_SHA256  | 40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6f...|
+  | INSTALLED_VERSION  | 4.1.16 (unchanged; rebuild needed)         |
+  +--------------------+--------------------------------------------+
+
+VERDICT: HALT_ARTIFACT_UNBOUND (same as predecessor ACT).
+  The bounded vocabulary repair is COMPLETE and PROVEN at the
+  unit-test layer (§5/§6/§8 RED→GREEN→ABLATION). LIVE qualification
+  is blocked on the same env constraint the predecessor ACT
+  documented: no Elm 0.19.2 binary, no VSIX build, no host install.
+  The TS-only fix means kernel SHA is unchanged and a re-pin would
+  be a no-op.
+
+PASS_CRITERIA_SATISFIED:
+  - LIVE RED preserved                                 YES (00-entry.txt)
+  - production-shaped RED reproduced before repair     YES (02-red.txt)
+  - source/target stage vocabulary characterized       YES (01-recon.txt)
+  - authority filter consumes source vocabulary        YES (single-line fix)
+  - run_turn_started reaches actual compiled Elm       YES (NEW test passes)
+  - Elm HOLD(active_run) suppresses commit             YES (PROD-VOCAB-HOLD)
+  - agent_turn_done clears active run                  YES (PROD-VOCAB-AUTHORIZE)
+  - Elm subsequently AUTHORIZEs                        YES (commit count = 1)
+  - exactly one completion effect occurs               YES
+  - production-shaped test uses real capture seam      YES (capture helper)
+  - old run_started test input removed/replaced        YES (real-provider)
+  - chronology guard remains intact                    YES (CHRONO test PASS)
+  - real-provider failure remains fail-closed          YES (FAILURE test PASS)
+  - no silent TS fallback                              YES (decoder unchanged)
+  - exact VSIX bound and installed                     NO  (env constraint)
+  - LIVE ON proves corrected ordering                  NO  (env constraint)
+  - LIVE counters have zero decode/kernel failures       NO  (env constraint)
+  - OFF ablation conserves existing behavior            NO  (env constraint)
+  - no unrelated production delta                      YES
+
+HALT_ARTIFACT_UNBOUND is the honest verdict for this ACT.
+The repair is complete and provable; the operator step to bind
+the artifact + run LIVE qualification remains the same one
+described in the predecessor ACT.

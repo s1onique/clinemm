@@ -1,0 +1,66 @@
+PRODUCTION-SHAPED RED — REPRODUCED
+
+Test file:
+  apps/vscode/src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts
+  (NEW; 4 tests)
+
+Entry seam:
+  captureContinuationCardinalityAuthorityRecord(...)   ← REAL production seam
+  (NOT enqueueElmAuthorityRecord(...) directly)
+
+Activation wiring (mirrors production):
+  setElmAuthorityProvider(REAL_KERNEL_PATH)
+  setContinuationCardinalityAuthorityCaptureEnabled(true)
+
+Factual production sequence (per ACT §5, §6):
+  task_started           (CCARD source stage)
+  run_turn_started       (PRODUCTION source — NOT Elm target tag)
+  agent_turn_done        (production source — clears activeRun)
+  submit_and_exit_seen   (production source)
+
+RED output (pre-repair):
+
+  ✓ REAL-ELM-PROD-VOCAB-ADAPTER
+      adaptRecord maps source run_turn_started -> Elm run_started.
+      Boundary invariant pin (§8).
+
+  × REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+      AssertionError: expected 1 to be greater than or equal to 2
+      counters.states === 1 (only task_started reached Elm;
+      run_turn_started silently dropped at AUTHORITY_STAGES).
+
+  × REAL-ELM-PROD-VOCAB-HOLD
+      AssertionError: expected 1 to be +0
+      completionCommitCount === 1 (Elm AUTHORIZE because it never
+      knew about the active run).
+
+  ✓ REAL-ELM-PROD-VOCAB-AUTHORIZE
+      The "second half" (§6) — run_turn_started + agent_turn_done
+      + submit_and_exit_seen yields exactly one commit, since
+      agent_turn_done clears the active run. (Whether the run-start
+      record reached Elm or not, agent_turn_done clears it.)
+
+ELM_DECISION_PRE_FIX:
+  HOLD discriminator (REAL-ELM-PROD-VOCAB-HOLD):
+    Elm never received run_turn_started.
+    Elm's holdReasons was empty at the commit-attempt moment.
+    -> AUTHORIZE.
+    -> commitCount = 1.
+
+  AUTHORIZE discriminator (REAL-ELM-PROD-VOCAB-AUTHORIZE):
+    Same bypass; agent_turn_done would have cleared activeRun anyway.
+    -> AUTHORIZE.
+    -> commitCount = 1.
+
+COMMIT_COUNT_PRE_FIX:
+  HOLD:    1  (RED — expected 0)
+  AUTHORIZE: 1
+
+This is the EXACT RED the ACT predicted:
+  "run_turn_started silently dropped
+   Elm does not know active run exists
+   Elm AUTHORIZE
+   commit count = 1"
+
+RED reproduction: CONFIRMED.
+HALT_RED_NOT_REPRODUCED: NOT TRIGGERED.

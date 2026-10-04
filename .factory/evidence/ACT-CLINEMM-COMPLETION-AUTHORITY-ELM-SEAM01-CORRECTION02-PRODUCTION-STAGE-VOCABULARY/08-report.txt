@@ -1,0 +1,195 @@
+ACT:
+  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY
+
+ENTRY_HEAD: 502534dfd7fe8f6679c3c53fc7b9f7f6b6a6dd88
+SUBJECT_HEAD: 0f626ac9782020269bbf4d665700616060f88a06
+CLOSURE_HEAD: 0f626ac9782020269bbf4d665700616060f88a06
+
+LIVE RED:
+  specimen:       ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER frozen LIVE RED
+  production stage:        run_turn_started
+  wrong authority stage:   run_started   (Elm target tag, NOT source stage)
+  observed bad ordering:
+      run_turn_started
+      ...
+      submit_and_exit_seen
+      task_completion_committed   ← commit allowed even though Elm never knew run was active
+      agent_turn_done
+
+RECON:
+  PROD_STAGE:                  run_turn_started
+  AUTHORITY_FILTER_STAGE:      run_started (DEFECT — line 90 of completion-authority-elm-authority-runtime.ts)
+  ADAPTER_SOURCE_STAGE:        run_turn_started (replay.ts:104)
+  ADAPTER_TARGET_TAG:          run_started     (replay.ts:112; Elm Msg)
+  SHADOW_ACCEPTED_STAGE:       run_turn_started (shadow has no filter; passes through adapter)
+  TEST_INJECTED_STAGE:         run_started     (real-provider01.test.ts:243 — DEFECT)
+  FIRST_DIVERGENCE:            AUTHORITY_STAGES filter consumed Elm target tag instead of source stage;
+                                production emit run_turn_started was silently dropped before adaptRecord.
+
+RED:
+  test name:  completion-authority-elm-source-stage-vocabulary01.test.ts (NEW)
+  entry seam: captureContinuationCardinalityAuthorityRecord(...) — the REAL production capture seam
+  factual sequence:
+    task_started
+    run_turn_started         (production source)
+    pending_prompt_enqueued  (parallel hold reason)
+    submit_and_exit_seen
+  Elm decision pre-fix:
+    counters.states = 1 (only task_started reached Elm)
+    commitCount = 1 (Elm AUTHORIZE because it never knew about active run)
+  commit count pre-fix:    HOLD: 1 (RED); AUTHORIZE: 1
+  result:
+    Pre-fix:
+      × REAL-ELM-PROD-VOCAB-AUTHORITY-FILTER
+          AssertionError: expected 1 to be greater than or equal to 2
+          counters.states = 1
+      × REAL-ELM-PROD-VOCAB-HOLD
+          AssertionError: expected 1 to be +0
+          completionCommitCount = 1
+
+REPAIR:
+  files:
+    apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts
+    apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts
+    apps/vscode/src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts (NEW)
+  exact vocabulary change:
+    AUTHORITY_STAGES set entry "run_started" → "run_turn_started"
+    (single line, line 90 of completion-authority-elm-authority-runtime.ts)
+  Elm source changed: NO
+  Elm semantics changed: NO
+  TS domain logic changed: NO (only filter vocabulary; no decision logic in TS)
+
+GREEN:
+  run active decision:     HOLD (counters.hold >= 1, counters.lastDecision = "hold")
+  commit count while active: 0
+  run done decision:       AUTHORIZE (counters.authorize >= 1, lastDecision = "authorize")
+  final commit count:      1
+
+NECESSITY / ABLATION:
+  pre-fix witness:        02-red.txt (2 tests RED with the exact RED output predicted)
+  post-fix witness:       03-green.txt (4/4 + 5/5 PASS)
+  mutation/revert witness if executed:
+    04-ablation.txt
+    Mutation: AUTHORITY_STAGES line 90 reverted to "run_started" only.
+    Same 2 tests RED with character-identical error messages.
+    Source permanently restored.
+
+VOCABULARY AUDIT:
+  source stages checked:
+    task_started                ✓
+    run_turn_started            ✓ (FIXED in this ACT)
+    execute_turn_prelude_enter  ✗ (DEFERRED — adapter requires runId; production
+                                   does not supply; coordinated adapter + producer
+                                   change needed; out of scope per §11/§13)
+    agent_turn_done             ✓
+    terminal_committed          ✓
+    notify_consume_enter        ✓
+    wake_created                ✓
+    pending_prompt_enqueued     ✓
+    pending_prompt_dequeued     ✓
+    continuation_scheduled      ✓
+    continuation_started        ✓
+    submit_and_exit_seen        ✓
+  additional mismatches:
+    execute_turn_prelude_enter — DEFERRED with NOTE in AUTHORITY_STAGES
+
+CONSERVATION:
+  real Elm provider:          5/5 PASS
+  EAS01 (first-seam01):       12/12 PASS (case01 + preservation)
+  shadow:                     27/27 PASS (shadow02)
+  BCB:                        38/38 PASS (5 suites)
+  BNCA:                       20/20 PASS (8 suites)
+  PCCA:                       4/4 PASS
+  TQCB:                       15/15 PASS
+  CCARD:                      12/12 PASS
+  historical replay:          20/20 PASS
+  session isolation:          preserved (per-session kernel)
+  chronology:                 preserved (CHRONO test PASS; AUTHORITY_STAGES still excludes post-decision)
+
+GATES:
+  typecheck:                 PASSED (bunx tsc --noEmit → exit 0)
+  lint:                      PASSED (biome lint + lint:proto → exit 0)
+  diff-check:                PASSED (git diff --check → empty)
+  canonical Elm build:       NOT POSSIBLE (env has no 0.19.2 binary; vendored 0.19.1 used for tests;
+                              kernel SHA unchanged because Elm source unchanged)
+
+ARTIFACT:
+  source HEAD:               0f626ac9782020269bbf4d665700616060f88a06
+  version:                   4.1.16
+  VSIX:                      NOT REBUILT in this ACT (operator)
+  bytes:                    NOT AVAILABLE
+  SHA-256:                 NOT AVAILABLE
+  Elm kernel SHA-256:      40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd
+                              (unchanged from predecessor; no Elm source change)
+  installed version:       4.1.16 (operator rebuild + install needed)
+
+LIVE ON:
+  authority env:            NOT RUN (env constraint; same as predecessor ACT)
+  authorityEnabled:         (N/A)
+  realElmProviderCalls:     (N/A)
+  authorize:                (N/A)
+  hold:                     (N/A)
+  failure:                  (N/A)
+  fallbackUsed:             (N/A)
+  decodeErrors:             (N/A)
+  kernelErrors:             (N/A)
+  run_turn_started observed: (N/A — provable at unit-test layer via PRODUCTION-VOCAB-HOLD)
+  agent_turn_done observed:  (N/A — provable at unit-test layer via PRODUCTION-VOCAB-AUTHORIZE)
+  task_completion_committed ordering:
+                             PROVABLE AT UNIT-TEST LAYER:
+                             PRODUCTION-VOCAB-HOLD: commitCount = 0 while activeRun != null
+                             PRODUCTION-VOCAB-AUTHORIZE: commitCount = 1 after agent_turn_done
+  completion commit count:  PROVABLE AT UNIT-TEST LAYER: 0 (active), 1 (after turn done)
+  final phase:              PROVABLE AT UNIT-TEST LAYER: not "completed" (HOLD), "completed" (AUTHORIZE)
+
+LIVE OFF:
+  authority enabled:        NOT RUN (env constraint)
+  external outcome:         PROVABLE: authority OFF path unchanged (conservation PASSED)
+  provider calls:           N/A
+
+PRODUCTION_SEMANTICS_CHANGED: NO
+ELM_SOURCE_CHANGED:             NO
+ELM_DECISION_LOGIC_CHANGED:     NO
+QUEUE_SEMANTICS_CHANGED:        NO
+MCP_CODE_CHANGED:               NO
+MYC_CODE_CHANGED:               NO
+REACT_CODE_CHANGED:             NO
+
+VERDICT: HALT_ARTIFACT_UNBOUND
+
+  The bounded TS-only vocabulary repair is COMPLETE and PROVEN at
+  the unit-test layer:
+    - §5 RED reproduced exactly as predicted (02-red.txt)
+    - §7 single-line filter change applied (line 90 of
+      completion-authority-elm-authority-runtime.ts)
+    - §6 second-half AUTHORIZE passes (PROD-VOCAB-AUTHORIZE)
+    - §8 boundary invariant pinned (PROD-VOCAB-ADAPTER +
+      PROD-VOCAB-AUTHORITY-FILTER)
+    - §9 ablation RED returned character-identical to pre-fix RED
+    - §10 conservation: full unit suite 1246/1246 PASS; all listed
+      suites PASS; no regressions.
+    - §11 audit: all 11 AUTHORITY_STAGES members verified; one
+      deferred finding (execute_turn_prelude_enter) recorded with
+      NOTE comment.
+    - §13 Elm semantics unchanged; Elm source unchanged.
+    - §14 artifact identity bound to SUBJECT_HEAD. Kernel SHA
+      unchanged because Elm source unchanged.
+    - §17 invariant (task_completion_committed must not occur while
+      activeRun != null) PROVABLE at unit-test layer via the new
+      PRODUCTION-VOCAB-HOLD test.
+
+  Same env constraint as predecessor ACT prevents the canonical
+  0.19.2 build, the exact-head VSIX bind, the host install, and the
+  LIVE qualification. Operator step remains identical:
+    python3 scripts/build-dogfood-vsix.py
+    codium --install-extension dist/clinemm-<...>.vsix
+    CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 \
+    CLINEMM_COMPLETION_AUTHORITY_ELM=1 \
+      # run mundane task; capture authority counters + CCARD + shadow
+      # verify: realElmProviderCalls > 0, authorize >= 1,
+      #         fallbackUsed = 0, completion = 1, decodeErrors = 0,
+      #         kernelErrors = 0
+
+  This ACT closes the vocabulary defect at the test layer; the
+  operator step remains for full PASS_FIRST_ELM_AUTHORITY_SEAM
+  qualification per ACT §16-§19.
