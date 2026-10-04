@@ -1,4 +1,4 @@
-GREEN — POST-FIX — C1-CORRECTED
+GREEN — POST-FIX — C1-CORRECTED + ARTIFACT-IDENTITY-CLOSED
 
 Repair:
   apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts:90
@@ -13,6 +13,15 @@ Updated test vocabulary:
   This converts the previously hand-normalized test into one that
   exercises the production-source vocabulary, matching the real capture
   seam.
+
+  apps/vscode/src/sdk/__tests__/completion-authority-elm-shadow02.test.ts
+  Frozen-SHA constant updated to the canonical-build SHA
+  15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+  (was previously pinned to a 0.19.1-compiled SHA, then mistakenly
+  re-pinned to an --optimize-compiled 0.19.2 SHA that did not match
+  the VSIX-embedded kernel. The artifact-identity reviewer caught
+  the latter defect; the test now pins the unoptimized tracked-build
+  SHA, which matches the VSIX byte-for-byte.)
 
 Post-fix GREEN output:
 
@@ -33,7 +42,7 @@ Post-fix GREEN output:
     ✓ REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT  (SEMANTIC, C1)
         Sequence: task_started → run_turn_started → submit_and_exit_seen
         (NO pending_prompt_enqueued, NO agent_turn_done).
-        counters.states >= 2  (run_turn_started reached Elm)
+        counters.states >= 2  (run_turned_started reached Elm)
         counters.hold   >= 1  (Elm observed active run)
         counters.lastDecision = "hold"
         commitCount      = 0
@@ -51,16 +60,23 @@ Post-fix GREEN output:
     ✓ REAL-ELM-FAILURE
     ✓ REAL-ELM-CHRONO
 
-ELM_SOURCE_CHANGED:                false
-ELM_DECISION_LOGIC_CHANGED:        false
-TS_AUTHORITY_INPUT_SEMANTICS_CHANGED: true  (filter admits production source stage)
-EXPECTED_EXTERNAL_BEHAVIOR_CHANGED: false  (the LIVE contract — active run
-                                                 blocks commit until
-                                                 agent_turn_done — was
-                                                 already enforced via
-                                                 the BCB barrier's
-                                                 checkElmCompletionAuthority
-                                                 consult of lastDecision;
-                                                 Elm now correctly observes
-                                                 the contract.)
-QUEUE_SEMANTICS_CHANGED:            none
+  Detail (additional conservation suites verified this ACT):
+    ✓ shadow02 (27/27) including the frozen-SHA ELS02-16.B3 pin
+    ✓ case01 (6/6)
+    ✓ preservation (6/6)
+    ✓ historical_replay01 (20/20)
+    ✓ pcca01 (4/4)
+    Total: 71/71 PASS across 7 REAL-ELM test files.
+
+ELM_SOURCE_CHANGED:                       false
+ELM_DECISION_LOGIC_CHANGED:               false
+TS_AUTHORITY_INPUT_SEMANTICS_CHANGED:     true   (filter admits production source stage)
+                                                Elm's observed input set changes
+                                                correspondingly; no decision logic change)
+AUTHORITY_COMPLETION_ORDERING_CHANGED:    true   (the authority-enabled BCB path now
+                                                correctly observes the active run and
+                                                holds commits at the BCB barrier via
+                                                lastDecision consult of computeHoldReasons)
+EXPECTED_FINAL_USER_OUTCOME_CHANGED:      false  (the user-observable final outcome is
+                                                unchanged)
+QUEUE_SEMANTICS_CHANGED:                  none

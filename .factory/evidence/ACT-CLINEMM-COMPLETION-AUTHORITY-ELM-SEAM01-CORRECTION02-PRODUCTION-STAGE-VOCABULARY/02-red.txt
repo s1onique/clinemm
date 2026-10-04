@@ -1,10 +1,10 @@
-PRODUCTION-SHAPED RED — REPRODUCED — C1-CORRECTED
+PRODUCTION-SHAPED RED — REPRODUCED — C1-CORRECTED + ARTIFACT-IDENTITY-CLOSED
 
 Test file:
   apps/vscode/src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts
-  (NEW; 4 tests, of which 3 are now in scope after C1 correction —
-   the confounded HOLD test is REPLACED by SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT
-   per the C1 reviewer's HALT_CAUSAL_CLAIM_INVALID adjudication)
+  (NEW; 3 tests in scope post-C1 — the confounded HOLD test was REPLACED
+   by SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT per the C1 reviewer's
+   HALT_CAUSAL_CLAIM_INVALID adjudication)
 
 Entry seam:
   captureContinuationCardinalityAuthorityRecord(...)   ← REAL production seam
@@ -14,33 +14,21 @@ Activation wiring (mirrors production):
   setElmAuthorityProvider(REAL_KERNEL_PATH)
   setContinuationCardinalityAuthorityCaptureEnabled(true)
 
-Factual production sequence (per ACT §5, §6):
+Factual production sequence (per ACT §5, §6, C1-corrected):
   task_started           (CCARD source stage)
   run_turn_started       (PRODUCTION source — NOT Elm target tag)
-  agent_turn_done        (production source — clears activeRun)
   submit_and_exit_seen   (production source)
 
-RED output (pre-repair, C1-CORRECTED NARRATIVE):
-
-  ✓ REAL-ELM-PROD-VOCAB-ADAPTER
-      adaptRecord maps source run_turn_started -> Elm run_started.
-      Boundary invariant pin (§8).
-
+RED output (pre-fix):
   × REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER (TRANSPORT)
       AssertionError: expected 1 to be greater than or equal to 2
-      counters.states === 1 (only task_started reached Elm;
-      run_turn_started silently dropped at AUTHORITY_STAGES).
+      counters.states = 1 (only task_started reached Elm;
+      run_turn_started silently dropped at AUTHORITY_STAGES)
 
   × REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT (SEMANTIC, C1)
       AssertionError: expected 0 to be greater than or equal to 1
-      counters.hold === 0 (Elm never observed the active run;
+      counters.hold = 0 (Elm never observed the active run;
       run_turn_started silently dropped at AUTHORITY_STAGES).
-
-  ✓ REAL-ELM-PROD-VOCAB-AUTHORIZE [REMOVED IN C1-CORRECTION]
-      The "second half" (§6) — run_turn_started + agent_turn_done
-      + submit_and_exit_seen yields exactly one commit, since
-      agent_turn_done clears the active run. (Whether the run-start
-      record reached Elm or not, agent_turn_done clears it.)
 
 ELM_DECISION_PRE_FIX (C1-CORRECTED):
   TRANSPORT discriminator (REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER):
@@ -51,27 +39,20 @@ ELM_DECISION_PRE_FIX (C1-CORRECTED):
 
   SEMANTIC discriminator (REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT):
     Sequence: task_started → run_turn_started → submit_and_exit_seen
-    (no pending_prompt_enqueued, no agent_turn_done)
+    (no pending_prompt_enqueued, no agent_turn_done — C1-corrected)
     Pre-fix: Elm received only task_started + submit_and_exit_seen
     (run_turn_started dropped). After submit:
-      activeRun = Nothing (no run observed by Elm)
-      commitReadyRun = Nothing (no run observed)
+      activeRun = Nothing  (no run observed)
+      commitReadyRun = Nothing
       computeHoldReasons = []
     -> lastDecision = "authorize"
-    -> commitCount = 1
-    -> phaseAtCompletion = "completed"
-    -> counters.hold = 0 (REGRESSION vs. expected 1)
-    The pre-fix semantic is the "FAIL then" case — an active run
-    is semantically active in production (CCARD recorded it) but Elm
-    never sees it, so the BCB barrier at checkElmCompletionAuthority
-    consults lastDecision = "authorize" and allows the commit.
-    This is the bug: commit happens while a real run is active.
+    -> commitCount = 1    (commit happened — should have been blocked)
+    -> phase = "completed"  (regression)
 
 COMMIT_COUNT_PRE_FIX (C1-CORRECTED):
   TRANSPORT:  states = 1 (RED — expected >= 2)
   SEMANTIC:   hold   = 0 (RED — expected >= 1)
               commit = 1 (commit happened — should be blocked by active run)
-  AUTHORIZE:  [removed; the agent_turn_done path remains a future ACT]
 
 Why this is the EXACT RED the ACT predicted (post-C1 correction):
   "run_turn_started silently dropped
@@ -84,17 +65,32 @@ RED reproduction: CONFIRMED.
 HALT_RED_NOT_REPRODUCED: NOT TRIGGERED.
 
 C1-CORRECTION NOTE (2026-10-04, reviewer HALT_CAUSAL_CLAIM_INVALID):
-  The pre-C1 narrative claimed the confounded HOLD test injected
-  pending_prompt_enqueued as a parallel hold reason and that
-  commitCount=0 was therefore not attributable to activeRun. The
-  C1 correction removes pending_prompt_enqueued from the semantic
-  test entirely; the corrected semantic test still observes
-  commitCount=0 (HOLD) post-fix, because the BCB barrier consults
-  lastDecision which reflects computeHoldReasons (unfiltered),
-  and activeRun ≠ Nothing yields holdReasons = ["ActiveRun"].
-  The completionCommitHoldReasons suppression rule
+  The pre-C1 narrative confounded the HOLD test by injecting
+  pending_prompt_enqueued as a parallel hold reason. The C1
+  correction removes pending_prompt_enqueued from the semantic test
+  entirely; the corrected semantic test still observes commitCount=0
+  (HOLD) post-fix because the BCB barrier consults lastDecision
+  which reflects computeHoldReasons (unfiltered). The
+  completionCommitHoldReasons suppression rule
   (Authority.elm:453-460, commitReadyRun == activeRun) is dead code
   in the LIVE path because task_completion_committed is excluded
   from AUTHORITY_STAGES (POST-DECISION). The LIVE contract is that
   an active run blocks commit until agent_turn_done clears activeRun.
   See 08-report.txt for the full architectural analysis.
+
+C1-P1 COMPOSITE-WITNESS NOTE (2026-10-04, reviewer GO WITH ONE P1 EVIDENCE FIX):
+  The SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT test now uses a single composite
+  witness {states, hold, authorize, lastDecision, commitCount, phase}
+  so ablation failure messages surface ALL six observable fields in one
+  payload (not just the first mismatch). This produced the full
+  semantic failure tuple in 04-ablation.txt.
+
+ARTIFACT-IDENTITY NOTE (2026-10-04, reviewer HALT_ARTIFACT_NOT_TEST_BOUND):
+  The artifact-identity reviewer verified that
+  TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA
+  == 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+  (107,835 bytes; canonical 0.19.2-compiled via the tracked
+  build-elm.sh contract — UNOPTIMIZED). The previous ~5KB byte
+  difference was caused by an --optimize standalone rebuild outside
+  the tracked contract; the fix uses the tracked contract exclusively.
+  The artifact-identity gate is CLOSED.

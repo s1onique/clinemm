@@ -1,7 +1,7 @@
-NECESSITY / ABLATION — CONFIRMED — C1-CORRECTED + C1-P1 WITNESS
+NECESSITY / ABLATION — CONFIRMED — C1-CORRECTED + ARTIFACT-IDENTITY-CLOSED
 
 Strategy (per ACT §9): revert ONLY the filter change in
-completion-authority-elm-authority-runtime.ts:85 from "run_turn_started"
+completion-authority-elm-authority-runtime.ts:90 from "run_turn_started"
 back to "run_started", and observe that the new tests RED again with
 the SAME observable RED outputs as the initial pre-fix RED. The
 existing tests are not the ablation evidence — they were already
@@ -11,7 +11,7 @@ Ablation mutation (only this one line reverted; nothing else):
 
   AUTHORITY_STAGES.set("run_started")   // was run_turn_started
 
-Ablation output (C1-CORRECTED + C1-P1 composite witness — both tests RED):
+Ablation output (C1-CORRECTED — both transport AND semantic tests RED):
 
   bun x vitest run \
     src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts \
@@ -89,7 +89,7 @@ Restoration (line 85 back to "run_turn_started"):
     -> commitCount = 0    (correctly blocked by active run)
     -> phase != "completed"  (correctly held)
 
-NECESSITY: PROVEN (C1-CORRECTED + C1-P1 composite witness).
+NECESSITY: PROVEN (C1-CORRECTED + ARTIFACT-IDENTITY-CLOSED).
   The single-line filter vocabulary repair is NECESSARY for both:
     (1) the source-vocab → Elm transport contract
         (counters.states must be >= 2 — transport-only)
@@ -100,7 +100,7 @@ NECESSITY: PROVEN (C1-CORRECTED + C1-P1 composite witness).
     states = 3, hold = 0, authorize = 1,
     lastDecision = "authorize", commitCount = 1, phase = "completed".
 
-Causal composition (per ACT §9, C1-CORRECTED + C1-P1):
+Causal composition (per ACT §9, C1-CORRECTED + ARTIFACT-IDENTITY-CLOSED):
   PRE_FIX_REAL_PRODUCTION_SHAPED_RED  (02-red.txt)
     +
   POST_FIX_GREEN                      (03-green.txt)
@@ -112,6 +112,20 @@ Causal composition (per ACT §9, C1-CORRECTED + C1-P1):
   AND semantic are required and proven. The composite witness in
   Failure 2 surfaces the full operational regression in one
   executable artifact.
+
+§14.K — Artifact-identity (non-repaired after artifact-identity reviewer):
+  Tested.kernel (the disk file the shadow02 test reads and the
+  source-stage-vocab tests exercise) is the SAME bytes as the
+  staged kernel and the VSIX-embedded kernel:
+    TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA
+    == 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+  This was the artifact-identity reviewer's P0 concern. Resolved by
+  using the tracked apps/vscode/elm/completion-authority/scripts/build-elm.sh
+  contract (unoptimized, no special flags) for the local kernel rebuild,
+  rather than a standalone `elm make ... --optimize` invocation that
+  produced a 102,772-byte kernel that diverged from the 107,835-byte
+  tracked-build kernel. The "non-deterministic" framing was wrong;
+  the byte-difference was the --optimize flag's effect.
 
 Source permanently restored after inspection. No persistent source
 mutation remains.

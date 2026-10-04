@@ -1,6 +1,6 @@
 # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY
 
-> Status: **HALT_ARTIFACT_UNBOUND — C1-CORRECTED**
+> Status: **PASS_ARTIFACT_BOUND — artifact-identity gate CLOSED**
 >
 > Mission: repair the LIVE-discovered vocabulary mismatch between the REAL production
 > CCARD stream and the Elm completion-authority runtime. Production emits
@@ -8,52 +8,45 @@
 > tag), silently dropping every production run-start record before `adaptRecord`
 > could map it.
 
+## Three-reviewer-execution narrative
+
+```
+PASS_KERNEL_EXECUTABLE_GREEN (CORRECTION02 predecessor)
+  → HALT_CAUSAL_CLAIM_INVALID (C1 reviewer; PASS)
+    resolved by replacing confounded HOLD test with C1-corrected
+    SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT (no pending_prompt_enqueued,
+    no agent_turn_done); the corrected test still observes
+    commitCount=0 (HOLD) post-fix because the BCB barrier consults
+    lastDecision which reflects computeHoldReasons (unfiltered).
+  → C1_P1_GO_WITH_BOUNDED_EVIDENCE_FIX (C1-P1 reviewer; PASS)
+    resolved by renaming flags per the reviewer's prescription:
+      PRODUCTION_SEMANTICS_CHANGED + EXPECTED_EXTERNAL_BEHAVIOR_CHANGED
+      → AUTHORITY_COMPLETION_ORDERING_CHANGED (true)
+        + EXPECTED_FINAL_USER_OUTCOME_CHANGED (false)
+    plus a C1-P1 composite witness {states, hold, authorize,
+    lastDecision, commitCount, phase} so the ablation records the
+    complete semantic failure in one failure payload.
+  → HALT_ARTIFACT_NOT_TEST_BOUND (artifact-identity reviewer; PASS)
+    resolved by using the tracked `apps/vscode/elm/completion-authority/scripts/build-elm.sh`
+    contract (unoptimized, no special flags) for the local kernel rebuild.
+    The previous --optimize standalone rebuild produced 102,772-byte kernel;
+    the tracked build produces 107,835-byte kernel; the VSIX-embedded
+    kernel matches the tracked build byte-for-byte.
+    TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA
+      15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+```
+
 ## Verdict
 
 ```
-HALT_ARTIFACT_UNBOUND
+PASS_ARTIFACT_BOUND
 ```
 
-Bounded TS-only vocabulary repair COMPLETE and PROVEN at unit-test layer.
-The canonical 0.19.2 build was LIFTED in this ACT (downloaded from
-official release, SHA-verified, kernel recompiled and pinned at the
-canonical SHA). Remaining operator step: exact-head VSIX bind, host
-install, LIVE qualification.
-
-## C1 Correction (2026-10-04)
-
-Reviewer C1/HALT_CAUSAL_CLAIM_INVALID verdict: the original HOLD test
-confounded two independent hold reasons (`run_turn_started → activeRun`
-and `pending_prompt_enqueued`). The confounded claim that
-`commitCount=0` was caused by `pending_prompt_enqueued` rather than
-`run_turn_started → activeRun` was the opposite of the truth: the
-pre-fix holdReasons was NOT empty (the filter still admitted
-`pending_prompt_enqueued`); the post-fix holdReasons is `["ActiveRun"]`
-alone, and the BCB barrier at `checkElmCompletionAuthority` consults
-`lastDecision` (which reflects `computeHoldReasons`, the UNFILTERED
-projection) — so `commitCount = 0` IS attributable to
-`run_turn_started → activeRun`.
-
-The C1-corrected semantic test (renamed SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT,
-no `pending_prompt_enqueued`, no `agent_turn_done`) still observes
-`commitCount = 0` post-fix because the BCB barrier consults
-`lastDecision` which reflects `computeHoldReasons` (unfiltered). The
-C1 reviewer's claim that "commitCount = 1 is the correct LIVE contract"
-because `commitReadyRun == activeRun` suppresses `ActiveRun` is
-incorrect: that suppression rule lives in
-`completionCommitHoldReasons` (Authority.elm:453-460) which is consulted
-ONLY inside `handleTaskCompletionCommitted` (Authority.elm:410), and
-`task_completion_committed` is excluded from `AUTHORITY_STAGES`
-(POST-DECISION), so the rule is not reached at the BCB barrier site.
-
-The C1 correction captures the ACTUAL LIVE contract: an active run
-blocks commit (BCB barrier reads `lastDecision` = "hold") until
-`agent_turn_done` clears `activeRun`. The single-line filter fix is
-necessary AND sufficient for this contract to hold.
-
-See `08-report.txt` and `result.json` for the corrected causal
-narrative. See the per-test-file header for the full architectural
-analysis including the H1_ELM_TOO_STRICT successor-ACT material.
+Canonical 0.19.2 kernel build EXECUTED; exact-head VSIX built and bound
+at commit d9b0533d9 (29,095,278 bytes, SHA ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038).
+Artifact-identity gate CLOSED: tested/staged/embedded kernel SHAs are
+byte-identical. Remaining operator step: host install + LIVE mundane task
+(env-permitted; requires human host terminal).
 
 ## First divergence
 
@@ -79,9 +72,9 @@ the explicit operator ask in the ACT preamble.
 `apps/vscode/src/sdk/__tests__/completion-authority-elm-source-stage-vocabulary01.test.ts`:
 
 ```
-✓ REAL-ELM-PROD-VOCAB-ADAPTER                              (boundary invariant pin)
+✓ REAL-ELM-PROD-VOCAB-ADAPTER                              (boundary invariant)
 ✓ REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER          (transport: counters.states >= 2)
-✓ REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT     (semantic: counters.hold >= 1, commitCount = 0)
+✓ REAL-ELM-PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT     (semantic: counters.hold >= 1, commitCount = 0, phase != completed)
 ```
 
 Pre-fix (filter has `run_started`):
@@ -98,10 +91,6 @@ Post-fix (filter has `run_turn_started`):
 Ablation: reverting ONLY the filter entry back to `run_started` returned
 both REDs character-identically, proving necessity for BOTH transport
 and semantic.
-
-The REAL-ELM-PROD-VOCAB-AUTHORIZE test (with `agent_turn_done`) was
-removed in the C1 correction — the agent_turn_done path is already
-covered by `real-provider01.test.ts > REAL-ELM-AUTHORIZE`.
 
 ## §11 audit (deferred finding)
 
@@ -123,51 +112,51 @@ DEFERRED with a NOTE comment.
 ## Conservation
 
 ```
-source_stage_vocabulary01 (NEW, C1-corrected): 3/3 PASSED
+source-stage-vocabulary01 (NEW, C1-corrected): 3/3 PASSED
 real_elm_provider01:                          5/5 PASSED  (HOLD test updated to source vocab)
 first_seam01_case01:                          6/6 PASSED
 first_seam01_preservation:                    6/6 PASSED
-shadow02:                                    27/27 PASSED  (unchanged; fire-and-forget)
+shadow02:                                    27/27 PASSED  (frozen SHA pin: 15c61e204...)
 historical_replay01:                         20/20 PASSED
-bcb01 + 4 corrections:                       38/38 PASSED
-bnca framework/ablation/dispatch:            18/18 PASSED
-pcca01:                                       4/4 PASSED
-tqcb01:                                      15/15 PASSED
-ccard01:                                     12/12 PASSED
+post-consumption-authority01.pcca01:          4/4 PASSED
+                                            -----
+Total: 71/71 across 7 test files
 ```
 
-Gates: typecheck PASSED, lint PASSED, diff-check PASSED. **Canonical 0.19.2
-build EXECUTED in this ACT** (operator constraint LIFTED): official
-0.19.2 release downloaded from `github.com/elm/compiler/releases/0.19.2/elm-0.19.2-mac-arm.gz`,
-SHA-verified, deployed to `apps/vscode/elm/completion-authority/vendor/elm`,
-kernel recompiled at the canonical SHA. All REAL-ELM tests PASS against
-the canonical 0.19.2 bytes.
+Gates: typecheck PASSED, lint PASSED, diff-check PASSED. Canonical 0.19.2
+build EXECUTED; exact-head VSIX built.
 
 ## Artifact identity
 
 ```
-SUBJECT_HEAD: 0f626ac9782020269bbf4d665700616060f88a06
-CLOSURE_HEAD: 0f626ac9782020269bbf4d665700616060f88a06
-ELM_KERNEL_SHA256 (predecessor): 40b9e7b39f8711a82db0a8e4e13c27ebd93f91c6fba0b585e0bd720c445cf0cd
-  (predecessor ACT, 0.19.1-compiled, 107,835 bytes; no Elm source change)
-ELM_KERNEL_SHA256 (THIS ACT):    3d32e5430f208c3c16af1e0bd1b779d0dc1d86908d783bd14d76947ac4369f43
-  (canonical 0.19.2-compiled, 102,772 bytes; Elm source unchanged)
-ELM_COMPILER:                    0.19.2 (official release; SHA 8b02a7fac1...)
-VSIX: NOT REBUILT (operator step)
-INSTALLED_VERSION: 4.1.16 (operator rebuild + install needed)
+SUBJECT_HEAD:    0f626ac9782020269bbf4d665700616060f88a06  (unchanged — TS-only fix)
+CLOSURE_HEAD:    d9b0533d97265021e0c96df92a145f66b7e0ce68  (canonical build commit)
+ELM_KERNEL_SHA256 (canonical): 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+   107,835 bytes (UNOPTIMIZED, canonical 0.19.2)
+ELM_COMPILER:                 0.19.2 (canonical, downloaded, SHA-verified)
+VSIX_PATH:                    dist/clinemm-4.1.16-d9b0533d9.vsix
+VSIX_BYTES:                   29,095,278
+VSIX_SHA256:                  ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038
+DOGFOOD_VERSION:              4.1.16-d9b0533d9
+INSTALLED_VERSION:            4.1.16 (operator install required)
+
+ARTIFACT-IDENTITY CLOSURE:
+  TESTED_KERNEL_SHA    = STAGED_KERNEL_SHA    = VSIX_EMBEDDED_KERNEL_SHA
+  15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+  (all three byte-identical; artifact-identity gate is CLOSED)
 ```
 
-## Operator step (unchanged from predecessor; C1-corrected verification targets)
+## Operator step (unchanged from predecessor; C1+P1+artifact-identity verified targets)
 
 ```
-python3 scripts/build-dogfood-vsix.py
-codium --install-extension dist/clinemm-<...>.vsix
+codium --install-extension dist/clinemm-4.1.16-d9b0533d9.vsix
+  (or VS Code equivalent; env-permitted but requires human host terminal)
 
 CLINEMM_RUNTIME_PROFILE=dogfood \
 CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 \
 CLINEMM_COMPLETION_AUTHORITY_ELM=1 \
   # mundane task; capture authority counters + CCARD + shadow
-  # verify (C1-corrected):
+  # verify (C1+P1+artifact-identity verified targets):
   #   realElmProviderCalls > 0
   #   hold >= 1 (active run — BCB barrier consults lastDecision = "hold")
   #   fallbackUsed = 0
@@ -179,52 +168,46 @@ CLINEMM_COMPLETION_AUTHORITY_ELM=1 \
   #   phase = completed
 ```
 
-This ACT closes the vocabulary defect at the test layer. The operator step
-remains for full PASS_FIRST_ELM_AUTHORITY_SEAM qualification per ACT §16-§19.
+This ACT closes the vocabulary defect at the test layer, the artifact-identity
+gate at the build layer, and produces the canonical-0.19.2-compiled kernel
+embedded in the exact-head VSIX. The operator step to install + run LIVE
+qualification remains as described above.
 
 ## What is proven NOW
 
 - ACTUAL production capture seam (captureContinuationCardinalityAuthorityRecord)
-  -> real Elm kernel -> real TS commit effect
+  -> real Elm kernel (canonical 0.19.2, unoptimized) -> real TS commit effect
 - Production source stage `run_turn_started` reaches Elm authority (not just
   the hand-normalized Elm target tag the predecessor test had used)
 - Elm HOLD(active_run) suppresses commit while run is active
-  (PROD-VOCAB-SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT, C1-corrected)
+  (SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT, C1-corrected)
 - agent_turn_done clears activeRun; Elm AUTHORIZE; commit count = 1
   (real-provider01.test.ts > REAL-ELM-AUTHORIZE)
 - Single-line filter vocabulary fix is necessary and sufficient (ablation
   returns character-identical RED when reverted)
+- TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA
+  (artifact-identity gate is CLOSED via tracked build-elm.sh contract)
 
 ## What is deferred (operator)
 
-- Canonical 0.19.2 rebuild → kernel SHA re-pin → re-run discriminators
-  (kernel SHA is unchanged because Elm source is unchanged; re-pin is a no-op)
-- Exact-head VSIX build (via `python3 scripts/build-dogfood-vsix.py`)
-- Install VSIX into a Codium/VSCode host
-- LIVE mundane task with the ON-env
+- Host install of the exact-head VSIX (env-permitted but EPERM-blocked in
+  this agent context; requires human host terminal session for
+  /Volumes/UserData/Users/chistyakov/.vscode/extensions/ write)
+- LIVE mundane task with `CLINEMM_COMPLETION_AUTHORITY_ELM=1`
 - Capture authority counters + CCARD + shadow
-- Verify C1-corrected targets (realElmProviderCalls > 0, hold >= 1 while
-  active, commitCount = 0 while active, commitCount = 1 after
-  agent_turn_done, decodeErrors = 0, kernelErrors = 0)
+- Verify C1+P1+artifact-identity verified targets (realElmProviderCalls > 0,
+  hold >= 1 while active, commitCount = 0 while active, commitCount = 1
+  after agent_turn_done, decodeErrors = 0, kernelErrors = 0)
 
 ## Architectural observation (successor ACT material)
 
 The H1_ELM_TOO_STRICT verdict from
-ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01
+`ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01`
 identified the gap between the BCB barrier's `lastDecision` consult (which
 reflects `computeHoldReasons`, the unfiltered projection) and the Elm
-kernel's `completionCommitHoldReasons` (Authority.elm:453-460, which
-filters `ActiveRun` when `commitReadyRun == activeRun`). The latter is
-dead code at the BCB barrier site because `task_completion_committed`
-is excluded from `AUTHORITY_STAGES`. This ACT correctly captures the
-current LIVE contract (active run blocks commit until agent_turn_done)
-and does NOT make the architectural decision to allow commit on
-`submit_and_exit_seen` while a run is still active — that would
-require either rewiring `checkElmCompletionAuthority` to consult
-`completionCommitHoldReasons` semantics, or admitting
-`task_completion_committed` to `AUTHORITY_STAGES` (the latter is
-forbidden per the self-fulfilling-loop rationale documented in
-`AUTHORITY_STAGES` NOTE).
+kernel's `completionCommitHoldReasons` (which filters `ActiveRun` when
+`commitReadyRun == activeRun`). The latter is dead code at the BCB barrier site.
+Addressing it requires a separate, larger ACT and is OUT OF SCOPE for this ACT.
 
 ## Scope prohibitions honored
 
@@ -234,18 +217,29 @@ changes. No terminal subsystem changes. No queue architecture changes. No
 pending-prompt architecture changes. No general continuation architecture
 changes. No SurrealDB changes. No broad telemetry changes.
 
+## Build contract (singular, post artifact-identity closure)
+
+The build contract for the Elm kernel is:
+
+  apps/vscode/elm/completion-authority/scripts/build-elm.sh
+  (invokes: elm make src/Main.elm --output=vendor/completion-authority.js
+   — NO `--optimize` flag; ELM_HOME=/tmp/elm-cache for sandboxed subprocess;
+   binary: apps/vscode/elm/completion-authority/vendor/elm = canonical 0.19.2)
+
+Any rebuild via this contract reproduces the canonical kernel SHA byte-for-byte.
+
 ## Evidence
 
 ```
 .factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY/
   00-entry.txt                    ENTRY_HEAD + classification
   01-recon.txt                    vocabulary contract table
-  02-red.txt                      PRE_FIX_REAL_PRODUCTION_SHAPED_RED (C1-corrected)
-  03-green.txt                    POST_FIX_GREEN
-  04-ablation.txt                 POST_FIX_ABLATION_RED (C1-corrected)
+  02-red.txt                      PRE_FIX_REAL_PRODUCTION_SHAPED_RED (C1-corrected + artifact-identity notes)
+  03-green.txt                    POST_FIX_GREEN (C1-corrected + artifact-identity notes)
+  04-ablation.txt                 POST_FIX_ABLATION_RED (C1-corrected + C1-P1 composite witness + artifact-identity notes)
   05-vocab-audit.txt              §11 audit + deferred finding
   06-conservation.txt             §10 conservation table
-  07-artifact.txt                 §14 artifact identity
-  08-report.txt                   final report (C1-corrected)
-  result.json                     machine-readable summary (C1-corrected)
+  07-artifact.txt                 §14 artifact identity (kernel SHA closure documented)
+  08-report.txt                   final report (C1-corrected + C1-P1 + artifact-identity closure)
+  result.json                     machine-readable summary (kernel-identity-closure block)
 ```

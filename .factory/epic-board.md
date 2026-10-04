@@ -17359,7 +17359,7 @@ CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — HALT_AUTHORITY_NOT_CAUS
 
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY — PASS_ARTIFACT_BOUND — 2026-10-04
 
-**Status:** TS-only bounded vocabulary repair COMPLETE and PROVEN at the unit-test layer. Canonical Elm 0.19.2 kernel build LIFTED in this ACT (downloaded, SHA-verified, kernel recompiled). Exact-head VSIX BUILT and BOUND at commit `a1b3eccbb` (`dist/clinemm-4.1.16-a1b3eccbb.vsix`, 29,095,279 bytes, SHA `dbc668c07b9e295d1f879d31f8a769f937eff9b35f2b7ae875d21050dd18c989`). Verdict `PASS_ARTIFACT_BOUND`. Remaining operator step: host install + LIVE mundane task.
+**Status:** TS-only bounded vocabulary repair COMPLETE and PROVEN at the unit-test layer. Canonical Elm 0.19.2 kernel build LIFTED in this ACT (downloaded, SHA-verified, kernel recompiled via tracked `build-elm.sh` contract — UNOPTIMIZED). Exact-head VSIX BUILT and BOUND at commit `d9b0533d9` (`dist/clinemm-4.1.16-d9b0533d9.vsix`, 29,095,278 bytes, SHA `ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038`). **Artifact-identity gate CLOSED**: `TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA == 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c` (107,835 bytes, canonical 0.19.2-compiled). Verdict `PASS_ARTIFACT_BOUND`. Remaining operator step: host install + LIVE mundane task.
 
 ### Mission
 
@@ -17487,7 +17487,7 @@ This ACT closes the vocabulary defect at the test layer. The operator step remai
 **Board cursor:**
 ```
 HOLD:    ACT-MYC-CLINEMM03-LIVE-PRIME-QUALIFICATION-RESUME01
-NOW:     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY  (PASS_ARTIFACT_BOUND; LIVE mundane task pending)
+NOW:     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY  (PASS_ARTIFACT_BOUND; artifact-identity gate CLOSED; host install + LIVE mundane task pending)
 CLOSED:  ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER  (REAL_ELM_PROVEN_HALT_ARTIFACT_UNBOUND)
          ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01  (HALT_AUTHORITY_NOT_CAUSAL)
 ```
@@ -17591,35 +17591,57 @@ The two new flags separately answer the two distinct questions the old generic f
 - `authority_completion_ordering_changed = true` captures the internal ordering change at the BCB barrier.
 - `expected_final_user_outcome_changed = false` captures the user-observable invariance.
 
-#### Reviewer chain (C1-P1)
+#### Reviewer chain (artifact-identity closure)
 
 ```
 PASS_KERNEL_EXECUTABLE_GREEN (CORRECTION02)
   → HALT_CAUSAL_CLAIM_INVALID (C1 reviewer; PASS)
+    (confounded HOLD test replaced with C1-corrected
+     SEMANTIC-ACTIVE-RUN-BLOCKS-COMMIT; commitCount=0 (HOLD) is the
+     LIVE contract — BCB barrier consults lastDecision of unfiltered
+     computeHoldReasons)
   → C1_P1_GO_WITH_BOUNDED_EVIDENCE_FIX (C1-P1 reviewer; PASS)
-  → CANONICAL_0192_BUILD_EXECUTED (THIS ACT; PASS)
+    (flags renamed: AUTHORITY_COMPLETION_ORDERING_CHANGED (true) +
+     EXPECTED_FINAL_USER_OUTCOME_CHANGED (false); composite witness
+     surfaces full semantic regression in one failure payload)
+  → HALT_ARTIFACT_NOT_TEST_BOUND (artifact-identity reviewer; PASS)
+    (the prior --optimize standalone rebuild diverged from the tracked
+     build-elm.sh contract; using the tracked contract now produces
+     TESTED_KERNEL_SHA == STAGED_KERNEL_SHA == VSIX_EMBEDDED_KERNEL_SHA
+     == 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c)
+  → CANONICAL_0192_BUILD_EXECUTED + EXACT_HEAD_VSIX_BUILT (THIS ACT; PASS)
     (canonical 0.19.2 downloaded from github.com/elm/compiler/releases/
         0.19.2/elm-0.19.2-mac-arm.gz, SHA-verified
         8b02a7fac1643b39acb87ae2a8e10f0f1534fe61940ca08ab17dfc2ac98115c8,
         deployed to apps/vscode/elm/completion-authority/vendor/elm,
-        kernel recompiled to 102,772 bytes
-        SHA 3d32e5430f208c3c16af1e0bd1b779d0dc1d86908d783bd14d76947ac4369f43;
-        8/8 REAL-ELM tests PASS against the canonical 0.19.2 bytes)
-  → NEXT: exact-head VSIX → install → LIVE authority ON
-          (operator step; requires human host terminal)
+        kernel recompiled via tracked build-elm.sh contract to
+        107,835 bytes SHA 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c;
+        71/71 REAL-ELM tests PASS against the canonical 0.19.2 bytes)
+    (exact-head VSIX: dist/clinemm-4.1.16-d9b0533d9.vsix,
+        29,095,278 bytes, SHA ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038;
+        embedded kernel SHA == local kernel SHA, artifact-identity gate CLOSED)
+  → NEXT: host install → LIVE authority ON
+          (operator step; /Volumes EPERM in this agent context — requires
+           human host terminal for /Volumes/.../Users/chistyakov/.vscode/extensions/
+           write and the LIVE mundane task launch)
 ```
 
-**Board cursor (post canonical 0.19.2 build + exact-head VSIX):**
+**Board cursor (post artifact-identity closure):**
 ```
 CORRECTION02 vocabulary repair      PASS
 C1 causal correction               PASS_WITH_ONE_P1_EVIDENCE_FIX
 C1-P1 evidence refinement          PASS
-canonical 0.19.2 kernel build      PASS   (NEW — downloaded, SHA-verified,
-                                                kernel recompiled, 8/8 PASS)
-exact-head VSIX                    PASS   (NEW — dist/clinemm-4.1.16-a1b3eccbb.vsix,
-                                                29,095,279 bytes, SHA-verified)
-host install                       WAIT   (operator step)
-LIVE authority qualification       WAIT   (operator step)
+canonical 0.19.2 kernel build      PASS   (downloaded, SHA-verified,
+                                                kernel recompiled via tracked
+                                                build-elm.sh contract — UNOPTIMIZED,
+                                                71/71 PASS across 7 test files)
+artifact-identity closure         PASS   (TESTED/STAGED/EMBEDDED kernel
+                                                SHAs byte-identical:
+                                                15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c)
+exact-head VSIX                    PASS   (dist/clinemm-4.1.16-d9b0533d9.vsix,
+                                                29,095,278 bytes, SHA ac4480cbd33d4ea7a01517aff00cd00118787d047d63cef1e6f78216e1595038)
+host install                       WAIT   (operator step; /Volumes EPERM in this agent context)
+LIVE authority qualification       WAIT   (operator step; human host terminal)
 MYC03                              HOLD
 ```
 
