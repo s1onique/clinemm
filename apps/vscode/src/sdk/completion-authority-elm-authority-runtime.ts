@@ -47,10 +47,7 @@
  *   the dogfood diagnostic profile resolver.
  */
 
-import {
-	type ElmCompletionAuthorityDecision,
-	defaultElmCompletionAuthorityDecision,
-} from "./completion-authority-elm-authority"
+import { defaultElmCompletionAuthorityDecision, type ElmCompletionAuthorityDecision } from "./completion-authority-elm-authority"
 import { adaptRecord, type KernelHandle } from "./completion-authority-elm-replay"
 import { loadKernel } from "./completion-authority-elm-replay.kernel"
 
@@ -69,9 +66,7 @@ export interface ElmAuthorityCountersSnapshot {
 	readonly fallbackUsed: number
 	readonly sessionsActive: number
 	readonly lastDecision: ElmCompletionAuthorityDecision["kind"] | null
-	readonly lastClassification:
-		| Extract<ElmCompletionAuthorityDecision, { kind: "failure" }>["classification"]
-		| null
+	readonly lastClassification: Extract<ElmCompletionAuthorityDecision, { kind: "failure" }>["classification"] | null
 	readonly lastHoldReasons: readonly string[]
 }
 
@@ -87,7 +82,7 @@ export interface ElmAuthorityCountersSnapshot {
  */
 const AUTHORITY_STAGES = new Set<string>([
 	"task_started",
-	"run_started",
+	"run_turn_started",
 	"agent_turn_done",
 	"terminal_committed",
 	"notify_consume_enter",
@@ -101,6 +96,21 @@ const AUTHORITY_STAGES = new Set<string>([
 	// `task_cancelled` are deliberately EXCLUDED. These are POST-DECISION
 	// facts. Telling the authority kernel that the task was decided
 	// before the question "may commit happen?" is a self-fulfilling loop.
+	//
+	// NOTE: `execute_turn_prelude_enter` is deliberately NOT in this
+	// set, even though production emits it and Elm handles it as a
+	// run-start signal (Authority.elm:146). Reason: the adapter
+	// (replay.ts:106) requires a non-null `runId` for this stage,
+	// and the production capture seam (session-host-capture.ts:106
+	// and canonical-event-subscription.ts:71-78) deliberately does
+	// NOT supply a runId — the runtime runId does not exist at that
+	// boundary. Adding the stage name here would only cause the
+	// adapter to return INSUFFICIENT_IDENTITY silently. Fixing this
+	// requires a coordinated adapter + producer change; it is a
+	// separate causal problem (lives at the producer-adapter
+	// boundary, not the filter) and is DEFERRED per ACT §11:
+	// "if they expose a different causal problem, record and defer
+	// unless P0."
 ])
 
 interface AuthorityKernelSession {
@@ -156,11 +166,7 @@ function getOrInitGlobal(): AuthorityGlobalState {
 	return state
 }
 
-function getOrCreateSession(
-	state: AuthorityGlobalState,
-	sessionId: string,
-	kernelPath: string,
-): AuthorityKernelSession {
+function getOrCreateSession(state: AuthorityGlobalState, sessionId: string, kernelPath: string): AuthorityKernelSession {
 	let sess = state.sessions.get(sessionId)
 	if (sess) return sess
 	const kernel = loadKernel(kernelPath)
@@ -174,11 +180,7 @@ function getOrCreateSession(
 	return sess
 }
 
-function bumpCounter<K extends keyof AuthorityGlobalState["counters"]>(
-	state: AuthorityGlobalState,
-	k: K,
-	by = 1,
-): void {
+function bumpCounter<K extends keyof AuthorityGlobalState["counters"]>(state: AuthorityGlobalState, k: K, by = 1): void {
 	state.counters[k] += by
 }
 
@@ -193,10 +195,7 @@ function buildFailureClassification(
 	return "elm_authority_unavailable"
 }
 
-function decideElmAuthorityCompletion(
-	state: AuthorityGlobalState,
-	sessionId: string,
-): ElmCompletionAuthorityDecision {
+function decideElmAuthorityCompletion(state: AuthorityGlobalState, sessionId: string): ElmCompletionAuthorityDecision {
 	const sess = state.sessions.get(sessionId)
 	if (!sess) {
 		bumpCounter(state, "failure")
@@ -289,10 +288,7 @@ export async function flushElmAuthorityForSession(sessionId: string): Promise<vo
 	}
 }
 
-async function processOneAuthorityRecord(
-	state: AuthorityGlobalState,
-	record: Record<string, unknown>,
-): Promise<void> {
+async function processOneAuthorityRecord(state: AuthorityGlobalState, record: Record<string, unknown>): Promise<void> {
 	const sessionId = typeof record.sessionId === "string" ? (record.sessionId as string) : ""
 	if (!sessionId) {
 		bumpCounter(state, "failure")
@@ -353,9 +349,7 @@ async function processOneAuthorityRecord(
 		bumpCounter(state, "failure")
 		return
 	}
-	const decodeError = outbounds.find(
-		(o) => o.kind === "decode_error",
-	) as { kind: "decode_error"; error: string } | undefined
+	const decodeError = outbounds.find((o) => o.kind === "decode_error") as { kind: "decode_error"; error: string } | undefined
 	if (decodeError) {
 		sess.failed = true
 		const failure: ElmCompletionAuthorityDecision = {
@@ -368,9 +362,7 @@ async function processOneAuthorityRecord(
 		bumpCounter(state, "failure")
 		return
 	}
-	const lastState = [...outbounds]
-		.reverse()
-		.find((o) => o.kind === "state") as
+	const lastState = [...outbounds].reverse().find((o) => o.kind === "state") as
 		| { kind: "state"; model: Record<string, unknown>; violation?: string }
 		| undefined
 	if (!lastState) {

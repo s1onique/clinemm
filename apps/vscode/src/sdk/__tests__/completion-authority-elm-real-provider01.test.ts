@@ -21,9 +21,9 @@
  * the way the production extension.ts:activate wires it.
  */
 
-import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
 import {
@@ -37,10 +37,7 @@ import {
 } from "../completion-authority-elm-authority-runtime"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
-import {
-	SdkSessionEventCoordinator,
-	type SdkSessionEventCoordinatorOptions,
-} from "../sdk-session-event-coordinator"
+import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
 vi.mock("@/shared/services/Logger", () => ({
@@ -86,17 +83,7 @@ afterEach(() => {
 })
 
 const HERE = fileURLToPath(import.meta.url)
-const REAL_KERNEL_PATH = join(
-	HERE,
-	"..",
-	"..",
-	"..",
-	"..",
-	"elm",
-	"completion-authority",
-	"vendor",
-	"completion-authority.js",
-)
+const REAL_KERNEL_PATH = join(HERE, "..", "..", "..", "..", "elm", "completion-authority", "vendor", "completion-authority.js")
 
 interface RealElmHarness {
 	readonly coordinator: SdkSessionEventCoordinator
@@ -176,10 +163,8 @@ function makeRealElmHarness(): RealElmHarness {
 		getOutstandingAutonomousWork: () => false,
 		getLaunchedBackgroundJobIds: () => [],
 		enqueueCompletionContinuation: () => Promise.resolve({ kind: "no_held_job_ids" }),
-		getElmCompletionAuthorityDecision: (sessionId?: string) =>
-			getElmAuthorityCompletionDecision(sessionId ?? ""),
-		flushElmAuthorityForSession: async (sessionId: string) =>
-			flushElmAuthorityForSession(sessionId),
+		getElmCompletionAuthorityDecision: (sessionId?: string) => getElmAuthorityCompletionDecision(sessionId ?? ""),
+		flushElmAuthorityForSession: async (sessionId: string) => flushElmAuthorityForSession(sessionId),
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	return {
@@ -239,8 +224,16 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROV
 				sessionId: elmHarness.activeSessionId,
 				taskId: elmHarness.activeTaskId,
 			})
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02:
+			// the AUTHORITY_STAGES filter consumes SOURCE stage names
+			// (production capture vocabulary), NOT Elm target tags.
+			// Production emits `run_turn_started` (mapped to Elm
+			// `run_started` inside adaptRecord). The previous version
+			// of this test injected the Elm target tag directly, which
+			// accidentally matched a buggy filter rather than the real
+			// production capture seam.
 			await enqueueElmAuthorityRecord({
-				stage: "run_started",
+				stage: "run_turn_started",
 				sessionId: elmHarness.activeSessionId,
 				runId: "run-1",
 				origin: "explicit_user",
@@ -267,11 +260,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROV
 			})
 			elmHarness.translatorState.setAttemptCompletionSeen()
 			elmHarness.translatorState.setTerminalResponseCommittedThisTurn()
-			await emitCompletionTurn(
-				elmHarness.coordinator,
-				elmHarness.activeSessionId,
-				elmHarness.translatorState,
-			)
+			await emitCompletionTurn(elmHarness.coordinator, elmHarness.activeSessionId, elmHarness.translatorState)
 
 			expect(elmHarness.completionCommitCount()).toBe(0)
 			expect(elmHarness.phaseAtCompletion()).not.toBe("completed")
