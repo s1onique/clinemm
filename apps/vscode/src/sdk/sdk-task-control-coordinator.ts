@@ -229,9 +229,27 @@ export class SdkTaskControlCoordinator {
 			// turn actually ended (completed vs cancelled) instead of a transient
 			// non-terminal status.
 			const activeSession = this.options.sessions.getActiveSession()
-			await this.options.sessions.endActiveSession("showTaskWithId", {
-				awaitStop: activeSession?.sessionId === taskId,
-			})
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION01-SHOWTASKWITHID-CAUSAL-REPRODUCTION
+			// (SHOWTASK-RED-01 parental RED): when the active session
+			// already represents the requested task AND it is idle
+			// (no in-flight turn), the lifecycle teardown would
+			// destroy the deferred-completion-barrier (BCB01) marker
+			// without any explicit supersession. The marker is held
+			// by `SdkSessionEventCoordinator.reevaluateDeferredCompletionBarrier`
+			// which observes `getActiveSession() → undefined` and clears
+			// the marker — silently truncating the continuation
+			// obligation. Skip the end+reinstall cycle in this case;
+			// the active session lifecycle, the task view, and the
+			// deferred obligations all remain intact. For RUNNING
+			// same-task sessions the existing endActiveSession +
+			// awaitStop + reinstall cycle still fires (the comment
+			// above about persisted-session-status still applies).
+			const isSameTaskIdle = activeSession?.sessionId === taskId && activeSession?.isRunning === false
+			if (!isSameTaskIdle) {
+				await this.options.sessions.endActiveSession("showTaskWithId", {
+					awaitStop: activeSession?.sessionId === taskId,
+				})
+			}
 
 			// FENCE: everything below mutates the shared task view (clearing the
 			// current task, installing the new proxy, setting the turn phase). If a
@@ -241,16 +259,22 @@ export class SdkTaskControlCoordinator {
 				return historyItem
 			}
 
-			const currentTask = this.options.getTask()
-			if (currentTask) {
-				currentTask.messageStateHandler.clear()
+			if (!isSameTaskIdle) {
+				// Only tear down the task view state when we actually ended
+				// the active session. On same-task idle skip, the task
+				// view is still correctly bound to the existing
+				// TaskProxy — no need to clear and reinstall.
+				const currentTask = this.options.getTask()
+				if (currentTask) {
+					currentTask.messageStateHandler.clear()
+				}
+
+				// The outgoing task's settings overlay must not apply to the newly
+				// opened task (see clearTaskSettings option doc).
+				await this.options.clearTaskSettings()
+
+				this.options.resetMessageTranslator()
 			}
-
-			// The outgoing task's settings overlay must not apply to the newly
-			// opened task (see clearTaskSettings option doc).
-			await this.options.clearTaskSettings()
-
-			this.options.resetMessageTranslator()
 
 			// Load messages before installing the new task proxy so any concurrent
 			// postStateToWebview() caller never sees the new id with empty messages.
