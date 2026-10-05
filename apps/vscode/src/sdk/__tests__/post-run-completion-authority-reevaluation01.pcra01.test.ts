@@ -39,7 +39,7 @@ import {
 	flushElmAuthorityForSession,
 	getElmAuthorityCompletionDecision,
 	getElmAuthorityCounters,
-	isElmAuthorityEnabled,
+	isElmAuthorityAvailable,
 	resetElmAuthorityForTests,
 	setElmAuthorityProvider,
 } from "../completion-authority-elm-authority-runtime"
@@ -391,20 +391,21 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01", () => {
 		}, 20_000)
 	})
 
-	describe("POSTRUN-OFF-CONSERVATION-05 - Elm authority OFF => existing behavior unchanged", () => {
-		it("authority OFF + existing TS-created deferred barrier + agent_turn_done => NO new reevaluation caused by this ACT", async () => {
-			// Strengthened per review: simulate a legacy TS-predicate hold
-			// (the deferredCompletionBarrier already exists in the
-			// coordinator before this ACT; it is created by the TS
-			// predicate chain). The new agent-turn-done trigger MUST NOT
-			// cause any additional reevaluation in the OFF path, because
-			// the P1 guard at the wiring boundary is supposed to make
-			// `setAgentTurnDoneSemanticTrigger` a true no-op when Elm
-			// authority is OFF.
-			expect(isElmAuthorityEnabled()).toBe(false)
+	describe("POSTRUN-NO-KERNEL-CONSERVATION - Elm kernel not armed => existing barrier held", () => {
+		it("kernel-miss + existing TS-created deferred barrier + agent_turn_done => barrier held, no commit", async () => {
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+			// there is no OFF mode. The legacy P1 guard that made
+			// `setAgentTurnDoneSemanticTrigger` a no-op when Elm authority
+			// was OFF has been REMOVED. The trigger ALWAYS fires. But
+			// when the runtime is not armed (no setElmAuthorityProvider
+			// call), getElmAuthorityCompletionDecision returns a failure
+			// decision and the coordinator suppresses the commit effect
+			// (fail-closed). The deferred-completion-barrier marker is
+			// still held.
+			expect(isElmAuthorityAvailable()).toBe(false)
 			const h = makeHarness({
-				activeSessionId: "session-postrun-off-05",
-				activeTaskId: "task-postrun-off-05",
+				activeSessionId: "session-postrun-no-kernel-05",
+				activeTaskId: "task-postrun-no-kernel-05",
 			})
 
 			// Pre-populate a legacy TS-created deferredCompletionBarrier
@@ -420,17 +421,17 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01", () => {
 			const commitCountBefore = h.completionCommitCount()
 			expect(commitCountBefore).toBe(0)
 
-			// Fire the new agent-turn-done trigger. In the OFF path,
-			// the P1 guard MUST short-circuit before any flush or
-			// reevaluation, so the barrier remains untouched.
+			// Fire the new agent-turn-done trigger. The trigger fires
+			// unconditionally (no P1 OFF guard). The reevaluate consults
+			// Elm, which returns failure (kernel not armed), so the
+			// commit is suppressed and the barrier is held.
 			await h.coordinator.notifyAgentTurnDone(h.activeSessionId)
 
-			// Legacy behavior is unchanged: no new commit caused by
-			// this ACT.
+			// No new commit caused by this ACT.
 			expect(h.completionCommitCount()).toBe(commitCountBefore)
 
-			// The legacy TS-created barrier is still present (we did not
-			// cause a reevaluation that would clear it).
+			// The TS-created barrier is still present (Elm said no, so
+			// the barrier was not cleared).
 			const marker = (h.coordinator as unknown as { deferredCompletionBarrier: unknown }).deferredCompletionBarrier
 			expect(marker).toBeDefined()
 		}, 20_000)

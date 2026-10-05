@@ -115,7 +115,7 @@ import {
 	flushElmAuthorityForSession,
 	getElmAuthorityCompletionDecision,
 	getElmAuthorityCounters,
-	isElmAuthorityEnabled,
+	isElmAuthorityAvailable,
 	resetElmAuthorityForTests,
 	setElmAuthorityProvider,
 } from "../completion-authority-elm-authority-runtime"
@@ -375,7 +375,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-ST
 
 		it("REAL-ELM-PROD-VOCAB-SOURCE-FLOWS-THROUGH-FILTER (TRANSPORT, no commit inference)", async () => {
 			setElmAuthorityProvider(REAL_KERNEL_PATH)
-			expect(isElmAuthorityEnabled()).toBe(true)
+			expect(isElmAuthorityAvailable()).toBe(true)
 			setContinuationCardinalityAuthorityCaptureEnabled(true)
 			const sessionId = "vocab-filter-probe"
 			const taskId = "vocab-filter-task"

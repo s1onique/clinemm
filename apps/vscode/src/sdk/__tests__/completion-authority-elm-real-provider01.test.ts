@@ -31,7 +31,7 @@ import {
 	flushElmAuthorityForSession,
 	getElmAuthorityCompletionDecision,
 	getElmAuthorityCounters,
-	isElmAuthorityEnabled,
+	isElmAuthorityAvailable,
 	resetElmAuthorityForTests,
 	setElmAuthorityProvider,
 } from "../completion-authority-elm-authority-runtime"
@@ -211,7 +211,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROV
 	describe("REAL ELM kernel loading", () => {
 		it("REAL-ELM-LOAD: compiled kernel loads; runtime reports enabled", () => {
 			setElmAuthorityProvider(REAL_KERNEL_PATH)
-			expect(isElmAuthorityEnabled()).toBe(true)
+			expect(isElmAuthorityAvailable()).toBe(true)
 		}, 15_000)
 	})
 

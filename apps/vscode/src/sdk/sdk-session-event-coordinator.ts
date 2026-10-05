@@ -9,7 +9,12 @@ import { isClineManagedProvider } from "@/shared/utils/cline"
 import { getDiagnosticHostId, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import { type BackgroundOwnerCorrelationActiveJob, captureBackgroundOwnerCorrelationRecord } from "./background-owner-correlation"
 import {
-	defaultGetElmCompletionAuthorityDecision,
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+// the silent default-Authorize fallback is REMOVED from the authority
+// module. The coordinator MUST be constructed with a real Elm provider
+// (or rely on the unconditional `SdkController` wiring, which injects
+// `ElmAuthorityModule.getElmAuthorityCompletionDecision`). There is no
+// silent default-Authorize fallback.
 	type ElmCompletionAuthorityDecision,
 } from "./completion-authority-elm-authority"
 import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
@@ -458,19 +463,15 @@ export interface SdkSessionEventCoordinatorOptions {
 	 *     No silent TS fallback. Elm unavailability is logged
 	 *     explicitly via `Logger.warn` with the classification.
 	 *
-	 * Default behavior when absent: a function that always returns
-	 * `kind: "authorize"` — the legacy TS predicate chain remains
-	 * the sole authority. This makes every pre-ACT test (BCB01,
-	 * BNCA, CPA01, etc.) byte-identical: no test is forced to
-	 * wire the option.
-	 *
-	 * The production enable helper
-	 * (`dogfood-diagnostic-profile.applyElmAuthorityProfile`)
-	 * arms this option at extension activation time when
-	 * `CLINEMM_COMPLETION_AUTHORITY_ELM=1` is set in the operator's
-	 * environment.
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	 * this option is REQUIRED. The coordinator MUST be constructed
+	 * with a real Elm authority provider. The legacy silent default-
+	 * Authorize fallback has been deleted. The production wiring
+	 * (`SdkController > SdkSessionEventCoordinatorOptions`) injects
+	 * `ElmAuthorityModule.getElmAuthorityCompletionDecision`. Tests
+	 * inject their own provider. There is no opt-out.
 	 */
-	getElmCompletionAuthorityDecision?: (sessionId?: string) => ElmCompletionAuthorityDecision
+	getElmCompletionAuthorityDecision: (sessionId?: string) => ElmCompletionAuthorityDecision
 	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
 	 * Optional microtask-flush helper the coordinator awaits before
@@ -596,18 +597,21 @@ export class SdkSessionEventCoordinator {
 	private nextCompletionCommitEventId = 0
 
 	/**
-	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01:
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
 	 * The Elm-authority decision provider, captured at construction.
-	 * The fallback default is a function that always returns
-	 * `kind: "authorize"` so the legacy TS predicate chain remains
-	 * the sole authority when this option is absent.
+	 * REQUIRED (no fallback). The provider is the real Elm runtime
+	 * (`ElmAuthorityModule.getElmAuthorityCompletionDecision`) in
+	 * production; tests inject their own. The legacy silent default-
+	 * Authorize fallback is gone.
 	 */
 	private readonly getElmCompletionAuthorityDecision: (sessionId?: string) => ElmCompletionAuthorityDecision
 
 	constructor(private readonly options: SdkSessionEventCoordinatorOptions) {
 		this.translateSessionEvent = options.translateSessionEvent ?? translateSessionEvent
-		this.getElmCompletionAuthorityDecision =
-			options.getElmCompletionAuthorityDecision ?? defaultGetElmCompletionAuthorityDecision
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+		// The option is required; do not fall back to a default-
+		// Authorize. Tests must inject a provider.
+		this.getElmCompletionAuthorityDecision = options.getElmCompletionAuthorityDecision
 	}
 
 	/**
@@ -721,11 +725,12 @@ export class SdkSessionEventCoordinator {
 	 * the existing TS predicate chain clears first; Elm is the FINAL
 	 * gate.
 	 *
-	 * The legacy default
-	 * (`defaultGetElmCompletionAuthorityDecision`) returns
-	 * `kind: "authorize"` so when the option is absent on the
-	 * coordinator (every pre-ACT test), this helper is a true
-	 * no-op — the legacy TS path is byte-identical.
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	 * the legacy silent default-Authorize fallback (which returned
+	 * `kind: "authorize"` when the option was absent) has been
+	 * removed. The provider is REQUIRED. When the runtime is not
+	 * armed, `getElmAuthorityCompletionDecision` returns a
+	 * `failure` decision and this helper suppresses the commit effect.
 	 */
 	private async checkElmCompletionAuthority(writerId: TurnStateWriterId): Promise<boolean> {
 		const activeSession = this.options.sessions.getActiveSession()
@@ -1108,12 +1113,11 @@ export class SdkSessionEventCoordinator {
 	 * identified was missing. No timing: the call is driven by the
 	 * factual `agent_turn_done` event, not by polling.
 	 *
-	 * Authority OFF: when the Elm authority runtime is disabled
-	 * (the default), this seam MUST be a true no-op. The early-return
-	 * guard at the top of this method short-circuits before any flush
-	 * or reevaluation — so legacy behavior is byte-identical to the
-	 * predecessor ACT (no new re-evaluation cause for legacy TS
-	 * barriers).
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	 * The legacy "OFF mode is a no-op" early-return guard is REMOVED.
+	 * There is no OFF mode. The trigger always fires; the consult
+	 * site (`checkElmCompletionAuthority`) fail-closes on kernel
+	 * miss / decode error.
 	 */
 	async notifyAgentTurnDone(sessionId: string): Promise<void> {
 		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
@@ -1121,36 +1125,14 @@ export class SdkSessionEventCoordinator {
 		// (every call reaches this method), then the inner
 		// body entered (U0). The reevaluateEntered counter (U1)
 		// is incremented at the entry of the reevaluation itself.
-		// §11 invariant: these counters do NOT change the
-		// evaluation order — the production pre-check below
-		// runs first and short-circuits the Elm-authority-OFF
-		// case before either counter increments. With the
-		// diagnostic disabled the record*() calls are no-ops.
 		recordAgentTurnDoneNotificationSeen()
-		// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01 P1 fix:
-		// When Elm authority is OFF (the default), this seam MUST be a
-		// no-op. Without this guard, `reevaluateDeferredCompletionBarrier`
-		// would re-run the TS conservation chain against a pre-existing
-		// TS-created `deferredCompletionBarrier` and (since the legacy
-		// Elm `default` provider returns `authorize` when OFF) commit
-		// completion. That would introduce a NEW re-evaluation cause
-		// for legacy TS barriers in the OFF path, which is a semantic
-		// change beyond the ACT's scope.
-		//
-		// With this guard, the trigger is a true no-op when Elm
-		// authority is OFF: legacy behavior is byte-identical to the
-		// predecessor ACT.
-		if (!ElmAuthorityModule.isElmAuthorityEnabled()) {
-			return
-		}
-		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
-		// U0 discriminator. The Elm-authority-OFF pre-check
-		// short-circuits BEFORE we record "entered". A frozen
-		// LIVE with notifyAgentTurnDoneEntered=0 +
-		// totalAgentTurnDoneNotifications=N therefore pinpoints
-		// HALT_POSTRUN_TRIGGER_NOT_ENTERED — the production
-		// callback is unreachable because Elm authority is
-		// disabled in the installed Extension Host.
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+		// The legacy P1 guard `if (!isElmAuthorityEnabled()) return`
+		// is REMOVED. There is no OFF mode. The Elm authority is the
+		// sole completion authority; the trigger always fires; the
+		// consult site (`checkElmCompletionAuthority`) fail-closes on
+		// kernel miss / decode error. The U0 discriminator below still
+		// records "entered" for the LIVE-UPSTREAM-CALLBACK diagnostic.
 		recordNotifyAgentTurnDoneEntered()
 		try {
 			await this.options.flushElmAuthorityForSession?.(sessionId)

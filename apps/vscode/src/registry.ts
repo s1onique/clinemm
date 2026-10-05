@@ -111,28 +111,15 @@ const ClineCommands = {
 	// cardinality to 1, OR CAPTURE_INSUFFICIENT, OR
 	// HALT_RED_NOT_REPRODUCED, OR successor evidence supersedes it.
 	DumpContinuationCardinalityAuthority: prefix + ".debug.dumpContinuationCardinalityAuthority",
-	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01:
-	// Debug dump command for the Elm completion-authority shadow
-	// observer. Default-off diagnostic; the operator opts in via
-	// CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1. The dump
-	// serializes the bounded ring + counter snapshot to
-	// <globalStorageUri>/completion-authority-elm-shadow.jsonl +
-	// .counters.json. No toggle command (enablement is owned by
-	// `applyElmShadowDiagnosticProfile` in
-	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER:
-	// PASS_LIVE_ELM_SHADOW with operator-rendered 1:1 live
-	// correspondence, OR successor evidence supersedes.
-	DumpCompletionAuthorityElmShadow: prefix + ".debug.dumpCompletionAuthorityElmShadow",
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-AUTHORITY-COUNTER-DUMP01:
 	// Debug dump command for the SYNCHRONOUS REAL Elm authority
-	// runtime counter snapshot. Mirrors the SHADOW dump pattern:
-	// unconditional (operator can always inspect whatever the
-	// runtime captured), dump != clear (no counter mutation). The
-	// dump serializes `getElmAuthorityCounters()` to
-	// <globalStorageUri>/completion-authority-elm-authority.counters.json.
+	// runtime counter snapshot. Unconditional (operator can always
+	// inspect whatever the runtime captured), dump != clear (no
+	// counter mutation). The dump serializes `getElmAuthorityCounters()`
+	// to <globalStorageUri>/completion-authority-elm-authority.counters.json.
 	// No toggle command (enablement is owned by
-	// `applyElmAuthorityProfile` in dogfood-diagnostic-profile.ts;
-	// env-gated via CLINEMM_COMPLETION_AUTHORITY_ELM=1). REMOVAL_TRIGGER:
+	// `initializeElmAuthorityRuntime` in dogfood-diagnostic-profile.ts;
+	// UNCONDITIONAL, no env gate). REMOVAL_TRIGGER:
 	// PASS_LIVE_ELM_AUTHORITY with operator-rendered 1:1 live
 	// correspondence AND the cause is RED on HOLD/FAILURE for
 	// operator review, OR successor evidence supersedes.

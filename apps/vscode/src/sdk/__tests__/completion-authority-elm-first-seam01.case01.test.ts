@@ -167,12 +167,17 @@ function makeHarness(opts: MakeHarnessOpts = {}): TestHarness {
 		getOutstandingAutonomousWork: () => false,
 		getLaunchedBackgroundJobIds: () => [],
 		enqueueCompletionContinuation: () => Promise.resolve({ kind: "no_held_job_ids" }),
-		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01: the seam.
-		// When the option is supplied, the coordinator MUST consult it
-		// before invoking the production commit effect. When omitted,
-		// the default (always-authorize) makes the existing tests
-		// byte-identical.
-		getElmCompletionAuthorityDecision: opts.getElmCompletionAuthorityDecision,
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+		// the legacy silent default-Authorize fallback has been
+		// removed. The provider is REQUIRED. The harness passes the
+		// supplied `opts.getElmCompletionAuthorityDecision`; if no
+		// provider is supplied, an authorize-by-default provider is
+		// injected so existing tests (which exercised the OFF path
+		// in the predecessor ACT) remain byte-identical to legacy
+		// TS behavior.
+		getElmCompletionAuthorityDecision:
+			opts.getElmCompletionAuthorityDecision ??
+			(() => ({ kind: "authorize", reason: "test_default_authorize" })),
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	return {

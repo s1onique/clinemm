@@ -13,7 +13,7 @@
  * endpoint the Command Palette registration calls.
  *
  * The runtime does NOT enable the authority kernel; enablement is
- * owned exclusively by `applyElmAuthorityProfile` in
+ * owned exclusively by `initializeElmAuthorityRuntime` in
  * dogfood-diagnostic-profile.ts, called from extension.ts:activate
  * BEFORE SdkController construction. There is no toggle command —
  * the dump is unconditionally reachable so an operator can inspect

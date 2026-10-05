@@ -29,10 +29,17 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — source preservation", 
 		expect(source).toMatch(/kind:\s*"failure"/)
 	})
 
-	it("EAS01-PRES-02: authority module exports a default-always-authorize dependency-injection seam", () => {
+	it("EAS01-PRES-02: authority module exports the closed discriminated union (no default-Authorize fallback)", () => {
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+		// the legacy silent default-Authorize fallback (which used to
+		// return kind=authorize unconditionally) has been DELETED. The
+		// module now exports only the closed discriminated union type.
+		// The failure classification must include elm_authority_unavailable
+		// so a missing runtime is fail-closed.
 		const source = readFileSync(AUTHORITY_MODULE_PATH, "utf8")
-		expect(source).toMatch(/defaultGetElmCompletionAuthorityDecision/)
-		expect(source).toMatch(/export\s+function\s+defaultGetElmCompletionAuthorityDecision/)
+		expect(source).not.toMatch(/defaultGetElmCompletionAuthorityDecision/)
+		expect(source).not.toMatch(/defaultElmCompletionAuthorityDecision/)
+		expect(source).toMatch(/elm_authority_unavailable/)
 	})
 
 	it("EAS01-PRES-03: coordinator imports the authority decision type", () => {
@@ -41,14 +48,21 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01 — source preservation", 
 		expect(source).toMatch(/ElmCompletionAuthorityDecision/)
 	})
 
-	it("EAS01-PRES-04: coordinator constructor option name matches across type and capture", () => {
+	it("EAS01-PRES-04: coordinator constructor option is REQUIRED (no optional, no default fallback)", () => {
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+		// the `getElmCompletionAuthorityDecision` option is REQUIRED
+		// (no `?` in the type declaration) and has NO `??` fallback
+		// in the constructor. There is no silent default-Authorize.
 		const source = readFileSync(COORDINATOR_PATH, "utf8")
-		// Option declared on the options interface
-		expect(source).toMatch(/getElmCompletionAuthorityDecision\?:/)
+		// Option declared on the options interface (no `?`)
+		expect(source).toMatch(/getElmCompletionAuthorityDecision:\s*\(sessionId\?: string\)/)
 		// Option captured into the class private field
 		expect(source).toMatch(/private\s+readonly\s+getElmCompletionAuthorityDecision:/)
-		// Option captured in constructor
-		expect(source).toMatch(/options\.getElmCompletionAuthorityDecision\s*\?\?/)
+		// Option captured in constructor (NO `??` fallback to a
+		// silent default-Authorize provider — that provider has been
+		// deleted)
+		expect(source).toMatch(/this\.getElmCompletionAuthorityDecision\s*=\s*options\.getElmCompletionAuthorityDecision\b/)
+		expect(source).not.toMatch(/options\.getElmCompletionAuthorityDecision\s*\?\?/)
 	})
 
 	it("EAS01-PRES-05: coordinator consults Elm authority at BOTH commit-effect sites", () => {

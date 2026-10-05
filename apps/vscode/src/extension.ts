@@ -7,7 +7,6 @@ import * as vscode from "vscode"
 import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
 import { dumpExtensionSideElmAuthorityCounters } from "@/sdk/completion-authority-elm-authority-runtime-host"
-import { dumpExtensionSideElmShadowDiagnostic } from "@/sdk/completion-authority-elm-shadow-runtime"
 import { dumpExtensionSideCompletionContinuationDeliveryCounters } from "@/sdk/completion-continuation-delivery-runtime-host"
 import { dumpExtensionSideCompletionContinuationUpstreamCounters } from "@/sdk/completion-continuation-upstream-runtime-host"
 import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
@@ -17,8 +16,7 @@ import {
 	applyCompletionContinuationDeliveryDiagnosticProfile,
 	applyCompletionContinuationUpstreamDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
-	applyElmAuthorityProfile,
-	applyElmShadowDiagnosticProfile,
+	initializeElmAuthorityRuntime,
 	applyExtensionHostAllocationProfilerProfile,
 	applyExtensionHostCpuProfilerProfile,
 	applyExtensionHostHotloopDiagnosticProfile,
@@ -306,54 +304,39 @@ export async function activate(context: vscode.ExtensionContext) {
 	// enqueueCompletionContinuationIfHeld invocation.
 	applyCompletionContinuationUpstreamDiagnosticProfile(isDogfoodRuntime(process.env))
 
-	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03:
-	// arm the Elm shadow observer at the SAME EARLIEST
-	// initialization seam, BEFORE SdkController construction.
-	// The shadow is DEFAULT-OFF. The operator opts in via the
-	// CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 env var. The
-	// kernel path is resolved from `context.extensionUri.fsPath`
-	// (the authoritative installed extension root, which is
-	// the directory containing `dist/extension.js` AND
-	// `runtime-assets/completion-authority.js` in the packaged
-	// VSIX). This is stronger than the `_importMetaUrl` banner
-	// approach — `extensionUri` is provided directly by VS Code
-	// and survives esbuild bundling without depending on the
-	// banner's variable scope (top-level CJS `const` is
-	// module-scoped, NOT a property on globalThis).
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	// initialize the Elm authority runtime UNCONDITIONALLY at the
+	// earliest initialization seam, BEFORE SdkController construction.
+	// There is NO env gate, NO opt-in/opt-out, NO silent default-
+	// Authorize fallback. The Elm kernel is the sole completion
+	// authority. The legacy CLINEMM_COMPLETION_AUTHORITY_ELM and
+	// CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW env vars have been
+	// removed. If the canonical runtime asset is missing from the
+	// VSIX, the activation helper emits a console.error and the
+	// runtime refuses every completion commit (fail-closed).
 	//
-	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03
-	// (PACKAGING-DISCOVERY): the kernel is NOT loaded from
+	// Kernel-path resolution (carried over from the predecessor ACT):
+	// the kernel is NOT loaded from
 	// `elm/completion-authority/vendor/completion-authority.js`
-	// anymore. That source path is filtered out by the nested
+	// anymore — that source path is filtered out by the nested
 	// `apps/vscode/elm/completion-authority/.gitignore` during
-	// `vsce`'s discovery step (vsce applies .gitignore semantics
-	// before .vscodeignore, so .vscodeignore !negations cannot
-	// resurrect it). The dogfood VSIX builder
+	// `vsce`'s discovery step. The dogfood VSIX builder
 	// (scripts/build_dogfood_vsix_lib.py > stage_elm_kernel_runtime_asset)
 	// copies the kernel into `runtime-assets/completion-authority.js`
 	// inside the temporary worktree immediately before `vsce package`,
-	// and the runtime loads it from there. Same bytes, different
-	// packaging path.
-	const elmShadowKernelPath = path.join(context.extensionUri.fsPath, "runtime-assets", "completion-authority.js")
-	const elmShadowActivation = applyElmShadowDiagnosticProfile(process.env, elmShadowKernelPath)
-	if (elmShadowActivation.enabled) {
-		Logger.log(`[ELM-SHADOW] enabled=true kernelPath=${elmShadowActivation.kernelPath}`)
-	}
-
-	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
-	// arm the SYNCHRONOUS REAL Elm authority runtime at the SAME
-	// EARLIEST initialization seam as the shadow, BEFORE SdkController
-	// construction. The authority runtime is DEFAULT-OFF. The operator
-	// opts in via the CLINEMM_COMPLETION_AUTHORITY_ELM=1 env var.
-	// The kernel path is the SAME packaged runtime-asset the shadow
-	// uses; both runtimes load the same compiled Elm bundle into
-	// independent Elm.Main.init({}) instances. When ON, the runtime
-	// is the final pre-effect gate for the production
-	// setTurnPhase("completed", ...) commit effect.
-	const elmAuthorityKernelPath = elmShadowKernelPath
-	const elmAuthorityActivation = applyElmAuthorityProfile(process.env, elmAuthorityKernelPath)
+	// and the runtime loads it from there. The path is resolved from
+	// `context.extensionUri.fsPath` (the authoritative installed
+	// extension root, which is the directory containing
+	// `dist/extension.js` AND `runtime-assets/completion-authority.js`
+	// in the packaged VSIX).
+	const elmAuthorityKernelPath = path.join(context.extensionUri.fsPath, "runtime-assets", "completion-authority.js")
+	const elmAuthorityActivation = initializeElmAuthorityRuntime(elmAuthorityKernelPath)
 	if (elmAuthorityActivation.enabled) {
 		Logger.log(`[ELM-AUTHORITY] enabled=true kernelPath=${elmAuthorityActivation.kernelPath}`)
+	} else {
+		Logger.error(
+			`[ELM-AUTHORITY] runtime asset missing from VSIX (kernelPath=${elmAuthorityKernelPath}); every completion commit will be refused until the asset is restored.`,
+		)
 	}
 
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
@@ -1100,31 +1083,6 @@ ${ctx.cellJson || "{}"}
 				)
 			}
 		}),
-		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01:
-		// Dump command for the Elm shadow observer diagnostic. Mirrors
-		// the CCARD dump pattern: unconditional (operator can always
-		// inspect whatever the shadow captured), dump != clear (no
-		// ring mutation). The dump serializes the bounded ring to
-		// <globalStorageUri>/completion-authority-elm-shadow.jsonl
-		// AND the counter snapshot to
-		// <globalStorageUri>/completion-authority-elm-shadow.counters.json.
-		// No toggle command — enablement is owned by
-		// `applyElmShadowDiagnosticProfile` in dogfood-diagnostic-profile.ts.
-		// REMOVAL_TRIGGER: PASS_LIVE_ELM_SHADOW with operator-rendered
-		// 1:1 live correspondence, OR successor evidence supersedes.
-		vscode.commands.registerCommand(commands.DumpCompletionAuthorityElmShadow, async () => {
-			try {
-				const { ringFile, countersFile, recordCount, counters } = await dumpExtensionSideElmShadowDiagnostic(context)
-				void vscode.window.showInformationMessage(
-					`Completion authority Elm shadow: ${recordCount} observation${recordCount === 1 ? "" : "s"} (states=${counters.states}, violations=${counters.violations}, decodeErrors=${counters.decodeErrors}, kernelErrors=${counters.kernelErrors}) → ${ringFile} (+ ${countersFile}).`,
-				)
-			} catch (err) {
-				Logger.error("[ELM-SHADOW] dump failed", err)
-				void vscode.window.showErrorMessage(
-					`Completion authority Elm shadow dump failed: ${err instanceof Error ? err.message : String(err)}`,
-				)
-			}
-		}),
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-AUTHORITY-COUNTER-DUMP01:
 		// Dump command for the SYNCHRONOUS REAL Elm authority counter
 		// snapshot. Mirrors the SHADOW dump pattern: unconditional
@@ -1133,8 +1091,8 @@ ${ctx.cellJson || "{}"}
 		// `getElmAuthorityCounters()` to
 		// <globalStorageUri>/completion-authority-elm-authority.counters.json.
 		// No toggle command — enablement is owned by
-		// `applyElmAuthorityProfile` in dogfood-diagnostic-profile.ts
-		// (env-gated via CLINEMM_COMPLETION_AUTHORITY_ELM=1). The
+		// `initializeElmAuthorityRuntime` in dogfood-diagnostic-profile.ts
+		// (UNCONDITIONAL, no env gate). The
 		// message shows the same diagnostic fields a 1:1 review needs
 		// (total / authorize / hold / failure / fallbackUsed /
 		// decodeErrors / kernelErrors / lastDecision) so the operator

@@ -130,7 +130,6 @@ import {
 	setBackgroundOwnerCorrelationCaptureEnabled,
 } from "./background-owner-correlation"
 import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
-import * as ElmShadowModule from "./completion-authority-elm-shadow"
 import {
 	isCompletionContinuationDeliveryEnabled,
 	setCompletionContinuationDeliveryEnabled,
@@ -1071,91 +1070,17 @@ function _isCompletionContinuationUpstreamEnabledForActivation(): boolean {
 }
 
 // ===========================================================================
-// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01 — central
-// activation helper for the Elm shadow observer seam.
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY
 //
-// CONTRACT — frozen in this ACT (mirrors the SHADOW02 frozen contract;
-// no override matrix):
-//   - The shadow runtime is DEFAULT-OFF. There is NO automatic
-//     enablement merely because the build is dogfood.
-//   - The shadow is enabled STRICTLY by the operator setting the
-//     environment variable:
-//       CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1
-//       CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=true
-//       CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=yes
-//     Anything else (including unset, "0", "false", "no", "") keeps
-//     the shadow OFF.
-//   - When OFF, the kernel is never loaded; no Elm.Main.init runs;
-//     no shadow session map exists; no outbound port is subscribed.
-//   - When ON, the shadow module is enabled with the resolved
-//     kernel path (the absolute filesystem path to the compiled
-//     `vendor/completion-authority.js`). The first CCARD record
-//     observed for a new session triggers a fresh `loadKernel`.
-//   - The activation helper is called from extension.ts:activate
-//     BEFORE SdkController construction. There is exactly ONE
-//     production activation path, no copied orchestration in tests.
-//   - Public installs (isDogfood=false) may opt-in via the env var.
-//     The frozen contract requires explicit opt-in; this differs
-//     from the BJLA / BOCOR / CCARD profile resolvers which gate
-//     strictly on isDogfood.
+// The Elm shadow observer seam has been RETIRED from production.
+// `applyElmShadowDiagnosticProfile` and the
+// `CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW` env var are deleted.
+// The pure-Elm-kernel correspondence tests in
+// `__tests__/completion-authority-elm-shadow02.test.ts` retain the
+// `completion-authority-elm-shadow.ts` module file as test fixture
+// substrate, but there is NO production wiring into
+// `continuation-cardinality-authority.ts` or `extension.ts`.
 // ===========================================================================
-
-function _parseEnvTruthy(value: string | undefined): boolean {
-	if (value === undefined) return false
-	const v = value.trim().toLowerCase()
-	return v === "1" || v === "true" || v === "yes"
-}
-
-/**
- * THE single production activation helper for the Elm shadow seam.
- * Called from extension.ts:activate (sibling to BJLA / BOCOR / CCARD
- * activations); there is exactly ONE production activation path.
- *
- * Returns:
- *   enabled    — true iff the shadow is now armed (post-call state).
- *   flipped    — true iff this call changed the previous state.
- *   kernelPath — the resolved path passed to the shadow module, or
- *                null when disabled (no kernel should be loaded).
- *
- * The kernel path is passed by the caller (extension.ts:activate)
- * because the shadow module itself is `vscode`-free and does not
- * know how to derive the packaged extension root.
- */
-export function applyElmShadowDiagnosticProfile(
-	env: NodeJS.ProcessEnv | undefined,
-	kernelPath: string | null,
-): {
-	readonly enabled: boolean
-	readonly flipped: boolean
-	readonly kernelPath: string | null
-	readonly resolvedReason: "env" | "default_off"
-} {
-	const should = _parseEnvTruthy(env?.CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW)
-	const wasEnabled = ElmShadowModule.isElmShadowEnabled()
-	if (should) {
-		if (!kernelPath) {
-			// fail-closed: env requested ON but caller did not supply a
-			// kernel path. Disable and report.
-			ElmShadowModule.setElmShadowEnabled(false, null)
-			return { enabled: false, flipped: wasEnabled, kernelPath: null, resolvedReason: "env" }
-		}
-		ElmShadowModule.setElmShadowEnabled(true, kernelPath)
-		return {
-			enabled: true,
-			flipped: !wasEnabled,
-			kernelPath,
-			resolvedReason: "env",
-		}
-	}
-	// Default off path.
-	ElmShadowModule.setElmShadowEnabled(false, null)
-	return {
-		enabled: false,
-		flipped: wasEnabled,
-		kernelPath: null,
-		resolvedReason: "default_off",
-	}
-}
 
 // ===========================================================================
 // ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 — central dogfood
@@ -1709,34 +1634,28 @@ export function applyProviderRequestCaptureDiagnosticProfile(
 }
 
 // ===========================================================================
-// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY
 //
 // Central activation helper for the SYNCHRONOUS REAL Elm authority
-// runtime. Mirrors `applyElmShadowDiagnosticProfile` exactly. Reads
-// `CLINEMM_COMPLETION_AUTHORITY_ELM`; when truthy AND the caller
-// supplies a kernel path, arms the runtime. The runtime owns its own
-// per-session Elm application instances (separate from the shadow)
-// and exposes a synchronous provider the coordinator consults at
-// `checkElmCompletionAuthority`.
+// runtime. The runtime is MANDATORY — there is no env gate, no
+// opt-in/opt-out, no silent default-Authorize fallback. The Elm
+// kernel is the sole completion authority.
 //
 // CONTRACT — frozen:
-//   - The authority runtime is DEFAULT-OFF.
-//   - Activated STRICTLY by the operator setting:
-//       CLINEMM_COMPLETION_AUTHORITY_ELM=1
-//       CLINEMM_COMPLETION_AUTHORITY_ELM=true
-//       CLINEMM_COMPLETION_AUTHORITY_ELM=yes
-//   - Anything else keeps the authority OFF (legacy TS predicates
-//     remain the sole authority).
-//   - When OFF, no kernel is loaded; no Elm.Main.init runs; no
-//     per-session map exists; no synchronous observer runs.
-//   - When ON, the runtime is armed with the resolved kernel path
-//     (the absolute filesystem path to the compiled
-//     `vendor/completion-authority.js`). The first CCARD record
-//     observed for a new session triggers a fresh `loadKernel`.
-//   - The activation helper is called from extension.ts:activate
-//     BEFORE SdkController construction. Exactly ONE production
-//     activation path.
-//   - Public installs (isDogfood=false) may opt-in via the env var.
+//   - The authority runtime is initialized UNCONDITIONALLY at
+//     extension activation, BEFORE SdkController construction.
+//   - When the supplied `kernelPath` is non-null, the runtime is
+//     armed; the Elm kernel is loaded on first consult; the
+//     production `checkElmCompletionAuthority` consult is fail-closed
+//     (HOLD and FAILURE both suppress commit effect; AUTHORIZE
+//     permits it exactly once).
+//   - When the supplied `kernelPath` is null (a packaging error: the
+//     canonical runtime asset is missing from the VSIX), the runtime
+//     is left in the fail-closed `!enabled` state and the activation
+//     helper emits an audible `console.error`. Subsequent consults
+//     return `failure` decisions. The legacy
+//     `CLINEMM_COMPLETION_AUTHORITY_ELM` env var is REMOVED; there
+//     is no opt-out path.
 //
 // Chronology discipline is enforced INSIDE the runtime
 // (`completion-authority-elm-authority-runtime.ts > AUTHORITY_STAGES`):
@@ -1748,55 +1667,42 @@ export function applyProviderRequestCaptureDiagnosticProfile(
 
 /**
  * THE single production activation helper for the synchronous REAL Elm
- * authority runtime. Called from extension.ts:activate AFTER the shadow
- * activation (so the shadow remains the first diagnostic wired) and
- * BEFORE SdkController construction. There is exactly ONE production
- * activation path; no copied orchestration in tests.
+ * authority runtime. Called from extension.ts:activate BEFORE
+ * SdkController construction. There is exactly ONE production
+ * activation path; no copied orchestration in tests. The runtime is
+ * unconditional (no env gate).
  *
  * Returns:
  *   enabled    — true iff the runtime is now armed (post-call state).
  *   flipped    — true iff this call changed the previous state.
  *   kernelPath — the resolved path passed to the runtime, or null when
- *                disabled (no kernel should be loaded).
- *   resolvedReason — "env" when the env var triggered ON; "default_off"
- *                otherwise.
+ *                the canonical runtime asset is missing from the VSIX.
  *
  * The kernel path is passed by the caller (extension.ts:activate)
  * because the runtime is `vscode`-free and does not know how to
  * derive the packaged extension root.
  */
-export function applyElmAuthorityProfile(
-	env: NodeJS.ProcessEnv | undefined,
-	kernelPath: string | null,
-): {
+export function initializeElmAuthorityRuntime(kernelPath: string | null): {
 	readonly enabled: boolean
 	readonly flipped: boolean
 	readonly kernelPath: string | null
-	readonly resolvedReason: "env" | "default_off"
 } {
-	const should = _parseEnvTruthy(env?.CLINEMM_COMPLETION_AUTHORITY_ELM)
-	const wasEnabled = ElmAuthorityModule.isElmAuthorityEnabled()
-	if (should) {
-		if (!kernelPath) {
-			// fail-closed: env requested ON but caller did not supply a
-			// kernel path. Disable and report.
-			ElmAuthorityModule.setElmAuthorityProvider(null)
-			return { enabled: false, flipped: wasEnabled, kernelPath: null, resolvedReason: "env" }
+	const wasEnabled = ElmAuthorityModule.isElmAuthorityAvailable()
+	if (!kernelPath) {
+		if (typeof console !== "undefined" && typeof console.error === "function") {
+			console.error(
+				"[SdkController] Elm authority runtime asset is missing from the VSIX; " +
+					"the runtime will refuse every completion commit. Check that " +
+					"`runtime-assets/completion-authority.js` is present in the packaged extension.",
+			)
 		}
-		ElmAuthorityModule.setElmAuthorityProvider(kernelPath)
-		return {
-			enabled: true,
-			flipped: !wasEnabled,
-			kernelPath,
-			resolvedReason: "env",
-		}
+		ElmAuthorityModule.setElmAuthorityProvider(null)
+		return { enabled: false, flipped: wasEnabled, kernelPath: null }
 	}
-	// Default off path.
-	ElmAuthorityModule.setElmAuthorityProvider(null)
+	ElmAuthorityModule.setElmAuthorityProvider(kernelPath)
 	return {
-		enabled: false,
-		flipped: wasEnabled,
-		kernelPath: null,
-		resolvedReason: "default_off",
+		enabled: true,
+		flipped: !wasEnabled,
+		kernelPath,
 	}
 }

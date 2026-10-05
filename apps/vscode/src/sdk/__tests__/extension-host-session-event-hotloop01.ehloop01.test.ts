@@ -142,6 +142,15 @@ function makeCoordinator(opts: {
 			})
 		},
 		getTurnPhase: () => turnStateTracker.currentPhase,
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+		// the Elm authority provider is now REQUIRED on the
+		// coordinator options. This test does not exercise the
+		// authority path, so a no-op provider is sufficient.
+		getElmCompletionAuthorityDecision: () => ({
+			kind: "failure",
+			reason: "ehloop01_test_no_provider",
+			classification: "elm_authority_unavailable",
+		}),
 	}
 
 	const coordinator = new SdkSessionEventCoordinator(options)

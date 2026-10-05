@@ -1,20 +1,22 @@
 /**
- * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION01
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY
  *
- * Extension-host dump adapter for the Elm completion-authority
- * shadow observer. Mirrors the BJLA / BOCOR / CCARD dump pattern:
- * unconditional (operator can always inspect whatever was captured),
- * dump != clear (no ring mutation).
+ * TEST-FIXTURE ONLY. The Elm completion-authority SHADOW runtime has
+ * been RETIRED from production. The file remains in the codebase
+ * because `__tests__/completion-authority-elm-shadow02.test.ts`
+ * imports it as a pure-Elm-kernel correspondence test fixture.
+ * There is NO production wiring in `extension.ts`,
+ * `continuation-cardinality-authority.ts`, or anywhere else; the
+ * `DumpCompletionAuthorityElmShadow` Command Palette registration
+ * and `applyElmShadowDiagnosticProfile` activation helper have been
+ * deleted. Tests that import this module exercise the bounded ring
+ * + counter snapshot directly; they do not represent production
+ * behavior.
  *
- * The shadow module is unaware of vscode; it exposes the bounded
- * ring + counter snapshot via pure functions. This module wires
- * those to JSONL / JSON files under context.globalStorageUri and is
- * the host-side endpoint the Command Palette registration calls.
- *
- * The runtime does NOT enable the shadow; enablement is owned
- * exclusively by `applyElmShadowDiagnosticProfile` in
- * dogfood-diagnostic-profile.ts, called from extension.ts:activate
- * BEFORE SdkController construction.
+ * History note: prior versions of this file wired the dump to a
+ * Command Palette registration in `extension.ts:1086-1108`. That
+ * registration was removed along with the shadow runtime from
+ * production.
  */
 
 import { mkdir, writeFile } from "node:fs/promises"

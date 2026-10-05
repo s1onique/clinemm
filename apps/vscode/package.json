@@ -257,11 +257,6 @@
 				"category": "Cline"
 			},
 			{
-				"command": "cline.debug.dumpCompletionAuthorityElmShadow",
-				"title": "Cline Debug: Dump Completion Authority Elm Shadow",
-				"category": "Cline"
-			},
-			{
 				"command": "cline.debug.dumpCompletionAuthorityElmAuthority",
 				"title": "Cline Debug: Dump Completion Authority Elm Authority",
 				"category": "Cline"

@@ -2540,17 +2540,18 @@ export class Controller {
 				getActiveSession: () => this.sessions?.getActiveSession(),
 				logger: Logger,
 			}),
-			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
 			// wire the SYNCHRONOUS REAL Elm authority runtime into
-			// the production seam. `applyElmAuthorityProfile` runs in
-			// extension.ts:activate BEFORE SdkController construction
-			// and arms the runtime. The provider and flush helper
-			// exposed by the runtime are the same instances the
-			// production coordinator consults at the
-			// `checkElmCompletionAuthority` seam. When the runtime
-			// is OFF (the default), both helpers are no-ops and the
-			// legacy TS predicate chain remains the sole authority
-			// (byte-identical to the predecessor ACT).
+			// the production seam. `initializeElmAuthorityRuntime`
+			// runs in extension.ts:activate BEFORE SdkController
+			// construction and arms the runtime unconditionally.
+			// The provider and flush helper exposed by the runtime
+			// are the same instances the production coordinator
+			// consults at the `checkElmCompletionAuthority` seam.
+			// There is no OFF mode and no silent default-Authorize
+			// fallback. If the runtime asset is missing from the
+			// VSIX, `getElmAuthorityCompletionDecision` returns a
+			// fail-closed `failure` decision.
 			getElmCompletionAuthorityDecision: (sessionId?: string) =>
 				ElmAuthorityModule.getElmAuthorityCompletionDecision(sessionId ?? ""),
 			flushElmAuthorityForSession: (sessionId: string) => ElmAuthorityModule.flushElmAuthorityForSession(sessionId),
@@ -2569,21 +2570,17 @@ export class Controller {
 		// CCARD diagnostic `captureEnabled` flag). It fires only
 		// after the `agent_turn_done` capture is acknowledged by
 		// the production capture path - no timing or polling.
-		// P1 fix (per review): gate the new post-run liveness seam on
-		// Elm authority enablement. The legacy `deferredCompletionBarrier`
-		// already exists and is created by the TS completion predicate
-		// chain; without this guard, the new agent-turn-done trigger
-		// would (in the OFF path) gain a NEW re-evaluation cause for
-		// legacy TS barriers, which is a semantic change we did not
-		// intend. With this guard, the trigger is a true no-op when
-		// Elm authority is OFF, so legacy behavior is byte-identical
-		// to the predecessor ACT.
-		setAgentTurnDoneSemanticTrigger((sessionId) => {
-			if (!ElmAuthorityModule.isElmAuthorityEnabled()) {
-				return
-			}
-			void this.sessionEvents.notifyAgentTurnDone(sessionId)
-		})
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+// the post-run liveness seam is now unconditional — there is no
+// OFF mode to gate against. The Elm authority is the sole completion
+// authority; the trigger always fires; the consult site
+// (`checkElmCompletionAuthority`) fail-closes on kernel miss / decode
+// error. The legacy P1 guard `if (!isElmAuthorityEnabled()) return`
+// is REMOVED — it was a no-op-discrimination when an OFF mode
+// existed; with no OFF mode, the discrimination is unnecessary.
+setAgentTurnDoneSemanticTrigger((sessionId) => {
+	void this.sessionEvents.notifyAgentTurnDone(sessionId)
+})
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION:
 		// Wire the rebuild scheduler's `isDeferredCompletionOutstanding`
 		// predicate to the live `SdkSessionEventCoordinator` marker.

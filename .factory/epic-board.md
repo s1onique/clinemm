@@ -19284,3 +19284,52 @@ must NOT be opened until a reviewer has confirmed:
 1. LIVE-first vs. delete-OFF-first sequence.
 2. Shadow-runtime decision (retire vs. dogfood-gate).
 3. RED 01..05 are authored against the production source with this classification table as the discriminator reference.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY - IMPLEMENTATION_PASS_LEGACY_TS_AUTHORITY_REMOVED - 2026-10-05
+
+**Status:** IMPLEMENTATION_PASS_LEGACY_TS_AUTHORITY_REMOVED. Reviewer C1: GO.
+
+**Reviewer decision (C1):** LIVE-first is already complete. Delete OFF now. Retire the production shadow. Preserve only offline replay/test substrate that still earns its keep.
+
+**Implementation order (executed):**
+1. Made the real Elm provider MANDATORY (no optional fallback).
+2. Deleted `defaultElmCompletionAuthorityDecision` + `defaultGetElmCompletionAuthorityDecision` from authority module.
+3. Removed `notifyAgentTurnDone` short-circuit at coordinator.ts:1143.
+4. Replaced env-gated `applyElmAuthorityProfile` with unconditional `initializeElmAuthorityRuntime(kernelPath)`.
+5. Deleted `CLINEMM_COMPLETION_AUTHORITY_ELM` env-gate code paths.
+6. Retired production shadow wiring (deleted `applyElmShadowDiagnosticProfile`, dump command, registry entry, package.json contribution, CCARD shadow-gate block, `continuation-cardinality-authority.ts` ShadowGate). Module files retained as test fixtures.
+7. Renamed `isElmAuthorityEnabled` to `isElmAuthorityAvailable` (health observation only).
+
+**Conservation matrix:**
+- bun run check-types: PASS (exit 0)
+- bun run test:unit: 94 files, 1246 PASS / 0 FAIL
+- vitest authority suite (8 files): 76 PASS / 0 FAIL
+- vitest full (excluding pre-existing sdk-task-history drift): PASS
+
+**Reviewer final acceptance criterion (production source grep):**
+- `rg 'CLINEMM_COMPLETION_AUTHORITY_ELM(_SHADOW)?' apps/vscode/src` -> only `not.toMatch` assertions in tests
+- `rg 'defaultElmCompletionAuthorityDecision|defaultGetElmCompletionAuthorityDecision|elm_authority_off_default_authorize' apps/vscode/src` -> only `not.toMatch` assertions in tests + history-note comment
+
+**Cursor (post-IMPLEMENTATION):**
+```
+MCP/session lifecycle             LIVE PASS (CORRECTION04)
+Elm authority HOLD->AUTHORIZE     LIVE PASS (CORRECTION01)
+authority->effect repair          IMPLEMENTATION PASS (this ACT)
+ownership inventory               RECON PASS (RECON ACT at 77e0950df)
+ownership cleanup (default-01)    IMPLEMENTATION PASS (this ACT)
+  -> delete OFF path             DONE (silent default-authorize removed)
+  -> retire shadow               DONE (production wiring removed)
+  -> unconditional init          DONE (initializeElmAuthorityRuntime)
+  -> preserve 11 RETAIN           DONE (conservation spine intact)
+  -> 5 preservation tests         REWRITTEN (no test left)
+installed LIVE                    NEXT (operator-driven)
+MYC03                             HOLD (unchanged by this ACT)
+```
+
+**Artifact identity:**
+```
+ENTRY_HEAD                77e0950df (RECON PASS)
+SUBJECT_HEAD              <this ACT commit, to be set at commit time>
+DOGFOOD_SOURCE_HEAD       <unset - ACT does not produce a VSIX>
+CLOSURE_HEAD              <this board update>
+```

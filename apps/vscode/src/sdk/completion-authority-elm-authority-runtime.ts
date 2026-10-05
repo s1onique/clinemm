@@ -40,14 +40,16 @@
  *   (`task_completion_committed`, `completion_presented`,
  *   `task_cancelled`) before forwarding to the Elm authority instance.
  *
- * Default OFF:
- *   Mirrors the SHADOW02 contract. The runtime is default-off; the
- *   provider function returns the legacy `defaultElmCompletionAuthorityDecision`
- *   (always authorize) until `setElmAuthorityProvider` is called by
- *   the dogfood diagnostic profile resolver.
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+ * The runtime is MANDATORY. There is no OFF mode and no silent
+ * default-Authorize decision. If `state.enabled` is false (the kernel
+ * failed to load), `getElmAuthorityCompletionDecision` returns a
+ * `failure` decision and the coordinator suppresses the commit effect.
+ * The legacy silent default-Authorize symbols have been deleted from
+ * `./completion-authority-elm-authority.ts`.
  */
 
-import { defaultElmCompletionAuthorityDecision, type ElmCompletionAuthorityDecision } from "./completion-authority-elm-authority"
+import type { ElmCompletionAuthorityDecision } from "./completion-authority-elm-authority"
 import { adaptRecord, type KernelHandle } from "./completion-authority-elm-replay"
 import { loadKernel } from "./completion-authority-elm-replay.kernel"
 
@@ -117,7 +119,11 @@ interface AuthorityKernelSession {
 	readonly sessionId: string
 	readonly kernel: KernelHandle
 	failed: boolean
-	lastDecision: ElmCompletionAuthorityDecision
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	// `lastDecision` is `null` when no Elm decision has been produced
+	// yet for this session. The consult site maps `null` to a
+	// fail-closed `failure` decision — never to `authorize`.
+	lastDecision: ElmCompletionAuthorityDecision | null
 }
 
 interface AuthorityGlobalState {
@@ -174,7 +180,12 @@ function getOrCreateSession(state: AuthorityGlobalState, sessionId: string, kern
 		sessionId,
 		kernel,
 		failed: false,
-		lastDecision: defaultElmCompletionAuthorityDecision,
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+		// `lastDecision` starts as `null` (no Elm opinion yet). The
+		// consult site returns a fail-closed `failure` decision when
+		// there is no Elm decision — there is no default-Authorize
+		// fallback in this module.
+		lastDecision: null,
 	}
 	state.sessions.set(sessionId, sess)
 	return sess
@@ -201,6 +212,18 @@ function decideElmAuthorityCompletion(state: AuthorityGlobalState, sessionId: st
 		bumpCounter(state, "failure")
 		return { kind: "failure", reason: "elm_authority_no_session", classification: "elm_authority_no_session" }
 	}
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	// `null` means no Elm opinion has been produced yet for this
+	// session. Map to a fail-closed `failure` decision rather than a
+	// silent `authorize`.
+	if (sess.lastDecision === null) {
+		bumpCounter(state, "failure")
+		return {
+			kind: "failure",
+			reason: "elm_authority_no_session",
+			classification: "elm_authority_no_session",
+		}
+	}
 	if (sess.failed) {
 		return sess.lastDecision
 	}
@@ -210,13 +233,22 @@ function decideElmAuthorityCompletion(state: AuthorityGlobalState, sessionId: st
 /**
  * The provider SdkController consults at `checkElmCompletionAuthority`.
  * Returns the latest synchronous Elm authority decision for the given
- * session. Default OFF: returns the legacy always-authorize decision.
+ * session. ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-
+ * TS-AUTHORITY: if `state.enabled` is false (the kernel failed to
+ * load), returns a fail-closed `failure` decision. There is no
+ * default-Authorize fallback.
  */
 export function getElmAuthorityCompletionDecision(sessionId: string): ElmCompletionAuthorityDecision {
 	const state = getOrInitGlobal()
 	if (!state.enabled) {
 		bumpCounter(state, "fallbackUsed")
-		return defaultElmCompletionAuthorityDecision
+		state.counters.total++
+		state.counters.failure++
+		return {
+			kind: "failure",
+			reason: "elm_authority_unavailable",
+			classification: "elm_authority_unavailable",
+		}
 	}
 	const decision = decideElmAuthorityCompletion(state, sessionId)
 	switch (decision.kind) {
@@ -377,13 +409,23 @@ async function processOneAuthorityRecord(state: AuthorityGlobalState, record: Re
 }
 
 /**
- * Activate the synchronous authority runtime. Default OFF. Mirrors the
- * shadow activation contract: ON only when the resolver supplied a
- * kernel path.
+ * Activate the synchronous authority runtime. ACT-CLINEMM-COMPLETION-
+ * AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY: production
+ * MUST call this with a non-null `kernelPath` BEFORE SdkController
+ * construction. The only `null` accept path is `resetElmAuthorityForTests`
+ * (test-only); production code that passes `null` is a fatal
+ * configuration error and is logged via `console.error` so the
+ * operator can see why their extension failed to activate.
  */
 export function setElmAuthorityProvider(kernelPath: string | null): void {
 	const state = getOrInitGlobal()
 	if (!kernelPath) {
+		if (typeof console !== "undefined" && typeof console.error === "function") {
+			console.error(
+				"[SdkController] Elm authority runtime was given a null kernelPath; " +
+					"this is a configuration error. The authority MUST be initialized unconditionally at extension activation.",
+			)
+		}
 		state.enabled = false
 		state.kernelPath = null
 		state.sessions.clear()
@@ -396,7 +438,19 @@ export function setElmAuthorityProvider(kernelPath: string | null): void {
 	state.provider = getElmAuthorityCompletionDecision
 }
 
-export function isElmAuthorityEnabled(): boolean {
+/**
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+ * Returns `true` iff the Elm authority runtime is armed with a kernel
+ * path. In production this is set unconditionally at extension
+ * activation (no env-gate). It returns `false` ONLY when the kernel
+ * failed to load (`setElmAuthorityProvider(null)` from
+ * `resetElmAuthorityForTests`, or a load-time error). This is a
+ * health/availability observation, NOT an authority decision switch
+ * — production callers MUST NOT branch on it to decide whether to
+ * consult the authority. The authority is consulted unconditionally
+ * via `getElmAuthorityCompletionDecision`.
+ */
+export function isElmAuthorityAvailable(): boolean {
 	return getOrInitGlobal().enabled
 }
 
@@ -404,7 +458,11 @@ export function hasElmAuthoritySession(sessionId: string): boolean {
 	const state = getOrInitGlobal()
 	if (!state.enabled) return false
 	const sess = state.sessions.get(sessionId)
-	return Boolean(sess) && !sess?.failed
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	// "Available" means a real Elm kernel has produced at least one
+	// decision for this session. `lastDecision === null` means no
+	// decision yet — still no real Elm opinion to consult.
+	return Boolean(sess) && !sess?.failed && sess?.lastDecision !== null
 }
 
 /**
@@ -435,10 +493,11 @@ export function hasElmAuthoritySession(sessionId: string): boolean {
  * Failure modes:
  *   - `holdReasons` is missing or wrong type → counted as `decodeError`
  *     and returned as `{ kind: "failure", reason: "elm_authority_decode_error", classification: "elm_authority_decode_error" }`
- *     (fail-closed; defaultElmCompletionAuthorityDecision is NOT used as
- *     a silent fallback because the runtime's whole purpose is to be the
- *     authority — silent fallback re-introduces the same risk the ACT was
- *     opened against).
+ *     (fail-closed; the runtime's whole purpose is to be the authority
+ *     - silent fallback re-introduces the same risk the ACT was opened
+ *     against; ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-
+ *     LEGACY-TS-AUTHORITY removed the silent default-Authorize fallback
+ *     entirely).
  *   - `holdReasons` contains a non-string entry → counted as `decodeError`
  *     and fail-closed.
  */

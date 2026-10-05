@@ -1,7 +1,9 @@
 /**
- * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY
  *
- * Elm-authority seam for completion commit eligibility.
+ * Elm-authority seam for completion commit eligibility. The Elm
+ * kernel is the MANDATORY authority for completion commit; there is
+ * NO silent TS fallback.
  *
  * Architecture (per ACT §2):
  *   factual production inputs
@@ -15,20 +17,18 @@
  *   - hold: Elm has computed at least one hold reason; TS must NOT
  *     invoke the commit effect.
  *   - failure: Elm evaluation could not produce a valid decision;
- *     TS must NOT silently fall back to the legacy TS authority.
+ *     TS MUST NOT invoke the commit effect. The coordinator surfaces
+ *     the bounded classification (no session / decode error / kernel
+ *     error / invalid transition / unavailable). There is no "default
+ *     authorize" fallback anywhere in this module or its callers.
  *
- * The `default*` constant and `defaultGetElmCompletionAuthorityDecision`
- * preserve byte-identical behavior when the authority flag is unset
- * (the legacy TS predicate chain is the sole authority, exactly as
- * before this ACT).
- *
- * The runtime authority mode (env-gated) is wired by
- * `dogfood-diagnostic-profile.applyElmAuthorityProfile` and consumed
- * via `SdkSessionEventCoordinator`'s `getElmCompletionAuthorityDecision`
- * option.
- *
- * The ACT goal is: production completion commit is BOTH correct AND
- * causally obedient to this Elm decision. No silent TS fallback.
+ * History note: prior versions of this module exported a
+ * silent default-Authorize fallback that returned
+ * `kind: "authorize", reason: "elm_authority_off_default_authorize"`.
+ * That constant and its DI seam wrapper have been removed. Any
+ * caller that previously fell back to the default now consumes
+ * the real Elm runtime unconditionally (ACT-CLINEMM-COMPLETION-
+ * AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY).
  */
 
 export type ElmCompletionAuthorityDecision =
@@ -44,30 +44,3 @@ export type ElmCompletionAuthorityDecision =
 				| "elm_authority_invalid_transition"
 				| "elm_authority_unavailable"
 	  }
-
-/**
- * Default — used when the authority option is absent on the
- * coordinator. The default is a no-op that ALWAYS authorizes, so the
- * legacy TS predicate chain is the sole authority (byte-identical to
- * pre-ACT behavior). ONLY at `OFF`, the Elm decision has no effect.
- */
-export const defaultElmCompletionAuthorityDecision: ElmCompletionAuthorityDecision = {
-	kind: "authorize",
-	reason: "elm_authority_off_default_authorize",
-}
-
-/**
- * The default dependency-injection seam: a function that always
- * returns the default-allow decision. When the production enable
- * helper arms the authority mode, the host (SdkController) replaces
- * this with a real Elm-kernel query function. Until then, the legacy
- * TS predicate chain is the sole authority (byte-identical).
- *
- * The optional `sessionId` argument is consumed by the real-Elm
- * authority runtime (ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-
- * CORRECTION01-REAL-ELM-PROVIDER) to scope the per-session kernel.
- * The default ignores it.
- */
-export function defaultGetElmCompletionAuthorityDecision(_sessionId?: string): ElmCompletionAuthorityDecision {
-	return defaultElmCompletionAuthorityDecision
-}

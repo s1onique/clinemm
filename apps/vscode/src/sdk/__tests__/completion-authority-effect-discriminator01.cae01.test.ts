@@ -82,7 +82,7 @@ import {
 	flushElmAuthorityForSession,
 	getElmAuthorityCompletionDecision,
 	getElmAuthorityCounters,
-	isElmAuthorityEnabled,
+	isElmAuthorityAvailable,
 	resetElmAuthorityForTests,
 	setElmAuthorityProvider,
 } from "../completion-authority-elm-authority-runtime"
@@ -312,7 +312,7 @@ function readWitness(h: Harness): {
 describe("ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01", () => {
 	describe("CAE-01 - real AUTHORIZE path with composite witness", () => {
 		it("after Elm HOLD at submit, agent_turn_done reevaluates to AUTHORIZE -> setTurnPhase + CCARD committed once", async () => {
-			expect(isElmAuthorityEnabled()).toBe(false)
+			expect(isElmAuthorityAvailable()).toBe(false)
 			setElmAuthorityProvider(REAL_KERNEL_PATH)
 
 			const h = makeHarness({
@@ -413,28 +413,42 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01", () => {
 		}, 20_000)
 	})
 
-	describe("CAE-03 - OFF conservation (Elm authority OFF)", () => {
-		it("OFF path -> defaultGetElmCompletionAuthorityDecision -> legacy TS commit, no Elm consult", async () => {
-			// Do NOT call setElmAuthorityProvider - runtime stays OFF.
-			expect(isElmAuthorityEnabled()).toBe(false)
+	describe("CAE-03 - no-provider fail-closed (kernel not armed)", () => {
+		it("kernel-miss -> getElmAuthorityCompletionDecision returns failure -> commit suppressed", async () => {
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+			// there is no OFF path. When the runtime is not armed (no
+			// setElmAuthorityProvider call), getElmAuthorityCompletionDecision
+			// returns a failure decision and the coordinator suppresses
+			// the commit effect (fail-closed). The legacy
+			// silent default-Authorize fallback
+			// that would have produced authorize is GONE.
+			expect(isElmAuthorityAvailable()).toBe(false)
 			const h = makeHarness({
-				activeSessionId: "session-cae03-off",
-				activeTaskId: "task-cae03-off",
+				activeSessionId: "session-cae03-no-kernel",
+				activeTaskId: "task-cae03-no-kernel",
 			})
 
 			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
 
 			const w = readWitness(h)
-			// OFF path: legacy TS predicate chain is the sole authority,
-			// the C10 commit fires (no outstanding obligations in this
-			// minimal harness), exactly one setTurnPhase + one CCARD
-			// committed. NO Elm consults occurred (authorityCalls === 0).
-			expect(w.authorityCalls).toBe(0)
-			expect(w.setTurnPhaseCalls).toBe(1)
-			expect(w.completedPhaseCalls).toBe(1)
-			expect(w.committedRecords).toBe(1)
-			expect(w.completionIds.length).toBe(1)
-			expect(w.markerPresentAfter).toBe(false)
-		}, 20_000)
-	})
+			// NEW CONTRACT (fail-closed): the consult site saw the
+			// failure decision and suppressed the commit effect.
+			// authorityCalls >= 1 proves the consult happened.
+			// setTurnPhaseCalls === 0 proves the commit was suppressed.
+			// committedRecords === 0 proves no CCARD committed.
+			expect(w.authorityCalls).toBeGreaterThanOrEqual(1)
+			expect(w.setTurnPhaseCalls).toBe(0)
+			expect(w.completedPhaseCalls).toBe(0)
+			expect(w.committedRecords).toBe(0)
+			expect(w.completionIds.length).toBe(0)
+			// The Elm consult returned failure; the coordinator
+			// re-registered the deferred-completion-barrier marker so
+			// the next causal trigger (an agent_turn_done event, a
+			// queued-prompt drain, or a TQCB01 reevaluation) will
+			// re-consult Elm. The marker MUST be present after a
+			// fail-closed consult so the BCB01 conservation invariant
+			// is upheld.
+		expect(w.markerPresentAfter).toBe(true)
+	}, 20_000)
+})
 })

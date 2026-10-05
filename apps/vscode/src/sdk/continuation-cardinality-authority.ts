@@ -68,13 +68,13 @@
  * post-capture cardinality tests.
  */
 
-// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02: static import of
-// the Elm shadow observer. The shadow module does NOT load the Elm
-// bundle on import — it loads only when `setElmShadowEnabled(true,
-// ...)` is called. So importing it here does not change the CCARD
-// cold-start cost for default-off production. The shadow has zero
-// authority: it observes and reports, never mutates.
-import * as ShadowModule from "./completion-authority-elm-shadow"
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+// The Elm shadow observer seam has been RETIRED from production. The
+// `import * as ShadowModule from "./completion-authority-elm-shadow"`
+// is removed. The pure-Elm-kernel correspondence tests in
+// `__tests__/completion-authority-elm-shadow02.test.ts` retain the
+// `completion-authority-elm-shadow.ts` module file as test fixture
+// substrate, but there is NO production wiring here.
 import * as AuthorityModule from "./completion-authority-elm-authority-runtime"
 
 export type ContinuationCardinalityStage =
@@ -275,13 +275,11 @@ export function captureContinuationCardinalityAuthorityRecord(record: {
 	readonly submitId?: string
 	readonly completionId?: string
 }): void {
-	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02: query the
-	// shadow gate via the shadow module's exported predicate. The
-	// shadow module stores its state on globalThis, so this read
-	// sees the same state that the production activation helper
-	// (and the test) configured.
-	const shadowWants = !captureEnabled ? isElmShadowObserverActive() : true
-	if (!captureEnabled && !shadowWants) return
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	// The shadow observer seam has been RETIRED from production. The
+	// `shadowWants` discriminator is gone; CCARD capture is gated solely
+	// by `captureEnabled` (the existing central dogfood / opt-in flag).
+	if (!captureEnabled) return
 	const origin: ContinuationCardinalityOrigin = record.origin ?? "unknown"
 	const rec: ContinuationCardinalityAuthorityRecord = {
 		seq: captureEnabled ? nextSeq++ : -1,
@@ -309,15 +307,11 @@ export function captureContinuationCardinalityAuthorityRecord(record: {
 		counter.count++
 		counter.origins.add(origin)
 	}
-	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02: forward a
-	// copy of the constructed record to the Elm shadow observer as
-	// a fire-and-forget call. The shadow never feeds back into
-	// production state.
-	try {
-		observeElmShadowFireAndForget(rec as unknown as Record<string, unknown>)
-	} catch {
-		// Never propagate from the diagnostic observer.
-	}
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
+	// The Elm shadow observer seam has been RETIRED from production.
+	// The shadow observer forwarder is removed; records flow only to
+	// the SYNCHRONOUS REAL Elm authority observer below.
+	//
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
 	// forward a copy to the SYNCHRONOUS REAL Elm authority observer
 	// (synchronous enqueue, microtask-bounded drain deferred to the
@@ -365,68 +359,32 @@ export function setContinuationCardinalityAuthorityCaptureBufferSize(size: numbe
 }
 
 // -----------------------------------------------------------------------------
-// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02 — Elm shadow observer gate.
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY
 //
-// The shadow runtime is optional and lazily loaded. When the shadow
-// module is not present in the codebase or has not yet been enabled,
-// these helpers are silent no-ops and the CCARD helper remains a
-// complete no-op when captureEnabled is false.
-//
-// The CCARD module NEVER imports the shadow module statically so the
-// Elm bundle is not pulled into every consumer.
+// The Elm shadow observer gate has been RETIRED from production.
+// `isElmShadowObserverActive` / `observeElmShadowFireAndForget` /
+// `resolveShadowGate` / the `ShadowGate` interface are all gone. The
+// pure-Elm-kernel correspondence tests in
+// `__tests__/completion-authority-elm-shadow02.test.ts` retain the
+// `completion-authority-elm-shadow.ts` module file as test fixture
+// substrate, but there is NO production wiring here.
 // -----------------------------------------------------------------------------
 
-interface ShadowGate {
-	isElmShadowObserverActive(): boolean
-	observeElmShadowFireAndForget(record: Record<string, unknown>): void
-}
-
-function resolveShadowGate(): ShadowGate | null {
-	const required = ShadowModule as Partial<ShadowGate>
-	if (
-		required &&
-		typeof required.isElmShadowObserverActive === "function" &&
-		typeof required.observeElmShadowFireAndForget === "function"
-	) {
-		return required as ShadowGate
-	}
-	return null
-}
-
-function isElmShadowObserverActive(): boolean {
-	const gate = resolveShadowGate()
-	if (!gate) return false
-	try {
-		return Boolean(gate.isElmShadowObserverActive())
-	} catch {
-		return false
-	}
-}
-
-function observeElmShadowFireAndForget(record: Record<string, unknown>): void {
-	const gate = resolveShadowGate()
-	if (!gate) return
-	try {
-		gate.observeElmShadowFireAndForget(record)
-	} catch {
-		// Never propagate.
-	}
-}
-
 // -----------------------------------------------------------------------------
-// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER
+// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY
 //
-// Elm authority gate. The authority runtime is optional; when present,
-// the helper forwards a copy of the record into the per-session queue.
-// The actual Elm send + outbound drain is performed by
-// `flushElmAuthorityForSession` which the coordinator awaits at
-// `checkElmCompletionAuthority`. The authority runtime is default-off,
-// so when the runtime module is absent or disabled this helper is a
-// complete no-op.
+// Elm authority gate. The authority runtime is MANDATORY in
+// production. The helper forwards a copy of the record into the
+// per-session queue when the runtime is available. The actual Elm
+// send + outbound drain is performed by `flushElmAuthorityForSession`
+// which the coordinator awaits at `checkElmCompletionAuthority`.
+// When the runtime module is absent (test fixture substitution) or
+// the kernel failed to load (fail-closed), this helper is a complete
+// no-op.
 // -----------------------------------------------------------------------------
 
 interface AuthorityGate {
-	isElmAuthorityEnabled(): boolean
+	isElmAuthorityAvailable(): boolean
 	enqueueElmAuthorityRecord(record: Record<string, unknown>): void
 	flushElmAuthorityForSession(sessionId: string): Promise<void>
 	getElmAuthorityCompletionDecision(sessionId: string): {
@@ -441,7 +399,7 @@ function resolveAuthorityGate(): AuthorityGate | null {
 	const required = AuthorityModule as Partial<AuthorityGate>
 	if (
 		required &&
-		typeof required.isElmAuthorityEnabled === "function" &&
+		typeof required.isElmAuthorityAvailable === "function" &&
 		typeof required.enqueueElmAuthorityRecord === "function" &&
 		typeof required.flushElmAuthorityForSession === "function" &&
 		typeof required.getElmAuthorityCompletionDecision === "function"
