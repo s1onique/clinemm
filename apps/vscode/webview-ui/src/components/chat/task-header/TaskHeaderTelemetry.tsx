@@ -155,6 +155,67 @@ const MECHANISM_DESCRIPTORS: readonly MechanismDescriptor[] = [
  * explicit `aria-label` describing the bucket so screen readers
  * hear `6 edit tool calls` rather than `pencil 6`.
  */
+// =========================================================================
+// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — myc chip hover/aria helpers
+// =========================================================================
+//
+// Privacy-safe by construction: the helpers NEVER see raw error
+// messages, query text, memory content, or session identifiers. They
+// operate on the bounded enums + counts that arrive on the wire.
+// `formatAutomaticPrimeSection` maps the bounded status to a single
+// line of user-readable copy using the canonical verb map (ACT §10).
+// `formatMycLastSection` is bounded to `{operation, outcome, latencyMs}`.
+// `describeMycDegradation` aggregates the bounded status into a single
+// short reason for the screen-reader aria-label (matches ACT §22's
+// warning policy: prime error is always actionable; "skipped" is only
+// actionable when paired with `attempted=true`).
+
+function describeMycDegradation(m: NonNullable<TaskHeaderTelemetryStrip["myc"]>): string {
+	const reasons: string[] = []
+	if (m.callsFailed > 0) {
+		reasons.push(`${m.callsFailed} failed operation${m.callsFailed === 1 ? "" : "s"}`)
+	}
+	if (m.automaticPrime.attempted && m.automaticPrime.status === "error") {
+		reasons.push("automatic prime failed")
+	} else if (m.automaticPrime.attempted && m.automaticPrime.status === "skipped") {
+		reasons.push("automatic prime skipped")
+	}
+	return reasons.length > 0 ? reasons.join("; ") : "degraded"
+}
+
+function formatAutomaticPrimeSection(m: NonNullable<TaskHeaderTelemetryStrip["myc"]>): string {
+	const status = m.automaticPrime.status
+	let line: string
+	switch (status) {
+		case "ok":
+			line = "✓ acquired"
+			break
+		case "empty":
+			line = "✓ acquired (empty)"
+			break
+		case "error":
+			line = "⚠ failed"
+			break
+		case "skipped":
+			line = "— skipped"
+			break
+		case "idle":
+		default:
+			line = "— not yet attempted"
+			break
+	}
+	return `Automatic prime\n${line}`
+}
+
+function formatMycLastSection(m: NonNullable<TaskHeaderTelemetryStrip["myc"]>): string {
+	if (!m.last) return ""
+	const op = m.last.operation
+	const outcome = m.last.outcome
+	const outcomeLabel = outcome === "success" ? "useful" : outcome === "empty" ? "empty" : "error"
+	const latency = typeof m.last.latencyMs === "number" ? ` · ${m.last.latencyMs} ms` : ""
+	return `Last\n${op} · ${outcomeLabel}${latency}`
+}
+
 function MechanismChip({ descriptor, count }: { descriptor: MechanismDescriptor; count: number }) {
 	const testId = `task-header-mechanism-${descriptor.key}`
 	const ariaLabel = `${count} ${descriptor.label}`
@@ -416,6 +477,70 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 					</span>
 				)
 			})()}
+			{/*
+			  ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01:
+			  User-visible myc operational telemetry chip. The host
+			  projects `telemetry.myc` ONLY under
+			  `CLINEMM_RUNTIME_PROFILE=dogfood` (see SdkController
+			  `computeMycTelemetryProjection`), so this block is
+			  inert in public — `myc` is `undefined` and the chip is
+			  not rendered. Compact form: `myc S/T` (zero-call form:
+			  `myc 0`). Degraded form: `⚠ myc S/T` when
+			  `callsFailed > 0` OR `automaticPrime.status === "error"`.
+			  Hover (title) carries the structured detail; the
+			  chip itself has no click handler. No custom icon, no
+			  hard-coded color, no SVG — text + theme tokens only.
+			*/}
+			{telemetry.myc
+				? (() => {
+						const m = telemetry.myc
+						const successful = m.callsSuccessful
+						const total = m.callsTotal
+						const failed = m.callsFailed
+						const primeStatus = m.automaticPrime.status
+						const isDegraded =
+							failed > 0 || primeStatus === "error" || (primeStatus === "skipped" && m.automaticPrime.attempted)
+						const compactLabel =
+							total === 0 ? "myc 0" : total === 1 && successful === 1 ? "myc 1/1" : `myc ${successful}/${total}`
+						const ariaBase =
+							total === 0
+								? "myc: no operations yet"
+								: total === 1
+									? "myc: 1 successful operation out of 1"
+									: `myc: ${successful} successful operation${successful === 1 ? "" : "s"} out of ${total}`
+						const ariaLabel = isDegraded ? `${ariaBase}; degraded — ${describeMycDegradation(m)}` : ariaBase
+
+						const titleSections: string[] = []
+						if (total > 0 || m.automaticPrime.attempted) {
+							titleSections.push(
+								`Calls\n${total} total · ${successful} successful${failed > 0 ? ` · ${failed} failed` : ""}`,
+							)
+						}
+						if (m.retrievalCalls > 0) {
+							titleSections.push(`Retrieval\n${m.usefulRetrievals} useful / ${m.retrievalCalls}`)
+						}
+						if (m.automaticPrime.attempted) {
+							titleSections.push(formatAutomaticPrimeSection(m))
+						}
+						if (m.last) {
+							titleSections.push(formatMycLastSection(m))
+						}
+						const title = titleSections.join("\n\n")
+
+						return (
+							<span
+								aria-label={ariaLabel}
+								className="inline-flex items-center gap-1"
+								data-testid="task-header-myc-chip"
+								title={title}>
+								{isDegraded ? <span aria-hidden>⚠</span> : null}
+								<span aria-hidden className="font-mono">
+									{compactLabel}
+								</span>
+							</span>
+						)
+					})()
+				: null}
 			{/* ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 			    Diagnostic-knob indicator. Rendered ONLY when at least one
 			    knob is ON. In public the field is all-false and the

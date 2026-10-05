@@ -100,8 +100,18 @@
  * Privacy: emits nothing more than bounded integers and timestamps.
  */
 import type { AgentRuntimeRecoverySnapshot } from "@cline/shared"
-import type { RuntimeErrorIncident, TaskHeaderTelemetryStrip, ToolMechanismSummary } from "@shared/ExtensionMessage"
+import type {
+	MycLastCall,
+	MycOperationWire,
+	MycOutcomeWire,
+	MycPrimeStatusWire,
+	MycTelemetrySummary,
+	RuntimeErrorIncident,
+	TaskHeaderTelemetryStrip,
+	ToolMechanismSummary,
+} from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
+import type { MycPrimeStatus } from "./myc-prime-automation"
 import { recordMechanism as accumulateMechanism, emptyMechanismSummary } from "./tool-mechanism-classifier"
 
 /**
@@ -163,6 +173,54 @@ function countRecoveryDelta(prev: number, next: number): number {
 	return 0
 }
 
+/**
+ * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 (host classifier, ACT §6):
+ *
+ * Maps a canonical myc tool name to its bounded wire operation
+ * classification. Names follow the real MCP server's tool surface
+ * (`myc_prime`, `myc_recall`, `myc_remember`, `myc_update`,
+ * `myc_ready`, `myc_link`); anything else is bucketed as `"other"`
+ * to keep the wire bounded.
+ */
+function classifyMycOperation(toolName: string): MycOperationWire {
+	switch (toolName) {
+		case "myc_prime":
+			return "prime"
+		case "myc_recall":
+			return "recall"
+		case "myc_remember":
+			return "remember"
+		case "myc_update":
+			return "update"
+		case "myc_ready":
+			return "ready"
+		case "myc_link":
+			return "link"
+		default:
+			return "other"
+	}
+}
+
+/**
+ * Per ACT §6: only the canonical retrieval-like operations count
+ * toward retrieval usefulness. Mutations (`remember`, `update`,
+ * `link`) MUST NOT distort retrieval counts.
+ */
+function isRetrievalLikeOperation(op: MycOperationWire): boolean {
+	return op === "prime" || op === "recall" || op === "ready"
+}
+
+/**
+ * Canonical myc server names matched by the observer. Mirrors
+ * `resolveMycServerName` from `apps/vscode/src/sdk/myc-prime-automation.ts`
+ * so the tracker filter agrees with the prime helper. A recordMycToolCall
+ * for any other serverName is silently ignored — the upstream
+ * SdkController gate is the load-bearing filter (ACT §17), and this
+ * guard is the redundant safety net so a future drift in the upstream
+ * gate cannot poison the counter.
+ */
+const MYC_SERVER_NAMES: ReadonlySet<string> = new Set(["myc", "myc-mcp"])
+
 export class TaskTelemetryTracker {
 	private currentTaskId: string | undefined
 	private startedAt: number | undefined
@@ -193,6 +251,24 @@ export class TaskTelemetryTracker {
 	// like the runtime-error counter; the wire emits only when > 0
 	// (see `get()`).
 	private activeCommandJobs = 0
+	// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: per-task myc operational
+	// telemetry state. All counters saturate at `MAX_SAFE_INTEGER` to
+	// match the existing pattern. The webview projection is a single
+	// `MycTelemetrySummary` field; the public profile never sees
+	// `myc` because the host projects this field ONLY when the
+	// extension is running under `CLINEMM_RUNTIME_PROFILE=dogfood`.
+	// There is no telemetry emission, no PostHog, no OTEL — the
+	// projection is a task-local operational instrument panel
+	// only (ACT §25).
+	private mycConfigured = false
+	private mycCallsTotal = 0
+	private mycCallsSuccessful = 0
+	private mycCallsFailed = 0
+	private mycRetrievalCalls = 0
+	private mycUsefulRetrievals = 0
+	private mycPrimeStatus: MycPrimeStatusWire = "idle"
+	private mycPrimeAttempted = false
+	private mycLast: MycLastCall | undefined
 
 	/**
 	 * Start (or re-start) a task's telemetry window.
@@ -234,6 +310,20 @@ export class TaskTelemetryTracker {
 		// zero the live ownership gauge on a new task identity —
 		// same-task continuation preserves it.
 		this.activeCommandJobs = 0
+		// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: zero the myc counters
+		// on a new task identity. The `configured` bit is preserved
+		// across `startTask` because the MCP server presence is a host
+		// configuration fact, not a per-task fact; the next
+		// observation will re-affirm it via `setMycConfigured(true)`
+		// if the server is still present.
+		this.mycCallsTotal = 0
+		this.mycCallsSuccessful = 0
+		this.mycCallsFailed = 0
+		this.mycRetrievalCalls = 0
+		this.mycUsefulRetrievals = 0
+		this.mycPrimeStatus = "idle"
+		this.mycPrimeAttempted = false
+		this.mycLast = undefined
 		return this.get()
 	}
 
@@ -316,6 +406,18 @@ export class TaskTelemetryTracker {
 		this.prevEpisodeFailures = 0
 		this.mechanism = emptyMechanismSummary()
 		this.runtimeErrorCount = 0
+		// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: also wipe myc state on
+		// clear (host is the single authority; webview rebuilds from
+		// `get()`).
+		this.mycConfigured = false
+		this.mycCallsTotal = 0
+		this.mycCallsSuccessful = 0
+		this.mycCallsFailed = 0
+		this.mycRetrievalCalls = 0
+		this.mycUsefulRetrievals = 0
+		this.mycPrimeStatus = "idle"
+		this.mycPrimeAttempted = false
+		this.mycLast = undefined
 		return this.get()
 	}
 
@@ -519,6 +621,178 @@ export class TaskTelemetryTracker {
 		return this.activeCommandJobs
 	}
 
+	// =========================================================================
+	// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — per-task myc telemetry API
+	// =========================================================================
+	//
+	// The wire projection is the single `MycTelemetrySummary` field on
+	// `TaskHeaderTelemetryStrip`. The SdkController wires this API at:
+	//
+	//   - `setMycConfigured(boolean)`  — called from the host on
+	//     `getStateToPostToWebview()` based on `resolveMycServerName`
+	//     (the same canonical detection used by `myc-prime-automation`).
+	//   - `recordMycToolCall(...)`     — called from the McpHub
+	//     observer seam (`McpHub.callTool` completion), filtered to
+	//     `serverName ∈ {myc, myc-mcp}` (matching the canonical
+	//     detection). The prime-specific helper
+	//     (`runMycPrimeOnSessionStart`) ALSO calls this exactly once
+	//     per prime (no double-count: ACT §17).
+	//   - `recordMycPrimeStatus(...)`  — called from the prime helper
+	//     to record the bounded wire status mapped from the existing
+	//     `MycPrimeResult.status`. Sets `attempted=true` after the
+	//     first observation.
+	//
+	// No telemetry emission. No env vars. No protocol changes.
+	// =========================================================================
+
+	/**
+	 * Mark the myc MCP server as configured (or cleared) for the
+	 * current task. Idempotent. When no task is active the call is
+	 * logged and dropped — the host never fabricates myc counts
+	 * against an unowned task identity.
+	 */
+	setMycConfigured(configured: boolean): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId === undefined) {
+			Logger.debug(`[TaskTelemetryTracker] setMycConfigured called before startTask; ignored (configured=${configured})`)
+			return this.get()
+		}
+		this.mycConfigured = configured === true
+		return this.get()
+	}
+
+	/**
+	 * Per-call record. Counts ONE observed myc operation in the task.
+	 *
+	 * Cardinality invariant (ACT §17): each real MCP call to the
+	 * myc server produces exactly one `recordMycToolCall` event.
+	 * The prime-specific helper and the generic McpHub observer
+	 * route to this same API; the SdkController wires both seams
+	 * exactly once per call.
+	 *
+	 * Args:
+	 *   serverName    — for the observation filter (canonical
+	 *                   `myc` / `myc-mcp` only; the SdkController
+	 *                   is the gate so non-myc servers never reach
+	 *                   here).
+	 *   toolName      — canonical MCP tool name (e.g. `myc_prime`).
+	 *                   Used to bucket retrieval usefulness.
+	 *   outcome       — bounded: `"success" | "empty" | "error"`.
+	 *                   `"empty"` is protocol-successful AND
+	 *                   retrieval-returned-no-rows.
+	 *   latencyMs     — bounded optional latency.
+	 *   resultUseful  — bounded optional boolean, ONLY consulted
+	 *                   when the operation is retrieval-like AND
+	 *                   the outcome was `"success"` or `"empty"`.
+	 */
+	recordMycToolCall(
+		serverName: string,
+		toolName: string,
+		outcome: MycOutcomeWire,
+		latencyMs?: number,
+		resultUseful?: boolean,
+	): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId === undefined) {
+			Logger.debug(
+				`[TaskTelemetryTracker] recordMycToolCall called before startTask; ignored (server=${serverName}, tool=${toolName})`,
+			)
+			return this.get()
+		}
+		// Redundant safety net (the SdkController upstream gate is
+		// the load-bearing filter — ACT §17). A non-myc serverName
+		// is silently ignored.
+		if (!MYC_SERVER_NAMES.has(serverName)) {
+			return this.get()
+		}
+		const op = classifyMycOperation(toolName)
+		if (this.mycCallsTotal < Number.MAX_SAFE_INTEGER) {
+			this.mycCallsTotal = Math.min(this.mycCallsTotal + 1, Number.MAX_SAFE_INTEGER)
+		}
+		if (outcome === "error") {
+			if (this.mycCallsFailed < Number.MAX_SAFE_INTEGER) {
+				this.mycCallsFailed = Math.min(this.mycCallsFailed + 1, Number.MAX_SAFE_INTEGER)
+			}
+		} else {
+			// "success" or "empty" both count as successful per
+			// result contract (a successful empty recall IS a
+			// successful protocol operation).
+			if (this.mycCallsSuccessful < Number.MAX_SAFE_INTEGER) {
+				this.mycCallsSuccessful = Math.min(this.mycCallsSuccessful + 1, Number.MAX_SAFE_INTEGER)
+			}
+		}
+		if (isRetrievalLikeOperation(op)) {
+			if (this.mycRetrievalCalls < Number.MAX_SAFE_INTEGER) {
+				this.mycRetrievalCalls = Math.min(this.mycRetrievalCalls + 1, Number.MAX_SAFE_INTEGER)
+			}
+			if (resultUseful === true) {
+				if (this.mycUsefulRetrievals < Number.MAX_SAFE_INTEGER) {
+					this.mycUsefulRetrievals = Math.min(this.mycUsefulRetrievals + 1, Number.MAX_SAFE_INTEGER)
+				}
+			}
+		}
+		const lastEntry: MycLastCall = {
+			operation: op,
+			outcome,
+		}
+		if (typeof latencyMs === "number" && Number.isFinite(latencyMs) && latencyMs >= 0) {
+			lastEntry.latencyMs = latencyMs
+		}
+		this.mycLast = lastEntry
+		return this.get()
+	}
+
+	/**
+	 * Record the bounded automatic-prime observation. Maps from the
+	 * existing `MycPrimeResult.status`:
+	 *
+	 *   "ok"      → "ok"
+	 *   "failed"  → "error"
+	 *   "skipped" → "skipped"
+	 *   "pending" → "idle" (we never project a transient state —
+	 *               ACT §22 warning policy applies only after the
+	 *               attempt resolves).
+	 *
+	 * The first non-`"idle"` call sets `attempted=true`. Calling
+	 * `recordMycToolCall(...)` for the prime is the cardinality
+	 * owner; this method only updates the prime-specific status
+	 * field. They are independent updates.
+	 */
+	recordMycPrimeStatus(status: MycPrimeStatus): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId === undefined) {
+			Logger.debug(`[TaskTelemetryTracker] recordMycPrimeStatus called before startTask; ignored (status=${status})`)
+			return this.get()
+		}
+		const mapped: MycPrimeStatusWire =
+			status === "ok" ? "ok" : status === "failed" ? "error" : status === "skipped" ? "skipped" : "idle"
+		this.mycPrimeStatus = mapped
+		this.mycPrimeAttempted = true
+		return this.get()
+	}
+
+	/**
+	 * Build the bounded wire projection from the tracker's internal
+	 * state. Pure function over internal fields — no side effects.
+	 * Returns a fresh object on every call so callers can safely
+	 * mutate the result without poisoning the tracker.
+	 */
+	private buildMycSummary(): MycTelemetrySummary {
+		const summary: MycTelemetrySummary = {
+			configured: this.mycConfigured,
+			callsTotal: this.mycCallsTotal,
+			callsSuccessful: this.mycCallsSuccessful,
+			callsFailed: this.mycCallsFailed,
+			retrievalCalls: this.mycRetrievalCalls,
+			usefulRetrievals: this.mycUsefulRetrievals,
+			automaticPrime: {
+				attempted: this.mycPrimeAttempted,
+				status: this.mycPrimeStatus,
+			},
+		}
+		if (this.mycLast !== undefined) {
+			summary.last = { ...this.mycLast }
+		}
+		return summary
+	}
+
 	/**
 	 * Pure snapshot of the current telemetry state. Returns
 	 * `undefined` when no task has ever been started.
@@ -557,6 +831,16 @@ export class TaskTelemetryTracker {
 			// present. Conservation invariant: terminal task/job
 			// implies activeCommandJobs === 0.
 			...(this.activeCommandJobs > 0 ? { activeCommandJobs: this.activeCommandJobs } : {}),
+			// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: myc operational
+			// telemetry summary. Always present when a task is active
+			// (matches `MycTelemetrySummary` semantics — zero
+			// counters + idle prime status is a valid "no activity
+			// yet" state). The SdkController's
+			// `getStateToPostToWebview` projects `myc` only under
+			// `CLINEMM_RUNTIME_PROFILE=dogfood`; Hub/Remote hosts that
+			// haven't projected the field render nothing (the webview
+			// tests for `myc !== undefined`).
+			myc: this.buildMycSummary(),
 		}
 	}
 

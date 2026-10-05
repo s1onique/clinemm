@@ -34,7 +34,14 @@ import type { ApiConfiguration } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
 import { CLINE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/ClineAccount"
 import { mentionRegexGlobal } from "@shared/context-mentions"
-import type { ClineApiReqInfo, ClineMessage, ExtensionState, RuntimeErrorIncident, TurnPhase } from "@shared/ExtensionMessage"
+import type {
+	ClineApiReqInfo,
+	ClineMessage,
+	ExtensionState,
+	MycTelemetrySummary,
+	RuntimeErrorIncident,
+	TurnPhase,
+} from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import {
 	disablePostTerminalAuthorityDiagnostic,
@@ -109,7 +116,8 @@ import { createProviderCatalog, toSdkProviderConfig } from "./model-catalog/cata
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
-import { getMycPrimeResult, runMycPrimeOnSessionStart } from "./myc-prime-automation"
+import { getMycPrimeResult, resolveMycServerName, runMycPrimeOnSessionStart } from "./myc-prime-automation"
+import { observeMycPrimeResult, observeMycToolStart } from "./myc-task-observation"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
 import { isPostTerminalAuthorityDiagnosticEffectivelyEnabled } from "./post-terminal-authority-diagnostic-runtime"
 import { createProductionModelProfilesOwner, type ModelProfilesOwnerDeps } from "./profile-store/owner"
@@ -1711,12 +1719,20 @@ export class Controller {
 			// the race the reviewer flagged. Failures are recorded
 			// on the module-level recorder and surfaced via
 			// `ExtensionState.mycPrimeAutomation` for observability.
-			onMycPrimeRequested: ({ sessionId, cwd }) =>
-				runMycPrimeOnSessionStart({
+			onMycPrimeRequested: async ({ sessionId, cwd }) => {
+				const result = await runMycPrimeOnSessionStart({
 					sessionId,
 					cwd,
 					mcpHub: this.mcpHub,
-				}),
+				})
+				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: feed the
+				// prime outcome into the per-task tracker. ONE prime
+				// ⇒ ONE recordMycToolCall + ONE recordMycPrimeStatus.
+				// The generic McpHub observer does NOT additionally
+				// count the prime (ACT §17).
+				observeMycPrimeResult(this.taskTelemetry, result)
+				return result
+			},
 			editorExecutor: (input, cwd, context) => this.diffEdits.executeEditorTool(input, cwd, context),
 			applyPatchExecutor: (input, cwd, context) => this.diffEdits.executeApplyPatchTool(input, cwd, context),
 			// The SDK's built-in reader resolves relative paths against the extension
@@ -1799,6 +1815,14 @@ export class Controller {
 			// construction.
 			onToolStarted: (event) => {
 				this.taskTelemetry.recordToolStartedWithName(event.toolName)
+				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: feed the
+				// model-driven myc call into the per-task tracker.
+				// `observeMycToolStart` is a no-op for non-myc
+				// tool names; ONE `content_start(tool)` ⇒ ONE
+				// observed call. Failure surfaces via the existing
+				// `runtimeErrorCount` chip (distinct counter,
+				// no double-count).
+				observeMycToolStart(this.taskTelemetry, event.toolName)
 			},
 			onDidBecomeIdle: () => this.handleSessionBecameIdle(),
 			beforeStartSession: () => this.ensureRemoteConfigForSessionStart(),
@@ -2571,16 +2595,16 @@ export class Controller {
 		// after the `agent_turn_done` capture is acknowledged by
 		// the production capture path - no timing or polling.
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
-// the post-run liveness seam is now unconditional — there is no
-// OFF mode to gate against. The Elm authority is the sole completion
-// authority; the trigger always fires; the consult site
-// (`checkElmCompletionAuthority`) fail-closes on kernel miss / decode
-// error. The legacy P1 guard `if (!isElmAuthorityEnabled()) return`
-// is REMOVED — it was a no-op-discrimination when an OFF mode
-// existed; with no OFF mode, the discrimination is unnecessary.
-setAgentTurnDoneSemanticTrigger((sessionId) => {
-	void this.sessionEvents.notifyAgentTurnDone(sessionId)
-})
+		// the post-run liveness seam is now unconditional — there is no
+		// OFF mode to gate against. The Elm authority is the sole completion
+		// authority; the trigger always fires; the consult site
+		// (`checkElmCompletionAuthority`) fail-closes on kernel miss / decode
+		// error. The legacy P1 guard `if (!isElmAuthorityEnabled()) return`
+		// is REMOVED — it was a no-op-discrimination when an OFF mode
+		// existed; with no OFF mode, the discrimination is unnecessary.
+		setAgentTurnDoneSemanticTrigger((sessionId) => {
+			void this.sessionEvents.notifyAgentTurnDone(sessionId)
+		})
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION:
 		// Wire the rebuild scheduler's `isDeferredCompletionOutstanding`
 		// predicate to the live `SdkSessionEventCoordinator` marker.
@@ -5380,6 +5404,35 @@ setAgentTurnDoneSemanticTrigger((sessionId) => {
 		}
 	}
 
+	/**
+	 * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: build the wire
+	 * projection of the per-task myc telemetry summary. The host is
+	 * the single authority — this projection is read-only and feeds
+	 * the webview TaskHeader. Returns `undefined` when no task is
+	 * active (the strip falls back to em-dash in that case, exactly
+	 * like the existing `taskTelemetry` field). Re-affirms the
+	 * `configured` bit on every state push via `resolveMycServerName`
+	 * so a server-add / server-remove event flips the chip without
+	 * requiring a tool call.
+	 */
+	private computeMycTelemetryProjection(): MycTelemetrySummary | undefined {
+		const strip = this.taskTelemetry.get()
+		if (!strip) {
+			return undefined
+		}
+		const summary = strip.myc
+		if (!summary) {
+			return undefined
+		}
+		const serverName = this.mcpHub ? resolveMycServerName(this.mcpHub) : undefined
+		// Re-affirm `configured` on every state push. The tracker's
+		// observation-time flag would lag a server removal; the
+		// canonical `resolveMycServerName` is always current.
+		this.taskTelemetry.setMycConfigured(Boolean(serverName))
+		const refreshed = this.taskTelemetry.get()
+		return refreshed?.myc ?? summary
+	}
+
 	async getStateToPostToWebview(): Promise<ExtensionState> {
 		// Build the base ExtensionState from StateManager, then layer the SDK's
 		// task history on top.
@@ -5672,6 +5725,17 @@ setAgentTurnDoneSemanticTrigger((sessionId) => {
 				// (prime runs in the background; the state push observes
 				// whatever has been recorded so far).
 				mycPrimeAutomation: this.computeMycPrimeAutomationProjection(),
+				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: per-task myc
+				// operational telemetry summary. The host is the single
+				// authority — the webview NEVER recomputes myc counts.
+				// Dogfood-only projection: when `isDogfoodRuntime` is
+				// false, the field is omitted so the webview renders
+				// nothing (the public profile never sees the chip).
+				// `resolveMycServerName` is the canonical detection;
+				// re-affirms `configured` on every state push so a
+				// server-add / server-remove event flips the chip
+				// without requiring a tool call.
+				myc: isDogfoodRuntime(process.env) ? this.computeMycTelemetryProjection() : undefined,
 				// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 				// Project the EFFECTIVE diagnostic-knob state to the
 				// webview. The TaskHeader indicator renders the active

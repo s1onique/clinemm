@@ -867,6 +867,13 @@ export interface TurnState {
  * `turnState.phase`), NO context/token/cost fields (out of scope for
  * 01-A), NO `messages`-derived values. The webview renders "—" when
  * this projection is absent.
+ *
+ * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: optional `myc` field
+ * (`MycTelemetrySummary`) — bounded per-task myc operational
+ * telemetry. Dogfood-only in the webview (the public profile never
+ * projects `myc`, so the webview renders nothing). NOT analytics,
+ * NOT network telemetry. See `MycTelemetrySummary` below for the
+ * exact field set.
  */
 export interface TaskHeaderTelemetryStrip {
 	startedAt: number
@@ -931,6 +938,74 @@ export interface TaskHeaderTelemetryStrip {
 	 * as the gauge at the lifecycle emitter.
 	 */
 	activeCommandJobs?: number
+	/**
+	 * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01:
+	 *
+	 * Per-task myc (memory / mycology) operational telemetry. NOT
+	 * analytics — task-local operational instrument panel only. NO
+	 * network emission, NO PostHog / OTEL export, NO memory text or
+	 * raw session id crosses the wire. Bounded enums, counts, and
+	 * the bounded automatic-prime status. Dogfood-only visible in
+	 * the webview TaskHeader.
+	 *
+	 * Cardinality invariant: ONE automatic-prime MCP call maps to
+	 * exactly one increment of `callsTotal`. The host tracker is the
+	 * single authority — both the prime-specific helper
+	 * (`runMycPrimeOnSessionStart`) and the generic McpHub call
+	 * observer route to the same `recordMycToolCall` API exactly once
+	 * per call. No TelemetryService.capture for this surface.
+	 *
+	 * Privacy-sensitive fields intentionally NOT present (per ACT
+	 * §8 boundary): memory text, prime text, query text, node IDs,
+	 * raw session IDs, project slugs, absolute paths, tool argument
+	 * values, raw error messages, provider payloads.
+	 */
+	myc?: MycTelemetrySummary
+}
+
+/**
+ * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: bounded wire projection
+ * for the user-visible myc indicator on the Task Header.
+ *
+ * Counter semantics (frozen in ACT §6):
+ *   - callsTotal        — total observed myc operations in the task
+ *   - callsSuccessful   — completed successfully per result contract
+ *   - callsFailed       — failed per result contract
+ *   - retrievalCalls    — prime / recall / ready (canonical retrieval-like)
+ *   - usefulRetrievals  — retrieval AND result content non-empty
+ *
+ * `automaticPrime` is the bounded enum projection of the live
+ * `MycPrimeResult.status` from `apps/vscode/src/sdk/myc-prime-automation.ts`.
+ * The mapping preserves the existing prime state machine without
+ * leaking raw error messages.
+ *
+ * `last` is a bounded operation / outcome / latency triple. No raw
+ * query or result text.
+ */
+export type MycPrimeStatusWire = "idle" | "ok" | "empty" | "error" | "skipped"
+
+export type MycOperationWire = "prime" | "recall" | "remember" | "update" | "ready" | "link" | "other"
+
+export type MycOutcomeWire = "success" | "empty" | "error"
+
+export interface MycLastCall {
+	operation: MycOperationWire
+	outcome: MycOutcomeWire
+	latencyMs?: number
+}
+
+export interface MycTelemetrySummary {
+	configured: boolean
+	callsTotal: number
+	callsSuccessful: number
+	callsFailed: number
+	retrievalCalls: number
+	usefulRetrievals: number
+	automaticPrime: {
+		attempted: boolean
+		status: MycPrimeStatusWire
+	}
+	last?: MycLastCall
 }
 
 /**

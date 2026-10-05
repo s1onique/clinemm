@@ -1,3 +1,59 @@
+## ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — CLOSED_CLEAN — 2026-10-06
+
+**Status:** CLOSED_CLEAN. Dogfood-only user-visible myc telemetry on the ClineMM Task Header. The compact surface is `myc 1/1` (zero-call form `myc 0`, degraded form `⚠ myc S/T`). Hover carries Calls / Retrieval / Automatic prime / Last. Privacy-bound: no memory text, query text, raw session ids, node ids, or raw error messages cross the wire. Cardinality: ONE automatic-prime MCP call maps to exactly ONE `recordMycToolCall` event.
+
+```text
+ENTRY_HEAD       = (act creation — no prior SUBJECT_HEAD)
+SUBJECT_HEAD     = 4cc3b28d4 ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01 (last MYC parent)
+CLOSURE_HEAD     = (this commit)
+PRODUCTION_DELTA = 8 files (4 modified + 4 new)
+  MODIFIED:
+    apps/vscode/src/shared/ExtensionMessage.ts                 (+ MycTelemetrySummary, myc? field)
+    apps/vscode/src/sdk/task-telemetry-tracker.ts              (+ setMycConfigured / recordMycToolCall / recordMycPrimeStatus / buildMycSummary + reset on startTask+clear)
+    apps/vscode/src/sdk/SdkController.ts                       (+ computeMycTelemetryProjection, myc: isDogfoodRuntime() ? ... : undefined, observeMycToolStart wired in onToolStarted, observeMycPrimeResult wired in onMycPrimeRequested)
+    apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx (+ myc chip renderer + helpers describeMycDegradation/formatAutomaticPrimeSection/formatMycLastSection)
+  NEW:
+    apps/vscode/src/sdk/myc-task-observation.ts                                       (pure helpers extracted from SdkController)
+    apps/vscode/src/sdk/__tests__/task-header-telemetry-tracker-myc.thmyc01.test.ts  (15 host RED tests — THMYC-HOST-01..15)
+    apps/vscode/src/sdk/__tests__/myc-task-observation.thmyc01.test.ts               (10 helper unit tests — THMYC-OBS-01..10)
+    apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.myc-chip.red.test.tsx (10 UI RED tests — THMYC-UI-01..10)
+TEST_RESULTS     = host 89/89 PASS (15 new + 64 existing task-telemetry-tracker + 10 new helper) | UI 61/61 PASS (10 new + 46 existing TaskHeaderTelemetry + 5 live-green-dom) | conservation 186/186 in target files
+ABLATION         = OBS-02/03/04 went RED when observeMycToolStart was bypassed (proves UI bound to production seam) — restored to GREEN
+DOGFOOD_GATE     = isDogfoodRuntime() (CLINEMM_RUNTIME_PROFILE=dogfood). Public profile never sees myc.
+BACKEND_TELEMETRY= NONE (no TelemetryService.capture for this surface, no PostHog, no OTel, no env var, no protocol change)
+NEW_ENV_VAR      = NONE
+PROTOCOL_CHANGED = false
+MCP_SCHEMA_CHANGED = false
+ELM_CHANGED      = false
+REACT_CHANGED    = false (chip + helpers added; existing strip + state label + diagnostic knobs + active command jobs + runtime error glyphs ALL CONSERVED)
+MYC_MEMORY_SEMANTICS_CHANGED = false (extension only)
+TASK_HEADER_PROJECTION_CHANGED = true (added bounded `myc` field on the canonical TaskHeaderTelemetryStrip)
+WEBVIEW_UI_CHANGED = true (new chip + hover; no diagnostic-letter addition to VIAPD)
+VERDICT          = PASS_MYC_TASK_HEADER_TELEMETRY
+```
+
+**Recon (frozen in plan):**
+
+| SIGNAL | REAL SOURCE | SAFE | PER-TASK | EXISTING | PROPOSED |
+|---|---|---|---|---|---|
+| total myc ops | runMycPrimeOnSessionStart (prime); onToolStarted with toolName starting `myc_` (recall/reme/...) | yes (count only) | yes (tracker identity) | none | `callsTotal` |
+| successful ops | same — outcome `success`/`empty` vs `error` | yes (bounded enum) | yes | none | `callsSuccessful` |
+| failed ops | same — error outcome | yes | yes | none | `callsFailed` |
+| retrieval calls | same — toolName ∈ {myc_prime, myc_recall, myc_ready} | yes | yes | none | `retrievalCalls` |
+| useful retrievals | same — outcome ∈ {success, empty} AND caller supplied `resultUseful=true` | yes (boolean per call) | yes | none | `usefulRetrievals` |
+| automatic prime status | getMycPrimeResult(activeSessionId).status mapped via bounded mapper | yes (bounded enum) | yes | yes (`mycPrimeAutomation`) | `automaticPrime.status` |
+| prime attempted | same | yes | yes | none | `automaticPrime.attempted` |
+| prime injected | `recordMycPrimeLiveAcquisition` does NOT yet publish `injected` — OMITTED V1 | NO | n/a | none | OMITTED (NOT_AVAILABLE per ACT §10) |
+| reach counts | not safely observable today — OMITTED per ACT §9 (do not fabricate) | NO | n/a | none | OMITTED |
+| last call | derived from observation seam (operation + outcome + latencyMs only) | yes (bounded) | yes | none | `last` |
+| configured (server present) | resolveMycServerName(mcpHub) | yes (boolean) | yes (re-affirmed each state push) | none | `configured` |
+
+**Ablation evidence (ACT §27):** Setting `if (false)` around the `tracker.recordMycToolCall` line inside `observeMycToolStart` made THMYC-OBS-02/03/04 turn RED. Restored → GREEN. This proves the UI tests are bound to the production observation seam, not self-referential.
+
+**Privacy boundary verified (ACT §7, §8):** render tree of `task-header-myc-chip` contains no session id, no path, no memory content, no query text, no raw error. The `last` field is bounded to `{operation: MycOperationWire, outcome: MycOutcomeWire, latencyMs?: number}` — no text.
+
+**No-scope-expansion invariant:** zero changes to Elm, MCP schema, myc tool surface, TelemetryService, env vars, or protocol. The MCP server's tool-name repair (`myc_prime` not `prime`) is preserved verbatim. MYC03 forensic diagnostics untouched.
+
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — IN_PROGRESS — 2026-09-29
 
 **Status:** IN_PROGRESS. §18 CORRECTION01 RED tests AUTHORED + RED-verified. Reviewer P0 halted the first-pass and required scope correction. The corrected RED suite replaces synthetic adapter input + Elm Model expansion with REAL production-seam REDs that exercise the actual `captureContinuationCardinalityAuthorityRecord` helper + source-presence on the production files. Reviewer directive satisfied: "if production RED reproduces → C1: GO §21; if not → HALT_RED_NOT_REPRODUCED". Production REDs DID reproduce — 13 of them, each driving the real CCARD module and the real SdkController/CommandJobManager/SessionEventCoordinator source.
