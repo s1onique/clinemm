@@ -282,6 +282,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpLifecycleClear",
+				"title": "Cline Debug: Dump Lifecycle Clear",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

@@ -42,6 +42,7 @@ import {
 	dumpExtensionSideHostOwnershipDiagnostic,
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
 } from "@/sdk/host-ownership-diagnostic-runtime"
+import { dumpExtensionSideLifecycleClearSnapshot } from "@/sdk/lifecycle-clear-recorder-runtime-host"
 import { installMycPrimeLiveDiagReadoutRuntime } from "@/sdk/myc-prime-live-diag-runtime"
 import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
@@ -1220,6 +1221,34 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[EHLOOP] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Extension host hotloop diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01 — CALLER-REASON DISCRIMINATOR.
+		// Dump command for the lifecycle-clear recorder. Mirrors the
+		// CCARD / CCDO / CCDSO / CCNTUP / EHLOOP / ELM-SHADOW /
+		// ELM-AUTHORITY dump pattern: unconditional (operator can
+		// always inspect whatever the recorder captured), dump != clear
+		// (no snapshot mutation). The dump serializes the lifecycle
+		// clear snapshot (getLifecycleClearSnapshot) to
+		// <globalStorageUri>/lifecycle-clear.counters.json.
+		// REMOVAL_TRIGGER: first of (a) root cause isolated (LIVE
+		// classifies an exact lastClearReason), (b) capture insufficient
+		// (successor counter design required), (c) successor evidence
+		// supersedes. Once the trigger fires this adapter + the
+		// registry entry + the package.json declaration + the
+		// extension.ts handler + the production recorder MUST be
+		// removed TOGETHER.
+		vscode.commands.registerCommand(commands.DumpLifecycleClear, async () => {
+			try {
+				const { countersFile, snapshot } = await dumpExtensionSideLifecycleClearSnapshot(context)
+				void vscode.window.showInformationMessage(
+					`Lifecycle clear: enabled=${snapshot.enabled} total=${snapshot.total} lastClearReason=${snapshot.lastClearReason ?? "null"} lastUnrecognizedReason=${snapshot.lastUnrecognizedReason ?? "null"} → ${countersFile}.`,
+				)
+			} catch (err) {
+				Logger.error("[LIFECYCLE-CLEAR] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Lifecycle clear dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

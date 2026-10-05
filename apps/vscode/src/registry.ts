@@ -182,6 +182,21 @@ const ClineCommands = {
 	// CAPTURE_INSUFFICIENT, OR HALT_CAUSE_NOT_ESTABLISHED, OR
 	// successor evidence supersedes it.
 	DumpExtensionHostHotloopDiagnostic: prefix + ".debug.dumpExtensionHostHotloopDiagnostic",
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01 — CALLER-REASON DISCRIMINATOR.
+	// Dump command for the lifecycle-clear recorder. Mirrors the
+	// CCARD / CCDO / CCDSO / CCNTUP / EHLOOP / ELM-SHADOW / ELM-AUTHORITY
+	// dump pattern: unconditional (operator can always inspect whatever the
+	// recorder captured), dump != clear (no snapshot mutation). The dump
+	// serializes the lifecycle-clear snapshot (`getLifecycleClearSnapshot()`)
+	// to <globalStorageUri>/lifecycle-clear.counters.json. The recorder
+	// gates internally via `isDogfoodRuntime()` (matched to the ccupd01 /
+	// CCDO01 gate) — no toggle / enable command. REMOVAL_TRIGGER: first of
+	// (a) root cause isolated (LIVE classifies an exact lastClearReason),
+	// (b) capture insufficient (successor counter design required),
+	// (c) successor evidence supersedes. On removal, this registry entry +
+	// the package.json declaration + the extension.ts handler + the host
+	// dump runtime + the production recorder MUST be removed TOGETHER.
+	DumpLifecycleClear: prefix + ".debug.dumpLifecycleClear",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",
