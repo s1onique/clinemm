@@ -49,6 +49,7 @@
  * `./completion-authority-elm-authority.ts`.
  */
 
+import { Logger } from "@/shared/services/Logger"
 import type { ElmCompletionAuthorityDecision } from "./completion-authority-elm-authority"
 import { adaptRecord, type KernelHandle } from "./completion-authority-elm-replay"
 import { loadKernel } from "./completion-authority-elm-replay.kernel"
@@ -420,12 +421,10 @@ async function processOneAuthorityRecord(state: AuthorityGlobalState, record: Re
 export function setElmAuthorityProvider(kernelPath: string | null): void {
 	const state = getOrInitGlobal()
 	if (!kernelPath) {
-		if (typeof console !== "undefined" && typeof console.error === "function") {
-			console.error(
-				"[SdkController] Elm authority runtime was given a null kernelPath; " +
-					"this is a configuration error. The authority MUST be initialized unconditionally at extension activation.",
-			)
-		}
+		Logger.error(
+			"[SdkController] Elm authority runtime was given a null kernelPath; " +
+				"this is a configuration error. The authority MUST be initialized unconditionally at extension activation.",
+		)
 		state.enabled = false
 		state.kernelPath = null
 		state.sessions.clear()

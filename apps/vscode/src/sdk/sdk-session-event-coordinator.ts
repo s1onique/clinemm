@@ -10,14 +10,13 @@ import { getDiagnosticHostId, getDiagnosticManagerId } from "./background-job-li
 import { type BackgroundOwnerCorrelationActiveJob, captureBackgroundOwnerCorrelationRecord } from "./background-owner-correlation"
 import {
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
-// the silent default-Authorize fallback is REMOVED from the authority
-// module. The coordinator MUST be constructed with a real Elm provider
-// (or rely on the unconditional `SdkController` wiring, which injects
-// `ElmAuthorityModule.getElmAuthorityCompletionDecision`). There is no
-// silent default-Authorize fallback.
+	// the silent default-Authorize fallback is REMOVED from the authority
+	// module. The coordinator MUST be constructed with a real Elm provider
+	// (or rely on the unconditional `SdkController` wiring, which injects
+	// `ElmAuthorityModule.getElmAuthorityCompletionDecision`). There is no
+	// silent default-Authorize fallback.
 	type ElmCompletionAuthorityDecision,
 } from "./completion-authority-elm-authority"
-import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
 import {
 	recordActiveSessionLookupEntered,
 	recordActiveSessionMissing,

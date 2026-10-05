@@ -121,6 +121,7 @@ import {
 	enableTurnStateWriterProvenanceDiagnostic,
 	isTurnStateWriterProvenanceDiagnosticEnabled,
 } from "@shared/turn-state-writer-provenance"
+import { Logger } from "@/shared/services/Logger"
 import {
 	isBackgroundJobLivenessAuthorityCaptureEnabled as _isBackgroundJobLivenessAuthorityCaptureEnabled,
 	setBackgroundJobLivenessAuthorityCaptureEnabled,
@@ -1689,13 +1690,11 @@ export function initializeElmAuthorityRuntime(kernelPath: string | null): {
 } {
 	const wasEnabled = ElmAuthorityModule.isElmAuthorityAvailable()
 	if (!kernelPath) {
-		if (typeof console !== "undefined" && typeof console.error === "function") {
-			console.error(
-				"[SdkController] Elm authority runtime asset is missing from the VSIX; " +
-					"the runtime will refuse every completion commit. Check that " +
-					"`runtime-assets/completion-authority.js` is present in the packaged extension.",
-			)
-		}
+		Logger.error(
+			"[SdkController] Elm authority runtime asset is missing from the VSIX; " +
+				"the runtime will refuse every completion commit. Check that " +
+				"`runtime-assets/completion-authority.js` is present in the packaged extension.",
+		)
 		ElmAuthorityModule.setElmAuthorityProvider(null)
 		return { enabled: false, flipped: wasEnabled, kernelPath: null }
 	}
