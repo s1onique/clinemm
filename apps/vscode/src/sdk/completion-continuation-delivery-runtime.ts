@@ -1,5 +1,6 @@
 /**
  * ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION01-LIVE-CALLBACK-OUTCOME
+ * ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION02-DOGFOOD-DIAGNOSTIC-GATE-AND-ARTIFACT-BINDING
  *
  * LIVE callback-outcome counter for the completion-continuation
  * enqueue path. Default-off aggregate counter with NO semantic effect
@@ -32,6 +33,26 @@
  *     - lastRequestedSessionMatched (most recent callback identity)
  *     - pendingPromptEnqueuedObserved (optional; correlated via the
  *       existing production capture hooks ONLY when they are armed)
+ *
+ * CORRECTION02 — Enablement boundary (default-off opt-in):
+ *   - The runtime owns a module-level `enabled: boolean` flag
+ *     (default false). Every record function short-circuits when
+ *     disabled, so the production callback body remains
+ *     bit-identical outside dogfood (no counter increment, no
+ *     observable state change).
+ *   - The flag is set EXCLUSIVELY by the production seam
+ *     `setCompletionContinuationDeliveryEnabled` from
+ *     `dogfood-diagnostic-profile.ts` via
+ *     `applyCompletionContinuationDeliveryDiagnosticProfile`.
+ *   - No environment variable. No public config. No workspace
+ *     toggle. The diagnostic is enabled iff the existing dogfood
+ *     runtime profile is active (`CLINEMM_RUNTIME_PROFILE=dogfood`).
+ *   - The dump command and host-side dump runtime remain registered
+ *     in all profiles (mirrors CCARD / Elm shadow / Elm authority
+ *     convention: dump is unconditional, dump != clear, dump !=
+ *     enable). While disabled, the dump reports an all-zero
+ *     snapshot so an operator can always confirm the diagnostic is
+ *     correctly off.
  *
  * Counter semantics:
  *   - Aggregate counts ONLY; never records prompt bodies, terminal
@@ -71,6 +92,7 @@ export interface CompletionContinuationDeliveryCountersSnapshot {
 }
 
 interface DeliveryState {
+	enabled: boolean
 	counters: {
 		total: number
 		callbackEntered: number
@@ -106,19 +128,49 @@ function freshCounters(): DeliveryState["counters"] {
 	}
 }
 
-let _state: DeliveryState = { counters: freshCounters() }
+let _state: DeliveryState = { enabled: false, counters: freshCounters() }
 
 function getOrInitState(): DeliveryState {
 	return _state
 }
 
+/**
+ * Production seam — flip the diagnostic enablement. Called ONLY
+ * by `applyCompletionContinuationDeliveryDiagnosticProfile` in
+ * dogfood-diagnostic-profile.ts (during extension activation).
+ *
+ * Outside dogfood the flag is `false` (default) and every record
+ * function is a no-op, so the production callback body is
+ * bit-identical to the pre-instrumentation path.
+ */
+export function setCompletionContinuationDeliveryEnabled(enabled: boolean): void {
+	_state.enabled = enabled === true
+}
+
+/**
+ * Read-only view of the diagnostic enablement flag. Used by the
+ * dogfood profile resolver to decide whether the previous value
+ * differed from the requested value (and a flip is required).
+ * Mirrors the `isContinuationCardinalityAuthorityCaptureEnabled`
+ * shape used by the CCARD apply helper.
+ */
+export function isCompletionContinuationDeliveryEnabled(): boolean {
+	return _state.enabled === true
+}
+
+function _isCompletionContinuationDeliveryEnabledForActivation(): boolean {
+	return _state.enabled === true
+}
+
 export function recordCallbackEntered(): void {
+	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.total += 1
 	state.counters.callbackEntered += 1
 }
 
 export function recordActiveSessionMissing(): void {
+	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.activeSessionMissing += 1
 	state.counters.sessionGone += 1
@@ -127,6 +179,7 @@ export function recordActiveSessionMissing(): void {
 }
 
 export function recordSessionIdMismatch(): void {
+	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.sessionIdMismatch += 1
 	state.counters.sessionGone += 1
@@ -135,6 +188,7 @@ export function recordSessionIdMismatch(): void {
 }
 
 export function recordNoHeldJobIds(): void {
+	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.noHeldJobIds += 1
 	state.counters.lastOutcome = "no_held_job_ids"
@@ -142,11 +196,13 @@ export function recordNoHeldJobIds(): void {
 }
 
 export function recordSdkHostSendEntered(): void {
+	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.sdkHostSendEntered += 1
 }
 
 export function recordDelivered(): void {
+	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.delivered += 1
 	state.counters.lastOutcome = "delivered"
@@ -154,6 +210,7 @@ export function recordDelivered(): void {
 }
 
 export function recordSendThrew(): void {
+	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.sendThrew += 1
 	state.counters.rejected += 1
@@ -162,6 +219,7 @@ export function recordSendThrew(): void {
 }
 
 export function recordPendingPromptEnqueuedObserved(): void {
+	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.pendingPromptEnqueuedObserved = (state.counters.pendingPromptEnqueuedObserved ?? 0) + 1
 }
@@ -186,11 +244,12 @@ export function getCompletionContinuationDeliveryCounters(): CompletionContinuat
 }
 
 /**
- * Test-only: reset the counter snapshot to zero. Production code
- * NEVER calls this. The dump command also does NOT call this —
- * dump != clear (no counter mutation), mirroring the SHADOW / ELM
- * authority convention.
+ * Test-only: reset the counter snapshot to zero AND restore the
+ * default-off enablement flag. Production code NEVER calls this.
+ * The dump command also does NOT call this — dump != clear (no
+ * counter mutation), mirroring the SHADOW / ELM authority
+ * convention.
  */
 export function resetCompletionContinuationDeliveryForTests(): void {
-	_state = { counters: freshCounters() }
+	_state = { enabled: false, counters: freshCounters() }
 }

@@ -1,5 +1,6 @@
 /**
  * ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION01-LIVE-CALLBACK-OUTCOME
+ * ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION02-DOGFOOD-DIAGNOSTIC-GATE-AND-ARTIFACT-BINDING
  *
  * RED tests (CALLBACK-OUTCOME-01..05 from ACT §9). Pins the
  * diagnostic semantics on the production callback factory
@@ -25,6 +26,12 @@
  *        -> sdkHostSendEntered=1, sendThrew=1, rejected=1
  *     E. CALLBACK-OUTCOME-05 — dump is read-only
  *        Dumping counters must not mutate/reset callback or queue state
+ *
+ * CORRECTION02: each test fixture arms the diagnostic through the
+ * PRODUCTION profile seam (same helper extension.ts:activate calls
+ * during a dogfood install), mirroring the dogfood wiring. Without
+ * the activation the runtime is default-off and every assertion
+ * above is RED — proving the default-off contract.
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
@@ -34,6 +41,7 @@ import {
 	getCompletionContinuationDeliveryCounters,
 	resetCompletionContinuationDeliveryForTests,
 } from "../completion-continuation-delivery-runtime"
+import { applyCompletionContinuationDeliveryDiagnosticProfile } from "../dogfood-diagnostic-profile"
 import { buildSdkControllerEnqueueCompletionContinuation } from "../SdkController"
 
 function snapshot(): CompletionContinuationDeliveryCountersSnapshot {
@@ -80,9 +88,17 @@ function makeCallback(opts: { active?: ActiveSession }): (input: {
 
 beforeEach(() => {
 	resetCompletionContinuationDeliveryForTests()
+	// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION02-DOGFOOD-DIAGNOSTIC-GATE-AND-ARTIFACT-BINDING:
+	// arm the diagnostic through the SAME production seam
+	// extension.ts:activate uses during a dogfood install (isDogfood
+	// = true). Mirrors the dogfood LIVE wiring — without this arming,
+	// the production callback body is default-off and these assertions
+	// are RED.
+	applyCompletionContinuationDeliveryDiagnosticProfile(true)
 })
 
 afterEach(() => {
+	applyCompletionContinuationDeliveryDiagnosticProfile(false)
 	resetCompletionContinuationDeliveryForTests()
 })
 

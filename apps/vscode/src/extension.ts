@@ -13,6 +13,7 @@ import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/s
 import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
+	applyCompletionContinuationDeliveryDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
 	applyElmAuthorityProfile,
 	applyElmShadowDiagnosticProfile,
@@ -261,6 +262,24 @@ export async function activate(context: vscode.ExtensionContext) {
 	// BEFORE the first CommandJobManager.finalize /
 	// BackgroundNotifyCoordinator.consumeTerminal / etc.
 	applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION02-DOGFOOD-DIAGNOSTIC-GATE-AND-ARTIFACT-BINDING:
+	// arm the CCDCO (Completion Continuation DELivery Outcome)
+	// counter seam at the SAME EARLIEST initialization seam,
+	// BEFORE SdkController construction. The helper arms the
+	// module seam idempotently based STRICTLY on the dogfood
+	// identity bit (mirrors CCARD — no env var, no override
+	// matrix). The diagnostic is default-OFF; in dogfood the
+	// production callback body records the discriminated
+	// first-divergence counters (CASE A..H from the LIVE
+	// discriminator table §13). Outside dogfood the record
+	// functions short-circuit, so the callback body is bit-identical
+	// to the pre-instrumentation path. The dump command remains
+	// unconditional (dump != enable, dump != clear). Running this
+	// BEFORE SdkController construction guarantees the counter
+	// seam is armed BEFORE the first
+	// buildSdkControllerEnqueueCompletionContinuation invocation.
+	applyCompletionContinuationDeliveryDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03:
 	// arm the Elm shadow observer at the SAME EARLIEST

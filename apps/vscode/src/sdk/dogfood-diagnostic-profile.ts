@@ -129,6 +129,12 @@ import {
 	isBackgroundOwnerCorrelationCaptureEnabled as _isBackgroundOwnerCorrelationCaptureEnabled,
 	setBackgroundOwnerCorrelationCaptureEnabled,
 } from "./background-owner-correlation"
+import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
+import * as ElmShadowModule from "./completion-authority-elm-shadow"
+import {
+	isCompletionContinuationDeliveryEnabled,
+	setCompletionContinuationDeliveryEnabled,
+} from "./completion-continuation-delivery-runtime"
 import {
 	isContinuationCardinalityAuthorityCaptureEnabled as _isContinuationCardinalityAuthorityCaptureEnabled,
 	setContinuationCardinalityAuthorityCaptureEnabled,
@@ -146,8 +152,6 @@ import {
 	setTaskHeaderSelectorInputCaptureEnabled,
 } from "./task-header-selector-input-capture"
 import type { TurnStateWriterProvenanceDiagnosticContext } from "./turn-state-writer-provenance-runtime"
-import * as ElmShadowModule from "./completion-authority-elm-shadow"
-import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
 
 const ENV_VARS: Readonly<Record<DiagnosticKnob, string>> = {
 	v: "CLINEMM_CAPTURE_V2_PATH",
@@ -921,6 +925,73 @@ export function applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfood
 
 function _isContinuationCardinalityAuthorityCaptureEnabledForActivation(): boolean {
 	return _isContinuationCardinalityAuthorityCaptureEnabled()
+}
+
+// ===========================================================================
+// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION02-DOGFOOD-DIAGNOSTIC-GATE-AND-ARTIFACT-BINDING
+// — central dogfood profile resolver for the CCDCO (Completion
+// Continuation DELivery Outcome) capture seam.
+//
+// CONTRACT — frozen in this ACT (mirrors CCARD / BJLA / BOCOR; no env
+// override layer, no new knob):
+//   - There is NO new env var. NO override matrix. NO parser.
+//     Per the Factory reviewer precedent (and the predecessor
+//     ACT §0 "DEFAULT_OFF"), the diagnostic is enabled STRICTLY
+//     by the central dogfood profile:
+//       isDogfood === true  -> diagnostic ON
+//       isDogfood === false -> diagnostic OFF (public default)
+//   - The module seam is
+//     ./completion-continuation-delivery-runtime.ts#setCompletionContinuationDeliveryEnabled.
+//     The resolver arms it via
+//     setCompletionContinuationDeliveryEnabled(enabled).
+//   - The activation helper is called from
+//     extension.ts:activate (sibling to the existing CCARD
+//     activation); there is exactly ONE production activation
+//     path.
+//   - The dump command + the host-side dump runtime remain
+//     unconditional (mirrors CCARD / Elm shadow / Elm authority
+//     convention: dump is always callable, dump != clear, dump !=
+//     enable). While disabled, the dump reports an all-zero
+//     snapshot so an operator can always confirm the diagnostic
+//     is correctly off.
+//
+// HONEST STOP RULE (mirrors BJLA / BOCOR / CCARD):
+//   Once the root cause is isolated, the diagnostic is
+//   classified CAPTURE_INSUFFICIENT, OR successor evidence
+//   supersedes, this helper + the runtime module + the dump
+//   command + the registry entry + the package.json declaration
+//   + the production callback instrumentation MUST be removed
+//   TOGETHER.
+// ===========================================================================
+
+/**
+ * THE single production activation helper for the CCDCO seam.
+ * Called from extension.ts:activate (sibling to the CCARD
+ * activation); there is exactly ONE production activation path,
+ * no copied orchestration in tests.
+ *
+ * Mirrors CCARD: enable/disable is strictly:
+ *
+ *   isDogfood === true  -> ON
+ *   isDogfood === false -> OFF
+ *
+ * No new env knob. No parser. No override matrix.
+ */
+export function applyCompletionContinuationDeliveryDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
+	const was = isCompletionContinuationDeliveryEnabled()
+	const should = isDogfood
+	if (should && !was) {
+		setCompletionContinuationDeliveryEnabled(true)
+		return { enabled: true, flipped: true }
+	}
+	if (!should && was) {
+		setCompletionContinuationDeliveryEnabled(false)
+		return { enabled: false, flipped: true }
+	}
+	return { enabled: should, flipped: false }
 }
 
 // ===========================================================================
