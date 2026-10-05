@@ -88,6 +88,7 @@ import type {
 import type { LucideIcon } from "lucide-react"
 import { ClockIcon, Edit3Icon, EyeIcon, PlugIcon, SearchIcon, WrenchIcon } from "lucide-react"
 import React, { useEffect, useState } from "react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
 	formatElapsed,
 	isUsableMechanismProjection,
@@ -214,6 +215,37 @@ function formatMycLastSection(m: NonNullable<TaskHeaderTelemetryStrip["myc"]>): 
 	const outcomeLabel = outcome === "success" ? "useful" : outcome === "empty" ? "empty" : "error"
 	const latency = typeof m.last.latencyMs === "number" ? ` · ${m.last.latencyMs} ms` : ""
 	return `Last\n${op} · ${outcomeLabel}${latency}`
+}
+
+/**
+ * Plain-text variant for the structured JSX Tooltip body (no `\n`
+ * separators — each piece is its own block). Same bounded sources
+ * as the title-string variants above.
+ */
+function formatAutomaticPrimeSectionPlain(m: NonNullable<TaskHeaderTelemetryStrip["myc"]>): string {
+	const status = m.automaticPrime.status
+	switch (status) {
+		case "ok":
+			return "✓ acquired"
+		case "empty":
+			return "✓ acquired (empty)"
+		case "error":
+			return "⚠ failed"
+		case "skipped":
+			return "— skipped"
+		case "idle":
+		default:
+			return "— not yet attempted"
+	}
+}
+
+function formatMycLastSectionPlain(m: NonNullable<TaskHeaderTelemetryStrip["myc"]>): string {
+	if (!m.last) return ""
+	const op = m.last.operation
+	const outcome = m.last.outcome
+	const outcomeLabel = outcome === "success" ? "useful" : outcome === "empty" ? "empty" : "error"
+	const latency = typeof m.last.latencyMs === "number" ? ` · ${m.last.latencyMs} ms` : ""
+	return `${op} · ${outcomeLabel}${latency}`
 }
 
 function MechanismChip({ descriptor, count }: { descriptor: MechanismDescriptor; count: number }) {
@@ -487,8 +519,10 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 			  not rendered. Compact form: `myc S/T` (zero-call form:
 			  `myc 0`). Degraded form: `⚠ myc S/T` when
 			  `callsFailed > 0` OR `automaticPrime.status === "error"`.
-			  Hover (title) carries the structured detail; the
-			  chip itself has no click handler. No custom icon, no
+			  Hover AND keyboard focus surface the structured detail
+			  via the ClineMM Radix Tooltip primitive (NOT a native
+			  `title` attribute — reviewer's P1-C accessibility fix).
+			  The chip itself has no click handler. No custom icon, no
 			  hard-coded color, no SVG — text + theme tokens only.
 			*/}
 			{telemetry.myc
@@ -510,34 +544,60 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 									: `myc: ${successful} successful operation${successful === 1 ? "" : "s"} out of ${total}`
 						const ariaLabel = isDegraded ? `${ariaBase}; degraded — ${describeMycDegradation(m)}` : ariaBase
 
-						const titleSections: string[] = []
-						if (total > 0 || m.automaticPrime.attempted) {
-							titleSections.push(
-								`Calls\n${total} total · ${successful} successful${failed > 0 ? ` · ${failed} failed` : ""}`,
-							)
-						}
-						if (m.retrievalCalls > 0) {
-							titleSections.push(`Retrieval\n${m.usefulRetrievals} useful / ${m.retrievalCalls}`)
-						}
-						if (m.automaticPrime.attempted) {
-							titleSections.push(formatAutomaticPrimeSection(m))
-						}
-						if (m.last) {
-							titleSections.push(formatMycLastSection(m))
-						}
-						const title = titleSections.join("\n\n")
+						const showCalls = total > 0 || m.automaticPrime.attempted
+						const showRetrieval = m.retrievalCalls > 0
+						const showPrime = m.automaticPrime.attempted
+						const showLast = m.last !== undefined
+						const anySection = showCalls || showRetrieval || showPrime || showLast
 
 						return (
-							<span
-								aria-label={ariaLabel}
-								className="inline-flex items-center gap-1"
-								data-testid="task-header-myc-chip"
-								title={title}>
-								{isDegraded ? <span aria-hidden>⚠</span> : null}
-								<span aria-hidden className="font-mono">
-									{compactLabel}
-								</span>
-							</span>
+							<Tooltip>
+								<TooltipTrigger
+									aria-label={ariaLabel}
+									className="inline-flex items-center gap-1"
+									data-testid="task-header-myc-chip">
+									{isDegraded ? <span aria-hidden>⚠</span> : null}
+									<span aria-hidden className="font-mono">
+										{compactLabel}
+									</span>
+								</TooltipTrigger>
+								{anySection ? (
+									<TooltipContent
+										className="max-w-xs text-left"
+										data-testid="task-header-myc-tooltip"
+										side="bottom">
+										{showCalls ? (
+											<div data-testid="task-header-myc-section-calls">
+												<div className="font-medium">Calls</div>
+												<div>
+													{total} total · {successful} successful
+													{failed > 0 ? ` · ${failed} failed` : ""}
+												</div>
+											</div>
+										) : null}
+										{showRetrieval ? (
+											<div className="mt-1.5" data-testid="task-header-myc-section-retrieval">
+												<div className="font-medium">Retrieval</div>
+												<div>
+													{m.usefulRetrievals} useful / {m.retrievalCalls}
+												</div>
+											</div>
+										) : null}
+										{showPrime ? (
+											<div className="mt-1.5" data-testid="task-header-myc-section-prime">
+												<div className="font-medium">Automatic prime</div>
+												<div>{formatAutomaticPrimeSectionPlain(m)}</div>
+											</div>
+										) : null}
+										{showLast ? (
+											<div className="mt-1.5" data-testid="task-header-myc-section-last">
+												<div className="font-medium">Last</div>
+												<div>{formatMycLastSectionPlain(m)}</div>
+											</div>
+										) : null}
+									</TooltipContent>
+								) : null}
+							</Tooltip>
 						)
 					})()
 				: null}

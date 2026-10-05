@@ -117,7 +117,7 @@ import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigS
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
 import { getMycPrimeResult, resolveMycServerName, runMycPrimeOnSessionStart } from "./myc-prime-automation"
-import { observeMycPrimeResult, observeMycToolStart } from "./myc-task-observation"
+import { observeMcpToolCompletion, observeMycPrimeResult } from "./myc-task-observation"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
 import { isPostTerminalAuthorityDiagnosticEffectivelyEnabled } from "./post-terminal-authority-diagnostic-runtime"
 import { createProductionModelProfilesOwner, type ModelProfilesOwnerDeps } from "./profile-store/owner"
@@ -1262,6 +1262,21 @@ export class Controller {
 			ExtensionRegistryInfo.version,
 			telemetryService,
 		)
+		// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: wire the
+		// canonical MCP completion seam into the per-task tracker.
+		// Outcome-aware accounting (success/error) lives at the
+		// completion boundary, NOT at the pre-execution
+		// `content_start(tool)` boundary (which has no outcome).
+		// The observer slot is single-arity: ONE McpHub
+		// `callTool()` resolution ⇒ ONE completion event ⇒ ONE
+		// potential `recordMycToolCall` (filtered by toolName
+		// prefix inside `observeMcpToolCompletion`).
+		this.mcpHub.setMcpToolObserver((event) => {
+			observeMcpToolCompletion(this.taskTelemetry, {
+				toolName: event.toolName,
+				outcome: event.outcome,
+			})
+		})
 
 		// Initialize SDK-backed auth and account services.
 		this.authService = AuthService.getInstance(this, this.sdkTelemetry.telemetry)
@@ -1815,14 +1830,21 @@ export class Controller {
 			// construction.
 			onToolStarted: (event) => {
 				this.taskTelemetry.recordToolStartedWithName(event.toolName)
-				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: feed the
-				// model-driven myc call into the per-task tracker.
-				// `observeMycToolStart` is a no-op for non-myc
-				// tool names; ONE `content_start(tool)` ⇒ ONE
-				// observed call. Failure surfaces via the existing
-				// `runtimeErrorCount` chip (distinct counter,
-				// no double-count).
-				observeMycToolStart(this.taskTelemetry, event.toolName)
+				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01
+				// CORRECTION01: the previous
+				// `observeMycToolStart(this.taskTelemetry,
+				// event.toolName)` was removed. Outcome-aware
+				// accounting moved to the canonical MCP
+				// completion seam (`McpHub.setMcpToolObserver`
+				// above). The pre-execution `content_start(tool)`
+				// hook has no outcome; counting it as
+				// `successful` made the wire read `myc 1/1` for
+				// a `myc_recall` that later errored (reviewer P1
+				// wrong-capture-boundary defect). The
+				// `recordToolStartedWithName` call above is
+				// preserved — it feeds the existing
+				// `mechanism` projection (cumulative counter
+				// not tied to outcomes).
 			},
 			onDidBecomeIdle: () => this.handleSessionBecameIdle(),
 			beforeStartSession: () => this.ensureRemoteConfigForSessionStart(),

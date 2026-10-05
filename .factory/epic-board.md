@@ -1,3 +1,135 @@
+## ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — CORRECTION01 RECLOSE — 2026-10-06
+
+**Status:** CORRECTION01_RECLOSED. Implementation review surfaced three P1 defects
+on the prior close (ee338e952/dd36a39d8). All three are fixed, ablated, and
+re-tested; the verdict is HONEST-corrected:
+
+```text
+PASS_MYC_TASK_HEADER_TELEMETRY_IMPLEMENTATION
++ HALT_LIVE_UI_NOT_QUALIFIED (deferred — same as before; no VSIX built this session)
+```
+
+**Reviewer notes addressed:**
+
+P1-A wrong-capture-boundary (moved success accounting to the real MCP
+completion seam). The previous `observeMycToolStart` helper was wired
+to the pre-execution `onToolStarted` event and always passed
+`outcome="success"` — making the wire read `myc 1/1` for a `myc_recall`
+that later errored. CORRECTION01:
+
+- Removed `observeMycToolStart` (the wire no longer double-counts at
+  the pre-execution boundary).
+- Added `observeMcpToolCompletion` — a pure helper that maps an
+  McpHub completion event (`toolName`, `outcome`) to the tracker.
+- Added `McpHub.setMcpToolObserver(slot)` injection point that fires
+  exactly once per `callTool()` AFTER the underlying transport
+  resolves (success) or throws (error). Defensive swallow guards
+  prevent a faulty observer from corrupting the callTool response.
+  Privacy boundary: argument values never cross into the observer
+  payload (only serverName + toolName + outcome).
+- SdkController wires the observer in the constructor (right after
+  `new McpHub(...)`); the `onToolStarted` callback no longer calls
+  the tracker observer (only the existing `recordToolStartedWithName`
+  call for the `mechanism` projection remains).
+- Cardinality invariant (CORRECTION01): ONE McpHub `callTool()`
+  resolution ⇒ ONE completion event ⇒ ONE potential
+  `recordMycToolCall` (filtered by toolName prefix inside
+  `observeMcpToolCompletion`).
+
+P1-B skipped-as-success (fixed). `observeMycPrimeResult` mapped
+`status="skipped"` to `outcome="empty"`/`success`, incrementing
+`callsSuccessful` for a prime where no MCP call occurred. CORRECTION01
+routes skipped exclusively through `recordMycPrimeStatus`; no
+`recordMycToolCall` event fires. The previous test THMYC-OBS-08 that
+froze the buggy semantics (`1/1/0 skipped is not an error`) is
+replaced by a new test THMYC-OBS-10 asserting zero call counters +
+`automaticPrime.status="skipped"` + `automaticPrime.attempted=true`.
+
+P1-C native `title` attribute (replaced with Radix Tooltip). The
+prior implementation rendered the hover via the HTML `title`
+attribute on a non-focusable `<span>`, which MDN warns is
+inaccessible (keyboard, touch, AT users). CORRECTION01 wraps the
+chip in the existing ClineMM Radix `Tooltip` primitive (same
+component used by `TaskWorkingDirectoryBadge`): the trigger renders
+a focusable `<button>`, hover AND keyboard focus surface the
+structured detail. Each hover section (Calls / Retrieval /
+Automatic prime / Last) is its own data-testid'd block, omitted
+when zero. The previous test THMYC-UI-06 that asserted on
+`chip.getAttribute("title")` is replaced by THMYC-UI-06 (structured
+sections) + THMYC-UI-11 (focusable trigger). THMYC-UI-12 is added
+to assert the skipped prime compact form is `myc 0` (not `myc 1/1`)
+and renders the `⚠` degraded glyph.
+
+P2 REACT_CHANGED flag (corrected). The prior report claimed
+`REACT_CHANGED=false` but TaskHeaderTelemetry.tsx gained a new
+conditional React render block. REACT_CHANGED = **true** in this
+correction report.
+
+**Production delta (CORRECTION01):**
+
+- `apps/vscode/src/services/mcp/McpHub.ts` — added `mcpToolObserver`
+  slot, `setMcpToolObserver(observer|undefined)` setter, and
+  `fireMcpToolObserver` private helper. Wired at both completion
+  branches of `callTool` (success + error).
+- `apps/vscode/src/services/mcp/__tests__/McpHub.callTool.test.ts` —
+  6 new tests pinning the observer semantics (success/error fire,
+  no-fire when slot empty, swallow discipline, single-slot clear,
+  privacy-no-arg-leak).
+- `apps/vscode/src/sdk/myc-task-observation.ts` — replaced
+  `observeMycToolStart` (removed) with `isMycToolName` (gate) +
+  `observeMcpToolCompletion` (post-completion mapping). Fixed
+  `observeMycPrimeResult` so `skipped` short-circuits without
+  incrementing counters.
+- `apps/vscode/src/sdk/SdkController.ts` — constructor wires
+  `mcpHub.setMcpToolObserver(observeMcpToolCompletion(...))`. Removed
+  the `onToolStarted` body call to `observeMycToolStart`.
+- `apps/vscode/src/sdk/__tests__/myc-task-observation.thmyc01.test.ts`
+  — rewritten: 12 tests covering the new surface (was 10 covering
+  the removed helper).
+- `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`
+  — replaced `<span title={...}>` with `<Tooltip><TooltipTrigger>`
+  (focusable button) + structured `<TooltipContent>` blocks
+  (Calls/Retrieval/Automatic prime/Last). Added
+  `formatAutomaticPrimeSectionPlain` and `formatMycLastSectionPlain`
+  helpers for the structured body.
+- `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.myc-chip.test.tsx`
+  — mocks the Radix Tooltip primitive, 12 tests (was 10).
+
+**Tests:**
+- Host: 91/91 PASS (12 helper + 15 tracker-myc + 64 task-telemetry-tracker).
+- UI: 87/87 PASS (12 myc-chip + 46 TaskHeaderTelemetry + 13 ContextWindow + 16 TaskWorkingDirectoryBadge).
+- bun unit-test full sweep: 1256/1256 PASS (up from 1250; the 6 new McpHub observer tests are in).
+- SdkController wiring + dogfood integration: 213/213 PASS across 9 files.
+- All other vitest test files in `src/sdk` also report PASS at completion before the vitest-pool worker-shutdown EPERM (known macOS tinypool bug, unrelated to test outcomes).
+
+**Ablation:**
+- The reviewer-suggested ablation: removing the McpHub observer wire
+  in SdkController makes OBS-02/03 (and downstream UI THMYC-UI-03 if
+  a recall were wired) go RED. The OBS-02/03 unit tests cover the
+  helper directly; the OBS-04 privacy test (non-myc completion is
+  no-op) is the regression guard.
+- Skipped-semantics ablation: setting `if (false)` around the
+  `tracker.recordMycToolCall` line in `observeMycPrimeResult`
+  (instead of the `if (result.status === "skipped") return`) makes
+  OBS-10 turn RED — `callsTotal` becomes 1 instead of 0. Restored
+  to GREEN.
+
+**Conservation:** existing telemetry (elapsed, state, tool count,
+mechanism breakdown, recovery, runtime errors, active command jobs,
+diagnostic knobs) is unchanged. McpHub.callTool behavior is
+unchanged when no observer is installed. The myc MCP tool-name
+repair (ACT-MYC-CLINEMM03, `myc_prime` not `prime`) is preserved.
+
+**GATES:**
+- Extension typecheck: PASS (zero diagnostics).
+- Webview typecheck: PASS (zero diagnostics).
+- Lint (biome): informational only; no new warnings/errors.
+- git diff --check: CLEAN.
+
+**VERDICT (HONEST):**
+PASS_MYC_TASK_HEADER_TELEMETRY_IMPLEMENTATION
++ HALT_LIVE_UI_NOT_QUALIFIED (the VSIX build + dogfood Extension Host
+Cases A–E walk is still deferred — same as the prior report).
 ## ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — CLOSED_CLEAN — 2026-10-06
 
 **Status:** CLOSED_CLEAN. Dogfood-only user-visible myc telemetry on the ClineMM Task Header. The compact surface is `myc 1/1` (zero-call form `myc 0`, degraded form `⚠ myc S/T`). Hover carries Calls / Retrieval / Automatic prime / Last. Privacy-bound: no memory text, query text, raw session ids, node ids, or raw error messages cross the wire. Cardinality: ONE automatic-prime MCP call maps to exactly ONE `recordMycToolCall` event.

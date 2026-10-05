@@ -422,4 +422,95 @@ describe("McpHub.callTool", () => {
 			result.content.should.have.length(0)
 		})
 	})
+
+	describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / setMcpToolObserver (canonical completion seam)", () => {
+		// These tests pin the new per-call completion observer
+		// hook that SdkController wires to its per-task tracker.
+		// They are the integration-level evidence that the
+		// outcome-aware accounting lives at the COMPLETION boundary
+		// (not the pre-execution `content_start(tool)` boundary —
+		// reviewer's P1-A wrong-capture-boundary fix).
+
+		it("fires once with outcome=success on a successful callTool()", async () => {
+			const client = createMockClient({ content: [{ type: "text", text: "ok" }] })
+			const { hub } = createMcpHub({ client })
+			const events: Array<{ serverName: string; toolName: string; outcome: string }> = []
+			hub.setMcpToolObserver((event) => events.push(event))
+
+			await hub.callTool("test-server", "myc_recall", { q: "x" }, "ulid-100")
+
+			events.should.have.length(1)
+			events[0].should.deepEqual({ serverName: "test-server", toolName: "myc_recall", outcome: "success" })
+		})
+
+		it("fires once with outcome=error when the underlying transport throws", async () => {
+			const failingClient = { request: sinon.stub().rejects(new Error("transport boom")) }
+			const { hub } = createMcpHub({ client: failingClient })
+			const events: Array<{ serverName: string; toolName: string; outcome: string }> = []
+			hub.setMcpToolObserver((event) => events.push(event))
+
+			let threw = false
+			try {
+				await hub.callTool("test-server", "myc_recall", undefined, "ulid-101")
+			} catch {
+				threw = true
+			}
+			threw.should.be.true()
+			events.should.have.length(1)
+			events[0].should.deepEqual({ serverName: "test-server", toolName: "myc_recall", outcome: "error" })
+		})
+
+		it("does NOT fire when no observer is installed (single-slot semantics)", async () => {
+			const client = createMockClient({ content: [{ type: "text", text: "ok" }] })
+			const { hub } = createMcpHub({ client })
+			// No observer installed; callTool still completes normally.
+			const result = await hub.callTool("test-server", "myc_recall", undefined, "ulid-102")
+			result.content.should.be.an.Array()
+		})
+
+		it("a throwing observer does NOT corrupt the callTool response (swallow discipline)", async () => {
+			const client = createMockClient({ content: [{ type: "text", text: "survived" }] })
+			const { hub } = createMcpHub({ client })
+			hub.setMcpToolObserver(() => {
+				throw new Error("observer bug")
+			})
+
+			// The call MUST succeed even though the observer threw.
+			const result = await hub.callTool("test-server", "myc_recall", undefined, "ulid-103")
+			result.content.should.be.an.Array()
+			;(result.content[0] as { type: "text"; text: string }).text.should.equal("survived")
+		})
+
+		it("setMcpToolObserver(undefined) clears the slot", async () => {
+			const client = createMockClient({ content: [{ type: "text", text: "ok" }] })
+			const { hub } = createMcpHub({ client })
+			let calls = 0
+			hub.setMcpToolObserver(() => calls++)
+			await hub.callTool("test-server", "myc_recall", undefined, "ulid-104a")
+			calls.should.equal(1)
+
+			hub.setMcpToolObserver(undefined)
+			await hub.callTool("test-server", "myc_recall", undefined, "ulid-104b")
+			calls.should.equal(1) // second call did not fire
+		})
+
+		it("does NOT leak argument values to the observer (privacy)", async () => {
+			const client = createMockClient({ content: [{ type: "text", text: "ok" }] })
+			const { hub } = createMcpHub({ client })
+			const events: unknown[] = []
+			hub.setMcpToolObserver((event) => events.push(event))
+
+			await hub.callTool(
+				"test-server",
+				"myc_recall",
+				{ secret_query: "do-not-leak", token: "secret-do-not-leak" },
+				"ulid-105",
+			)
+
+			events.should.have.length(1)
+			const payload = JSON.stringify(events[0])
+			payload.should.not.match(/do-not-leak/)
+			payload.should.not.match(/secret/)
+		})
+	})
 })

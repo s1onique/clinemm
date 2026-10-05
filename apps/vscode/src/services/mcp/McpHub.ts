@@ -142,6 +142,26 @@ export class McpHub {
 	// Callback for notifying when the MCP tool list changes (servers added/removed/reconnected).
 	// Used by SdkController to restart the SDK session with updated tools.
 	private toolListChangeCallback?: () => void
+	/**
+	 * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: per-call completion
+	 * observer hook. Fires exactly once per `callTool()` invocation
+	 * AFTER the underlying transport completes (success path) OR
+	 * throws (error path). Used by `SdkController` to wire the
+	 * per-task `TaskTelemetryTracker` counter seam — outcome-aware
+	 * accounting belongs at the completion boundary, NOT at the
+	 * pre-execution `content_start(tool)` boundary (which has no
+	 * outcome). Mirror of `setToolListChangeCallback` (which fires on
+	 * tool-list changes, not per-call).
+	 *
+	 * Single-slot. Setting a new callback replaces the previous one
+	 * without notification. Test seam: production composition
+	 * exercises it; unit tests use a no-op handler.
+	 *
+	 * Privacy: the observer receives `serverName` + `toolName` only
+	 * (the `McpToolCallResponse` is never passed). Argument values
+	 * never leave `McpHub`.
+	 */
+	private mcpToolObserver?: (event: { serverName: string; toolName: string; outcome: "success" | "error" }) => void
 	// Fingerprint of the last tool list snapshot, used to detect actual tool list changes
 	// vs. mere status updates (e.g., error messages appended).
 	private lastToolFingerprint = ""
@@ -2198,6 +2218,13 @@ export class McpHub {
 				undefined,
 				toolArguments ? Object.keys(toolArguments) : undefined,
 			)
+			// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: per-call completion
+			// observer seam (success). Fires AFTER the result is
+			// handed to the SDK; argument values never leak (only
+			// serverName + toolName + outcome). Observer exceptions
+			// are swallowed — a faulty observer must not corrupt the
+			// tool response.
+			this.fireMcpToolObserver(serverName, toolName, "success")
 
 			return {
 				...result,
@@ -2212,6 +2239,10 @@ export class McpHub {
 				error instanceof Error ? error.message : String(error),
 				toolArguments ? Object.keys(toolArguments) : undefined,
 			)
+			// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: per-call completion
+			// observer seam (error). Same swallowing discipline as the
+			// success branch.
+			this.fireMcpToolObserver(serverName, toolName, "error")
 			throw augmentMcpTimeoutError(error, serverName, timeout)
 		}
 	}
@@ -2497,6 +2528,42 @@ export class McpHub {
 	 */
 	clearToolListChangeCallback(): void {
 		this.toolListChangeCallback = undefined
+	}
+	/**
+	 * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: fire-and-swallow the
+	 * `mcpToolObserver` slot. Defensive guard: a thrown observer
+	 * must not corrupt the caller-visible callTool() response (a
+	 * `myc_*` call that throws in the observer would otherwise
+	 * surface as a transport-level error to the user). Slot is read
+	 * once per fire to keep the seam simple; a synchronous
+	 * re-entrant set during the fire is honored on the NEXT fire.
+	 */
+	private fireMcpToolObserver(serverName: string, toolName: string, outcome: "success" | "error"): void {
+		const observer = this.mcpToolObserver
+		if (!observer) {
+			return
+		}
+		try {
+			observer({ serverName, toolName, outcome })
+		} catch (error) {
+			Logger.error(
+				`mcpToolObserver threw during callTool(${serverName}, ${toolName}) outcome=${outcome}:`,
+				error instanceof Error ? error.message : String(error),
+			)
+		}
+	}
+	/**
+	 * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: install a single-slot
+	 * per-call completion observer. Fires exactly once per
+	 * `callTool()` after the underlying transport resolves. Used by
+	 * `SdkController` to wire the per-task tracker counter seam at
+	 * the canonical completion boundary. Passing `undefined` clears
+	 * the slot.
+	 */
+	setMcpToolObserver(
+		observer: ((event: { serverName: string; toolName: string; outcome: "success" | "error" }) => void) | undefined,
+	): void {
+		this.mcpToolObserver = observer
 	}
 
 	/**
