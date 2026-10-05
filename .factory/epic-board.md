@@ -18440,3 +18440,80 @@ reevaluation #2 (agent_turn_done):
 **No new code in this change. No new ACT. Build the actual `2f3d78df6` artifact first, install it, and re-collect.**
 
 ---
+## ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CALLER-REASON-DISCRIMINATOR — INSTRUMENTED_BUILD — 2026-05-10
+
+**Mission:** Narrow the post-CORRECTION04 active-session-lifecycle capture gap. CORRECTION04 (commit `2f3d78df6`) proved the marker flip happens at the `getActiveSession()` lookup branch (`activeSessionMissing=1`), but only the **storage writer** (`clearActiveSessionReference`) was identified, not the **invoking caller-reason** (the funnel `endActiveSession(reason)` is the only external entry; the `reason` string passed by each call site differs, so it identifies the caller in 1:1). This ACT adds a single bounded discriminator: the caller-reason string of every `endActiveSession(reason)` invocation. The next LIVE dump identifies the exact caller.
+
+**Status:** INSTRUMENTED_BUILD (Phase A complete in source at `050e35356`: `apps/vscode/src/sdk/lifecycle-clear-recorder.ts` — 181 lines, bounded `LifecycleClearReason` enum of 8 known call-site reasons + `empty` + `unrecognized` sentinels, gated on `resolveClineMmRuntimeProfile() === "dogfood"` (matches the existing `ccupd01` gate), zero stack capture, zero PII, zero raw session ids; `recordLifecycleClear(reason)` called as the FIRST statement in `SdkSessionLifecycle.endActiveSession` at `sdk-session-lifecycle.ts:289-283`, including the early-return "no active session" path; 23 RED/GREEN tests across two files: `clcrec01` (19 cases, recorder in isolation — C1 public-off, C2 dogfood-empty, C3 dogfood-bounded per enum value, C4 dogfood-multi-last-wins, C5 dogfood-unrecognized with raw-string preservation, C6 dogfood-empty-reason mapped to `"empty"`, C7 reset) + `clcrec02` (4 cases, drives the REAL `SdkSessionLifecycle.endActiveSession` funnel via `startNewSession` + `clearTask` + `dispose` + public-profile suppression); conservation: `bun run check-types` PASS, `bun run test:unit` PASS (1246/1246 across 94 files), `bunx biome check` (recorder + 2 tests + lifecycle) — 0 new warnings, `git diff --check` CLEAN).
+
+**Static recon (already PROVEN by CORRECTION04 and re-asserted by this ACT):**
+
+| Property | Value |
+|---|---|
+| `CLEAR_STORAGE_WRITER` | `clearActiveSessionReference` — PROVEN at `sdk-session-lifecycle.ts:267-271` |
+| `LIVE_CLEAR_CALLER` | UNOBSERVED (cannot be located from static recon alone) |
+| `LIVE_CLEAR_TRIGGER` | UNOBSERVED |
+| `CLEAR_RELATIVE_TO_AGENT_TURN_DONE` | UNOBSERVED |
+| `CLEAR_INTENTIONAL_BY_CURRENT_CONTRACT` | UNOBSERVED |
+
+**Discriminator (NEW in this ACT):**
+
+| Snapshot field | Meaning |
+|---|---|
+| `enabled` | `false` in `public`; `true` in `dogfood` |
+| `total` | Number of `endActiveSession(reason)` calls recorded since process start (or last `resetLifecycleClearSnapshot()`) |
+| `lastClearReason` | Most recent `reason`, mapped through the bounded enum (one of the 10 enum values) |
+| `lastUnrecognizedReason` | Raw `reason` string when it fell outside the enum (one LIVE cycle only — retire after) |
+
+**Live classification table (the LIVE operator should apply after the next dump):**
+
+| `lastClearReason` | `lastUnrecognizedReason` | Classification |
+|---|---|---|
+| `startNewSession` | (n/a) | **`HALT_DEFERRED_MARKER_SESSION_LIFECYCLE`** with caller = `startNewSession` (the canonical "second task started during deferred reeval" path) |
+| `replaceActiveSession` | (n/a) | **`HALT_DEFERRED_MARKER_SESSION_LIFECYCLE`** with caller = `replaceActiveSession` (mode/MCP/provider rebuild inside session) |
+| `dispose` | (n/a) | `HALT_DEFERRED_MARKER_SESSION_LIFECYCLE` with caller = `dispose` (Extension Host tear-down mid-turn — likely a different bug class) |
+| `clearTask` | (n/a) | `HALT_DEFERRED_MARKER_SESSION_LIFECYCLE` with caller = `clearTask` (user "New Task" / clear button during session) |
+| `showTaskWithId` | (n/a) | `HALT_DEFERRED_MARKER_SESSION_LIFECYCLE` with caller = `showTaskWithId` (history task switch) |
+| `followupTargetChange` | (n/a) | `HALT_DEFERRED_MARKER_SESSION_LIFECYCLE` with caller = `followupTargetChange` |
+| `autoApprovalRebuildFailure` | (n/a) | `HALT_DEFERRED_MARKER_SESSION_LIFECYCLE` with caller = `autoApprovalRebuildFailure` |
+| `remoteConfigToggle` | (n/a) | `HALT_DEFERRED_MARKER_SESSION_LIFECYCLE` with caller = `remoteConfigToggle` |
+| `unrecognized` | `<raw>` | **`CAPTURE_INSUFFICIENT_NEW_ENUM_SITE`** — extend enum OR fix callsite, then re-classify |
+| `empty` | (n/a) | `BUG: never reached` (defensive guardrail; indicates a callsite passed `""`) |
+| (snapshot.total === 0) | (n/a) | **`CAPTURE_INSUFFICIENT_DEFERRED_BARRIER_NOT_THE_WRITER`** — the writer never fired; the deferred barrier destruction is NOT caused by `clearActiveSessionReference` in this run; deeper discriminator required (downstream cascade?) |
+
+**Verdict (this ACT):** `INSTRUMENTED_BUILD`. The discriminator is wired; the artifact binding proof for the operator (no new diagnostic enabled; no production semantic delta; dump command unchanged; zero state mutation; zero stack capture) is identical in shape to the CORRECTION03/04 §26 proofs. The next operator action is the SAME as CORRECTION04 §26: rebuild the artifact from SUBJECT_HEAD `050e35356`, install it, restart the Extension Host, re-run the LIVE workload, dump (the recorder snapshot is exposed via `getLifecycleClearSnapshot()`, NOT a new dump command — it rides on the existing `getStateToPostToWebview` push), and apply the classification table above.
+
+**Required next operator action — NO new ACT, NO new code:**
+
+1. Rebuild the VSIX from SUBJECT_HEAD `050e35356` (canonical `bun run package` produces `./dist/dogfood/clinemm-4.1.16-<hash>-050e35356.vsix`).
+2. Install that VSIX (replace the CORRECTION04 install at `~/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-<hash>-050e35356/`).
+3. Restart fresh Extension Host.
+4. Confirm via Command Palette that `Cline Debug: Dump Completion Continuation Upstream` is still listed (unchanged from CORRECTION04).
+5. Re-run the mundane LIVE workload that previously produced `markerPresent=1, markerMissing=1, activeSessionMissing=1`.
+6. Run the dump. Inspect the recorder snapshot — apply the classification table above:
+   - If `total >= 1` and `lastClearReason` is one of the 8 known enum values → that caller is the live trigger. Open a follow-up LIVE classification ACT to bound the repair per §11 (do not move `getActiveSession()`; repair is at the layer that produced the CLEAR).
+   - If `total >= 1` and `lastClearReason === "unrecognized"` → new enumeration site surfaced; extend the enum in a successor ACT and re-collect.
+   - If `total === 0` → `CAPTURE_INSUFFICIENT_DEFERRED_BARRIER_NOT_THE_WRITER` — the deferred barrier destruction is NOT caused by `clearActiveSessionReference` in this run. Deeper discriminator required.
+7. Only after the LIVE classification converges should a follow-up LIVE classification ACT be opened.
+
+**No new architecture. No new proto. No new state field on the webview push (the snapshot is consumed by the existing dump command; `getStateToPostToWebview` is unchanged). No fix to `getActiveSession()` itself. No delay clear. No stable session-by-id lookup. No bound continuation authority. NO pending review authorized — this is purely diagnostic.**
+
+**Hard prohibitions:**
+
+- Do NOT move `clearActiveSessionReference` to a deferred-clear queue. The current lifecycle contract is "activeSession is the source of truth; the deferred barrier reads it; if it's undefined the marker is correctly destroyed." The contract is under review, not yet invalidated.
+- Do NOT add a `getSessionById` / `findSession` registry. The ACT reviewer's §12 explicitly forbids new registries without a new P0.
+- Do NOT retain a stale `sdkHost` past `clearActiveSessionReference()`. That would leak the host and is a different bug class.
+- Do NOT touch `SdkSessionLifecycle` ordering — the recorder reads at the funnel but does not change the funnel's behavior.
+- Do NOT touch Elm / CCARD / BCB / PCCA / CPA / CCDS01 / PCRL01 / POSTRUN / Elm shadow / Elm authority / presentation / queue / MCP / MYC / proto / state fields. This is a single bounded diagnostic.
+
+**Discriminator retirement policy (per §25 "Temporary Diagnostic Retirement"):**
+
+- After the next LIVE dump produces a non-empty `lastClearReason`, the new ACT that consumes the discriminator (classification ACT) MUST also include `git reset()` calls to retire the recorder — `resetLifecycleClearSnapshot()` does NOT auto-fire. The retirement is explicit and deliberate.
+- The recorder is NOT retired after this ACT — it is the next discriminator. It will be retired by its successor.
+
+**Subject head:** `050e35356` (this commit).
+**Subject head parent:** `ad39436ed` (CORRECTION04 board update — INSTRUMENTED_BUILD at `2f3d78df6`).
+**BUILT_FROM_HEAD:** `050e35356`.
+**DOGFOOD_VERSION:** `4.1.16-5a1c485cb` (unchanged; the build script produces `<version>-<package-sha>-<commit-sha>.vsix`).
+**Predecessor:** `ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION04-LIVE-ACTIVE-SESSION-LOOKUP-DISCRIMINATOR` (commit `2f3d78df6`).
+**Successor:** (next LIVE classification ACT — to be opened ONLY after the LIVE classification table converges; NOT opened here).
