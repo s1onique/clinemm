@@ -18247,38 +18247,57 @@ RECOMMENDATION FOR NEXT ACT
 
 ```text
 ENTRY_HEAD            = 6c187539ff7e6d34db20f6e5d3990d604ac18909 (CCDS01 closure_head)
-SUBJECT_HEAD          = d73f2d492eb7e864e2563922a53f66fd81dcdc32 (instrumentation commit)
+SUBJECT_HEAD          = 71fd204486f80aa0a11f6b85b5878817dd301cf3 (CORRECTION02 commit)
 CLOSURE_HEAD          = (discover after LIVE classification commit)
 
 DOGFOOD_VERSION       = 4.1.16-5a1c485cb (UNCHANGED from predecessor ACT; subject_head baked into build name)
-VSIX_PATH             = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-ccdco01-d73f2d49.vsix
+VSIX_PATH             = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-ccdco01-d73f2d49.vsix (PREDECESSOR)
 VSIX_BYTES            = 30097813
 VSIX_SHA256           = 4fc39afc8bd47fd170f9beff8f1ea0620d62d49a1dc46d68b8eeff464f3b9105
 ELM_KERNEL_SHA256     = 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c (UNCHANGED from predecessor ACT)
+                          AND NEW ACT §28 HALT_ARTIFACT_BUILD_FAILED — canonical
+                          builder could not complete in this sandbox (Elm
+                          `package.elm-lang.org/all-packages` handshake failed,
+                          `~/.elm/0.19.2/packages/lock` is read-only due to a
+                          stale elm-test lock holder, grpc-tools native fetch
+                          required network). SUBJECT_HEAD != DOGFOOD_SOURCE_HEAD
+                          because the bound artifact is still the predecessor
+                          VSIX. The committed source (71fd20448) is itself GREEN
+                          across every test gate below — the halt is in the
+                          binary-build layer, not in the source.
 
 PHASE_A_GATES
-  focused                            = 5/5 PASS (CALLBACK-OUTCOME-01..05)
-  wiring-invariants                 = 5/5 PASS (CCDCO01.A..E)
-  CCDS01 (no regression)            = 1/1 PASS (CCDS01-01 GREEN through instrumented callback)
-  BCB01-C3 (no regression)          = all PASS
-  BCB01-C4 (no regression)          = all PASS
-  PCRA01  (no regression)           = all PASS
-  PCRL01  (no regression)           = 5/5 PASS
-  ELM_SHADOW02 (no regression)      = all PASS
-  ELM_REAL_PROVIDER01               = all PASS
-  ELM_AUTHORITY_COUNTER_DUMP01      = all PASS
-  CCARD_COMMIT_STAGE_BOUNDARY       = all PASS
-  typecheck                          = PASS (bunx tsc --noEmit + tsconfig.vscode-compat + webview-ui)
+  focused                            = 5/5 PASS (CALLBACK-OUTCOME-01..05, after dogfood-seam beforeEach arming)
+  wiring-invariants                  = 9/9 PASS (CCDCO01.A..I, extended with .F..I for the dogfood resolver)
+  dogfood-gate (NEW)                 = 5/5 PASS (CCDCO-DOGFOOD-01..03)
+  CCDS01 (no regression)             = 1/1 PASS (CCDS01-01 GREEN through instrumented callback)
+  CCARD01 (no regression)            = all PASS (refactor of helper is structural)
+  CCARD_COMMIT_STAGE_BOUNDARY         = all PASS
+  BOCOR (no regression)              = all PASS
+  BJLA  (no regression)              = all PASS
+  ELM_SHADOW02 (no regression)       = all PASS
+  ELM_AUTHORITY_COUNTER_DUMP01       = all PASS
+  PCRA01  (no regression)            = all PASS
+  PCRL01  (no regression)            = 5/5 PASS
+  typecheck                          = PASS (bunx tsc --noEmit)
   check-types:c2-4-c-bridge          = 0 diagnostic(s) (against frozen baseline)
-  lint                               = PASS (biome, 2112 files, 0 errors)
+  lint                               = PASS (biome, 2113 files, 0 errors)
   git diff --check                   = CLEAN
-  TS_DELIVERY_SEMANTICS_CHANGED     = false (no semantic effect on returned outcome)
-  QUEUE_SEMANTICS_CHANGED           = false (counter increments happen AFTER decision)
-  ELM_SOURCE_CHANGED                = false
-  ELM_DECISION_LOGIC_CHANGED        = false
-  REACT_CODE_CHANGED                = false
-  MCP_CODE_CHANGED                  = false
-  MYC_CODE_CHANGED                  = false
+
+SEMANTIC_DELTAS
+  ELM_SOURCE_CHANGED                 = false
+  ELM_DECISION_LOGIC_CHANGED         = false
+  TS_DELIVERY_SEMANTICS_CHANGED      = false (callback body is bit-identical when diagnostic is off;
+                                                    counter increments happen AFTER decision)
+  QUEUE_SEMANTICS_CHANGED            = false
+  DIAGNOSTIC_ENABLEMENT_CHANGED      = true (default-off enforced via _state.enabled gate)
+  NEW_ENV_VAR_ADDED                  = false (no CLINEMM_DIAG_COMPLETION_CONTINUATION_DELIVERY,
+                                                    no CLINEMM_ENABLE_CCDCO — only the existing
+                                                    CLINEMM_RUNTIME_PROFILE=dogfood bit)
+  NEW_PUBLIC_CONFIG_ADDED            = false
+  MCP_CODE_CHANGED                   = false
+  MYC_CODE_CHANGED                   = false
+  REACT_CODE_CHANGED                 = false
 ```
 
-**Live classification:** (operator-driven; sandbox cannot execute LIVE dogfood workload). The instrumented VSIX is bound to `dist/clinemm-ccdco01-d73f2d49.vsix` (30097813 bytes, SHA-256 `4fc39afc8bd47fd170f9beff8f1ea0620d62d49a1dc46d68b8eeff464f3b9105`). Operator must install exact VSIX in normal desktop ClineMM host and run the same mundane workload that produced LIVE A/B; on failure or completion, run the four dump commands (`Cline Debug: Dump Continuation Cardinality Authority`, `Cline Debug: Dump Completion Authority Elm Shadow`, `Cline Debug: Dump Completion Authority Elm Authority`, `Cline Debug: Dump Completion Continuation Delivery`) and apply the discriminator table §13 to classify CASE A..H.
+**Live classification:** HALT_ARTIFACT_BUILD_FAILED — the canonical dogfood builder could not complete in this sandbox. The Elm `package.elm-lang.org/all-packages` TLS handshake failed, the local `~/.elm/0.19.2/packages/lock` is held by a stale `elm-test` and is read-only, and the grpc-tools native binary required a network fetch. The committed source (71fd20448) is GREEN across every test gate above; the halt is at the binary-build layer, not in the source. The operator MUST either (a) run the canonical dogfood builder in an environment that can reach package.elm-lang.org and write to `~/.elm/`, then install the resulting VSIX, or (b) accept the PREDECESSOR bound VSIX (`clinemm-ccdco01-d73f2d49.vsix`) — note that the predecessor VSIX does NOT yet contain the dogfood-gate wiring; the predecessor runtime always collects counters. The build-source discrepancy is therefore honest: the PREDECESSOR VSIX is structurally a step behind the CORRECTION02 source. Once a fresh dogfood VSIX is produced from HEAD 71fd20448, operator must (a) install exact VSIX in normal desktop ClineMM host and run the mundane workload that produced LIVE A/B, (b) run the four dump commands (`Cline Debug: Dump Continuation Cardinality Authority`, `Cline Debug: Dump Completion Authority Elm Shadow`, `Cline Debug: Dump Completion Authority Elm Authority`, `Cline Debug: Dump Completion Continuation Delivery`) and apply the discriminator table §13 to classify CASE A..H.
