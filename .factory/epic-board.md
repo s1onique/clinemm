@@ -18688,7 +18688,7 @@ drain-coalescing fix. No production semantic delta for the OFF path.
 - The snapshot-based drain preserves the legacy "different reasons serialize" contract while adding the "same reason coalesces" guarantee. COALESCE-05 was the load-bearing test that surfaced the original loop race.
 - The marker on `SdkSessionEventCoordinator` is the source of truth for "is the deferred completion obligation still being held by the BCB01 §0.1 conservation predicates" — the rebuild scheduler's deferred predicate must mirror this exactly, not the upstream count alone (the marker survives the terminal-count branch because the marker is cleared only when conservation fully resolves).
 
-**Subject head:** `TODO_SUBJECT_HEAD`
+**Subject head:** `f93ce98a5e2c1afe68e0856aed0323e47bbb1916`
 **Subject head parent:** `1777c58c` (CORRECTION02 P1 — full same-task idempotence).
 **Predecessor:** `ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION04-LIVE-ACTIVE-SESSION-LOOKUP-DISCRIMINATOR (2026-10-05)` and `ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION02-SHOWTASKWITHID-FULL-IDEMPOTENCE (1777c58c)`.
 **VERDICT:** PASS_FIRST_ELM_AUTHORITY_SEAM.
