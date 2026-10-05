@@ -1054,6 +1054,33 @@ export class SdkSessionEventCoordinator {
 			return
 		}
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01:
+		// mirror the Site-B C10 capture (line ~1872) so the deferred
+		// reevaluation path emits the factual `task_completion_committed`
+		// CCARD record. The previous ACT moved this record AFTER
+		// Elm authority gate AND setTurnPhase("completed", ...) so a
+		// missing `task_completion_committed` proves the successful
+		// effect seam was not fully traversed — exactly the LIVE
+		// specimen (`run_qpi4eTiw`, session `1791222861936_ay61p`)
+		// symptom, where the deferred reevaluation reached
+		// authority_check_reached + AUTHORIZE, setTurnPhase fired,
+		// but no `task_completion_committed` record was captured.
+		// Origin="deferred_continuation" matches the deferred-barrier
+		// reevaluation path; Site B uses origin="pending_prompt_drain"
+		// because that path runs synchronously inside the C10
+		// completion handler. The marker is already cleared above at
+		// `this.deferredCompletionBarrier = undefined`, so this
+		// capture is the unique C10 record for this turn.
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "task_completion_committed",
+			origin: "deferred_continuation",
+			sessionId: activeSession.sessionId,
+			taskId: this.options.getTask?.()?.taskId,
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-H:
+			// mint a coordinator-local completionId for this C10 event.
+			// Monotonic, per-coordinator-instance. One C10 -> one completionId.
+			completionId: `completion-${activeSession.sessionId}-${++this.nextCompletionCommitEventId}`,
+		})
 	}
 
 	/**
