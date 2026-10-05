@@ -108,28 +108,49 @@ describe("SdkSessionRebuildScheduler", () => {
 		const provider = vi.fn().mockResolvedValue(undefined)
 		const terminal = vi.fn().mockResolvedValue(undefined)
 
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION04-P1-CONSERVATION-SUFFIX:
+		// Hold `drainInFlight` via `runExclusive` so the three
+		// `request()` calls accumulate in `pending` instead of
+		// triggering a synchronous drain with just `mcpTools` in the
+		// snapshot. The bug (whole-snapshot requeue) only fires when
+		// the snapshot has ≥2 entries at drain-start so iter ≥1 hits
+		// the isRunning check.
+		let releaseExclusive!: () => void
+		const exclusivePromise = scheduler.runExclusive(
+			() =>
+				new Promise<void>((resolve) => {
+					releaseExclusive = resolve
+				}),
+		)
 		scheduler.request("mcpTools", mcpTools)
 		scheduler.request("provider", provider)
 		scheduler.request("terminalExecutionMode", terminal)
-		// Three pending entries; only `mcpTools` was deleted from
-		// pending in the snapshot pre-loop. The other two were deleted by
-		// the snapshot's `pending.delete(reason)` loop BEFORE the loop
-		// ran. Without re-queue, the next two would be lost.
+		// All three pending entries land in `pending` while the
+		// exclusive is in flight.
 
-		// The session was idle at drain-start. The drain processes
-		// `mcpTools`, which flips `isRunning=true`. The drain loop then
-		// returns early at the next iteration's isRunning check.
+		// Release the exclusive. The scheduler sets
+		// `drainInFlight = undefined` and calls `drainIfIdle()` with
+		// `pending.size = 3`. The snapshot now contains all three
+		// entries. The drain processes `mcpTools` (flipping
+		// isRunning=true), and on iter 1 the isRunning check triggers
+		// the requeue branch.
+		releaseExclusive()
+		await exclusivePromise
 		await scheduler.waitUntilSettled()
 		expect(mcpTools).toHaveBeenCalledOnce()
 		expect(provider).not.toHaveBeenCalled()
 		expect(terminal).not.toHaveBeenCalled()
 
-		// Idle the session. The remaining two snapshot entries MUST be
-		// re-queued and now drain.
+		// Idle the session. The unexecuted entries MUST be re-queued
+		// and now drain. The already-executed `mcpTools` MUST NOT be
+		// replayed (CORRECTION04 suffix-slice invariant — without the
+		// suffix slice, the requeue branch re-inserts `mcpTools` and
+		// the next drain replays it).
 		activeSession.isRunning = false
 		scheduler.sessionBecameIdle()
 		await scheduler.waitUntilSettled()
 
+		expect(mcpTools).toHaveBeenCalledOnce()
 		expect(provider).toHaveBeenCalledOnce()
 		expect(terminal).toHaveBeenCalledOnce()
 	})
@@ -157,18 +178,42 @@ describe("SdkSessionRebuildScheduler", () => {
 		})
 		const provider = vi.fn().mockResolvedValue(undefined)
 
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION04-P1-CONSERVATION-SUFFIX:
+		// Hold `drainInFlight` via `runExclusive` so the two
+		// `request()` calls accumulate in `pending` instead of
+		// triggering a synchronous drain with just `mcpTools` in the
+		// snapshot. The bug (whole-snapshot requeue) only fires when
+		// the snapshot has ≥2 entries at drain-start so iter ≥1 hits
+		// the deferredOutstanding check.
+		let releaseExclusive!: () => void
+		const exclusivePromise = scheduler.runExclusive(
+			() =>
+				new Promise<void>((resolve) => {
+					releaseExclusive = resolve
+				}),
+		)
 		scheduler.request("mcpTools", mcpTools)
 		scheduler.request("provider", provider)
+
+		// Release the exclusive. The scheduler sets
+		// `drainInFlight = undefined` and calls `drainIfIdle()` with
+		// `pending.size = 2`. The snapshot contains both entries.
+		// `mcpTools` runs (flipping deferred=true); on iter 1 the
+		// deferredOutstanding check triggers the requeue branch.
+		releaseExclusive()
+		await exclusivePromise
 		await scheduler.waitUntilSettled()
 		expect(mcpTools).toHaveBeenCalledOnce()
 		expect(provider).not.toHaveBeenCalled()
 
 		// Settle the deferred obligation. The held snapshot entries
-		// MUST drain.
+		// MUST drain. The already-executed `mcpTools` MUST NOT be
+		// replayed (CORRECTION04 suffix-slice invariant).
 		outstanding = false
 		scheduler.deferredCompletionSettled()
 		await scheduler.waitUntilSettled()
 
+		expect(mcpTools).toHaveBeenCalledOnce()
 		expect(provider).toHaveBeenCalledOnce()
 	})
 })

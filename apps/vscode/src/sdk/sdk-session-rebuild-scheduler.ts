@@ -156,8 +156,21 @@ export class SdkSessionRebuildScheduler {
 		}
 		const drainedReasons: ReadonlySet<SessionRebuildReason> = new Set(snapshot.map(([reason]) => reason))
 
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION04-P1-CONSERVATION-SUFFIX:
+		// Both early-return branches re-queue the SUFFIX of the snapshot
+		// from `currentIndex` onward, not the entire snapshot. The
+		// predecessor CORRECTION03 requeued the whole snapshot, which
+		// re-inserted already-executed entries (e.g. `mcpTools` after the
+		// first rebuild) into `pending`; the next drain cycle then
+		// re-executed them, violating the conservation invariant
+		// "requeue unexecuted entries, not replay executed ones".
+		// Track the current index inside the async drain so the
+		// branches below can slice from `snapshot[currentIndex..]`.
+		let currentIndex = 0
+
 		const drain = async (): Promise<void> => {
-			for (const [reason, rebuild] of snapshot) {
+			for (; currentIndex < snapshot.length; currentIndex++) {
+				const [reason, rebuild] = snapshot[currentIndex]
 				const activeSession = this.options.sessions.getActiveSession()
 				if (!activeSession) {
 					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-P1-CONSERVATION:
@@ -168,15 +181,19 @@ export class SdkSessionRebuildScheduler {
 					return
 				}
 				if (activeSession.isRunning) {
-					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-P1-CONSERVATION:
+					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION04-P1-CONSERVATION-SUFFIX:
 					// The session became running mid-drain (a turn started).
-					// Re-queue the remaining snapshot entries (and any that
-					// arrived after the snapshot was taken) so the next
-					// drain cycle, when the session is idle again, picks
-					// them up. Without this re-queue, the snapshot's
-					// `pending.delete(reason)` (executed BEFORE the loop)
-					// would have permanently removed them.
-					for (const [requeueReason, requeueRebuild] of snapshot) {
+					// Re-queue only the SUFFIX starting at `currentIndex`
+					// (the unexecuted snapshot entries plus any that
+					// arrived after the snapshot was taken). Already-
+					// executed entries (snapshot[0..currentIndex]) must
+					// NOT be re-inserted; otherwise the next drain cycle
+					// re-runs them. Without the suffix slice, the
+					// snapshot's `pending.delete(reason)` (executed BEFORE
+					// the loop) would also have permanently removed the
+					// unexecuted entries — that was the CORRECTION03
+					// motivation for the requeue.
+					for (const [requeueReason, requeueRebuild] of snapshot.slice(currentIndex)) {
 						if (!this.pending.has(requeueReason)) {
 							this.pending.set(requeueReason, requeueRebuild)
 						}
@@ -184,12 +201,13 @@ export class SdkSessionRebuildScheduler {
 					return
 				}
 				if (this.isDeferredCompletionOutstanding()) {
-					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03:
-					// Hold the rebuild until the deferred obligation settles.
-					// Re-queue the remaining snapshot entries (same P1
-					// conservation rationale as the isRunning branch —
-					// see above).
-					for (const [requeueReason, requeueRebuild] of snapshot) {
+					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION04-P1-CONSERVATION-SUFFIX:
+					// Hold the rebuild until the deferred obligation
+					// settles. Same suffix-only requeue as the isRunning
+					// branch above; the predecessor branch requeued the
+					// whole snapshot and would replay already-executed
+					// entries after the obligation settles.
+					for (const [requeueReason, requeueRebuild] of snapshot.slice(currentIndex)) {
 						if (!this.pending.has(requeueReason)) {
 							this.pending.set(requeueReason, requeueRebuild)
 						}
