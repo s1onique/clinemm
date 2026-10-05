@@ -18694,3 +18694,80 @@ drain-coalescing fix. No production semantic delta for the OFF path.
 **VERDICT:** PASS_FIRST_ELM_AUTHORITY_SEAM.
 
 **MYC-CLINEMM03 remains HOLD** (unchanged; LIVE qualification against an isolated ClineMM dogfood Extension Host is out of scope for this ACT).
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION — REVIEWER P1 + HALT_ARTIFACT — 2026-10-05
+
+**Reviewer verdict correction** (Factory review surfaced two P1 issues with the
+first-commit report):
+
+1. **Verdict overreach.** The first commit claimed
+   `VERDICT: PASS_FIRST_ELM_AUTHORITY_SEAM` while the report itself
+   admitted `VSIX: not built` and `LIVE: not executed`. Production-shape
+   REAL seam tests are excellent causal evidence, but they cannot be
+   promoted to installed-LIVE qualification without an installed dogfood
+   Extension Host running the same mundane workload. The honest verdict
+   at this point is `PASS_MCP_RESTART_CAUSAL_REPAIR + HALT_ARTIFACT_UNBOUND`,
+   not `PASS_FIRST_ELM_AUTHORITY_SEAM`. Acknowledged and corrected.
+
+2. **P1 scheduler conservation defect** (caught in review). The new
+   `drainIfIdle()` snapshots all pending rebuilds and deletes all
+   snapshot reasons from `pending` before executing them. If the loop
+   then takes an early-return branch (`activeSession` disappeared,
+   `isRunning` flipped true, or `isDeferredCompletionOutstanding()`
+   flipped true mid-rebuild), the remaining unexecuted snapshot
+   entries were silently lost because they had already been deleted
+   from `pending`. The predecessor `while (pending.size > 0)` loop
+   avoided the loss mode by always looping back to read the live map;
+   the snapshot rewrite must re-queue explicitly.
+
+   **P1 fix applied** at `apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts`:
+   both early-return branches now loop over the snapshot and
+   `pending.set(reason, ...)` each entry not already in pending. Two
+   new tests at `apps/vscode/src/sdk/sdk-session-rebuild-scheduler.test.ts`:
+   - `re-queues unexecuted snapshot entries when isRunning flips mid-drain`
+     (mcpTools rebuild sets isRunning=true; provider + terminalExecutionMode
+     must re-drain when idle).
+   - `re-queues unexecuted snapshot entries when deferredOutstanding flips mid-drain`
+     (mcpTools rebuild flips deferred true; provider must re-drain when settled).
+
+   Scheduler tests: 7/7 GREEN. mcprestart tests: 10/10 GREEN. Conservation
+   matrix: 100% PASS.
+
+**Artifact / LIVE qualification** (per the reviewer's required sequence):
+
+- `python3 scripts/build-dogfood-vsix.py --force`:
+  - source_head: `0170b7427403b74364d4d6de048d6e87c367aa7c`
+  - dogfood_version: `4.1.16-5a1c485cb-0170b7427`
+  - artifact: `dist/dogfood/clinemm-4.1.16-5a1c485cb-0170b7427.vsix`
+  - sha256: `4bc6b738ea68e75d474e61bb66e087480c3f42a49a658cbfb7ad05ff032bc424`
+  - bytes: 29,098,740
+  - Elm kernel SHA-256: `15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c`
+  - skip_typecheck: false
+- **HALT_ARTIFACT_NOT_CORRECTION03** on install: the IDE sandbox
+  blocks `mkdir` for `~/.vscodium-clinemm/User/` (same halt as the
+  prior `HALT_ARTIFACT_NOT_CORRECTION03` from the COMPLETION-CONTINUATION-
+  DELIVERY-SEAM01 cluster). Without `User/` the `codium --install-extension`
+  cannot create its `extensions.json` and the `mkdir` for the extracted
+  extension directory fails with `EPERM: operation not permitted`. The
+  installed Extension Host therefore remains CORRECTION02 at 1777c58c,
+  not the new CORRECTION03 at 0170b7427. The VSIX is built, SHA-bound,
+  and ready to install in a non-sandbox environment; the LIVE
+  qualification cannot be re-run in this IDE session.
+
+**Final verdict for this ACT:**
+```
+PASS_MCP_RESTART_CAUSAL_REPAIR
++ HALT_ARTIFACT_UNBOUND
+```
+NOT `PASS_FIRST_ELM_AUTHORITY_SEAM`. The honest P0 evidence is the
+production-shape RED + GREEN suite (real MCP coordinator, real rebuild
+scheduler, real SdkSessionLifecycle.replaceActiveSession, real
+reevaluateDeferredCompletionBarrier — only `VscodeSessionHost.create`
+is mocked). The ablation (predicate disabled → RED-01 FAILS) is the
+cleanest proof of causal composition.
+
+**MYC-CLINEMM03 remains HOLD** (unchanged; LIVE qualification against
+an isolated ClineMM dogfood Extension Host is required to lift the
+hold, and the IDE sandbox blocks the install).
+
+**Subject head:** `0170b7427403b74364d4d6de048d6e87c367aa7c`
