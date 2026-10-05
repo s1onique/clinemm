@@ -18301,3 +18301,66 @@ SEMANTIC_DELTAS
 ```
 
 **Live classification:** HALT_ARTIFACT_BUILD_FAILED — the canonical dogfood builder could not complete in this sandbox. The Elm `package.elm-lang.org/all-packages` TLS handshake failed, the local `~/.elm/0.19.2/packages/lock` is held by a stale `elm-test` and is read-only, and the grpc-tools native binary required a network fetch. The committed source (71fd20448) is GREEN across every test gate above; the halt is at the binary-build layer, not in the source. The operator MUST either (a) run the canonical dogfood builder in an environment that can reach package.elm-lang.org and write to `~/.elm/`, then install the resulting VSIX, or (b) accept the PREDECESSOR bound VSIX (`clinemm-ccdco01-d73f2d49.vsix`) — note that the predecessor VSIX does NOT yet contain the dogfood-gate wiring; the predecessor runtime always collects counters. The build-source discrepancy is therefore honest: the PREDECESSOR VSIX is structurally a step behind the CORRECTION02 source. Once a fresh dogfood VSIX is produced from HEAD 71fd20448, operator must (a) install exact VSIX in normal desktop ClineMM host and run the mundane workload that produced LIVE A/B, (b) run the four dump commands (`Cline Debug: Dump Continuation Cardinality Authority`, `Cline Debug: Dump Completion Authority Elm Shadow`, `Cline Debug: Dump Completion Authority Elm Authority`, `Cline Debug: Dump Completion Continuation Delivery`) and apply the discriminator table §13 to classify CASE A..H.
+**Live classification:** HALT_ARTIFACT_BUILD_FAILED — the canonical dogfood builder could not complete in this sandbox. The Elm `package.elm-lang.org/all-packages` TLS handshake failed, the local `~/.elm/0.19.2/packages/lock` is held by a stale `elm-test` and is read-only, and the grpc-tools native binary required a network fetch. The committed source (71fd20448) is GREEN across every test gate above; the halt is at the binary-build layer, not in the source. The operator MUST either (a) run the canonical dogfood builder in an environment that can reach package.elm-lang.org and write to `~/.elm/`, then install the resulting VSIX, or (b) accept the PREDECESSOR bound VSIX (`clinemm-ccdco01-d73f2d49.vsix`) — note that the predecessor VSIX does NOT yet contain the dogfood-gate wiring; the predecessor runtime always collects counters. The build-source discrepancy is therefore honest: the PREDECESSOR VSIX is structurally a step behind the CORRECTION02 source. Once a fresh dogfood VSIX is produced from HEAD 71fd20448, operator must (a) install exact VSIX in normal desktop ClineMM host and run the mundane workload that produced LIVE A/B, (b) run the four dump commands (`Cline Debug: Dump Continuation Cardinality Authority`, `Cline Debug: Dump Completion Authority Elm Shadow`, `Cline Debug: Dump Completion Authority Elm Authority`, `Cline Debug: Dump Completion Continuation Delivery`) and apply the discriminator table §13 to classify CASE A..H.
+
+---
+
+## ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION02-DOGFOOD-DIAGNOSTIC-GATE-AND-ARTIFACT-BINDING — INSTRUMENTED_BUILD — 2026-05-10
+
+**Mission:** Gate the `dumpCompletionContinuationDelivery` callback-outcome counter behind the existing dogfood profile so the diagnostic never affects production semantics, AND bind the ACT-report artifact to a single canonical installable VSIX so operator-installation identity is verifiable from disk.
+
+**Status:** INSTRUMENTED_BUILD (RED/GREEN complete + typecheck/lint/diff-check GREEN, no production semantic delta). Built VSIX installed as `s1onique.clinemm-4.1.16-5a1c485cb-a5d0f0f23` at `~/.vscodium-clinemm/extensions/`. Live classification pending.
+
+ENTRY_HEAD          = (unchanged from CORRECTION01-LIVE-CALLBACK-OUTCOME board block)
+SUBJECT_HEAD        = 71fd204486f80aa0a11f6b85b5878817dd301cf3 (CORRECTION02 commit, gate + binding)
+BUILT_FROM_HEAD     = a5d0f0f23 (from git refactor of CORRECTION02 followups)
+DOGFOOD_VERSION     = 4.1.16-5a1c485cb (UNCHANGED from predecessor ACT; subject_head baked into build name)
+VSIX_PATH           = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-5a1c485cb-a5d0f0f23.vsix
+INSTALLED_AT        = /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-a5d0f0f23/
+
+(Phase A work + gates documented in commit 71fd20448 + a5d0f0f23 messages.)
+
+---
+
+## ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR — INSTRUMENTED_BUILD — 2026-05-10
+
+**Mission:** Instrument the U0..U11 *upstream* (SDK-side) seams around `enqueueCompletionContinuation` with the same default-off dogfood-gated aggregate counter pattern used for the downstream Delivery counter, so the LIVE discriminator table can identify the FIRST failing upstream transition (crossing the SDK boundary into the host).
+
+**Status:** INSTRUMENTED_BUILD (Phase A complete in source at `8849c3dbd`: 6 RED/GREEN tests, source `dumpCompletionContinuationUpstream` command contribution + handler wired in `apps/vscode/src/registry.ts:170` + `apps/vscode/src/extension.ts`, typecheck/lint/diff-check GREEN, no production semantic delta). Source complete; correct artifact EXISTS at `./dist/dogfood/clinemm-4.1.16-5a1c485cb-8849c3dbd.vsix` and DOES contain the `Upstream` command in its manifest. Live classification: **HALT_ARTIFACT_NOT_CORRECTION03** — the installed artifact is the CORRECTION02 instrumented build (`a5d0f0f23`), NOT the CORRECTION03 instrumented build (`8849c3dbd`).
+
+SUBJECT_HEAD          = 8849c3dbd7392e38ea36a51bc136aaf18db214bd (CORRECTION03 — U0..U11 + Upstream dump)
+BUILT_FROM_HEAD       = 8849c3dbd
+DOGFOOD_VERSION       = 4.1.16-5a1c485cb
+CORRECT03_VSIX_PATH   = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-5a1c485cb-8849c3dbd.vsix
+CORRECT03_VSIX_BYTES  = 29097746
+INSTALLED_AT          = /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-a5d0f0f23/   ← WRONG ARTIFACT (CORRECTION02)
+CORRECT03_AT_INSTALL  = NONE — CORRECTION03 VSIX built but not installed; command palette does NOT list `Dump Completion Continuation Upstream`.
+
+---
+
+CORRECT03_AT_INSTALL  = NONE — CORRECTION03 VSIX built but not installed; command palette does NOT list `Dump Completion Continuation Upstream`.
+
+**Artifact identity proof (verifier-checked from disk on 2026-05-10):**
+
+| Source of truth | `dumpCompletionContinuationDelivery` | `dumpCompletionContinuationUpstream` |
+|---|---|---|
+| `apps/vscode/package.json` at `8849c3dbd` | YES | **YES** (lines 275-276) |
+| `apps/vscode/src/registry.ts` at `8849c3dbd` | YES | **YES** (line 170) |
+| VSIX `./dist/dogfood/clinemm-4.1.16-5a1c485cb-8849c3dbd.vsix` | YES | **YES** |
+| VSIX `./dist/dogfood/clinemm-4.1.16-5a1c485cb-a5d0f0f23.vsix` | YES | NO |
+| Installed `~/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-a5d0f0f23/package.json` | YES | **NO** |
+| Command Palette in running IDE (per operator screenshot) | YES | **NO** |
+
+**Verdict:** `HALT_ARTIFACT_NOT_CORRECTION03`. The previous LIVE observation of "all-zero callback-outcome counters" (provisional `CAPTURE_INSUFFICIENT`) is **uninformative** because the running artifact does NOT contain the CORRECTION03 instrumentation. The CORRECTION02 artifact DOES contain the Delivery counter but the Upstream counter (`dumpCompletionContinuationUpstream`) was added in CORRECTION03 only.
+
+**Required next operator action — NO new ACT, NO new code:**
+1. Install `./dist/dogfood/clinemm-4.1.16-5a1c485cb-8849c3dbd.vsix` into the normal ClineMM host (replace `~/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-a5d0f0f23/`).
+2. Restart fresh Extension Host.
+4. Confirm via Command Palette that `Cline Debug: Dump Completion Continuation Upstream` is now listed (alongside the four pre-existing dump commands).
+5. Re-run the mundane LIVE workload that previously produced all-zero Delivery counters.
+6. Run `Cline Debug: Dump Completion Continuation Upstream` — apply the §13 discriminator table to classify whether the upstream counters are non-zero (i.e., the asymmetry is upstream of the host boundary).
+7. Only then may a follow-up LIVE classification ACT be opened.
+
+**No new code. No new ACT. Build the actual `8849c3dbd` artifact first, install it, and re-collect.**
+
+---
