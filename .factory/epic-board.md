@@ -18364,3 +18364,79 @@ CORRECT03_AT_INSTALL  = NONE — CORRECTION03 VSIX built but not installed; comm
 **No new code. No new ACT. Build the actual `8849c3dbd` artifact first, install it, and re-collect.**
 
 ---
+
+## ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION04-LIVE-ACTIVE-SESSION-LOOKUP-DISCRIMINATOR — INSTRUMENTED_BUILD — 2026-05-10
+
+**Mission:** Narrow the pre-U3 instrumentation gap surfaced by the CORRECTION03 LIVE dump. The dump on the post-install LIVE run showed `markerPresent=1, markerMissing=1`, every identity mismatch counter = 0, and `unconsumedTerminalCountLast=null` — three `terminal_committed` facts were observed LIVE without any terminal-count read on the upstream side. The only obvious pre-U3 branch the CORRECTION03 instrumentation did not cover is the active-session lookup (`sessions.getActiveSession()`) at `sdk-session-event-coordinator.ts:770-776`, which silently clears the marker and returns when `!activeSession`. This correction adds four counters + one stop reason so the next LIVE run classifies whether the marker flip happens on the active-session lookup or further downstream.
+
+**Status:** INSTRUMENTED_BUILD (Phase A complete in source at `2f3d78df6`: 3 RED/GREEN tests added to `apps/vscode/src/sdk/__tests__/completion-continuation-upstream-discriminator01.ccupd01.test.ts` — UPSTREAM-DIAG-06 F-a (dogfood OFF, all-zero §11 invariant), F-b (dogfood ON, active session absent, reproduces LIVE chronology: `markerPresent=1, activeSessionLookupEntered=1, activeSessionMissing=1, markerClearedForMissingSession=1, lastStopReason="active_session_missing"` for reeval #1; reeval #2 sees `markerMissing=1`), F-c (dogfood ON, active session present, `activeSessionPresent=1, activeSessionMissing=0`); production wiring at `sdk-session-event-coordinator.ts:773-800` preserves §11 invariant — `getActiveSession()` is called exactly once, the SAME `activeSession` const is reused for BOTH the production check AND the `recordActiveSessionPresent` / `recordActiveSessionMissing` dispatch; typecheck/lint/diff-check GREEN; RED/GREEN verified by temporarily commenting the `recordActiveSessionMissing()` call → F-b FAILS, restoration → F-b PASSES; no production semantic delta outside the diagnostic).
+
+SUBJECT_HEAD          = 2f3d78df6... (CORRECTION04 — U2.5 active-session lookup + 3 tests)
+BUILT_FROM_HEAD       = 2f3d78df6
+DOGFOOD_VERSION       = 4.1.16-5a1c485cb
+CORRECT03_VSIX_PATH   = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-5a1c485cb-8849c3dbd.vsix  (CORRECTION03)
+CORRECT04_VSIX_PATH   = ./dist/dogfood/clinemm-4.1.16-5a1c485cb-2f3d78df6.vsix  (must be rebuilt from SUBJECT_HEAD 2f3d78df6)
+INSTALLED_AT          = /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-a5d0f0f23/   ← still CORRECTION02; CORRECTION03 and CORRECTION04 artifacts not yet installed.
+
+---
+
+**Live classification (currently inferred from the CORRECTION03 dump):**
+
+| Counter | Value | Interpretation |
+|---|---|---|
+| `notifyAgentTurnDoneEntered` | 1 | one `agent_turn_done` notification reached the coordinator |
+| `reevaluateEntered` | 2 | reeval ran twice (once for the boundary, once for `agent_turn_done`) |
+| `markerPresent` | 1 | reeval #1 observed the deferred-completion marker |
+| `markerMissing` | 1 | reeval #2 saw the marker cleared |
+| `activeSessionLookupEntered` | NEW (U2.5) | reeval #1 reached the active-session branch — should fire if the flip is here |
+| `activeSessionPresent` | NEW (U2.5) | reeval #1 found a defined session — should fire if the flip is NOT here |
+| `activeSessionMissing` | NEW (U2.5) | reeval #1 found no session — fires iff this branch clears the marker |
+| `markerClearedForMissingSession` | NEW (U2.5) | paired 1:1 with `activeSessionMissing` |
+| `sessionMismatch / taskMismatch / epochMismatch` | 0 | identity checks NEVER reached |
+| `outstandingAutonomousWork / ownerStillRunning` | 0 | U5/U6 NEVER reached |
+| `unconsumedTerminalCountLast` | null | U7 NEVER reached |
+| `enqueueIfHeldEntered / enqueueCompletionContinuationInvoked` | 0 | U8/U11 NEVER reached |
+| `lastStopReason` (post-CORRECTION03 dump) | `"marker_missing"` | last decision recorded by the runtime |
+| `lastRequestedSessionMatched` | false | last observed identity was absent |
+
+**Inference (current — to be replaced by the next LIVE dump):** The marker flip in the LIVE chronology happened at the active-session lookup branch. Specifically:
+
+reevaluation #1 (boundary):
+        marker present
+        activeSession absent   ← uninstrumented in CORRECTION03
+        marker cleared
+        return before terminal-count read
+
+reevaluation #2 (agent_turn_done):
+        marker now missing
+        lastStopReason = marker_missing
+
+**This is INFERRED, not measured.** The CORRECTION04 counters are the measurement.
+
+---
+
+**Live classification table (the LIVE operator should apply after the next dump):**
+
+| `activeSessionMissing` | `lastStopReason` (first reeval) | `lastStopReason` (second reeval) | Classification |
+|---|---|---|---|
+| 1 | `active_session_missing` | `marker_missing` | **`HALT_DEFERRED_MARKER_SESSION_LIFECYCLE`** — the active-session branch is the first divergent transition. |
+| 0 | (something past U2.5) | (something past U2.5) | `CAPTURE_INSUFFICIENT_DEEPER_UPSTREAM` — the active session IS present; the gap is elsewhere (probably a downstream cascade, not an upstream discriminator gap). |
+
+---
+
+**Verdict (this ACT):** `INSTRUMENTED_BUILD`. The discriminator is wired; the artifact binding proof for the operator (no new diagnostic enabled; no production semantic delta; dump command unchanged) is identical to the CORRECTION03 §26 proof. The next operator action is the SAME as CORRECTION03 §26: rebuild the CORRECTION04 artifact from SUBJECT_HEAD `2f3d78df6`, install it, restart the Extension Host, re-run the LIVE workload, dump, and apply the classification table above.
+
+**Required next operator action — NO new ACT, NO new code:**
+1. Rebuild the VSIX from SUBJECT_HEAD `2f3d78df6` (canonical `bun run package` produces `./dist/dogfood/clinemm-4.1.16-5a1c485cb-2f3d78df6.vsix`).
+2. Install that VSIX (replace the CORRECTION02 install at `~/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-a5d0f0f23/`).
+3. Restart fresh Extension Host.
+4. Confirm via Command Palette that `Cline Debug: Dump Completion Continuation Upstream` is listed (alongside the other dump commands).
+5. Re-run the mundane LIVE workload that previously produced `markerPresent=1, markerMissing=1` with no identity mismatch.
+6. Run the dump — apply the classification table above:
+   - If `activeSessionMissing=1, lastStopReason="active_session_missing"` → **`HALT_DEFERRED_MARKER_SESSION_LIFECYCLE`**. The first divergent transition is the active-session lookup. The success path requires determining *which* session disposes the active session between `submit_and_exit` and the terminal-idle event (likely a session-lifecycle race against `setTurnPhase("completed", ...)`).
+   - If `activeSessionPresent=1` → `CAPTURE_INSUFFICIENT_DEEPER_UPSTREAM` — a new discriminator or successor evidence is required.
+7. Only after the LIVE classification converges should a follow-up LIVE classification ACT be opened.
+
+**No new code in this change. No new ACT. Build the actual `2f3d78df6` artifact first, install it, and re-collect.**
+
+---
