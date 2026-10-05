@@ -18517,3 +18517,100 @@ reevaluation #2 (agent_turn_done):
 **DOGFOOD_VERSION:** `4.1.16-5a1c485cb` (unchanged; the build script produces `<version>-<package-sha>-<commit-sha>.vsix`).
 **Predecessor:** `ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION04-LIVE-ACTIVE-SESSION-LOOKUP-DISCRIMINATOR` (commit `2f3d78df6`).
 **Successor:** (next LIVE classification ACT — to be opened ONLY after the LIVE classification table converges; NOT opened here).
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CALLER-REASON-DISCRIMINATOR — P1-FIX — 2026-05-10
+
+**Mission:** Address the two P1 issues raised against the prior ACT by the Factory reviewer (verdict: `HALT_LIVE_DIAGNOSTIC_UNDUMPABLE`).
+
+  - P1-A: the recorder (`lifecycle-clear-recorder.ts`) exposed `getLifecycleClearSnapshot()` but had no operator-facing dump path. The diagnostic was NOT usable from the installed Extension Host — no host dump adapter, no command registration, no `package.json` contribution, no Command Palette entry. The claim "the next LIVE dump will identify the exact caller" was FALSE without the wiring.
+
+  - P1-B: the prior ACT silently committed `factory/baselines/file-size.csv` and `factory/baselines/file-size-summary.json` even though those baseline files are NOT part of this diagnostic mission. The diff showed `production_files` jumping from 1,697 to 3,365 and `all_tracked_files` from 3,346 to 10,854 — a clear signal the regeneration pulled from a different working tree. Per the repository-trust rule this MUST be removed from this ACT, not normalized.
+
+**Status:** P1-FIX DELIVERED at commit `81855b9ae`. P1-A wired via the standard CCARD / CCDO / CCDSO / CCNTUP / EHLOOP / ELM-SHADOW / ELM-AUTHORITY pattern (4 production wiring layers + 1 wiring-invariant test file + 1 host dump runtime). P1-B reverted at the working-tree level (baseline files now identical to state at `2f3d78df6`, the most recent commit that did NOT regenerate them).
+
+**P1-A wiring (mirrors `completion-continuation-upstream-runtime-host.ts`):**
+
+  - NEW `apps/vscode/src/sdk/lifecycle-clear-recorder-runtime-host.ts` (~107 lines)
+    - UNCONDITIONAL (operator can always inspect whatever the recorder captured, even after diagnostic disabled).
+    - `dump != clear` (no snapshot mutation).
+    - Output: JSON file under `context.globalStorageUri` named `lifecycle-clear.counters.json`.
+    - Narrow structural `LifecycleClearDumpContext` interface (mirrors the CCNTUP / CCARD shape) so production and test code pass a wider `vscode.ExtensionContext` that satisfies the shape — this module does NOT import vscode for type information.
+  - MOD `apps/vscode/src/registry.ts` (+15 lines):
+    - `DumpLifecycleClear: prefix + ".debug.dumpLifecycleClear"`, with ACT-marker comment, removal-trigger, and matched-gate note (uses `isDogfoodRuntime()` matching the ccupd01 / CCDO01 gate; no toggle / enable command).
+  - MOD `apps/vscode/src/extension.ts` (2-line import at line 11, 27-line `registerCommand` block):
+    - `vscode.commands.registerCommand(commands.DumpLifecycleClear, async () => { ... })`
+    - Success toast: `Lifecycle clear: enabled=<bool> total=<n> lastClearReason=<enum|null> lastUnrecognizedReason=<raw|null> -> <countersFile>.`
+    - Failure path: `[LIFECYCLE-CLEAR] dump failed` Logger.error + VS Code error message.
+  - MOD `apps/vscode/package.json` (+5 lines):
+    - New command declaration: `command: "cline.debug.dumpLifecycleClear"`, `title: "Cline Debug: Dump Lifecycle Clear"`, `category: "Cline"`. Positioned alongside the other `cline.debug.dump*` entries.
+  - NEW `apps/vscode/src/sdk/__tests__/lifecycle-clear-recorder-runtime-host01.clcrec03.test.ts` (6 wiring-invariant tests; 28/28 PASS across the 3 clcrec test files):
+    - CLCREC03.A registry.ts exposes `DumpLifecycleClear` command id
+    - CLCREC03.B extension.ts:activate registers `DumpLifecycleClear` and calls `dumpExtensionSideLifecycleClearSnapshot`
+    - CLCREC03.C package.json declares `cline.debug.dumpLifecycleClear` with title `Cline Debug: Dump Lifecycle Clear`
+    - CLCREC03.D host dump runtime exists, calls `getLifecycleClearSnapshot`, writes to `lifecycle-clear.counters.json`, does NOT call `resetLifecycleClearSnapshot`
+    - CLCREC03.E host dump public-profile round-trip (`enabled: false, total: 0`)
+    - CLCREC03.F host dump dogfood-profile round-trip (`enabled: true, total: N, lastClearReason: <enum>`)
+
+**P1-B baseline revert:**
+
+  - Reverted `factory/baselines/file-size.csv` and `factory/baselines/file-size-summary.json` to their state at commit `2f3d78df6`.
+  - Confirmed by `git diff HEAD~1 HEAD --stat`:
+      `factory/baselines/file-size-summary.json | 310 +-`
+      `factory/baselines/file-size.csv          | 8177 +++---`
+  - Confirmed the earlier values are restored:
+      `production_files: 1697` (from 3365)
+      `all_tracked_files: 3346` (from 10854)
+  - Note: the drift exists in commit `050e35356`'s tree history but is NOT in `HEAD`'s tree. The LIVE operator builds from `HEAD`; the artifact produced from `HEAD` is clean. The follow-up commit ensures even `git log` is clean for the ACT range starting at this commit.
+
+**Conservation (run and verified):**
+
+  | Gate | Result |
+  |---|---|
+  | `bun run check-types` | PASS (exit 0) |
+  | `bun run test:unit` | PASS (1246/1246 across 94 files) |
+  | `bun test clcrec01 (bun:test)` | PASS (18/18) |
+  | `bun test clcrec02 (bun:test)` | PASS (4/4) |
+  | `bun test ccupd01 (bun:test)` | PASS (9/9) |
+  | `bunx vitest run clcrec01+02+03` | PASS (28/28) |
+  | `bunx vitest run ccdco01+ccdso01` | PASS (18/18) |
+  | `bunx biome check (8 files)` | 0 NEW diagnostics (count identical pre-fix vs post-fix) |
+  | `git diff --check` | CLEAN |
+  | `package.json` JSON validity | OK (verified via Node JSON.parse) |
+
+**Subject head:** `81855b9ae` (this commit).
+**Subject head parent:** `f83077f06` (board update).
+**Predecessor:** `050e35356` (recorder + 2 tests + wiring; baseline drift now reverted at HEAD).
+**BUILT_FROM_HEAD:** `81855b9ae`.
+
+**Hard prohibitions (unchanged from prior ACT):**
+
+  - Do NOT move `clearActiveSessionReference` to a deferred-clear queue.
+  - Do NOT add a `getSessionById` / `findSession` registry.
+  - Do NOT retain a stale `sdkHost` past `clearActiveSessionReference()`.
+  - Do NOT touch `SdkSessionLifecycle` ordering.
+  - Do NOT touch Elm / CCARD / BCB / PCCA / CPA / CCDS01 / PCRL01 / POSTRUN / Elm shadow / Elm authority / presentation / queue / MCP / MYC / proto / state fields.
+  - Do NOT regenerate `factory/baselines/file-size.csv` or `factory/baselines/file-size-summary.json` in this ACT or any subsequent LIVE-classification ACT. Those files belong to the baseline-regeneration workflow, not to this diagnostic.
+
+**Discriminator retirement policy (unchanged):**
+
+  - After the next LIVE dump produces a non-empty `lastClearReason`, the new ACT that consumes the discriminator MUST also include `resetLifecycleClearSnapshot()` calls (or the equivalent) to retire the recorder. The retirement is deliberate and explicit.
+  - On retirement, the recorder + the host dump runtime + the registry entry + the package.json declaration + the extension.ts handler + the test files MUST be removed TOGETHER. The wiring-invariant tests will turn RED if any single layer is removed in isolation (that's the property they guard).
+
+**No new architecture. No new proto. No new state field on the webview push. No fix to `getActiveSession()`. No delay clear. No stable session-by-id lookup. No bound continuation authority. NO P0. NO P1 after removal. This is a single bounded diagnostic cycle, now LIVE-operator-usable.**
+
+**Required next operator action — NO new ACT, NO new code:**
+
+1. Rebuild the VSIX from SUBJECT_HEAD `81855b9ae` (canonical `bun run package` produces `./dist/dogfood/clinemm-4.1.16-<hash>-81855b9ae.vsix`).
+2. Install that VSIX (replace the CORRECTION04 install at `~/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-<hash>-050e35356/`).
+3. Restart fresh Extension Host.
+4. Confirm via Command Palette that BOTH dump commands are listed:
+   - `Cline Debug: Dump Completion Continuation Upstream` (from CORRECTION04)
+   - `Cline Debug: Dump Lifecycle Clear` (from this P1-FIX)
+5. Re-run the mundane LIVE workload that previously produced `markerPresent=1, markerMissing=1, activeSessionMissing=1`.
+6. Run the `Cline Debug: Dump Lifecycle Clear` command. Inspect the toast (and optionally the JSON file at `<globalStorageUri>/lifecycle-clear.counters.json`). Apply the classification table from the prior board entry at `f83077f06`:
+   - If `total >= 1` and `lastClearReason` is one of the 8 known enum values → that caller is the live trigger. Open a follow-up LIVE classification ACT to bound the repair per §11 (do not move `getActiveSession()`; repair is at the layer that produced the CLEAR).
+   - If `total >= 1` and `lastClearReason === "unrecognized"` → new enumeration site surfaced; extend the enum in a successor ACT and re-collect.
+   - If `total === 0` → `CAPTURE_INSUFFICIENT_DEFERRED_BARRIER_NOT_THE_WRITER` — the writer never fired; deeper discriminator required.
+7. Only after the LIVE classification converges should a follow-up LIVE classification ACT be opened.
+
+**MYC-CLINEMM03 remains HOLD** (unchanged; the LIVE operator-driven loop is paused behind the deferred-completion P0).
