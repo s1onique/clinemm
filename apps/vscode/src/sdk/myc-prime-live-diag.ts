@@ -300,6 +300,13 @@ export type MycPrimeLiveAcquisitionFailureClass =
 	// tool_call (typed-error expansion — ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01)
 	| "tool_timeout"
 	| "method_not_found"
+	// tool_call (tool-name mismatch expansion — ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01):
+	// the MCP server returned `McpError(InvalidParams)` with the canonical
+	// `unknown tool 'X'` prefix. This is the discriminator class that
+	// surfaces the production tool-name mismatch (e.g. live session
+	// established `unknown tool 'prime'` because the automatic path
+	// called `"prime"` while the real published server exports `myc_prime`).
+	| "unknown_tool"
 	| "tool_returned_error"
 	| "client_request_failed"
 	// result_parse

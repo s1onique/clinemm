@@ -132,7 +132,7 @@ async function primeViaHub(
 	const args: Record<string, unknown> = { session: sessionId, format: "agent" }
 	if (extra.repo !== undefined) args.repo = extra.repo
 	if (extra.budget !== undefined) args.budget = extra.budget
-	const res = await hub.callTool(serverName, "prime", args, ulid, undefined, sessionId)
+	const res = await hub.callTool(serverName, "myc_prime", args, ulid, undefined, sessionId)
 	const text = (res.content as Array<{ type: string; text?: string }>).find((c) => c.type === "text")?.text
 	return JSON.parse(text!)
 }

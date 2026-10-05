@@ -37,23 +37,53 @@ import { recordMycPrimeLiveAcquisition, startMycPrimeLiveDiag } from "./myc-prim
  * carry enough structure to classify (string-prefix detection only —
  * a back-compat path).
  *
+ * ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01: added
+ * `unknown_tool` for `McpError(code=InvalidParams)` whose message
+ * carries the canonical `unknown tool 'X'` prefix. The published
+ * myc MCP server returns this exact shape (`-32602: unknown tool
+ * 'prime'`) when the automatic session-start prime is invoked with
+ * a tool name the server does not export. The LIVE dump established
+ * this as the FIRST divergence; collapsing it to `client_request_failed`
+ * (as the prior discriminator did) hid the real cause and prevented
+ * the RED witness from being reproducible.
+ *
  * Priority order (highest specificity first):
- *   1. `ErrorCode.RequestTimeout` → `tool_timeout`
- *   2. `ErrorCode.MethodNotFound`  → `method_not_found`
- *   3. any other typed `McpError`  → `client_request_failed` (the catch-all
- *      is preserved for back-compat with AF-RED-05; the discriminator tree
- *      can be tightened in a future ACT to split into specific codes
- *      like `send_failed`, `connection_closed`, etc.)
- *   4. non-typed `Error`           → `client_request_failed`
- *   5. undefined                   → `client_request_failed` (defensive)
+ *   1. `ErrorCode.RequestTimeout`                          → `tool_timeout`
+ *   2. `ErrorCode.MethodNotFound`                          → `method_not_found`
+ *   3. `ErrorCode.InvalidParams` AND message contains the canonical
+ *      `unknown tool` substring (the MCP server's unknown-tool "shape";
+ *      the SDK's `McpError` constructor prefixes the message with
+ *      `MCP error <code>: `, so the literal starts AFTER the prefix —
+ *      e.g. `MCP error -32602: unknown tool 'prime'`)  → `unknown_tool`
+ *   4. any other typed `McpError`                          → `client_request_failed`
+ *      (the catch-all is preserved for back-compat with AF-RED-05; the
+ *      discriminator tree can be tightened in a future ACT to split
+ *      into specific codes like `send_failed`, `connection_closed`,
+ *      etc.)
+ *   5. non-typed `Error`                                   → `client_request_failed`
+ *   6. undefined                                            → `client_request_failed`
+ *      (defensive)
  */
-function classifyToolCallFailure(error: unknown): "tool_timeout" | "method_not_found" | "client_request_failed" {
+function classifyToolCallFailure(error: unknown): "tool_timeout" | "method_not_found" | "unknown_tool" | "client_request_failed" {
 	if (error instanceof McpError) {
 		if (error.code === ErrorCode.RequestTimeout) {
 			return "tool_timeout"
 		}
 		if (error.code === ErrorCode.MethodNotFound) {
 			return "method_not_found"
+		}
+		if (
+			error.code === ErrorCode.InvalidParams &&
+			typeof error.message === "string" &&
+			// ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01: the MCP SDK
+			// McpError constructor prefixes every error with `MCP error <code>: `,
+			// so the canonical `unknown tool 'X'` substring appears AFTER the
+			// prefix (e.g. the LIVE dump: `MCP error -32602: unknown tool 'prime'`).
+			// Use a substring check, not a prefix check, to catch the canonical
+			// MCP error shape.
+			error.message.includes("unknown tool")
+		) {
+			return "unknown_tool"
 		}
 	}
 	return "client_request_failed"
@@ -147,10 +177,13 @@ export function resolveMycServerName(mcpHub: McpHub, override?: string): string 
  *
  * The function:
  *   1. Looks up the configured `myc` MCP server (no-op if absent).
- *   2. Calls `mcpHub.callTool(serverName, "prime", args, ulid, signal, sessionId)`.
+ *   2. Calls `mcpHub.callTool(serverName, "myc_prime", args, ulid, signal, sessionId)`.
  *      The `sessionId` arg is the load-bearing sixth argument —
  *      it triggers `ensureSessionConnection(sessionId)` which lazily
  *      spawns the per-session child with `MYC_SESSION_ID` injected.
+ *      The advertised tool name on the real published myc MCP server
+ *      is `myc_prime` (not `prime`) — see
+ *      ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01.
  *   3. Parses the first text content block as the prime text.
  *   4. On success, records `status: "ok"` with the parsed text.
  *   5. On any error, records `status: "failed"` with the error message
@@ -216,7 +249,16 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 	}
 
 	try {
-		const response = await mcpHub.callTool(serverName, "prime", args, ulid, signal, sessionId)
+		// ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01: the
+		// published myc MCP server advertises the tool as `myc_prime`,
+		// NOT `prime`. A real-installed invocation of `"prime"` returns
+		// `MCP error -32602: unknown tool 'prime'` (InvalidParams),
+		// which the typed-error classifier below now discriminates as
+		// `failureClass=unknown_tool`. The legacy `"prime"` literal
+		// collapsed silently into `client_request_failed` and masked the
+		// real cause. Fix is one token; ablation back to `"prime"`
+		// re-exposes `unknown tool 'prime'` deterministically.
+		const response = await mcpHub.callTool(serverName, "myc_prime", args, ulid, signal, sessionId)
 		const content = (response as { content?: unknown }).content
 		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01:
 		// detect `response.isError === true` BEFORE the result-parse branch.

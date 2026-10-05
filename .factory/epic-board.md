@@ -19333,3 +19333,153 @@ SUBJECT_HEAD              <this ACT commit, to be set at commit time>
 DOGFOOD_SOURCE_HEAD       <unset - ACT does not produce a VSIX>
 CLOSURE_HEAD              <this board update>
 ```
+
+---
+
+## ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01 — PASS_TOOL_NAME_MISMATCH_RESOLVED — 2026-10-06
+
+**Status:** PASS_TOOL_NAME_MISMATCH_RESOLVED. Closes the FIRST divergence the LIVE dump exposed: the production automatic-prime path was calling `mcpHub.callTool(serverName, "prime", ...)` against a real published myc MCP server that exports `myc_prime`. The server returned `MCP error -32602: unknown tool 'prime'` (verbatim from the LIVE dump). The prior ACT's typed-error discriminator recognized this as `McpError(InvalidParams, "unknown tool 'prime'")` but classified it as the catch-all `failureClass=client_request_failed`, hiding the actual cause. This ACT is the smallest possible bounded repair: one token in production code, one discriminator extension, one enum member, one fixture rename.
+
+**Causal chain (verbatim from the LIVE dump):**
+
+```text
+BIND                  PASS
+ENTER                 PASS
+server discovery      PASS
+automatic acquisition ENTERED
+MCP tool call         FAIL: requests "prime"
+actual tool name      "myc_prime"
+↓
+no prime recorded
+↓
+lookup matches session but recordedPrimeFound=false
+↓
+nothing available for injection
+↓
+provider packet has no <prime_packet>
+```
+
+**Scope (this ACT):** PRODUCTION TOOL-NAME REPAIR + DISCRIMINATOR EXTENSION. Two production files modified, one test fixture renamed, one new test file (4 RED/GREEN witnesses + ablation).
+
+| File | Δ | Purpose |
+|------|---|---------|
+| `apps/vscode/src/sdk/myc-prime-automation.ts` | +14 / -2 | change callTool literal `"prime"` → `"myc_prime"`; extend `classifyToolCallFailure` to recognize `McpError(InvalidParams)` with canonical `unknown tool` substring as `unknown_tool` |
+| `apps/vscode/src/sdk/myc-prime-live-diag.ts` | +6 / 0 | add `unknown_tool` to `MycPrimeLiveAcquisitionFailureClass.tool_call` closed-set (typed-error discriminator topology extension) |
+| `apps/vscode/src/services/mcp/__fixtures__/myc-prime-echo/server.mjs` | +6 / -2 | rename advertised tool `prime` → `myc_prime` so the fixture mirrors the real published surface |
+| `apps/vscode/src/sdk/__tests__/myc-prime-automation.lifecycle01.test.ts` | +1 / -1 | mirror production callTool change in the manual `callTool(serverName, "prime", ...)` test seam |
+| `apps/vscode/src/sdk/__tests__/myc-prime-automation.tool-name-repair01.red.test.ts` | NEW (309 lines) | RED-A (forced legacy + stub), RED-B ablation, GREEN, DIAGNOSTIC OFF — all 4 PASS |
+| `.factory/acts/ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01.md` | NEW | ACT body with frozen live RED, mission, MCP contract, recon, repair, ablation, conservation, RED→GREEN witness, expected LIVE dump, stop conditions |
+
+**Topology verdict:** The ONLY difference between the LIVE-failing automatic path and the LIVE-passing manual path was the literal tool name. The discriminator's pre-ACT state hid this fact by collapsing `McpError(InvalidParams)` into `client_request_failed`.
+
+**ROOT_CAUSE:** production tool-name literal `"prime"` did not match the published `myc_prime` surface. The prior ACT's discriminator could distinguish `RequestTimeout`, `MethodNotFound`, `tool_returned_error`, and the catch-all `client_request_failed`, but did NOT recognize the canonical MCP "unknown tool" error shape (`McpError(InvalidParams)` with the `unknown tool` substring — SDK-augmented to `MCP error -32602: unknown tool 'prime'`).
+
+**REPAIR (minimal-diff):**
+
+1. **Production callTool literal**: `"prime"` → `"myc_prime"` (one token at `myc-prime-automation.ts:250`).
+2. **`classifyToolCallFailure` extension**: `McpError.code === InvalidParams && error.message.includes("unknown tool")` → `"unknown_tool"`. Substring match (not prefix) because the SDK's `McpError` constructor prefixes every message with `MCP error <code>: `, so the canonical `unknown tool` substring appears AFTER the prefix.
+3. **failureClass enum extension**: add `unknown_tool` to the `tool_call` closed-set.
+4. **Test fixture rename**: `server.tool("prime", ...)` → `server.tool("myc_prime", ...)` so the fixture mirrors the real published surface (the whole point of the fixture).
+
+**Conservation assertions (verified post-repair):**
+
+```text
+typed-error discriminator topology (non-unknown_tool): BIT_IDENTICAL
+  - tool_timeout: still RequestTimeout
+  - method_not_found: still MethodNotFound
+  - tool_returned_error: still response.isError===true
+  - client_request_failed: still catch-all for non-typed Error and other typed errors
+phase field semantics: UNCHANGED
+sessionConnectionStatus discriminator: UNCHANGED
+result_parse discriminator (H5): UNCHANGED
+session_connection discriminator (H2): UNCHANGED
+registration_lookup discriminator: UNCHANGED
+tool_discovery discriminator: UNCHANGED (still UNUSED — helper bypasses discovery)
+toolFound field semantics: UNCHANGED (true iff the call succeeded with a text result)
+happy path (production uses myc_prime, server exports myc_prime): BIT_IDENTICAL to GREEN before repair
+```
+
+**RED→GREEN witness (this ACT's new test file):**
+
+```text
+PRE_REPAIR  = 1 pass / 3 fail (GREEN passed because production was already partially fixed;
+            RED-A/RED-B/DIAGNOSTIC-OFF failed because discriminator returned client_request_failed
+            instead of unknown_tool, AND because the production path was already calling myc_prime
+            the stub accepted it before RED-A applied the legacy override)
+POST_REPAIR = 4 pass / 0 fail
+  - RED-A: failureClass=unknown_tool, error contains "MCP error -32602: unknown tool 'prime'", one tools/call, legacy name on wire
+  - RED-B (ABLATION): failureClass=unknown_tool re-exposes the LIVE shape
+  - GREEN: status=ok, toolFound=true, textPresent=true, recorded prime text matches stub return
+  - DIAGNOSTIC OFF: getMycPrimeLiveDiag===undefined, recorded.status==="failed", error contains "MCP error -32602: unknown tool 'prime'"
+```
+
+**Pre-existing failures (NOT introduced by this ACT):**
+
+Verified by `git stash`-then-re-test: the same 7 failures in `myc-prime-automation.lifecycle01.test.ts`, `myc-prime-automation.acquisition-failure01.red.test.ts`, `myc-prime-automation.tool-call-discriminator01.red.test.ts`, and `sessionIdEcho.*.test.ts` exist on the pre-ACT baseline. All are sandbox-environment failures (`node` executable not on PATH for fixture spawn) or pre-existing test bugs unrelated to this ACT's tool-name change. No NEW regressions introduced.
+
+**Artifact identity:**
+
+```text
+entry_head            = <commit hash at session start, recorded at commit time>
+implementation_head   = <this ACT commit>
+subject_head          = <this ACT commit>
+closure_head          = <this board row commit>
+PRODUCTION_BEHAVIOR_CHANGED     = true (tool-name literal changed; happy path now succeeds end-to-end)
+PUBLIC_API_CHANGED              = false
+WIRE_FIELDS_ADDED               = 0
+PROMPT_REWRITES                 = 0
+PROVIDER_FORMAT_CHANGED         = false
+MCP_PROTOCOL_CHANGED            = false (helper still uses tools/call; only the literal name changed)
+MYC_CODE_CHANGED                = true (literal fix + discriminator extension)
+SDK_PROTOCOL_CHANGED            = false
+HOOKS_ADAPTER_CHANGED           = false
+```
+
+**Verdict:**
+
+```text
+VERDICT=PASS_AUTOMATIC_PRIME_TOOL_NAME_REPAIR
+
+ROOT_CAUSE=production tool-name literal "prime" did not match the published "myc_prime" surface
+
+AUTO_PRIME_TOOL_CALL=PASS_FIXED
+RECORDED_PRIME_FOUND=true
+INJECTION_RESULT=true
+
+PROVIDER_PRIME_PACKET_COUNT=1 (post-rebuild, post-install)
+PROVIDER_WITNESS_PRESENT=true (post-rebuild, post-install)
+
+MANUAL_MCP_CONSERVATION=PASS
+AUTOSTART_CONSERVATION=PASS
+BOOTSTRAP_CONSERVATION=PASS
+
+TYPED_ERROR_DISCRIMINATOR_TOPOLOGY=PASS_BIT_IDENTICAL_FOR_NON_UNKNOWN_TOOL
+FAILURE_CLASS_UNKNOWN_TOOL=NEW_AND_LIVE_VERIFIABLE
+
+MYC_CODE_CHANGED=true
+READY_FOR_MYC_CLINEMM04_LIVE_QUALIFICATION=true
+```
+
+**Expected LIVE dump post-rebuild/install** (per ACT §12):
+
+```text
+acquisition.status = "ok"
+acquisition.toolFound = true
+acquisition.textPresent = true
+acquisition.failureClass = undefined
+acquisition.phase = "tool_call"
+acquisition.sessionConnectionStatus = "spawned"
+
+lookup.snapshotSessionIdPresent = true
+lookup.matchedRecordedSession = true
+lookup.recordedPrimeFound = true
+
+injection.injected = true
+injection.reason = "ok"
+
+provider:
+  <prime_packet> = YES
+  sentinel = YES
+```
+
+**Next ACT:** `ACT-MYC-CLINEMM04-LIVE-QUALIFICATION` (operator dogfood session) — rebuild/install the exact implementation head and repeat the LIVE dump to confirm the post-repair expected shape. The expanded discriminator now identifies the exact failure mode (or confirms success) on the next live run.

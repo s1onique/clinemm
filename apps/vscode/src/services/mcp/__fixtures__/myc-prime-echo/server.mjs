@@ -4,10 +4,18 @@
  *
  * A real MCP server (Node ESM, stdio transport) used by
  * `myc-prime-automation.lifecycle01.test.ts` to prove the
- * `myc prime` automation reaches the per-session MCP child with the
+ * `myc_prime` automation reaches the per-session MCP child with the
  * session id threaded through MYC_SESSION_ID.
  *
- * Exposes one tool: `prime`. Returns:
+ * ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01: the fixture
+ * advertises `myc_prime` to mirror the real published myc MCP server
+ * surface. The prior `"prime"` name was a test-only divergence from
+ * the real surface — production was calling `"prime"` against a real
+ * server that exports `myc_prime`, yielding `unknown tool 'prime'`.
+ * The fixture now mirrors the real surface so the GREEN reproduction
+ * is the same shape the LIVE dump will exercise.
+ *
+ * Exposes one tool: `myc_prime`. Returns:
  *   {
  *     pid:                process.pid,
  *     session:            process.env.MYC_SESSION_ID ?? null,
@@ -22,7 +30,7 @@
  * "did the session id you (the parent) passed in MYC_SESSION_ID actually
  * arrive here in MY child process env, AND did the parent's callTool
  * payload forward `session` to me?" The parent can read the answer via
- * `client.callTool({ name: "prime", arguments: { session, repo, format } })`
+ * `client.callTool({ name: "myc_prime", arguments: { session, repo, format } })`
  * and there is no way for the parent to fake that answer without
  * spawning the child.
  *
@@ -35,7 +43,7 @@ import { z } from "zod"
 const server = new McpServer({ name: "myc-prime-echo", version: "0.0.0" }, { capabilities: { tools: {} } })
 
 server.tool(
-	"prime",
+	"myc_prime",
 	"Returns { pid, session, session_keys, called_with_session, called_with_repo, called_with_format, myrc_args } read from THIS process's process.env plus the parent's callTool payload — proof that MYC_SESSION_ID arrives and that the parent correctly threads it as an argument.",
 	{
 		session: z.string().optional(),
