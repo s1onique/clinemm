@@ -85,6 +85,15 @@ import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscripti
 import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
 import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
+import {
+	recordActiveSessionMissing,
+	recordCallbackEntered,
+	recordDelivered,
+	recordNoHeldJobIds,
+	recordSdkHostSendEntered,
+	recordSendThrew,
+	recordSessionIdMismatch,
+} from "./completion-continuation-delivery-runtime"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import { setAgentTurnDoneSemanticTrigger } from "./continuation-cardinality-authority.runtime-capture"
 import {
@@ -825,11 +834,27 @@ export function buildSdkControllerEnqueueCompletionContinuation(options: {
 	kind: "delivered" | "rejected" | "session_gone" | "no_held_job_ids"
 }> {
 	return async ({ sessionId, taskId, heldJobIds }) => {
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION01-LIVE-CALLBACK-OUTCOME:
+		// Mark the callback body reached BEFORE any decision is made
+		// so the dump can discriminate CASE A (callback never
+		// entered) from every other branch (see ACT §13
+		// discriminator table). Aggregate counter; no semantic
+		// effect on the returned outcome.
+		recordCallbackEntered()
 		if (heldJobIds.length === 0) {
+			// Aggregate counter.
+			recordNoHeldJobIds()
 			return Promise.resolve({ kind: "no_held_job_ids" })
 		}
 		const active = options.getActiveSession()
-		if (!active || active.sessionId !== sessionId) {
+		if (!active) {
+			// Aggregate counter.
+			recordActiveSessionMissing()
+			return Promise.resolve({ kind: "session_gone" })
+		}
+		if (active.sessionId !== sessionId) {
+			// Aggregate counter.
+			recordSessionIdMismatch()
 			return Promise.resolve({ kind: "session_gone" })
 		}
 		const prompt = formatCompletionContinuationPrompt({
@@ -837,10 +862,16 @@ export function buildSdkControllerEnqueueCompletionContinuation(options: {
 			sessionId,
 			taskId,
 		})
+		// Aggregate counter.
+		recordSdkHostSendEntered()
 		try {
 			await active.sdkHost.send({ sessionId, prompt, delivery: "queue" })
+			// Aggregate counter.
+			recordDelivered()
 			return { kind: "delivered" as const }
 		} catch (error: unknown) {
+			// Aggregate counter.
+			recordSendThrew()
 			options.logger.warn(
 				`[SdkController] enqueueCompletionContinuation send() rejected for sessionId=${sessionId} heldJobIds=${heldJobIds.length}: ${
 					error instanceof Error ? error.message : String(error)

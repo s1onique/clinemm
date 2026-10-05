@@ -137,6 +137,21 @@ const ClineCommands = {
 	// correspondence AND the cause is RED on HOLD/FAILURE for
 	// operator review, OR successor evidence supersedes.
 	DumpCompletionAuthorityElmAuthority: prefix + ".debug.dumpCompletionAuthorityElmAuthority",
+	// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION01-LIVE-CALLBACK-OUTCOME:
+	// Debug dump command for the LIVE callback-outcome counter
+	// snapshot. Mirrors the CCARD / SHADOW / ELM-AUTHORITY dump
+	// pattern: unconditional (operator can always inspect whatever
+	// the runtime captured), dump != clear (no counter mutation).
+	// The dump serializes
+	// `getCompletionContinuationDeliveryCounters()` to
+	// <globalStorageUri>/completion-continuation-delivery.counters.json.
+	// The runtime is always collecting so the dump can report a
+	// fresh process; the diagnostic enablement is owned by the
+	// presence of the production callback (no toggle command).
+	// REMOVAL_TRIGGER: first of (a) root cause isolated, (b)
+	// capture insufficient (successor counter design required), (c)
+	// successor evidence supersedes.
+	DumpCompletionContinuationDelivery: prefix + ".debug.dumpCompletionContinuationDelivery",
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
 	// Dump command for the EHLOOP01 (Extension Host Hotloop) counter
 	// diagnostic. Mirrors the BJLA / BOCOR / CCARD dump pattern:

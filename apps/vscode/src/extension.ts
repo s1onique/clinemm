@@ -8,6 +8,7 @@ import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
 import { dumpExtensionSideElmAuthorityCounters } from "@/sdk/completion-authority-elm-authority-runtime-host"
 import { dumpExtensionSideElmShadowDiagnostic } from "@/sdk/completion-authority-elm-shadow-runtime"
+import { dumpExtensionSideCompletionContinuationDeliveryCounters } from "@/sdk/completion-continuation-delivery-runtime-host"
 import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
 import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
@@ -1110,6 +1111,29 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[ELM-AUTHORITY] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Completion authority Elm authority dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION01-LIVE-CALLBACK-OUTCOME:
+		// Dump command for the LIVE callback-outcome counter diagnostic.
+		// Mirrors the CCARD / SHADOW / ELM-AUTHORITY dump pattern:
+		// unconditional (operator can always inspect whatever the
+		// runtime captured), dump != clear (no counter mutation).
+		// The dump serializes the LIVE callback-outcome counter
+		// snapshot to
+		// <globalStorageUri>/completion-continuation-delivery.counters.json.
+		// REMOVAL_TRIGGER: first of (a) root cause isolated, (b)
+		// capture insufficient, (c) successor evidence supersedes.
+		vscode.commands.registerCommand(commands.DumpCompletionContinuationDelivery, async () => {
+			try {
+				const { countersFile, counters } = await dumpExtensionSideCompletionContinuationDeliveryCounters(context)
+				void vscode.window.showInformationMessage(
+					`Completion continuation delivery: callbackEntered=${counters.callbackEntered} activeSessionMissing=${counters.activeSessionMissing} sessionIdMismatch=${counters.sessionIdMismatch} sdkHostSendEntered=${counters.sdkHostSendEntered} delivered=${counters.delivered} rejected=${counters.rejected} sessionGone=${counters.sessionGone} noHeldJobIds=${counters.noHeldJobIds} sendThrew=${counters.sendThrew} lastOutcome=${counters.lastOutcome ?? "null"} lastRequestedSessionMatched=${counters.lastRequestedSessionMatched === null ? "null" : counters.lastRequestedSessionMatched} pendingPromptEnqueuedObserved=${counters.pendingPromptEnqueuedObserved === null ? "null" : counters.pendingPromptEnqueuedObserved} → ${countersFile}.`,
+				)
+			} catch (err) {
+				Logger.error("[CONT-CONT-DELIVERY] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Completion continuation delivery dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

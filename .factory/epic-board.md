@@ -18228,3 +18228,51 @@ RECOMMENDATION FOR NEXT ACT
   - If that probe is RED, repair the session-preservation seam.
   - If that probe is GREEN, continue with hypothesis (b) — a send-throw probe.
   - If all three are GREEN, the LIVE failure is an OBSERVABILITY issue (capture OFF) — separate repair seam.
+
+## ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION01-LIVE-CALLBACK-OUTCOME — INSTRUMENTED_BUILD — 2026-05-10
+
+**Mission:** Classify the first REAL production divergence between `completion continuation required` and `pending_prompt_enqueued` using the installed ClineMM Extension Host. The previous ACT proved the chain works through a synthetic harness; the missing information lives in the actual installed wrapper/session context. This ACT adds a tiny default-off LIVE callback-outcome counter at the production callback site (not another bridge test) so the LIVE discriminator table can identify the first failing transition.
+
+**Status:** INSTRUMENTED_BUILD (Phase A complete: diagnostic wired, RED tests GREEN, typecheck/lint/diff-check GREEN, no production semantic delta). LIVE classification pending.
+
+**Code delta (Phase A — instrumentation only):**
+- NEW: `apps/vscode/src/sdk/completion-continuation-delivery-runtime.ts` — default-off aggregate counter (recordCallbackEntered / recordActiveSessionMissing / recordSessionIdMismatch / recordSdkHostSendEntered / recordDelivered / recordSendThrew / recordNoHeldJobIds / recordPendingPromptEnqueuedObserved / getCompletionContinuationDeliveryCounters / resetCompletionContinuationDeliveryForTests).
+- NEW: `apps/vscode/src/sdk/completion-continuation-delivery-runtime-host.ts` — extension-side dump adapter; serializes the snapshot to `<globalStorageUri>/completion-continuation-delivery.counters.json`.
+- NEW: `apps/vscode/src/sdk/__tests__/completion-continuation-delivery-callback-outcome-red01.ccdco-red01.test.ts` — CALLBACK-OUTCOME-01..05 RED tests (5/5 PASS).
+- NEW: `apps/vscode/src/sdk/__tests__/completion-continuation-delivery-callback-outcome01.ccdco01.test.ts` — wiring-invariant test (5/5 PASS).
+- MODIFIED: `apps/vscode/src/sdk/SdkController.ts` — instrumented `buildSdkControllerEnqueueCompletionContinuation` factory body with 7 aggregate counter calls (no semantic effect on the returned outcome).
+- MODIFIED: `apps/vscode/src/registry.ts` — `DumpCompletionContinuationDelivery` command id.
+- MODIFIED: `apps/vscode/src/extension.ts` — `vscode.commands.registerCommand(commands.DumpCompletionContinuationDelivery, ...)` registration.
+- MODIFIED: `apps/vscode/package.json` — `cline.debug.dumpCompletionContinuationDelivery` contribution.
+
+```text
+ENTRY_HEAD            = 6c187539ff7e6d34db20f6e5d3990d604ac18909 (CCDS01 closure_head)
+SUBJECT_HEAD          = (discover after commit)
+CLOSURE_HEAD          = (discover after LIVE classification)
+
+PHASE_A_GATES
+  focused                            = 5/5 PASS (CALLBACK-OUTCOME-01..05)
+  wiring-invariants                 = 5/5 PASS (CCDCO01.A..E)
+  CCDS01 (no regression)            = 1/1 PASS (CCDS01-01 GREEN through instrumented callback)
+  BCB01-C3 (no regression)          = all PASS
+  BCB01-C4 (no regression)          = all PASS
+  PCRA01  (no regression)           = all PASS
+  PCRL01  (no regression)           = 5/5 PASS
+  ELM_SHADOW02 (no regression)      = all PASS
+  ELM_REAL_PROVIDER01               = all PASS
+  ELM_AUTHORITY_COUNTER_DUMP01      = all PASS
+  CCARD_COMMIT_STAGE_BOUNDARY       = all PASS
+  typecheck                          = PASS (bunx tsc --noEmit + tsconfig.vscode-compat + webview-ui)
+  check-types:c2-4-c-bridge          = 0 diagnostic(s) (against frozen baseline)
+  lint                               = PASS (biome, 2112 files, 0 errors)
+  git diff --check                   = CLEAN
+  TS_DELIVERY_SEMANTICS_CHANGED     = false (no semantic effect on returned outcome)
+  QUEUE_SEMANTICS_CHANGED           = false (counter increments happen AFTER decision)
+  ELM_SOURCE_CHANGED                = false
+  ELM_DECISION_LOGIC_CHANGED        = false
+  REACT_CODE_CHANGED                = false
+  MCP_CODE_CHANGED                  = false
+  MYC_CODE_CHANGED                  = false
+```
+
+**Live classification:** (to be filled after LIVE)

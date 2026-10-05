@@ -267,6 +267,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpCompletionContinuationDelivery",
+				"title": "Cline Debug: Dump Completion Continuation Delivery",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.debug.dumpExtensionHostHotloopDiagnostic",
 				"title": "Cline Debug: Dump Extension Host Hotloop Diagnostic",
 				"category": "Cline"
