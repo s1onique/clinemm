@@ -184,6 +184,26 @@ const ClineCommands = {
 	// the package.json declaration + the extension.ts handler + the host
 	// dump runtime + the production recorder MUST be removed TOGETHER.
 	DumpLifecycleClear: prefix + ".debug.dumpLifecycleClear",
+	// ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-DUMP-COMMAND-SURFACE01:
+	// Debug dump command for the MYC prime live diagnostic. Mirrors
+	// the CCARD / CCDO / CCDSO / CCNTUP / EHLOOP / ELM-SHADOW /
+	// ELM-AUTHORITY / Lifecycle-Clear dump convention: unconditional
+	// (operator can always inspect whatever the recorder captured),
+	// dump != clear (no snapshot mutation). The dump serializes the
+	// existing `getMycPrimeLiveDiag(sessionId)` snapshot for the
+	// currently active ClineMM session to
+	// <globalStorageUri>/myc-prime-live.counters.json. The recorder
+	// gates internally via `isMycPrimeLiveDiagEnabled()` (set by the
+	// central dogfood profile resolver at activation) — no toggle /
+	// enable command. The sessionId is RESOLVED BY THE HANDLER from
+	// the controller's active task, NOT manually typed, so the dump
+	// joins the operator's "task I just ran" with the diagnostic
+	// snapshot. REMOVAL_TRIGGER: first successful LIVE binding of
+	// MYC03, OR CAPTURE_INSUFFICIENT, OR successor evidence
+	// supersedes it. On removal, this registry entry + the package.json
+	// declaration + the extension.ts handler + the host dump runtime
+	// MUST be removed TOGETHER.
+	DumpMycPrimeLiveDiagnostic: prefix + ".debug.dumpMycPrimeLiveDiagnostic",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

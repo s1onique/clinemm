@@ -16,7 +16,6 @@ import {
 	applyCompletionContinuationDeliveryDiagnosticProfile,
 	applyCompletionContinuationUpstreamDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
-	initializeElmAuthorityRuntime,
 	applyExtensionHostAllocationProfilerProfile,
 	applyExtensionHostCpuProfilerProfile,
 	applyExtensionHostHotloopDiagnosticProfile,
@@ -26,6 +25,7 @@ import {
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
+	initializeElmAuthorityRuntime,
 } from "@/sdk/dogfood-diagnostic-profile"
 import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
 import { isDogfoodRuntime } from "@/sdk/dogfood-runtime-profile"
@@ -42,6 +42,7 @@ import {
 } from "@/sdk/host-ownership-diagnostic-runtime"
 import { dumpExtensionSideLifecycleClearSnapshot } from "@/sdk/lifecycle-clear-recorder-runtime-host"
 import { installMycPrimeLiveDiagReadoutRuntime } from "@/sdk/myc-prime-live-diag-runtime"
+import { dumpExtensionSideMycPrimeLiveDiag } from "@/sdk/myc-prime-live-diag-runtime-host"
 import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
@@ -1207,6 +1208,49 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[LIFECYCLE-CLEAR] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Lifecycle clear dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-DUMP-COMMAND-SURFACE01:
+		// Debug dump command for the MYC prime live diagnostic. Mirrors
+		// the CCARD / CCDO / CCDSO / CCNTUP / EHLOOP / ELM-SHADOW /
+		// ELM-AUTHORITY / Lifecycle-Clear dump pattern: unconditional
+		// (operator can always inspect whatever the recorder captured,
+		// even after the diagnostic was disabled), dump != clear (no
+		// snapshot mutation). The dump serializes the existing
+		// `getMycPrimeLiveDiag(sessionId)` snapshot for the currently
+		// ACTIVE ClineMM session to
+		// <globalStorageUri>/myc-prime-live.counters.json. The sessionId
+		// is resolved from the active webview's controller task so the
+		// dump binds the operator's "task I just ran" to the diagnostic
+		// snapshot — manually typing the session id would weaken the
+		// exact identity proof MYC03 needs. The recorder gates
+		// internally via `isMycPrimeLiveDiagEnabled()` (set by
+		// `applyMycPrimeLiveDiagDiagnosticProfile` from the central
+		// dogfood profile resolver at activation) — no toggle / enable
+		// command. REMOVAL_TRIGGER: first successful LIVE binding of
+		// MYC03, OR CAPTURE_INSUFFICIENT, OR successor evidence
+		// supersedes. Once the trigger fires this handler + the
+		// registry entry + the package.json declaration + the host dump
+		// runtime MUST be removed TOGETHER.
+		vscode.commands.registerCommand(commands.DumpMycPrimeLiveDiagnostic, async () => {
+			try {
+				const activeWebview = WebviewProvider.getVisibleInstance()
+				const sessionId = activeWebview?.controller?.task?.taskId
+				const { countersFile, result } = await dumpExtensionSideMycPrimeLiveDiag(context, sessionId)
+				const status = result.sessionIdPresent
+					? result.snapshotPresent
+						? "snapshot_present"
+						: "snapshot_absent"
+					: "no_active_session"
+				const sessionLabel = sessionId ?? "none"
+				void vscode.window.showInformationMessage(
+					`MYC prime live diag: sessionId=${sessionLabel} status=${status} → ${countersFile}.`,
+				)
+			} catch (err) {
+				Logger.error("[MYC-PRIME-LIVE-DIAG] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`MYC prime live diag dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

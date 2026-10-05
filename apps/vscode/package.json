@@ -282,6 +282,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpMycPrimeLiveDiagnostic",
+				"title": "Cline Debug: Dump myc Prime Diagnostic",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"
