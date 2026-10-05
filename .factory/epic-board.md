@@ -18102,3 +18102,129 @@ Discipline validation:
 - Test file is removable; if removed, no production behavior changes.
 
 Terminal PASS_FIRST_ELM_AUTHORITY_SEAM was NOT earned by this ACT: terminal PASS requires a real installed Extension Host run reaching final completion (task_completion_committed=1). The current installed LIVE specimen did NOT complete. The upstream continuation callback is reached (PCRL-01) but the downstream delivery seam is unresolved in LIVE. MYC-CLINEMM03 remains HOLD pending the continuation-delivery ACT.
+## ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01 — HALT_RED_NOT_REPRODUCED — 2026-05-10
+
+**Mission:** Identify the first broken REAL continuation-delivery transition between `enqueueCompletionContinuationIfHeld` and the model observing the coalesced continuation prompt. Repair only that seam. Exact-head LIVE qualify.
+
+**Status:** HALT_RED_NOT_REPRODUCED. The production-chain RED probe (CCDS01-01) GREENs. The REAL chain from the production `buildSdk.SdkControllerEnqueueCompletionContinuation` factory → `sdkHost.send` → `LocalRuntimeHost.runTurn` → `PendingPromptsController.enqueue` → drain → second `runTurn` → synthetic `agent.run` works in the test harness for the LIVE B chronology (unconsumed=1 at submit AND at `agent_turn_done`). All boundary assertions pass:
+  - D3: `sdkHost.send` invoked with `{ delivery: "queue" }`
+  - D5: queue insert observed (queue length transitions 0→1 then drains)
+  - D7: `pending_prompt_enqueued` capture fires (>= 1)
+  - D9: `continuation_scheduled` capture fires (>= 1)
+  - D10: synthetic `agent.run` invoked with the COALESCED continuation prompt prefix
+
+```text
+ENTRY_HEAD                 = 104ab1591ccadfd94db1f15f731c61086bb533f0 (post-run-REEVALUATION01 correction01 precheck-liveness halt)
+SUBJECT_HEAD               = 15b5a472827aafe8260cc345ab9b61732a49f337 (this ACT)
+CCDS01_TEST                = 1/1 PASS (live-shaped production chain probe)
+PCRL01                     = 5/5 PASS (regression conservation)
+TYPECHECK_BRIDGE           = 0 diagnostic(s) (OK against frozen baseline)
+TYPECHECK_BASE             = PASS (bunx tsc --noEmit)
+LINT                       = PASS (biome lint, 2108 files, 0 errors)
+FORMAT                     = 1 file reformatted (auto-fix)
+GIT_DIFF_CHECK             = CLEAN (no trailing-newline residue)
+ELM_SOURCE_CHANGED         = false
+ELM_DECISION_LOGIC_CHANGED = false
+TS_CONSERVATION_SEMANTICS_CHANGED = false
+TS_DELIVERY_SEMANTICS_CHANGED    = false
+QUEUE_SEMANTICS_CHANGED         = false
+MCP_CODE_CHANGED                = false
+MYC_CODE_CHANGED                = false
+REACT_CODE_CHANGED              = false
+PRODUCTION_CODE_CHANGED         = NONE (no fix needed: RED not reproduced)
+NEW_TEST_FILE                   = apps/vscode/src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts
+VSIX_BUILT                     = NO (no production code change)
+LIVE_QUALIFICATION              = NOT RUN (no fix applied; ACT halted at HALT_RED_NOT_REPRODUCED per §29)
+
+RECON (CURRENT source from prior DECISION already pinned; refresh confirmed):
+  CONTINUATION_DECISION_SITE = sdk-session-event-coordinator.ts:848 (reevaluateDeferredCompletionBarrier) AND :1616 (initial-dispatch)
+  DEDUPE_SITE                = sdk-session-event-coordinator.ts:1066 (set BEFORE await — single-shot per sessionId|taskId|epoch)
+  REAL_CALLBACK              = buildSdkControllerEnqueueCompletionContinuation at SdkController.ts:821-852 (production wiring at :2508)
+  SDKHOST_SEND_SITE          = SdkController.ts:841 (await active.sdkHost.send({sessionId, prompt, delivery:"queue"}))
+  QUEUE_RECEIVER             = LocalRuntimeHost.runTurn:1223, queue/steer branch at :1255-1264
+  QUEUE_INSERT_SITE          = pending-prompt-service.ts:329-376 -> state.pendingPrompts.push at :262
+  PENDING_PROMPT_CAPTURE_SITE = pending-prompt-service.ts:364-373 (deps.onEnqueue) -> continuation-cardinality-authority.session-host-capture.ts:72-80
+  QUEUE_DRAIN_SITE           = pending-prompt-service.ts:409-421 scheduleDrain (gated by !aborting && !drainingPendingPrompts && canStartRun())
+  CONTINUATION_STARTED_SITE  = continuation-cardinality-authority.session-host-capture.ts:90-99 at onBeforeDispatch
+  FIRST_STRUCTURALLY_UNOBSERVED_BOUNDARY = D0→D3 (PRODUCTION CHAIN) — **PROVEN TO WORK** by this ACT
+
+RED PROBE: CCDS01-01
+  test file              = apps/vscode/src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts
+  evidence grade         = SYNTHETIC_REAL (model is synthetic; production-class wire)
+  callback invoked       = YES (continuationSendLog-equivalent observable in chain)
+  sdkHost.send invoked   = YES (bridge -> host.runTurn({delivery:"queue"}))
+  send result             = undefined -> no ObservablePendingPromptsController rejection
+  receiver entered         = YES (PendingPromptsController.enqueue via real LocalRuntimeHost queue branch)
+  queue size before      = 0
+  queue size after       = 1 (transient) -> 0 (after drain)
+  pending_prompt_enqueued = >= 1 (CCARD capture via createProductionPendingPromptCapture factory)
+  continuation_started    = >= 1 (CCARD capture via onBeforeDispatch)
+  verdict                = CHAIN WORKS in test harness
+
+DISCRIMINATOR A — Callback → sdkHost.send
+  Continuation callback fired: 1 (initial-dispatch)
+  sdkHost.send fired:           1 (bridge -> runTurn({delivery:"queue"}))
+  payload: { sessionId, prompt, delivery: "queue" } ✓
+  PRE-FIX vs POST-FIX: handoff authentic, identity carried, dedupe intact.
+
+DISCRIMINATOR B — Send result
+  sdkHost.send returns: undefined (no rejection, no throw, no swallow)
+
+DISCRIMINATOR C — Queue receiver
+  PendingPromptsController.enqueue invoked: 1
+  queue size: 0 -> 1 -> 0
+
+DISCRIMINATOR D — CCARD capture
+  pending_prompt_enqueued fired: YES
+  continuation_scheduled fired:  YES
+
+DISCRIMINATOR E — Drain / Continuation start
+  drain fires (queueMicrotask)
+  continuation_started capture fires at onBeforeDispatch
+
+DEDUPE AUTHORITY
+  lastCompletionMark set at sdk-session-event-coordinator.ts:1066 (BEFORE await)
+  repeated trigger for same epoch: exactly one effective delivery (deduped at next epoch)
+  failed-send retry: NOT exhausted (no failure observed in probe)
+
+DELIVERY OUTCOME CONTRACT
+  sdkHost.send observed as enqueue-local (returns immediately after LocalRuntimeHost.addPendingPrompt)
+  NOT fire-and-forget (await is present in the production factory)
+
+CONSERVATION
+  PCRL01                 = 5/5 PASS (predecessor ACT precheck classification still holds)
+  TYPECHECK_BRIDGE       = 0 diagnostic(s) (against frozen baseline)
+  LINT                   = PASS
+  FORMAT                 = auto-fix on biome (1 file)
+  ELM_SOURCE             = unchanged
+  TS_CONSERVATION          = unchanged
+  TS_DELIVERY             = unchanged
+  QUEUE_SEMANTICS        = unchanged
+  REACT                  = unchanged
+  MYC                    = unchanged
+
+CLASSIFICATION
+  BROKEN_TRANSITION    = NOT FOUND in PROVEN chain D0-D7
+  DELIVERY_ACCEPTED    = YES
+  QUEUE_INSERTED       = YES
+  CAPTURE_CORRECT      = YES
+  DRAIN_TRIGGERED      = YES
+  DEDUPE_CORRECT       = YES
+
+HALT_RED_NOT_REPRODUCED — the production chain I probed is healthy.
+
+LIVE failure localization (speculative, requires NEW P0 evidence to drive next ACT):
+  - The LIVE specimen's `pending_prompt_enqueued = 0` cannot be reconciled with the production chain I tested.
+  - Per PCRL01 evidence, the coordinator fires the continuation callback at the coordinator boundary.
+  - Per CCDS01 (this ACT), the production callback reaches PendingPromptsController.enqueue in the test harness.
+  - Therefore the LIVE failure is in a code path CCDS01 does not exercise. Plausible deltas:
+    (a) `sessions.getActiveSession()` returns undefined at callback-fire time -> `session_gone` (callback returns early, no send). Not yet reproduced.
+    (b) `sdkHost.send` throws in LIVE due to a session-host condition the test bridge does not replicate (e.g. ClineCore wrapping, MCP host bridge proxy, or a session-state guard). Not yet reproduced.
+    (c) The CCARD capture hooks are NOT armed in the LIVE production (I.e. capture is OFF and the observer just sees "no observable event"). The LIVE was dogfood with capture enabled — not yet verified.
+  - These three hypotheses are NOT repair candidates per §17 (no NEW P0 evidence).
+
+RECOMMENDATION FOR NEXT ACT
+  - Author a successor RED probe that targets hypothesis (a) — the `session_gone` failure mode — and runs the same chain with `getActiveSession()` returning undefined.
+  - If that probe is RED, repair the session-preservation seam.
+  - If that probe is GREEN, continue with hypothesis (b) — a send-throw probe.
+  - If all three are GREEN, the LIVE failure is an OBSERVABILITY issue (capture OFF) — separate repair seam.
