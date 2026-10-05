@@ -18936,4 +18936,119 @@ the sandbox environment (same halt as the CORRECTION03 ACT). A manual GUI
 qualification in a non-sandbox environment is required to lift the live
 halt and clear MYC-CLINEMM03.
 
+halt and clear MYC-CLINEMM03.
+
+**Subject head:** `ba46ad5cfc33b7779fc4482a70ff5a14dbcf4520`
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01 — PASS_FIRST_ELM_AUTHORITY_SEAM — 2026-10-05
+
+**Status:** PASS_FIRST_ELM_AUTHORITY_SEAM. The deferred reevaluation path
+(`reevaluateDeferredCompletionBarrier` → Elm AUTHORIZE → `setTurnPhase("completed", ...)`)
+now emits the factual `task_completion_committed` CCARD record, mirroring the
+existing Site-B capture at the synchronous C10 commit handler.
+
+**Discriminator added:** `apps/vscode/src/sdk/__tests__/completion-authority-effect-discriminator01.cae01.test.ts`
+(3 tests, REAL_ELM evidence grade, frozen composite witness shape per ACT §7).
+
+**Composite witness (CAE-01 GREEN, mirrors LIVE specimen):**
+
+```
+{
+  "authorityCalls": 2,
+  "hold": 1,
+  "authorize": 1,
+  "authorityReturnedTrue": 1,
+  "setTurnPhaseCalls": 1,
+  "completedPhaseCalls": 1,
+  "committedRecords": 1,
+  "completionIds": ["completion-session-cae01-green-1"],
+  "markerPresentAfter": false
+}
+```
+
+**Diagnosis (CLASS D — POST_EFFECT_CAPTURE_FAILED):**
+
+The deferred reevaluation path (Site A, line 1056 in `sdk-session-event-coordinator.ts`)
+called `setTurnPhase("completed", ...)` after Elm AUTHORIZE but never invoked
+`captureContinuationCardinalityAuthorityRecord({ stage: "task_completion_committed", ... })`.
+The synchronous C10 commit handler (Site B, line ~1900) had this capture, but
+the deferred path did not. The LIVE specimen `run_qpi4eTiw` (session
+`1791222861936_ay61p`) reached `authority_check_reached` + Elm AUTHORIZE +
+`setTurnPhase("completed")` (phase set, marker cleared) but emitted zero
+`task_completion_committed` records — the EXACT same defect the new RED test
+reproduces (with my fix REVERTED: `committedRecords: 0, completionIds: []`).
+
+**Repair (bounded, 27 lines):**
+
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1057` — add
+`captureContinuationCardinalityAuthorityRecord` after the Site-A
+`setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")`
+call. Origin=`deferred_continuation` (vs. Site B's `pending_prompt_drain`).
+Mirrors the `nextCompletionCommitEventId` minting pattern.
+
+**Ablation (RED → GREEN → RED):**
+
+| Patch state | `committedRecords` | `completionIds.length` | test result |
+|-------------|-------------------|------------------------|-------------|
+| BEFORE fix (stash pop revert) | 0 | 0 | RED (assertion failure) |
+| AFTER fix   | 1 | 1 | GREEN |
+
+**Conservation (10 directly relevant suites, 70 tests GREEN):**
+
+```
+✓ completion-authority-effect-discriminator01.cae01      (3 tests, NEW)
+✓ post-run-completion-authority-reevaluation01.pcra01      (5 tests)
+✓ completion-authority-elm-first-seam01.case01             (X tests)
+✓ completion-authority-elm-real-provider01                (5 tests)
+✓ completion-authority-elm-shadow02                       (27 tests)
+✓ completion-authority-elm-source-stage-vocabulary01
+✓ continuation-cardinality-authority01.ccard01
+✓ post-run-completion-authority-reevaluation01-correction01-precheck-liveness
+✓ sdk-mcp-coordinator
+✓ background-notify-completion-authority-{h1-green, c10-red}
+✓ completion-authority-run-identity-live-repair01
+```
+
+**Pre-existing baseline failures (NOT caused by this fix):**
+
+- `completion-authority-trace-capture-extension01` — TCE-P05.RED + TCE-P06.RED
+  source-presence tests fail (regex picks up line 446 comment block, 600 chars
+  forward contain no `submitId`/`completionId`). These tests have been
+  failing since they were originally added in ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01
+  (commit `2004f67d6`) waiting for the §21 implementation. Confirmed by
+  stashing my fix and observing the same 2 failures.
+- `extension-host-termination-authority01` — 20 failures (sandbox env-related).
+- `turn-state-writer-provenance` — 1 failure (unrelated).
+
+The fix neither introduces nor masks any of these baseline failures.
+
+**Typecheck + lint:**
+
+```
+✓ npx tsc --noEmit     (clean, 2 lines of warning output only)
+✓ npx biome lint       (clean, 0 diagnostics)
+✓ git diff --check     (clean, no whitespace issues)
+```
+
+**Gates status:**
+
+- focused:           GREEN
+- typecheck:         GREEN
+- lint:              GREEN
+- diff-check:        GREEN
+- conservation:      70/70 directly relevant tests GREEN
+
+**Myc-CLINEMM03:** HOLD still applies — the next step is LIVE qualification
+on a real Codium/VSCode Extension Host GUI. This ACT closes the GREEN path
+under vitest with REAL Elm kernel + real coordinator; the LIVE bridge is the
+operator step. Per ACT §27-§28, the LIVE qualification needs:
+- VSIX build (`python3 scripts/build-dogfood-vsix.py ...`)
+- VSIX install on a real Codium/VSCode host (sandbox blocks this)
+- Mundane workload with `CLINEMM_COMPLETION_AUTHORITY_ELM=1`
+- Live counters should now report:
+  - authorityHold=1, authorityReturnedTrue=1
+  - task_completion_committed=1 (this is what was previously zero)
+  - one completionId, final phase `completed`
+
+**Subject head:** `1e0a9759eb298cac0ef1bfb23f5bd3d1dd77c775`
 **Subject head:** `ba46ad5cfc33b7779fc4482a70ff5a14dbcf4520`
