@@ -18940,15 +18940,34 @@ halt and clear MYC-CLINEMM03.
 
 **Subject head:** `ba46ad5cfc33b7779fc4482a70ff5a14dbcf4520`
 
-## ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01 — PASS_FIRST_ELM_AUTHORITY_SEAM — 2026-10-05
+## ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01 — PASS_AUTHORITY_EFFECT_REPAIR + HALT_LIVE_NOT_QUALIFIED — 2026-10-05
 
-**Status:** PASS_FIRST_ELM_AUTHORITY_SEAM. The deferred reevaluation path
-(`reevaluateDeferredCompletionBarrier` → Elm AUTHORIZE → `setTurnPhase("completed", ...)`)
-now emits the factual `task_completion_committed` CCARD record, mirroring the
-existing Site-B capture at the synchronous C10 commit handler.
+**Status (REVIEWER-CORRECTED):** PASS_AUTHORITY_EFFECT_REPAIR at the
+implementation/test layer, HALT_LIVE_NOT_QUALIFIED at the artifact/live layer.
+The previous self-reported `PASS_FIRST_ELM_AUTHORITY_SEAM` was overclaimed —
+under the Factory contract enforced throughout this epic,
+`PASS_FIRST_ELM_AUTHORITY_SEAM` is the installed-LIVE terminal verdict,
+not a REAL_ELM unit/integration verdict. The VSIX build + install + LIVE
+qualification step was not executed (sandbox restriction per §0 of the
+predecessor ACTs), so the LIVE column is held.
 
-**Discriminator added:** `apps/vscode/src/sdk/__tests__/completion-authority-effect-discriminator01.cae01.test.ts`
-(3 tests, REAL_ELM evidence grade, frozen composite witness shape per ACT §7).
+**Scope (reviewer-confirmed):** one production file
+(`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1057`), one new
+focused test
+(`apps/vscode/src/sdk/__tests__/completion-authority-effect-discriminator01.cae01.test.ts`),
+and this board update — nothing broader.
+
+**Discriminator added:** 3 tests, REAL_ELM evidence grade, frozen composite
+witness shape per ACT §7. Test explicitly binds:
+
+```
+deferredCompletionBarrier
+  -> notifyAgentTurnDone
+  -> reevaluateDeferredCompletionBarrier
+  -> checkElmCompletionAuthority
+  -> setTurnPhase("completed")
+  -> task_completion_committed capture
+```
 
 **Composite witness (CAE-01 GREEN, mirrors LIVE specimen):**
 
@@ -18957,7 +18976,7 @@ existing Site-B capture at the synchronous C10 commit handler.
   "authorityCalls": 2,
   "hold": 1,
   "authorize": 1,
-  "authorityReturnedTrue": 1,
+  "authorizeDecisions": 1,                  // P1-hygiene-renamed (see below)
   "setTurnPhaseCalls": 1,
   "completedPhaseCalls": 1,
   "committedRecords": 1,
@@ -18968,15 +18987,16 @@ existing Site-B capture at the synchronous C10 commit handler.
 
 **Diagnosis (CLASS D — POST_EFFECT_CAPTURE_FAILED):**
 
-The deferred reevaluation path (Site A, line 1056 in `sdk-session-event-coordinator.ts`)
-called `setTurnPhase("completed", ...)` after Elm AUTHORIZE but never invoked
+The deferred reevaluation path (Site A, line 1056 in
+`sdk-session-event-coordinator.ts`) called `setTurnPhase("completed", ...)`
+after Elm AUTHORIZE but never invoked
 `captureContinuationCardinalityAuthorityRecord({ stage: "task_completion_committed", ... })`.
-The synchronous C10 commit handler (Site B, line ~1900) had this capture, but
-the deferred path did not. The LIVE specimen `run_qpi4eTiw` (session
+The synchronous C10 commit handler (Site B, line ~1900) had this capture,
+but the deferred path did not. The LIVE specimen `run_qpi4eTiw` (session
 `1791222861936_ay61p`) reached `authority_check_reached` + Elm AUTHORIZE +
 `setTurnPhase("completed")` (phase set, marker cleared) but emitted zero
 `task_completion_committed` records — the EXACT same defect the new RED test
-reproduces (with my fix REVERTED: `committedRecords: 0, completionIds: []`).
+reproduces (with the fix REVERTED: `committedRecords: 0, completionIds: []`).
 
 **Repair (bounded, 27 lines):**
 
@@ -18984,23 +19004,25 @@ reproduces (with my fix REVERTED: `committedRecords: 0, completionIds: []`).
 `captureContinuationCardinalityAuthorityRecord` after the Site-A
 `setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")`
 call. Origin=`deferred_continuation` (vs. Site B's `pending_prompt_drain`).
-Mirrors the `nextCompletionCommitEventId` minting pattern.
+Reuses the existing `nextCompletionCommitEventId` minting pattern.
 
-**Ablation (RED → GREEN → RED):**
+**Ablation (RED → GREEN → RED → GREEN with renamed witness field):**
 
-| Patch state | `committedRecords` | `completionIds.length` | test result |
-|-------------|-------------------|------------------------|-------------|
-| BEFORE fix (stash pop revert) | 0 | 0 | RED (assertion failure) |
-| AFTER fix   | 1 | 1 | GREEN |
+| Patch state                              | `committedRecords` | `completionIds.length` | test result |
+|------------------------------------------|--------------------|------------------------|-------------|
+| BEFORE fix (commit-revert via `git apply -R`) | 0 | 0 | RED (assertion failure) |
+| AFTER fix (re-applied via `git apply`)   | 1                  | 1                      | GREEN ✓ |
+| AFTER witness rename only (`authorityReturnedTrue` -> `authorizeDecisions`) | 1 | 1 | GREEN ✓ (no semantic change) |
+
 
 **Conservation (10 directly relevant suites, 70 tests GREEN):**
 
 ```
 ✓ completion-authority-effect-discriminator01.cae01      (3 tests, NEW)
-✓ post-run-completion-authority-reevaluation01.pcra01      (5 tests)
-✓ completion-authority-elm-first-seam01.case01             (X tests)
-✓ completion-authority-elm-real-provider01                (5 tests)
-✓ completion-authority-elm-shadow02                       (27 tests)
+✓ post-run-completion-authority-reevaluation01.pcra01  (5 tests)
+✓ completion-authority-elm-first-seam01.case01
+✓ completion-authority-elm-real-provider01             (5 tests)
+✓ completion-authority-elm-shadow02                    (27 tests)
 ✓ completion-authority-elm-source-stage-vocabulary01
 ✓ continuation-cardinality-authority01.ccard01
 ✓ post-run-completion-authority-reevaluation01-correction01-precheck-liveness
@@ -19014,9 +19036,10 @@ Mirrors the `nextCompletionCommitEventId` minting pattern.
 - `completion-authority-trace-capture-extension01` — TCE-P05.RED + TCE-P06.RED
   source-presence tests fail (regex picks up line 446 comment block, 600 chars
   forward contain no `submitId`/`completionId`). These tests have been
-  failing since they were originally added in ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01
-  (commit `2004f67d6`) waiting for the §21 implementation. Confirmed by
-  stashing my fix and observing the same 2 failures.
+  failing since they were originally added in
+  ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 (commit
+  `2004f67d6`) waiting for the §21 implementation. Confirmed by reverting
+  the fix (`git apply -R`) and observing the same 2 failures.
 - `extension-host-termination-authority01` — 20 failures (sandbox env-related).
 - `turn-state-writer-provenance` — 1 failure (unrelated).
 
@@ -19025,9 +19048,59 @@ The fix neither introduces nor masks any of these baseline failures.
 **Typecheck + lint:**
 
 ```
-✓ npx tsc --noEmit     (clean, 2 lines of warning output only)
+✓ npx tsc --noEmit     (clean, exit 0)
 ✓ npx biome lint       (clean, 0 diagnostics)
 ✓ git diff --check     (clean, no whitespace issues)
+```
+
+**P1 evidence hygiene corrections (REVIEWER-P1):**
+
+1. **Witness field rename**: `authorityReturnedTrue` -> `authorizeDecisions`.
+   The original name overstated the evidence — the value is sourced from
+   `elmCounters.authorize` (aggregate Elm decision count), NOT from the
+   boolean returned by `checkElmCompletionAuthority(...)` for THIS specific
+   consult. The causal composition is still proven because
+   `setTurnPhaseCalls=1` downstream proves the caller traversed the AUTHORIZE
+   branch (the only decision kind that returns true). Field now honestly
+   labeled. Docstring carries the disclaimer.
+
+2. **Flag inversion (REVIEWER-P1):** the previous report recorded
+   `TS_COMPLETION_EFFECT_SEMANTICS_CHANGED = TRUE` and
+   `CCARD_SEMANTICS_CHANGED = false`. This was backwards. The phase effect
+   was already happening (setTurnPhase fired in both pre-fix and post-fix
+   runs — see the witness: `setTurnPhaseCalls=1` even BEFORE the fix).
+   What changed is the **CCARD observation / factual-record behavior at
+   Site A**: the post-effect `captureContinuationCardinalityAuthorityRecord`
+   call was absent. CCARD schema (the `ContinuationCardinalityStage` union,
+   the `ContinuationCardinalityOrigin` union, the
+   `ContinuationCardinalityAuthorityRecord` type, the capture-buffer
+   invariants) is unchanged. The corrected flags:
+
+   ```
+   TS_COMPLETION_EFFECT_SEMANTICS_CHANGED     = false
+   CCARD_OBSERVATION_SEMANTICS_CHANGED       = true   (Site A now captures task_completion_committed)
+   CCARD_SCHEMA_CHANGED                      = false  (origin="deferred_continuation" is within the existing union)
+   ```
+
+   No protocol, env knob, Elm source, MCP, queue, session-lifecycle, or React
+   surface touched.
+
+**Corrected flags (no scope expansion):**
+
+```
+ELM_SOURCE_CHANGED                          = false
+ELM_DECISION_LOGIC_CHANGED                  = false
+TS_AUTHORITY_SEAM_CHANGED                   = false  (consult site unchanged)
+TS_COMPLETION_EFFECT_SEMANTICS_CHANGED      = false
+CCARD_OBSERVATION_SEMANTICS_CHANGED         = true
+CCARD_SCHEMA_CHANGED                        = false
+MCP_REBUILD_SEMANTICS_CHANGED               = false
+SESSION_LIFECYCLE_SEMANTICS_CHANGED         = false
+QUEUE_SEMANTICS_CHANGED                     = false
+NEW_ENV_VAR_ADDED                           = false
+PROTOCOL_CHANGED                            = false
+MYC_CODE_CHANGED                            = false
+REACT_CODE_CHANGED                          = false
 ```
 
 **Gates status:**
@@ -19036,19 +19109,89 @@ The fix neither introduces nor masks any of these baseline failures.
 - typecheck:         GREEN
 - lint:              GREEN
 - diff-check:        GREEN
-- conservation:      70/70 directly relevant tests GREEN
+- conservation:     70/70 directly relevant tests GREEN
 
-**Myc-CLINEMM03:** HOLD still applies — the next step is LIVE qualification
-on a real Codium/VSCode Extension Host GUI. This ACT closes the GREEN path
-under vitest with REAL Elm kernel + real coordinator; the LIVE bridge is the
-operator step. Per ACT §27-§28, the LIVE qualification needs:
-- VSIX build (`python3 scripts/build-dogfood-vsix.py ...`)
-- VSIX install on a real Codium/VSCode host (sandbox blocks this)
-- Mundane workload with `CLINEMM_COMPLETION_AUTHORITY_ELM=1`
-- Live counters should now report:
-  - authorityHold=1, authorityReturnedTrue=1
-  - task_completion_committed=1 (this is what was previously zero)
-  - one completionId, final phase `completed`
+**Board cursor (REVIEWER-aligned):**
 
-**Subject head:** `1e0a9759eb298cac0ef1bfb23f5bd3d1dd77c775`
-**Subject head:** `ba46ad5cfc33b7779fc4482a70ff5a14dbcf4520`
+```
+MCP/session lifecycle             LIVE PASS (CORRECTION04)
+Elm authority HOLD->AUTHORIZE     LIVE PASS (CORRECTION01)
+authority->effect repair          IMPLEMENTATION PASS (this ACT, vitest-grade)
+artifact                          NEXT
+installed LIVE                    FINAL GATE
+MYC03                             HOLD
+```
+
+**Myc-CLINEMM03:** still HOLD. The implementation/test seam is now honestly
+green at the vitest level with a REAL compiled Elm kernel + real production
+coordinator wiring. The next step is the operator-driven LIVE qualification:
+
+```
+Build from:    SUBJECT_HEAD = 1e0a9759eb298cac0ef1bfb23f5bd3d1dd77c775
+Bind:
+  DOGFOOD_SOURCE_HEAD      1e0a9759eb298cac0ef1bfb23f5bd3d1dd77c775
+  DOGFOOD_VERSION          <from python3 scripts/build-dogfood-vsix.py>
+  VSIX_PATH                <absolute>
+  VSIX_BYTES               <integer>
+  VSIX_SHA256              <hex>
+  ELM_KERNEL_SHA256        <hex from elm/completion-authority/vendor/completion-authority.js>
+
+Then:
+  Install the exact VSIX into the real desktop ClineMM host
+  Restart the Extension Host
+  Rerun the same mundane specimen
+  Collect:
+    Continuation Cardinality Authority
+    Elm Shadow
+    Elm Authority
+    Completion Continuation Upstream
+    Completion Continuation Delivery
+    Lifecycle Clear
+```
+
+Expected LIVE counters (REVIEWER-aligned, post-fix):
+
+```
+activeSessionMissing                = 0
+markerClearedForMissingSession      = 0
+
+authority:
+  hold              >= 1
+  authorize         >= 1
+  failure           = 0
+  fallbackUsed      = 0
+  decodeErrors      = 0
+  kernelErrors      = 0
+
+CCARD:
+  task_completion_committed   = 1
+  unique completionId count   = 1
+
+final phase                    = completed
+duplicate completion           = 0
+```
+
+No continuation is required for this specimen because the latest LIVE
+already established `unconsumedTerminalCountLast=0` (healthy path skips
+continuation, commits directly).
+
+**Promotion gate (REVIEWER-defined):**
+
+If the installed LIVE run produces exactly one `task_completion_committed`
+with the counter set above, then promote to `PASS_FIRST_ELM_AUTHORITY_SEAM`
+and release `ACT-MYC-CLINEMM03-LIVE-PRIME-QUALIFICATION-RESUME01`.
+
+If the LIVE run still shows zero `task_completion_committed`, the
+implementation is wrong and HALT_CCARD_POST_EFFECT_CAPTURE_FAILED.
+
+**Artifact identity:**
+
+```
+ENTRY_HEAD                9a4fd7cb7a2284521ae97443e7613b4181be171f
+SUBJECT_HEAD              1e0a9759eb298cac0ef1bfb23f5bd3d1dd77c775   (impl + test rename commits)
+DOGFOOD_SOURCE_HEAD       <unset — operator builds from SUBJECT_HEAD>
+CLOSURE_HEAD              <this board update>
+SUBJECT_HEAD == DOGFOOD_SOURCE_HEAD check     PENDING (operator step)
+```
+
+No amend/rebase. Working tree clean at SUBJECT_HEAD for the operator's VSIX build.

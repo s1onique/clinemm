@@ -27,7 +27,12 @@
  *     authorityCalls,
  *     hold,
  *     authorize,
- *     authorityReturnedTrue,
+ *     authorizeDecisions,      // aggregate count of Elm decisions that returned `authorize`
+ *                             // — P1 HYGIENE: NOT the boolean returned by the
+ *                             //   specific `checkElmCompletionAuthority(...)` consult
+ *                             //   for THIS call. The causal composition is still
+ *                             //   proven because `setTurnPhaseCalls=1` downstream
+ *                             //   proves the caller traversed the AUTHORIZE branch.
  *     setTurnPhaseCalls,
  *     completedPhaseCalls,
  *     committedRecords,        // count of `task_completion_committed`
@@ -39,7 +44,7 @@
  *   authorityCalls          >= 2
  *   hold                    = 1
  *   authorize               = 1
- *   authorityReturnedTrue   = 1
+ *   authorizeDecisions      = 1
  *   setTurnPhaseCalls       = 1
  *   completedPhaseCalls     = 1
  *   committedRecords        = 1
@@ -52,9 +57,9 @@
  *
  * Discriminators (ACT §10-§14) — pinpoint WHICH transition fails:
  *
- *     authorityCalls === 2 but authorityReturnedTrue === 0
+ *     authorityCalls === 2 but authorizeDecisions === 0
  *       -> CLASS A: AUTHORITY_CORRELATION. Stale/wrong per-session consult.
- *     authorityReturnedTrue === 1 but setTurnPhaseCalls === 0
+ *     authorizeDecisions === 1 but setTurnPhaseCalls === 0
  *       -> CLASS B: EFFECT_WIRING_MISSING. setTurnPhase is absent.
  *     setTurnPhaseCalls === 1 but committedRecords === 0
  *       -> CLASS D: POST_EFFECT_CAPTURE_FAILED. CCARD seam absent at this site.
@@ -269,7 +274,7 @@ function readWitness(h: Harness): {
 	authorityCalls: number
 	hold: number
 	authorize: number
-	authorityReturnedTrue: number
+	authorizeDecisions: number
 	setTurnPhaseCalls: number
 	completedPhaseCalls: number
 	committedRecords: number
@@ -281,18 +286,21 @@ function readWitness(h: Harness): {
 	const ccardRecords = getContinuationCardinalityAuthorityCaptureRecords()
 	const completionRecords = ccardRecords.filter((r) => r.stage === "task_completion_committed")
 	const completionIds = Array.from(new Set(completionRecords.map((r) => r.completionId).filter((v): v is string => !!v)))
-	// authorityCalls: count of Elm consults
+	// authorityCalls: count of Elm consults (aggregate, per-extension-host).
 	const authorityCalls = elmCounters.total
-	// authorityReturnedTrue: count of decisions returned `authorize`
-	// (this is the same number that gates setTurnPhase; Elm's `authorize`
-	// is the only decision kind that returns true from checkElmCompletionAuthority)
-	const authorityReturnedTrue = elmCounters.authorize
+	// P1 HYGIENE: `authorizeDecisions` is the aggregate count of Elm
+	// decisions that returned `authorize`. It is NOT a per-call read
+	// of the boolean returned by `checkElmCompletionAuthority(...)` for
+	// THIS consult. The causal composition is still proven because
+	// `setTurnPhaseCalls=1` downstream proves the caller traversed
+	// the AUTHORIZE branch (the only kind that returns true).
+	const authorizeDecisions = elmCounters.authorize
 	const markerPresent = h.coordinator.isDeferredCompletionBarrierOutstandingForTesting()
 	return {
 		authorityCalls,
 		hold: elmCounters.hold,
 		authorize: elmCounters.authorize,
-		authorityReturnedTrue,
+		authorizeDecisions,
 		setTurnPhaseCalls: h.setTurnPhaseCalls(),
 		completedPhaseCalls: h.completedPhaseCalls(),
 		committedRecords: ccardCounters.stages.task_completion_committed.count,
@@ -361,7 +369,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01", () => {
 			expect(w.authorityCalls).toBeGreaterThanOrEqual(2)
 			expect(w.hold).toBe(1)
 			expect(w.authorize).toBe(1)
-			expect(w.authorityReturnedTrue).toBe(1)
+			expect(w.authorizeDecisions).toBe(1)
 			expect(w.setTurnPhaseCalls).toBe(1)
 			expect(w.completedPhaseCalls).toBe(1)
 			expect(w.committedRecords).toBe(1)
@@ -396,7 +404,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01", () => {
 			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
 
 			const w = readWitness(h)
-			expect(w.authorityReturnedTrue).toBe(0)
+			expect(w.authorizeDecisions).toBe(0)
 			expect(w.setTurnPhaseCalls).toBe(0)
 			expect(w.completedPhaseCalls).toBe(0)
 			expect(w.committedRecords).toBe(0)
