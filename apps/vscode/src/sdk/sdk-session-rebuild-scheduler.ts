@@ -160,19 +160,40 @@ export class SdkSessionRebuildScheduler {
 			for (const [reason, rebuild] of snapshot) {
 				const activeSession = this.options.sessions.getActiveSession()
 				if (!activeSession) {
+					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-P1-CONSERVATION:
+					// Session disappeared entirely (clear-task, dispose).
+					// No reason to preserve the remaining snapshot — the
+					// session is gone. Clear pending and bail.
 					this.pending.clear()
 					return
 				}
 				if (activeSession.isRunning) {
+					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-P1-CONSERVATION:
+					// The session became running mid-drain (a turn started).
+					// Re-queue the remaining snapshot entries (and any that
+					// arrived after the snapshot was taken) so the next
+					// drain cycle, when the session is idle again, picks
+					// them up. Without this re-queue, the snapshot's
+					// `pending.delete(reason)` (executed BEFORE the loop)
+					// would have permanently removed them.
+					for (const [requeueReason, requeueRebuild] of snapshot) {
+						if (!this.pending.has(requeueReason)) {
+							this.pending.set(requeueReason, requeueRebuild)
+						}
+					}
 					return
 				}
 				if (this.isDeferredCompletionOutstanding()) {
 					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03:
 					// Hold the rebuild until the deferred obligation settles.
-					// The pending entry is preserved verbatim so the next
-					// drainIfIdle() call (triggered by
-					// `deferredCompletionSettled`, `sessionBecameIdle`,
-					// `runExclusive` finally, or `request`) picks it up.
+					// Re-queue the remaining snapshot entries (same P1
+					// conservation rationale as the isRunning branch —
+					// see above).
+					for (const [requeueReason, requeueRebuild] of snapshot) {
+						if (!this.pending.has(requeueReason)) {
+							this.pending.set(requeueReason, requeueRebuild)
+						}
+					}
 					return
 				}
 
