@@ -422,6 +422,19 @@ export default defineConfig({
 			// + real SdkSessionEventCoordinator + real CCARD capture seam.
 			// Runs only under this bridge config.
 			"src/sdk/__tests__/completion-authority-commit-while-run-active-discriminator01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01 / CCDS01:
+			// Production-shape RED witness for the LIVE failure where the
+			// continuation callback is reached (PCRL01) but no observable
+			// queue/continuation event reaches PendingPromptsController /
+			// the model. Drives the REAL `LocalRuntimeHost` →
+			// PendingPromptsController → drain → runTurn chain via the
+			// REAL `buildSdkControllerEnqueueCompletionContinuation`
+			// factory (the same factory wired into the production
+			// SdkController at SdkController.ts:2508). Runs only under
+			// this bridge config because the test uses the
+			// `@cline-internal/core/runtime/host/local-runtime-host`
+			// deep-relative alias.
+			"src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

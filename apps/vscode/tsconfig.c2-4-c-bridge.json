@@ -170,7 +170,14 @@
 		// absent), the synchronous-boundary property, and the
 		// ablation (no prelude record when the hook is not
 		// wired).
-		"src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01 / CCDS01:
+		// Real production-chain RED probe driving the REAL
+		// `buildSdkControllerEnqueueCompletionContinuation` factory
+		// and the REAL LocalRuntimeHost chain through
+		// PendingPromptsController. The bridge aliases resolve the
+		// production SDK classes for typecheck.
+		"src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

@@ -175,6 +175,15 @@
 		// tsconfig.c2-4-c-bridge.json + vitest.config.c2-4-c-bridge.ts
 		// to bypass the @cline/core stub alias.
 		"src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01 / CCDS01:
+		// Real production-chain RED probe — drives the REAL
+		// `buildSdkControllerEnqueueCompletionContinuation` factory
+		// through the REAL LocalRuntimeHost → PendingPromptsController
+		// chain. Uses the `@cline-internal/core/runtime/host/local-runtime-host`
+		// alias declared only in `tsconfig.c2-4-c-bridge.json`. Excluded
+		// from the base config so the base `@cline/core` stub alias stays
+		// in scope for other tests.
+		"src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 /
 		// FRSP01-C03: bounded P0 cleanup of the test-domain configuration
 		// leak that blocked `vscode:prepublish` from producing an exact-

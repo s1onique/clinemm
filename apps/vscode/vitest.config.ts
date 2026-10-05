@@ -330,6 +330,14 @@ export default defineConfig({
 			// under the bun runtime.
 			"src/sdk/__tests__/myc-prime-automation.lifecycle01.test.ts",
 			"src/sdk/__tests__/myc-prime-automation.lifecycle02.test.ts",
+			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01 / CCDS01:
+			// Real production-chain RED probe. Imports
+			// `@cline-internal/core/runtime/host/local-runtime-host`
+			// (the alias declared only in the bridge config) and the
+			// REAL `buildSdkControllerEnqueueCompletionContinuation`
+			// factory. Excluded here so the base config's `@cline/core`
+			// stub alias stays in scope for other tests.
+			"src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
