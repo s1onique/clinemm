@@ -21,6 +21,10 @@
  *     U1   reevaluateEntered
  *     U2   markerMissing
  *     U2   markerPresent
+ *     U2.5 activeSessionLookupEntered   (CORRECTION04 — pre-U3 active-session lookup)
+ *     U2.5 activeSessionPresent
+ *     U2.5 activeSessionMissing
+ *     U2.5 markerClearedForMissingSession
  *     U3   sessionMismatch
  *     U3   taskMismatch
  *     U4   epochMismatch
@@ -36,6 +40,24 @@
  *     U10  dedupePermitted
  *     U11  enqueueCompletionContinuationInvoked
  *     U0..U11 lastStopReason  (bounded internal enum; see §7)
+ *
+ * CORRECTION04 — narrowed the pre-U3 instrumentation gap:
+ *   The CORRECTION03 dump on the live run after installing the
+ *   correct artifact showed `markerPresent=1, markerMissing=1`,
+ *   every identity mismatch counter = 0, and
+ *   `unconsumedTerminalCountLast=null` — three terminal commits
+ *   were observed LIVE without any terminal-count read on the
+ *   upstream side. The only obvious pre-U3 branch the prior
+ *   instrumentation does NOT cover is the active-session lookup
+ *   (`sessions.getActiveSession()`) at
+ *   `sdk-session-event-coordinator.ts:770-776`, which silently
+ *   clears the marker and returns when `!activeSession`.
+ *   This correction adds four counters and one stop reason so
+ *   the next LIVE run classifies whether the marker flip happens
+ *   on the active-session lookup or further downstream. No
+ *   provider is invoked twice: the SAME `activeSession` const
+ *   that the production check uses is reused for the record*
+ *   call (§11 invariant).
  *
  * CORRECTION03 — Enablement boundary (default-off opt-in, mirrors CCDO):
  *   - Module-level `enabled: boolean` flag (default false). Every
@@ -60,6 +82,7 @@
 
 export type CompletionContinuationUpstreamStopReason =
 	| "marker_missing"
+	| "active_session_missing"
 	| "session_mismatch"
 	| "task_mismatch"
 	| "epoch_mismatch"
@@ -78,6 +101,10 @@ export interface CompletionContinuationUpstreamCountersSnapshot {
 	readonly reevaluateEntered: number
 	readonly markerMissing: number
 	readonly markerPresent: number
+	readonly activeSessionLookupEntered: number
+	readonly activeSessionPresent: number
+	readonly activeSessionMissing: number
+	readonly markerClearedForMissingSession: number
 	readonly sessionMismatch: number
 	readonly taskMismatch: number
 	readonly epochMismatch: number
@@ -108,6 +135,10 @@ interface State {
 		reevaluateEntered: number
 		markerMissing: number
 		markerPresent: number
+		activeSessionLookupEntered: number
+		activeSessionPresent: number
+		activeSessionMissing: number
+		markerClearedForMissingSession: number
 		sessionMismatch: number
 		taskMismatch: number
 		epochMismatch: number
@@ -134,6 +165,10 @@ function freshCounters(): State["counters"] {
 		reevaluateEntered: 0,
 		markerMissing: 0,
 		markerPresent: 0,
+		activeSessionLookupEntered: 0,
+		activeSessionPresent: 0,
+		activeSessionMissing: 0,
+		markerClearedForMissingSession: 0,
 		sessionMismatch: 0,
 		taskMismatch: 0,
 		epochMismatch: 0,
@@ -221,6 +256,59 @@ export function recordMarkerPresent(): void {
 	if (!_state.enabled) return
 	const state = getOrInitState()
 	state.counters.markerPresent += 1
+}
+
+/**
+ * CORRECTION04 — record that `reevaluateDeferredCompletionBarrier`
+ * has reached the active-session lookup. Increments the U2.5
+ * `activeSessionLookupEntered` counter. Called exactly once per
+ * reevaluation that passed the marker check (i.e., always paired
+ * with `recordMarkerPresent`), BEFORE the active-session const is
+ * reused by `recordActiveSessionPresent` /
+ * `recordActiveSessionMissing` so the §11 invariant holds: the
+ * production code reads `getActiveSession()` once, captures the
+ * const, and dispatches to the appropriate record*() — no provider
+ * is invoked twice.
+ */
+export function recordActiveSessionLookupEntered(): void {
+	if (!_state.enabled) return
+	const state = getOrInitState()
+	state.counters.activeSessionLookupEntered += 1
+}
+
+/**
+ * CORRECTION04 — record that the active-session lookup returned
+ * a defined session. The coordinator proceeds past the
+ * `if (!activeSession) { ... return }` branch into the
+ * identity-match checks. No stop reason is set here; the marker
+ * has not yet been cleared by this code path.
+ */
+export function recordActiveSessionPresent(): void {
+	if (!_state.enabled) return
+	const state = getOrInitState()
+	state.counters.activeSessionPresent += 1
+}
+
+/**
+ * CORRECTION04 — record that the active-session lookup returned
+ * `undefined` / falsy. The coordinator's production code path
+ * clears the deferred-completion marker and returns; this
+ * discriminator captures the LIVE evidence that the marker flip
+ * happened at the active-session lookup, NOT at the identity
+ * mismatch checks.
+ *
+ * Also records `markerClearedForMissingSession` and sets
+ * `lastStopReason = "active_session_missing"` so the operator
+ * can classify the failure from a single dump without having to
+ * cross-reference the chronology. The two increments are always
+ * paired (1:1) when this branch fires.
+ */
+export function recordActiveSessionMissing(): void {
+	if (!_state.enabled) return
+	const state = getOrInitState()
+	state.counters.activeSessionMissing += 1
+	state.counters.markerClearedForMissingSession += 1
+	state.counters.lastStopReason = "active_session_missing"
 }
 
 export function recordSessionMismatch(): void {
@@ -337,6 +425,10 @@ export function getCompletionContinuationUpstreamCounters(): CompletionContinuat
 		reevaluateEntered: state.counters.reevaluateEntered,
 		markerMissing: state.counters.markerMissing,
 		markerPresent: state.counters.markerPresent,
+		activeSessionLookupEntered: state.counters.activeSessionLookupEntered,
+		activeSessionPresent: state.counters.activeSessionPresent,
+		activeSessionMissing: state.counters.activeSessionMissing,
+		markerClearedForMissingSession: state.counters.markerClearedForMissingSession,
 		sessionMismatch: state.counters.sessionMismatch,
 		taskMismatch: state.counters.taskMismatch,
 		epochMismatch: state.counters.epochMismatch,

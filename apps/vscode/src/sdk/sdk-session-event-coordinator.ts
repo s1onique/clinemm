@@ -14,6 +14,9 @@ import {
 } from "./completion-authority-elm-authority"
 import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
 import {
+	recordActiveSessionLookupEntered,
+	recordActiveSessionMissing,
+	recordActiveSessionPresent,
 	recordAgentTurnDoneNotificationSeen,
 	recordAuthorityCheckReached,
 	recordDedupePermitted,
@@ -767,13 +770,34 @@ export class SdkSessionEventCoordinator {
 			return
 		}
 		recordMarkerPresent()
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION04-LIVE-ACTIVE-SESSION-LOOKUP-DISCRIMINATOR:
+		// U2.5 discriminator. The active-session lookup is the
+		// ONLY pre-U3 branch the CORRECTION03 instrumentation
+		// did not cover. The marker was just observed present; if
+		// the active session has been disposed (e.g. by an
+		// intervening session switch), this branch silently
+		// clears the marker and returns — which is exactly what
+		// the LIVE chronology shows (markerPresent=1 followed by
+		// markerMissing=1, with no identity mismatch recorded).
+		// §11 invariant: getActiveSession() is called exactly
+		// once; the same `activeSession` const is reused for
+		// BOTH the production check AND the record*() dispatch.
+		recordActiveSessionLookupEntered()
 		const activeSession = this.options.sessions.getActiveSession()
 		const sessionMatched = !!activeSession && marker.sessionId === activeSession.sessionId
 		recordRequestedSessionMatched(sessionMatched)
 		if (!activeSession) {
+			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION04-LIVE-ACTIVE-SESSION-LOOKUP-DISCRIMINATOR:
+			// Captures the LIVE scenario where the marker flip
+			// happens at the active-session lookup, NOT at any
+			// identity mismatch. The `recordActiveSessionMissing`
+			// call also records `markerClearedForMissingSession`
+			// and sets `lastStopReason = "active_session_missing"`.
+			recordActiveSessionMissing()
 			this.deferredCompletionBarrier = undefined
 			return
 		}
+		recordActiveSessionPresent()
 		if (marker.sessionId !== activeSession.sessionId) {
 			recordSessionMismatch()
 			this.deferredCompletionBarrier = undefined

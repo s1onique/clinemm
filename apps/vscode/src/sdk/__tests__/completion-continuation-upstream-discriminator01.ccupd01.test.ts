@@ -37,6 +37,26 @@
  *      CCDO callback-outcome `callbackEntered` counter increments
  *      when the production callback is wired through the
  *      `buildSdkControllerEnqueueCompletionContinuation` factory.
+ *
+ *   F. UPSTREAM-DIAG-06 — active session lookup (CORRECTION04)
+ *      The CORRECTION03 dump on the live run showed
+ *      `markerPresent=1, markerMissing=1` with no identity
+ *      mismatch recorded. The only pre-U3 branch the prior
+ *      instrumentation did not cover is the active-session
+ *      lookup at `sdk-session-event-coordinator.ts:770-776`.
+ *      F asserts that branch:
+ *        F-a. Dogfood OFF; `getActiveSession()→undefined` →
+ *             all upstream counters stay zero (§11 invariant:
+ *             disabled record*() short-circuit).
+ *        F-b. Dogfood ON; `getActiveSession()→undefined`,
+ *             marker present → U2.5 discriminator:
+ *               activeSessionLookupEntered=1
+ *               activeSessionMissing=1
+ *               markerClearedForMissingSession=1
+ *               lastStopReason="active_session_missing"
+ *             and the marker is cleared (a second reeval
+ *             sees `markerMissing=1`, the exact LIVE
+ *             chronology).
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
@@ -242,6 +262,11 @@ describe("UPSTREAM-DIAG-03 — terminal hold reaches enqueue-if-held", () => {
 		// U2 (marker present).
 		expect(s.markerMissing).toBe(0)
 		expect(s.markerPresent).toBe(1)
+		// U2.5 (CORRECTION04 — active session present in this scenario).
+		expect(s.activeSessionLookupEntered).toBe(1)
+		expect(s.activeSessionPresent).toBe(1)
+		expect(s.activeSessionMissing).toBe(0)
+		expect(s.markerClearedForMissingSession).toBe(0)
 		// U3/U4 (identity + epoch match — no mismatch counters).
 		expect(s.sessionMismatch).toBe(0)
 		expect(s.taskMismatch).toBe(0)
@@ -363,5 +388,162 @@ describe("UPSTREAM-DIAG-PROFILE — dogfood-gate conservation", () => {
 
 	test("the diagnostic is gated STRICTLY by the dogfood profile — no public knob", () => {
 		expect(typeof applyCompletionContinuationUpstreamDiagnosticProfile).toBe("function")
+	})
+})
+
+describe("UPSTREAM-DIAG-06 — active session lookup (CORRECTION04)", () => {
+	/**
+	 * Build a minimal coordinator whose `sessions.getActiveSession()`
+	 * returns `undefined` — the exact LIVE chronology inferred
+	 * from the CORRECTION03 dump. Mirrors `makeHarness` (above)
+	 * but with `getActiveSession() → undefined`. The production
+	 * code under test is the REAL `reevaluateDeferredCompletionBarrier`
+	 * from `sdk-session-event-coordinator.ts`; the SAME const
+	 * pattern is exercised as in every other test in this file.
+	 */
+	function makeAbsentSessionHarness(opts: { activeSessionId: string; activeTaskId: string }): {
+		readonly coordinator: SdkSessionEventCoordinator
+		readonly setMarkerPresent: (present: boolean) => void
+	} {
+		const tracker = new TurnStateTracker(new MessageIdMinter())
+		const translatorState = new MessageTranslatorState(new MessageIdMinter())
+		const coordinator = new SdkSessionEventCoordinator({
+			messageTranslatorState: translatorState,
+			sessions: {
+				// CORRECTION04 — active session is absent (the LIVE scenario).
+				getActiveSession: () => undefined,
+				setRunning: () => undefined,
+			},
+			messages: {
+				appendAndEmit: (() => undefined) as never,
+			},
+			taskHistory: { updateTaskUsage: () => undefined } as never,
+			getTask: () => ({ taskId: opts.activeTaskId }) as never,
+			postStateToWebview: () => Promise.resolve(undefined),
+			setTurnPhase: (() => undefined) as never,
+			getTurnPhase: () => tracker.currentPhase,
+			translateSessionEvent: () => ({ kind: "noop" }) as never,
+			hasRunningBackgroundJobForOwner: () => false,
+			getActiveJobOwnershipSnapshot: () => [],
+			getActiveSessionHost: () => undefined,
+			getUnconsumedOwnedTerminalResultCount: () => 0,
+			getUnconsumedOwnedTerminalJobIds: () => [],
+			getPendingPromptCount: () => ({ available: true, count: 0 }),
+			getActiveNotifyCount: () => 0,
+			hasActiveNotify: () => false,
+			wasWakeDispatchRequested: () => false,
+			wasWakeDelivered: () => false,
+			wasWakeDispatchFailed: () => false,
+			getOutstandingAutonomousWork: () => false,
+			getLaunchedBackgroundJobIds: () => [],
+			enqueueCompletionContinuation: () => Promise.resolve({ kind: "delivered" as const }),
+		} as unknown as SdkSessionEventCoordinatorOptions)
+		return {
+			coordinator,
+			setMarkerPresent: (present) => {
+				if (!present) {
+					coordinator.setDeferredCompletionBarrierForTesting(undefined)
+					return
+				}
+				coordinator.setDeferredCompletionBarrierForTesting({
+					sessionId: opts.activeSessionId,
+					taskId: opts.activeTaskId,
+					epoch: translatorState.getMinter().epoch,
+				})
+			},
+		}
+	}
+
+	test("F-a. dogfood OFF, active session absent → all upstream counters stay zero", async () => {
+		// §11 invariant: when the diagnostic is OFF, every
+		// record*() short-circuits; no counter is incremented
+		// even when the underlying predicate would otherwise fire.
+		applyCompletionContinuationUpstreamDiagnosticProfile(false)
+		const harness = makeAbsentSessionHarness({
+			activeSessionId: "sess-ccupd-06a",
+			activeTaskId: "task-ccupd-06a",
+		})
+		harness.setMarkerPresent(true)
+		await harness.coordinator.reevaluateDeferredCompletionBarrier()
+		const s = upstreamSnapshot()
+		// recordReevaluateEntered is also gated; everything
+		// downstream stays at zero.
+		expect(s.reevaluateEntered).toBe(0)
+		expect(s.markerMissing).toBe(0)
+		expect(s.markerPresent).toBe(0)
+		expect(s.activeSessionLookupEntered).toBe(0)
+		expect(s.activeSessionPresent).toBe(0)
+		expect(s.activeSessionMissing).toBe(0)
+		expect(s.markerClearedForMissingSession).toBe(0)
+		expect(s.lastStopReason).toBeNull()
+	})
+
+	test("F-b. dogfood ON, active session absent, marker present → U2.5 discriminator fires and the LIVE chronology is reproduced", async () => {
+		applyCompletionContinuationUpstreamDiagnosticProfile(true)
+		const harness = makeAbsentSessionHarness({
+			activeSessionId: "sess-ccupd-06b",
+			activeTaskId: "task-ccupd-06b",
+		})
+		harness.setMarkerPresent(true)
+		// Reevaluation #1: marker present, active session absent.
+		await harness.coordinator.reevaluateDeferredCompletionBarrier()
+		const s1 = upstreamSnapshot()
+		// U2: marker present. U2.5: active-session lookup
+		// reached, lookup returned absent, marker cleared by
+		// this branch. The reeval does NOT reach U3/U4/U7/U8/U11.
+		expect(s1.reevaluateEntered).toBe(1)
+		expect(s1.markerPresent).toBe(1)
+		expect(s1.markerMissing).toBe(0)
+		expect(s1.activeSessionLookupEntered).toBe(1)
+		expect(s1.activeSessionMissing).toBe(1)
+		expect(s1.markerClearedForMissingSession).toBe(1)
+		expect(s1.activeSessionPresent).toBe(0)
+		expect(s1.sessionMismatch).toBe(0)
+		expect(s1.taskMismatch).toBe(0)
+		expect(s1.epochMismatch).toBe(0)
+		expect(s1.unconsumedTerminalCountPositive).toBe(0)
+		expect(s1.unconsumedTerminalCountLast).toBeNull()
+		expect(s1.lastStopReason).toBe("active_session_missing")
+		expect(s1.enqueueCompletionContinuationInvoked).toBe(0)
+		// Reevaluation #2 (the chronological notification the LIVE
+		// operator observes): the marker has been cleared by
+		// reeval #1, so this reeval sees markerMissing.
+		await harness.coordinator.reevaluateDeferredCompletionBarrier()
+		const s2 = upstreamSnapshot()
+		expect(s2.reevaluateEntered).toBe(2)
+		expect(s2.markerPresent).toBe(1) // first reeval only
+		expect(s2.markerMissing).toBe(1) // second reeval only
+		expect(s2.activeSessionLookupEntered).toBe(1) // lookup only reached when marker is present
+		expect(s2.activeSessionMissing).toBe(1)
+		expect(s2.markerClearedForMissingSession).toBe(1)
+		// lastStopReason reflects the most recent decision — the
+		// second reeval's markerMissing.
+		expect(s2.lastStopReason).toBe("marker_missing")
+	})
+
+	test("F-c. dogfood ON, active session present, marker present → U2.5 records activeSessionPresent", async () => {
+		applyCompletionContinuationUpstreamDiagnosticProfile(true)
+		// Reuse the existing makeHarness (active session IS present).
+		const harness = makeHarness({
+			activeSessionId: "sess-ccupd-06c",
+			activeTaskId: "task-ccupd-06c",
+			ownerRunning: false,
+		})
+		harness.setMarkerPresent(true)
+		await harness.coordinator.reevaluateDeferredCompletionBarrier()
+		const s = upstreamSnapshot()
+		// U2.5: the lookup is reached and the session is present.
+		// No marker clear, no stop-reason change from this path.
+		expect(s.activeSessionLookupEntered).toBe(1)
+		expect(s.activeSessionPresent).toBe(1)
+		expect(s.activeSessionMissing).toBe(0)
+		expect(s.markerClearedForMissingSession).toBe(0)
+		// lastStopReason is the eventual stop (U11 enqueue_invoked
+		// because the harness also exposes a default unconsumed
+		// terminal count of 0 — actually NO, the harness sets 0
+		// by default, so the reeval does NOT fire U8. In this
+		// test we ONLY assert that the active-session path did
+		// NOT set "active_session_missing".
+		expect(s.lastStopReason).not.toBe("active_session_missing")
 	})
 })
