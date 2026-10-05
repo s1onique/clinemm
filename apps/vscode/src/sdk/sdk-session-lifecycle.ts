@@ -15,6 +15,7 @@ import { Logger } from "@/shared/services/Logger"
 import type { ActiveSession } from "./cline-session-factory"
 import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
 import { clearPrimeInjectionStateForSession } from "./hooks-adapter"
+import { recordLifecycleClear } from "./lifecycle-clear-recorder"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { buildToolPolicies } from "./sdk-tool-policies"
 import type { SdkSessionHost } from "./session-host"
@@ -274,6 +275,19 @@ export class SdkSessionLifecycle {
 		reason: string,
 		options: { awaitStop?: boolean; timeoutMs?: number } = {},
 	): Promise<ActiveSession | undefined> {
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01 — CALLER-REASON
+		// DISCRIMINATOR. Snapshot the caller reason at the funnel, BEFORE the
+		// `clearActiveSessionReference` mutation. The recorder is dogfood-only
+		// (no-op in `public` profile); this call has zero semantic effect on
+		// lifecycle ordering, host disposal, or the awaited stop.
+		//
+		// We record EVEN when `activeSession` is undefined (the early-return
+		// branch below) so the LIVE dump can distinguish "clear fired while
+		// activeSession was already undefined" from "clear never fired at
+		// all". Both branches share the same funnel and both are valid
+		// observations the LIVE needs.
+		recordLifecycleClear(reason)
+
 		const activeSession = this.clearActiveSessionReference()
 		if (!activeSession) {
 			return undefined
