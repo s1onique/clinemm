@@ -35,10 +35,16 @@
 //   SHOWTASK-RED-01    REAL showTaskWithId reproduction (the parental RED)
 //   SHOWTASK-CONTROL-02 same state WITHOUT showTaskWithId → marker survives
 //   SHOWTASK-SAME-03   same-task show (activeSession.sessionId === taskId)
+//   SHOWTASK-SAME-03a  same-task RUNNING show (the original end+restart path)
 //   SHOWTASK-DIFFERENT-04 A → B (different task switch)
 //   SHOWTASK-SESSION-IDENTITY-05 session identity isolation across switch
 //   SHOWTASK-CANCEL-06 cancel semantics across switch
 //   SHOWTASK-EXACTLY-ONCE-07 repeated show/agent_done/reevaluate → 1 continuation
+//   SHOWTASK-IDEMPOTENCE-08 P1 — same-task idle must be a true no-op:
+//                       activeSession ref unchanged, TaskProxy ref unchanged,
+//                       messageStateHandler.clear / clearTaskSettings /
+//                       resetMessageTranslator NOT called, createTaskProxy
+//                       path NOT entered (no setTask invoked).
 //
 // Contract classification (per ACT §4): HYBRID. showTaskWithId(A) when A
 // is already current re-installs the active session lifecycle (existing
@@ -124,7 +130,12 @@ interface Fixture {
 	readonly activeTaskId: string
 	readonly startSession: (sessionId: string) => Promise<void>
 	readonly getActiveSession: () => ActiveSession | undefined
+	readonly getTask: () => { taskId: string } | undefined
 	readonly getTaskId: () => string | undefined
+	readonly getClearPendingCalls: () => number
+	readonly getSetTaskCalls: () => number
+	readonly getClearTaskSettingsCalls: () => number
+	readonly getResetMessageTranslatorCalls: () => number
 	readonly reevaluateDeferredCompletionBarrier: () => Promise<void>
 	readonly seedDeferredMarker: () => void
 	readonly setUnconsumedOwnedTerminalCount: (n: number, jobIds?: string[]) => void
@@ -140,6 +151,7 @@ function makeFixture(): Fixture {
 	mockCreateSessionHost.mockResolvedValue(host)
 
 	let liveTask: { taskId: string } | undefined
+	let setTaskCallCount = 0
 
 	const fx_fence = new TaskOperationFence()
 	const tracker = new TurnStateTracker(new MessageIdMinter())
@@ -164,9 +176,13 @@ function makeFixture(): Fixture {
 		heldJobIds: readonly string[]
 	}> = []
 
+	const clearPendingFn = vi.fn()
+	const clearTaskSettingsFn = vi.fn().mockResolvedValue(undefined)
+	const resetMessageTranslatorFn = vi.fn()
+
 	const coordinatorOptions: SdkTaskControlCoordinatorOptions = {
 		sessions: lifecycle,
-		interactions: { clearPending: vi.fn() } as never,
+		interactions: { clearPending: clearPendingFn } as never,
 		taskOperationFence: fx_fence,
 		messages: {
 			appendAndEmit: vi.fn(),
@@ -194,13 +210,14 @@ function makeFixture(): Fixture {
 		} as any,
 		getTask: () => liveTask as never,
 		setTask: (task: unknown) => {
+			setTaskCallCount++
 			liveTask = task as { taskId: string }
 		},
-		clearTaskSettings: vi.fn().mockResolvedValue(undefined),
+		clearTaskSettings: clearTaskSettingsFn,
 		setTurnPhase: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		onAskResponse: vi.fn(),
-		resetMessageTranslator: vi.fn(),
+		resetMessageTranslator: resetMessageTranslatorFn,
 		raiseCancelFence: vi.fn(),
 	}
 
@@ -269,7 +286,12 @@ function makeFixture(): Fixture {
 		activeTaskId: "task-A",
 		startSession,
 		getActiveSession: () => lifecycle.getActiveSession(),
+		getTask: () => liveTask,
 		getTaskId: () => liveTask?.taskId,
+		getClearPendingCalls: () => clearPendingFn.mock.calls.length,
+		getSetTaskCalls: () => setTaskCallCount,
+		getClearTaskSettingsCalls: () => clearTaskSettingsFn.mock.calls.length,
+		getResetMessageTranslatorCalls: () => resetMessageTranslatorFn.mock.calls.length,
 		reevaluateDeferredCompletionBarrier: () => sessionEvents.reevaluateDeferredCompletionBarrier(),
 		seedDeferredMarker: () => {
 			const active = lifecycle.getActiveSession()
@@ -546,5 +568,52 @@ describe("SHOWTASK01 — showTaskWithId causal reproduction against the LIVE BCB
 		await fx.reevaluateDeferredCompletionBarrier()
 		const d3 = getCompletionContinuationDeliveryCounters()
 		expect(d3.callbackEntered).toBe(1)
+	})
+
+	// ----------------------------------------------------------------------
+	// SHOWTASK-IDEMPOTENCE-08 (P1 fix) — same-task idle must be a true
+	// no-op at the lifecycle seam:
+	//   - activeSession ref survives (no clearActiveSessionReference)
+	//   - getTask() returns the SAME object reference as before
+	//     (no createTaskProxy + setTask replacement underneath)
+	//   - interactions.clearPending NOT called
+	//   - messageStateHandler.clear NOT called on the existing task
+	//   - clearTaskSettings NOT called
+	//   - resetMessageTranslator NOT called
+	//
+	// This pins the contract that the prior bounded-repair was missing
+	// (the original patch skipped only endActiveSession + the task-view
+	// clear block, then fell through to createTaskProxy + setTask,
+	// replacing the TaskProxy underneath the preserved ActiveSession —
+	// an ownership mismatch).
+	// ----------------------------------------------------------------------
+	it("IDEMPOTENCE-08: same-task idle show is a true no-op (activeSession ref, TaskProxy ref, and lifecycle teardown calls all preserved)", async () => {
+		const fx = makeFixture()
+		await fx.startSession("session-A")
+		expect(fx.getActiveSession()?.sessionId).toBe("session-A")
+		expect(fx.getActiveSession()?.isRunning).toBe(false)
+		expect(fx.getTaskId()).toBe("session-A")
+		const liveSessionRefBefore = fx.getActiveSession()
+		const liveTaskRefBefore = fx.getTask()
+		expect(liveSessionRefBefore).toBeDefined()
+		expect(liveTaskRefBefore).toBeDefined()
+		const clearPendingBefore = fx.getClearPendingCalls()
+		const setTaskBefore = fx.getSetTaskCalls()
+		const clearTaskSettingsBefore = fx.getClearTaskSettingsCalls()
+		const resetMessageTranslatorBefore = fx.getResetMessageTranslatorCalls()
+
+		await fx.coordinator.showTaskWithId("session-A")
+
+		// 1. activeSession ref survives verbatim.
+		expect(fx.getActiveSession()).toBe(liveSessionRefBefore)
+
+		// 2. TaskProxy ref survives verbatim (no createTaskProxy + setTask replacement).
+		expect(fx.getTask()).toBe(liveTaskRefBefore)
+
+		// 3. The lifecycle teardown calls were NEVER invoked.
+		expect(fx.getClearPendingCalls()).toBe(clearPendingBefore)
+		expect(fx.getSetTaskCalls()).toBe(setTaskBefore)
+		expect(fx.getClearTaskSettingsCalls()).toBe(clearTaskSettingsBefore)
+		expect(fx.getResetMessageTranslatorCalls()).toBe(resetMessageTranslatorBefore)
 	})
 })
