@@ -152,6 +152,22 @@ const ClineCommands = {
 	// capture insufficient (successor counter design required), (c)
 	// successor evidence supersedes.
 	DumpCompletionContinuationDelivery: prefix + ".debug.dumpCompletionContinuationDelivery",
+	// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+	// Debug dump command for the LIVE upstream-discriminator
+	// counter snapshot (U0..U11 first-divergence counters).
+	// Mirrors the CCARD / CCDO / SHADOW / ELM-AUTHORITY dump
+	// pattern: unconditional (operator can always inspect
+	// whatever the runtime captured), dump != clear (no
+	// counter mutation). The dump serializes
+	// `getCompletionContinuationUpstreamCounters()` to
+	// <globalStorageUri>/completion-continuation-upstream.counters.json.
+	// The runtime is always collecting so the dump can report a
+	// fresh process; the diagnostic enablement is owned by the
+	// dogfood profile (no toggle command, no env knob).
+	// REMOVAL_TRIGGER: first of (a) root cause isolated, (b)
+	// capture insufficient (successor counter design required), (c)
+	// successor evidence supersedes.
+	DumpCompletionContinuationUpstream: prefix + ".debug.dumpCompletionContinuationUpstream",
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
 	// Dump command for the EHLOOP01 (Extension Host Hotloop) counter
 	// diagnostic. Mirrors the BJLA / BOCOR / CCARD dump pattern:

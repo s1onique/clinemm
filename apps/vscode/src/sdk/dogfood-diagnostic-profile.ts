@@ -136,6 +136,10 @@ import {
 	setCompletionContinuationDeliveryEnabled,
 } from "./completion-continuation-delivery-runtime"
 import {
+	isCompletionContinuationUpstreamEnabled as _isCompletionContinuationUpstreamEnabled,
+	setCompletionContinuationUpstreamEnabled,
+} from "./completion-continuation-upstream-runtime"
+import {
 	isContinuationCardinalityAuthorityCaptureEnabled as _isContinuationCardinalityAuthorityCaptureEnabled,
 	setContinuationCardinalityAuthorityCaptureEnabled,
 } from "./continuation-cardinality-authority"
@@ -992,6 +996,78 @@ export function applyCompletionContinuationDeliveryDiagnosticProfile(isDogfood: 
 		return { enabled: false, flipped: true }
 	}
 	return { enabled: should, flipped: false }
+}
+
+// ===========================================================================
+// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR
+// — central dogfood profile resolver for the CCUD (Completion
+// Continuation Upstream Discriminator) capture seam.
+//
+// CONTRACT — frozen in this ACT (mirrors CCDO / CCARD / BJLA / BOCOR; no
+// env override layer, no new knob):
+//   - There is NO new env var. NO override matrix. NO parser.
+//     Per the Factory reviewer precedent (and the predecessor
+//     ACT §0 "DEFAULT_OFF"), the diagnostic is enabled STRICTLY
+//     by the central dogfood profile:
+//       isDogfood === true  -> diagnostic ON
+//       isDogfood === false -> diagnostic OFF (public default)
+//   - The module seam is
+//     ./completion-continuation-upstream-runtime.ts#setCompletionContinuationUpstreamEnabled.
+//     The resolver arms it via
+//     setCompletionContinuationUpstreamEnabled(enabled).
+//   - The activation helper is called from
+//     extension.ts:activate (sibling to the existing CCARD /
+//     CCDO activation); there is exactly ONE production
+//     activation path.
+//   - The dump command + the host-side dump runtime remain
+//     unconditional (mirrors CCARD / CCDO / Elm shadow / Elm
+//     authority convention: dump is always callable, dump !=
+//     clear, dump != enable). While disabled, the dump reports
+//     an all-zero snapshot so the operator can always confirm
+//     the diagnostic is correctly off.
+//
+// HONEST STOP RULE (mirrors CCARD / CCDO / BJLA / BOCOR):
+//   Once the root cause is isolated (LIVE classifies an exact
+//   U<n> first divergence), the diagnostic is classified
+//   CAPTURE_INSUFFICIENT, OR successor evidence supersedes,
+//   this helper + the runtime module + the dump command +
+//   the registry entry + the package.json declaration +
+//   the production coordinator instrumentation MUST be
+//   removed TOGETHER.
+// ===========================================================================
+
+/**
+ * THE single production activation helper for the CCUD seam.
+ * Called from extension.ts:activate (sibling to the CCDO / CCARD
+ * activation); there is exactly ONE production activation path,
+ * no copied orchestration in tests.
+ *
+ * Mirrors CCDO: enable/disable is strictly:
+ *
+ *   isDogfood === true  -> ON
+ *   isDogfood === false -> OFF
+ *
+ * No new env knob. No parser. No override matrix.
+ */
+export function applyCompletionContinuationUpstreamDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
+	const was = _isCompletionContinuationUpstreamEnabledForActivation()
+	const should = isDogfood
+	if (should && !was) {
+		setCompletionContinuationUpstreamEnabled(true)
+		return { enabled: true, flipped: true }
+	}
+	if (!should && was) {
+		setCompletionContinuationUpstreamEnabled(false)
+		return { enabled: false, flipped: true }
+	}
+	return { enabled: should, flipped: false }
+}
+
+function _isCompletionContinuationUpstreamEnabledForActivation(): boolean {
+	return _isCompletionContinuationUpstreamEnabled()
 }
 
 // ===========================================================================

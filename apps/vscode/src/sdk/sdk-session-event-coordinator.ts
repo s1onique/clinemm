@@ -13,6 +13,28 @@ import {
 	type ElmCompletionAuthorityDecision,
 } from "./completion-authority-elm-authority"
 import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
+import {
+	recordAgentTurnDoneNotificationSeen,
+	recordAuthorityCheckReached,
+	recordDedupePermitted,
+	recordDedupeSuppressed,
+	recordEnqueueCompletionContinuationInvoked,
+	recordEnqueueIfHeldEntered,
+	recordEpochMismatch,
+	recordHeldJobIdsRead,
+	recordMarkerMissing,
+	recordMarkerPresent,
+	recordNoHeldJobIds,
+	recordNotifyAgentTurnDoneEntered,
+	recordNoUnconsumedTerminal,
+	recordOutstandingAutonomousWork,
+	recordOwnerStillRunning,
+	recordReevaluateEntered,
+	recordRequestedSessionMatched,
+	recordSessionMismatch,
+	recordTaskMismatch,
+	recordUnconsumedTerminalCountRead,
+} from "./completion-continuation-upstream-runtime"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import {
 	enterExtensionHostHotloopHandleSessionEvent,
@@ -731,24 +753,41 @@ export class SdkSessionEventCoordinator {
 	}
 
 	async reevaluateDeferredCompletionBarrier(): Promise<void> {
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U1 discriminator. Every call increments
+		// reevaluateEntered; the U2..U7 counters below record the
+		// decision the production code made. §11 invariant:
+		// every predicate is captured into a local const and the
+		// SAME const is used for the production check AND the
+		// record*() call. No provider is invoked twice.
+		recordReevaluateEntered()
 		const marker = this.deferredCompletionBarrier
-		if (!marker) return
+		if (!marker) {
+			recordMarkerMissing()
+			return
+		}
+		recordMarkerPresent()
 		const activeSession = this.options.sessions.getActiveSession()
+		const sessionMatched = !!activeSession && marker.sessionId === activeSession.sessionId
+		recordRequestedSessionMatched(sessionMatched)
 		if (!activeSession) {
 			this.deferredCompletionBarrier = undefined
 			return
 		}
 		if (marker.sessionId !== activeSession.sessionId) {
+			recordSessionMismatch()
 			this.deferredCompletionBarrier = undefined
 			return
 		}
 		const taskId = this.options.getTask?.()?.taskId
 		if (marker.taskId !== taskId) {
+			recordTaskMismatch()
 			this.deferredCompletionBarrier = undefined
 			return
 		}
 		const currentEpoch = this.options.messageTranslatorState.getMinter().epoch
 		if (marker.epoch !== currentEpoch) {
+			recordEpochMismatch()
 			this.deferredCompletionBarrier = undefined
 			return
 		}
@@ -804,7 +843,14 @@ export class SdkSessionEventCoordinator {
 		// block completion and 4 such jobs each produced a
 		// wake-driven submit_and_exit.
 		const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
-		if (ownerStillRunning) return
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U6 discriminator. Capture the predicate once (§11
+		// invariant — no provider is invoked twice), record the
+		// fact, then the production check uses the same const.
+		if (ownerStillRunning) {
+			recordOwnerStillRunning()
+			return
+		}
 		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
 		// extend the barrier predicate to include the second
 		// conjunct of the BCB01 §0.1 frozen invariant:
@@ -820,6 +866,18 @@ export class SdkSessionEventCoordinator {
 		// by SdkController.
 		const unconsumedOwnedTerminalResultCount =
 			this.options.getUnconsumedOwnedTerminalResultCount?.(activeSession.sessionId) ?? 0
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U7 discriminator. The provider is invoked exactly once
+		// (§11 invariant — capture to local const, then use the
+		// const for BOTH the record and the production check).
+		// `unconsumedTerminalCountLast` is captured for every
+		// reevaluation so the operator can correlate the LIVE
+		// `terminal_committed=3` chronology against the
+		// upstream-visible count without exposing raw job IDs.
+		recordUnconsumedTerminalCountRead({
+			count: unconsumedOwnedTerminalResultCount,
+			positive: unconsumedOwnedTerminalResultCount > 0,
+		})
 		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION04:
 		// Trigger the bounded coalesced continuation at the terminal-
 		// idle / Q5 re-evaluation transition (not just at the
@@ -846,6 +904,15 @@ export class SdkSessionEventCoordinator {
 		// the held completion commits exactly once via the
 		// existing setTurnPhase("completed", ...) path below.
 		if (unconsumedOwnedTerminalResultCount > 0) {
+			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+			// U8 discriminator. The actual `enqueueIfHeldEntered`
+			// counter is incremented INSIDE
+			// `enqueueCompletionContinuationIfHeld` (so it counts
+			// every entry — including direct callers — not just
+			// this reevaluation-driven one). The
+			// `recordEnqueueCompletionContinuationInvoked` (U11)
+			// counter is incremented INSIDE that method too,
+			// right before the actual options callback is invoked.
 			// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
 			// Bounded finalization-authority trigger. Fire AT MOST
 			// ONCE per `(sessionId, epoch)`. The dedupe key uses
@@ -873,7 +940,25 @@ export class SdkSessionEventCoordinator {
 				})
 			return
 		}
-		if (outstandingAutonomousWork) return
+		if (outstandingAutonomousWork) {
+			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+			// U5 discriminator. Recorded AFTER the predicate
+			// (the existing `outstandingAutonomousWork` const
+			// already captured at line 833) so the production
+			// check and the record*() share the SAME fact (§11
+			// invariant).
+			recordOutstandingAutonomousWork()
+			return
+		}
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U7 discriminator — the negotiated condition was that
+		// the unconsumed terminal count was zero AND the
+		// reevaluation fell through past the count>0 branch.
+		// Record `no_unconsumed_terminal` so a LIVE with
+		// `unconsumedTerminalCountPositive=0` AND
+		// `lastStopReason=no_unconsumed_terminal` pinpoints
+		// HALT_TERMINAL_ACCOUNTING_DIVERGENCE.
+		recordNoUnconsumedTerminal()
 		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
 		// If the wake-driven turn owns terminal completion for any
 		// notify-owned jobId launched by this turn, the originating
@@ -895,6 +980,15 @@ export class SdkSessionEventCoordinator {
 			`[SdkController] outstanding obligations resolved; releasing held completion for session ${activeSession.sessionId} (epoch=${marker.epoch})`,
 		)
 		this.deferredCompletionBarrier = undefined
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// lastStopReason="authority_check_reached" marks that
+		// the reevaluation reached the Elm authority consult.
+		// This is the deepest upstream U-class discriminator — it
+		// is the LAST positive note before the EDT check. A LIVE
+		// with `authority_check_reached` means the BCB01
+		// conservation checks all passed for the active
+		// session/task/epoch.
+		recordAuthorityCheckReached()
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01: Elm is the
 		// FINAL gate. When the option is the legacy default
 		// (`kind: "authorize"`), the helper returns true and the
@@ -956,6 +1050,17 @@ export class SdkSessionEventCoordinator {
 	 * barriers).
 	 */
 	async notifyAgentTurnDone(sessionId: string): Promise<void> {
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U0/U1 discriminator. Record the notification was seen
+		// (every call reaches this method), then the inner
+		// body entered (U0). The reevaluateEntered counter (U1)
+		// is incremented at the entry of the reevaluation itself.
+		// §11 invariant: these counters do NOT change the
+		// evaluation order — the production pre-check below
+		// runs first and short-circuits the Elm-authority-OFF
+		// case before either counter increments. With the
+		// diagnostic disabled the record*() calls are no-ops.
+		recordAgentTurnDoneNotificationSeen()
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01 P1 fix:
 		// When Elm authority is OFF (the default), this seam MUST be a
 		// no-op. Without this guard, `reevaluateDeferredCompletionBarrier`
@@ -972,6 +1077,15 @@ export class SdkSessionEventCoordinator {
 		if (!ElmAuthorityModule.isElmAuthorityEnabled()) {
 			return
 		}
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U0 discriminator. The Elm-authority-OFF pre-check
+		// short-circuits BEFORE we record "entered". A frozen
+		// LIVE with notifyAgentTurnDoneEntered=0 +
+		// totalAgentTurnDoneNotifications=N therefore pinpoints
+		// HALT_POSTRUN_TRIGGER_NOT_ENTERED — the production
+		// callback is unreachable because Elm authority is
+		// disabled in the installed Extension Host.
+		recordNotifyAgentTurnDoneEntered()
 		try {
 			await this.options.flushElmAuthorityForSession?.(sessionId)
 		} catch (err) {
@@ -1035,6 +1149,12 @@ export class SdkSessionEventCoordinator {
 		| { kind: "already_sent"; continuationSessionEpoch: string }
 		| { kind: "no_callback" }
 	> {
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U8 discriminator. Every entry increments
+		// `enqueueIfHeldEntered`. U9..U11 instrumentation below
+		// captures each short-circuit branch with the same
+		// §11 invariant (local const + record-after).
+		recordEnqueueIfHeldEntered()
 		if (!this.options.enqueueCompletionContinuation) {
 			return Promise.resolve({ kind: "no_callback" })
 		}
@@ -1050,20 +1170,38 @@ export class SdkSessionEventCoordinator {
 		const epoch = this.options.messageTranslatorState.getMinter().epoch
 		const continuationSessionEpoch = `${activeSessionId}|${taskId ?? "(none)"}|${epoch}`
 		if (this.lastCompletionContinuationSessionEpoch === continuationSessionEpoch) {
+			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+			// U10 discriminator. The dedupe suppresses.
+			recordDedupeSuppressed()
 			return Promise.resolve({ kind: "already_sent", continuationSessionEpoch })
 		}
 		const heldJobIds = this.options.getUnconsumedOwnedTerminalJobIds?.(activeSessionId, taskId) ?? []
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U9 discriminator. Capture provider cardinality (count
+		// only, no IDs — §6 identity policy) so the operator can
+		// correlate the LIVE terminal_committed=N chronology
+		// against the upstream-visible held-job count without
+		// exposing raw jobIds.
+		recordHeldJobIdsRead({ ids: heldJobIds })
 		if (heldJobIds.length === 0) {
 			// The count-based fallback path can produce a 0-length
 			// list. In that case we suppress the continuation:
 			// the runtime will eventually reach a steady state
 			// (terminal-idle + reevaluateDeferredCompletionBarrier).
+			recordNoHeldJobIds()
 			return Promise.resolve({ kind: "no_held_job_ids", heldJobIds })
 		}
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// U10 discriminator — dedupe permits. U11 discriminator
+		// — invoke recorded RIGHT BEFORE the options callback
+		// is invoked. Together these two record*() calls tell
+		// the operator the U-class was honored at every layer.
+		recordDedupePermitted()
 		// Mark BEFORE await so a synchronous re-entry cannot
 		// double-fire. O(1) memory regardless of coordinator
 		// lifetime (P1 halt fix: replaces the unbounded Set).
 		this.lastCompletionContinuationSessionEpoch = continuationSessionEpoch
+		recordEnqueueCompletionContinuationInvoked()
 		return this.options
 			.enqueueCompletionContinuation({
 				sessionId: activeSessionId,
@@ -1126,6 +1264,20 @@ export class SdkSessionEventCoordinator {
 			taskId: this.deferredCompletionBarrier.taskId,
 			epoch: this.deferredCompletionBarrier.epoch,
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+	 * test-only backdoor to set / clear the deferred-completion-barrier
+	 * marker so the UPSTREAM-DIAG-02..05 suites can drive the
+	 * production reevaluation path with explicit marker
+	 * presence/absence without rebuilding the full coordinator.
+	 * Production code NEVER calls this.
+	 */
+	setDeferredCompletionBarrierForTesting(
+		barrier: { readonly sessionId: string; readonly taskId: string | undefined; readonly epoch: number } | undefined,
+	): void {
+		this.deferredCompletionBarrier = barrier ? { ...barrier, deferredAt: Date.now() } : undefined
 	}
 
 	/**

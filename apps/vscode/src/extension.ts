@@ -9,11 +9,13 @@ import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/bac
 import { dumpExtensionSideElmAuthorityCounters } from "@/sdk/completion-authority-elm-authority-runtime-host"
 import { dumpExtensionSideElmShadowDiagnostic } from "@/sdk/completion-authority-elm-shadow-runtime"
 import { dumpExtensionSideCompletionContinuationDeliveryCounters } from "@/sdk/completion-continuation-delivery-runtime-host"
+import { dumpExtensionSideCompletionContinuationUpstreamCounters } from "@/sdk/completion-continuation-upstream-runtime-host"
 import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
 import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyCompletionContinuationDeliveryDiagnosticProfile,
+	applyCompletionContinuationUpstreamDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
 	applyElmAuthorityProfile,
 	applyElmShadowDiagnosticProfile,
@@ -280,6 +282,28 @@ export async function activate(context: vscode.ExtensionContext) {
 	// seam is armed BEFORE the first
 	// buildSdkControllerEnqueueCompletionContinuation invocation.
 	applyCompletionContinuationDeliveryDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+	// arm the CCUD (Completion Continuation Upstream Discriminator)
+	// counter seam at the SAME EARLIEST initialization seam,
+	// BEFORE SdkController construction. The helper arms the
+	// module seam idempotently based STRICTLY on the dogfood
+	// identity bit (mirrors CCDO / CCARD — no env var, no override
+	// matrix). The diagnostic is default-OFF; in dogfood the
+	// production coordinator records the discriminated
+	// first-divergence counters (U0..U11 from the LIVE
+	// discriminator table §16). Outside dogfood the record
+	// functions short-circuit, so the coordinator's evaluation
+	// order is bit-identical to the pre-instrumentation path
+	// (§11 invariant — predicates are evaluated exactly once,
+	// record*() runs AFTER the production const is known). The
+	// dump command remains unconditional (dump != enable,
+	// dump != clear). Running this BEFORE SdkController
+	// construction guarantees the counter seam is armed BEFORE
+	// the first SdkSessionEventCoordinator.notifyAgentTurnDone /
+	// reevaluateDeferredCompletionBarrier /
+	// enqueueCompletionContinuationIfHeld invocation.
+	applyCompletionContinuationUpstreamDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03:
 	// arm the Elm shadow observer at the SAME EARLIEST
@@ -1153,6 +1177,31 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[CONT-CONT-DELIVERY] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Completion continuation delivery dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
+		// Dump command for the LIVE upstream-discriminator counter
+		// (U0..U11). Mirrors the CCARD / CCDO / SHADOW /
+		// ELM-AUTHORITY dump pattern: unconditional (operator can
+		// always inspect whatever the runtime captured),
+		// dump != clear (no counter mutation). The dump
+		// serializes the LIVE upstream-discriminator counter
+		// snapshot to
+		// <globalStorageUri>/completion-continuation-upstream.counters.json.
+		// REMOVAL_TRIGGER: first of (a) root cause isolated (LIVE
+		// classifies an exact U<n>), (b) capture insufficient,
+		// (c) successor evidence supersedes.
+		vscode.commands.registerCommand(commands.DumpCompletionContinuationUpstream, async () => {
+			try {
+				const { countersFile, counters } = await dumpExtensionSideCompletionContinuationUpstreamCounters(context)
+				void vscode.window.showInformationMessage(
+					`Completion continuation upstream: totalAgentTurnDoneNotifications=${counters.totalAgentTurnDoneNotifications} notifyAgentTurnDoneEntered=${counters.notifyAgentTurnDoneEntered} reevaluateEntered=${counters.reevaluateEntered} markerMissing=${counters.markerMissing} markerPresent=${counters.markerPresent} sessionMismatch=${counters.sessionMismatch} taskMismatch=${counters.taskMismatch} epochMismatch=${counters.epochMismatch} outstandingAutonomousWork=${counters.outstandingAutonomousWork} ownerStillRunning=${counters.ownerStillRunning} unconsumedTerminalCountPositive=${counters.unconsumedTerminalCountPositive} unconsumedTerminalCountLast=${counters.unconsumedTerminalCountLast === null ? "null" : counters.unconsumedTerminalCountLast} enqueueIfHeldEntered=${counters.enqueueIfHeldEntered} heldJobIdsEmpty=${counters.heldJobIdsEmpty} heldJobIdsNonEmpty=${counters.heldJobIdsNonEmpty} heldJobIdsCountLast=${counters.heldJobIdsCountLast === null ? "null" : counters.heldJobIdsCountLast} dedupeSuppressed=${counters.dedupeSuppressed} dedupePermitted=${counters.dedupePermitted} enqueueCompletionContinuationInvoked=${counters.enqueueCompletionContinuationInvoked} lastStopReason=${counters.lastStopReason ?? "null"} lastRequestedSessionMatched=${counters.lastRequestedSessionMatched === null ? "null" : counters.lastRequestedSessionMatched} → ${countersFile}.`,
+				)
+			} catch (err) {
+				Logger.error("[CONT-CONT-UPSTREAM] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Completion continuation upstream dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),
