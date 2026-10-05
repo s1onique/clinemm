@@ -18771,3 +18771,169 @@ an isolated ClineMM dogfood Extension Host is required to lift the
 hold, and the IDE sandbox blocks the install).
 
 **Subject head:** `0170b7427403b74364d4d6de048d6e87c367aa7c`
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION04-P1-CONSERVATION-SUFFIX — P1 FIX ONCE — 2026-10-05
+
+**Status:** P1_FIX_ONCE + HALT_LIVE_NO_LIVE_GUI. Bounded correction closing the
+reviewer's P1 defect in the CORRECTION03 scheduler-conservation fix.
+
+```text
+ENTRY_HEAD            = 0170b7427403b74364d4d6de048d6e87c367aa7c (CORRECTION03)
+SUBJECT_HEAD          = ba46ad5cfc33b7779fc4482a70ff5a14dbcf4520 (this ACT)
+P1_BUG_LOCATION       = apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts:179, 192
+P1_FIX_LOCATION       = apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts:159-214
+P1_FIX_SHAPE          = suffix-slice requeue from currentIndex
+SCHEDULER_TESTS       = 7/7 PASS (with currentIndex slice)
+RED_GREEN_ABLATION    = 2/7 FAIL without the slice (mcpTools called 2x)
+MCPRESTART_TESTS      = 10/10 PASS
+SESSION_AUTO_APPROVAL = 10/10 PASS
+TYPECHECK             = PASS (0 errors in tsconfig.json scope)
+LINT                  = PASS (biome clean on 2 modified files)
+DIFF_CHECK            = CLEAN
+PRODUCTION_FOOTPRINT  = 2 files, +89/-6 vs predecessor
+ELM_KERNEL_SHA256     = 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c (unchanged)
+VSIX_ARTIFACT         = dist/dogfood/clinemm-4.1.16-5a1c485cb-ba46ad5cf.vsix
+VSIX_SHA256           = 66d1daeaeac14aaa4047e1c8a7f74631ef91367a1b2b168784e77d216103550e
+VSIX_BYTES            = 29,098,691
+VSIX_INSTALL          = /tmp/vscodium-clinemm-correction04/extensions/s1onique.clinemm-4.1.16-5a1c485cb-ba46ad5cf/
+LIVE_GUI              = HALT_LIVE_NO_LIVE_GUI (sandbox blocks VSCodium GUI launch; same halt as CORRECTION03)
+SCHEDULER_SEMANTICS_CHANGED   = true
+ELM_AUTHORITY_SEMANTICS_CHANGED = false
+COMPLETION_AUTHORITY_SEMANTICS_CHANGED = false
+QUEUE_SEMANTICS_CHANGED       = false
+PRESENTATION_SEMANTICS_CHANGED = false
+MCP_CODE_CHANGED              = false
+MYC_CODE_CHANGED              = false
+```
+
+**The reviewer P1 defect (verbatim from digest):**
+
+> On an inner early return, the correction currently does:
+> ```ts
+> for (const [requeueReason, requeueRebuild] of snapshot) {
+>     if (!this.pending.has(requeueReason)) {
+>         this.pending.set(requeueReason, requeueRebuild)
+>     }
+> }
+> ```
+> That loops over the **entire original snapshot**, not merely the entries
+> that have not executed yet. So this sequence is possible:
+> ```
+> snapshot = [mcpTools, provider, terminalExecutionMode]
+> execute mcpTools          # succeeds
+> mcpTools flips isRunning=true
+> next iteration: isRunning == true → requeue ENTIRE snapshot
+> later sessionBecameIdle(): mcpTools executes AGAIN ← defect
+> ```
+> Your new test almost exposes it, but only asserts `mcpTools called once`
+> before second drain. It never asserts `mcpTools` is **still** called
+> once after the second drain.
+
+**Bounded fix:**
+
+- `apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts`: track a closure-scoped
+  `currentIndex` (declared immediately above `drain = async () => {…}`) and
+  change the `for (const [reason, rebuild] of snapshot)` loop into a
+  manual-index `for (; currentIndex < snapshot.length; currentIndex++)`. The two
+  early-return branches (isRunning and isDeferredCompletionOutstanding) now
+  iterate over `snapshot.slice(currentIndex)` instead of the entire snapshot.
+  The active-session-gone branch is unchanged (session disappeared → clear all
+  and bail).
+
+**RED→GREEN ablation (load-bearing proof, mirrors ACT §7):**
+
+| Variant | scheduler tests | mcprestart tests |
+|---|---|---|
+| **With fix** (ba46ad5cf) | **7/7 PASS** | 10/10 PASS |
+| **Without fix** (0170b7427 source restored, strengthened tests in place) | **2/7 FAIL** (`expected "vi.fn()" to be called once, but got 2 times`) | 10/10 PASS |
+
+The 2 FAILs are exactly the test-cases the digest identified as covering the
+new conservation property. The bug is real and the strengthened tests catch it.
+
+**Strengthened tests** (apps/vscode/src/sdk/sdk-session-rebuild-scheduler.test.ts):
+
+- Both P1 tests now gate the requests behind `scheduler.runExclusive(...)` so
+  the snapshot at drain-start contains ≥2 entries. Without the gate, the
+  first `request("mcpTools")` synchronously starts a drain with
+  snapshot=[only that one entry], and the bug never fires because the loop
+  exits after iter 0 without entering the isRunning branch.
+- Both tests now assert `expect(mcpTools).toHaveBeenCalledOnce()` AFTER the
+  second drain (the new conservation invariant: already-executed entries
+  MUST NOT be replayed).
+
+**Artifact + install (canonical):**
+
+- Build: `python3 scripts/build-dogfood-vsix.py --force` (with
+  `BUN_TMPDIR=/tmp/bun-tmp` and `ELM_HOME=/tmp/elm-home` to work around
+  the sandbox's seatbelt denial of the default `/private/var/folders/.../T`
+  and `~/.elm`).
+- Source head: `ba46ad5cfc33b7779fc4482a70ff5a14dbcf4520`.
+- Dogfood version: `4.1.16-5a1c485cb-ba46ad5cf`.
+- VSIX: `dist/dogfood/clinemm-4.1.16-5a1c485cb-ba46ad5cf.vsix`
+  (29,098,691 bytes, sha256 `66d1daeaeac14aaa4047e1c8a7f74631ef91367a1b2b168784e77d216103550e`).
+- Install: `codium --no-sandbox --install-extension <vsix> --user-data-dir
+  /tmp/vscodium-clinemm-correction04/user-data --extensions-dir
+  /tmp/vscodium-clinemm-correction04/extensions` → `Extension installed
+  successfully: s1onique.clinemm vscode-userdata:.../extensions.json`.
+- `codium --list-extensions` confirms `s1onique.clinemm 4.1.16-5a1c485cb-ba46ad5cf`.
+
+**Bundle verification (minified extension.js diff vs predecessor 0170b7427):**
+
+The exact structural change in the bundled scheduler class:
+
+```
+- 0170: for(let[o,i]of r){... if(s.isRunning){for(let[u,c]of r)...
++ ba46: let a=0;o=async()=>{for(;a<r.length;a++){let[i,s]=r[a]... 
++       if(u.isRunning){for(let[c,d]of r.slice(a))...
+```
+
+The fix (`r.slice(a)`) is present in the production bundle.
+
+**HALT_LIVE_NO_LIVE_GUI:**
+
+The actual LIVE qualification against a fresh Extension Host GUI (reviewer's
+"install exact new VSIX → fresh Extension Host LIVE") could not be completed
+in this sandbox environment because:
+
+1. VSCodium GUI launches complete process-creation (`launching> pid=...`) but
+   then exit with `SIGSEGV` because `kill EPERM` blocks Playwright/electron
+   from controlling them. This is the documented `macOS only` flakiness in
+   `apps/vscode/src/dev/debug-harness/README.md`.
+2. The persistent VSCodium process (`nohup ... & disown`) does create a
+   `/tmp/clinemm-cline-dir-correction04/data/` directory (the Cline
+   extension's CLINE_DIR is initialized by `StateManager`), but the GUI
+   process never reaches the steady-state where `globalState.json` is
+   written, so the diagnostics dumps documented in the predecessor ACT
+   cannot be collected.
+3. The same halt as CORRECTION03: the IDE sandbox blocks `mkdir` for
+   `~/.vscodium-clinemm/User/`, so the `~/.vscodium-clinemm` profile
+   install path is unusable. The fresh `/tmp/vscodium-clinemm-correction04/`
+   profile path works for `--install-extension` (extract succeeds, registered
+   in extensions.json), but the persistent GUI launch is blocked at the
+   `kill EPERM` / `nice(5) failed: operation not permitted` layer.
+
+**Honest verdict for this ACT:**
+
+```
+P1_FIX_ONCE
++ VSIX_BUILT_SHA256_BOUND
++ VSIX_INSTALLED_REGISTERED
++ BUNDLE_VERIFIED_SUFFIX_SLICE_PRESENT
++ HALT_LIVE_NO_LIVE_GUI
+```
+
+NOT `PASS_P1_CORRECTION04_REVIEWER_C1_GO`. The fix is verified by:
+- 7/7 scheduler tests GREEN,
+- 2/7 RED ablation proves the strengthened tests catch the bug,
+- 10/10 mcprestart + 10/10 session-auto-approval tests GREEN,
+- tsc + biome + diff-check clean,
+- VSIX built with canonical SHA,
+- VSIX installed and registered,
+- minified bundle contains the structural suffix-slice fix.
+
+The remaining gap is the live-extension-host GUI run, which is blocked by
+the sandbox environment (same halt as the CORRECTION03 ACT). A manual GUI
+qualification in a non-sandbox environment is required to lift the live
+halt and clear MYC-CLINEMM03.
+
+**Subject head:** `ba46ad5cfc33b7779fc4482a70ff5a14dbcf4520`
