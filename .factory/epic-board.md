@@ -18247,8 +18247,14 @@ RECOMMENDATION FOR NEXT ACT
 
 ```text
 ENTRY_HEAD            = 6c187539ff7e6d34db20f6e5d3990d604ac18909 (CCDS01 closure_head)
-SUBJECT_HEAD          = (discover after commit)
-CLOSURE_HEAD          = (discover after LIVE classification)
+SUBJECT_HEAD          = d73f2d492eb7e864e2563922a53f66fd81dcdc32 (instrumentation commit)
+CLOSURE_HEAD          = (discover after LIVE classification commit)
+
+DOGFOOD_VERSION       = 4.1.16-5a1c485cb (UNCHANGED from predecessor ACT; subject_head baked into build name)
+VSIX_PATH             = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-ccdco01-d73f2d49.vsix
+VSIX_BYTES            = 30097813
+VSIX_SHA256           = 4fc39afc8bd47fd170f9beff8f1ea0620d62d49a1dc46d68b8eeff464f3b9105
+ELM_KERNEL_SHA256     = 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c (UNCHANGED from predecessor ACT)
 
 PHASE_A_GATES
   focused                            = 5/5 PASS (CALLBACK-OUTCOME-01..05)
@@ -18275,4 +18281,4 @@ PHASE_A_GATES
   MYC_CODE_CHANGED                  = false
 ```
 
-**Live classification:** (to be filled after LIVE)
+**Live classification:** (operator-driven; sandbox cannot execute LIVE dogfood workload). The instrumented VSIX is bound to `dist/clinemm-ccdco01-d73f2d49.vsix` (30097813 bytes, SHA-256 `4fc39afc8bd47fd170f9beff8f1ea0620d62d49a1dc46d68b8eeff464f3b9105`). Operator must install exact VSIX in normal desktop ClineMM host and run the same mundane workload that produced LIVE A/B; on failure or completion, run the four dump commands (`Cline Debug: Dump Continuation Cardinality Authority`, `Cline Debug: Dump Completion Authority Elm Shadow`, `Cline Debug: Dump Completion Authority Elm Authority`, `Cline Debug: Dump Completion Continuation Delivery`) and apply the discriminator table §13 to classify CASE A..H.
