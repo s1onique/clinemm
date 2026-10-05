@@ -19195,3 +19195,92 @@ SUBJECT_HEAD == DOGFOOD_SOURCE_HEAD check     PENDING (operator step)
 ```
 
 No amend/rebase. Working tree clean at SUBJECT_HEAD for the operator's VSIX build.
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-RECON-OWNERSHIP-CLEANUP — RECON_PASS_OWNERSHIP_INVENTORY — 2026-10-05
+
+**Status:** RECON_PASS_OWNERSHIP_INVENTORY. Inventory + classification table + RED test plan for the expert advisory's recommended cleanup of legacy TS authority from the completion-commit path. This RECON does NOT delete code; it confirms the advisory's structural thesis and flags the LIVE-vs-delete-OFF sequence as a reviewer decision.
+
+**Advisory thesis confirmed by direct source inspection:**
+
+- `apps/vscode/src/sdk/completion-authority-elm-authority.ts:54-57` defines `defaultElmCompletionAuthorityDecision` with `kind:"authorize", reason:"elm_authority_off_default_authorize"`. At OFF, the consult site `checkElmCompletionAuthority(writerId)` at `sdk-session-event-coordinator.ts:730` returns `true` and the production `setTurnPhase("completed", ...)` commit effect runs. That is the silent default-authorize the advisory flagged.
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1143` has a SECOND OFF guard in `notifyAgentTurnDone` that short-circuits the post-run re-evaluation trigger.
+- `applyElmAuthorityProfile(env, kernelPath)` at `dogfood-diagnostic-profile.ts:1768` arms OFF/ON based on `CLINEMM_COMPLETION_AUTHORITY_ELM=1`. `extension.ts:354` invokes it at activation.
+
+**§3 inventory (18 pre-Elm TS predicates):**
+
+- 11 RETAIN (orchestration / conservation / identity invariants): sessionId/taskId/epoch ownership; pendingPromptAuthorityUnknown / pendingPromptsKnown / activeNotifyCount / perJobOutstandingNotifyWork; ownerStillRunning; unconsumedOwnedTerminalResultCount → `enqueueCompletionContinuationIfHeld` (orchestration with side effect); `outstandingAutonomousWork` aggregate.
+- 7 DELETE/REWRITE (authority overlap): `checkElmCompletionAuthority` consult site; `defaultElmCompletionAuthorityDecision`; `defaultGetElmCompletionAuthorityDecision`; `notifyAgentTurnDone` short-circuit; `applyElmAuthorityProfile`; `CLINEMM_COMPLETION_AUTHORITY_ELM`; `isElmAuthorityEnabled()` (rewrite to `isElmAuthorityAvailable`).
+- 1 SHADOW DECISION (reviewer): retire `CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW` entirely OR dogfood-gate without a dedicated env knob. Advisory prefers retire.
+
+**Sequence conflict flagged for reviewer:**
+
+- Expert advisory: delete-OFF then LIVE (no OFF-control comparison).
+- Current board cursor: LIVE-first (MYC03 HOLD → LIVE-final-gate → delete-OFF).
+- Either is defensible. The implementation ACT should NOT pick a side until a reviewer has.
+
+**RED test plan authored for the implementation ACT (RED 01..06):**
+
+- RED 01: kernel-miss → fail-closed → commit suppressed.
+- RED 02: decode error → fail-closed → commit suppressed.
+- RED 03: HOLD + unconsumedOwnedTerminalResultCount > 0 → `enqueueCompletionContinuationIfHeld` fires exactly once, `setTurnPhase` NOT called (proves item 9 + item 11 compose).
+- RED 04: `notifyAgentTurnDone` short-circuit removed; re-evaluator always entered; Elm consult fails-closed.
+- RED 05: production source-presence (`rg CLINEMM_COMPLETION_AUTHORITY_ELM(_SHADOW)?` → 0 production occurrences).
+- RED 06: installed LIVE counters match the LIVE-PASS contract.
+
+**Conservation matrix:** 13 test suites are at risk of incidental breakage and must be in the implementation ACT's conservation matrix (FIVE preservation tests must be REWRITTEN, not just re-run).
+
+**Baseline (this RECON snapshot):**
+
+```
+bun run test:unit           94 files, 1246 PASS / 0 FAIL, exit 0
+vitest (authority suites)   7 files,    55 PASS / 0 FAIL, exit 0
+TYPECHECK                   PASS (no source changes in this RECON)
+```
+
+**Verdict flags (RECON-aligned):**
+
+```
+ELM_SOURCE_CHANGED                          = false (RECON only)
+ELM_DECISION_LOGIC_CHANGED                  = false
+TS_AUTHORITY_SEAM_CHANGED                   = TBD (implementation ACT)
+TS_COMPLETION_EFFECT_SEMANTICS_CHANGED      = false
+CCARD_OBSERVATION_SEMANTICS_CHANGED         = false
+CCARD_SCHEMA_CHANGED                        = false
+MCP_REBUILD_SEMANTICS_CHANGED               = false
+SESSION_LIFECYCLE_SEMANTICS_CHANGED         = false
+QUEUE_SEMANTICS_CHANGED                     = false
+NEW_ENV_VAR_ADDED                           = false
+NEW_ENV_VAR_REMOVED                         = TBD (implementation ACT)
+PROTOCOL_CHANGED                            = false
+MYC03_CURSOR                                = HOLD (unchanged by this RECON)
+```
+
+**Board cursor (post-RECON):**
+
+```
+MCP/session lifecycle             LIVE PASS (CORRECTION04)
+Elm authority HOLD->AUTHORIZE     LIVE PASS (CORRECTION01)
+authority->effect repair          IMPLEMENTATION PASS (CORRECTION01)
+ownership inventory               RECON PASS (this ACT)
+ownership cleanup (default-01)    NEXT (reviewer decision: LIVE-first or delete-OFF-first)
+shadow runtime decision           OPEN (reviewer)
+installed LIVE                    FINAL GATE
+MYC03                             HOLD
+```
+
+**Artifact identity:**
+
+```
+ENTRY_HEAD                354b924128ff2fa69ba2b88dc61cf2d3a0357279
+SUBJECT_HEAD              <this RECON commit, to be set at commit time>
+DOGFOOD_SOURCE_HEAD       <unset — RECON does not produce a VSIX>
+CLOSURE_HEAD              <this board update>
+```
+
+The implementation ACT (target ID per advisory:
+`ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY`)
+must NOT be opened until a reviewer has confirmed:
+
+1. LIVE-first vs. delete-OFF-first sequence.
+2. Shadow-runtime decision (retire vs. dogfood-gate).
+3. RED 01..05 are authored against the production source with this classification table as the discriminator reference.
