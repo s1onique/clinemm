@@ -540,6 +540,21 @@ export class SdkSessionEventCoordinator {
 	private deferredCompletionBarrier: DeferredCompletionBarrier | undefined
 
 	/**
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION:
+	 *
+	 * Test-only accessor exposing the marker state. Production wiring in
+	 * `SdkController` mirrors this via the `isDeferredCompletionOutstanding`
+	 * predicate on `SdkSessionRebuildScheduler`. The marker is the source
+	 * of truth for "the deferred completion obligation is still being
+	 * held by the BCB01 §0.1 conservation predicates" — the rebuild
+	 * scheduler's drain must wait for it to clear before firing any
+	 * passive rebuild that clears `activeSession`.
+	 */
+	isDeferredCompletionBarrierOutstandingForTesting(): boolean {
+		return this.deferredCompletionBarrier !== undefined
+	}
+
+	/**
 	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03 /
 	 * CORRECTION04:
 	 *

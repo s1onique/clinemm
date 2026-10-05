@@ -100,6 +100,7 @@ export type LifecycleClearReason =
 	| "followupTargetChange"
 	| "autoApprovalRebuildFailure"
 	| "remoteConfigToggle"
+	| "mcpToolRestart"
 	| "empty"
 	| "unrecognized"
 
@@ -112,6 +113,7 @@ const BOUNDARY_REASON_SET: ReadonlySet<string> = new Set<LifecycleClearReason>([
 	"followupTargetChange",
 	"autoApprovalRebuildFailure",
 	"remoteConfigToggle",
+	"mcpToolRestart",
 	"empty",
 	"unrecognized",
 ])

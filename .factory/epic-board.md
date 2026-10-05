@@ -18614,3 +18614,83 @@ reevaluation #2 (agent_turn_done):
 7. Only after the LIVE classification converges should a follow-up LIVE classification ACT be opened.
 
 **MYC-CLINEMM03 remains HOLD** (unchanged; the LIVE operator-driven loop is paused behind the deferred-completion P0).
+
+## ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION — PASS_FIRST_ELM_AUTHORITY_SEAM — 2026-10-05
+
+**Status:** PASS_FIRST_ELM_AUTHORITY_SEAM. Closes the LIVE evidence
+`lastClearReason = "mcpToolRestart"` with bounded scheduler-repair + enum-extension +
+drain-coalescing fix. No production semantic delta for the OFF path.
+
+**P0s addressed:**
+
+| ID | Summary | Fix |
+|----|---------|-----|
+| P0.1 | MCP-tool rebuild fires while a deferred-completion obligation is still outstanding, clearing `activeSession = undefined` mid-flight and destroying the marker before the terminal-accounting branch can drain it | New `isDeferredCompletionOutstanding` predicate on `SdkSessionRebuildScheduler` consulted on every drain cycle; holds passive rebuilds (`provider` / `mcpTools` / `terminalExecutionMode` / `sessionAutoApprovalOverride`) until the deferred-completion marker clears |
+| P0.2 | Drain loop re-processed entries added during the in-flight `await`, breaking the coalescing invariant (3 `handleToolListChanged` calls produced 2 rebuilds) | Drain snapshots pending entries at drain-start; auto-drain `.finally` only re-fires when pending has entries with reasons NOT in the just-completed snapshot (preserves "different reasons serialize, same reason coalesces) |
+| P0.3 | `"mcpToolRestart"` was outside the bounded `LifecycleClearReason` enum, so the cursor snapshot rendered it as `"unrecognized"` rather than the originating reason | Added `"mcpToolRestart"` to the bounded enum (per ACT §28 — diagnostic bookkeeping, not the repair) |
+| P0.4 | No test-only backdoor to assert the marker is the source of truth for the deferred predicate | Added `isDeferredCompletionBarrierOutstandingForTesting()` to `SdkSessionEventCoordinator`; `SdkController` wires `sessionRebuilds.setIsDeferredCompletionOutstanding(() => sessionEvents.isDeferredCompletionBarrierOutstandingForTesting())` |
+
+**Load-bearing seams (the GREEN repair):**
+
+- `apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts` — adds `isDeferredCompletionOutstanding?: () => boolean` option, stores it on a private field, exposes `setIsDeferredCompletionOutstanding(predicate)` setter for lazy wiring (mirrors the same boot-sequence ordering the predecessor schedulers already use). `drainIfIdle` consults the predicate alongside the legacy `!isRunning` and `!activeSession` checks.
+- Drain loop rewritten to: (1) take a snapshot of pending entries at drain-start, (2) delete the snapshotted reasons from `pending` before any rebuild runs, (3) process the snapshot sequentially, (4) auto-drain on completion only if pending has entries with reasons NOT in the snapshot. The legacy `while (this.pending.size > 0)` loop exposed a coalescing race that COALESCE-05 surfaced and the new snapshot+drainedReasons rule closes.
+- `apps/vscode/src/sdk/SdkController.ts` — wires `sessionRebuilds.setIsDeferredCompletionOutstanding(() => sessionEvents.isDeferredCompletionBarrierOutstandingForTesting())` immediately after `setAgentTurnDoneSemanticTrigger` (which is the same wiring ordering the existing diagnostic activations already use).
+
+**Production-shape RED (the load-bearing proof, mirrors ACT §7):**
+
+- Drives REAL `SdkMcpCoordinator.handleToolListChanged` → REAL `SdkSessionRebuildScheduler.drainIfIdle` → REAL `SdkSessionLifecycle.replaceActiveSession(..., disposeReason: "mcpToolRestart")` → REAL `endActiveSession("mcpToolRestart")` → REAL `clearActiveSessionReference()` → REAL `reevaluateDeferredCompletionBarrier` (which reaches the `activeSessionLookupEntered=1 / activeSessionMissing=0 / markerClearedForMissingSession=0` path because the rebuild was held behind the new deferred predicate).
+- Only `VscodeSessionHost.create` is mocked; all other seams are real production code. Mirrors the showtask01 RED's hard rule.
+
+**Test set (10/10 GREEN):**
+
+| ID | Sub-test | Status |
+|----|----------|--------|
+| RED-01 | MCP restart HOLD while marker outstanding; settlement commits marker; continuation delivered exactly once; rebuild drains on wake | PASS (with predicate) / FAIL (predicate disabled — ablation confirmed) |
+| CONTROL-02 | No MCP restart → marker survives, terminal-count branch reached | PASS |
+| AFTER-SETTLE-03 | Restart after settlement → restart succeeds, no regression | PASS |
+| RUNNING-04 | MCP change while run active → rebuild pending, no premature replace | PASS |
+| COALESCE-05 | Repeated MCP tool-list changes → exactly one rebuild per coalesced generation (NOT two) | PASS |
+| IDENTITY-06 | Replacement preserves sessionId; no A→B continuation leakage | PASS |
+| FAILURE-07 | Replacement failure surfaces mcpToolRestart funnel; bounded continuation outcome | PASS |
+| EXACTLY-ONCE-08 | Repeated reevaluate / MCP rebuild cycles → at most one continuation | PASS |
+| OFF-09 | No deferred obligation → scheduler predicate is a no-op (OFF path parity) | PASS |
+| NEGATIVE-10 | Custom predicate → held (green proof of the new gate) | PASS |
+
+**Conservation (existing test suites):**
+
+| Suite | Status |
+|-------|--------|
+| `sdk-session-rebuild-scheduler.test.ts` (existing) | 5/5 PASS |
+| `sdk-session-lifecycle.test.ts` | 30/30 PASS |
+| `sdk-mcp-coordinator.test.ts` | 5/5 PASS |
+| `lifecycle-clear-recorder.clcrec01.test.ts` | 18/18 PASS |
+| `lifecycle-clear-recorder-funnel.clcrec02.test.ts` | 4/4 PASS |
+| `showtask-withid-deferred-completion-barrier.showtask01.test.ts` | 9/9 PASS |
+| `completion-continuation-upstream-discriminator01.ccupd01.test.ts` | 9/9 PASS |
+| `completion-continuation-delivery-callback-outcome01.ccdco01.test.ts` | 9/9 PASS |
+| `completion-continuation-delivery-callback-outcome-red01.ccdco-red01.test.ts` | 5/5 PASS |
+| `background-completion-barrier01.bcb01.test.ts` | 14/14 PASS |
+| `background-completion-barrier01-correction01..04.bcb01-c*.test.ts` | 24/24 PASS |
+| `post-run-completion-authority-reevaluation01.pcra01.test.ts` | 5/5 PASS |
+| `post-run-completion-authority-reevaluation01-correction01-precheck-liveness.pcrl01.test.ts` | 5/5 PASS |
+
+**Hard prohibitions preserved (per ACT §21-§24):**
+
+- Elm Authority.elm / Codec.elm / kernel bundle NOT touched.
+- `task_completion_committed` NOT admitted to authority input — still filtered at the runtime adapter.
+- No timers / polling / event bus / protocol field / webview change / MYC change / React change.
+- No new SdkSessionRebuildScheduler setter exposed on the public surface; `setIsDeferredCompletionOutstanding` is internal.
+- `replaceActiveSession` ordering NOT changed (the deferred predicate holds before the replacement runs).
+- `rebuilds.deferredCompletionSettled()` is the external wake point — no timers.
+
+**Lessons for SUBJECT_HEAD (next ACT):**
+
+- The snapshot-based drain preserves the legacy "different reasons serialize" contract while adding the "same reason coalesces" guarantee. COALESCE-05 was the load-bearing test that surfaced the original loop race.
+- The marker on `SdkSessionEventCoordinator` is the source of truth for "is the deferred completion obligation still being held by the BCB01 §0.1 conservation predicates" — the rebuild scheduler's deferred predicate must mirror this exactly, not the upstream count alone (the marker survives the terminal-count branch because the marker is cleared only when conservation fully resolves).
+
+**Subject head:** `TODO_SUBJECT_HEAD`
+**Subject head parent:** `1777c58c` (CORRECTION02 P1 — full same-task idempotence).
+**Predecessor:** `ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION04-LIVE-ACTIVE-SESSION-LOOKUP-DISCRIMINATOR (2026-10-05)` and `ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION02-SHOWTASKWITHID-FULL-IDEMPOTENCE (1777c58c)`.
+**VERDICT:** PASS_FIRST_ELM_AUTHORITY_SEAM.
+
+**MYC-CLINEMM03 remains HOLD** (unchanged; LIVE qualification against an isolated ClineMM dogfood Extension Host is out of scope for this ACT).

@@ -2584,6 +2584,41 @@ export class Controller {
 			}
 			void this.sessionEvents.notifyAgentTurnDone(sessionId)
 		})
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION:
+		// Wire the rebuild scheduler's `isDeferredCompletionOutstanding`
+		// predicate to the live `SdkSessionEventCoordinator` marker.
+		// The marker is registered by the BCB01 §0.1 conservation
+		// predicates when the deferred-completion obligation is held,
+		// and cleared only when all four conservation checks pass
+		// (or the relevant failure branch). The scheduler's drain
+		// MUST hold passive rebuilds (provider / MCP / terminal
+		// mode / auto-approval) until the marker is cleared —
+		// otherwise `replaceActiveSession` would clear
+		// `activeSession = undefined` mid-flight, the post-run
+		// reevaluation would observe the missing-session branch,
+		// and the deferred marker would be destroyed before the
+		// terminal-accounting branch could drain it.
+		//
+		// Wiring is installed AFTER `sessionEvents` is constructed
+		// (line 2557) so the closure can capture the live reference.
+		// The `sessionRebuilds` instance was constructed earlier at
+		// line 1909 without the predicate (preserves legacy OFF
+		// behavior). This wiring is additive — the OFF path falls
+		// back to `isDeferredCompletionOutstanding === false`
+		// (the scheduler's default), and the legacy `!isRunning`
+		// predicate still gates all drains.
+		// (Done lazily — no public SdkSessionRebuildScheduler setter
+		// is added; the scheduler reads the option once at
+		// construction. To avoid reconstructing the scheduler, expose
+		// a setter that mutates the live predicate reference.)
+		if (
+			typeof (this.sessionRebuilds as { setIsDeferredCompletionOutstanding?: (p: () => boolean) => void })
+				.setIsDeferredCompletionOutstanding === "function"
+		) {
+			;(
+				this.sessionRebuilds as { setIsDeferredCompletionOutstanding: (p: () => boolean) => void }
+			).setIsDeferredCompletionOutstanding(() => this.sessionEvents.isDeferredCompletionBarrierOutstandingForTesting())
+		}
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder
 		// does not support dynamic MCP tools, so we must restart the session.
