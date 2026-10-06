@@ -109,8 +109,8 @@ Output (presentation semantics):
 Rules:
   R1 (HOST COMPACTION):     currentLegacyPhase == "compacting"                              => { phase = "compacting",           source = "host" }
   R2 (HOST FOLLOWUP):       currentLegacyPhase == "awaiting_followup"                      => { phase = "awaiting_followup",    source = "host" }
-  R3 (CANONICAL SHADOW):    canonicalShadowPhase != MISSING                               
-                             AND NOT stale(...)                                          
+  R3 (CANONICAL SHADOW):    canonicalShadowPhase != MISSING
+                             AND NOT stale(...)
                              AND NOT unbound_demote(...)                                   => { phase = canonicalShadowPhase,   source = "shadow" }
   R4 (LEGACY ABSENCE):      else                                                         => { phase = currentLegacyPhase,     source = "legacy" }
 
