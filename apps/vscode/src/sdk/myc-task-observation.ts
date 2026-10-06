@@ -61,12 +61,21 @@ export function isMycToolName(toolName: string | undefined): boolean {
 
 /**
  * Outcome shape consumed by `observeMcpToolCompletion`. Mirrors
- * the `McpHub` completion observer payload (CORRECTION02).
+ * the `McpHub` completion observer payload (CORRECTION02 +
+ * CORRECTION03).
  *
  * `outcome`:
  *   - `"success"` — protocol resolved, `isError !== true`, content non-empty
  *   - `"empty"`   — protocol resolved, `isError !== true`, content empty
  *   - `"error"`   — protocol resolved with `isError: true` OR transport threw
+ *
+ * `serverName` (CORRECTION03): the canonical McpHub-provided
+ * server name. The helper threads this verbatim into the tracker
+ * via `tracker.recordMycToolCall(serverName, ...)` so that the
+ * tracker's `MYC_SERVER_NAMES` guard can reject non-myc servers
+ * (e.g. a `github` server exposing a `myc_recall` tool). Without
+ * this, the previous CORRECTION02 helper hard-coded "myc" and
+ * silently bypassed that guard.
  *
  * `hasNonEmptyContent` is a bounded privacy-safe boolean (no
  * response text crosses the helper boundary). For retrieval-like
@@ -78,6 +87,7 @@ export function isMycToolName(toolName: string | undefined): boolean {
  * known.
  */
 export interface McpToolCompletion {
+	readonly serverName: string
 	readonly toolName: string
 	readonly outcome: "success" | "empty" | "error"
 	readonly hasNonEmptyContent: boolean
@@ -90,6 +100,13 @@ export interface McpToolCompletion {
  * is host-scoped and routes ALL completions through
  * `isMycToolName` to decide whether to feed the tracker. Non-myc
  * tools pass through (no increment).
+ *
+ * Server-identity preservation (CORRECTION03): the helper threads
+ * `event.serverName` verbatim to `tracker.recordMycToolCall`. It
+ * does NOT hard-code "myc" — that would silently bypass the
+ * tracker's `MYC_SERVER_NAMES` guard. The guard is the load-bearing
+ * defense against a non-myc MCP server exposing a `myc_recall`
+ * tool from poisoning the counter.
  *
  * Useful-retrieval gate (CORRECTION02):
  *   - The retrieval call counter (`retrievalCalls`) increments
@@ -115,7 +132,11 @@ export function observeMcpToolCompletion(tracker: TaskTelemetryTracker, event: M
 	// content — the user's "useful recall" means a real retrieval
 	// returned real rows.
 	const useful = event.outcome === "success" && event.hasNonEmptyContent === true
-	tracker.recordMycToolCall("myc", event.toolName, event.outcome, event.latencyMs, useful)
+	// CORRECTION03: thread the McpHub-provided serverName through
+	// so the tracker's `MYC_SERVER_NAMES` guard can reject
+	// non-myc servers. Hard-coding "myc" here would bypass that
+	// guard entirely.
+	tracker.recordMycToolCall(event.serverName, event.toolName, event.outcome, event.latencyMs, useful)
 }
 /**
  * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — record the canonical

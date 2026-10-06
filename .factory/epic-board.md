@@ -1,3 +1,86 @@
+## ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — CORRECTION03 (LIVE-GO) — 2026-10-06
+
+**Status:** CORRECTION03_CLOSED. Reviewer flagged one P1 (server identity discarded at observer seam): the helper hard-coded `tracker.recordMycToolCall("myc", ...)` and threw away the `serverName` McpHub already provides. A `github` server exposing a `myc_recall` tool would have bypassed the tracker's `MYC_SERVER_NAMES` guard and poisoned the myc counters. Fix is one bounded line — thread `event.serverName` through `McpToolCompletion`.
+
+```text
+CORRECTION03 SUMMARY:
+- P0: NONE                                                (previous P0 dirt already reverted in CORRECTION02)
+- P1-A (MCP isError semantic): FIXED                        (CORRECTION02)
+- P1-B (single cardinality owner): FIXED                   (CORRECTION02)
+- P1-C (Last success/useful conflation): FIXED              (CORRECTION02)
+- P1-D (NEW — server identity preservation): FIXED HERE
+```
+
+**P1-D — server identity preservation (FIXED):**
+
+Before:
+```
+observeMcpToolCompletion(tracker, event) {
+  if (!isMycToolName(event.toolName)) return
+  tracker.recordMycToolCall("myc", event.toolName, ...)
+}
+```
+
+After:
+```
+observeMcpToolCompletion(tracker, event) {
+  if (!isMycToolName(event.toolName)) return
+  // CORRECTION03: thread the McpHub-provided serverName through
+  // so the tracker's `MYC_SERVER_NAMES` guard can reject
+  // non-myc servers.
+  tracker.recordMycToolCall(event.serverName, event.toolName, ...)
+}
+```
+
+The helper no longer short-circuits the tracker's load-bearing safety net. The `MYC_SERVER_NAMES` guard (`["myc", "myc-mcp"]`) now correctly rejects any server name that is not a recognized canonical myc server — including any future non-myc MCP server that exposes a tool named `myc_recall`.
+
+**THMYC-OBS-12 (CORRECTION03) test contract — pinned:**
+- canonical server name `"myc"` + `myc_recall` → callsTotal=1
+- canonical alias `"myc-mcp"` + `myc_recall` → callsTotal=1
+- non-myc server `"github"` + `myc_recall` → callsTotal=0 (tracker guard rejects; previously helper would have hard-coded "myc" and slipped through)
+
+**Production delta (CORRECTION03, 4 files):**
+
+- `apps/vscode/src/sdk/myc-task-observation.ts`: `McpToolCompletion` interface gains `readonly serverName: string`. `observeMcpToolCompletion` threads `event.serverName` verbatim into `tracker.recordMycToolCall` (replacing the hard-coded `"myc"`). Docblock updated to describe the server-identity preservation invariant.
+- `apps/vscode/src/sdk/SdkController.ts`: the McpHub observer wire now passes `serverName: event.serverName` to `observeMcpToolCompletion`. Docblock added explaining why the SdkController does NOT pre-filter — the tracker's guard is the load-bearing defense.
+- `apps/vscode/src/sdk/__tests__/myc-task-observation.thmyc01.test.ts`: new `THMYC-OBS-12 (CORRECTION03)` test pins the three server-identity cases. Existing OBS-02/02b/03/04/05/06 calls updated to pass `serverName`.
+- `apps/vscode/src/sdk/__tests__/task-header-myc-task-header-actual-prime-cardinality.c24-c-bridge.test.ts`: both `observeMcpToolCompletion` call sites updated to thread `serverName`.
+
+**Tests:**
+- Host: 30/30 PASS across 3 files (13 helper + 15 tracker-myc + 2 cardinality-integration). The new OBS-12 pins the invariant; OBS-02..06 still cover success/error/empty/mutation paths.
+- bun unit-test full sweep: 1261/1261 PASS, 0 FAIL across 95 files. No regressions.
+- Webview typecheck: PASS (no production change).
+
+**Gates:**
+- Extension typecheck: PASS.
+- Webview typecheck: PASS.
+- Lint (biome): no new diagnostics.
+
+**Conservation (consistency of CORRECTION03):** No wire-shape change. `MycTelemetrySummary` fields unchanged. McpHub.callTool behavior unchanged when no observer installed. ACT-MYC-CLINEMM03 tool-name repair preserved. The `MYC_SERVER_NAMES` guard (already on the tracker; was being silently defeated by the helper's hard-coded `"myc"`) now actually does its load-bearing job.
+
+**FLAGS (revised — CORRECTION03):**
+- WEBVIEW_UI_CHANGED: false
+- TASK_HEADER_PROJECTION_CHANGED: false
+- MYC_CALL_SEMANTICS_CHANGED: false
+- MYC_MEMORY_SEMANTICS_CHANGED: false
+- MCP_PROTOCOL_CHANGED: false
+- BACKEND_TELEMETRY_CHANGED: false
+- NEW_ENV_VAR_ADDED: false
+- ELM_CHANGED: false
+- REACT_CHANGED: false
+
+**STATUS (relevant to the LIVE walk):**
+
+PASS_MYC-CLIMEMM-TASK-HEADER-TELEMETRY_IMPLEMENTATION
++ HALT_LIVE_UI_NOT_QUALIFIED (still deferred — no VSIX in this session; the next session should proceed directly to:
+   build exact-head VSIX
+   → install
+   → fresh dogfood host (CLINEMM_RUNTIME_PROFILE=dogfood)
+   → Cases A–E (fresh task, automatic prime success, explicit useful recall, mutation, new task reset)
+   → visually qualify myc chip + tooltip)
+   per the reviewer's directive: "do not start another review cycle. Make that one bounded correction, rerun the focused tests/typecheck/lint, then go directly to build/install/LIVE."
+
+SUBJECT_HEAD=c447847c8 + CORRECTION03 (new commit) ENTRY_HEAD=ea697c667 (CORRECTION01) PREVIOUS=4cc3b28d4 (ACT-MYC-CLINEMM03).
 ## ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — CORRECTION02 RECLOSE — 2026-10-06
 
 **Status:** CORRECTION02_RECLOSED. Reviewer surfaced one P0 (unrelated tracked dirt) and three P1s in the prior close (ea697c667). All four are fixed, ablated, and re-tested; verdict is HONEST-corrected:

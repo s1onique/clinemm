@@ -38,6 +38,7 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 CORRECTION02 / one real prime 
 			hasNonEmptyContent: boolean
 		}) => {
 			observeMcpToolCompletion(tracker, {
+				serverName: event.serverName,
 				toolName: event.toolName,
 				outcome: event.outcome,
 				hasNonEmptyContent: event.hasNonEmptyContent,
@@ -103,6 +104,7 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 CORRECTION02 / one real prime 
 			hasNonEmptyContent: boolean
 		}) => {
 			observeMcpToolCompletion(tracker, {
+				serverName: event.serverName,
 				toolName: event.toolName,
 				outcome: event.outcome,
 				hasNonEmptyContent: event.hasNonEmptyContent,

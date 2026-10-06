@@ -46,7 +46,13 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / isMycToolName", () => {
 describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (McpHub completion seam)", () => {
 	it("THMYC-OBS-02: successful non-empty myc_recall -> +1 successful, +1 retrieval, +1 useful (CORRECTION02: hasNonEmptyContent=true)", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "success", hasNonEmptyContent: true, latencyMs: 18 })
+		observeMcpToolCompletion(t, {
+			serverName: "myc",
+			toolName: "myc_recall",
+			outcome: "success",
+			hasNonEmptyContent: true,
+			latencyMs: 18,
+		})
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(1)
 		expect(m?.callsSuccessful).toBe(1)
@@ -63,7 +69,13 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (Mc
 
 	it("THMYC-OBS-02b: successful empty myc_recall -> +1 successful, +1 retrieval, useful=0 (CORRECTION02: hasNonEmptyContent=false)", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "success", hasNonEmptyContent: false, latencyMs: 20 })
+		observeMcpToolCompletion(t, {
+			serverName: "myc",
+			toolName: "myc_recall",
+			outcome: "success",
+			hasNonEmptyContent: false,
+			latencyMs: 20,
+		})
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(1)
 		expect(m?.callsSuccessful).toBe(1)
@@ -74,7 +86,13 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (Mc
 
 	it("THMYC-OBS-03: errored myc_recall -> +1 failed, +0 successful, retrieval still +1 (P1 boundary fix)", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "error", hasNonEmptyContent: false, latencyMs: 12 })
+		observeMcpToolCompletion(t, {
+			serverName: "myc",
+			toolName: "myc_recall",
+			outcome: "error",
+			hasNonEmptyContent: false,
+			latencyMs: 12,
+		})
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(1)
 		expect(m?.callsSuccessful).toBe(0)
@@ -85,8 +103,18 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (Mc
 
 	it("THMYC-OBS-04: non-myc completion event is a no-op", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "read_file", outcome: "success", hasNonEmptyContent: true })
-		observeMcpToolCompletion(t, { toolName: "create_issue", outcome: "error", hasNonEmptyContent: false })
+		observeMcpToolCompletion(t, {
+			serverName: "not-myc",
+			toolName: "read_file",
+			outcome: "success",
+			hasNonEmptyContent: true,
+		})
+		observeMcpToolCompletion(t, {
+			serverName: "github",
+			toolName: "create_issue",
+			outcome: "error",
+			hasNonEmptyContent: false,
+		})
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(0)
 		expect(m?.callsSuccessful).toBe(0)
@@ -100,7 +128,13 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (Mc
 		// This is the reviewer's "useful for that exact call is
 		// actually observed" semantic.
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "success", hasNonEmptyContent: true, latencyMs: 20 })
+		observeMcpToolCompletion(t, {
+			serverName: "myc",
+			toolName: "myc_recall",
+			outcome: "success",
+			hasNonEmptyContent: true,
+			latencyMs: 20,
+		})
 		const m = t.get()?.myc
 		expect(m?.usefulRetrievals).toBe(1)
 		expect(m?.callsSuccessful).toBe(1)
@@ -108,12 +142,65 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (Mc
 
 	it("THMYC-OBS-06: myc_remember (mutation) -> +1 successful, retrieval unchanged, useful unchanged", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_remember", outcome: "success", hasNonEmptyContent: true })
+		observeMcpToolCompletion(t, {
+			serverName: "myc",
+			toolName: "myc_remember",
+			outcome: "success",
+			hasNonEmptyContent: true,
+		})
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(1)
 		expect(m?.callsSuccessful).toBe(1)
 		expect(m?.retrievalCalls).toBe(0)
 		expect(m?.usefulRetrievals).toBe(0)
+	})
+
+	it("THMYC-OBS-12 (CORRECTION03): server identity is preserved on the observer boundary (no hard-coded server name)", () => {
+		// Reviewer P1 fix: the helper must thread the McpHub-
+		// provided `serverName` through to the tracker, not
+		// silently overwrite it with the canonical "myc" string.
+		// Without this, a non-myc server exposing a tool named
+		// `myc_recall` would incorrectly increment the myc counter
+		// (the tracker's `MYC_SERVER_NAMES` guard would be bypassed
+		// because the helper hard-codes "myc").
+		//
+		// Three cases, each preserving server identity:
+		//
+		// (a) canonical myc server name -> increment
+		// (b) "myc-mcp" alias -> increment (canonical alias)
+		// (c) any other server name -> NO increment (the
+		//     tracker's MYC_SERVER_NAMES guard rejects the call
+		//     regardless of the toolName prefix)
+		const tA = start()
+		observeMcpToolCompletion(tA, {
+			serverName: "myc",
+			toolName: "myc_recall",
+			outcome: "success",
+			hasNonEmptyContent: true,
+		})
+		expect(tA.get()?.myc?.callsTotal).toBe(1)
+
+		const tB = start("task-b")
+		observeMcpToolCompletion(tB, {
+			serverName: "myc-mcp",
+			toolName: "myc_recall",
+			outcome: "success",
+			hasNonEmptyContent: true,
+		})
+		expect(tB.get()?.myc?.callsTotal).toBe(1)
+
+		const tC = start("task-c")
+		observeMcpToolCompletion(tC, {
+			serverName: "github",
+			toolName: "myc_recall",
+			outcome: "success",
+			hasNonEmptyContent: true,
+		})
+		expect(tC.get()?.myc?.callsTotal).toBe(0)
+		expect(tC.get()?.myc?.callsSuccessful).toBe(0)
+		expect(tC.get()?.myc?.callsFailed).toBe(0)
+		expect(tC.get()?.myc?.retrievalCalls).toBe(0)
+		expect(tC.get()?.myc?.usefulRetrievals).toBe(0)
 	})
 })
 

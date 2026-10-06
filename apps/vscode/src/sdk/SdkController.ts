@@ -1273,6 +1273,17 @@ export class Controller {
 		// prefix inside `observeMcpToolCompletion`).
 		this.mcpHub.setMcpToolObserver((event) => {
 			observeMcpToolCompletion(this.taskTelemetry, {
+				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01
+				// CORRECTION03: thread the McpHub-provided
+				// serverName through to the tracker so its
+				// `MYC_SERVER_NAMES` guard can reject non-myc
+				// servers (e.g. a `github` server exposing a
+				// `myc_recall` tool would otherwise poison the
+				// counter). The SdkController does NOT pre-filter
+				// here — the tracker's guard is the load-bearing
+				// defense and the helper's responsibility is to
+				// preserve the identity that McpHub provided.
+				serverName: event.serverName,
 				toolName: event.toolName,
 				outcome: event.outcome,
 				hasNonEmptyContent: event.hasNonEmptyContent,
