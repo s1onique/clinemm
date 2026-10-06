@@ -146,10 +146,12 @@ $ bunx vsce package --no-dependencies --allow-package-secrets sendgrid \
 
 | Property | Value |
 |---|---|
-| source HEAD | `d770f242b7c62426568a4afaed397c2b2200d884` (final post-CORRECTION01 HEAD) |
+| source HEAD | `d770f242b7c62426568a4afaed397c2b2200d884` (post-CORRECTION01 source HEAD at VSIX build time) |
 | VSIX path | `apps/vscode/dist/clinemm-act-task-head-orchestration01.vsix` |
 | Byte size | 44,388,656 (≈ 42.33 MB) |
 | SHA-256 | `c4dabd876e5d25533e33817367c06fd8fab06e5f309597173a10b2ad4071c36d` |
+
+The post-VSIX commits (`d770f242b → bbc5387af`) only update the act MD + evidence file pointers and add the SUPERSEDED note to `01-build-verification.md`; they do NOT change production source. The final HEAD `bbc5387afafc75c4e809ef835994ab7d61fa1da4` represents the same source tree the VSIX was packaged from (the elmc bundle + TS adapter are byte-identical to the SHA recorded above; only the MD content changed).
 
 **Verdict: PASS.** Exact-head VSIX artifact produced. The TS adapter
 does not invoke the kernel at extension runtime (the kernel is
