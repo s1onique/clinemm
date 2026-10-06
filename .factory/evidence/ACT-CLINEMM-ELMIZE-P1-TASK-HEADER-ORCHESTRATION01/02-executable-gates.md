@@ -1,7 +1,7 @@
 # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION01 — Executable Gates
 
 **Date:** 2026-10-06
-**Subject HEAD:** `02cabc484c51d9338b23ef1b037f3c36e0165a31` (post-CORRECTION01)
+**Subject HEAD:** `d770f242b7c62426568a4afaed397c2b2200d884` (final post-CORRECTION01 HEAD; intermediate: `02cabc484`)
 **Toolchain:** bun 1.3.14, node 26.0.0, vitest 4.1.10, elm-test 0.19.2, vsce 3.17+
 
 This file replaces the optimistic `01-build-verification.md`. Every gate below
@@ -146,10 +146,10 @@ $ bunx vsce package --no-dependencies --allow-package-secrets sendgrid \
 
 | Property | Value |
 |---|---|
-| source HEAD | `02cabc484c51d9338b23ef1b037f3c36e0165a31` |
+| source HEAD | `d770f242b7c62426568a4afaed397c2b2200d884` (final post-CORRECTION01 HEAD) |
 | VSIX path | `apps/vscode/dist/clinemm-act-task-head-orchestration01.vsix` |
 | Byte size | 44,388,656 (≈ 42.33 MB) |
-| SHA-256 | `e618a4ad43720dbe965aacf178e7936d6648ce30a0f14fd25e02e705fd22c534` |
+| SHA-256 | `c4dabd876e5d25533e33817367c06fd8fab06e5f309597173a10b2ad4071c36d` |
 
 **Verdict: PASS.** Exact-head VSIX artifact produced. The TS adapter
 does not invoke the kernel at extension runtime (the kernel is

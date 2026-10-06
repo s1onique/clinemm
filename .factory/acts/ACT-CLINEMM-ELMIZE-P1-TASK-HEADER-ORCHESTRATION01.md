@@ -366,10 +366,10 @@ ACT-owned warnings/errors end at zero.
 
 Per `02-executable-gates.md` Gate 7:
 
-- source HEAD: `02cabc484c51d9338b23ef1b037f3c36e0165a31`
+- source HEAD: `d770f242b7c62426568a4afaed397c2b2200d884` (final post-CORRECTION01 HEAD)
 - VSIX path: `apps/vscode/dist/clinemm-act-task-head-orchestration01.vsix`
 - Byte size: 44,388,656 (≈ 42.33 MB)
-- SHA-256: `e618a4ad43720dbe965aacf178e7936d6648ce30a0f14fd25e02e705fd22c534`
+- SHA-256: `c4dabd876e5d25533e33817367c06fd8fab06e5f309597173a10b2ad4071c36d`
 
 Kernel JS SHA-256: `29528f18ce8ccc91c58ae06f5f54e6e74fd08e9d9504e72aa87fa927974f2bc9`
 
