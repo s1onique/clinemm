@@ -22,6 +22,7 @@ import {
 	applyExtensionHostTerminationAuthorityProfile,
 	applyMycPrimeLiveDiagDiagnosticProfile,
 	applyProviderRequestCaptureDiagnosticProfile,
+	applyTaskHeaderElmRuntimeShadowDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
@@ -208,6 +209,33 @@ export async function activate(context: vscode.ExtensionContext) {
 	// seam is armed BEFORE the first publication. Verified by
 	// `dogfood-diagnostic-profile-thsicap-activation.test.ts`.
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION:
+	// Arm the TaskHeader Elm runtime-shadow comparison seam at the
+	// SAME EARLIEST initialization seam, BEFORE SdkController
+	// construction. The helper composes the effective shadow state
+	// (explicit env override `CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW`
+	// > profile default OFF in both public and dogfood) and flips
+	// the module seam in `task-header-elm-shadow.ts` idempotently.
+	//
+	// DEFAULT_OFF. The shadow is opt-in only — public installs
+	// NEVER evaluate the Elm kernel against the TaskHeader
+	// production seam; the dogfood kernel requires the operator
+	// to opt in via the env var so a fresh dogfood session does
+	// not silently turn the shadow on. When the seam is disabled,
+	// the comparison helper at the publication block short-circuits
+	// without invoking the Elm kernel, reading the runtime asset,
+	// or emitting any wire delta. The TS production selector
+	// (`selectTaskHeaderPresentation`) remains authoritative in
+	// EVERY branch.
+	//
+	// REMOVAL_TRIGGER: first successful LIVE qualification that
+	// authorizes TaskHeader authority cutover to
+	// `ORCHESTRATION03-AUTHORITY`, OR the first real LIVE semantic
+	// mismatch that identifies a contract defect, OR
+	// CAPTURE_INSUFFICIENT. See the resolver JSDoc in
+	// `dogfood-diagnostic-profile.ts` for the full doctrine.
+	applyTaskHeaderElmRuntimeShadowDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// (twenty-seventh-pass): arm the W carrier trace (Q1..Q4) seam

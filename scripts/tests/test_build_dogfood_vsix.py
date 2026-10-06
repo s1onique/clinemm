@@ -971,18 +971,19 @@ class TestCorrection06OrchestratorUnconditionalNeuter(unittest.TestCase):
                     (["BUILD-ELM-KERNEL-INVOKED"], Path(stage))
                 )
                 apps = stage
-                src_dir = (
-                    apps / "elm" / "completion-authority" / "vendor"
-                )
-                src_dir.mkdir(parents=True, exist_ok=True)
                 js_bytes = b"recording-build-payload-bytes"
-                src_dir.joinpath(
-                    "completion-authority.js"
-                ).write_bytes(js_bytes)
                 sha = compute_sha256_bytes(js_bytes)
-                src_dir.joinpath(
-                    "completion-authority.js.sha256"
-                ).write_text(sha + "\n")
+                # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
+                # The build helper now produces BOTH kernel vendor
+                # directories; the staging helper verifies both.
+                for kernel_dir in (
+                    "completion-authority",
+                    "task-header-orchestration",
+                ):
+                    src_dir = apps / "elm" / kernel_dir / "vendor"
+                    src_dir.mkdir(parents=True, exist_ok=True)
+                    src_dir.joinpath(f"{kernel_dir}.js").write_bytes(js_bytes)
+                    src_dir.joinpath(f"{kernel_dir}.js.sha256").write_text(sha + "\n")
 
             def recording_vsce(stage_apps_vscode, staged_vsix_out, **_kw):
                 visible_trace.append(
@@ -1203,6 +1204,11 @@ class TestDogfood06PayloadExtensionJs(unittest.TestCase):
                 # gitignored vendor/ location).
                 "extension/runtime-assets/completion-authority.js",
                 "extension/runtime-assets/completion-authority.js.sha256",
+                # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
+                # task-header-orchestration kernel must also be present
+                # as a real VSIX runtime asset.
+                "extension/runtime-assets/task-header-orchestration.js",
+                "extension/runtime-assets/task-header-orchestration.js.sha256",
             }
         )
 
@@ -1238,6 +1244,11 @@ class TestDogfood07PayloadWebviewAssets(unittest.TestCase):
                 # gitignored vendor/ location).
                 "extension/runtime-assets/completion-authority.js",
                 "extension/runtime-assets/completion-authority.js.sha256",
+                # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
+                # task-header-orchestration kernel must also be present
+                # as a real VSIX runtime asset.
+                "extension/runtime-assets/task-header-orchestration.js",
+                "extension/runtime-assets/task-header-orchestration.js.sha256",
             }
         )
 
@@ -1289,6 +1300,11 @@ class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
                 "extension/webview-ui/build/assets/index.js",
                 "extension/runtime-assets/completion-authority.js",
                 "extension/runtime-assets/completion-authority.js.sha256",
+                # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
+                # task-header-orchestration kernel must also be present
+                # as a real VSIX runtime asset.
+                "extension/runtime-assets/task-header-orchestration.js",
+                "extension/runtime-assets/task-header-orchestration.js.sha256",
             }
         )
 
@@ -1346,6 +1362,58 @@ class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
             str(ctx.exception),
         )
 
+    def test_task_header_orchestration_kernel_required(self) -> None:
+        """ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
+        the task-header-orchestration kernel is a real runtime
+        asset — the VSIX must include
+        ``extension/runtime-assets/task-header-orchestration.js`` +
+        ``.sha256`` sidecar. A missing kernel is a P1 packaging
+        defect because the runtime reads from this path when
+        `CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW=1` is set."""
+        # Both kernels present -> pass.
+        verify_vsix_payload(
+            {
+                "extension/dist/extension.js",
+                "extension/webview-ui/build/assets/index.js",
+                "extension/runtime-assets/completion-authority.js",
+                "extension/runtime-assets/completion-authority.js.sha256",
+                "extension/runtime-assets/task-header-orchestration.js",
+                "extension/runtime-assets/task-header-orchestration.js.sha256",
+            }
+        )
+        # task-header-orchestration kernel JS missing -> fail.
+        with self.assertRaises(BuildError) as ctx:
+            verify_vsix_payload(
+                {
+                    "extension/dist/extension.js",
+                    "extension/webview-ui/build/assets/index.js",
+                    "extension/runtime-assets/completion-authority.js",
+                    "extension/runtime-assets/completion-authority.js.sha256",
+                    # task-header-orchestration kernel JS missing on purpose
+                    "extension/runtime-assets/task-header-orchestration.js.sha256",
+                }
+            )
+        self.assertIn(
+            "extension/runtime-assets/task-header-orchestration.js",
+            str(ctx.exception),
+        )
+        # task-header-orchestration kernel SHA missing -> fail.
+        with self.assertRaises(BuildError) as ctx:
+            verify_vsix_payload(
+                {
+                    "extension/dist/extension.js",
+                    "extension/webview-ui/build/assets/index.js",
+                    "extension/runtime-assets/completion-authority.js",
+                    "extension/runtime-assets/completion-authority.js.sha256",
+                    "extension/runtime-assets/task-header-orchestration.js",
+                    # task-header-orchestration kernel SHA missing on purpose
+                }
+            )
+        self.assertIn(
+            "extension/runtime-assets/task-header-orchestration.js.sha256",
+            str(ctx.exception),
+        )
+
 
 class TestDogfoodKernel04StageRuntimeAsset(unittest.TestCase):
     """DOGFOOD-KERNEL-04: stage_elm_kernel_runtime_asset must copy
@@ -1368,6 +1436,14 @@ class TestDogfoodKernel04StageRuntimeAsset(unittest.TestCase):
         src_dir.mkdir(parents=True, exist_ok=True)
         (src_dir / "completion-authority.js").write_bytes(js_bytes)
         (src_dir / "completion-authority.js.sha256").write_text(sha + "\n")
+        # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
+        # The kernel staging function now stages the
+        # task-header-orchestration kernel too. Tests must populate
+        # the source vendor directory for it.
+        src_dir = root / "elm" / "task-header-orchestration" / "vendor"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        (src_dir / "task-header-orchestration.js").write_bytes(js_bytes)
+        (src_dir / "task-header-orchestration.js.sha256").write_text(sha + "\n")
 
     def test_stages_js_and_sha_and_sha_matches(self) -> None:
         with tempfile.TemporaryDirectory(
@@ -1468,21 +1544,22 @@ class TestDogfoodKernel04StageRuntimeAsset(unittest.TestCase):
 
 def _write_tracked_elm_sources(root: Path) -> Path:
     """Create the minimal tracked Elm layout so ``build_elm_kernel``
-    can locate ``elm/completion-authority/scripts/build-elm.sh``.
+    can locate the build scripts for every tracked kernel.
     Returns the apps/vscode root inside ``root``."""
     apps = root / "apps" / "vscode"
-    scripts_dir = (
-        apps / "elm" / "completion-authority" / "scripts"
-    )
-    scripts_dir.mkdir(parents=True, exist_ok=True)
-    script = scripts_dir / "build-elm.sh"
-    script.write_text(
-        "#!/usr/bin/env bash\n"
-        "# stub for DOGFOOD-KERNEL-05 tests; real build is in the\n"
-        "# canonical repo and runs via the same helper.\n"
-        "exit 0\n"
-    )
-    script.chmod(0o755)
+    for kernel_dir in ("completion-authority", "task-header-orchestration"):
+        scripts_dir = (
+            apps / "elm" / kernel_dir / "scripts"
+        )
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        script = scripts_dir / "build-elm.sh"
+        script.write_text(
+            "#!/usr/bin/env bash\n"
+            "# stub for DOGFOOD-KERNEL-05 tests; real build is in the\n"
+            "# canonical repo and runs via the same helper.\n"
+            "exit 0\n"
+        )
+        script.chmod(0o755)
     return apps
 
 
@@ -1518,16 +1595,25 @@ class TestDogfoodKernel05BuildElmKernel(unittest.TestCase):
 
             build_elm_kernel(apps, run_visible=record)
 
-            self.assertEqual(len(trace), 1)
-            argv, cwd = trace[0]
-            self.assertEqual(len(argv), 1)
+            # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02: the
+            # helper now invokes BOTH kernel build scripts in order.
+            self.assertEqual(len(trace), 2)
+            argv0 = trace[0][0]
+            argv1 = trace[1][0]
             self.assertTrue(
-                argv[0].endswith(
+                argv0[0].endswith(
                     "elm/completion-authority/scripts/build-elm.sh"
                 ),
-                msg=f"unexpected argv[0]: {argv[0]!r}",
+                msg=f"unexpected argv0[0]: {argv0[0]!r}",
             )
-            self.assertEqual(cwd, Path(apps))
+            self.assertTrue(
+                argv1[0].endswith(
+                    "elm/task-header-orchestration/scripts/build-elm.sh"
+                ),
+                msg=f"unexpected argv1[0]: {argv1[0]!r}",
+            )
+            self.assertEqual(trace[0][1], Path(apps))
+            self.assertEqual(trace[1][1], Path(apps))
 
     def test_helper_fails_closed_when_build_script_missing(self) -> None:
         """No tracked ``build-elm.sh`` => ``BuildError`` from the
@@ -1829,19 +1915,22 @@ class TestDogfoodKernel05bBuildSuccessMissingArtifactFailsClosed(
             expected_sha = compute_sha256_bytes(js_bytes)
 
             def fake_build(argv, cwd):
-                src_dir = (
-                    apps
-                    / "elm"
-                    / "completion-authority"
-                    / "vendor"
-                )
-                src_dir.mkdir(parents=True, exist_ok=True)
-                src_dir.joinpath(
-                    "completion-authority.js"
-                ).write_bytes(js_bytes)
-                src_dir.joinpath(
-                    "completion-authority.js.sha256"
-                ).write_text(expected_sha + "\n")
+                # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
+                # The build helper now writes BOTH kernel vendor
+                # directories. The staging helper then verifies
+                # both.
+                for kernel_dir in (
+                    "completion-authority",
+                    "task-header-orchestration",
+                ):
+                    src_dir = apps / "elm" / kernel_dir / "vendor"
+                    src_dir.mkdir(parents=True, exist_ok=True)
+                    src_dir.joinpath(
+                        f"{kernel_dir}.js"
+                    ).write_bytes(js_bytes)
+                    src_dir.joinpath(
+                        f"{kernel_dir}.js.sha256"
+                    ).write_text(expected_sha + "\n")
 
             build_elm_kernel(apps, run_visible=fake_build)
             returned_sha = stage_elm_kernel_runtime_asset(apps)

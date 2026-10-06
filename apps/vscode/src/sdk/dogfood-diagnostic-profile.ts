@@ -1705,3 +1705,147 @@ export function initializeElmAuthorityRuntime(kernelPath: string | null): {
 		kernelPath,
 	}
 }
+
+// ===========================================================================
+// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION
+//
+// Central dogfood profile resolver for the TaskHeader Elm runtime-shadow
+// diagnostic.
+//
+// CONTRACT — frozen in this ACT:
+//   - The env var `CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW` is read
+//     in EXACTLY ONE place — `parseTaskHeaderElmRuntimeShadowEnv` below.
+//     All other consumers go through the module-level seam in
+//     `task-header-elm-shadow.ts`.
+//   - The activation helper
+//     (`applyTaskHeaderElmRuntimeShadowDiagnosticProfile`) is called
+//     from `extension.ts:activate` (sibling to the existing THSICAP
+//     / W carrier / D-knob activations); there is exactly ONE
+//     production activation path, no copied orchestration in tests.
+//
+// Hard invariants (ACT §C1, §C3):
+//   - DEFAULT_OFF in BOTH profiles. The shadow is opt-in only — the
+//     public install NEVER evaluates the Elm kernel against the
+//     TaskHeader production seam; the dogfood kernel requires the
+//     operator to opt in (via the env var) so a fresh dogfood session
+//     does not silently turn the shadow on.
+//   - When disabled: no Elm kernel load, no filesystem read for the
+//     TaskHeader Elm asset, no Elm initialization, no comparison, no
+//     log emission, no state mutation, no wire delta, no TaskHeader
+//     semantic delta.
+//   - The TS production selector (`selectTaskHeaderPresentation`)
+//     remains authoritative in EVERY branch. The shadow's ONLY effect
+//     is appending to a bounded observation ring; the returned
+//     `taskHeaderPresentation` is byte-identical to the pre-shadow
+//     behavior in every observation.
+//
+// Precedence (top wins; deterministic; fail-closed):
+//
+//   1. Explicit env override:
+//        `=1`/`true`/`yes` -> ON
+//        `=0`/`off`/`false` -> OFF
+//        garbage / unset -> falls through to (2)
+//   2. Profile default:
+//        `isDogfood === true`  -> OFF (opt-in required)
+//        `isDogfood === false` -> OFF (public default)
+//
+// REMOVAL_TRIGGER (per Factory doctrine on temporary diagnostics):
+//   first successful LIVE qualification that authorizes cutover
+//   to `ORCHESTRATION03-AUTHORITY`, OR
+//   the first real LIVE semantic mismatch that identifies a contract
+//   defect, OR
+//   CAPTURE_INSUFFICIENT.
+// When cutover lands, REMOVE this resolver + activation helper +
+// `runtime-assets/task-header-orchestration.js` staging + the
+// comparison seam at `SdkController.ts:5883-5902` + the wiring in
+// `extension.ts:activate` together.
+// ===========================================================================
+
+import {
+	isTaskHeaderElmRuntimeShadowEnabled as _publicIsTaskHeaderElmRuntimeShadowEnabled,
+	setTaskHeaderElmRuntimeShadowEnabled as _setTaskHeaderElmRuntimeShadowEnabled,
+} from "./task-header-elm-shadow"
+
+export const TASK_HEADER_ELM_RUNTIME_SHADOW_ENV_VAR = "CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW"
+
+export function parseTaskHeaderElmRuntimeShadowEnv(env: NodeJS.ProcessEnv): { enabled: boolean } | undefined {
+	const raw = env[TASK_HEADER_ELM_RUNTIME_SHADOW_ENV_VAR]
+	if (typeof raw !== "string" || raw.length === 0) {
+		return undefined
+	}
+	const normalized = raw.trim().toLowerCase()
+	if (TRUTHY_DISABLE.has(normalized)) {
+		return { enabled: false }
+	}
+	if (TRUTHY_ENABLE.has(normalized)) {
+		return { enabled: true }
+	}
+	return undefined
+}
+
+/**
+ * Resolves the EFFECTIVE TaskHeader Elm runtime-shadow state from the
+ * env var and the dogfood identity bit. Pure / synchronous / no I/O.
+ *
+ * Precedence (top wins; deterministic; fail-closed):
+ *
+ *   1. Explicit env override:
+ *        `=1`/`true`/`yes` -> ON
+ *        `=0`/`off`/`false` -> OFF
+ *        garbage / unset -> falls through to (2)
+ *   2. Profile default:
+ *        `isDogfood === true`  -> OFF (opt-in required)
+ *        `isDogfood === false` -> OFF (public default)
+ */
+export function resolveEffectiveTaskHeaderElmRuntimeShadow(
+	env: NodeJS.ProcessEnv,
+	isDogfood: boolean,
+): { readonly enabled: boolean; readonly source: "env" | "profile" } {
+	const parsed = parseTaskHeaderElmRuntimeShadowEnv(env)
+	if (parsed !== undefined) {
+		return { enabled: parsed.enabled, source: "env" }
+	}
+	// Layer 2: profile default. Both public and dogfood default to OFF;
+	// dogfood operators opt in via the env var. This keeps LIVE
+	// qualification noise predictable (no auto-on shadow).
+	void isDogfood
+	return { enabled: false, source: "profile" }
+}
+
+/**
+ * THE single production activation helper for the TaskHeader Elm
+ * runtime-shadow seam. Called from `extension.ts:activate` (sibling
+ * to the existing THSICAP / W carrier / D-knob activations); there
+ * is exactly ONE production activation path, no copied orchestration
+ * in tests.
+ *
+ * Contract:
+ *   - Reads the resolved shadow state via
+ *     `resolveEffectiveTaskHeaderElmRuntimeShadow(env, isDogfood)`.
+ *   - Flips the module seam in `./task-header-elm-shadow.ts` via
+ *     `_setTaskHeaderElmRuntimeShadowEnabled(enabled)` — idempotent
+ *     (only mutates when the resolved state diverges from the
+ *     current seam state).
+ *   - Returns `{ enabled, source, flipped }` for diagnostics.
+ *
+ * Called BEFORE the first `SdkController.getStateToPostToWebview()`
+ * (the publication seam where the shadow helper fires). When disabled,
+ * the helper at the seam short-circuits without invoking the Elm
+ * kernel.
+ */
+export function applyTaskHeaderElmRuntimeShadowDiagnosticProfile(
+	env: NodeJS.ProcessEnv,
+	isDogfood: boolean,
+): { readonly enabled: boolean; readonly source: "env" | "profile"; readonly flipped: boolean } {
+	const resolved = resolveEffectiveTaskHeaderElmRuntimeShadow(env, isDogfood)
+	const was = _publicIsTaskHeaderElmRuntimeShadowEnabled()
+	if (resolved.enabled && !was) {
+		_setTaskHeaderElmRuntimeShadowEnabled(true)
+		return { enabled: true, source: resolved.source, flipped: true }
+	}
+	if (!resolved.enabled && was) {
+		_setTaskHeaderElmRuntimeShadowEnabled(false)
+		return { enabled: false, source: resolved.source, flipped: true }
+	}
+	return { enabled: resolved.enabled, source: resolved.source, flipped: false }
+}

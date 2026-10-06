@@ -299,19 +299,19 @@ def stage_elm_kernel_runtime_asset(
     *,
     copy_fn: Optional[Callable[[Path, Path], None]] = None,
 ) -> str:
-    """Stage the Elm kernel bundle + sha sidecar from the nested,
-    gitignored ``elm/completion-authority/vendor/`` directory into
-    the NON-gitignored ``runtime-assets/`` directory inside the
-    given worktree. Returns the SHA-256 of the staged JS bytes —
-    callers can compare this against the staged ``.sha256`` sidecar
-    to assert the copy preserved the bytes (DOGFOOD-KERNEL-04).
+    """Stage ALL Elm kernel bundles + sha sidecars from the nested,
+    gitignored ``elm/*/vendor/`` directories into the NON-gitignored
+    ``runtime-assets/`` directory inside the given worktree. Returns
+    the SHA-256 of the LAST staged JS bytes — callers compare against
+    the staged ``.sha256`` sidecars to assert the copy preserved the
+    bytes (DOGFOOD-KERNEL-04).
 
     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03
     (PACKAGING-DISCOVERY). This is the bounded fix for the
     long-standing vsce-discovery-vs-gitignore problem: any file
-    under ``elm/completion-authority/vendor/`` is filtered out by
-    the nested ``.gitignore`` during vsce's discovery walk, so a
-    later ``.vscodeignore !rule`` cannot resurrect it. By copying
+    under ``elm/*/vendor/`` is filtered out by the nested
+    ``.gitignore`` during vsce's discovery walk, so a later
+    ``.vscodeignore !rule`` cannot resurrect it. By copying
     the artifact into a fresh, non-tracked, non-gitignored
     ``runtime-assets/`` directory, we sidestep both the discovery
     filter and the .vscodeignore precedence rules entirely.
@@ -321,6 +321,15 @@ def stage_elm_kernel_runtime_asset(
     canonical worktree. Fail-closed if the source artifacts do not
     exist or the staged copy is empty.
 
+    ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02: the function
+    now stages BOTH kernels:
+
+      - completion-authority    (runtime-assets/completion-authority.js)
+      - task-header-orchestration (runtime-assets/task-header-orchestration.js)
+
+    Adding a third kernel just means appending a row to
+    ``_ELM_KERNELS``.
+
     ``copy_fn`` is a test seam: by default it uses
     :func:`shutil.copy2`; tests can pass any
     ``Callable[[Path, Path], None]`` to substitute a fake.
@@ -328,60 +337,66 @@ def stage_elm_kernel_runtime_asset(
     if copy_fn is None:
         copy_fn = shutil.copy2
 
-    source_js = stage_apps_vscode / _ELM_KERNEL_SOURCE_JS
-    source_sha = stage_apps_vscode / _ELM_KERNEL_SOURCE_SHA
-    if not source_js.is_file():
-        raise BuildError(
-            f"Elm kernel source missing in worktree: {source_js} — "
-            "did apps/vscode/elm/completion-authority/scripts/build-elm.sh run?"
-        )
-    if not source_sha.is_file():
-        raise BuildError(
-            f"Elm kernel source SHA missing in worktree: {source_sha} — "
-            "build-elm.sh must emit both .js and .sha256 sidecars."
-        )
+    last_staged_sha = ""
+    for kernel in _ELM_KERNELS:
+        source_js = stage_apps_vscode / kernel["source_js"]
+        source_sha = stage_apps_vscode / kernel["source_sha"]
+        if not source_js.is_file():
+            raise BuildError(
+                f"Elm kernel source missing in worktree: {source_js} — "
+                f"did {kernel['build_script']} run?"
+            )
+        if not source_sha.is_file():
+            raise BuildError(
+                f"Elm kernel source SHA missing in worktree: {source_sha} — "
+                "build-elm.sh must emit both .js and .sha256 sidecars."
+            )
 
-    staged_dir = stage_apps_vscode / _ELM_KERNEL_STAGED_DIR
-    staged_js = staged_dir / _ELM_KERNEL_STAGED_NAME
-    staged_sha = staged_dir / _ELM_KERNEL_STAGED_SHA_NAME
-    staged_dir.mkdir(parents=True, exist_ok=True)
+        staged_dir = stage_apps_vscode / kernel["staged_dir"]
+        staged_js = staged_dir / kernel["staged_name"]
+        staged_sha = staged_dir / kernel["staged_sha_name"]
+        staged_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        copy_fn(source_js, staged_js)
-        copy_fn(source_sha, staged_sha)
-    except OSError as exc:
-        raise BuildError(
-            f"failed to stage Elm kernel runtime asset: {exc}"
-        ) from exc
+        try:
+            copy_fn(source_js, staged_js)
+            copy_fn(source_sha, staged_sha)
+        except OSError as exc:
+            raise BuildError(
+                f"failed to stage Elm kernel runtime asset "
+                f"({kernel['staged_name']}): {exc}"
+            ) from exc
 
-    if not staged_js.is_file() or staged_js.stat().st_size == 0:
-        raise BuildError(
-            f"staged Elm kernel is missing or empty: {staged_js}"
-        )
-    if not staged_sha.is_file() or staged_sha.stat().st_size == 0:
-        raise BuildError(
-            f"staged Elm kernel SHA sidecar is missing or empty: {staged_sha}"
-        )
+        if not staged_js.is_file() or staged_js.stat().st_size == 0:
+            raise BuildError(
+                f"staged Elm kernel is missing or empty: {staged_js}"
+            )
+        if not staged_sha.is_file() or staged_sha.stat().st_size == 0:
+            raise BuildError(
+                f"staged Elm kernel SHA sidecar is missing or empty: {staged_sha}"
+            )
 
-    staged_js_sha = compute_sha256(staged_js)
-    # Sidecar content is the lowercase hex SHA-256 followed by a
-    # trailing newline (the format build-elm.sh emits). Trim and
-    # compare strictly — if build-elm.sh changes its sidecar format,
-    # we want this to fail loudly rather than silently accept a
-    # malformed sidecar.
-    try:
-        sidecar_text = staged_sha.read_text().strip()
-    except OSError as exc:
-        raise BuildError(
-            f"cannot read staged kernel SHA sidecar {staged_sha}: {exc}"
-        ) from exc
-    if sidecar_text != staged_js_sha:
-        raise BuildError(
-            "staged Elm kernel SHA sidecar mismatch: "
-            f"sidecar={sidecar_text[:16]}... computed={staged_js_sha[:16]}... "
-            "— the .sha256 sidecar must match the staged JS bytes exactly."
-        )
-    return staged_js_sha
+        staged_js_sha = compute_sha256(staged_js)
+        # Sidecar content is the lowercase hex SHA-256 followed by a
+        # trailing newline (the format build-elm.sh emits). Trim and
+        # compare strictly — if build-elm.sh changes its sidecar
+        # format, we want this to fail loudly rather than silently
+        # accept a malformed sidecar.
+        try:
+            sidecar_text = staged_sha.read_text().strip()
+        except OSError as exc:
+            raise BuildError(
+                f"cannot read staged kernel SHA sidecar {staged_sha}: {exc}"
+            ) from exc
+        if sidecar_text != staged_js_sha:
+            raise BuildError(
+                "staged Elm kernel SHA sidecar mismatch "
+                f"({kernel['staged_name']}): "
+                f"sidecar={sidecar_text[:16]}... "
+                f"computed={staged_js_sha[:16]}... "
+                "— the .sha256 sidecar must match the staged JS bytes exactly."
+            )
+        last_staged_sha = staged_js_sha
+    return last_staged_sha
 
 
 _VSIX_MANIFEST_NAME = "extension.vsixmanifest"
@@ -389,14 +404,14 @@ _VSIX_ENTRY_NAME = "extension/dist/extension.js"
 _VSIX_WEBVIEW_PREFIX = "extension/webview-ui/build/assets/"
 # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03 (PACKAGING-DISCOVERY):
 # The Elm kernel bundle is generated by `elm make` and is intentionally
-# gitignored by `apps/vscode/elm/completion-authority/.gitignore`
+# gitignored by `apps/vscode/elm/<kernel>/.gitignore`
 # (`vendor/*.js`, `vendor/*.sha256`). When `package.json` has no `files`
 # whitelist, vsce's file DISCOVERY walks the tree and applies .gitignore
 # semantics BEFORE .vscodeignore runs — so any kernel JS that lives under
 # the nested gitignore filter is invisible to vsce and cannot be
 # resurrected by a later `.vscodeignore` !negation. The previous fix
 # (a `.vscodeignore` negation) was therefore inert: the dogfood tree
-# preview showed an `elm/completion-authority/` subtree but the exact-file
+# preview showed an `elm/<kernel>/` subtree but the exact-file
 # verifier still failed on the kernel JS path. The bounded fix is to
 # stage the kernel into a NON-gitignored, package-owned runtime-assets
 # directory inside the temporary worktree immediately before
@@ -407,22 +422,56 @@ _VSIX_WEBVIEW_PREFIX = "extension/webview-ui/build/assets/"
 # and is torn down in the finally block.
 #
 # The activation code in apps/vscode/src/extension.ts:activate loads
-# exactly this path from `context.extensionUri.fsPath` when
-# CLINEMM_COMPLETION_AUTHORITY_ELM_SHADOW=1 is set, so a missing
-# kernel bundle at activation time is a P1 packaging defect that
-# must be caught at build time. This constant pins the expected
-# location so verify_vsix_payload can assert it is present.
-_VSIX_ELM_KERNEL_ENTRY = "extension/runtime-assets/completion-authority.js"
-_VSIX_ELM_KERNEL_SHA_ENTRY = "extension/runtime-assets/completion-authority.js.sha256"
-# Source-of-truth locations (relative to apps/vscode inside the
-# worktree). stage_elm_kernel_runtime_asset reads from these and
-# writes to the staged paths.
-_ELM_KERNEL_SOURCE_JS = "elm/completion-authority/vendor/completion-authority.js"
-_ELM_KERNEL_SOURCE_SHA = "elm/completion-authority/vendor/completion-authority.js.sha256"
-_ELM_KERNEL_STAGED_DIR = "runtime-assets"
-_ELM_KERNEL_STAGED_NAME = "completion-authority.js"
-_ELM_KERNEL_STAGED_SHA_NAME = "completion-authority.js.sha256"
+# the completion-authority kernel from this path
+# (`runtime-assets/completion-authority.js`) UNCONDITIONALLY. The
+# task-header-orchestration kernel is also loaded from
+# `runtime-assets/task-header-orchestration.js` when the operator
+# opts in via `CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW=1`. A
+# missing kernel bundle at activation time is a P1 packaging
+# defect that must be caught at build time. This table pins the
+# expected locations so verify_vsix_payload can assert both
+# kernels are present.
 _VERSION_ATTR_RE = re.compile(r'<Identity\b[^>]*\bVersion="([^"]+)"', re.IGNORECASE)
+
+# Per-kernel table: source-of-truth (relative to apps/vscode inside
+# the worktree) and staged-path (relative to apps/vscode inside the
+# worktree). stage_elm_kernel_runtime_asset reads from the source
+# paths and writes to the staged paths.
+_ELM_KERNELS: list = [
+    {
+        "name": "completion-authority",
+        "build_script": "apps/vscode/elm/completion-authority/scripts/build-elm.sh",
+        "source_js": "elm/completion-authority/vendor/completion-authority.js",
+        "source_sha": "elm/completion-authority/vendor/completion-authority.js.sha256",
+        "staged_dir": "runtime-assets",
+        "staged_name": "completion-authority.js",
+        "staged_sha_name": "completion-authority.js.sha256",
+        "vsix_entry": "extension/runtime-assets/completion-authority.js",
+        "vsix_sha_entry": "extension/runtime-assets/completion-authority.js.sha256",
+    },
+    {
+        "name": "task-header-orchestration",
+        "build_script": "apps/vscode/elm/task-header-orchestration/scripts/build-elm.sh",
+        "source_js": "elm/task-header-orchestration/vendor/task-header-orchestration.js",
+        "source_sha": "elm/task-header-orchestration/vendor/task-header-orchestration.js.sha256",
+        "staged_dir": "runtime-assets",
+        "staged_name": "task-header-orchestration.js",
+        "staged_sha_name": "task-header-orchestration.js.sha256",
+        "vsix_entry": "extension/runtime-assets/task-header-orchestration.js",
+        "vsix_sha_entry": "extension/runtime-assets/task-header-orchestration.js.sha256",
+    },
+]
+
+# Backwards-compatible single-kernel constants — preserved because
+# the test suite and the public CLI both reference them. Tests use
+# the completion-authority kernel as the canonical first row.
+_ELM_KERNEL_SOURCE_JS = _ELM_KERNELS[0]["source_js"]
+_ELM_KERNEL_SOURCE_SHA = _ELM_KERNELS[0]["source_sha"]
+_ELM_KERNEL_STAGED_DIR = _ELM_KERNELS[0]["staged_dir"]
+_ELM_KERNEL_STAGED_NAME = _ELM_KERNELS[0]["staged_name"]
+_ELM_KERNEL_STAGED_SHA_NAME = _ELM_KERNELS[0]["staged_sha_name"]
+_VSIX_ELM_KERNEL_ENTRY = _ELM_KERNELS[0]["vsix_entry"]
+_VSIX_ELM_KERNEL_SHA_ENTRY = _ELM_KERNELS[0]["vsix_sha_entry"]
 
 
 def read_vsix_version(vsix_path: Path) -> str:
@@ -465,22 +514,32 @@ def verify_vsix_payload(vsix_names: Iterable[str]) -> None:
     ``_VSIX_WEBVIEW_PREFIX`` directory is absent (or has zero members).
 
     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION03
-    (PACKAGING-DISCOVERY, DOGFOOD-KERNEL): additionally asserts
-    the Elm kernel bundle is present at the *staged* runtime-asset
-    location (``_VSIX_ELM_KERNEL_ENTRY`` /
-    ``_VSIX_ELM_KERNEL_SHA_ENTRY``). See the constants above for the
-    rationale — the kernel is staged into ``runtime-assets/`` by
+    (PACKAGING-DISCOVERY, DOGFOOD-KERNEL) AND
+    ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION
+    (ELM-ARTIFACT-NOT-BOUND): additionally asserts EVERY tracked
+    Elm kernel bundle is present at its *staged* runtime-asset
+    location (`vsix_entry` / `vsix_sha_entry` per row in
+    `_ELM_KERNELS`). See the constants above for the rationale —
+    each kernel is staged into `runtime-assets/` by
     :func:`stage_elm_kernel_runtime_asset` immediately before
-    ``vsce package`` runs."""
+    ``vsce package`` runs.
+    """
     names = set(vsix_names)
     if _VSIX_ENTRY_NAME not in names:
         raise BuildError(f"{_VSIX_ENTRY_NAME} missing from VSIX")
     if not any(n.startswith(_VSIX_WEBVIEW_PREFIX) for n in names):
         raise BuildError(f"{_VSIX_WEBVIEW_PREFIX}* missing from VSIX")
-    if _VSIX_ELM_KERNEL_ENTRY not in names:
-        raise BuildError(f"{_VSIX_ELM_KERNEL_ENTRY} missing from VSIX")
-    if _VSIX_ELM_KERNEL_SHA_ENTRY not in names:
-        raise BuildError(f"{_VSIX_ELM_KERNEL_SHA_ENTRY} missing from VSIX")
+    for kernel in _ELM_KERNELS:
+        if kernel["vsix_entry"] not in names:
+            raise BuildError(
+                f"{kernel['vsix_entry']} missing from VSIX "
+                f"(kernel={kernel['name']})"
+            )
+        if kernel["vsix_sha_entry"] not in names:
+            raise BuildError(
+                f"{kernel['vsix_sha_entry']} missing from VSIX "
+                f"(kernel={kernel['name']})"
+            )
 
 
 # =============================================================================
@@ -739,21 +798,28 @@ def run_canonical_build(stage: Path, *, run_visible: Optional[Callable[[Sequence
 def build_elm_kernel(
     stage_apps_vscode: Path,
     *,
+    kernel_name: Optional[str] = None,
     run_visible: Optional[Callable[[Sequence[str], Path], None]] = None,
 ) -> None:
-    """Invoke the tracked ``build-elm.sh`` inside the staged worktree so
-    the Elm kernel bytes are produced from the same tracked Elm
+    """Invoke the tracked ``build-elm.sh`` inside the staged worktree
+    so the Elm kernel bytes are produced from the same tracked Elm
     sources as the subject being packaged.
 
     ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION04
-    (WORKTREE-KERNEL-BUILD). The gitignored artifact
-    ``apps/vscode/elm/completion-authority/vendor/completion-authority.js``
-    is regenerated by ``build-elm.sh`` against the staged
-    ``apps/vscode`` tree (its ``$(cd "$(dirname ...)")/..`` anchor
-    resolves into the staged tree). The script emits both ``.js`` and
-    ``.sha256`` sidecars; if either is absent afterwards, the
-    subsequent :func:`stage_elm_kernel_runtime_asset` call raises
+    (WORKTREE-KERNEL-BUILD) AND
+    ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION:
+    every tracked kernel listed in ``_ELM_KERNELS`` is rebuilt in
+    order. The gitignored artifact
+    ``apps/vscode/elm/<kernel>/vendor/<kernel>.js`` is regenerated by
+    ``build-elm.sh`` against the staged ``apps/vscode`` tree (its
+    ``$(cd "$(dirname ...)")/..`` anchor resolves into the staged
+    tree). The script emits both ``.js`` and ``.sha256`` sidecars;
+    if either is absent afterwards, the subsequent
+    :func:`stage_elm_kernel_runtime_asset` call raises
     ``BuildError`` and the package never starts.
+
+    When ``kernel_name`` is provided, only that kernel is built
+    (test seam). When omitted, every kernel is built.
 
     Authority preservation: this helper is the orchestrator seam;
     :func:`stage_elm_kernel_runtime_asset` remains the authority for
@@ -772,28 +838,27 @@ def build_elm_kernel(
     :func:`_default_run` (streaming, fail-closed on non-zero exit).
     DOGFOOD-KERNEL-05 uses this seam to simulate a failing build.
     """
-    build_script = (
-        stage_apps_vscode
-        / "elm"
-        / "completion-authority"
-        / "scripts"
-        / "build-elm.sh"
-    )
-    if not build_script.is_file():
-        raise BuildError(
-            f"Elm build script missing in worktree: {build_script} — "
-            "is apps/vscode/elm/completion-authority/scripts tracked?"
-        )
     runner = run_visible or (
         lambda argv, cwd: _default_run(argv, cwd, capture=False)
     )
-    # Execute the tracked build script. We deliberately invoke the
-    # script (not the inline commands) so the project's pinned
-    # Elm version + sha-emission policy stays the authority. The
-    # script's own ``set -euo pipefail`` and exit code propagation
-    # are sufficient: a non-zero exit here raises BuildError via
-    # _default_run.
-    runner([str(build_script)], stage_apps_vscode)
+    for kernel in _ELM_KERNELS:
+        if kernel_name is not None and kernel["name"] != kernel_name:
+            continue
+        build_script = stage_apps_vscode / Path(kernel["build_script"]).relative_to(
+            Path("apps") / "vscode"
+        )
+        if not build_script.is_file():
+            raise BuildError(
+                f"Elm build script missing in worktree: {build_script} — "
+                f"is {kernel['build_script']} tracked?"
+            )
+        # Execute the tracked build script. We deliberately invoke
+        # the script (not the inline commands) so the project's
+        # pinned Elm version + sha-emission policy stays the
+        # authority. The script's own ``set -euo pipefail`` and
+        # exit code propagation are sufficient: a non-zero exit
+        # here raises BuildError via _default_run.
+        runner([str(build_script)], stage_apps_vscode)
 
 
 def vsce_package(

@@ -179,6 +179,7 @@ import {
 import { SessionListingCallerClass, withListSessionsCaller } from "./session-listing-diagnostic-runtime"
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
+import { buildFactsJson as buildTaskHeaderElmFactsJson, observeTaskHeaderElmRuntimeShadow } from "./task-header-elm-shadow"
 import { captureTaskHeaderSelectorInput } from "./task-header-selector-input-capture"
 import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
@@ -5880,26 +5881,37 @@ export class Controller {
 				// `seq` is the legacy `TurnStateTracker.seq` for transport-
 				// level stale-push fencing (same domain as
 				// `thinkingPresentation.seq`).
-				taskHeaderPresentation: selectTaskHeaderPresentation({
-					canonicalShadowPhase: this.getLocalShadowPhase(),
-					currentLegacyPhase: this.turnStateTracker.currentPhase,
-					seq: this.turnStateTracker.get().seq,
-					// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
-					// Pass the TurnState-domain seq the shadow had stamped
-					// on its LAST observation yielding the phase the
-					// shadow is currently projecting (via
-					// `getLocalShadowPhase()`). The phase-keyed stamp
-					// collapses the unbounded observation-count stamp
-					// into a per-projection invariant: a noop observation
-					// that yields the same projection does NOT bypass
-					// the staleness gate.
-					canonicalShadowObservedTurnSeq: (() => {
-						const currentShadowPhase = this.getLocalShadowPhase()
-						return currentShadowPhase !== undefined
-							? this.getLocalShadowTurnSeqForPhase(currentShadowPhase)
-							: undefined
-					})(),
-				}),
+				taskHeaderPresentation: await (async () => {
+					const taskHeaderInputs = {
+						canonicalShadowPhase: this.getLocalShadowPhase(),
+						currentLegacyPhase: this.turnStateTracker.currentPhase,
+						seq: this.turnStateTracker.get().seq,
+						canonicalShadowObservedTurnSeq: (() => {
+							const currentShadowPhase = this.getLocalShadowPhase()
+							return currentShadowPhase !== undefined
+								? this.getLocalShadowTurnSeqForPhase(currentShadowPhase)
+								: undefined
+						})(),
+					}
+					const tsProjection = selectTaskHeaderPresentation(taskHeaderInputs)
+					// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION:
+					// Drive the proven Elm kernel against the SAME
+					// `Facts` quadruple the production TS selector
+					// consumed, and append the bounded comparison
+					// observation into the ring. The TS projection
+					// is the production return value in EVERY branch;
+					// the shadow's ONLY effect is side-channel
+					// observation (no wire delta, no state mutation).
+					// When the dogfood-diagnostic-profile seam is
+					// OFF (the public default AND the dogfood default),
+					// the comparison helper short-circuits without
+					// invoking the Elm kernel, reading the runtime
+					// asset, or emitting any wire delta.
+					return await observeTaskHeaderElmRuntimeShadow({
+						ts: tsProjection,
+						facts: buildTaskHeaderElmFactsJson(taskHeaderInputs),
+					})
+				})(),
 				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned
 				// authority; this is a read-only mirror for the webview.
