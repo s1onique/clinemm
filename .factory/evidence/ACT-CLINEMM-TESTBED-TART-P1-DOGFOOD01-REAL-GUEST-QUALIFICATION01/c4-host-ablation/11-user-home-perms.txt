@@ -1,0 +1,3 @@
+total 0
+drwxr-xr-x  3 chistyakov  admin  -  96 Jul  9  2025 Application Support
+drwxrwxrwx  4 root        admin  - 128 Sep 18 14:53 Preferences

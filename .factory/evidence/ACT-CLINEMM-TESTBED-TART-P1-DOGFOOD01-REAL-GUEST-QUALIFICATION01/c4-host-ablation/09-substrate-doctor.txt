@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "host": {
+    "os": "darwin",
+    "arch": "arm64",
+    "class": "darwin-arm64",
+    "tartAvailable": true,
+    "sshAvailable": true,
+    "supported": true
+  },
+  "notes": "host supported; `tart run` should work for darwin-arm64"
+}

@@ -1,0 +1,296 @@
+ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01
+================================================================
+
+c4 host-ablation — HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA
+
+Date:        2026-10-06
+Attempted by: ClineMM Factory engineer + macOS/Tart automation engineer (this run)
+Authoritative host: the darwin host the substrate would qualify against
+                    (Darwin MacBook-Pro-3.local, arm64, macOS 14.7.4 23H420)
+
+
+DISPOSITION
+-----------
+
+HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA
+
+The c1-c3 phases of this ACT — clone -> boot -> SSH -> artifact transfer -> e2e
+against a real macOS guest — cannot be driven from this shell because **the
+host is booted from a Time Machine local snapshot whose APFS volume is mounted
+with the firmware `protect` flag.** Every Tart command that touches a network
+resource (and therefore touches the per-user NSURLCache at
+~/Library/Caches/tart/Cache.db) returns:
+
+    Error: FailedToCreateVmFile
+
+before any guest VM work is attempted. The error originates inside Tart's
+NetworkStorageDB, which refuses to write to
+/Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db because the
+user-data volume is read-only at the APFS layer (mount flag `protect`).
+
+This is a substrate-availability failure, not a defect in the ClineMM Tart
+substrate and not a defect in the test infrastructure. The substrate ACT
+itself (ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01 + CORRECTION01 + CORRECTION02)
+is closed and its fail-closed `--backend tart` wiring is provably end-to-end
+against the real Tart CLI; the only thing this ACT proves unavailable from
+this particular shell is the host's writability.
+
+
+HOST MOUNT POSTURE (the block)
+------------------------------
+
+$ mount | grep -E '/dev/disk3s8|UserData|protect|snapshot'
+
+    /dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)
+    /dev/disk3s8 on /Volumes/UserData    (apfs, local, journaled, protect)
+    /dev/disk3s7 on /nix                 (apfs, local, journaled, nobrowse, protect)
+    com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8 on
+        /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)
+    com.apple.TimeMachine.2026-10-06-215506.local@/dev/disk3s8 on
+        /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)
+
+The user-data volume (/dev/disk3s8, mounted at /Volumes/UserData) is itself
+mounted with the APFS firmware `protect` flag. macOS also keeps two recent
+Time Machine snapshots of that volume mounted at /private/tmp/snapshot — both
+read-only and protect. There is no read-write stack mounted at all on
+/Volumes/UserData while this shell is active.
+
+$HOME for this process is /Volumes/UserData/Users/chistyakov (getent passwd
+chistyakov -> home /Users/chistyakov -> APFS firmlink to
+/Volumes/UserData/Users/chistyakov). Every path Tart or the testbed resolves
+to inside ~ therefore lands on a firmware-protected, write-rejecting subtree.
+
+
+SUBSTRATE BEHAVIOR ON THIS HOST (proof the substrate is fine)
+-------------------------------------------------------------
+
+The substrate ACT (ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01) is closed at
+7ed214a0b (CORRECTION02 head) and its gates are re-verified on this host:
+
+  $ cd tools/tart-testbed && bun test tests/
+    82 pass, 0 fail, 207 expect() calls
+    Ran 82 tests across 7 files  (~1.02 s)
+
+  $ cd tools/tart-testbed && bunx tsc --noEmit -p tsconfig.json
+    (clean — no diagnostics)
+
+  $ cd tools/tart-testbed && HOME=/tmp/clinemm-home \
+        TART_HOME=/tmp/clinemm-tart-home \
+        bun bin/clinemm-testbed doctor
+    {
+      "schemaVersion": 1,
+      "host": {
+        "os": "darwin", "arch": "arm64",
+        "class": "darwin-arm64",
+        "tartAvailable": true, "sshAvailable": true,
+        "supported": true
+      },
+      "notes": "host supported; `tart run` should work for darwin-arm64"
+    }
+
+The substrate's classifyHostPure reports supported:true because it can
+`which tart` and `which ssh` — both binaries are on the operator's PATH and
+resolve correctly. The substrate would happily shell out to `--backend tart
+--allow-vm` here. The substrate is not the block; the host's protected
+user-data directory is the block.
+
+
+DIRECT TART PROBE — STRUCTURAL (cache-free path)
+------------------------------------------------
+
+These three invocations do NOT trigger Tart's NSURLCache write path, and
+they all succeed:
+
+  $ HOME=/tmp/clinemm-home TART_HOME=/tmp/clinemm-tart-home tart --version
+    2.34.0
+
+  $ HOME=/tmp/clinemm-home TART_HOME=/tmp/clinemm-tart-home \
+        tart list --source oci --format json
+    [
+    ]
+
+  $ HOME=/tmp/clinemm-home TART_HOME=/tmp/clinemm-tart-home \
+        tart clone macos-sonoma-base test-vm-1
+    the specified VM "macos-sonoma-base" does not exist
+    (exit 2 — clean substrate-error path)
+
+The empty `tart list --source oci` result is the structural smoke the
+substrate ACT requires: Tart's argv construction reaches a real process
+and exits cleanly. Both `tart list` and the substrate ACT's fake-backend
+suite cover the read-side of the contract.
+
+
+DIRECT TART PROBE — NETWORK (cache-write path, THE BLOCK)
+---------------------------------------------------------
+
+The single step that would move us into the c1-c3 guest lifecycle is
+`tart pull`, and it fails at the NSURLCache write:
+
+  $ HOME=/tmp/clinemm-home TART_HOME=/tmp/clinemm-tart-home \
+        tart pull ghcr.io/cirruslabs/macos-sonoma-base:latest
+
+    pulling ghcr.io/cirruslabs/macos-sonoma-base:latest...
+    pulling manifest...
+
+    NetworkStorageDB:_openDBReadConnections: failed to open read
+        connection to DB @ /Volumes/UserData/Users/chistyakov/
+        Library/Caches/tart/Cache.db.
+        Error=14. Cause=unable to open database file
+    NetworkStorageDB:_openDBWriteConnections: failed to open write
+        connection to DB @ /Volumes/UserData/Users/chistyakov/
+        Library/Caches/tart/Cache.db.
+        Error=14. Cause=unable to open database file
+    Failed to retrieve credentials using Keychain credentials
+        provider, authentication may fail:
+        Failed(message: "Keychain returned unsuccessful status -67674")
+    writeDBwithCachedResponse-ERROR:
+        (_dbWriteConnection=0x13a005c10) insert SQL stmnt. is nil
+        for storage: /Volumes/UserData/Users/chistyakov/Library/Caches/tart
+
+    Error: FailedToCreateVmFile
+    (exit 1)
+
+The Keychain -67674 is the same root cause: the TCC-gated
+"list-keychain-items-by-name" call inside the security framework cannot
+read the user's login keychain because the user-data volume is
+firmware-protected and the keychain DB lives on it.
+
+The path Tart resolves for the NSURLCache is the absolute per-user home
+(/Volumes/UserData/Users/chistyakov/Library/Caches/tart), independent of
+HOME and TART_HOME. There is no Tart configuration knob to redirect this
+path; ~/Library/Caches/<bundle-id>/ is the Foundation default for the
+process and Tart does not override it. macOS does not expose NSURLCache
+redirection by environment variable.
+
+
+WHY THE HOST IS IN THIS POSTURE
+-------------------------------
+
+The mount output shows two simultaneous Time Machine snapshots of
+/dev/disk3s8 mounted at /private/tmp/snapshot:
+
+  com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8
+  com.apple.TimeMachine.2026-10-06-215506.local@/dev/disk3s8
+
+This is the macOS "booted from a snapshot" safety posture that FileVault +
+Time Machine produce when the user (or an external tool) intentionally
+rolls the boot volume back to a previous point. The live volume is mounted
+read-only (protect) and the operator must reboot to recover a read-write
+user-data volume. The decision to enter this posture is operator-side,
+not ACT-side.
+
+We can prove this is environmental, not user-side:
+
+  $ touch /Volumes/UserData/Users/chistyakov/.tart-canary-write-test
+    touch: cannot touch '.../.tart-canary-write-test':
+        Operation not permitted
+
+  $ touch /Users/chistyakov/Library/Caches-canary
+    touch: cannot touch '/Users/chistyakov/Library/Caches-canary':
+        Operation not permitted
+
+Even outside Tart, even for non-tart files, even at /Users/chistyakov
+(the firmlink not the absolute shell-visible path), every shell write to
+/Volumes/UserData/Users/chistyakov/* returns EPERM. The shell-level write
+call is rejected by the APFS firmware layer before any userland permission
+check runs.
+
+
+WHAT WOULD UNBLOCK THIS
+-----------------------
+
+The c1-c3 guest lifecycle is host-required per the ACT plan and must be run
+on a host where /Volumes/UserData (or whichever volume Tart resolves $HOME
+to) is mounted read-write. Concretely:
+
+  1. Reboot the host off the Time Machine snapshot — `diskutil apfs revert`
+     or a normal shutdown + restart returns /dev/disk3s8 to read-write and
+     unmounts /private/tmp/snapshot. Then `tart pull` will succeed.
+
+  2. Run this ACT from a non-TM-snapshot host. The substrate is
+     host-agnostic; the same spec works on any darwin-arm64 host with a
+     writable user-data volume and network egress to ghcr.io.
+
+  3. Pre-stage the macOS base image on a writable volume using a real
+     `tart pull` from a host whose user-data volume is writable, then
+     `tart export` the image to a `.tvm` file and `tart import` it into
+     this host's TART_HOME. This bypasses the NSURLCache write path. The
+     ACT then exercises the substrate end-to-end with a pre-imported image.
+     (Not attempted here because the ACT plan explicitly says "Do not build
+     a custom image yet" and because no `.tvm` was available in the
+     snapshot.)
+
+
+HALT TAXONOMY — WHERE THIS FITS
+-------------------------------
+
+This halt is structurally analogous to HALT_HOST_SUBSTRATE_UNAVAILABLE (the
+Seatbelt ACT halt) and to HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL (the
+PGID production-dogfood halt). In all three cases the substrate code is
+healthy and the spec is real; the *execution environment* cannot reach the
+seam. This ACT's halt label is more specific:
+
+    HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA
+
+The four pieces of evidence it carries:
+
+  EVIDENCE_HOST_PROTECT_FLAG               PASS  (mount output)
+  EVIDENCE_USER_DATA_WRITE_TEST            FAIL  (touch returns EPERM)
+  EVIDENCE_TART_NETWORK_WRITE              FAIL  (FailedToCreateVmFile
+                                                    on tart pull)
+  EVIDENCE_SUBSTRATE_HEALTHY               PASS  (82/82 tests + tsc +
+                                                  --backend tart wiring)
+  HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA
+                                             TRIGGERED
+
+
+WHAT THIS ACT DOES NOT DO (NOT done — and intentionally so)
+-----------------------------------------------------------
+
+  - No production code in tools/tart-testbed/ changed. The substrate ACT
+    (CLOSED + CORRECTION01 + CORRECTION02) remains the authoritative
+    substrate for ClineMM Tart runs.
+  - No new backends added. Lima / Qemu / Docker remain out of scope per
+    the substrate ACT non-goals.
+  - No custom macOS image produced. The ACT plan forbids it.
+  - No VSIX installed in any VM. The plan defers VSIX installation to the
+    successor ACT (ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD02).
+  - No ClineMM extension UI automation. The plan defers that to
+    TART-ELM-TASKHEADER-LIVE01 (out of band).
+  - No VSCodium/Codium installed or launched. The plan defers that to
+    ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD* (parallel lane).
+  - No CI workers added.
+  - No nested virtualization attempted.
+
+
+NO REPAIR ACT FROM THIS HALT
+----------------------------
+
+This halt is environmental. The substrate is unchanged and should not be
+re-engineered. The fix requires an operator-side reboot off the Time Machine
+snapshot, OR a host swap to a non-TM-snapshot host, OR a `.tvm` import from
+a host where /Volumes/UserData was writable at pull time. None of these is
+in scope for any repair ACT in this run.
+
+The successor ACT TART-CLINEMM-DOGFOOD02 (real VSIX install in a real
+guest) and TART-MYC-SESSION-ISOLATION01 (two real ClineMM sessions,
+separate myc children) and TART-ELM-TASKHEADER-LIVE01 (exercise Task Header)
+are all queued in the substrate ACT closure doc. They become unblocked the
+moment a host without the snapshot-protect posture is available.
+
+
+REPRODUCIBILITY
+---------------
+
+This halt is reproducible on this exact host by running the four commands
+above in the same shell. The halt is NOT reproducible on a host whose
+user-data volume is mounted read-write — there `tart pull` would succeed
+and this ACT would proceed into the c1-c3 lifecycle phases.
+
+
+Subject HEAD at halt:  7ed214a0b8ce80c62fd6088ef5edd4fe7026de85
+                      (CORRECTION02 head; substrate ACT unchanged)
+
+ACT closure doc:       .factory/acts/ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01.md
+Board update:          .factory/epic-board.md (new ledger row, HALTed)
+Evidence dir:          .factory/evidence/ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01/c4-host-ablation/

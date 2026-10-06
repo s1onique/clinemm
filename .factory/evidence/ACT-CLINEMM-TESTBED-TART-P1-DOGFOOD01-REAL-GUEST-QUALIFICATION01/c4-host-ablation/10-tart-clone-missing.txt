@@ -1,0 +1,2 @@
+the specified VM "macos-sonoma-base" does not exist
+clone missing exit: 2

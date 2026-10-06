@@ -1,0 +1,85 @@
+{
+  "act_id": "ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01",
+  "verdict": "HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA",
+  "halt_taxonomy": {
+    "matched_listed_halt": null,
+    "new_halt_added": "HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA",
+    "structural_analog": "HALT_HOST_SUBSTRATE_UNAVAILABLE (Seatbelt §4) — substrate code is healthy; the host execution environment cannot reach the seam.",
+    "trigger": "ACT c1 requires a real `tart pull ghcr.io/cirruslabs/macos-sonoma-base:latest` to materialize a base image on the host. Tart's NetworkStorageDB at ~/Library/Caches/tart/Cache.db refuses to open (Error=14) because /Volumes/UserData is mounted with the APFS firmware `protect` flag (booted from a Time Machine snapshot mounted at /private/tmp/snapshot). No Tart or shell process can write to /Volumes/UserData/Users/chistyakov/{.tart,Library/Caches/tart}/ on this host. Every shell `touch` and every Tart network call returns EPERM or FailedToCreateVmFile."
+  },
+  "entry_freeze": {
+    "entry_head": "7ed214a0b8ce80c62fd6088ef5edd4fe7026de85",
+    "git_status_clean_at_entry": true,
+    "unexpected_tracked_dirt": 0,
+    "expected_tracked_dirt": "0 — only the new evidence dir (.factory/evidence/ACT-...) is added by this ACT itself",
+    "substrate_head": "7ed214a0b (CORRECTION02 head; substrate ACT unchanged)"
+  },
+  "host_recon": {
+    "host_os": "darwin",
+    "host_arch": "arm64",
+    "host_macos_version": "14.7.4",
+    "host_macos_build": "23H420",
+    "host_kernel": "Darwin 23.6.0 arm64",
+    "tart_version": "2.34.0",
+    "tart_binary": "/run/current-system/sw/bin/tart -> /nix/store/crsnipsi18a4ac0vvim0c4093mwf1l1h-tart-2.34.0/bin/tart",
+    "ssh_on_path": true,
+    "scp_on_path": true,
+    "jq_on_path": true
+  },
+  "substrate_preflight": {
+    "tools_tart_testbed_bun_test": "82 pass, 0 fail, 207 expect() calls (~1.02s)",
+    "tools_tart_testbed_tsc_noemit": "clean — no diagnostics",
+    "tools_tart_testbed_doctor": {
+      "os": "darwin",
+      "arch": "arm64",
+      "class": "darwin-arm64",
+      "tartAvailable": true,
+      "sshAvailable": true,
+      "supported": true
+    },
+    "structural_tart_smoke": "tart --version -> 2.34.0 (via RealProcessRunner, no VM)",
+    "substrate_real_tart_wiring": "verified end-to-end by ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01-CORRECTION01 + CORRECTION02; --backend tart --allow-vm wires RealProcessRunner + TartBackend"
+  },
+  "evidence_set": [
+    "00-mount.txt — mount output proving /Volumes/UserData is mounted `protect` and /private/tmp/snapshot is the live TM snapshot",
+    "01-host-swvers.txt — host sw_vers / uname / arch",
+    "02-tart-version.txt — tart --version via TART_HOME=/tmp (clean: 2.34.0)",
+    "03-oci-list.txt — tart list --source oci --format json (clean: [])",
+    "04-local-list.txt — tart list --source local --format json (clean: [])",
+    "05-userdata-write-test.stderr — touch /Volumes/UserData/Users/chistyakov/.tart-canary-write-test -> EPERM; touch /Users/chistyakov/Library/Caches-canary -> EPERM",
+    "06-tart-pull-stdout.txt + 06-tart-pull-stderr.txt — tart pull ghcr.io/cirruslabs/macos-sonoma-base:latest -> FailedToCreateVmFile (NSURLCache at /Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db refuses open; Keychain -67674)",
+    "07-substrate-bun-test.txt — 82/82 tests still GREEN on this host",
+    "08-substrate-tsc.txt — tsc clean on this host",
+    "09-substrate-doctor.txt — substrate doctor reports supported:true on this host",
+    "10-tart-clone-missing.txt — tart clone macos-sonoma-base test-vm-1 -> 'VM does not exist' (clean substrate error path)",
+    "11-user-home-perms.txt — /Users/chistyakov and /Users/chistyakov/Library show no ACLs but shell writes still EPERM (APFS firmware layer)"
+  ],
+  "halted_before_phase": "c1 (clone → boot → SSH → artifact transfer)",
+  "halted_at_step": "c0+c1 — base image pull is the first network-touching step",
+  "completed_steps": [
+    "c0 host recon (host sw_vers, arch, tart version)",
+    "c0 substrate doctor (supported:true)",
+    "c0 substrate gates re-verified (82/82 + tsc clean)",
+    "c0 evidence dir prepared",
+    "c1 NOT EXECUTED — host protective posture blocks tart's NSURLCache write path before any guest VM work begins",
+    "c2 NOT EXECUTED — blocked at c1",
+    "c3 NOT EXECUTED — blocked at c1",
+    "c4 NOT EXECUTED — no failure-injection needed; structural halt"
+  ],
+  "non_goals_intentionally_not_done": [
+    "No substrate code change — substrate ACT unchanged",
+    "No new backends (Lima, Qemu, Docker) — substrate ACT non-goals still hold",
+    "No custom macOS image — ACT plan forbids",
+    "No VSIX installed — successor ACT (DOGFOOD02) defers this",
+    "No ClineMM extension UI automation — TART-ELM-TASKHEADER-LIVE01 (out of band)",
+    "No VSCodium/Codium launch — parallel ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD* lane",
+    "No CI workers added",
+    "No nested virtualization"
+  ],
+  "what_would_unblock": [
+    "(1) Reboot host off Time Machine snapshot (diskutil apfs revert) so /Volumes/UserData is read-write",
+    "(2) Run this ACT from a non-TM-snapshot darwin-arm64 host with writable user-data volume + network egress",
+    "(3) Pre-stage base image as .tvm on a writable host, then tart import on this host"
+  ],
+  "no_repair_act_authorized": "true — this halt is environmental; substrate is unchanged and should not be re-engineered"
+}

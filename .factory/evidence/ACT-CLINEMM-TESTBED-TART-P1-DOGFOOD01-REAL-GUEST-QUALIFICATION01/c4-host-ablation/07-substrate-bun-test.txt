@@ -1,0 +1,8 @@
+[0m[32m✓[0m [0mclassifyHostPure[2m >[0m[1m darwin-arm64 but tart missing => unsupported[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mclassifyHostPure[2m >[0m[1m darwin-arm64 but ssh missing => unsupported[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mclassifyHostPure[2m >[0m[1m windows + arm64 => other class[0m [0m[2m[0.01ms[0m[2m][0m
+
+[0m[32m 82 pass[0m
+[0m[2m 0 fail[0m
+ 207 expect() calls
+Ran 82 tests across 7 files. [0m[2m[[1m1019.00ms[0m[2m][0m

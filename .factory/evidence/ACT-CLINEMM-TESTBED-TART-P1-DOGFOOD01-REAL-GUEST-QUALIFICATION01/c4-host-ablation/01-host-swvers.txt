@@ -1,0 +1,5 @@
+ProductName:		macOS
+ProductVersion:		14.7.4
+BuildVersion:		23H420
+Darwin MacBook-Pro-3.local 23.6.0 Darwin Kernel Version 23.6.0: Thu Dec 19 20:47:16 PST 2024; root:xnu-10063.141.1.703.2~1/RELEASE_ARM64_T6031 arm64 arm Darwin
+arm64

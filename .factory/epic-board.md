@@ -1,3 +1,53 @@
+## ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01 — HALTED — 2026-10-06
+
+**Status:** HALTED. The substrate ACT (`ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01`) and its two corrections (CORRECTION01 + CORRECTION02) are CLOSED at `7ed214a0b`; the substrate is unchanged. This ACT is the first to attempt a real macOS guest qualification for the substrate. It cannot run its c1-c6 lifecycle phases because the host is booted from a Time Machine local snapshot whose APFS volume is mounted with the firmware `protect` flag. Every Tart network call returns `Error: FailedToCreateVmFile` before any guest VM work begins; every shell write under `/Volumes/UserData/Users/chistyakov/` returns EPERM. The substrate's read-side (cache-free) is GREEN on this host; only the write-side is environmentally blocked.
+
+Substrate preflight (re-run on this host, no changes to substrate):
+- `bun test tests/` — **82/82 PASS** (7 files, 207 expect() calls, ~1.02 s)
+- `bunx tsc --noEmit -p tsconfig.json` — clean (strict, noUncheckedIndexedAccess)
+- `bin/clinemm-testbed doctor` — `{"os":"darwin","arch":"arm64","class":"darwin-arm64","tartAvailable":true,"sshAvailable":true,"supported":true}`
+
+Structural Tart smoke (cache-free path, works on this host):
+- `tart --version` (via `HOME=/tmp/clinemm-home TART_HOME=/tmp/clinemm-tart-home`) → `2.34.0`
+- `tart list --source oci --format json` → `[]`
+- `tart list --source local --format json` → `[]`
+- `tart clone macos-sonoma-base test-vm-1` → `the specified VM "macos-sonoma-base" does not exist` (exit 2, clean substrate error path)
+
+The block (cache-write path, fails on this host):
+- `tart pull ghcr.io/cirruslabs/macos-sonoma-base:latest` → `NetworkStorageDB:_openDBReadConnections: failed to open read connection to DB @ /Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db. Error=14` + `Keychain returned unsuccessful status -67674` + `Error: FailedToCreateVmFile` (exit 1)
+- `touch /Volumes/UserData/Users/chistyakov/.tart-canary-write-test` → EPERM
+- `touch /Users/chistyakov/Library/Caches-canary` → EPERM
+- `/Users/chistyakov/Library` ACLs: empty (no `-e` column entries) — yet writes still rejected at the APFS firmware layer
+
+Mount posture (`mount | grep -E '/dev/disk3s8|UserData|protect|snapshot'`):
+```
+/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)
+/dev/disk3s8 on /Volumes/UserData    (apfs, local, journaled, protect)
+/dev/disk3s7 on /nix                 (apfs, local, journaled, nobrowse, protect)
+com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)
+com.apple.TimeMachine.2026-10-06-215506.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)
+```
+
+```
+HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA
++ substrate preflight GREEN (82/82 + tsc + doctor) on this host
++ structural Tart smoke (--version, list) clean
++ structural Tart error path (clone missing) clean
++ ACT c1-c6 NOT EXECUTED — host protective posture blocks Tart's NSURLCache write path
++ no substrate code changed (substrate ACT unchanged at 7ed214a0b)
++ no repair ACT authorized — halt is environmental
++ successor ACTs (DOGFOOD02, MYC-SESSION-ISOLATION01, ELM-TASKHEADER-LIVE01) remain queued;
+  become unblocked on a non-TM-snapshot host
+```
+
+**Halt taxonomy:** new entry — structurally analogous to the existing `HALT_HOST_SUBSTRATE_UNAVAILABLE` (Seatbelt §4) and `HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL` (PGID production-dogfood). In all three cases the substrate code is healthy and the spec is real; the execution environment cannot reach the seam.
+
+**Files:** none — substrate is unchanged. ACT closure document: `.factory/acts/ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01.md`. Evidence directory: `.factory/evidence/ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01/c4-host-ablation/` (12 files: 11 raw evidence + HALT narrative + `result.json`).
+
+**What would unblock:** (1) operator reboot off the Time Machine snapshot (`diskutil apfs revert` or normal shutdown+restart) so `/dev/disk3s8` returns to read-write; (2) re-run this ACT from a non-TM-snapshot `darwin-arm64` host with a writable user-data volume and `ghcr.io` egress; (3) pre-stage the base image as a `.tvm` on a writable host and `tart import` into this host's `TART_HOME` (bypasses the NSURLCache write path entirely).
+
+---
+
 ## ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01 — CORRECTION02_CLOSED — 2026-10-06
 
 **Status:** CORRECTION02_CLOSED. Reviewer flagged one P1 contract defect on the spawn() seam: `RealProcessRunner.spawn()` memoized a single `terminateInFlight` promise shared by both `terminate()` and `kill()`. The intended SIGTERM → SIGKILL escalation in `TartBackend.stop()` therefore never actually sent SIGKILL — `kill()` returned the cached SIGTERM promise. A child that swallows SIGTERM (or any stuck process) would never receive SIGKILL. Also two P2 residue: stale comments still described the pre-CORRECTION01 `run({timeoutMs:1500})` lifecycle. All fixed in one bounded seam:

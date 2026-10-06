@@ -1,0 +1,4 @@
+touch: cannot touch '/Volumes/UserData/Users/chistyakov/.tart-canary-write-test': Operation not permitted
+tart-canary exit: 1
+touch: cannot touch '/Users/chistyakov/Library/Caches-canary': Operation not permitted
+Library/Caches canary exit: 1
