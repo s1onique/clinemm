@@ -146,3 +146,57 @@ describe("TartBackend CORRECTION01 process-lifecycle seam", () => {
     expect(caught?.code).toBe("TESTBED_VM_OWNERSHIP_UNPROVEN");
   });
 });
+
+describe("ProcessHandle CORRECTION02 signal escalation seam", () => {
+  it("SIGTERM is sent and ignored -> SIGKILL is actually sent -> handle exits on SIGKILL", async () => {
+    // Simulate the worst-case containment: tart run ignores SIGTERM
+    // and we have to escalate. The CORRECTION02 fix is what makes
+    // this test pass; before, kill() returned the cached SIGTERM
+    // promise and SIGKILL was never sent.
+    const proc = new FakeProcessRunner([], {
+      strict: false,
+      spawnScripts: [
+        // Real "tart run" that swallows SIGTERM but dies on SIGKILL.
+        { argvPrefix: ["tart", "run"], ignoreSignals: ["SIGTERM"] },
+      ],
+    });
+    const handle = await proc.spawn({ argv: ["tart", "run"] });
+    // The test-introspection fields live on the concrete fake,
+    // not the interface. We cast so we can assert on the signal
+    // log and exit state.
+    const fake = handle as unknown as {
+      hasExited(): boolean;
+      signalLog: NodeJS.Signals[];
+    };
+    expect(handle).not.toBeNull();
+    // Send SIGTERM (polite). The mock ignores it.
+    await handle.terminate("SIGTERM");
+    // The handle is still alive.
+    expect(fake.hasExited()).toBe(false);
+    // Both signals are recorded.
+    expect(fake.signalLog).toEqual(["SIGTERM"]);
+    // Now escalate. kill() must ACTUALLY send SIGKILL.
+    await handle.kill("SIGKILL");
+    // Handle has now exited.
+    const exitInfo = await handle.exited;
+    expect(exitInfo.signal).toBe("SIGKILL");
+    expect(fake.signalLog).toEqual(["SIGTERM", "SIGKILL"]);
+  });
+
+  it("terminate and kill with the same signal dedupe; different signals do NOT", async () => {
+    // CORRECTION02: per-signal memoization. Calling terminate
+    // twice with SIGTERM is one signal call; but terminate(SIGTERM)
+    // then kill(SIGKILL) is two calls.
+    const proc = new FakeProcessRunner([], {
+      strict: false,
+      spawnScripts: [{ argvPrefix: ["tart", "run"] }],
+    });
+    const handle = await proc.spawn({ argv: ["tart", "run"] });
+    const fake = handle as unknown as { signalLog: NodeJS.Signals[] };
+    await handle.terminate("SIGTERM");
+    await handle.terminate("SIGTERM"); // dedupe
+    expect(fake.signalLog).toEqual(["SIGTERM"]);
+    await handle.kill("SIGKILL");
+    expect(fake.signalLog).toEqual(["SIGTERM", "SIGKILL"]);
+  });
+});

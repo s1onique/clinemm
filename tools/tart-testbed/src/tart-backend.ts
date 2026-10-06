@@ -7,9 +7,14 @@
  *
  * Lifecycle (C6): prepare() → start() → waitReady() → exec/etc.
  *   - prepare(): `tart clone`
- *   - start(): `tart run --no-graphics` in the background;
- *     timedOut=true is the expected outcome.
+ *   - start(): `tart run --no-graphics` via `proc.spawn()`;
+ *     the handle is retained and never SIGKILLed (CORRECTION01).
  *   - waitReady(): poll `tart ip` + ssh until both succeed.
+ *   - stop(): `tart stop`, then await the spawned handle to
+ *     exit (5s polite → SIGTERM → SIGKILL fallback).
+ *     kill() and terminate() are SEPARATE operations per
+ *     CORRECTION02; the per-signal memoization ensures
+ *     SIGTERM-then-SIGKILL actually sends BOTH signals.
  */
 
 import {

@@ -1,3 +1,28 @@
+## ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01 — CORRECTION02_CLOSED — 2026-10-06
+
+**Status:** CORRECTION02_CLOSED. Reviewer flagged one P1 contract defect on the spawn() seam: `RealProcessRunner.spawn()` memoized a single `terminateInFlight` promise shared by both `terminate()` and `kill()`. The intended SIGTERM → SIGKILL escalation in `TartBackend.stop()` therefore never actually sent SIGKILL — `kill()` returned the cached SIGTERM promise. A child that swallows SIGTERM (or any stuck process) would never receive SIGKILL. Also two P2 residue: stale comments still described the pre-CORRECTION01 `run({timeoutMs:1500})` lifecycle. All fixed in one bounded seam:
+
+1. `RealProcessRunner.spawn()` now memoizes per-signal via `Map<NodeJS.Signals, Promise<void>>`. `terminate(SIGTERM)` and `kill(SIGKILL)` are now distinct operations and BOTH signals are sent.
+2. `FakeProcessHandle` mirrors the new contract: `signalLog` records every call; new `ignoreSignals` script field models the "process swallows SIGTERM but dies on SIGKILL" case; `kill()` no longer aliases to `terminate()`.
+3. `RealProcessRunner.spawn` stream fds → `"ignore"` (the previous `"pipe"` could hang `proc.exited` if the caller did not drain the streams — observed during structural smoke).
+4. P2 cleanup: rewrote stale "timedOut=true is the expected outcome" comment in `tart-backend.ts` and the stale "via `ProcessRunner.run` with `timeoutMs`" comment in `tart-cli.ts`.
+
+```
+PASS_CLINEMM_TART_TESTBED_SUBSTRATE_CORRECTION02_SIGNAL_ESCALATION
++ 82/82 tests green (7 files; +2 new: signal-escalation seam)
++ typecheck clean
++ git diff --check clean
++ real-tart smoke: spawn(["tart","--version"]) -> real child, exits 0
++ per-signal memoization verified through real subprocess
++ no VM launched during closure
+```
+
+**Files:** `src/process-runner.ts` (per-signal memo, FakeProcessHandle rewrite, spawn streams=ignore), `src/tart-backend.ts` (P2 doc), `src/tart-cli.ts` (P2 doc), `tests/tart-backend.test.ts` (+2 tests).
+
+ACT closure document: `.factory/acts/ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01-CORRECTION02-SIGNAL-ESCALATION.md`.
+
+---
+
 ## ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01 — CORRECTION01_CLOSED — 2026-10-06
 
 **Status:** CORRECTION01_CLOSED. Reviewer flagged two P0 issues: (a) `--backend tart` actually used `FakeProcessRunner` (the real Tart CLI was never invoked), and (b) `TartBackend.start()` called `proc.run({timeoutMs:1500})` on `tart run`, SIGKILLing the child after 1.5s and tearing the VM down — not a valid lifecycle. Both fixed with one bounded seam:
@@ -95,6 +120,7 @@ TART-ELM-TASKHEADER-LIVE01    exercise Task Header, invoke diagnostics command
 |---|---|---|
 | `ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01` | PASS_CLINEMM_TART_TESTBED_SUBSTRATE | shipped `tools/tart-testbed/` substrate |
 | `ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01-CORRECTION01-REAL-LIFECYCLE` | PASS_CLINEMM_TART_TESTBED_SUBSTRATE_CORRECTION01_REAL_LIFECYCLE | wired real Tart path: `spawn()` seam + `--backend tart --allow-vm` -> `RealProcessRunner + TartBackend`; +10 tests, 80/80 green |
+| `ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01-CORRECTION02-SIGNAL-ESCALATION` | PASS_CLINEMM_TART_TESTBED_SUBSTRATE_CORRECTION02_SIGNAL_ESCALATION | per-signal memoization in `spawn()`: SIGTERM-then-SIGKILL actually sends both signals; +2 tests, 82/82 green |
 
 ACT closure document: `.factory/acts/ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01.md` (full detail).
 

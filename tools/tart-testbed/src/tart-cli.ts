@@ -34,10 +34,13 @@ export function tartCloneArgv(args: {
  * `tart run <vm> [--no-graphics]` — starts the VM in the background.
  * We always use `--no-graphics` because the harness is headless.
  *
- * Note: `tart run` is long-running. The orchestrator spawns it
- * via ProcessRunner.run with timeoutMs = startMs and treats
- * timedOut=true as "VM is running"; the explicit completion
- * signal is `tart ip` returning an address.
+ * Note: `tart run` is a long-running foreground process owned by
+ * the Tart daemon. The orchestrator MUST drive it via
+ * `ProcessRunner.spawn()` (CORRECTION01), retaining the handle
+ * across `start() → stop()`. It must NOT be passed through
+ * `run()` with a timeout — that would SIGKILL the child and tear
+ * the VM down. Readiness is then established by `tart ip` + ssh
+ * polling, not by `tart run` exiting.
  */
 export function tartRunArgv(args: {
   vmName: string;

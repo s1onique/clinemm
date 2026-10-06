@@ -120,6 +120,13 @@ export interface FakeSpawnScript {
   readonly terminateExitCode?: number | null;
   /** If > 0, the mock auto-exits after this many ms (simulates a crash). */
   readonly autoExitMs?: number;
+  /**
+   * Signals the mock should IGNORE. The handle stays alive
+   * when these are sent; a later signal (e.g. SIGKILL) can
+   * escalate. Used to model the "tart run ignores SIGTERM"
+   * containment case.
+   */
+  readonly ignoreSignals?: readonly NodeJS.Signals[];
 }
 
 /**
@@ -246,15 +253,25 @@ export class FakeProcessRunner implements ProcessRunner {
  * Mock process handle. `exited` does not settle until terminate/kill
  * is invoked, or until `terminate` is called by an `autoExitMs`
  * timer.
+ *
+ * CORRECTION02: `kill()` is a separate operation from `terminate()`.
+ * Each signal call is recorded; the LAST signal is the one the
+ * `exited` promise resolves with. This lets tests assert that
+ * SIGTERM was sent, ignored, and then SIGKILL was sent, and that
+ * the process actually exited on SIGKILL (not on the prior SIGTERM
+ * that the test wanted to be a no-op).
  */
 class FakeProcessHandle implements ProcessHandle {
   readonly pid: number;
   readonly exited: Promise<{ readonly exitCode: number | null; readonly signal: NodeJS.Signals | null }>;
   readonly stdout: ReadableStream<Uint8Array> | null = null;
   readonly stderr: ReadableStream<Uint8Array> | null = null;
+  /** All signals this handle was sent, in order. Test introspection. */
+  readonly signalLog: NodeJS.Signals[] = [];
+  /** Per-signal in-flight promises, so duplicate calls dedupe. */
+  private readonly inflight = new Map<NodeJS.Signals, Promise<void>>();
   private resolver: ((v: { exitCode: number | null; signal: NodeJS.Signals | null }) => void) | null = null;
-  private terminated = false;
-  private terminatePromise: Promise<void> | null = null;
+  private settled = false;
   private readonly script: FakeSpawnScript | null;
 
   constructor(pid: number, script: FakeSpawnScript | null) {
@@ -265,26 +282,54 @@ class FakeProcessHandle implements ProcessHandle {
     });
   }
 
-  /** True iff terminate or kill has already been called. */
+  /** True iff exited has resolved. */
   hasExited(): boolean {
-    return this.terminated;
+    return this.settled;
   }
 
-  async terminate(signal: NodeJS.Signals = "SIGTERM"): Promise<void> {
-    if (this.terminatePromise) return this.terminatePromise;
-    this.terminatePromise = (async () => {
-      await Promise.resolve();
-      if (this.terminated) return;
-      this.terminated = true;
-      const sig = this.script?.terminateSignal ?? signal;
-      const code = this.script?.terminateExitCode ?? null;
-      if (this.resolver) this.resolver({ exitCode: code, signal: sig });
-    })();
-    return this.terminatePromise;
+  /**
+   * Send a polite signal. Records the signal in `signalLog`.
+   * Resolves `exited` unless `script.ignoreSignals` includes it
+   * (then the handle stays alive for an escalation).
+   */
+  terminate(signal: NodeJS.Signals = "SIGTERM"): Promise<void> {
+    const existing = this.inflight.get(signal);
+    if (existing !== undefined) return existing;
+    const p = this.send(signal);
+    this.inflight.set(signal, p);
+    return p;
   }
 
-  async kill(signal: NodeJS.Signals = "SIGKILL"): Promise<void> {
-    return this.terminate(signal);
+  /**
+   * Forceful kill. Always a separate operation from `terminate()`.
+   * The previous implementation routed kill() -> terminate(), which
+   * prevented SIGTERM -> SIGKILL escalation from sending the second
+   * signal.
+   */
+  kill(signal: NodeJS.Signals = "SIGKILL"): Promise<void> {
+    const existing = this.inflight.get(signal);
+    if (existing !== undefined) return existing;
+    const p = this.send(signal);
+    this.inflight.set(signal, p);
+    return p;
+  }
+
+  private send(signal: NodeJS.Signals): Promise<void> {
+    this.signalLog.push(signal);
+    // Honor script-configured ignoring: if the script says this
+    // signal is ignored, do NOT resolve `exited`. Subsequent
+    // signals (e.g. SIGKILL after a polite SIGTERM) will
+    // resolve it.
+    const ignored = this.script?.ignoreSignals ?? [];
+    if (ignored.includes(signal) && !this.settled) {
+      return Promise.resolve();
+    }
+    if (this.settled) return Promise.resolve();
+    this.settled = true;
+    const sig = this.script?.terminateSignal ?? signal;
+    const code = this.script?.terminateExitCode ?? null;
+    if (this.resolver) this.resolver({ exitCode: code, signal: sig });
+    return Promise.resolve();
   }
 }
 // =============================================================================
@@ -484,8 +529,15 @@ export class RealProcessRunner implements ProcessRunner {
         cwd: req.cwd,
         env,
         stdin: null,
-        stdout: "pipe",
-        stderr: "pipe",
+        // CORRECTION02: do NOT use "pipe" here. If the caller
+        // does not drain the streams, Bun keeps the pipe open
+        // and `proc.exited` may not resolve after a kill. "ignore"
+        // detaches the streams at the OS level and the process
+        // can always be reaped. The ProcessHandle interface
+        // exposes stdout/stderr as null in that case; the
+        // FakeProcessRunner still records calls for testing.
+        stdout: "ignore",
+        stderr: "ignore",
       });
     } catch (cause) {
       throw new Error(
@@ -498,11 +550,17 @@ export class RealProcessRunner implements ProcessRunner {
       () => ({ exitCode: null as number | null, signal: "SIGKILL" as NodeJS.Signals | null }),
     );
 
-    let terminateInFlight: Promise<void> | null = null;
+    // CORRECTION02: memoize per signal so the SIGTERM → SIGKILL
+    // escalation in TartBackend.stop() actually sends the second
+    // signal. The previous global `terminateInFlight` would
+    // short-circuit the second call and the child could ignore
+    // SIGTERM forever without ever receiving SIGKILL.
+    const inflight = new Map<NodeJS.Signals, Promise<void>>();
 
-    const terminate = async (signal: NodeJS.Signals): Promise<void> => {
-      if (terminateInFlight) return terminateInFlight;
-      terminateInFlight = (async () => {
+    const send = (signal: NodeJS.Signals): Promise<void> => {
+      const existing = inflight.get(signal);
+      if (existing !== undefined) return existing;
+      const p = (async () => {
         try {
           proc.kill(signal);
         } catch {
@@ -515,16 +573,21 @@ export class RealProcessRunner implements ProcessRunner {
           new Promise<void>((res) => setTimeout(res, 5000)),
         ]);
       })();
-      return terminateInFlight;
+      inflight.set(signal, p);
+      return p;
     };
 
     return {
       pid: proc.pid,
       exited: exitedPromise,
-      stdout: proc.stdout as unknown as ReadableStream<Uint8Array> | null,
-      stderr: proc.stderr as unknown as ReadableStream<Uint8Array> | null,
-      terminate: (signal?: NodeJS.Signals) => terminate(signal ?? "SIGTERM"),
-      kill: (signal?: NodeJS.Signals) => terminate(signal ?? "SIGKILL"),
+      // stdout/stderr are not exposed; daemon-like processes
+      // (tart run) typically stream lots of output and we do
+      // not need to capture it. Callers can subclass or wrap
+      // this runner if they need stream access.
+      stdout: null,
+      stderr: null,
+      terminate: (signal?: NodeJS.Signals) => send(signal ?? "SIGTERM"),
+      kill: (signal?: NodeJS.Signals) => send(signal ?? "SIGKILL"),
     };
   }
 }
