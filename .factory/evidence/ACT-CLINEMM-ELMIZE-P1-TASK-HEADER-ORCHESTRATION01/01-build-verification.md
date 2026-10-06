@@ -1,4 +1,11 @@
-# ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION01 — Build Verification
+# ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION01 — Build Verification (SUPERSEDED)
+
+> **SUPERSEDED by `02-executable-gates.md`.** This document is preserved
+> to record the optimistic pre-review verification. The Factory
+> reviewer (`HALT_EVIDENCE_NOT_EXECUTED`) correctly flagged that
+> `inspection ≠ GREEN` and required actual executed correspondence.
+> `02-executable-gates.md` records the executed gates (127/127 tests
+> pass, exact-head VSIX identity recorded).
 
 **Date:** 2026-10-06
 **Subject HEAD:** 3b17b1835 (final ACT HEAD; prior bounded ACT commit 83583d716)

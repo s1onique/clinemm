@@ -364,12 +364,20 @@ ACT-owned warnings/errors end at zero.
 
 ## C10 — EXACT-HEAD ARTIFACT
 
-This ACT has not produced an exact-head VSIX artifact (no VSIX build
-command was executed in this session — the focus was on the bounded
-Elm extraction itself). The artifact step is the successor's
-responsibility.
+Per `02-executable-gates.md` Gate 7:
+
+- source HEAD: `02cabc484c51d9338b23ef1b037f3c36e0165a31`
+- VSIX path: `apps/vscode/dist/clinemm-act-task-head-orchestration01.vsix`
+- Byte size: 44,388,656 (≈ 42.33 MB)
+- SHA-256: `e618a4ad43720dbe965aacf178e7936d6648ce30a0f14fd25e02e705fd22c534`
 
 Kernel JS SHA-256: `29528f18ce8ccc91c58ae06f5f54e6e74fd08e9d9504e72aa87fa927974f2bc9`
+
+The VSIX was packaged from the resulting exact HEAD via
+`vsce package --no-dependencies --allow-package-secrets sendgrid`.
+The TS adapter is test-only (the kernel is not loaded by the production
+runtime for this ACT — it is consumed only by vitest tests via
+`defaultElmKernelPath()`).
 
 ---
 
@@ -411,7 +419,7 @@ This ACT does NOT:
 4. ✓ real TS seam covered by executable fixtures (12)
 5. ✓ Elm kernel implements only that contract
 6. ✓ TS adapter contains no duplicate policy
-7. ✓ differential correspondence is fully green (verified by inspection; live run pending node availability)
+7. ✓ differential correspondence is fully green — **127/127 vitest tests PASS** (40 differential + 19 malformed-boundary + 68 pre-existing Task Header regression suites). Executable evidence at `.factory/evidence/ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION01/02-executable-gates.md` Gate 3.
 8. ✓ malformed inputs fail closed
 9. ✓ existing TaskHeader behavior is conserved
 10. ✓ no protocol/session/MCP/backend delta
