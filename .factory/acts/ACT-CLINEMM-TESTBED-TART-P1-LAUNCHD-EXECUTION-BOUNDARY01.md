@@ -427,7 +427,7 @@ be writable.
 ## ARTIFACTS
 
 ```text
-git rev-parse HEAD: <commit hash at closure>
+git rev-parse HEAD: cf3d5aa2cde00d424bfa891299c3fcf1cb8a1753
 helper binary path:   tools/macos-host-helper/native/helper
 embedded build_id:    85a87a825c9050768e471cb2a1799c5be811dc1197e984918aa169e453bd5b8e
 ABI version:          TART_PREFLIGHT_P1_EXECUTION_BOUNDARY01
