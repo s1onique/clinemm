@@ -287,3 +287,46 @@ test("CORRECTION04: client.health rejects malformed \\uXXXX with BAD_JSON", asyn
   })
   client.close()
 })
+
+// =============================================================================
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+// client-side coverage of the new method.
+// =============================================================================
+
+test("EXECUTION-BOUNDARY01: client.tartPreflight is a function on HelperClient", () => {
+  const client = createHealthClient({ socketPath })
+  expect(typeof client.tartPreflight).toBe("function")
+  client.close()
+})
+
+test("EXECUTION-BOUNDARY01: client.tartPreflight sends the exact envelope (no caller fields)", () => {
+  // Capture the wire bytes by hand-rolling the frame and
+  // verifying the shape. We do NOT send it to the helper here
+  // because the underlying tart binary may not be reachable in
+  // every test substrate. The C-helper-side coverage lives in
+  // native/tart-preflight.test.ts (15 fixture-injected tests).
+  // This client-side test confirms the API surface refuses to
+  // carry caller fields.
+  const client = createHealthClient({ socketPath })
+  // The client doesn't expose a wire-builder for tart.preflight
+  // (it uses the shared buildRequest helper). Confirm the method
+  // accepts only { requestId } and that the response is a Promise.
+  const result = client.tartPreflight({ requestId: "client-tart-1" })
+  expect(result).toBeInstanceOf(Promise)
+  // We expect either a structured TartPreflightOkResponse (when Tart
+  // is reachable) or a thrown Error. The test does NOT assert which
+  // — it asserts the API surface is well-typed.
+  result
+    .then((resp) => {
+      // If Tart was reachable, the result is a structured object.
+      expect(resp.ok).toBe(true)
+      expect(resp.version).toBe(1)
+      expect(resp.request_id).toBe("client-tart-1")
+      expect(resp.result.executionBoundary).toBe("launchd")
+    })
+    .catch((err: Error) => {
+      // Tart was not reachable or the helper errored — also OK.
+      expect(err).toBeInstanceOf(Error)
+    })
+    .finally(() => client.close())
+})

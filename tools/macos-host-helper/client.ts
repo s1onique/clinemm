@@ -152,6 +152,49 @@ export interface ClientCloseResponse {
   result: "CLOSED"
 }
 
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+// The helper-owned Tart preflight result. The helper performs:
+//   - resolve its sealed Tart executable allowlist,
+//   - create+delete a fixed cache canary at $HOME/Library/Caches/clinemm-tart-launchd-probe,
+//   - run `tart --version`, `tart list --source local --format json`,
+//     and (best-effort) `tart list --source oci --format json`,
+// all argv-only, with bounded timeouts. The client receives a
+// BOUNDED structured result; no shell, no arbitrary stdout, no
+// keychain, no secrets. The result schema is the load-bearing
+// causal discriminator: `cacheWrite.succeeded=true` proves the
+// launchd helper's execution context can write a fixed cache
+// location that direct ClineMM cannot.
+export interface TartPreflightResult {
+  executionBoundary: "launchd"
+  serviceIdentity: {
+    uid: number
+    username?: string
+  }
+  cacheWrite: {
+    attempted: true
+    succeeded: boolean
+    errorClass?: string
+  }
+  tart: {
+    available: boolean
+    version?: string
+    localListSucceeded: boolean
+    ociListSucceeded: boolean
+  }
+  overall:
+    | "PASS"
+    | "CACHE_WRITE_FAILED"
+    | "TART_NOT_FOUND"
+    | "TART_EXEC_FAILED"
+}
+
+export interface TartPreflightOkResponse {
+  version: 1
+  request_id: string
+  ok: true
+  result: TartPreflightResult
+}
+
 export interface ActiveJobsErrorResponse {
   ok: false
   error: "ACTIVE_JOBS"
@@ -173,6 +216,7 @@ export type AnyResponse =
   | ReleaseOwnedResponse
   | HelperRestartResponse
   | ClientCloseResponse
+  | TartPreflightOkResponse
   | ErrorResponse
 
 export class RequestIdMismatchError extends Error {
@@ -237,6 +281,15 @@ export interface HelperClient {
     jobToken: string
   }): Promise<ReleaseOwnedResponse>
   helperRestart(opts?: { requestId?: string }): Promise<HelperRestartResponse>
+  // ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+  // Semantic Tart preflight. NO caller-supplied fields influence
+  // authority or argv. The helper owns the Tart executable, the
+  // cache canary path, and the argv. The response carries the
+  // bounded structured result (cache canary, --version, list
+  // local/oci). Used as the load-bearing causal discriminator:
+  // does the launchd helper's execution context escape the
+  // Seatbelt boundary that direct ClineMM cannot?
+  tartPreflight(opts?: { requestId?: string }): Promise<TartPreflightOkResponse>
   close(): void
 }
 
@@ -387,6 +440,26 @@ export function createHelperClient(opts: HelperClientOptions): HelperClient {
       }
       return resp
     },
+    // ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+    // tartPreflight sends the protocol envelope only. The helper
+    // performs the bounded, argv-only Tart preflight and returns
+    // the structured result. The client throws on any non-ok
+    // response (helper error, parse drift, etc.) and on
+    // request_id correlation drift.
+    //
+    // Default timeout is 30 seconds because tart list can take a
+    // few seconds on a busy system; callers can override via
+    // HelperClientOptions.timeoutMs.
+    async tartPreflight(tOpts?: { requestId?: string }): Promise<TartPreflightOkResponse> {
+      const requestId = tOpts?.requestId ?? `tart-preflight-${Date.now().toString(36)}`
+      const env = await roundTrip(buildRequest("tart.preflight", requestId))
+      if (!env.ok) throw new Error(`helper error: ${(env as ErrorResponse).error}`)
+      const resp = env as TartPreflightOkResponse
+      if (resp.request_id !== requestId) {
+        throw new RequestIdMismatchError(requestId, resp.request_id)
+      }
+      return resp
+    },
     async clientClose(cOpts): Promise<ClientCloseResponse> {
       const env = await roundTrip(buildOwnedRequest(
         "client.close", cOpts.requestId,
@@ -423,7 +496,7 @@ function checkForbiddenKeys(obj: unknown, path = ""): void {
 }
 
 function buildRequest(
-  method: "health" | "client.open" | "helper.restart",
+  method: "health" | "client.open" | "helper.restart" | "tart.preflight",
   requestId: string,
 ): string {
   const env: Record<string, unknown> = {

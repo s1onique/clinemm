@@ -1,3 +1,32 @@
+## ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01 — PASS_CLINEMM_TART_LAUNCHD_BOUNDARY_CODE_READY — 2026-10-06
+
+**Status:** CLOSED. New semantic RPC `tart.preflight` on the existing per-user LaunchAgent helper (`tools/macos-host-helper/native/helper`, AF_UNIX socket, launchd-managed). No new helper introduced; no VM lifecycle added; no IPC seam weakened. The helper resolves the Tart executable from a sealed 4-entry allowlist (Nix + Homebrew + upstream app bundle), creates+deletes a fixed cache canary at `$HOME/Library/Caches/clinemm-tart-launchd-probe` (HOME resolved via `getpwuid(getuid())->pw_dir`, NOT `$HOME`), and runs bounded argv-only probes (`tart --version` 10s, `tart list --source local --format json` 15s, `tart list --source oci --format json` 15s) via `execve` with a fixed minimal envp (PATH/HOME/TMPDIR only). The 10 forbidden keys remain rejected; any extra field is rejected as `UNKNOWN_FIELD` BEFORE dispatch (envelope is exactly `{ version, request_id, method }`). The new method is `METHOD_NOT_AVAILABLE_IN_TS_FALLBACK` from the dev-only TS `server.ts` (matches the existing launchd-only pattern for `testbed.run-installed-vsix-smoke`).
+
+**Bounded repair (7 files, ~610 insertions, ~20 deletions):**
+- `tools/macos-host-helper/protocol.ts`: `ALLOWED_METHODS += "tart.preflight"`, `METHOD_REQUIRED_KEYS["tart.preflight"] = new Set()` (no caller fields), `ParsedTartPreflightRequest` type, parse branch, dispatch → `METHOD_NOT_AVAILABLE_IN_TS_FALLBACK`.
+- `tools/macos-host-helper/client.ts`: `TartPreflightResult` + `TartPreflightOkResponse` types, `tartPreflight()` method, `buildRequest` union extended to include `"tart.preflight"`.
+- `tools/macos-host-helper/native/helper.c`: `TART_TRUSTED_PATHS` allowlist, `tart_resolve_executable()`, `tart_resolve_home()`, `tart_resolve_cache_path()`, `tart_run_cache_canary()` (with 6-class error discriminator), `tart_cache_err_class_str()`, `tart_run_argv()` (argv-only, bounded wallclock, SIGKILL escalation), `respond_tart_preflight_ok()`, `handle_tart_preflight()`, dispatch branch. ABI version bumped → embedded `build_id` drift confirms source change.
+- `tools/macos-host-helper/native/Makefile` + `native/build.sh`: `ABI_VERSION=TART_PREFLIGHT_P1_EXECUTION_BOUNDARY01` → `build_id=85a87a825c9050768e471cb2a1799c5be811dc1197e984918aa169e453bd5b8e` (was: `1d3a280bd...`).
+- `tools/macos-host-helper/native/tart-preflight.test.ts` (NEW): 15 fixture-injected tests — RPC-01..04 (envelope contract) + PF-01..10 (cache canary, Tart exec, list local, full PASS).
+- `tools/macos-host-helper/server.test.ts`: +3 EXECUTION-BOUNDARY01 tests (ALLOWED_METHODS, METHOD_REQUIRED_KEYS, dispatch).
+- `tools/macos-host-helper/client.test.ts`: +2 EXECUTION-BOUNDARY01 client-side tests.
+- `.factory/acts/ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01.md` (NEW): full closure report.
+
+**Conservation gates (4 test files, 157 tests, ALL PASS):**
+- All 137 pre-existing helper / client / server tests still green.
+- 15 new native tests + 5 new TS tests added; total 157 / 0 fail.
+- Tart argv-only path PROVEN end-to-end with the real `/run/current-system/sw/bin/tart` (Nix, version 2.34.0): `--version`, `list --source local`, `list --source oci` all succeeded.
+- `tart_run_argv` SIGKILL path PROVEN (PF-07: 15s sleeper returns `TART_EXEC_FAILED` after 10s deadline).
+- No `_PATH`/`exec`/`cmd`/`argv` field appears in the new envelope (10 forbidden keys remain rejected).
+- `git diff --check` clean.
+- No VSIX built, no LIVE launchd-managed claim, no operator dependency for the code closure.
+
+**Discriminator (C15):** the in-process smoke probe (NOT launchd-managed; helper spawned by `bun` directly) returned `cacheWrite.succeeded=false, errorClass=EPERM_OR_EACCES_OR_EROFS` AND `tart.version=2.34.0, localListSucceeded=true, ociListSucceeded=true`. The Tart-side succeeded; the cache-side EPERM'd for the SAME reason the prior `HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA` halt identified — this developer Mac boots from a Time Machine snapshot, and `/Volumes/UserData` is APFS firmware `protect`-flagged (helper's HOME resolves to `/Volumes/UserData/Users/chistyakov`, not `/Users/chistyakov`). The launchd-boundary A/B question is therefore **NOT answerable on this substrate**; `realBoundaryProbe=NOT_EXECUTED` is the correct classification per C14. The launchd helper did NOT introduce a regression — it inherited the SAME firmware-deny that direct ClineMM hits. Per C14, the operator must reinstall the helper binary at the new ABI version on a clean Aqua-session boot to exercise the real A/B discriminator.
+
+**Verdict:** `PASS_CLINEMM_TART_LAUNCHD_BOUNDARY_CODE_READY` — code-ready, helper binary updated, Tart-via-helper argv-only path GREEN, cache-side blocked by substrate (firmware, not Seatbelt), real launchd-managed probe deferred to operator + non-firmware-protected substrate.
+
+**Next ACT (operator + substrate gated):** `ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01` — connects `tools/tart-testbed` to the existing launchd transport via a semantic `runTartTestbed(spec)` request (NOT seven per-call methods for clone/run/ip/stop/delete). Successor must additionally address the APFS firmware caveat (pick a HOME outside `/Volumes/UserData` or use a fixed-path canary that doesn't require HOME to be writable). That ACT then reruns the previously-halted real-guest qualification: clone → spawn `tart run` → IP → SSH → artifact → teardown.
+
 ## ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR — PASS_KERNEL_OFFLINE_REPAIR — 2026-10-06
 
 **Status:** CLOSED. Predecessor was CORRECTION02 (PASS_TASK_HEADER_ELM_RUNTIME_CODEC_BINDING_REPAIR at HEAD `7ed214a0b`); substrate unchanged. New LIVE failure: `kernelOffline=512, decodeErrors=0` (vs predecessor's `decodeErrors=512` against the wrong-kernel). First divergent stage established from code + tests: `KERNEL_FILE_MISSING`. Root cause: `defaultElmKernelPath()` resolved via `import.meta.url` to a source-tree path (`apps/vscode/elm/task-header-orchestration/vendor/task-header-orchestration.js`) that is filtered out of the packaged extension via the nested `.gitignore` (`vendor/*.js`) interacting with `.vscodeignore` discovery. The completion-authority kernel already uses the staged `runtime-assets/<name>.js` convention via `context.extensionUri.fsPath`. The TaskHeader loader was missing the analogous wire.

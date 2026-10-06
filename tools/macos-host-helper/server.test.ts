@@ -25,6 +25,7 @@ import {
 	METHOD_REQUIRED_KEYS,
 	parseRequest,
 	type ParsedRequest,
+	type ParsedTartPreflightRequest,
 	type ResponseEnvelope,
 } from "./protocol.ts"
 import { createHelperServer } from "./server.ts"
@@ -586,6 +587,34 @@ describe("PROBE01: testbed.run-installed-vsix-smoke protocol", () => {
 	it("ALLOWED_METHODS includes both methods", () => {
 		expect(ALLOWED_METHODS.has("health")).toBe(true)
 		expect(ALLOWED_METHODS.has("testbed.run-installed-vsix-smoke")).toBe(true)
+	})
+
+	// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+	// tart.preflight is on the allow-list and has NO required
+	// fields (the envelope is exactly { version, request_id, method }).
+	it("EXECUTION-BOUNDARY01: ALLOWED_METHODS includes tart.preflight", () => {
+		expect(ALLOWED_METHODS.has("tart.preflight")).toBe(true)
+	})
+
+	it("EXECUTION-BOUNDARY01: tart.preflight has no required fields beyond envelope", () => {
+		const required = METHOD_REQUIRED_KEYS["tart.preflight"]
+		expect(required).toBeDefined()
+		expect(required?.size).toBe(0)
+	})
+
+	it("EXECUTION-BOUNDARY01: dispatch() of tart.preflight returns METHOD_NOT_AVAILABLE_IN_TS_FALLBACK", () => {
+		// The TS fallback server does NOT support tart.preflight
+		// — only the launchd-managed C helper does. This is
+		// structurally identical to how testbed.run-installed-vsix-smoke
+		// is dispatched.
+		const parsed: ParsedTartPreflightRequest = {
+			version: 1,
+			request_id: "test",
+			method: "tart.preflight",
+		}
+		const resp = dispatch(parsed, 1, 501)
+		expect(resp.ok).toBe(false)
+		expect(resp.error).toBe("METHOD_NOT_AVAILABLE_IN_TS_FALLBACK")
 	})
 })
 

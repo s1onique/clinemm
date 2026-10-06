@@ -44,7 +44,7 @@ fi
 # This is the same algorithm that was previously in
 # hex_sha256_of_self_source(); we just move it to build time so the
 # production binary doesn't need to read its own source at startup.
-ABI_VERSION="OWNED_PGID_TERMINATION_01"
+ABI_VERSION="TART_PREFLIGHT_P1_EXECUTION_BOUNDARY01"
 if command -v shasum >/dev/null 2>&1; then
   # macOS ships shasum; prefer -a 256 explicitly.
   BUILD_ID="$(printf '%s' "$ABI_VERSION" | cat - "$SRC" | shasum -a 256 | awk '{print $1}')"

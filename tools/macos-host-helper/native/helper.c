@@ -40,10 +40,26 @@
 //   Request (testbed.run-installed-vsix-smoke):
 //     {"version":1, "request_id":"...", "method":"testbed.run-installed-vsix-smoke",
 //      "subject_head":"<40-hex>", "vsix_path":"<absolute>", "vsix_sha256":"<64-hex>"}
+//   Request (tart.preflight) (EXECUTION-BOUNDARY01):
+//     {"version":1, "request_id":"...", "method":"tart.preflight"}
+//     No extra fields. Caller does NOT pass path, argv, env, cwd,
+//     or executable. The helper owns the Tart executable, the
+//     cache canary path, and the argv.
 //   Response (ok): {"version":1, "request_id":"<echoed>", "ok":true,
 //                    "service":"clinemm-host-helper", "pid":<n>, "uid":<n>}
 //   Response (testbed ok): {"version":1, "request_id":"<echoed>", "ok":true,
 //                    "result":{ ... }} (runner-emitted JSON object)
+//   Response (tart.preflight ok) (EXECUTION-BOUNDARY01):
+//     {"version":1, "request_id":"<echoed>", "ok":true,
+//      "result":{"executionBoundary":"launchd",
+//                "serviceIdentity":{"uid":<n>,"username":"..."},
+//                "cacheWrite":{"attempted":true,"succeeded":<bool>,
+//                              "errorClass":"..." (optional)},
+//                "tart":{"available":<bool>,"version":"..." (optional),
+//                        "localListSucceeded":<bool>,
+//                        "ociListSucceeded":<bool>},
+//                "overall":"PASS"|"CACHE_WRITE_FAILED"|
+//                          "TART_NOT_FOUND"|"TART_EXEC_FAILED"}}
 //   Errors:   {"ok":false, "error":"<CODE>"}
 //
 // The response echoes the request_id EXACTLY. The client verifies the
@@ -55,9 +71,10 @@
 // Structural anti-shell: 10 forbidden keys (command, argv, shell, exec,
 // script, spawn, cmd, cmdline, path, file) are rejected BEFORE value
 // parsing. The legal envelope has exactly {version, request_id, method}
-// for `health`, or {version, request_id, method, subject_head, vsix_path,
-// vsix_sha256} for `testbed.run-installed-vsix-smoke`. Any other key is
-// rejected with FORBIDDEN_KEY.
+// for `health` and `tart.preflight` (EXECUTION-BOUNDARY01), or
+// {version, request_id, method, subject_head, vsix_path, vsix_sha256}
+// for `testbed.run-installed-vsix-smoke`. Any other key is rejected
+// with FORBIDDEN_KEY.
 //
 // launchd integration (fail-closed in CORRECTION02):
 //   1. Call launch_activate_socket("Listener") to retrieve the AF_UNIX fd
@@ -96,6 +113,12 @@
 #include <ctype.h>
 #include <poll.h>
 #include <sys/time.h>
+#include <time.h>
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+// pwd.h (getpwuid) for helper-side HOME resolution independent of
+// $HOME; sys/types.h for uid_t.
+#include <pwd.h>
+#include <sys/types.h>
 
 // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
 // peer identity (kernel-authenticated client UID/PID) and
@@ -841,6 +864,154 @@ static drain_result_t drain_with_deadline(int fd, char *out, size_t cap,
   return r;
 }
 
+// =============================================================================
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+// tart.preflight method dispatch
+// =============================================================================
+//
+// Semantic Tart preflight. The envelope is exactly {version,
+// request_id, method}. The helper:
+//
+//   1. Resolves a TRUSTED Tart executable from a sealed allowlist.
+//   2. Creates and deletes a fixed cache canary inside the helper's
+//      resolved HOME.
+//   3. Runs bounded, argv-only Tart commands:
+//        tart --version
+//        tart list --source local --format json
+//        tart list --source oci  --format json   (best-effort)
+//
+// The result JSON is built locally by the helper (no runner stdout
+// forwarding) so it cannot leak environment, keychain, SSH keys,
+// shell history, or arbitrary stdout. The result schema is bounded.
+
+// Sealed allowlist for the Tart executable, in priority order.
+static const char *const TART_TRUSTED_PATHS[] = {
+  "/run/current-system/sw/bin/tart",                              // Nix store
+  "/opt/homebrew/bin/tart",                                       // Homebrew (Apple Silicon)
+  "/usr/local/bin/tart",                                          // Homebrew (Intel)
+  "/Applications/tart.app/Contents/MacOS/tart",                   // Upstream app bundle
+  NULL
+};
+
+static const char *tart_resolve_executable(void) {
+  const char *env_override = getenv("CLINEMM_TART_EXECUTABLE");
+  if (env_override && *env_override) {
+    struct stat st;
+    if (stat(env_override, &st) == 0 && S_ISREG(st.st_mode) &&
+        access(env_override, X_OK) == 0) {
+      return env_override;
+    }
+    return NULL;
+  }
+  for (size_t i = 0; TART_TRUSTED_PATHS[i] != NULL; i++) {
+    struct stat st;
+    if (stat(TART_TRUSTED_PATHS[i], &st) == 0 && S_ISREG(st.st_mode) &&
+        access(TART_TRUSTED_PATHS[i], X_OK) == 0) {
+      return TART_TRUSTED_PATHS[i];
+    }
+  }
+  return NULL;
+}
+
+static int tart_resolve_home(char *out, size_t out_cap) {
+  if (out_cap == 0) return -1;
+  struct passwd *pw = getpwuid(getuid());
+  if (!pw || !pw->pw_dir || !*pw->pw_dir) {
+    const char *home = getenv("HOME");
+    if (!home || !*home) home = "/tmp";
+    size_t n = strnlen(home, out_cap - 1);
+    if (n >= out_cap) return -1;
+    memcpy(out, home, n);
+    out[n] = '\0';
+    return 0;
+  }
+  size_t n = strnlen(pw->pw_dir, out_cap - 1);
+  if (n >= out_cap) return -1;
+  memcpy(out, pw->pw_dir, n);
+  out[n] = '\0';
+  return 0;
+}
+
+static int tart_resolve_cache_path(char *out, size_t out_cap) {
+  const char *override = getenv("CLINEMM_TART_CACHE_DIR");
+  if (override && *override) {
+    size_t n = strnlen(override, out_cap - 1);
+    if (n >= out_cap) return -1;
+    memcpy(out, override, n);
+    out[n] = '\0';
+    return 0;
+  }
+  char home[2048];
+  if (tart_resolve_home(home, sizeof(home)) != 0) return -1;
+  int n = snprintf(out, out_cap, "%s/Library/Caches/clinemm-tart-launchd-probe", home);
+  if (n <= 0 || (size_t)n >= out_cap) return -1;
+  return 0;
+}
+
+static int tart_run_cache_canary(const char *path, int *err_class_out) {
+  int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+  if (fd < 0) {
+    if (err_class_out) {
+      if (errno == EACCES || errno == EPERM || errno == EROFS) *err_class_out = 0x1;
+      else if (errno == ENOENT) *err_class_out = 0x2;
+      else *err_class_out = 0x3;
+    }
+    return -1;
+  }
+  static const char CANARY_BODY[] = "clinemm-tart-launchd-preflight\n";
+  ssize_t w = write_all(fd, CANARY_BODY, sizeof(CANARY_BODY) - 1);
+  if (w < 0) {
+    int saved = errno;
+    close(fd);
+    (void)unlink(path);
+    errno = saved;
+    if (err_class_out) *err_class_out = 0x4;
+    return -1;
+  }
+  if (close(fd) != 0) {
+    int saved = errno;
+    (void)unlink(path);
+    errno = saved;
+    if (err_class_out) *err_class_out = 0x5;
+    return -1;
+  }
+  if (unlink(path) != 0) {
+    if (err_class_out) *err_class_out = 0x6;
+    return -1;
+  }
+  return 0;
+}
+
+static const char *tart_cache_err_class_str(int ec) {
+  switch (ec) {
+    case 0x1: return "EPERM_OR_EACCES_OR_EROFS";
+    case 0x2: return "ENOENT";
+    case 0x3: return "OPEN_OTHER";
+    case 0x4: return "WRITE_FAILED";
+    case 0x5: return "CLOSE_FAILED";
+    case 0x6: return "UNLINK_FAILED";
+    default:  return "OTHER";
+  }
+}
+
+typedef enum {
+  TART_RUN_OK = 0, TART_RUN_NONZERO = 1, TART_RUN_TIMEOUT = 2, TART_RUN_ERROR = -1
+} tart_run_result_t;
+static tart_run_result_t tart_run_argv(const char *path,
+                                        char *const argv[],
+                                        int timeout_seconds,
+                                        char *out_buf, size_t out_cap,
+                                        char *err_buf, size_t err_cap);
+static void respond_tart_preflight_ok(int cfd,
+                                       const void *request_id, size_t request_id_len,
+                                       const char *username,
+                                       int cache_succeeded, int cache_err_class,
+                                       int tart_available,
+                                       const char *tart_version,
+                                       int local_succeeded,
+                                       int oci_succeeded,
+                                       const char *overall);
+
 static void handle_testbed_run(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs) {
   const char *verr = NULL;
   if (!validate_testbed_fields(kvs, nkvs, &verr)) {
@@ -1473,6 +1644,9 @@ static int json_str(char *buf, size_t cap, size_t *off,
 
 // Forward declaration so we can write the new handlers here.
 static void handle_testbed_run(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs);
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+// tart.preflight has no caller fields beyond the protocol envelope.
+static void handle_tart_preflight(int cfd, const kv_t *rid);
 
 // client.open: returns a fresh client_token bound to the
 // kernel-authenticated peer (UID + PID). No caller-supplied
@@ -2098,8 +2272,302 @@ static void handle_connection(int cfd) {
     close(cfd);
     return;
   }
+  // ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+  // Semantic Tart preflight. The envelope has been parsed (and
+  // any extra field already failed the dispatcher's
+  // per-method-required-keys check). The handler performs a
+  // bounded, argv-only Tart preflight and returns a structured
+  // result.
+  if (strcmp(m->val, "tart.preflight") == 0) {
+    handle_tart_preflight(cfd, r);
+    close(cfd);
+    return;
+  }
   respond_err(cfd, "METHOD_NOT_ALLOWED");
   close(cfd);
+}
+
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+// tart.preflight handler implementation.
+
+// Run a single argv-only subprocess with a bounded wallclock
+// deadline. Returns:
+//   TART_RUN_OK       — exit code 0
+//   TART_RUN_NONZERO  — exit code != 0
+//   TART_RUN_TIMEOUT  — deadline reached; child SIGKILLed
+//   TART_RUN_ERROR    — fork/pipe/exec error
+// NO shell. NO env map from caller (only PATH/HOME/TMPDIR).
+static tart_run_result_t tart_run_argv(const char *path,
+                                        char *const argv[],
+                                        int timeout_seconds,
+                                        char *out_buf, size_t out_cap,
+                                        char *err_buf, size_t err_cap) {
+  if (out_cap > 0) out_buf[0] = '\0';
+  if (err_cap > 0) err_buf[0] = '\0';
+  int pipefd[2];
+  if (pipe(pipefd) != 0) return TART_RUN_ERROR;
+  int errfd[2];
+  if (pipe(errfd) != 0) { close(pipefd[0]); close(pipefd[1]); return TART_RUN_ERROR; }
+  pid_t pid = fork();
+  if (pid < 0) {
+    close(pipefd[0]); close(pipefd[1]); close(errfd[0]); close(errfd[1]);
+    return TART_RUN_ERROR;
+  }
+  if (pid == 0) {
+    close(pipefd[0]);
+    close(errfd[0]);
+    dup2(pipefd[1], STDOUT_FILENO);
+    dup2(errfd[1], STDERR_FILENO);
+    close(pipefd[1]);
+    close(errfd[1]);
+    if (setpgid(0, 0) < 0 && errno != EACCES && errno != EPERM) _exit(125);
+    char home_env[2048];
+    const char *home = getenv("HOME");
+    if (!home || !*home) home = "/tmp";
+    snprintf(home_env, sizeof(home_env), "HOME=%s", home);
+    char *const envp[] = {
+      (char *)"PATH=/usr/local/bin:/opt/homebrew/bin:/run/current-system/sw/bin:/usr/bin:/bin",
+      home_env,
+      (char *)"TMPDIR=/tmp",
+      NULL
+    };
+    execve(path, argv, envp);
+    _exit(126);
+  }
+  (void)setpgid(pid, pid);
+  close(pipefd[1]);
+  close(errfd[1]);
+
+  struct timespec deadline;
+  clock_gettime(CLOCK_MONOTONIC, &deadline);
+  deadline.tv_sec += timeout_seconds;
+
+  drain_result_t dr = drain_with_deadline(pipefd[0], out_buf, out_cap, deadline);
+  close(pipefd[0]);
+  drain_result_t derr = drain_with_deadline(errfd[0], err_buf, err_cap - 1, deadline);
+  close(errfd[0]);
+  if (derr.len > 0 && err_cap > 0) err_buf[derr.len] = '\0';
+
+  int status = 0;
+  pid_t wr = 0;
+  if (!dr.timeout) {
+    struct timespec now;
+    while (1) {
+      clock_gettime(CLOCK_MONOTONIC, &now);
+      if (now.tv_sec > deadline.tv_sec ||
+          (now.tv_sec == deadline.tv_sec && now.tv_nsec >= deadline.tv_nsec)) {
+        dr.timeout = 1;
+        break;
+      }
+      wr = waitpid(pid, &status, WNOHANG);
+      if (wr == pid) break;
+      if (wr < 0) break;
+      struct timespec slice = deadline;
+      long ns = (deadline.tv_nsec - now.tv_nsec);
+      if (ns < 0) { slice.tv_sec -= 1; slice.tv_nsec += 1000000000L; ns += 1000000000L; }
+      long ms_left = (slice.tv_sec - now.tv_sec) * 1000L + ns / 1000000L;
+      if (ms_left > 100) ms_left = 100;
+      if (ms_left < 0) ms_left = 0;
+      usleep((useconds_t)(ms_left * 1000L));
+    }
+  }
+  if (wr != pid) {
+    int kr = kill(-pid, SIGKILL);
+    if (kr < 0 && errno == ESRCH) kr = kill(pid, SIGKILL);
+    (void)kr;
+    waitpid(pid, &status, 0);
+    return TART_RUN_TIMEOUT;
+  }
+  if (!WIFEXITED(status)) return TART_RUN_ERROR;
+  int exit_code = WEXITSTATUS(status);
+  if (out_cap > 0) {
+    size_t end = (size_t)dr.len;
+    if (end >= out_cap) end = out_cap - 1;
+    out_buf[end] = '\0';
+  }
+  if (exit_code != 0) return TART_RUN_NONZERO;
+  return TART_RUN_OK;
+}
+
+// Emit the tart.preflight success envelope. Result body is built
+// locally by the helper from the captured subprocess outputs.
+// NO caller-supplied data is forwarded.
+static void respond_tart_preflight_ok(int cfd,
+                                       const void *request_id, size_t request_id_len,
+                                       const char *username,
+                                       int cache_succeeded, int cache_err_class,
+                                       int tart_available,
+                                       const char *tart_version,
+                                       int local_succeeded,
+                                       int oci_succeeded,
+                                       const char *overall) {
+  char buf[MAX_FRAME];
+  size_t off = 0;
+  int hdr = snprintf(buf + off, sizeof(buf) - off,
+                     "{\"version\":1,\"request_id\":");
+  if (hdr <= 0 || (size_t)hdr >= sizeof(buf) - off) goto trunc;
+  off += (size_t)hdr;
+  int idn = write_json_string(buf + off, sizeof(buf) - off, request_id, request_id_len);
+  if (idn < 0) goto trunc;
+  off += (size_t)idn;
+  int tail;
+  if (tart_version != NULL) {
+    tail = snprintf(buf + off, sizeof(buf) - off,
+      ",\"ok\":true,\"result\":{\"executionBoundary\":\"launchd\","
+      "\"serviceIdentity\":{\"uid\":%d,\"username\":\"%s\"},"
+      "\"cacheWrite\":{\"attempted\":true,\"succeeded\":%s%s%s%s},"
+      "\"tart\":{\"available\":%s,\"version\":",
+      (int)getuid(), username ? username : "",
+      cache_succeeded ? "true" : "false",
+      cache_err_class > 0 ? ",\"errorClass\":\"" : "",
+      cache_err_class > 0 ? tart_cache_err_class_str(cache_err_class) : "",
+      cache_err_class > 0 ? "\"" : "",
+      tart_available ? "true" : "false");
+    if (tail <= 0 || (size_t)tail >= sizeof(buf) - off) goto trunc;
+    off += (size_t)tail;
+    // Emit the version as a JSON string (with proper escaping).
+    // We don't include leading/trailing quotes here — write_json_string
+    // adds them. The comma/closing-brace are emitted after.
+    int v = write_json_string(buf + off, sizeof(buf) - off,
+                               tart_version, strlen(tart_version));
+    if (v < 0) goto trunc;
+    off += (size_t)v;
+    tail = snprintf(buf + off, sizeof(buf) - off,
+      ",\"localListSucceeded\":%s,\"ociListSucceeded\":%s},\"overall\":\"%s\"}}\n",
+      local_succeeded ? "true" : "false",
+      oci_succeeded ? "true" : "false",
+      overall);
+    if (tail <= 0 || (size_t)tail >= sizeof(buf) - off) goto trunc;
+    off += (size_t)tail;
+  } else {
+    tail = snprintf(buf + off, sizeof(buf) - off,
+      ",\"ok\":true,\"result\":{\"executionBoundary\":\"launchd\","
+      "\"serviceIdentity\":{\"uid\":%d,\"username\":\"%s\"},"
+      "\"cacheWrite\":{\"attempted\":true,\"succeeded\":%s%s%s%s},"
+      "\"tart\":{\"available\":%s,"
+      "\"localListSucceeded\":%s,\"ociListSucceeded\":%s},\"overall\":\"%s\"}}\n",
+      (int)getuid(), username ? username : "",
+      cache_succeeded ? "true" : "false",
+      cache_err_class > 0 ? ",\"errorClass\":\"" : "",
+      cache_err_class > 0 ? tart_cache_err_class_str(cache_err_class) : "",
+      cache_err_class > 0 ? "\"" : "",
+      tart_available ? "true" : "false",
+      local_succeeded ? "true" : "false",
+      oci_succeeded ? "true" : "false",
+      overall);
+    if (tail <= 0 || (size_t)tail >= sizeof(buf) - off) goto trunc;
+    off += (size_t)tail;
+  }
+  (void)write_all(cfd, buf, off);
+  return;
+trunc:
+  respond_err(cfd, "INTERNAL_TRUNCATION");
+}
+
+// handle_tart_preflight — semantic RPC. See the dispatcher block
+// at the top of this file for the full contract.
+static void handle_tart_preflight(int cfd, const kv_t *rid) {
+  // Step 1: resolve the helper's username (kernel identity, not
+  // caller-supplied).
+  const char *username = NULL;
+  struct passwd *pw = getpwuid(getuid());
+  if (pw && pw->pw_name) username = pw->pw_name;
+
+  // Step 2: cache canary. The path is generated inside the helper
+  // from the helper's resolved HOME (NOT from the caller).
+  char canary_path[2048];
+  int cache_err_class = 0;
+  int cache_succeeded = 0;
+  if (tart_resolve_cache_path(canary_path, sizeof(canary_path)) != 0) {
+    cache_err_class = 0x3;
+    respond_tart_preflight_ok(cfd, rid->val, rid->val_len, username,
+                               0, cache_err_class, 0, NULL, 0, 0,
+                               "CACHE_WRITE_FAILED");
+    return;
+  }
+  if (tart_run_cache_canary(canary_path, &cache_err_class) == 0) {
+    cache_succeeded = 1;
+  }
+
+  // Step 3: resolve the Tart executable.
+  const char *tart_path = tart_resolve_executable();
+  if (tart_path == NULL) {
+    respond_tart_preflight_ok(cfd, rid->val, rid->val_len, username,
+                               cache_succeeded, cache_err_class,
+                               0, NULL, 0, 0,
+                               cache_succeeded ? "TART_NOT_FOUND" : "CACHE_WRITE_FAILED");
+    return;
+  }
+
+  // Step 4: run `tart --version` (argv-only, bounded 10s).
+  static const int VERSION_TIMEOUT_SEC = 10;
+  char out_v[256];
+  char err_v[512];
+  char *const argv_v[] = { (char *)tart_path, (char *)"--version", NULL };
+  tart_run_result_t rv = tart_run_argv(tart_path, argv_v, VERSION_TIMEOUT_SEC,
+                                        out_v, sizeof(out_v), err_v, sizeof(err_v));
+  if (rv != TART_RUN_OK || out_v[0] == '\0') {
+    respond_tart_preflight_ok(cfd, rid->val, rid->val_len, username,
+                              cache_succeeded, cache_err_class,
+                              0, NULL, 0, 0, "TART_EXEC_FAILED");
+    return;
+  }
+  size_t vlen = strlen(out_v);
+  while (vlen > 0 && (out_v[vlen - 1] == '\n' || out_v[vlen - 1] == '\r' ||
+                       out_v[vlen - 1] == ' ' || out_v[vlen - 1] == '\t')) {
+    out_v[--vlen] = '\0';
+  }
+  if (vlen > 64) out_v[64] = '\0';
+
+  // Step 5: `tart list --source local --format json` (argv-only,
+  // bounded 15s). We discard the stdout body — the result schema
+  // only records success/failure. NO large stdout is forwarded.
+  static const int LIST_TIMEOUT_SEC = 15;
+  int local_succeeded = 0;
+  char out_l[64];
+  char err_l[256];
+  char *const argv_l[] = {
+    (char *)tart_path, (char *)"list",
+    (char *)"--source", (char *)"local",
+    (char *)"--format", (char *)"json",
+    NULL
+  };
+  tart_run_result_t rl_result = tart_run_argv(tart_path, argv_l, LIST_TIMEOUT_SEC,
+                                              out_l, sizeof(out_l), err_l, sizeof(err_l));
+  if (rl_result == TART_RUN_OK) local_succeeded = 1;
+
+  // Step 6: `tart list --source oci --format json` (best-effort).
+  int oci_succeeded = 0;
+  char *const argv_o[] = {
+    (char *)tart_path, (char *)"list",
+    (char *)"--source", (char *)"oci",
+    (char *)"--format", (char *)"json",
+    NULL
+  };
+  char out_o[64];
+  char err_o[256];
+  tart_run_result_t ro_result = tart_run_argv(tart_path, argv_o, LIST_TIMEOUT_SEC,
+                                              out_o, sizeof(out_o), err_o, sizeof(err_o));
+  if (ro_result == TART_RUN_OK) oci_succeeded = 1;
+
+  // Step 7: classify overall.
+  const char *overall;
+  int tart_available = 1;
+  if (!cache_succeeded) {
+    overall = "CACHE_WRITE_FAILED";
+    tart_available = 0;
+  } else if (!local_succeeded) {
+    overall = "TART_EXEC_FAILED";
+    tart_available = 0;
+  } else {
+    overall = "PASS";
+  }
+
+  respond_tart_preflight_ok(cfd, rid->val, rid->val_len, username,
+                             cache_succeeded, cache_err_class,
+                             tart_available, out_v,
+                             local_succeeded, oci_succeeded,
+                             overall);
 }
 
 int main(int argc, char **argv) {

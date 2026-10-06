@@ -2,6 +2,7 @@
  * ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01
  * ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01
  * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
+ * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01
  *
  * Protocol constants and the parse/dispatch pipeline for the trusted
  * host helper. PROBE01 adds ONE new fixed method
@@ -24,6 +25,25 @@
  *     registration/socket; the next connection restarts the helper.
  *     REJECTED when active_job_count > 0 (per §19 of the ACT).
  *
+ * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01 adds ONE
+ * more fixed method (`tart.preflight`) with NO caller-supplied
+ * fields beyond the protocol envelope (`version`, `request_id`,
+ * `method`). The helper:
+ *
+ *   1. Resolves the trusted Tart executable on the helper side
+ *      (sealed allowlist of absolute paths, NO caller PATH lookup).
+ *   2. Creates and deletes a fixed cache canary inside the helper
+ *      using the helper's resolved HOME directory — the caller does
+ *      NOT pass a path.
+ *   3. Runs `tart --version`, `tart list --source local --format
+ *      json`, and (best-effort) `tart list --source oci --format
+ *      json` as bounded, argv-only subprocesses. NO shell.
+ *
+ * The method is the load-bearing proof that the existing launchd
+ * service can serve as the host-side execution boundary for Tart
+ * operations that cannot run directly from the Seatbelt-constrained
+ * ClineMM process tree. No VM lifecycle code is added.
+ *
  * Wire format additions:
  *   health now also returns:
  *     "build_id": "<64-hex sha256 of helper.c + ABI version>"
@@ -38,6 +58,11 @@
  * `pgid` is a caller-supplied identifier that influences authority,
  * and only as a numeric claim verified by the kernel-authenticated
  * peer identity.
+ *
+ * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01
+ * CONSERVATION: `tart.preflight` accepts EXACTLY { version,
+ * request_id, method }. No caller field influences authority or
+ * argv. The 10 forbidden keys remain rejected.
  */
 
 export const PROTOCOL_VERSION = 1 as const
@@ -57,6 +82,10 @@ export const ALLOWED_METHODS: ReadonlySet<string> = new Set<string>([
 	"process-group.terminate-owned",
 	"process-group.release-owned",
 	"helper.restart",
+	// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+	// Semantic Tart preflight. No caller fields. Helper owns the
+	// Tart executable path, the cache canary path, and the argv.
+	"tart.preflight",
 ])
 
 /** Maximum accepted request frame, in bytes (PROBE01: increased for VSIX SHA256 + path). */
@@ -117,6 +146,12 @@ export const METHOD_REQUIRED_KEYS: Readonly<
 	"process-group.terminate-owned": new Set<string>(["client_token", "job_token"]),
 	"process-group.release-owned": new Set<string>(["client_token", "job_token"]),
 	"helper.restart": new Set<string>([]),
+	// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+	// tart.preflight has NO caller-supplied fields. The envelope is
+	// exactly { version, request_id, method }. Any extra field is
+	// rejected by the parser (UNKNOWN_FIELD), preserving the
+	// anti-shell invariant.
+	"tart.preflight": new Set<string>([]),
 }
 
 export interface ParsedHealthRequest {
@@ -168,6 +203,17 @@ export interface ParsedHelperRestartRequest {
 	readonly method: "helper.restart"
 }
 
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+// tart.preflight is a SEMANTIC RPC. The envelope is exactly the
+// protocol tuple — no fields influence authority or argv. The
+// helper owns the Tart executable path, the cache canary path,
+// and the argv.
+export interface ParsedTartPreflightRequest {
+	readonly version: 1
+	readonly request_id: string
+	readonly method: "tart.preflight"
+}
+
 export type ParsedRequest =
 	| ParsedHealthRequest
 	| ParsedTestbedRequest
@@ -176,6 +222,7 @@ export type ParsedRequest =
 	| ParsedTerminateOwnedRequest
 	| ParsedReleaseOwnedRequest
 	| ParsedHelperRestartRequest
+	| ParsedTartPreflightRequest
 
 export type ParseError =
 	| "BAD_JSON"
@@ -404,6 +451,21 @@ export function parseRequest(raw: string): ParseResult {
 			},
 		}
 	}
+	// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+	// tart.preflight envelope is exactly { version, request_id,
+	// method }. The METHOD_REQUIRED_KEYS guard above (exact key set)
+	// already rejected any extra field with UNKNOWN_FIELD, so the
+	// value here is structurally empty by construction.
+	if (obj.method === "tart.preflight") {
+		return {
+			ok: true,
+			value: {
+				version: 1,
+				request_id: obj.request_id,
+				method: "tart.preflight",
+			},
+		}
+	}
 	return { ok: false, error: "WRONG_TYPE" }
 }
 
@@ -525,6 +587,14 @@ export function dispatch(
 		case "process-group.terminate-owned":
 		case "process-group.release-owned":
 		case "helper.restart":
+		// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
+		// The TS fallback server does NOT support tart.preflight
+		// either — Tart execution depends on the launchd-managed
+		// helper's HOME (which is the operator's Aqua session),
+		// argv-only subprocesses, and the sealed Tart-executable
+		// allowlist. Reach the C helper via the launchd-managed
+		// AF_UNIX socket to exercise this capability.
+		case "tart.preflight":
 			return {
 				ok: false,
 				error: "METHOD_NOT_AVAILABLE_IN_TS_FALLBACK",

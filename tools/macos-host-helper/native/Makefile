@@ -11,7 +11,7 @@ CC      ?= cc
 # Compute the embedded build_id (review-correction01). The same
 # algorithm is duplicated in build.sh; we keep them in sync because
 # Make recipes with $(shell) aren't trivially embedded into CC flags.
-ABI_VERSION ?= OWNED_PGID_TERMINATION_01
+ABI_VERSION ?= TART_PREFLIGHT_P1_EXECUTION_BOUNDARY01
 BUILD_ID    ?= $(shell printf '%s' "$(ABI_VERSION)" | cat - helper.c | shasum -a 256 | awk '{print $$1}')
 CFLAGS      ?= -O2 -Wall -Wextra \
                -DCLINEMM_HELPER_ABI_VERSION="\"$(ABI_VERSION)\"" \
