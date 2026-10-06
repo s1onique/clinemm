@@ -1,7 +1,7 @@
 # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION01 — Build Verification
 
 **Date:** 2026-10-06
-**Subject HEAD:** 83583d716 (the bounded ACT commit)
+**Subject HEAD:** 3b17b1835 (final ACT HEAD; prior bounded ACT commit 83583d716)
 
 ---
 
