@@ -174,11 +174,176 @@ let cachedKernel: CompiledElmKernel | null = null
 const _cachedKernelBundleSig: string | null = null
 
 /**
+ * Stable asset identifier the diagnostic surfaces. Mirrors the
+ * canonical VSIX path `runtime-assets/task-header-orchestration.js`
+ * that `stage_elm_kernel_runtime_asset` writes. NEVER resolves to
+ * an absolute path so the bounded diagnostic does not leak user
+ * filesystem topology.
+ */
+export const TASK_HEADER_ELM_RUNTIME_ASSET_ID = "runtime-assets/task-header-orchestration.js" as const
+
+/**
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR:
+ *
+ * Module-scope loader-status record. Updated by the loader
+ * (production and test set) so the Command Palette diagnostic can
+ * surface an EXACT stage + failure class instead of an opaque
+ * `kernel_offline` counter.
+ *
+ * The diagnostic is observable via `getTaskHeaderElmKernelDiagnostic()`
+ * and is reset to `not_attempted` by `resetElmKernelForTests()`. The
+ * captured record carries NO absolute user paths; the loader sets
+ * `assetId` to the stable `runtime-assets/task-header-orchestration.js`
+ * identifier in every branch.
+ */
+let _kernelDiagnostic: TaskHeaderElmKernelDiagnostic = {
+	stage: "not_attempted",
+	failureClass: null,
+	assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+	fileReadable: null,
+	bundleByteSize: null,
+	errorName: null,
+}
+
+/**
+ * Bounded error.name captured when the loader throws. The diagnostic
+ * stores ONLY the `name` field (e.g. "Error", "TypeError",
+ * "SyntaxError"). The full message and stack are intentionally NOT
+ * captured so the diagnostic never leaks absolute paths, bundle
+ * code, or user filesystem topology.
+ */
+function errorNameOf(err: unknown): string {
+	if (err instanceof Error && typeof err.name === "string" && err.name.length > 0) {
+		return err.name
+	}
+	return "Error"
+}
+
+/**
+ * Test seam + diagnostic surface. Returns the loader's last stage
+ * + bounded error name. The diagnostic is read-only from the
+ * caller's perspective; only the loader mutates the underlying
+ * module state.
+ */
+export function getTaskHeaderElmKernelDiagnostic(): TaskHeaderElmKernelDiagnostic {
+	return _kernelDiagnostic
+}
+
+/**
+ * Test seam — reset the loader diagnostic to `not_attempted`.
+ * Mirrors the reset semantics of `resetElmKernelForTests`. NEVER
+ * touches the TS projection, the observation ring, the enabled
+ * flag, or any production state.
+ */
+export function resetTaskHeaderElmKernelDiagnostic(): void {
+	_kernelDiagnostic = {
+		stage: "not_attempted",
+		failureClass: null,
+		assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+		fileReadable: null,
+		bundleByteSize: null,
+		errorName: null,
+	}
+}
+
+/**
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR:
+ *
+ * Stage taxonomy for the TaskHeader Elm kernel loader. Each stage
+ * the runtime can fail at carries an exact `failureClass` so the
+ * Command Palette diagnostic can discriminate the cause of `kernel_offline`
+ * instead of returning an opaque counter.
+ *
+ * The closed stage set is ordered to mirror the loader execution
+ * order in `ensureElmKernelEvaluated` / `loadCompiledElmKernel` /
+ * `invokeElmKernel`. The diagnostic captures the FIRST stage the
+ * loader fails at; later stages are not entered.
+ *
+ * Stage mapping (loader execution order -> diagnostic stage):
+ *
+ *   not_attempted       : loader not yet entered
+ *   path_resolved       : resolveProductionKernelPath() returned non-empty
+ *   file_read           : fs.readFileSync(kernelPath) returned non-empty buffer
+ *   bundle_evaluated    : new Function(...) executed without throwing
+ *   exports_present     : namespace.Elm is truthy
+ *   main_init_present   : namespace.Elm.Main.init is a function
+ *   app_initialized     : mod.Main.init({}) returned a value with .ports
+ *   ports_valid         : ports actually accept inbound.send / outbound.subscribe
+ *   failed              : loader short-circuited at some prior stage
+ */
+export type TaskHeaderElmKernelStage =
+	| "not_attempted"
+	| "path_resolved"
+	| "file_read"
+	| "bundle_evaluated"
+	| "exports_present"
+	| "main_init_present"
+	| "app_initialized"
+	| "ports_valid"
+	| "ready"
+	| "failed"
+
+export type TaskHeaderElmKernelFailureClass =
+	| "KERNEL_PATH_UNRESOLVED"
+	| "KERNEL_FILE_MISSING"
+	| "KERNEL_READ_FAILED"
+	| "KERNEL_EVAL_FAILED"
+	| "KERNEL_EXPORT_MISSING"
+	| "KERNEL_MAIN_INIT_MISSING"
+	| "KERNEL_APP_INIT_FAILED"
+	| "KERNEL_PORTS_INVALID"
+	| null
+
+export interface TaskHeaderElmKernelDiagnostic {
+	readonly stage: TaskHeaderElmKernelStage
+	readonly failureClass: TaskHeaderElmKernelFailureClass
+	readonly assetId: "runtime-assets/task-header-orchestration.js"
+	readonly fileReadable: boolean | null
+	readonly bundleByteSize: number | null
+	readonly bundleSha256?: string
+	readonly errorName: string | null
+}
+
+/**
  * Resolve the absolute path to the compiled Elm kernel JS file.
+ *
+ * Default returns a source-tree absolute path so the vitest suite
+ * (which executes against the in-tree filesystem) can load the
+ * kernel without any test-side stub. The packaged extension never
+ * ships the source-tree path (see
+ * `apps/vscode/elm/task-header-orchestration/.gitignore` and the
+ * `.vscodeignore` discovery interaction); the production activation
+ * helper in `extension.ts:activate` MUST set the production resolver
+ * seam (`setTaskHeaderElmProductionKernelPath(...)`) BEFORE the
+ * first `invokeElmKernel` call so the loader reads the staged
+ * `runtime-assets/task-header-orchestration.js` file that
+ * `stage_elm_kernel_runtime_asset` writes into the packaged VSIX.
  */
 export function defaultElmKernelPath(): string {
 	const url = new URL("../../elm/task-header-orchestration/vendor/task-header-orchestration.js", import.meta.url)
 	return url.pathname
+}
+
+let _productionKernelPath: string | null = null
+
+export function setTaskHeaderElmProductionKernelPath(path: string | null): void {
+	_productionKernelPath = path
+}
+
+export function getTaskHeaderElmProductionKernelPath(): string | null {
+	return _productionKernelPath
+}
+
+/**
+ * Production resolver - returns the staged-runtime-asset path when
+ * the activation helper has wired the seam; otherwise returns the
+ * source-tree path so existing vitest execution keeps working.
+ */
+export function resolveProductionKernelPath(): string {
+	if (typeof _productionKernelPath === "string" && _productionKernelPath.length > 0) {
+		return _productionKernelPath
+	}
+	return defaultElmKernelPath()
 }
 
 let _kernelEvaluatedOnce = false
@@ -257,27 +422,145 @@ let _taskHeaderKernelNamespace: TaskHeaderElmNamespace | null = null
  */
 export function ensureElmKernelEvaluated(kernelPath: string): boolean {
 	if (_kernelEvaluatedOnce && _taskHeaderKernelNamespace) return true
+	// Stage: path_resolved. The resolver returned a non-empty
+	// path. If the path is empty we treat that as the first failure
+	// boundary (KERNEL_PATH_UNRESOLVED).
+	if (typeof kernelPath !== "string" || kernelPath.length === 0) {
+		_kernelDiagnostic = {
+			stage: "failed",
+			failureClass: "KERNEL_PATH_UNRESOLVED",
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: null,
+			bundleByteSize: null,
+			errorName: null,
+		}
+		Logger.error("[task-header-elm-shadow] kernel path could not be resolved (empty)")
+		return false
+	}
+	_kernelDiagnostic = {
+		stage: "path_resolved",
+		failureClass: null,
+		assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+		fileReadable: null,
+		bundleByteSize: null,
+		errorName: null,
+	}
+	let code: string
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const fs = require("node:fs") as typeof import("node:fs")
-		const code = fs.readFileSync(kernelPath, "utf8")
-		const namespace: Record<string, unknown> = {}
-		const evaluator = new Function("scope", code + "; return this;")
-		evaluator.call(namespace, namespace)
-		const kernelExports = (namespace as { Elm?: TaskHeaderElmNamespace }).Elm ?? null
-		if (!kernelExports || typeof kernelExports.Main?.init !== "function") {
-			Logger.error(
-				"[task-header-elm-shadow] kernel bundle did not expose TaskHeaderElmNamespace.Elm.Main.init after sandboxed evaluation",
-			)
+		if (!fs.existsSync(kernelPath)) {
+			_kernelDiagnostic = {
+				stage: "failed",
+				failureClass: "KERNEL_FILE_MISSING",
+				assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+				fileReadable: false,
+				bundleByteSize: null,
+				errorName: null,
+			}
+			Logger.error(`[task-header-elm-shadow] kernel bundle missing at expected path`)
 			return false
 		}
-		_taskHeaderKernelNamespace = kernelExports
-		_kernelEvaluatedOnce = true
-		return true
+		code = fs.readFileSync(kernelPath, "utf8")
 	} catch (err) {
-		Logger.error(`[task-header-elm-shadow] failed to load Elm kernel bundle: ${err}`)
+		_kernelDiagnostic = {
+			stage: "failed",
+			failureClass: "KERNEL_READ_FAILED",
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: null,
+			bundleByteSize: null,
+			errorName: errorNameOf(err),
+		}
+		Logger.error(`[task-header-elm-shadow] failed to read Elm kernel bundle: ${errorNameOf(err)}`)
 		return false
 	}
+	if (typeof code !== "string" || code.length === 0) {
+		_kernelDiagnostic = {
+			stage: "failed",
+			failureClass: "KERNEL_READ_FAILED",
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: true,
+			bundleByteSize: 0,
+			errorName: null,
+		}
+		Logger.error("[task-header-elm-shadow] kernel bundle is empty")
+		return false
+	}
+	_kernelDiagnostic = {
+		stage: "file_read",
+		failureClass: null,
+		assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+		fileReadable: true,
+		bundleByteSize: code.length,
+		errorName: null,
+	}
+	let namespace: Record<string, unknown>
+	let kernelExports: TaskHeaderElmNamespace | null
+	try {
+		namespace = {}
+		const evaluator = new Function("scope", code + "; return this;")
+		evaluator.call(namespace, namespace)
+		// Stage: bundle_evaluated. The wrapper executed; check exports.
+		kernelExports = (namespace as { Elm?: TaskHeaderElmNamespace }).Elm ?? null
+	} catch (err) {
+		_kernelDiagnostic = {
+			stage: "failed",
+			failureClass: "KERNEL_EVAL_FAILED",
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: true,
+			bundleByteSize: code.length,
+			errorName: errorNameOf(err),
+		}
+		Logger.error(`[task-header-elm-shadow] failed to evaluate Elm kernel bundle: ${errorNameOf(err)}`)
+		return false
+	}
+	if (!kernelExports) {
+		_kernelDiagnostic = {
+			stage: "failed",
+			failureClass: "KERNEL_EXPORT_MISSING",
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: true,
+			bundleByteSize: code.length,
+			errorName: null,
+		}
+		Logger.error(
+			"[task-header-elm-shadow] kernel bundle did not expose TaskHeaderElmNamespace.Elm after sandboxed evaluation",
+		)
+		return false
+	}
+	_kernelDiagnostic = {
+		stage: "exports_present",
+		failureClass: null,
+		assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+		fileReadable: true,
+		bundleByteSize: code.length,
+		errorName: null,
+	}
+	if (typeof kernelExports.Main?.init !== "function") {
+		_kernelDiagnostic = {
+			stage: "failed",
+			failureClass: "KERNEL_MAIN_INIT_MISSING",
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: true,
+			bundleByteSize: code.length,
+			errorName: null,
+		}
+		Logger.error(
+			"[task-header-elm-shadow] kernel bundle did not expose TaskHeaderElmNamespace.Elm.Main.init after sandboxed evaluation",
+		)
+		return false
+	}
+	_kernelDiagnostic = {
+		stage: "main_init_present",
+		failureClass: null,
+		assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+		fileReadable: true,
+		bundleByteSize: code.length,
+		errorName: null,
+	}
+	_taskHeaderKernelNamespace = kernelExports
+	_kernelEvaluatedOnce = true
+	return true
 }
 
 // Bump when the kernel bundle format changes; ensures stale evaluations
@@ -299,33 +582,84 @@ export const _TASK_HEADER_ELM_KERNEL_BUNDLE_SIG = "v2"
  * JSDoc for the full causal chain.
  */
 export function loadCompiledElmKernel(): CompiledElmKernel | null {
-	if (cachedKernel) return cachedKernel
-	try {
-		const mod = _taskHeaderKernelNamespace
-		if (!mod || typeof mod.Main?.init !== "function") {
-			return null
-		}
-		const app = mod.Main.init({})
-		if (!app || !app.ports || !app.ports.inbound || !app.ports.outbound) {
-			return null
-		}
-		let lastOutbound: unknown = null
-		app.ports.outbound.subscribe((v: unknown) => {
-			lastOutbound = v
-		})
-		cachedKernel = {
-			sendInbound(value: unknown) {
-				lastOutbound = null
-				app.ports.inbound.send(value)
-			},
-			recvOutbound() {
-				return lastOutbound
-			},
+	if (cachedKernel) {
+		// Stage: ready (re-entrant load against the cached kernel).
+		_kernelDiagnostic = {
+			stage: "ready",
+			failureClass: null,
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: _kernelDiagnostic.fileReadable,
+			bundleByteSize: _kernelDiagnostic.bundleByteSize,
+			errorName: null,
 		}
 		return cachedKernel
-	} catch {
+	}
+	const mod = _taskHeaderKernelNamespace
+	if (!mod || typeof mod.Main?.init !== "function") {
 		return null
 	}
+	let app: {
+		readonly ports: {
+			readonly inbound: { send: (v: unknown) => void }
+			readonly outbound: { subscribe: (cb: (v: unknown) => void) => void }
+		}
+	} | null = null
+	try {
+		app = mod.Main.init({})
+	} catch (err) {
+		_kernelDiagnostic = {
+			stage: "failed",
+			failureClass: "KERNEL_APP_INIT_FAILED",
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: _kernelDiagnostic.fileReadable,
+			bundleByteSize: _kernelDiagnostic.bundleByteSize,
+			errorName: errorNameOf(err),
+		}
+		Logger.error(`[task-header-elm-shadow] Main.init threw: ${errorNameOf(err)}`)
+		return null
+	}
+	if (!app || !app.ports || !app.ports.inbound || !app.ports.outbound) {
+		_kernelDiagnostic = {
+			stage: "failed",
+			failureClass: "KERNEL_PORTS_INVALID",
+			assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+			fileReadable: _kernelDiagnostic.fileReadable,
+			bundleByteSize: _kernelDiagnostic.bundleByteSize,
+			errorName: null,
+		}
+		Logger.error("[task-header-elm-shadow] kernel app is missing inbound/outbound ports")
+		return null
+	}
+	_kernelDiagnostic = {
+		stage: "app_initialized",
+		failureClass: null,
+		assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+		fileReadable: _kernelDiagnostic.fileReadable,
+		bundleByteSize: _kernelDiagnostic.bundleByteSize,
+		errorName: null,
+	}
+	let lastOutbound: unknown = null
+	app.ports.outbound.subscribe((v: unknown) => {
+		lastOutbound = v
+	})
+	cachedKernel = {
+		sendInbound(value: unknown) {
+			lastOutbound = null
+			app!.ports.inbound.send(value)
+		},
+		recvOutbound() {
+			return lastOutbound
+		},
+	}
+	_kernelDiagnostic = {
+		stage: "ports_valid",
+		failureClass: null,
+		assetId: TASK_HEADER_ELM_RUNTIME_ASSET_ID,
+		fileReadable: _kernelDiagnostic.fileReadable,
+		bundleByteSize: _kernelDiagnostic.bundleByteSize,
+		errorName: null,
+	}
+	return cachedKernel
 }
 
 /**
@@ -335,6 +669,8 @@ export function resetElmKernelForTests(): void {
 	cachedKernel = null
 	_taskHeaderKernelNamespace = null
 	_kernelEvaluatedOnce = false
+	_productionKernelPath = null
+	resetTaskHeaderElmKernelDiagnostic()
 }
 
 /**
@@ -342,7 +678,7 @@ export function resetElmKernelForTests(): void {
  * returning a typed `TaskHeaderElmDecision`. Fail-closed.
  */
 export async function invokeElmKernel(factsJson: TaskHeaderElmFactsJson): Promise<TaskHeaderElmDecision> {
-	ensureElmKernelEvaluated(defaultElmKernelPath())
+	ensureElmKernelEvaluated(resolveProductionKernelPath())
 	const kernel = loadCompiledElmKernel()
 	if (!kernel) {
 		return { kind: "kernel_offline", classification: "task_header_elm_kernel_offline" }
@@ -700,6 +1036,7 @@ const REPORT_RECENT_OBSERVATIONS = 10
  */
 export function formatTaskHeaderElmRuntimeShadowReport(observations: readonly TaskHeaderElmRuntimeShadowObservation[]): string {
 	const summary = summarizeTaskHeaderElmRuntimeShadowObservations(observations)
+	const diagnostic = getTaskHeaderElmKernelDiagnostic()
 	const lines: string[] = []
 	lines.push("Task Header Elm Runtime Shadow")
 	lines.push("")
@@ -710,6 +1047,31 @@ export function formatTaskHeaderElmRuntimeShadowReport(observations: readonly Ta
 	lines.push(`mismatchSeq:      ${summary.mismatchSeq}`)
 	lines.push(`kernelOffline:    ${summary.kernelOffline}`)
 	lines.push(`decodeErrors:     ${summary.decodeErrors}`)
+	// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR:
+	// The kernel section surfaces the loader's last stage + bounded
+	// failure class so the operator can read `kernel.stage` directly
+	// from a single Copy Report. The section is bounded:
+	//   - `asset` is the stable VSIX asset identifier (NEVER absolute path)
+	//   - `bundleByteSize` is a numeric length only
+	//   - `errorName` carries only `Error.name` (NEVER message/stack)
+	//   - `failureClass` is the closed enum (or `null` on success)
+	lines.push("")
+	lines.push("kernel:")
+	lines.push(`  stage:           ${diagnostic.stage}`)
+	lines.push(`  asset:           ${diagnostic.assetId}`)
+	if (diagnostic.fileReadable !== null) {
+		lines.push(`  fileReadable:    ${diagnostic.fileReadable}`)
+	}
+	if (diagnostic.bundleByteSize !== null) {
+		lines.push(`  bundleByteSize:  ${diagnostic.bundleByteSize}`)
+	}
+	if (diagnostic.bundleSha256 !== undefined) {
+		lines.push(`  bundleSha256:    ${diagnostic.bundleSha256}`)
+	}
+	lines.push(`  failureClass:    ${diagnostic.failureClass === null ? "null" : diagnostic.failureClass}`)
+	if (diagnostic.errorName !== null) {
+		lines.push(`  errorName:       ${diagnostic.errorName}`)
+	}
 	if (observations.length > 0) {
 		lines.push("")
 		const tail = observations.slice(-REPORT_RECENT_OBSERVATIONS)

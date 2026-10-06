@@ -107,6 +107,15 @@ describe("ACT-CLINEMM-...-CORRECTION01 / FMT-01..05: formatTaskHeaderElmRuntimeS
 		expect(report).toContain("mismatchSeq:")
 		expect(report).toContain("kernelOffline:")
 		expect(report).toContain("decodeErrors:")
+		// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR:
+		// The report must surface the loader-status diagnostic so
+		// the operator can copy a single bounded payload.
+		expect(report).toContain("kernel:")
+		expect(report).toContain("stage:")
+		expect(report).toContain("asset:")
+		expect(report).toContain("failureClass:")
+		// Stable asset identifier mirrors `stage_elm_kernel_runtime_asset`.
+		expect(report).toContain("runtime-assets/task-header-orchestration.js")
 		// No observation block in the empty ring.
 		expect(report).not.toMatch(/^#\d+$/m)
 	})
@@ -123,13 +132,13 @@ describe("ACT-CLINEMM-...-CORRECTION01 / FMT-01..05: formatTaskHeaderElmRuntimeS
 		]
 		const report = formatTaskHeaderElmRuntimeShadowReport(obs)
 		// Counter fields present.
-		expect(report).toMatch(/evaluations:      7/)
-		expect(report).toMatch(/matches:          2/)
-		expect(report).toMatch(/mismatchPhase:    1/)
-		expect(report).toMatch(/mismatchSource:   1/)
-		expect(report).toMatch(/mismatchSeq:      1/)
-		expect(report).toMatch(/kernelOffline:    1/)
-		expect(report).toMatch(/decodeErrors:     1/)
+		expect(report).toMatch(/evaluations: {6}7/)
+		expect(report).toMatch(/matches: {10}2/)
+		expect(report).toMatch(/mismatchPhase: {4}1/)
+		expect(report).toMatch(/mismatchSource: {3}1/)
+		expect(report).toMatch(/mismatchSeq: {6}1/)
+		expect(report).toMatch(/kernelOffline: {4}1/)
+		expect(report).toMatch(/decodeErrors: {5}1/)
 		// Bounded semantic fields per observation.
 		expect(report).toContain("inputs:")
 		expect(report).toContain("canonicalShadowPhase:")
@@ -161,10 +170,10 @@ describe("ACT-CLINEMM-...-CORRECTION01 / FMT-01..05: formatTaskHeaderElmRuntimeS
 		expect(numbered?.[2]).toBe("#3")
 		expect(numbered?.[3]).toBe("#4")
 		// The retained seq values are 9..12 (visible in the inputs block).
-		expect(report).toMatch(/seq:                               9/)
-		expect(report).toMatch(/seq:                               10/)
-		expect(report).toMatch(/seq:                               11/)
-		expect(report).toMatch(/seq:                               12/)
+		expect(report).toMatch(/seq: {31}9/)
+		expect(report).toMatch(/seq: {31}10/)
+		expect(report).toMatch(/seq: {31}11/)
+		expect(report).toMatch(/seq: {31}12/)
 		// No omission summary line because the formatter's input has
 		// only 4 observations (well below the 10-item tail cap).
 		expect(report).not.toMatch(/older observation\(s\) omitted/)
@@ -185,7 +194,7 @@ describe("ACT-CLINEMM-...-CORRECTION01 / FMT-01..05: formatTaskHeaderElmRuntimeS
 		const report = formatTaskHeaderElmRuntimeShadowReport(sink.snapshot)
 		expect(report.match(/^#\d+$/gm)?.length).toBe(10)
 		expect(report).toMatch(/older observation\(s\) omitted/)
-		expect(report).toMatch(/evaluations:      15/)
+		expect(report).toMatch(/evaluations: {6}15/)
 	})
 
 	it("FMT-04: reports carry bounded semantic facts ONLY (no prompt text, no model output, no MCP contents, no file paths)", () => {

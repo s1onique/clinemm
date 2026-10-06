@@ -48,10 +48,7 @@ import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
-import {
-	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
-	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
-} from "@/sdk/task-header-selector-input-capture-runtime"
+import { setTaskHeaderElmProductionKernelPath } from "@/sdk/task-header-elm-shadow"
 import {
 	applyTaskHeaderElmRuntimeShadowDiagnosticsAction,
 	buildTaskHeaderElmRuntimeShadowDiagnosticsActionOptions,
@@ -60,6 +57,10 @@ import {
 	isTaskHeaderElmRuntimeShadowDiagnosticsEnabled,
 	selectTaskHeaderElmRuntimeShadowDiagnosticsAction,
 } from "@/sdk/task-header-elm-shadow-diagnostics"
+import {
+	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
+	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
+} from "@/sdk/task-header-selector-input-capture-runtime"
 import {
 	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
 	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
@@ -373,6 +374,27 @@ export async function activate(context: vscode.ExtensionContext) {
 	// in the packaged VSIX).
 	const elmAuthorityKernelPath = path.join(context.extensionUri.fsPath, "runtime-assets", "completion-authority.js")
 	const elmAuthorityActivation = initializeElmAuthorityRuntime(elmAuthorityKernelPath)
+	// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR:
+	// Wire the TaskHeader Elm kernel path through the SAME production
+	// resolver seam that the completion-authority kernel uses. The
+	// packaged extension ships the kernel at
+	// `runtime-assets/task-header-orchestration.js` (mirrors the
+	// `stage_elm_kernel_runtime_asset` build-script contract); the
+	// in-source-tree path
+	// `apps/vscode/elm/task-header-orchestration/vendor/task-header-orchestration.js`
+	// is filtered out by `apps/vscode/elm/task-header-orchestration/.gitignore`
+	// and the `.vscodeignore` discovery interaction, so without
+	// this wire the loader would resolve to a non-shipped path and
+	// the runtime would report `kernel_offline` for every Facts
+	// quadruple (the LIVE 512/512 failure this ACT repairs).
+	//
+	// Setting the resolver BEFORE the first `observeTaskHeaderElmRuntimeShadow`
+	// call guarantees the FIRST loader attempt reads from the staged
+	// runtime asset. The diagnostic captures the exact stage so any
+	// future regression (a missing staging, a wrong filename) surfaces
+	// as `KERNEL_FILE_MISSING` / `KERNEL_READ_FAILED` instead of an
+	// opaque `kernel_offline` counter.
+	setTaskHeaderElmProductionKernelPath(path.join(context.extensionUri.fsPath, "runtime-assets", "task-header-orchestration.js"))
 	if (elmAuthorityActivation.enabled) {
 		Logger.log(`[ELM-AUTHORITY] enabled=true kernelPath=${elmAuthorityActivation.kernelPath}`)
 	} else {
