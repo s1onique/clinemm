@@ -1,0 +1,4 @@
+#!/usr/bin/env bun
+// ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01 — bin entry
+import { main } from "../src/cli.ts";
+void main();

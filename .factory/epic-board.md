@@ -1,3 +1,105 @@
+## ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01 — CORRECTION01_CLOSED — 2026-10-06
+
+**Status:** CORRECTION01_CLOSED. Reviewer flagged two P0 issues: (a) `--backend tart` actually used `FakeProcessRunner` (the real Tart CLI was never invoked), and (b) `TartBackend.start()` called `proc.run({timeoutMs:1500})` on `tart run`, SIGKILLing the child after 1.5s and tearing the VM down — not a valid lifecycle. Both fixed with one bounded seam:
+
+1. New `ProcessRunner.spawn(req) -> ProcessHandle` primitive (`pid`, `terminate()`, `kill()`); `run()` unchanged.
+2. `TartBackend.start()` uses `spawn()` and retains the handle (no timeout); a 200ms probe catches synchronous failures.
+3. `TartBackend.stop()` runs `tart stop` AND awaits the spawned handle to exit (5s polite → SIGTERM → SIGKILL fallback).
+4. CLI extracted to `selectCliRunner(backendKind, allowVm, host)` — pure, tested. Real Tart now wires `RealProcessRunner + TartBackend`.
+5. Real Tart is fail-closed on unsupported hosts (reviewer's seam).
+6. `destroy()` also refuses a VM not started by THIS backend instance (defense in depth).
+
+```
+PASS_CLINEMM_TART_TESTBED_SUBSTRATE_CORRECTION01_REAL_LIFECYCLE
++ 80/80 tests green (7 files; +10 new: tart-backend + cli-wiring)
++ typecheck clean
++ git diff --check clean
++ structural Tart smoke: `tart --version` 2.34.0 via RealProcessRunner.run
+  + spawn() actually starts a real child process
++ real Tart path closed end-to-end: --backend tart --allow-vm on supported host
+  -> RealProcessRunner + TartBackend
++ no VM launched during closure
+```
+
+**Files:** `src/process-runner.ts` (+spawn), `src/tart-backend.ts` (start/spawn, stop/await, destroy gate), `src/cli.ts` (pure wiring), `tests/tart-backend.test.ts` (5 new), `tests/cli-wiring.test.ts` (5 new).
+
+ACT closure document: `.factory/acts/ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01-CORRECTION01-REAL-LIFECYCLE.md`.
+
+---
+
+## ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01 — CLOSED — 2026-10-06
+
+**Status:** CLOSED. New substrate shipped at `tools/tart-testbed/` (no production code changed). The substrate is scenario-agnostic; future ACTs (TART-CLINEMM-DOGFOOD01, TART-MYC-SESSION-ISOLATION01, TART-ELM-TASKHEADER-LIVE01) compose on top of `TestbedOrchestrator` without modifying it.
+
+```
+PASS_CLINEMM_TART_TESTBED_SUBSTRATE
++ 70/70 tests green (5 files)
++ typecheck clean
++ git diff --check clean
++ no VSIX built, no LIVE claim, no operator dependency
++ structural Tart smoke: `tart --version` 2.34.0 via RealProcessRunner (no VM)
+```
+
+**Why this ACT now:** several open ClineMM lanes terminate at "install it manually / run dogfood manually / restart extension / open second session / capture process identity". The recurring missing capability is a Tart execution primitive. Building it once, scenario-agnostically, pays for myc LIVE-qualification, Elm TaskHeader LIVE, MCP lifecycle restart, and future destructive tests.
+
+**RECON (C0):** Existing `tools/macos-vsix-testbed/` (~6000 LoC) is a tightly-coupled VSIX-qualification runner (5-arg fixed entry, fail-closed CORRECTION03 pins). NOT a generic substrate. Build a NEW package rather than refactor; preserve the existing VSIX runner's fail-closed gates.
+
+**Deliverable:**
+```
+tools/tart-testbed/
+  bin/clinemm-testbed               (shell entrypoint)
+  src/types.ts                      (TestbedSpec, TestbedResult, TestbedError)
+  src/process-runner.ts             (ProcessRunner DI seam + Real + Fake)
+  src/vm-identity.ts                (collision-resistant naming + ownership)
+  src/host-classification.ts        (pure classifyHostPure)
+  src/tart-cli.ts                   (pure argv construction - C3, C17)
+  src/ssh-argv.ts                   (pure ssh argv + shell quoting - C7, C8)
+  src/backend.ts                    (TestbedBackend interface - C2)
+  src/tart-backend.ts               (real TartBackend)
+  src/fake-backend.ts               (FakeTestbedBackend, deterministic)
+  src/testbed.ts                    (TestbedOrchestrator)
+  src/cli.ts                        (run / validate / doctor)
+  tests/argv-construction.test.ts   (15 tests)
+  tests/ssh-argv.test.ts            (11 tests)
+  tests/vm-identity.test.ts         (10 tests)
+  tests/host-classification.test.ts (5 tests)
+  tests/fake-backend.test.ts        (29 tests - C16 suite of 25)
+```
+
+**Gates:**
+- bun test tests/: **70/70 pass**, 170 expect() calls, ~33ms
+- bunx tsc --noEmit -p tsconfig.json: **clean** (strict, noUncheckedIndexedAccess)
+- git diff --check: **clean**
+- ./bin/clinemm-testbed doctor: darwin-arm64 + tart + ssh -> supported
+- ./bin/clinemm-testbed validate: ok
+- ./bin/clinemm-testbed run --backend fake: PASS, result.json written
+- `--backend tart` requires explicit `--allow-vm` (closure-safe default)
+
+**Hard-rule adherence (C3/C4/C11/C13):**
+- Argv-only: hostile input ("foo; rm -rf /", "$(evil)") remains ONE argv element. Verified.
+- VM ownership: structural check `vmOwnedByRun`; non-owned deletes throw `TESTBED_VM_OWNERSHIP_UNPROVEN`. Test 22.
+- Teardown-first: orchestrator's `runTeardown` runs on every exit path. Test 19 confirms primary failure survives teardown failure.
+- No-secret-result: test 24 asserts result JSON contains no private-key contents or env.
+
+**Non-goals (confirmed NOT done):** no myc LIVE qualification, no ClineMM install, no VSCodium automation, no custom macOS image, no Tart base-image production, no CI workers, no Chamber integration, no Lima/Qemu/Docker backends, no nested virt, no operator interaction.
+
+**Successor ACTs (sequenced):**
+```
+TART-CLINEMM-DOGFOOD01         install exact VSIX, launch ext host, collect logs
+TART-MYC-SESSION-ISOLATION01   two real ClineMM sessions, separate myc children
+TART-ELM-TASKHEADER-LIVE01    exercise Task Header, invoke diagnostics command
+```
+
+**Substrate ACT ledger row:**
+| ACT ID | Verdict | Purpose |
+|---|---|---|
+| `ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01` | PASS_CLINEMM_TART_TESTBED_SUBSTRATE | shipped `tools/tart-testbed/` substrate |
+| `ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01-CORRECTION01-REAL-LIFECYCLE` | PASS_CLINEMM_TART_TESTBED_SUBSTRATE_CORRECTION01_REAL_LIFECYCLE | wired real Tart path: `spawn()` seam + `--backend tart --allow-vm` -> `RealProcessRunner + TartBackend`; +10 tests, 80/80 green |
+
+ACT closure document: `.factory/acts/ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01.md` (full detail).
+
+---
+
 ## ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — CORRECTION03 (LIVE-GO) — 2026-10-06
 
 **Status:** CORRECTION03_CLOSED. Reviewer flagged one P1 (server identity discarded at observer seam): the helper hard-coded `tracker.recordMycToolCall("myc", ...)` and threw away the `serverName` McpHub already provides. A `github` server exposing a `myc_recall` tool would have bypassed the tracker's `MYC_SERVER_NAMES` guard and poisoned the myc counters. Fix is one bounded line — thread `event.serverName` through `McpToolCompletion`.
