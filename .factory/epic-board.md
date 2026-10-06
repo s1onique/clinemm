@@ -1,3 +1,79 @@
+## ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — CORRECTION02 RECLOSE — 2026-10-06
+
+**Status:** CORRECTION02_RECLOSED. Reviewer surfaced one P0 (unrelated tracked dirt) and three P1s in the prior close (ea697c667). All four are fixed, ablated, and re-tested; verdict is HONEST-corrected:
+
+```text
+PASS_MYC_TASK_HEADER_TELEMETRY_IMPLEMENTATION
++ HALT_LIVE_UI_NOT_QUALIFIED (deferred — same as prior; no VSIX built this session)
+```
+
+**P0 (UNEXPECTED_TRACKED_DIRT) — REVERTED.** `.factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md` was a regenerated `Generated:` timestamp from a different ACT. Reverted via `git checkout HEAD -- <file>` before any further work. Working tree was clean for the prior close at the tracked level; the reviewer pointed to a foreign edit that had slipped into the staged diff.
+
+**P1-A semantic boundary (MCP `isError === true`) — FIXED.** The prior CORRECTION01 classified every resolved call as `outcome="success"` and only the thrown path as `outcome="error"`. MCP distinguishes a protocol-level error (throw path) from a tool-level failure (resolved normally with `isError: true`). CORRECTION02:
+
+- `McpHub.callTool` resolved branch now classifies outcome as:
+  - `outcome="error"` when `result.isError === true`
+  - `outcome="success"` when content non-empty AND not isError
+  - `outcome="empty"` when content empty AND not isError
+- `hasNonEmptyContent` boolean now rides along in the observer payload (privacy-safe: just a length check, no body text). Computed from `result.content.length > 0 || structuredContent has keys`.
+
+**P1-B single cardinality owner (McpHub is the sole counter; prime helper is status-only) — FIXED.** Previously `observeMycPrimeResult` ALSO called `recordMycToolCall("myc", "myc_prime", ...)` — that double-counted the prime. CORRECTION02 strips the prime helper to:
+
+```text
+observeMycPrimeResult(tracker, result)
+    -> tracker.recordMycPrimeStatus(result.status)  // only
+```
+
+ONE real MCP call (including automatic prime) ⇒ EXACTLY ONE `recordMycToolCall` event, fired from the McpHub completion observer when the prime helper invokes `mcpHub.callTool(...)`. The skipped path (`resolveMycServerName` returns undefined) short-circuits before any callTool, so no observer fires — status flips to `"skipped"` and nothing else moves.
+
+**P1-C UX success/useful conflation (Last section uses bounded outcome, not aggregate label) — FIXED.** `formatMycLastSection` and `formatMycLastSectionPlain` now render the bounded `outcome` enum verbatim (`"success"` / `"empty"` / `"error"`), NOT the aggregate `useful` label. `usefulRetrievals` lives in the separate Retrieval section and represents the task-aggregate counter — using it in `Last` conflated per-call semantics with the aggregate.
+
+**Cardinality proof (`task-header-myc-task-header-actual-prime-cardinality.c24-c-bridge.test.ts`):**
+
+- THMYC-CRONE-01: real prime (ok + non-empty text) → `callsTotal=1, callsSuccessful=1, retrievalCalls=1, usefulRetrievals=1, callsFailed=0` (NOT 2).
+- THMYC-CRONE-03: TWO real primes (sequential distinct sessions) → `callsTotal=2` (NOT 1, NOT 4). The observer fires exactly once per McpHub.callTool() resolution.
+
+The integration test repros the production observer via an in-memory McpHub double (`getServers() + callTool()`) and drives `runMycPrimeOnSessionStart` + `observeMycPrimeResult` in the exact sequencing the SdkController uses. Any drift (e.g. accidentally re-introducing `recordMycToolCall` inside `observeMycPrimeResult`) makes THMYC-CRONE-01 fail with `callsTotal=2`.
+
+**Production delta (CORRECTION02):**
+
+- `McpHub.ts`: observer payload now carries `hasNonEmptyContent: boolean` and the widened outcome enum (`"success" | "empty" | "error"`). `callTool` resolved branch classifies via `result.isError === true` first, then `hasNonEmptyContent`. Thrown branch fires `outcome="error", hasNonEmptyContent=false`.
+- `McpHub.callTool.test.ts`: 5 new CORRECTION02 tests pin the semantic classification (`isError=true → error`, `isError=false + non-empty → success`, `isError=false + empty → empty`, `isError=true + empty → error`, `structuredContent → hasNonEmptyContent=true`). Old existing tests updated for the widened payload shape.
+- `myc-task-observation.ts`: `McpToolCompletion.outcome` widened to `"success" | "empty" | "error"`; `hasNonEmptyContent: boolean` added. `observeMcpToolCompletion` derives `useful = outcome==="success" && hasNonEmptyContent===true` automatically — no caller override. `observeMycPrimeResult` stripped to `tracker.recordMycPrimeStatus(result.status)` only; no more `recordMycToolCall` from the prime path.
+- `SdkController.ts`: `observeMcpToolCompletion` call site now passes `hasNonEmptyContent: event.hasNonEmptyContent` from the McpHub observer payload.
+- `myc-task-observation.thmyc01.test.ts`: updated for new payload shape + new prime-only semantics. OBS-02/02b split to pin success+useful AND success+empty separately.
+- `task-header-myc-task-header-actual-prime-cardinality.c24-c-bridge.test.ts` (NEW): THMYC-CRONE-01 + THMYC-CRONE-03 cardinality integration tests using the production `runMycPrimeOnSessionStart` helper + a McpHub double that fires the observer.
+- `TaskHeaderTelemetry.tsx`: `formatMycLastSection` and `formatMycLastSectionPlain` now render the bounded outcome verbatim (`"success"` / `"empty"` / `"error"`), not the aggregate `"useful"` label.
+- `TaskHeaderTelemetry.myc-chip.test.tsx`: THMYC-UI-06 now asserts the Last section contains `· success` and does NOT contain `· useful`.
+- `.factory/epic-board.md`: appended this entry.
+
+**Tests:**
+- Host: 190/190 PASS across 8 files (12 helper + 15 tracker-myc + 2 cardinality-integration + 64 task-telemetry-tracker + 6 SdkController.task-telemetry-wiring + 30 dogfood-diagnostic-profile + 22 dogfood-runtime-profile + 39 dogfood-diagnostic-profile-myc-clinemm01).
+- UI: 58/58 PASS (12 myc-chip + 46 TaskHeaderTelemetry).
+- bun unit-test full sweep: 1261/1261 PASS, 0 FAIL across 95 files (was 1256; +5 from CORRECTION02 McpHub tests).
+
+**Gates:**
+- Extension typecheck: PASS.
+- Webview typecheck: PASS.
+- Lint (biome): informational only (no new warnings/errors).
+- git diff --check: CLEAN. The unrelated Seatbelt evidence timestamp was reverted.
+
+**Conservation:** existing telemetry (elapsed, state, tool count, mechanism, recovery, runtime errors, active command jobs, diagnostic knobs) unchanged. McpHub.callTool behavior unchanged when no observer installed. ACT-MYC-CLINEMM03 tool-name repair preserved. The observer now carries `hasNonEmptyContent` (privacy-safe boolean); argument values, response bodies, error messages still never cross.
+
+**FLAGS:**
+- WEBVIEW_UI_CHANGED: true
+- TASK_HEADER_PROJECTION_CHANGED: true (no change to wire shape; added CORRECTION02 docstring-only changes to the existing `MycTelemetrySummary` field)
+- MYC_CALL_SEMANTICS_CHANGED: false (no change to the MCP server's tool surface; only the observer's classification of MCP responses)
+- MYC_MEMORY_SEMANTICS_CHANGED: false
+- MCP_PROTOCOL_CHANGED: false
+- BACKEND_TELEMETRY_CHANGED: false
+- NEW_ENV_VAR_ADDED: false
+- ELM_CHANGED: false
+- REACT_CHANGED: true (the Radix Tooltip render from CORRECTION01 is preserved; the `Last` text is now verbatim outcome)
+
+**VERDICT (HONEST):**
+PASS_MYC_TASK_HEADER_TELEMETRY_IMPLEMENTATION
++ HALT_LIVE_UI_NOT_QUALIFIED (VSIX build + dogfood Extension Host Cases A-E walk still deferred — same as prior two reports).
 ## ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — CORRECTION01 RECLOSE — 2026-10-06
 
 **Status:** CORRECTION01_RECLOSED. Implementation review surfaced three P1 defects

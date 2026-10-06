@@ -177,6 +177,14 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / TaskHeaderTelemetry myc chip
 		expect(primeSection.textContent).toMatch(/acquired/)
 		expect(lastSection.textContent).toMatch(/Last/i)
 		expect(lastSection.textContent).toMatch(/recall/)
+		// CORRECTION02 (reviewer P1-C): the `Last` section uses the
+		// bounded outcome enum ("success" / "empty" / "error")
+		// directly, NOT the aggregate "useful" label. `useful` is
+		// the task-aggregate counter shown in the separate
+		// Retrieval section; using it here conflated per-call
+		// semantics with the aggregate.
+		expect(lastSection.textContent).toMatch(/·\s*success\b/)
+		expect(lastSection.textContent).not.toMatch(/·\s*useful\b/)
 		expect(lastSection.textContent).toMatch(/18\s*ms/i)
 	})
 

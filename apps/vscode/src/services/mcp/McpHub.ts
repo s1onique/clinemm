@@ -161,7 +161,12 @@ export class McpHub {
 	 * (the `McpToolCallResponse` is never passed). Argument values
 	 * never leave `McpHub`.
 	 */
-	private mcpToolObserver?: (event: { serverName: string; toolName: string; outcome: "success" | "error" }) => void
+	private mcpToolObserver?: (event: {
+		serverName: string
+		toolName: string
+		outcome: "success" | "empty" | "error"
+		hasNonEmptyContent: boolean
+	}) => void
 	// Fingerprint of the last tool list snapshot, used to detect actual tool list changes
 	// vs. mere status updates (e.g., error messages appended).
 	private lastToolFingerprint = ""
@@ -2210,21 +2215,44 @@ export class McpHub {
 				},
 			)
 
+			// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 CORRECTION02:
+			// MCP distinguishes a protocol-level error (throw
+			// path) from a tool-level failure (resolved normally
+			// with `isError: true`). The observer MUST classify
+			// `isError: true` as `outcome: "error"`. Without this
+			// gate, a model-visible `myc_recall` that returns
+			// normally with `isError: true` is displayed as
+			// `myc 1/1` on the wire — wrong. Computing the bounded
+			// `hasNonEmptyContent` here (privacy-safe: just a
+			// boolean, no response body) is the only signal the
+			// tracker gets to know whether the call was useful.
+			const isError = result.isError === true
+			const hasNonEmptyContent =
+				(Array.isArray(result.content) && result.content.length > 0) ||
+				(result.structuredContent !== undefined &&
+					result.structuredContent !== null &&
+					typeof result.structuredContent === "object" &&
+					Object.keys(result.structuredContent).length > 0)
+			const outcome: "success" | "empty" | "error" = isError ? "error" : hasNonEmptyContent ? "success" : "empty"
+
 			this.telemetryService.captureMcpToolCall(
 				ulid,
 				serverName,
 				toolName,
-				"success",
+				isError ? "error" : "success",
 				undefined,
 				toolArguments ? Object.keys(toolArguments) : undefined,
 			)
 			// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: per-call completion
-			// observer seam (success). Fires AFTER the result is
-			// handed to the SDK; argument values never leak (only
-			// serverName + toolName + outcome). Observer exceptions
-			// are swallowed — a faulty observer must not corrupt the
-			// tool response.
-			this.fireMcpToolObserver(serverName, toolName, "success")
+			// observer seam (resolved path). Fires AFTER the result
+			// is handed to the SDK; argument values and the result
+			// body never leak (only serverName + toolName + outcome
+			// + hasNonEmptyContent). Observer exceptions are
+			// swallowed — a faulty observer must not corrupt the
+			// tool response. McpHub is the single cardinality
+			// owner: ONE `callTool()` resolution ⇒ exactly ONE
+			// observer event (CORRECTION02).
+			this.fireMcpToolObserver(serverName, toolName, outcome, hasNonEmptyContent)
 
 			return {
 				...result,
@@ -2240,9 +2268,12 @@ export class McpHub {
 				toolArguments ? Object.keys(toolArguments) : undefined,
 			)
 			// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: per-call completion
-			// observer seam (error). Same swallowing discipline as the
-			// success branch.
-			this.fireMcpToolObserver(serverName, toolName, "error")
+			// observer seam (thrown path). Same swallowing discipline
+			// as the resolved branch. The thrown case always fires
+			// outcome="error" with hasNonEmptyContent=false (no
+			// result body was ever received). McpHub is the single
+			// cardinality owner.
+			this.fireMcpToolObserver(serverName, toolName, "error", false)
 			throw augmentMcpTimeoutError(error, serverName, timeout)
 		}
 	}
@@ -2538,13 +2569,18 @@ export class McpHub {
 	 * once per fire to keep the seam simple; a synchronous
 	 * re-entrant set during the fire is honored on the NEXT fire.
 	 */
-	private fireMcpToolObserver(serverName: string, toolName: string, outcome: "success" | "error"): void {
+	private fireMcpToolObserver(
+		serverName: string,
+		toolName: string,
+		outcome: "success" | "empty" | "error",
+		hasNonEmptyContent: boolean,
+	): void {
 		const observer = this.mcpToolObserver
 		if (!observer) {
 			return
 		}
 		try {
-			observer({ serverName, toolName, outcome })
+			observer({ serverName, toolName, outcome, hasNonEmptyContent })
 		} catch (error) {
 			Logger.error(
 				`mcpToolObserver threw during callTool(${serverName}, ${toolName}) outcome=${outcome}:`,
@@ -2561,7 +2597,14 @@ export class McpHub {
 	 * the slot.
 	 */
 	setMcpToolObserver(
-		observer: ((event: { serverName: string; toolName: string; outcome: "success" | "error" }) => void) | undefined,
+		observer:
+			| ((event: {
+					serverName: string
+					toolName: string
+					outcome: "success" | "empty" | "error"
+					hasNonEmptyContent: boolean
+			  }) => void)
+			| undefined,
 	): void {
 		this.mcpToolObserver = observer
 	}

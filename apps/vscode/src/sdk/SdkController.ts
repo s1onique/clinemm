@@ -1275,6 +1275,7 @@ export class Controller {
 			observeMcpToolCompletion(this.taskTelemetry, {
 				toolName: event.toolName,
 				outcome: event.outcome,
+				hasNonEmptyContent: event.hasNonEmptyContent,
 			})
 		})
 

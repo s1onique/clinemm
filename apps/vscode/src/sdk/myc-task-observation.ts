@@ -3,31 +3,45 @@
  * that convert MCP completion events into per-task `TaskTelemetryTracker`
  * increments.
  *
- * CORRECTION01 (this revision): the previous `observeMycToolStart`
- * helper was wired to the pre-execution `onToolStarted` seam and
- * always passed outcome `"success"` — it counted an attack as
- * successful before the tool had completed. That was a wrong-capture-
- * boundary defect: the wire read `myc 1/1` for a `myc_recall` that
- * later errored. CORRECTION01 moves outcome-aware accounting to the
- * real MCP completion seam (`McpHub.callTool` post-resolution
- * `success`/`error` branch, exposed via `setMcpToolObserver`). The
- * pre-execution `onToolStarted` hook is now a NO-OP for the tracker
- * (`observeMycToolStart` exists only for backward-compatibility shim
- * purposes and never increments counters — see below).
+ * CORRECTION01: the previous `observeMycToolStart` helper was wired
+ * to the pre-execution `onToolStarted` seam and always passed
+ * outcome `"success"` — it counted an attack as successful before
+ * the tool had completed. CORRECTION01 moved outcome-aware
+ * accounting to the real MCP completion seam (`McpHub.callTool`
+ * post-resolution branch, exposed via `setMcpToolObserver`).
  *
- * Cardinality invariant (ACT §17, CORRECTION01): ONE MCP tool call ⇒
- * EXACTLY ONE `recordMycToolCall` event, fired from the McpHub
- * completion observer. The pre-execution hook is not a second
- * counter. The prime-specific helper (`observeMycPrimeResult`) is
- * the canonical path for the automatic-prime MCP call because the
- * prime helper itself drives the call (and knows the latency and the
- * semantic outcome `ok`/`empty`/`failed`/`skipped`). For non-prime
- * myc calls (`myc_recall`, `myc_remember`, etc.) the McpHub observer
- * fires the outcome.
+ * CORRECTION02 (this revision): McpHub is the SINGLE cardinality
+ * owner for every actual MCP call, including automatic prime.
+ * Previously `observeMycPrimeResult` also called
+ * `recordMycToolCall("myc", "myc_prime", ...)` — that produced
+ * exactly the double-count the reviewer flagged (one real prime
+ * ⇒ two tracker increments). Now:
  *
- * Privacy: only `serverName`, `toolName`, and bounded outcome are
- * read. Argument values, response bodies, error messages never cross
- * the helper boundary. No network emission.
+ *   - `observeMcpToolCompletion` is the sole entry point that
+ *     calls `recordMycToolCall`. The McpHub observer fires once
+ *     per `callTool()` resolution, with `outcome` classified by
+ *     MCP semantics (CORRECTION02 §1: `isError === true` ⇒
+ *     `outcome="error"`) and `hasNonEmptyContent` derived from the
+ *     bounded `content.length > 0 || structuredContent
+ *     non-empty` rule.
+ *   - `observeMycPrimeResult` updates ONLY the prime-specific
+ *     state (`automaticPrime.status` + `automaticPrime.attempted`).
+ *     It NEVER calls `recordMycToolCall`. The prime's call MCP
+ *     counter increment flows exclusively through the McpHub
+ *     observer when the prime actually made the underlying call.
+ *   - `skipped` (no myc server configured → no `callTool`
+ *     happened) only updates the prime status. The compact
+ *     form `myc S/T` therefore continues to read correctly.
+ *
+ * Cardinality invariant (CORRECTION02): ONE real MCP tool call
+ * (including automatic prime) ⇒ EXACTLY ONE `recordMycToolCall`
+ * event, fired from the McpHub completion observer. The
+ * prime-specific helper is no longer a second counter.
+ *
+ * Privacy: only `serverName`, `toolName`, bounded outcome, and the
+ * bounded `hasNonEmptyContent` boolean cross the helper boundary.
+ * Argument values, response bodies, error messages never do. No
+ * network emission.
  */
 import type { MycPrimeResult } from "./myc-prime-automation"
 import type { TaskTelemetryTracker } from "./task-telemetry-tracker"
@@ -47,74 +61,85 @@ export function isMycToolName(toolName: string | undefined): boolean {
 
 /**
  * Outcome shape consumed by `observeMcpToolCompletion`. Mirrors
- * the `McpHub` completion observer payload exactly. `latencyMs`
- * is optional: when the caller cannot supply a latency (e.g. the
- * McpHub observer does not record a start timestamp), the tracker
- * records no latency.
+ * the `McpHub` completion observer payload (CORRECTION02).
+ *
+ * `outcome`:
+ *   - `"success"` — protocol resolved, `isError !== true`, content non-empty
+ *   - `"empty"`   — protocol resolved, `isError !== true`, content empty
+ *   - `"error"`   — protocol resolved with `isError: true` OR transport threw
+ *
+ * `hasNonEmptyContent` is a bounded privacy-safe boolean (no
+ * response text crosses the helper boundary). For retrieval-like
+ * myc tools it determines whether `usefulRetrievals` increments.
+ *
+ * `latencyMs` is optional: the McpHub observer does not record a
+ * start timestamp, so the tracker records no latency at the
+ * completion seam. The prime-specific helper may supply it when
+ * known.
  */
 export interface McpToolCompletion {
 	readonly toolName: string
-	readonly outcome: "success" | "error"
+	readonly outcome: "success" | "empty" | "error"
+	readonly hasNonEmptyContent: boolean
 	readonly latencyMs?: number
 }
 
 /**
  * Map an McpHub completion event into a per-task tracker increment.
- * ONLY called for myc_-prefixed tools — the McpHub observer slot is
- * host-scoped and routes ALL completions through `isMycToolName` to
- * decide whether to feed the tracker. Non-myc tools pass through
- * (no increment).
+ * ONLY called for myc_-prefixed tools — the McpHub observer slot
+ * is host-scoped and routes ALL completions through
+ * `isMycToolName` to decide whether to feed the tracker. Non-myc
+ * tools pass through (no increment).
  *
- * `useful` defaults to `false` because the McpHub completion event
- * does not carry the response body (privacy boundary). The
- * automatic-prime path (which knows `result.text` length) is the
- * only call site that can set `useful=true` via
- * `observeMycPrimeResult`.
+ * Useful-retrieval gate (CORRECTION02):
+ *   - The retrieval call counter (`retrievalCalls`) increments
+ *     for retrieval-like ops (`myc_prime` / `myc_recall` /
+ *     `myc_ready`) regardless of outcome.
+ *   - The useful-retrieval counter (`usefulRetrievals`) increments
+ *     ONLY when the call succeeded AND returned non-empty
+ *     content (i.e. `outcome === "success"` AND
+ *     `hasNonEmptyContent === true`). The observer's
+ *     `hasNonEmptyContent` is the load-bearing signal — it carries
+ *     the privacy-safe "did the model get useful rows?" answer
+ *     without ever exposing the response body.
+ *
+ * Latency is optional; non-finite values are filtered by
+ * `recordMycToolCall`.
  */
-export function observeMcpToolCompletion(tracker: TaskTelemetryTracker, event: McpToolCompletion, useful: boolean = false): void {
+export function observeMcpToolCompletion(tracker: TaskTelemetryTracker, event: McpToolCompletion): void {
 	if (!isMycToolName(event.toolName)) {
 		return
 	}
-	tracker.recordMycToolCall("myc", event.toolName, event.outcome === "success" ? "success" : "error", event.latencyMs, useful)
+	// Useful: success AND hasNonEmptyContent. Errors and empties
+	// are never useful even if they returned an "error body" with
+	// content — the user's "useful recall" means a real retrieval
+	// returned real rows.
+	const useful = event.outcome === "success" && event.hasNonEmptyContent === true
+	tracker.recordMycToolCall("myc", event.toolName, event.outcome, event.latencyMs, useful)
 }
 /**
  * ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 — record the canonical
- * `MycPrimeResult` outcome into the per-task tracker. ONE prime ⇒
- * ONE call to `recordMycToolCall` plus ONE call to
- * `recordMycPrimeStatus`. Cardinality invariant (ACT §17,
- * CORRECTION01).
+ * `MycPrimeResult` outcome into the per-task tracker.
  *
- * `ts` (the prime's recorded timestamp) and `now` (the wall clock at
- * the moment we feed the tracker) yield the latency. Both MUST be
- * numbers; non-finite values are clamped to 0.
+ * CORRECTION02 (this revision): this helper updates ONLY the
+ * prime-specific state (`automaticPrime.status` +
+ * `automaticPrime.attempted`). It does NOT call
+ * `recordMycToolCall`. The prime's MCP call counter increment
+ * flows exclusively through the McpHub completion observer when
+ * the prime helper actually invokes `mcpHub.callTool(...)`.
+ * That single-source-of-truth invariant is what makes the wire
+ * read `myc 1/1` (not `myc 2/2`) for a single real prime.
  *
- * CORRECTION01 (skipped semantics): the previous mapping of
- * `skipped` to `empty`/`success` incremented `callsSuccessful` for a
- * skipped prime (no actual MCP call occurred — `resolveMycServerName`
- * returned undefined and the helper short-circuited). That let the
- * wire read `myc 1/1` for a task where NO call happened. CORRECTION01
- * routes `skipped` exclusively through `recordMycPrimeStatus`; no
- * `recordMycToolCall` event is fired (because the underlying MCP
- * call was not made — there is no completion seam to feed). The
- * `myc N/N` compact form continues to count `callsSuccessful ===
- * callsTotal === actual completed myc MCP calls`, never short-
- * circuit skips. The `automaticPrime.status="skipped"` field
- * carries the skip semantics separately.
+ * `ts` is preserved on the call site for telemetry that may
+ * surface in MYC03 forensic diagnostics; it is NOT used here for
+ * the wire counter (latency follows the McpHub observer seam).
+ *
+ * Skipped semantics (preserved from CORRECTION01): `skipped`
+ * means no myc server was configured and no MCP call was made.
+ * Only the prime status flips; nothing else moves. The compact
+ * `myc S/T` form therefore continues to count actual
+ * completed myc MCP calls (never short-circuit skips).
  */
-export function observeMycPrimeResult(tracker: TaskTelemetryTracker, result: MycPrimeResult, now: number = Date.now()): void {
-	// "skipped" = no myc server configured (no MCP call was made at
-	// all). Record ONLY the prime status; do NOT increment any
-	// call-counter (no completion seam happened).
-	if (result.status === "skipped") {
-		tracker.recordMycPrimeStatus("skipped")
-		return
-	}
-	// Latency: clamp to 0 if ts is non-finite OR in the future
-	// (clock skew safety). 0 is a valid latency observation.
-	const latencyMs = typeof result.ts === "number" && Number.isFinite(result.ts) ? Math.max(0, now - result.ts) : 0
-	const isFailure = result.status === "failed"
-	const isUseful = result.status === "ok" && Boolean(result.text && result.text.length > 0)
-	const outcome: "success" | "empty" | "error" = isFailure ? "error" : isUseful ? "success" : "empty"
-	tracker.recordMycToolCall("myc", "myc_prime", outcome, latencyMs, isUseful)
+export function observeMycPrimeResult(tracker: TaskTelemetryTracker, result: MycPrimeResult): void {
 	tracker.recordMycPrimeStatus(result.status)
 }

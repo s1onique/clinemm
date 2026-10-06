@@ -212,7 +212,13 @@ function formatMycLastSection(m: NonNullable<TaskHeaderTelemetryStrip["myc"]>): 
 	if (!m.last) return ""
 	const op = m.last.operation
 	const outcome = m.last.outcome
-	const outcomeLabel = outcome === "success" ? "useful" : outcome === "empty" ? "empty" : "error"
+	// CORRECTION02 (reviewer P1-C fix): the `Last` section uses the
+	// bounded outcome enum directly (`success` / `empty` / `error`),
+	// NOT the aggregate "useful" label. `usefulRetrievals` is a
+	// task-aggregate counter shown in the separate Retrieval section.
+	// Using "useful" here conflated the per-call semantic with the
+	// aggregate counter. Wire-enum values render verbatim.
+	const outcomeLabel = outcome
 	const latency = typeof m.last.latencyMs === "number" ? ` · ${m.last.latencyMs} ms` : ""
 	return `Last\n${op} · ${outcomeLabel}${latency}`
 }
@@ -243,7 +249,9 @@ function formatMycLastSectionPlain(m: NonNullable<TaskHeaderTelemetryStrip["myc"
 	if (!m.last) return ""
 	const op = m.last.operation
 	const outcome = m.last.outcome
-	const outcomeLabel = outcome === "success" ? "useful" : outcome === "empty" ? "empty" : "error"
+	// CORRECTION02: see `formatMycLastSection` above. Bounded
+	// outcome verbatim, not "useful".
+	const outcomeLabel = outcome
 	const latency = typeof m.last.latencyMs === "number" ? ` · ${m.last.latencyMs} ms` : ""
 	return `${op} · ${outcomeLabel}${latency}`
 }

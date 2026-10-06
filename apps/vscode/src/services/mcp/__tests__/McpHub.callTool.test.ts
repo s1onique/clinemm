@@ -440,7 +440,12 @@ describe("McpHub.callTool", () => {
 			await hub.callTool("test-server", "myc_recall", { q: "x" }, "ulid-100")
 
 			events.should.have.length(1)
-			events[0].should.deepEqual({ serverName: "test-server", toolName: "myc_recall", outcome: "success" })
+			events[0].should.deepEqual({
+				serverName: "test-server",
+				toolName: "myc_recall",
+				outcome: "success",
+				hasNonEmptyContent: true,
+			})
 		})
 
 		it("fires once with outcome=error when the underlying transport throws", async () => {
@@ -457,7 +462,12 @@ describe("McpHub.callTool", () => {
 			}
 			threw.should.be.true()
 			events.should.have.length(1)
-			events[0].should.deepEqual({ serverName: "test-server", toolName: "myc_recall", outcome: "error" })
+			events[0].should.deepEqual({
+				serverName: "test-server",
+				toolName: "myc_recall",
+				outcome: "error",
+				hasNonEmptyContent: false,
+			})
 		})
 
 		it("does NOT fire when no observer is installed (single-slot semantics)", async () => {
@@ -511,6 +521,91 @@ describe("McpHub.callTool", () => {
 			const payload = JSON.stringify(events[0])
 			payload.should.not.match(/do-not-leak/)
 			payload.should.not.match(/secret/)
+		})
+
+		// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 CORRECTION02
+		// (P1-A semantic boundary). MCP distinguishes a
+		// protocol-level error (throw path) from a tool-level
+		// failure (resolved normally with isError=true). The
+		// observer MUST classify isError=true as outcome=error,
+		// not outcome=success. Without this gate, a model-visible
+		// myc_recall that returns normally with isError=true is
+		// displayed as `myc 1/1` on the wire — wrong.
+		it("CORRECTION02: resolved result with isError=true fires outcome=error (not success)", async () => {
+			const client = createMockClient({
+				content: [{ type: "text", text: "tool-internal failure" }],
+				isError: true,
+			})
+			const { hub } = createMcpHub({ client })
+			const events: Array<{ outcome: string; hasNonEmptyContent?: boolean }> = []
+			hub.setMcpToolObserver((event) => events.push(event))
+
+			const result = await hub.callTool("test-server", "myc_recall", undefined, "ulid-200")
+			// The result is still returned to the SDK; the
+			// observer just classifies the outcome as error.
+			;(result.isError === true).should.be.true()
+			events.should.have.length(1)
+			events[0].outcome.should.equal("error")
+			// hasNonEmptyContent is true because the tool returned
+			// a content array (an error body is still content from
+			// the user's perspective). The `useful` gate at the
+			// tracker level is independent: an isError=true call
+			// is NOT useful even if it returned content.
+		})
+
+		it("CORRECTION02: resolved result with isError=false and non-empty content fires outcome=success, hasNonEmptyContent=true", async () => {
+			const client = createMockClient({
+				content: [{ type: "text", text: "actual useful payload" }],
+				isError: false,
+			})
+			const { hub } = createMcpHub({ client })
+			const events: Array<{ outcome: string; hasNonEmptyContent: boolean }> = []
+			hub.setMcpToolObserver((event) => events.push(event))
+
+			await hub.callTool("test-server", "myc_recall", undefined, "ulid-201")
+			events.should.have.length(1)
+			events[0].outcome.should.equal("success")
+			events[0].hasNonEmptyContent.should.equal(true)
+		})
+
+		it("CORRECTION02: resolved result with isError=false and empty content fires outcome=empty, hasNonEmptyContent=false", async () => {
+			const client = createMockClient({ content: [], isError: false })
+			const { hub } = createMcpHub({ client })
+			const events: Array<{ outcome: string; hasNonEmptyContent: boolean }> = []
+			hub.setMcpToolObserver((event) => events.push(event))
+
+			await hub.callTool("test-server", "myc_recall", undefined, "ulid-202")
+			events.should.have.length(1)
+			events[0].outcome.should.equal("empty")
+			events[0].hasNonEmptyContent.should.equal(false)
+		})
+
+		it("CORRECTION02: resolved result with isError=true and empty content still fires outcome=error (isError wins)", async () => {
+			const client = createMockClient({ content: [], isError: true })
+			const { hub } = createMcpHub({ client })
+			const events: Array<{ outcome: string; hasNonEmptyContent: boolean }> = []
+			hub.setMcpToolObserver((event) => events.push(event))
+
+			await hub.callTool("test-server", "myc_recall", undefined, "ulid-203")
+			events.should.have.length(1)
+			events[0].outcome.should.equal("error")
+			events[0].hasNonEmptyContent.should.equal(false)
+		})
+
+		it("CORRECTION02: structuredContent (no content[]) fires hasNonEmptyContent=true", async () => {
+			const client = createMockClient({
+				content: [],
+				structuredContent: { key: "value" },
+				isError: false,
+			})
+			const { hub } = createMcpHub({ client })
+			const events: Array<{ outcome: string; hasNonEmptyContent: boolean }> = []
+			hub.setMcpToolObserver((event) => events.push(event))
+
+			await hub.callTool("test-server", "myc_recall", undefined, "ulid-204")
+			events.should.have.length(1)
+			events[0].hasNonEmptyContent.should.equal(true)
+			events[0].outcome.should.equal("success")
 		})
 	})
 })

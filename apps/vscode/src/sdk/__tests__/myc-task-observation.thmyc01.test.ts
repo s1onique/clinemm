@@ -44,20 +44,37 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / isMycToolName", () => {
 })
 
 describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (McpHub completion seam)", () => {
-	it("THMYC-OBS-02: successful myc_recall -> +1 successful, +1 retrieval, useful=0 (caller cannot see body)", () => {
+	it("THMYC-OBS-02: successful non-empty myc_recall -> +1 successful, +1 retrieval, +1 useful (CORRECTION02: hasNonEmptyContent=true)", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "success", latencyMs: 18 })
+		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "success", hasNonEmptyContent: true, latencyMs: 18 })
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(1)
 		expect(m?.callsSuccessful).toBe(1)
 		expect(m?.callsFailed).toBe(0)
 		expect(m?.retrievalCalls).toBe(1)
-		expect(m?.usefulRetrievals).toBe(0)
+		// CORRECTION02: with hasNonEmptyContent=true, the helper
+		// infers `useful=true`. The OLD signature had `useful=false`
+		// default because the McpHub observer couldn't see the body;
+		// now it sees the bounded `hasNonEmptyContent` boolean and
+		// sets useful accordingly. The privacy boundary is preserved
+		// (no body text crosses).
+		expect(m?.usefulRetrievals).toBe(1)
+	})
+
+	it("THMYC-OBS-02b: successful empty myc_recall -> +1 successful, +1 retrieval, useful=0 (CORRECTION02: hasNonEmptyContent=false)", () => {
+		const t = start()
+		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "success", hasNonEmptyContent: false, latencyMs: 20 })
+		const m = t.get()?.myc
+		expect(m?.callsTotal).toBe(1)
+		expect(m?.callsSuccessful).toBe(1)
+		expect(m?.callsFailed).toBe(0)
+		expect(m?.retrievalCalls).toBe(1)
+		expect(m?.usefulRetrievals).toBe(0) // empty recall is not useful
 	})
 
 	it("THMYC-OBS-03: errored myc_recall -> +1 failed, +0 successful, retrieval still +1 (P1 boundary fix)", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "error", latencyMs: 12 })
+		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "error", hasNonEmptyContent: false, latencyMs: 12 })
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(1)
 		expect(m?.callsSuccessful).toBe(0)
@@ -68,17 +85,22 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (Mc
 
 	it("THMYC-OBS-04: non-myc completion event is a no-op", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "read_file", outcome: "success" })
-		observeMcpToolCompletion(t, { toolName: "create_issue", outcome: "error" })
+		observeMcpToolCompletion(t, { toolName: "read_file", outcome: "success", hasNonEmptyContent: true })
+		observeMcpToolCompletion(t, { toolName: "create_issue", outcome: "error", hasNonEmptyContent: false })
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(0)
 		expect(m?.callsSuccessful).toBe(0)
 		expect(m?.callsFailed).toBe(0)
 	})
 
-	it("THMYC-OBS-05: useful=true is honored when caller supplies it (rare — body-aware callers)", () => {
+	it("THMYC-OBS-05: useful is derived from outcome+hasNonEmptyContent (no caller override in CORRECTION02)", () => {
+		// CORRECTION02: the helper signature no longer takes a
+		// `useful` override — usefulness is now strictly a function
+		// of (outcome === "success" && hasNonEmptyContent === true).
+		// This is the reviewer's "useful for that exact call is
+		// actually observed" semantic.
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "success", latencyMs: 20 }, true)
+		observeMcpToolCompletion(t, { toolName: "myc_recall", outcome: "success", hasNonEmptyContent: true, latencyMs: 20 })
 		const m = t.get()?.myc
 		expect(m?.usefulRetrievals).toBe(1)
 		expect(m?.callsSuccessful).toBe(1)
@@ -86,7 +108,7 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (Mc
 
 	it("THMYC-OBS-06: myc_remember (mutation) -> +1 successful, retrieval unchanged, useful unchanged", () => {
 		const t = start()
-		observeMcpToolCompletion(t, { toolName: "myc_remember", outcome: "success" })
+		observeMcpToolCompletion(t, { toolName: "myc_remember", outcome: "success", hasNonEmptyContent: true })
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(1)
 		expect(m?.callsSuccessful).toBe(1)
@@ -95,52 +117,55 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMcpToolCompletion (Mc
 	})
 })
 
-describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMycPrimeResult", () => {
-	it("THMYC-OBS-07: ok + non-empty text -> 1/1/0 + retrieval 1/1 + status ok + useful +1", () => {
+describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMycPrimeResult (CORRECTION02)", () => {
+	// CORRECTION02 (this revision): `observeMycPrimeResult` updates
+	// ONLY the prime-specific state (`automaticPrime.status` +
+	// `automaticPrime.attempted`). It NEVER calls `recordMycToolCall`
+	// — that single-source-of-truth invariant is what makes the
+	// wire read `myc 1/1` (not `myc 2/2`) for a single real prime.
+	// The actual counter increment for a real prime flows through
+	// the McpHub observer when the prime helper invokes
+	// `mcpHub.callTool(...)`. These tests assert the helper's
+	// status-only behavior in isolation; the cardinality-once
+	// integration test is in
+	// `McpHub.callTool.test.ts` CORRECTION02 block and a follow-up
+	// integration test (see TODO file).
+
+	it("THMYC-OBS-07: ok status -> automaticPrime.status=ok + attempted=true; no call counters touched", () => {
 		const t = start()
-		observeMycPrimeResult(t, { sessionId: "ses-x", status: "ok", text: "hello", ts: 1000 }, 1023)
+		observeMycPrimeResult(t, { sessionId: "ses-x", status: "ok", text: "hello", ts: 1000 })
 		const m = t.get()?.myc
-		expect(m?.callsTotal).toBe(1)
-		expect(m?.callsSuccessful).toBe(1)
+		expect(m?.callsTotal).toBe(0)
+		expect(m?.callsSuccessful).toBe(0)
 		expect(m?.callsFailed).toBe(0)
-		expect(m?.retrievalCalls).toBe(1)
-		expect(m?.usefulRetrievals).toBe(1)
+		expect(m?.retrievalCalls).toBe(0)
+		expect(m?.usefulRetrievals).toBe(0)
 		expect(m?.automaticPrime.status).toBe("ok")
 		expect(m?.automaticPrime.attempted).toBe(true)
-		expect(m?.last?.operation).toBe("prime")
-		expect(m?.last?.outcome).toBe("success")
-		expect(m?.last?.latencyMs).toBe(23)
+		expect(m?.last).toBeUndefined()
 	})
 
-	it("THMYC-OBS-08: ok + empty text -> 1/1/0 + retrieval 1/0 + status ok (empty useful)", () => {
+	it("THMYC-OBS-08: ok status with empty text -> same as OBS-07 (the helper does not inspect text)", () => {
 		const t = start()
-		observeMycPrimeResult(t, { sessionId: "ses-x", status: "ok", text: "", ts: 1000 }, 1023)
+		observeMycPrimeResult(t, { sessionId: "ses-x", status: "ok", text: "", ts: 1000 })
 		const m = t.get()?.myc
-		expect(m?.callsTotal).toBe(1)
-		expect(m?.callsSuccessful).toBe(1)
-		expect(m?.callsFailed).toBe(0)
-		expect(m?.retrievalCalls).toBe(1)
-		expect(m?.usefulRetrievals).toBe(0)
+		expect(m?.callsTotal).toBe(0)
 		expect(m?.automaticPrime.status).toBe("ok")
-		expect(m?.last?.outcome).toBe("empty")
+		expect(m?.last).toBeUndefined()
 	})
 
-	it("THMYC-OBS-09: failed -> 1/0/1 + status error + useful 0", () => {
+	it("THMYC-OBS-09: failed status -> automaticPrime.status=error + attempted=true; no call counters touched", () => {
 		const t = start()
-		observeMycPrimeResult(t, { sessionId: "ses-x", status: "failed", error: "boom", ts: 1000 }, 1023)
+		observeMycPrimeResult(t, { sessionId: "ses-x", status: "failed", error: "boom", ts: 1000 })
 		const m = t.get()?.myc
-		expect(m?.callsTotal).toBe(1)
-		expect(m?.callsSuccessful).toBe(0)
-		expect(m?.callsFailed).toBe(1)
-		expect(m?.retrievalCalls).toBe(1)
-		expect(m?.usefulRetrievals).toBe(0)
+		expect(m?.callsTotal).toBe(0)
 		expect(m?.automaticPrime.status).toBe("error")
-		expect(m?.last?.outcome).toBe("error")
+		expect(m?.automaticPrime.attempted).toBe(true)
 	})
 
-	it("THMYC-OBS-10: skipped -> zero call counters + status skipped (P1-B fix: skipped is not a call)", () => {
+	it("THMYC-OBS-10: skipped status -> automaticPrime.status=skipped + attempted=true; no call counters touched (CORRECTION01 P1-B fix)", () => {
 		const t = start()
-		observeMycPrimeResult(t, { sessionId: "ses-x", status: "skipped", error: "no server", ts: 1000 }, 1023)
+		observeMycPrimeResult(t, { sessionId: "ses-x", status: "skipped", error: "no server", ts: 1000 })
 		const m = t.get()?.myc
 		expect(m?.callsTotal).toBe(0)
 		expect(m?.callsSuccessful).toBe(0)
@@ -152,18 +177,11 @@ describe("ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01 / observeMycPrimeResult", () =
 		expect(m?.last).toBeUndefined()
 	})
 
-	it("THMYC-OBS-11: ts > now -> latency clamped to 0 (no NaN)", () => {
+	it("THMYC-OBS-11: pending status -> maps to idle (no transient state, per ACT §10)", () => {
 		const t = start()
-		observeMycPrimeResult(t, { sessionId: "ses-x", status: "ok", text: "x", ts: 9999 }, 1000)
+		observeMycPrimeResult(t, { sessionId: "ses-x", status: "pending", ts: 1000 })
 		const m = t.get()?.myc
-		expect(m?.last?.latencyMs).toBe(0)
-		expect(Number.isFinite(m?.last?.latencyMs)).toBe(true)
-	})
-
-	it("THMYC-OBS-12: non-finite ts -> latency clamped to 0", () => {
-		const t = start()
-		observeMycPrimeResult(t, { sessionId: "ses-x", status: "ok", text: "x", ts: Number.NaN }, 1000)
-		const m = t.get()?.myc
-		expect(m?.last?.latencyMs).toBe(0)
+		expect(m?.automaticPrime.status).toBe("idle")
+		expect(m?.automaticPrime.attempted).toBe(true)
 	})
 })
