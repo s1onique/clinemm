@@ -1,3 +1,44 @@
+## ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR — PASS_KERNEL_OFFLINE_REPAIR — 2026-10-06
+
+**Status:** CLOSED. Predecessor was CORRECTION02 (PASS_TASK_HEADER_ELM_RUNTIME_CODEC_BINDING_REPAIR at HEAD `7ed214a0b`); substrate unchanged. New LIVE failure: `kernelOffline=512, decodeErrors=0` (vs predecessor's `decodeErrors=512` against the wrong-kernel). First divergent stage established from code + tests: `KERNEL_FILE_MISSING`. Root cause: `defaultElmKernelPath()` resolved via `import.meta.url` to a source-tree path (`apps/vscode/elm/task-header-orchestration/vendor/task-header-orchestration.js`) that is filtered out of the packaged extension via the nested `.gitignore` (`vendor/*.js`) interacting with `.vscodeignore` discovery. The completion-authority kernel already uses the staged `runtime-assets/<name>.js` convention via `context.extensionUri.fsPath`. The TaskHeader loader was missing the analogous wire.
+
+**Bounded repair (5 files, 1259 insertions, 52 deletions):**
+- `apps/vscode/src/extension.ts`: wire `setTaskHeaderElmProductionKernelPath(path.join(context.extensionUri.fsPath, "runtime-assets", "task-header-orchestration.js"))` BEFORE SdkController construction, mirroring the completion-authority wiring at line 374.
+- `apps/vscode/src/sdk/task-header-elm-shadow.ts`: new module-scoped production resolver seam (`setTaskHeaderElmProductionKernelPath` / `resolveProductionKernelPath`) + loader-stage diagnostic record (`TaskHeaderElmKernelDiagnostic`) covering 8 bounded stages. External `TaskHeaderElmDecision` API is unchanged (still `kernel_offline` on every loader failure — bounded subreason is INTERNAL state surfaced via Command Palette). `invokeElmKernel` now reads `resolveProductionKernelPath()` instead of `defaultElmKernelPath()`.
+- `apps/vscode/src/sdk/__tests__/task-header-elm-runtime-shadow-loader-discriminator-c05.test.ts` (NEW): RED-1..RED-7 (KERNEL_FILE_MISSING / KERNEL_EVAL_FAILED / KERNEL_EXPORT_MISSING / KERNEL_MAIN_INIT_MISSING / KERNEL_PORTS_INVALID / happy path / asset id contract / simulated installed-extension layout). 8 tests PASS.
+- `apps/vscode/src/sdk/__tests__/task-header-elm-runtime-shadow-diagnostics.report-c02.test.ts`: extended FMT-01 to assert the new `kernel:` / `stage:` / `asset:` / `failureClass:` fields.
+- `.factory/acts/ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR.md` (NEW): full closure report.
+
+**Conservation gates (10 test files, 128 tests, ALL PASS):**
+- CORRECTION02 coexistence test green (sandbox isolation preserved).
+- c24-c-bridge test green (real production seam).
+- Diagnostics suite (summary-c01, report-c02, reset-c03, command-handler-c04) green.
+- Dogfood profile activation02 green.
+- No `_taskHeaderKernelNamespace ?? globalThis.Elm` fallback introduced (C12 hard rule preserved).
+- No Elm source / bundle / wire contract / authority / runtime-shadow flag change.
+- `git diff -- apps/vscode/elm/` EMPTY.
+
+**Verification gates:**
+- `bun run check-types` PASS
+- `bun run lint` PASS
+- `git diff --check` PASS
+- 10 focused vitest files / 128 tests PASS
+- typecheck/lint/diff --check all green
+
+**Predecessor LIVE (preserved as evidence):**
+```text
+evaluations=512
+matches=0
+kernelOffline=512
+decodeErrors=0
+```
+
+**FIRST_DIVERGENT_STAGE / FAILURE_CLASS / ROOT_CAUSE:** `KERNEL_FILE_MISSING` — source-tree path is filtered out of the packaged VSIX; the staged `runtime-assets/task-header-orchestration.js` was never read by the loader.
+
+**Artifacts:** `git rev-parse HEAD = 87be883b2`. Commit `CORRECTION03: stage TaskHeader Elm kernel via runtime-assets/ + loader-stage discriminator diagnostic` (5 files changed, 1259 insertions, 52 deletions). No VSIX / install / LIVE qualification performed (operator-owned).
+
+**Next ACT (operator-owned, blocked until installed LIVE confirms):** rebuild VSIX → install → launch dogfood → exercise Task Header → run `ClineMM: Task Header Elm Shadow Diagnostics`. The diagnostic should expose `kernel: stage: ready, failureClass: null` and the seven-counter block should show `kernelOffline=0, decodeErrors=0`. If the diagnostic reports `KERNEL_FILE_MISSING` instead, the build script `stage_elm_kernel_runtime_asset` regressed and that script's tests are the right next seam. ONLY after installed LIVE shows `READY + matches=N + zero failures` should the operator declare `PASS_TASK_HEADER_ELM_RUNTIME_SHADOW` and proceed to `ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY`.
+
 ## ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01 — HALTED — 2026-10-06
 
 **Status:** HALTED. The substrate ACT (`ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01`) and its two corrections (CORRECTION01 + CORRECTION02) are CLOSED at `7ed214a0b`; the substrate is unchanged. This ACT is the first to attempt a real macOS guest qualification for the substrate. It cannot run its c1-c6 lifecycle phases because the host is booted from a Time Machine local snapshot whose APFS volume is mounted with the firmware `protect` flag. Every Tart network call returns `Error: FailedToCreateVmFile` before any guest VM work begins; every shell write under `/Volumes/UserData/Users/chistyakov/` returns EPERM. The substrate's read-side (cache-free) is GREEN on this host; only the write-side is environmentally blocked.
