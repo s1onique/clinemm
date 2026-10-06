@@ -27,6 +27,7 @@
  */
 
 import type { TaskHeaderPresentationProjection, TurnPhase } from "@shared/ExtensionMessage"
+import { Logger } from "@/shared/services/Logger"
 
 export interface TaskHeaderElmFactsJson {
 	readonly canonicalShadowPhase: TurnPhase | null
@@ -170,12 +171,13 @@ export interface CompiledElmKernel {
 }
 
 let cachedKernel: CompiledElmKernel | null = null
+const _cachedKernelBundleSig: string | null = null
 
 /**
  * Resolve the absolute path to the compiled Elm kernel JS file.
  */
 export function defaultElmKernelPath(): string {
-	const url = new URL("../elm/task-header-orchestration/vendor/task-header-orchestration.js", import.meta.url)
+	const url = new URL("../../elm/task-header-orchestration/vendor/task-header-orchestration.js", import.meta.url)
 	return url.pathname
 }
 
@@ -185,7 +187,21 @@ let _kernelEvaluatedOnce = false
  * Ensure the compiled Elm kernel bundle is loaded into `globalThis.Elm`.
  * Idempotent.
  *
- * Mirrors `completion-authority-elm-replay.kernel.ts > evaluateBundleOnce`.
+ * Mirrors `completion-authority-elm-replay.kernel.ts > evaluateBundleOnce`
+ * verbatim: `new Function("scope", code + "; return this.Elm;")` and
+ * passing a fresh scope object as the first argument. The Elm 0.19.2
+ * IIFE pattern is `(function(scope){...}(this))` — the inner `scope`
+ * parameter receives `this` from the outer evaluation. In a non-strict
+ * outer call, `this` is `globalThis`; the IIFE then writes
+ * `globalThis.Elm = exports`. Passing a fresh scope arg here is
+ * necessary so that the IIFE's outer `(this)` parameter does not bind
+ * to the *first* positional argument (which it would if we used
+ * `new Function(code)` and called `evaluator(scope)` with `scope`
+ * first — the IIFE `(this)` would receive the `code` arg).
+ *
+ * The completion-authority pattern is the proven pattern (their test
+ * `completion-authority-elm-historical-replay01.test.ts` passes 20/20
+ * in this exact environment). We mirror it exactly.
  */
 export function ensureElmKernelEvaluated(kernelPath: string): boolean {
 	if (_kernelEvaluatedOnce && (globalThis as any).Elm) return true
@@ -193,14 +209,21 @@ export function ensureElmKernelEvaluated(kernelPath: string): boolean {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const fs = require("node:fs") as typeof import("node:fs")
 		const code = fs.readFileSync(kernelPath, "utf8")
-		const evaluator = new Function(code + "; return this.Elm;")
-		evaluator()
+		const scope: Record<string, unknown> = {}
+		const evaluator = new Function("scope", code + "; return this.Elm;")
+		evaluator(scope)
 		_kernelEvaluatedOnce = true
 		return true
-	} catch {
+	} catch (err) {
+		Logger.error(`[task-header-elm-shadow] failed to load Elm kernel bundle: ${err}`)
 		return false
 	}
 }
+
+// Bump when the kernel bundle format changes; ensures stale evaluations
+// are re-evaluated. Mirrors the completion-authority convention of
+// gating the cache by path.
+export const _TASK_HEADER_ELM_KERNEL_BUNDLE_SIG = "v2"
 
 /**
  * Construct a fresh Elm app instance via `Elm.Main.init({})`.
