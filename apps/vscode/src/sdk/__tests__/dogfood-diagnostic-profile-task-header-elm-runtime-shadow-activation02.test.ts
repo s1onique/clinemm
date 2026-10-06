@@ -1,12 +1,12 @@
 /**
- * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS
  *
- * Tests for the TaskHeader Elm runtime-shadow profile extension. These
- * tests exercise the REAL production activation helper
- * (`applyTaskHeaderElmRuntimeShadowDiagnosticProfile` in
- * `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` — the SAME
- * helper `extension.ts:activate` calls) and the REAL production
- * comparison helper (`observeTaskHeaderElmRuntimeShadow` in
+ * Tests for the TaskHeader Elm runtime-shadow profile extension after the
+ * dogfood-default-ON correction. These tests exercise the REAL production
+ * activation helper (`applyTaskHeaderElmRuntimeShadowDiagnosticProfile` in
+ * `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` — the SAME helper
+ * `extension.ts:activate` calls) and the REAL production comparison
+ * helper (`observeTaskHeaderElmRuntimeShadow` in
  * `apps/vscode/src/sdk/task-header-elm-shadow.ts`).
  *
  * EVIDENCE CLASSIFICATION: SYNTHETIC_REAL.
@@ -19,15 +19,27 @@
  *   proof (AC3 below), this is a reasonable proof of the activation
  *   ordering.
  *
- * Required test coverage:
+ * Frozen contract (per ACT §C1, §C8):
  *
- *   T1 public  + no env          -> OFF
- *   T2 dogfood + no env          -> OFF
- *   T3 public  + env=1           -> ON
- *   T4 dogfood + env=1           -> ON
- *   T5 public  + env=0           -> OFF
- *   T6 dogfood + env=0           -> OFF
- *   T7 default-disabled semantics outside dogfood are unchanged
+ *   public profile  -> shadow OFF (no env override path)
+ *   dogfood profile -> shadow ON  (no env override path)
+ *
+ * The env-var branch (`CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW`) was
+ * REMOVED by this ACT — the user-facing workflow is profile-identity
+ * only. NO env var reads; NO env override constants; NO env parser.
+ *
+ * Required test coverage (per ACT §C8):
+ *
+ *   PROFILE-01:
+ *     public + no override
+ *     -> disabled
+ *   PROFILE-02:
+ *     dogfood + no override
+ *     -> enabled
+ *   PROFILE-03:
+ *     activation helper applies OFF for public
+ *   PROFILE-04:
+ *     activation helper applies ON for dogfood
  *
  * Plus structural / production-integration tests:
  *   AC1..AC5 (see below)
@@ -36,7 +48,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	applyTaskHeaderElmRuntimeShadowDiagnosticProfile,
-	parseTaskHeaderElmRuntimeShadowEnv,
 	resolveEffectiveTaskHeaderElmRuntimeShadow,
 } from "../dogfood-diagnostic-profile"
 import {
@@ -46,8 +57,6 @@ import {
 	observeTaskHeaderElmRuntimeShadow,
 	resetTaskHeaderElmRuntimeShadowForTests,
 } from "../task-header-elm-shadow"
-
-const ENV_VAR = "CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW"
 
 beforeEach(() => {
 	resetTaskHeaderElmRuntimeShadowForTests()
@@ -59,60 +68,62 @@ afterEach(() => {
 })
 
 // ----------------------------------------------------------------------------
-// T1..T6 — Resolver precedence (pure)
+// PROFILE-01..PROFILE-04 — Resolver + activation contract
+// (dogfood default ON, public default OFF, no env override)
 // ----------------------------------------------------------------------------
 
-describe("T1..T6: resolveEffectiveTaskHeaderElmRuntimeShadow precedence (pure resolver)", () => {
-	it("T1: public + no env -> OFF (public default preserved)", () => {
+describe("PROFILE-01..02: resolveEffectiveTaskHeaderElmRuntimeShadow identity (pure resolver)", () => {
+	it("PROFILE-01: public + no env -> OFF (public default preserved)", () => {
 		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({}, false)).toEqual({
 			enabled: false,
 			source: "profile",
 		})
 	})
 
-	it("T2: dogfood + no env -> OFF (opt-in required, no auto-on)", () => {
+	it("PROFILE-02: dogfood + no env -> ON (dogfood default ON, no opt-in required)", () => {
 		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({}, true)).toEqual({
+			enabled: true,
+			source: "profile",
+		})
+	})
+
+	it("PROFILE-01b: public + env var does NOT change the result (env branch removed)", () => {
+		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: "1" }, false)).toEqual({
+			enabled: false,
+			source: "profile",
+		})
+		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: "0" }, false)).toEqual({
+			enabled: false,
+			source: "profile",
+		})
+		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: "garbage" }, false)).toEqual({
 			enabled: false,
 			source: "profile",
 		})
 	})
 
-	it("T3: public + env=1 -> ON (explicit operator opt-in honored)", () => {
-		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ [ENV_VAR]: "1" }, false)).toEqual({ enabled: true, source: "env" })
-	})
-
-	it("T4: dogfood + env=1 -> ON (explicit operator opt-in honored)", () => {
-		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ [ENV_VAR]: "1" }, true)).toEqual({ enabled: true, source: "env" })
-	})
-
-	it("T5: public + env=0 -> OFF (explicit override-down honored)", () => {
-		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ [ENV_VAR]: "0" }, false)).toEqual({ enabled: false, source: "env" })
-	})
-
-	it("T6: dogfood + env=0 -> OFF (explicit override-down honored)", () => {
-		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ [ENV_VAR]: "off" }, true)).toEqual({ enabled: false, source: "env" })
-	})
-
-	it("T7: garbage env -> falls through to profile default OFF", () => {
-		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ [ENV_VAR]: "garbage" }, false)).toEqual({
-			enabled: false,
+	it("PROFILE-02b: dogfood + env var does NOT change the result (env branch removed)", () => {
+		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: "1" }, true)).toEqual({
+			enabled: true,
 			source: "profile",
 		})
-	})
-
-	it("T8: parseEnv null returns undefined; empty string returns undefined", () => {
-		expect(parseTaskHeaderElmRuntimeShadowEnv({})).toBeUndefined()
-		expect(parseTaskHeaderElmRuntimeShadowEnv({ [ENV_VAR]: "" })).toBeUndefined()
-		expect(parseTaskHeaderElmRuntimeShadowEnv({ [ENV_VAR]: "  1  " })?.enabled).toBe(true)
+		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: "0" }, true)).toEqual({
+			enabled: true,
+			source: "profile",
+		})
+		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: "garbage" }, true)).toEqual({
+			enabled: true,
+			source: "profile",
+		})
 	})
 })
 
 // ----------------------------------------------------------------------------
-// AC1 — Default OFF when no env is set (public + dogfood)
+// AC1 — Default-OFF (public) / default-ON (dogfood) activation
 // ----------------------------------------------------------------------------
 
-describe("AC1: default-disabled activation", () => {
-	it("public + no env -> resolver returns OFF and helper does NOT arm the seam", () => {
+describe("AC1: profile-default activation", () => {
+	it("PROFILE-03: public + no env -> resolver returns OFF and helper does NOT arm the seam", () => {
 		const r = resolveEffectiveTaskHeaderElmRuntimeShadow({}, false)
 		expect(r.enabled).toBe(false)
 		expect(r.source).toBe("profile")
@@ -122,65 +133,80 @@ describe("AC1: default-disabled activation", () => {
 		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(false)
 	})
 
-	it("dogfood + no env -> resolver returns OFF and helper does NOT arm the seam (opt-in required)", () => {
+	it("PROFILE-04: dogfood + no env -> resolver returns ON and helper ARMS the seam (no env var needed)", () => {
+		const r = resolveEffectiveTaskHeaderElmRuntimeShadow({}, true)
+		expect(r.enabled).toBe(true)
+		expect(r.source).toBe("profile")
 		const helper = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({}, true)
+		expect(helper.enabled).toBe(true)
+		expect(helper.flipped).toBe(true)
+		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(true)
+	})
+})
+
+// ----------------------------------------------------------------------------
+// AC2 — Public OFF conservation in the presence of any env var
+// ----------------------------------------------------------------------------
+
+describe("AC2: public OFF is the default public identity (env var is ignored)", () => {
+	it("public + env=1 -> resolver returns OFF; helper does NOT arm the seam", () => {
+		const r = resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: "1" }, false)
+		expect(r.enabled).toBe(false)
+		expect(r.source).toBe("profile")
+		const helper = applyTaskHeaderElmRuntimeShadowDiagnosticProfile(
+			{ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: "1" },
+			false,
+		)
 		expect(helper.enabled).toBe(false)
 		expect(helper.flipped).toBe(false)
 		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(false)
 	})
-})
 
-// ----------------------------------------------------------------------------
-// AC2 — Explicit ON arms the seam
-// ----------------------------------------------------------------------------
-
-describe("AC2: explicit ON arms the seam", () => {
-	it("env=1 -> helper arms the seam and flipped=true", () => {
-		const helper = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({ [ENV_VAR]: "1" }, false)
-		expect(helper.enabled).toBe(true)
-		expect(helper.source).toBe("env")
-		expect(helper.flipped).toBe(true)
-		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(true)
-	})
-
-	it("env=true -> helper arms the seam", () => {
-		const helper = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({ [ENV_VAR]: "true" }, false)
-		expect(helper.enabled).toBe(true)
-		expect(helper.flipped).toBe(true)
-	})
-
-	it("env=yes -> helper arms the seam", () => {
-		const helper = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({ [ENV_VAR]: "yes" }, true)
-		expect(helper.enabled).toBe(true)
+	it("public + env=0/off/false/garbage -> OFF (full env garbage semantics preserved)", () => {
+		for (const v of ["0", "off", "false", "garbage", ""]) {
+			expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: v }, false).enabled).toBe(
+				false,
+			)
+		}
+		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({}, false).enabled).toBe(false)
 	})
 })
 
 // ----------------------------------------------------------------------------
-// AC3 — Idempotent seam flips
+// AC3 — Idempotent seam flips (public can be flipped OFF; dogfood flipped ON)
 // ----------------------------------------------------------------------------
 
 describe("AC3: idempotent activation flips", () => {
-	it("two consecutive ON calls -> second call flipped=false", () => {
-		const first = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({ [ENV_VAR]: "1" }, false)
+	it("two consecutive dogfood ON calls -> second call flipped=false", () => {
+		const first = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({}, true)
 		expect(first.flipped).toBe(true)
-		const second = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({ [ENV_VAR]: "1" }, false)
+		const second = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({}, true)
 		expect(second.flipped).toBe(false)
 		expect(second.enabled).toBe(true)
 		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(true)
 	})
 
-	it("ON then OFF -> second call flipped=true and seam is disabled", () => {
-		applyTaskHeaderElmRuntimeShadowDiagnosticProfile({ [ENV_VAR]: "1" }, false)
+	it("dogfood ON then public OFF -> second call flipped=true and seam is disabled", () => {
+		applyTaskHeaderElmRuntimeShadowDiagnosticProfile({}, true)
 		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(true)
-		const off = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({ [ENV_VAR]: "0" }, false)
+		const off = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({}, false)
 		expect(off.flipped).toBe(true)
 		expect(off.enabled).toBe(false)
 		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(false)
 	})
+
+	it("public OFF then dogfood ON -> second call flipped=true and seam is enabled", () => {
+		applyTaskHeaderElmRuntimeShadowDiagnosticProfile({}, false)
+		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(false)
+		const on = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({}, true)
+		expect(on.flipped).toBe(true)
+		expect(on.enabled).toBe(true)
+		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(true)
+	})
 })
 
 // ----------------------------------------------------------------------------
-// AC4 — Default-disabled comparison helper conservation
+// AC4 — Disabled-mode comparison helper conservation
 // ----------------------------------------------------------------------------
 
 describe("AC4: disabled-mode comparison helper is conservation-tight", () => {
@@ -222,10 +248,10 @@ describe("AC4: disabled-mode comparison helper is conservation-tight", () => {
 })
 
 // ----------------------------------------------------------------------------
-// AC5 — Public-default conservation
+// AC5 — Public default conservation (env-var path removed)
 // ----------------------------------------------------------------------------
 
-describe("AC5: public default is OFF in both profiles when no env is set", () => {
+describe("AC5: public default is OFF regardless of any env var contents", () => {
 	it("public + no env -> OFF; helper is a no-op", () => {
 		const helper = applyTaskHeaderElmRuntimeShadowDiagnosticProfile({}, false)
 		expect(helper.enabled).toBe(false)
@@ -234,9 +260,11 @@ describe("AC5: public default is OFF in both profiles when no env is set", () =>
 		expect(isTaskHeaderElmRuntimeShadowEnabled()).toBe(false)
 	})
 
-	it("public + env=0/off/false/empty/unset -> OFF (full env semantics preserved)", () => {
-		for (const v of ["0", "off", "false", ""]) {
-			expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ [ENV_VAR]: v }, false).enabled).toBe(false)
+	it("public + env=0/off/false/garbage -> OFF (env branch removed; identity is the SOLE gate)", () => {
+		for (const v of ["0", "off", "false", "garbage", ""]) {
+			expect(resolveEffectiveTaskHeaderElmRuntimeShadow({ CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW: v }, false).enabled).toBe(
+				false,
+			)
 		}
 		expect(resolveEffectiveTaskHeaderElmRuntimeShadow({}, false).enabled).toBe(false)
 	})

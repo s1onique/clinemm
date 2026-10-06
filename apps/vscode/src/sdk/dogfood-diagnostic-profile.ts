@@ -1707,28 +1707,31 @@ export function initializeElmAuthorityRuntime(kernelPath: string | null): {
 }
 
 // ===========================================================================
-// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION
+// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS
 //
 // Central dogfood profile resolver for the TaskHeader Elm runtime-shadow
 // diagnostic.
 //
 // CONTRACT — frozen in this ACT:
-//   - The env var `CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW` is read
-//     in EXACTLY ONE place — `parseTaskHeaderElmRuntimeShadowEnv` below.
-//     All other consumers go through the module-level seam in
-//     `task-header-elm-shadow.ts`.
+//   - There is NO env-var override. The user-facing workflow is:
+//       public profile  -> shadow OFF (no Elm evaluation)
+//       dogfood profile -> shadow ON  (automatic; the operator does NOT
+//                                       need to set any env var)
 //   - The activation helper
 //     (`applyTaskHeaderElmRuntimeShadowDiagnosticProfile`) is called
 //     from `extension.ts:activate` (sibling to the existing THSICAP
 //     / W carrier / D-knob activations); there is exactly ONE
 //     production activation path, no copied orchestration in tests.
 //
-// Hard invariants (ACT §C1, §C3):
-//   - DEFAULT_OFF in BOTH profiles. The shadow is opt-in only — the
-//     public install NEVER evaluates the Elm kernel against the
-//     TaskHeader production seam; the dogfood kernel requires the
-//     operator to opt in (via the env var) so a fresh dogfood session
-//     does not silently turn the shadow on.
+// Hard invariants (ACT §C2, §C3):
+//   - public install NEVER evaluates the Elm kernel against the
+//     TaskHeader production seam. The shadow is OFF in public by
+//     identity; no env var, no flag, no command flips it on.
+//   - dogfood install evaluates the Elm kernel against the TaskHeader
+//     production seam automatically. The shadow is ON in dogfood by
+//     identity; the operator does NOT need to set any env var to see
+//     the bounded observations (the Command Palette diagnostic
+//     surfaces them — see `task-header-elm-shadow-diagnostics.ts`).
 //   - When disabled: no Elm kernel load, no filesystem read for the
 //     TaskHeader Elm asset, no Elm initialization, no comparison, no
 //     log emission, no state mutation, no wire delta, no TaskHeader
@@ -1741,13 +1744,9 @@ export function initializeElmAuthorityRuntime(kernelPath: string | null): {
 //
 // Precedence (top wins; deterministic; fail-closed):
 //
-//   1. Explicit env override:
-//        `=1`/`true`/`yes` -> ON
-//        `=0`/`off`/`false` -> OFF
-//        garbage / unset -> falls through to (2)
-//   2. Profile default:
-//        `isDogfood === true`  -> OFF (opt-in required)
-//        `isDogfood === false` -> OFF (public default)
+//   1. Profile identity (the ONLY gate; no env var):
+//        `isDogfood === true`  -> ON  (dogfood default ON)
+//        `isDogfood === false` -> OFF (public default OFF)
 //
 // REMOVAL_TRIGGER (per Factory doctrine on temporary diagnostics):
 //   first successful LIVE qualification that authorizes cutover
@@ -1758,7 +1757,8 @@ export function initializeElmAuthorityRuntime(kernelPath: string | null): {
 // When cutover lands, REMOVE this resolver + activation helper +
 // `runtime-assets/task-header-orchestration.js` staging + the
 // comparison seam at `SdkController.ts:5883-5902` + the wiring in
-// `extension.ts:activate` together.
+// `extension.ts:activate` + the Command Palette diagnostic +
+// the registry entry + the package.json declaration together.
 // ===========================================================================
 
 import {
@@ -1766,50 +1766,28 @@ import {
 	setTaskHeaderElmRuntimeShadowEnabled as _setTaskHeaderElmRuntimeShadowEnabled,
 } from "./task-header-elm-shadow"
 
-export const TASK_HEADER_ELM_RUNTIME_SHADOW_ENV_VAR = "CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW"
-
-export function parseTaskHeaderElmRuntimeShadowEnv(env: NodeJS.ProcessEnv): { enabled: boolean } | undefined {
-	const raw = env[TASK_HEADER_ELM_RUNTIME_SHADOW_ENV_VAR]
-	if (typeof raw !== "string" || raw.length === 0) {
-		return undefined
-	}
-	const normalized = raw.trim().toLowerCase()
-	if (TRUTHY_DISABLE.has(normalized)) {
-		return { enabled: false }
-	}
-	if (TRUTHY_ENABLE.has(normalized)) {
-		return { enabled: true }
-	}
-	return undefined
-}
-
 /**
- * Resolves the EFFECTIVE TaskHeader Elm runtime-shadow state from the
- * env var and the dogfood identity bit. Pure / synchronous / no I/O.
+ * Resolves the EFFECTIVE TaskHeader Elm runtime-shadow state from
+ * the dogfood identity bit. Pure / synchronous / no I/O / NO env var.
  *
- * Precedence (top wins; deterministic; fail-closed):
+ * Contract (frozen):
+ *   - `isDogfood === true`  -> ON  (dogfood default ON, automatic)
+ *   - `isDogfood === false` -> OFF (public default OFF, automatic)
  *
- *   1. Explicit env override:
- *        `=1`/`true`/`yes` -> ON
- *        `=0`/`off`/`false` -> OFF
- *        garbage / unset -> falls through to (2)
- *   2. Profile default:
- *        `isDogfood === true`  -> OFF (opt-in required)
- *        `isDogfood === false` -> OFF (public default)
+ * The env-var branch from the predecessor ACT was REMOVED by
+ * ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS — the user does
+ * NOT want another env-var workflow for this temporary diagnostic.
+ * The `env` parameter is kept for source-compatibility (and so the
+ * signature continues to match the central-diagnostic-profile
+ * convention), but it is intentionally unused.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function resolveEffectiveTaskHeaderElmRuntimeShadow(
 	env: NodeJS.ProcessEnv,
 	isDogfood: boolean,
-): { readonly enabled: boolean; readonly source: "env" | "profile" } {
-	const parsed = parseTaskHeaderElmRuntimeShadowEnv(env)
-	if (parsed !== undefined) {
-		return { enabled: parsed.enabled, source: "env" }
-	}
-	// Layer 2: profile default. Both public and dogfood default to OFF;
-	// dogfood operators opt in via the env var. This keeps LIVE
-	// qualification noise predictable (no auto-on shadow).
-	void isDogfood
-	return { enabled: false, source: "profile" }
+): { readonly enabled: boolean; readonly source: "profile" } {
+	// Layer 1 (the only layer): profile identity.
+	return { enabled: isDogfood, source: "profile" }
 }
 
 /**
@@ -1836,16 +1814,16 @@ export function resolveEffectiveTaskHeaderElmRuntimeShadow(
 export function applyTaskHeaderElmRuntimeShadowDiagnosticProfile(
 	env: NodeJS.ProcessEnv,
 	isDogfood: boolean,
-): { readonly enabled: boolean; readonly source: "env" | "profile"; readonly flipped: boolean } {
+): { readonly enabled: boolean; readonly source: "profile"; readonly flipped: boolean } {
 	const resolved = resolveEffectiveTaskHeaderElmRuntimeShadow(env, isDogfood)
 	const was = _publicIsTaskHeaderElmRuntimeShadowEnabled()
 	if (resolved.enabled && !was) {
 		_setTaskHeaderElmRuntimeShadowEnabled(true)
-		return { enabled: true, source: resolved.source, flipped: true }
+		return { enabled: true, source: "profile", flipped: true }
 	}
 	if (!resolved.enabled && was) {
 		_setTaskHeaderElmRuntimeShadowEnabled(false)
-		return { enabled: false, source: resolved.source, flipped: true }
+		return { enabled: false, source: "profile", flipped: true }
 	}
-	return { enabled: resolved.enabled, source: resolved.source, flipped: false }
+	return { enabled: resolved.enabled, source: "profile", flipped: false }
 }

@@ -425,12 +425,13 @@ _VSIX_WEBVIEW_PREFIX = "extension/webview-ui/build/assets/"
 # the completion-authority kernel from this path
 # (`runtime-assets/completion-authority.js`) UNCONDITIONALLY. The
 # task-header-orchestration kernel is also loaded from
-# `runtime-assets/task-header-orchestration.js` when the operator
-# opts in via `CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW=1`. A
-# missing kernel bundle at activation time is a P1 packaging
-# defect that must be caught at build time. This table pins the
-# expected locations so verify_vsix_payload can assert both
-# kernels are present.
+# `runtime-assets/task-header-orchestration.js` when the runtime
+# shadow is enabled — i.e. in the dogfood profile (default ON) and
+# in public when (legacy) env overrides apply (post-correction01 the
+# env branch is removed; dogfood-only by identity). A missing kernel
+# bundle at activation time is a P1 packaging defect that must be
+# caught at build time. This table pins the expected locations so
+# verify_vsix_payload can assert both kernels are present.
 _VERSION_ATTR_RE = re.compile(r'<Identity\b[^>]*\bVersion="([^"]+)"', re.IGNORECASE)
 
 # Per-kernel table: source-of-truth (relative to apps/vscode inside

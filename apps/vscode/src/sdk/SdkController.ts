@@ -5894,7 +5894,7 @@ export class Controller {
 						})(),
 					}
 					const tsProjection = selectTaskHeaderPresentation(taskHeaderInputs)
-					// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION:
+					// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
 					// Drive the proven Elm kernel against the SAME
 					// `Facts` quadruple the production TS selector
 					// consumed, and append the bounded comparison
@@ -5902,11 +5902,18 @@ export class Controller {
 					// is the production return value in EVERY branch;
 					// the shadow's ONLY effect is side-channel
 					// observation (no wire delta, no state mutation).
-					// When the dogfood-diagnostic-profile seam is
-					// OFF (the public default AND the dogfood default),
-					// the comparison helper short-circuits without
-					// invoking the Elm kernel, reading the runtime
-					// asset, or emitting any wire delta.
+					//
+					// Profile defaults (frozen by the correction):
+					//   public  -> shadow OFF (short-circuit)
+					//   dogfood -> shadow ON  (always evaluate)
+					// When the seam is OFF (public), the comparison
+					// helper short-circuits without invoking the Elm
+					// kernel, reading the runtime asset, or emitting
+					// any wire delta. When the seam is ON (dogfood),
+					// the bounded observation ring is populated at
+					// every publication; the Command Palette
+					// diagnostic surfaces those observations for
+					// off-line inspection.
 					return await observeTaskHeaderElmRuntimeShadow({
 						ts: tsProjection,
 						facts: buildTaskHeaderElmFactsJson(taskHeaderInputs),

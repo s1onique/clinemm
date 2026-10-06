@@ -53,6 +53,14 @@ import {
 	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
 } from "@/sdk/task-header-selector-input-capture-runtime"
 import {
+	applyTaskHeaderElmRuntimeShadowDiagnosticsAction,
+	buildTaskHeaderElmRuntimeShadowDiagnosticsActionOptions,
+	buildTaskHeaderElmRuntimeShadowDiagnosticsDisabledMessage,
+	buildTaskHeaderElmRuntimeShadowDiagnosticsReport,
+	isTaskHeaderElmRuntimeShadowDiagnosticsEnabled,
+	selectTaskHeaderElmRuntimeShadowDiagnosticsAction,
+} from "@/sdk/task-header-elm-shadow-diagnostics"
+import {
 	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
 	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
 } from "@/sdk/turn-state-writer-provenance-runtime"
@@ -210,24 +218,29 @@ export async function activate(context: vscode.ExtensionContext) {
 	// `dogfood-diagnostic-profile-thsicap-activation.test.ts`.
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
 
-	// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION:
+	// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
 	// Arm the TaskHeader Elm runtime-shadow comparison seam at the
 	// SAME EARLIEST initialization seam, BEFORE SdkController
 	// construction. The helper composes the effective shadow state
-	// (explicit env override `CLINEMM_DIAG_TASK_HEADER_ELM_RUNTIME_SHADOW`
-	// > profile default OFF in both public and dogfood) and flips
-	// the module seam in `task-header-elm-shadow.ts` idempotently.
+	// (profile identity only — NO env var) and flips the module
+	// seam in `task-header-elm-shadow.ts` idempotently.
 	//
-	// DEFAULT_OFF. The shadow is opt-in only — public installs
-	// NEVER evaluate the Elm kernel against the TaskHeader
-	// production seam; the dogfood kernel requires the operator
-	// to opt in via the env var so a fresh dogfood session does
-	// not silently turn the shadow on. When the seam is disabled,
-	// the comparison helper at the publication block short-circuits
-	// without invoking the Elm kernel, reading the runtime asset,
-	// or emitting any wire delta. The TS production selector
-	// (`selectTaskHeaderPresentation`) remains authoritative in
-	// EVERY branch.
+	// Profile defaults (frozen by the correction):
+	//   public profile  -> shadow OFF
+	//   dogfood profile -> shadow ON
+	// The operator does NOT need to set any env var. When the seam
+	// is disabled (public), the comparison helper at the
+	// publication block short-circuits without invoking the Elm
+	// kernel, reading the runtime asset, or emitting any wire
+	// delta. When the seam is enabled (dogfood), the bounded
+	// observation ring is populated at every publication; the
+	// Command Palette diagnostic
+	// (`cline.taskHeaderElmShadowDiagnostics`) surfaces those
+	// observations for off-line inspection.
+	//
+	// The TS production selector (`selectTaskHeaderPresentation`)
+	// remains authoritative in EVERY branch — the shadow is
+	// observe-only.
 	//
 	// REMOVAL_TRIGGER: first successful LIVE qualification that
 	// authorizes TaskHeader authority cutover to
@@ -1038,6 +1051,50 @@ ${ctx.cellJson || "{}"}
 				void vscode.window.showErrorMessage(
 					`TaskHeader selector-input clear failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
+			}
+		}),
+		// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
+		// Single Command Palette entry point for the TaskHeader Elm
+		// runtime-shadow diagnostic. The runtime shadow is enabled
+		// AUTOMATICALLY in the dogfood profile (no env var; see
+		// `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts`). When
+		// invoked:
+		//   1. Show the compact summary via `showInformationMessage`.
+		//   2. Open a `showQuickPick` action picker with three
+		//      entries: Copy Report / Reset Observations / Close.
+		// When invoked OUTSIDE dogfood (shadow disabled), show the
+		// spec-mandated bounded message
+		// "Task Header Elm runtime shadow is disabled in this
+		// profile." (no QuickPick). This keeps the command safe to
+		// invoke regardless of profile — no new context-key
+		// framework is introduced (per C7).
+		//
+		// REMOVAL_TRIGGER: first successful LIVE qualification that
+		// authorizes cutover to `ORCHESTRATION03-AUTHORITY`, OR the
+		// first real LIVE semantic mismatch that identifies a
+		// contract defect, OR CAPTURE_INSUFFICIENT. When cutover
+		// lands, REMOVE this handler + the package.json declaration +
+		// the registry entry + the host-side diagnostics module
+		// together.
+		vscode.commands.registerCommand(commands.TaskHeaderElmShadowDiagnostics, async () => {
+			if (!isTaskHeaderElmRuntimeShadowDiagnosticsEnabled()) {
+				void vscode.window.showInformationMessage(buildTaskHeaderElmRuntimeShadowDiagnosticsDisabledMessage())
+				return
+			}
+			const report = buildTaskHeaderElmRuntimeShadowDiagnosticsReport()
+			void vscode.window.showInformationMessage(report)
+			const options = buildTaskHeaderElmRuntimeShadowDiagnosticsActionOptions()
+			const selection = await vscode.window.showQuickPick(options as readonly string[], {
+				title: "Task Header Elm Shadow Diagnostics",
+				placeHolder: "Choose an action",
+			})
+			if (!selection) {
+				return
+			}
+			const action = selectTaskHeaderElmRuntimeShadowDiagnosticsAction(selection)
+			const resultMessage = await applyTaskHeaderElmRuntimeShadowDiagnosticsAction(action)
+			if (resultMessage.length > 0) {
+				void vscode.window.showInformationMessage(resultMessage)
 			}
 		}),
 		// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:

@@ -204,6 +204,33 @@ const ClineCommands = {
 	// declaration + the extension.ts handler + the host dump runtime
 	// MUST be removed TOGETHER.
 	DumpMycPrimeLiveDiagnostic: prefix + ".debug.dumpMycPrimeLiveDiagnostic",
+	// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
+	// Single Command Palette entry point for the TaskHeader Elm
+	// runtime-shadow observer's bounded diagnostics. The runtime
+	// shadow is enabled AUTOMATICALLY in the dogfood profile (no
+	// env var, no flag — see
+	// `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts`).
+	// When invoked, the handler shows the compact summary
+	// (`Task Header Elm Runtime Shadow` header + the seven
+	// classification counters + the last N bounded observations)
+	// via `vscode.window.showInformationMessage`, then opens a
+	// `showQuickPick` action picker with three entries: Copy
+	// Report / Reset Observations / Close. "Reset Observations"
+	// clears the bounded observation ring ONLY — does NOT touch
+	// the enabled flag, the TS presentation, or the Elm kernel
+	// state. When invoked OUTSIDE dogfood (shadow disabled), the
+	// handler returns a single bounded message
+	// ("Task Header Elm runtime shadow is disabled in this
+	// profile.") so the operator gets an obvious, non-crashing
+	// no-op. REMOVAL_TRIGGER: first successful LIVE qualification
+	// that authorizes cutover to `ORCHESTRATION03-AUTHORITY`, OR
+	// the first real LIVE semantic mismatch that identifies a
+	// contract defect, OR CAPTURE_INSUFFICIENT. On removal, this
+	// registry entry + the package.json declaration + the
+	// extension.ts handler + the host-side diagnostics module +
+	// the SOT-level helpers in `task-header-elm-shadow.ts` MUST
+	// be removed TOGETHER.
+	TaskHeaderElmShadowDiagnostics: prefix + ".taskHeaderElmShadowDiagnostics",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

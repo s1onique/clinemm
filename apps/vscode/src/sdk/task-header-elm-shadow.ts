@@ -391,6 +391,12 @@ export interface TaskHeaderElmRuntimeShadowSink {
 	readonly size: number
 	readonly snapshot: readonly TaskHeaderElmRuntimeShadowObservation[]
 	clear(): void
+	/**
+	 * Test seam — change the bounded ring capacity. Used by
+	 * summary / report tests to force the eviction policy on
+	 * small inputs. NOT consumed in production code paths.
+	 */
+	setCapacity?(capacity: number): void
 }
 
 const DEFAULT_RING_SIZE = 512
@@ -416,6 +422,16 @@ class ArrayRingSink implements TaskHeaderElmRuntimeShadowSink {
 
 	clear(): void {
 		this.buf.length = 0
+	}
+
+	setCapacity(capacity: number): void {
+		if (capacity < 1) {
+			throw new Error(`setCapacity: capacity must be >= 1, got ${capacity}`)
+		}
+		this.cap = capacity
+		while (this.buf.length > this.cap) {
+			this.buf.shift()
+		}
 	}
 }
 
@@ -491,8 +507,182 @@ export function clearTaskHeaderElmRuntimeShadowObservations(): void {
 	sink.clear()
 }
 
+/**
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
+ * Operator-facing alias for the Command Palette diagnostic's
+ * "Reset Observations" action. Same semantic as
+ * {@link clearTaskHeaderElmRuntimeShadowObservations}: clear the
+ * bounded observation ring only. MUST NOT touch the enabled flag,
+ * the TS presentation, the Elm kernel state, or any other
+ * production state.
+ */
+export function resetTaskHeaderElmRuntimeShadowObservations(): void {
+	clearTaskHeaderElmRuntimeShadowObservations()
+}
+
 export function getTaskHeaderElmRuntimeShadowBufferSize(): number {
 	return DEFAULT_RING_SIZE
+}
+
+/**
+ * Test seam — change the bounded ring capacity. Delegates to the
+ * active sink's `setCapacity`. Used by summary / report tests to
+ * force the eviction policy on small inputs.
+ */
+export function setTaskHeaderElmRuntimeShadowBufferSize(capacity: number): void {
+	const sink = getTaskHeaderElmRuntimeShadowSink() ?? getOrInitSharedRingSink()
+	if (typeof sink.setCapacity === "function") {
+		sink.setCapacity(capacity)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Summary + report (Command Palette diagnostic surface)
+// ---------------------------------------------------------------------------
+
+export interface TaskHeaderElmRuntimeShadowSummary {
+	readonly evaluations: number
+	readonly matches: number
+	readonly mismatchPhase: number
+	readonly mismatchSource: number
+	readonly mismatchSeq: number
+	readonly kernelOffline: number
+	readonly decodeErrors: number
+}
+
+/**
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
+ * Pure aggregator — fold the bounded observation ring into the
+ * seven summary counters. The ring itself is the source of truth
+ * (no parallel mutable counters); the summary is re-derivable on
+ * every invocation.
+ *
+ * Counted classifications (closed set, mirrors the bounded
+ * `TaskHeaderElmRuntimeShadowClassification` union):
+ *   - MATCH                -> matches
+ *   - MISMATCH_PHASE       -> mismatchPhase
+ *   - MISMATCH_SOURCE      -> mismatchSource
+ *   - MISMATCH_SEQ         -> mismatchSeq
+ *   - ELM_KERNEL_OFFLINE   -> kernelOffline
+ *   - ELM_DECODE_ERROR     -> decodeErrors
+ *
+ * `evaluations` is the total of all six counters — i.e. the number
+ * of ring entries (post-eviction). This is the SAME number as
+ * `observations.length`.
+ */
+export function summarizeTaskHeaderElmRuntimeShadowObservations(
+	observations: readonly TaskHeaderElmRuntimeShadowObservation[],
+): TaskHeaderElmRuntimeShadowSummary {
+	let matches = 0
+	let mismatchPhase = 0
+	let mismatchSource = 0
+	let mismatchSeq = 0
+	let kernelOffline = 0
+	let decodeErrors = 0
+	for (const obs of observations) {
+		switch (obs.classification) {
+			case "MATCH":
+				matches++
+				break
+			case "MISMATCH_PHASE":
+				mismatchPhase++
+				break
+			case "MISMATCH_SOURCE":
+				mismatchSource++
+				break
+			case "MISMATCH_SEQ":
+				mismatchSeq++
+				break
+			case "ELM_KERNEL_OFFLINE":
+				kernelOffline++
+				break
+			case "ELM_DECODE_ERROR":
+				decodeErrors++
+				break
+		}
+	}
+	const evaluations = matches + mismatchPhase + mismatchSource + mismatchSeq + kernelOffline + decodeErrors
+	return {
+		evaluations,
+		matches,
+		mismatchPhase,
+		mismatchSource,
+		mismatchSeq,
+		kernelOffline,
+		decodeErrors,
+	}
+}
+
+const REPORT_RECENT_OBSERVATIONS = 10
+
+/**
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
+ * Pure formatter — produce the compact diagnostic report the
+ * Command Palette surfaces. Includes the seven summary counters and
+ * the most-recent bounded observations (last 10 by default; older
+ * observations are elided in the tail with `…`).
+ *
+ * The report carries ONLY bounded semantic facts (TS projection,
+ * Elm projection, classification, the four-input `Facts` quadruple)
+ * — never prompt text, model output, MCP contents, or file paths.
+ */
+export function formatTaskHeaderElmRuntimeShadowReport(
+	observations: readonly TaskHeaderElmRuntimeShadowObservation[],
+): string {
+	const summary = summarizeTaskHeaderElmRuntimeShadowObservations(observations)
+	const lines: string[] = []
+	lines.push("Task Header Elm Runtime Shadow")
+	lines.push("")
+	lines.push(`evaluations:      ${summary.evaluations}`)
+	lines.push(`matches:          ${summary.matches}`)
+	lines.push(`mismatchPhase:    ${summary.mismatchPhase}`)
+	lines.push(`mismatchSource:   ${summary.mismatchSource}`)
+	lines.push(`mismatchSeq:      ${summary.mismatchSeq}`)
+	lines.push(`kernelOffline:    ${summary.kernelOffline}`)
+	lines.push(`decodeErrors:     ${summary.decodeErrors}`)
+	if (observations.length > 0) {
+		lines.push("")
+		const tail = observations.slice(-REPORT_RECENT_OBSERVATIONS)
+		const omitted = observations.length - tail.length
+		// Label each retained observation with its 1-based position in
+		// the ring's current view. The `seq` field inside the inputs
+		// block carries the production-side seq so the operator can
+		// reconcile the position with the actual turn sequence.
+		let i = 1
+		for (const obs of tail) {
+			lines.push("")
+			lines.push(`#${i}`)
+			lines.push("inputs:")
+			lines.push(`  canonicalShadowPhase:              ${obs.inputs.canonicalShadowPhase ?? "null"}`)
+			lines.push(`  currentLegacyPhase:                ${obs.inputs.currentLegacyPhase}`)
+			lines.push(`  seq:                               ${obs.inputs.seq}`)
+			lines.push(`  canonicalShadowObservedTurnSeq:    ${obs.inputs.canonicalShadowObservedTurnSeq ?? "null"}`)
+			lines.push("ts:")
+			lines.push(`  phase:  ${obs.ts.phase}`)
+			lines.push(`  source: ${obs.ts.source}`)
+			lines.push(`  seq:    ${obs.ts.seq}`)
+			lines.push("elm:")
+			if (obs.elm.kind === "presentation") {
+				lines.push("  presentation:")
+				lines.push(`    phase:  ${obs.elm.phase}`)
+				lines.push(`    source: ${obs.elm.source}`)
+				lines.push(`    seq:    ${obs.elm.seq}`)
+			} else if (obs.elm.kind === "kernel_offline") {
+				lines.push("  kernel_offline")
+			} else {
+				lines.push("  decode_error:")
+				lines.push(`    reason: ${obs.elm.reason}`)
+			}
+			lines.push("classification:")
+			lines.push(`  ${obs.classification}`)
+			i++
+		}
+		if (omitted > 0) {
+			lines.push("")
+			lines.push(`… ${omitted} older observation(s) omitted`)
+		}
+	}
+	return lines.join("\n")
 }
 
 /**
