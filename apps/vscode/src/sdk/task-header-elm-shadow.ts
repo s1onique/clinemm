@@ -184,34 +184,94 @@ export function defaultElmKernelPath(): string {
 let _kernelEvaluatedOnce = false
 
 /**
- * Ensure the compiled Elm kernel bundle is loaded into `globalThis.Elm`.
- * Idempotent.
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION02-RUNTIME-CODEC-BINDING:
+ * Sandboxed namespace the TaskHeader Elm kernel writes its `Elm`
+ * exports into. Isolation from `globalThis.Elm` is the architectural
+ * reason this seam is wired this way (see `ensureElmKernelEvaluated`
+ * JSDoc); the completion-authority kernel already occupies
+ * `globalThis.Elm`, so the TaskHeader kernel MUST NOT also write there
+ * or its `_Platform_export` call crashes with
+ * `_Debug_crash(6, 'Elm')` ("Your page is loading multiple Elm
+ * scripts with a module named Elm").
+ */
+interface TaskHeaderElmNamespace {
+	readonly Main?: {
+		readonly init: (flags: unknown) => {
+			readonly ports: {
+				readonly inbound: { send: (v: unknown) => void }
+				readonly outbound: { subscribe: (cb: (v: unknown) => void) => void }
+			}
+		}
+	}
+}
+let _taskHeaderKernelNamespace: TaskHeaderElmNamespace | null = null
+
+/**
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION02-RUNTIME-CODEC-BINDING:
+ * Ensure the compiled TaskHeader Elm kernel bundle is loaded into a
+ * SANDBOXED namespace object. Idempotent.
  *
- * Mirrors `completion-authority-elm-replay.kernel.ts > evaluateBundleOnce`
- * verbatim: `new Function("scope", code + "; return this.Elm;")` and
- * passing a fresh scope object as the first argument. The Elm 0.19.2
- * IIFE pattern is `(function(scope){...}(this))` — the inner `scope`
- * parameter receives `this` from the outer evaluation. In a non-strict
- * outer call, `this` is `globalThis`; the IIFE then writes
- * `globalThis.Elm = exports`. Passing a fresh scope arg here is
- * necessary so that the IIFE's outer `(this)` parameter does not bind
- * to the *first* positional argument (which it would if we used
- * `new Function(code)` and called `evaluator(scope)` with `scope`
- * first — the IIFE `(this)` would receive the `code` arg).
+ * Why sandboxed (the runtime-codec repair):
  *
- * The completion-authority pattern is the proven pattern (their test
- * `completion-authority-elm-historical-replay01.test.ts` passes 20/20
- * in this exact environment). We mirror it exactly.
+ * The Elm0.19.2 IIFE pattern at the tail of every compiled kernel is
+ * `(function(scope){...}(this))`. The IIFE's parameter `scope`
+ * receives `this` from the outer call site, and `_Platform_export`
+ * writes the kernel's `Elm` exports to `scope['Elm']`. The original
+ * completion-authority loader evaluates with the outer wrapper function
+ * in non-strict mode, so `this` resolves to `globalThis` and the
+ * IIFE writes the kernel's exports to `globalThis.Elm.Main`. That is
+ * fine for the FIRST kernel to load. The SECOND kernel's
+ * `_Platform_export` call detects the existing `globalThis.Elm`,
+ * walks `_Platform_mergeExportsProd` /
+ * `_Platform_mergeExportsDebug`, and trips on `Main.init` —
+ * `_Debug_crash(6, 'Elm')`. The TS wrapper around the
+ * `evaluateBundleOnce` call swallows the throw, `globalThis.Elm`
+ * remains pointing at the FIRST kernel, and `loadCompiledElmKernel`
+ * then returns the FIRST kernel's `Elm.Main.init`, which decodes a
+ * DIFFERENT message envelope. The 512/512 LIVE "Expecting an OBJECT
+ * with a field named `tag`" decode errors are the completion-
+ * authority's `Decode.field "tag"` failing on TaskHeader's flat
+ * `Facts` quadruple — a fail-closed rejection of the wrong shape by
+ * the WRONG kernel, masquerading as a TaskHeader decoder defect.
+ *
+ * The repair routes the TaskHeader kernel through a per-kernel
+ * namespace object that is NEVER `globalThis`. We invoke the wrapper
+ * via `evaluator.call(namespace, namespace)` so the outer `this` is
+ * `namespace`; the IIFE then receives `namespace` as its `scope`
+ * argument and writes `namespace.Elm = exports`. The captured
+ * `namespace.Elm` is the TaskHeader kernel's exports — fully
+ * isolated from any other kernel that may share the same process.
+ *
+ * Mechanism (matches the proven
+ * `completion-authority-elm-replay.kernel.ts` shape, with the .call
+ * binding the OUTER `this` to a private object instead of letting it
+ * fall through to `globalThis`):
+ *
+ *   new Function("scope", code + "; return this;")
+ *     .call(namespace, namespace)
+ *     -> reads back `namespace.Elm` for `loadCompiledElmKernel`
+ *
+ * The appended `; return this;` sentinel runs AFTER the IIFE and
+ * reads the wrapper's bound `thisArg`. With `.call(namespace, ...)`
+ * that is `namespace` — and `namespace.Elm` is the kernel's exports.
  */
 export function ensureElmKernelEvaluated(kernelPath: string): boolean {
-	if (_kernelEvaluatedOnce && (globalThis as any).Elm) return true
+	if (_kernelEvaluatedOnce && _taskHeaderKernelNamespace) return true
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const fs = require("node:fs") as typeof import("node:fs")
 		const code = fs.readFileSync(kernelPath, "utf8")
-		const scope: Record<string, unknown> = {}
-		const evaluator = new Function("scope", code + "; return this.Elm;")
-		evaluator(scope)
+		const namespace: Record<string, unknown> = {}
+		const evaluator = new Function("scope", code + "; return this;")
+		evaluator.call(namespace, namespace)
+		const kernelExports = (namespace as { Elm?: TaskHeaderElmNamespace }).Elm ?? null
+		if (!kernelExports || typeof kernelExports.Main?.init !== "function") {
+			Logger.error(
+				"[task-header-elm-shadow] kernel bundle did not expose TaskHeaderElmNamespace.Elm.Main.init after sandboxed evaluation",
+			)
+			return false
+		}
+		_taskHeaderKernelNamespace = kernelExports
 		_kernelEvaluatedOnce = true
 		return true
 	} catch (err) {
@@ -226,12 +286,22 @@ export function ensureElmKernelEvaluated(kernelPath: string): boolean {
 export const _TASK_HEADER_ELM_KERNEL_BUNDLE_SIG = "v2"
 
 /**
- * Construct a fresh Elm app instance via `Elm.Main.init({})`.
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION02-RUNTIME-CODEC-BINDING:
+ * Construct a fresh TaskHeader Elm app instance via
+ * `Elm.Main.init({})` from the SANDBOXED namespace captured by
+ * `ensureElmKernelEvaluated`.
+ *
+ * CRITICAL: this MUST read from `_taskHeaderKernelNamespace`, NOT
+ * `globalThis.Elm`. Reading from `globalThis.Elm` is the production
+ * bug — the completion-authority kernel already occupies that
+ * namespace, so any value read there belongs to the completion-
+ * authority kernel, not TaskHeader. See `ensureElmKernelEvaluated`
+ * JSDoc for the full causal chain.
  */
 export function loadCompiledElmKernel(): CompiledElmKernel | null {
 	if (cachedKernel) return cachedKernel
 	try {
-		const mod = (globalThis as any).Elm
+		const mod = _taskHeaderKernelNamespace
 		if (!mod || typeof mod.Main?.init !== "function") {
 			return null
 		}
@@ -259,10 +329,12 @@ export function loadCompiledElmKernel(): CompiledElmKernel | null {
 }
 
 /**
- * Reset the module-scope cache. Test seam only.
+ * Reset the module-scope caches. Test seam only.
  */
 export function resetElmKernelForTests(): void {
 	cachedKernel = null
+	_taskHeaderKernelNamespace = null
+	_kernelEvaluatedOnce = false
 }
 
 /**
@@ -626,9 +698,7 @@ const REPORT_RECENT_OBSERVATIONS = 10
  * Elm projection, classification, the four-input `Facts` quadruple)
  * — never prompt text, model output, MCP contents, or file paths.
  */
-export function formatTaskHeaderElmRuntimeShadowReport(
-	observations: readonly TaskHeaderElmRuntimeShadowObservation[],
-): string {
+export function formatTaskHeaderElmRuntimeShadowReport(observations: readonly TaskHeaderElmRuntimeShadowObservation[]): string {
 	const summary = summarizeTaskHeaderElmRuntimeShadowObservations(observations)
 	const lines: string[] = []
 	lines.push("Task Header Elm Runtime Shadow")
