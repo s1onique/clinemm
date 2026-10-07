@@ -50,6 +50,10 @@
 			"@cline-internal/core/runtime/orchestration/session-runtime-orchestrator": [
 				"../../sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator"
 			],
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+			"@cline-internal/core/runtime/turn-queue/host-runtime-control-brand": [
+				"../../sdk/packages/core/src/runtime/turn-queue/host-runtime-control-brand"
+			],
 			"@cline-internal/core/extensions/context/compaction": [
 				"../../sdk/packages/core/src/extensions/context/compaction"
 			]
@@ -177,7 +181,15 @@
 		// and the REAL LocalRuntimeHost chain through
 		// PendingPromptsController. The bridge aliases resolve the
 		// production SDK classes for typecheck.
-		"src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+		// Provider-boundary GREEN witness. Drives the REAL
+		// `SessionRuntime` orchestrator with a capturing
+		// `createAgentRuntimeImpl` and verifies the role distinction
+		// (system vs user) survives the producer -> consumer chain at
+		// the `state.messages` boundary. The bridge aliases resolve
+		// the production SDK classes for typecheck.
+		"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

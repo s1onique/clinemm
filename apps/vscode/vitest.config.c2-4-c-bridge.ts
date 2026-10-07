@@ -38,6 +38,13 @@ const sdkCoreSessionRuntimeOrchestrator = path.resolve(sdkCoreRoot, "runtime/orc
 // the `@cline/core` bundle minifier name-collision or the
 // apps/vscode base-config `@cline/core` stub alias.
 const sdkCoreContextCompaction = path.resolve(sdkCoreRoot, "extensions/context/compaction")
+// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+// The closed Symbol-keyed brand that the trusted host seam attaches to
+// the runtime-control continuation envelope. Aliases the source path so
+// the bridge test can drive the REAL producer->consumer chain (the
+// `@cline/core` barrel does NOT export this module, so external
+// consumers cannot reach the brand symbol).
+const sdkCoreHostRuntimeControlBrand = path.resolve(sdkCoreRoot, "runtime/turn-queue/host-runtime-control-brand")
 const appsVscodeRoot = path.resolve(__dirname)
 
 export default defineConfig({
@@ -435,6 +442,20 @@ export default defineConfig({
 			// `@cline-internal/core/runtime/host/local-runtime-host`
 			// deep-relative alias.
 			"src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+			// Provider-boundary GREEN witness. Drives the REAL
+			// `SessionRuntime` orchestrator with a capturing
+			// `createAgentRuntimeImpl` and verifies the role distinction
+			// (system vs user) survives the producer -> consumer chain at
+			// the `state.messages` boundary. Also exercises the brand
+			// (Symbol-keyed) authentication bit at the
+			// `host-runtime-control-brand` module. Runs only under this
+			// bridge config because the test uses the
+			// `@cline-internal/core/runtime/orchestration/session-runtime-orchestrator`
+			// and `@cline-internal/core/runtime/turn-queue/host-runtime-control-brand`
+			// deep-relative aliases (the `@cline/core` barrel does not
+			// export these symbols).
+			"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},
@@ -468,6 +489,8 @@ export default defineConfig({
 			// resolves to the REAL SessionRuntime orchestrator class
 			// (sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts).
 			"@cline-internal/core/runtime/orchestration/session-runtime-orchestrator": sdkCoreSessionRuntimeOrchestrator,
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+			"@cline-internal/core/runtime/turn-queue/host-runtime-control-brand": sdkCoreHostRuntimeControlBrand,
 			// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
 			// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
 			// real `createContextCompactionPrepareTurn` factory,

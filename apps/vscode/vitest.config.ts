@@ -338,6 +338,13 @@ export default defineConfig({
 			// factory. Excluded here so the base config's `@cline/core`
 			// stub alias stays in scope for other tests.
 			"src/sdk/__tests__/completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+			// Provider-boundary GREEN witness. Requires the
+			// `@cline-internal/core/runtime/orchestration/session-runtime-orchestrator`
+			// and `@cline-internal/core/runtime/turn-queue/host-runtime-control-brand`
+			// aliases that the BASE vitest config does not provide. Runs
+			// under `vitest.config.c2-4-c-bridge.ts` instead.
+			"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

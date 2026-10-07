@@ -125,6 +125,9 @@ import {
 	type SubAgentStartTracker,
 } from "./local/spawn-tool";
 import { loadUserFileContent } from "./local/user-files";
+import {
+	HOST_RUNTIME_CONTROL_BRAND,
+} from "../turn-queue/host-runtime-control-brand";
 import type {
 	PendingPromptsServiceApi,
 	ResolvedStartSessionInput,
@@ -2377,19 +2380,23 @@ export class LocalRuntimeHost implements RuntimeHost {
 		});
 
 		try {
-			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION02-MODEL-PRIVILEGE:
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
 			// Build the AgentMessage envelope when the host stamped a
 			// structural authority discriminator. The envelope MUST carry
 			// `role: "system"` (the privileged instruction channel) so the
 			// orchestrator's `executeRunInternal` persists it on the system
-			// channel, which then flows through `messagesToAgentMessages` →
-			// `initialMessages` → `state.messages` → `toAiSdkMessages` →
-			// `formatMessagesForAiSdk` as a privileged instruction distinct
-			// from any user role. Plain string prompts take the legacy path
-			// (no metadata, normal user-role) and cannot reach this branch.
-			// The `metadata.runtimeAuthority` discriminator is the
-			// authentication bit: without it the orchestrator coerces to
-			// `"user"`, so role alone cannot promote an arbitrary input.
+			// channel. The envelope also carries the
+			// `HOST_RUNTIME_CONTROL_BRAND` symbol (attached via
+			// `Object.defineProperty` so it is non-enumerable and not
+			// serializable), which is the authoritative authentication bit
+			// the orchestrator reads to decide whether to promote the
+			// envelope to the system channel. The brand is module-internal
+			// (the `@cline/core` barrel does NOT export
+			// `HOST_RUNTIME_CONTROL_BRAND`), so a user-supplied envelope
+			// that reaches `SessionRuntime.run(AgentMessage)` directly
+			// cannot forge the brand — only this trusted seam can attach
+			// it. Plain string prompts take the legacy path (no metadata,
+			// no brand, normal user-role) and cannot reach this branch.
 			let runInput: AgentMessage | string | undefined
 			if (runtimeControlKind !== undefined) {
 				const messageMetadata: Record<string, unknown> = {
@@ -2397,13 +2404,25 @@ export class LocalRuntimeHost implements RuntimeHost {
 					kind: runtimeControlKind,
 					userRunSpan: 0,
 				}
-				runInput = {
+				const envelope: AgentMessage = {
 					id: `runtime-control-${Date.now()}`,
 					role: "system",
 					content: [{ type: "text", text: prompt }],
 					createdAt: Date.now(),
 					metadata: messageMetadata,
 				}
+				// Attach the brand. Non-enumerable so it does not
+				// serialize into the persisted transcript or the wire
+				// format; it is a TEMPORARY in-process marker that
+				// survives only into the orchestrator's `executeRunInternal`
+				// inspection.
+				Object.defineProperty(envelope, HOST_RUNTIME_CONTROL_BRAND, {
+					value: true,
+					enumerable: false,
+					writable: false,
+					configurable: false,
+				})
+				runInput = envelope
 			}
 			const runFn = shouldContinue
 				? () => session.agent.continue(runInput ?? prompt, userImages, userFiles)

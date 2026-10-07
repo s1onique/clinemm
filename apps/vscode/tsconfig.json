@@ -275,6 +275,14 @@
 		// (resolves under tsconfig.c2-4-c-bridge.json only). Excluded
 		// here so `bun run check-types` does not see the
 		// base-config-incompatible import path.
-		"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+		// Provider-boundary GREEN witness. Requires the
+		// `@cline-internal/core/runtime/orchestration/session-runtime-orchestrator`
+		// and `@cline-internal/core/runtime/turn-queue/host-runtime-control-brand`
+		// aliases that resolve under `tsconfig.c2-4-c-bridge.json` only.
+		// Excluded here so `bun run check-types` does not see the
+		// base-config-incompatible import paths.
+		"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts"
 	]
 }

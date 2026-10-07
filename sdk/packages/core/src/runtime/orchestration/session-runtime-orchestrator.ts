@@ -78,6 +78,7 @@ import {
 } from "../config/connection-update";
 import { LoopDetectionTracker } from "../safety/loop-detection";
 import { MistakeTracker } from "../safety/mistake-tracker";
+import { isHostRuntimeControlMessage } from "../turn-queue/host-runtime-control-brand";
 import { RuntimeEventAdapter } from "./runtime-event-adapter";
 
 export const SESSION_RUN_IN_PROGRESS_ERROR_CODE = "session_run_in_progress";
@@ -912,28 +913,30 @@ export class SessionRuntime {
 		// a falsy input as "no additional messages", per
 		// packages/agents/src/agent-runtime.ts normalizeInput path).
 		if (effectiveUserMessage !== undefined) {
-			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION02-MODEL-PRIVILEGE:
-			// When the host supplies a typed AgentMessage carrying the
-			// trusted structural discriminator
-			// (`metadata.runtimeAuthority === "host_runtime_control"`),
-			// persist it on the privileged `"system"` channel so the model
-			// receives it through `messagesToAgentMessages` →
-			// `initialMessages` → `state.messages` → `toAiSdkMessages` →
-			// `formatMessagesForAiSdk` with a privilege distinct from any
-			// user role. The role is set ONLY at this closed host-internal
-			// seam; user-supplied prompts take the legacy user-role path
-			// (string branch) and the typed-object branch above MUST carry
-			// the structural metadata to participate. The metadata is the
-			// authentication bit: without it the role is coerced to
-			// `"user"`, so metadata alone cannot promote an arbitrary input.
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+			// Promotion to the privileged instruction role is gated ONLY
+			// on the Symbol-keyed brand
+			// (`isHostRuntimeControlMessage(rawMessage)`). The
+			// `metadata.runtimeAuthority` string is plain provenance and
+			// is NEVER a promotion predicate — a user-supplied envelope
+			// that reaches `SessionRuntime.run(AgentMessage)` directly
+			// can set any metadata string but cannot set the brand
+			// symbol (it is module-internal; the @cline/core barrel
+			// does NOT export `HOST_RUNTIME_CONTROL_BRAND`). The
+			// metadata discriminator was retained through CORRECTION02
+			// as the authentication bit; the reviewer's halt
+			// `HALT_MODEL_PRIVILEGE_EVIDENCE_NOT_EXECUTED` showed that
+			// the metadata is forgeable. The Symbol brand is the actual
+			// authentication bit.
 			if (typeof effectiveUserMessage === "object") {
 				const rawMessage = effectiveUserMessage
+				// Brand is authoritative. No fallback to metadata.
 				const isHostRuntimeControl =
-					rawMessage.metadata?.runtimeAuthority === "host_runtime_control"
+					isHostRuntimeControlMessage(rawMessage)
 				// Convert the AgentMessage shape to the MessageWithMetadata
 				// shape the ConversationStore holds verbatim. The role is
-				// privileged iff the trusted discriminator is set; without
-				// it the message is coerced to `"user"` so user-supplied
+				// privileged iff the trusted brand is set; without it the
+				// message is coerced to `"user"` so user-supplied
 				// envelopes cannot pick the system channel. Metadata
 				// survives `messageToAgentMessages` → `initialMessages` →
 				// `AgentRuntime` → model request (the load-bearing boundary).
