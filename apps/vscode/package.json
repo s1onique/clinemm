@@ -287,11 +287,6 @@
 				"category": "Cline"
 			},
 			{
-				"command": "cline.taskHeaderElmShadowDiagnostics",
-				"title": "ClineMM: Task Header Elm Shadow Diagnostics",
-				"category": "ClineMM"
-			},
-			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

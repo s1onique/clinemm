@@ -9,12 +9,15 @@
  * `selectTaskHeaderPresentation` (see
  * `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:559–644`)
  * and the UNBOUND-demotion guard added by
- * ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01.
+ * ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01 +
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY.
  *
- * Both the TS production selector and the Elm kernel are exercised
- * against this exact table. The differential correspondence suite
- * (`task-header-elm-orchestration-shadow01.test.ts`) verifies that
- * the two produce identical outputs across the entire table.
+ * The Elm kernel is the SOLE production authority for
+ * `taskHeaderPresentation`. The contract test
+ * (`task-header-elm-orchestration-authority01.test.ts`) drives the
+ * real Elm kernel against this exact table; the TS reference
+ * selector is exercised only as an invariant fixture (any drift
+ * between the two surfaces as a CONTRACT defect).
  *
  * These fixtures are the SAME table as the Elm-side test suite
  * `apps/vscode/elm/task-header-orchestration/tests/TaskHeaderOrchestrationTest.elm`,

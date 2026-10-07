@@ -22,7 +22,6 @@ import {
 	applyExtensionHostTerminationAuthorityProfile,
 	applyMycPrimeLiveDiagDiagnosticProfile,
 	applyProviderRequestCaptureDiagnosticProfile,
-	applyTaskHeaderElmRuntimeShadowDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
@@ -49,14 +48,6 @@ import {
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
 import { setTaskHeaderElmProductionKernelPath } from "@/sdk/task-header-elm-shadow"
-import {
-	applyTaskHeaderElmRuntimeShadowDiagnosticsAction,
-	buildTaskHeaderElmRuntimeShadowDiagnosticsActionOptions,
-	buildTaskHeaderElmRuntimeShadowDiagnosticsDisabledMessage,
-	buildTaskHeaderElmRuntimeShadowDiagnosticsReport,
-	isTaskHeaderElmRuntimeShadowDiagnosticsEnabled,
-	selectTaskHeaderElmRuntimeShadowDiagnosticsAction,
-} from "@/sdk/task-header-elm-shadow-diagnostics"
 import {
 	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
 	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
@@ -219,38 +210,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	// `dogfood-diagnostic-profile-thsicap-activation.test.ts`.
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
 
-	// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
-	// Arm the TaskHeader Elm runtime-shadow comparison seam at the
-	// SAME EARLIEST initialization seam, BEFORE SdkController
-	// construction. The helper composes the effective shadow state
-	// (profile identity only — NO env var) and flips the module
-	// seam in `task-header-elm-shadow.ts` idempotently.
-	//
-	// Profile defaults (frozen by the correction):
-	//   public profile  -> shadow OFF
-	//   dogfood profile -> shadow ON
-	// The operator does NOT need to set any env var. When the seam
-	// is disabled (public), the comparison helper at the
-	// publication block short-circuits without invoking the Elm
-	// kernel, reading the runtime asset, or emitting any wire
-	// delta. When the seam is enabled (dogfood), the bounded
-	// observation ring is populated at every publication; the
-	// Command Palette diagnostic
-	// (`cline.taskHeaderElmShadowDiagnostics`) surfaces those
-	// observations for off-line inspection.
-	//
-	// The TS production selector (`selectTaskHeaderPresentation`)
-	// remains authoritative in EVERY branch — the shadow is
-	// observe-only.
-	//
-	// REMOVAL_TRIGGER: first successful LIVE qualification that
-	// authorizes TaskHeader authority cutover to
-	// `ORCHESTRATION03-AUTHORITY`, OR the first real LIVE semantic
-	// mismatch that identifies a contract defect, OR
-	// CAPTURE_INSUFFICIENT. See the resolver JSDoc in
-	// `dogfood-diagnostic-profile.ts` for the full doctrine.
-	applyTaskHeaderElmRuntimeShadowDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
-
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// (twenty-seventh-pass): arm the W carrier trace (Q1..Q4) seam
 	// at the SAME EARLIEST initialization seam, BEFORE SdkController
@@ -388,11 +347,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	// the runtime would report `kernel_offline` for every Facts
 	// quadruple (the LIVE 512/512 failure this ACT repairs).
 	//
-	// Setting the resolver BEFORE the first `observeTaskHeaderElmRuntimeShadow`
-	// call guarantees the FIRST loader attempt reads from the staged
-	// runtime asset. The diagnostic captures the exact stage so any
-	// future regression (a missing staging, a wrong filename) surfaces
-	// as `KERNEL_FILE_MISSING` / `KERNEL_READ_FAILED` instead of an
+	// Setting the resolver BEFORE the first
+	// `pickTaskHeaderPresentationForPublication` call guarantees the
+	// FIRST loader attempt reads from the staged runtime asset. The
+	// diagnostic captures the exact stage so any future regression (a
+	// missing staging, a wrong filename) surfaces as
+	// `KERNEL_FILE_MISSING` / `KERNEL_READ_FAILED` instead of an
 	// opaque `kernel_offline` counter.
 	setTaskHeaderElmProductionKernelPath(path.join(context.extensionUri.fsPath, "runtime-assets", "task-header-orchestration.js"))
 	if (elmAuthorityActivation.enabled) {
@@ -1073,50 +1033,6 @@ ${ctx.cellJson || "{}"}
 				void vscode.window.showErrorMessage(
 					`TaskHeader selector-input clear failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
-			}
-		}),
-		// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
-		// Single Command Palette entry point for the TaskHeader Elm
-		// runtime-shadow diagnostic. The runtime shadow is enabled
-		// AUTOMATICALLY in the dogfood profile (no env var; see
-		// `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts`). When
-		// invoked:
-		//   1. Show the compact summary via `showInformationMessage`.
-		//   2. Open a `showQuickPick` action picker with three
-		//      entries: Copy Report / Reset Observations / Close.
-		// When invoked OUTSIDE dogfood (shadow disabled), show the
-		// spec-mandated bounded message
-		// "Task Header Elm runtime shadow is disabled in this
-		// profile." (no QuickPick). This keeps the command safe to
-		// invoke regardless of profile — no new context-key
-		// framework is introduced (per C7).
-		//
-		// REMOVAL_TRIGGER: first successful LIVE qualification that
-		// authorizes cutover to `ORCHESTRATION03-AUTHORITY`, OR the
-		// first real LIVE semantic mismatch that identifies a
-		// contract defect, OR CAPTURE_INSUFFICIENT. When cutover
-		// lands, REMOVE this handler + the package.json declaration +
-		// the registry entry + the host-side diagnostics module
-		// together.
-		vscode.commands.registerCommand(commands.TaskHeaderElmShadowDiagnostics, async () => {
-			if (!isTaskHeaderElmRuntimeShadowDiagnosticsEnabled()) {
-				void vscode.window.showInformationMessage(buildTaskHeaderElmRuntimeShadowDiagnosticsDisabledMessage())
-				return
-			}
-			const report = buildTaskHeaderElmRuntimeShadowDiagnosticsReport()
-			void vscode.window.showInformationMessage(report)
-			const options = buildTaskHeaderElmRuntimeShadowDiagnosticsActionOptions()
-			const selection = await vscode.window.showQuickPick(options as readonly string[], {
-				title: "Task Header Elm Shadow Diagnostics",
-				placeHolder: "Choose an action",
-			})
-			if (!selection) {
-				return
-			}
-			const action = selectTaskHeaderElmRuntimeShadowDiagnosticsAction(selection)
-			const resultMessage = await applyTaskHeaderElmRuntimeShadowDiagnosticsAction(action)
-			if (resultMessage.length > 0) {
-				void vscode.window.showInformationMessage(resultMessage)
 			}
 		}),
 		// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:

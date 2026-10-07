@@ -179,13 +179,12 @@ import {
 import { SessionListingCallerClass, withListSessionsCaller } from "./session-listing-diagnostic-runtime"
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
-import { buildFactsJson as buildTaskHeaderElmFactsJson, observeTaskHeaderElmRuntimeShadow } from "./task-header-elm-shadow"
+import { pickTaskHeaderPresentationForPublication } from "./task-header-elm-authority"
 import { captureTaskHeaderSelectorInput } from "./task-header-selector-input-capture"
 import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
 import {
 	createCanonicalRestorePhaseCallback,
-	selectTaskHeaderPresentation,
 	selectTaskShadowArbiterSnapshot,
 	selectThinkingPresentation,
 } from "./task-state-shadow-arbiter-mapper"
@@ -5853,7 +5852,6 @@ export class Controller {
 					})(),
 				}),
 				// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
-				//
 				// The webview-facing TaskHeader state projection. The
 				// TaskHeader state label consumer
 				// (apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx)
@@ -5861,22 +5859,20 @@ export class Controller {
 				// `taskHeaderStateLabel(taskHeaderPresentation, turnState)`)
 				// instead of `turnState.phase` directly.
 				//
-				// Three-source precedence (frozen by `selectTaskHeaderPresentation`):
-				//   1. HOST COMPACTION OVERRIDE — if `currentLegacyPhase
-				//      === "compacting"`, the host is the only legitimate
-				//      authority for the `compacting` label (the canonical
-				//      shadow cannot represent this phase because
-				//      compaction is not a runtime event).
-				//   2. CANONICAL SHADOW — if `getLocalShadowPhase()` is
-				//      defined, the shadow's `turnPhase` is the authority
-				//      for 7 of the 8 phases (idle / streaming /
-				//      awaiting_approval / awaiting_followup / completed /
-				//      error / resumable) and overrides a stale legacy
-				//      `streaming`.
-				//   3. ABSENCE FALLBACK — Hub/Remote / Local pre-observation
-				//      collapses to the legacy `turnState.phase` with
-				//      `source: "legacy"`, same byte-equivalent semantics
-				//      as the E7.1 Thinking legacy branch.
+				// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY:
+				// The Elm kernel is the SOLE production authority for the
+				// projection. The four-rule precedence (host compaction
+				// override / canonical shadow with UNBOUND demotion /
+				// host awaiting_followup override / absence fallback) is
+				// implemented in `apps/vscode/elm/task-header-orchestration/`
+				// and projected via
+				// `pickTaskHeaderPresentationForPublication` in
+				// `apps/vscode/src/sdk/task-header-elm-authority.ts`. The
+				// legacy TS selector
+				// (`selectTaskHeaderPresentation` in
+				// `task-state-shadow-arbiter-mapper.ts`) is retained as a
+				// reference helper for invariant fixtures; it is NOT a
+				// production TaskHeader presentation authority.
 				//
 				// `seq` is the legacy `TurnStateTracker.seq` for transport-
 				// level stale-push fencing (same domain as
@@ -5893,33 +5889,15 @@ export class Controller {
 								: undefined
 						})(),
 					}
-					const tsProjection = selectTaskHeaderPresentation(taskHeaderInputs)
-					// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION01-DOGFOOD-DIAGNOSTICS:
-					// Drive the proven Elm kernel against the SAME
-					// `Facts` quadruple the production TS selector
-					// consumed, and append the bounded comparison
-					// observation into the ring. The TS projection
-					// is the production return value in EVERY branch;
-					// the shadow's ONLY effect is side-channel
-					// observation (no wire delta, no state mutation).
-					//
-					// Profile defaults (frozen by the correction):
-					//   public  -> shadow OFF (short-circuit)
-					//   dogfood -> shadow ON  (always evaluate)
-					// When the seam is OFF (public), the comparison
-					// helper short-circuits without invoking the Elm
-					// kernel, reading the runtime asset, or emitting
-					// any wire delta. When the seam is ON (dogfood),
-					// the bounded observation ring is populated at
-					// every publication; the Command Palette
-					// diagnostic surfaces those observations for
-					// off-line inspection.
-					return await observeTaskHeaderElmRuntimeShadow({
-						ts: tsProjection,
-						facts: buildTaskHeaderElmFactsJson(taskHeaderInputs),
-					})
+					// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY:
+					// The Elm kernel is the SOLE production authority for the
+					// TaskHeader presentation projection. The legacy TS selector
+					// (selectTaskHeaderPresentation) and the runtime-shadow
+					// observer (observeTaskHeaderElmRuntimeShadow) have been
+					// removed. seq remains the legacy TurnStateTracker.seq for
+					// transport-level stale-push fencing.
+					return await pickTaskHeaderPresentationForPublication(taskHeaderInputs)
 				})(),
-				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned
 				// authority; this is a read-only mirror for the webview.
 				// Both legacy keys (sessionAutoApproval + sessionAutonomy) carry

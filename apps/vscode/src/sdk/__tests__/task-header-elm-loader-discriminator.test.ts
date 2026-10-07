@@ -111,6 +111,24 @@ describe("ACT-CLINEMM-...-CORRECTION03 / RED-2: KERNEL_EVAL_FAILED", () => {
 		expect(diagnostic.bundleByteSize).toBeGreaterThan(0)
 		expect(diagnostic.errorName).toBe("Error")
 	})
+
+	// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY / C14:
+	// explicitly cover the KERNEL_APP_INIT_FAILED stage (Main.init throws).
+	it("RED-2b: Main.init throws -> KERNEL_APP_INIT_FAILED", async () => {
+		const bundlePath = writeBundle(
+			"init-throw.js",
+			"this.Elm = { Main: { init: function (_flags) { throw new Error('synthetic app init failure'); } } };",
+		)
+		setTaskHeaderElmProductionKernelPath(bundlePath)
+		const result = await invokeElmKernel(LIVE_SPECIMEN)
+		expect(result.kind).toBe("kernel_offline")
+		if (result.kind !== "kernel_offline") return
+		expect(result.classification).toBe("task_header_elm_kernel_offline")
+		const diagnostic = getTaskHeaderElmKernelDiagnostic()
+		expect(diagnostic.stage).toBe("failed")
+		expect(diagnostic.failureClass).toBe("KERNEL_APP_INIT_FAILED")
+		expect(diagnostic.errorName).toBe("Error")
+	})
 })
 
 describe("ACT-CLINEMM-...-CORRECTION03 / RED-3: KERNEL_EXPORT_MISSING", () => {

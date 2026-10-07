@@ -138,7 +138,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION02-RUNTIME
 		// Baseline: with a clean globalThis, the real TaskHeader kernel
 		// loads via the sandboxed namespace and returns presentation.
 		// This is the contract the ORCHESTRATION01 fixture suite
-		// (`task-header-elm-orchestration-shadow01.test.ts`) already
+		// (`task-header-elm-orchestration-authority01.test.ts`) already
 		// validates for many fixtures; this is the LIVE specimen in
 		// particular.
 		const decision = await invokeElmKernel(LIVE_SPECIMEN)
