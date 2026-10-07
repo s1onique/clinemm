@@ -32,7 +32,7 @@ export function sanitizeSurrogates(content: string): string {
 	);
 }
 
-export type AiSdkFormatterMessageRole = "user" | "assistant" | "tool";
+export type AiSdkFormatterMessageRole = "user" | "assistant" | "tool" | "system";
 
 export type AiSdkFormatterPart =
 	| {

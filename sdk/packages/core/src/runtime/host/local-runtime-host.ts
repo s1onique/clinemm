@@ -2377,13 +2377,19 @@ export class LocalRuntimeHost implements RuntimeHost {
 		});
 
 		try {
-			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION02-MODEL-PRIVILEGE:
 			// Build the AgentMessage envelope when the host stamped a
-			// structural authority discriminator. The AgentRuntime's
-			// `normalizeInput` accepts an AgentMessage (or array) and
-			// preserves its metadata verbatim through `cloneMessages` →
-			// `state.messages.push`. Plain string prompts take the
-			// legacy path (no metadata, normal user-role).
+			// structural authority discriminator. The envelope MUST carry
+			// `role: "system"` (the privileged instruction channel) so the
+			// orchestrator's `executeRunInternal` persists it on the system
+			// channel, which then flows through `messagesToAgentMessages` →
+			// `initialMessages` → `state.messages` → `toAiSdkMessages` →
+			// `formatMessagesForAiSdk` as a privileged instruction distinct
+			// from any user role. Plain string prompts take the legacy path
+			// (no metadata, normal user-role) and cannot reach this branch.
+			// The `metadata.runtimeAuthority` discriminator is the
+			// authentication bit: without it the orchestrator coerces to
+			// `"user"`, so role alone cannot promote an arbitrary input.
 			let runInput: AgentMessage | string | undefined
 			if (runtimeControlKind !== undefined) {
 				const messageMetadata: Record<string, unknown> = {
@@ -2393,7 +2399,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 				}
 				runInput = {
 					id: `runtime-control-${Date.now()}`,
-					role: "user",
+					role: "system",
 					content: [{ type: "text", text: prompt }],
 					createdAt: Date.now(),
 					metadata: messageMetadata,

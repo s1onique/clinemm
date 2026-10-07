@@ -6,6 +6,16 @@
  * `executeAgentTurn` -> `SessionRuntime.run` -> `AgentRuntime` ->
  * `state.messages` chain) and proves that runtime-control continuations
  * carry a non-user provenance bit at the model-request boundary.
+ *
+ * NOTE (CORRECTION02 supersedes): the predecessor proved structural
+ * difference via `metadata` only — identical text, different metadata.
+ * The reviewer halt HALT_CONTROL_AUTHORITY_METADATA_NOT_PRIVILEGED
+ * established that this is insufficient: the runtime-origin still
+ * reached the model as `role: "user"`. The CORRECTION02 ACT
+ * (`completion-continuation-model-privilege01.ccmp01.test.ts`) adds the
+ * role-channel assertion. This file is retained as the substrate test
+ * (closed-enum discriminator + producer-side queue/handoff + tool
+ * registry snapshot).
  */
 
 import type { AgentMessage } from "@cline/shared"

@@ -104,7 +104,19 @@ export type AgentMessagePart =
 // Messages and token usage
 // =============================================================================
 
-export type AgentMessageRole = "user" | "assistant" | "tool";
+/**
+ * Agent-message roles.
+ *
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION02-MODEL-PRIVILEGE:
+ * `"system"` is the privileged instruction channel. It is reserved for
+ * messages stamped by the host's internal control seams (e.g. the
+ * completion-continuation BCB01 turn) and is never user-writable. Adding it
+ * to the union is required so the runtime cannot silently coerce a
+ * host-stamped continuation back to `"user"` and the model-boundary
+ * representation of a host-stamped continuation is role-distinct from any
+ * user role, the load-bearing property this ACT establishes.
+ */
+export type AgentMessageRole = "user" | "assistant" | "tool" | "system";
 
 export interface AgentTokenUsage {
 	inputTokens: number;

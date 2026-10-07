@@ -912,26 +912,34 @@ export class SessionRuntime {
 		// a falsy input as "no additional messages", per
 		// packages/agents/src/agent-runtime.ts normalizeInput path).
 		if (effectiveUserMessage !== undefined) {
-			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
-			// When the host supplies a typed AgentMessage (carrying the
-			// structural `runtimeAuthority` + `kind` metadata), thread
-			// it verbatim through the conversation store so the message
-			// identity survives `messagesToAgentMessages` →
-			// `initialMessages` → AgentRuntime. Plain string prompts
-			// take the legacy `buildUserTurnContent` path.
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION02-MODEL-PRIVILEGE:
+			// When the host supplies a typed AgentMessage carrying the
+			// trusted structural discriminator
+			// (`metadata.runtimeAuthority === "host_runtime_control"`),
+			// persist it on the privileged `"system"` channel so the model
+			// receives it through `messagesToAgentMessages` →
+			// `initialMessages` → `state.messages` → `toAiSdkMessages` →
+			// `formatMessagesForAiSdk` with a privilege distinct from any
+			// user role. The role is set ONLY at this closed host-internal
+			// seam; user-supplied prompts take the legacy user-role path
+			// (string branch) and the typed-object branch above MUST carry
+			// the structural metadata to participate. The metadata is the
+			// authentication bit: without it the role is coerced to
+			// `"user"`, so metadata alone cannot promote an arbitrary input.
 			if (typeof effectiveUserMessage === "object") {
 				const rawMessage = effectiveUserMessage
+				const isHostRuntimeControl =
+					rawMessage.metadata?.runtimeAuthority === "host_runtime_control"
 				// Convert the AgentMessage shape to the MessageWithMetadata
-				// shape the ConversationStore holds verbatim. Metadata
-				// survives messageToAgentMessages → initialMessages →
-				// AgentRuntime → model request (the load-bearing boundary).
-				// Runtime-control messages always carry `role: "user"` and
-				// `content: AgentMessagePart[]` (typed structurally
-				// compatible with `ContentBlock[]` after
-				// messageToAgentMessages projection).
+				// shape the ConversationStore holds verbatim. The role is
+				// privileged iff the trusted discriminator is set; without
+				// it the message is coerced to `"user"` so user-supplied
+				// envelopes cannot pick the system channel. Metadata
+				// survives `messageToAgentMessages` → `initialMessages` →
+				// `AgentRuntime` → model request (the load-bearing boundary).
 				const persistedAgentMessage: MessageWithMetadata = {
 					id: rawMessage.id,
-					role: "user",
+					role: isHostRuntimeControl ? "system" : "user",
 					content: typeof rawMessage.content === "string"
 						? await buildUserTurnContent(
 								rawMessage.content,
