@@ -147,3 +147,4 @@ apps/examples/desktop-app/.cursor/settings.json
 scripts/__pycache__/
 apps/vscode/~/
 .myc/
+tools/macos-host-helper/native/helper
