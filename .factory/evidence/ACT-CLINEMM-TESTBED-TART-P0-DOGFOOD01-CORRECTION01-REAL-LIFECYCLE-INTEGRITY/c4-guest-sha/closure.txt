@@ -1,0 +1,36 @@
+C4 SHAPE — runtime SHA-256 wired; host/guest artifact fields in result shape
+
+Date: 2026-10-08
+Subject HEAD: d46223b51
+
+The C helper now exposes runtime SHA-256 (sha256_file was previously
+gated behind CLINEMM_HELPER_BUILD_ID; ungated for C4). The structured
+result emitter (tbr_emit_result_ok) emits hostArtifactSha256 and
+guestArtifactSha256 fields when populated.
+
+In this ACT the lifecycle is synthetic (fake-tart cannot actually
+clone a real macOS image and start a real SSH server), so neither
+host nor guest SHA is populated in the synthetic PASS path. The
+fields are present in the response shape so a real Tart run can
+emit them. The synthetic TBRUNNER-C-09-1..5 fixtures verify the
+error shape preserves primary failure regardless of artifact SHAs.
+
+REAL-RUN NOTE (C10/C11):
+  When a real Tart binary is wired and the guest creates
+  /tmp/clinemm-dogfood01-result (per the brief), the lifecycle
+  will:
+    - hash the host-side result file (via tbr_sha256_file)
+    - ssh into the guest and `cat` the result file
+    - hash the guest-side result file via `sha256sum` over SSH
+    - emit hostArtifactSha256 == guestArtifactSha256
+  The wiring is in place (tbr_sha256_file is callable, the emit
+  path accepts host_sha/guest_sha), but the guest-side SHA fetch
+  requires the guest to be reachable — which requires the real
+  Tart + OCI image, gated by C11. C11 evidence: see c11-evidence.
+
+FILES CHANGED:
+  tools/macos-host-helper/native/helper.c
+    - SHA-256 always compiled (ungated from CLINEMM_HELPER_BUILD_ID)
+    - tbr_sha256_file(path, hex_out, cap, size_out) exported
+    - tbr_emit_result_ok accepts host_sha, guest_sha, emits fields
+      when populated

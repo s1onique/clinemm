@@ -1,0 +1,31 @@
+C2 RED REPRODUCED — hasForbiddenKeysDeep argv exception too permissive
+Date: 2026-10-08
+Subject HEAD: d46223b51
+
+RED tests added to tools/macos-host-helper/server.test.ts in the
+ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01 describe block:
+
+  C2-RED-01: argv at spec root rejected (EXEC_SHAPED_PAYLOAD)        FAIL (currently ACCEPTED — defect)
+  C2-RED-02: argv inside spec.metadata entry rejected                FAIL (currently ACCEPTED — defect)
+  C2-RED-03: argv inside artifact object rejected                    FAIL (currently ACCEPTED — defect)
+  C2-RED-04: argv inside commands[i] still passes (negative case)    PASS (correct — only this path is allowed)
+  C2-RED-05: nested object (timeouts) containing argv rejected       FAIL (currently ACCEPTED — defect)
+  C2-RED-06: array element (metadata) containing env rejected        FAIL (currently ACCEPTED — defect)
+  C2-GREEN-01: keep_vm=true at spec root accepted                    PASS (control — keep_vm must remain allowed)
+
+5 fail / 2 pass within C2 block. Pre-existing 75 server.test.ts tests
+remain GREEN.
+
+DEFECT: hasForbiddenKeysDeep in tools/macos-host-helper/protocol.ts
+(line 605) allows `argv` ANYWHERE its value is an array of strings.
+This means a malicious caller can place { argv: ["..."] } inside any
+spec sub-object (metadata, timeouts, artifacts[*], etc.) and bypass
+the closed-schema guard. The fix tightens the exception so argv is
+ONLY allowed when the key's parent chain is exactly
+[spec_root, "commands", i].
+
+The C helper does NOT parse spec internally; spec travels as a
+JSON-encoded string per LAUNCHD-RUNNER01. The TS parse layer is the
+load-bearing authority on closed-schema. The C helper's job is to
+re-enforce the closed-schema shape on the spec string via a focused
+re-parse in handle_tart_testbed_run (defense in depth).

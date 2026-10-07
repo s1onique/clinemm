@@ -1,0 +1,35 @@
+C3 SPLIT — IP-timeout and SSH-timeout are distinct error codes
+
+Date: 2026-10-08
+Subject HEAD: d46223b51
+
+The lifecycle in handle_tart_testbed_run (tools/macos-host-helper/native/helper.c)
+splits WAIT_IP and WAIT_SSH into two bounded phases:
+
+  1. tbr_wait_ip(tart_path, vm, 60s deadline, 1s poll) — bounded
+     polling of `tart ip`. Returns 0 with ip_out populated on
+     success; 1 on timeout; 2 on Tart resolution failure.
+     Primary failure: TART_IP_TIMEOUT (1) or TART_START_FAILED (2).
+
+  2. tbr_wait_ssh(ssh_path, kh, id, user, ip, 30s deadline, 1s poll)
+     — bounded polling of `ssh <ip> true`. Returns 0 on success;
+     1 on timeout; 2 on env failure. Primary failure:
+     TART_SSH_TIMEOUT (1) or TESTBED_PREPARE_FAILED (2).
+
+The split is required by the brief: "Required failure: TART_SSH_TIMEOUT,
+not TART_COPY_IN_FAILED." The helper no longer collapses both into
+TART_COPY_IN_FAILED.
+
+VERIFICATION (TBRUNNER-C-09-1, TBRUNNER-C-01, TBRUNNER-C-04):
+  With fake-tart returning IP=192.168.64.42, the lifecycle advances
+  to WAIT_SSH and times out with TART_SSH_TIMEOUT (not TART_IP_TIMEOUT,
+  not TART_COPY_IN_FAILED). 10 tests pass, 0 fail.
+
+  Test C-09-1: "SSH unavailable -> TART_SSH_TIMEOUT (not TART_IP_TIMEOUT)"
+
+FILES CHANGED:
+  tools/macos-host-helper/native/helper.c
+    - handle_tart_testbed_run: tbr_wait_ip / tbr_wait_ssh are
+      separate phases with distinct error codes
+  tools/macos-host-helper/native/tart-testbed-run.test.ts
+    - TBRUNNER-C-01 / C-04 / C-09-1 exercise the split

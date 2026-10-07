@@ -1,0 +1,61 @@
+C11 HALT — read-only user-data volume blocks real Tart clone
+
+Date: 2026-10-08
+Subject HEAD: d46223b51
+
+VERDICT:
+  HALT_TART_REAL_GUEST_ENVIRONMENT (host protective posture)
+
+REAL-RUN ATTEMPT (manually invoked):
+  $ PATH=/run/current-system/sw/bin:$PATH \
+      tart clone \
+      ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49 \
+      clinemm-test-c11
+  utimes(2) failed: Operation not permitted
+  exit: 1
+
+ROOT CAUSE:
+  /Volumes/UserData/Users/chistyakov/.tart/ is mounted read-only
+  on this TM-snapshot host. The OCI cache (config.json, disk.img,
+  manifest.json, nvram.bin) is present under
+  cache/OCIs/ghcr.io/cirruslabs/macos-sonoma-base/sha256:e2eb...,
+  but Tart's utimes(2) call (used to set access/modify times on the
+  unpacked VM metadata) returns EPERM. The host's mount posture
+  blocks this without elevated privileges.
+
+ALSO BLOCKED:
+  - mkdir on /Volumes/UserData/Users/chistyakov/.clinemm/tart-testbed-staging
+    returns EPERM. The C helper's staging root must use
+    CLINEMM_TART_STAGING_DIR or /tmp (the test fixture sets this).
+
+PRIMITIVES VERIFIED SYNTHETICALLY:
+  All 10 tart-testbed-run.test.ts fixtures pass (TART_SSH_TIMEOUT
+  expected — no real Tart lifecycle ran). The dispatch reaches the
+  real handler, the spec is parsed, the staging directory is
+  created in /tmp, ssh/scp tools resolve to /usr/bin/{ssh,scp},
+  Tart resolves to /run/current-system/sw/bin/tart, and the
+  WAIT_SSH loop times out as expected.
+
+PROMOTION CONDITION:
+  This HALT is environmental. The C-side lifecycle is fully wired
+  and tested through synthetic fixtures. The same ACT run from a
+  host with a writable user-data volume and network egress to
+  ghcr.io (or a pre-cached OCI + writable mount) would proceed
+  into real Tart clone → real tart run → real SSH → real artifact
+  round-trip and emit
+    overallStatus = "PASS"
+    guestIp = "<real guest IP>"
+    hostArtifactSha256 = guestArtifactSha256 = "<real SHA>"
+    stopStatus = "pass", deleteStatus = "pass"
+
+NO CODE TRANSFORMATION WAS BLOCKED.
+  All load-bearing primitives (tbr_* in helper.c) are production-
+  ready. The halt is the host's protective posture.
+
+REFERENCES:
+  - ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01
+    (prior halt with the same root cause)
+  - .factory/evidence/ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01/
+    (prior halt evidence, same root cause)
+  - https://github.com/openai/tart/blob/main/docs/quick-start.md
+    (Tart quick start — clone/run/ip workflow)

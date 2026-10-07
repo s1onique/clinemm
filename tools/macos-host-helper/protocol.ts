@@ -594,30 +594,57 @@ export function parseRequest(raw: string): ParseResult {
  *
  * EXCEPTION: the `argv` key is allowed ONLY inside the structural
  * `spec.commands[].argv` shape — that is the guest-command argv,
- * NOT a host-side execution surface. We allow `argv` whenever its
- * value is an array of strings; the closed-schema validator
- * (`validateTestbedRunSpec`) further bounds the array length and
- * element length. Anywhere else, `argv` is treated as exec-shaped
- * and rejected (defense in depth — `argv` at the spec root would
- * suggest the caller is using the spec as a TVF and should fail
- * closed at parse time).
+ * NOT a host-side execution surface. We allow `argv` ONLY when its
+ * parent chain is exactly [spec_root, "commands", i]; anywhere else
+ * (spec root, spec.metadata[*], spec.timeouts.*, spec.artifacts[*],
+ * spec.known_hosts_contents, etc.) the `argv` key is treated as
+ * exec-shaped and rejected. This is the closed-schema guard — argv
+ * shaped as an array-of-strings is still forbidden if it appears
+ * outside the canonical commands[*] path.
+ *
+ * ACT-CLINEMM-TESTBED-TART-P0-DOGFOOD01-CORRECTION01-REAL-LIFECYCLE-INTEGRITY
+ * (C2): prior implementation accepted `argv` ANYWHERE its value was
+ * an array-of-strings. That bypassed the closed-schema invariant
+ * for spec.metadata, spec.timeouts, spec.artifacts[*], etc. This
+ * rewrite threads the parent-chain through the recursion so the
+ * exception is structural, not value-shaped.
  */
-function hasForbiddenKeysDeep(v: unknown): boolean {
+function hasForbiddenKeysDeep(v: unknown, parentChain: readonly string[] = []): boolean {
 	if (v === null || typeof v !== "object") return false
 	if (Array.isArray(v)) {
+		// When recursing into an array, the array's parent key is
+		// already in parentChain. Each array element inherits that
+		// parent chain — the array index is not a meaningful schema
+		// boundary for the argv-exception check; only the immediate
+		// parent key matters.
 		for (let i = 0; i < v.length; i++) {
-			if (hasForbiddenKeysDeep(v[i])) return true
+			if (hasForbiddenKeysDeep(v[i], parentChain)) return true
 		}
 		return false
 	}
 	for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-		// Allow `argv` only when its value is an array of strings —
-		// this matches the structural `commands[].argv` shape.
-		if (k === "argv" && Array.isArray(val) && val.every((e) => typeof e === "string")) {
-			continue
+		// argv is permitted ONLY inside spec.commands[i].
+		// The parent chain at this level is [..., "commands", i],
+		// but we model it as [..., "commands"] because we do not
+		// push the array index into parentChain. The check is
+		// therefore: parentChain[length-1] === "commands".
+		if (k === "argv") {
+			const parentIsCommands =
+				parentChain.length >= 1 &&
+				parentChain[parentChain.length - 1] === "commands"
+			if (
+				parentIsCommands &&
+				Array.isArray(val) &&
+				val.every((e) => typeof e === "string")
+			) {
+				// Accept: this is the canonical commands[i].argv shape.
+				continue
+			}
+			// Reject: argv outside the canonical path is exec-shaped.
+			return true
 		}
 		if (FORBIDDEN_REQUEST_KEYS.has(k)) return true
-		if (hasForbiddenKeysDeep(val)) return true
+		if (hasForbiddenKeysDeep(val, [...parentChain, k])) return true
 	}
 	return false
 }

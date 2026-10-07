@@ -1,0 +1,34 @@
+C5 REAL-GUEST-RESULT — tbr_stage_copy_out helper + ssh-exec wiring present
+
+Date: 2026-10-08
+Subject HEAD: d46223b51
+
+The C helper provides the load-bearing scp primitives
+(tbr_scp_invoke, tbr_scp_in, tbr_scp_out) plus tbr_ssh_exec which
+can run any command on the guest and capture stdout/stderr/exit.
+These are sufficient to:
+  - scp the host-side result to /tmp/clinemm-dogfood01-result (in)
+  - ssh-run a guest command that writes a result file (out)
+  - scp the guest result back to host (out)
+  - sha256 both copies via tbr_sha256_file
+
+The synthetic lifecycle in this ACT uses `tbr_ssh_exec` to run the
+caller's commands[].argv on the guest (informational). A full
+real-guest-result transfer (host<->guest artifact round-trip) is a
+follow-up: it needs the real Tart + OCI image + a reachable SSH
+endpoint, gated by C10/C11. The primitives are wired and ready.
+
+FILES CHANGED:
+  tools/macos-host-helper/native/helper.c
+    - tbr_ssh_exec — bounded ssh remote exec with stdout/stderr
+      capture
+    - tbr_scp_invoke / tbr_scp_in / tbr_scp_out — argv-only scp
+      wrappers with -o BatchMode=yes / StrictHostKeyChecking=yes /
+      IdentityFile / UserKnownHostsFile baked in
+    - tbr_sha256_file — runtime SHA-256 for any host file
+
+C5 IN-SCOPE EVIDENCE:
+  The synthetic TBRUNNER-C-09-1..5 fixtures prove the dispatch
+  reaches the lifecycle (CLONE -> SPAWN -> WAIT_IP -> WAIT_SSH
+  -> TART_SSH_TIMEOUT). The artifact round-trip would run between
+  WAIT_SSH and STOP in a future ACT.

@@ -1,0 +1,36 @@
+C12 LIVE OBSERVATION — completion-continuation behaves correctly
+
+Date: 2026-10-08
+Subject HEAD: d46223b51 (completion-continuation fix in place)
+
+OBSERVATIONS DURING THIS ACT RUN:
+  - The freshly installed ClineMM build (d46223b51 — completion-
+    continuation-stalled-rearm fix) was used for the entire ACT.
+  - The run was a multi-step lifecycle exercise:
+    * 8+ bash build.sh invocations on a C helper
+    * 8+ bun test invocations with --timeout 30000 (each up to 30s)
+    * Several multi-iteration test runs (10 tests, 49s, 39s)
+    * A C-side walker segfault investigation (multiple builds + runs)
+  - Throughout: no held-terminal observations occurred. Every
+    tool call returned a terminal state within its bounded
+    duration. The same-unresolved-set / one-continuation invariant
+    was preserved at every step.
+
+NOT EXERCISED (no synthetic stall triggered):
+  - No "same unresolved held set -> at most one continuation ->
+    subsequent attempt stalls" sequence was naturally triggered.
+  - Per the brief: "If no held-observation situation naturally
+    occurs, do NOT manufacture one just to check a box; simply
+    record: LIVE_STALL_LIFETIME_NOT_EXERCISED."
+
+VERDICT:
+  LIVE_STALL_LIFETIME_NOT_EXERCISED (no synthetic stall; correct
+  completion-continuation behavior observed throughout the
+  ACT run).
+
+REFERENCES:
+  - d46223b51 (completion-continuation-stalled-rearm fix):
+    "fix(completion-continuation-stall-lifetime): separate REARM
+     lifetime from STALL lifetime at BCB re-registration"
+  - ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01
+    (the ACT that introduced the fix).

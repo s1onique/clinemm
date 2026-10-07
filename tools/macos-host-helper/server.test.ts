@@ -758,7 +758,148 @@ describe("ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01 — tart.testbed.run prot
 		expect(resp.ok).toBe(false);
 		if (resp.ok) return;
 		expect(resp.error).toBe("METHOD_NOT_AVAILABLE_IN_TS_FALLBACK");
-	});
+	})
+
+	// ACT-CLINEMM-TESTBED-TART-P0-DOGFOOD01-CORRECTION01-REAL-LIFECYCLE-INTEGRITY (C2):
+	// RED: argv exception in hasForbiddenKeysDeep is currently allowed
+	// ANYWHERE an argv-shaped value (array-of-strings) appears. Closed-schema
+	// invariant says `argv` is permitted ONLY inside spec.commands[*], not at
+	// the spec root, not inside spec.metadata, not inside artifact objects.
+	// Each of these must fail closed at parseRequest time.
+	it("C2-RED-01: argv at spec root is rejected (EXEC_SHAPED_PAYLOAD)", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+			argv: ["echo", "root-leak"],
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "c2-red-1",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		);
+		expect(r.ok).toBe(false);
+		if (r.ok) return;
+		expect(r.error).toBe("EXEC_SHAPED_PAYLOAD");
+	})
+
+	it("C2-RED-02: argv inside spec.metadata entry is rejected", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+			metadata: { argv: ["echo", "metadata-leak"] },
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "c2-red-2",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		);
+		expect(r.ok).toBe(false);
+		if (r.ok) return;
+		expect(r.error).toBe("EXEC_SHAPED_PAYLOAD");
+	})
+
+	it("C2-RED-03: argv inside artifact object is rejected", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+			artifacts: [{ guestPath: "/a", hostDestination: "/b", required: false, argv: ["x"] }],
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "c2-red-3",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		);
+		expect(r.ok).toBe(false);
+		if (r.ok) return;
+		expect(r.error).toBe("EXEC_SHAPED_PAYLOAD");
+	})
+
+	it("C2-RED-04: argv inside commands[i] (negative case — ALLOWED) still passes", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo", "ok"] }],
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "c2-red-4",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		);
+		expect(r.ok).toBe(true);
+	})
+
+	it("C2-RED-05: nested object containing argv is rejected", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+			timeouts: { readyMs: 1000, argv: ["echo"] },
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "c2-red-5",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		);
+		expect(r.ok).toBe(false);
+		if (r.ok) return;
+		expect(r.error).toBe("EXEC_SHAPED_PAYLOAD");
+	})
+
+	it("C2-RED-06: array element containing exec-shaped key is rejected", () => {
+		// The defect targeted in this test: any of the 10 forbidden
+		// keys (command,argv,shell,exec,script,spawn,cmd,cmdline,
+		// path,file) appearing inside an array element must be
+		// rejected. Here `exec` is the forbidden key inside the
+		// metadata array element.
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+			artifacts: [{ guestPath: "/a", hostDestination: "/b", required: false }],
+			metadata: [{ exec: "rm -rf /" }],
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "c2-red-6",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		);
+		expect(r.ok).toBe(false);
+		if (r.ok) return;
+		expect(r.error).toBe("EXEC_SHAPED_PAYLOAD");
+	})
+
+	// C2 GREEN: keep_vm is a boolean, never exec-shaped. Must remain allowed.
+	it("C2-GREEN-01: keep_vm=true at spec root is accepted", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+			keep_vm: true,
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "c2-green-1",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		);
+		expect(r.ok).toBe(true);
+	})
 })
 
 

@@ -1,0 +1,45 @@
+C10 REAL-RUN — Tart binary available, lifecycle primitives wired
+
+Date: 2026-10-08
+Subject HEAD: d46223b51
+
+Tart binary location: /run/current-system/sw/bin/tart
+  (Nix store symlink -> /nix/store/crsnipsi18a4ac0vvim0c4093mwf1l1h-tart-2.34.0/bin/tart)
+Version: 2.34.0 (Tart — official Apple Silicon + Linux ARM64).
+
+Host: macOS 14.7.4 (23H420), arm64, kernel Darwin 23.6.0.
+
+PRIMITIVES READY (per handle_tart_testbed_run):
+  - tbr_resolve_executable -> /run/current-system/sw/bin/tart
+  - tbr_build_clone_argv(tart, image, vm)
+  - tbr_build_run_argv(tart, vm) + tbr_spawn_argv (long-lived)
+  - tbr_wait_ip(tart, vm, 60s, 1s)
+  - tbr_resolve_tool("ssh") -> /usr/bin/ssh
+  - tbr_resolve_tool("scp") -> /usr/bin/scp
+  - tbr_wait_ssh(ssh, kh, id, user, ip, 30s, 1s)
+  - tbr_ssh_exec(...) -> run commands[].argv on guest
+  - tbr_invoke_bounded([tart, stop, vm])
+  - tbr_escalate(&run_handle, 5000, 3000)
+  - tbr_invoke_bounded([tart, delete, vm])
+
+LAUNCHD PATH:
+  The lifecycle is invoked via the tart.testbed.run RPC on
+  io.clinemm.host-helper. The launchd Helper is already wired
+  (per ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01 and
+  ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01). The launchd backend
+  in tools/tart-testbed/src/launchd-backend.ts uses this handler
+  via LaunchdHostHelperTransport. 32 launchd-runner tests pass.
+
+CLI PATH:
+  tools/tart-testbed/bin/clinemm-testbed run <spec> --backend
+  launchd-tart --allow-vm (operator-only). The substrate has 114
+  passing tests covering the CLI wiring.
+
+REAL-RUN PRECONDITIONS:
+  1. tart binary at /run/current-system/sw/bin/tart (VERIFIED)
+  2. OCI image: ghcr.io/cirruslabs/macos-sonoma-base@sha256:...
+     (NOT YET VERIFIED on this host; the network path to
+     ghcr.io is blocked by the host protective posture per
+     ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01)
+  3. SSH key auth into the guest (NOT YET VERIFIED)
+  4. Writable user-data volume (NOT YET VERIFIED — see C11 below)

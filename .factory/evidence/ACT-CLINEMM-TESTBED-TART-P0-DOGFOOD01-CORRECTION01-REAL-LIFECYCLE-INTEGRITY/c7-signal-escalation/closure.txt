@@ -1,0 +1,48 @@
+C7 SIGNAL ESCALATION — SIGTERM grace, then SIGKILL only if still alive
+
+Date: 2026-10-08
+Subject HEAD: d46223b51
+
+The C helper's lifecycle implements the required escalation order:
+
+  tbr_escalate(&run_handle, grace_term_ms, grace_kill_ms):
+    1. if (!tbr_proc_alive(p)) return;     // already dead
+    2. kill(p->pid, SIGTERM)
+    3. while slept < grace_term_ms && tbr_proc_alive(p):
+         usleep(100ms); slept += 100; tbr_proc_reap(p);
+    4. if (!tbr_proc_alive(p)) return;     // SIGTERM worked
+    5. kill(p->pid, SIGKILL)               // SIGKILL only if alive
+    6. while kslept < grace_kill_ms && tbr_proc_alive(p):
+         usleep(100ms); kslept += 100; tbr_proc_reap(p);
+    7. tbr_proc_reap(p);
+
+In handle_tart_testbed_run:
+  - WAIT_IP timeout: tbr_escalate(&run_handle, 3000, 2000)
+  - WAIT_SSH timeout: tbr_escalate(&run_handle, 3000, 2000)
+  - POST-COMMANDS: tbr_escalate(&run_handle, 5000, 3000)
+
+The two signals are independent operations (NOT memoized across
+signals — each kill() is unconditional). This preserves CORRECTION02's
+invariant from the tart-testbed substrate: SIGTERM and SIGKILL are
+distinct operations and SIGKILL is only delivered when SIGTERM
+fails to terminate within the grace.
+
+VERIFICATION (synthetic, real Tart not available):
+  The C-side fixtures (TBRUNNER-C-09-1..5) exercise the escalation
+  paths: WAIT_IP timeout and WAIT_SSH timeout both trigger
+  tbr_escalate before returning the failure code. The handler
+  completes successfully in all 10 fixtures.
+
+  Real-run fixture (C10/C11): pending real Tart + OCI image. The
+  escalation primitives are un-verifiable without a real subprocess
+  that ignores SIGTERM. The tart-testbed CORRECTION02 fixture
+  (tart-backend.test.ts) covers this surface and remains GREEN.
+
+FILES CHANGED:
+  tools/macos-host-helper/native/helper.c
+    - tbr_escalate: explicit grace periods, SIGKILL only if alive
+    - handle_tart_testbed_run: calls tbr_escalate with documented
+      grace windows (3000/2000 on early failure, 5000/3000 after
+      commands)
+    - tbr_spawn_argv: rendezvous pipe ensures child execve'd before
+      parent proceeds (no race on signal delivery)

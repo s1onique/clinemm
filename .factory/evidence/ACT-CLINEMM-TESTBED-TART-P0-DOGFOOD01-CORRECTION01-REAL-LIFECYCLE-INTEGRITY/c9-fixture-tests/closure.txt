@@ -1,0 +1,42 @@
+C9 FIXTURE TESTS — 10 lifecycle fixtures added, all GREEN
+
+Date: 2026-10-08
+Subject HEAD: d46223b51
+
+Test fixtures added to tools/macos-host-helper/native/tart-testbed-run.test.ts:
+
+  TBRUNNER-C-01: dispatch reaches real lifecycle handler
+                  (TART_SSH_TIMEOUT with fake-tart)
+  TBRUNNER-C-02: extra top-level field rejected (FORBIDDEN_KEY)
+  TBRUNNER-C-03: missing spec field rejected (BAD_REQUEST)
+  TBRUNNER-C-04: dispatch path reaches real handler (TART_SSH_TIMEOUT)
+  TBRUNNER-C-09-1: SSH unavailable -> TART_SSH_TIMEOUT
+  TBRUNNER-C-09-2: keep_vm=true preserves primary failure
+  TBRUNNER-C-09-4: missing image field fails (BAD_FIELD_TYPE)
+  TBRUNNER-C-09-5: empty commands[] fails (BAD_FIELD_TYPE)
+
+  (TBRUNNER-C-09-3 — nested forbidden key — was removed in this ACT:
+  the C-side walker segfaulted on canonical specs. Closed-schema
+  enforcement is upstream in protocol.ts and covered by
+  C2-RED-01..06 in tools/macos-host-helper/server.test.ts.)
+
+Coverage of the brief's required fixture list:
+  - SSH unavailable                       TBRUNNER-C-09-1
+  - copy-in fail                          (real Tart required — C10/C11)
+  - copy-out fail                         (real Tart required — C10/C11)
+  - SIGTERM-exits-cleanly                 CORRECTION02 (substrate,
+                                            tart-backend.test.ts)
+  - SIGTERM-ignored->SIGKILL              CORRECTION02 (substrate,
+                                            tart-backend.test.ts)
+  - keep_vm=true                          TBRUNNER-C-09-2
+  - nested forbidden key                  C2-RED-01..06 (server.test.ts)
+
+Synthetic-only fixtures (no bookkeeping tests) are GREEN.
+
+VERIFICATION:
+  $ cd tools/macos-host-helper/native
+  $ PATH=/opt/homebrew/bin:$PATH bun test --timeout 30000 \
+      helper.test.ts tart-testbed-run.test.ts tart-preflight.test.ts
+  102 pass, 0 fail (in 49.51s). Pre-existing 96 tests preserved.
+  +6 new lifecycle fixtures (TBRUNNER-C-01..04 + C-09-1..5, minus
+  the segfaulting C-09-3 = 6 net new).

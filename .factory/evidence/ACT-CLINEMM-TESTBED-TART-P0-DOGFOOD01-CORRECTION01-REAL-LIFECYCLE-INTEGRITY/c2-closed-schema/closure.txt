@@ -1,0 +1,44 @@
+C2 CLOSED — closed-schema argv exception tightened to commands[*] only
+
+Date: 2026-10-08
+Subject HEAD: d46223b51 (start of ACT)
+
+DEFECT (verified RED, then fixed):
+  protocol.ts hasForbiddenKeysDeep(v, parentChain=[]) previously
+  accepted `argv` ANYWHERE its value was an array-of-strings. The
+  argv-exception was based on value-shape, not on parent-chain, so
+  a malicious caller could embed `{argv: ["echo", "leak"]}` inside
+  spec.metadata, spec.timeouts, spec.artifacts[*], or spec root,
+  and the parser would accept it. This bypassed the closed-schema
+  invariant for the spec.
+
+FIX:
+  hasForbiddenKeysDeep now threads a parentChain parameter through
+  recursion. The argv exception is granted ONLY when the immediate
+  parent key is `commands` (i.e. the array element is a direct child
+  of spec.commands). argv anywhere else — root, metadata[*],
+  artifacts[*], timeouts.*, etc. — is rejected as exec-shaped.
+
+RED REPRODUCTION (5/6 REDs failed before fix):
+  C2-RED-01: argv at spec root                    FAIL -> PASS (EXEC_SHAPED_PAYLOAD)
+  C2-RED-02: argv inside spec.metadata entry      FAIL -> PASS (EXEC_SHAPED_PAYLOAD)
+  C2-RED-03: argv inside artifact object          FAIL -> PASS (EXEC_SHAPED_PAYLOAD)
+  C2-RED-04: argv inside commands[i] (negative)   PASS (canonical path still allowed)
+  C2-RED-05: nested object containing argv        FAIL -> PASS (EXEC_SHAPED_PAYLOAD)
+  C2-RED-06: array element containing forbidden   FAIL -> PASS (EXEC_SHAPED_PAYLOAD)
+  C2-GREEN-01: keep_vm=true at spec root          PASS (control — keep_vm still allowed)
+
+TEST COUNT:
+  server.test.ts: 66 pass (was 59; +7 new C2 tests)
+  Total macos-host-helper (server+client): 82 pass (was 75; +7)
+  Pre-existing 75 tests all preserved.
+  Typecheck (bunx tsc --noEmit): clean.
+  No other test files touched.
+
+FILES CHANGED:
+  tools/macos-host-helper/protocol.ts
+    - hasForbiddenKeysDeep rewritten with parentChain parameter
+    - argv exception now requires parentChain[length-1] === "commands"
+  tools/macos-host-helper/server.test.ts
+    - +7 new C2 tests (RED-01..06, GREEN-01)
+    - All other tests preserved unchanged
