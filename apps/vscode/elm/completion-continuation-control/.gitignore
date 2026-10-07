@@ -4,16 +4,19 @@
 # so the build orchestrator can verify the produced JS byte-for-byte
 # before staging it into the dogfood artifact.
 #
-# ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+# ACT-CLINEMM-ELMIZE-P1-TOOLCHAIN-RESOLVER01:
 # Unlike completion-authority/ and task-header-orchestration/ (which
-# track `vendor/elm` for hermetic local builds), this kernel
-# EXCLUDES `vendor/elm` from its commits per the factory review
-# directive for CORRECTION06 ("Commit the full CORRECTION05+06+Elm
-# substrate set, excluding vendor/elm"). The 60 MB duplicate is
-# NOT carried in the repo; the build pipeline resolves the compiler
-# from the global environment / a future centralization ACT.
-# `.gitignore` keeps `vendor/elm` excluded; `.gitkeep` preserves
-# the directory so tracked tools can populate it at build time.
+# still carry a tracked `vendor/elm` as a one-shot-dev fallback), this
+# kernel does NOT track `vendor/elm`. The Elm compiler is a toolchain
+# input, not source: the canonical dogfood builder resolves the
+# pinned compiler on the build host and passes it via `${ELM_BIN}`
+# into the kernel's `build-elm.sh`. Keeping the 60 MB binary out of
+# three tracked copies also makes the exact-HEAD worktree reproducible
+# without injecting files into the temporary detached worktree.
+#
+# `scripts/elm_toolchain.sh` will still consult `${HERE}/vendor/elm`
+# as a fallback if a developer drops one in for local builds; the
+# `.gitignore` keeps it excluded so it can never leak into a commit.
 vendor/*.js
 vendor/*.js.sha256
 vendor/elm

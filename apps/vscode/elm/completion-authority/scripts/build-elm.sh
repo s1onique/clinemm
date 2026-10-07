@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # build-elm.sh
 #
-# Compile the Elm kernel to JS using the SYSTEM `elm` (Elm 0.19.2
-# on PATH). Pure bash. No Python. No vendored compiler. No
-# project-local ELM_HOME / registry.dat staging.
+# Compile the completion-authority Elm kernel to JS.
+# Pure bash. The compiler is resolved by the shared
+# `scripts/elm_toolchain.sh` resolver (one toolchain authority across
+# all three kernels).
 #
 # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-CORRECTION02:
 #   * The CORRECTION01 vendored-0.19.1 + .elm-home/0.19.1/packages/
 #     registry.dat bootstrap is REMOVED. Elm 0.19.2 is the supported
 #     toolchain (matches the homebrew `elm` formula and the official
 #     Elm installer).
-#   * This script now requires `elm` on PATH and exits with a clear
-#     HALT message if it is missing.
 #   * `vendor/elm` and `vendor/elm.sha256` are retained as historical
 #     evidence (the CORRECTION01 binary) and are NOT consulted by the
-#     build.
+#     build — the dogfood build always passes `${ELM_BIN}` so the
+#     worktree's vendor copy is informational.
+#
+# ACT-CLINEMM-ELMIZE-P1-TOOLCHAIN-RESOLVER01:
+#   * Sources `scripts/elm_toolchain.sh` so the resolver contract is
+#     identical to the other two kernels.
 #
 # ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION05
 # (ELM-PROJECT-CWD). `HERE` is the Elm project root
@@ -36,24 +40,21 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ELM="$(command -v elm 2>/dev/null || true)"
 
-if [[ -z "${ELM}" || ! -x "${ELM}" ]]; then
-    echo "HALT_ELM_COMPILER_NOT_ON_PATH" >&2
-    echo "fatal: \`elm\` not found on PATH" >&2
-    echo "       install Elm 0.19.2 (e.g. \`brew install elm\`) and re-run" >&2
-    exit 1
-fi
-
-# Sanity-check the Elm version. We pin to 0.19.2; elm-test and
-# elm-explorations/test >= 2.0.0 are compatible per the elm-test 0.19.2
-# compatibility note.
-ELM_VERSION="$("${ELM}" --version 2>/dev/null || true)"
-if [[ "${ELM_VERSION}" != "0.19.2" ]]; then
-    echo "HALT_ELM_VERSION_MISMATCH" >&2
-    echo "fatal: expected elm 0.19.2, got ${ELM_VERSION}" >&2
-    exit 2
-fi
+# Resolve the Elm compiler via the shared toolchain authority. The
+# resolver pins 0.19.2 and prefers:
+#   1. ${ELM_BIN} (explicit, orchestrator-supplied)
+#   2. ${HERE}/vendor/elm (one-shot dev / tracked fallback)
+#   3. system `elm` on PATH (exact-version check guards drift)
+# It exports ELM, ELM_VERSION, ELM_BIN_SHA256 on success and halts
+# closed with a structured HALT_* message on failure.
+#
+# Path: this script lives at apps/vscode/elm/<kernel>/scripts/build-elm.sh
+# (so HERE = apps/vscode/elm/<kernel>). The shared resolver lives at the
+# REPO ROOT scripts/elm_toolchain.sh — four `..` segments up
+# (kernel -> elm -> vscode -> apps -> repo root).
+# shellcheck source=scripts/elm_toolchain.sh
+source "${HERE}/../../../../scripts/elm_toolchain.sh"
 
 mkdir -p "${HERE}/vendor"
 
@@ -63,7 +64,7 @@ mkdir -p "${HERE}/vendor"
 # being in the compiler's working directory.
 cd "${HERE}"
 
-echo "[build-elm] compiling Main.elm -> vendor/completion-authority.js (elm ${ELM_VERSION})"
+echo "[build-elm] compiling Main.elm -> vendor/completion-authority.js (elm ${ELM_VERSION} via ${ELM})"
 "${ELM}" make "${HERE}/src/Main.elm" --output="${HERE}/vendor/completion-authority.js"
 
 # Sidecar format is `<lowercase-hex-sha256>\n` — the SHA ONLY, no
@@ -87,7 +88,9 @@ emit_sha "${HERE}/src/Codec.elm"
 emit_sha "${HERE}/elm.json"
 
 echo "[build-elm] done:"
-echo "   elm version          -> ${ELM_VERSION}"
+echo "   elm version             -> ${ELM_VERSION}"
+echo "   elm compiler path       -> ${ELM}"
+echo "   elm compiler sha256     -> ${ELM_BIN_SHA256:-<unreadable>}"
 echo "   completion-authority.js -> $(cat "${HERE}/vendor/completion-authority.js.sha256")"
 echo "   Main.elm               -> $(cat "${HERE}/src/Main.elm.sha256")"
 echo "   Authority.elm          -> $(cat "${HERE}/src/Authority.elm.sha256")"

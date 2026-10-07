@@ -20723,3 +20723,53 @@ Verdict: PASS_COMPLETION_CONTINUATION_ELM_PRODUCTION_AUTHORITY
 Lifecycle clear failures in mcprestart01 RED-01/AFTER-SETTLE-03/IDENTITY-06
 are PRE-EXISTING on HEAD (verified via git stash); unrelated to CORRECTION06.
 ```
+
+## ACT-CLINEMM-ELMIZE-P1-TOOLCHAIN-RESOLVER01 — PASS_CLINEMM_TOOLCHAIN_RESOLVER — 2026-10-07
+
+**Status:** CLOSED. P1 bounded build/toolchain contract defect. Diagnosed and fixed: the exact-head Git worktree under `git worktree add --detach` does not carry the main worktree's untracked `vendor/elm`, so the canonical dogfood build was hitting `HALT_COMPLETION_CONTINUATION_CONTROL_ELM_KERNEL_NOT_VENDORED`. Three-kernel contract divergence (vendored for 2, system for 1, ignoring `${ELM_BIN}` entirely) replaced by ONE shared resolver across all three kernels.
+
+**Contract (new, single authority):**
+
+```text
+all Elm kernel build scripts -> scripts/elm_toolchain.sh
+resolver precedence:
+  1. ${ELM_BIN}             -- explicit, orchestrator-supplied
+  2. ${HERE}/vendor/elm     -- one canonical repo-local compiler
+  3. system `elm` on PATH   -- exact-0.19.2 check guards drift
+  4. fail closed            HALT_ELM_TOOLCHAIN_UNRESOLVED
+required version: 0.19.2
+```
+
+**Bounded repair (7 files, ~430 insertions, ~55 deletions):**
+- `scripts/elm_toolchain.sh` (NEW, 150 lines): one shared bash resolver exporting `ELM`, `ELM_VERSION`, `ELM_BIN_SHA256`. Exact-version fail-closed. Mirrors Python's `resolve_elm_compiler()` contract.
+- `scripts/build_dogfood_vsix_lib.py` (NEW ~180 lines): `resolve_elm_compiler()`, `_ELM_REQUIRED_VERSION`, `_ELM_BREW_CANDIDATES`. `build_elm_kernel()` now resolves once per build, propagates `ELM_BIN` via env to the production runner, returns the compiler dict so the orchestrator can stamp `elm_version` + `elm_bin` + `elm_bin_sha256` + `elm_toolchain_resolver_reason` into the artifact JSON. The `ELM_BIN` override branch is AUTHORITATIVE (no fall-through on wrong-version).
+- `apps/vscode/elm/completion-continuation-control/scripts/build-elm.sh`: removed the hard `ELM="${HERE}/vendor/elm"` and the `HALT_COMPLETION_CONTINUATION_CONTROL_ELM_KERNEL_NOT_VENDORED` guard. Sources the shared resolver.
+- `apps/vscode/elm/task-header-orchestration/scripts/build-elm.sh`: same — sources the shared resolver. Tracked `vendor/elm` kept as branch-2 fallback for one-shot dev builds.
+- `apps/vscode/elm/completion-authority/scripts/build-elm.sh`: same — sources the shared resolver (was using `command -v elm`, ignoring `${ELM_BIN}` entirely).
+- `apps/vscode/elm/completion-continuation-control/.gitignore`: rewrote the comment to record the toolchain-resolver contract; the `.gitignore` directives themselves are unchanged (the `vendor/elm` exclusion was already correct).
+- `scripts/tests/test_elm_toolchain_resolver.py` (NEW, 13 tests): pin the 4-branch precedence + fail-closed contracts on BOTH the shell resolver and the Python orchestrator resolver.
+
+**Conservation gates (13/13 new tests PASS, baseline 57/67 pre-existing failures unchanged):**
+- `python3 -m unittest scripts.tests.test_elm_toolchain_resolver` — **13/13 PASS** (4 shell-resolver precedence tests + 5 Python-resolver tests + 1 env-pass-through test + 1 SHA-contract test + 2 authoritative-override tests).
+- `python3 -m unittest scripts.tests.test_build_dogfood_vsix` — **57 PASS / 10 pre-existing-failures** (verified equal to baseline via `git stash`; the 10 failures are pre-existing CORRECTION06 test-stub issues that need a separate ACT — they all stem from the third kernel `completion-continuation-control` being added to `_ELM_KERNELS` without updating the test stub seeds).
+
+**Reproducibility signal (operator-supplied):**
+```
+ELM=/opt/homebrew/bin/elm
+ELM_VERSION=0.19.2
+ELM_BIN_SHA256=3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
+```
+The SHA matches `apps/vscode/elm/completion-continuation-control/vendor/elm.sha256` line 2 — the official homebrew `elm` formula packages the same binary the repo previously vendored.
+
+**Discriminator:** the resolver explicitly prefers `/opt/homebrew/bin/elm` over `shutil.which("elm")` because the Nix-system `/run/current-system/sw/bin/elm` is `0.19.1` (a real failure mode on this host) and would silently violate the contract.
+
+**What this ACT did NOT do:**
+- ❌ track `vendor/elm` in three places
+- ❌ copy `vendor/elm` into the temporary exact-HEAD worktree
+- ❌ disable the exact-HEAD worktree isolation
+- ❌ modify the kernel authority at all
+
+**Next ACT (operator-owned):**
+1. Update the pre-existing CORRECTION06 test stubs (`_write_tracked_elm_sources`, `_make_vsix`) to seed `completion-continuation-control` so the 10 baseline failures recover. Trivial follow-up.
+2. Rerun the canonical exact-HEAD dogfood build at this commit's tree, confirm `elm_version` + `elm_bin_sha256` appear in the result JSON.
+3. Proceed straight to install + LIVE qualification.

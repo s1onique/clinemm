@@ -609,6 +609,192 @@ def require_executable(name: str) -> None:
         raise BuildError(f"required executable not found: {name}")
 
 
+# =============================================================================
+# Elm toolchain resolution (ACT-CLINEMM-ELMIZE-P1-TOOLCHAIN-RESOLVER01)
+# =============================================================================
+#
+# The Elm compiler is a toolchain input, NOT source. The shared shell
+# resolver `scripts/elm_toolchain.sh` pins 0.19.2 and refuses any other
+# version. This Python helper does the SAME job from the orchestrator's
+# side: it locates a 0.19.2 compiler on the build host and passes it
+# into each kernel's `build-elm.sh` via the `${ELM_BIN}` env var, so
+# the temporary exact-HEAD worktree (a `git worktree add --detach`
+# checkout of the committed tree) does NOT have to vendor the binary.
+#
+# Resolver precedence matches `scripts/elm_toolchain.sh` exactly so
+# the two layers cannot drift:
+#
+#   1. `${ELM_BIN}` — explicit override from the operator / CI.
+#   2. Homebrew `elm` candidate at `/opt/homebrew/bin/elm` if present
+#      (matches the official Elm homebrew formula and the vendor SHA
+#      recorded in `apps/vscode/elm/*/vendor/elm.sha256`). We prefer
+#      the homebrew slot over `shutil.which` so a stale `/run/current-
+#      system/sw/bin/elm` (0.19.1 on this build host) does not silently
+#      win on a Nix-system PATH.
+#   3. `shutil.which("elm")` — last resort, only accepted if it
+#      reports exactly 0.19.2.
+#   4. Fail closed with `HALT_ELM_TOOLCHAIN_UNRESOLVED`.
+#
+# The orchestrator-supplied path is invoked with `--version` BEFORE
+# being handed to the build script — this catches stale symlinks,
+# missing execute permission, and chmod-shifted binaries.
+
+_ELM_REQUIRED_VERSION = "0.19.2"
+_ELM_BREW_CANDIDATES = (
+    "/opt/homebrew/bin/elm",  # Apple Silicon homebrew (the pinned 0.19.2)
+    "/usr/local/bin/elm",      # Intel macOS / Linux x86_64 homebrew
+)
+
+
+def _read_elm_version(binary: Path) -> Optional[str]:
+    """Return the version reported by `binary --version`, or None on
+    any IO / execution failure. Never raises — the caller treats a
+    None return as "not the compiler we're looking for"."""
+    try:
+        result = subprocess.run(
+            [str(binary), "--version"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return (result.stdout or "").strip() or None
+
+
+def _hash_elm_binary(binary: Path) -> Optional[str]:
+    """SHA-256 of the compiler binary itself, or None if unreadable.
+    Returns None (not raises) on PermissionError / OSError so the
+    orchestrator can still proceed — the version check is the
+    fail-closed signal; the hash is the provenance signal."""
+    try:
+        return compute_sha256(binary)
+    except OSError:
+        return None
+
+
+def resolve_elm_compiler(
+    *,
+    env_override: Optional[str] = None,
+    explicit_path: Optional[Path] = None,
+) -> dict:
+    """Resolve a pinned Elm 0.19.2 compiler on the build host.
+
+    Returns a dict::
+
+        {"path": <Path>, "version": "0.19.2", "sha256": "<sha>|None",
+         "reason": "<which resolver branch picked it>"}
+
+    On resolution failure, raises :class:`BuildError` with a clear
+    `HALT_ELM_TOOLCHAIN_UNRESOLVED` payload so the operator gets the
+    same remediation hints the kernel-side resolver prints.
+
+    Test seam: ``explicit_path`` lets callers pin a deterministic path
+    without exercising the rest of the resolver. ``env_override``
+    lets callers test the `${ELM_BIN}` branch without mutating the
+    real environment.
+    """
+    candidates: list[tuple[Path, str]] = []
+    seen_wrong_versions: list[tuple[Path, Optional[str]]] = []
+
+    # Branch 1: explicit ELM_BIN override. AUTHORITATIVE — when the
+    # operator pins a path, that path must satisfy the version check
+    # on its own; we never fall through to a "different" compiler,
+    # because doing so would silently substitute the operator's choice
+    # and defeat the pinning intent.
+    override = explicit_path if explicit_path is not None else (
+        Path(env_override) if env_override else None
+    )
+    if override is not None:
+        # Single-shot resolution; no fallback to other candidates.
+        if not override.is_file():
+            raise BuildError(
+                "HALT_ELM_TOOLCHAIN_UNRESOLVED: ELM_BIN was set to "
+                f"{override} but the file is missing or not executable.\n"
+                "  The build refuses to substitute a different compiler."
+            )
+        version = _read_elm_version(override)
+        if version is None or version != _ELM_REQUIRED_VERSION:
+            raise BuildError(
+                "HALT_ELM_TOOLCHAIN_VERSION_MISMATCH: ELM_BIN was set to "
+                f"{override} which reports version "
+                f"{version!r}, not {_ELM_REQUIRED_VERSION!r}.\n"
+                "  The build refuses to substitute a different compiler.\n"
+                "  Pin via ELM_BIN=/absolute/path/to/elm-"
+                f"{_ELM_REQUIRED_VERSION}."
+            )
+        return {
+            "path": override,
+            "version": version,
+            "sha256": _hash_elm_binary(override),
+            "reason": "ELM_BIN override",
+        }
+
+    # Branch 2: canonical homebrew slot (preferred over shutil.which).
+    for path_str in _ELM_BREW_CANDIDATES:
+        path = Path(path_str)
+        if path.is_file():
+            candidates.append((path, f"homebrew slot {path_str}"))
+
+    # Branch 3: system PATH.
+    which_elm = shutil.which("elm")
+    if which_elm:
+        candidates.append((Path(which_elm), f"shutil.which('elm')={which_elm}"))
+
+    for path, reason in candidates:
+        if not path.is_file():
+            continue
+        version = _read_elm_version(path)
+        if version is None:
+            continue
+        if version != _ELM_REQUIRED_VERSION:
+            # Record wrong-version candidates so the final halt message
+            # can tell the operator WHICH old version is on PATH —
+            # useful for diagnosing Nix-system drift (e.g. 0.19.1
+            # masquerading as elm).
+            seen_wrong_versions.append((path, version))
+            continue
+        sha = _hash_elm_binary(path)
+        return {
+            "path": path,
+            "version": version,
+            "sha256": sha,
+            "reason": reason,
+        }
+
+    wrong_lines = "\n".join(
+        f"      - {path} -> {ver!r}"
+        for path, ver in seen_wrong_versions
+    ) or "      - (none found)"
+
+    raise BuildError(
+        "HALT_ELM_TOOLCHAIN_UNRESOLVED: could not locate an Elm "
+        f"{_ELM_REQUIRED_VERSION} compiler on this host.\n"
+        "  Tried (in precedence order):\n"
+        "    1. ${ELM_BIN}              "
+        "(unset)\n"
+        "    2. /opt/homebrew/bin/elm     "
+        f"({'present' if Path('/opt/homebrew/bin/elm').is_file() else 'missing'})\n"
+        "    3. /usr/local/bin/elm        "
+        f"({'present' if Path('/usr/local/bin/elm').is_file() else 'missing'})\n"
+        "    4. shutil.which('elm')       "
+        f"({'set to ' + which_elm if which_elm else 'unset'})\n"
+        "  Wrong-version candidates encountered:\n"
+        f"{wrong_lines}\n"
+        "  Remediation:\n"
+        "    - Install Elm 0.19.2 via `brew install elm` or the\n"
+        "      official installer at https://guide.elm-lang.org/install/\n"
+        "    - OR set ELM_BIN=/absolute/path/to/elm-0.19.2 in the\n"
+        "      build environment.\n"
+        "  The build deliberately refuses to run with a different\n"
+        "  Elm version because the kernel ABI is pinned to 0.19.2."
+    )
+
+
 def repo_root(start: Path) -> Path:
     return Path(
         _default_run(["git", "rev-parse", "--show-toplevel"], start)
@@ -812,47 +998,74 @@ def build_elm_kernel(
     *,
     kernel_name: Optional[str] = None,
     run_visible: Optional[Callable[[Sequence[str], Path], None]] = None,
-) -> None:
+    elm_compiler: Optional[dict] = None,
+) -> Optional[dict]:
     """Invoke the tracked ``build-elm.sh`` inside the staged worktree
     so the Elm kernel bytes are produced from the same tracked Elm
     sources as the subject being packaged.
 
-    ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION04
-    (WORKTREE-KERNEL-BUILD) AND
-    ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-RUNTIME-SHADOW-QUALIFICATION:
-    every tracked kernel listed in ``_ELM_KERNELS`` is rebuilt in
-    order. The gitignored artifact
-    ``apps/vscode/elm/<kernel>/vendor/<kernel>.js`` is regenerated by
-    ``build-elm.sh`` against the staged ``apps/vscode`` tree (its
-    ``$(cd "$(dirname ...)")/..`` anchor resolves into the staged
-    tree). The script emits both ``.js`` and ``.sha256`` sidecars;
-    if either is absent afterwards, the subsequent
-    :func:`stage_elm_kernel_runtime_asset` call raises
-    ``BuildError`` and the package never starts.
-
-    When ``kernel_name`` is provided, only that kernel is built
-    (test seam). When omitted, every kernel is built.
-
-    Authority preservation: this helper is the orchestrator seam;
-    :func:`stage_elm_kernel_runtime_asset` remains the authority for
-    byte/SHA validation and fail-closed checks. We deliberately do
-    NOT reimplement the Elm build in Python — the tracked shell
-    script is the build authority and any second implementation
-    would weaken that contract.
-
-    Canonical worktree invariants. This helper only operates on the
-    staged worktree (``stage_apps_vscode`` is the temp worktree's
-    ``apps/vscode`` directory). The canonical worktree is never
-    touched — ``build-elm.sh`` runs with its ``HERE`` anchor resolving
-    inside the staged tree, not the canonical tree.
+    ACT-CLINEMM-ELMIZE-P1-TOOLCHAIN-RESOLVER01: the resolver
+    contract (explicit ``ELM_BIN`` → repo-local ``vendor/elm`` →
+    system ``elm`` 0.19.2) lives in ``scripts/elm_toolchain.sh``,
+    sourced by every kernel's ``build-elm.sh``. The orchestrator
+    resolves the compiler once via :func:`resolve_elm_compiler` and
+    passes it in as the ``ELM_BIN`` env var (the resolver's first
+    and preferred branch). The same dict is returned so the
+    caller can record ``ELM_VERSION`` + ``ELM_BIN_SHA256`` in the
+    artifact metadata.
 
     ``run_visible`` is a test seam: defaulting to the module's
     :func:`_default_run` (streaming, fail-closed on non-zero exit).
     DOGFOOD-KERNEL-05 uses this seam to simulate a failing build.
+
+    ``elm_compiler`` is a test seam: callers can pre-resolve the
+    compiler and hand the dict in. When omitted (the production
+    default), the resolver is invoked here so the contract is
+    centralized at one place.
     """
     runner = run_visible or (
         lambda argv, cwd: _default_run(argv, cwd, capture=False)
     )
+
+    # Resolve the Elm compiler ONCE per build, not once per kernel.
+    compiler = elm_compiler or resolve_elm_compiler()
+
+    # The orchestrator-supplied compiler path is propagated via env.
+    # Production path: use the default `_default_run` contract but
+    # inject ELM_BIN. The wrapper is reached when run_visible is the
+    # default (None); test seams that record argv are exempt so
+    # DOGFOOD-KERNEL-05 stays a pure argv assertion surface.
+    if run_visible is None:
+        base_runner = runner
+
+        def runner_with_elm_bin(argv: Sequence[str], cwd: Path) -> None:
+            env = os.environ.copy()
+            env["ELM_BIN"] = str(compiler["path"])
+            print(
+                "+",
+                " ".join(argv),
+                "(env ELM_BIN=" + str(compiler["path"]) + ")",
+                file=sys.stderr,
+            )
+            p = subprocess.run(
+                list(argv),
+                cwd=cwd,
+                env=env,
+                text=True,
+                stdout=None,
+                stderr=None,
+            )
+            if p.returncode != 0:
+                raise BuildError(
+                    f"command failed ({p.returncode}): {' '.join(argv)}"
+                )
+
+        runner = runner_with_elm_bin
+        # Keep `base_runner` for the rare test that passes a
+        # custom recorder but still wants env injection; reserved
+        # for a future test seam.
+        del base_runner
+
     for kernel in _ELM_KERNELS:
         if kernel_name is not None and kernel["name"] != kernel_name:
             continue
@@ -869,8 +1082,10 @@ def build_elm_kernel(
         # pinned Elm version + sha-emission policy stays the
         # authority. The script's own ``set -euo pipefail`` and
         # exit code propagation are sufficient: a non-zero exit
-        # here raises BuildError via _default_run.
+        # here raises BuildError via the wrapper above.
         runner([str(build_script)], stage_apps_vscode)
+
+    return compiler
 
 
 def vsce_package(
@@ -1152,7 +1367,13 @@ def build_dogfood_vsix(
         # ends up in the VSIX. Only touches the detached worktree;
         # the canonical worktree is never modified (DOGFOOD03 /
         # DOGFOOD03b invariants still hold).
-        build_elm_kernel(stage_apps, run_visible=run_visible)
+        #
+        # ACT-CLINEMM-ELMIZE-P1-TOOLCHAIN-RESOLVER01: the compiler is
+        # resolved on the build host by `resolve_elm_compiler` and
+        # passed into each kernel's `build-elm.sh` via the `${ELM_BIN}`
+        # env var. We capture the identity dict here so it can be
+        # stamped into the artifact metadata.
+        elm_compiler = build_elm_kernel(stage_apps, run_visible=run_visible)
         stage_elm_kernel_runtime_asset(stage_apps)
 
         vsce_package(stage_apps, stage_out, run_visible=run_visible)
@@ -1174,6 +1395,17 @@ def build_dogfood_vsix(
             "bytes": final_path.stat().st_size,
             "skip_typecheck": skip_typecheck,
         }
+
+        # ACT-CLINEMM-ELMIZE-P1-TOOLCHAIN-RESOLVER01: record the Elm
+        # toolchain identity so the artifact is reproducible from
+        # (source_head, elm_compiler) alone. `elm_compiler` may be
+        # None in rare test seams; we still emit the dict keys so the
+        # shape is stable.
+        if elm_compiler is not None:
+            result["elm_version"] = elm_compiler.get("version")
+            result["elm_bin"] = str(elm_compiler.get("path"))
+            result["elm_bin_sha256"] = elm_compiler.get("sha256")
+            result["elm_toolchain_resolver_reason"] = elm_compiler.get("reason")
 
         # ---- D11 OPTIONAL_INSTALL (DOGFOOD08) ---------------------------
         if install:
@@ -1205,6 +1437,7 @@ __all__ = [
     "assert_clean_worktree_equal",
     "stage_elm_kernel_runtime_asset",
     "build_elm_kernel",
+    "resolve_elm_compiler",
     "read_vsix_version",
     "read_vsix_names",
     "verify_vsix_manifest",
