@@ -1,5 +1,6 @@
 /**
  * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY
+ * ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-CORRECTION01-FAILURE-CACHE-SCOPE
  *
  * C3 / C4 / C13 — Authority cutover RED witness for the
  * TaskHeader presentation publication seam.
@@ -18,6 +19,15 @@
  *
  * Post-cutover expectation (Elm sole authority):
  *   production result == Elm (via real invokeElmKernel or DI)
+ *
+ * CORRECTION01-FAILURE-CACHE-SCOPE:
+ *   The "hold last good" policy was REMOVED. On any failure
+ *   (`kernel_offline`, `decode_error`, or synchronous throw), the
+ *   helper returns the bounded sentinel
+ *   `{ phase: "idle", source: "host", seq: inputs.seq }`
+ *   using the CURRENT input.seq. The tests below were rewritten
+ *   to assert that the bounded sentinel is used and the previous
+ *   `seq` is NOT carried over (seq-preservation invariant).
  */
 
 import type { TaskHeaderPresentationProjection, TurnPhase } from "@shared/ExtensionMessage"
@@ -76,21 +86,25 @@ describe("ACT-CLINEMM-...-ORCHESTRATION03-AUTHORITY / C3 RED witness — authori
 		expect(result).toStrictEqual({ phase: "compacting", source: "host", seq: 7 })
 	})
 
-	it("C3-CUTOVER-04: kernel_offline falls closed to the last successful presentation (DI)", async () => {
-		const goodElm = async (): Promise<TaskHeaderElmDecision> => ({
-			kind: "presentation",
-			value: { phase: "streaming", source: "shadow", seq: 11 },
-		})
-		const first = await pickTaskHeaderPresentationForPublication(
+	it("C3-CUTOVER-04: kernel_offline falls closed to the bounded sentinel with CURRENT seq (DI)", async () => {
+		// First publish a successful Elm result to populate the previous
+		// cache (CORRECTION01: this cached state is now inert; the
+		// helper will NOT carry it forward).
+		await pickTaskHeaderPresentationForPublication(
 			inputs({
 				canonicalShadowPhase: "streaming",
 				currentLegacyPhase: "idle",
 				seq: 11,
 			}),
-			{ invokeElmForProduction: goodElm },
+			{
+				invokeElmForProduction: async () => ({
+					kind: "presentation",
+					value: { phase: "streaming", source: "shadow", seq: 11 },
+				}),
+			},
 		)
-		expect(first).toStrictEqual({ phase: "streaming", source: "shadow", seq: 11 })
 
+		// Now simulate a kernel_offline failure at a different seq.
 		const offlineElm = async (): Promise<TaskHeaderElmDecision> => ({
 			kind: "kernel_offline",
 			classification: "task_header_elm_kernel_offline",
@@ -103,24 +117,30 @@ describe("ACT-CLINEMM-...-ORCHESTRATION03-AUTHORITY / C3 RED witness — authori
 			}),
 			{ invokeElmForProduction: offlineElm },
 		)
-		expect(held).toStrictEqual(first)
+		// CORRECTION01: bounded sentinel with the CURRENT input.seq,
+		// NOT the held `phase: "streaming", source: "shadow", seq: 11`.
+		expect(held).toStrictEqual({ phase: "idle", source: "host", seq: 12 })
 	})
 
-	it("C3-CUTOVER-05: decode_error falls closed to the last successful presentation (DI)", async () => {
-		const goodElm = async (): Promise<TaskHeaderElmDecision> => ({
-			kind: "presentation",
-			value: { phase: "awaiting_approval", source: "shadow", seq: 21 },
-		})
-		const first = await pickTaskHeaderPresentationForPublication(
+	it("C3-CUTOVER-05: decode_error falls closed to the bounded sentinel with CURRENT seq (DI)", async () => {
+		// First publish a successful Elm result to populate the previous
+		// cache (CORRECTION01: this cached state is now inert; the
+		// helper will NOT carry it forward).
+		await pickTaskHeaderPresentationForPublication(
 			inputs({
 				canonicalShadowPhase: "awaiting_approval",
 				currentLegacyPhase: "idle",
 				seq: 21,
 			}),
-			{ invokeElmForProduction: goodElm },
+			{
+				invokeElmForProduction: async () => ({
+					kind: "presentation",
+					value: { phase: "awaiting_approval", source: "shadow", seq: 21 },
+				}),
+			},
 		)
-		expect(first).toStrictEqual({ phase: "awaiting_approval", source: "shadow", seq: 21 })
 
+		// Now simulate a decode_error at a different seq.
 		const badElm = async (): Promise<TaskHeaderElmDecision> => ({
 			kind: "decode_error",
 			reason: "synthetic-decode-error",
@@ -134,7 +154,8 @@ describe("ACT-CLINEMM-...-ORCHESTRATION03-AUTHORITY / C3 RED witness — authori
 			}),
 			{ invokeElmForProduction: badElm },
 		)
-		expect(held).toStrictEqual(first)
+		// CORRECTION01: bounded sentinel with the CURRENT input.seq.
+		expect(held).toStrictEqual({ phase: "idle", source: "host", seq: 22 })
 	})
 
 	it("C3-CUTOVER-06: no cached presentation yet + kernel offline -> bounded idle host sentinel (DI)", async () => {
@@ -272,7 +293,10 @@ describe("ACT-CLINEMM-...-ORCHESTRATION03-AUTHORITY / C13 authority test matrix 
 		})
 	}
 
-	it("AUTH-10 malformed Elm output → fail closed (DI)", async () => {
+	it("AUTH-10 malformed Elm output → bounded sentinel with CURRENT seq (DI)", async () => {
+		// CORRECTION01: cache is gone. The previous successful result is
+		// NOT carried forward. The bounded sentinel uses the CURRENT
+		// input.seq.
 		await pickTaskHeaderPresentationForPublication(
 			inputs({
 				canonicalShadowPhase: undefined,
@@ -300,10 +324,13 @@ describe("ACT-CLINEMM-...-ORCHESTRATION03-AUTHORITY / C13 authority test matrix 
 				}),
 			},
 		)
-		expect(held).toStrictEqual({ phase: "streaming", source: "legacy", seq: 1 })
+		// CORRECTION01: NOT `phase: "streaming", source: "legacy", seq: 1`.
+		expect(held).toStrictEqual({ phase: "idle", source: "host", seq: 2 })
 	})
 
-	it("AUTH-11 kernel offline → fail closed (DI)", async () => {
+	it("AUTH-11 kernel offline → bounded sentinel with CURRENT seq (DI)", async () => {
+		// CORRECTION01: cache is gone. The bounded sentinel uses the
+		// CURRENT input.seq.
 		await pickTaskHeaderPresentationForPublication(
 			inputs({
 				canonicalShadowPhase: undefined,
@@ -330,7 +357,117 @@ describe("ACT-CLINEMM-...-ORCHESTRATION03-AUTHORITY / C13 authority test matrix 
 				}),
 			},
 		)
-		expect(held).toStrictEqual({ phase: "awaiting_followup", source: "host", seq: 1 })
+		// CORRECTION01: NOT `phase: "awaiting_followup", source: "host", seq: 1`.
+		expect(held).toStrictEqual({ phase: "idle", source: "host", seq: 2 })
+	})
+
+	it("AUTH-12 synchronous kernel throw → bounded sentinel with CURRENT seq (DI)", async () => {
+		// CORRECTION01: synchronous throws are treated like offline/
+		// decode — bounded sentinel with the CURRENT input.seq, never
+		// the held last-successful cache.
+		await pickTaskHeaderPresentationForPublication(
+			inputs({
+				canonicalShadowPhase: undefined,
+				currentLegacyPhase: "idle",
+				seq: 100,
+			}),
+			{
+				invokeElmForProduction: async () => ({
+					kind: "presentation",
+					value: { phase: "awaiting_approval", source: "shadow", seq: 100 },
+				}),
+			},
+		)
+		const held = await pickTaskHeaderPresentationForPublication(
+			inputs({
+				canonicalShadowPhase: undefined,
+				currentLegacyPhase: "idle",
+				seq: 101,
+			}),
+			{
+				invokeElmForProduction: async () => {
+					throw new Error("synthetic-kernel-throw")
+				},
+			},
+		)
+		// CORRECTION01: NOT `phase: "awaiting_approval", source: "shadow", seq: 100`.
+		expect(held).toStrictEqual({ phase: "idle", source: "host", seq: 101 })
+	})
+
+	it("CORR01-LEAK-01: success in session A then failure in fresh session B MUST NOT leak A's phase/source (DI)", async () => {
+		// Simulate task/session boundary: the helper is published
+		// against two logically independent inputs (no production
+		// taskId; the test script models "fresh session" via different
+		// canonical/legacy inputs). CORRECTION01 invariant:
+		// the previous successful result MUST NOT bleed into a
+		// subsequent failure result.
+		await pickTaskHeaderPresentationForPublication(
+			inputs({
+				canonicalShadowPhase: "compacting",
+				currentLegacyPhase: "streaming",
+				seq: 50,
+			}),
+			{
+				invokeElmForProduction: async () => ({
+					kind: "presentation",
+					value: { phase: "compacting", source: "host", seq: 50 },
+				}),
+			},
+		)
+		// Fresh task/session: simulate authority failure.
+		const held = await pickTaskHeaderPresentationForPublication(
+			inputs({
+				canonicalShadowPhase: undefined,
+				currentLegacyPhase: "idle",
+				seq: 51,
+			}),
+			{
+				invokeElmForProduction: async () => ({
+					kind: "kernel_offline",
+					classification: "task_header_elm_kernel_offline",
+				}),
+			},
+		)
+		// The phase/source MUST be the sentinel (`idle`/`host`), NOT
+		// `compacting`/`host` from the previous successful publish.
+		expect(held.phase).toBe("idle")
+		expect(held.source).toBe("host")
+		expect(held.seq).toBe(51)
+	})
+
+	it("CORR01-SEQ-01: success seq=N, then failure seq=N+1 → emitted seq MUST be N+1 (DI)", async () => {
+		// CORRECTION01 invariant: seq preservation under failure.
+		// The bounded sentinel takes the CURRENT input.seq, NOT the
+		// held last-successful seq.
+		await pickTaskHeaderPresentationForPublication(
+			inputs({
+				canonicalShadowPhase: "streaming",
+				currentLegacyPhase: "idle",
+				seq: 7,
+			}),
+			{
+				invokeElmForProduction: async () => ({
+					kind: "presentation",
+					value: { phase: "streaming", source: "shadow", seq: 7 },
+				}),
+			},
+		)
+		const held = await pickTaskHeaderPresentationForPublication(
+			inputs({
+				canonicalShadowPhase: "idle",
+				currentLegacyPhase: "idle",
+				seq: 8,
+			}),
+			{
+				invokeElmForProduction: async () => ({
+					kind: "decode_error",
+					reason: "synthetic-decode-error",
+					classification: "task_header_elm_decode_error",
+				}),
+			},
+		)
+		// The seq MUST be 8, the phase/source MUST be the sentinel.
+		expect(held).toStrictEqual({ phase: "idle", source: "host", seq: 8 })
 	})
 })
 

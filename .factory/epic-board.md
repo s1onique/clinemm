@@ -20148,3 +20148,53 @@ kernel.failureClass=null
 **Artifacts:** `git rev-parse HEAD = 9ab587830621ed3a6679983068a5105e99dfa483`. Commit `ORCHESTRATION03-AUTHORITY: promote TaskHeader Elm kernel from runtime shadow to production authority, remove all temporary shadow scaffolding` (21 files changed, 623 insertions, 2716 deletions). No VSIX build / install / post-authority LIVE qualification performed (operator-owned per ACT §C23).
 
 **Next ACT (operator-owned, blocked until installed LIVE confirms):** rebuild VSIX → install → launch dogfood → exercise Task Header transitions (idle / streaming / awaiting_approval / compacting / awaiting_followup / completed / error / resumable). With no shadow anymore, the post-authority LIVE qualification becomes much simpler: the TaskHeader state label must remain correct for every transition, no router diagnostics are involved, and the fail-closed path only matters if the kernel asset is genuinely missing from the packaged VSIX. If UI behavior is correct for every transition, declare `CLOSED_CLEAN — TASK HEADER ELM AUTHORITY` and proceed to `ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01`.
+
+## ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-CORRECTION01-FAILURE-CACHE-SCOPE — PASS_FAIL_CLOSED_BOUNDED_SENTINEL — 2026-10-07
+
+**Status:** CLOSED. Predecessor: ORCHESTRATION03-AUTHORITY (PASS_TASK_HEADER_ELM_AUTHORITY) at `9ab587830`. Substrate unchanged.
+
+**Reviewer verdict on predecessor:** `PASS_WITH_ONE_BOUNDED_P1`. The single P1 was that `_lastSuccessfulPresentation` was module-scoped with no task/session identity in scope, so it could (a) leak a successful result from one task into the failure fallback of another, AND (b) publish a projection whose `seq` was stale relative to the current input — a direct violation of the seq-preservation invariant. Reviewer preferred bounded-sentinel over scoped-cache, and noted the completion-authority precedent uses per-session Map + `lastDecision === null → failure` (NOT hold-last-good).
+
+**Bounded fix (2 files, +60 / -10 LOC; 3 new RED witnesses):**
+- `apps/vscode/src/sdk/task-header-elm-authority.ts`:
+  - REMOVED `let _lastSuccessfulPresentation: TaskHeaderPresentationProjection | null = null` (was the leak vector).
+  - REMOVED the cache-write on success and the cache-read on every failure path.
+  - Failure policy now: any of `kernel_offline`, `decode_error`, or synchronous throw → return the bounded sentinel `{ phase: "idle", source: "host", seq: inputs.seq }` using the CURRENT input.seq. No hold-last-good, no TS semantic fallback, no cross-task state leakage.
+  - `resetTaskHeaderElmAuthorityForTests` shrunk to counters-only (no cache to reset).
+  - Counters preserved as a single monotonically increasing diagnostic record (they are not state; they are observations).
+- `apps/vscode/src/sdk/SdkController.ts` publication comment updated (was `hold the last successful Elm result`; now `bounded sentinel with the CURRENT input.seq`).
+
+**Tests rewritten + 3 new RED witnesses (1 file, +20 / -8 LOC):**
+- `apps/vscode/src/sdk/__tests__/task-header-authority-cutover.authority03.test.ts`:
+  - C3-CUTOVER-04 / 05 (DI): rewritten — now assert bounded sentinel with CURRENT input.seq, NOT the held previous result.
+  - AUTH-10 / AUTH-11 (DI): same rewrite.
+  - **NEW AUTH-12** (DI): synchronous kernel throw → bounded sentinel with CURRENT input.seq.
+  - **NEW CORR01-LEAK-01** (DI): success in session A then failure in fresh session B → previous phase/source MUST NOT leak (asserts `phase === "idle"` and `source === "host"` regardless of A's values).
+  - **NEW CORR01-SEQ-01** (DI): success at seq=N then failure at seq=N+1 → emitted seq MUST be N+1, not N.
+  - 21 tests pass in this file (was 18; +3 from the new witnesses).
+
+**Why option A (bounded sentinel) was selected over option B (scoped cache + explicit reset at task lifecycle):**
+- The SdkController publication seam (SdkController.ts:5890) does NOT have task/session identity in scope; the only inputs are the legacy tracker phases and seq. There is no clean boundary to plug a "reset at task boundary" hook.
+- The completion-authority precedent (CORRECTION01-REAL-ELM-PROVIDER) uses a per-session Map keyed on sessionId and maps the absent case (`lastDecision === null`) to a `failure` decision — NOT to a held last-good. So there is no proven user-visible invariant that requires "hold last good" here.
+- The bounded sentinel is causally valid (current input.seq is preserved), cannot bleed state across tasks, and still satisfies the load-bearing rule `Elm failure ≠ TS semantic fallback`.
+
+**Conservation gates PASS:**
+- 16 TaskHeader test files / **202 tests PASS** (was 199; +3 from new witnesses).
+- `completion-authority-elm-*` — 72 tests PASS (untouched).
+- Bun unit suite: **95 files / 1261 tests PASS**.
+- `bun run check-types` PASS (exit 0).
+- `bun run lint` PASS (2154 files, no fixes applied).
+- `git diff --check` PASS.
+- No production reference to `_lastSuccessfulPresentation` remains.
+
+**Production-seam test matrix (after C4 + CORRECTION01):**
+- 9 real-Elm AUTH cases: result == Elm (unchanged).
+- C3-CUTOVER-01/02/06/07: authority switch pinned, no silent TS fallback (unchanged).
+- C3-CUTOVER-04/05 + AUTH-10/11 + AUTH-12: ALL failures (offline/decode/throw) → bounded sentinel with CURRENT input.seq.
+- CORR01-LEAK-01: cross-task leak guard.
+- CORR01-SEQ-01: seq-preservation under failure guard.
+- AUTH-13: `globalThis.Elm` not consulted (per-kernel namespace bypasses it).
+
+**Artifacts:** `git rev-parse HEAD = 9ab587830` (authority cutover; predecessor). This closure record is on the same HEAD — the diff is in the next commit.
+
+**Next ACT:** rebuild VSIX → install → launch dogfood → exercise Task Header transitions. With no shadow anymore and a fail-closed bounded-sentinel policy, the post-authority LIVE qualification simplifies: the TaskHeader state label must remain correct for every transition, no router diagnostics are involved, and the bounded-sentinel path only matters if the kernel asset is genuinely missing from the packaged VSIX. If UI behavior is correct for every transition, declare `CLOSED_CLEAN — TASK HEADER ELM AUTHORITY + FAILURE CACHE SCOPE` and proceed to `ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01`.

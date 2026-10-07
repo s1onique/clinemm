@@ -5890,12 +5890,18 @@ export class Controller {
 						})(),
 					}
 					// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY:
+					// ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-CORRECTION01-FAILURE-CACHE-SCOPE:
 					// The Elm kernel is the SOLE production authority for the
 					// TaskHeader presentation projection. The legacy TS selector
 					// (selectTaskHeaderPresentation) and the runtime-shadow
 					// observer (observeTaskHeaderElmRuntimeShadow) have been
 					// removed. seq remains the legacy TurnStateTracker.seq for
 					// transport-level stale-push fencing.
+					//
+					// CORRECTION01: on any Elm failure, the helper returns the
+					// bounded sentinel `{ phase: "idle", source: "host", seq }`
+					// using the CURRENT input.seq. No hold-last-good, no
+					// cross-task state leakage, no stale seq publication.
 					return await pickTaskHeaderPresentationForPublication(taskHeaderInputs)
 				})(),
 				// ephemeral session override state. The store is the host-owned
