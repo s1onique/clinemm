@@ -20773,3 +20773,67 @@ The SHA matches `apps/vscode/elm/completion-continuation-control/vendor/elm.sha2
 1. Update the pre-existing CORRECTION06 test stubs (`_write_tracked_elm_sources`, `_make_vsix`) to seed `completion-continuation-control` so the 10 baseline failures recover. Trivial follow-up.
 2. Rerun the canonical exact-HEAD dogfood build at this commit's tree, confirm `elm_version` + `elm_bin_sha256` appear in the result JSON.
 3. Proceed straight to install + LIVE qualification.
+
+## ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01 — PASS_COMPLETION_CONTINUATION_STALLED_REARM_CONVERGENCE — 2026-10-08
+
+**Status:** CLOSED. P0 bounded completion-continuation convergence defect. Diagnosed and fixed: the production stall fingerprint was structurally too coarse; pure passive accumulation of held-job-ids between submit_and_exit attempts shifted the fingerprint string and bypassed the stall detector. The LIVE specimen (task/session `1791400813202_ddnh3`) exhibited exactly this: 4 × submit_and_exit → 4 × pending_prompt_enqueued → 4 × continuation_started → loop → 0 × task_completion_committed.
+
+**Pre-fix fingerprint:**
+```ts
+`${activeSessionId}|${taskId ?? "(none)"}|${unconsumedOwnedTerminalResultsForC10}|${heldJobIds.slice().sort().join(",")}`
+```
+In the LIVE run, `heldJobIds` grew monotonically as new background terminals arrived between attempts while the model had no observation capability. Each call saw a structurally DIFFERENT fingerprint (different heldJobIds → different string) and the stall detector therefore permitted the enqueue. The `4 stalledNoProgress + 4 dedupePermitted over 8 entries` (LIVE counter snapshot) is the fingerprint of the loop.
+
+**Repair (3 files, ~512 insertions, ~9 deletions):**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`:
+  - Added module-level `isStrictSupersetOf(prior, next): boolean` helper (sorted-array subset check, O(n) no allocation, structural).
+  - Added field `lastCompletionContinuationHeldSetSorted: readonly string[] | undefined`. Cleared alongside `lastCompletionContinuationControlFingerprint` in `clearCompletionContinuationSentForTesting` and in the submit_and_exit BCB barrier re-registration seam.
+  - Replaced the pre-fix equality check with the superset-aware discriminator:
+    - equal held set size + equal elements ⇒ STALL (no progress)
+    - new is a strict superset of prior ⇒ STALL (passive accumulation, no consumption)
+    - new is a strict subset of prior OR membership shift ⇒ real progress, release dedupe
+    - no prior held set (first call) ⇒ leave dedupe ownership alone (so pre-armed dedupe from a prior run still suppresses)
+  - Removed `unconsumedOwnedTerminalResultsForC10` from the fingerprint string (count is implied by sorted held list length; count-only change is NOT progress per CCSRL-07).
+  - Persisted the canonical sorted held-set snapshot alongside the fingerprint on the success path.
+- `apps/vscode/src/sdk/__tests__/completion-continuation-stalled-rearm-loop01.ccsrl01.test.ts` (NEW, 13 tests): RED pins + necessity ablation + REARM-CONS-01..05 conservation.
+
+**Conservation gates (13/13 new + 141/141 related PASS, typecheck PASS, lint PASS, git diff --check PASS):**
+- `bun run test:vitest completion-continuation-stalled-rearm-loop01` — **13/13 PASS** (CCSRL-01 LIVE-specimen reproduction → exactly 1 delivery, 3 stalls; CCSRL-02..08 fingerprint canonicalization + progress matrix; CCSRL-09..10 necessity ablations; REARM-CONS-01, 02, 05 conservation).
+- `bun run test:vitest completion-continuation-rearm01` — **7/7 PASS** (K → K+1 dedupe lifetime invariant preserved).
+- `bun run test:vitest completion-continuation-stall-enforcement01` — **5/5 PASS** (production stall consumption).
+- `bun run test:vitest completion-continuation-upstream-discriminator01` — **9/9 PASS** (UPSTREAM-DIAG discriminator counter contracts; pre-armed dedupe key still suppresses).
+- `bun run test:vitest completion-continuation-delivery-*` — **12/12 PASS** (delivery transport untouched; 4/4 LIVE delivered).
+- `bun run test:vitest completion-continuation-structural-authority01` — PASS.
+- `bun run test:vitest completion-continuation-control-authority01` — PASS.
+- `bun run test:vitest completion-continuation-control-elm-*` — **56/56 PASS** (Elm policy not invoked on the new stall path; production still absorbs the surface).
+- `bun run test:vitest task-completion-continuation-coherence` — PASS.
+- `bun run check-types` — PASS.
+- `bun run lint` — PASS (2177 files, 1212ms, no fixes applied).
+- `git diff --check` — PASS.
+
+**Necessity proof (CCSRL-10):** even if the prior fingerprint is forged back into the pre-fix coarse shape (`count|sorted-held`), the post-fix code stores the canonical sorted held-set SEPARATELY from the fingerprint, so the held-set snapshot still detects the pure superset and suppresses the enqueue with `stalled_no_progress`. The held-set snapshot is the load-bearing discriminator — not the fingerprint string.
+
+**Reproduction blocked by RED (pre-fix CCSRL test outcomes):**
+```
+CCSRL-01: FAIL — second.kind was 'already_sent', not 'stalled_no_progress'
+CCSRL-03: FAIL — 'already_sent', not 'stalled_no_progress' (pure superset permitted)
+CCSRL-04: FAIL — 'already_sent', not 'delivered' (epoch dedupe blocking legitimate contraction)
+CCSRL-08: FAIL — stalledNoProgress=0, not >=3
+CCSRL-09: FAIL — stalledNoProgress=0, not >=3
+REARM-CONS-02: FAIL — 'already_sent', not 'delivered'
+```
+
+**Source HEAD:** `9efb863dfb91d1d7c09cb72ee2dea744df2ad4f7`
+
+**VSIX:**
+```
+path: dist/clinemm-ccsrl01-9efb863df.vsix
+size: 59,953,825 bytes (57.18 MiB)
+SHA-256: 1919837541376b964d75d742416204fef7dba503551ae65e1dd23d8fbc4dc7b2
+```
+
+**Evidence:** `.factory/evidence/ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01/CLOSURE.md`
+
+**Blockers:** None. HALT_UNEXPECTED_TRACKED_DIRT, HALT_RED_NOT_REPRODUCED, CAPTURE_INSUFFICIENT, HALT_STALL_STATE_NOT_PERSISTED, HALT_REARM_REGRESSION, HALT_DUAL_STALL_AUTHORITY, HALT_TRUST_BOUNDARY_SCOPE_CREEP, HALT_PROVIDER_TRANSPORT_REGRESSION, HALT_TASKHEADER_SCOPE_CREEP, HALT_LIVE_STALLED_REARM_RECURS — all cleared.
+
+**Successor ACT (operator-owned, frozen by name):** proceed straight to install + LIVE qualification at HEAD `9efb863dfb91d1d7c09cb72ee2dea744df2ad4f7`. Replay a held-accumulation scenario (10 background jobs, no observation capability, monotone accumulation) and assert the LIVE counters: `submit_and_exit_seen >= 1, stalledNoProgress >= 1, pending_prompt_enqueued after stall = 0, continuation_scheduled after stall = 0, continuation_started after stall = 0, sdkHostSend after stall = 0`.
