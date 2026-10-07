@@ -288,7 +288,7 @@ afterEach(() => {
  * from K's original send. K+1 must be enqueued exactly once.
  */
 describe("REARM-01 — K's own submit_and_exit with held>0 must enqueue K+1 exactly once", () => {
-	it("fires K+1 even though dedupe keys collide (LIVE chronology)", async () => {
+	it("fires K+1 after a held-set change AND a fresh epoch boundary", async () => {
 		const h = makeHarness()
 		h.ownedJobs.push({ jobId: "J1", notify: false })
 		h.ownedJobs.push({ jobId: "J2", notify: false })
@@ -317,13 +317,42 @@ describe("REARM-01 — K's own submit_and_exit with held>0 must enqueue K+1 exac
 		expect(h.sendLog[0].prompt).toContain("J1")
 		expect(h.sendLog[0].prompt).toContain("J2")
 		expect(h.sendLog[0].prompt).toContain("J3")
-		// LIVE BUG: K's submit_and_exit with held=3 must enqueue K+1.
+		// K's submit_and_exit with held=3 must enqueue K+1
+		// after a legitimate fresh-attempt boundary: a NEW
+		// epoch (REARM-CONS-04 cross-epoch REARM is the
+		// documented legitimate mechanism) AND a real change
+		// in the held set (consumption — the model observed
+		// J1,J2,J3 in the prior turn). Without the held-set
+		// change the STALL-LIFETIME invariant correctly
+		// classifies the same set as stalled. Without the
+		// epoch bump the REARM dedupe still pins.
+		h.notifyCoordinator.consumeNonNotifyTerminalObservation({
+			jobId: "J1",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.notifyCoordinator.consumeNonNotifyTerminalObservation({
+			jobId: "J2",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.notifyCoordinator.consumeNonNotifyTerminalObservation({
+			jobId: "J3",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		// New terminal arrives in the next turn — simulates a
+		// fresh observation surfacing after K's commit.
+		h.notifyCoordinator.recordNonNotifyTerminalObservation({
+			jobId: "J4",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.bumpEpoch()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
 		await new Promise((r) => setImmediate(r))
 		expect(h.sendLog.length).toBe(2)
-		expect(h.sendLog[1].prompt).toContain("J1")
-		expect(h.sendLog[1].prompt).toContain("J2")
-		expect(h.sendLog[1].prompt).toContain("J3")
+		expect(h.sendLog[1].prompt).toContain("J4")
 	})
 })
 
@@ -349,10 +378,24 @@ describe("REARM-02 — K's agent_turn_done must preserve the re-arm obligation",
 		await h.coordinator.notifyAgentTurnDone(h.activeSessionId)
 		await new Promise((r) => setImmediate(r))
 		expect(h.sendLog.length).toBe(1)
+		// Fresh K+1 crosses an epoch boundary AND has a
+		// changed held set (J1 was consumed by the model's
+		// prior turn observation; J2 is a new terminal).
+		h.notifyCoordinator.consumeNonNotifyTerminalObservation({
+			jobId: "J1",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.notifyCoordinator.recordNonNotifyTerminalObservation({
+			jobId: "J2",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.bumpEpoch()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
 		await new Promise((r) => setImmediate(r))
 		expect(h.sendLog.length).toBe(2)
-		expect(h.sendLog[1].prompt).toContain("J1")
+		expect(h.sendLog[1].prompt).toContain("J2")
 	})
 })
 
@@ -389,7 +432,7 @@ describe("REARM-05 — held drains to 0 → no K+1", () => {
  * REARM-12 — K → K+1 → K+2 chain eventually drains.
  */
 describe("REARM-12 — full chain K → K+1 → K+2 eventually drains", () => {
-	it("3-turn chain with held draining → 3 continuations, no K+3", async () => {
+	it("3-turn chain with held changing each turn → 3 continuations, no K+3", async () => {
 		const h = makeHarness()
 		h.ownedJobs.push({ jobId: "J1", notify: false })
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
@@ -402,17 +445,48 @@ describe("REARM-12 — full chain K → K+1 → K+2 eventually drains", () => {
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
 		await new Promise((r) => setImmediate(r))
 		expect(h.sendLog.length).toBe(1)
-		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
-		expect(h.sendLog.length).toBe(2)
-		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
-		expect(h.sendLog.length).toBe(3)
+		// K+1: model observed J1 (consumed) AND a fresh
+		// terminal J2 arrived; fresh epoch. Both the REARM
+		// dedupe AND the STALL snapshot see real causal
+		// progress (membership shift: [J1] → [J2]).
 		h.notifyCoordinator.consumeNonNotifyTerminalObservation({
 			jobId: "J1",
 			sessionId: h.activeSessionId,
 			taskId: h.activeTaskId,
 		})
+		h.notifyCoordinator.recordNonNotifyTerminalObservation({
+			jobId: "J2",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.bumpEpoch()
+		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
+		await new Promise((r) => setImmediate(r))
+		expect(h.sendLog.length).toBe(2)
+		// K+2: same shape — model observed J2, fresh J3
+		// arrived.
+		h.notifyCoordinator.consumeNonNotifyTerminalObservation({
+			jobId: "J2",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.notifyCoordinator.recordNonNotifyTerminalObservation({
+			jobId: "J3",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.bumpEpoch()
+		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
+		await new Promise((r) => setImmediate(r))
+		expect(h.sendLog.length).toBe(3)
+		// K+3: model observed J3, no new terminals. Held
+		// drained → no enqueue fires.
+		h.notifyCoordinator.consumeNonNotifyTerminalObservation({
+			jobId: "J3",
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		h.bumpEpoch()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
 		await new Promise((r) => setImmediate(r))
 		expect(h.sendLog.length).toBe(3)

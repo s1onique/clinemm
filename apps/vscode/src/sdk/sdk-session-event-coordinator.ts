@@ -2026,27 +2026,36 @@ export class SdkSessionEventCoordinator {
 								// pinned from the previous run's epoch-scoped key,
 								// which caused K's own submit_and_exit to suppress
 								// the successor (LIVE defect).
+								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01-CORRECTION01-STALL-LIFETIME:
+								// REARM ownership only at this lifetime boundary. A fresh
+								// BCB registration may legitimately need a new continuation,
+								// so the dedupe marker is attempt-scoped and cleared here.
+								//
+								// DO NOT clear STALL ownership here. STALL is
+								// causal-state-scoped, not attempt-scoped — it must survive
+								// a new submit_and_exit / BCB re-registration because the
+								// held set is unchanged in the LIVE defect. The predecessor
+								// STALLED-REARM-LOOP01 fix cleared the STALL fingerprint AND
+								// the canonical held-set snapshot at this same boundary,
+								// which (when paired with the REARM clear) defeated the
+								// superset-aware discriminator: `priorSortedHeld === undefined`
+								// cannot classify same/superset as stalled, so the next
+								// attempt always looked like a first observation. Future
+								// refactors MUST keep these lifetimes separate.
 								this.lastCompletionContinuationSessionEpoch = undefined
-								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
-								// Also clear the STALL fingerprint. The freshly-registered
-								// marker lifecycle (the BCB barrier is cleared and re-set on
-								// every submit_and_exit handler) represents a new attempt to
-								// drive a continuation — the prior fingerprint only applies
-								// to the just-completed run. Without this clear, K+1 within
-								// the same epoch and with the same heldJobIds would be
-								// incorrectly suppressed as a stall (the predecessor REARM01
-								// cleared the epoch dedupe but not the stall fingerprint; this
-								// correction restores symmetry).
-								this.lastCompletionContinuationControlFingerprint = undefined
-								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
-								// Clear the canonical held-set snapshot for the same
-								// reason: the BCB barrier's re-registration is the
-								// production signal that the model is starting a fresh
-								// attempt, so the prior stall state must NOT carry over.
-								// The next call computes a fresh fingerprint against
-								// the new held state; if the model is still making no
-								// progress the superset-aware discriminator catches it.
-								this.lastCompletionContinuationHeldSetSorted = undefined
+								// STALL authority (lastCompletionContinuationControlFingerprint
+								// + lastCompletionContinuationHeldSetSorted) is NOT cleared —
+								// see lifetime boundary comment above. The legitimate
+								// STALL-clear sites are:
+								//   - causal progress (contraction / membership shift) in
+								//     enqueueCompletionContinuationIfHeld
+								//   - task replacement (new coordinator instance)
+								//   - session replacement (new coordinator instance)
+								//   - true controller/task teardown
+								//   - explicit test reset (clearCompletionContinuationSentForTesting)
+								// A submit_and_exit re-call, a new BCB registration, a new
+								// pending prompt, a new runId, a new timestamp, and a new
+								// epoch are NOT causal progress and must NOT clear STALL authority.
 								// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
 								// Bounded finalization-authority trigger (see
 								// `enqueueCompletionContinuationIfHeld` docstring).
