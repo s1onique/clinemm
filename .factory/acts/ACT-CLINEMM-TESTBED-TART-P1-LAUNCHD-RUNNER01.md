@@ -3,7 +3,8 @@
 **Status:** CLOSED
 **Date:** 2026-10-07
 **Predecessor HEAD:** a27ebb5a7ed8ae89f5da0cd9f0c9ac24a271ded6
-**Closure HEAD:** fa27c21f4bcd4e16c37c17943768c93112798a2c
+**Closure HEAD:** 113904cd2f186b32e66a20620b404cf1bd9d3f23
+**Commit:** fa27c21f4bcd4e16c37c17943768c93112798a2c (feat); 113904cd2f186b32e66a20620b404cf1bd9d3f23 (docs)
 **Helper ABI version:** TART_TESTBED_RUN_P1_LAUNCHD_RUNNER01
 **Helper build_id:** 0xfd6eacaa2605da51b511b11c76b4cd404c32e24353ac3b76b453abfa3edf108 (drift confirms source change)
 
