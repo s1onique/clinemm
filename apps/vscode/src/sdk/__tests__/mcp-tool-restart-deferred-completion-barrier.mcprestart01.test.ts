@@ -225,6 +225,11 @@ function makeFixture(opts: { isDeferredOutstanding?: () => boolean } = {}): Fixt
 			})
 			return buildSdkControllerEnqueueCompletionContinuation({
 				getActiveSession: () => lifecycle.getActiveSession(),
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+				// Test fixture supplies the historical default tool
+				// list so the production seam's capability projection
+				// has an honest input.
+				liveTools: () => ["command_status", "submit_and_exit"],
 				logger: {
 					warn: vi.fn(),
 				},
@@ -388,8 +393,14 @@ describe("MCPRESTART01 — MCP tool-restart causal reproduction against the defe
 		// for the full microtask chain (enqueueCompletionContinuationIfHeld
 		// -> enqueueCompletionContinuation -> recordCallbackEntered ->
 		// sdkHost.send -> recordDelivered -> fixture drain count) to
-		// settle.
-		for (let i = 0; i < 20; i++) await Promise.resolve()
+		// settle. ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+		// the production seam consults the Elm kernel
+		// (`pickContinuationDirectiveForPublication`) which awaits a
+		// setTimeout(0) in `invokeElmKernel` to let the Platform.worker
+		// outbound port fire — we must drain the timer queue, not just
+		// microtasks. 50ms is the established pattern in
+		// background-completion-barrier01 tests.
+		await new Promise((r) => setTimeout(r, 200))
 
 		// Marker survived: no missing-session branch reached.
 		const upstream = getCompletionContinuationUpstreamCounters()
@@ -414,13 +425,13 @@ describe("MCPRESTART01 — MCP tool-restart causal reproduction against the defe
 		// cleared via the production "all four conservation checks
 		// pass" branch at sdk-session-event-coordinator.ts:1021.
 		await fx.reevaluateDeferredCompletionBarrier()
-		for (let i = 0; i < 20; i++) await Promise.resolve()
+		await new Promise((r) => setTimeout(r, 200))
 
 		// (C) After settlement, wake the scheduler; the held MCP
 		// rebuild drains.
 		fx.rebuilds.deferredCompletionSettled()
 		await fx.rebuilds.waitUntilSettled()
-		for (let i = 0; i < 20; i++) await Promise.resolve()
+		await new Promise((r) => setTimeout(r, 200))
 
 		// (D) MCP restart fired (lifecycle funnel reason).
 		const snapAfter = getLifecycleClearSnapshot()
@@ -449,10 +460,12 @@ describe("MCPRESTART01 — MCP tool-restart causal reproduction against the defe
 		fx.setUnconsumedOwnedTerminalCount(1, ["cmd_mcp_control02"])
 
 		await fx.reevaluateDeferredCompletionBarrier()
-		// The continuation enqueue is fire-and-forget (`void ...`). Wait
-		// for the microtask that resolves the callback to land before
-		// sampling the fixture.
-		for (let i = 0; i < 5; i++) await Promise.resolve()
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+		// production seam awaits Elm's setTimeout(0) before calling
+		// `sdkHost.send`. Drain the timer queue to let the fixture's
+		// `.then((outcome) => ...)` callback fire (it sets
+		// `unconsumedTerminalCount = 0`).
+		await new Promise((r) => setTimeout(r, 50))
 
 		expect(fx.continuationSendLog.length).toBe(1)
 		expect(fx.continuationSendLog[0].sessionId).toBe("session-A")
@@ -485,7 +498,9 @@ describe("MCPRESTART01 — MCP tool-restart causal reproduction against the defe
 		// drains but the marker is HELD until the next reevaluate finds
 		// outstandingAutonomousWork=false (then commits + clears).
 		await fx.reevaluateDeferredCompletionBarrier()
-		for (let i = 0; i < 10; i++) await Promise.resolve()
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+		// drain Elm's setTimeout(0) before checking the delivery counter.
+		await new Promise((r) => setTimeout(r, 50))
 		const deliveryAfterSettle = getCompletionContinuationDeliveryCounters()
 		expect(deliveryAfterSettle.callbackEntered).toBe(1)
 		expect(deliveryAfterSettle.delivered).toBe(1)
@@ -495,7 +510,7 @@ describe("MCPRESTART01 — MCP tool-restart causal reproduction against the defe
 		// authorize). After this call the marker is CLEARED, so the
 		// deferred predicate returns false.
 		await fx.reevaluateDeferredCompletionBarrier()
-		for (let i = 0; i < 10; i++) await Promise.resolve()
+		await new Promise((r) => setTimeout(r, 50))
 
 		// NOW fire the MCP tool-list change. The deferred obligation
 		// is no longer outstanding, so the rebuild drains immediately.
@@ -571,22 +586,22 @@ describe("MCPRESTART01 — MCP tool-restart causal reproduction against the defe
 		// (1) Fire MCP change — rebuild HELD because marker is outstanding.
 		fx.mcpCoordinator.handleToolListChanged()
 		await fx.rebuilds.waitUntilSettled()
-		for (let i = 0; i < 10; i++) await Promise.resolve()
+		await new Promise((r) => setTimeout(r, 200))
 
 		// (2) Settle the deferred obligation via reevaluate (terminal-count
 		// branch fires, count drains, marker still held).
 		await fx.reevaluateDeferredCompletionBarrier()
-		for (let i = 0; i < 20; i++) await Promise.resolve()
+		await new Promise((r) => setTimeout(r, 200))
 
 		// (3) Second reevaluate commits the held marker (terminal count
 		// is now 0, no outstanding autonomous work). Marker cleared.
 		await fx.reevaluateDeferredCompletionBarrier()
-		for (let i = 0; i < 20; i++) await Promise.resolve()
+		await new Promise((r) => setTimeout(r, 200))
 
 		// (4) Wake the scheduler. Pending MCP rebuild drains.
 		fx.rebuilds.deferredCompletionSettled()
 		await fx.rebuilds.waitUntilSettled()
-		for (let i = 0; i < 10; i++) await Promise.resolve()
+		await new Promise((r) => setTimeout(r, 200))
 
 		expect(fx.continuationSendLog.length).toBeGreaterThanOrEqual(1)
 		const last = fx.continuationSendLog[fx.continuationSendLog.length - 1]
@@ -649,11 +664,16 @@ describe("MCPRESTART01 — MCP tool-restart causal reproduction against the defe
 
 		// Cycle 1: reevaluate drains via terminal-count branch.
 		await fx.reevaluateDeferredCompletionBarrier()
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+		// production seam awaits Elm's `setTimeout(0)` before calling
+		// `sdkHost.send`. Drain the timer queue to let the chain settle.
+		await new Promise((r) => setTimeout(r, 50))
 		const c1 = getCompletionContinuationDeliveryCounters()
 		expect(c1.delivered).toBe(1)
 
 		// Cycle 2: reevaluate (no marker -> no-op).
 		await fx.reevaluateDeferredCompletionBarrier()
+		await new Promise((r) => setTimeout(r, 50))
 		const c2 = getCompletionContinuationDeliveryCounters()
 		expect(c2.delivered).toBe(1)
 

@@ -48,6 +48,7 @@ import {
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
 import { setTaskHeaderElmProductionKernelPath } from "@/sdk/task-header-elm-shadow"
+import { setCompletionContinuationControlElmProductionKernelPath } from "@/sdk/completion-continuation-control-elm"
 import {
 	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
 	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
@@ -355,6 +356,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	// `KERNEL_FILE_MISSING` / `KERNEL_READ_FAILED` instead of an
 	// opaque `kernel_offline` counter.
 	setTaskHeaderElmProductionKernelPath(path.join(context.extensionUri.fsPath, "runtime-assets", "task-header-orchestration.js"))
+
+	// ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02:
+	// pin the production kernel path for the completion-continuation-control
+	// Elm kernel. Mirrors the TaskHeader activation wiring above (same
+	// `runtime-assets/` directory, same activation seam). The third row
+	// of `_ELM_KERNELS` in `scripts/build_dogfood_vsix_lib.py` stages this
+	// kernel into the VSIX alongside `completion-authority.js` and
+	// `task-header-orchestration.js`.
+	setCompletionContinuationControlElmProductionKernelPath(
+		path.join(context.extensionUri.fsPath, "runtime-assets", "completion-continuation-control.js"),
+	)
 	if (elmAuthorityActivation.enabled) {
 		Logger.log(`[ELM-AUTHORITY] enabled=true kernelPath=${elmAuthorityActivation.kernelPath}`)
 	} else {

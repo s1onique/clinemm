@@ -352,12 +352,20 @@ describe("UPSTREAM-DIAG-05 — callback path end-to-end", () => {
 							startResult: undefined,
 							isRunning: false,
 						}) as ActiveSession,
+					// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+					// Test fixture supplies the historical default tool
+					// list so the production seam's capability projection
+					// has an honest input.
+					liveTools: () => ["command_status", "submit_and_exit"],
 					logger: { warn: () => undefined },
 				}),
 			)
 			harness.setMarkerPresent(true)
 			harness.setUnconsumedTerminalCount(1)
 			await harness.coordinator.reevaluateDeferredCompletionBarrier()
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+			// production seam awaits Elm's setTimeout(0). Drain timer.
+			await new Promise((r) => setTimeout(r, 50))
 			const up = upstreamSnapshot()
 			expect(up.enqueueCompletionContinuationInvoked).toBe(1)
 			expect(up.lastStopReason).toBe("enqueue_invoked")

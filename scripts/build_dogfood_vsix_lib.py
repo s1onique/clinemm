@@ -461,6 +461,17 @@ _ELM_KERNELS: list = [
         "vsix_entry": "extension/runtime-assets/task-header-orchestration.js",
         "vsix_sha_entry": "extension/runtime-assets/task-header-orchestration.js.sha256",
     },
+    {
+        "name": "completion-continuation-control",
+        "build_script": "apps/vscode/elm/completion-continuation-control/scripts/build-elm.sh",
+        "source_js": "elm/completion-continuation-control/vendor/completion-continuation-control.js",
+        "source_sha": "elm/completion-continuation-control/vendor/completion-continuation-control.js.sha256",
+        "staged_dir": "runtime-assets",
+        "staged_name": "completion-continuation-control.js",
+        "staged_sha_name": "completion-continuation-control.js.sha256",
+        "vsix_entry": "extension/runtime-assets/completion-continuation-control.js",
+        "vsix_sha_entry": "extension/runtime-assets/completion-continuation-control.js.sha256",
+    },
 ]
 
 # Backwards-compatible single-kernel constants — preserved because

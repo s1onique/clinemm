@@ -103,6 +103,13 @@ describe("CCDCO-DOGFOOD-01 — diagnostic OFF outside dogfood (default)", () => 
 		const { session, sdkHostSendCalls } = makeSession({ sessionId: "sess-ccdco-dogfood-01" })
 		const cb = buildSdkControllerEnqueueCompletionContinuation({
 			getActiveSession: () => session,
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+			// Test fixture supplies the historical default tool
+			// list so the production seam's capability projection
+			// has an honest input. The diagnostic the test cares
+			// about (delivery counter) does not depend on the
+			// exact capability projection.
+			liveTools: () => ["command_status", "submit_and_exit"],
 			logger: { warn: () => undefined },
 		})
 		// Production semantic is unchanged: callback delivers.
@@ -158,6 +165,7 @@ describe("CCDCO-DOGFOOD-02 — diagnostic ON inside dogfood (default)", () => {
 		const { session, sdkHostSendCalls } = makeSession({ sessionId: "sess-ccdco-dogfood-02" })
 		const cb = buildSdkControllerEnqueueCompletionContinuation({
 			getActiveSession: () => session,
+			liveTools: () => ["command_status", "submit_and_exit"],
 			logger: { warn: () => undefined },
 		})
 		const outcome = await cb({
@@ -211,6 +219,7 @@ describe("CCDCO-DOGFOOD-03 — profile conservation", () => {
 		const { session } = makeSession({ sessionId: "sess-ccdco-profile-conservation" })
 		const cb = buildSdkControllerEnqueueCompletionContinuation({
 			getActiveSession: () => session,
+			liveTools: () => ["command_status", "submit_and_exit"],
 			logger: { warn: () => undefined },
 		})
 		const outcome = await cb({

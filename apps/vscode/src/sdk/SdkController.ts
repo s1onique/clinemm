@@ -93,6 +93,10 @@ import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSessio
 import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
 import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
 import {
+	type CompletionContinuationControlElmKernelInvoke,
+	pickContinuationDirectiveForPublication,
+} from "./completion-continuation-control-elm"
+import {
 	recordActiveSessionMissing,
 	recordCallbackEntered,
 	recordDelivered,
@@ -837,6 +841,32 @@ export function buildSdkControllerEnqueueTerminalWake(options: {
  */
 export function buildSdkControllerEnqueueCompletionContinuation(options: {
 	getActiveSession: () => ActiveSession | undefined
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+	 * Synchronous accessor for the names of the tools the runtime will
+	 * register on the resumed turn. Derives the actual resumed-turn tool
+	 * registry, NOT a configured/global/prompt-derived approximation.
+	 * The capability projection (C3) maps this list to the closed
+	 * `canObserveHeldResults` / `canRetryCompletion` booleans the Elm
+	 * kernel consumes.
+	 *
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+	 * Returning `undefined` means the live registry is unknown
+	 * (Hub/Remote hosts that do not surface the resumed registry).
+	 * The production seam treats `undefined` as "capability unknown"
+	 * and rejects the continuation rather than inventing a default.
+	 * The contract is now: production seam MUST supply this and
+	 * MUST return either the live tool names OR `undefined`.
+	 */
+	liveTools?: () => readonly string[] | undefined
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+	 * Optional override for the Elm kernel invocation (test seam). The
+	 * production seam does NOT supply this — `pickContinuationDirectiveForPublication`
+	 * uses the real Elm kernel by default. Tests inject sentinels here
+	 * for the C4/C7/C8 ablation.
+	 */
+	invokeElmForProduction?: CompletionContinuationControlElmKernelInvoke
 	logger: { warn: (message: string) => void }
 }): (input: { sessionId: string; taskId: string | undefined; heldJobIds: readonly string[] }) => Promise<{
 	kind: "delivered" | "rejected" | "session_gone" | "no_held_job_ids"
@@ -865,10 +895,61 @@ export function buildSdkControllerEnqueueCompletionContinuation(options: {
 			recordSessionIdMismatch()
 			return Promise.resolve({ kind: "session_gone" })
 		}
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+		// Consult the Elm kernel before deciding which continuation
+		// prompt to render. The directive is the SOLE semantic
+		// authority; the legacy 4-branch TS decision (`hasObservation`
+		// × `hasCompletion`) does NOT run on the production seam.
+		//
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+		// When `liveTools()` returns `undefined` (Hub/Remote hosts that
+		// do not surface the resumed-turn registry), production MUST
+		// NOT invent a capability projection. Treating `undefined` as
+		// `[command_status, submit_and_exit]` would lie about what
+		// tools the resumed turn actually has; the prompt would then
+		// instruct the model to call a tool that isn't registered.
+		// The honest behavior is to refuse to project — return
+		// `rejected` without invoking Elm. (Elm does not get
+		// consulted for an unprovable fact set.)
+		//
+		// Honest narrowing (C9): the production seam does NOT expose
+		// `stalledNoProgress`, `taskMatches`, or `alreadyCommitted`
+		// as observable facts. The BCB01 §0.1 barrier has already
+		// gated these: the continuation only fires when not stalled,
+		// when the task matches, and when the prior submit has not
+		// committed. The Elm kernel treats the absent observation as
+		// `false` (a narrow input — it does not over-trigger fail-closed
+		// for legitimate continuation cases).
+		const liveToolsResult = options.liveTools?.()
+		if (liveToolsResult === undefined) {
+			recordSendThrew()
+			options.logger.warn(
+				`[SdkController] enqueueCompletionContinuation rejected: liveTools unavailable for sessionId=${sessionId} — capability projection not honest`,
+			)
+			return { kind: "rejected" as const }
+		}
+		const toolNames = liveToolsResult
+		const directive = await pickContinuationDirectiveForPublication(
+			{
+				unconsumedCount: heldJobIds.length,
+				capabilities: {
+					canObserveHeldResults: toolNames.includes("command_status"),
+					canRetryCompletion: toolNames.includes("submit_and_exit"),
+				},
+				stalledNoProgress: false,
+				sessionMatches: active.sessionId === sessionId,
+				taskMatches: true,
+				alreadyCommitted: false,
+			},
+			{ invokeElmForProduction: options.invokeElmForProduction },
+		)
 		const prompt = formatCompletionContinuationPrompt({
 			heldJobIds,
 			sessionId,
 			taskId,
+			availableObservationMechanisms: toolNames.includes("command_status") ? ["command_status"] : [],
+			availableCompletionMechanisms: toolNames.includes("submit_and_exit") ? ["submit_and_exit"] : [],
+			runtimeControlDirective: directive,
 		})
 		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
 		// Stamp the structural authority discriminator on the
@@ -2594,6 +2675,27 @@ export class Controller {
 			// `submit_and_exit`.
 			enqueueCompletionContinuation: buildSdkControllerEnqueueCompletionContinuation({
 				getActiveSession: () => this.sessions?.getActiveSession(),
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+				// Read the actual resumed-turn tool registry from the
+				// `LocalRuntimeHost` via `SdkSessionHost.liveTools?(sessionId)`.
+				// The C3 capability projection derives booleans from this
+				// list (closed schema: `command_status`, `submit_and_exit`).
+				//
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+				// When the host does not surface a live registry
+				// (Hub/Remote), we return `undefined`. The production
+				// seam treats `undefined` as "unknown capability state"
+				// and refuses to enqueue — never invents the historical
+				// `[command_status, submit_and_exit]` default (that
+				// would lie about what tools the resumed turn actually
+				// has). Hub/Remote are therefore out of scope for the
+				// CORRECTION06 production-authority qualification until
+				// a follow-up ACT supplies a real liveTools accessor.
+				liveTools: () => {
+					const active = this.sessions?.getActiveSession()
+					const sid = active?.sessionId
+					return sid ? active?.sdkHost?.liveTools?.(sid) : undefined
+				},
 				logger: Logger,
 			}),
 			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:

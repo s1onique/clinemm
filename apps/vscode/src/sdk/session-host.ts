@@ -126,6 +126,20 @@ export interface SdkSessionHost {
 	 * method.
 	 */
 	runtimeSnapshot?(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+	 * Synchronous accessor for the names of the tools the runtime
+	 * will register on the next model request for `sessionId`. The
+	 * CORRECTION06 C3 capability projection derives the actual
+	 * resumed-turn tool registry from this list — never from a
+	 * configured/global/prompt-derived approximation.
+	 *
+	 * Returns `undefined` for backends that cannot surface the
+	 * live registry (e.g. remote/hub proxies without an in-process
+	 * runtime); the consumer falls back to the historical default
+	 * `[command_status, submit_and_exit]` snapshot in that case.
+	 */
+	liveTools?(sessionId: string | undefined): readonly string[] | undefined
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
 	/**
 	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:

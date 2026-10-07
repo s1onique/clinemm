@@ -378,6 +378,12 @@ function makeDeliveryHarness(opts: {
 		// SdkController.ts:2508. No re-implementation.
 		enqueueCompletionContinuation: buildSdkControllerEnqueueCompletionContinuation({
 			getActiveSession: () => activeSession,
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+			// Test fixture supplies the historical default tool list
+			// so the production seam's capability projection has an
+			// honest input. Bridge configuration mirrors the production
+			// liveTools accessor chain (LocalRuntimeHost-backed).
+			liveTools: () => ["command_status", "submit_and_exit"],
 			logger: { warn: (msg: string) => logger.warn(msg) },
 		}),
 		getElmCompletionAuthorityDecision: (sessionId?: string) => getElmAuthorityCompletionDecision(sessionId ?? ""),

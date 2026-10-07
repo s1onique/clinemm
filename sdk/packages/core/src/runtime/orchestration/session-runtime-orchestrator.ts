@@ -143,6 +143,38 @@ function mergeSystemPromptRules(
 	return base || additional;
 }
 
+/**
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
+ * Extract the textual payload of an `AgentMessage.content` shape into a
+ * single string suitable for projection into the model-boundary
+ * privileged-instruction channel (`instructions` on `streamText` /
+ * `generateText`).
+ *
+ * The producer side (`LocalRuntimeHost.executeAgentTurn`) only puts
+ * `content: [{ type: "text", text: prompt }]` into a brand-gated
+ * envelope, so the typical path is one text part. Mixed content
+ * (e.g. an `image` part attached to a host continuation) is joined
+ * by the textual parts in their original order; non-text parts are
+ * omitted because the privileged-instruction channel is a string
+ * and AI SDK v7 does not accept multi-part content there.
+ *
+ * Returns `undefined` when no textual payload can be extracted
+ * (empty content, no text parts); the caller treats that as a
+ * no-op and does not project into `instructions`.
+ */
+function extractAgentMessageText(
+	content: AgentMessage["content"],
+): string | undefined {
+	const parts: string[] = [];
+	for (const part of content) {
+		if (part.type === "text") {
+			parts.push(part.text);
+		}
+	}
+	const joined = parts.join("\n").trim();
+	return joined.length > 0 ? joined : undefined;
+}
+
 function isToolEnabledByPolicies(
 	toolName: string,
 	toolPolicies: AgentConfig["toolPolicies"],
@@ -339,6 +371,30 @@ export class SessionRuntime {
 		Message[]
 	>;
 	private extensionsInitialized = false;
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
+	 * Per-run transient field that carries the trusted continuation
+	 * directive extracted from a CORRECTION04-branded host envelope.
+	 *
+	 * Lifecycle:
+	 *   - Set by `executeRunInternal` when `input.userMessage` is a
+	 *     branded `AgentMessage` whose content the orchestrator
+	 *     extracts.
+	 *   - Read by `executeRunInternal` at the moment it composes the
+	 *     model request — appended to `composeSystemPrompt`'s output
+	 *     so it reaches the model on the top-level `instructions`
+	 *     channel of `streamText` / `generateText` (AI SDK v7
+	 *     privileged channel). NEVER plain in `messages[]`.
+	 *   - Cleared by `resetConversationBoundaryTrackers` so a future,
+	 *     unrelated turn does NOT inherit a stale privileged
+	 *     instruction (per C8 / C20 / TRANSPORT-06).
+	 *
+	 * Trust gate: only `executeRunInternal` populates this field, and
+	 * ONLY after `isHostRuntimeControlMessage(rawMessage)` returns
+	 * `true`. The brand is the only producer; user / tool / file /
+	 * forged metadata cannot reach this branch.
+	 */
+	private runtimeTrustedContinuationInstruction: string | undefined;
 	private readonly listeners = new Set<SessionEventListener>();
 	/**
 	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: host-side observers that want
@@ -596,6 +652,13 @@ export class SessionRuntime {
 		this.messageBuilder.resetConversationState();
 		this.mistakeTracker.reset();
 		this.loopTracker.reset();
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
+		// Per-run transient field (C8 / C20). Cleared on every
+		// boundary reset so a future, unrelated run does NOT inherit a
+		// stale privileged instruction from a previous resumed turn.
+		// This is the only place that clears the field besides `run()`
+		// below (which calls `resetForRun` → boundary reset → here).
+		this.runtimeTrustedContinuationInstruction = undefined;
 	}
 
 	// -------------------------------------------------------------------
@@ -788,6 +851,16 @@ export class SessionRuntime {
 		userImages?: string[],
 		userFiles?: string[],
 	): Promise<AgentResult> {
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
+		// Clear the per-run transient field before `continue()` so
+		// a stale privileged instruction cannot leak across continues
+		// within the same session (C8 / C20 / TRANSPORT-06). `run()`
+		// already calls `resetConversationBoundaryTrackers`, but
+		// `continue()` does not — this explicit clear closes the gap.
+		// A new brand-gated envelope reaching the trusted seam on the
+		// next turn will repopulate the field; no envelope reaches
+		// `continue()` from the trusted host seam today.
+		this.runtimeTrustedContinuationInstruction = undefined
 		return this.executeRun({
 			userMessage,
 			userImages,
@@ -816,7 +889,28 @@ export class SessionRuntime {
 				rules.push(content);
 			}
 		}
-		return mergeSystemPromptRules(this.config.systemPrompt, rules);
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
+		// Compose the trusted continuation onto the system prompt at
+		// model-request build time. The transient field is set ONLY by
+		// `executeRunInternal` after a positive
+		// `isHostRuntimeControlMessage(rawMessage)` check, and is
+		// cleared by `resetConversationBoundaryTrackers` so a future
+		// unrelated turn cannot inherit it (per C8 / C20).
+		//
+		// Deterministic ordering: base + extension rules + trusted
+		// continuation. The continuation is appended LAST so the host's
+		// privileged directive shadows extension-provided guidance on the
+		// rare conflict — the trusted seam is the most authoritative
+		// producer for this turn.
+		const baseWithRules = mergeSystemPromptRules(
+			this.config.systemPrompt,
+			rules,
+		);
+		const continuation = this.runtimeTrustedContinuationInstruction
+		if (continuation) {
+			return mergeSystemPromptRules(baseWithRules, [continuation]);
+		}
+		return baseWithRules;
 	}
 
 	private executeRun(input: {
@@ -943,16 +1037,33 @@ export class SessionRuntime {
 				// Brand is authoritative. No fallback to metadata.
 				const isHostRuntimeControl =
 					isHostRuntimeControlMessage(rawMessage)
-				// Convert the AgentMessage shape to the MessageWithMetadata
-				// shape the ConversationStore holds verbatim. The role is
-				// privileged iff the trusted brand is set; without it the
-				// message is coerced to `"user"` so user-supplied
-				// envelopes cannot pick the system channel. Metadata
-				// survives `messageToAgentMessages` → `initialMessages` →
-				// `AgentRuntime` → model request (the load-bearing boundary).
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
+				// The brand-gated envelope is persisted with
+				// `role: "user"` (NOT `"system"`). Privileged routing
+				// happens at the model-boundary projection, not the
+				// transcript role. This:
+				//   - avoids the AI SDK v7 `messages[]` rejection of
+				//     `role:"system"` entries
+				//     (C6 / TRANSPORT-01),
+				//   - keeps the conversation transcript free of
+				//     `role:"system"` runtime-control entries
+				//     (C9 / TRANSPORT-01),
+				//   - preserves audit metadata (`runtimeAuthority`,
+				//     `kind`, `userRunSpan`) so observability sees the
+				//     runtime origin in the persisted record, AND
+				//   - composes the trusted continuation onto the
+				//     top-level `instructions` channel at
+				//     model-request build time (see `composeSystemPrompt`
+				//     append below).
+				//
+				// A user-supplied envelope (no brand) is coerced to
+				// `role: "user"` exactly as before (TRANSPORT-02). The
+				// brand is the only privilege gate; metadata alone is
+				// insufficient and cannot reach this code path with
+				// `isHostRuntimeControl === true`.
 				const persistedAgentMessage: MessageWithMetadata = {
 					id: rawMessage.id,
-					role: isHostRuntimeControl ? "system" : "user",
+					role: "user",
 					content: typeof rawMessage.content === "string"
 						? await buildUserTurnContent(
 								rawMessage.content,
@@ -966,6 +1077,18 @@ export class SessionRuntime {
 					modelInfo: rawMessage.modelInfo,
 				}
 				this.conversation.appendMessage(persistedAgentMessage)
+				// Extract the runtime-control text into the transient
+				// per-run field. Only the brand-gated producer can set
+				// this; user / tool / forged-metadata input cannot.
+				// The field is read once, in the same `executeRunInternal`
+				// invocation, to compose `systemPrompt` before the
+				// runtime config is built (below).
+				if (isHostRuntimeControl) {
+					const continuationText = extractAgentMessageText(rawMessage.content)
+					if (continuationText) {
+						this.runtimeTrustedContinuationInstruction = continuationText
+					}
+				}
 			} else {
 				const content = await buildUserTurnContent(
 					effectiveUserMessage,

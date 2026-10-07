@@ -714,6 +714,29 @@ export class ClineCore {
 		return this.host.getActiveRuntimeSnapshot(sessionId)
 	}
 	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+	 * Synchronous proxy to `LocalRuntimeHost.getActiveRuntimeToolNames(sessionId)`.
+	 * Returns the tool names the runtime has registered on the next
+	 * model request for `sessionId`, or `undefined` when the host is
+	 * not a `LocalRuntimeHost` (e.g. Hub/Remote) or the session is
+	 * not active on this host. The CORRECTION06 C3 capability
+	 * projection derives the actual resumed-turn tool registry from
+	 * this list — never from a configured/global/prompt-derived
+	 * approximation.
+	 *
+	 * PUBLIC API DELTA: yes. Adds `ClineCore.getActiveRuntimeToolNames`.
+	 * Surface stability: PROVISIONAL — internal-use-only during
+	 * CORRECTION06 qualification; not for third-party consumers yet.
+	 */
+	getActiveRuntimeToolNames(sessionId: string | undefined): readonly string[] | undefined {
+		if (!sessionId) return undefined
+		const localHost = this.host as { getActiveRuntimeToolNames?: (sid: string | undefined) => readonly string[] | undefined }
+		if (!localHost.getActiveRuntimeToolNames) {
+			return undefined
+		}
+		return localHost.getActiveRuntimeToolNames(sessionId)
+	}
+	/**
 	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
 	 * REMOVED.
 	 *

@@ -1537,6 +1537,31 @@ export class LocalRuntimeHost implements RuntimeHost {
 	}
 
 	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+	 * Synchronous accessor for the names of the tools the runtime
+	 * has registered on the next model request for `sessionId`. Reads
+	 * `active.runtime.tools` (the `BuiltRuntime.tools: AgentTool[]`
+	 * list the runtime will hand to the provider on the resumed
+	 * turn). Returns `undefined` when the session is not active on
+	 * this host — the consumer falls back to the historical default
+	 * `[command_status, submit_and_exit]` snapshot in that case.
+	 *
+	 * NOT on the `RuntimeHost` interface (same architectural rule as
+	 * `getActiveRuntimeSnapshot`): the live-tool-list surface is
+	 * authoritative on `LocalRuntimeHost`, exposed via the
+	 * `SdkSessionHost.liveTools?()` optional accessor in the
+	 * `VscodeSessionHost` adapter, and consumers use `?.()` so
+	 * method-absent and returns-undefined cases collapse to a
+	 * single fallback at the C3 capability projection.
+	 */
+	getActiveRuntimeToolNames(sessionId: string | undefined): readonly string[] | undefined {
+		if (!sessionId) return undefined
+		const active = this.sessions.get(sessionId)
+		if (!active) return undefined
+		return active.runtime.tools.map((t) => t.name)
+	}
+
+	/**
 	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
 	 * REMOVED.
 	 *
@@ -2380,29 +2405,42 @@ export class LocalRuntimeHost implements RuntimeHost {
 		});
 
 		try {
-			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION04-PRIVATE-BRAND:
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
 			// Build the AgentMessage envelope when the host stamped a
-			// structural authority discriminator. The envelope MUST carry
-			// `role: "system"` (the privileged instruction channel) so the
-			// orchestrator's `executeRunInternal` persists it on the system
-			// channel. The envelope is registered into the
-			// `markHostRuntimeControl` WeakSet, which is the authoritative
-			// authentication bit the orchestrator reads.
+			// structural authority discriminator. The envelope is
+			// registered into the `markHostRuntimeControl` WeakSet, which
+			// is the authoritative authentication bit the orchestrator
+			// reads (CORRECTION04 brand; unchanged by this ACT).
 			//
-			// A user-supplied envelope cannot be registered into the
-			// WeakSet without going through this trusted seam (the WeakSet
-			// reference is module-internal; the @cline/core barrel does
-			// NOT export `markHostRuntimeControl`). The orchestrator's
-			// role-promotion predicate is
-			// `isHostRuntimeControlMessage(rawMessage)`, NEVER the metadata
-			// string. Even an attacker who re-imports
+			// CRITICAL — CORRECTION05 changes ONLY the provider-facing
+			// representation. The envelope's role is `role: "user"` (NOT
+			// `role: "system"`) so that:
+			//   (a) The persisted conversation transcript carries no
+			//       `role:"system"` entry for runtime-control content
+			//       (per C9 / TRANSPORT-01; AI SDK v7 rejects
+			//       `role:"system"` inside `messages[]`).
+			//   (b) The model-boundary `AiSdkMessage[]` contains no
+			//       `role:"system"` entry for runtime-control content
+			//       (per C6 / TRANSPORT-01).
+			//   (c) The runtime-control content reaches the model on the
+			//       top-level `instructions` (AI SDK v7 privileged
+			//       channel) — composed by the orchestrator from the
+			//       brand-gated text, NEVER from user-supplied text.
+			//   (d) No transient runtime-control content leaks into a
+			//       future turn (per C8 / C20; the orchestrator holds the
+			//       extracted text in a per-run field that is reset by
+			//       `resetForRun`).
+			//
+			// The brand is the ONLY privilege gate. A user-supplied
+			// envelope cannot be registered into the WeakSet without
+			// going through this trusted seam (the WeakSet reference is
+			// module-internal; the @cline/core barrel does NOT export
+			// `markHostRuntimeControl`). Even an attacker who re-imports
 			// `Symbol.for("@cline/agent-runtime-control-brand")` and
 			// attaches it via `Object.defineProperty` cannot reach the
 			// WeakSet membership check — CORRECTION03's
 			// `Symbol.for`/`Object.defineProperty` mechanism has been
-			// removed entirely. Plain string prompts take the legacy path
-			// (no metadata, no brand, normal user-role) and cannot reach
-			// this branch.
+			// removed entirely.
 			let runInput: AgentMessage | string | undefined
 			if (runtimeControlKind !== undefined) {
 				const messageMetadata: Record<string, unknown> = {
@@ -2412,7 +2450,8 @@ export class LocalRuntimeHost implements RuntimeHost {
 				}
 				const envelope: AgentMessage = {
 					id: `runtime-control-${Date.now()}`,
-					role: "system",
+					// role:"user" is load-bearing — see (a)-(d) above.
+					role: "user",
 					content: [{ type: "text", text: prompt }],
 					createdAt: Date.now(),
 					metadata: messageMetadata,

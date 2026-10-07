@@ -258,6 +258,11 @@ function makeFixture(): Fixture {
 			})
 			return buildSdkControllerEnqueueCompletionContinuation({
 				getActiveSession: () => lifecycle.getActiveSession(),
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+				// Test fixture supplies the historical default tool
+				// list so the production seam's capability projection
+				// has an honest input.
+				liveTools: () => ["command_status", "submit_and_exit"],
 				logger: Logger,
 			})(input)
 		},
@@ -384,6 +389,11 @@ describe("SHOWTASK01 — showTaskWithId causal reproduction against the LIVE BCB
 		// bound to.
 
 		await fx.reevaluateDeferredCompletionBarrier()
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+		// production seam awaits Elm's setTimeout(0) before calling
+		// `sdkHost.send`. Drain the timer queue to let the chain
+		// settle before sampling the counters.
+		await new Promise((r) => setTimeout(r, 50))
 
 		const u = getCompletionContinuationUpstreamCounters()
 		const d = getCompletionContinuationDeliveryCounters()
@@ -418,6 +428,9 @@ describe("SHOWTASK01 — showTaskWithId causal reproduction against the LIVE BCB
 		expect(fx.getActiveSession()).toBeDefined()
 
 		await fx.reevaluateDeferredCompletionBarrier()
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+		// production seam awaits Elm's setTimeout(0). Drain timer.
+		await new Promise((r) => setTimeout(r, 50))
 
 		const u = getCompletionContinuationUpstreamCounters()
 		const d = getCompletionContinuationDeliveryCounters()
@@ -508,6 +521,9 @@ describe("SHOWTASK01 — showTaskWithId causal reproduction against the LIVE BCB
 		fx.setUnconsumedOwnedTerminalCount(1, ["cmd_sess_id"])
 		await fx.coordinator.showTaskWithId("session-A")
 		await fx.reevaluateDeferredCompletionBarrier()
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06:
+		// production seam awaits Elm's setTimeout(0). Drain timer.
+		await new Promise((r) => setTimeout(r, 50))
 		const u = getCompletionContinuationUpstreamCounters()
 		const d = getCompletionContinuationDeliveryCounters()
 		expect(u.markerClearedForMissingSession).toBe(0)

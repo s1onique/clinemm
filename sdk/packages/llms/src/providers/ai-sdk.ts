@@ -2216,7 +2216,26 @@ function createAiSdkProvider(kind: ProviderModuleKind): GatewayProviderFactory {
 								context.logger,
 							) as never,
 							messages: messages as never,
-							...(useSystemOption ? { system: systemPrompt } : {}),
+							// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
+							// Project the (base + extension rules +
+							// brand-gated trusted continuation) prompt
+							// through AI SDK v7's canonical privileged
+							// channel: top-level `instructions`.
+							//
+							// AI SDK v7 `standardizePrompt` rejects
+							// `role:"system"` inside `messages[]` unless
+							// `allowSystemInMessages: true` (which we
+							// deliberately do NOT set, per C13). The
+							// producer side already strips
+							// `role:"system"` entries from
+							// `messages[]`; the privileged channel here
+							// is `instructions`, NOT `system` (legacy
+							// alias). Using `instructions` aligns with
+							// AI SDK's v7 contract and surfaces the
+							// privileged payload as `instructions` on
+							// every `streamText`-derived telemetry
+							// event.
+							...(useSystemOption ? { instructions: systemPrompt } : {}),
 							...(tools ? { tools } : {}),
 							abortSignal: request.signal,
 							experimental_repairToolCall: repairMalformedToolCall as never,

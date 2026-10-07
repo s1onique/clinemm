@@ -870,6 +870,23 @@ export class VscodeSessionHost implements SdkSessionHost {
 	runtimeSnapshot(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined {
 		return this.inner.getActiveRuntimeSnapshot(sessionId)
 	}
+
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+	 * Synchronous accessor for the names of the tools the runtime
+	 * has registered on the next model request for `sessionId`.
+	 * Proxies to `ClineCore.getActiveRuntimeToolNames(sessionId)`,
+	 * which in turn reaches `LocalRuntimeHost.getActiveRuntimeToolNames(sessionId)`
+	 * (when the underlying host is `LocalRuntimeHost`). Returns
+	 * `undefined` when the host does not implement the underlying
+	 * accessor — consumers MUST use `?.()` so the method-absent and
+	 * returns-undefined cases collapse to the same
+	 * `["command_status", "submit_and_exit"]` fallback at the C3
+	 * capability projection.
+	 */
+	liveTools(sessionId: string | undefined): readonly string[] | undefined {
+		return this.inner.getActiveRuntimeToolNames(sessionId)
+	}
 	/**
 	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
 	 * REMOVED.

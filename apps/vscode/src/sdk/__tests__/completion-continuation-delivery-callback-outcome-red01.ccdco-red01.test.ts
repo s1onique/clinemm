@@ -81,6 +81,11 @@ function makeCallback(opts: { active?: ActiveSession }): (input: {
 	const warns: string[] = []
 	const cb = buildSdkControllerEnqueueCompletionContinuation({
 		getActiveSession: () => opts.active,
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+		// Test fixture supplies the historical default tool list so
+		// the production seam's capability projection has an honest
+		// input.
+		liveTools: () => ["command_status", "submit_and_exit"],
 		logger: { warn: (msg: string) => warns.push(msg) },
 	})
 	return cb
@@ -190,6 +195,9 @@ describe("CALLBACK-OUTCOME-04 — send throws", () => {
 		const warns: string[] = []
 		const cb = buildSdkControllerEnqueueCompletionContinuation({
 			getActiveSession: () => session,
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
+			// Test fixture supplies the historical default tool list.
+			liveTools: () => ["command_status", "submit_and_exit"],
 			logger: { warn: (msg: string) => warns.push(msg) },
 		})
 		const outcome = await cb({ sessionId: "sess-ccdo-04", taskId: "task-ccdo-04", heldJobIds: ["cmd_z"] })

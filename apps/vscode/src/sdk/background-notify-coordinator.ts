@@ -42,6 +42,7 @@
  */
 
 import type { CommandJobState } from "./command-job-manager"
+import type { ContinuationDirective } from "./completion-continuation-control-elm"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 
 /** Maximum bytes (UTF-8) for a generated wake prompt. */
@@ -271,12 +272,111 @@ export const COMPLETION_CONTINUATION_PROMPT_PREFIX =
  */
 export const COMPLETION_CONTINUATION_PROMPT_MAX_BYTES = 2048
 
+/**
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+ *
+ * Render the continuation footer that the Elm directive selects. The
+ * directive's `tag` is the SOLE semantic decision. The function never
+ * consults the legacy `hasObservation`/`hasCompletion` branching. The
+ * tool names inside the rendered wording are taken from the actual
+ * resumed-turn tool registry (the caller-supplied `observation` and
+ * `completionMech` arrays) so the prompt NEVER claims a tool that
+ * isn't registered.
+ *
+ * Tag -> wording mapping (frozen at C6/C9 review):
+ *   observe_then_retry : held > 0 + observation + completion
+ *     -> "issue ${observation} per jobId; after observed, re-issue
+ *         ${completionMech}"
+ *   retry_completion    : held == 0 + completion
+ *     -> "re-issue ${completionMech}"
+ *   wait_for_host       : alreadyCommitted (no held action by model)
+ *     -> "host has already committed; wait for host"
+ *   fail_closed         : no observation or no completion (or
+ *                         stall / session-mismatch / task-mismatch /
+ *                         alreadyCommitted via malformed fallback)
+ *     -> "continuation cannot resolve; do not issue any tool"
+ *
+ * If the directive's tag selects a wording that requires a tool the
+ * registry does NOT have (e.g. `observe_then_retry` with no
+ * observation mechanism), the wording degrades gracefully to the
+ * fail-closed form (the Elm kernel itself returns `fail_closed` for
+ * those inputs at the action-policy layer; this is a defensive
+ * post-decision guard so the prompt never emits a contradictory
+ * instruction).
+ */
+function renderContinuationDirectiveFooter(
+	directive: ContinuationDirective,
+	observation: readonly string[],
+	completionMech: readonly string[],
+): string {
+	const obsTool = observation[0]
+	const compTool = completionMech[0]
+	switch (directive.tag) {
+		case "observe_then_retry":
+			// Defensive: the directive says observe-then-retry but
+			// the registry is missing the observation tool. The
+			// prompt MUST NOT instruct the model to call a tool
+			// it doesn't have — degrade to fail-closed.
+			if (!obsTool || !compTool) {
+				return [
+					"",
+					"Continuation cannot resolve in this turn's tool registry.",
+					"Do NOT issue any tool; wait for the host.",
+				].join("\n")
+			}
+			return [
+				"",
+				`For each held jobId above, issue ONE \`${obsTool}\` tool call (you may issue them in parallel).`,
+				`After observing every held jobId, re-issue \`${compTool}\` with the final verified summary.`,
+				`Do NOT synthesize any \`${compTool}\` completion row before every held observation has been consumed.`,
+			].join("\n")
+		case "retry_completion":
+			if (!compTool) {
+				return [
+					"",
+					"Continuation cannot resolve in this turn's tool registry.",
+					"Do NOT issue any tool; wait for the host.",
+				].join("\n")
+			}
+			return [
+				"",
+				`Re-issue \`${compTool}\` with the final verified summary.`,
+				"Do NOT re-issue any observation tool first.",
+			].join("\n")
+		case "wait_for_host":
+			// The host has already committed; the model should
+			// wait. No tool emission.
+			return [
+				"",
+				"The host has already committed the completion for this turn.",
+				"Do NOT issue any completion or observation tool; wait for the host to deliver the next prompt.",
+			].join("\n")
+		case "fail_closed":
+			return [
+				"",
+				"No continuation mechanism is available for this turn.",
+				"Do NOT issue any completion or observation tool; this continuation cannot resolve.",
+			].join("\n")
+	}
+}
+
 export function formatCompletionContinuationPrompt(input: {
 	readonly heldJobIds: readonly string[]
 	readonly sessionId: string
 	readonly taskId: string | undefined
 	readonly availableObservationMechanisms?: readonly string[] | undefined
 	readonly availableCompletionMechanisms?: readonly string[] | undefined
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+	 * The Elm-resolved directive (when supplied) is the SOLE semantic
+	 * authority for the footer wording. When supplied, the directive's
+	 * `tag` selects which footer the formatter renders; the legacy
+	 * 4-branch TS decision (`hasObservation` × `hasCompletion`) does
+	 * NOT run. Production seam supplies this; differential/substrate
+	 * tests omit it (the legacy path stays as the C8 necessity
+	 * witness).
+	 */
+	readonly runtimeControlDirective?: ContinuationDirective | undefined
 }): string {
 	const heldJobIds = input.heldJobIds
 
@@ -314,7 +414,16 @@ export function formatCompletionContinuationPrompt(input: {
 	// When the snapshot is empty the footer degrades gracefully to
 	// a fail-closed instruction (C5 / C7).
 	let footer: string
-	if (!hasObservation && !hasCompletion) {
+	if (input.runtimeControlDirective !== undefined) {
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
+		// The Elm kernel owns the semantic decision. The directive's
+		// `tag` selects which footer the formatter renders; the
+		// legacy 4-branch TS decision (`hasObservation` ×
+		// `hasCompletion`) does NOT run. The legacy branches remain
+		// as the C8 necessity substrate for tests that omit the
+		// `runtimeControlDirective` parameter.
+		footer = renderContinuationDirectiveFooter(input.runtimeControlDirective, observation, completionMech)
+	} else if (!hasObservation && !hasCompletion) {
 		footer = [
 			"",
 			"No observation or completion mechanism is available in this turn's tool registry.",
@@ -462,9 +571,7 @@ export type CompletionContinuationControl = {
  * forged capability snapshot from injecting a fake tool name that
  * the model would be asked to call.
  */
-export function filterKnownObservationMechanisms(
-	raw: readonly string[] | undefined,
-): readonly ObservationMechanism[] {
+export function filterKnownObservationMechanisms(raw: readonly string[] | undefined): readonly ObservationMechanism[] {
 	if (!raw) return []
 	const filtered: ObservationMechanism[] = []
 	for (const m of raw) {
@@ -479,9 +586,7 @@ export function filterKnownObservationMechanisms(
  * Filter an untrusted completion-mechanism list to the closed
  * set. Same rationale as `filterKnownObservationMechanisms`.
  */
-export function filterKnownCompletionMechanisms(
-	raw: readonly string[] | undefined,
-): readonly CompletionMechanism[] {
+export function filterKnownCompletionMechanisms(raw: readonly string[] | undefined): readonly CompletionMechanism[] {
 	if (!raw) return []
 	const filtered: CompletionMechanism[] = []
 	for (const m of raw) {
@@ -631,11 +736,7 @@ export function parseCompletionContinuationControl(
 	if (!Array.isArray(r.availableCompletionMechanisms)) return null
 
 	// Closed-enum validation (C8 / C10).
-	if (
-		r.completionStatus !== "HELD" &&
-		r.completionStatus !== "COMMITTED" &&
-		r.completionStatus !== "CANNOT_CONTINUE"
-	) {
+	if (r.completionStatus !== "HELD" && r.completionStatus !== "COMMITTED" && r.completionStatus !== "CANNOT_CONTINUE") {
 		return null
 	}
 	if (
@@ -661,12 +762,8 @@ export function parseCompletionContinuationControl(
 		heldJobIds,
 		completionStatus: r.completionStatus as CompletionContinuationControl["completionStatus"],
 		requiredAction: r.requiredAction as CompletionContinuationControl["requiredAction"],
-		availableObservationMechanisms: filterKnownObservationMechanisms(
-			r.availableObservationMechanisms as readonly string[],
-		),
-		availableCompletionMechanisms: filterKnownCompletionMechanisms(
-			r.availableCompletionMechanisms as readonly string[],
-		),
+		availableObservationMechanisms: filterKnownObservationMechanisms(r.availableObservationMechanisms as readonly string[]),
+		availableCompletionMechanisms: filterKnownCompletionMechanisms(r.availableCompletionMechanisms as readonly string[]),
 	}
 }
 
@@ -681,10 +778,7 @@ export function parseCompletionContinuationControl(
  * `CONTROL_STALLED_NO_PROGRESS` and stop enqueuing further
  * continuations of the same shape.
  */
-export function shouldStallSameStateControl(
-	a: CompletionContinuationControl,
-	b: CompletionContinuationControl,
-): boolean {
+export function shouldStallSameStateControl(a: CompletionContinuationControl, b: CompletionContinuationControl): boolean {
 	if (a.sessionId !== b.sessionId) return false
 	if (a.taskId !== b.taskId) return false
 	if (a.completionStatus !== b.completionStatus) return false
