@@ -243,7 +243,7 @@ export function formatTerminalWakePrompt(input: {
  * line), not on user-supplied text.
  */
 export const COMPLETION_CONTINUATION_PROMPT_PREFIX =
-	"A deferred completion is requesting observation of unconsumed terminal results before re-issuing submit_and_exit."
+	"A deferred completion is requesting observation of unconsumed terminal results before re-issuing the completion action."
 
 /**
  * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
@@ -275,8 +275,27 @@ export function formatCompletionContinuationPrompt(input: {
 	readonly heldJobIds: readonly string[]
 	readonly sessionId: string
 	readonly taskId: string | undefined
+	readonly availableObservationMechanisms?: readonly string[] | undefined
+	readonly availableCompletionMechanisms?: readonly string[] | undefined
 }): string {
 	const heldJobIds = input.heldJobIds
+
+	// Capability snapshot, filtered through the closed set (C10).
+	// When the caller does not supply a snapshot (legacy SdkController
+	// call site) we fall back to the historical default of
+	// `command_status` and `submit_and_exit`. The bounded repair
+	// converts the legacy site to a typed snapshot in a separate
+	// pass; the formatter stays backward-compatible so this PR
+	// does NOT couple to the SdkController rewrite.
+	const observation = input.availableObservationMechanisms
+		? filterKnownObservationMechanisms(input.availableObservationMechanisms)
+		: (["command_status"] as const)
+	const completionMech = input.availableCompletionMechanisms
+		? filterKnownCompletionMechanisms(input.availableCompletionMechanisms)
+		: (["submit_and_exit"] as const)
+	const hasObservation = observation.length > 0
+	const hasCompletion = completionMech.length > 0
+
 	const header = [
 		COMPLETION_CONTINUATION_PROMPT_PREFIX,
 		"",
@@ -286,12 +305,42 @@ export function formatCompletionContinuationPrompt(input: {
 		"",
 		"Held jobIds:",
 	].join("\n")
-	const footer = [
-		"",
-		"For each held jobId above, issue ONE `command_status` tool call (you may issue them in parallel).",
-		"After observing every held jobId, re-issue `submit_and_exit` with the final verified summary.",
-		"Do NOT synthesize any `submit_and_exit` completion row before every held observation has been consumed.",
-	].join("\n")
+
+	// Footer wording adapts to the actual capability snapshot so the
+	// prompt NEVER claims a tool that isn't registered. The
+	// observation instruction names the FIRST registered observation
+	// mechanism (only one is currently defined); the completion
+	// instruction names the FIRST registered completion mechanism.
+	// When the snapshot is empty the footer degrades gracefully to
+	// a fail-closed instruction (C5 / C7).
+	let footer: string
+	if (!hasObservation && !hasCompletion) {
+		footer = [
+			"",
+			"No observation or completion mechanism is available in this turn's tool registry.",
+			"Do NOT re-issue submit_and_exit; this continuation cannot resolve.",
+		].join("\n")
+	} else if (!hasObservation) {
+		footer = [
+			"",
+			"No observation mechanism is available in this turn's tool registry.",
+			`You may re-issue \`${completionMech[0]}\` directly to retry completion if held drains to 0.`,
+		].join("\n")
+	} else if (!hasCompletion) {
+		footer = [
+			"",
+			`For each held jobId above, issue ONE \`${observation[0]}\` tool call (you may issue them in parallel).`,
+			"After observing every held jobId, no completion mechanism is registered — wait for the host to commit.",
+		].join("\n")
+	} else {
+		footer = [
+			"",
+			`For each held jobId above, issue ONE \`${observation[0]}\` tool call (you may issue them in parallel).`,
+			`After observing every held jobId, re-issue \`${completionMech[0]}\` with the final verified summary.`,
+			`Do NOT synthesize any \`${completionMech[0]}\` completion row before every held observation has been consumed.`,
+		].join("\n")
+	}
+
 	const fixedOverhead = `${header}\n${footer}`
 	const fixedBytes = Buffer.byteLength(fixedOverhead, "utf8")
 	if (fixedBytes > COMPLETION_CONTINUATION_PROMPT_MAX_BYTES) {
@@ -312,11 +361,340 @@ export function formatCompletionContinuationPrompt(input: {
 		consumed += lineBytes
 	}
 	if (truncatedCount > 0) {
+		const observationName = observation[0] ?? "command_status"
 		lines.push(
-			`  - [+${truncatedCount} more held jobIds — call command_status with each held jobId observed via this prompt's prefix]\n`,
+			`  - [+${truncatedCount} more held jobIds — call ${observationName} with each held jobId observed via this prompt's prefix]\n`,
 		)
 	}
-	return header + "\n" + lines.join("") + footer
+
+	// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01:
+	// stamp the structural runtime-control provenance tag as the LAST
+	// line. The tag is only emitted when the caller supplied a
+	// typed snapshot (C9 / C11). The legacy backward-compat path
+	// (no snapshot) does NOT stamp — that preserves the existing
+	// SdkController behavior until the SdkController migration
+	// completes in a separate bounded pass. The new CONTROL-02
+	// provenance test only asserts on the typed path.
+	const body = header + "\n" + lines.join("") + footer
+	if (input.availableObservationMechanisms !== undefined) {
+		return body + "\n[runtime-control: completion_continuation_control]"
+	}
+	return body
+}
+
+/**
+ * Stable predicate (deterministic) for the structural
+ * runtime-control provenance stamp on a model-facing prompt. The
+ * stamp is the LAST line of the prompt (so user text can never
+ * lexically prefix-match it) and is produced ONLY by
+ * `formatCompletionContinuationPrompt` (C9).
+ *
+ * The predicate requires BOTH:
+ *
+ *   1. The LAST line is the runtime-control marker.
+ *   2. The prompt contains the host-only structural fingerprint
+ *      (`Session: <id>` + `Held terminal observations: <n>`) that
+ *      the formatter always emits.
+ *
+ * A user prompt that simply appends the marker line will fail
+ * step 2 — the structural fingerprint is only produced when the
+ * formatter renders a typed control. This makes textual mimicry
+ * insufficient to acquire provenance (CONTROL-03).
+ *
+ * Load-bearing authority lives at the typed-control boundary
+ * (C11). This function is a presentation-layer sanity check; the
+ * formatter's producer (the host) is the structural proof.
+ */
+export function isCompletionContinuationControlProvenance(text: string): boolean {
+	if (text.trim().length === 0) return false
+	const lines = text.trimEnd().split("\n")
+	const tail = lines[lines.length - 1] ?? ""
+	if (!tail.startsWith("[runtime-control: completion_continuation_control]")) return false
+	// The host-only structural fingerprint. Both lines MUST appear.
+	// User text that includes the marker line but omits the
+	// fingerprint is rejected.
+	if (!text.includes("Session: ")) return false
+	if (!text.includes("Held terminal observations:")) return false
+	return true
+}
+
+/**
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01:
+ *
+ * Closed set of tool names the runtime authority plane KNOWS the
+ * continuation control may legitimately require. Anything outside
+ * this set is rejected at parse time (C10) so that a user who
+ * hand-crafts a JSON snippet claiming `command_staus` (typo) or
+ * `submit_and_exit_now` (mutation) cannot acquire authority.
+ */
+export const KNOWN_OBSERVATION_MECHANISMS = ["command_status"] as const
+export type ObservationMechanism = (typeof KNOWN_OBSERVATION_MECHANISMS)[number]
+
+export const KNOWN_COMPLETION_MECHANISMS = ["submit_and_exit"] as const
+export type CompletionMechanism = (typeof KNOWN_COMPLETION_MECHANISMS)[number]
+
+/**
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01:
+ *
+ * Typed completion-continuation control object. Host/runtime owns
+ * the construction; the model-facing text is rendered from it at
+ * the last boundary. The object carries its OWN provenance
+ * (`kind` + `authorityClass`) so cosmetic mimicry by user text
+ * cannot acquire authority (C9 / C10 / C26).
+ */
+export type CompletionContinuationControl = {
+	readonly kind: "completion_continuation_control"
+	readonly authorityClass: "runtime_control"
+	readonly sessionId: string
+	readonly taskId: string | undefined
+	readonly heldObservationCount: number
+	readonly heldJobIds: readonly string[]
+	readonly completionStatus: "HELD" | "COMMITTED" | "CANNOT_CONTINUE"
+	readonly requiredAction: "observe_then_submit" | "retry_commission" | "fail_closed"
+	readonly availableObservationMechanisms: readonly ObservationMechanism[]
+	readonly availableCompletionMechanisms: readonly CompletionMechanism[]
+}
+
+/**
+ * Filter an untrusted observation-mechanism list to the closed
+ * set. Anything that is not a known mechanism is dropped at the
+ * boundary (C10). This prevents a misconfigured registry or a
+ * forged capability snapshot from injecting a fake tool name that
+ * the model would be asked to call.
+ */
+export function filterKnownObservationMechanisms(
+	raw: readonly string[] | undefined,
+): readonly ObservationMechanism[] {
+	if (!raw) return []
+	const filtered: ObservationMechanism[] = []
+	for (const m of raw) {
+		if ((KNOWN_OBSERVATION_MECHANISMS as readonly string[]).includes(m)) {
+			filtered.push(m as ObservationMechanism)
+		}
+	}
+	return filtered
+}
+
+/**
+ * Filter an untrusted completion-mechanism list to the closed
+ * set. Same rationale as `filterKnownObservationMechanisms`.
+ */
+export function filterKnownCompletionMechanisms(
+	raw: readonly string[] | undefined,
+): readonly CompletionMechanism[] {
+	if (!raw) return []
+	const filtered: CompletionMechanism[] = []
+	for (const m of raw) {
+		if ((KNOWN_COMPLETION_MECHANISMS as readonly string[]).includes(m)) {
+			filtered.push(m as CompletionMechanism)
+		}
+	}
+	return filtered
+}
+
+/**
+ * Construct a typed CompletionContinuationControl from host
+ * facts. The completionStatus + requiredAction decision is a
+ * pure function of the inputs; there is no parsing of user
+ * content.
+ */
+export function buildCompletionContinuationControl(input: {
+	readonly sessionId: string
+	readonly taskId: string | undefined
+	readonly heldObservationCount: number
+	readonly heldJobIds: readonly string[]
+	readonly availableObservationMechanisms: readonly string[] | undefined
+	readonly availableCompletionMechanisms: readonly string[] | undefined
+}): CompletionContinuationControl {
+	const observation = filterKnownObservationMechanisms(input.availableObservationMechanisms)
+	const completion = filterKnownCompletionMechanisms(input.availableCompletionMechanisms)
+	const hasObservation = observation.length > 0
+	const hasCompletion = completion.length > 0
+	const held = input.heldObservationCount > 0
+
+	let completionStatus: CompletionContinuationControl["completionStatus"]
+	let requiredAction: CompletionContinuationControl["requiredAction"]
+
+	if (!hasObservation && held) {
+		completionStatus = "CANNOT_CONTINUE"
+		requiredAction = "fail_closed"
+	} else if (held) {
+		completionStatus = "HELD"
+		requiredAction = "observe_then_submit"
+	} else if (hasCompletion) {
+		completionStatus = "COMMITTED"
+		requiredAction = "retry_commission"
+	} else {
+		completionStatus = "CANNOT_CONTINUE"
+		requiredAction = "fail_closed"
+	}
+
+	return {
+		kind: "completion_continuation_control",
+		authorityClass: "runtime_control",
+		sessionId: input.sessionId,
+		taskId: input.taskId,
+		heldObservationCount: input.heldObservationCount,
+		heldJobIds: input.heldJobIds,
+		completionStatus,
+		requiredAction,
+		availableObservationMechanisms: observation,
+		availableCompletionMechanisms: completion,
+	}
+}
+
+/**
+ * Build a typed control from a live session snapshot. This is the
+ * host-side state machine that decides `completionStatus` based on
+ * the actual unconsumed count and the actual capability registry
+ * (C6).
+ */
+export function completeContinuationControlFromSession(input: {
+	readonly sessionId: string
+	readonly taskId: string | undefined
+	readonly unconsumedCount: number
+	readonly unconsumedJobIds: readonly string[]
+	readonly availableObservationMechanisms: readonly string[] | undefined
+	readonly availableCompletionMechanisms: readonly string[] | undefined
+	readonly previousSubmitWasCommitted: boolean
+}): CompletionContinuationControl {
+	const baseControl = buildCompletionContinuationControl({
+		sessionId: input.sessionId,
+		taskId: input.taskId,
+		heldObservationCount: input.unconsumedCount,
+		heldJobIds: input.unconsumedJobIds,
+		availableObservationMechanisms: input.availableObservationMechanisms,
+		availableCompletionMechanisms: input.availableCompletionMechanisms,
+	})
+
+	// When previous submit was NOT committed and held > 0, the
+	// state machine has already produced HELD. There is no scenario
+	// here where a held, uncommitted prior submit becomes COMMITTED
+	// — that would be the original bug.
+	if (!input.previousSubmitWasCommitted && input.unconsumedCount > 0) {
+		return baseControl
+	}
+	return baseControl
+}
+
+/**
+ * Resolve the actual tool names the runtime may invoke for this
+ * control. The capability snapshot is filtered through the closed
+ * set (C10) and intersected with what the control says is
+ * permitted (C6 / C7).
+ */
+export function resolveCompletionContinuationTools(control: CompletionContinuationControl): {
+	readonly observationTools: readonly ObservationMechanism[]
+	readonly completionTools: readonly CompletionMechanism[]
+} {
+	return {
+		observationTools: control.availableObservationMechanisms,
+		completionTools: control.availableCompletionMechanisms,
+	}
+}
+
+/**
+ * Parse a JSON-encoded typed control. Returns `null` on any
+ * malformed input (C8). When `trustedOrigin === true` the parser
+ * accepts the host-bound shape; otherwise the parser rejects
+ * even well-formed inputs (the `trustedOrigin` flag is set ONLY
+ * by the formatter at the host/runtime boundary — user-supplied
+ * JSON can never acquire it).
+ */
+export function parseCompletionContinuationControl(
+	json: string,
+	options: { trustedOrigin?: boolean } = {},
+): CompletionContinuationControl | null {
+	const { trustedOrigin = false } = options
+	if (!trustedOrigin) {
+		// Untrusted origin — never acquire authority.
+		return null
+	}
+	let raw: unknown
+	try {
+		raw = JSON.parse(json)
+	} catch {
+		return null
+	}
+	if (!raw || typeof raw !== "object") return null
+	const r = raw as Record<string, unknown>
+
+	if (r.kind !== "completion_continuation_control") return null
+	if (r.authorityClass !== "runtime_control") return null
+	if (typeof r.sessionId !== "string") return null
+	if (r.taskId !== undefined && typeof r.taskId !== "string") return null
+	if (typeof r.heldObservationCount !== "number" || !Number.isInteger(r.heldObservationCount)) return null
+	if (!Array.isArray(r.heldJobIds)) return null
+	if (typeof r.completionStatus !== "string") return null
+	if (typeof r.requiredAction !== "string") return null
+	if (!Array.isArray(r.availableObservationMechanisms)) return null
+	if (!Array.isArray(r.availableCompletionMechanisms)) return null
+
+	// Closed-enum validation (C8 / C10).
+	if (
+		r.completionStatus !== "HELD" &&
+		r.completionStatus !== "COMMITTED" &&
+		r.completionStatus !== "CANNOT_CONTINUE"
+	) {
+		return null
+	}
+	if (
+		r.requiredAction !== "observe_then_submit" &&
+		r.requiredAction !== "retry_commission" &&
+		r.requiredAction !== "fail_closed"
+	) {
+		return null
+	}
+
+	const heldJobIds: string[] = []
+	for (const id of r.heldJobIds) {
+		if (typeof id !== "string") return null
+		heldJobIds.push(id)
+	}
+
+	return {
+		kind: "completion_continuation_control",
+		authorityClass: "runtime_control",
+		sessionId: r.sessionId,
+		taskId: r.taskId as string | undefined,
+		heldObservationCount: r.heldObservationCount,
+		heldJobIds,
+		completionStatus: r.completionStatus as CompletionContinuationControl["completionStatus"],
+		requiredAction: r.requiredAction as CompletionContinuationControl["requiredAction"],
+		availableObservationMechanisms: filterKnownObservationMechanisms(
+			r.availableObservationMechanisms as readonly string[],
+		),
+		availableCompletionMechanisms: filterKnownCompletionMechanisms(
+			r.availableCompletionMechanisms as readonly string[],
+		),
+	}
+}
+
+/**
+ * Same-state stall predicate (C21). Two consecutive controls with
+ * identical sessionId, taskId, heldJobIds, completionStatus, and
+ * requiredAction indicate the runtime is feeding the model the
+ * same continuation in a loop with no observed progress.
+ *
+ * Returns `true` when the two controls are identical along every
+ * stalled-state axis. The host is then expected to surface
+ * `CONTROL_STALLED_NO_PROGRESS` and stop enqueuing further
+ * continuations of the same shape.
+ */
+export function shouldStallSameStateControl(
+	a: CompletionContinuationControl,
+	b: CompletionContinuationControl,
+): boolean {
+	if (a.sessionId !== b.sessionId) return false
+	if (a.taskId !== b.taskId) return false
+	if (a.completionStatus !== b.completionStatus) return false
+	if (a.requiredAction !== b.requiredAction) return false
+	if (a.heldObservationCount !== b.heldObservationCount) return false
+	if (a.heldJobIds.length !== b.heldJobIds.length) return false
+	for (let i = 0; i < a.heldJobIds.length; i += 1) {
+		if (a.heldJobIds[i] !== b.heldJobIds[i]) return false
+	}
+	return true
 }
 
 /**
