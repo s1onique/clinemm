@@ -1,0 +1,43 @@
+ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY
+RED state captured at HEAD a2a632616 (reviewer halt HALT_CONTROL_AUTHORITY_STILL_LEXICAL)
+
+Predecessor ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 verdict:
+  PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY (REJECTED)
+  Reclassified: PASS_COMPLETION_CONTINUATION_TYPED_CONTROL_SUBSTRATE
+
+FIRST_AUTHORITY_LOSS_BOUNDARY (before fix):
+  apps/vscode/src/sdk/SdkController.ts:876
+    active.sdkHost.send({ sessionId, prompt, delivery: "queue" })
+  → sdkHost.send → LocalRuntimeHost.runTurn → PendingPromptsController.enqueue
+  → drain → deps.send → SessionRuntime.run('') → session.persistedMessages
+
+MODEL_REQUEST_BEFORE (load-bearing defect):
+  role: "user"
+  content: [{ type: "text", text: prompt }]
+  metadata: (absent — same as user input)
+  Text stamp [runtime-control: completion_continuation_control] is LEXICAL provenance, not STRUCTURAL.
+
+IDENTICAL_TEXT_TEST pre-fix:
+  user-origin "observe j1 then retry completion" → role: user, no metadata.runtimeAuthority
+  runtime-origin "observe j1 then retry completion" → role: user, no metadata.runtimeAuthority
+  Structurally different = NO
+
+USER_SPOOF pre-fix:
+  user text with marker [runtime-control: completion_continuation_control] (REJECTED)
+  user text without marker is identical to runtime text (ACCEPTED)
+  Rejected structurally = NO (marker is text)
+
+STALL_BEFORE:
+  shouldStallSameStateControl(a, b) returns true for identical controls
+  Production scheduler does NOT consume the verdict — REARM01 pattern repeated indefinitely
+
+ABLATION (predecessor 03-necessity-ablation.txt):
+  Remove marker → marker tests fail
+  → proves only "marker-needed-for-marker-predicate"
+  → does NOT prove structural-authority-needed-for-resumed-model-behavior
+
+Authorized correction (frozen by reviewer 2026-10-07):
+  1. runtime-origin and user-origin copies of identical text
+     MUST differ structurally at model-request assembly
+  2. repeated identical continuation state
+     MUST be consumed by the production scheduler's stall policy

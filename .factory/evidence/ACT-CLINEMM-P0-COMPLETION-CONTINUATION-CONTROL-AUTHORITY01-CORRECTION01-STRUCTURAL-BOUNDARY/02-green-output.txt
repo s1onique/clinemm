@@ -1,0 +1,77 @@
+ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY
+GREEN state captured at HEAD <closure commit pending> (reviewer halt RESOLVED)
+
+Fix sequence:
+  - Add RuntimeControlKind = "completion_continuation_control" closed enum
+  - Add runtimeControlKind?: RuntimeControlKind to SendSessionInput, PendingPromptEntry, PendingPromptEnqueueInput, deps.send
+  - Thread runtimeControlKind through LocalRuntimeHost.runTurn → executeTurn → executeAgentTurn → SessionRuntime.run
+  - At SessionRuntime.run, if input is AgentMessage (typed), append to conversation store with metadata: { runtimeAuthority, kind, userRunSpan }
+  - messageToAgentMessages preserves the metadata through initialMessages → AgentRuntime.state.messages → model request
+  - Stamping is closed-enum + host-internal seam, NOT user-reachable
+  - buildSdkControllerEnqueueCompletionContinuation stamps runtimeControlKind on every send
+  - VscodeSessionHost.send forwards runtimeControlKind to ClineCore → LocalRuntimeHost.runTurn
+  - SdkSessionEventCoordinator computes (sessionId|taskId|count|heldJobIds) fingerprint BEFORE epoch dedupe
+  - Fingerprint match → stalled_no_progress (counter, records, operationally consumed)
+  - BCB01 trigger site clears BOTH markers before each new attempt (K→K+1 lineage preserved)
+  - clearCompletionContinuationSentForTesting test backdoor clears both
+
+FIRST_AUTHORITY_LOSS_BOUNDARY (after fix):
+  Boundary moved out of SdkController.ts:876 (prompt text) to SdkController.ts:887 (SendSessionInput.runtimeControlKind).
+  All subsequent hops forward the structural provenance.
+
+MODEL_REQUEST_AFTER:
+  role: "user"
+  content: [{ type: "text", text: prompt }]
+  metadata: { runtimeAuthority: "host_runtime_control", kind: "runtime_completion_continuation", userRunSpan: 0 }
+  STRUCTURAL provenance attached by the host-internal SessionRuntime.run(AgentMessage) seam.
+
+IDENTICAL_TEXT_TEST post-fix:
+  user-origin "observe j1 then retry completion" → role: user, metadata absent
+  runtime-origin "observe j1 then retry completion" → role: user, metadata.runtimeAuthority="host_runtime_control"
+  Structurally different = YES (the metadata field is the discriminator)
+
+USER_SPOOF post-fix:
+  user cannot construct metadata.runtimeAuthority="host_runtime_control" because:
+  (a) the metadata is set by the host-internal SessionRuntime.run seam,
+  (b) the closed enum type rejects arbitrary values,
+  (c) the import path is @cline/core (host-bundled)
+  Rejected structurally = YES.
+
+STALL_AFTER:
+  Production enqueue consumes guard. test STALL-01..04 drive enqueueCompletionContinuationIfHeld directly,
+  each verifies the production scheduler behavior. STALL-01: same fingerprint twice → stalled_no_progress.
+  STALL-02: heldJobIds change → delivered. STALL-03: task change → delivered.
+  STALL-04: fresh test backdoor clears both → third enqueue delivered.
+
+ABLATION (this ACT):
+  BOUNDARY: reverse-mapping runtime-control-kind to ordinary user role — the closed-enum type
+  prevents the inverse by construction (no producer can claim authority by setting the discriminator).
+  STALL: zeroing lastCompletionContinuationControlFingerprint before each check restores
+  delivered for the second call. STALL-01 fails — production must have the proven in-order.
+
+Test results (focused):
+  completion-continuation-structural-authority01.ccsa01.test.ts: 11/11 GREEN
+  completion-continuation-stall-enforcement01.ccse01.test.ts: 5/5 GREEN
+  completion-continuation-control-authority01.ccca01.test.ts: 35/35 GREEN (predecessor substrate)
+  completion-continuation-rearm01.rearm01.test.ts: 7/7 GREEN (REARM01 invariant)
+
+Test results (conservation):
+  completion-continuation-delivery-callback-outcome01.ccdco01.test.ts: GREEN
+  completion-continuation-delivery-callback-outcome-red01.ccdco-red01.test.ts: GREEN
+  completion-continuation-delivery-dogfood-gate.ccdco-dogfood.test.ts: GREEN
+  completion-continuation-upstream-discriminator01.ccupd01.test.ts: GREEN
+  sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.test.ts: 62/62 GREEN
+
+Typecheck:
+  apps/vscode (bunx tsc --noEmit): 1 pre-existing error (SdkController.ts:1331 taskTelemetryPhaseUnsub). 0 new errors.
+  sdk/packages/core (bun tsc -p tsconfig.dev.json --noEmit): 25 pre-existing errors (all in unrelated test files). 0 new errors.
+
+Lint (biome check --diagnostic-level=error):
+  All 7 modified files: PASS.
+
+git diff --check: PASS.
+
+VSIX: NOT_EXECUTED.
+LIVE_POST_FIX: NOT_EXECUTED.
+
+Success verdict: PASS_COMPLETION_CONTINUATION_STRUCTURAL_AUTHORITY.

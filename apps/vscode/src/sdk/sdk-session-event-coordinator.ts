@@ -39,6 +39,7 @@ import {
 	recordReevaluateEntered,
 	recordRequestedSessionMatched,
 	recordSessionMismatch,
+	recordStalledNoProgress,
 	recordTaskMismatch,
 	recordUnconsumedTerminalCountRead,
 } from "./completion-continuation-upstream-runtime"
@@ -573,6 +574,33 @@ export class SdkSessionEventCoordinator {
 	 * the next continuation. No explicit cleanup needed.
 	 */
 	private lastCompletionContinuationSessionEpoch: string | undefined
+
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+	 *
+	 * Production stall fingerprint — the LAST typed control actually
+	 * enqueued through this coordinator. The fingerprint is the
+	 * `(sessionId, taskId, completionStatus, requiredAction,
+	 * heldObservationCount, heldJobIds-fingerprint)` tuple the
+	 * `shouldStallSameStateControl` predicate derives. Production
+	 * scheduler consumes this on every trigger and STOPS the enqueue
+	 * when the new would-be control fingerprint equals the last
+	 * one (model has produced identical state ⇒ no progress ⇒
+	 * pathological continuation loop).
+	 *
+	 * Cleared by `clearCompletionContinuationSentForTesting` (test
+	 * backdoor). Not cleared on epoch advance — a stall across an
+	 * epoch is a stall, regardless of epoch bump (BIND_TIMEs).
+	 *
+	 * The fingerprint is `O(1)` memory (a single string) and
+	 * bounded by the number of distinct (status, action, jobset)
+	 * tuples — usually 1 in production, so 1 slot is plenty. A
+	 * Map<String, number> was considered for multi-key tracking
+	 * but adds bookkeeping for no gain (the production flow does
+	 * not need historical stall records — it only needs "is the
+	 * LAST one stalled?").
+	 */
+	private lastCompletionContinuationControlFingerprint: string | undefined
 
 	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-G:
@@ -1212,6 +1240,17 @@ export class SdkSessionEventCoordinator {
 		| { kind: "not_held" }
 		| { kind: "already_sent"; continuationSessionEpoch: string }
 		| { kind: "no_callback" }
+		/**
+		 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		 * Production scheduler discriminated a same-state continuation
+		 * against the prior enqueue (model produced no progress). The
+		 * enqueue is suppressed with this bounded outcome. The task
+		 * remains UNRESOLVED — the runtime may still commit completion
+		 * if the model progresses on a different turn, but the
+		 * continuation prompt will not be re-enqueued with identical
+		 * state.
+		 */
+		| { kind: "stalled_no_progress" }
 	> {
 		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 		// U8 discriminator. Every entry increments
@@ -1233,13 +1272,46 @@ export class SdkSessionEventCoordinator {
 		}
 		const epoch = this.options.messageTranslatorState.getMinter().epoch
 		const continuationSessionEpoch = `${activeSessionId}|${taskId ?? "(none)"}|${epoch}`
+		const heldJobIds = this.options.getUnconsumedOwnedTerminalJobIds?.(activeSessionId, taskId) ?? []
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		//
+		// PRODUCTION stall check BEFORE the epoch dedupe. The
+		// stall fingerprint is a tighter signal than epoch
+		// dedupe: same (sessionId, taskId, count, heldJobIds)
+		// means the model produced no progress even across an
+		// epoch. The epoch dedupe suppresses legitimately
+		// distinct continuations (different heldJobIds after a
+		// terminal commit); the stall fingerprint is
+		// progress-aware and pins the pathological no-progress
+		// case. The predecessor helper detected this case but
+		// did not feed it into production (C15/C17 halt).
+		//
+		// Comparing to `shouldStallSameStateControl`:
+		//   `shouldStallSameStateControl(a, b)` uses
+		//   `(completionStatus, requiredAction, heldJobIds,
+		//   sessionId, taskId)`; we use the same axes plus
+		//   `unconsumedOwnedTerminalResultsForC10` for
+		//   stronger no-progress detection (held count drops
+		//   ⇒ progress).
+		const nextFingerprint = `${activeSessionId}|${taskId ?? "(none)"}|${unconsumedOwnedTerminalResultsForC10}|${heldJobIds.slice().sort().join(",")}`
+		if (this.lastCompletionContinuationControlFingerprint === nextFingerprint) {
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+			// Stall discriminated: same (heldJobIds, count,
+			// session, task) as the prior enqueue. The model
+			// produced no progress. Suppress the enqueue with a
+			// STALLED outcome and DO NOT mark the epoch dedupe
+			// slot — the dedupe slot is keyed on epoch, and a
+			// stall must not poison the next genuine epoch's
+			// continuation.
+			recordStalledNoProgress()
+			return Promise.resolve({ kind: "stalled_no_progress" as const })
+		}
 		if (this.lastCompletionContinuationSessionEpoch === continuationSessionEpoch) {
 			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 			// U10 discriminator. The dedupe suppresses.
 			recordDedupeSuppressed()
 			return Promise.resolve({ kind: "already_sent", continuationSessionEpoch })
 		}
-		const heldJobIds = this.options.getUnconsumedOwnedTerminalJobIds?.(activeSessionId, taskId) ?? []
 		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 		// U9 discriminator. Capture provider cardinality (count
 		// only, no IDs — §6 identity policy) so the operator can
@@ -1265,6 +1337,11 @@ export class SdkSessionEventCoordinator {
 		// double-fire. O(1) memory regardless of coordinator
 		// lifetime (P1 halt fix: replaces the unbounded Set).
 		this.lastCompletionContinuationSessionEpoch = continuationSessionEpoch
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		// Persist the post-success fingerprint for the next stall
+		// check. Cleared by `clearCompletionContinuationSentForTesting`
+		// for the test backdoor.
+		this.lastCompletionContinuationControlFingerprint = nextFingerprint
 		recordEnqueueCompletionContinuationInvoked()
 		return this.options
 			.enqueueCompletionContinuation({
@@ -1310,6 +1387,10 @@ export class SdkSessionEventCoordinator {
 	 */
 	clearCompletionContinuationSentForTesting(): void {
 		this.lastCompletionContinuationSessionEpoch = undefined
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		// Clear the stall fingerprint so a fresh test scenario can
+		// re-enqueue the same heldJobIds.
+		this.lastCompletionContinuationControlFingerprint = undefined
 	}
 
 	/**
@@ -1832,6 +1913,17 @@ export class SdkSessionEventCoordinator {
 								// which caused K's own submit_and_exit to suppress
 								// the successor (LIVE defect).
 								this.lastCompletionContinuationSessionEpoch = undefined
+								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+								// Also clear the STALL fingerprint. The freshly-registered
+								// marker lifecycle (the BCB barrier is cleared and re-set on
+								// every submit_and_exit handler) represents a new attempt to
+								// drive a continuation — the prior fingerprint only applies
+								// to the just-completed run. Without this clear, K+1 within
+								// the same epoch and with the same heldJobIds would be
+								// incorrectly suppressed as a stall (the predecessor REARM01
+								// cleared the epoch dedupe but not the stall fingerprint; this
+								// correction restores symmetry).
+								this.lastCompletionContinuationControlFingerprint = undefined
 								// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
 								// Bounded finalization-authority trigger (see
 								// `enqueueCompletionContinuationIfHeld` docstring).

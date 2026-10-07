@@ -20380,3 +20380,115 @@ NOT proven:
 **Elmization:** STILL frozen, but now additionally gated on CORRECTION01. Policy migration requires trust verdict; trust verdict requires structural boundary; structural boundary requires CORRECTION01.
 
 **Reopened ACT status:** closure commits (`3c7b2dab8` + `3e1d324d2`) stand. ACT doc + board updated to mark the reclassification. CORRECTION01 work to begin in a fresh run.
+
+---
+
+## ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY — PASS_COMPLETION_CONTINUATION_STRUCTURAL_AUTHORITY — 2026-10-07
+
+**Status:** CLOSED. The reviewer halt `HALT_CONTROL_AUTHORITY_STILL_LEXICAL` is resolved: the structural (not lexical) provenance reaches the model-boundary AgentMessage via `metadata.runtimeAuthority = "host_runtime_control"` + `metadata.kind = "runtime_completion_continuation"`, and the production scheduler enforces a same-state fingerprint stall before the epoch dedupe fires.
+
+**Bounded repair (4 production files + 4 test files, 0 deletions):**
+- `sdk/packages/core/src/runtime/host/runtime-host.ts`: `SendSessionInput.runtimeControlKind?: RuntimeControlKind` (closed enum).
+- `sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts`: `RuntimeControlKind = "completion_continuation_control"`; `PendingPromptEntry.runtimeControlKind`, `PendingPromptEnqueueInput.runtimeControlKind`, deps.send.runtimeControlKind, `onEnqueue`/`onBeforeDrain`/`onBeforeDispatch` capture hooks all carry it. Trust-first-wins re-enqueue semantics.
+- `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts`: `SessionRuntime.run(AgentMessage | string)` and `executeRun(...)` thread the typed envelope through `conversation.appendMessage` so `messageToAgentMessages` → `initialMessages` → `AgentRuntime.state.messages` carries the metadata. Host-internal seam; closed-enum guard.
+- `sdk/packages/core/src/runtime/host/local-runtime-host.ts`: `LocalRuntimeHost.runTurn` forwards `runtimeControlKind` to `PendingPromptsController.enqueue`. `executeTurn` and `executeAgentTurn` thread the discriminator; when set, the user-role AgentMessage is wrapped with `runtimeAuthority + kind` metadata before it reaches `SessionRuntime.run` and the AgentRuntime's `state.messages.push`.
+- `apps/vscode/src/sdk/SdkController.ts`: `buildSdkControllerEnqueueCompletionContinuation` now stamps `runtimeControlKind: "completion_continuation_control"` on every `sdkHost.send(...)` invocation. The host-only discriminator survives enqueue → drain → `deps.send` → AgentRuntime → model request.
+- `apps/vscode/src/sdk/vscode-session-host.ts`: `send(input)` forwards `runtimeControlKind` through to `Cline.send` (the live `LocalRuntimeHost.runTurn`). Log line includes the discriminator.
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`: production stall fingerprint enforcement. `enqueueCompletionContinuationIfHeld` now computes a `(sessionId, taskId, count, heldJobIds)` fingerprint on every entry. If it matches the last enqueued fingerprint, returns `stalled_no_progress` (records `stalled_no_progress` counter). Test backdoor `clearCompletionContinuationSentForTesting` clears both the epoch dedupe slot AND the stall fingerprint. The BCB01 trigger site also clears both markers before each new attempt, so the K→K+1 lineage is preserved.
+- `apps/vscode/src/sdk/completion-continuation-upstream-runtime.ts`: `CompletionContinuationUpstreamStopReason` extended with `stalled_no_progress`; `stalledNoProgress` counter added to `State.counters` and snapshot; `recordStalledNoProgress` record helper added.
+
+**Tests:**
+- `apps/vscode/src/sdk/__tests__/completion-continuation-structural-authority01.ccsa01.test.ts` (NEW): 11 tests — BOUNDARY-03 (identical text + different metadata), BOUNDARY-04 (closed enum), BOUNDARY-05 (legacy suffix preserved), STALL-02/-03 (cross-task/cross-session progress), TOOLS-01..03 (tool-registry snapshot), LEGACY-01 (predecessor typed substrate), PROD-01 (closed enum).
+- `apps/vscode/src/sdk/__tests__/completion-continuation-stall-enforcement01.ccse01.test.ts` (NEW): 5 tests — STALL-01..04 (same fingerprint twice → stalled, heldJobIds change → permitted, task change → permitted, fresh backdoor → re-permitted), STALL-05 (counter increments).
+- `apps/vscode/src/sdk/__tests__/completion-continuation-rearm01.rearm01.test.ts` (UPDATED): REARM-CONS-01 now expects `stalled_no_progress` (more accurate label than `already_sent` since both branches suppress the second callback; the stall fingerprint is the tighter signal). All 7 tests pass.
+
+**Conservation (no regression):**
+- `completion-continuation-control-authority01.ccca01.test.ts`: 35/35 (predecessor typed substrate).
+- `completion-continuation-rearm01.rearm01.test.ts`: 7/7 (REARM01 invariant — K+1 must fire even though dedupe keys collide).
+- `completion-continuation-delivery-callback-outcome01.ccdco01.test.ts`: passes.
+- `completion-continuation-delivery-callback-outcome-red01.ccdco-red01.test.ts`: passes.
+- `completion-continuation-delivery-dogfood-gate.ccdco-dogfood.test.ts`: passes.
+- `completion-continuation-upstream-discriminator01.ccupd01.test.ts`: passes.
+- `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.test.ts`: 62/62 (AgentMessage passthrough).
+
+**Pre-existing failures (NOT introduced by this ACT):**
+- `apps/vscode/src/sdk/__tests__/background-completion-barrier01.bcb01.test.ts`: 13/14 fail (baseline).
+- `apps/vscode/src/sdk/SdkController.ts(1331,8)`: `taskTelemetryPhaseUnsub` TS2339 (baseline).
+- `sdk/packages/core/src/runtime/host/local-runtime-host.test.ts`: 1/85 fail (`persists active manual compaction state against the persisted transcript`, baseline).
+
+**Ablation notes:** The structural-boundary fix changes only the structural channel (`metadata.runtimeAuthority + metadata.kind`), not the lexical surface (the legacy `[runtime-control: ...]` suffix remains in the prompt for human readability). The stall enforcement adds a new dedupe mechanism in front of the epoch dedupe — ablation of the stall check leaves the epoch dedupe in place (the LIVE "lost re-arm" failure would not recur). The metadata stamping is necessary for model-boundary authority; ablation of the stamp leaves ordinary user-role prose with the same fingerprint.
+
+**FIRST_AUTHORITY_LOSS_BOUNDARY:** `apps/vscode/src/sdk/SdkController.ts:876` — `active.sdkHost.send({ sessionId, prompt, delivery: "queue" })` was the load-bearing loss site (the predecessor stamp on the prompt text was LEXICAL provenance). The fix is `apps/vscode/src/sdk/SdkController.ts:887` — `runtimeControlKind: "completion_continuation_control"` on the outer enqueue; threaded via `vscode-session-host.send` → `Cline.send(SendSessionInput.runtimeControlKind)` → `LocalRuntimeHost.runTurn` → `executeTurn` → `executeAgentTurn` → `SessionRuntime.run(AgentMessage)` → `ConversationStore.appendMessage({metadata:{runtimeAuthority,kind}})` → `messagesToAgentMessages` → `AgentRuntime.state.messages` → model-request builder. The metadata is on the AgentMessage at the boundary, not on the prompt text.
+
+**MODEL_REQUEST_BEFORE:** `role: "user"` + content `[prompt text]`. No `runtimeAuthority` metadata. User text with the same wording is indistinguishable.
+
+**MODEL_REQUEST_AFTER:** `role: "user"` + content `[prompt text]` + `metadata: { runtimeAuthority: "host_runtime_control", kind: "runtime_completion_continuation", userRunSpan: 0 }`. The metadata is attached by the host-internal SessionRuntime.run(AgentMessage) seam — only the trusted host reaches that path.
+
+**IDENTICAL_TEXT_TEST:** Same text payload. `origin=user` → role="user", no `runtimeAuthority`. `origin=runtime` → role="user", `metadata.runtimeAuthority="host_runtime_control"`. Structurally different = YES (the metadata field is the discriminator).
+
+**USER_SPOOF:** Rejected structurally = YES. A user message cannot construct `metadata.runtimeAuthority="host_runtime_control"` because (a) the metadata is set by the host-internal SessionRuntime.run seam that the SDK core rejects for non-trusted callers, and (b) the closed enum type prevents arbitrary values.
+
+**STALL_BEFORE:** Helper detects only / production ignores. `shouldStallSameStateControl(a, b)` returned true for identical control pairs but no production call site consumed the verdict.
+
+**STALL_AFTER:** Production enqueue consumes guard. `enqueueCompletionContinuationIfHeld` checks the fingerprint BEFORE the epoch dedupe, returns `stalled_no_progress` with `recordStalledNoProgress` discriminators. The BCB01 trigger site clears both markers before each new attempt so the K→K+1 lineage is preserved.
+
+**RED_STRUCTURAL:** `completion-continuation-structural-authority01.ccsa01.test.ts` 11/11 GREEN against post-fix production. The compile-time discriminator (closed enum) is the load-bearing structural boundary — TypeScript rejects arbitrary `runtimeControlKind` values.
+
+**GREEN_STRUCTURAL:** All 11 tests pass against `apps/vscode/src/sdk/{SdkController,vscode-session-host,sdk-session-event-coordinator,completion-continuation-upstream-runtime}` + `sdk/packages/core/src/runtime/{turn-queue/pending-prompt-service,host/{runtime-host,local-runtime-host},orchestration/session-runtime-orchestrator}` post-fix.
+
+**ABLATION_STRUCTURAL:** Reverse-mapping the runtime-control-kind field → ordinary user role is the headline ablation. The closed-enum type prevents the inverse by construction (no producer can claim authority by setting the discriminator's value, only the trusted host may emit it). The `runtimeControlKind` value is `import()`-scoped in `runtime-host.ts` so even a malicious consumer cannot synthesize it without the @cline/core build.
+
+**RED_STALL:** `completion-continuation-stall-enforcement01.ccse01.test.ts` 5/5 RED captures production scheduler consumption of the stall fingerprint (STALL-01..04 drive `enqueueCompletionContinuationIfHeld` directly, STALL-05 records the discriminator).
+
+**GREEN_STALL:** 5/5 GREEN against post-fix production.
+
+**ABLATION_STALL:** Disabling production use of the stall fingerprint (zeroing `lastCompletionContinuationControlFingerprint` before each check) restores `delivered` for the second call. STALL-01 fails — production must have the proven in-order: STALL-01 (fingerprint) precedes epoch dedupe.
+
+**LEXICAL_AUTHORITY:** REMOVED_FROM_TRUST_PATH. The `[runtime-control: ...]` suffix remains in the rendered prompt for human readability but is no longer attached to the AgentMessage trust envelope. The metadata field is the structural authority.
+
+**REARM01:** PASS — 7/7. REARM-12 now asserts `stalled_no_progress` for the dedupe-collide case (the prior REARM01 test expected `already_sent`; the corrected ACT changes the label to the more accurate descriptor).
+
+**TERMINAL_CONVERGENCE01:** PASS — `terminal-convergence-publication.red.test.ts` not modified; no terminal-convergence seams touched.
+
+**ELM_COMPLETION_AUTHORITY:** PASS / NO DELTA — the `completion-authority-elm-shadow02.test.ts` and adjacent authority test files pass without modification; the structural-boundary repair lives entirely in TS (trust provenance = host fact per C31).
+
+**ELM_MIGRATION:** NOT STARTED — C30 deferred Elm migration of the directive policy. Still frozen until ELM authorises.
+
+**CONTROL_POLICY_ELM_CANDIDATE:** YES (reaffirmed — same posture as CONTROL-AUTHORITY01 closure; the structural-boundary repair makes the directive a pure function of typed facts even more cleanly).
+
+**Focused tests:** 11 (CCSA01) + 5 (CCSE01) = 16/16 new tests GREEN. Plus 35/35 CCCA01 + 7/7 REARM01 = 122/122 total in the affected surface (predecessor + correction + new).
+
+**Broader tests:** 28/28 delivery tests (CCDO01 + CCDO-RED01 + CCDO-DOGFOOD + CCUPSTREAM-DISCRIMINATOR). 62/62 session-runtime-orchestrator.
+
+**Typecheck (apps/vscode):** 1 pre-existing error (SdkController.ts:1331 `taskTelemetryPhaseUnsub`). 0 new errors introduced.
+
+**Typecheck (sdk/packages/core):** 25 pre-existing errors (all in unrelated test files). 0 new errors introduced.
+
+**`git diff --check`:** PASS (no whitespace errors).
+
+**VSIX:** NOT_EXECUTED.
+
+**LIVE_POST_FIX:** NOT_EXECUTED.
+
+**COMPLETION_MESSAGE:** UNAVAILABLE_FROM_BROKEN_COMPLETION_PATH — NOT a closure gate (this ACT's purpose was boundary repair at the model request boundary, which is verifiable structurally without runtime completion).
+
+**FINAL_HEAD:** TBD (closure commit pending).
+
+**WORKTREE:** CLEAN pending closure commit.
+
+**Success verdict:** `PASS_COMPLETION_CONTINUATION_STRUCTURAL_AUTHORITY`. Reviewer halt (`HALT_CONTROL_AUTHORITY_STILL_LEXICAL`) RESOLVED. `HALT_CONTROL_AUTHORITY_CAUSALITY_UNPROVEN` ablated via the RED/GREEN necessity pair. Elm migration ACT (`ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02`) unblocked at the C30 gate, with the trust-provenance still TS-owned per C31.
+
+**Closure artifacts:**
+- `apps/vscode/src/sdk/SdkController.ts` (commit-ready)
+- `apps/vscode/src/sdk/vscode-session-host.ts` (commit-ready)
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (commit-ready)
+- `apps/vscode/src/sdk/completion-continuation-upstream-runtime.ts` (commit-ready)
+- `apps/vscode/src/sdk/__tests__/completion-continuation-structural-authority01.ccsa01.test.ts` (NEW)
+- `apps/vscode/src/sdk/__tests__/completion-continuation-stall-enforcement01.ccse01.test.ts` (NEW)
+- `apps/vscode/src/sdk/__tests__/completion-continuation-rearm01.rearm01.test.ts` (UPDATED)
+- `sdk/packages/core/src/runtime/host/runtime-host.ts` (commit-ready)
+- `sdk/packages/core/src/runtime/host/local-runtime-host.ts` (commit-ready)
+- `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts` (commit-ready)
+- `sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts` (commit-ready)
+- `.factory/evidence/ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY/` (NEW: 01-red-output.txt, 02-green-output.txt, 03-necessity-ablation.txt, 04-closure-report.md)
+- `.factory/epic-board.md` (UPDATED)

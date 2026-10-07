@@ -93,6 +93,7 @@ export type CompletionContinuationUpstreamStopReason =
 	| "dedupe_suppressed"
 	| "enqueue_invoked"
 	| "authority_check_reached"
+	| "stalled_no_progress"
 	| "unknown"
 
 export interface CompletionContinuationUpstreamCountersSnapshot {
@@ -119,6 +120,14 @@ export interface CompletionContinuationUpstreamCountersSnapshot {
 	readonly dedupeSuppressed: number
 	readonly dedupePermitted: number
 	readonly enqueueCompletionContinuationInvoked: number
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+	 * Production scheduler stall counter. Increments when the
+	 * fingerprint check matches the prior fingerprint, suppressing
+	 * the enqueue with `stalled_no_progress`. Backward-compatible:
+	 * absent on snapshots produced before the correction.
+	 */
+	readonly stalledNoProgress?: number
 	readonly lastStopReason: CompletionContinuationUpstreamStopReason | null
 	/** Tracks whether the requested active session id matched the
 	 * marker's sessionId the LAST time the coordinator's
@@ -153,6 +162,7 @@ interface State {
 		dedupeSuppressed: number
 		dedupePermitted: number
 		enqueueCompletionContinuationInvoked: number
+		stalledNoProgress: number
 		lastStopReason: CompletionContinuationUpstreamStopReason | null
 		lastRequestedSessionMatched: boolean | null
 	}
@@ -183,6 +193,7 @@ function freshCounters(): State["counters"] {
 		dedupeSuppressed: 0,
 		dedupePermitted: 0,
 		enqueueCompletionContinuationInvoked: 0,
+		stalledNoProgress: 0,
 		lastStopReason: null,
 		lastRequestedSessionMatched: null,
 	}
@@ -405,6 +416,21 @@ export function recordEnqueueCompletionContinuationInvoked(): void {
 	state.counters.lastStopReason = "enqueue_invoked"
 }
 
+/**
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+ *
+ * Production scheduler STALL discriminant. Increments when the
+ * fingerprint check matches the prior fingerprint, suppressing the
+ * enqueue with `stalled_no_progress`. The discriminator is
+ * observational-only — it does not mutate runtime state.
+ */
+export function recordStalledNoProgress(): void {
+	if (!_state.enabled) return
+	const state = getOrInitState()
+	state.counters.stalledNoProgress = (state.counters.stalledNoProgress ?? 0) + 1
+	state.counters.lastStopReason = "stalled_no_progress"
+}
+
 export function recordAuthorityCheckReached(): void {
 	if (!_state.enabled) return
 	const state = getOrInitState()
@@ -443,6 +469,7 @@ export function getCompletionContinuationUpstreamCounters(): CompletionContinuat
 		dedupeSuppressed: state.counters.dedupeSuppressed,
 		dedupePermitted: state.counters.dedupePermitted,
 		enqueueCompletionContinuationInvoked: state.counters.enqueueCompletionContinuationInvoked,
+		stalledNoProgress: state.counters.stalledNoProgress,
 		lastStopReason: state.counters.lastStopReason,
 		lastRequestedSessionMatched: state.counters.lastRequestedSessionMatched,
 	}

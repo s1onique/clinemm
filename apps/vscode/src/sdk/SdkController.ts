@@ -228,7 +228,7 @@ import { resolveWorkspaceManagerPaths, resolveWorkspaceRootPath } from "./worksp
 /**
  * Log a stub warning and return undefined.
  */
-function stubWarn(name: string): void {
+function _stubWarn(name: string): void {
 	Logger.warn(`[SdkController] STUB: ${name} not yet implemented`)
 }
 
@@ -870,10 +870,22 @@ export function buildSdkControllerEnqueueCompletionContinuation(options: {
 			sessionId,
 			taskId,
 		})
-		// Aggregate counter.
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		// Stamp the structural authority discriminator on the
+		// `sdkHost.send` call so the queue round-trip preserves the
+		// trust signal. The runtime tags the AgentMessage
+		// produced by the resumed model turn with
+		// `runtimeAuthority = "host_runtime_control"` +
+		// `kind = "runtime_completion_continuation"` metadata so a
+		// user cannot forge authority by replaying identical text.
 		recordSdkHostSendEntered()
 		try {
-			await active.sdkHost.send({ sessionId, prompt, delivery: "queue" })
+			await active.sdkHost.send({
+				sessionId,
+				prompt,
+				delivery: "queue",
+				runtimeControlKind: "completion_continuation_control",
+			})
 			// Aggregate counter.
 			recordDelivered()
 			return { kind: "delivered" as const }
@@ -1049,7 +1061,6 @@ export class Controller {
 	// (`getStateToPostToWebview`). Transport-only, no
 	// estimator imports.
 	private readonly workingContextHostCapture: WorkingContextHostCapture
-	private taskTelemetryPhaseUnsub: (() => void) | undefined
 	// ACT-CLINEMM-SESSION-AUTONOMY01:
 	// Single owner of the active-session auto-approval override ("none" | "all").
 	// NOT persisted; cleared by the task-clear choke-point (and by new-task init).
@@ -1089,21 +1100,6 @@ export class Controller {
 			taskId: sessionId,
 			epoch,
 		}
-	}
-
-	/**
-	 * ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01:
-	 *
-	 * Build the `setTurnPhase(phase, anchorTs)` callback wired to
-	 * the canonical tracker for one coordinator. The returned closure
-	 * tags every mutation with the supplied writerId via
-	 * `setWithWriter` so the diagnostic ring can attribute the
-	 * mutation to that coordinator. The closure captures `this` via
-	 * the lexical arrow, matching the existing wiring contract.
-	 */
-	private turnPhaseSetterFor(writerId: import("@shared/turn-state-writer-provenance").TurnStateWriterId) {
-		return (phase: TurnPhase, anchorTs?: number) =>
-			this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId))
 	}
 
 	// Bridges SDK events to the webview's gRPC streams.
@@ -2908,30 +2904,6 @@ export class Controller {
 			managed: true,
 		})
 		throw new Error("Could not verify organization policy. Check your connection and try again.")
-	}
-
-	private createRemoteConfigAwareSessionHost(): Promise<VscodeSessionHost> {
-		return VscodeSessionHost.create({
-			mcpHub: this.mcpHub,
-			beforeStartSession: () => this.ensureRemoteConfigForSessionStart(),
-			getRemoteConfigIntegration: () => this.remoteConfigCoreIntegration,
-			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
-			// forward runtime incidents reported by the host-owned
-			// CommandJobManager. The remote-config refresh path
-			// creates a temp host with its own CommandJobManager, so
-			// it must carry the same sink as the production host.
-			onRuntimeError: this.handleTaskRuntimeError,
-			onCommandJobLifecycle: this.handleCommandJobLifecycle,
-			// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
-			// thread the host-owned opt-in coordinator + active
-			// owner resolver through to the run_commands tool.
-			backgroundNotifyCoordinator: this.backgroundNotifyCoordinator,
-			resolveActiveOwner: () => {
-				const active = this.sessions?.getActiveSession()
-				if (!active) return undefined
-				return { sessionId: active.sessionId, taskId: this.task?.taskId }
-			},
-		})
 	}
 
 	private async performRemoteConfigRefresh(isCurrent: () => boolean): Promise<boolean> {
@@ -5621,11 +5593,11 @@ export class Controller {
 				.sort((a, b) => b.ts - a.ts)
 				.slice(0, 100)
 
-			let queuedPrompts: ExtensionState["queuedPrompts"] = []
+			let _queuedPrompts: ExtensionState["queuedPrompts"] = []
 			const activeSession = this.sessions.getActiveSession()
 			if (activeSession) {
 				try {
-					queuedPrompts = await activeSession.sdkHost.pendingPrompts("list", { sessionId: activeSession.sessionId })
+					_queuedPrompts = await activeSession.sdkHost.pendingPrompts("list", { sessionId: activeSession.sessionId })
 					// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
 					// No cache write needed — the Q5 guard chain now reads
 					// the authoritative count directly from the canonical
@@ -5685,7 +5657,7 @@ export class Controller {
 			// workspaceState.get + a single boolean compare (the ring
 			// flip is skipped because the post-activate ring state
 			// already matches).
-			const tswpdEffective = applyTurnStateWriterProvenanceDiagnosticProfile(
+			const _tswpdEffective = applyTurnStateWriterProvenanceDiagnosticProfile(
 				process.env,
 				isDogfoodRuntime(process.env),
 				this.context,

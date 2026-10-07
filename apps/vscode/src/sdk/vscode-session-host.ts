@@ -494,7 +494,9 @@ export class VscodeSessionHost implements SdkSessionHost {
 	}
 
 	async send(input: SendSessionInput) {
-		Logger.log(`[VscodeSessionHost] send() called: sessionId=${input.sessionId}, prompt=${input.prompt?.substring(0, 50)}`)
+		Logger.log(
+			`[VscodeSessionHost] send() called: sessionId=${input.sessionId}, prompt=${input.prompt?.substring(0, 50)}, runtimeControlKind=${input.runtimeControlKind ?? "(none)"}`,
+		)
 		try {
 			const result = await this.inner.send(input)
 			Logger.log(

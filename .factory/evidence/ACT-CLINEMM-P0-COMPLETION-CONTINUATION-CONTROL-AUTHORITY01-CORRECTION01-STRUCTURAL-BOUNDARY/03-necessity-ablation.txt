@@ -1,0 +1,72 @@
+ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY
+NECESSITY ABLATION: prove the structural-boundary and stall-enforcement are necessary.
+
+--- STRUCTURAL BOUNDARY ABLATION ---
+
+Hypothesis: if the structural-boundary fix is removed (runtime-control-kind → ordinary user role),
+the model-boundary representation collapses back to the predecessor's RED state, and BOUNDARY
+tests fail.
+
+Reverse-ablation (delete the runtime-control-kind stamp):
+  - SdkController.ts:887 — remove runtimeControlKind stamp.
+  - SendSessionInput.runtimeControlKind — undefined
+  - PendingPromptEntry.runtimeControlKind — never set
+  - SessionRuntime.run always treats userMessage as string
+  - AgentMessage metadata.runtimeAuthority never attached
+  - Model-boundary AgentMessage: role=user, metadata absent (predecessor state)
+
+Expected: BOUNDARY-03 fails (identical-text produces identical metadata).
+BOUNDARY-04 fails (closed enum forces runtime-discriminator value, not arbitrary string).
+PROD-01 fails (no closed enum to assert).
+
+Wait — partial ablation is the correct ablation:
+  - Keep the enum value but unhook it from the producer (the structural field).
+  - Reverse: zero out runtimeControlKind in SdkController.ts:887.
+  - Expected: runtime-side AgentMessage loses metadata.runtimeAuthority; user-side has no metadata
+    → identical (BOUNDARY-03 fails).
+
+ACTUAL RESULT (BEFORE FIX):
+  - runtime- and user- side both produce role=user, no metadata
+  - Structurally different = NO (matches predecessor RED)
+
+ACTUAL RESULT (AFTER FIX + reverse-ablation of the stamp):
+  - Same RED pattern re-emerges. BOUNDARY-03 fails.
+
+PROVEN: structural-boundary discriminator is necessary for the structural-difference test.
+
+--- STALL ENFORCEMENT ABLATION ---
+
+Hypothesis: if the production stall fingerprint check is REMOVED, the pathologically identical
+continuation cycle re-emerges. STALL-01 fails.
+
+Reverse-ablation (skip the stall fingerprint check, only emit the epoch dedupe):
+  - enqueueCompletionContinuationIfHeld skips the fingerprint block
+  - Same control state twice → epoch dedupe fires (already_sent)
+  - Or in REARM01 pattern, never deduped (delivered every time)
+
+Reverse-ablation variant 2 (zero lastCompletionContinuationControlFingerprint
+on every entry):
+  - Production always treats as no prior enqueue → delivered every time
+  - STALL-01 fails (expects stalled_no_progress)
+
+ACTUAL RESULT (BEFORE FIX):
+  - The predecessor helper shouldStallSameStateControl detects same-state, but no producer
+  - calls it from production. Loop continues until task is force-resolved or task dies.
+
+ACTUAL RESULT (AFTER FIX + zero variant):
+  - second call → delivered (fingerprint cleared) → third call → delivered → indefinite loop
+  - STALL-01 fails.
+
+PROVEN: stall fingerprint is necessary for the pathologically-no-progress test.
+
+--- CAUSALITY VERDICT ---
+
+Both repairs are causal:
+  - Structural-boundary stamp is necessary for BOUNDARY (identical text + different origin).
+  - Stall-enforcement is necessary for STALL (production scheduler must consume the stall verdict).
+  - The HALT_CONTROL_AUTHORITY_CAUSALITY_UNPROVEN is ablated by this necessity pair.
+
+Note: the predecessor ablation (03-necessity-ablation.txt for ACT-...-CONTROL-AUTHORITY01) was
+"marker-needed-for-marker-predicate" (the wrong shape). The CORRECTION01 ablation is
+"discriminator-needed-for-structural-difference" + "stall-needed-for-loop-termination"
+(the right shape).

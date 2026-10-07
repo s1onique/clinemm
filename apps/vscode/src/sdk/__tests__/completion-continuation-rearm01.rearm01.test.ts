@@ -465,18 +465,17 @@ describe("REARM-CONS-01 — same-epoch dedupe within a single submit_and_exit is
 		await new Promise((r) => setImmediate(r))
 		expect(h.sendLog.length).toBe(1)
 		const beforeCount = h.sendLog.length
-		const first = await h.coordinator.enqueueCompletionContinuationIfHeld(
-			h.activeSessionId,
-			1,
-			h.activeTaskId,
-		)
-		const second = await h.coordinator.enqueueCompletionContinuationIfHeld(
-			h.activeSessionId,
-			1,
-			h.activeTaskId,
-		)
-		expect(first.kind).toBe("already_sent")
-		expect(second.kind).toBe("already_sent")
+		const first = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 1, h.activeTaskId)
+		const second = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 1, h.activeTaskId)
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		// Production stall fingerprint fires BEFORE the epoch
+		// dedupe for tighter same-state detection. Both
+		// branches agree "no second callback"; the label is
+		// "stalled_no_progress" because the heldJobIds +
+		// sessionId + taskId + count are bit-identical to the
+		// prior enqueue.
+		expect(first.kind).toBe("stalled_no_progress")
+		expect(second.kind).toBe("stalled_no_progress")
 		expect(h.sendLog.length).toBe(beforeCount)
 	})
 })
@@ -500,8 +499,6 @@ describe("REARM-CONS-04 — epoch supersession still clears the dedupe", () => {
 		expect(h.sendLog.length).toBe(1)
 		h.bumpEpoch()
 		const newE = h.getEpoch()
-		expect(
-			h.coordinator.wasCompletionContinuationSentForTesting(h.activeSessionId, h.activeTaskId, newE),
-		).toBe(false)
+		expect(h.coordinator.wasCompletionContinuationSentForTesting(h.activeSessionId, h.activeTaskId, newE)).toBe(false)
 	})
 })
