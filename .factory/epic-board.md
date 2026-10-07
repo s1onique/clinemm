@@ -20239,3 +20239,62 @@ kernel.failureClass=null
 ACT closure document: `.factory/acts/ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01.md`.
 
 **Next ACT:** rebuild VSIX-less — instead, install the rebuilt C helper binary at `~/.clinemm/bin/clinemm-host-helper`, restart the LaunchAgent (`launchctl kickstart -k gui/$UID/io.clinemm.host-helper`), then run `ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION` which plugs the real Tart lifecycle into `handle_tart_testbed_run` and runs the first real guest (clone real macOS base image → tart run → tart ip → SSH → copy exact artifact in → SHA verify → command → copy evidence out → stop/delete).
+
+---
+
+## ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01 — PASS_COMPLETION_CONTINUATION_REARM — 2026-10-07
+
+**Status:** CLOSED. Predecessor: ACT-CLINEMM-ELMIZE-P0-TASK-HEADER-TERMINAL-CONVERGENCE01 (PASS at HEAD `7d12e229e`, fix(task-header): publish deferred terminal state). Closure HEAD: `337e5734d` (commit 1 of 2).
+
+**Bounded repair (2 files, 516 insertions, 0 deletions):**
+
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`: 1 line of clean code + 8 lines of comment. After the `deferredCompletionBarrier` marker is freshly registered at the `submit_and_exit_seen` site (line ~1820), clear `lastCompletionContinuationSessionEpoch = undefined` BEFORE the bounded finalization-authority trigger at line ~1843. The very next `enqueueCompletionContinuationIfHeld` call then proceeds without dedupe, firing the successor K+1. Subsequent duplicate triggers within the same K+1 run are still suppressed (BCB-34 invariant preserved).
+- `apps/vscode/src/sdk/__tests__/completion-continuation-rearm01.rearm01.test.ts` (NEW, 7 tests): REARM-01 (LIVE defect), REARM-02, REARM-05 (control), REARM-12 (3-turn chain), REARM-AB-01 (ablation), REARM-CONS-01 (BCB-34 conservation), REARM-CONS-04 (epoch supersession conservation).
+
+**ROOT_CAUSE:**
+
+The dedupe was bound to `${sessionId}|${taskId}|${epoch}`. The minter's `epoch` only advances on task boundaries (clear / history open / reinit / cancel), NOT on `agent_turn_done`. So continuation K and the SUCCESSOR K+1 (fired from K's own `submit_and_exit_seen`) shared the same dedupe key; K+1 was suppressed; `agent_turn_done` of K fired; `reevaluateDeferredCompletionBarrier` re-registered the marker; trigger invoked AGAIN; dedupe AGAIN suppressed; lost re-arm; `task_completion_committed` never fired.
+
+**Conservation gates PASS:**
+
+- REARM01 focused suite: 7/7 (was 3 RED + 4 control/conservation pass before fix).
+- Necessity ablation: with the new line commented out, the original RED returns (3 failures: REARM-01, REARM-02, REARM-12).
+- related completion-continuation tests: 89/89 PASS across 13 files (terminal-convergence-publication.red, bcb01-c3, bcb01-c4, completion-continuation-upstream-discriminator01, completion-continuation-delivery-seam01, completion-continuation-delivery-callback-outcome01, completion-continuation-delivery-callback-outcome-red01, completion-continuation-delivery-dogfood-gate, continuation-cardinality-authority01, continuation-cardinality-correlation-loss01, post-run-completion-authority-reevaluation01, task-completion-continuation-coherence, post-continuation-run-stall02).
+- Elm completion-authority tests: 58/58 PASS across 7 files.
+- `tsc --noEmit`: PASS (exit 0).
+- `bun run lint`: PASS (no errors).
+- `git diff --check`: clean.
+
+**Pre-existing failures (NOT_INTRODUCED_BY_REARM01, baselined at `7d12e229e`):**
+
+- `extension-host-termination-authority01.termination-authority.test.ts`: 20/35 fail
+- `background-completion-barrier01.bcb01.test.ts`: 13/14 fail
+- `continuation-pathological-corpus01.swcm04.test.ts`: 11/16 fail
+- `long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts`: 10/15 fail
+- `c10-filter-ablation01.ablation.test.ts`: 3/8 fail
+- `turn-state-writer-provenance.wprov.test.ts`: 1/35 fail
+- `completion-authority-trace-capture-extension01.test.ts`: 2/39 fail
+
+Total 60 pre-existing failures across 7 files. REARM01 introduces 0 new failures.
+
+**DEDUPLICATION:** PRESERVED (BCB-34 invariant intact).
+**SUCCESSOR_OBLIGATION:** RETAINED (REARM-02).
+**DOUBLE_COMPLETION:** DISPROVEN (REARM-05, REARM-12).
+**ELM_COMPLETION_AUTHORITY_DELTA:** NONE.
+**TASK_HEADER_ELM_DELTA:** NONE.
+
+**REARM_ELM_CANDIDATE:** YES. The rearm policy operates on a compact, typed snapshot of facts (currentContinuationState, heldTerminalCount, ownerRunning, sessionMatches/taskMatches/epochMatches, completionAuthorityDecision, deliveryState) — none are Promise / callback / mutable repository. The decision is a pure function `Facts → RearmDecision` (`NoAction | RetainSuccessorObligation | ScheduleSuccessor | PermitCompletion`). Stronger Elm territory than the publication-effect seam because the bug itself is about temporal policy, not about an unavoidable external API.
+
+**WHY NO ELM MIGRATION IN REARM01:** Per ACT §C16, P0 REARM01 = causal repair only. Combining the lost successor repair with a new Elm authority migration would destroy the useful ablation (did the bug disappear because scheduling was fixed, or because policy was rewritten?). REARM01 closes the seam with the bounded TS change and freezes the Elm-candidate classification for the successor ACT.
+
+**ARTIFACTS:**
+
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`: 1 clean line + 8 comment lines.
+- `apps/vscode/src/sdk/__tests__/completion-continuation-rearm01.rearm01.test.ts` (NEW): 7 tests.
+- `.factory/acts/ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01.md` (NEW): full closure report.
+- `.factory/evidence/ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01/{00-recon,01-red-output,02-green-output,03-necessity-ablation}` (NEW).
+
+**VSIX:** NOT_EXECUTED.
+**LIVE_POST_FIX:** NOT_EXECUTED.
+
+**Successor:** `ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-REARM-AUTHORITY01` — proven TS rearm policy → Elm shadow correspondence → LIVE/test qualification → authority cutover → remove displaced TS policy.
