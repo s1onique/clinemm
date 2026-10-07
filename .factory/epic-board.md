@@ -20203,7 +20203,7 @@ kernel.failureClass=null
 
 ## ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01 — PASS_CLINEMM_TART_LAUNCHD_RUNNER — 2026-10-07
 
-**Status:** CLOSED. Predecessor: LAUNCHD-EXECUTION-BOUNDARY01 (PASS_CLINEMM_TART_LAUNCHD_BOUNDARY_CODE_READY) at `cf3d5aa2c`. Substrate unchanged; C helper's existing surface extended.
+**Status:** CLOSED. Predecessor: LAUNCHD-EXECUTION-BOUNDARY01 (PASS_CLINEMM_TART_LAUNCHD_BOUNDARY_CODE_READY) at `cf3d5aa2c`. Substrate unchanged; C helper's existing surface extended. Closure HEAD: `fa27c21f4bcd4e16c37c17943768c93112798a2c`.
 
 **What shipped:**
 
