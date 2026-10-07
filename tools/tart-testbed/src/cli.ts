@@ -17,6 +17,8 @@ import {
   classifyHostPure,
   FakeProcessRunner,
   FakeTestbedBackend,
+  LaunchdHostHelperTransport,
+  LaunchdTestbedRunner,
   RealProcessRunner,
   TartBackend,
   TestbedOrchestrator,
@@ -31,7 +33,7 @@ function usage(): never {
       "clinemm-testbed — ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01",
       "",
       "Usage:",
-      "  clinemm-testbed run <spec.json> [--out <dir>] [--backend fake|tart] [--allow-vm]",
+      "  clinemm-testbed run <spec.json> [--out <dir>] [--backend fake|tart|launchd-tart] [--allow-vm]",
       "  clinemm-testbed validate <spec.json>",
       "  clinemm-testbed doctor",
       "",
@@ -166,7 +168,7 @@ function validateSpec(spec: TestbedSpec): { ok: boolean; errors: string[] } {
   return { ok: errors.length === 0, errors };
 }
 
-export type CliRunnerKind = "fake" | "tart" | "rejected";
+export type CliRunnerKind = "fake" | "tart" | "launchd-tart" | "rejected";
 
 export interface CliRunnerWiring {
   readonly kind: CliRunnerKind;
@@ -227,8 +229,109 @@ export function selectCliRunner(
   };
 }
 
-async function runSpec(spec: TestbedSpec, backendKind: "fake" | "tart", outDir: string | undefined, allowVm: boolean): Promise<void> {
+/**
+ * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01: resolve the
+ * launchd-tart CLI wiring. Returns a rejection if `--allow-vm` is
+ * missing or the launchd helper socket is undiscoverable; otherwise
+ * exposes a `LaunchdTestbedRunner` over a default AF_UNIX socket.
+ *
+ * The launchd-tart backend does NOT shell out to `tart` directly; it
+ * routes through the per-user LaunchAgent helper via a HostHelperTransport.
+ * The CLI uses the standard helper socket resolution:
+ *   - CLINEMM_HOST_HELPER_SOCKET env var, or
+ *   - $HOME/.clinemm/host-helper.sock
+ */
+export function selectLaunchdTartRunner(
+  allowVm: boolean,
+  socketPath: string | null,
+):
+  | { kind: "launchd-tart"; transport: LaunchdHostHelperTransport }
+  | { kind: "rejected"; rejectReason: string } {
+  if (!allowVm) {
+    return {
+      kind: "rejected",
+      rejectReason:
+        "--backend launchd-tart requires --allow-vm to actually drive Tart via the launchd helper; the substrate ACT forbids VM launch on closure. Re-run with --allow-vm when you are ready to execute a real guest, or use --backend fake.",
+    };
+  }
+  if (socketPath === null) {
+    return {
+      kind: "rejected",
+      rejectReason:
+        "launchd helper socket path not discoverable; set CLINEMM_HOST_HELPER_SOCKET or HOME",
+    };
+  }
+  return {
+    kind: "launchd-tart",
+    transport: new LaunchdHostHelperTransport({
+      socketPath,
+      timeoutMs: 10 * 60 * 1000,
+    }),
+  };
+}
+
+function resolveLaunchdHelperSocket(): string | null {
+  const fromEnv = process.env.CLINEMM_HOST_HELPER_SOCKET;
+  if (typeof fromEnv === "string" && fromEnv.length > 0) return fromEnv;
+  const home = process.env.HOME;
+  if (typeof home === "string" && home.length > 0) {
+    return `${home}/.clinemm/host-helper.sock`;
+  }
+  return null;
+}
+
+async function runSpec(spec: TestbedSpec, backendKind: "fake" | "tart" | "launchd-tart", outDir: string | undefined, allowVm: boolean): Promise<void> {
   const host = await classifyHost();
+  if (backendKind === "launchd-tart") {
+    const socketPath = resolveLaunchdHelperSocket();
+    const wiring = selectLaunchdTartRunner(allowVm, socketPath);
+    if (wiring.kind === "rejected") {
+      stderr.write(`[clinemm-testbed] ${wiring.rejectReason}\n`);
+      exit(2);
+    }
+    const runner = new LaunchdTestbedRunner({ transport: wiring.transport });
+    let result;
+    try {
+      result = await runner.run(
+        {
+          image: spec.image,
+          ...(spec.vmNamePrefix !== undefined ? { vmNamePrefix: spec.vmNamePrefix } : {}),
+          ...(spec.runId !== undefined ? { runId: spec.runId } : {}),
+          ...(spec.sshUser !== undefined ? { sshUser: spec.sshUser } : {}),
+          ...(spec.sshIdentityFile !== undefined ? { sshIdentityFile: spec.sshIdentityFile } : {}),
+          ...(spec.knownHostsContents !== undefined ? { knownHostsContents: spec.knownHostsContents } : {}),
+          commands: spec.commands.map((c) => ({
+            argv: c.argv,
+            ...(c.cwd !== undefined ? { cwd: c.cwd } : {}),
+            ...(c.env !== undefined ? { env: c.env } : {}),
+            ...(c.timeoutMs !== undefined ? { timeoutMs: c.timeoutMs } : {}),
+            ...(c.label !== undefined ? { label: c.label } : {}),
+            ...(c.failOnNonZero !== undefined ? { failOnNonZero: c.failOnNonZero } : {}),
+          })),
+          ...(spec.artifacts !== undefined ? { artifacts: spec.artifacts } : {}),
+          ...(spec.timeouts !== undefined ? { timeouts: spec.timeouts } : {}),
+          ...(spec.keepVm !== undefined ? { keepVm: spec.keepVm } : {}),
+          ...(spec.metadata !== undefined ? { metadata: spec.metadata } : {}),
+        },
+        host,
+      );
+    } catch (e) {
+      stderr.write(`[clinemm-testbed] launchd runner failed: ${(e as Error).message}\n`);
+      exit(1);
+    }
+    if (outDir !== undefined) {
+      try {
+        const { mkdirSync, writeFileSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        mkdirSync(outDir, { recursive: true });
+        writeFileSync(join(outDir, "result.json"), JSON.stringify(result, null, 2));
+      } catch {
+        /* best-effort */
+      }
+    }
+    stdout.write(JSON.stringify(result, null, 2) + "\n");
+    exit(result.overallStatus === "PASS" || result.overallStatus === "KEEP_VM" ? 0 : 1);
+  }
   const wiring = selectCliRunner(backendKind, allowVm, host);
   if (wiring.kind === "rejected") {
     stderr.write(`[clinemm-testbed] ${wiring.rejectReason}\n`);
@@ -269,7 +372,7 @@ export async function main(): Promise<void> {
       stderr.write(`[clinemm-testbed] invalid spec:\n${v.errors.join("\n")}\n`);
       exit(2);
     }
-    const backendKind = (flags.backend ?? "fake") as "fake" | "tart";
+    const backendKind = (flags.backend ?? "fake") as "fake" | "tart" | "launchd-tart";
     const outDir = flags.out;
     const allowVm = flags["allow-vm"] === "true";
     return runSpec(spec, backendKind, outDir, allowVm);

@@ -517,7 +517,8 @@ function buildOwnedRequest(
   method:
     | "process-group.register-owned"
     | "process-group.terminate-owned"
-    | "process-group.release-owned",
+    | "process-group.release-owned"
+    | "client.close",
   requestId: string,
   fields: Record<string, unknown>,
 ): string {
@@ -547,6 +548,34 @@ function buildTestbedRequest(
     subject_head: subjectHead,
     vsix_path: vsixPath,
     vsix_sha256: vsixSha256,
+  }
+  checkForbiddenKeys(env)
+  return JSON.stringify(env)
+}
+
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+// build a tart.testbed.run request envelope.
+//
+// The wire envelope carries `spec` as a JSON-encoded string
+// (not a nested object). The C helper's protocol parser is
+// intentionally restricted to flat key/value envelopes
+// (FORBIDDEN_SHAPE for nested objects/arrays at the wire level),
+// so the structured spec travels as an opaque JSON string.
+// On the helper side, the C dispatcher JSON-parses the string
+// to obtain the structured spec.
+//
+// We expose this as a top-level function rather than adding it
+// to HelperClient so the typed client API stays stable across
+// ACTs — the testbed-side transport is the only caller.
+export function buildTartTestbedRunRequest(
+  requestId: string,
+  spec: Record<string, unknown>,
+): string {
+  const env: Record<string, unknown> = {
+    version: 1,
+    request_id: requestId,
+    method: "tart.testbed.run",
+    spec: JSON.stringify(spec),
   }
   checkForbiddenKeys(env)
   return JSON.stringify(env)

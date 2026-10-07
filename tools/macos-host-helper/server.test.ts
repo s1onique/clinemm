@@ -27,6 +27,7 @@ import {
 	type ParsedRequest,
 	type ParsedTartPreflightRequest,
 	type ResponseEnvelope,
+	validateTestbedRunSpec,
 } from "./protocol.ts"
 import { createHelperServer } from "./server.ts"
 
@@ -616,6 +617,148 @@ describe("PROBE01: testbed.run-installed-vsix-smoke protocol", () => {
 		expect(resp.ok).toBe(false)
 		expect(resp.error).toBe("METHOD_NOT_AVAILABLE_IN_TS_FALLBACK")
 	})
+})
+
+// =============================================================================
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+// Protocol + dispatch tests for the new tart.testbed.run RPC.
+// =============================================================================
+
+describe("ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01 — tart.testbed.run protocol", () => {
+	it("RUNNER-RPC-01: valid tart.testbed.run envelope accepted", () => {
+		const spec = {
+			image: "ghcr.io/cirruslabs/macos-sonoma-base@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo", "hi"] }],
+		}
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "test-1",
+				method: "tart.testbed.run",
+				spec: JSON.stringify(spec),
+			}),
+		)
+		expect(r.ok).toBe(true)
+		if (!r.ok) return
+		if (r.value.method !== "tart.testbed.run") return
+		expect(r.value.spec).toEqual(spec)
+	})
+
+	it("RUNNER-RPC-02: extra top-level field rejected with UNKNOWN_FIELD", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "test-2",
+				method: "tart.testbed.run",
+				spec,
+				extra: "nope",
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (r.ok) return
+		expect(r.error).toBe("UNKNOWN_FIELD")
+	})
+
+	it("RUNNER-RPC-03: forbidden 'command' inside spec.commands[i] rejected with EXEC_SHAPED_PAYLOAD", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"], command: "rm -rf /" }],
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "test-3",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (r.ok) return
+		expect(r.error).toBe("EXEC_SHAPED_PAYLOAD")
+	})
+
+	it("RUNNER-RPC-04: forbidden 'shell' at spec root rejected", () => {
+		const spec = JSON.stringify({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+			shell: "/bin/sh",
+		});
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "test-4",
+				method: "tart.testbed.run",
+				spec,
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (r.ok) return
+		expect(r.error).toBe("EXEC_SHAPED_PAYLOAD")
+	})
+
+	it("RUNNER-RPC-05: spec missing image fails validateTestbedRunSpec", () => {
+		const r = validateTestbedRunSpec({
+			commands: [{ argv: ["echo"] }],
+		})
+		expect(r.ok).toBe(false)
+		if (r.ok) return
+		expect(r.error).toMatch(/image/);
+	})
+
+	it("RUNNER-RPC-06: spec with NUL in image fails", () => {
+		const r = validateTestbedRunSpec({
+			image: "x@sha256:" + "0".repeat(64) + "\x00",
+			commands: [{ argv: ["echo"] }],
+		})
+		expect(r.ok).toBe(false);
+	})
+
+	it("RUNNER-RPC-07: spec with too many commands fails", () => {
+		const commands = Array.from({ length: 65 }, () => ({ argv: ["echo"] }));
+		const r = validateTestbedRunSpec({
+			image: "x@sha256:" + "0".repeat(64),
+			commands,
+		});
+		expect(r.ok).toBe(false);
+	});
+
+	it("RUNNER-RPC-08: spec with too many artifacts fails", () => {
+		const artifacts = Array.from({ length: 33 }, () => ({
+			guestPath: "/a",
+			hostDestination: "/b",
+			required: false,
+		}));
+		const r = validateTestbedRunSpec({
+			image: "x@sha256:" + "0".repeat(64),
+			commands: [{ argv: ["echo"] }],
+			artifacts,
+		});
+		expect(r.ok).toBe(false);
+	});
+
+	it("RUNNER-RPC-09: ALLOWED_METHODS includes tart.testbed.run", () => {
+		expect(ALLOWED_METHODS.has("tart.testbed.run")).toBe(true);
+	});
+
+	it("RUNNER-RPC-10: dispatch() of tart.testbed.run returns METHOD_NOT_AVAILABLE_IN_TS_FALLBACK", () => {
+		const parsed = {
+			version: 1 as const,
+			request_id: "test",
+			method: "tart.testbed.run" as const,
+			spec: {
+				image: "x@sha256:" + "0".repeat(64),
+				commands: [{ argv: ["echo"] }],
+			} as Record<string, unknown>,
+		};
+		const resp = dispatch(parsed, 1, 501);
+		expect(resp.ok).toBe(false);
+		if (resp.ok) return;
+		expect(resp.error).toBe("METHOD_NOT_AVAILABLE_IN_TS_FALLBACK");
+	});
 })
 
 

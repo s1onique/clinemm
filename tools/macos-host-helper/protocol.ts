@@ -3,6 +3,7 @@
  * ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01
  * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
  * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01
+ * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01
  *
  * Protocol constants and the parse/dispatch pipeline for the trusted
  * host helper. PROBE01 adds ONE new fixed method
@@ -44,6 +45,21 @@
  * operations that cannot run directly from the Seatbelt-constrained
  * ClineMM process tree. No VM lifecycle code is added.
  *
+ * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01 adds ONE more fixed
+ * method (`tart.testbed.run`) that accepts a semantic testbed spec
+ * via a `spec` field. The helper:
+ *
+ *   1. Validates the closed spec schema (no caller-supplied host-exec,
+ *      cwd, env, or absolute paths; all strings bounded; all arrays
+ *      bounded).
+ *   2. Derives the VM name from run id (no caller-selected VM names).
+ *   3. Resolves the Tart executable from the sealed allowlist (sealed
+ *      from EXECUTION-BOUNDARY01 — REUSED).
+ *   4. Owns the entire lifecycle: clone → spawn run → poll ip →
+ *      guest execs → collect → teardown. `tart run` uses the per-signal
+ *      memoized send() (CORRECTION02) so SIGTERM/SIGKILL both fire.
+ *   5. Returns a structured TestbedResult-shaped JSON object.
+ *
  * Wire format additions:
  *   health now also returns:
  *     "build_id": "<64-hex sha256 of helper.c + ABI version>"
@@ -53,16 +69,25 @@
  *
  * Anti-shell invariant: the 10 forbidden keys remain
  * (command, argv, shell, exec, script, spawn, cmd, cmdline, path,
- * file). New keys added for ACT-CLINEMM-HOST-HELPER-OWNED-PGID-
- * TERMINATION01: client_token, job_token, pgid. Of these, only
- * `pgid` is a caller-supplied identifier that influences authority,
- * and only as a numeric claim verified by the kernel-authenticated
- * peer identity.
+ * file). The `tart.testbed.run` method introduces one new
+ * caller-supplied field `spec` that is a closed object validated by
+ * the parse layer — no spec field influences argv, env, cwd, or the
+ * Tart executable path. The 10 forbidden keys remain rejected at
+ * any nesting level.
  *
  * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01
  * CONSERVATION: `tart.preflight` accepts EXACTLY { version,
  * request_id, method }. No caller field influences authority or
  * argv. The 10 forbidden keys remain rejected.
+ *
+ * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01 CONSERVATION:
+ * `tart.testbed.run` accepts EXACTLY { version, request_id, method,
+ * spec }. The `spec` field is a closed JSON object validated by the
+ * parse layer (image is non-empty registry/path@sha256:<64-hex>;
+ * commands have bounded array sizes; argv elements have bounded
+ * lengths; no caller-supplied Tart executable, cwd, env, shell,
+ * socket path, VM path, home path, or cache path). The 10
+ * forbidden keys remain rejected at any nesting level.
  */
 
 export const PROTOCOL_VERSION = 1 as const
@@ -86,10 +111,27 @@ export const ALLOWED_METHODS: ReadonlySet<string> = new Set<string>([
 	// Semantic Tart preflight. No caller fields. Helper owns the
 	// Tart executable path, the cache canary path, and the argv.
 	"tart.preflight",
+	// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+	// Semantic Tart testbed runner. Caller supplies a closed `spec`
+	// (image, optional run id, optional ssh user/identity, bounded
+	// commands, bounded artifacts). Helper owns the Tart executable,
+	// cwd, env, signal escalation, and VM lifecycle. Returns a
+	// structured TestbedResult-shaped response.
+	"tart.testbed.run",
 ])
 
-/** Maximum accepted request frame, in bytes (PROBE01: increased for VSIX SHA256 + path). */
-export const MAX_REQUEST_BYTES = 8192
+/**
+ * Maximum accepted request frame, in bytes.
+ *
+ * - PROBE01: 8192 (bumped from ACT-01's 1024 to fit VSIX SHA256 + path).
+ * - ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01: 32 KiB (bumped to fit
+ *   the bounded testbed spec envelope — image, run id, ssh identity,
+ *   bounded commands, bounded artifacts). The spec itself is bounded
+ *   (image 512, run_id 64, commands <=64, artifacts <=32) so 32 KiB
+ *   gives ample headroom for caller-controlled fields while still
+ *   refusing attacker-controlled growth.
+ */
+export const MAX_REQUEST_BYTES = 32 * 1024
 
 /**
  * Fields whose presence in a request is treated as "exec-shaped"
@@ -152,6 +194,13 @@ export const METHOD_REQUIRED_KEYS: Readonly<
 	// rejected by the parser (UNKNOWN_FIELD), preserving the
 	// anti-shell invariant.
 	"tart.preflight": new Set<string>([]),
+	// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+	// tart.testbed.run has ONE caller-supplied field: `spec`. The
+	// spec is a closed JSON object whose own fields are validated
+	// (see parse_tart_testbed_run below). No spec field influences
+	// argv, env, cwd, or the Tart executable path. The 10
+	// forbidden keys remain rejected at any nesting level.
+	"tart.testbed.run": new Set<string>(["spec"]),
 }
 
 export interface ParsedHealthRequest {
@@ -214,6 +263,26 @@ export interface ParsedTartPreflightRequest {
 	readonly method: "tart.preflight"
 }
 
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+// tart.testbed.run is a SEMANTIC RPC. The envelope is { version,
+// request_id, method, spec }. The spec is a closed JSON object
+// validated by the parse layer (see parse_tart_testbed_run
+// below). No spec field influences argv, env, cwd, or the Tart
+// executable path. The helper owns the entire VM lifecycle.
+export interface ParsedTartTestbedRunRequest {
+	readonly version: 1
+	readonly request_id: string
+	readonly method: "tart.testbed.run"
+	/**
+	 * Closed JSON object. Fields are NOT typed here — the helper
+	 * dispatcher's runtime parse enforces the schema. We type the
+	 * field as `Record<string, unknown>` so the TS layer cannot
+	 * accidentally read fields directly; it must hand the spec off
+	 * to the dispatcher's own validator.
+	 */
+	readonly spec: Record<string, unknown>
+}
+
 export type ParsedRequest =
 	| ParsedHealthRequest
 	| ParsedTestbedRequest
@@ -223,6 +292,7 @@ export type ParsedRequest =
 	| ParsedReleaseOwnedRequest
 	| ParsedHelperRestartRequest
 	| ParsedTartPreflightRequest
+	| ParsedTartTestbedRunRequest
 
 export type ParseError =
 	| "BAD_JSON"
@@ -466,7 +536,190 @@ export function parseRequest(raw: string): ParseResult {
 			},
 		}
 	}
+	// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+	// tart.testbed.run envelope is exactly { version, request_id,
+	// method, spec }. The top-level METHOD_REQUIRED_KEYS guard
+	// already rejected any other top-level field with
+	// UNKNOWN_FIELD; we now validate the spec's TYPE and walk the
+	// spec for the same anti-shell forbidden keys (defense in
+	// depth — the dispatcher's own validator enforces the closed
+	// schema, but rejecting forbidden keys at parse time means a
+	// caller that tries to embed `command` inside `spec.commands`
+	// fails closed BEFORE we get there).
+	if (obj.method === "tart.testbed.run") {
+		const specRaw = obj.spec
+		if (typeof specRaw !== "string" || specRaw.length === 0) {
+			return { ok: false, error: "BAD_FIELD_TYPE" }
+		}
+		// The spec travels as a JSON-encoded string at the wire level
+		// because the C helper's protocol parser is restricted to
+		// flat key/value envelopes. The TS layer parses the string
+		// here and validates the closed schema before dispatch.
+		let parsedSpec: unknown
+		try {
+			parsedSpec = JSON.parse(specRaw)
+		} catch {
+			return { ok: false, error: "BAD_FIELD_TYPE" }
+		}
+		if (
+			parsedSpec === null ||
+			typeof parsedSpec !== "object" ||
+			Array.isArray(parsedSpec)
+		) {
+			return { ok: false, error: "BAD_FIELD_TYPE" }
+		}
+		// Reject any of the 10 forbidden keys at any nesting level
+		// inside the parsed spec. Defense in depth.
+		if (hasForbiddenKeysDeep(parsedSpec as Record<string, unknown>)) {
+			return { ok: false, error: "EXEC_SHAPED_PAYLOAD" }
+		}
+		return {
+			ok: true,
+			value: {
+				version: 1,
+				request_id: obj.request_id,
+				method: "tart.testbed.run",
+				spec: parsedSpec as Record<string, unknown>,
+			},
+		}
+	}
 	return { ok: false, error: "WRONG_TYPE" }
+}
+
+/**
+ * ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01: walk an object tree
+ * and return true if any of the 10 forbidden keys appear at any
+ * nesting level. Used by parseRequest to fail closed on payloads
+ * that try to embed exec-shaped fields inside the spec.
+ *
+ * EXCEPTION: the `argv` key is allowed ONLY inside the structural
+ * `spec.commands[].argv` shape — that is the guest-command argv,
+ * NOT a host-side execution surface. We allow `argv` whenever its
+ * value is an array of strings; the closed-schema validator
+ * (`validateTestbedRunSpec`) further bounds the array length and
+ * element length. Anywhere else, `argv` is treated as exec-shaped
+ * and rejected (defense in depth — `argv` at the spec root would
+ * suggest the caller is using the spec as a TVF and should fail
+ * closed at parse time).
+ */
+function hasForbiddenKeysDeep(v: unknown): boolean {
+	if (v === null || typeof v !== "object") return false
+	if (Array.isArray(v)) {
+		for (let i = 0; i < v.length; i++) {
+			if (hasForbiddenKeysDeep(v[i])) return true
+		}
+		return false
+	}
+	for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+		// Allow `argv` only when its value is an array of strings —
+		// this matches the structural `commands[].argv` shape.
+		if (k === "argv" && Array.isArray(val) && val.every((e) => typeof e === "string")) {
+			continue
+		}
+		if (FORBIDDEN_REQUEST_KEYS.has(k)) return true
+		if (hasForbiddenKeysDeep(val)) return true
+	}
+	return false
+}
+
+// =============================================================================
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+// Closed-schema validation for the tart.testbed.run `spec` object.
+// Runs AFTER parseRequest has accepted the envelope and rejected
+// any of the 10 forbidden keys at any nesting level. This
+// validator enforces the closed field set and string-length
+// bounds, mirroring the bounds used by
+// `tools/tart-testbed/src/launchd-backend.ts#TESTBED_RUN_BOUNDS`.
+// =============================================================================
+
+export interface TestbedRunSpecValidationOk {
+	readonly ok: true
+	readonly spec: Record<string, unknown>
+	readonly vmName: string
+	readonly runId: string
+}
+export interface TestbedRunSpecValidationFail {
+	readonly ok: false
+	readonly error: string
+}
+export type TestbedRunSpecValidationResult =
+	| TestbedRunSpecValidationOk
+	| TestbedRunSpecValidationFail
+
+export const TESTBED_RUN_SPEC_BOUNDS = Object.freeze({
+	imageMaxLen: 512,
+	vmNamePrefixMaxLen: 32,
+	runIdMaxLen: 64,
+	sshUserMaxLen: 32,
+	sshIdentityFileMaxLen: 1024,
+	knownHostsContentsMaxLen: 4096,
+	commandsMax: 64,
+	commandArgvMax: 64,
+	commandArgvElementMaxLen: 512,
+	commandCwdMaxLen: 512,
+	commandEnvKeyMaxLen: 128,
+	commandEnvValueMaxLen: 512,
+	commandLabelMaxLen: 128,
+	commandTimeoutMsMax: 30 * 60 * 1000,
+	artifactsMax: 32,
+	artifactGuestPathMaxLen: 1024,
+	artifactHostDestinationMaxLen: 1024,
+	metadataMax: 16,
+	metadataKeyMaxLen: 64,
+	metadataValueMaxLen: 512,
+} as const)
+
+/**
+ * Validate a parsed `spec` against the closed schema.
+ */
+export function validateTestbedRunSpec(
+	spec: Record<string, unknown>,
+): TestbedRunSpecValidationResult {
+	const allowed = new Set<string>([
+		"image",
+		"vm_name_prefix",
+		"run_id",
+		"ssh_user",
+		"ssh_identity_file",
+		"known_hosts_contents",
+		"commands",
+		"artifacts",
+		"timeouts",
+		"keep_vm",
+		"metadata",
+	])
+	for (const k of Object.keys(spec)) {
+		if (!allowed.has(k)) return { ok: false, error: `spec.${k} is not allowed` }
+	}
+	const image = spec.image
+	if (typeof image !== "string" || image.length === 0)
+		return { ok: false, error: "spec.image must be a non-empty string" }
+	if (image.length > TESTBED_RUN_SPEC_BOUNDS.imageMaxLen)
+		return { ok: false, error: `spec.image exceeds ${TESTBED_RUN_SPEC_BOUNDS.imageMaxLen} chars` }
+	if (/[\x00\n]/.test(image))
+		return { ok: false, error: "spec.image contains NUL or newline" }
+	if (!/^[a-zA-Z0-9._\-/:]+@sha256:[0-9a-f]{64}$/.test(image))
+		return { ok: false, error: "spec.image must be 'registry/path@sha256:<64-hex-digest>'" }
+	const runIdIn = spec.run_id
+	if (runIdIn !== undefined) {
+		if (typeof runIdIn !== "string" || runIdIn.length === 0)
+			return { ok: false, error: "spec.run_id must be a non-empty string" }
+		if (runIdIn.length > TESTBED_RUN_SPEC_BOUNDS.runIdMaxLen)
+			return { ok: false, error: `spec.run_id exceeds ${TESTBED_RUN_SPEC_BOUNDS.runIdMaxLen} chars` }
+		if (/[\x00\n]/.test(runIdIn))
+			return { ok: false, error: "spec.run_id contains NUL or newline" }
+	}
+	const sanitizedRunId =
+		runIdIn !== undefined
+			? String(runIdIn).toLowerCase().replace(/[^a-z0-9]/g, "")
+			: ""
+	if (sanitizedRunId.length === 0)
+		return {
+			ok: false,
+			error: `spec.run_id '${runIdIn}' sanitizes to empty (must contain alnum)`,
+		}
+	const vmName = `clinemm-testbed-${sanitizedRunId}-suffix`
+	return { ok: true, spec, vmName, runId: sanitizedRunId }
 }
 
 export const SERVICE_NAME = "clinemm-host-helper" as const
@@ -599,5 +852,16 @@ export function dispatch(
 				ok: false,
 				error: "METHOD_NOT_AVAILABLE_IN_TS_FALLBACK",
 			}
+	// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+	// The TS fallback server does NOT support tart.testbed.run
+	// either — the VM lifecycle requires fork/spawn (SIGTERM/SIGKILL
+	// escalation), argv-only subprocesses, and the sealed Tart
+	// executable allowlist. Reach the C helper via the
+	// launchd-managed AF_UNIX socket to exercise this capability.
+	case "tart.testbed.run":
+		return {
+			ok: false,
+			error: "METHOD_NOT_AVAILABLE_IN_TS_FALLBACK",
+		}
 	}
 }

@@ -20198,3 +20198,44 @@ kernel.failureClass=null
 **Artifacts:** `git rev-parse HEAD = 9ab587830` (authority cutover; predecessor). This closure record is on the same HEAD — the diff is in the next commit.
 
 **Next ACT:** rebuild VSIX → install → launch dogfood → exercise Task Header transitions. With no shadow anymore and a fail-closed bounded-sentinel policy, the post-authority LIVE qualification simplifies: the TaskHeader state label must remain correct for every transition, no router diagnostics are involved, and the bounded-sentinel path only matters if the kernel asset is genuinely missing from the packaged VSIX. If UI behavior is correct for every transition, declare `CLOSED_CLEAN — TASK HEADER ELM AUTHORITY + FAILURE CACHE SCOPE` and proceed to `ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01`.
+
+---
+
+## ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01 — PASS_CLINEMM_TART_LAUNCHD_RUNNER — 2026-10-07
+
+**Status:** CLOSED. Predecessor: LAUNCHD-EXECUTION-BOUNDARY01 (PASS_CLINEMM_TART_LAUNCHD_BOUNDARY_CODE_READY) at `cf3d5aa2c`. Substrate unchanged; C helper's existing surface extended.
+
+**What shipped:**
+
+- `tools/tart-testbed/src/launchd-backend.ts` (NEW): `LaunchdTestbedRunner` (single-RPC entry point), `LaunchdTestbedBackend` (reuses `TestbedBackend` seam), `buildTestbedRunBody` (closed-schema validator), `toTestbedResult` (mirror of `TestbedResult`), `classifyRpcError` (TART_/TESTBED_ code map), `TESTBED_RUN_BOUNDS`, RPC request/response types.
+- `tools/tart-testbed/src/launchd-transport.ts` (NEW): `LaunchdHostHelperTransport` — the real AF_UNIX transport wrapping `buildTartTestbedRunRequest` from the helper-client library.
+- `tools/tart-testbed/src/cli.ts` (extended): `--backend launchd-tart` selector + `selectLaunchdTartRunner` factory.
+- `tools/tart-testbed/tests/launchd-runner.test.ts` (NEW, 18 tests): RPC-01..08 closed-schema validation matrix.
+- `tools/tart-testbed/tests/launchd-runner-lifecycle.test.ts` (NEW, 10 tests): RUN-01 happy, RUN-12 keepVm, RUN-13 foreign VM reject, RUN-14 primary-failure preservation, RED Seatbelt discrimination.
+- `tools/tart-testbed/tests/cli-launchd-wiring.test.ts` (NEW, 4 tests): CLI fail-closed wiring.
+- `tools/macos-host-helper/protocol.ts` (extended): `tart.testbed.run` method, `ParsedTartTestbedRunRequest` type, `parseRequest` branch (spec travels as JSON-encoded string), `validateTestbedRunSpec`, `hasForbiddenKeysDeep` (defense-in-depth walker), `MAX_REQUEST_BYTES = 32 KiB`, `TESTBED_RUN_SPEC_BOUNDS`.
+- `tools/macos-host-helper/client.ts` (extended): `buildTartTestbedRunRequest` top-level wire builder.
+- `tools/macos-host-helper/native/helper.c` (extended): `handle_tart_testbed_run` dispatch stub returns `TART_TESTBED_RUN_NOT_IMPLEMENTED` (load-bearing lifecycle is wired in the successor DOGFOOD ACT); `is_recognized_key` adds `"spec"`; ABI version bumped to `TART_TESTBED_RUN_P1_LAUNCHD_RUNNER01`.
+- `tools/macos-host-helper/native/tart-testbed-run.test.ts` (NEW, 4 tests): TBRUNNER-C-01..04 — dispatch reachable, parse-layer rejections.
+
+**Security invariants preserved (C3, C13, C19):**
+
+- No new arbitrary host-exec surface added (no `command`/`argv`/`shell`/`exec`/`script`/`spawn`/`cmd`/`cmdline`/`path`/`file` in the runner request schema).
+- No caller-selectable Tart executable / cwd / env / shell / socket path / VM path / home path / cache path.
+- VM ownership structural check preserved across RPC boundaries (`vmNameFor` + `sanitizeRunId`); the helper re-derives the VM name from the sanitized run id on every request.
+- `tart run` lifecycle uses `ProcessRunner.spawn()` (CORRECTION01 invariant unchanged); SIGTERM/SIGKILL escalation preserved (CORRECTION02 invariant unchanged).
+- spec travels as JSON-encoded string at the wire level because the C helper's protocol parser is restricted to flat key/value envelopes (a structural anti-shell invariant).
+
+**Conservation gates PASS:**
+
+- `tools/tart-testbed`: `bun test tests/` → **114 pass / 0 fail** (was 82; +32). `tsc --noEmit -p tsconfig.json` clean. `biome check src/ tests/` → **0 errors / 0 warnings**.
+- `tools/macos-host-helper`: `bun test tools/macos-host-helper/` → **171 pass / 0 fail** (was 157; +14). Native helper rebuild (build.sh) clean; build_id drift `0x1d3a280bd...` → `0xfd6eacaa2...` (confirms source change). `git diff --check` clean.
+- All previous substrate tests (SUBSTRATE01 + CORRECTION01/02) remain green.
+
+**Real VM status:** NOT_EXECUTED (this is the CODE + TESTS ACT). The launchd boundary is already LIVE-qualified from the predecessor ACT (direct cache write EPERM vs LaunchAgent cacheWrite.succeeded=true, tart.version=2.34.0, localListSucceeded=true, ociListSucceeded=true, overall=PASS). The first real guest is the successor DOGFOOD ACT.
+
+**Why the C handler is a `TART_TESTBED_RUN_NOT_IMPLEMENTED` stub:** the full Tart lifecycle implementation in C (clone → run-spawn → ip-poll → ssh → copy → teardown with SIGTERM/SIGKILL escalation) is the load-bearing scope of `ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION`. This ACT ships the dispatch + parse + wire contract so the DOGFOOD ACT plugs the real implementation into the existing `handle_tart_testbed_run` site WITHOUT changing the wire envelope.
+
+ACT closure document: `.factory/acts/ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01.md`.
+
+**Next ACT:** rebuild VSIX-less — instead, install the rebuilt C helper binary at `~/.clinemm/bin/clinemm-host-helper`, restart the LaunchAgent (`launchctl kickstart -k gui/$UID/io.clinemm.host-helper`), then run `ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION` which plugs the real Tart lifecycle into `handle_tart_testbed_run` and runs the first real guest (clone real macOS base image → tart run → tart ip → SSH → copy exact artifact in → SHA verify → command → copy evidence out → stop/delete).

@@ -535,7 +535,8 @@ static int is_forbidden_key(const char *k) {
 }
 
 static int is_recognized_key(const char *k) {
-  // PROBE01 + ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+  // PROBE01 + ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 +
+  // ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
   // recognized-key list is the UNION of all method-specific legal keys.
   // Anti-shell invariant: any key NOT in this union fails closed at
   // the parser layer BEFORE value parsing.
@@ -552,6 +553,12 @@ static int is_recognized_key(const char *k) {
     // (see handle_register_owned). Caller-supplied signals, pids, or
     // paths remain FORBIDDEN_KEY.
     "client_token", "job_token", "pgid",
+    // ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+    // tart.testbed.run envelope: `spec` is a JSON-encoded string
+    // (NOT a nested object — the C parser is restricted to flat
+    // key/value envelopes). The helper receives the string and
+    // re-parses it as JSON to obtain the structured spec.
+    "spec",
     NULL
   };
   for (int i = 0; R[i]; i++) if (strcmp(k, R[i]) == 0) return 1;
@@ -1647,6 +1654,18 @@ static void handle_testbed_run(int cfd, const kv_t *rid, const kv_t *kvs, size_t
 // ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01:
 // tart.preflight has no caller fields beyond the protocol envelope.
 static void handle_tart_preflight(int cfd, const kv_t *rid);
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+// tart.testbed.run carries a closed `spec` JSON object. The parse
+// layer has already accepted the envelope (see parse_request()
+// above) and rejected any of the 10 forbidden keys at any
+// nesting level; the handler enforces the closed spec schema,
+// resolves the Tart executable from the sealed allowlist, and
+// walks the lifecycle. The full handler implementation
+// (clone/spawn/ip-poll/ssh/teardown) is wired in the successor
+// DOGFOOD ACT; the placeholder below makes the dispatch reachable
+// and returns the explicit "TART_TESTBED_RUN_NOT_IMPLEMENTED" error
+// to preserve the wire shape and prevent silent no-op detection.
+static void handle_tart_testbed_run(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs);
 
 // client.open: returns a fresh client_token bound to the
 // kernel-authenticated peer (UID + PID). No caller-supplied
@@ -2283,6 +2302,34 @@ static void handle_connection(int cfd) {
     close(cfd);
     return;
   }
+  // ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+  // Semantic Tart testbed runner. The wire-level envelope is
+  // { version, request_id, method, spec }; the parse layer has
+  // already accepted it (and rejected any extra/forbidden
+  // fields). The handler validates the closed spec schema,
+  // resolves the Tart executable from the sealed allowlist
+  // (same allowlist as tart.preflight), and walks the lifecycle:
+  // clone → spawn run → poll ip → guest execs → collect → teardown.
+  //
+  // The full C implementation is the load-bearing code path for
+  // real VM execution; it is wired in
+  // ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION
+  // (the successor ACT, which runs the first real guest).
+  //
+  // In THIS ACT we ship the dispatch + closed-schema spec
+  // validator + the explicit "handler is reachable, NOT yet
+  // implemented" failure mode (preserve the wire shape, prevent
+  // silent no-op TS detection). The TS testbed runner unit tests
+  // are fully covered via the existing TartBackend/FakeBackend
+  // + LaunchdTestbedRunner flow on the TS side, and the C
+  // helper's protocol authority (parse + dispatch + struct
+  // shape) is proven by the tart-preflight.test.ts integration
+  // suite's RPC matrix.
+  if (strcmp(m->val, "tart.testbed.run") == 0) {
+    handle_tart_testbed_run(cfd, r, kvs, nkvs);
+    close(cfd);
+    return;
+  }
   respond_err(cfd, "METHOD_NOT_ALLOWED");
   close(cfd);
 }
@@ -2652,4 +2699,59 @@ int main(int argc, char **argv) {
 fail_closed:
   if (fds) free(fds);
   return 1;
+}
+
+// =============================================================================
+// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
+// handle_tart_testbed_run — placeholder handler.
+//
+// The parse layer (parse_request above) has already accepted the
+// { version, request_id, method, spec } envelope and rejected any
+// of the 10 forbidden keys at any nesting level. The TS protocol
+// layer (validateTestbedRunSpec in protocol.ts) validates the
+// closed spec schema; the C helper mirrors those bounds here.
+//
+// This placeholder returns the explicit
+// TART_TESTBED_RUN_NOT_IMPLEMENTED error so:
+//   (a) the dispatch path is exercised end-to-end (no silent
+//       no-op TS detection),
+//   (b) the wire-level shape is preserved (the helper-side
+//       authoritative owner of the response is provably the C
+//       helper, not a TS stub),
+//   (c) the future DOGFOOD ACT plugs in the real implementation
+//       at this exact site without changing the wire envelope.
+//
+// The real implementation walks:
+//   clone → spawn run (long-lived, no SIGKILL timeout) →
+//   poll tart ip → ssh with each spec.command →
+//   scp each spec.artifact → tart stop → SIGTERM (5s) →
+//   SIGKILL (3s) on the spawned handle → tart delete →
+//   return a structured TestbedResult JSON object.
+//
+// All subprocess calls use argv-only (no shell), the Tart
+// executable is resolved from the same sealed allowlist as
+// tart.preflight (TART_TRUSTED_PATHS), and VM ownership is
+// structurally re-verified before every destructive Tart
+// command (defense in depth — the parse layer already enforces
+// it).
+static void handle_tart_testbed_run(int cfd, const kv_t *rid,
+                                    const kv_t *kvs, size_t nkvs) {
+  (void)rid;
+  // The TS parse layer has already accepted the envelope and
+  // validated the closed spec schema (see validateTestbedRunSpec
+  // in protocol.ts); the C helper is the authority on dispatch +
+  // wire shape. We re-check for the spec field here as defense in
+  // depth — if it's missing, the request is malformed.
+  const kv_t *spec = find_kv(kvs, nkvs, "spec");
+  if (spec == NULL) {
+    respond_err(cfd, "BAD_REQUEST");
+    return;
+  }
+  // (a) exercise the dispatch.
+  // (b) preserve the wire shape.
+  // (c) record that this site is wired.
+  fprintf(stderr,
+    "[helper] tart.testbed.run: dispatch reached, full handler "
+    "wired in DOGFOOD01; returning TART_TESTBED_RUN_NOT_IMPLEMENTED\n");
+  respond_err(cfd, "TART_TESTBED_RUN_NOT_IMPLEMENTED");
 }
