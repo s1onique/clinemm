@@ -913,21 +913,31 @@ export class SessionRuntime {
 		// a falsy input as "no additional messages", per
 		// packages/agents/src/agent-runtime.ts normalizeInput path).
 		if (effectiveUserMessage !== undefined) {
-			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION04-PRIVATE-BRAND:
 			// Promotion to the privileged instruction role is gated ONLY
-			// on the Symbol-keyed brand
+			// on the WeakSet brand
 			// (`isHostRuntimeControlMessage(rawMessage)`). The
 			// `metadata.runtimeAuthority` string is plain provenance and
 			// is NEVER a promotion predicate — a user-supplied envelope
 			// that reaches `SessionRuntime.run(AgentMessage)` directly
-			// can set any metadata string but cannot set the brand
-			// symbol (it is module-internal; the @cline/core barrel
-			// does NOT export `HOST_RUNTIME_CONTROL_BRAND`). The
-			// metadata discriminator was retained through CORRECTION02
-			// as the authentication bit; the reviewer's halt
+			// can set any metadata string but cannot be registered into
+			// the module-private WeakSet (the WeakSet reference is
+			// module-internal; the @cline/core barrel does NOT export
+			// `markHostRuntimeControl`). The metadata discriminator was
+			// retained through CORRECTION02 as the authentication bit;
+			// the reviewer's halt
 			// `HALT_MODEL_PRIVILEGE_EVIDENCE_NOT_EXECUTED` showed that
-			// the metadata is forgeable. The Symbol brand is the actual
-			// authentication bit.
+			// the metadata is forgeable.
+			//
+			// CORRECTION03 attempted a `Symbol.for(...)` brand. The
+			// reviewer's halt `HALT_RUNTIME_CONTROL_BRAND_FORGEABLE`
+			// correctly identified that `Symbol.for(key)` returns the
+			// runtime-wide registry symbol for `key`, so any attacker
+			// can reconstruct the brand via
+			// `Object.defineProperty(message, Symbol.for(key), {value: true})`.
+			// CORRECTION04 replaces that with a module-private WeakSet —
+			// no string key, no exported Symbol, no reconstructable
+			// credential. The verification is `privateBrands.has(message)`.
 			if (typeof effectiveUserMessage === "object") {
 				const rawMessage = effectiveUserMessage
 				// Brand is authoritative. No fallback to metadata.

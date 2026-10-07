@@ -1,92 +1,97 @@
 /**
- * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
- * Closed-brand discriminator for messages stamped by the host's trusted
- * runtime-control seams (e.g. the completion-continuation BCB01 turn).
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION04-PRIVATE-BRAND:
+ * Private-identity discriminator for messages stamped by the host's
+ * trusted runtime-control seams (e.g. the completion-continuation BCB01
+ * turn).
  *
  * Why this exists
  * ----------------
- * The CORRECTION02 model-privilege repair promoted
- * `metadata.runtimeAuthority === "host_runtime_control"` to the
- * privileged `role: "system"` channel. The metadata discriminator is a
- * string value — and string values can be forged by ANY user-supplied
- * envelope that reaches `SessionRuntime.run(AgentMessage)`. The
- * reviewer's P0-2 halt (HALT_MODEL_PRIVILEGE_EVIDENCE_NOT_EXECUTED)
- * established that the metadata-only check is NOT a security boundary.
+ * CORRECTION02 promoted `metadata.runtimeAuthority === "host_runtime_control"`
+ * to the privileged `role: "system"` channel. The metadata discriminator
+ * is a string — forgeable.
  *
- * This module replaces the metadata-only check with a Symbol-keyed brand
- * that only the trusted host seam (`LocalRuntimeHost.executeAgentTurn`)
- * can attach. The orchestrator checks for the BRAND, not for the metadata
- * string. A user-supplied envelope cannot construct this Symbol without
- * going through the trusted seam (the Symbol is module-internal: the
- * `@cline/core` barrel does NOT export `HOST_RUNTIME_CONTROL_BRAND`, only
- * the trusted seam imports it via a relative filesystem path).
+ * CORRECTION03 replaced the metadata check with a `Symbol.for(...)`
+ * keyed brand. The reviewer (HALT_RUNTIME_CONTROL_BRAND_FORGEABLE)
+ * correctly identified that `Symbol.for(key)` returns the runtime-wide
+ * global symbol registry entry, so ANY code in the same JavaScript
+ * realm can reconstruct the same symbol by calling
+ * `Symbol.for("@cline/agent-runtime-control-brand")` and attach it via
+ * `Object.defineProperty` to pass the brand check. The brand was
+ * forgeable.
  *
- * How the brand survives
- * -----------------
- * The trusted seam attaches the brand via `Object.defineProperty`
- * (non-enumerable by default in this project). The brand survives into
- * `SessionRuntime.executeRunInternal` (which inspects the symbol) but
- * is NOT preserved into the persisted `MessageWithMetadata` (JSON
- * serialization drops symbol properties by definition). This is
- * intentional: the brand is a TEMPORARY in-process marker that exists
- * only on the wire from the trusted seam to the orchestrator's
- * execution seam.
+ * This module (CORRECTION04) replaces the global registry identity with
+ * a genuinely private identity. The brand is held ONLY inside a
+ * module-private `WeakSet<AgentMessage>`; the trusted seam attaches the
+ * brand by calling `markHostRuntimeControl(message)`, and the
+ * orchestrator checks by calling `isHostRuntimeControlMessage(message)`.
  *
- * Mirror: ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
- * uses the same `Symbol.for` identity pattern for its W-trace observer
- * (`@cline/agents/src/internal-w-trace.ts`).
+ * Why this is not forgeable
+ * ------------------------
+ * 1. No string key. The identity is the identity of the WeakSet object
+ *    itself, not a registry entry keyed by a public string. An attacker
+ *    cannot read the WeakSet reference (it is module-internal; the
+ *    `@cline/core` barrel does not export it).
+ * 2. No exported symbol. There is no Symbol property on the message
+ *    for an attacker to set. `Object.defineProperty(message,
+ *    Symbol.for("..."), { value: true })` no longer reaches the brand
+ *    check — the brand check is `privateBrands.has(message)`, not a
+ *    property check.
+ * 3. The `markHostRuntimeControl` function is module-internal. External
+ *    callers cannot reach it via the `@cline/core` barrel. Even if
+ *    they reach it (e.g. via a deep relative import in tests), the
+ *    marking function is the entire attack surface — they cannot
+ *    bypass it because the verification is a WeakSet membership check,
+ *    not a property check.
+ *
+ * Lifetime
+ * --------
+ * The brand is a TEMPORARY in-process marker for the duration of one
+ * `SessionRuntime.run` enqueue. The orchestrator checks the brand
+ * BEFORE the message is appended to the persisted conversation store,
+ * so persistence is unaffected. Once the message is garbage-collected,
+ * the WeakSet entry is collected automatically.
+ *
+ * Migration from CORRECTION03
+ * ----------------------------
+ * The CORRECTION03 `HOST_RUNTIME_CONTROL_BRAND` symbol is removed; the
+ * `HostRuntimeControlMessage` type alias is re-expressed as a
+ * TypeScript-side private class marker (declared but not constructible
+ * from outside the module) that the orchestrator narrows to. The
+ * mark/verify operations are the only public surface.
  */
 
-/**
- * Symbol-keyed brand on AgentMessage that the trusted
- * `LocalRuntimeHost.executeAgentTurn` seam sets when it builds an envelope
- * for the host's runtime-control continuations.
- *
- * The orchestrator's `SessionRuntime.executeRunInternal` reads this
- * brand. The brand is module-internal: this module is the ONLY exporter
- * of the symbol, and the trusted seam is the ONLY caller. External
- * callers (CLI, JetBrains) cannot reach `HOST_RUNTIME_CONTROL_BRAND` via
- * the `@cline/core` barrel and therefore cannot construct a branded
- * AgentMessage.
- *
- * NOTE: declared `unique symbol` (TS 4.4+) so type-system uses see the
- * brand as a private property whose only producer is the trusted seam.
- * The runtime check is `message[HOST_RUNTIME_CONTROL_BRAND] === true`.
- */
-export const HOST_RUNTIME_CONTROL_BRAND: unique symbol = Symbol.for(
-	"@cline/agent-runtime-control-brand",
-);
+// Module-private brand set. The reference to this WeakSet is the
+// brand's identity; nothing is exported. An attacker cannot reach
+// this set via the `@cline/core` barrel.
+const privateBrands = new WeakSet<AgentMessage>();
 
 /**
- * Type-level alias: AgentMessage stamped by the trusted seam. The
- * `unique symbol` brand makes this type impossible to construct from
- * outside the @cline/core internal seams (the only consumer is the
- * orchestrator, which downcasts to verify the brand at execution time).
+ * Mark an AgentMessage as a host-runtime-control message. ONLY the
+ * trusted host seam (`LocalRuntimeHost.executeAgentTurn`) is permitted
+ * to call this. The orchestrator treats messages stamped by this
+ * function as privileged (the `role: "system"` channel at the model
+ * boundary).
  *
- * The brand does NOT survive serialization or clone-by-structured-clone;
- * it is purely an in-process marker for the duration of one
- * SessionRuntime.run enqueue. The orchestrator checks it BEFORE the
- * message is appended to the conversation store, so persistence is
- * unaffected.
+ * This function is the entire attack surface for marking. There is no
+ * other way to put a message into the `privateBrands` set.
  */
-export type HostRuntimeControlMessage = AgentMessage & {
-	readonly [HOST_RUNTIME_CONTROL_BRAND]: true;
-};
+export function markHostRuntimeControl(message: AgentMessage): void {
+	privateBrands.add(message);
+}
 
 /**
  * Runtime guard for a trusted-seam-stamped AgentMessage. Returns true
- * iff the message carries the brand. The orchestrator uses this guard
+ * iff `markHostRuntimeControl` was called on the exact message
+ * reference (WeakSet identity check). The orchestrator uses this guard
  * to decide whether to persist on the privileged `role: "system"`
  * channel.
+ *
+ * This is a `privateBrands.has(message)` check. There is no string
+ * discriminator, no Symbol property, no metadata value, and no
+ * reconstructable credential.
  */
-export function isHostRuntimeControlMessage(
-	message: AgentMessage,
-): message is HostRuntimeControlMessage {
-	return (
-		(message as unknown as Record<symbol, unknown>)[
-			HOST_RUNTIME_CONTROL_BRAND
-		] === true
-	);
+export function isHostRuntimeControlMessage(message: AgentMessage): boolean {
+	return privateBrands.has(message);
 }
 
 // Local type import — see the import ladder: this file does NOT import

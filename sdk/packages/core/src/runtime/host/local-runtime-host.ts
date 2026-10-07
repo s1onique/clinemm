@@ -126,7 +126,7 @@ import {
 } from "./local/spawn-tool";
 import { loadUserFileContent } from "./local/user-files";
 import {
-	HOST_RUNTIME_CONTROL_BRAND,
+	markHostRuntimeControl,
 } from "../turn-queue/host-runtime-control-brand";
 import type {
 	PendingPromptsServiceApi,
@@ -2380,23 +2380,29 @@ export class LocalRuntimeHost implements RuntimeHost {
 		});
 
 		try {
-			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION04-PRIVATE-BRAND:
 			// Build the AgentMessage envelope when the host stamped a
 			// structural authority discriminator. The envelope MUST carry
 			// `role: "system"` (the privileged instruction channel) so the
 			// orchestrator's `executeRunInternal` persists it on the system
-			// channel. The envelope also carries the
-			// `HOST_RUNTIME_CONTROL_BRAND` symbol (attached via
-			// `Object.defineProperty` so it is non-enumerable and not
-			// serializable), which is the authoritative authentication bit
-			// the orchestrator reads to decide whether to promote the
-			// envelope to the system channel. The brand is module-internal
-			// (the `@cline/core` barrel does NOT export
-			// `HOST_RUNTIME_CONTROL_BRAND`), so a user-supplied envelope
-			// that reaches `SessionRuntime.run(AgentMessage)` directly
-			// cannot forge the brand — only this trusted seam can attach
-			// it. Plain string prompts take the legacy path (no metadata,
-			// no brand, normal user-role) and cannot reach this branch.
+			// channel. The envelope is registered into the
+			// `markHostRuntimeControl` WeakSet, which is the authoritative
+			// authentication bit the orchestrator reads.
+			//
+			// A user-supplied envelope cannot be registered into the
+			// WeakSet without going through this trusted seam (the WeakSet
+			// reference is module-internal; the @cline/core barrel does
+			// NOT export `markHostRuntimeControl`). The orchestrator's
+			// role-promotion predicate is
+			// `isHostRuntimeControlMessage(rawMessage)`, NEVER the metadata
+			// string. Even an attacker who re-imports
+			// `Symbol.for("@cline/agent-runtime-control-brand")` and
+			// attaches it via `Object.defineProperty` cannot reach the
+			// WeakSet membership check — CORRECTION03's
+			// `Symbol.for`/`Object.defineProperty` mechanism has been
+			// removed entirely. Plain string prompts take the legacy path
+			// (no metadata, no brand, normal user-role) and cannot reach
+			// this branch.
 			let runInput: AgentMessage | string | undefined
 			if (runtimeControlKind !== undefined) {
 				const messageMetadata: Record<string, unknown> = {
@@ -2411,17 +2417,11 @@ export class LocalRuntimeHost implements RuntimeHost {
 					createdAt: Date.now(),
 					metadata: messageMetadata,
 				}
-				// Attach the brand. Non-enumerable so it does not
-				// serialize into the persisted transcript or the wire
-				// format; it is a TEMPORARY in-process marker that
-				// survives only into the orchestrator's `executeRunInternal`
-				// inspection.
-				Object.defineProperty(envelope, HOST_RUNTIME_CONTROL_BRAND, {
-					value: true,
-					enumerable: false,
-					writable: false,
-					configurable: false,
-				})
+				// Register the envelope into the module-private WeakSet.
+				// This is the entire attack surface for marking; there
+				// is no Symbol property, no metadata discriminator, and
+				// no other credential to forge.
+				markHostRuntimeControl(envelope)
 				runInput = envelope
 			}
 			const runFn = shouldContinue
