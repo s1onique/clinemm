@@ -1027,6 +1027,14 @@ export class Controller {
 	// remount; resets only on a NEW task identity.
 	private taskTelemetry: TaskTelemetryTracker
 	private taskTelemetryRecoveryUnsub: (() => void) | undefined
+	// ACT-CLINEMM-P1-PACKAGE-TASK-TELEMETRY-UNSUB-TYPECHECK01:
+	// Unsubscribe handle for the phase-transition telemetry observer
+	// attached in `initTask` (line 1331). Mirrors the
+	// `taskTelemetryRecoveryUnsub` pattern: re-attach is idempotent
+	// (previous subscriber is detached first), and the handle is
+	// invoked once in `dispose()` so the controller teardown does
+	// not leak the listener.
+	private taskTelemetryPhaseUnsub: (() => void) | undefined
 	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
 	 * host-owned opt-in notification coordinator. Constructed
@@ -1328,13 +1336,7 @@ export class Controller {
 		// subscriber so any future bug in observeTurnPhase or any
 		// caller-side hook added here stays contained. Telemetry must
 		// remain removable without affecting task execution.
-		this.taskTelemetryPhaseUnsub = this.turnStateTracker.subscribe((phase, anchorTs) => {
-			try {
-				this.taskTelemetry.observeTurnPhase(phase, anchorTs)
-			} catch (error) {
-				Logger.error("[SdkController] TaskTelemetryTracker.observer threw; isolated.", error)
-			}
-		})
+		this.attachPhaseTelemetrySubscription()
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative task telemetry
 		// (elapsed / tool / recovery counters). Lives across the controller
 		// lifetime so webview reconnect / React remount does not reset.
@@ -3018,6 +3020,13 @@ export class Controller {
 	}
 
 	async dispose(): Promise<void> {
+		// ACT-CLINEMM-P1-PACKAGE-TASK-TELEMETRY-UNSUB-TYPECHECK01:
+		// Detach the phase-telemetry observer FIRST so no further
+		// phase transitions are observed during the rest of the
+		// teardown. Mirrors the order used for the recovery-state
+		// observer (detach BEFORE dependent resource disposal).
+		this.taskTelemetryPhaseUnsub?.()
+		this.taskTelemetryPhaseUnsub = undefined
 		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
 		// dispose the opt-in notify-on-terminal coordinator FIRST
 		// so no further consumeTerminal calls can race the
@@ -3782,6 +3791,31 @@ export class Controller {
 			}
 		}
 		return sessionId
+	}
+
+	/**
+	 * ACT-CLINEMM-P1-PACKAGE-TASK-TELEMETRY-UNSUB-TYPECHECK01:
+	 * Subscribe to phase transitions emitted by `turnStateTracker`
+	 * and feed them into the `TaskTelemetryTracker`. Idempotent:
+	 * re-calling detaches the previous subscription before attaching
+	 * a new one (covers the new-task case where `initTask` is invoked
+	 * again — the tracker survives across task boundaries, but the
+	 * observer binding is per-task).
+	 *
+	 * Mirrors the `attachRecoveryTelemetrySubscription` shape.
+	 * Observation-only: nothing on the phase-transition policy path
+	 * reads from the telemetry counter.
+	 */
+	private attachPhaseTelemetrySubscription(): void {
+		this.taskTelemetryPhaseUnsub?.()
+		this.taskTelemetryPhaseUnsub = undefined
+		this.taskTelemetryPhaseUnsub = this.turnStateTracker.subscribe((phase, anchorTs) => {
+			try {
+				this.taskTelemetry.observeTurnPhase(phase, anchorTs)
+			} catch (error) {
+				Logger.error("[SdkController] TaskTelemetryTracker.observer threw; isolated.", error)
+			}
+		})
 	}
 
 	/**
