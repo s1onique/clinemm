@@ -1823,6 +1823,15 @@ export class SdkSessionEventCoordinator {
 									epoch: this.options.messageTranslatorState.getMinter().epoch,
 									deferredAt: Date.now(),
 								}
+								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01:
+								// Clear the completion-continuation-dedupe marker
+								// so this very trigger call (the FIRST trigger of
+								// the freshly-registered marker lifecycle) can fire
+								// K+1. The previous implementation kept the dedupe
+								// pinned from the previous run's epoch-scoped key,
+								// which caused K's own submit_and_exit to suppress
+								// the successor (LIVE defect).
+								this.lastCompletionContinuationSessionEpoch = undefined
 								// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
 								// Bounded finalization-authority trigger (see
 								// `enqueueCompletionContinuationIfHeld` docstring).
