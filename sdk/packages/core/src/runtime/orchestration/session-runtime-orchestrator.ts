@@ -768,7 +768,7 @@ export class SessionRuntime {
 	// -------------------------------------------------------------------
 
 	run(
-		userMessage: string,
+		userMessage: AgentMessage | string,
 		userImages?: string[],
 		userFiles?: string[],
 	): Promise<AgentResult> {
@@ -783,7 +783,7 @@ export class SessionRuntime {
 	}
 
 	continue(
-		userMessage?: string,
+		userMessage?: AgentMessage | string,
 		userImages?: string[],
 		userFiles?: string[],
 	): Promise<AgentResult> {
@@ -819,7 +819,7 @@ export class SessionRuntime {
 	}
 
 	private executeRun(input: {
-		userMessage?: string;
+		userMessage?: AgentMessage | string;
 		userImages?: string[];
 		userFiles?: string[];
 		isContinue: boolean;
@@ -841,7 +841,7 @@ export class SessionRuntime {
 	 * continues from where the stream died instead of replaying the run.
 	 */
 	private async executeRunWithAuthRetry(input: {
-		userMessage?: string;
+		userMessage?: AgentMessage | string;
 		userImages?: string[];
 		userFiles?: string[];
 		isContinue: boolean;
@@ -866,7 +866,7 @@ export class SessionRuntime {
 	}
 
 	private async executeRunInternal(input: {
-		userMessage?: string;
+		userMessage?: AgentMessage | string;
 		userImages?: string[];
 		userFiles?: string[];
 		isContinue: boolean;
@@ -912,13 +912,48 @@ export class SessionRuntime {
 		// a falsy input as "no additional messages", per
 		// packages/agents/src/agent-runtime.ts normalizeInput path).
 		if (effectiveUserMessage !== undefined) {
-			const content = await buildUserTurnContent(
-				effectiveUserMessage,
-				input.userImages,
-				input.userFiles,
-				this.config.userFileContentLoader,
-			);
-			this.conversation.appendMessage({ role: "user", content });
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+			// When the host supplies a typed AgentMessage (carrying the
+			// structural `runtimeAuthority` + `kind` metadata), thread
+			// it verbatim through the conversation store so the message
+			// identity survives `messagesToAgentMessages` →
+			// `initialMessages` → AgentRuntime. Plain string prompts
+			// take the legacy `buildUserTurnContent` path.
+			if (typeof effectiveUserMessage === "object") {
+				const rawMessage = effectiveUserMessage
+				// Convert the AgentMessage shape to the MessageWithMetadata
+				// shape the ConversationStore holds verbatim. Metadata
+				// survives messageToAgentMessages → initialMessages →
+				// AgentRuntime → model request (the load-bearing boundary).
+				// Runtime-control messages always carry `role: "user"` and
+				// `content: AgentMessagePart[]` (typed structurally
+				// compatible with `ContentBlock[]` after
+				// messageToAgentMessages projection).
+				const persistedAgentMessage: MessageWithMetadata = {
+					id: rawMessage.id,
+					role: "user",
+					content: typeof rawMessage.content === "string"
+						? await buildUserTurnContent(
+								rawMessage.content,
+								input.userImages,
+								input.userFiles,
+								this.config.userFileContentLoader,
+							)
+						: (rawMessage.content as Message["content"]),
+					ts: rawMessage.createdAt,
+					metadata: rawMessage.metadata,
+					modelInfo: rawMessage.modelInfo,
+				}
+				this.conversation.appendMessage(persistedAgentMessage)
+			} else {
+				const content = await buildUserTurnContent(
+					effectiveUserMessage,
+					input.userImages,
+					input.userFiles,
+					this.config.userFileContentLoader,
+				);
+				this.conversation.appendMessage({ role: "user", content });
+			}
 		}
 
 		// Build the AgentRuntime for this turn.

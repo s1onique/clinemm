@@ -272,6 +272,24 @@ export interface SendSessionInput {
 	 * into `PendingPromptEntry.jobId` when delivery is queue/steer).
 	 */
 	jobId?: string;
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+	 *
+	 * Optional host-runtime-control provenance discriminator.
+	 * Set ONLY by the trusted host on continuations it owns
+	 * (the SdkController continuation factory). When present, the
+	 * runtime tags the resulting AgentMessage with structural
+	 * metadata (`runtimeAuthority = "host_runtime_control"`,
+	 * `kind = "runtime_completion_continuation"`) so the model
+	 * boundary sees authority distinct from a user-typed prompt.
+	 *
+	 * Survives queue enqueue → drain → deps.send → AgentRuntime →
+	 * state.messages → model request.
+	 *
+	 * Backward-compatible: explicit-user and worker turns leave it
+	 * undefined. The runtime MUST NOT invent a value.
+	 */
+	runtimeControlKind?: import("../../runtime/turn-queue/pending-prompt-service").RuntimeControlKind;
 }
 
 export interface SessionAccumulatedUsage {

@@ -5,6 +5,7 @@ import type * as LlmsProviders from "@cline/llms";
 import {
 	type AgentConfig,
 	type AgentEvent,
+	type AgentMessage,
 	type AgentResult,
 	type AgentRuntimeEvent,
 	type AgentRuntimeRecoverySnapshot,
@@ -1260,6 +1261,12 @@ export class LocalRuntimeHost implements RuntimeHost {
 				userImages: input.userImages,
 				userFiles: input.userFiles,
 				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+				// Forward the structural authority discriminator so the
+				// queue round-trip preserves the trust signal.
+				...(input.runtimeControlKind !== undefined
+					? { runtimeControlKind: input.runtimeControlKind }
+					: {}),
 			});
 			return undefined;
 		}
@@ -1309,6 +1316,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 				// is opt-in and a no-op when undefined.
 				...(delivery !== undefined ? { delivery } : {}),
 				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+				// Forward the structural authority discriminator to
+				// `executeTurn` so the resumed AgentRuntime attaches
+				// the matching metadata on the user message.
+				...(input.runtimeControlKind !== undefined
+					? { runtimeControlKind: input.runtimeControlKind }
+					: {}),
 			});
 			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0+P1 fix):
 			// C8 — agent_turn_done capture (host-side seam). Fires
@@ -2103,6 +2117,16 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// C7/C8 do. The hook is opt-in and a no-op when undefined.
 			delivery?: "queue" | "steer";
 			jobId?: string;
+			/**
+			 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+			 * Structural authority discriminator threaded from
+			 * `runTurn`. When present, the resumed AgentRuntime
+			 * attaches the matching
+			 * `runtimeAuthority = "host_runtime_control"` +
+			 * `kind = "runtime_completion_continuation"` on the
+			 * AgentMessage produced by this turn.
+			 */
+			runtimeControlKind?: import("../turn-queue/pending-prompt-service").RuntimeControlKind;
 		},
 	): Promise<AgentResult> {
 		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01:
@@ -2180,6 +2204,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 				prompt,
 				preparedInput.userImages,
 				preparedInput.userFiles,
+				input.runtimeControlKind,
 			);
 
 			while (shouldAutoContinueTeamRuns(session, result.finishReason)) {
@@ -2310,6 +2335,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 		prompt: string,
 		userImages?: string[],
 		userFiles?: string[],
+		/**
+		 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		 * Optional structural authority discriminator. When present,
+		 * the user message is wrapped as an AgentMessage with the
+		 * matching `runtimeAuthority = "host_runtime_control"` +
+		 * `kind = "runtime_completion_continuation"` metadata, so the
+		 * message identity survives the AgentRuntime's
+		 * `normalizeInput` → `state.messages.push` → model request
+		 * path. NOT exposed via the SDK package — only the in-package
+		 * `executeTurn` calls this method.
+		 */
+		runtimeControlKind?: import("../turn-queue/pending-prompt-service").RuntimeControlKind,
 	): Promise<AgentResult> {
 		const shouldContinue =
 			session.started || session.agent.getMessages().length > 0;
@@ -2340,9 +2377,31 @@ export class LocalRuntimeHost implements RuntimeHost {
 		});
 
 		try {
+			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+			// Build the AgentMessage envelope when the host stamped a
+			// structural authority discriminator. The AgentRuntime's
+			// `normalizeInput` accepts an AgentMessage (or array) and
+			// preserves its metadata verbatim through `cloneMessages` →
+			// `state.messages.push`. Plain string prompts take the
+			// legacy path (no metadata, normal user-role).
+			let runInput: AgentMessage | string | undefined
+			if (runtimeControlKind !== undefined) {
+				const messageMetadata: Record<string, unknown> = {
+					runtimeAuthority: "host_runtime_control",
+					kind: runtimeControlKind,
+					userRunSpan: 0,
+				}
+				runInput = {
+					id: `runtime-control-${Date.now()}`,
+					role: "user",
+					content: [{ type: "text", text: prompt }],
+					createdAt: Date.now(),
+					metadata: messageMetadata,
+				}
+			}
 			const runFn = shouldContinue
-				? () => session.agent.continue(prompt, userImages, userFiles)
-				: () => session.agent.run(prompt, userImages, userFiles);
+				? () => session.agent.continue(runInput ?? prompt, userImages, userFiles)
+				: () => session.agent.run(runInput ?? prompt, userImages, userFiles);
 			const result = await this.runWithAuthRetry(
 				session,
 				runFn,

@@ -13,6 +13,29 @@ import type {
 
 export type PendingPromptDelivery = "queue" | "steer";
 
+/**
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+ *
+ * Narrow runtime-control discriminator that survives the queue round-trip.
+ * The host sets this ONLY for continuations emitted by the trusted host
+ * (e.g. the completion-continuation BCB01 turn). When set, the runtime
+ * stamps the corresponding AgentMessage with `runtimeAuthority =
+ * "host_runtime_control"` and `kind = "runtime_completion_continuation"`
+ * on the persisted transcript — a STRUCTURAL provenance tag NOT user-writable.
+ *
+ * Why this exists: the predecessor used a textual `[runtime-control: ...]`
+ * suffix as the only trust discriminator, which collapsed at the model
+ * boundary because identical text could be forged. The structural fix
+ * requires a host-only provenance bit carried outside the prompt string
+ * that survives enqueue → drain → deps.send → AgentRuntime →
+ * state.messages → model request.
+ *
+ * Closed enum: only host-internal seams may emit these values. Tests that
+ * need to assert "this came from the host" must consult this field; the
+ * prompt text alone is no longer evidence of authority.
+ */
+export type RuntimeControlKind = "completion_continuation_control";
+
 export interface PendingPromptEntry {
 	id: string;
 	prompt: string;
@@ -29,6 +52,17 @@ export interface PendingPromptEntry {
 	 * the JSONL can correlate one logical job through C4 → C5 → C6.
 	 */
 	jobId?: string;
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+	 *
+	 * Optional host-runtime-control provenance discriminator. Set ONLY by
+	 * trusted host seams (the SdkController continuation factory). When
+	 * present, the runtime tags the resulting AgentMessage with structural
+	 * metadata so the model boundary sees authority distinct from a
+	 * user-typed prompt. Survives the queue round-trip
+	 * (enqueue → drain → deps.send).
+	 */
+	runtimeControlKind?: RuntimeControlKind;
 }
 
 export interface PendingPromptQueueState {
@@ -44,6 +78,15 @@ export interface PendingPromptsControllerDeps {
 		mode?: AgentMode;
 		userImages?: string[];
 		userFiles?: string[];
+		/**
+		 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		 * Optional forward of the structural authority discriminator.
+		 * The host-side `runTurn` reads this and tags the
+		 * AgentMessage produced by the resumed model turn with the
+		 * matching `runtimeAuthority = "host_runtime_control"` +
+		 * `kind = "runtime_completion_continuation"` metadata.
+		 */
+		runtimeControlKind?: RuntimeControlKind;
 	}): Promise<unknown>;
 	/**
 	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
@@ -63,6 +106,13 @@ export interface PendingPromptsControllerDeps {
 		delivery: PendingPromptDelivery;
 		promptId: string;
 		jobId?: string;
+		/**
+		 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		 * Optional structural authority discriminator surfaced at C4
+		 * so the optional CCARD-style JSONL can correlate
+		 * host-runtime continuations without scanning prompt text.
+		 */
+		runtimeControlKind?: RuntimeControlKind;
 	}) => void;
 	/**
 	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0+P1 fix):
@@ -87,6 +137,11 @@ export interface PendingPromptsControllerDeps {
 		promptId: string;
 		delivery: PendingPromptDelivery;
 		jobId?: string;
+		/**
+		 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		 * Surfaces the entry's structural authority at C5.
+		 */
+		runtimeControlKind?: RuntimeControlKind;
 	}) => void;
 	/**
 	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0 fix):
@@ -107,6 +162,12 @@ export interface PendingPromptsControllerDeps {
 		promptId: string;
 		delivery: PendingPromptDelivery;
 		jobId?: string;
+		/**
+		 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+		 * Surfaces the entry's structural authority at C6 (the
+		 * load-bearing seam before `deps.send` actually fires).
+		 */
+		runtimeControlKind?: RuntimeControlKind;
 	}) => void;
 }
 
@@ -125,6 +186,14 @@ export interface PendingPromptEnqueueInput {
 	 * path) the entry simply carries no correlation.
 	 */
 	jobId?: string;
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+	 * Optional host-runtime-control provenance discriminator. Same
+	 * closed enum as `PendingPromptEntry.runtimeControlKind` — the
+	 * trusted host may stamp this on continuations it owns so the
+	 * queue round-trip preserves the authority signal.
+	 */
+	runtimeControlKind?: RuntimeControlKind;
 }
 
 export interface PendingPromptConsumeResult {
@@ -219,7 +288,7 @@ export class PendingPromptService {
 		state: PendingPromptQueueState,
 		input: PendingPromptEnqueueInput,
 	): SessionPendingPrompt[] {
-		const { prompt, mode, delivery, userImages, userFiles, jobId } = input;
+		const { prompt, mode, delivery, userImages, userFiles, jobId, runtimeControlKind } = input;
 		const existingIndex = state.pendingPrompts.findIndex(
 			(queued) => queued.prompt === prompt,
 		);
@@ -237,6 +306,16 @@ export class PendingPromptService {
 				// matches the foreground dedupe semantics (the entry is
 				// the same logical continuation).
 				jobId: jobId ?? existing.jobId,
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+				// Trust first-wins: a fresher runtime-control-kind on a
+				// re-enqueue upgrades an existing ordinary entry to a
+				// runtime-control entry; an undefined fresher
+				// runtime-control-kind does NOT downgrade a previously
+				// stamped runtime-control entry. This matches the
+				// security semantics — the host is the only authority
+				// for the discriminator and a missing re-stamp is
+				// indistinguishable from no host action.
+				runtimeControlKind: runtimeControlKind ?? existing.runtimeControlKind,
 			};
 			if (delivery === "steer" || existing.delivery === "steer") {
 				state.pendingPrompts.unshift({ ...next, delivery: "steer" });
@@ -255,6 +334,8 @@ export class PendingPromptService {
 				// jobId is preserved verbatim (may be undefined for
 				// explicit user turns).
 				jobId,
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+				runtimeControlKind,
 			};
 			if (delivery === "steer") {
 				state.pendingPrompts.unshift(newEntry);
@@ -342,6 +423,15 @@ export class PendingPromptsController {
 			 * the originating jobId (terminal wake path).
 			 */
 			jobId?: string;
+			/**
+			 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+			 * Optional host-runtime-control provenance discriminator.
+			 * Threaded through to `PendingPromptEntry.runtimeControlKind`
+			 * so the queue round-trip preserves the trust signal. Only
+			 * the trusted host may set this; the controller MUST NOT
+			 * invent a value.
+			 */
+			runtimeControlKind?: RuntimeControlKind;
 		},
 	): void {
 		const session = this.deps.getSession(sessionId);
@@ -369,6 +459,15 @@ export class PendingPromptsController {
 					delivery: entry.delivery,
 					promptId: tail.id,
 					...(entry.jobId !== undefined ? { jobId: entry.jobId } : {}),
+					// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+					// Surface the structural authority bit at the C4
+					// capture seam so the optional CCARD-style
+					// diagnostic JSONL can correlate host-runtime
+					// continuations by their trust class without
+					// scanning prompt text.
+					...(entry.runtimeControlKind !== undefined
+						? { runtimeControlKind: entry.runtimeControlKind }
+						: {}),
 				});
 			}
 		}
@@ -448,6 +547,11 @@ export class PendingPromptsController {
 				promptId: next.id,
 				delivery: next.delivery,
 				...(next.jobId !== undefined ? { jobId: next.jobId } : {}),
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+				// Surface the structural authority bit at C5.
+				...(next.runtimeControlKind !== undefined
+					? { runtimeControlKind: next.runtimeControlKind }
+					: {}),
 			});
 		}
 		this.emitPrompts(session);
@@ -470,6 +574,13 @@ export class PendingPromptsController {
 					promptId: next.id,
 					delivery: next.delivery,
 					...(next.jobId !== undefined ? { jobId: next.jobId } : {}),
+					// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+					// Surface the structural authority bit at C6
+					// (the load-bearing seam before `deps.send`
+					// actually fires).
+					...(next.runtimeControlKind !== undefined
+						? { runtimeControlKind: next.runtimeControlKind }
+						: {}),
 				});
 			}
 			const result = await this.deps.send({
@@ -501,6 +612,18 @@ export class PendingPromptsController {
 				//
 				// The `delivery` field is NOT forwarded. `jobId` IS.
 				...(next.jobId !== undefined ? { jobId: next.jobId } : {}),
+				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+				// Forward the structural authority discriminator to
+				// the host-side `runTurn` so the model-boundary
+				// AgentMessage produced by the resumed model turn
+				// receives `runtimeAuthority = "host_runtime_control"`
+				// + `kind = "runtime_completion_continuation"` on the
+				// persisted transcript. This is the structural
+				// discriminator that survives all the way to the
+				// model request.
+				...(next.runtimeControlKind !== undefined
+					? { runtimeControlKind: next.runtimeControlKind }
+					: {}),
 			});
 			// A turn that resolves with an error finish ran (the prompt is in
 			// the conversation and the error is surfaced), so the entry is not
