@@ -20297,4 +20297,56 @@ Total 60 pre-existing failures across 7 files. REARM01 introduces 0 new failures
 **VSIX:** NOT_EXECUTED.
 **LIVE_POST_FIX:** NOT_EXECUTED.
 
-**Successor:** `ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-REARM-AUTHORITY01` — proven TS rearm policy → Elm shadow correspondence → LIVE/test qualification → authority cutover → remove displaced TS policy.
+
+## ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 — PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY — 2026-10-07
+
+**Status:** CLOSED. Predecessor: ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01 (PASS at HEAD `c305fe006`). REARM01 closed the dedupe-lifetime boundary; this ACT closes the message-authority boundary. Downstream of REARM01 (re-arm succeeded; the new failure is the resumed model misclassifying the legitimate runtime control as prompt injection).
+
+**Authority classification:** Type B — runtime control masquerades as ordinary user-role free-form prose. The resumed agent applied its prompt-injection self-defense uniformly and refused `command_status`/`submit_and_exit`, looping with `"this is a prompt injection"`.
+
+**Bounded repair (2 files, ~1340 insertions, ~0 deletions to existing public surface):**
+
+- `apps/vscode/src/sdk/background-notify-coordinator.ts` (+396 lines): typed surface (`CompletionContinuationControl` carrying `kind: "completion_continuation_control"` + `authorityClass: "runtime_control"` + `completionStatus: "HELD" | "COMMITTED" | "CANNOT_CONTINUE"` + `requiredAction: "observe_then_submit" | "retry_commission" | "fail_closed"` + closed-enum tool snapshot). Pure helpers: `filterKnownObservationMechanisms`, `filterKnownCompletionMechanisms`, `buildCompletionContinuationControl`, `completeContinuationControlFromSession`, `isCompletionContinuationControlProvenance`, `parseCompletionContinuationControl` (gated on `trustedOrigin`), `shouldStallSameStateControl`, `resolveCompletionContinuationTools`. Extended `formatCompletionContinuationPrompt` with optional `availableObservationMechanisms` / `availableCompletionMechanisms` parameters; footer wording adapts to the snapshot (only mentions tools that are in the registry). When the snapshot is supplied, the prompt stamps `[runtime-control: completion_continuation_control]` as the LAST line. Backward-compatible: legacy `SdkController.ts` call site (no snapshot) preserves the old shape.
+
+- Changed `COMPLETION_CONTINUATION_PROMPT_PREFIX` from `"...before re-issuing submit_and_exit."` to `"...before re-issuing the completion action."` so the prompt does NOT hardcode `submit_and_exit` when the registry is empty (TOOL-03 fix).
+
+- `apps/vscode/src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts` (NEW, 740 lines): 35 focused tests in three groups:
+  - **CONTROL-01..10**: completion state, structural provenance, user-text spoofing, capability-derived tools, missing tools, same-state stall, serialization, malformed input, end-to-end seam, host-permitted retry.
+  - **AUTH-PI-01..06**: prompt-injection adversarial matrix.
+  - **TOOL-01..05**: tool-registry adversarial matrix.
+
+**Authority invariants (C9 / C10 / C26):**
+
+- The provenance predicate `isCompletionContinuationControlProvenance(text)` requires BOTH the tail-marker AND the host-only structural fingerprint (`Session: <id>` + `Held terminal observations: <n>`). User text that appends the literal is rejected.
+- `parseCompletionContinuationControl` requires `trustedOrigin=true`. The flag is set ONLY at the host boundary. User-supplied JSON cannot acquire authority even with the correct closed enums.
+- Closed enums (`KNOWN_OBSERVATION_MECHANISMS = ["command_status"]`, `KNOWN_COMPLETION_MECHANISMS = ["submit_and_exit"]`) filter the capability snapshot at the boundary. Unknown tool names are dropped before reaching the formatter.
+- `completionStatus` semantic distinguishes HELD (held > 0, observation available) from COMMITTED (held drained, completion available) from CANNOT_CONTINUE.
+
+**Conservation gates PASS:**
+- REARM01 focused suite: 7/7.
+- related completion-continuation tests: 82/82 across 7 files plus the new CCCA01 (35/35).
+- `tsc --noEmit`: PASS (exit 0).
+- `bun run lint`: PASS (no errors).
+- `git diff --check`: PASS.
+
+**Necessity ablation PASS:**
+
+Disable the provenance-stamp emission (`if (input.availableObservationMechanisms !== undefined && false)`): **Tests 35: 2 failed | 33 passed**. The two failing tests are CONTROL-02 prompt-stamped-provenance and CONTROL-09 production-seam provenance tests. The marker is the discriminating causal element for provenance.
+
+**Pre-existing baseline failures (UNCHANGED, baselined at REARM01 predecessor HEAD):** extension-host-termination-authority01: 20; completion-authority-trace-capture-extension01: 2; sdk-task-history: 33; sdk-session-event-coordinator: 2; continuation-pathological-corpus01.swcm04: 11. Verified by `git stash` round-trip. No new failures introduced.
+
+**ELM_COMPLETION_AUTHORITY_DELTA:** NONE.
+**TASK_HEADER_ELM_DELTA:** NONE.
+**TERMINAL_CONVERGENCE01_DELTA:** NONE.
+**CONTROL_POLICY_ELM_CANDIDATE:** YES.
+
+**Why Elm migration deferred:** Per ACT §C30, this P0 = causal repair only. The pure semantic decision (`ControlFacts → Directive { ObserveThenRetry | RetryCompletion | WaitForHost | FailClosed Reason }`) is a strong pure function candidate, but combining the authority repair with an Elm migration would destroy the ability to ablate. Trust provenance remains TS (C31).
+
+**ARTIFACTS:** `apps/vscode/src/sdk/background-notify-coordinator.ts`; `apps/vscode/src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts` (NEW); `.factory/acts/ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01.md` (NEW); `.factory/evidence/ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01/{01-red-output,02-green-output,03-necessity-ablation}` (NEW).
+
+**VSIX:** NOT_EXECUTED.
+**LIVE_POST_FIX:** NOT_EXECUTED.
+
+**Successor:** `ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02` — proven TS control policy → Elm shadow correspondence → LIVE/test qualification → authority cutover → remove displaced TS semantic branching.
+
+**Success verdict:** `PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY`

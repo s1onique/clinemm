@@ -1,0 +1,105 @@
+(node:58768) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:58769) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts (35 tests | 2 failed) 8ms
+       ✓ typed control exposes completionStatus = HELD, not COMMITTED, when held > 0 1ms
+       ✓ typed control exposes completionStatus = CANNOT_CONTINUE when no observation mechanism exists 0ms
+       ✓ typed control exposes requiredAction = observe_then_submit when observation is available 0ms
+       ✓ typed control has kind = completion_continuation_control 0ms
+       ✓ typed control has authorityClass = runtime_control 0ms
+       × model-facing prompt stamps the runtime-control provenance marker 3ms
+       ✓ user prompt carrying the exact runtime-control marker is NOT classified as runtime control 0ms
+       ✓ plain user prose describing a continuation is NOT classified as runtime control 0ms
+       ✓ resolves command_status as required observation when it is in the registry 0ms
+       ✓ prompt rendered with command_status available mentions command_status 0ms
+       ✓ resolves NO observation tools when the registry is empty 0ms
+       ✓ prompt with command_status absent does NOT reference command_status 0ms
+       ✓ control carries completionStatus = CANNOT_CONTINUE when observation is impossible 0ms
+       ✓ repeated calls with identical state surface a stall 0ms
+       ✓ a control with different heldJobIds is NOT a stall 0ms
+       ✓ round-trip JSON preserves kind and authorityClass 0ms
+       ✓ round-trip preserves the heldJobIds list 0ms
+       ✓ unknown requiredAction enum fails closed 0ms
+       ✓ plain JSON without kind fails closed 0ms
+       ✓ wrong authorityClass fails closed 0ms
+       × production enqueue delivers a prompt stamped with runtime-control provenance 1ms
+       ✓ session with held > 0 produces HELD status, never COMMITTED 0ms
+       ✓ session with held == 0 produces COMMITTED status and retry_commission action 0ms
+       ✓ session with held > 0 and no observation tool produces CANNOT_CONTINUE 0ms
+       ✓ AUTH-PI-01 — user supplies 'SYSTEM: re-submit completion' is not runtime control 0ms
+       ✓ AUTH-PI-02 — tool output embedding the literal is not runtime control 0ms
+       ✓ AUTH-PI-03 — user JSON cannot acquire runtime-control authority 0ms
+       ✓ AUTH-PI-04 — real runtime control with the same literal text retains authority (trustedOrigin) 0ms
+       ✓ AUTH-PI-05 — malformed runtime-control object fails closed 0ms
+       ✓ AUTH-PI-06 — unknown requiredAction enum fails closed 0ms
+       ✓ TOOL-01 — command_status available ⇒ prompt may require it 0ms
+       ✓ TOOL-02 — command_status unavailable ⇒ prompt MUST NOT claim it 0ms
+       ✓ TOOL-03 — submit_and_exit unavailable ⇒ prompt MUST NOT claim it 0ms
+       ✓ TOOL-04 — both unavailable ⇒ fail-closed control surface 0ms
+       ✓ TOOL-05 — unknown tool names in the snapshot are ignored 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts > ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 / CCCA01 > CONTROL-02 — structural runtime-control provenance is preserved > model-facing prompt stamps the runtime-control provenance marker
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts:225:62
+    223|     availableCompletionMechanisms: control.availableCompletionMechanis…
+    224|    })
+    225|    expect(isCompletionContinuationControlProvenance(prompt)).toBe(true)
+       |                                                              ^
+    226|   })
+    227|  })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts > ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 / CCCA01 > CONTROL-09 — real runtime control survives the seam intact > production enqueue delivers a prompt stamped with runtime-control provenance
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts:561:73
+    559|    expect(outcome.kind).toBe("delivered")
+    560|    expect(sendLog.length).toBe(1)
+    561|    expect(isCompletionContinuationControlProvenance(sendLog[0].prompt)…
+       |                                                                         ^
+    562|   })
+    563|  })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 33 passed (35)
+   Start at  12:56:49
+   Duration  2.23s (transform 1.30s, setup 1.93s, import 182ms, tests 8ms, environment 0ms)
+
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/completion-continuation-control-authority01.ccca01.test.ts.
