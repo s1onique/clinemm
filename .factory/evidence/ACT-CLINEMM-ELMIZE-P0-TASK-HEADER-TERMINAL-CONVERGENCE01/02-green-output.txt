@@ -1,0 +1,50 @@
+TERMINAL-PUB-04: GREEN after repair
+
+Run on the repaired production code (the production file `sdk-session-event-coordinator.ts`
+gained a single `postStateToWebview?.().catch(...)` call after the deferred-path C10
+commit at line 1088-1104):
+
+  $ bash $HOME/.bun/bin/bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/terminal-convergence-publication.red.test.ts
+
+  ✓ TERMINAL-PUB-01-A: Elm AUTHORIZE — at least one postStateToWebview fires after the C10 commit, and its snapshot seq is >= the C10 commit seq
+  ✓ TERMINAL-PUB-02: Elm HOLD — no C10 commit, no completed-phase publication is required
+  ✓ TERMINAL-PUB-03: after the 50ms debounce flush, the published snapshot carries the post-C10 seq (REAL debouncer path)
+  ✓ TERMINAL-PUB-04: when the C10 commit happens via the deferred-barrier reevaluation path (line ~1060), a publication MUST follow
+
+  Test Files  1 passed (1)
+       Tests  4 passed (4)
+
+Typecheck:
+  $ bash $HOME/.bun/bin/bunx tsc --noEmit
+  (no output — exit 0)
+
+Lint:
+  $ bash $HOME/.bun/bin/bunx biome lint --config-path ./biome.jsonc \
+      --no-errors-on-unmatched --files-ignore-unknown=true \
+      --diagnostic-level=error \
+      src/sdk/sdk-session-event-coordinator.ts \
+      src/sdk/__tests__/terminal-convergence-publication.red.test.ts
+  Checked 2 files in 66ms. No fixes applied.
+
+git diff --check:
+  (no output — exit 0)
+
+Adjacent test gates (regression check, must remain unchanged):
+
+  src/sdk/__tests__/ccard-commit-stage-boundary-misbound01.test.ts (3/3 PASS)
+  src/sdk/__tests__/task-header (178/178 PASS)
+  src/sdk/turn-state-tracker.test.ts (15/15 PASS)
+  src/sdk/webview-grpc-bridge.test.ts (7/7 PASS)
+  src/sdk/state-post-debouncer.test.ts (4/4 PASS)
+  src/shared/post-terminal-authority (23/23 PASS)
+
+Pre-existing failures (unrelated, NOT introduced by this repair):
+  - CPL02, OWN01 in src/sdk/sdk-session-event-coordinator.test.ts (2 RED documenting desired state)
+  - TCE-P05, TCE-P06 in src/sdk/__tests__/completion-authority-trace-capture-extension01.test.ts (2 RED documenting desired state)
+  - CPA-02..CPA-16 in src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts (6 RED documenting desired state)
+  - BNCA-FRAMEWORK-01b/c in src/sdk/__tests__/background-notify-completion-authority-c10-framework01.bnca-framework01.test.ts (2 RED)
+  - c24-c-bridge test files require dedicated vitest config (infrastructure issue, not a regression)
+
+All pre-existing failures verified against the stashed (unmodified) source — they are
+not introduced by this ACT.

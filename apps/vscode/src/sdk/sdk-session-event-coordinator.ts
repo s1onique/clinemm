@@ -1085,6 +1085,23 @@ export class SdkSessionEventCoordinator {
 			// Monotonic, per-coordinator-instance. One C10 -> one completionId.
 			completionId: `completion-${activeSession.sessionId}-${++this.nextCompletionCommitEventId}`,
 		})
+		// ACT-CLINEMM-ELMIZE-P0-TASK-HEADER-TERMINAL-CONVERGENCE01:
+		// publication is the consistency boundary (ACT §C7). The
+		// deferred-barrier reevaluation path commits `completed` here
+		// AFTER the main `done` handler's C10 was deferred (Elm HOLD
+		// or a conservation predicate held). The main path fires a
+		// `postStateToWebview()` from the bottom of `handleSessionEvent`
+		// (line ~2186-2194), but THIS path is invoked from
+		// `notifyAgentTurnDone` (the runtime's `agent_turn_done`
+		// capture), which has no publication gate. Without this
+		// `postStateToWebview()` the webview keeps the stale
+		// pre-terminal `turnState` snapshot and the TaskHeader stays
+		// on "Working" even though the runtime reached the terminal
+		// phase. The fire-and-forget pattern matches the Site-B
+		// publication gate (errors are logged, not propagated).
+		this.options.postStateToWebview?.().catch((err) => {
+			Logger.error("[SdkController] Failed to post state after deferred C10 commit:", err)
+		})
 	}
 
 	/**

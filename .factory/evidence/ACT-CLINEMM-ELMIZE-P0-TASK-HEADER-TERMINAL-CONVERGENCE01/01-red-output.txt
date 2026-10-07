@@ -1,0 +1,33 @@
+TERMINAL-PUB-04: deferred-barrier reevaluation commit MUST also fire a publication
+  Type B (missing terminal publication) on the DEFERRED-BARRIER REEVALUATION path
+
+Run on current production code (pre-repair) — stash applied, production file unmodified:
+
+  $ bash $HOME/.bun/bin/bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/terminal-convergence-publication.red.test.ts
+
+  ✓ TERMINAL-PUB-01-A: Elm AUTHORIZE — at least one postStateToWebview fires after the C10 commit, and its snapshot seq is >= the C10 commit seq
+  ✓ TERMINAL-PUB-02: Elm HOLD — no C10 commit, no completed-phase publication is required
+  ✓ TERMINAL-PUB-03: after the 50ms debounce flush, the published snapshot carries the post-C10 seq (REAL debouncer path)
+  × TERMINAL-PUB-04: when the C10 commit happens via the deferred-barrier reevaluation path (line ~1060), a publication MUST follow
+
+  Test Files  1 failed (1)
+       Tests  1 failed | 3 passed (4)
+
+Failure detail:
+  AssertionError: expected 0 to be greater than 0
+    ❯ src/sdk/__tests__/terminal-convergence-publication.red.test.ts:516
+    515|    expect(terminalCommitSeq).toBeGreaterThan(0)
+    516|    expect(postTerminalCallCount).toBeGreaterThan(0)
+       |                                  ^
+
+Diagnostic observations during RED:
+  callOrder: ["setTurnPhase:completed:2"]   ← the C10 commit DID happen on the deferred path
+  elmConsults: 2                              ← Elm was consulted twice (HOLD then AUTHORIZE)
+  tracker seq: 2                             ← tracker advanced to the terminal seq
+  deferredCompletionBarrier: undefined        ← marker was cleared (commit happened)
+  postTerminalCallCount: 0                   ← BUT no postStateToWebview was ever called
+
+This is the LIVE defect: the deferred-barrier reevaluation path commits `completed`
+but does NOT fire a publication. The webview is therefore stuck on the stale
+`streaming / 5426` snapshot even though the runtime reached the terminal phase.
