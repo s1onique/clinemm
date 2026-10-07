@@ -64,6 +64,46 @@ function normalizeModelId(modelId: string): string {
 	return modelId.trim().toLowerCase()
 }
 
+/**
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
+ *
+ * Pure set-superset test for two sorted id arrays. Returns true iff
+ * `prior` is a STRICT subset of `next` (every element of prior appears
+ * in next, and at least one element of next is not in prior).
+ *
+ * Both inputs MUST be sorted ascending. This function is `O(n)` and
+ * does not allocate. Used by the production stall discriminator to
+ * detect passive accumulation: when the new held-job-ids set is a
+ * pure superset of the prior set, no model consumption happened and
+ * the scheduler must NOT re-arm.
+ *
+ * Symmetric, structural, no provider call. Does not read or write
+ * runtime state.
+ */
+function isStrictSupersetOf(prior: readonly string[], next: readonly string[]): boolean {
+	if (next.length <= prior.length) return false
+	let pi = 0
+	let ni = 0
+	while (pi < prior.length && ni < next.length) {
+		const cmp = prior[pi].localeCompare(next[ni])
+		if (cmp === 0) {
+			pi++
+			ni++
+		} else if (cmp < 0) {
+			// prior has an element not in next → prior is NOT a subset of next.
+			return false
+		} else {
+			// next has an element not in prior; keep scanning.
+			ni++
+		}
+	}
+	if (pi !== prior.length) return false
+	// At this point all of prior is contained in next. We already
+	// returned false if next.length <= prior.length, so strict-superset
+	// is guaranteed when prior has been fully matched.
+	return true
+}
+
 type AgentFailureTelemetry = Pick<ProviderFailureTelemetry, "sessionId" | "error" | "errorType"> | undefined
 
 export interface SdkSessionEventCoordinatorOptions {
@@ -601,6 +641,30 @@ export class SdkSessionEventCoordinator {
 	 * LAST one stalled?").
 	 */
 	private lastCompletionContinuationControlFingerprint: string | undefined
+
+	/**
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
+	 *
+	 * Canonical sorted snapshot of the held-job-ids set that produced
+	 * the LAST successful enqueue through this coordinator. Stored
+	 * separately from `lastCompletionContinuationControlFingerprint` so
+	 * the stall discriminator can perform a SET comparison (pure
+	 * superset ⇒ no progress ⇒ stall) rather than a coarse
+	 * string-equality check. The pre-fix fingerprint included the
+	 * held count and the raw sorted IDs, so a passive superset
+	 * accumulation (new background terminals arriving while the model
+	 * has no observation capability) would shift the fingerprint and
+	 * BYPASS the stall detector. Storing the sorted set explicitly
+	 * closes the LIVE stalled-rearm-loop defect.
+	 *
+	 * Cleared by `clearCompletionContinuationSentForTesting` (test
+	 * backdoor). Not cleared on epoch advance — a stall across an
+	 * epoch is a stall, regardless of epoch bump (BIND_TIMEs).
+	 *
+	 * `undefined` means "no prior successful enqueue"; the first
+	 * enqueue is always permitted.
+	 */
+	private lastCompletionContinuationHeldSetSorted: readonly string[] | undefined
 
 	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-G:
@@ -1293,18 +1357,58 @@ export class SdkSessionEventCoordinator {
 		//   `unconsumedOwnedTerminalResultsForC10` for
 		//   stronger no-progress detection (held count drops
 		//   ⇒ progress).
-		const nextFingerprint = `${activeSessionId}|${taskId ?? "(none)"}|${unconsumedOwnedTerminalResultsForC10}|${heldJobIds.slice().sort().join(",")}`
-		if (this.lastCompletionContinuationControlFingerprint === nextFingerprint) {
+		//
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
+		// The pre-fix fingerprint `${sessionId}|${taskId}|${count}|
+		//   ${heldJobIds.sorted}` was structurally
+		// too-coarse: pure superset accumulation (new
+		// background terminals arriving between attempts while
+		// the model has no observation capability) shifts the
+		// fingerprint and therefore BYPASSES the stall
+		// detector. The LIVE specimen
+		// (task/session 1791400813202_ddnh3) exhibited exactly
+		// this: 4 × submit_and_exit → 4 × stalledNoProgress +
+		// 4 × dedupePermitted over 8 entries → loop. The
+		// post-fix discriminator treats the held set as a
+		// CAUSAL key: the new set is STALLED iff it is a pure
+		// superset of (or identical to) the prior observed
+		// set. Any contraction or membership shift is real
+		// progress and releases the epoch dedupe so a fresh
+		// continuation may proceed.
+		const nextSortedHeld = heldJobIds.slice().sort()
+		const nextFingerprint = `${activeSessionId}|${taskId ?? "(none)"}|${nextSortedHeld.join(",")}`
+		const priorSortedHeld = this.lastCompletionContinuationHeldSetSorted
+		if (
+			priorSortedHeld !== undefined &&
+			(priorSortedHeld.length === nextSortedHeld.length
+				? priorSortedHeld.every((id, i) => id === nextSortedHeld[i])
+				: isStrictSupersetOf(priorSortedHeld, nextSortedHeld))
+		) {
 			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
-			// Stall discriminated: same (heldJobIds, count,
-			// session, task) as the prior enqueue. The model
-			// produced no progress. Suppress the enqueue with a
-			// STALLED outcome and DO NOT mark the epoch dedupe
-			// slot — the dedupe slot is keyed on epoch, and a
-			// stall must not poison the next genuine epoch's
-			// continuation.
+			// Stall discriminated: same canonical held set, OR
+			// the new held set is a pure superset of the prior
+			// one (passive accumulation, no model consumption).
+			// In both cases the model produced no progress.
+			// Suppress the enqueue with a STALLED outcome and
+			// DO NOT mark the epoch dedupe slot — the dedupe
+			// slot is keyed on epoch, and a stall must not
+			// poison the next genuine epoch's continuation.
 			recordStalledNoProgress()
 			return Promise.resolve({ kind: "stalled_no_progress" as const })
+		}
+		if (priorSortedHeld !== undefined && !isStrictSupersetOf(priorSortedHeld, nextSortedHeld)) {
+			// Real progress: there IS a prior observed held
+			// set AND it is neither equal to nor a pure
+			// superset of the new one. This means the model
+			// actually consumed something (the held set
+			// contracted) or the membership shifted (old
+			// terminals cleared, new ones arrived
+			// simultaneously). Release the epoch dedupe so a
+			// fresh continuation can proceed even within the
+			// same epoch. The first call (no prior held set)
+			// is left alone — the dedupe ownership from any
+			// prior successful enqueue must still hold.
+			this.lastCompletionContinuationSessionEpoch = undefined
 		}
 		if (this.lastCompletionContinuationSessionEpoch === continuationSessionEpoch) {
 			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
@@ -1342,6 +1446,12 @@ export class SdkSessionEventCoordinator {
 		// check. Cleared by `clearCompletionContinuationSentForTesting`
 		// for the test backdoor.
 		this.lastCompletionContinuationControlFingerprint = nextFingerprint
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
+		// Persist the canonical sorted held-set so the NEXT stall
+		// check can compare set membership (pure-superset → stall)
+		// rather than coarse string equality. Cleared alongside
+		// the fingerprint in `clearCompletionContinuationSentForTesting`.
+		this.lastCompletionContinuationHeldSetSorted = nextSortedHeld
 		recordEnqueueCompletionContinuationInvoked()
 		return this.options
 			.enqueueCompletionContinuation({
@@ -1391,6 +1501,10 @@ export class SdkSessionEventCoordinator {
 		// Clear the stall fingerprint so a fresh test scenario can
 		// re-enqueue the same heldJobIds.
 		this.lastCompletionContinuationControlFingerprint = undefined
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
+		// Clear the canonical held-set snapshot so the next stall
+		// comparison does not falsely suppress a fresh scenario.
+		this.lastCompletionContinuationHeldSetSorted = undefined
 	}
 
 	/**
@@ -1924,6 +2038,15 @@ export class SdkSessionEventCoordinator {
 								// cleared the epoch dedupe but not the stall fingerprint; this
 								// correction restores symmetry).
 								this.lastCompletionContinuationControlFingerprint = undefined
+								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
+								// Clear the canonical held-set snapshot for the same
+								// reason: the BCB barrier's re-registration is the
+								// production signal that the model is starting a fresh
+								// attempt, so the prior stall state must NOT carry over.
+								// The next call computes a fresh fingerprint against
+								// the new held state; if the model is still making no
+								// progress the superset-aware discriminator catches it.
+								this.lastCompletionContinuationHeldSetSorted = undefined
 								// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
 								// Bounded finalization-authority trigger (see
 								// `enqueueCompletionContinuationIfHeld` docstring).
