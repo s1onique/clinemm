@@ -20298,7 +20298,11 @@ Total 60 pre-existing failures across 7 files. REARM01 introduces 0 new failures
 **LIVE_POST_FIX:** NOT_EXECUTED.
 
 
-## ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 — PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY — 2026-10-07
+## ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 — REOPENED as CORRECTION01 — 2026-10-07
+
+**REVIEWER HALT: `HALT_CONTROL_AUTHORITY_STILL_LEXICAL`** — the typed control collapses to ordinary user-role prose before the model boundary; the provenance stamp is lexical, not structural. Reclassified from PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY to PASS_COMPLETION_CONTINUATION_TYPED_CONTROL_SUBSTRATE. Authorized correction: `ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY`. Closure doc: `.factory/acts/ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01.md`. See §"REVIEWER HALT — `HALT_CONTROL_AUTHORITY_STILL_LEXICAL`" below.
+
+_Original verdict (REJECTED): PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY_
 
 **Status:** CLOSED. Predecessor: ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01 (PASS at HEAD `c305fe006`). REARM01 closed the dedupe-lifetime boundary; this ACT closes the message-authority boundary. Downstream of REARM01 (re-arm succeeded; the new failure is the resumed model misclassifying the legitimate runtime control as prompt injection).
 
@@ -20347,6 +20351,32 @@ Disable the provenance-stamp emission (`if (input.availableObservationMechanisms
 **VSIX:** NOT_EXECUTED.
 **LIVE_POST_FIX:** NOT_EXECUTED.
 
-**Successor:** `ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02` — proven TS control policy → Elm shadow correspondence → LIVE/test qualification → authority cutover → remove displaced TS semantic branching.
+**Success verdict (original):** `PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY` — REJECTED by reviewer halt `HALT_CONTROL_AUTHORITY_STILL_LEXICAL`. Reclassified as PASS_COMPLETION_CONTINUATION_TYPED_CONTROL_SUBSTRATE.
 
-**Success verdict:** `PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY`
+**REVIEWER HALT — `HALT_CONTROL_AUTHORITY_STILL_LEXICAL`**
+
+**Original verdict rejected.** The reviewer correctly identified that the load-bearing defect — model-facing trusted authority — was NOT repaired. The marker `[runtime-control: completion_continuation_control]` plus `Session:` / `Held terminal observations:` fingerprints are LEXICAL provenance, not STRUCTURAL. User text with the same wording is indistinguishable from the model. The necessity ablation proves only `marker-needed-for-marker-predicate`, not structural-authority-needed-for-resumed-model-behavior. `trustedOrigin` is stronger but not the production boundary (the continuation still goes through `sdkHost.send({ delivery:"queue" })` as ordinary prose). `shouldStallSameStateControl` detects identical state but the production scheduler enforcement is NOT PROVEN.
+
+**Reclassified verdict:** `PASS_COMPLETION_CONTINUATION_TYPED_CONTROL_SUBSTRATE` (downgraded from `PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY`).
+
+Proven (substrate only):
+- typed `CompletionControl`;
+- HELD / COMMITTED / CANNOT_CONTINUE semantics;
+- capability-derived tool wording;
+- closed enums (`KNOWN_OBSERVATION_MECHANISMS`, `KNOWN_COMPLETION_MECHANISMS`);
+- `trustedOrigin`-gated parser;
+- adversarial parser tests (AUTH-PI-01..06);
+- no REARM01 regression;
+- strong RED/GREEN around the new helper API.
+
+NOT proven:
+- model-facing trusted authority (structural, not lexical);
+- unforgeable provenance at model boundary;
+- production stall termination;
+- LIVE behavioral repair.
+
+**Authorized correction:** `ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY` — frozen by reviewer. CompletionContinuationControl must retain non-user provenance all the way to model-request assembly. NOT user-role string with magic suffix. Use internal/runtime message kind OR developer/system/control channel OR message metadata consumed by request builder. RED: identical rendered text user-origin vs runtime-origin MUST differ structurally at model-request representation; user cannot construct whatever field/role/kind gives runtime authority. AND scheduler enforcement proof: same control state twice → second enqueue suppressed → no loop. Only then would the Elm migration ACT be authorized.
+
+**Elmization:** STILL frozen, but now additionally gated on CORRECTION01. Policy migration requires trust verdict; trust verdict requires structural boundary; structural boundary requires CORRECTION01.
+
+**Reopened ACT status:** closure commits (`3c7b2dab8` + `3e1d324d2`) stand. ACT doc + board updated to mark the reclassification. CORRECTION01 work to begin in a fresh run.

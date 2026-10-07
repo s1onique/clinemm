@@ -1,15 +1,20 @@
 # ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01
 
-**Status:** CLOSED
+**Status:** REOPENED as CORRECTION01 (reviewer halt: `HALT_CONTROL_AUTHORITY_STILL_LEXICAL`)
+**Original closure:** 2026-10-07 (PASS_COMPLETION_CONTINUATION_TYPED_CONTROL_SUBSTRATE — reclassified)
 **Date:** 2026-10-07
 **Subject HEAD:** the repair commit lands at HEAD of `clinemm` repo; the docs/board commit lands on top.
 **Predecessor:** ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01 (CLOSED at HEAD `c305fe006`)
 
 ---
 
-## VERDICT
+## VERDICT (reclassified by reviewer)
 
-**PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY**
+**PASS_COMPLETION_CONTINUATION_TYPED_CONTROL_SUBSTRATE** — corrected from the original PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY claim.
+
+The original verdict was **rejected by reviewer halt** `HALT_CONTROL_AUTHORITY_STILL_LEXICAL`. The reviewer correctly identified that the load-bearing defect — model-facing trusted authority not present at the model boundary — was NOT repaired. The provenance stamp (`[runtime-control: completion_continuation_control]` plus `Session:` / `Held terminal observations:` textual fingerprints) is **lexical provenance**, not **structural provenance**. A user can type the same text; there is no model-side discriminator.
+
+The necessity ablation proves only `marker-needed-for-marker-predicate`, not `structural-runtime-authority-needed-for-resumed-model-behavior`.
 
 This ACT repairs the LIVE P0 where the deferred-completion continuation prompt (a runtime-generated control instruction) reached the resumed turn as ordinary user-role free-form prose. The resumed agent applied its prompt-injection self-defense, classified the legitimate runtime control as untrusted third-party content, denied `command_status`/`submit_and_exit`, and entered a refusal loop claiming "the work is already complete."
 
@@ -772,3 +777,115 @@ No blockers fired. Success verdict: **PASS_COMPLETION_CONTINUATION_CONTROL_AUTHO
 - No untrusted-content escalation. parseCompletionContinuationControl requires trustedOrigin gate; closed-enum validation rejects unknown values.
 - No hardcoded `command_status` or `submit_and_exit` claims when those tools are absent (TOOL-02 / TOOL-03).
 - No creation of a generic trust/authority framework.
+
+---
+
+## REVIEWER HALT — `HALT_CONTROL_AUTHORITY_STILL_LEXICAL`
+
+### Verdict
+
+**`HALT_CONTROL_AUTHORITY_STILL_LEXICAL`** — the original `PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY` is rejected.
+
+The reviewer correctly identified that:
+
+1. **Provenance is still lexical, not structural.** The marker `[runtime-control: completion_continuation_control]` plus textual `Session:` / `Held terminal observations:` fingerprints are textual cues that user-authored messages can mimic verbatim. The model sees two strings in the same authority role — there is no discriminator outside the text.
+
+2. **The necessity ablation proves the wrong seam.** The ablation `marker-needed-for-marker-predicate` only proves the marker is required for the marker classifier, not that structural authority is required for resumed model behavior. The production trust boundary is at the model-request assembly, not at the text-level marker.
+
+3. **`trustedOrigin` is stronger but not the production boundary.** `parseCompletionContinuationControl({trustedOrigin:true})` is a good host-side invariant, but the production continuation still flows through `sdkHost.send({ sessionId, prompt, delivery:"queue" })` as ordinary prose. The strong provenance exists before rendering, then disappears at the critical crossing.
+
+4. **Production stall termination is not proven.** `shouldStallSameStateControl()` **detects** identical state; the closure wording says "the host is *expected* to surface `CONTROL_STALLED_NO_PROGRESS` and stop enqueueing." That suggests the production enqueue path may not enforce the stall decision.
+
+### Reclassified verdict
+
+**PASS_COMPLETION_CONTINUATION_TYPED_CONTROL_SUBSTRATE** (downgraded from PASS_COMPLETION_CONTINUATION_CONTROL_AUTHORITY).
+
+**Proven:**
+- typed `CompletionContinuationControl`;
+- HELD / COMMITTED / CANNOT_CONTINUE semantics;
+- capability-derived tool wording;
+- closed enums (`KNOWN_OBSERVATION_MECHANISMS`, `KNOWN_COMPLETION_MECHANISMS`);
+- `trustedOrigin`-gated parser;
+- adversarial parser tests (AUTH-PI-01..06);
+- no regression to REARM01;
+- strong RED/GREEN around the new helper API.
+
+**Not proven:**
+- model-facing trusted authority (structural, not lexical);
+- unforgeable provenance at model boundary;
+- production stall termination;
+- LIVE behavioral repair.
+
+### Authorized correction
+
+**`ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY`** — frozen by reviewer.
+
+Requirement:
+
+```text
+CompletionContinuationControl
+→ retains non-user provenance all the way to model-request assembly
+```
+
+Implementation options (NOT user-role string with magic suffix):
+
+- internal/runtime message kind;
+- developer/system/control channel;
+- message metadata consumed by request builder.
+
+RED:
+
+```text
+identical rendered text:
+  user-origin message
+  runtime-origin continuation
+
+→ model-request representation MUST differ structurally
+
+AND:
+
+user cannot construct whatever field/role/kind gives runtime authority
+```
+
+AND scheduler enforcement proof:
+
+```text
+same control state twice
+→ second enqueue suppressed/terminally classified
+→ no endless continuation loop
+```
+
+Only after those two proofs are GREEN would the Elm successor ACT be authorized.
+
+### Elmization remains a good idea (still frozen, deferred)
+
+The pure semantic directive policy is still a strong Elm candidate. Architecture must become:
+
+```text
+host provenance
+    ↓
+trusted facts
+    ↓
+Elm policy
+    ↓
+typed directive
+    ↓
+model-request builder preserves runtime authority
+```
+
+NOT:
+
+```text
+typed object
+→ magic text
+→ ordinary user message
+```
+
+`ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02` remains frozen by name, but the policy migration is now gated on the structural-boundary correction.
+
+### Status
+
+- Subject HEAD remains `3e1d324d2b2db58d3f7aa0b630a495fd19067c70` (the original two-commit range).
+- The original commits stand; this ACT is REOPENED as CORRECTION01 pending the structural-boundary repair.
+- VSIX/install/dogfood/LIVE: NOT_EXECUTED (unchanged).
+- Elm migration: NOT STARTED (now additionally gated on CORRECTION01).
