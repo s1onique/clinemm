@@ -20078,3 +20078,73 @@ provider:
 ```
 
 **Next ACT:** `ACT-MYC-CLINEMM04-LIVE-QUALIFICATION` (operator dogfood session) — rebuild/install the exact implementation head and repeat the LIVE dump to confirm the post-repair expected shape. The expanded discriminator now identifies the exact failure mode (or confirms success) on the next live run.
+
+## ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY — PASS_TASK_HEADER_ELM_AUTHORITY — 2026-10-07
+
+**Status:** CLOSED. Predecessor chain: ORCHESTRATION01 → ORCHESTRATION02 → CORRECTION01 → CORRECTION02 → CORRECTION03 (all PASS at `86b7a373e`). Substrate unchanged. The qualified LIVE specimen (512/512 MATCH, 0 kernel offline, 0 decode errors, kernel.stage=ready) was the precondition; cutover is the natural next step.
+
+**Single-authority cutover:**
+- `apps/vscode/src/sdk/SdkController.ts`: the `taskHeaderPresentation` publication block now calls `pickTaskHeaderPresentationForPublication(taskHeaderInputs)` (Elm kernel) instead of `selectTaskHeaderPresentation(taskHeaderInputs)` (TS selector). The runtime-shadow observer `observeTaskHeaderElmRuntimeShadow(...)` is REMOVED from this seam.
+- New module `apps/vscode/src/sdk/task-header-elm-authority.ts` is the production-side authority. It calls the proven `invokeElmKernel`, decodes the Elm decision, and applies a **fail-closed** policy on `kernel_offline` / `decode_error`: hold the last successful Elm result (no TS semantic recomputation); with NO prior success, return the bounded sentinel `{ phase: "idle", source: "host", seq: input.seq }`.
+- Per ACT §C2 the preferred (fail-closed) branch is selected, matching the completion-authority Elm precedent. No silent TS selector recomputation, no availability fallback.
+
+**Preserved (per C5):**
+- `setTaskHeaderElmProductionKernelPath` / `resolveProductionKernelPath` and the private per-kernel namespace loader (`_taskHeaderKernelNamespace` never reads `globalThis.Elm`) — the CORRECTION02/CORRECTION03 machinery is unchanged.
+- The packaged `runtime-assets/task-header-orchestration.js` resolution contract (operator still owns staging via `scripts/build_dogfood_vsix_lib.py > stage_elm_kernel_runtime_asset`).
+
+**Removed (per C6/C7/C8/C9/C10):**
+- `apps/vscode/src/sdk/task-header-elm-shadow-diagnostics.ts` (Command Palette diagnostic module).
+- `cline.taskHeaderElmShadowDiagnostics` package.json command contribution + the `TaskHeaderElmShadowDiagnostics` registry entry + the `vscode.commands.registerCommand(...)` handler in `extension.ts`.
+- `applyTaskHeaderElmRuntimeShadowDiagnosticProfile` + `resolveEffectiveTaskHeaderElmRuntimeShadow` from `dogfood-diagnostic-profile.ts`.
+- `observeTaskHeaderElmRuntimeShadow` (the comparison observer), the `TaskHeaderElmRuntimeShadowSink` interface, the bounded ring (`ArrayRingSink`), the classification taxonomy (`MATCH` / `MISMATCH_PHASE` / `MISMATCH_SOURCE` / `MISMATCH_SEQ` / `ELM_KERNEL_OFFLINE` / `ELM_DECODE_ERROR`), the summary aggregator, the report formatter, the `setTaskHeaderElmRuntimeShadowEnabled` flag, the `setTaskHeaderElmRuntimeShadowBufferSize` knob, the `resetTaskHeaderElmRuntimeShadow*` helpers — all removed together from `task-header-elm-shadow.ts`.
+
+**Test authority migration (per C12):**
+- `task-header-elm-orchestration-shadow01.test.ts` → `task-header-elm-orchestration-authority01.test.ts` (no permanent TS==Elm differential; Elm kernel is the authority).
+- `task-header-elm-runtime-shadow-diagnostics.*` (4 files), `task-header-elm-runtime-shadow02.c24-c-bridge.test.ts`, `dogfood-diagnostic-profile-task-header-elm-runtime-shadow-activation02.test.ts` — all DELETED.
+- `task-header-elm-runtime-shadow-loader-discriminator-c05.test.ts` → renamed `task-header-elm-loader-discriminator.test.ts` (semantic content unchanged + RED-2b added for `KERNEL_APP_INIT_FAILED` per ACT §C14).
+- `task-header-elm-runtime-shadow03.sandboxed-namespace-coexistence.test.ts` → renamed `task-header-elm-namespace-coexistence.test.ts` (sandbox isolation preserved).
+- `task-header-elm-orchestration-shadow01.malformed-edges.test.ts` → renamed `task-header-elm-orchestration-malformed-edges.test.ts`.
+- `task-header-elm-orchestration-shadow01.fixtures.ts` → renamed `task-header-elm-orchestration.fixtures.ts` (the 12 reference fixtures are the SAME table the Elm-side test suite verifies).
+- New RED witness: `task-header-authority-cutover.authority03.test.ts` (C3/C4/C14) — 18 tests cover the post-cutover production seam via DI (`invokeElmForProduction`) + 9 real-Elm AUTH-01..AUTH-09 + AUTH-10/11 fail-closed hold-last-good + AUTH-13 namespace sandbox guard.
+- `selectTaskHeaderPresentation` is RETAINED in `task-state-shadow-arbiter-mapper.ts` as a reference helper for invariant fixtures (0 production callers after cutover); the contract test exercises it against the canonical fixture table to detect any drift between the TS rule implementations and the Elm kernel.
+
+**Conservation gates:**
+- 16 TaskHeader test files / **199 tests PASS** (vitest focused sweep).
+- `apps/vscode/src/sdk/__tests__/completion-authority-elm-*` — 72 tests PASS (completion-authority Elm runtime untouched).
+- `apps/vscode/src/sdk/__tests__/dogfood*` — 186 tests PASS (dogfood profile still owns its other seams).
+- `apps/vscode/src/sdk/__tests__/sdk-controller-*` — 32 tests PASS.
+- Bun unit suite: **95 files / 1261 tests PASS** (no regressions).
+- `bun run check-types` PASS (exit 0, zero diagnostics across proto regen + tsc + compat + webview tsc).
+- `bun run lint` PASS (2154 files checked, no fixes applied).
+- `git diff --check` PASS.
+- No `globalThis.Elm` fallback introduced (C12 hard rule).
+
+**Predecessor LIVE qualification (preserved as evidence, see ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR):**
+
+```text
+evaluations=512
+matches=512
+mismatchPhase=0
+mismatchSource=0
+mismatchSeq=0
+kernelOffline=0
+decodeErrors=0
+kernel.stage=ready
+kernel.failureClass=null
+```
+
+**Production-seam test matrix (after C4):**
+- AUTH-01 idle, AUTH-02 streaming, AUTH-03 completed: legacy absence path, real Elm kernel.
+- AUTH-04 host compaction override: `compacting` wins over UNBOUND canonical shadow.
+- AUTH-05 host awaiting followup: `awaiting_followup` wins.
+- AUTH-06 canonical shadow accepted (fresh stamp): `shadow` source.
+- AUTH-07 UNBOUND canonical demoted to legacy: `streaming` legacy preserves active legacy.
+- AUTH-08 legacy absence (no canonical shadow): `error` source.
+- AUTH-09 seq preservation: input.seq verbatim.
+- AUTH-11 kernel offline → fail closed (held + no prior promotion → bounded sentinel).
+- AUTH-13 `globalThis.Elm` not consulted (the per-kernel namespace bypasses it).
+- 9 real-Elm AUTH cases all PASS against the production kernel.
+
+**Artifacts:** `git rev-parse HEAD = 9ab587830621ed3a6679983068a5105e99dfa483`. Commit `ORCHESTRATION03-AUTHORITY: promote TaskHeader Elm kernel from runtime shadow to production authority, remove all temporary shadow scaffolding` (21 files changed, 623 insertions, 2716 deletions). No VSIX build / install / post-authority LIVE qualification performed (operator-owned per ACT §C23).
+
+**Next ACT (operator-owned, blocked until installed LIVE confirms):** rebuild VSIX → install → launch dogfood → exercise Task Header transitions (idle / streaming / awaiting_approval / compacting / awaiting_followup / completed / error / resumable). With no shadow anymore, the post-authority LIVE qualification becomes much simpler: the TaskHeader state label must remain correct for every transition, no router diagnostics are involved, and the fail-closed path only matters if the kernel asset is genuinely missing from the packaged VSIX. If UI behavior is correct for every transition, declare `CLOSED_CLEAN — TASK HEADER ELM AUTHORITY` and proceed to `ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01`.
