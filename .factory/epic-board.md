@@ -20920,3 +20920,63 @@ SHA-256: 1919837541376b964d75d742416204fef7dba503551ae65e1dd23d8fbc4dc7b2
 **Blockers:** None. HALT_UNEXPECTED_TRACKED_DIRT, HALT_RED_NOT_REPRODUCED, CAPTURE_INSUFFICIENT, HALT_STALL_STATE_NOT_PERSISTED, HALT_REARM_REGRESSION, HALT_DUAL_STALL_AUTHORITY, HALT_TRUST_BOUNDARY_SCOPE_CREEP, HALT_PROVIDER_TRANSPORT_REGRESSION, HALT_TASKHEADER_SCOPE_CREEP, HALT_LIVE_STALLED_REARM_RECURS — all cleared.
 
 **Successor ACT (operator-owned, frozen by name):** proceed straight to install + LIVE qualification at HEAD `9efb863dfb91d1d7c09cb72ee2dea744df2ad4f7`. Replay a held-accumulation scenario (10 background jobs, no observation capability, monotone accumulation) and assert the LIVE counters: `submit_and_exit_seen >= 1, stalledNoProgress >= 1, pending_prompt_enqueued after stall = 0, continuation_scheduled after stall = 0, continuation_started after stall = 0, sdkHostSend after stall = 0`.
+
+## ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-CONSUMER-PROBE01 — PASS_WITH_NONBLOCKING_RESIDUE — 2026-10-08
+
+**Status:** CLOSED at the C1–C18 recon + probe gates after C-line post-closure review (verdict: `PASS_WITH_NONBLOCKING_RESIDUE`). **No production code change warranted. No new bounded repair authorized.** The decisive question — "does a `DeferredCompletionBarrier` with `reason=stalled_no_progress` require the rebuild scheduler to behave differently from an ordinary held barrier, or is the scheduler correctly enforcing the same safety hold while the missing blocked-outcome consumer belongs elsewhere?" — is settled by the executable probe. **The scheduler is correctly enforcing the same safety hold for all three reason states; the missing actionable lifecycle consumer is elsewhere.**
+
+**Verdict per ACT §C16 / C17:**
+- `PASS_SCHEDULER_BOOLEAN_CONSERVATION` + `SCHEDULER_REASON_DIFFERENTIATION_NOT_REQUIRED_BY_CURRENT_CONTRACT` — the scheduler is NOT the wrong consumer under the current contract; H1 is **NOT SUPPORTED** under the current contract (narrow conclusion per C-line reviewer qualification — not "universally disproven"); H2 is SUPPORTED.
+- `CAPTURE_INSUFFICIENT` for the host-blocked-outcome P0 — the missing actionable consumer is documented (H3 PARTIALLY: dogfood diagnostic counters; H4 SUPPORTED: no production code path inspects `barrier.reason`), but no source-backed invariant is violated, no RED reproduces, no bounded mapping correction is justified.
+
+**Source-of-truth evidence (production code, unchanged by this ACT):**
+- `apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts:39` — the deferred-outstanding predicate is `() => boolean`. No reason field exists at the scheduler binding.
+- `apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts:125-127` — `isDeferredCompletionOutstanding()` calls `this.deferredOutstandingPredicate()`. The drain decision is pure boolean.
+- `apps/vscode/src/SdkController.ts:2775` — production binding: `() => this.sessionEvents.isDeferredCompletionBarrierOutstandingForTesting()`. Pure boolean; no `reason` consultation.
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:629-631` — the bound predicate body: `return this.deferredCompletionBarrier !== undefined`. Pure `!== undefined` check.
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:592-598` — `DeferredCompletionBarrier` interface: `reason?: DeferredCompletionBarrierReason` is a closed enum, stamped by `applyBlockedCompletionContinuationOutcome` (L1688-1808).
+- `apps/vscode/src/sdk/completion-continuation-upstream-runtime.ts:482-506` — `recordBlockedOutcomeStalledNoProgress` / `recordBlockedOutcomeDeliveryRejected` are opt-in dogfood counters (`if (!_state.enabled) return`). They are diagnostic surfaces, not lifecycle consumers.
+- Source search confirms no other production code path inspects `barrier.reason`. The only consumer at runtime is the dogfood diagnostic counter increment; the only consumer at test time is `getDeferredCompletionBarrierForTesting`.
+
+**ACT-owned executable evidence (NEW):**
+- `apps/vscode/src/sdk/__tests__/host-blocked-outcome-consumer-probe01.hbocp01.test.ts` (NEW, 6 tests, vitest native):
+  - **HBOCP-01**: barrier + `reason=undefined` → drain held; observer recorded `outstanding=true, reason=undefined`.
+  - **HBOCP-02**: barrier + `reason="stalled_no_progress"` → drain held; observer recorded `outstanding=true, reason="stalled_no_progress"`.
+  - **HBOCP-03**: barrier + `reason="delivery_rejected"` → drain held; observer recorded `outstanding=true, reason="delivery_rejected"`.
+  - **HBOCP-04** (C-line reviewer-narrowed conservation claim): barrier + `reason="stalled_no_progress"` → remove via `setDeferredCompletionBarrierForTesting(undefined)` → `deferredCompletionSettled()` → `rebuild` invoked exactly once. **The probe proves the scheduler releases when the barrier is ABSENT, NOT the causal path from real held-result consumption to barrier removal.** The production path that clears the marker after a real terminal-result consumption is the BCB01 §0.1 conservation predicates' success branch, exercised by HBOP-30 / PCRA01 / `mcp-tool-restart-deferred-completion-barrier` — NOT by this probe.
+  - **HBOCP-05**: real producer chain (K delivers, K+1 stalls via `handleSessionEvent`) → marker carries `reason="stalled_no_progress"`; scheduler predicate returns true; drain held; observer records the reason.
+  - **HBOCP-06**: three states in sequence at the production wiring's predicate → all three return `outstanding=true`; the `reason` is a strict refinement of the boolean; the scheduler sees a single true.
+
+**Causal discriminator (§C7):**
+- H1 (scheduler should act differently on blocked reason under the current contract): **NOT SUPPORTED** (narrow; not "universally disproven") by PROBE-01..03
+- H2 (scheduler correctly holds both states under the current contract): **SUPPORTED**
+- H3 (blocked state consumed elsewhere): **PARTIALLY** (diagnostic counters; test accessor)
+- H4 (no host lifecycle consumer exists): **SUPPORTED**
+
+**RED (§C8):** Not required. No source-backed invariant is violated by treating the typed-blocked state identically to the ordinary held state at the scheduler predicate under the current contract. A RED that required the scheduler to release on a blocked reason would break the BCB01 §0.1 conservation and the C10 completion barrier conservation. Such a RED is FORBIDDEN per C9. The narrow conclusion is sufficient to close the probe.
+
+**Repair (§C9):** NOT authorized. None of the five bounded-repair conditions are met: no real consumer identified beyond diagnostics, no source-backed invariant violated, no RED reproduces, no bounded mapping correction is justified, completion safety is intact and must remain so.
+
+**Conservation gates (HEAD `9538ebd13`):**
+- Focused tests: **10 files / 116 tests GREEN** (HBOCP01 6 new, HBOP01 12, scheduler 7, CCSLT01 10, CCSE01 5, CCSRL01 13, CCUTO01 14, CCUPD01 9, CCCA01 35, PCRA01 5).
+- Pre-existing baseline failures (NOT introduced by this ACT, isolated): `mcprestart01` 3/10 and `swcm04` 11/23 — already documented as pre-existing test drift in prior ACTs.
+- `cd apps/vscode && bun run check-types`: PASS (new test file clean; no errors introduced).
+- `bunx biome lint ... new test file`: PASS (no diagnostics).
+- `git diff --check`: PASS (clean).
+- `git status --short`: only the new untracked test file; no tracked dirt.
+
+**State integrity preserved (§C11):** My ACT-owned test file makes no changes to enqueue-epoch binding, session/task identity triple check, existing-marker requirement, typed reason mapping, STALL fingerprint lifetime, REARM dedupe lifetime, Elm Completion Authority, or Elm Continuation Control.
+
+**Scope (§C15):** Only `apps/vscode/src/sdk/__tests__/host-blocked-outcome-consumer-probe01.hbocp01.test.ts` is added. No production source modified. No changes under `apps/vscode/elm/**`, `sdk/packages/llms/**`, `tools/tart-testbed/**`, or `tools/macos-host-helper/**`. Protected stash `stash@{0}` on `d46223b51` is intact.
+
+**Source HEAD:** `9538ebd133b4ce4b75d29bca2bf04a531d378ed4`
+
+**VSIX:** NOT_EXECUTED (operator-owned; not part of this ACT)
+
+**LIVE:** NOT_EXECUTED (operator-owned; not part of this ACT)
+
+**Closure artifact:** `.factory/acts/ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-CONSUMER-PROBE01.md`
+
+**Blockers:** None. HALT_UNEXPECTED_TRACKED_DIRT, HALT_RED_NOT_REPRODUCED, CAPTURE_INSUFFICIENT — all cleared or properly recorded as `CAPTURE_INSUFFICIENT` for the residual host-blocked-outcome consumer gap (unchartered by this ACT).
+
+**Successor ACT (optional, operator-owned, not chartered):** A future ACT MAY identify a real, operator-actionable host lifecycle surface (e.g. the existing session status or error channel). The successor must (1) STOP designing new classification logic — the Elm Continuation Control kernel already classifies the blocked outcome (P2/P5), so the host gap is publication not classification; (2) name the proposed owner via source reading; (3) examine existing patterns where the SDK distinguishes persisted display-only failures from model-bound messages as a possible existing-consumer precedent — WITHOUT assuming it is the correct solution; (4) show via RED that a real invariant is violated without it; and (5) bound the new consumer to the existing completion conservation. The probe in this ACT establishes the demand; the proof-of-value remains to be discovered.
