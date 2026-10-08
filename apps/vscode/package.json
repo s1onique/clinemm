@@ -506,7 +506,8 @@
 		"check-types:c2-4-d-hub": "bun scripts/check-types-d-hub-with-baseline.ts",
 		"check-types:c2-4-d-hub:refresh-baseline": "D2_BASELINE_UPDATE=1 bun scripts/check-types-d-hub-with-baseline.ts",
 		"check-types:c2-5-c4": "bun scripts/check-types-c2-5-c4-with-baseline.ts",
-		"check-types:c2-5-c4:refresh-baseline": "C2_5_C4_BASELINE_UPDATE=1 bun scripts/check-types-c2-5-c4-with-baseline.ts"
+		"check-types:c2-5-c4:refresh-baseline": "C2_5_C4_BASELINE_UPDATE=1 bun scripts/check-types-c2-5-c4-with-baseline.ts",
+		"test:vitest:twqc01": "vitest run --config vitest.config.twqc01.ts"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [

@@ -200,6 +200,13 @@
 		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
 		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
 		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
+		// ACT-CLINEMM-P0-TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01 / TWQC01:
+		// the real-queue-consumer probe. Runs under
+		// `vitest.config.twqc01.ts` which adds the
+		// `@cline-internal/core/.../pending-prompt-service` alias.
+		// Excluded here to keep the base config's @cline/core stub
+		// alias in scope (mirror entry in `vitest.config.ts`).
+		"src/sdk/__tests__/terminal-wake-queue-consumer-probe01.twqc01.test.ts",
 		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
 		// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
 		// full-composition witness — REAL factory + REAL

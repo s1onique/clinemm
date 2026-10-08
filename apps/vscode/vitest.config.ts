@@ -240,6 +240,14 @@ export default defineConfig({
 			"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
 			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
 			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
+			// ACT-CLINEMM-P0-TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01 / TWQC01:
+			// the real-queue-consumer probe (real LocalRuntimeHost +
+			// real PendingPromptsController + real runTurn). Runs under
+			// `vitest.config.twqc01.ts` which adds the
+			// `@cline-internal/core/.../pending-prompt-service` alias.
+			// Excluded here to keep the base config's @cline/core stub
+			// alias in scope (the bridge config owns this test).
+			"src/sdk/__tests__/terminal-wake-queue-consumer-probe01.twqc01.test.ts",
 			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3-R5
 			// (persistence phase): the instance-store + typed-projector
 			// tests run under the dedicated
