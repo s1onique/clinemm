@@ -360,7 +360,7 @@ stash/restore on the predecessor HEAD `4d57e8d97`).
 ACT: ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01
 
 ENTRY_HEAD:   4d57e8d97763fec867662cb794d7b80dc949fd20
-SUBJECT_HEAD: <discover after bounded commit>
+SUBJECT_HEAD: ee3fd7fc7c... (discover via `git rev-parse HEAD`)
 
 CANDIDATE_OWNERS:
   - TaskTelemetryTracker.recordRuntimeError (selected by predecessor ACT)
