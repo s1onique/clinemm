@@ -23,6 +23,8 @@ import {
 	recordActiveSessionPresent,
 	recordAgentTurnDoneNotificationSeen,
 	recordAuthorityCheckReached,
+	recordBlockedOutcomeDeliveryRejected,
+	recordBlockedOutcomeStalledNoProgress,
 	recordDedupePermitted,
 	recordDedupeSuppressed,
 	recordEnqueueCompletionContinuationInvoked,
@@ -555,11 +557,44 @@ interface DeferredContinuation {
  * The marker is NOT a general-purpose continuation queue — it holds
  * at most ONE pending completion per coordinator instance.
  */
+/**
+ * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01:
+ *
+ * Closed enum for the typed host-owned reason a deferred
+ * completion barrier carries. The marker is the existing
+ * production "blocked" surface; the `reason` field is the
+ * missing typed verdict. Stamped only by
+ * `applyBlockedCompletionContinuationOutcome` from a
+ * non-delivered enqueue outcome whose captured session/task
+ * still match the live active session/task (C4 adversarial
+ * guard). A `delivered` / `not_held` / `no_held_job_ids` /
+ * `already_sent` / `session_gone` / `no_callback` outcome
+ * MUST NOT stamp a blocked reason.
+ *
+ * Invariants:
+ *   - One value per call-site mapping (no free-form strings).
+ *   - "stalled_no_progress" maps from the upstream TS disc
+ *     (enqueueIfHeld L1404-1421) — Elm policy is NOT consulted
+ *     for the disc verdict (the disc is causal-state, not
+ *     capability).
+ *   - "delivery_rejected" maps from the production callback's
+ *     `rejected` outcome (sdkHost.send threw OR liveTools
+ *     returned undefined).
+ *   - "observation_unavailable" is reserved for the case where
+ *     the Elm policy fail-closed on observation_unavailable is
+ *     carried into a host publication; not currently produced
+ *     by the production seam (the C5 RED-2 / RED#2 cases pin
+ *     this is preserved as a CLOSED enum value, not an
+ *     open-ended string).
+ */
+type DeferredCompletionBarrierReason = "stalled_no_progress" | "delivery_rejected" | "observation_unavailable"
+
 interface DeferredCompletionBarrier {
 	readonly sessionId: string
 	readonly taskId: string | undefined
 	readonly epoch: number
 	readonly deferredAt: number
+	readonly reason?: DeferredCompletionBarrierReason
 }
 
 export class SdkSessionEventCoordinator {
@@ -1034,8 +1069,7 @@ export class SdkSessionEventCoordinator {
 		// exactly once per reevaluation).
 		const unconsumedOwnedTerminalJobIds =
 			this.options.getUnconsumedOwnedTerminalJobIds?.(activeSession.sessionId, taskId) ?? []
-		const heldObligation =
-			unconsumedOwnedTerminalResultCount > 0 || unconsumedOwnedTerminalJobIds.length > 0
+		const heldObligation = unconsumedOwnedTerminalResultCount > 0 || unconsumedOwnedTerminalJobIds.length > 0
 		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION04:
 		// Trigger the bounded coalesced continuation at the terminal-
 		// idle / Q5 re-evaluation transition (not just at the
@@ -1077,21 +1111,58 @@ export class SdkSessionEventCoordinator {
 			// the marker's epoch (the same epoch the barrier
 			// was registered under) so the continuation is bound
 			// to the just-held submit_and_exit's epoch.
-			void this.enqueueCompletionContinuationIfHeld(activeSession.sessionId, unconsumedOwnedTerminalResultCount, taskId)
+			//
+			// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01:
+			// capture sessionId/taskId at fire time so the
+			// `.then` mapping can validate the resolution is
+			// still current (C4 adversarial guard against a
+			// task replacement between fire and resolution).
+			//
+			// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+			// ALSO capture the enqueue's epoch. The BCB block
+			// registered the marker with the same epoch that
+			// the enqueue was fired on (the marker is set on
+			// the prior line, the enqueue is fired immediately
+			// after — both reads of `getMinter().epoch` happen
+			// within the same synchronous call frame, so they
+			// see the SAME epoch value). The captured
+			// `enqueueEpoch` is the obligation's identity; the
+			// helper refuses to stamp a marker whose epoch
+			// differs (a stale K resolving after the BCB has
+			// advanced to K+1 must NOT stamp K+1's marker).
+			const capturedSessionId = activeSession.sessionId
+			const capturedTaskId = taskId
+			const capturedEnqueueEpoch = this.options.messageTranslatorState.getMinter().epoch
+			void this.enqueueCompletionContinuationIfHeld(capturedSessionId, unconsumedOwnedTerminalResultCount, capturedTaskId)
 				.then((outcome) => {
 					if (outcome.kind === "delivered") {
 						Logger.warn(
-							`[SdkController] completion continuation turn enqueued from terminal-idle re-evaluation for session=${activeSession.sessionId} heldJobIds=${outcome.heldJobIds.length} (epoch=${outcome.continuationSessionEpoch})`,
+							`[SdkController] completion continuation turn enqueued from terminal-idle re-evaluation for session=${capturedSessionId} heldJobIds=${outcome.heldJobIds.length} (epoch=${outcome.continuationSessionEpoch})`,
 						)
 					} else if (outcome.kind === "no_held_job_ids") {
 						Logger.warn(
-							`[SdkController] completion continuation suppressed at terminal-idle re-evaluation for session=${activeSession.sessionId}: count>0 but getUnconsumedOwnedTerminalJobIds returned 0 (count-based fallback)`,
+							`[SdkController] completion continuation suppressed at terminal-idle re-evaluation for session=${capturedSessionId}: count>0 but getUnconsumedOwnedTerminalJobIds returned 0 (count-based fallback)`,
 						)
 					}
+					// Publish a typed host-owned reason for the
+					// blocked outcomes (C5/C6/C7). The mapping
+					// is no-op for `delivered`, `not_held`,
+					// `no_held_job_ids`, `already_sent`,
+					// `session_gone`, `no_callback` — none of
+					// these is a "blocked" verdict.
+					//
+					// CORRECTION01: the helper now receives
+					// the captured enqueue epoch and binds the
+					// publication to a marker of the same epoch
+					// (no fabrication, no cross-epoch stamp).
+					this.applyBlockedCompletionContinuationOutcome(
+						{ sessionId: capturedSessionId, taskId: capturedTaskId, enqueueEpoch: capturedEnqueueEpoch },
+						outcome,
+					)
 				})
 				.catch((error) => {
 					Logger.warn(
-						`[SdkController] completion continuation enqueue at terminal-idle re-evaluation failed for session=${activeSession.sessionId}: ${
+						`[SdkController] completion continuation enqueue at terminal-idle re-evaluation failed for session=${capturedSessionId}: ${
 							error instanceof Error ? error.message : String(error)
 						}`,
 					)
@@ -1531,20 +1602,239 @@ export class SdkSessionEventCoordinator {
 	}
 
 	/**
+	 * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01:
+	 *
+	 * Bounded host-owned publication of a non-delivered enqueue
+	 * outcome. Called from the `.then((outcome) => ...)` of BOTH
+	 * `enqueueCompletionContinuationIfHeld` call sites
+	 * (L1113-1131 reevaluate path; L2148-2167 C10 path).
+	 *
+	 * Mapping (C7):
+	 *   "stalled_no_progress" → "stalled_no_progress"
+	 *   "rejected"            → "delivery_rejected"
+	 *   (any other kind)      → no-op
+	 *
+	 * The mapping does NOT consult the Elm kernel for the
+	 * verdict (C15 — no policy change, no new kernel). The disc
+	 * verdict comes from the upstream TS discriminator
+	 * (L1432-1453); the production callback's `rejected` is
+	 * the production seam's own observation.
+	 *
+	 * C4 adversarial guard: the captured `sessionId` / `taskId`
+	 * must still match the LIVE active session/task at the time
+	 * the enqueue resolves. If a task switch happened between
+	 * fire and resolution, the resolution is stale and MUST
+	 * NOT publish a blocked reason onto the replacement task's
+	 * marker. Validation reads the live `getActiveSession()`
+	 * and `getTask()`; no I/O, no provider calls.
+	 *
+	 * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+	 * Three additional invariants the predecessor failed to
+	 * enforce (reviewer's P0 findings):
+	 *
+	 * 1. NO FABRICATION: an existing matching marker must
+	 *    already be present at resolution. A blocked
+	 *    publication does NOT create a fresh marker. If the
+	 *    marker has been cleared (commit) or never registered
+	 *    (the BCB predicate did not fire), the resolution is
+	 *    inapplicable and the helper returns without
+	 *    mutating state. This binds the publication to the
+	 *    BCB-registered blocked surface.
+	 *
+	 * 2. EPOCH BINDING: the captured `enqueueEpoch` (read
+	 *    from `getMinter().epoch` at the call site, before
+	 *    the `.then` was scheduled) must equal the marker's
+	 *    current epoch. The predecessor's check used
+	 *    `currentEpoch = getMinter().epoch` at resolution
+	 *    time, which permitted the failure mode:
+	 *      K fires at epoch 10
+	 *      K+1 advances to epoch 11 (a new messageId was
+	 *        minted by some other producer)
+	 *      BCB re-registers marker at epoch 11
+	 *      K resolves at epoch 11
+	 *      currentEpoch === 11, marker.epoch === 11, the
+	 *        check `marker.epoch !== currentEpoch` is false,
+	 *        the helper stamps
+	 *    With CORRECTION01, the helper requires
+	 *      marker.epoch === captured.enqueueEpoch
+	 *    K's captured.enqueueEpoch is 10; the marker is at
+	 *    11; the check fails; the helper refuses. K's stale
+	 *    resolution is dropped.
+	 *
+	 * 3. PRODUCTION CONSUMER: on a successful publication the
+	 *    helper increments
+	 *    `recordBlockedOutcomeStalledNoProgress` /
+	 *    `recordBlockedOutcomeDeliveryRejected` — the
+	 *    production dogfood diagnostic counters (already
+	 *    registered, already exposed via
+	 *    `getCompletionContinuationUpstreamCounters`). The
+	 *    typed verdict is now observable in a production
+	 *    surface, not just a test-accessor decoration.
+	 *
+	 * Idempotence (C9): the marker is at-most-one per
+	 * coordinator instance, so two stalls → one typed
+	 * publication. Genuine progress (the next enqueue returns
+	 * `delivered` and the BCB clears the marker) releases the
+	 * blocked state without further host intervention.
+	 *
+	 * C11 invariant: a blocked publication MUST NOT advance
+	 * the turn phase to "completed" or commit
+	 * `task_completion_committed`. The marker is the
+	 * production "blocked" surface; the commit path
+	 * (`reevaluateDeferredCompletionBarrier` and
+	 * `handleSessionEvent`) is independent and consults its
+	 * own Elm authority.
+	 */
+	private applyBlockedCompletionContinuationOutcome(
+		captured: {
+			readonly sessionId: string
+			readonly taskId: string | undefined
+			/**
+			 * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+			 * the value of `getMinter().epoch` at the moment the
+			 * enqueue was fired. The helper binds the
+			 * publication to a marker of the SAME epoch (no
+			 * cross-epoch stamp).
+			 */
+			readonly enqueueEpoch: number
+		},
+		outcome:
+			| { kind: "delivered"; heldJobIds: readonly string[]; continuationSessionEpoch: string }
+			| { kind: "rejected"; heldJobIds: readonly string[]; continuationSessionEpoch: string }
+			| { kind: "session_gone" }
+			| { kind: "no_held_job_ids"; heldJobIds: readonly string[] }
+			| { kind: "not_held" }
+			| { kind: "already_sent"; continuationSessionEpoch: string }
+			| { kind: "no_callback" }
+			| { kind: "stalled_no_progress" },
+	): void {
+		let reason: DeferredCompletionBarrierReason | undefined
+		if (outcome.kind === "stalled_no_progress") {
+			reason = "stalled_no_progress"
+		} else if (outcome.kind === "rejected") {
+			reason = "delivery_rejected"
+		} else {
+			// C2: every other union member is not a "blocked"
+			// verdict. No-op preserves the marker (the BCB
+			// registration already carries sessionId/taskId
+			// without a typed reason) and prevents fabricated
+			// blocked outcomes for `delivered`, `not_held`,
+			// `no_held_job_ids`, `already_sent`, `session_gone`,
+			// `no_callback`.
+			return
+		}
+		// C4 adversarial guard: validate identity at resolution.
+		const live = this.options.sessions?.getActiveSession?.()
+		const liveTaskId = this.options.getTask?.()?.taskId
+		if (!live || live.sessionId !== captured.sessionId) {
+			// Session gone or replaced. The post-fire session
+			// identity differs from the captured identity. The
+			// resolution is stale; do not publish.
+			return
+		}
+		if (liveTaskId !== captured.taskId) {
+			// Task replacement. The C4 adversarial case: a T1
+			// enqueue resolving after a switch to T2 must NOT
+			// stamp a blocked reason onto T2's marker.
+			return
+		}
+		// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+		// NO FABRICATION. The marker is the BCB-registered
+		// "blocked" surface; an absent marker means the BCB
+		// has not registered a hold for the active session,
+		// or the marker has been cleared (commit /
+		// epoch-supersession). A blocked publication does
+		// NOT create a fresh marker; the resolution is
+		// inapplicable without a matching registered
+		// obligation. This binds the publication to the BCB
+		// surface, preventing spurious "blocked" verdicts
+		// from races where the BCB cycle had not yet
+		// registered (e.g. a stalled enqueue that fired
+		// before the BCB block).
+		if (!this.deferredCompletionBarrier) {
+			return
+		}
+		// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+		// EPOCH BINDING. The marker's epoch must equal the
+		// captured enqueue epoch. The predecessor's check
+		// used `currentEpoch = getMinter().epoch` at
+		// resolution time, which allowed a K-then-K+1
+		// sequence (K fires at epoch 10, K+1 advances to
+		// epoch 11, K resolves at epoch 11) to misattribute
+		// K's verdict onto K+1's marker. With
+		// `enqueueEpoch` captured at fire time, the helper
+		// refuses if the marker's epoch has advanced past
+		// the enqueue's epoch.
+		if (this.deferredCompletionBarrier.epoch !== captured.enqueueEpoch) {
+			return
+		}
+		// Identity triple must also match (defense in depth —
+		// the C4 guards already validated session/task
+		// identity against the LIVE active session/task; the
+		// marker is for the captured identity because the
+		// BCB re-registered it just before firing the
+		// enqueue, on the same captured values). If a stale
+		// marker somehow survived (e.g. a different
+		// sessionId), refuse.
+		if (
+			this.deferredCompletionBarrier.sessionId !== captured.sessionId ||
+			this.deferredCompletionBarrier.taskId !== captured.taskId
+		) {
+			return
+		}
+		// Stamp the marker with the typed reason. The marker
+		// identity triple (sessionId, taskId, epoch) is
+		// preserved exactly — only the `reason` field is
+		// added. Idempotence (C9) is preserved because the
+		// marker is at-most-one; subsequent resolutions of
+		// the same obligation either confirm the reason or
+		// (if the BCB has cycled) the epoch check refuses.
+		this.deferredCompletionBarrier = {
+			...this.deferredCompletionBarrier,
+			reason,
+		}
+		// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+		// PRODUCTION CONSUMER. The typed verdict is now
+		// observable via the production dogfood diagnostic
+		// surface (the same `getCompletionContinuationUpstreamCounters`
+		// dump the operator already uses for the U0..U11
+		// first-divergence table). The counter increments
+		// ONCE per successful publication.
+		if (reason === "stalled_no_progress") {
+			recordBlockedOutcomeStalledNoProgress()
+		} else if (reason === "delivery_rejected") {
+			recordBlockedOutcomeDeliveryRejected()
+		}
+	}
+
+	/**
 	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
 	 * test-only backdoor exposing the deferred-completion-barrier
 	 * marker so TQCB01 RED/GREEN tests can verify the marker's
 	 * identity triple (sessionId, taskId, epoch) without depending
 	 * on indirect observable side-effects.
+	 *
+	 * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01: the
+	 * returned shape now also carries the optional typed `reason`
+	 * field, set by `applyBlockedCompletionContinuationOutcome`
+	 * from a non-delivered enqueue outcome. The reason is
+	 * `undefined` for markers registered solely by the BCB
+	 * predicate (a fresh hold, not a typed blocked verdict).
 	 */
 	getDeferredCompletionBarrierForTesting():
-		| { readonly sessionId: string; readonly taskId: string | undefined; readonly epoch: number }
+		| {
+				readonly sessionId: string
+				readonly taskId: string | undefined
+				readonly epoch: number
+				readonly reason?: DeferredCompletionBarrierReason
+		  }
 		| undefined {
 		if (!this.deferredCompletionBarrier) return undefined
 		return {
 			sessionId: this.deferredCompletionBarrier.sessionId,
 			taskId: this.deferredCompletionBarrier.taskId,
 			epoch: this.deferredCompletionBarrier.epoch,
+			reason: this.deferredCompletionBarrier.reason,
 		}
 	}
 
@@ -2030,8 +2320,7 @@ export class SdkSessionEventCoordinator {
 									this.options.getTask?.()?.taskId,
 								) ?? []
 							const heldObligationForC10 =
-								unconsumedOwnedTerminalResultsForC10 > 0 ||
-								unconsumedOwnedTerminalJobIdsForC10.length > 0
+								unconsumedOwnedTerminalResultsForC10 > 0 || unconsumedOwnedTerminalJobIdsForC10.length > 0
 							const suppressOriginatingCompletion = perJobSuppressOriginatingCompletion
 
 							if (
@@ -2099,17 +2388,53 @@ export class SdkSessionEventCoordinator {
 								// Fire AT MOST ONCE per (sessionId, epoch) when the
 								// BCB01 §0.1 second conjunct is the hold cause.
 								if (unconsumedOwnedTerminalResultsForC10 > 0 && !suppressOriginatingCompletion) {
+									// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01:
+									// capture sessionId/taskId at fire time so the
+									// `.then` mapping can validate the resolution is
+									// still current (C4 adversarial guard against a
+									// task replacement between fire and resolution).
+									//
+									// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+									// ALSO capture the enqueue's epoch. The marker
+									// registered on the prior line (BCB block) and
+									// the enqueue fired here share the SAME
+									// `getMinter().epoch` value (the BCB registration
+									// reads the minter, the enqueue reads it again -
+									// no `nextMessageId()` happens between them, so
+									// the epoch is the same). The captured
+									// `enqueueEpoch` is the obligation's identity;
+									// the helper refuses to stamp a marker whose
+									// epoch differs.
+									const capturedSessionId = activeSession.sessionId
+									const capturedTaskId = this.options.getTask?.()?.taskId
+									const capturedEnqueueEpoch = this.options.messageTranslatorState.getMinter().epoch
 									void this.enqueueCompletionContinuationIfHeld(
-										activeSession.sessionId,
+										capturedSessionId,
 										unconsumedOwnedTerminalResultsForC10,
-										this.options.getTask?.()?.taskId,
+										capturedTaskId,
 									)
 										.then((outcome) => {
 											if (outcome.kind === "delivered") {
 												Logger.warn(
-													`[SdkController] completion continuation turn enqueued for session=${activeSession.sessionId} heldJobIds=${outcome.heldJobIds.length} (epoch=${outcome.continuationSessionEpoch})`,
+													`[SdkController] completion continuation turn enqueued for session=${capturedSessionId} heldJobIds=${outcome.heldJobIds.length} (epoch=${outcome.continuationSessionEpoch})`,
 												)
 											}
+											// Publish a typed host-owned reason
+											// for the blocked outcomes (C5/C6/C7).
+											// No-op for non-blocked outcomes.
+											//
+											// CORRECTION01: pass the captured
+											// enqueue epoch so the helper binds
+											// the publication to a marker of the
+											// same epoch.
+											this.applyBlockedCompletionContinuationOutcome(
+												{
+													sessionId: capturedSessionId,
+													taskId: capturedTaskId,
+													enqueueEpoch: capturedEnqueueEpoch,
+												},
+												outcome,
+											)
 										})
 										.catch((error) => {
 											Logger.warn(

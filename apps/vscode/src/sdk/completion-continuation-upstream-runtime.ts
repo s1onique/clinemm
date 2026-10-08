@@ -128,6 +128,26 @@ export interface CompletionContinuationUpstreamCountersSnapshot {
 	 * absent on snapshots produced before the correction.
 	 */
 	readonly stalledNoProgress?: number
+	/**
+	 * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+	 * Production-side counter for the typed host-owned
+	 * `stalled_no_progress` publication. Increments when the
+	 * `applyBlockedCompletionContinuationOutcome` helper
+	 * successfully stamps a stalled verdict on the deferred
+	 * completion barrier marker (existing matching marker, matching
+	 * enqueue epoch, matching live session/task). Backward-compatible:
+	 * absent on snapshots produced before the correction.
+	 */
+	readonly blockedOutcomeStalledNoProgress?: number
+	/**
+	 * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+	 * Production-side counter for the typed host-owned
+	 * `delivery_rejected` publication. Increments when the helper
+	 * successfully stamps a delivery_rejected verdict on the
+	 * marker. Backward-compatible: absent on snapshots produced
+	 * before the correction.
+	 */
+	readonly blockedOutcomeDeliveryRejected?: number
 	readonly lastStopReason: CompletionContinuationUpstreamStopReason | null
 	/** Tracks whether the requested active session id matched the
 	 * marker's sessionId the LAST time the coordinator's
@@ -163,6 +183,19 @@ interface State {
 		dedupePermitted: number
 		enqueueCompletionContinuationInvoked: number
 		stalledNoProgress: number
+		/**
+		 * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+		 * Production-side counter for the typed host-owned
+		 * `stalled_no_progress` publication. Mirrors
+		 * `CompletionContinuationUpstreamCountersSnapshot.blockedOutcomeStalledNoProgress`.
+		 */
+		blockedOutcomeStalledNoProgress: number
+		/**
+		 * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+		 * Production-side counter for the typed host-owned
+		 * `delivery_rejected` publication.
+		 */
+		blockedOutcomeDeliveryRejected: number
 		lastStopReason: CompletionContinuationUpstreamStopReason | null
 		lastRequestedSessionMatched: boolean | null
 	}
@@ -194,6 +227,8 @@ function freshCounters(): State["counters"] {
 		dedupePermitted: 0,
 		enqueueCompletionContinuationInvoked: 0,
 		stalledNoProgress: 0,
+		blockedOutcomeStalledNoProgress: 0,
+		blockedOutcomeDeliveryRejected: 0,
 		lastStopReason: null,
 		lastRequestedSessionMatched: null,
 	}
@@ -431,6 +466,45 @@ export function recordStalledNoProgress(): void {
 	state.counters.lastStopReason = "stalled_no_progress"
 }
 
+/**
+ * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+ *
+ * Production-side host publication of a `stalled_no_progress`
+ * verdict onto the deferred-completion-barrier marker. Called by
+ * `SdkSessionEventCoordinator.applyBlockedCompletionContinuationOutcome`
+ * AFTER it has stamped the marker with the typed reason
+ * (existing matching marker, matching enqueue epoch, matching
+ * live session/task — all C4 adversarial guards passed). The
+ * counter is the production-readable surface that proves the
+ * typed verdict is observable, not just a test-accessor
+ * decoration. Mirrors the `stalledNoProgress` counter
+ * (U0..U11 first-divergence table) for the post-enqueue
+ * publication stage.
+ */
+export function recordBlockedOutcomeStalledNoProgress(): void {
+	if (!_state.enabled) return
+	const state = getOrInitState()
+	state.counters.blockedOutcomeStalledNoProgress = (state.counters.blockedOutcomeStalledNoProgress ?? 0) + 1
+	state.counters.lastStopReason = "stalled_no_progress"
+}
+
+/**
+ * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+ *
+ * Production-side host publication of a `delivery_rejected`
+ * verdict onto the deferred-completion-barrier marker. See
+ * `recordBlockedOutcomeStalledNoProgress` for the full contract;
+ * this counter is the parallel publication surface for the
+ * `rejected` callback outcome (production seam observed the
+ * send rejection).
+ */
+export function recordBlockedOutcomeDeliveryRejected(): void {
+	if (!_state.enabled) return
+	const state = getOrInitState()
+	state.counters.blockedOutcomeDeliveryRejected = (state.counters.blockedOutcomeDeliveryRejected ?? 0) + 1
+	state.counters.lastStopReason = "stalled_no_progress"
+}
+
 export function recordAuthorityCheckReached(): void {
 	if (!_state.enabled) return
 	const state = getOrInitState()
@@ -470,6 +544,8 @@ export function getCompletionContinuationUpstreamCounters(): CompletionContinuat
 		dedupePermitted: state.counters.dedupePermitted,
 		enqueueCompletionContinuationInvoked: state.counters.enqueueCompletionContinuationInvoked,
 		stalledNoProgress: state.counters.stalledNoProgress,
+		blockedOutcomeStalledNoProgress: state.counters.blockedOutcomeStalledNoProgress,
+		blockedOutcomeDeliveryRejected: state.counters.blockedOutcomeDeliveryRejected,
 		lastStopReason: state.counters.lastStopReason,
 		lastRequestedSessionMatched: state.counters.lastRequestedSessionMatched,
 	}

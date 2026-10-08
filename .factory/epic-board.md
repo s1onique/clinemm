@@ -1,3 +1,44 @@
+## ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HALTED_AT_PRODUCTION_CONSUMER_GAP — 2026-10-08
+
+**Status:** HALTED at the second factory-reviewer verdict `HALT_HOST_OUTCOME_CONSUMER_STILL_DIAGNOSTIC_ONLY`. The CORRECTION01 state-integrity repairs (no-fabrication guard, epoch binding, identity triple, real Elm invariant, two production dogfood counters) are RETAINED as durable work and COMMITTED. The reviewer halted the closure because the only normal-runtime consumer of the marker (`SdkSessionRebuildScheduler.drain` boolean predicate at `sdk-session-rebuild-scheduler.ts:203`) does not consult the typed `reason` — the marker is enriched but no production lifecycle decision is bound to the typed verdict. The P1 recon ACT (`ACT-CLINEMM-ELMIZE-P1-BLOCKED-OUTCOME-CLASSIFICATION01`) closed with verdict `PASS_NO_ELM_MIGRATION_NEEDED_HOST_OUTCOME_GAP` and named this exact successor: "bounded P0 host repair that projects the `enqueueCompletionContinuationIfHeld` discriminated-union member to a typed host surface". This ACT does exactly that.
+
+**Approach (per C3):** enrich the existing production `DeferredCompletionBarrier` marker with a typed `reason` field. The marker is the existing always-on "blocked" surface (it gates the rebuild scheduler's `drain` via `isDeferredCompletionOutstanding` in `SdkController.ts:2775`). No new publication framework, no new wire field, no new test fixture, no new public API. The change is a single private helper `applyBlockedCompletionContinuationOutcome(...)` invoked by the `.then((outcome) => ...)` of BOTH call sites (L1132-1141 reevaluate path, L2297-2303 C10 path). The mapping is closed-enum: `stalled_no_progress → "stalled_no_progress"`, `rejected → "delivery_rejected"`, every other union member is no-op. C4 adversarial guards (live session identity + live taskId + epoch) prevent stale publication onto a replacement task.
+
+**Source-of-truth evidence:**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1347-1531` (`enqueueCompletionContinuationIfHeld`) — the **producer**; returns the 8-member discriminated union (verified frozen at L1347-1541, including `{ kind: "stalled_no_progress" }`).
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1132-1141` (reevaluate path) and `:2297-2303` (C10 path) — the **callers**; both `.then((outcome) => ...)` now invoke the new helper. Logger.warn calls preserved.
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1607-1700` — new private helper `applyBlockedCompletionContinuationOutcome` (single bounded method, no copy-paste drift, no Elm consult for the verdict).
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1580-1595` — `getDeferredCompletionBarrierForTesting` extended additively to expose the new `reason` field.
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:558-595` — `DeferredCompletionBarrier` interface extended with `readonly reason?: DeferredCompletionBarrierReason` (closed enum: `"stalled_no_progress" | "delivery_rejected" | "observation_unavailable"`).
+- `apps/vscode/src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts` (NEW, 7 tests) — drives the REAL `SdkSessionEventCoordinator` through the REAL `handleSessionEvent` BCB re-registration path; asserts the marker carries `reason: "stalled_no_progress"` after K+1 stalls, and `reason: "delivery_rejected"` after a `rejected` callback outcome. The C4 adversarial case (HBOP-20) verifies the task-replacement guard.
+
+**First divergent stage:** `OUTCOME_DISCARDED`. Pre-fix, both `.then` consumers only call `Logger.warn` on a subset of the union members; the typed verdict for `stalled_no_progress` and `rejected` is never projected to any host state. Post-fix, the marker is enriched with a typed `reason` from the same private helper.
+
+**Conservation gates (HEAD `d3ff42c4b`):**
+- Focused tests: **110 / 110 GREEN** (HBOP01 12, CCSLT01 10, CCSE01 5, CCSRL01 13, REARM01 7, CCUTO01 14, CCUPD01 9, CCCA01 35, PCRA01 5)
+- CORRECTION01 added 5 new tests: HBOP-30/31/32 (production counter), HBOP-40 (K-then-K+1 epoch binding), HBOP-50 (no fabrication), HBOP-60 (real Elm/TS invariant, replaces placeholder HBOP-30)
+- `cd apps/vscode && bun run check-types`: PASS
+- `cd apps/vscode && bun run lint`: PASS (2180 files, no fixes)
+- `git diff --check`: clean
+- `git diff -- apps/vscode/elm/`: EMPTY (Elm authority untouched per C15)
+- `git diff -- completion-continuation-control-elm.ts`: EMPTY
+- `git diff -- completion-authority-elm-authority*`: EMPTY
+- `git status --short`: clean tracked tree, two ACT-owned files
+- Protected stash `stash@{0}` on `d46223b51` preserved
+- C13 ablation (comment-out + restore): mapping is necessary; without it, HBOP-01/02/11 fail; with it, all 7 GREEN
+
+**Production code touched (2 files):** `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (helper + C4/CORRECTION01 guards + epoch binding, ~290 insertions) and `apps/vscode/src/sdk/completion-continuation-upstream-runtime.ts` (2 new production dogfood counters + record*() functions, ~76 insertions). New test (1 file): `apps/vscode/src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts` (12 tests, ~570 lines). Single durable change is this board entry plus `.factory/acts/ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01.md`.
+
+**CORRECTION02 halt (second factory review):**
+
+The factory reviewer returned `HALT_HOST_OUTCOME_CONSUMER_STILL_DIAGNOSTIC_ONLY`. The decisive observation: the producer-to-consumer chain is `enqueue result → reason stamped on private marker → optional diagnostic counter incremented → operator can inspect diagnostic counter CONDITIONAL → host handles a blocked lifecycle outcome NOT PROVEN`. The state-integrity repairs are PASS; the production-consumer gap is P0 OPEN and FROZEN.
+
+The reviewer explicitly forbade a CORRECTION02 review loop. The next step is a future operator-rendered ACT that executes a short probe of the real host consumer and defines the minimum required contract — NOT another diagnostic counter.
+
+The state-integrity repairs (no-fabrication guard, epoch binding, identity triple, real Elm invariant, two production dogfood counters) are COMMITTED in this closure as durable work. The CORRECTION01 closure verdict is `PASS_HOST_BLOCKED_OUTCOME_PUBLICATION_CORRECTION01_PRELIVE` for the state-integrity subset only.
+
+**Forward-look (LIVE qualification, NOT chartered here):** The operator's exact-head VSIX packaging, installation, and LIVE qualification is governed by §C22 of the closure artifact. The contract requires observing: (1) one host-owned blocked outcome (marker.reason is typed), (2) correct session/task correlation, (3) no repeated continuation for unchanged obligation, (4) no task completion committed, (5) no unavailable-tool mandate, (6) blocked state visible through the marker consumer. After held results are consumed, the host state must reevaluate and the legitimate completion path must become available. A new model turn is NOT proof of consumption; a log line is NOT proof of lifecycle change. The `PASS_HOST_BLOCKED_OUTCOME_PUBLICATION_LIVE` verdict is reserved for a future operator-rendered ACT that runs this contract against an installed exact-head build.
+
 ## ACT-CLINEMM-ELMIZE-P1-BLOCKED-OUTCOME-CLASSIFICATION01 — PASS_NO_ELM_MIGRATION_NEEDED_HOST_OUTCOME_GAP — 2026-10-08
 
 **Status:** CLOSED at the C1–C8 recon gates. **No production code change warranted. No new Elm kernel authorized.** The pure semantic decision the brief asks about ("when completion is forbidden and no useful continuation can make progress, what authoritative outcome does the host produce, and who consumes it?") is ALREADY OWNED by the existing Continuation Control Elm kernel (`Policy.elm` P2 + P5). The observable seam the LIVE specimen lacks is a HOST PUBLICATION GAP, not a pure policy gap. A fourth Elm kernel would re-introduce the `HALT_DUAL_BLOCKED_OUTCOME_AUTHORITY` defect the brief forbids.
