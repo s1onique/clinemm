@@ -2502,6 +2502,23 @@ export class Controller {
 			setTurnPhase: (phase, anchorTs, writerId) =>
 				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			getTurnPhase: () => this.turnStateTracker.currentPhase,
+			// ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+			// CTQC01 bounded host correlation accessor. The same
+			// `liveTools` projection that the
+			// `buildSdkControllerEnqueueCompletionContinuation`
+			// callback uses for the capability projection is also
+			// exposed at the SdkSessionEventCoordinator level so
+			// the bounded correlation guard at the BCB
+			// re-registration site can consult the live tool
+			// registry. When the registry does not include
+			// `command_status`, the guard publishes a SINGLE typed
+			// blocked outcome (`reason: "observation_unavailable"`)
+			// and stops re-firing the coalesced continuation.
+			liveTools: () => {
+				const active = this.sessions?.getActiveSession()
+				const sid = active?.sessionId
+				return sid ? active?.sdkHost?.liveTools?.(sid) : undefined
+			},
 			captureProviderApiError: (event) => this.captureProviderFailure(event),
 			beginProviderFailureTelemetryTurn: () => this.beginProviderFailureTelemetryTurn(),
 			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5

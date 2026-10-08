@@ -148,6 +148,19 @@ export interface CompletionContinuationUpstreamCountersSnapshot {
 	 * before the correction.
 	 */
 	readonly blockedOutcomeDeliveryRejected?: number
+	/**
+	 * ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+	 * Production-side counter for the typed host-owned
+	 * `observation_unavailable` publication. Increments when the
+	 * bounded correlation guard at the BCB re-registration site
+	 * detects that the live resumed-turn tool registry does NOT
+	 * include an observation mechanism. The counter is the
+	 * parallel publication surface for the CTQC01 fix; mirrors
+	 * `blockedOutcomeStalledNoProgress` and
+	 * `blockedOutcomeDeliveryRejected`. Backward-compatible:
+	 * absent on snapshots produced before the CTQC01 fix.
+	 */
+	readonly blockedOutcomeObservationUnavailable?: number
 	readonly lastStopReason: CompletionContinuationUpstreamStopReason | null
 	/** Tracks whether the requested active session id matched the
 	 * marker's sessionId the LAST time the coordinator's
@@ -196,6 +209,13 @@ interface State {
 		 * `delivery_rejected` publication.
 		 */
 		blockedOutcomeDeliveryRejected: number
+		/**
+		 * ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+		 * Production-side counter for the typed host-owned
+		 * `observation_unavailable` publication. Mirrors
+		 * `CompletionContinuationUpstreamCountersSnapshot.blockedOutcomeObservationUnavailable`.
+		 */
+		blockedOutcomeObservationUnavailable: number
 		lastStopReason: CompletionContinuationUpstreamStopReason | null
 		lastRequestedSessionMatched: boolean | null
 	}
@@ -229,6 +249,7 @@ function freshCounters(): State["counters"] {
 		stalledNoProgress: 0,
 		blockedOutcomeStalledNoProgress: 0,
 		blockedOutcomeDeliveryRejected: 0,
+		blockedOutcomeObservationUnavailable: 0,
 		lastStopReason: null,
 		lastRequestedSessionMatched: null,
 	}
@@ -505,6 +526,24 @@ export function recordBlockedOutcomeDeliveryRejected(): void {
 	state.counters.lastStopReason = "stalled_no_progress"
 }
 
+/**
+ * ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+ *
+ * Production-side host publication of an `observation_unavailable`
+ * verdict onto the deferred-completion-barrier marker. Mirrors
+ * `recordBlockedOutcomeStalledNoProgress` and
+ * `recordBlockedOutcomeDeliveryRejected`. The counter increments
+ * when the bounded correlation guard at the BCB re-registration
+ * site detects that the model has no observation capability and
+ * publishes a typed blocked outcome.
+ */
+export function recordBlockedOutcomeObservationUnavailable(): void {
+	if (!_state.enabled) return
+	const state = getOrInitState()
+	state.counters.blockedOutcomeObservationUnavailable = (state.counters.blockedOutcomeObservationUnavailable ?? 0) + 1
+	state.counters.lastStopReason = "stalled_no_progress"
+}
+
 export function recordAuthorityCheckReached(): void {
 	if (!_state.enabled) return
 	const state = getOrInitState()
@@ -546,6 +585,7 @@ export function getCompletionContinuationUpstreamCounters(): CompletionContinuat
 		stalledNoProgress: state.counters.stalledNoProgress,
 		blockedOutcomeStalledNoProgress: state.counters.blockedOutcomeStalledNoProgress,
 		blockedOutcomeDeliveryRejected: state.counters.blockedOutcomeDeliveryRejected,
+		blockedOutcomeObservationUnavailable: state.counters.blockedOutcomeObservationUnavailable,
 		lastStopReason: state.counters.lastStopReason,
 		lastRequestedSessionMatched: state.counters.lastRequestedSessionMatched,
 	}

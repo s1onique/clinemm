@@ -17,6 +17,15 @@ import {
 	// silent default-Authorize fallback.
 	type ElmCompletionAuthorityDecision,
 } from "./completion-authority-elm-authority"
+// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C6 / C7):
+// the held-set progress classification is a kernel concern. The
+// production seam (`enqueueCompletionContinuationIfHeld`) consults
+// the existing Continuation Control Elm kernel BEFORE deciding
+// the outcome. The kernel's `failureReason: "stalled_no_progress"`
+// is the SOLE semantic authority for the no-progress blocking
+// decision; the host's prior inlined `isStrictSupersetOf` check is
+// removed (C7 ablation 4 — legacy TS authority removed).
+import { pickContinuationDirectiveForPublication } from "./completion-continuation-control-elm"
 import {
 	recordActiveSessionLookupEntered,
 	recordActiveSessionMissing,
@@ -24,6 +33,7 @@ import {
 	recordAgentTurnDoneNotificationSeen,
 	recordAuthorityCheckReached,
 	recordBlockedOutcomeDeliveryRejected,
+	recordBlockedOutcomeObservationUnavailable,
 	recordBlockedOutcomeStalledNoProgress,
 	recordDedupePermitted,
 	recordDedupeSuppressed,
@@ -54,15 +64,6 @@ import {
 	recordExtensionHostHotloopSessionEvent,
 } from "./extension-host-hotloop-diagnostic"
 import { shouldEmitExtensionHostQueueLog } from "./extension-host-queue-log-policy"
-// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C6 / C7):
-// the held-set progress classification is a kernel concern. The
-// production seam (`enqueueCompletionContinuationIfHeld`) consults
-// the existing Continuation Control Elm kernel BEFORE deciding
-// the outcome. The kernel's `failureReason: "stalled_no_progress"`
-// is the SOLE semantic authority for the no-progress blocking
-// decision; the host's prior inlined `isStrictSupersetOf` check is
-// removed (C7 ablation 4 — legacy TS authority removed).
-import { pickContinuationDirectiveForPublication } from "./completion-continuation-control-elm"
 import type { MessageTranslatorState, TranslationResult } from "./message-translator"
 import { translateSessionEvent } from "./message-translator"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
@@ -461,6 +462,33 @@ export interface SdkSessionEventCoordinatorOptions {
 	}) => Promise<{
 		kind: "delivered" | "rejected" | "session_gone" | "no_held_job_ids"
 	}>
+	/**
+	 * ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+	 *
+	 * Bounded host correlation accessor for the live resumed-turn tool
+	 * registry. The coordinator consults this synchronously at the
+	 * BCB01-CORRECTION03 re-registration + enqueue trigger
+	 * (`handleSessionEvent` L2570+). When the model has no
+	 * `command_status` (or any observation capability), the
+	 * coalesced continuation is useless — handing the model a prompt
+	 * that lists held jobIds but instructs it to call a tool it
+	 * does not have produces a bounded loop where the model re-issues
+	 * `submit_and_exit` (its only available action) and the BCB
+	 * re-registers. The host publishes a SINGLE typed blocked
+	 * outcome (`reason: "observation_unavailable"`) and stops
+	 * re-firing the coalesced continuation.
+	 *
+	 * The per-job wake path (`enqueueTerminalWake` →
+	 * `formatTerminalWakePrompt` → `sdkHost.send`) is NOT policed
+	 * by this accessor — the wake is the genuine observation
+	 * notification path. The bounded correlation only affects the
+	 * COALESCED continuation.
+	 *
+	 * Optional: when absent, the coordinator preserves the
+	 * pre-CTQC01 behavior (no correlation check; the host re-fires
+	 * the coalesced continuation regardless of capability).
+	 */
+	liveTools?: () => readonly string[] | undefined
 	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01:
 	 *
@@ -1848,10 +1876,37 @@ export class SdkSessionEventCoordinator {
 			// surface the verdict in a non-effect-bearing log
 			// channel. A repeated verdict (idempotence) is
 			// also a no-op (we do not re-log either).
-			Logger.warn(
-				`[SdkController] Elm continuation-control fail-closed at writerId=block-publication; reason=${outcome.failureReason}`,
-			)
-			return
+			//
+			// ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+			// EXCEPTION: `observation_unavailable` is a closed-enum
+			// value of `DeferredCompletionBarrierReason` (defined at
+			// L610) that the host BOTH stamps on the marker AND
+			// publishes as a typed blocked outcome. The reason:
+			// the host's CTQC01 bounded correlation guard
+			// synthesizes a `fail_closed(observation_unavailable)`
+			// outcome at the BCB re-registration site when the
+			// model has no observation capability. The host's
+			// intent is "the model cannot progress; publish a
+			// single typed blocked outcome and stop re-firing".
+			// This is a HOST-OWNED detection (the kernel does not
+			// see the capability projection at the BCB site), so
+			// the incident publication is via the existing
+			// `recordRuntimeError` sink with the additive source
+			// `completion-continuation-observation-unavailable`.
+			// The marker is stamped with `reason:
+			// "observation_unavailable"` and the
+			// `recordBlockedOutcomeObservationUnavailable` counter
+			// increments.
+			if (outcome.failureReason === "observation_unavailable") {
+				reason = "observation_unavailable"
+				// Fall through to the marker stamp + counter + incident
+				// publication path (the rest of the function).
+			} else {
+				Logger.warn(
+					`[SdkController] Elm continuation-control fail-closed at writerId=block-publication; reason=${outcome.failureReason}`,
+				)
+				return
+			}
 		} else {
 			// C2: every other union member is not a "blocked"
 			// verdict. No-op preserves the marker (the BCB
@@ -1962,6 +2017,14 @@ export class SdkSessionEventCoordinator {
 			recordBlockedOutcomeStalledNoProgress()
 		} else if (reason === "delivery_rejected") {
 			recordBlockedOutcomeDeliveryRejected()
+		} else if (reason === "observation_unavailable") {
+			// ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+			// CTQC01 bounded correlation guard published this verdict
+			// at the BCB re-registration site. The counter is the
+			// production-readable surface that proves the typed
+			// verdict is observable, not just a test-accessor
+			// decoration.
+			recordBlockedOutcomeObservationUnavailable()
 		}
 		// ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01:
 		// LIFECYCLE CONSUMER. Reuse the existing
@@ -1979,8 +2042,21 @@ export class SdkSessionEventCoordinator {
 		// (mirroring the existing pre-MAPPING01 behavior where the
 		// dogfood counter and the marker stamp still fire).
 		if (this.options.taskTelemetry) {
-			const source: RuntimeErrorSource =
-				reason === "stalled_no_progress" ? "completion-continuation-stalled" : "completion-continuation-delivery-rejected"
+			let source: RuntimeErrorSource
+			if (reason === "stalled_no_progress") {
+				source = "completion-continuation-stalled"
+			} else if (reason === "observation_unavailable") {
+				// ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+				// CTQC01 bounded correlation guard. The additive
+				// source `completion-continuation-observation-unavailable`
+				// (ExtensionMessage.ts:1155) flows through the same
+				// `recordRuntimeError(incident)` sink. The V1
+				// webview ignores the source string, so the
+				// additive enum extension is safe.
+				source = "completion-continuation-observation-unavailable"
+			} else {
+				source = "completion-continuation-delivery-rejected"
+			}
 			const incident: RuntimeErrorIncident = {
 				errorClass: "UNKNOWN_RUNTIME_ERROR",
 				source,
@@ -2521,11 +2597,33 @@ export class SdkSessionEventCoordinator {
 										? `[SdkController] submit_and_exit suppressed for session ${activeSession.sessionId}: wake-driven turn owns terminal completion for one or more notify-owned jobs launched by this turn (BNCA barrier)`
 										: `[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has outstanding autonomous work (pendingPrompts=${pendingPromptsKnown}, activeNotify=${activeNotifyCount}); holding completion (TQCB01 barrier)`,
 								)
+								// ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01-CORRECTION01-ELIGIBILITY-AND-IDENTITY:
+								// Preserve the existing marker's `reason` field
+								// across BCB re-registrations ONLY when the
+								// previous marker's identity triple (sessionId,
+								// taskId, epoch) matches the current obligation
+								// (P0 #2 — identity discipline). A new obligation
+								// (epoch bump + new held set) does NOT inherit
+								// the previous verdict — the bounded guard's
+								// `sameObligationAlreadyObservationUnavailable`
+								// check must evaluate against the SAME obligation,
+								// not "any previous marker".
+								const _bcbCurrentSessionId = activeSession.sessionId
+								const _bcbCurrentTaskId = this.options.getTask?.()?.taskId
+								const _bcbCurrentEpoch = this.options.messageTranslatorState.getMinter().epoch
+								const _bcbPreviousMarker = this.deferredCompletionBarrier
+								const _bcbSameIdentity =
+									_bcbPreviousMarker !== undefined &&
+									_bcbPreviousMarker.sessionId === _bcbCurrentSessionId &&
+									_bcbPreviousMarker.taskId === _bcbCurrentTaskId &&
+									_bcbPreviousMarker.epoch === _bcbCurrentEpoch
+								const preservedReason = _bcbSameIdentity ? _bcbPreviousMarker.reason : undefined
 								this.deferredCompletionBarrier = {
-									sessionId: activeSession.sessionId,
-									taskId: this.options.getTask?.()?.taskId,
-									epoch: this.options.messageTranslatorState.getMinter().epoch,
+									sessionId: _bcbCurrentSessionId,
+									taskId: _bcbCurrentTaskId,
+									epoch: _bcbCurrentEpoch,
 									deferredAt: Date.now(),
+									...(preservedReason ? { reason: preservedReason } : {}),
 								}
 								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01:
 								// Clear the completion-continuation-dedupe marker
@@ -2570,62 +2668,134 @@ export class SdkSessionEventCoordinator {
 								// `enqueueCompletionContinuationIfHeld` docstring).
 								// Fire AT MOST ONCE per (sessionId, epoch) when the
 								// BCB01 §0.1 second conjunct is the hold cause.
-								if (unconsumedOwnedTerminalResultsForC10 > 0 && !suppressOriginatingCompletion) {
-									// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01:
-									// capture sessionId/taskId at fire time so the
-									// `.then` mapping can validate the resolution is
-									// still current (C4 adversarial guard against a
-									// task replacement between fire and resolution).
-									//
-									// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
-									// ALSO capture the enqueue's epoch. The marker
-									// registered on the prior line (BCB block) and
-									// the enqueue fired here share the SAME
-									// `getMinter().epoch` value (the BCB registration
-									// reads the minter, the enqueue reads it again -
-									// no `nextMessageId()` happens between them, so
-									// the epoch is the same). The captured
-									// `enqueueEpoch` is the obligation's identity;
-									// the helper refuses to stamp a marker whose
-									// epoch differs.
-									const capturedSessionId = activeSession.sessionId
-									const capturedTaskId = this.options.getTask?.()?.taskId
-									const capturedEnqueueEpoch = this.options.messageTranslatorState.getMinter().epoch
-									void this.enqueueCompletionContinuationIfHeld(
-										capturedSessionId,
-										unconsumedOwnedTerminalResultsForC10,
-										capturedTaskId,
-									)
-										.then((outcome) => {
-											if (outcome.kind === "delivered") {
-												Logger.warn(
-													`[SdkController] completion continuation turn enqueued for session=${capturedSessionId} heldJobIds=${outcome.heldJobIds.length} (epoch=${outcome.continuationSessionEpoch})`,
-												)
-											}
-											// Publish a typed host-owned reason
-											// for the blocked outcomes (C5/C6/C7).
-											// No-op for non-blocked outcomes.
-											//
-											// CORRECTION01: pass the captured
-											// enqueue epoch so the helper binds
-											// the publication to a marker of the
-											// same epoch.
+								// ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+								// Bounded host correlation guard. When the live
+								// resumed-turn tool registry does NOT include `command_status`
+								// (the observation mechanism the coalesced continuation prompt
+								// instructs the model to call), the coalesced continuation is
+								// useless — handing the model a prompt it cannot act on
+								// produces a bounded loop. The host publishes a SINGLE typed
+								// blocked outcome (`reason: "observation_unavailable"`) and
+								// stops re-firing the coalesced continuation until the
+								// capability is restored. The per-job wake path is unaffected.
+								// CORRECTION01 eligibility-predicate inversion (P0 #1):
+								// The bounded host correlation guard must NOT publish
+								// a blocked outcome outside the eligibility branch.
+								// `canObserveHeldResults` is consulted ONLY inside
+								// the eligibility branch (held terminal observation
+								// exists AND not suppressed). A non-held BCB block
+								// (e.g. `outstandingAutonomousWork === true` from
+								// pending prompts only) does NOT enter the
+								// eligibility branch and the guard does NOT publish
+								// `observation_unavailable` for it. The marker is
+								// registered by the BCB block above, but its
+								// `reason` field stays undefined (the CORRECTION01
+								// identity discipline does not stamp a verdict for
+								// a non-held BCB block).
+								//
+								// `liveTools === undefined` (capability unknown) is
+								// a distinct branch: the host does NOT publish
+								// `observation_unavailable` either (that would be a
+								// false positive); the existing
+								// `enqueueCompletionContinuationIfHeld` path runs
+								// and the downstream
+								// `buildSdkControllerEnqueueCompletionContinuation`
+								// returns `rejected` for `liveTools === undefined`.
+								const eligibleForCoalescedContinuation =
+									unconsumedOwnedTerminalResultsForC10 > 0 && !suppressOriginatingCompletion
+								if (eligibleForCoalescedContinuation) {
+									const liveToolNames = this.options.liveTools?.() ?? undefined
+									const canObserveHeldResults =
+										liveToolNames !== undefined ? liveToolNames.includes("command_status") : null
+									const sameObligationAlreadyObservationUnavailable =
+										this.deferredCompletionBarrier?.reason === "observation_unavailable"
+									if (canObserveHeldResults === false) {
+										// Bounded correlation: the model has no observation
+										// mechanism. Publish a SINGLE typed blocked
+										// outcome and skip the enqueue. The marker is
+										// held with reason stamped. The next cycle (if
+										// it has the same identity + different capability)
+										// is allowed to retry.
+										const capturedSessionId = activeSession.sessionId
+										const capturedTaskId = this.options.getTask?.()?.taskId
+										const capturedEnqueueEpoch = this.options.messageTranslatorState.getMinter().epoch
+										if (!sameObligationAlreadyObservationUnavailable) {
 											this.applyBlockedCompletionContinuationOutcome(
 												{
 													sessionId: capturedSessionId,
 													taskId: capturedTaskId,
 													enqueueEpoch: capturedEnqueueEpoch,
 												},
-												outcome,
+												{
+													kind: "fail_closed" as const,
+													failureReason: "observation_unavailable" as const,
+												},
 											)
-										})
-										.catch((error) => {
-											Logger.warn(
-												`[SdkController] completion continuation enqueue failed: ${
-													error instanceof Error ? error.message : String(error)
-												}`,
-											)
-										})
+										}
+									} else {
+										// canObserveHeldResults === true OR === null (capability unknown).
+										// The original code enqueued in both cases (the null case
+										// is the "honest capability unknown" host; the downstream
+										// SdkController rejects undefined liveTools at L923-930
+										// so an honest unknown falls through to `rejected`).
+										// The CORRECTION01 bounded guard only fires when capability is
+										// PROVEN unavailable (canObserveHeldResults === false).
+										// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01:
+										// capture sessionId/taskId at fire time so the
+										// `.then` mapping can validate the resolution is
+										// still current (C4 adversarial guard against a
+										// task replacement between fire and resolution).
+										//
+										// ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01-CORRECTION01-CONSUMER-AND-EPOCH:
+										// ALSO capture the enqueue's epoch. The marker
+										// registered on the prior line (BCB block) and
+										// the enqueue fired here share the SAME
+										// `getMinter().epoch` value (the BCB registration
+										// reads the minter, the enqueue reads it again -
+										// no `nextMessageId()` happens between them, so
+										// the epoch is the same). The captured
+										// `enqueueEpoch` is the obligation's identity;
+										// the helper refuses to stamp a marker whose
+										// epoch differs.
+										const capturedSessionId = activeSession.sessionId
+										const capturedTaskId = this.options.getTask?.()?.taskId
+										const capturedEnqueueEpoch = this.options.messageTranslatorState.getMinter().epoch
+										void this.enqueueCompletionContinuationIfHeld(
+											capturedSessionId,
+											unconsumedOwnedTerminalResultsForC10,
+											capturedTaskId,
+										)
+											.then((outcome) => {
+												if (outcome.kind === "delivered") {
+													Logger.warn(
+														`[SdkController] completion continuation turn enqueued for session=${capturedSessionId} heldJobIds=${outcome.heldJobIds.length} (epoch=${outcome.continuationSessionEpoch})`,
+													)
+												}
+												// Publish a typed host-owned reason
+												// for the blocked outcomes (C5/C6/C7).
+												// No-op for non-blocked outcomes.
+												//
+												// CORRECTION01: pass the captured
+												// enqueue epoch so the helper binds
+												// the publication to a marker of the
+												// same epoch.
+												this.applyBlockedCompletionContinuationOutcome(
+													{
+														sessionId: capturedSessionId,
+														taskId: capturedTaskId,
+														enqueueEpoch: capturedEnqueueEpoch,
+													},
+													outcome,
+												)
+											})
+											.catch((error) => {
+												Logger.warn(
+													`[SdkController] completion continuation enqueue failed: ${
+														error instanceof Error ? error.message : String(error)
+													}`,
+												)
+											})
+									}
 								}
 							} else {
 								// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 +

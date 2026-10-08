@@ -1151,6 +1151,16 @@ export type RuntimeErrorSource =
 	| "run-commands-spawn"
 	| "completion-continuation-stalled"
 	| "completion-continuation-delivery-rejected"
+	/**
+	 * ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
+	 * Host-owned detection of a held completion obligation for which
+	 * the live resumed-turn tool registry does NOT include an
+	 * observation mechanism (e.g. `command_status`). The host
+	 * publishes a typed blocked outcome and stops re-firing the
+	 * coalesced continuation. The V1 webview ignores the source
+	 * string, so this additive extension is safe.
+	 */
+	| "completion-continuation-observation-unavailable"
 
 export interface QueuedPrompt {
 	id: string
