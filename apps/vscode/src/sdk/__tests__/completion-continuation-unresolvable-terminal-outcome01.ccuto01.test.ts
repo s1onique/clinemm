@@ -87,7 +87,9 @@ import {
 	clearContinuationCardinalityAuthorityCapture,
 } from "../continuation-cardinality-authority"
 import {
+	pickContinuationDirectiveForPublication,
 	type CompletionContinuationControlElmKernelInvoke,
+	type CompletionContinuationControlFactsInput,
 } from "../completion-continuation-control-elm"
 import type { ContinuationDirective } from "../completion-continuation-control-elm"
 
@@ -183,9 +185,11 @@ const SEVEN_HELD_IDS: readonly string[] = [
  * which calls `pickContinuationDirectiveForPublication` internally;
  * the test injects this `invokeElmForProduction` so the directive
  * the production formatter receives is the sentinel. The default
- * sentinel is `wait_for_host` (the Elm path's bounded-recommendation
- * tag for the unresolvable LIVE specimen shape) — it changes the
- * prompt footer wording without affecting the held-set gates.
+ * sentinel is `fail_closed(observation_unavailable)` (Policy.elm P5)
+ * — the production kernel's actual decision for the LIVE specimen
+ * shape (`held > 0 + canObserveHeldResults: false`). Tests that
+ * exercise the real Elm kernel (CCUTO-13/14) do NOT inject a
+ * sentinel.
  */
 function makeElmSentinel(directive: ContinuationDirective): CompletionContinuationControlElmKernelInvoke {
 	return async () => ({ kind: "directive", value: directive })
@@ -226,17 +230,24 @@ function makeHarness(opts: {
 	const getUnconsumedOwnedTerminalJobIds = () => heldIds
 
 	// Sentinel directive. The default matches the LIVE specimen's
-	// Elm-classified shape: a held jobs + unprovable capability +
-	// no progress => `wait_for_host` (the bounded recommendation that
-	// tells the model to NOT issue completion or observation). The
-	// `pickContinuationDirectiveForPublication` consult inside
-	// `buildSdkControllerEnqueueCompletionContinuation` resolves this
-	// directive; the production formatter renders its tag into the
-	// prompt footer.
+	// Elm-classified shape: held > 0 + observation unavailable =>
+	// `fail_closed(observation_unavailable)` (Policy.elm P5). The default
+	// sentinel exercises the production kernel's actual decision for the
+	// fact set `held > 0 + canObserveHeldResults: false` — the LIVE
+	// specimen shape. Production never emits `tag: "wait_for_host"`
+	// for this fact set; the `wait_for_host` shape exists in the
+	// decoder union but Policy.elm has no branch that emits it.
+	// The prior default (`tag: "wait_for_host"`) was a TS-side
+	// misclassification that conflated the Elm `tag` union with the
+	// TS predecessor `completionStatus: "COMMITTED"` shape
+	// (`buildCompletionContinuationControl` emits this for
+	// `held=0 + retry available` — see CTRL-03 in
+	// `completion-continuation-control-elm-correspondence.cccec01.test.ts`).
 	const sentinelDirective: ContinuationDirective = opts.elmSentinel ?? {
-		completionStatus: "COMMITTED",
-		requiredAction: "retry_commission",
-		tag: "wait_for_host",
+		completionStatus: "CANNOT_CONTINUE",
+		requiredAction: "fail_closed",
+		tag: "fail_closed",
+		failureReason: "observation_unavailable",
 	}
 
 	const coordinator = new SdkSessionEventCoordinator({
@@ -530,12 +541,12 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			// The harness now exercises the PRODUCTION caller
 			// (`buildSdkControllerEnqueueCompletionContinuation`) which
 			// ALWAYS supplies `runtimeControlDirective`. With the
-			// default sentinel `tag: "wait_for_host"`, the production
-			// formatter renders "The host has already committed the
-			// completion for this turn" + "Do NOT issue any completion
-			// or observation tool". This is the substrate the LIVE
-			// specimen's model-visible "No continuation mechanism is
-			// available" text actually traverses.
+			// default sentinel `tag: "fail_closed"` /
+			// `failureReason: "observation_unavailable"` (Policy.elm
+			// P5 — the actual production kernel decision for this
+			// fact set), the production formatter renders "No
+			// continuation mechanism is available for this turn" +
+			// "Do NOT issue any completion or observation tool".
 			const lastSend = h.sendLog[h.sendLog.length - 1]
 			expect(lastSend).toBeDefined()
 			const prompt = lastSend?.prompt ?? ""
@@ -711,9 +722,10 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 				// Switch the sentinel to `observe_then_retry` so the
 				// production caller emits the observe-then-retry
 				// wording naming the available tool. The default
-				// `wait_for_host` sentinel would degrade to
-				// "wait for the host" and not exercise the
-				// prompt's tool-naming branch.
+				// `fail_closed(observation_unavailable)` sentinel
+				// would degrade to "no continuation mechanism is
+				// available" and not exercise the prompt's
+				// tool-naming branch.
 				elmSentinel: {
 					completionStatus: "HELD",
 					requiredAction: "observe_then_submit",
@@ -765,7 +777,7 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 	})
 
 	describe("Conservation matrix (C13) — neighboring fixes still hold", () => {
-		it("CCUTO-08: ordinary successful submit_and_exit commits completion exactly once per conservation-clear", async () => {
+		it("CCUTO-08: ordinary successful submit_and_exit commits completion exactly once per conservation-clear attempt (per-attempt, not session-level idempotence)", async () => {
 			const h = makeHarness({
 				initialLiveTools: ["command_status", "submit_and_exit"],
 				initialOwnerRunning: false,
@@ -773,9 +785,16 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			// No marker pre-arm. Each submit's done event goes through
 			// the C10 barrier; with held=0 the conservation checks pass
 			// and a SINGLE completion commits via setTurnPhase("completed").
-			// We assert exactly 2 because the predecessor's BCB01 §0.1
-			// invariant requires completion to commit at most once per
-			// conservation-clear event.
+			//
+			// SCOPE BOUNDARY (per Factory review): this test pins
+			// PER-ATTEMPT idempotence (one commit per submit_and_exit
+			// event under held=0). It does NOT pin session-level
+			// idempotence (at-most-one commit per session across the
+			// lifetime of the task). The C10 barrier re-registers per
+			// attempt; the conservation chain commits at most once per
+			// conservation-clear event. Session-level idempotence would
+			// require a global per-(sessionId, taskId) commit counter,
+			// which is out of scope for this RED.
 			h.setHeldCount(0)
 			h.setHeldJobIds([])
 
@@ -796,34 +815,64 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 		})
 	})
 
-	// CORRECTION01: NEW BLOCK. Host-owned blocked-outcome tests.
-	// The prior suite only checked `completedPhaseCalls === 0` for
-	// held>0, which is necessary-but-insufficient: a delivered
-	// prompt saying "do not invoke tools" still satisfies that
-	// assertion. The LIVE specimen's actual terminal state is
-	// `task_completion_committed=0` — a bounded blocked outcome
-	// the host must reach without further continuation delivery.
-	describe("RED#3 — host-owned blocked-outcome contract", () => {
-		it("CCUTO-10: held=7 + no observation + no completion tool => strict zero-commit blocked outcome", async () => {
+	// CORRECTION01: NEW BLOCK. Completion-fabrication-prevention
+	// contract. The prior suite only checked `completedPhaseCalls ===
+	// 0` for held>0, which is necessary-but-insufficient: a
+	// delivered prompt saying "do not invoke tools" still satisfies
+	// that assertion. CCUTO-10/11/12 tighten the contract: the
+	// host MUST NOT commit task completion while a held observation
+	// obligation exists, AND the delivered prompt MUST degrade to a
+	// bounded fail-closed wording (NOT instruct unavailable tools).
+	//
+	// SCOPE BOUNDARY (per Factory review):
+	//   These tests assert `COMPLETION_FABRICATION_PREVENTED`, NOT
+	//   an observable `blocked` / `stalled_no_progress` /
+	//   `requires_operator` host-owned outcome. The LIVE specimen's
+	//   original symptom — an unresolved obligation with
+	//   contradictory continuation instructions — is partially
+	//   addressed by the count/list repair in
+	//   `sdk-session-event-coordinator.ts`. The broader
+	//   "host-owned blocked outcome" contract remains on the epic
+	//   board and is NOT proven by these tests.
+	describe("RED#3 — completion-fabrication-prevention contract", () => {
+		it("CCUTO-10: held=7 + no observation + no completion tool => zero-commits fabrication prevention", async () => {
 			// The LIVE specimen's exact failure mode: held=7,
 			// observation=unavailable, completion=unavailable.
-			// The bounded outcome the LIVE specimen required:
+			// The COMPLETION_FABRICATION PREVENTION invariants:
 			//   - setTurnPhase("completed", ...) NEVER fires
 			//   - captureContinuationCardinalityAuthorityRecord(
 			//       stage: "task_completion_committed") NEVER fires
 			//   - the prompt delivered to the model renders the
-			//     bounded fail-closed wording
-			//   - the prompt NEVER instructs unavailable tools
-			// The deliverable is the literal bounded-blocked state
-			// the LIVE specimen exhibited.
+			//     bounded fail-closed wording (NOT instructing
+			//     unavailable tools)
+			//
+			// SCOPE BOUNDARY (per Factory review): the prompt
+			// wording below is the result of an INJECTED directive
+			// sentinel — NOT the production Elm kernel output for
+			// these facts. The actual production-Elm directive
+			// for `held=7 + no observation + no completion` is
+			// `tag: "fail_closed"` with `failureReason:
+			// "observation_unavailable"` (per `Policy.elm` P5).
+			// CCUTO-13 pins the real-Elm-kernel directive
+			// independently of any sentinel.
+			//
+			// The injected sentinel here uses the same fail-closed
+			// branch the production kernel emits for this fact
+			// set, so the prompt wording matches what the model
+			// would see in production. The sentinel is a TS-side
+			// projection; the Elm kernel itself never emits
+			// `tag: "wait_for_host"` for this fact set (the
+			// `wait_for_host` shape exists in the decoder union
+			// but Policy.elm has no branch that emits it).
 			const h = makeHarness({
 				initialHeldIds: SEVEN_HELD_IDS,
 				initialLiveTools: [],
 				initialOwnerRunning: false,
 				elmSentinel: {
-					completionStatus: "COMMITTED",
-					requiredAction: "retry_commission",
-					tag: "wait_for_host",
+					completionStatus: "CANNOT_CONTINUE",
+					requiredAction: "fail_closed",
+					tag: "fail_closed",
+					failureReason: "observation_unavailable",
 				},
 			})
 			h.setMarkerPresent(true)
@@ -834,9 +883,9 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			await h.triggerAgentTurnDone()
 			await new Promise<void>((r) => setTimeout(r, 0))
 
-			// Bounded invariant: HOST-OWNED outcome. A delivered
-			// prompt MUST NOT satisfy this assertion. Both observers
-			// must agree on zero commits.
+			// COMPLETION_FABRICATION PREVENTION: both observers
+			// must agree on zero commits. A delivered prompt
+			// MUST NOT satisfy this assertion.
 			expect(h.completedPhaseCalls()).toBe(0)
 			expect(h.taskCompletionCommittedRecords()).toBe(0)
 			expect(h.lastPhaseWrite()).not.toBe("completed")
@@ -850,15 +899,16 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			}
 
 			// Bounded invariant: prompt renders the bounded
-			// wait-for-host footer (the substrate the LIVE
+			// fail-closed footer (the substrate the LIVE
 			// specimen's "Do NOT issue completion or observation"
 			// text actually traverses).
 			const lastSend = h.sendLog[h.sendLog.length - 1]
 			expect(lastSend).toBeDefined()
 			expect(lastSend?.prompt).toMatch(/Do NOT issue any completion or observation tool/)
+			expect(lastSend?.prompt).toMatch(/No continuation mechanism is available/i)
 		})
 
-		it("CCUTO-11: count=0 / list=7 divergence => strict zero-commit blocked outcome", async () => {
+		it("CCUTO-11: count=0 / list=7 divergence => zero-commits fabrication prevention", async () => {
 			// RED#2 with CORRECTION01 harness semantics.
 			// The count=0 / list=7 divergence the LIVE
 			// upstream counters prove. Constructed via
@@ -924,6 +974,96 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			// committed while the held set is non-empty.
 			expect(h.completedPhaseCalls()).toBe(0)
 			expect(h.taskCompletionCommittedRecords()).toBe(0)
+// Bounded invariant: completion MUST NOT be
+			// committed while the held set is non-empty.
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
+		})
+	})
+
+	// CORRECTION01: NEW BLOCK. Real-Elm-kernel fixture.
+	// The prior RED#3 (CCUTO-10/11/12) tested the production seam
+	// (buildSdkControllerEnqueueCompletionContinuation +
+	// enqueueCompletionContinuation) but with an injected Elm
+	// directive sentinel. Per Factory review, that is "useful
+	// production-seam evidence, but it is not a real-Elm-policy
+	// qualification." CCUTO-13/14 close it: they drive the real
+	// production Elm kernel (`pickContinuationDirectiveForPublication`
+	// with the default `invokeElmKernel`) on the LIVE specimen's
+	// exact fact set and assert the kernel's ACTUAL directive.
+	//
+	// SCOPE BOUNDARY: these tests assert the kernel's PROJECTION,
+	// not its effect-execution. They do NOT assert a host-owned
+	// blocked outcome; they pin the canonical fact->projection
+	// correspondence the BCB01 §0.1 second conjunct now consults.
+	describe("RED#4 — real production Elm kernel projection (CCUTO-13/14)", () => {
+		it("CCUTO-13: LIVE specimen facts => real kernel emits fail_closed(observation_unavailable)", async () => {
+			// The LIVE specimen's exact fact set:
+			//   unconsumedCount = 7 (held=7)
+			//   capabilities = { canObserveHeldResults: false, canRetryCompletion: false }
+			//   stalledNoProgress = false
+			//   sessionMatches = true
+			//   taskMatches = true
+			//   alreadyCommitted = false
+			//
+			// Production wiring (SdkController.ts:930-948):
+			//   pickContinuationDirectiveForPublication({
+			//     unconsumedCount: heldJobIds.length,
+			//     capabilities: {
+			//       canObserveHeldResults: toolNames.includes("command_status"),
+			//       canRetryCompletion: toolNames.includes("submit_and_exit"),
+			//     },
+			//     stalledNoProgress: false,
+			//     sessionMatches: active.sessionId === sessionId,
+			//     taskMatches: true,
+			//     alreadyCommitted: false,
+			//   })
+			//
+			// The harness calls pickContinuationDirectiveForPublication
+			// with NO invokeElmForProduction option — the default
+			// `invokeElmKernel` (the compiled Elm kernel) runs.
+			// Policy.elm P5: `FailClosed ObservationUnavailable`.
+			const facts: CompletionContinuationControlFactsInput = {
+				unconsumedCount: 7,
+				capabilities: { canObserveHeldResults: false, canRetryCompletion: false },
+				stalledNoProgress: false,
+				sessionMatches: true,
+				taskMatches: true,
+				alreadyCommitted: false,
+			}
+			const directive = await pickContinuationDirectiveForPublication(facts)
+
+			// Bounded invariant: production kernel emits `fail_closed`
+			// with `failureReason: "observation_unavailable"` for
+			// `held > 0 + canObserveHeldResults: false`. This is the
+			// canonical correspondence the predecessor CTRL-02 test
+			// (cccec01) established for both TS-reference and Elm.
+			expect(directive.tag).toBe("fail_closed")
+			expect(directive.tag === "fail_closed" ? directive.failureReason : "not_fail_closed").toBe(
+				"observation_unavailable",
+			)
+		})
+
+		it("CCUTO-14: held=7 + observation + completion => real kernel emits ObserveThenRetry", async () => {
+			// The opposite fact set: held=7 + both capabilities.
+			// Policy.elm P4: `ObserveThenRetry`.
+			//
+			// This is the substrate the predecessor C8 tests
+			// pinned (continuation can name the available tool
+			// when observation + completion are registered).
+			const facts: CompletionContinuationControlFactsInput = {
+				unconsumedCount: 7,
+				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
+				stalledNoProgress: false,
+				sessionMatches: true,
+				taskMatches: true,
+				alreadyCommitted: false,
+			}
+			const directive = await pickContinuationDirectiveForPublication(facts)
+
+			expect(directive.tag).toBe("observe_then_retry")
+			expect(directive.completionStatus).toBe("HELD")
+			expect(directive.requiredAction).toBe("observe_then_submit")
 		})
 	})
 })
