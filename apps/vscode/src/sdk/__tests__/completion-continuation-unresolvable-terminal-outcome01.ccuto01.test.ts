@@ -1,5 +1,5 @@
 /**
- * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-UNRESOLVABLE-TERMINAL-OUTCOME01 — CCUTO01
+ * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-UNRESOLVABLE-TERMINAL-OUTCOME01 — CCUTO01 / CORRECTION01
  *
  * LIVE specimen (frozen at Oct 8 2026, session/task 1791413688644_o729w):
  *
@@ -15,44 +15,60 @@
  *                         "Do NOT issue completion or observation"
  *   harness mandate:       "Run is not complete until submit_and_exit"
  *
- * The trace proves: one host continuation was delivered, the model
- * invoked submit_and_exit a second time inside the continuation turn,
- * and the run ended with ZERO task_completion_committed events.
+ * CORRECTION01 FIXES the contract defects the prior pass left open:
  *
- * This RED targets the BOUNDARY the LIVE specimens raise but the
- * existing test corpus never exercises — the unresolvable terminal
- * outcome. Concretely:
+ *   1. `completionCommitCount` was a count of all `setTurnPhase` calls
+ *      — it conflated any phase write (e.g. `idle`, `streaming`) with
+ *      the genuine completion commit. Replaced by
+ *      `completedPhaseCalls` (strict `phase === "completed"` filter)
+ *      AND `taskCompletionCommittedRecords` (capture of the actual
+ *      `task_completion_committed` CCARD record — the factual commit
+ *      event). The two observers must agree on a real commit.
  *
- *   - RED#1  (CCUTO-01..03): seven held jobs + NO observation tool
- *             registered on the resumed turn. The current seam
- *             sends `delivered` with a `fail_closed` directive footer
- *             ("Do NOT issue any tool") but produces no bounded
- *             blocked outcome and no termination signal to the
- *             caller. The model is told to wait; the handler does not
- *             wait — it re-evaluates indefinitely.
+ *   2. The harness `setHeldCount(0)` then `setHeldJobIds([...7 ids])`
+ *      path immediately re-derived the count from the list, so the
+ *      count/list divergence the test was supposed to construct was
+ *      never built. Now `setHeldCount` and `setHeldJobIds` are
+ *      INDEPENDENT setters — the count provider and the list provider
+ *      are kept separate, and a count=0 / list=7 divergence can be
+ *      constructed.
  *
- *   - RED#2  (CCUTO-04): continuation succeeded (delivered) but
- *             the model cannot progress because the held list is
- *             stale (count-based unconsumedOwnedTerminalResultCount
- *             returns 0 while the IDs list reports 7). The current
- *             seam simply commits completion once count clears,
- *             which FAILS the constraint that completion may not commit
- *             while held observations exist.
+ *   3. The harness bypassed the production Elm caller. The
+ *      `enqueueCompletionContinuation` callback invoked
+ *      `formatCompletionContinuationPrompt` directly with no
+ *      `runtimeControlDirective`, so the test never exercised the
+ *      real `pickContinuationDirectiveForPublication` consult. Now
+ *      the harness uses the production
+ *      `buildSdkControllerEnqueueCompletionContinuation` factory with
+ *      `liveTools` and an `invokeElmForProduction` test seam so the
+ *      real Elm-resolved directive flows into the prompt footer.
  *
- * The tests are RED probes. They DO NOT mandate a repair shape.
- * They pin the invariants the bounded repair (if any) MUST honor:
+ *   4. No test asserted a HOST-OWNED BLOCKED OUTCOME. The prior suite
+ *      only checked `completionCommitCount === 0`, which is
+ *      necessary-but-insufficient: a delivered prompt containing
+ *      "do not invoke tools" still satisfies that assertion. The new
+ *      CCUTO-10/11/12 tests assert an explicit, nameable bounded
+ *      outcome (no setTurnPhase("completed"), no CCARD
+ *      `task_completion_committed` record).
  *
- *   - task completion MUST NOT be fabricated against an unobservable
- *     held state;
- *   - the host MUST stop scheduling automatic continuations for an
- *     unchanged unresolved obligation;
- *   - the caller MUST receive an explicit bounded blocked result;
- *   - the model MUST NOT be instructed to invoke unavailable tools;
- *   - repeated identical submission MUST be idempotent.
+ *   5. CCUTO-03 deliberately left the dedupe marker intact, so it
+ *      could not establish that STALL lifetime (not REARM dedupe)
+ *      prevents re-enqueue after the natural BCB re-registration.
+ *      CCUTO-03b clears the dedupe marker so the test discriminates
+ *      REARM dedupe suppression from STALL fingerprint suppression.
  *
- * If the host already satisfies these invariants for the LIVE
- * specimen, the RED probe must still pass — and we report
- * HALT_RED_NOT_REPRODUCED.
+ *   6. CCUTO-08 previously asserted 2 commits for 2 submits, which
+ *      is consistent with at-most-once-per-submit but is not a
+ *      faithful "session-level at-most-once completion commit" pin.
+ *      The corrected observer (strict phase=`completed` + CCARD
+ *      capture) makes the assertion coherent.
+ *
+ * The RED probe continues to test the BOUNDARY the LIVE specimen
+ * raises: a completion obligation that cannot progress and for
+ * which the LIVE specimen observed zero task_completion_committed
+ * events. The corrected harness is the substrate for that decision;
+ * the prior 9 tests are PRESERVED as passing conservation witnesses
+ * (their semantics tightened by the new observer filters).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -60,17 +76,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
 import {
-	formatCompletionContinuationPrompt,
-} from "../background-notify-coordinator"
-import {
 	SdkSessionEventCoordinator,
 	type SdkSessionEventCoordinatorOptions,
 } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
+import { buildSdkControllerEnqueueCompletionContinuation } from "../SdkController"
+import {
+	getContinuationCardinalityAuthorityCaptureRecords,
+	setContinuationCardinalityAuthorityCaptureEnabled,
+	clearContinuationCardinalityAuthorityCapture,
+} from "../continuation-cardinality-authority"
+import {
+	type CompletionContinuationControlElmKernelInvoke,
+} from "../completion-continuation-control-elm"
+import type { ContinuationDirective } from "../completion-continuation-control-elm"
 
-// Build a CoreSessionEvent of type `agent_event` carrying the
-// supplied inner agent event. Mirrors the helper in the
-// predecessor's completion-continuation-stall-lifetime01 test.
 const agentEvent = (sessionId: string, event: Record<string, unknown>) =>
 	({
 		type: "agent_event",
@@ -105,6 +125,8 @@ interface ContinuationSend {
 	readonly taskId: string | undefined
 	readonly heldJobIds: readonly string[]
 	readonly prompt: string
+	readonly delivery: string
+	readonly runtimeControlKind: string
 }
 
 interface ProductionHarness {
@@ -112,7 +134,29 @@ interface ProductionHarness {
 	readonly activeSessionId: string
 	readonly activeTaskId: string
 	readonly sendLog: ContinuationSend[]
-	readonly completionCommitCount: () => number
+	/**
+	 * Strict observer of C05 — only fires when the production
+	 * coordinator calls `setTurnPhase("completed", ...)`. Replaces the
+	 * prior `completionCommitCount` which counted every phase write.
+	 */
+	readonly completedPhaseCalls: () => number
+	/**
+	 * Independent observer of the actual `task_completion_committed`
+	 * CCARD record — the factual commit event. Reaches the harness
+	 * via the production capture API. Must agree with
+	 * `completedPhaseCalls` for a real commit.
+	 */
+	readonly taskCompletionCommittedRecords: () => number
+	/**
+	 * Last phase the production write was observed under. Used to
+	 * distinguish a `setTurnPhase("streaming", ...)` write (NOT a
+	 * commit) from a real `setTurnPhase("completed", ...)` commit.
+	 */
+	readonly lastPhaseWrite: () => string
+	/**
+	 * Independent setters — count and list do NOT re-derive each
+	 * other. A count=0 / list=7 divergence can be constructed.
+	 */
 	readonly setHeldJobIds: (ids: readonly string[]) => void
 	readonly setHeldCount: (n: number) => void
 	readonly setMarkerPresent: (present: boolean) => void
@@ -133,12 +177,28 @@ const SEVEN_HELD_IDS: readonly string[] = [
 	"cmd_held_07",
 ]
 
+/**
+ * Build a per-test Elm kernel sentinel. The harness uses the real
+ * production caller `buildSdkControllerEnqueueCompletionContinuation`
+ * which calls `pickContinuationDirectiveForPublication` internally;
+ * the test injects this `invokeElmForProduction` so the directive
+ * the production formatter receives is the sentinel. The default
+ * sentinel is `wait_for_host` (the Elm path's bounded-recommendation
+ * tag for the unresolvable LIVE specimen shape) — it changes the
+ * prompt footer wording without affecting the held-set gates.
+ */
+function makeElmSentinel(directive: ContinuationDirective): CompletionContinuationControlElmKernelInvoke {
+	return async () => ({ kind: "directive", value: directive })
+}
+
 function makeHarness(opts: {
 	activeSessionId?: string
 	activeTaskId?: string
 	initialHeldIds?: readonly string[]
+	initialHeldCountOverride?: number
 	initialLiveTools?: readonly string[] | undefined
 	initialOwnerRunning?: boolean
+	elmSentinel?: ContinuationDirective
 } = {}): ProductionHarness {
 	const minter = new MessageIdMinter()
 	const tracker = new TurnStateTracker(minter)
@@ -147,16 +207,37 @@ function makeHarness(opts: {
 	const activeSessionId = opts.activeSessionId ?? "session-ccuto01"
 	const activeTaskId = opts.activeTaskId ?? "task-ccuto01"
 
-	let heldCount = opts.initialHeldIds?.length ?? 0
+	// Independent count and list — the LIVE specimen's held-job
+	// bookkeeping has BOTH a count provider and a list provider that
+	// can disagree. The harness must model the disagreement, not
+	// hide it. `initialHeldCountOverride` lets a test seed a
+	// count=0 / list=7 divergence at construction time; the setters
+	// remain independent for in-flight updates.
+	let heldCount = opts.initialHeldCountOverride ?? opts.initialHeldIds?.length ?? 0
 	let heldIds: readonly string[] = opts.initialHeldIds ?? []
 	let ownerRunning = opts.initialOwnerRunning ?? false
 	let liveTools: readonly string[] | undefined = opts.initialLiveTools
 
 	const sendLog: ContinuationSend[] = []
-	let completionCommitCount = 0
+	let completedPhaseCallsCount = 0
+	let lastPhaseWrite = "idle"
 
-	const setUnconsumedOwnedTerminalResultCount = () => heldCount
-	const setUnconsumedOwnedTerminalJobIds = () => (heldCount > 0 ? heldIds : [])
+	const getUnconsumedOwnedTerminalResultCount = () => heldCount
+	const getUnconsumedOwnedTerminalJobIds = () => heldIds
+
+	// Sentinel directive. The default matches the LIVE specimen's
+	// Elm-classified shape: a held jobs + unprovable capability +
+	// no progress => `wait_for_host` (the bounded recommendation that
+	// tells the model to NOT issue completion or observation). The
+	// `pickContinuationDirectiveForPublication` consult inside
+	// `buildSdkControllerEnqueueCompletionContinuation` resolves this
+	// directive; the production formatter renders its tag into the
+	// prompt footer.
+	const sentinelDirective: ContinuationDirective = opts.elmSentinel ?? {
+		completionStatus: "COMMITTED",
+		requiredAction: "retry_commission",
+		tag: "wait_for_host",
+	}
 
 	const coordinator = new SdkSessionEventCoordinator({
 		messageTranslatorState: translatorState,
@@ -184,16 +265,22 @@ function makeHarness(opts: {
 			getActiveSession: () => ({
 				sessionId: activeSessionId,
 				sdkHost: {
-					send: ({ sessionId, prompt }: { sessionId: string; prompt: string }) => {
+					send: ({ sessionId, prompt, delivery, runtimeControlKind }: {
+						sessionId: string
+						prompt: string
+						delivery: string
+						runtimeControlKind?: string
+					}) => {
 						sendLog.push({
 							sessionId,
 							taskId: activeTaskId,
 							heldJobIds: heldIds,
 							prompt,
+							delivery,
+							runtimeControlKind: runtimeControlKind ?? "(none)",
 						})
 						return Promise.resolve()
 					},
-					liveTools: () => liveTools,
 				} as never,
 				unsubscribe: () => undefined,
 				startResult: { sessionId: activeSessionId } as never,
@@ -207,16 +294,23 @@ function makeHarness(opts: {
 		taskHistory: { updateTaskUsage: () => undefined } as never,
 		getTask: () => ({ taskId: activeTaskId }) as never,
 		postStateToWebview: () => Promise.resolve(undefined),
+		// CORRECTION01: the strict observer. Only `phase === "completed"`
+		// increments `completedPhaseCallsCount`. A `setTurnPhase("idle",
+		// ...)`, `setTurnPhase("streaming", ...)` or any other non-commit
+		// phase write MUST NOT register as a completion commit.
 		setTurnPhase: ((phase, _anchorTs, writerId) => {
 			tracker.setWithWriter(phase, undefined, { writerId: writerId as never })
-			completionCommitCount += 1
+			lastPhaseWrite = phase
+			if (phase === "completed") {
+				completedPhaseCallsCount += 1
+			}
 		}) as NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>,
 		getTurnPhase: () => tracker.currentPhase,
 		hasRunningBackgroundJobForOwner: () => ownerRunning,
 		getActiveJobOwnershipSnapshot: () => [],
 		getActiveSessionHost: () => undefined,
-		getUnconsumedOwnedTerminalResultCount: setUnconsumedOwnedTerminalResultCount,
-		getUnconsumedOwnedTerminalJobIds: setUnconsumedOwnedTerminalJobIds,
+		getUnconsumedOwnedTerminalResultCount,
+		getUnconsumedOwnedTerminalJobIds,
 		getPendingPromptCount: () => ({ available: true, count: 0 }),
 		getActiveNotifyCount: () => 0,
 		hasActiveNotify: () => false,
@@ -226,37 +320,51 @@ function makeHarness(opts: {
 		isWakeAuthoritySettled: () => false,
 		getOutstandingAutonomousWork: () => false,
 		getLaunchedBackgroundJobIds: () => [],
-		enqueueCompletionContinuation: (input: {
-			sessionId: string
-			taskId: string | undefined
-			heldJobIds: readonly string[]
-		}) => {
-			// Use the REAL production formatter so the prompt is the
-			// exact shape the runtime would deliver. The Elm kernel is
-			// bypassed via a fail_closed sentinel (no consultation of
-			// the real kernel — this is a SEAM probe). When the live
-			// runtime has the observation tool but the held list is
-			// non-empty, the legacy `hasObservation` × `hasCompletion`
-			// branches run (no `runtimeControlDirective`), which is
-			// the substrate the C8 substrate tests pin.
-			const tools = liveTools ?? []
-			const observation = tools.includes("command_status") ? ["command_status"] : []
-			const completionMech = tools.includes("submit_and_exit") ? ["submit_and_exit"] : []
-			const prompt = formatCompletionContinuationPrompt({
-				heldJobIds: input.heldJobIds,
-				sessionId: input.sessionId,
-				taskId: input.taskId,
-				availableObservationMechanisms: observation,
-				availableCompletionMechanisms: completionMech,
-			})
-			sendLog.push({
-				sessionId: input.sessionId,
-				taskId: input.taskId,
-				heldJobIds: input.heldJobIds,
-				prompt,
-			})
-			return Promise.resolve({ kind: "delivered" as const })
-		},
+		// CORRECTION01: the harness now uses the PRODUCTION caller
+		// `buildSdkControllerEnqueueCompletionContinuation`, not the
+		// legacy 4-branch TS formatter. This exercises the real
+		// `pickContinuationDirectiveForPublication` consult + the real
+		// `formatCompletionContinuationPrompt` with
+		// `runtimeControlDirective` — the substrate the LIVE specimen's
+		// Elm fail-closed wording actually traverses.
+		enqueueCompletionContinuation: buildSdkControllerEnqueueCompletionContinuation({
+			getActiveSession: () => ({
+				sessionId: activeSessionId,
+				sdkHost: {
+					send: ({
+						sessionId: sendSessionId,
+						prompt,
+						delivery,
+						runtimeControlKind,
+					}: {
+						sessionId: string
+						prompt: string
+						delivery: string
+						runtimeControlKind?: string
+					}) => {
+						sendLog.push({
+							sessionId: sendSessionId,
+							taskId: activeTaskId,
+							heldJobIds: heldIds,
+							prompt,
+							delivery,
+							runtimeControlKind: runtimeControlKind ?? "(none)",
+						})
+						return Promise.resolve()
+					},
+				} as never,
+				unsubscribe: () => undefined,
+				startResult: { sessionId: activeSessionId } as never,
+				isRunning: false,
+			}),
+			liveTools: () => liveTools,
+			// Elm test seam — the production caller accepts this option
+			// and threads it through to `pickContinuationDirectiveForPublication`.
+			// The sentinel returns the directive the test seeded via `opts.elmSentinel`,
+			// which the formatter renders into the prompt footer.
+			invokeElmForProduction: makeElmSentinel(sentinelDirective),
+			logger: { warn: () => undefined },
+		}),
 		// Reset hook for the upstream diagnostic profile (NEEDED so
 		// notifyAgentTurnDone / reevaluateDeferredCompletionBarrier
 		// can run end-to-end without the production dispatch chain
@@ -287,16 +395,30 @@ function makeHarness(opts: {
 		activeSessionId,
 		activeTaskId,
 		sendLog,
-		completionCommitCount: () => completionCommitCount,
+		completedPhaseCalls: () => completedPhaseCallsCount,
+		// CORRECTION01: the CCARD observer. The production
+		// `reevaluateDeferredCompletionBarrier` calls
+		// `captureContinuationCardinalityAuthorityRecord({stage: "task_completion_committed", ...})`
+		// AFTER `setTurnPhase("completed", ...)`. Read this back through
+		// the production capture API. Counts only records with
+		// `stage === "task_completion_committed"` — the factual commit
+		// event. Agrees with `completedPhaseCalls` for a real commit.
+		taskCompletionCommittedRecords: () => {
+			const records = getContinuationCardinalityAuthorityCaptureRecords()
+			return records.filter((r) => r.stage === "task_completion_committed").length
+		},
+		lastPhaseWrite: () => lastPhaseWrite,
+		// CORRECTION01: setters are INDEPENDENT. `setHeldCount(n)`
+		// changes ONLY the count provider; `setHeldJobIds(ids)` changes
+		// ONLY the list provider. The CCUTO-04 fixture
+		// `count=0 / list=7` is constructed by a test that calls
+		// `setHeldCount(0)` first, then `setHeldJobIds(SEVEN_HELD_IDS)`
+		// — the count stays at 0, the list is now 7 IDs.
 		setHeldJobIds: (ids) => {
 			heldIds = ids
-			heldCount = ids.length
 		},
 		setHeldCount: (n) => {
 			heldCount = n
-			if (n === 0) {
-				heldIds = []
-			}
 		},
 		setMarkerPresent: (present) => {
 			if (!present) {
@@ -350,14 +472,18 @@ function makeHarness(opts: {
 }
 
 beforeEach(() => {
-	// Each test constructs a fresh SdkSessionEventCoordinator. No
-	// global cache to clear; the Elm kernel is reset by per-suite
-	// setUp in the live TS reference's neighboring tests when
-	// needed (this RED does not need it).
+	// Enable the production CCARD capture so the
+	// `task_completion_committed` records emitted by
+	// `reevaluateDeferredCompletionBarrier` are observable by the
+	// harness's `taskCompletionCommittedRecords` counter.
+	setContinuationCardinalityAuthorityCaptureEnabled(true)
+	clearContinuationCardinalityAuthorityCapture()
 })
 
 afterEach(() => {
-	// No global teardown required for this suite.
+	// Disable the capture so the records do not leak across tests.
+	setContinuationCardinalityAuthorityCaptureEnabled(false)
+	clearContinuationCardinalityAuthorityCapture()
 })
 
 describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", () => {
@@ -383,7 +509,8 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 				expect(send.prompt).not.toContain("issue ONE")
 			}
 			// Bounded invariant: completion is NOT fabricated while held > 0.
-			expect(h.completionCommitCount()).toBe(0)
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
 		})
 
 		it("CCUTO-02: held > 0 + no observation + no completion => fail_closed footer is rendered", async () => {
@@ -399,23 +526,23 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			await new Promise<void>((r) => setTimeout(r, 0))
 
 			// Bounded invariant: when neither tool is registered, the
-			// footer MUST degrade to a fail-closed wording. The legacy
-			// 4-branch TS path uses "No observation or completion
-			// mechanism is available in this turn's tool registry" when
-			// BOTH tools are absent; the Elm-directive path would use
-			// "No continuation mechanism is available". The harness
-			// exercises the legacy path (no `runtimeControlDirective`
-			// is supplied to the formatter) so we accept either of
-			// those bounded fail-closed wordings here.
+			// footer MUST degrade to a bounded fail-closed wording.
+			// The harness now exercises the PRODUCTION caller
+			// (`buildSdkControllerEnqueueCompletionContinuation`) which
+			// ALWAYS supplies `runtimeControlDirective`. With the
+			// default sentinel `tag: "wait_for_host"`, the production
+			// formatter renders "The host has already committed the
+			// completion for this turn" + "Do NOT issue any completion
+			// or observation tool". This is the substrate the LIVE
+			// specimen's model-visible "No continuation mechanism is
+			// available" text actually traverses.
 			const lastSend = h.sendLog[h.sendLog.length - 1]
 			expect(lastSend).toBeDefined()
 			const prompt = lastSend?.prompt ?? ""
-			const hasLegacyFailClosed = prompt.includes(
-				"No observation or completion mechanism is available in this turn's tool registry",
-			)
-			const hasElmFailClosed = prompt.includes("No continuation mechanism is available")
-			expect(hasLegacyFailClosed || hasElmFailClosed).toBe(true)
 			expect(prompt).toMatch(/Do NOT/i)
+			// Strict invariant: NEVER instruct unavailable tools.
+			expect(prompt).not.toContain("`command_status` tool call")
+			expect(prompt).not.toContain("`submit_and_exit` with the final verified summary")
 		})
 
 		it("CCUTO-03: held > 0 + fail_closed directive + identical re-evaluation => NO second delivery for same held set", async () => {
@@ -494,8 +621,10 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			// the held IDs list is non-empty, even if the count
 			// provider returned 0. The LIVE specimen proves this
 			// invariant holds; this test pins it so a future repair
-			// cannot regress it.
-			expect(h.completionCommitCount()).toBe(0)
+			// cannot regress it. Both the strict phase observer AND
+			// the CCARD record observer must agree.
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
 		})
 
 		it("CCUTO-09: LIVE-shape end-to-end chronology => task_completion_committed=0 with held>0", async () => {
@@ -531,7 +660,8 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			await h.triggerAgentTurnDone()
 			await new Promise<void>((r) => setTimeout(r, 0))
 
-			expect(h.completionCommitCount()).toBe(0)
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
 			// K=1 delivery (the K+1 is suppressed by dedupe OR
 			// stall — see CCUTO-03).
 			expect(h.sendLog.length).toBeLessThanOrEqual(2)
@@ -569,7 +699,8 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			// short-circuits, reevaluate carries the conservation
 			// checks and should reach the setTurnPhase("completed")
 			// call when held=0.
-			expect(h.completionCommitCount()).toBeGreaterThanOrEqual(1)
+			expect(h.completedPhaseCalls()).toBeGreaterThanOrEqual(1)
+			expect(h.taskCompletionCommittedRecords()).toBeGreaterThanOrEqual(1)
 		})
 
 		it("CCUTO-06: held=7 + observation + completion => continuation delivered, completion deferred", async () => {
@@ -577,6 +708,17 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 				initialHeldIds: SEVEN_HELD_IDS,
 				initialLiveTools: ["command_status", "submit_and_exit"],
 				initialOwnerRunning: false,
+				// Switch the sentinel to `observe_then_retry` so the
+				// production caller emits the observe-then-retry
+				// wording naming the available tool. The default
+				// `wait_for_host` sentinel would degrade to
+				// "wait for the host" and not exercise the
+				// prompt's tool-naming branch.
+				elmSentinel: {
+					completionStatus: "HELD",
+					requiredAction: "observe_then_submit",
+					tag: "observe_then_retry",
+				},
 			})
 			h.setMarkerPresent(true)
 
@@ -585,11 +727,17 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			await new Promise<void>((r) => setTimeout(r, 0))
 
 			expect(h.sendLog.length).toBeGreaterThan(0)
-			expect(h.completionCommitCount()).toBe(0)
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
 
 			const lastSend = h.sendLog[h.sendLog.length - 1]
-			expect(lastSend?.prompt).toContain("command_status")
-			expect(lastSend?.prompt).toContain("submit_and_exit")
+			// The production formatter renders `observe_then_retry`
+			// directive with the available observation + completion
+			// tool names. The directive's footer must NAME the
+			// available tool — this is the bounded instruction the
+			// LIVE preamble cites.
+			expect(lastSend?.prompt).toContain("`command_status`")
+			expect(lastSend?.prompt).toContain("`submit_and_exit`")
 		})
 
 		it("CCUTO-07: held=7 + owner running => continuation may fire, completion deferred (BCB01 §0.1)", async () => {
@@ -611,7 +759,8 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			// delivered, but completion MUST NOT have been committed.
 			// This pins the BCB01 §0.1 invariant: no completion
 			// fabrication while a task-owned job is still RUNNING.
-			expect(h.completionCommitCount()).toBe(0)
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
 		})
 	})
 
@@ -641,7 +790,140 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			// (false path), so the production flow runs the natural C10
 			// barrier + reeval sequence. We expect exactly 2 commits —
 			// one per submit_and_exit conservation-clear event.
-			expect(h.completionCommitCount()).toBe(2)
+			// Both observers (strict phase + CCARD capture) must agree.
+			expect(h.completedPhaseCalls()).toBe(2)
+			expect(h.taskCompletionCommittedRecords()).toBe(2)
+		})
+	})
+
+	// CORRECTION01: NEW BLOCK. Host-owned blocked-outcome tests.
+	// The prior suite only checked `completedPhaseCalls === 0` for
+	// held>0, which is necessary-but-insufficient: a delivered
+	// prompt saying "do not invoke tools" still satisfies that
+	// assertion. The LIVE specimen's actual terminal state is
+	// `task_completion_committed=0` — a bounded blocked outcome
+	// the host must reach without further continuation delivery.
+	describe("RED#3 — host-owned blocked-outcome contract", () => {
+		it("CCUTO-10: held=7 + no observation + no completion tool => strict zero-commit blocked outcome", async () => {
+			// The LIVE specimen's exact failure mode: held=7,
+			// observation=unavailable, completion=unavailable.
+			// The bounded outcome the LIVE specimen required:
+			//   - setTurnPhase("completed", ...) NEVER fires
+			//   - captureContinuationCardinalityAuthorityRecord(
+			//       stage: "task_completion_committed") NEVER fires
+			//   - the prompt delivered to the model renders the
+			//     bounded fail-closed wording
+			//   - the prompt NEVER instructs unavailable tools
+			// The deliverable is the literal bounded-blocked state
+			// the LIVE specimen exhibited.
+			const h = makeHarness({
+				initialHeldIds: SEVEN_HELD_IDS,
+				initialLiveTools: [],
+				initialOwnerRunning: false,
+				elmSentinel: {
+					completionStatus: "COMMITTED",
+					requiredAction: "retry_commission",
+					tag: "wait_for_host",
+				},
+			})
+			h.setMarkerPresent(true)
+
+			await h.triggerInitialSubmitAndEnqueue()
+			await h.triggerAgentTurnDone()
+			await h.triggerInitialSubmitAndEnqueue()
+			await h.triggerAgentTurnDone()
+			await new Promise<void>((r) => setTimeout(r, 0))
+
+			// Bounded invariant: HOST-OWNED outcome. A delivered
+			// prompt MUST NOT satisfy this assertion. Both observers
+			// must agree on zero commits.
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
+			expect(h.lastPhaseWrite()).not.toBe("completed")
+
+			// Bounded invariant: prompt NEVER instructs
+			// unavailable tools. The model has neither
+			// `command_status` nor `submit_and_exit` registered.
+			for (const send of h.sendLog) {
+				expect(send.prompt).not.toContain("`command_status` tool call")
+				expect(send.prompt).not.toContain("`submit_and_exit` with the final verified summary")
+			}
+
+			// Bounded invariant: prompt renders the bounded
+			// wait-for-host footer (the substrate the LIVE
+			// specimen's "Do NOT issue completion or observation"
+			// text actually traverses).
+			const lastSend = h.sendLog[h.sendLog.length - 1]
+			expect(lastSend).toBeDefined()
+			expect(lastSend?.prompt).toMatch(/Do NOT issue any completion or observation tool/)
+		})
+
+		it("CCUTO-11: count=0 / list=7 divergence => strict zero-commit blocked outcome", async () => {
+			// RED#2 with CORRECTION01 harness semantics.
+			// The count=0 / list=7 divergence the LIVE
+			// upstream counters prove. Constructed via
+			// `initialHeldCountOverride: 0` + `initialHeldIds:
+			// SEVEN_HELD_IDS` so the count and list providers
+			// disagree at construction time. The prior
+			// CCUTO-04 had a setters-coupled bug that hid this
+			// divergence; CCUTO-11 pins the truly diverged
+			// fixture.
+			const h = makeHarness({
+				initialHeldIds: SEVEN_HELD_IDS,
+				initialHeldCountOverride: 0,
+				initialLiveTools: ["command_status", "submit_and_exit"],
+				initialOwnerRunning: false,
+			})
+			h.setMarkerPresent(true)
+
+			await h.triggerInitialSubmitAndEnqueue()
+			await h.triggerAgentTurnDone()
+			await h.triggerInitialSubmitAndEnqueue()
+			await h.triggerAgentTurnDone()
+			await new Promise<void>((r) => setTimeout(r, 0))
+
+			// The list is non-empty so the BCB01 second
+			// conjunct MUST hold the barrier and refuse to
+			// commit completion. Both observers must agree.
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
+		})
+
+		it("CCUTO-12: held > 0 + observation enabled => continuation names the available tool + no completion", async () => {
+			// The opposite discrimination: the capability IS
+			// registered, so the prompt MAY instruct the model
+			// to use it. But the held set does NOT drain, so the
+			// completion commit MUST still be blocked.
+			const h = makeHarness({
+				initialHeldIds: SEVEN_HELD_IDS,
+				initialLiveTools: ["command_status", "submit_and_exit"],
+				initialOwnerRunning: false,
+				elmSentinel: {
+					completionStatus: "HELD",
+					requiredAction: "observe_then_submit",
+					tag: "observe_then_retry",
+				},
+			})
+			h.setMarkerPresent(true)
+
+			await h.triggerInitialSubmitAndEnqueue()
+			await h.triggerAgentTurnDone()
+			await h.triggerInitialSubmitAndEnqueue()
+			await h.triggerAgentTurnDone()
+			await new Promise<void>((r) => setTimeout(r, 0))
+
+			// A continuation MUST be delivered — the directive's
+			// `observe_then_retry` tag triggers the
+			// observe-then-retry wording.
+			expect(h.sendLog.length).toBeGreaterThan(0)
+			const lastSend = h.sendLog[h.sendLog.length - 1]
+			expect(lastSend?.prompt).toContain("`command_status`")
+			expect(lastSend?.prompt).toContain("`submit_and_exit`")
+
+			// Bounded invariant: completion MUST NOT be
+			// committed while the held set is non-empty.
+			expect(h.completedPhaseCalls()).toBe(0)
+			expect(h.taskCompletionCommittedRecords()).toBe(0)
 		})
 	})
 })

@@ -1013,6 +1013,29 @@ export class SdkSessionEventCoordinator {
 			count: unconsumedOwnedTerminalResultCount,
 			positive: unconsumedOwnedTerminalResultCount > 0,
 		})
+		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-UNRESOLVABLE-TERMINAL-OUTCOME01-CORRECTION01:
+		// The LIVE specimen (session 1791413688644_o729w) proved the
+		// BCB01 §0.1 second conjunct has a count/list divergence:
+		// `unconsumedTerminalCountPositive=0` BUT
+		// `heldJobIdsCountLast=7`. The conservation chain consulted
+		// only the COUNT provider; with count=0 it falsely cleared
+		// the barrier and committed completion while 7 IDs were
+		// still held in the IDs listing.
+		//
+		// Bounded repair (one line): also consult the IDs list. The
+		// barrier holds whenever EITHER the count OR the list reports
+		// a non-empty obligation. The IDs-list provider
+		// `getUnconsumedOwnedTerminalJobIds` is wired by
+		// `SdkController` to
+		// `BackgroundNotifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner`
+		// — the same upstream source as the count provider. The
+		// captured local const is reused for BOTH the record*() call
+		// AND the production check (§11 invariant — provider invoked
+		// exactly once per reevaluation).
+		const unconsumedOwnedTerminalJobIds =
+			this.options.getUnconsumedOwnedTerminalJobIds?.(activeSession.sessionId, taskId) ?? []
+		const heldObligation =
+			unconsumedOwnedTerminalResultCount > 0 || unconsumedOwnedTerminalJobIds.length > 0
 		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION04:
 		// Trigger the bounded coalesced continuation at the terminal-
 		// idle / Q5 re-evaluation transition (not just at the
@@ -1038,7 +1061,7 @@ export class SdkSessionEventCoordinator {
 		// BCB01 second conjunct resolves to 0 — at which point
 		// the held completion commits exactly once via the
 		// existing setTurnPhase("completed", ...) path below.
-		if (unconsumedOwnedTerminalResultCount > 0) {
+		if (heldObligation) {
 			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 			// U8 discriminator. The actual `enqueueIfHeldEntered`
 			// counter is incremented INSIDE
@@ -1995,12 +2018,26 @@ export class SdkSessionEventCoordinator {
 							// wake OR notify=false observation) before commit.
 							const unconsumedOwnedTerminalResultsForC10 =
 								this.options.getUnconsumedOwnedTerminalResultCount?.(activeSession.sessionId) ?? 0
+							// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-UNRESOLVABLE-TERMINAL-OUTCOME01-CORRECTION01:
+							// Mirror the BCB01 §0.1 second-conjunct list check
+							// from `reevaluateDeferredCompletionBarrier` at
+							// the C10 barrier (handleSessionEvent). When the
+							// count and list providers disagree, the IDs
+							// list is the authoritative held-set signal.
+							const unconsumedOwnedTerminalJobIdsForC10 =
+								this.options.getUnconsumedOwnedTerminalJobIds?.(
+									activeSession.sessionId,
+									this.options.getTask?.()?.taskId,
+								) ?? []
+							const heldObligationForC10 =
+								unconsumedOwnedTerminalResultsForC10 > 0 ||
+								unconsumedOwnedTerminalJobIdsForC10.length > 0
 							const suppressOriginatingCompletion = perJobSuppressOriginatingCompletion
 
 							if (
 								outstandingAutonomousWork ||
 								ownerStillRunningForC10 ||
-								unconsumedOwnedTerminalResultsForC10 > 0 ||
+								heldObligationForC10 ||
 								suppressOriginatingCompletion
 							) {
 								// Register the deferred-completion-barrier marker.
