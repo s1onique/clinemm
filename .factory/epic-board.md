@@ -1,3 +1,59 @@
+## ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN — 2026-10-08
+
+**Status:** CLOSED with verdict `PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN`. The P0 host-lifecycle-owner question is settled. The selected owner is `TaskTelemetryTracker.recordRuntimeError(incident)` — the existing production lifecycle consumer the host already owns, wires, and projects to the webview. The pattern is the exact "display-only terminal error excluded from model inputs" the upstream Cline SDK uses; the same V1 wire (`TaskHeaderTelemetryStrip.runtimeErrorCount`) renders the user-visible `⚠ N` glyph. No new wire field. No new public API. No Elm kernel change.
+
+**Approach (per C7):** one existing production lifecycle consumer is selected as the actionable host outcome for a typed blocked-completion verdict. The missing piece is a single bounded producer-to-consumer wiring inside the existing `SdkSessionEventCoordinator.applyBlockedCompletionContinuationOutcome(...)` helper (sdk-session-event-coordinator.ts:1688-1808), AFTER the C4 guards pass. The marker (`deferredCompletionBarrier`) already carries the typed `reason` (closed enum: `"stalled_no_progress" | "delivery_rejected" | "observation_unavailable"` per sdk-session-event-coordinator.ts:590); the helper already increments the opt-in dogfood counters (L1803-1807); the gap is that no production lifecycle decision is bound to the typed verdict. The successor ACT's bounded repair wires the existing `TaskTelemetryTracker.recordRuntimeError(incident)` call (the same sink `SdkController.handleTaskRuntimeError` at SdkController.ts:5370 already exposes for the V1 EPERM / `command_containment_failed` flow) at the same point the dogfood counters are invoked, reusing the closed `RuntimeErrorSource` enum with two additive new values. The closed `RuntimeErrorClass` reuses the existing `UNKNOWN_RUNTIME_ERROR` value (V1 webview ignores the strings per ExtensionMessage.ts:1042-1056).
+
+**Source-of-truth evidence:**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1688-1808` (`applyBlockedCompletionContinuationOutcome`) — the **producer**; C4-guarded helper invoked from the `.then((outcome) => ...)` of BOTH call sites.
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:590-598` — closed `DeferredCompletionBarrierReason` enum (the typed verdict already in the marker).
+- `apps/vscode/src/sdk/task-telemetry-tracker.ts:507-574` (`recordRuntimeError`) — the **selected owner**; the existing production lifecycle counter; REC-01..REC-11 invariants pin its behavior (zero-hide on wire, cumulative monotonic per task, latch on new task identity, saturation at `Number.MAX_SAFE_INTEGER`).
+- `apps/vscode/src/sdk/SdkController.ts:5346-5377` (`handleTaskRuntimeError`) — the existing closure that already wires the V1 EPERM / `command_containment_failed` flow into the tracker; the successor ACT threads this through to the shared-host `SdkSessionEventCoordinator` construction.
+- `apps/vscode/src/shared/ExtensionMessage.ts:1029-1068` — `RuntimeErrorIncident` interface (closed enums, additive-safe; the `command_containment_failed` precedent at L1119 proves additive `errorClass` extensions are safe; the V1 webview ignores the source string).
+- `apps/vscode/src/sdk/vscode-session-host.ts:149-162` — `onRuntimeError` callback type; pass-through only, no transform, the SdkController keeps the `recordRuntimeError` call site centralized.
+- `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx:412-462` — the existing webview `⚠ N` glyph (`data-testid="task-header-runtime-error-count"`); the consumer of the `runtimeErrorCount` wire field; zero-hides at zero, renders at >0.
+- `apps/vscode/src/sdk/__tests__/host-blocked-outcome-lifecycle-owner01.hbclo01.test.ts` (NEW, 4 tests) — drives the REAL `SdkSessionEventCoordinator` through the REAL `handleSessionEvent` BCB re-registration path; asserts the typed verdict reaches `taskTelemetry.recordRuntimeError(...)` with `errorClass: "UNKNOWN_RUNTIME_ERROR"`, `source: "completion-continuation-stalled" | "completion-continuation-delivery-rejected"`, and a `correlationId` of `${sessionId}|${taskId ?? "(none)"}|${enqueueEpoch}`. The current production code does NOT make this call → **2 RED, 2 GREEN** (the RED IS the production-seam invariant; negative control HBCLO-10 + C11 conservation HBCLO-20 PASS).
+
+**First divergent stage:** `OUTCOME_PUBLICATION_MAPPING` (the C6 causal discriminator). The marker carries the typed `reason` and the dogfood counter increments, but the production lifecycle consumer (`TaskTelemetryTracker.recordRuntimeError`) never receives the call. Pre-fix, the only observable is the test-accessor `getDeferredCompletionBarrierForTesting()` (proved by PROBE01) and the opt-in dogfood dump (proved by PROBE01 + HBCLO-20). Post-fix, the wire projection `runtimeErrorCount` increments for the task session, and the webview `⚠ N` glyph flips promptly.
+
+**Selected owner contract (frozen by this ACT):**
+- **always-on** (no opt-in flag; V1 public sink wired by `SdkController.ts:1901` to the shared host + 6 temp-host callsites)
+- **typed** (closed-enum `RuntimeErrorIncident`; additive `RuntimeErrorSource` extensions safe per V1 webview contract)
+- **display-only** (never projected to model input; only the cumulative integer reaches the wire; `errorClass`/`source` logged at INFO for forensic trace)
+- **per-task lifetime** (latches on new task identity; REC-06 invariant; same `currentTaskId` lifetime as `deferredCompletionBarrier` epoch)
+- **cumulative monotonic** (recoverable hold and unrecoverable block both increment; matches the `command_containment_failed` precedent)
+- **real consumer** (webview TaskHeader `⚠ N` glyph; `__clineRecordRuntimeError` debug hook already wired for live qualification per `SdkController.ts:1478-1481`)
+
+**Conservation gates (HEAD `c8e2a6e29`):**
+- New file: HBCLO01 (4 tests) — 2 RED + 2 GREEN (the RED is the missing owner wiring; HBCLO-10 negative control + HBCLO-20 C11 invariant PASS)
+- Focused conservation suite: 12 pre-existing files / 193 tests GREEN (HBOCP01 6, HBOP01 12, CCSLT01 10, CCSE01 5, CCSRL01 13, REARM01 7, CCUTO01 14, CCUPD01 9, CCCA01 35, PCRA01 5, task-telemetry-tracker 64, task-header-runtime-error-counter-rec01 13)
+- Pre-existing baseline failures unchanged: `mcprestart01` 3/10, `swcm04` 11/23 (documented as pre-existing test drift in prior ACTs; not introduced by this ACT)
+- `cd apps/vscode && bunx --bun tsc --noEmit --project tsconfig.json`: PASS (new test file typecheck-clean; no new errors)
+- `bun run lint` (biome + proto-lint): PASS (2182 files checked, no diagnostics)
+- `git diff --check`: PASS (clean; no tracked dirt)
+- `git status --short`: only the new untracked test file; no tracked dirt
+
+**State integrity preserved:**
+- Elm Completion Authority: unchanged (no consult at publication site; verdict is from existing TS disc + production callback)
+- Elm Continuation Control: unchanged
+- BCB01 §0.1 conservation predicates: unchanged
+- C10 completion-commit barrier: unchanged (HBCLO-20 C11 invariant pinned: `getTurnPhase() !== "completed"` while marker is held + verdict is blocked)
+- CORRECTION01 EPOCH BINDING: inherited (the proposed wiring MUST come AFTER the existing C4 guards; the helper's existing guard ordering is the natural gate)
+- K-then-K+1 adversarial: inherited (stale T1 resolution after T2 replacement does NOT publish; covered by HBOP-40 in HBOP01)
+- `command_containment_failed` precedent: preserved (closed-enum extension is the same shape)
+- New wire field: NONE (the V1 contract reuses `TaskHeaderTelemetryStrip.runtimeErrorCount`)
+- New Elm kernel: NONE
+
+**Scope:** ACT-owned files = 1 (the new test file). Production code: untouched. Frozen contract for the successor ACT's bounded repair: one `recordRuntimeError` call inside the existing `applyBlockedCompletionContinuationOutcome` helper (after the C4 guards) + one additive new value on the closed `RuntimeErrorSource` enum (`"completion-continuation-stalled"` and `"completion-continuation-delivery-rejected"`) + the `SdkSessionEventCoordinatorOptions.taskTelemetry` field + the `SdkController.handleTaskRuntimeError` wiring into the shared-host coordinator construction (parallel to the existing `onRuntimeError: this.handleTaskRuntimeError` at SdkController.ts:1901). The `command_containment_failed` precedent at ExtensionMessage.ts:1119 is the structural reference for the additive enum extension.
+
+**Forward-look (frozen, this ACT):** The host-blocked-outcome P0 is resolved at the "owner selection + RED reproduction" level. The bounded producer-to-consumer mapping is the successor ACT's responsibility (`ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01`, operator-owned). The successor ACT MUST:
+1. Implement the C9 ablation: before/after/disable/restore on the new `recordRuntimeError` call inside `applyBlockedCompletionContinuationOutcome`
+2. Re-run the HBCLO01 test (GREEN expected)
+3. Run the C10 conservation suite (12 files / 193 tests; no regressions)
+4. Run `bun run check-types` + `bun run lint` + `git diff --check`
+5. NOT modify any of: `apps/vscode/elm/**`, `sdk/packages/llms/**`, `tools/tart-testbed/**`, `tools/macos-host-helper/**`
+
+
 ## ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HALTED_AT_PRODUCTION_CONSUMER_GAP — 2026-10-08
 
 **Status:** HALTED at the second factory-reviewer verdict `HALT_HOST_OUTCOME_CONSUMER_STILL_DIAGNOSTIC_ONLY`. The CORRECTION01 state-integrity repairs (no-fabrication guard, epoch binding, identity triple, real Elm invariant, two production dogfood counters) are RETAINED as durable work and COMMITTED. The reviewer halted the closure because the only normal-runtime consumer of the marker (`SdkSessionRebuildScheduler.drain` boolean predicate at `sdk-session-rebuild-scheduler.ts:203`) does not consult the typed `reason` — the marker is enriched but no production lifecycle decision is bound to the typed verdict. The P1 recon ACT (`ACT-CLINEMM-ELMIZE-P1-BLOCKED-OUTCOME-CLASSIFICATION01`) closed with verdict `PASS_NO_ELM_MIGRATION_NEEDED_HOST_OUTCOME_GAP` and named this exact successor: "bounded P0 host repair that projects the `enqueueCompletionContinuationIfHeld` discriminated-union member to a typed host surface". This ACT does exactly that.
