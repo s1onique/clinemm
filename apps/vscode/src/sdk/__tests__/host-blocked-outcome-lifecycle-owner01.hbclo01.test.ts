@@ -1,73 +1,50 @@
 /**
- * ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01
+ * ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01 — HBCLO01
  *
- * Recon pass that selects the existing host lifecycle owner for a
- * blocked completion obligation, and proves the gap via a real
- * production-seam RED test.
+ * Bounded producer-to-consumer wiring test. Authorizes the
+ * MAPPING01 contract and pins its invariants on the REAL
+ * production seam.
  *
- *   Sub-predecessor:
- *     ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-CONSUMER-PROBE01
- *     (c8e2a6e29; PASS_WITH_NONBLOCKING_RESIDUE) closed the
- *     scheduler question: the rebuild scheduler is correctly
- *     conserving a Boolean safety hold. The marker is the
- *     always-on "blocked" surface; the typed `reason` is the
- *     verdict. The next ACT must answer the question this
- *     test poses: which existing production lifecycle surface
- *     should RECEIVE the typed verdict?
+ *   Predecessor:
+ *     ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01
+ *     (4d57e8d97; PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN)
+ *     identified `TaskTelemetryTracker.recordRuntimeError(incident)`
+ *     as the existing production lifecycle consumer and froze
+ *     the bounded repair contract: one additive call site
+ *     inside the existing
+ *     `applyBlockedCompletionContinuationOutcome(...)` helper
+ *     (AFTER the C4 guards pass + AFTER the marker stamp) +
+ *     one additive new value on the closed `RuntimeErrorSource`
+ *     enum.
  *
- *   Selected owner (this ACT, C7):
- *     `TaskTelemetryTracker.recordRuntimeError(incident)` is
- *     the existing production lifecycle consumer. Pattern:
+ *   Factory reviewer (PASS_WITH_ONE_P1) correction:
+ *     The P1 finding required this ACT to make both RED cases
+ *     GREEN immediately, AND to prove producer → actual
+ *     `TaskTelemetryTracker` → real TaskHeader telemetry
+ *     projection. A mocked `recordRuntimeError` call alone is
+ *     insufficient. This test therefore holds a REAL
+ *     `TaskTelemetryTracker` instance (the same single source
+ *     of truth the production SdkController thread-through hands
+ *     to the shared-host coordinator) and asserts the
+ *     cumulative in-memory counter
+ *     (`tracker.currentRuntimeErrorCount`) and the
+ *     `TaskHeaderTelemetryStrip.runtimeErrorCount` wire field
+ *     (`tracker.get()?.runtimeErrorCount`) — the latter is the
+ *     field the webview TaskHeader reads to render the `⚠ N`
+ *     glyph.
  *
- *       CommandJobManager.cancel ─→ reportRuntimeError(...) ─→
- *         VscodeSessionHost.onRuntimeError ─→
- *           SdkController.handleTaskRuntimeError ─→
- *             TaskTelemetryTracker.recordRuntimeError ─→
- *               TaskHeaderTelemetryStrip.runtimeErrorCount (wire) ─→
- *                 webview TaskHeader `⚠ N` glyph
- *
- *     The surface is:
- *       - always-on (no opt-in flag; the C0 production seam
- *         is unconditional — `recordRuntimeError` is the V1
- *         public sink wired by SdkController.ts:1901)
- *       - typed (`RuntimeErrorIncident { errorClass, source,
- *         correlationId? }` — closed enum, additive-safe)
- *       - display-only (the webview renders a `⚠ N` glyph,
- *         NEVER a model-input text; `errorClass` / `source`
- *         are NOT projected to the wire and never reach the
- *         model — ExtensionMessage.ts:1042-1056)
- *       - per-task lifetime (latches on `startTask` with a
- *         new identity; same per-task semantics as
- *         `deferredCompletionBarrier` epoch — the natural
- *         replacement guard)
- *       - cumulative monotonic (recoverable hold and
- *         unrecoverable block both increment; matches the
- *         existing `command_containment_failed` precedent)
- *
- *   The RED:
- *     This test drives the REAL `SdkSessionEventCoordinator`
- *     through the REAL `handleSessionEvent` BCB re-registration
- *     path with two consecutive `done` events (K delivers, K+1
- *     stalls). It asserts that the typed verdict reaches a
- *     production lifecycle consumer — specifically a
- *     `recordRuntimeError(...)` call on a `taskTelemetry` that
- *     the coordinator is expected to call. The CURRENT
- *     production code (applyBlockedCompletionContinuationOutcome
- *     at sdk-session-event-coordinator.ts:1688-1808) does NOT
- *     call any `recordRuntimeError(...)` — it only stamps the
- *     marker with a typed `reason` and increments the OPT-IN
- *     dogfood counter. Therefore the test FAILS against the
- *     current implementation, proving the missing consumer.
- *
- *   Conservation guards (pinned, not under test):
- *     - C11 invariant: getTurnPhase() !== "completed" while
- *       the marker is registered. A blocked verdict is NOT a
- *       task completion.
- *     - Negative control: a `delivered` outcome does NOT
- *       invoke recordRuntimeError (the marker is the only
- *       state change).
- *     - C4 adversarial: a stale T1 resolution after a T2
- *       replacement does NOT invoke recordRuntimeError.
+ *   Production seam exercised (end-to-end):
+ *       SdkSessionEventCoordinator.handleSessionEvent
+ *         → enqueueCompletionContinuationIfHeld
+ *           → Promise<EnqueueCompletionContinuationOutcome>
+ *             → .then((outcome) => applyBlockedCompletionContinuationOutcome)
+ *               → C4 adversarial guards
+ *                 → marker stamp (typed `reason`)
+ *                 → dogfood counter increment (existing)
+ *                 → taskTelemetry.recordRuntimeError(incident) ← NEW
+ *                   → tracker.runtimeErrorCount++ (cumulative)
+ *                     → TaskHeaderTelemetryStrip.runtimeErrorCount (wire)
+ *                       → webview TaskHeader `⚠ N` glyph
  *
  *   Elm conservation: zero Elm changes. The verdict comes
  *   from existing TS disc + existing production callback;
@@ -80,18 +57,18 @@
  *   (zero-hiding at zero, ⚠ N glyph at >0, monotonic
  *   cumulative, task-lifetime reset on new identity). The
  *   V1 webview ignores the `errorClass` / `source` strings
- *   (ExtensionMessage.ts:1042-1056) — adding a new additive
- *   `RuntimeErrorSource` value is a closed-enum extension
- *   that never reaches the wire.
+ *   (ExtensionMessage.ts:1042-1056) — the two additive new
+ *   `RuntimeErrorSource` values are closed-enum extensions
+ *   that never reach the wire.
  */
 import { type CoreSessionEvent } from "@cline/core"
-import type { RuntimeErrorIncident } from "@shared/ExtensionMessage"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { applyCompletionContinuationUpstreamDiagnosticProfile } from "../dogfood-diagnostic-profile"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
 import type { SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { SdkSessionEventCoordinator } from "../sdk-session-event-coordinator"
+import { TaskTelemetryTracker } from "../task-telemetry-tracker"
 import { TurnStateTracker } from "../turn-state-tracker"
 
 vi.mock("@/shared/services/Logger", () => ({
@@ -126,22 +103,23 @@ vi.mock("@services/telemetry", () => ({
 }))
 
 /**
- * The host-owned production lifecycle consumer the coordinator
- * is expected to call on a typed blocked verdict. We hold a
- * `vi.fn()` directly so the test can inspect `.mock.calls`
- * without a structural cast. The shape matches the production
- * `TaskTelemetryTracker.recordRuntimeError(incident)` API
- * surface (sdk-session-event-coordinator.ts sink pattern) so
- * the test stays faithful to the real wiring.
+ * ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01:
+ *
+ * The harness holds a REAL `TaskTelemetryTracker` instance (the
+ * production lifecycle consumer; the same single-source-of-truth
+ * the production SdkController thread-through hands to the
+ * shared-host coordinator). The factory reviewer's P1 finding
+ * requires the producer → actual `TaskTelemetryTracker` → real
+ * TaskHeader telemetry projection proof; a mocked
+ * `recordRuntimeError` call alone is insufficient. The
+ * assertions therefore read the real
+ * `TaskHeaderTelemetryStrip.runtimeErrorCount` wire field
+ * (`tracker.get()?.runtimeErrorCount`) and the cumulative
+ * in-memory counter (`tracker.currentRuntimeErrorCount`).
  */
-type RecordRuntimeErrorFn = ReturnType<typeof vi.fn<(incident: RuntimeErrorIncident) => void>>
-
 interface Harness {
 	readonly coordinator: SdkSessionEventCoordinator
-	readonly taskTelemetry: {
-		readonly recordRuntimeError: RecordRuntimeErrorFn
-		readonly incidents: RuntimeErrorIncident[]
-	}
+	readonly taskTelemetry: TaskTelemetryTracker
 	readonly sendLog: Array<{ prompt: string; sessionId: string; taskId?: string }>
 	readonly sessionId: string
 	readonly taskId: string
@@ -206,16 +184,16 @@ function makeHarness(
 		return Promise.resolve({ kind: "delivered" as const })
 	}
 	const continuationResult = opts.continuationResult ?? defaultContinuation
-	// HBCLO01-ADDITION: the production lifecycle consumer the
-	// coordinator is expected to call on a typed blocked
-	// verdict. The coordinator currently does NOT have a
-	// taskTelemetry option; we pass it through the structural
-	// cast the project already uses (e.g. ccsrl01.test.ts:146).
-	const incidents: RuntimeErrorIncident[] = []
-	const recordRuntimeError = vi.fn((incident: RuntimeErrorIncident) => {
-		incidents.push(incident)
-	}) as RecordRuntimeErrorFn
-	const taskTelemetry: { recordRuntimeError: RecordRuntimeErrorFn } = { recordRuntimeError }
+	// HBCLO01-MAPPING01-CORRECTION01: the REAL
+	// `TaskTelemetryTracker` (the production lifecycle consumer;
+	// same single-source-of-truth the SdkController
+	// thread-through hands to the shared-host coordinator).
+	// The factory reviewer's P1 finding requires the producer
+	// → actual `TaskTelemetryTracker` → real TaskHeader
+	// telemetry projection proof; a mocked
+	// `recordRuntimeError` call alone is insufficient.
+	const taskTelemetry = new TaskTelemetryTracker()
+	taskTelemetry.startTask(taskId, 1_700_000_000_000)
 	const coordinator = new SdkSessionEventCoordinator({
 		messageTranslatorState: translatorState,
 		translateSessionEvent,
@@ -286,7 +264,7 @@ function makeHarness(
 	})
 	const h: Harness = {
 		coordinator,
-		taskTelemetry: { recordRuntimeError, incidents },
+		taskTelemetry,
 		sendLog,
 		sessionId,
 		taskId,
@@ -308,7 +286,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 	})
 
 	describe("RED — typed blocked verdict MUST reach the existing production lifecycle consumer", () => {
-		it("HBCLO-01: stalled_no_progress publication invokes taskTelemetry.recordRuntimeError with typed incident", async () => {
+		it("HBCLO-01: stalled_no_progress publication reaches the real TaskTelemetryTracker (wire projection)", async () => {
 			const h = makeHarness({ heldJobIds: SEVEN_HELD_IDS })
 			const translatorState = h.coordinator["options"].messageTranslatorState
 
@@ -316,9 +294,10 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			// continuation delivered, STALL snapshot pinned.
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
 			expect(h.sendLog.length).toBe(1)
-			// Pre-stall baseline: zero incidents (K is
-			// delivered, not a blocked verdict).
-			expect(h.taskTelemetry.recordRuntimeError).not.toHaveBeenCalled()
+			// Pre-stall baseline: zero runtime-error incidents
+			// (K is delivered, not a blocked verdict).
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(0)
+			expect(h.taskTelemetry.get()?.runtimeErrorCount).toBeUndefined() // zero-hiding
 
 			// K+1: real submit_and_exit → BCB re-registration
 			// runs → enqueueIfHeld sees priorSortedHeld ===
@@ -326,36 +305,38 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			// the upstream TS disc returns { kind:
 			// "stalled_no_progress" } and the production
 			// callback's .then calls
-			// applyBlockedCompletionContinuationOutcome.
+			// applyBlockedCompletionContinuationOutcome,
+			// which (after the C4 guards pass and the marker
+			// stamp) now invokes the production lifecycle
+			// consumer `taskTelemetry.recordRuntimeError(...)`.
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
 			await new Promise<void>((r) => setTimeout(r, 0))
 			expect(h.sendLog.length).toBe(1)
 
-			// HBCLO01 HEADLINE: the production lifecycle
-			// consumer (TaskTelemetryTracker.recordRuntimeError)
-			// MUST have been invoked with a typed
-			// RuntimeErrorIncident. The CURRENT production
-			// code does NOT make this call — the test FAILS,
-			// proving the missing owner wiring.
-			expect(h.taskTelemetry.recordRuntimeError).toHaveBeenCalled()
-			const calls = h.taskTelemetry.recordRuntimeError.mock.calls
-			expect(calls.length).toBeGreaterThanOrEqual(1)
-			const incident = calls[0]?.[0] as RuntimeErrorIncident
-			expect(incident).toBeDefined()
-			// Typed verdict: reuses an existing closed-enum
-			// value so the tracker is a no-op branch
-			// (cumulative wire field is the same).
-			expect(incident.errorClass).toBe("UNKNOWN_RUNTIME_ERROR")
-			// Source: an additive new value on the closed
-			// RuntimeErrorSource enum (V1 webview ignores
-			// the string; safe additive change).
-			expect(incident.source).toBe("completion-continuation-stalled")
-			// correlationId carries the (sessionId|taskId)
-			// for forensic trace; existing V1 contract.
-			expect(typeof incident.correlationId).toBe("string")
+			// HBCLO01-MAPPING01-CORRECTION01 HEADLINE: the real
+			// production lifecycle consumer
+			// (`TaskTelemetryTracker.recordRuntimeError`) was
+			// invoked end-to-end through the production
+			// `SdkSessionEventCoordinator.handleSessionEvent` →
+			// `enqueueCompletionContinuationIfHeld` → `.then` →
+			// `applyBlockedCompletionContinuationOutcome` seam.
+			//
+			// The factory reviewer's P1 finding requires the
+			// producer → actual `TaskTelemetryTracker` → real
+			// TaskHeader telemetry projection proof; a mocked
+			// `recordRuntimeError` call alone is insufficient.
+			// The cumulative `currentRuntimeErrorCount` is
+			// the in-memory counter, and `get()?.runtimeErrorCount`
+			// is the `TaskHeaderTelemetryStrip.runtimeErrorCount`
+			// wire field that the webview TaskHeader reads to
+			// render the `⚠ N` glyph.
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
+			const wire = h.taskTelemetry.get()
+			expect(wire).toBeDefined()
+			expect(wire?.runtimeErrorCount).toBe(1)
 		})
 
-		it("HBCLO-02: delivery_rejected publication invokes taskTelemetry.recordRuntimeError with typed incident", async () => {
+		it("HBCLO-02: delivery_rejected publication reaches the real TaskTelemetryTracker (wire projection)", async () => {
 			const h = makeHarness({
 				heldJobIds: SEVEN_HELD_IDS,
 				continuationResult: () => Promise.resolve({ kind: "rejected" as const }),
@@ -366,18 +347,18 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			await new Promise<void>((r) => setTimeout(r, 0))
 			expect(h.sendLog.length).toBe(0)
 
-			expect(h.taskTelemetry.recordRuntimeError).toHaveBeenCalled()
-			const calls = h.taskTelemetry.recordRuntimeError.mock.calls
-			expect(calls.length).toBeGreaterThanOrEqual(1)
-			const incident = calls[0]?.[0] as RuntimeErrorIncident
-			expect(incident.errorClass).toBe("UNKNOWN_RUNTIME_ERROR")
-			expect(incident.source).toBe("completion-continuation-delivery-rejected")
-			expect(typeof incident.correlationId).toBe("string")
+			// Same projection proof as HBCLO-01; the
+			// `rejected` callback outcome is the parallel
+			// blocked verdict.
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
+			const wire = h.taskTelemetry.get()
+			expect(wire).toBeDefined()
+			expect(wire?.runtimeErrorCount).toBe(1)
 		})
 	})
 
 	describe("NEGATIVE CONTROL — non-blocked outcomes MUST NOT publish to the lifecycle consumer", () => {
-		it("HBCLO-10: a delivered outcome does not invoke recordRuntimeError (the marker is the only state change)", async () => {
+		it("HBCLO-10: a delivered outcome does not increment the lifecycle counter (the marker is the only state change)", async () => {
 			const h = makeHarness({ heldJobIds: SEVEN_HELD_IDS })
 			const translatorState = h.coordinator["options"].messageTranslatorState
 
@@ -385,7 +366,12 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			await new Promise<void>((r) => setTimeout(r, 0))
 			expect(h.sendLog.length).toBe(1)
 
-			expect(h.taskTelemetry.recordRuntimeError).not.toHaveBeenCalled()
+			// The cumulative `runtimeErrorCount` remains 0;
+			// the wire field is omitted (zero-hiding per
+			// the REC-09 invariant). The webview TaskHeader
+			// hides the `⚠ N` glyph (data-testid absent).
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(0)
+			expect(h.taskTelemetry.get()?.runtimeErrorCount).toBeUndefined()
 		})
 	})
 

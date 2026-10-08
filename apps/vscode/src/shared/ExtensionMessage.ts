@@ -1123,8 +1123,34 @@ export type RuntimeErrorClass =
  * Frozen V1 set of host subsystems that may report an incident.
  * Adding a new source is an additive change; consumers MUST NOT
  * branch on this string at runtime (the V1 webview ignores it).
+ *
+ * ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01:
+ * Additive closed-enum values for the bounded producer-to-consumer
+ * wiring of a typed blocked-completion verdict into the existing
+ * `TaskTelemetryTracker.recordRuntimeError(incident)` lifecycle
+ * surface. The mapping is closed-enum (no free-form strings):
+ *
+ *   `applyBlockedCompletionContinuationOutcome(...)` →
+ *     `this.options.taskTelemetry?.recordRuntimeError({
+ *        errorClass: "UNKNOWN_RUNTIME_ERROR",
+ *        source: "completion-continuation-stalled" |
+ *                "completion-continuation-delivery-rejected",
+ *        correlationId: ${sessionId}|${taskId}|${enqueueEpoch}
+ *      })`
+ *
+ * Only `stalled_no_progress` (source = `…-stalled`) and the
+ * `rejected` callback outcome (source = `…-delivery-rejected`) map
+ * to a recordRuntimeError call. Every other union member is a
+ * no-op (the helper returns early; no incident is recorded).
+ *
+ * The V1 webview ignores the source string (per the V1 contract
+ * above), so additive enum extensions are safe.
  */
-export type RuntimeErrorSource = "command-job-manager" | "run-commands-spawn"
+export type RuntimeErrorSource =
+	| "command-job-manager"
+	| "run-commands-spawn"
+	| "completion-continuation-stalled"
+	| "completion-continuation-delivery-rejected"
 
 export interface QueuedPrompt {
 	id: string

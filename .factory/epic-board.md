@@ -1,3 +1,26 @@
+## ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01 — PASS_BLOCKED_COMPLETION_LIFECYCLE_MAPPING_PRELIVE — 2026-10-08
+
+**Status:** CLOSED with verdict `PASS_BLOCKED_COMPLETION_LIFECYCLE_MAPPING_PRELIVE`. The factory reviewer's P1 finding on the predecessor ACT (`PASS_WITH_ONE_P1` on LIFECYCLE-OWNER01, HEAD `4d57e8d97`) is **closed**. Both HBCLO01 RED cases are now GREEN; the HBCLO01 test was rewritten to use a REAL `TaskTelemetryTracker` instance (the factory reviewer's P1 correction required "producer → actual `TaskTelemetryTracker` → real TaskHeader telemetry projection. A mocked `recordRuntimeError` call alone is insufficient"). The bounded producer-to-consumer mapping is in place end-to-end through the production `handleSessionEvent` → `enqueueCompletionContinuationIfHeld` → `.then` → `applyBlockedCompletionContinuationOutcome` seam.
+
+**Approach (per C8/C9 of the predecessor ACT):** execute the frozen bounded contract in full. Four additive production changes:
+
+1. `apps/vscode/src/shared/ExtensionMessage.ts` — 2 new additive values on the closed `RuntimeErrorSource` enum: `"completion-continuation-stalled"` and `"completion-continuation-delivery-rejected"`. The closed `RuntimeErrorClass` is **unchanged**; the new publication reuses the existing `UNKNOWN_RUNTIME_ERROR` value.
+2. `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — one new optional `taskTelemetry?: { recordRuntimeError(incident: RuntimeErrorIncident): void }` field on `SdkSessionEventCoordinatorOptions`; one new `taskTelemetry?.recordRuntimeError(incident)` call inside the existing `applyBlockedCompletionContinuationOutcome(...)` helper, AFTER the C4 adversarial guards pass and AFTER the marker stamp. The call only fires for the closed-enum set `{ "stalled_no_progress", "rejected" }` of non-delivered enqueue outcomes; every other union member is a no-op.
+3. `apps/vscode/src/sdk/SdkController.ts` — wire `taskTelemetry: { recordRuntimeError: (incident) => this.handleTaskRuntimeError(incident) }` into the shared-host `SdkSessionEventCoordinator` construction (parallel to the existing `onRuntimeError: this.handleTaskRuntimeError` at SdkController.ts:1901).
+4. `apps/vscode/src/sdk/__tests__/host-blocked-outcome-lifecycle-owner01.hbclo01.test.ts` — replace the mocked `vi.fn()` sink with a REAL `TaskTelemetryTracker` instance; assertions now read the real `tracker.get()?.runtimeErrorCount` wire field.
+
+**Conservation gates (HEAD `4d57e8d97` → bounded-commit HEAD):**
+- HBCLO01: was 2 RED + 2 GREEN, now **4/4 GREEN**.
+- C10 focused conservation: 13 files / 197 tests PASS.
+- Pre-existing baseline failures unchanged: verified by stash/restore on `4d57e8d97` (same failure set).
+- `tsc --noEmit`: PASS. `bun run lint`: PASS. `git diff --check`: PASS.
+
+**State integrity preserved:** Elm Completion Authority unchanged, BCB01 §0.1 unchanged, C10 barrier unchanged, CORRECTION01 C4 guards inherited, K-then-K+1 adversarial inherited, `command_containment_failed` precedent preserved, NO new wire field, NO new Elm kernel, NO new public API.
+
+**Scope (C11):** ACT-owned files = 4 (3 production + 1 test). NOT modified: `apps/vscode/elm/**`, `sdk/packages/llms/**`, `tools/tart-testbed/**`, `tools/macos-host-helper/**`.
+
+**Forward-look (frozen, this ACT):** HALT_HOST_BLOCKED_COMPLETION_LIFECYCLE_CONVERGENCE_NOT_PROVEN remains open per the reviewer's P2 finding; the narrower claim is `runtime-incident publication`, not `blocked-outcome lifecycle convergence`. Operator-owned live qualification.
+
 ## ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN — 2026-10-08
 
 **Status:** CLOSED with verdict `PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN`. The P0 host-lifecycle-owner question is settled. The selected owner is `TaskTelemetryTracker.recordRuntimeError(incident)` — the existing production lifecycle consumer the host already owns, wires, and projects to the webview. The pattern is the exact "display-only terminal error excluded from model inputs" the upstream Cline SDK uses; the same V1 wire (`TaskHeaderTelemetryStrip.runtimeErrorCount`) renders the user-visible `⚠ N` glyph. No new wire field. No new public API. No Elm kernel change.

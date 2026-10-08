@@ -3,7 +3,7 @@ import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import { refreshClineRecommendedModels } from "@/core/controller/models/refreshClineRecommendedModels"
 import type { StateManager } from "@/core/storage/StateManager"
 import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@/shared/cline/recommended-models"
-import type { ClineApiReqInfo, TurnPhase } from "@/shared/ExtensionMessage"
+import type { ClineApiReqInfo, RuntimeErrorIncident, RuntimeErrorSource, TurnPhase } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
 import { getDiagnosticHostId, getDiagnosticManagerId } from "./background-job-liveness-authority"
@@ -514,6 +514,44 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * inject their own provider. There is no opt-out.
 	 */
 	getElmCompletionAuthorityDecision: (sessionId?: string) => ElmCompletionAuthorityDecision
+	/**
+	 * ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01:
+	 *
+	 * Host-owned runtime-incident publication sink. The coordinator
+	 * invokes `taskTelemetry.recordRuntimeError(incident)` from inside
+	 * `applyBlockedCompletionContinuationOutcome(...)` AFTER the C4
+	 * adversarial guards pass and AFTER the marker stamp, for the
+	 * closed-enum set `{ "stalled_no_progress", "rejected" }` of
+	 * non-delivered enqueue outcomes. Every other union member is
+	 * a no-op (the helper returns early; no incident is recorded).
+	 *
+	 * The closed-enum `RuntimeErrorIncident` shape
+	 * (ExtensionMessage.ts:1064-1068) is the existing production
+	 * payload used by `CommandJobManager.cancel` for EPERM and
+	 * `command_containment_failed`. The new call site reuses the
+	 * existing `UNKNOWN_RUNTIME_ERROR` `errorClass` and adds two
+	 * additive values to the closed `RuntimeErrorSource` enum
+	 * (`"completion-continuation-stalled"` /
+	 * `"completion-continuation-delivery-rejected"`). The V1 webview
+	 * ignores the source string (per the V1 contract at
+	 * ExtensionMessage.ts:1121-1148), so additive enum extensions
+	 * are safe.
+	 *
+	 * The marker is at-most-one per coordinator instance, so
+	 * two stalls → one typed publication (idempotence preserved by
+	 * the existing C4 guards; a successful publication also
+	 * increments the cumulative `TaskHeaderTelemetryStrip.runtimeErrorCount`
+	 * wire field, mirroring the existing
+	 * `command_containment_failed` precedent).
+	 *
+	 * Optional: when absent, the helper returns without invoking
+	 * any incident sink (the existing pre-MAPPING01 behavior). The
+	 * `applyBlockedCompletionContinuationOutcome` marker stamp and
+	 * the opt-in dogfood counters continue to fire.
+	 */
+	taskTelemetry?: {
+		readonly recordRuntimeError: (incident: RuntimeErrorIncident) => void
+	}
 	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
 	 * Optional microtask-flush helper the coordinator awaits before
@@ -1804,6 +1842,31 @@ export class SdkSessionEventCoordinator {
 			recordBlockedOutcomeStalledNoProgress()
 		} else if (reason === "delivery_rejected") {
 			recordBlockedOutcomeDeliveryRejected()
+		}
+		// ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01:
+		// LIFECYCLE CONSUMER. Reuse the existing
+		// `TaskTelemetryTracker.recordRuntimeError(incident)` sink
+		// that the production host (SdkController.handleTaskRuntimeError
+		// at SdkController.ts:5370) already exposes for the V1 EPERM
+		// and `command_containment_failed` incidents. The same
+		// cumulative `TaskHeaderTelemetryStrip.runtimeErrorCount`
+		// wire field renders the user-visible `⚠ N` glyph; the V1
+		// webview ignores the source string, so additive enum
+		// extensions are safe.
+		//
+		// The `taskTelemetry` option is OPTIONAL. When absent the
+		// helper returns without invoking any incident sink
+		// (mirroring the existing pre-MAPPING01 behavior where the
+		// dogfood counter and the marker stamp still fire).
+		if (this.options.taskTelemetry) {
+			const source: RuntimeErrorSource =
+				reason === "stalled_no_progress" ? "completion-continuation-stalled" : "completion-continuation-delivery-rejected"
+			const incident: RuntimeErrorIncident = {
+				errorClass: "UNKNOWN_RUNTIME_ERROR",
+				source,
+				correlationId: `${captured.sessionId}|${captured.taskId ?? "(none)"}|${captured.enqueueEpoch}`,
+			}
+			this.options.taskTelemetry.recordRuntimeError(incident)
 		}
 	}
 

@@ -2713,6 +2713,26 @@ export class Controller {
 			getElmCompletionAuthorityDecision: (sessionId?: string) =>
 				ElmAuthorityModule.getElmAuthorityCompletionDecision(sessionId ?? ""),
 			flushElmAuthorityForSession: (sessionId: string) => ElmAuthorityModule.flushElmAuthorityForSession(sessionId),
+			// ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01:
+			// Wire the existing `TaskTelemetryTracker.recordRuntimeError`
+			// sink into the shared-host coordinator. The coordinator
+			// invokes it from `applyBlockedCompletionContinuationOutcome`
+			// AFTER the C4 adversarial guards pass and AFTER the marker
+			// stamp, for the closed-enum set
+			// `{ "stalled_no_progress", "rejected" }` of non-delivered
+			// enqueue outcomes.
+			//
+			// The sink is the same `handleTaskRuntimeError` closure the
+			// production `VscodeSessionHost.onRuntimeError` is wired
+			// to (the V1 EPERM / `command_containment_failed` path
+			// established by ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01).
+			// The closure delegates straight to
+			// `this.taskTelemetry.recordRuntimeError` so the same
+			// cumulative `TaskHeaderTelemetryStrip.runtimeErrorCount`
+			// wire field renders the user-visible `⚠ N` glyph.
+			taskTelemetry: {
+				recordRuntimeError: (incident) => this.handleTaskRuntimeError(incident),
+			},
 		})
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
 		// Wire the post-run liveness seam. When the host's
