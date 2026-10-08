@@ -142,6 +142,9 @@ async function emitCompletionTurn(
 		iterations: 1,
 	})
 	await coordinator.handleSessionEvent(doneEvent)
+	// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C7):
+	// drain the Elm kernel's setTimeout(0).
+	await new Promise((r) => setTimeout(r, 50))
 }
 
 interface Harness {
@@ -425,7 +428,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-CONSUMER-PROBE01 — HBOCP01", () 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
 			// K+1: stall → marker stamped
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			const barrier = h.coordinator.getDeferredCompletionBarrierForTesting() as { reason?: string } | undefined
 			expect(barrier).toBeDefined()

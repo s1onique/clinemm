@@ -22,7 +22,7 @@ import {
 const FACT_INPUT = {
 	unconsumedCount: 2,
 	capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-	stalledNoProgress: false,
+	priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 	sessionMatches: true,
 	taskMatches: true,
 	alreadyCommitted: false,

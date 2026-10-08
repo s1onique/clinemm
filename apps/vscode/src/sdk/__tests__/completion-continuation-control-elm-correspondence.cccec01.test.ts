@@ -31,7 +31,7 @@ function facts(over: Partial<CompletionContinuationControlFactsInput> = {}): Com
 	return {
 		unconsumedCount: 0,
 		capabilities: { canObserveHeldResults: false, canRetryCompletion: false },
-		stalledNoProgress: false,
+		priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 		sessionMatches: true,
 		taskMatches: true,
 		alreadyCommitted: false,
@@ -174,7 +174,7 @@ describe("C14-extension tests (Elm adds stall / identity / commit / malformed gu
 			facts({
 				unconsumedCount: 2,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				stalledNoProgress: true,
+				priorHeldSetSorted: ["j1", "j2"], currentHeldSetSorted: ["j1", "j2"],
 			}),
 		)
 		expect(tsToDirective(tsControl).tag).toBe("observe_then_retry")

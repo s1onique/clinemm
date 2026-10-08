@@ -312,7 +312,7 @@ describe("REARM-01 — K's own submit_and_exit with held>0 must enqueue K+1 exac
 		})
 		h.ownedJobs.length = 0
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 		expect(h.sendLog[0].prompt).toContain("J1")
 		expect(h.sendLog[0].prompt).toContain("J2")
@@ -350,7 +350,7 @@ describe("REARM-01 — K's own submit_and_exit with held>0 must enqueue K+1 exac
 		})
 		h.bumpEpoch()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(2)
 		expect(h.sendLog[1].prompt).toContain("J4")
 	})
@@ -373,10 +373,10 @@ describe("REARM-02 — K's agent_turn_done must preserve the re-arm obligation",
 		})
 		h.ownedJobs.length = 0
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 		await h.coordinator.notifyAgentTurnDone(h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 		// Fresh K+1 crosses an epoch boundary AND has a
 		// changed held set (J1 was consumed by the model's
@@ -393,7 +393,7 @@ describe("REARM-02 — K's agent_turn_done must preserve the re-arm obligation",
 		})
 		h.bumpEpoch()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(2)
 		expect(h.sendLog[1].prompt).toContain("J2")
 	})
@@ -415,7 +415,7 @@ describe("REARM-05 — held drains to 0 → no K+1", () => {
 		})
 		h.ownedJobs.length = 0
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 		h.notifyCoordinator.consumeNonNotifyTerminalObservation({
 			jobId: "J1",
@@ -423,7 +423,7 @@ describe("REARM-05 — held drains to 0 → no K+1", () => {
 			taskId: h.activeTaskId,
 		})
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 	})
 })
@@ -443,7 +443,7 @@ describe("REARM-12 — full chain K → K+1 → K+2 eventually drains", () => {
 		})
 		h.ownedJobs.length = 0
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 		// K+1: model observed J1 (consumed) AND a fresh
 		// terminal J2 arrived; fresh epoch. Both the REARM
@@ -461,7 +461,7 @@ describe("REARM-12 — full chain K → K+1 → K+2 eventually drains", () => {
 		})
 		h.bumpEpoch()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(2)
 		// K+2: same shape — model observed J2, fresh J3
 		// arrived.
@@ -477,7 +477,7 @@ describe("REARM-12 — full chain K → K+1 → K+2 eventually drains", () => {
 		})
 		h.bumpEpoch()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(3)
 		// K+3: model observed J3, no new terminals. Held
 		// drained → no enqueue fires.
@@ -488,7 +488,7 @@ describe("REARM-12 — full chain K → K+1 → K+2 eventually drains", () => {
 		})
 		h.bumpEpoch()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(3)
 	})
 })
@@ -510,11 +510,11 @@ describe("REARM-AB-01 — ablation: neutralise the dedupe ownership → K+1 IS e
 		})
 		h.ownedJobs.length = 0
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 		h.clearCompletionContinuationSentForTesting()
 		await emitSubmitAndExit(h.coordinator, h.translatorState, h.activeSessionId)
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(2)
 		expect(h.sendLog[1].prompt).toContain("J1")
 	})
@@ -536,7 +536,7 @@ describe("REARM-CONS-01 — same-epoch dedupe within a single submit_and_exit is
 		})
 		h.ownedJobs.length = 0
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 		const beforeCount = h.sendLog.length
 		const first = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 1, h.activeTaskId)
@@ -569,7 +569,7 @@ describe("REARM-CONS-04 — epoch supersession still clears the dedupe", () => {
 		})
 		h.ownedJobs.length = 0
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
-		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, 50))
 		expect(h.sendLog.length).toBe(1)
 		h.bumpEpoch()
 		const newE = h.getEpoch()

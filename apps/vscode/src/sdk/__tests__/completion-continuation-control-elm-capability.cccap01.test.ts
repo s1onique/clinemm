@@ -29,7 +29,7 @@ function factsFromRegistry(
 			canObserveHeldResults: tools.includes("command_status"),
 			canRetryCompletion: tools.includes("submit_and_exit"),
 		},
-		stalledNoProgress: false,
+		priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 		sessionMatches: true,
 		taskMatches: true,
 		alreadyCommitted: false,

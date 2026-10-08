@@ -39,7 +39,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const d = await pickContinuationDirectiveForPublication({
 				unconsumedCount: 2,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				stalledNoProgress: true,
+				priorHeldSetSorted: ["j1", "j2"], currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -54,7 +54,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const d = await pickContinuationDirectiveForPublication({
 				unconsumedCount: 2,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				stalledNoProgress: true,
+				priorHeldSetSorted: ["j1", "j2"], currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: false,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -79,7 +79,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const baseFacts: CompletionContinuationControlFactsInput = {
 				unconsumedCount: 1,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				stalledNoProgress: false,
+				priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -103,7 +103,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const d = await pickContinuationDirectiveForPublication({
 				unconsumedCount: 1,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				stalledNoProgress: false,
+				priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -126,7 +126,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const d = await pickContinuationDirectiveForPublication({
 				unconsumedCount: 1,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				stalledNoProgress: false,
+				priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,

@@ -54,6 +54,15 @@ import {
 	recordExtensionHostHotloopSessionEvent,
 } from "./extension-host-hotloop-diagnostic"
 import { shouldEmitExtensionHostQueueLog } from "./extension-host-queue-log-policy"
+// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C6 / C7):
+// the held-set progress classification is a kernel concern. The
+// production seam (`enqueueCompletionContinuationIfHeld`) consults
+// the existing Continuation Control Elm kernel BEFORE deciding
+// the outcome. The kernel's `failureReason: "stalled_no_progress"`
+// is the SOLE semantic authority for the no-progress blocking
+// decision; the host's prior inlined `isStrictSupersetOf` check is
+// removed (C7 ablation 4 — legacy TS authority removed).
+import { pickContinuationDirectiveForPublication } from "./completion-continuation-control-elm"
 import type { MessageTranslatorState, TranslationResult } from "./message-translator"
 import { translateSessionEvent } from "./message-translator"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
@@ -66,45 +75,18 @@ function normalizeModelId(modelId: string): string {
 	return modelId.trim().toLowerCase()
 }
 
-/**
- * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
- *
- * Pure set-superset test for two sorted id arrays. Returns true iff
- * `prior` is a STRICT subset of `next` (every element of prior appears
- * in next, and at least one element of next is not in prior).
- *
- * Both inputs MUST be sorted ascending. This function is `O(n)` and
- * does not allocate. Used by the production stall discriminator to
- * detect passive accumulation: when the new held-job-ids set is a
- * pure superset of the prior set, no model consumption happened and
- * the scheduler must NOT re-arm.
- *
- * Symmetric, structural, no provider call. Does not read or write
- * runtime state.
- */
-function isStrictSupersetOf(prior: readonly string[], next: readonly string[]): boolean {
-	if (next.length <= prior.length) return false
-	let pi = 0
-	let ni = 0
-	while (pi < prior.length && ni < next.length) {
-		const cmp = prior[pi].localeCompare(next[ni])
-		if (cmp === 0) {
-			pi++
-			ni++
-		} else if (cmp < 0) {
-			// prior has an element not in next → prior is NOT a subset of next.
-			return false
-		} else {
-			// next has an element not in prior; keep scanning.
-			ni++
-		}
-	}
-	if (pi !== prior.length) return false
-	// At this point all of prior is contained in next. We already
-	// returned false if next.length <= prior.length, so strict-superset
-	// is guaranteed when prior has been fully matched.
-	return true
-}
+// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
+// The `isStrictSupersetOf` helper was REMOVED by
+// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C7 ablation 4
+// — legacy TS authority removed). The held-set progress classification
+// is now a property of the existing Continuation Control Elm kernel
+// (`Policy.classifyHeldSetProgress` at
+// apps/vscode/elm/completion-continuation-control/src/Policy.elm:230-255).
+// The kernel's `failureReason: "stalled_no_progress"` is the SOLE
+// semantic authority for the no-progress blocking decision; the
+// production seam at `enqueueCompletionContinuationIfHeld` consults
+// the kernel and routes the `stalled_no_progress` outcome through
+// the existing `recordStalledNoProgress` counter.
 
 type AgentFailureTelemetry = Pick<ProviderFailureTelemetry, "sessionId" | "error" | "errorType"> | undefined
 
@@ -1419,8 +1401,17 @@ export class SdkSessionEventCoordinator {
 	 * `rejected`, `session_gone`, `no_held_job_ids`, `not_held`,
 	 * `already_sent`, `no_callback`) so callers / tests can
 	 * verify behavior without consulting the dedupe set.
+	 *
+	 * ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C7):
+	 * the method is `async` because the held-set progress
+	 * classification is now made by the existing Continuation
+	 * Control Elm kernel. The kernel is a `Platform.worker`
+	 * (asynchronous); the host awaits the directive before
+	 * deciding the outcome. The `enqueueIfHeldEntered` counter
+	 * is recorded at the FIRST line of the method, BEFORE the
+	 * `await` — so a synchronous re-entry cannot double-fire.
 	 */
-	enqueueCompletionContinuationIfHeld(
+	async enqueueCompletionContinuationIfHeld(
 		activeSessionId: string,
 		unconsumedOwnedTerminalResultsForC10: number,
 		taskId: string | undefined,
@@ -1447,6 +1438,19 @@ export class SdkSessionEventCoordinator {
 		 * state.
 		 */
 		| { kind: "stalled_no_progress" }
+		/**
+		 * ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFETY-AND-CLASSIFIER (P0 #1):
+		 * Every other `fail_closed` Elm directive (malformed facts,
+		 * observation unavailable, retry unavailable, session/task
+		 * mismatch, already committed) is terminal at the production
+		 * caller. The kind is `fail_closed` with a typed
+		 * `failureReason` so the downstream
+		 * `applyBlockedCompletionContinuationOutcome` mapping can
+		 * surface it via the existing Logger.warn path. The dedupe
+		 * slot is NEVER marked — a fail-closed decision must not
+		 * become an allowed effect through fallthrough.
+		 */
+		| { kind: "fail_closed"; failureReason: import("./completion-continuation-control-elm").FailureReasonTag }
 	> {
 		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 		// U8 discriminator. Every entry increments
@@ -1469,6 +1473,10 @@ export class SdkSessionEventCoordinator {
 		const epoch = this.options.messageTranslatorState.getMinter().epoch
 		const continuationSessionEpoch = `${activeSessionId}|${taskId ?? "(none)"}|${epoch}`
 		const heldJobIds = this.options.getUnconsumedOwnedTerminalJobIds?.(activeSessionId, taskId) ?? []
+		const nextSortedHeld = heldJobIds.slice().sort()
+		const nextFingerprint = `${activeSessionId}|${taskId ?? "(none)"}|${nextSortedHeld.join(",")}`
+		const priorSortedHeld = this.lastCompletionContinuationHeldSetSorted
+
 		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
 		//
 		// PRODUCTION stall check BEFORE the epoch dedupe. The
@@ -1482,64 +1490,129 @@ export class SdkSessionEventCoordinator {
 		// case. The predecessor helper detected this case but
 		// did not feed it into production (C15/C17 halt).
 		//
-		// Comparing to `shouldStallSameStateControl`:
-		//   `shouldStallSameStateControl(a, b)` uses
-		//   `(completionStatus, requiredAction, heldJobIds,
-		//   sessionId, taskId)`; we use the same axes plus
-		//   `unconsumedOwnedTerminalResultsForC10` for
-		//   stronger no-progress detection (held count drops
-		//   ⇒ progress).
+		// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C6 / C7):
+		// The held-set progress classification is a property of
+		// the existing Continuation Control Elm kernel. The
+		// kernel's `Policy.classifyHeldSetProgress` derives the
+		// closed `HeldSetProgress` sum from the two immutable
+		// sorted snapshots the host passes in:
+		//   - `priorHeldSetSorted` — the canonical snapshot at
+		//     the LAST successful enqueue (this field's lifetime
+		//     stays in TS; Elm only reads it as an immutable
+		//     fact).
+		//   - `currentHeldSetSorted` — the live projection (this
+		//     call's `heldJobIds`, sorted ascending inline).
+		// The kernel's P2 guard maps BOTH `NoProgress` and
+		// `PassiveAccumulation` to `FailClosed StalledNoProgress`,
+		// preserving the live STALLED-REARM-LOOP01 invariant.
+		// `ContractionOrMembershipShift` and `Indeterminate` (no
+		// prior snapshot) release the directive.
 		//
-		// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
-		// The pre-fix fingerprint `${sessionId}|${taskId}|${count}|
-		//   ${heldJobIds.sorted}` was structurally
-		// too-coarse: pure superset accumulation (new
-		// background terminals arriving between attempts while
-		// the model has no observation capability) shifts the
-		// fingerprint and therefore BYPASSES the stall
-		// detector. The LIVE specimen
-		// (task/session 1791400813202_ddnh3) exhibited exactly
-		// this: 4 × submit_and_exit → 4 × stalledNoProgress +
-		// 4 × dedupePermitted over 8 entries → loop. The
-		// post-fix discriminator treats the held set as a
-		// CAUSAL key: the new set is STALLED iff it is a pure
-		// superset of (or identical to) the prior observed
-		// set. Any contraction or membership shift is real
-		// progress and releases the epoch dedupe so a fresh
-		// continuation may proceed.
-		const nextSortedHeld = heldJobIds.slice().sort()
-		const nextFingerprint = `${activeSessionId}|${taskId ?? "(none)"}|${nextSortedHeld.join(",")}`
-		const priorSortedHeld = this.lastCompletionContinuationHeldSetSorted
-		if (
-			priorSortedHeld !== undefined &&
-			(priorSortedHeld.length === nextSortedHeld.length
-				? priorSortedHeld.every((id, i) => id === nextSortedHeld[i])
-				: isStrictSupersetOf(priorSortedHeld, nextSortedHeld))
-		) {
-			// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
-			// Stall discriminated: same canonical held set, OR
-			// the new held set is a pure superset of the prior
-			// one (passive accumulation, no model consumption).
-			// In both cases the model produced no progress.
-			// Suppress the enqueue with a STALLED outcome and
-			// DO NOT mark the epoch dedupe slot — the dedupe
-			// slot is keyed on epoch, and a stall must not
-			// poison the next genuine epoch's continuation.
-			recordStalledNoProgress()
-			return Promise.resolve({ kind: "stalled_no_progress" as const })
+		// C7 ablation 4 — legacy TS authority removed: the
+		// inlined `isStrictSupersetOf` check that used to live
+		// here is GONE. The Elm kernel's `failureReason` is the
+		// SOLE semantic authority.
+		const directive = await pickContinuationDirectiveForPublication({
+			unconsumedCount: heldJobIds.length,
+			capabilities: {
+				canObserveHeldResults: true,
+				canRetryCompletion: true,
+			},
+			priorHeldSetSorted: priorSortedHeld,
+			currentHeldSetSorted: nextSortedHeld,
+			sessionMatches: true,
+			taskMatches: true,
+			alreadyCommitted: false,
+		})
+		if (directive.tag === "fail_closed") {
+			// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFETY-AND-CLASSIFIER (P0 #1):
+			// EVERY `fail_closed` directive is terminal at the
+			// production caller. The Elm kernel is the SOLE
+			// semantic authority for the no-progress blocking
+			// decision AND for every other fail-closed reason
+			// (malformed facts, observation unavailable, retry
+			// unavailable, session/task mismatch, already
+			// committed). A fail-closed decision must not become
+			// an allowed effect through fallthrough. The dedupe
+			// slot is NEVER marked (a stall must not poison the
+			// next genuine epoch's continuation; a malformed
+			// input must not be retried until the host fixes it;
+			// an identity mismatch means the obligation is for
+			// a different session/task and should not be re-fired
+			// against this coordinator instance).
+			//
+			// The mapping from `failureReason` to the typed
+			// production outcome is exact:
+			//
+			//   stalled_no_progress     -> stalled_no_progress
+			//   malformed_facts         -> fail_closed (generic)
+			//   observation_unavailable -> fail_closed
+			//   retry_unavailable       -> fail_closed
+			//   session_mismatch        -> fail_closed (a NEW
+			//                               obligation is the
+			//                               correct next step)
+			//   task_mismatch           -> fail_closed
+			//   already_committed       -> fail_closed
+			//
+			// Only `stalled_no_progress` maps to its own typed
+			// outcome kind (the U-class discriminator surface
+			// records the same `stalledNoProgress` counter as
+			// before). The other reasons are surfaced as
+			// `fail_closed` with the reason; the
+			// `applyBlockedCompletionContinuationOutcome` mapping
+			// already handles `stalled_no_progress` and
+			// `delivery_rejected`; the remaining reasons are
+			// host-owned diagnostics that flow through
+			// `Logger.warn` only (no incident publication —
+			// they are local classification outcomes, not
+			// runtime errors).
+			if (directive.failureReason === "stalled_no_progress") {
+				recordStalledNoProgress()
+				return Promise.resolve({ kind: "stalled_no_progress" as const })
+			}
+			// Every other fail-closed reason: terminal with
+			// the typed reason. The downstream
+			// `applyBlockedCompletionContinuationOutcome`
+			// mapping sees a `fail_closed` kind and surfaces
+			// it via the existing Logger.warn path (these
+			// reasons are not in the closed-enum set
+			// `{ "stalled_no_progress", "delivery_rejected" }`
+			// that MAPPING01-CORRECTION01 instruments).
+			return Promise.resolve({
+				kind: "fail_closed" as const,
+				failureReason: directive.failureReason,
+			})
 		}
-		if (priorSortedHeld !== undefined && !isStrictSupersetOf(priorSortedHeld, nextSortedHeld)) {
-			// Real progress: there IS a prior observed held
-			// set AND it is neither equal to nor a pure
-			// superset of the new one. This means the model
-			// actually consumed something (the held set
-			// contracted) or the membership shifted (old
-			// terminals cleared, new ones arrived
-			// simultaneously). Release the epoch dedupe so a
-			// fresh continuation can proceed even within the
-			// same epoch. The first call (no prior held set)
-			// is left alone — the dedupe ownership from any
-			// prior successful enqueue must still hold.
+		if (priorSortedHeld !== undefined) {
+			// Real progress: the kernel saw a transition that
+			// is NOT `NoProgress` / `PassiveAccumulation` /
+			// `Indeterminate` (the closed `Indeterminate` case
+			// is the first-call semantic and does not reach
+			// this branch because `priorHeldSetSorted !==
+			// undefined`). This means the model actually
+			// consumed something (the held set contracted) or
+			// the membership shifted. Release the epoch dedupe
+			// so a fresh continuation can proceed even within
+			// the same epoch. The first call (no prior held
+			// set) is left alone — the dedupe ownership from
+			// any prior successful enqueue must still hold.
+			//
+			// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION02-SORTEDNESS-FAIL-CLOSED:
+			// this branch is reached ONLY for non-fail-closed
+			// directives (the `fail_closed` branch above returns
+			// early at line 1581-1584). After the CORRECTION02
+			// fix, a malformed snapshot (including a mis-sorted
+			// one) fails closed at P0 of `Policy.decide` via
+			// `Domain.factsIsExpected`, so the comment from
+			// CORRECTION01 that claimed `MalformedFacts` is
+			// "not stalled" and should release the REARM is no
+			// longer reachable — the previous fall-through path
+			// (malformed → classifier `Indeterminate` → fall
+			// through to `ObserveThenRetry` with observation
+			// capability → `delivered`) is closed. A malformed
+			// snapshot now produces `kind: "fail_closed"` with
+			// `failureReason: "malformed_facts"` and the dedupe
+			// slot is preserved.
 			this.lastCompletionContinuationSessionEpoch = undefined
 		}
 		if (this.lastCompletionContinuationSessionEpoch === continuationSessionEpoch) {
@@ -1744,13 +1817,41 @@ export class SdkSessionEventCoordinator {
 			| { kind: "not_held" }
 			| { kind: "already_sent"; continuationSessionEpoch: string }
 			| { kind: "no_callback" }
-			| { kind: "stalled_no_progress" },
+			| { kind: "stalled_no_progress" }
+			| {
+					kind: "fail_closed"
+					failureReason: import("./completion-continuation-control-elm").FailureReasonTag
+			  },
 	): void {
 		let reason: DeferredCompletionBarrierReason | undefined
 		if (outcome.kind === "stalled_no_progress") {
 			reason = "stalled_no_progress"
 		} else if (outcome.kind === "rejected") {
 			reason = "delivery_rejected"
+		} else if (outcome.kind === "fail_closed") {
+			// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFETY-AND-CLASSIFIER (P0 #1):
+			// the Elm kernel's non-stall fail-closed reasons
+			// (malformed_facts, observation_unavailable,
+			// retry_unavailable, session_mismatch,
+			// task_mismatch, already_committed) are terminal at
+			// the production caller. They are NOT in the
+			// closed-enum set `{ "stalled_no_progress",
+			// "delivery_rejected" }` that the marker stamps
+			// (CORRECTION01 invariant). We log them via
+			// `Logger.warn` so the operator can see them in
+			// the production dogfood dump, but we do NOT
+			// publish an incident, do NOT stamp the marker,
+			// and do NOT increment the dogfood counters.
+			// The reason is host-owned diagnostic only; the
+			// kernel is the SOLE semantic authority for the
+			// classification, and the host's role is to
+			// surface the verdict in a non-effect-bearing log
+			// channel. A repeated verdict (idempotence) is
+			// also a no-op (we do not re-log either).
+			Logger.warn(
+				`[SdkController] Elm continuation-control fail-closed at writerId=block-publication; reason=${outcome.failureReason}`,
+			)
+			return
 		} else {
 			// C2: every other union member is not a "blocked"
 			// verdict. No-op preserves the marker (the BCB

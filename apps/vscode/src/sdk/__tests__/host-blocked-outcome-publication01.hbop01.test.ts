@@ -135,6 +135,13 @@ async function emitCompletionTurn(
 		iterations: 1,
 	})
 	await coordinator.handleSessionEvent(doneEvent)
+	// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C7):
+	// the production seam now awaits BOTH Elm kernels before
+	// deciding the outcome. The kernels are `Platform.worker`
+	// and use `setTimeout(0)` for the outbound port. Drain the
+	// timer queue so the synchronous-looking assertions below
+	// see the post-Elm state.
+	await new Promise((r) => setTimeout(r, 50))
 }
 
 function makeHarness(
@@ -270,7 +277,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 			// enqueueIfHeld sees priorSortedHeld === [j1..j7],
 			// the new set is identical, returns stalled_no_progress.
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 			expect(h.sendLog.length).toBe(1)
 
 			// HBOP HEADLINE: the marker now carries a typed reason.
@@ -294,7 +301,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 			for (let i = 0; i < 3; i++) {
 				await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
 			}
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			expect(h.sendLog.length).toBe(1)
 			const snap = getCompletionContinuationUpstreamCounters()
@@ -310,7 +317,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			const phase = h.coordinator["options"].getTurnPhase?.()
 			expect(phase).not.toBe("completed")
@@ -324,7 +331,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 			const translatorState = h.coordinator["options"].messageTranslatorState
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 			expect(h.sendLog.length).toBe(1)
 
 			const barrier = h.coordinator.getDeferredCompletionBarrierForTesting() as { reason?: string } | undefined
@@ -340,7 +347,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 			const translatorState = h.coordinator["options"].messageTranslatorState
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 			expect(h.sendLog.length).toBe(0)
 
 			const barrier = h.coordinator.getDeferredCompletionBarrierForTesting() as { reason?: string } | undefined
@@ -450,7 +457,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
 			// K+1: same held set, returns stalled_no_progress.
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			const after = getCompletionContinuationUpstreamCounters().blockedOutcomeStalledNoProgress ?? 0
 			// The K+1 stalled verdict was published onto the
@@ -472,7 +479,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 			const before = getCompletionContinuationUpstreamCounters().blockedOutcomeDeliveryRejected ?? 0
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			const after = getCompletionContinuationUpstreamCounters().blockedOutcomeDeliveryRejected ?? 0
 			expect(after).toBeGreaterThan(before)
@@ -488,7 +495,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 
 			// Single turn: delivered (no stall).
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			const afterStalled = getCompletionContinuationUpstreamCounters().blockedOutcomeStalledNoProgress ?? 0
 			const afterRejected = getCompletionContinuationUpstreamCounters().blockedOutcomeDeliveryRejected ?? 0
@@ -520,7 +527,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 			// K: first turn delivered. Marker seeded by harness.
 			const kEpoch = translatorState.getMinter().epoch
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			// Simulate K+1 advancing the epoch: mint a new
 			// messageId (any internal producer) so the minter
@@ -619,7 +626,7 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			// Real assertion: the production counter incremented
 			// as a result of the TS disc verdict alone. (The

@@ -192,7 +192,7 @@ const SEVEN_HELD_IDS: readonly string[] = [
  * sentinel.
  */
 function makeElmSentinel(directive: ContinuationDirective): CompletionContinuationControlElmKernelInvoke {
-	return async () => ({ kind: "directive", value: directive })
+	return async () => ({ kind: "directive", heldSetProgress: "indeterminate", value: directive })
 }
 
 function makeHarness(opts: {
@@ -1013,7 +1013,7 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			//       canObserveHeldResults: toolNames.includes("command_status"),
 			//       canRetryCompletion: toolNames.includes("submit_and_exit"),
 			//     },
-			//     stalledNoProgress: false,
+			//     priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 			//     sessionMatches: active.sessionId === sessionId,
 			//     taskMatches: true,
 			//     alreadyCommitted: false,
@@ -1026,7 +1026,7 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			const facts: CompletionContinuationControlFactsInput = {
 				unconsumedCount: 7,
 				capabilities: { canObserveHeldResults: false, canRetryCompletion: false },
-				stalledNoProgress: false,
+				priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -1054,7 +1054,7 @@ describe("CCUTO01 — completion-continuation-unresolvable-terminal-outcome01", 
 			const facts: CompletionContinuationControlFactsInput = {
 				unconsumedCount: 7,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				stalledNoProgress: false,
+				priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,

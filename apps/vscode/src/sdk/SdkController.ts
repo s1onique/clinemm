@@ -936,7 +936,28 @@ export function buildSdkControllerEnqueueCompletionContinuation(options: {
 					canObserveHeldResults: toolNames.includes("command_status"),
 					canRetryCompletion: toolNames.includes("submit_and_exit"),
 				},
-				stalledNoProgress: false,
+				// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C6 / C7):
+				// The held-set progress classification is a kernel
+				// concern. The SdkController call site is downstream of
+				// the BCB01 §0.1 barrier and downstream of
+				// `enqueueCompletionContinuationIfHeld` — the TS stall
+				// guard has already been applied upstream. At this
+				// seam the held-set snapshots are passed as
+				// "indeterminate" / current = `heldJobIds`:
+				//   - `priorHeldSetSorted: []` — no prior snapshot
+				//     (this is the formatting path, not the enqueue
+				//     path; the prior snapshot lives on the
+				//     coordinator, not on the SdkController).
+				//   - `currentHeldSetSorted: heldJobIds` (sorted
+				//     inline) — the live projection.
+				// The kernel classifies this as `Indeterminate`
+				// (because prior is empty), the directive falls
+				// through to P4/P5, and the prompt renders normally.
+				// The actual stall verdict is owned by the
+				// enqueue-side kernel invocation (see
+				// `enqueueCompletionContinuationIfHeld` patch).
+				priorHeldSetSorted: undefined,
+				currentHeldSetSorted: heldJobIds.slice().sort(),
 				sessionMatches: active.sessionId === sessionId,
 				taskMatches: true,
 				alreadyCommitted: false,

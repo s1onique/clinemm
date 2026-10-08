@@ -20,7 +20,8 @@ import {
 const FACT_INPUT: CompletionContinuationControlFactsInput = {
 	unconsumedCount: 2,
 	capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-	stalledNoProgress: false,
+	priorHeldSetSorted: undefined,
+	currentHeldSetSorted: ["j1", "j2"],
 	sessionMatches: true,
 	taskMatches: true,
 	alreadyCommitted: false,
@@ -47,6 +48,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C23 
 		const d = await pickContinuationDirectiveForPublication(FACT_INPUT, {
 			invokeElmForProduction: async () => ({
 				kind: "directive",
+				heldSetProgress: "indeterminate",
 				value: injected,
 			}),
 		})
@@ -100,6 +102,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C23 
 				calls += 1
 				return {
 					kind: "directive",
+					heldSetProgress: "indeterminate",
 					value: {
 						completionStatus: "HELD",
 						requiredAction: "observe_then_submit",

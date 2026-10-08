@@ -258,6 +258,14 @@ describe("UPSTREAM-DIAG-03 — terminal hold reaches enqueue-if-held", () => {
 		harness.setMarkerPresent(true)
 		harness.setUnconsumedTerminalCount(3)
 		await harness.coordinator.reevaluateDeferredCompletionBarrier()
+		// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C7):
+		// the production seam now awaits the Elm kernel
+		// (`pickContinuationDirectiveForPublication`) before
+		// deciding the outcome. The kernel's `Platform.worker`
+		// uses an async `setTimeout(0)` for the outbound port.
+		// Drain the timer queue so the synchronous-looking
+		// assertion below sees the post-Elm state.
+		await new Promise((r) => setTimeout(r, 50))
 		const s = upstreamSnapshot()
 		// U2 (marker present).
 		expect(s.markerMissing).toBe(0)
@@ -309,6 +317,10 @@ describe("UPSTREAM-DIAG-04 — dedupe suppressed", () => {
 		harness.setUnconsumedTerminalCount(2)
 		harness.preArmDedupeKey("ignored")
 		await harness.coordinator.reevaluateDeferredCompletionBarrier()
+		// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C7):
+		// drain the Elm kernel's setTimeout(0) (see the comment on
+		// UPSTREAM-DIAG-03 above).
+		await new Promise((r) => setTimeout(r, 50))
 		const s = upstreamSnapshot()
 		// The reevaluation ran past U2..U7 but U10 dedupe suppressed.
 		// When dedupe suppresses, the heldJobIds read is NOT

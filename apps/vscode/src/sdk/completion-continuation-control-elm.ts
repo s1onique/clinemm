@@ -16,6 +16,23 @@
  *
  * The kernel-side asset ID is `runtime-assets/completion-continuation-control.js`
  * (added to `scripts/build_dogfood_vsix_lib.py` `_ELM_KERNELS` in this ACT).
+ *
+ * ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C6 / C7 / C8):
+ *
+ *   The held-set progress classification is a property of the
+ *   kernel. The host no longer pre-computes `stalledNoProgress`;
+ *   it passes the two immutable held-set snapshots and Elm derives
+ *   the verdict. This is a breaking change to the wire schema (the
+ *   `stalledNoProgress: Bool` field is REMOVED; two new
+ *   `*HeldSetSorted: string[]` fields are ADDED). The TS adapter
+ *   is the only call site that needs to change at the boundary.
+ *
+ *   The host STILL owns the temporal state (prior snapshot lifetime,
+ *   REARM dedupe lifetime, STALL fingerprint lifetime, terminal
+ *   observation records). The kernel is a pure projection
+ *   `Facts -> Directive`; the kernel never writes diagnostics,
+ *   never mutates the held-set store, and never owns the REARM
+ *   dedupe. See Policy.elm C6 invariant.
  */
 
 import { Logger } from "@/shared/services/Logger"
@@ -39,10 +56,33 @@ export interface ContinuationCapabilities {
 	readonly canRetryCompletion: boolean
 }
 
+/**
+ * ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C8):
+ *
+ *   The host passes the two immutable held-set snapshots:
+ *
+ *   - `priorHeldSetSorted` — the canonical sorted snapshot of the
+ *     held identity set at the LAST successful enqueue
+ *     (the TS coordinator's `lastCompletionContinuationHeldSetSorted`).
+ *     `undefined` or `[]` means "no prior snapshot" (first call /
+ *     cleared) → Elm classifies as `Indeterminate` and the directive
+ *     falls through. The TS adapter normalizes `undefined` to `[]`
+ *     for the wire (the closed schema requires a list, not an
+ *     absent field).
+ *
+ *   - `currentHeldSetSorted` — the canonical sorted snapshot of the
+ *     held identity set at the current call (the live
+ *     `getUnconsumedOwnedTerminalJobIds` projection). The TS adapter
+ *     sorts this before serializing; the closed-schema contract
+ *     requires the list to be sorted ascending. The kernel's
+ *     `classifyHeldSetProgress` does NOT re-sort (side-effect-free,
+ *     C6).
+ */
 export interface CompletionContinuationControlFactsInput {
 	readonly unconsumedCount: number
 	readonly capabilities: ContinuationCapabilities
-	readonly stalledNoProgress: boolean
+	readonly priorHeldSetSorted: readonly string[] | undefined
+	readonly currentHeldSetSorted: readonly string[]
 	readonly sessionMatches: boolean
 	readonly taskMatches: boolean
 	readonly alreadyCommitted: boolean
@@ -51,16 +91,50 @@ export interface CompletionContinuationControlFactsInput {
 /**
  * JSON shape on the wire -- Elm's `Codec.factsDecoder` consumes this
  * verbatim. Closed schema (C10 / C15); no extra fields allowed.
+ *
+ * ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C10):
+ *
+ *   The `stalledNoProgress: boolean` field is REMOVED. The schema
+ *   gains two new required fields:
+ *
+ *   - `priorHeldSetSorted:   string[]` — canonical sorted snapshot
+ *                                       at the LAST successful
+ *                                       enqueue; `[]` means "no
+ *                                       prior snapshot".
+ *   - `currentHeldSetSorted: string[]` — canonical sorted snapshot
+ *                                       at the CURRENT call.
+ *
+ *   Both fields are decoded as `string[]` by the schema; the
+ *   decoder rejects non-array / non-string / empty-string values
+ *   (the empty-string rejection preserves the `factsIsExpected`
+ *   invariant -- see Domain.elm C8).
  */
 export interface CompletionContinuationControlFactsJson {
 	readonly unconsumedCount: number
 	readonly observation: { readonly observeHeldResults: boolean; readonly retryCompletion: boolean }
 	readonly completion: { readonly observeHeldResults: boolean; readonly retryCompletion: boolean }
-	readonly stalledNoProgress: boolean
+	readonly priorHeldSetSorted: readonly string[]
+	readonly currentHeldSetSorted: readonly string[]
 	readonly sessionMatches: boolean
 	readonly taskMatches: boolean
 	readonly alreadyCommitted: boolean
 }
+
+/**
+ * ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5):
+ *
+ *   The closed classification returned by the kernel as a diagnostic
+ *   surface. The TS adapter does NOT consult this field; the
+ *   `directive` is the SOLE semantic authority. The classification
+ *   is included in the outbound message for the C14 differential
+ *   correspondence fixtures and for the LIVE operator's dogfood
+ *   dump.
+ */
+export type HeldSetProgressTag =
+	| "indeterminate"
+	| "no_progress"
+	| "passive_accumulation"
+	| "contraction_or_membership_shift"
 
 export type FailureReasonTag =
 	| "observation_unavailable"
@@ -87,7 +161,7 @@ export type ContinuationDirective =
 	  }
 
 export type CompletionContinuationControlElmDecision =
-	| { readonly kind: "directive"; readonly value: ContinuationDirective }
+	| { readonly kind: "directive"; readonly value: ContinuationDirective; readonly heldSetProgress: HeldSetProgressTag }
 	| {
 			readonly kind: "decode_error"
 			readonly reason: string
@@ -120,7 +194,16 @@ export function buildFactsJson(input: CompletionContinuationControlFactsInput): 
 			observeHeldResults: input.capabilities.canObserveHeldResults,
 			retryCompletion: input.capabilities.canRetryCompletion,
 		},
-		stalledNoProgress: input.stalledNoProgress,
+		// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C8):
+		// The host passes the canonical sorted held-set snapshots.
+		// `priorHeldSetSorted` is normalized: an absent (`undefined`)
+		// host value becomes `[]` (Indeterminate on the kernel side).
+		// `currentHeldSetSorted` is required; the host sorts it before
+		// calling the adapter (the closed-schema contract requires
+		// the list to be sorted ascending — the kernel's
+		// `classifyHeldSetProgress` does NOT re-sort).
+		priorHeldSetSorted: input.priorHeldSetSorted ?? [],
+		currentHeldSetSorted: input.currentHeldSetSorted,
 		sessionMatches: input.sessionMatches,
 		taskMatches: input.taskMatches,
 		alreadyCommitted: input.alreadyCommitted,
@@ -141,6 +224,31 @@ const FAILURE_REASONS: ReadonlySet<FailureReasonTag> = new Set([
 	"already_committed",
 	"malformed_facts",
 ])
+const HELD_SET_PROGRESS_TAGS: ReadonlySet<HeldSetProgressTag> = new Set<HeldSetProgressTag>([
+	"indeterminate",
+	"no_progress",
+	"passive_accumulation",
+	"contraction_or_membership_shift",
+])
+
+
+/**
+ * ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5):
+ *
+ *   Decode the diagnostic `heldSetProgress` field from the outbound
+ *   message. The decoder is defensive: a missing or unknown value
+ *   falls back to `"indeterminate"` (the safe default — the
+ *   directive itself is unchanged, and the adapter does not consult
+ *   the diagnostic). This matches the Elm-side
+ *   `Codec.decodeHeldSetProgress` behavior.
+ */
+function decodeHeldSetProgressTag(raw: unknown): HeldSetProgressTag {
+	if (typeof raw !== "string") return "indeterminate"
+	if (HELD_SET_PROGRESS_TAGS.has(raw as HeldSetProgressTag)) {
+		return raw as HeldSetProgressTag
+	}
+	return "indeterminate"
+}
 
 export function decodeDirective(msg: unknown): CompletionContinuationControlElmDecision {
 	if (typeof msg !== "object" || msg === null) {
@@ -151,6 +259,13 @@ export function decodeDirective(msg: unknown): CompletionContinuationControlElmD
 		}
 	}
 	const rec = msg as Record<string, unknown>
+	// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5):
+	// The outbound message now carries a diagnostic `heldSetProgress`
+	// field. The decoder reads it; the adapter does NOT consult it.
+	// If the field is missing or has an unknown value, the
+	// directive is still returned with `heldSetProgress: "indeterminate"`
+	// (the safe default; the directive itself is unchanged).
+	const heldSetProgress = decodeHeldSetProgressTag(rec.heldSetProgress)
 	switch (rec.kind) {
 		case "ready":
 			return {
@@ -179,12 +294,14 @@ export function decodeDirective(msg: unknown): CompletionContinuationControlElmD
 			if (tag === "observe_then_retry") {
 				return {
 					kind: "directive",
+					heldSetProgress,
 					value: { completionStatus: "HELD", requiredAction: "observe_then_submit", tag: "observe_then_retry" },
 				}
 			}
 			if (tag === "retry_completion") {
 				return {
 					kind: "directive",
+					heldSetProgress,
 					value: {
 						completionStatus: "READY_TO_RETRY",
 						requiredAction: "retry_commission",
@@ -195,6 +312,7 @@ export function decodeDirective(msg: unknown): CompletionContinuationControlElmD
 			if (tag === "wait_for_host") {
 				return {
 					kind: "directive",
+					heldSetProgress,
 					value: {
 						completionStatus: "COMMITTED",
 						requiredAction: "retry_commission",
@@ -212,6 +330,7 @@ export function decodeDirective(msg: unknown): CompletionContinuationControlElmD
 			}
 			return {
 				kind: "directive",
+				heldSetProgress,
 				value: {
 					completionStatus: "CANNOT_CONTINUE",
 					requiredAction: "fail_closed",

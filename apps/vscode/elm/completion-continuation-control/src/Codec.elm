@@ -6,6 +6,8 @@ module Codec exposing
     , encodeFailureReason
     , decodeCapabilityMap
     , encodeCapabilityMap
+    , encodeHeldSetProgress
+    , decodeHeldSetProgress
     )
 
 
@@ -24,7 +26,8 @@ Inbound `Facts`:
     "unconsumedCount": Int,
     "observation": { "observeHeldResults": Bool, "retryCompletion": Bool }?,
     "completion":   { "observeHeldResults": Bool, "retryCompletion": Bool }?,
-    "stalledNoProgress": Bool,
+    "priorHeldSetSorted":   [String],
+    "currentHeldSetSorted": [String],
     "sessionMatches": Bool,
     "taskMatches": Bool,
     "alreadyCommitted": Bool
@@ -36,12 +39,36 @@ represent "what can the host do" — they are SEPARATE semantically
 and SEPARATE in the wire shape. Each carries the closed enum mapping; a
 missing key on either field is mapped to the closed `emptyCapabilityMap`.
 
+ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C8 / C10):
+
+  The `stalledNoProgress: Bool` field that AUTHORITY02 used to accept
+  from the host is REMOVED. The schema gains TWO new REQUIRED fields:
+
+    - `priorHeldSetSorted`   — `[]` means "no prior snapshot"
+                                  (first call / cleared)
+    - `currentHeldSetSorted` — canonical sorted list at the current
+                                  call
+
+  Both are decoded as `List String`. The schema decoder rejects
+  non-list / non-string values (the strict-typing invariant from
+  AUTHORITY02 C15). A missing field on EITHER fails the WHOLE facts
+  decode (the new fields are required, unlike the optional
+  capability maps).
+
 Outbound `Directive`:
 
   { "tag": "observe_then_retry" }
   { "tag": "retry_completion" }
   { "tag": "wait_for_host" }
   { "tag": "fail_closed", "reason": "observation_unavailable" | ... }
+
+Outbound `HeldSetProgress` (used for diagnostic transparency in
+the policy's return value; the policy itself returns a `Directive`,
+the `HeldSetProgress` is encoded for the differential correspondence
+fixtures and the `Main.elm` outbound message):
+
+  "indeterminate" | "no_progress" | "passive_accumulation"
+  | "contraction_or_membership_shift"
 -}
 import Domain exposing (..)
 import Json.Decode as Decode exposing (Decoder)
@@ -55,14 +82,44 @@ import Json.Encode as Encode exposing (Value)
 
 factsDecoder : Decoder Facts
 factsDecoder =
-    Decode.map7 Facts
+    Decode.map8 Facts
         (Decode.field "unconsumedCount" Decode.int)
         (optionalCapabilityMap "observation")
         (optionalCapabilityMap "completion")
-        (Decode.field "stalledNoProgress" Decode.bool)
+        (sortedStringListDecoder "priorHeldSetSorted")
+        (sortedStringListDecoder "currentHeldSetSorted")
         (Decode.field "sessionMatches" Decode.bool)
         (Decode.field "taskMatches" Decode.bool)
         (Decode.field "alreadyCommitted" Decode.bool)
+
+
+{-| Strict `List String` decoder. Rejects non-list, non-string,
+and empty-string values (the empty-string rejection preserves the
+`factsIsExpected` invariant — see Domain.elm C8).
+
+The decoder does NOT verify the list is sorted. The
+`classifyHeldSetProgress` helper relies on the closed-schema
+contract that the host pre-sorts; a mis-sorted list would produce
+a deterministic (but semantically wrong) classification, which is
+the same behavior the predecessor TS policy had via
+`localeCompare`. This keeps the decoder side-effect-free.
+-}
+sortedStringListDecoder : String -> Decoder (List String)
+sortedStringListDecoder fieldName =
+    Decode.field fieldName
+        (Decode.list
+            (Decode.string
+                |> Decode.andThen
+                    (\s ->
+                        if String.length s > 0 then
+                            Decode.succeed s
+
+                        else
+                            Decode.fail
+                                (fieldName ++ " contains empty-string element")
+                    )
+            )
+        )
 
 
 {-| Decode the inbound JSON STRING into the typed `Facts`.
@@ -171,3 +228,68 @@ encodeCapabilityMap m =
         [ ( "observeHeldResults", Encode.bool m.observeHeldResults )
         , ( "retryCompletion", Encode.bool m.retryCompletion )
         ]
+
+
+-- ---------------------------------------------------------------------------
+-- HeldSetProgress (HELD-SET-PROGRESS-AUTHORITY01)
+-- ---------------------------------------------------------------------------
+
+
+{-| Encode a `HeldSetProgress` to a wire string. Used for diagnostic
+transparency in the policy's outbound message (the C14 differential
+fixtures assert on the classification tag) and for the `Main.elm`
+outbound payload.
+
+Closed wire enum:
+
+  indeterminate                       -- prior = []
+  no_progress                         -- prior == current
+  passive_accumulation                -- current is strict superset of prior
+  contraction_or_membership_shift     -- prior has element not in current
+-}
+encodeHeldSetProgress : HeldSetProgress -> String
+encodeHeldSetProgress p =
+    case p of
+        Indeterminate ->
+            "indeterminate"
+
+        NoProgress ->
+            "no_progress"
+
+        PassiveAccumulation ->
+            "passive_accumulation"
+
+        ContractionOrMembershipShift ->
+            "contraction_or_membership_shift"
+
+
+{-| Decode a `HeldSetProgress` from a wire string. Used by the
+outbound message decoder and by the differential correspondence
+fixtures. Unknown tags fail closed (return `Indeterminate` — the
+safest of the four classifications; the policy still produces the
+correct `Directive` because the classification is only a diagnostic
+surface, the authority lives in `Policy.decide`).
+-}
+decodeHeldSetProgress : String -> HeldSetProgress
+decodeHeldSetProgress s =
+    case s of
+        "indeterminate" ->
+            Indeterminate
+
+        "no_progress" ->
+            NoProgress
+
+        "passive_accumulation" ->
+            PassiveAccumulation
+
+        "contraction_or_membership_shift" ->
+            ContractionOrMembershipShift
+
+        _ ->
+            -- Closed-enum invariant: unknown tags fall back to
+            -- `Indeterminate`. The diagnostic surface should never
+            -- see an unknown tag (the encoder is the only writer),
+            -- but a defensive fallback protects against a hand-crafted
+            -- message. `Indeterminate` is the safe choice because
+            -- it releases the directive (it does not STALL).
+            Indeterminate

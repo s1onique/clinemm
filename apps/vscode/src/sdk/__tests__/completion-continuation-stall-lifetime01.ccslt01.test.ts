@@ -263,6 +263,17 @@ async function emitCompletionTurn(
 		iterations: 1,
 	})
 	await coordinator.handleSessionEvent(doneEvent)
+	// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C7):
+	// the production seam now awaits BOTH Elm kernels (Completion
+	// Authority + Continuation Control) before deciding the
+	// outcome. The kernels are `Platform.worker` and use
+	// `setTimeout(0)` for the outbound port. Drain the timer
+	// queue so the synchronous-looking assertions below see
+	// the post-Elm state. The previous test driver
+	// (pre-HELD-SET-PROGRESS-AUTHORITY01) was synchronous
+	// because the held-set comparison was inlined; the new
+	// driver is async because Elm owns the comparison.
+	await new Promise((r) => setTimeout(r, 50))
 }
 
 describe("ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01-CORRECTION01-STALL-LIFETIME", () => {

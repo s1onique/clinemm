@@ -36,6 +36,7 @@ import {
 function makeFailClosedSentinel(): CompletionContinuationControlElmDecision {
 	return {
 		kind: "directive",
+		heldSetProgress: "indeterminate",
 		value: {
 			completionStatus: "CANNOT_CONTINUE",
 			requiredAction: "fail_closed",
@@ -48,6 +49,7 @@ function makeFailClosedSentinel(): CompletionContinuationControlElmDecision {
 function makeWaitForHostSentinel(): CompletionContinuationControlElmDecision {
 	return {
 		kind: "directive",
+		heldSetProgress: "indeterminate",
 		value: {
 			completionStatus: "COMMITTED",
 			requiredAction: "retry_commission",
@@ -96,7 +98,7 @@ describe("ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION0
 				canObserveHeldResults: liveTools().includes("command_status"),
 				canRetryCompletion: liveTools().includes("submit_and_exit"),
 			},
-			stalledNoProgress: false,
+			priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 			sessionMatches: true,
 			taskMatches: true,
 			alreadyCommitted: false,
@@ -136,7 +138,7 @@ describe("ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION0
 				canObserveHeldResults: liveTools().includes("command_status"),
 				canRetryCompletion: liveTools().includes("submit_and_exit"),
 			},
-			stalledNoProgress: false,
+			priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 			sessionMatches: true,
 			taskMatches: true,
 			alreadyCommitted: true,
@@ -173,7 +175,7 @@ describe("ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION0
 				canObserveHeldResults: liveTools().includes("command_status"),
 				canRetryCompletion: liveTools().includes("submit_and_exit"),
 			},
-			stalledNoProgress: false,
+			priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
 			sessionMatches: true,
 			taskMatches: true,
 			alreadyCommitted: false,

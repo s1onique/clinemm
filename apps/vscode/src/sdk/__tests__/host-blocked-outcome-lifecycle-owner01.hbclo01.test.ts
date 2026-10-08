@@ -160,6 +160,10 @@ async function emitCompletionTurn(
 		iterations: 1,
 	})
 	await coordinator.handleSessionEvent(doneEvent)
+	// ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5 / C7):
+	// drain the Elm kernel's setTimeout(0) (see the comment on
+	// completion-continuation-stall-lifetime01.ccslt01).
+	await new Promise((r) => setTimeout(r, 50))
 }
 
 function makeHarness(
@@ -340,7 +344,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			// stamp) now invokes the production lifecycle
 			// consumer `taskTelemetry.recordRuntimeError(...)`.
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 			expect(h.sendLog.length).toBe(1)
 
 			// HBCLO01-MAPPING01-CORRECTION01 HEADLINE: the real
@@ -374,7 +378,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			const translatorState = h.coordinator["options"].messageTranslatorState
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 			expect(h.sendLog.length).toBe(0)
 
 			// Same projection proof as HBCLO-01; the
@@ -393,7 +397,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			const translatorState = h.coordinator["options"].messageTranslatorState
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 			expect(h.sendLog.length).toBe(1)
 
 			// The cumulative `runtimeErrorCount` remains 0;
@@ -412,7 +416,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			const phase = h.coordinator["options"].getTurnPhase?.()
 			expect(phase).not.toBe("completed")
@@ -436,7 +440,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 
 			await emitCompletionTurn(hAbs.coordinator, translatorStateAbs, hAbs.sessionId)
 			await emitCompletionTurn(hAbs.coordinator, translatorStateAbs, hAbs.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			// Marker stamp is still present (the bounded
 			// wiring does not change the existing marker
@@ -462,7 +466,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(0)
 
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
 			const wire = h.taskTelemetry.get()
@@ -481,7 +485,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 
 			// K+1: stall → first incident.
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
 
 			// Same-obligation duplicate: drive the helper a
@@ -518,7 +522,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			// K+1: stall (same held set → prior equal
 			// new) → first incident.
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
 
 			// K+2: distinct eligible obligation. Bump the
@@ -560,7 +564,7 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			// K+2: stall (strict superset of K's held set)
 			// → second incident.
 			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
-			await new Promise<void>((r) => setTimeout(r, 0))
+			await new Promise<void>((r) => setTimeout(r, 50))
 
 			// Distinct eligible obligation: a second
 			// incident. The cumulative count is now 2.
