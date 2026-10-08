@@ -419,6 +419,100 @@ LIVE:    NOT_EXECUTED (operator-owned; same reason)
 
 VERDICT: PASS_BLOCKED_COMPLETION_LIFECYCLE_MAPPING_PRELIVE
 
+## C19 — Factory P1 amendment (bounded, in-place)
+
+The factory reviewer's P1 finding on the MAPPING01-CORRECTION01
+ACT was a bounded amendment: add two focused assertions to
+HBCLO01 (necessity + cardinality). The amendment is implemented
+in this ACT and committed at the same `MAPPING01-CORRECTION01`
+HEAD. No new ACT or second broad review is necessary.
+
+### P1 amendment #1 (necessity ablation, executed)
+
+The factory reviewer noted: "Necessity ablation is asserted
+as mechanically provable, not actually executed." The
+amendment executes the ablation:
+
+- **HBCLO-30**: with `taskTelemetry` OMITTED from the
+  `SdkSessionEventCoordinatorOptions` cast (production-shape
+  absence), the helper's `if (this.options.taskTelemetry)`
+  guard returns early. The marker still receives its typed
+  reason (the existing BCB re-registration + marker stamp
+  behavior is unchanged). The real `TaskTelemetryTracker`
+  (constructed in the harness for the necessity test)
+  does NOT increment. Restoring the sink (Phase 2:
+  re-creating the coordinator with the real tracker wired)
+  drives the same K + K+1 scenario; the tracker increments
+  exactly once. The ablation is **executed**, not just
+  asserted.
+
+### P1 amendment #2 (cardinality, executed)
+
+The factory reviewer noted: "Exactly-once incident cardinality
+is claimed without a dedicated duplicate-resolution test."
+The amendment executes the cardinality proof:
+
+- **HBCLO-40a (idempotence)**: invoking
+  `applyBlockedCompletionContinuationOutcome` directly
+  twice for the SAME captured `(session, task, enqueueEpoch)`
+  with the SAME outcome verdict produces exactly one incident.
+  The new `IDEMPOTENCE` guard at
+  `sdk-session-event-coordinator.ts:1823-1839` —
+  `if (this.deferredCompletionBarrier.reason === reason) return` —
+  fires on the second invocation, preventing re-stamp and
+  preventing the production lifecycle consumer from being
+  invoked a second time for the same obligation.
+- **HBCLO-40b (distinct obligation)**: a genuinely distinct
+  eligible obligation (K+2 with a bumped epoch + a
+  strict-superset held set — the production discriminant for
+  "passive accumulation, no model consumption") produces
+  a second incident. The cumulative count goes from 1 to 2.
+
+### Production code change for IDEMPOTENCE
+
+The bounded amendment adds one guard inside the existing
+`applyBlockedCompletionContinuationOutcome` helper at
+`sdk-session-event-coordinator.ts:1823-1839`:
+
+```ts
+// IDEMPOTENCE. The marker is at-most-one per coordinator
+// instance; if it already carries the SAME typed `reason`
+// we're about to publish, the resolution is a duplicate
+// for the SAME obligation. Refuse to re-stamp and refuse
+// to invoke the production lifecycle consumer — exactly
+// ONE incident per obligation.
+if (this.deferredCompletionBarrier.reason === reason) {
+    return
+}
+```
+
+The guard is placed AFTER the existing C4 adversarial guards
+(session/task identity, marker presence, epoch binding,
+identity triple) and BEFORE the marker stamp + dogfood
+counter increment + new lifecycle consumer call. The
+helper's existing C4 guards (CORRECTION01 NO-FABRICATION +
+EPOCH BINDING + IDENTITY TRIPLE) protect against cross-epoch
+misattribution and cross-task leakage; the new IDEMPOTENCE
+guard prevents same-resolution duplicate-fire.
+
+The marker stamp itself is unchanged — re-stamping the same
+reason is still a no-op spread that yields the same shape.
+The dogfood counter increment (`recordBlockedOutcomeStalledNoProgress`
+/ `recordBlockedOutcomeDeliveryRejected`) and the production
+lifecycle consumer call (`this.options.taskTelemetry?.recordRuntimeError(...)`)
+are both gated by the new IDEMPOTENCE guard, so a duplicate
+resolution produces no observable change.
+
+### Bounded amendment results
+
+- HBCLO01: **7/7 GREEN** (was 4/4; 3 new tests added — HBCLO-30,
+  HBCLO-40a, HBCLO-40b).
+- C10 conservation suite: **13 files / 200 tests PASS**
+  (was 197; 3 new HBCLO tests).
+- Typecheck, lint, `git diff --check`: PASS.
+- Pre-existing baseline failures unchanged (verified by
+  stash/restore on HEAD `123294a00`).
+
 NEXT_ACT: HALT_HOST_BLOCKED_COMPLETION_LIFECYCLE_CONVERGENCE_NOT_PROVEN
   remains open as a residual concern per the factory reviewer's
   P2 finding. The runtime-incident publication is now in

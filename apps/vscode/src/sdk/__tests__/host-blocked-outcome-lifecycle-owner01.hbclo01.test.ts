@@ -123,8 +123,15 @@ interface Harness {
 	readonly sendLog: Array<{ prompt: string; sessionId: string; taskId?: string }>
 	readonly sessionId: string
 	readonly taskId: string
-	readonly heldJobIdsRef: readonly string[]
-	readonly countRef: number
+	/**
+	 * HBCLO-40-CARDINALITY: the held set + count are MUTABLE
+	 * refs because the K+2 "distinct eligible obligation"
+	 * case re-binds them to a new set + count to drive a
+	 * fresh stall detection (the production discriminant
+	 * for "passive accumulation, no model consumption").
+	 */
+	heldJobIdsRef: string[]
+	countRef: number
 	liveTaskIdRef: string
 }
 
@@ -165,6 +172,19 @@ function makeHarness(
 			taskId: string | undefined
 			heldJobIds: readonly string[]
 		}) => Promise<{ kind: "delivered" }> | Promise<{ kind: "rejected" }>
+		/**
+		 * HBCLO-30-NECESSITY: when `omitTaskTelemetry` is true,
+		 * the harness constructs a real `TaskTelemetryTracker`
+		 * for harness-side assertion (so the test can verify
+		 * the tracker NEVER increments when the sink is
+		 * absent) but the `taskTelemetry` field is OMITTED
+		 * from the `SdkSessionEventCoordinatorOptions` cast.
+		 * This is the production-shape absence: the helper
+		 * `if (this.options.taskTelemetry)` guard returns
+		 * early on a successful publication, and the marker
+		 * stamp + dogfood counter still fire.
+		 */
+		omitTaskTelemetry?: boolean
 	} = {},
 ): Harness {
 	const sessionId = opts.sessionId ?? "session-hbclo01"
@@ -192,6 +212,14 @@ function makeHarness(
 	// → actual `TaskTelemetryTracker` → real TaskHeader
 	// telemetry projection proof; a mocked
 	// `recordRuntimeError` call alone is insufficient.
+	//
+	// HBCLO-30-NECESSITY: the tracker is ALWAYS constructed
+	// (so the harness can assert on it), but it is wired into
+	// the coordinator ONLY when `omitTaskTelemetry` is false.
+	// This lets the necessity test prove the option is actually
+	// consulted: with the field absent, the tracker never
+	// increments; with the field present, the tracker increments
+	// exactly once.
 	const taskTelemetry = new TaskTelemetryTracker()
 	taskTelemetry.startTask(taskId, 1_700_000_000_000)
 	const coordinator = new SdkSessionEventCoordinator({
@@ -251,11 +279,13 @@ function makeHarness(
 		isWakeAuthoritySettled: () => false,
 		getLaunchedBackgroundJobIds: () => [],
 		enqueueCompletionContinuation: continuationResult,
-		// HBCLO01-ADDITION: project the expected consumer
-		// through the same structural cast the rest of the
-		// suite uses. The coordinator DOES NOT currently read
-		// this field; the test is the missing-link evidence.
-		taskTelemetry,
+		// HBCLO-30-NECESSITY: when `omitTaskTelemetry` is true,
+		// the `taskTelemetry` field is OMITTED from the options
+		// bag — proving the helper's `if (this.options.taskTelemetry)`
+		// guard actually consults the field. When the option is
+		// false (default), the field is wired so the bounded
+		// mapping fires.
+		...(opts.omitTaskTelemetry ? {} : { taskTelemetry }),
 	} as unknown as SdkSessionEventCoordinatorOptions)
 	coordinator.setDeferredCompletionBarrierForTesting({
 		sessionId,
@@ -387,6 +417,156 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 			const phase = h.coordinator["options"].getTurnPhase?.()
 			expect(phase).not.toBe("completed")
 			expect(phase).toBe("idle")
+		})
+	})
+
+	describe("HBCLO-30-NECESSITY — executed ablation: optional sink absent does NOT increment the tracker; restoring the sink increments exactly once", () => {
+		it("HBCLO-30: with taskTelemetry omitted from the options bag, the tracker NEVER increments even though the marker still receives its typed reason; restoring the sink increments exactly once", async () => {
+			// Phase 1: production-shape absence. The
+			// `taskTelemetry` field is OMITTED from the
+			// `SdkSessionEventCoordinatorOptions` cast —
+			// the helper's `if (this.options.taskTelemetry)`
+			// guard returns early. The marker stamp + dogfood
+			// counter still fire (existing behavior); the
+			// real `TaskTelemetryTracker` (constructed in the
+			// harness for the necessity test) does NOT
+			// increment.
+			const hAbs = makeHarness({ heldJobIds: SEVEN_HELD_IDS, omitTaskTelemetry: true })
+			const translatorStateAbs = hAbs.coordinator["options"].messageTranslatorState
+
+			await emitCompletionTurn(hAbs.coordinator, translatorStateAbs, hAbs.sessionId)
+			await emitCompletionTurn(hAbs.coordinator, translatorStateAbs, hAbs.sessionId)
+			await new Promise<void>((r) => setTimeout(r, 0))
+
+			// Marker stamp is still present (the bounded
+			// wiring does not change the existing marker
+			// behavior).
+			const barrier = hAbs.coordinator.getDeferredCompletionBarrierForTesting() as { reason?: string } | undefined
+			expect(barrier).toBeDefined()
+			expect(barrier?.reason).toBe("stalled_no_progress")
+			// BUT the tracker never incremented — the
+			// absence of the option field is a no-op for
+			// the tracker.
+			expect(hAbs.taskTelemetry.currentRuntimeErrorCount).toBe(0)
+			expect(hAbs.taskTelemetry.get()?.runtimeErrorCount).toBeUndefined()
+
+			// Phase 2: restore. Construct a fresh
+			// coordinator with the SAME production options
+			// + the real tracker wired. Drive the same
+			// K + K+1 scenario. The tracker must increment
+			// exactly once.
+			const h = makeHarness({ heldJobIds: SEVEN_HELD_IDS })
+			const translatorState = h.coordinator["options"].messageTranslatorState
+
+			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(0)
+
+			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
+			await new Promise<void>((r) => setTimeout(r, 0))
+
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
+			const wire = h.taskTelemetry.get()
+			expect(wire?.runtimeErrorCount).toBe(1)
+		})
+	})
+
+	describe("HBCLO-40-CARDINALITY — duplicate same-obligation resolution produces ONE incident; genuinely distinct eligible obligations each produce their own", () => {
+		it("HBCLO-40a: invoking applyBlockedCompletionContinuationOutcome twice for the same captured (session, task, enqueueEpoch) produces exactly one incident (idempotence)", async () => {
+			const h = makeHarness({ heldJobIds: SEVEN_HELD_IDS })
+			const translatorState = h.coordinator["options"].messageTranslatorState
+
+			// K: deliver.
+			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(0)
+
+			// K+1: stall → first incident.
+			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
+			await new Promise<void>((r) => setTimeout(r, 0))
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
+
+			// Same-obligation duplicate: drive the helper a
+			// SECOND time for the SAME captured (session, task,
+			// epoch). The C4 guards (CORRECTION01 NO-FABRICATION
+			// + EPOCH BINDING + IDENTITY TRIPLE) protect the
+			// marker stamp; the new wiring inherits the same
+			// guards. Expected: tracker stays at 1.
+			const helper = h.coordinator as unknown as {
+				applyBlockedCompletionContinuationOutcome: (
+					captured: { sessionId: string; taskId: string | undefined; enqueueEpoch: number },
+					outcome: { kind: "stalled_no_progress" },
+				) => void
+			}
+			helper.applyBlockedCompletionContinuationOutcome(
+				{ sessionId: h.sessionId, taskId: h.taskId, enqueueEpoch: translatorState.getMinter().epoch },
+				{ kind: "stalled_no_progress" },
+			)
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
+		})
+
+		it("HBCLO-40b: a genuinely distinct eligible obligation (K+2 with a bumped epoch and a strict-superset held set) produces a second incident", async () => {
+			const h = makeHarness({ heldJobIds: SEVEN_HELD_IDS })
+			const translatorState = h.coordinator["options"].messageTranslatorState
+
+			// K: deliver. The disc's successful enqueue
+			// seeds `lastCompletionContinuationHeldSetSorted`
+			// to the sorted K held set; this is the
+			// discriminant the stall detector compares
+			// against on the next emission.
+			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(0)
+
+			// K+1: stall (same held set → prior equal
+			// new) → first incident.
+			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
+			await new Promise<void>((r) => setTimeout(r, 0))
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(1)
+
+			// K+2: distinct eligible obligation. Bump the
+			// minter's epoch (the production mechanism for
+			// a new obligation; the K+2 BCB re-registration
+			// lives on the new epoch). Drive a STRICT
+			// SUPERSET held set — the disc treats strict
+			// supersets as stalls too (passive accumulation,
+			// no model consumption) per the CCSRL01
+			// fingerprint contract. The marker is
+			// re-registered at the new epoch (BCB
+			// re-registration pattern); the helper is
+			// invoked for the new captured (session, task,
+			// epoch = N+1); the marker at the new epoch
+			// has no reason (the C4 IDEMPOTENCE check
+			// passes); the marker is stamped with the
+			// typed reason; the production lifecycle
+			// consumer increments the tracker.
+			translatorState.getMinter().bumpEpoch()
+
+			// Re-seed the marker for the new epoch (the BCB
+			// re-registration pattern, mirroring the
+			// existing K→K+1 re-registration in the
+			// production seam).
+			h.coordinator.setDeferredCompletionBarrierForTesting({
+				sessionId: h.sessionId,
+				taskId: h.taskId,
+				epoch: translatorState.getMinter().epoch,
+			})
+
+			// A strict-superset held set is the production
+			// discriminant for "passive accumulation, no
+			// model consumption" — the disc's stall
+			// detector treats this case as a STALL
+			// (CCSRL01 §0.1).
+			h.heldJobIdsRef = ["j1", "j2", "j3", "j4", "j5", "j6", "j7", "j8"]
+			h.countRef = h.heldJobIdsRef.length
+
+			// K+2: stall (strict superset of K's held set)
+			// → second incident.
+			await emitCompletionTurn(h.coordinator, translatorState, h.sessionId)
+			await new Promise<void>((r) => setTimeout(r, 0))
+
+			// Distinct eligible obligation: a second
+			// incident. The cumulative count is now 2.
+			expect(h.taskTelemetry.currentRuntimeErrorCount).toBe(2)
+			const wire = h.taskTelemetry.get()
+			expect(wire?.runtimeErrorCount).toBe(2)
 		})
 	})
 })

@@ -1820,13 +1820,32 @@ export class SdkSessionEventCoordinator {
 		) {
 			return
 		}
+		// ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-MAPPING01 / MAPPING01-CORRECTION01-CARDINALITY:
+		// IDEMPOTENCE. The marker is at-most-one per
+		// coordinator instance; if it already carries the
+		// SAME typed `reason` we're about to publish, the
+		// resolution is a duplicate for the SAME obligation
+		// (same captured session/task/epoch, same held set
+		// discriminant, same outcome verdict). Refuse to
+		// re-stamp and refuse to invoke the production
+		// lifecycle consumer — exactly ONE incident per
+		// obligation. A genuinely distinct eligible
+		// obligation (epoch bump + new held set) clears
+		// the marker via the BCB re-registration pattern;
+		// the next helper invocation for THAT obligation
+		// sees an unmarked marker and proceeds normally.
+		if (this.deferredCompletionBarrier.reason === reason) {
+			return
+		}
 		// Stamp the marker with the typed reason. The marker
 		// identity triple (sessionId, taskId, epoch) is
 		// preserved exactly — only the `reason` field is
 		// added. Idempotence (C9) is preserved because the
 		// marker is at-most-one; subsequent resolutions of
-		// the same obligation either confirm the reason or
-		// (if the BCB has cycled) the epoch check refuses.
+		// the same obligation either confirm the reason
+		// (the IDEMPOTENCE check above returns early, no
+		// re-stamp, no counter increment) or (if the BCB
+		// has cycled) the epoch check refuses.
 		this.deferredCompletionBarrier = {
 			...this.deferredCompletionBarrier,
 			reason,
