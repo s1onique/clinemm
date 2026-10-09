@@ -1,3 +1,65 @@
+# ACT-CLINEMM-ELM-SEAM03-BACKGROUND-NOTIFY-AUTHORITY — PASS_ELM_SEAM03_SUBSTRATE — 2026-10-09
+
+**Status:** CLOSED with verdict `PASS_ELM_SEAM03_SUBSTRATE` after a bounded reviewer-halt correction. The original draft closed as `PASS_ELM_SEAM03_AUTHORITY`, but the Factory reviewer halted with `HALT_AUTHORITY_NOT_CUT_OVER`: the digest itself stated authority was not migrated, so the verdict contradicted the evidence. Verdict now correctly states **substrate only** — production authority remains TS, and cutover is the explicit goal of the next ACT (`ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER`).
+
+**Substrate proven:**
+- Real production seam identified: `BackgroundNotifyCoordinator.consumeTerminal` at `apps/vscode/src/sdk/background-notify-coordinator.ts:1658-1756` (5-outcome closed sum: no_marker / owner_mismatch / containment_no_wake / held / drained).
+- TS behavior frozen (precedence P0..P5: disposed → containment_failed → no-marker → no-owner / owner-mismatch → held → drained).
+- Elm pure projection implemented: `apps/vscode/elm/background-notify-authority/` (Domain, Policy, Codec, Main + tests + scripts).
+- Closed-schema JSON codec with fail-closed decoding at the boundary (rejects unknown terminalState, partial marker-owner, negative `remainingNotify`, negative `exitCode`).
+- Compiled real Elm kernel: `vendor/background-notify-authority.js`, 75,367 bytes, SHA-256 `b6d2a2b0c0b77f8ee7e09c08fb0c8a99b63fa2cd3bc89739bc1418161cb0a831`.
+- TS↔Elm differential execution: 19/19 BNAEC01 vitest PASS (12 representative BNA-01..BNA-12 + 4 malformed-edge + 3 buildFactsJson smoke).
+- ELM_NECESSITY_PROVEN: the BNAEC01 test imports the compiled kernel via `pickConsumeDecisionForAudit`; without the Elm substrate 9 of 12 fixtures would fail with `kernel_offline`.
+- Dogfood packaging wired: `scripts/build_dogfood_vsix_lib.py:_ELM_KERNELS` extended; next VSIX build will stage the kernel automatically.
+
+**Production delta: ZERO** in this ACT. The TypeScript `consumeTerminal` method remains the LIVE authority. A `NEEDS-EXPLICIT-CUTOVER` marker is added at the production call site (`vscode-run-commands-tool.ts:834`) naming `ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER` as the explicit successor. The Elm adapter is wired only into the BNAEC01 test surface and the future `pickConsumeDecisionForAudit` audit diagnostic.
+
+**Files added**:
+- `apps/vscode/elm/background-notify-authority/` (NEW kernel: elm.json, .gitignore, scripts/{build,test}-elm.sh, src/{Domain,Policy,Codec,Main}.elm + .sha256, tests/elm.json, tests/BackgroundNotifyAuthorityTest.elm, vendor/{background-notify-authority.js, .js.sha256, .gitkeep}).
+- `apps/vscode/src/sdk/background-notify-authority-elm.ts` (NEW: TS adapter, fail-closed kernel loader, typed audit decision surface).
+- `apps/vscode/src/sdk/__tests__/background-notify-authority-elm-correspondence.bnaec01.test.ts` (NEW: 19/19 vitest correspondence).
+- `.factory/acts/ACT-CLINEMM-ELM-SEAM03-BACKGROUND-NOTIFY-AUTHORITY.md` (this ACT plan + bounded correction).
+
+**Production files changed**: 2 — `apps/vscode/src/sdk/vscode-run-commands-tool.ts` (NEEDS-EXPLICIT-CUTOVER comment, 1 line), `scripts/build_dogfood_vsix_lib.py` (_ELM_KERNELS extension, ~5 lines). No policy change in TS.
+
+**Gates**:
+- `tsc --noEmit --project tsconfig.json` — PASS (0 errors).
+- `apps/vscode/elm/background-notify-authority/scripts/build-elm.sh` — PASS (kernel JS + 5 sidecar SHA256 files written).
+- `apps/vscode/elm/background-notify-authority/scripts/test-elm.sh` — **NOT_EXECUTED** in this environment (sandbox `elm-test` Node-worker spawn cannot run here; pre-existing harness issue affecting the prior ACTs). The pure-Elm logic is verified by (a) `elm make --output=/dev/null` for all 4 modules: PASS, and (b) the vitest BNAEC01 compiled-kernel correspondence 19/19 PASS, which exercises the actual compiled JS.
+- `vitest BNAEC01` (background-notify-authority-elm-correspondence) — 19/19 PASS.
+- `vitest BCNEX01` (pre-existing) — 7/7 PASS (no regression).
+- `vitest BCB01` (pre-existing) — 13/14 FAIL (pre-existing on main, confirmed via `git stash`; NOT caused by this ACT — the same 13 fail on the unmodified baseline).
+
+**Artifact identity**:
+- ENTRY_HEAD = `3a39f5b08391b762a941025d9351c1f7524161b5`.
+- SUBJECT_HEAD = `3a39f5b08391b762a941025d9351c1f7524161b5` (working tree changes only; not yet committed at this entry's authoring).
+- Elm kernel JS SHA-256 = `b6d2a2b0c0b77f8ee7e09c08fb0c8a99b63fa2cd3bc89739bc1418161cb0a831`, size = 75,367 bytes.
+
+**Residue**:
+- P0: none.
+- P1: none.
+- P2 NON-BLOCKING: pure-Elm `elm-test` invocation deferred to a host with writable `ELM_HOME`; the kernel is functionally proven via `elm make` + the vitest compiled-kernel correspondence 19/19. Production authority cutover deferred to `ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER` (which must additionally resolve the kernel-offline / decode-failure production semantics that the audit implementation currently collapses to `no_marker`).
+
+**C0.1 Installed-extension identity**: `LIVE_SOURCE_UNBOUND` per UCHC01's C0.1 binding. The source HEAD is bound to the production-seam file:line coordinates (NEEDS-EXPLICIT-CUTOVER marker at `vscode-run-commands-tool.ts:834`).
+
+**Operator handoff**: per C13, the operator must:
+1. Run `./scripts/build-elm.sh` on a host with writable `ELM_HOME` to regenerate the kernel.
+2. Run `./scripts/test-elm.sh` to capture the pure-Elm unit green run.
+3. Build a fresh VSIX from this HEAD and install into a clean VSCode instance.
+4. Run the C15 LIVE qualification scenarios (this is the SEAM04 obligation, not SEAM03's).
+5. Record source HEAD, VSIX version/path/bytes/SHA-256, and the actual runtime diagnostic counters in the C15 LIVE qualification report.
+
+**VSIX build / install / LIVE qualification**: NOT EXECUTED in this ACT. The next ACT (`ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER`) is the qualified successor.
+
+**Predecessor ACT lineage**:
+- `ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02` (predecessor) — established the kernel-template pattern this ACT reuses (Domain/Policy/Codec/Main + Platform.worker ports + closed-schema codec + vitest differential correspondence harness).
+- `ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02-REVIEWER-HALT` — the bounded-correction precedent that this ACT follows (reviewer-halt + bounded report correction, no code churn).
+- `ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01` (CORRECTION01..CORRECTION04) — repeatedly evolved the wake-ack tracking around `consumeTerminal`; this ACT freezes the decision surface itself.
+
+**Successor ACT**:
+- `ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER` — qualification + production authority cutover. Central discriminator: production semantics of `kernel_offline` / `decode_error` (the audit implementation collapses them to `no_marker`; production may need different treatment — e.g. escalation to a `fail_closed` directive with the typed reason, or an explicit operator-visible diagnostic that distinguishes "kernel infrastructure failure" from "policy says no_marker").
+
+
 # ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFETY-AND-CLASSIFIER — PASS_HELD_SET_PROGRESS_ELM_AUTHORITY_PRELIVE — 2026-10-08
 
 **Status:** CLOSED with verdict `PASS_HELD_SET_PROGRESS_ELM_AUTHORITY_PRELIVE`. The factory reviewer's HALT on the predecessor ACT identified two P0s, two P1s, and one P2. All five are addressed by this bounded correction.

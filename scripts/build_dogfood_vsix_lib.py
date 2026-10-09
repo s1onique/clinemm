@@ -472,6 +472,17 @@ _ELM_KERNELS: list = [
         "vsix_entry": "extension/runtime-assets/completion-continuation-control.js",
         "vsix_sha_entry": "extension/runtime-assets/completion-continuation-control.js.sha256",
     },
+    {
+        "name": "background-notify-authority",
+        "build_script": "apps/vscode/elm/background-notify-authority/scripts/build-elm.sh",
+        "source_js": "elm/background-notify-authority/vendor/background-notify-authority.js",
+        "source_sha": "elm/background-notify-authority/vendor/background-notify-authority.js.sha256",
+        "staged_dir": "runtime-assets",
+        "staged_name": "background-notify-authority.js",
+        "staged_sha_name": "background-notify-authority.js.sha256",
+        "vsix_entry": "extension/runtime-assets/background-notify-authority.js",
+        "vsix_sha_entry": "extension/runtime-assets/background-notify-authority.js.sha256",
+    },
 ]
 
 # Backwards-compatible single-kernel constants — preserved because

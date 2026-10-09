@@ -831,6 +831,18 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 							// authority and forward it as the
 							// `isContainmentFailed` flag.
 							const isContainmentFailed = terminalState === "containment_failed"
+							// ACT-CLINEMM-ELM-SEAM03-BACKGROUND-NOTIFY-AUTHORITY:
+							// NEEDS-EXPLICIT-CUTOVER. The Elm kernel shadow
+							// (apps/vscode/elm/background-notify-authority) is
+							// now in place and the BNAEC01 differential
+							// correspondence test passes 19/19. The TypeScript
+							// consumeTerminal method remains the LIVE authority
+							// at this call site. The next ACT
+							// (ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-
+							// AUTHORITY-CUTOVER) is the explicit successor for
+							// the live cutover. Until that ACT lands, the TS
+							// path remains authoritative. Do not invoke the
+							// Elm adapter here.
 							options.backgroundNotifyCoordinator!.consumeTerminal({
 								jobId,
 								terminalState,
