@@ -18,7 +18,11 @@
 
 import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator, type ResolveObligationDecision } from "../background-notify-coordinator"
+import {
+	BackgroundNotifyCoordinator,
+	legacyConsumeTerminalPolicy,
+	type ResolveObligationDecision,
+} from "../background-notify-coordinator"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
@@ -192,6 +196,12 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 			return removed ? { kind: "discarded", jobId, promptId: undefined } : { kind: "not_found", jobId }
 		},
 		now: () => ++now,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	let completionCommitCount = 0
@@ -352,7 +362,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			expect(h.tracker.currentPhase).not.toBe("completed")
 			expect(h.completionCommitCount()).toBe(0)
 
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: "B-red03",
 				terminalState: "exited",
 				exitCode: 0,
@@ -394,7 +404,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			})
 			h.registerMarker("J-ctl03")
 
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-ctl03",
 				terminalState: "exited",
 				exitCode: 0,
@@ -559,7 +569,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 
 			// Resolve notify=true marker via Path A. The
 			// notify=false sibling D is STILL RUNNING.
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-mixed",
 				terminalState: "exited",
 				exitCode: 0,
@@ -629,7 +639,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			h.resolveObligation("J-A")
 			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
 
-			const decision = h.notifyCoordinator.consumeTerminal({
+			const decision = await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-A",
 				terminalState: "exited",
 				exitCode: 0,
@@ -660,7 +670,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			})
 			h.registerMarker("J-B")
 
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-B",
 				terminalState: "exited",
 				exitCode: 0,
@@ -703,7 +713,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			expect(h.tracker.currentPhase).toBe("completed")
 			expect(h.completionCommitCount()).toBe(1)
 
-			const decision = h.notifyCoordinator.consumeTerminal({
+			const decision = await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-C",
 				terminalState: "exited",
 				exitCode: 0,
@@ -730,7 +740,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			h.registerMarker("J-A")
 			h.registerMarker("J-B")
 
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-A",
 				terminalState: "exited",
 				exitCode: 0,
@@ -738,7 +748,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 				isContainmentFailed: false,
 				outputTail: undefined,
 			})
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-B",
 				terminalState: "exited",
 				exitCode: 0,
@@ -782,7 +792,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			// Simulate notify=false: just call consumeTerminal
 			// without ever registering a marker. consumeTerminal
 			// will return no_marker and MUST NOT enqueue any wake.
-			const decision = h.notifyCoordinator.consumeTerminal({
+			const decision = await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-D-notifyfalse",
 				terminalState: "exited",
 				exitCode: 0,
@@ -810,7 +820,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 				writerId: "task-start-init-task",
 			})
 			h.registerMarker("J-F")
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-F",
 				terminalState: "exited",
 				exitCode: 0,
@@ -980,6 +990,12 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 						warn: () => undefined,
 					})
 				},
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			// 1. Spawn a real job via CommandJobManager. Wait
@@ -1016,7 +1032,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			await start.terminalPromise
 
 			// 3. Path A — consumeTerminal enqueues a wake.
-			const consumeDecision = notifyCoordinator.consumeTerminal({
+			const consumeDecision = await await notifyCoordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot.state,
 				exitCode: snapshot.exitCode,

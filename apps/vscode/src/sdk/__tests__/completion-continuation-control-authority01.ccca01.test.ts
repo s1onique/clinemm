@@ -83,6 +83,7 @@ import {
 	completeContinuationControlFromSession,
 	formatCompletionContinuationPrompt,
 	isCompletionContinuationControlProvenance,
+	legacyConsumeTerminalPolicy,
 	parseCompletionContinuationControl,
 	resolveCompletionContinuationTools,
 	shouldStallSameStateControl,
@@ -473,6 +474,12 @@ describe("ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 / CCCA01", 
 				resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
 				enqueueTerminalWake: () => Promise.resolve({ kind: "rejected" as const }),
 				now: () => ++now.t,
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 			const sendLog: { prompt: string; sessionId: string; taskId?: string }[] = []
 			const coordinator = new SdkSessionEventCoordinator({

@@ -8,7 +8,7 @@
  *
  *   1. agent starts run_commands(notifyOnCompletion: true) → J1 RUNNING
  *   2. J1 terminates BEFORE the model emits done-without-completion
- *   3. BackgroundNotifyCoordinator.consumeTerminal(J1) DRAINS — enqueues
+ *   3. await await BackgroundNotifyCoordinator.consumeTerminal(J1) DRAINS — enqueues
  *      a wake into PendingPromptsController via the production transport
  *   4. agent emits done-without-completion
  *   5. Q5 composition seam (Branch 4):
@@ -33,7 +33,7 @@
 
 import { type CoreSessionEvent, type PendingPromptCountRead, type SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
@@ -158,6 +158,12 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		enqueueTerminalWake: ({ sessionId, prompt }) =>
 			Promise.resolve(wakeSink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 		now: () => ++now,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01:
@@ -275,7 +281,7 @@ async function startAndCompleteBackgroundJob(
 	await start.terminalPromise
 
 	// Manually call consumeTerminal with a synthetic terminalState.
-	harness.notifyCoordinator.consumeTerminal({
+	await await harness.notifyCoordinator.consumeTerminal({
 		jobId: start.jobId,
 		terminalState: "exited",
 		exitCode: 0,

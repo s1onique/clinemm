@@ -37,7 +37,7 @@
  */
 import { type CoreSessionEvent, type SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
@@ -174,6 +174,12 @@ function makeWireHarness(opts: { activeSessionId?: string; activeTaskId?: string
 		enqueueTerminalWake: ({ sessionId, prompt }) =>
 			Promise.resolve(queue.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 		now: () => ++now,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	const coordinator = new SdkSessionEventCoordinator({
@@ -255,7 +261,7 @@ async function startAndCompleteBackgroundJob(
 	}
 	await h.manager.cancel({ jobId: start.jobId })
 	await start.terminalPromise
-	h.notifyCoordinator.consumeTerminal({
+	await await h.notifyCoordinator.consumeTerminal({
 		jobId: start.jobId,
 		terminalState: "exited",
 		exitCode: 0,

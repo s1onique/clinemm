@@ -103,7 +103,11 @@ mock.module("@/core/storage/StateManager", () => ({
 	},
 }))
 
-import { BackgroundNotifyCoordinator, formatCompletionContinuationPrompt } from "../background-notify-coordinator"
+import {
+	BackgroundNotifyCoordinator,
+	formatCompletionContinuationPrompt,
+	legacyConsumeTerminalPolicy,
+} from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { createVscodeExtraTools } from "../vscode-runtime-builder"
 
@@ -199,6 +203,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 					resolveActiveOwner: () => undefined,
 					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+					// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+					// policy as the consumeTerminalAuthority stub so the
+					// coordinator's effect interpreter is exercised without
+					// loading the Elm kernel. Production wiring uses
+					// `defaultElmAuthority`.
+					consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 				})
 
 				// Default mode: vscodeTerminal — the failing live config.
@@ -253,6 +263,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 					resolveActiveOwner: () => undefined,
 					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+					// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+					// policy as the consumeTerminalAuthority stub so the
+					// coordinator's effect interpreter is exercised without
+					// loading the Elm kernel. Production wiring uses
+					// `defaultElmAuthority`.
+					consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 				})
 
 				const tools = await createVscodeExtraTools(mcpHub as never, {
@@ -290,6 +306,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 					resolveActiveOwner: () => undefined,
 					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+					// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+					// policy as the consumeTerminalAuthority stub so the
+					// coordinator's effect interpreter is exercised without
+					// loading the Elm kernel. Production wiring uses
+					// `defaultElmAuthority`.
+					consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 				})
 
 				const tools = await createVscodeExtraTools(mcpHub as never, {
@@ -318,6 +340,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				resolveActiveOwner: () => owner,
 				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			const heldJobId = "cmd_fca02_held"
@@ -350,6 +378,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				resolveActiveOwner: () => owner,
 				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			const jobIds = ["cmd_fca03_j1", "cmd_fca03_j2", "cmd_fca03_j3", "cmd_fca03_j4"]
@@ -386,6 +420,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				resolveActiveOwner: () => owner,
 				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			const jobId = "cmd_fca04_containment_failed"
@@ -418,6 +458,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				resolveActiveOwner: () => owner,
 				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			notifyCoordinator.recordNonNotifyTerminalObservation({
@@ -446,6 +492,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				resolveActiveOwner: () => ({ sessionId: "s-owner", taskId: "t-owner" }),
 				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			notifyCoordinator.recordNonNotifyTerminalObservation({
@@ -483,6 +535,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				resolveActiveOwner: () => owner,
 				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			notifyCoordinator.recordNonNotifyTerminalObservation({
@@ -523,6 +581,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 					resolveActiveOwner: () => undefined,
 					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+					// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+					// policy as the consumeTerminalAuthority stub so the
+					// coordinator's effect interpreter is exercised without
+					// loading the Elm kernel. Production wiring uses
+					// `defaultElmAuthority`.
+					consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 				})
 
 				const tools = await createVscodeExtraTools(mcpHub as never, {
@@ -554,6 +618,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				resolveActiveOwner: () => owner,
 				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			const heldJobId = "cmd_fca14_held"
@@ -593,6 +663,12 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 					resolveActiveOwner: () => undefined,
 					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+					// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+					// policy as the consumeTerminalAuthority stub so the
+					// coordinator's effect interpreter is exercised without
+					// loading the Elm kernel. Production wiring uses
+					// `defaultElmAuthority`.
+					consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 				})
 
 				const tools = await createVscodeExtraTools(mcpHub as never, {

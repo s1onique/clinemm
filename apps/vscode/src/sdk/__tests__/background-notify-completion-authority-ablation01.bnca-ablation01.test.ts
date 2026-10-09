@@ -15,7 +15,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { createCommandStatusTool } from "../command-status-tool"
 
@@ -131,6 +131,12 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-ABL
 				return { kind: "discarded" as const, jobId, promptId: match.id }
 			},
 			now: () => ++now,
+			// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+			// policy as the consumeTerminalAuthority stub so the
+			// coordinator's effect interpreter is exercised without
+			// loading the Elm kernel. Production wiring uses
+			// `defaultElmAuthority`.
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 		})
 
 		const statusTool = createCommandStatusTool(manager, {
@@ -155,7 +161,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-ABL
 			const status = await manager.status({ jobId: start.jobId, waitMs: 0 })
 			if (!status.ok) return
 			const snapshot = status.snapshot
-			notifyCoordinator.consumeTerminal({
+			await await notifyCoordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot.state,
 				exitCode: snapshot.exitCode,

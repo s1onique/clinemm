@@ -110,7 +110,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import {
 	flushElmAuthorityForSession,
 	getElmAuthorityCompletionDecision,
@@ -207,6 +207,12 @@ function makeProdVocabHarness(): ProdVocabHarness {
 			),
 		discardQueuedWake: () => ({ kind: "not_found", jobId: "" }),
 		now: () => ++nowCounter,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	let commitCount = 0

@@ -16,7 +16,7 @@
  *
  *   This file closes the gap. It exercises the REAL chain:
  *
- *     BackgroundNotifyCoordinator.consumeTerminal(jobId=SENTINEL)
+ *     await await BackgroundNotifyCoordinator.consumeTerminal(jobId=SENTINEL)
  *       -> real `enqueueTerminalWake` callback (with jobId)
  *       -> real `buildSdkControllerEnqueueTerminalWake` closure
  *       -> real `sdkHost.send` -> real `LocalRuntimeHost.runTurn`
@@ -90,58 +90,54 @@ function makeSyntheticAgent() {
 	// (see LocalRuntimeHost.executeAgentTurn line 2229-2231).
 	// The stub accepts (prompt, _userImages, _userFiles) positionally.
 	let running = false
-	const run = vi.fn(
-		async (_prompt: string, _userImages?: string[], _userFiles?: string[]) => {
-			running = true
-			await new Promise((resolve) => setImmediate(resolve))
-			await new Promise((resolve) => setImmediate(resolve))
-			running = false
-			return {
-				finishReason: "completed",
-				text: "",
-				usage: {
-					inputTokens: 1,
-					outputTokens: 1,
-					cacheReadTokens: 0,
-					cacheWriteTokens: 0,
-					totalCost: 0,
-				},
-				messages: [],
-				toolCalls: [],
-				durationMs: 1,
-				iterations: 1,
-				model: { id: "mock-model", provider: "mock-provider" },
-				startedAt: new Date("2026-01-01T00:00:00.000Z"),
-				endedAt: new Date("2026-01-01T00:00:01.000Z"),
-			}
-		},
-	)
-	const continueFn = vi.fn(
-		async (_prompt: string, _userImages?: string[], _userFiles?: string[]) => {
-			running = true
-			await new Promise((resolve) => setImmediate(resolve))
-			await new Promise((resolve) => setImmediate(resolve))
-			running = false
-			return {
-				finishReason: "completed",
-				text: "",
-				usage: {
-					inputTokens: 1,
-					outputTokens: 1,
-					cacheReadTokens: 0,
-					cacheWriteTokens: 0,
-					totalCost: 0,
-				},
-				messages: [],
-				toolCalls: [],
-				durationMs: 1,
-				iterations: 1,
-				model: { id: "mock-model", provider: "mock-provider" },
-				startedAt: new Date("2026-01-01T00:00:00.000Z"),
-				endedAt: new Date("2026-01-01T00:00:01.000Z"),
-			}
-		},
-	)
+	const run = vi.fn(async (_prompt: string, _userImages?: string[], _userFiles?: string[]) => {
+		running = true
+		await new Promise((resolve) => setImmediate(resolve))
+		await new Promise((resolve) => setImmediate(resolve))
+		running = false
+		return {
+			finishReason: "completed",
+			text: "",
+			usage: {
+				inputTokens: 1,
+				outputTokens: 1,
+				cacheReadTokens: 0,
+				cacheWriteTokens: 0,
+				totalCost: 0,
+			},
+			messages: [],
+			toolCalls: [],
+			durationMs: 1,
+			iterations: 1,
+			model: { id: "mock-model", provider: "mock-provider" },
+			startedAt: new Date("2026-01-01T00:00:00.000Z"),
+			endedAt: new Date("2026-01-01T00:00:01.000Z"),
+		}
+	})
+	const continueFn = vi.fn(async (_prompt: string, _userImages?: string[], _userFiles?: string[]) => {
+		running = true
+		await new Promise((resolve) => setImmediate(resolve))
+		await new Promise((resolve) => setImmediate(resolve))
+		running = false
+		return {
+			finishReason: "completed",
+			text: "",
+			usage: {
+				inputTokens: 1,
+				outputTokens: 1,
+				cacheReadTokens: 0,
+				cacheWriteTokens: 0,
+				totalCost: 0,
+			},
+			messages: [],
+			toolCalls: [],
+			durationMs: 1,
+			iterations: 1,
+			model: { id: "mock-model", provider: "mock-provider" },
+			startedAt: new Date("2026-01-01T00:00:00.000Z"),
+			endedAt: new Date("2026-01-01T00:00:01.000Z"),
+		}
+	})
 	const agent = {
 		run,
 		continue: continueFn,
@@ -222,11 +218,7 @@ function deriveOrigin(
 	return "explicit_user"
 }
 
-async function waitFor(
-	predicate: () => boolean,
-	description: string,
-	deadlineMs = 5_000,
-): Promise<void> {
+async function waitFor(predicate: () => boolean, description: string, deadlineMs = 5_000): Promise<void> {
 	const start = Date.now()
 	while (!predicate()) {
 		if (Date.now() - start > deadlineMs) {
@@ -351,14 +343,8 @@ describe("ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 / CCCL01-E2E",
 		})
 		expect(enqueuedReturn).toBeUndefined()
 
-		await waitFor(
-			() => run.mock.calls.length + continueFn.mock.calls.length >= 1,
-			"agent.run OR agent.continue to fire once",
-		)
-		await waitFor(
-			() => witness.some((r) => r.stage === "agent_turn_done"),
-			"agent_turn_done witness to be recorded",
-		)
+		await waitFor(() => run.mock.calls.length + continueFn.mock.calls.length >= 1, "agent.run OR agent.continue to fire once")
+		await waitFor(() => witness.some((r) => r.stage === "agent_turn_done"), "agent_turn_done witness to be recorded")
 
 		// ---- The load-bearing correlation invariant.
 		const enqueue = witness.find((r) => r.stage === "pending_prompt_enqueued")
@@ -523,14 +509,8 @@ describe("ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 / CCCL01-E2E",
 		})
 		expect(enqueuedReturn).toBeUndefined()
 
-		await waitFor(
-			() => run.mock.calls.length + continueFn.mock.calls.length >= 1,
-			"agent.run OR agent.continue to fire once",
-		)
-		await waitFor(
-			() => witness.some((r) => r.stage === "agent_turn_done"),
-			"agent_turn_done witness to be recorded",
-		)
+		await waitFor(() => run.mock.calls.length + continueFn.mock.calls.length >= 1, "agent.run OR agent.continue to fire once")
+		await waitFor(() => witness.some((r) => r.stage === "agent_turn_done"), "agent_turn_done witness to be recorded")
 
 		const enqueue = witness.find((r) => r.stage === "pending_prompt_enqueued")
 		const dequeue = witness.find((r) => r.stage === "pending_prompt_dequeued")

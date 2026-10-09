@@ -38,7 +38,7 @@
 
 import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { type ElmCompletionAuthorityDecision } from "../completion-authority-elm-authority"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
@@ -118,6 +118,12 @@ function makeHarness(opts: MakeHarnessOpts = {}): TestHarness {
 			),
 		discardQueuedWake: () => ({ kind: "not_found", jobId: "" }),
 		now: () => ++nowCounter,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	let commitCount = 0
@@ -176,8 +182,7 @@ function makeHarness(opts: MakeHarnessOpts = {}): TestHarness {
 		// in the predecessor ACT) remain byte-identical to legacy
 		// TS behavior.
 		getElmCompletionAuthorityDecision:
-			opts.getElmCompletionAuthorityDecision ??
-			(() => ({ kind: "authorize", reason: "test_default_authorize" })),
+			opts.getElmCompletionAuthorityDecision ?? (() => ({ kind: "authorize", reason: "test_default_authorize" })),
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	return {

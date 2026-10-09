@@ -56,6 +56,7 @@ import {
 	BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX,
 	BackgroundNotifyCoordinator,
 	formatTerminalWakePrompt,
+	legacyConsumeTerminalPolicy,
 } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
@@ -168,6 +169,12 @@ function makeHarness(): Harness {
 			return { kind: "delivered" as const }
 		},
 		now: () => ++now,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	const coordinator = new SdkSessionEventCoordinator({
@@ -419,7 +426,7 @@ describe("BCNEX-P1 (correction): narrow predicate excludes legitimate user promp
  * receives exactly one wake per one terminal.
  */
 describe("BCNEX-CTL-12: queue-side cardinality (one notify=true job → exactly one queue entry)", () => {
-	it("registerMarker + consumeTerminal produces exactly one queued wake", () => {
+	it("registerMarker + consumeTerminal produces exactly one queued wake", async () => {
 		const harness = makeHarness()
 		const { notifyCoordinator, queue, activeSessionId, activeTaskId } = harness
 
@@ -442,7 +449,7 @@ describe("BCNEX-CTL-12: queue-side cardinality (one notify=true job → exactly 
 		// is NOT part of the public input surface either (held
 		// ordering uses the coordinator's internal `now`). Passing
 		// it is a TS2353 excess-property error.
-		const decision = notifyCoordinator.consumeTerminal({
+		const decision = await notifyCoordinator.consumeTerminal({
 			jobId: "J-ctl12",
 			terminalState: "exited",
 			exitCode: 0,

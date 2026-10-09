@@ -52,18 +52,18 @@
 
 import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { type ElmCompletionAuthorityDecision } from "../completion-authority-elm-authority"
-import { MessageIdMinter } from "../message-id-minter"
-import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
-import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
-import { TurnStateTracker } from "../turn-state-tracker"
 import {
 	clearContinuationCardinalityAuthorityCapture,
 	getContinuationCardinalityAuthorityCaptureRecords,
 	setContinuationCardinalityAuthorityCaptureBufferSize,
 	setContinuationCardinalityAuthorityCaptureEnabled,
 } from "../continuation-cardinality-authority"
+import { MessageIdMinter } from "../message-id-minter"
+import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
+import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
+import { TurnStateTracker } from "../turn-state-tracker"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -150,6 +150,12 @@ function makeHarness(opts: MakeHarnessOpts = {}): TestHarness {
 			),
 		discardQueuedWake: () => ({ kind: "not_found", jobId: "" }),
 		now: () => ++nowCounter,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	let commitCount = 0

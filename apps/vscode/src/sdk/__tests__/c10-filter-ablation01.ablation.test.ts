@@ -103,7 +103,7 @@
 
 import type { CoreSessionEvent, SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
@@ -243,6 +243,12 @@ function makeHarness(): Harness {
 			return { kind: "delivered" as const }
 		},
 		now: () => ++now,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	// ACT-CLINEMM-C10-FILTER-ABLATION01 (bounded correction
@@ -380,6 +386,12 @@ function makeHarnessWithOutcome(outcome: "delivered" | "rejected" | "session_gon
 			return { kind: outcome }
 		},
 		now: () => ++now,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	let c10FilterDecision: (ownedJobIds: readonly string[]) => boolean = (ownedJobIds) => {
@@ -858,7 +870,7 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-03 (matrix C — lost
 		// coordinator to call markWakeDispatchFailed(J). The
 		// marker is drained and the wake is definitively lost
 		// (no wake-driven turn will fire).
-		h.notifyCoordinator.consumeTerminal({
+		await await h.notifyCoordinator.consumeTerminal({
 			jobId,
 			terminalState: "exited",
 			exitCode: 0,
@@ -961,7 +973,7 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-05 (matrix E — two 
 		h.translatorState.recordLaunchedBackgroundJob(j40)
 		// J20 consumed (the originating turn's completion belongs
 		// to J40 not J20 per the BCCOC01 narrow per-job predicate).
-		h.notifyCoordinator.consumeTerminal({
+		await await h.notifyCoordinator.consumeTerminal({
 			jobId: j20,
 			terminalState: "exited",
 			exitCode: 0,
@@ -996,7 +1008,7 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-05 (matrix E — two 
 		h.notifyCoordinator.registerMarker({ jobId: j40, sessionId: h.activeSessionId, taskId: h.activeTaskId })
 		h.translatorState.recordLaunchedBackgroundJob(j20)
 		h.translatorState.recordLaunchedBackgroundJob(j40)
-		h.notifyCoordinator.consumeTerminal({
+		await await h.notifyCoordinator.consumeTerminal({
 			jobId: j20,
 			terminalState: "exited",
 			exitCode: 0,

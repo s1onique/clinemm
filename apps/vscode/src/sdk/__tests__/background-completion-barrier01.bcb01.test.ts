@@ -258,8 +258,8 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		// `notifyOnCompletion !== true` branch).
 		ownedJobs.push({ jobId, notify: false })
 	}
-	const drainNotifyJob = (jobId: string, exitCode?: number): void => {
-		notifyCoordinator.consumeTerminal({
+	const drainNotifyJob = async (jobId: string, exitCode?: number): Promise<void> => {
+		await notifyCoordinator.consumeTerminal({
 			jobId,
 			terminalState: "exited",
 			exitCode: exitCode ?? 0,
@@ -269,6 +269,7 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		})
 		const idx = ownedJobs.findIndex((j) => j.jobId === jobId)
 		if (idx >= 0) ownedJobs.splice(idx, 1)
+		return
 	}
 	const drainFireAndForgetJob = (jobId: string, opts?: { skipTerminalObservation?: boolean }): void => {
 		// Mirror production: at terminal, register the
@@ -423,7 +424,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// Drain the job → barrier re-evaluates with pending
 			// wake still in queue → still HELD (CORRECTION01
 			// second conjunct).
-			h.drainNotifyJob("J-bcb02")
+			await h.drainNotifyJob("J-bcb02")
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
@@ -452,15 +453,15 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Drain J1, re-evaluate, must still HOLD.
-			h.drainNotifyJob("J1-bcb03")
+			await h.drainNotifyJob("J1-bcb03")
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
-			h.drainNotifyJob("J2-bcb03")
+			await h.drainNotifyJob("J2-bcb03")
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
-			h.drainNotifyJob("J3-bcb03")
+			await h.drainNotifyJob("J3-bcb03")
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
 
@@ -468,7 +469,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// flushed the 3 held + the new one). The barrier
 			// HOLDS until the agent observes them all
 			// (CORRECTION01 second conjunct).
-			h.drainNotifyJob("J4-bcb03")
+			await h.drainNotifyJob("J4-bcb03")
 			expect(h.wakeSink.queued.length).toBe(4)
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
@@ -603,7 +604,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// the wake is now queued (CORRECTION01 second
 			// conjunct), AND a NEW job starts. Barrier MUST
 			// HOLD on both grounds.
-			h.drainNotifyJob("J1-bcb06")
+			await h.drainNotifyJob("J1-bcb06")
 			expect(h.ownedJobs.length).toBe(0)
 			h.registerFireAndForgetJob("J2-bcb06")
 			expect(h.ownedJobs.length).toBe(1)
@@ -646,10 +647,10 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Drain all 4 synchronously (no re-evaluate between).
-			h.drainNotifyJob("J1-bcb04")
-			h.drainNotifyJob("J2-bcb04")
-			h.drainNotifyJob("J3-bcb04")
-			h.drainNotifyJob("J4-bcb04")
+			await h.drainNotifyJob("J1-bcb04")
+			await h.drainNotifyJob("J2-bcb04")
+			await h.drainNotifyJob("J3-bcb04")
+			await h.drainNotifyJob("J4-bcb04")
 
 			// Single re-evaluation with 4 unobserved wakes:
 			// barrier HOLDS (CORRECTION01 second conjunct).
@@ -685,7 +686,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// BackgroundNotifyCoordinator dispatched it on
 			// consumeTerminal because it was the last notify
 			// marker for the owner).
-			h.drainNotifyJob("J-bcb05")
+			await h.drainNotifyJob("J-bcb05")
 			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
 
 			// submit_and_exit fires BEFORE the agent observes the
@@ -742,7 +743,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// Fail the job (exitCode != 0). Wake carries the
 			// terminal failure information (information is
 			// content even when the exit code is non-zero).
-			h.drainNotifyJob("J-bcb08-fail", 1)
+			await h.drainNotifyJob("J-bcb08-fail", 1)
 			expect(h.wakeSink.queued.length).toBe(1)
 			const prompt = h.wakeSink.queued[0].prompt
 			expect(prompt).toContain("J-bcb08-fail")
@@ -768,12 +769,12 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			h.registerNotifyJob("J-bcb09")
 
 			// First drain.
-			h.drainNotifyJob("J-bcb09")
+			await h.drainNotifyJob("J-bcb09")
 			expect(h.ownedJobs.length).toBe(0)
 			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
 
 			// Duplicate drain must NOT throw, must NOT affect state.
-			expect(() => h.drainNotifyJob("J-bcb09")).not.toThrow()
+			await expect(h.drainNotifyJob("J-bcb09")).resolves.not.toThrow()
 			expect(h.ownedJobs.length).toBe(0)
 			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
 
@@ -789,7 +790,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
 			expect(h.completionCommitCount()).toBe(0)
 
-			h.drainNotifyJob("J-bcb10")
+			await h.drainNotifyJob("J-bcb10")
 			// Barrier HOLDS: 1 wake queued (CORRECTION01).
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(0)
@@ -802,7 +803,7 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			// LATE terminal event arrives. The barrier
 			// marker has been cleared. The duplicate drain
 			// must NOT trigger another `task_completion_committed`.
-			h.drainNotifyJob("J-bcb10")
+			await h.drainNotifyJob("J-bcb10")
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
 			expect(h.completionCommitCount()).toBe(1)
 			expect(h.tracker.currentPhase).toBe("completed")

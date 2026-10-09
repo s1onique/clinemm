@@ -25,7 +25,7 @@
  * is present on the `send(...)` argument. PRE-FIX this FAILS.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "@/sdk/background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "@/sdk/background-notify-coordinator"
 import type { ActiveSession } from "@/sdk/cline-session-factory"
 import {
 	clearContinuationCardinalityAuthorityCapture,
@@ -85,6 +85,12 @@ describe("CCCL01 -- RED: wake_created.jobId must reach sdkHost.send(input)", () 
 		const coordinator = new BackgroundNotifyCoordinator({
 			resolveActiveOwner: () => ({ sessionId: session.sessionId, taskId: "task-ccard-1" }),
 			enqueueTerminalWake: wake,
+			// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+			// policy as the consumeTerminalAuthority stub so the
+			// coordinator's effect interpreter is exercised without
+			// loading the Elm kernel. Production wiring uses
+			// `defaultElmAuthority`.
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 		})
 
 		coordinator.registerMarker({
@@ -92,7 +98,7 @@ describe("CCCL01 -- RED: wake_created.jobId must reach sdkHost.send(input)", () 
 			sessionId: session.sessionId,
 			taskId: "task-ccard-1",
 		})
-		const decision = coordinator.consumeTerminal({
+		const decision = await await coordinator.consumeTerminal({
 			jobId: SENTINEL,
 			terminalState: "exited",
 			exitCode: 0,
@@ -129,6 +135,12 @@ describe("CCCL01 -- RED: wake_created.jobId must reach sdkHost.send(input)", () 
 		const coordinator = new BackgroundNotifyCoordinator({
 			resolveActiveOwner: () => ({ sessionId: session.sessionId, taskId: "task-ccard-2" }),
 			enqueueTerminalWake: wake,
+			// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+			// policy as the consumeTerminalAuthority stub so the
+			// coordinator's effect interpreter is exercised without
+			// loading the Elm kernel. Production wiring uses
+			// `defaultElmAuthority`.
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 		})
 
 		const J1 = "ccard-corr-loss-sentinel-j1"
@@ -137,7 +149,7 @@ describe("CCCL01 -- RED: wake_created.jobId must reach sdkHost.send(input)", () 
 		coordinator.registerMarker({ jobId: J1, sessionId: session.sessionId, taskId: "task-ccard-2" })
 		coordinator.registerMarker({ jobId: J2, sessionId: session.sessionId, taskId: "task-ccard-2" })
 
-		const d1 = coordinator.consumeTerminal({
+		const d1 = await await coordinator.consumeTerminal({
 			jobId: J1,
 			terminalState: "exited",
 			exitCode: 0,
@@ -146,7 +158,7 @@ describe("CCCL01 -- RED: wake_created.jobId must reach sdkHost.send(input)", () 
 		})
 		expect(d1.kind).toBe("held")
 
-		const d2 = coordinator.consumeTerminal({
+		const d2 = await await coordinator.consumeTerminal({
 			jobId: J2,
 			terminalState: "exited",
 			exitCode: 0,

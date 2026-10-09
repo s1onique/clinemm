@@ -224,8 +224,8 @@ function makeHarness(): ProductionHarness {
 	const registerFireAndForgetJob = (jobId: string): void => {
 		ownedJobs.push({ jobId, notify: false })
 	}
-	const drainNotifyJob = (jobId: string, exitCode?: number): void => {
-		notifyCoordinator.consumeTerminal({
+	const drainNotifyJob = async (jobId: string, exitCode?: number): Promise<void> => {
+		await notifyCoordinator.consumeTerminal({
 			jobId,
 			terminalState: "exited",
 			exitCode: exitCode ?? 0,
@@ -340,10 +340,10 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Drain all 4 — wakes queued (4), running jobs == 0.
-			h.drainNotifyJob("J1-bcb13")
-			h.drainNotifyJob("J2-bcb13")
-			h.drainNotifyJob("J3-bcb13")
-			h.drainNotifyJob("J4-bcb13")
+			await await h.drainNotifyJob("J1-bcb13")
+			await await h.drainNotifyJob("J2-bcb13")
+			await await h.drainNotifyJob("J3-bcb13")
+			await await h.drainNotifyJob("J4-bcb13")
 			expect(h.ownedJobs.length).toBe(0)
 			expect(h.wakeSink.queued.length).toBe(4)
 			expect(h.getPendingPromptCountRead()).toBe(4)
@@ -374,10 +374,10 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
 			expect(h.completionCommitCount()).toBe(0)
 
-			h.drainNotifyJob("J1-bcb14")
-			h.drainNotifyJob("J2-bcb14")
-			h.drainNotifyJob("J3-bcb14")
-			h.drainNotifyJob("J4-bcb14")
+			await await h.drainNotifyJob("J1-bcb14")
+			await await h.drainNotifyJob("J2-bcb14")
+			await await h.drainNotifyJob("J3-bcb14")
+			await await h.drainNotifyJob("J4-bcb14")
 			expect(h.wakeSink.queued.length).toBe(4)
 
 			// Barrier still HELD (4 unobserved).
@@ -461,8 +461,8 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
 			expect(h.completionCommitCount()).toBe(0)
 
-			h.drainNotifyJob("N1-bcb16")
-			h.drainNotifyJob("N2-bcb16")
+			await await h.drainNotifyJob("N1-bcb16")
+			await await h.drainNotifyJob("N2-bcb16")
 			h.drainFireAndForgetJob("F1-bcb16")
 			h.drainFireAndForgetJob("F2-bcb16")
 			expect(h.ownedJobs.length).toBe(0)
@@ -528,7 +528,7 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			expect(h.completionCommitCount()).toBe(0)
 
 			// Drain with exitCode=1 — wake carries failure.
-			h.drainNotifyJob("J-bcb18-fail", 1)
+			await await h.drainNotifyJob("J-bcb18-fail", 1)
 			expect(h.wakeSink.queued.length).toBe(1)
 			const prompt = h.wakeSink.queued[0].prompt
 			expect(prompt).toContain("J-bcb18-fail")
@@ -563,10 +563,10 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
 			expect(h.completionCommitCount()).toBe(0)
 
-			h.drainNotifyJob("J1-bcb19")
-			h.drainNotifyJob("J2-bcb19")
-			h.drainNotifyJob("J3-bcb19")
-			h.drainNotifyJob("J4-bcb19")
+			await await h.drainNotifyJob("J1-bcb19")
+			await await h.drainNotifyJob("J2-bcb19")
+			await await h.drainNotifyJob("J3-bcb19")
+			await await h.drainNotifyJob("J4-bcb19")
 
 			// 4 wakes queued.
 			expect(h.wakeSink.queued.length).toBe(4)
@@ -600,13 +600,13 @@ describe("BCB01-C — CORRECTION01 — second-conjunct enforcement", () => {
 
 			expect(h.getPendingPromptCountRead()).toBe(0)
 
-			h.drainNotifyJob("J1-bcb20")
+			await await h.drainNotifyJob("J1-bcb20")
 			expect(h.getPendingPromptCountRead()).toBe(0) // held, not queued
 
-			h.drainNotifyJob("J2-bcb20")
+			await await h.drainNotifyJob("J2-bcb20")
 			expect(h.getPendingPromptCountRead()).toBe(0) // held, not queued
 
-			h.drainNotifyJob("J3-bcb20") // last drain flushes ALL held + this one
+			await await h.drainNotifyJob("J3-bcb20") // last drain flushes ALL held + this one
 			expect(h.getPendingPromptCountRead()).toBe(3)
 
 			// After observing all wakes.

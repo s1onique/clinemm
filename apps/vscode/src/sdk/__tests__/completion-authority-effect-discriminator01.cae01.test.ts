@@ -76,7 +76,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import {
 	enqueueElmAuthorityRecord,
 	flushElmAuthorityForSession,
@@ -175,6 +175,12 @@ function makeHarness(opts: { activeSessionId: string; activeTaskId: string }): H
 			),
 		discardQueuedWake: () => ({ kind: "not_found", jobId: "" }),
 		now: () => ++nowCounter,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	let setTurnPhaseCallsCount = 0
@@ -448,7 +454,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01", () => {
 			// re-consult Elm. The marker MUST be present after a
 			// fail-closed consult so the BCB01 conservation invariant
 			// is upheld.
-		expect(w.markerPresentAfter).toBe(true)
-	}, 20_000)
-})
+			expect(w.markerPresentAfter).toBe(true)
+		}, 20_000)
+	})
 })

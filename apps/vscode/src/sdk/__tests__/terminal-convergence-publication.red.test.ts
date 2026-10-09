@@ -19,7 +19,7 @@
 
 import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { type ElmCompletionAuthorityDecision } from "../completion-authority-elm-authority"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
@@ -91,6 +91,12 @@ function makeTerminalConvergenceHarness(opts: MakeTerminalConvergenceOpts = {}):
 			),
 		discardQueuedWake: () => ({ kind: "not_found", jobId: "" }),
 		now: () => ++nowCounter,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	const callOrder: string[] = []
@@ -286,6 +292,12 @@ describe("ACT-CLINEMM-ELMIZE-P0-TASK-HEADER-TERMINAL-CONVERGENCE01", () => {
 					),
 				discardQueuedWake: () => ({ kind: "not_found", jobId: "" }),
 				now: () => ++nowCounter,
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			const publishedSnapshots: number[] = []
@@ -409,6 +421,12 @@ describe("ACT-CLINEMM-ELMIZE-P0-TASK-HEADER-TERMINAL-CONVERGENCE01", () => {
 					),
 				discardQueuedWake: () => ({ kind: "not_found", jobId: "" }),
 				now: () => ++nowCounter,
+				// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+				// policy as the consumeTerminalAuthority stub so the
+				// coordinator's effect interpreter is exercised without
+				// loading the Elm kernel. Production wiring uses
+				// `defaultElmAuthority`.
+				consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 			})
 
 			const callOrder: string[] = []

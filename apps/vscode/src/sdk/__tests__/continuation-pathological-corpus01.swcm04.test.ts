@@ -256,8 +256,8 @@ interface Harness {
  * enqueues into the test queue, mirroring what the live
  * `PendingPromptService.enqueue` does in production.
  */
-function driveNotifyTerminal(notifyCoordinator: BackgroundNotifyCoordinator, jobId: string): void {
-	notifyCoordinator.consumeTerminal({
+async function driveNotifyTerminal(notifyCoordinator: BackgroundNotifyCoordinator, jobId: string): Promise<void> {
+	await notifyCoordinator.consumeTerminal({
 		jobId,
 		terminalState: "exited",
 		exitCode: 0,
@@ -421,7 +421,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		expect(h.deferredMarkerSessionId()).toBe(h.activeSessionId)
 
 		// Drive the wake to land in the queue.
-		driveNotifyTerminal(h.notifyCoordinator, start.jobId)
+		await driveNotifyTerminal(h.notifyCoordinator, start.jobId)
 		// Yield for the wake-delivery promise chain to settle.
 		await new Promise((resolve) => setTimeout(resolve, 30))
 
@@ -560,7 +560,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		expect(h.deferredMarkerSessionId()).toBe(h.activeSessionId)
 
 		// Drive the wake to land in the queue.
-		driveNotifyTerminal(h.notifyCoordinator, start.jobId)
+		await driveNotifyTerminal(h.notifyCoordinator, start.jobId)
 		await new Promise((resolve) => setTimeout(resolve, 30))
 		// Two pending prompts now: the original user one + the wake.
 		expect(h.pendingPromptCountAtTurnEnd()).toBe(2)
@@ -595,7 +595,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 
 		// Drive the wake to land in the queue BEFORE the originating
 		// turn fires submit_and_exit (Path A drained first).
-		driveNotifyTerminal(h.notifyCoordinator, start.jobId)
+		await driveNotifyTerminal(h.notifyCoordinator, start.jobId)
 		await new Promise((resolve) => setTimeout(resolve, 30))
 
 		// Now the originating turn fires submit_and_exit.
@@ -696,7 +696,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		})
 
 		// Drive the wake (transport rejects).
-		driveNotifyTerminal(notifyCoordinator, start.jobId)
+		await driveNotifyTerminal(notifyCoordinator, start.jobId)
 		await new Promise((resolve) => setTimeout(resolve, 30))
 
 		// INVARIANT: no phantom prompt — the rejected transport
@@ -749,7 +749,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		// marker-count guard defers dispatching J1's wake until
 		// ALL pending markers for this owner are terminal. The
 		// queue is empty.
-		driveNotifyTerminal(h.notifyCoordinator, j1.jobId)
+		await driveNotifyTerminal(h.notifyCoordinator, j1.jobId)
 		await new Promise((resolve) => setTimeout(resolve, 30))
 
 		// INVARIANT: J1 wake HELD (queue empty); J2 marker still
@@ -768,7 +768,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		// J2 fires. With J1's held wake ready, the dispatch is
 		// now triggered for BOTH J1 (held-then-released) and J2
 		// (immediate).
-		driveNotifyTerminal(h.notifyCoordinator, j2.jobId)
+		await driveNotifyTerminal(h.notifyCoordinator, j2.jobId)
 		await new Promise((resolve) => setTimeout(resolve, 30))
 
 		// INVARIANT: both wakes delivered (two pending prompts).
@@ -801,7 +801,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 
 		// Fire the terminal BEFORE the originating turn's done.
 		// The wake may race with the completion tool.
-		driveNotifyTerminal(h.notifyCoordinator, start.jobId)
+		await driveNotifyTerminal(h.notifyCoordinator, start.jobId)
 		await new Promise((resolve) => setTimeout(resolve, 30))
 
 		// Queue has the wake.
@@ -946,7 +946,7 @@ describe("ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — pathologica
 		h.notifyCoordinator.registerMarker({ jobId: j2.jobId, sessionId: h.activeSessionId, taskId: h.activeTaskId })
 
 		// Only J1 fires.
-		driveNotifyTerminal(h.notifyCoordinator, j1.jobId)
+		await driveNotifyTerminal(h.notifyCoordinator, j1.jobId)
 		await new Promise((resolve) => setTimeout(resolve, 30))
 
 		await emitOriginatingDone(h)

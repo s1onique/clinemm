@@ -77,6 +77,7 @@ import {
 	BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX,
 	BackgroundNotifyCoordinator,
 	formatTerminalWakePrompt,
+	legacyConsumeTerminalPolicy,
 } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
@@ -201,6 +202,12 @@ function makeHarness(options: { simulatePreFix?: boolean } = {}): Harness {
 			return { kind: "delivered" as const }
 		},
 		now: () => ++now,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	// Register the notify marker (mirrors vscode-run-commands-tool.ts:771-780).
@@ -590,7 +597,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 				exitCode: 0,
 				outputTail: "STARTED\nFINISHED\n",
 			})
-			harness.notifyCoordinator.consumeTerminal({
+			await await harness.notifyCoordinator.consumeTerminal({
 				jobId: harness.jobId,
 				terminalState: "exited",
 				exitCode: 0,
@@ -661,7 +668,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 				reason: "natural",
 				outputTail: "OK\n",
 			})
-			harness.notifyCoordinator.consumeTerminal({
+			await await harness.notifyCoordinator.consumeTerminal({
 				jobId: harness.jobId,
 				terminalState: "exited",
 				exitCode: 0,
@@ -841,7 +848,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 				reason: "natural",
 				outputTail: "OK\n",
 			})
-			harness.notifyCoordinator.consumeTerminal({
+			await await harness.notifyCoordinator.consumeTerminal({
 				jobId: harness.jobId,
 				terminalState: "exited",
 				exitCode: 0,

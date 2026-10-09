@@ -41,7 +41,7 @@ import { fileURLToPath } from "node:url"
 import type { AgentResult, BasicLogger, CoreSessionEvent, SendSessionInput } from "@cline/core"
 import { LocalRuntimeHost } from "@cline-internal/core/runtime/host/local-runtime-host"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "@/sdk/background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "@/sdk/background-notify-coordinator"
 import type { ActiveSession } from "@/sdk/cline-session-factory"
 import {
 	enqueueElmAuthorityRecord,
@@ -343,6 +343,12 @@ function makeDiscriminatorHarness(opts: DiscriminatorHarnessOpts): Discriminator
 		enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 		discardQueuedWake: () => ({ kind: "not_found", jobId: "" }),
 		now: () => Date.now(),
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	// OBSERVE the real production `pickContinuationDirectiveForPublication`

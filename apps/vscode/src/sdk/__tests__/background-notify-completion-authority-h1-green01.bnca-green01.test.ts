@@ -21,7 +21,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { createCommandStatusTool } from "../command-status-tool"
 
@@ -117,6 +117,12 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-GRE
 					: { kind: "not_found" as const, jobId }
 			},
 			now: () => ++now,
+			// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+			// policy as the consumeTerminalAuthority stub so the
+			// coordinator's effect interpreter is exercised without
+			// loading the Elm kernel. Production wiring uses
+			// `defaultElmAuthority`.
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 		})
 
 		const statusTool = createCommandStatusTool(manager, {
@@ -148,7 +154,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-GRE
 				return
 			}
 			const snapshot = status.snapshot
-			notifyCoordinator.consumeTerminal({
+			await await notifyCoordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot.state,
 				exitCode: snapshot.exitCode,
@@ -220,6 +226,12 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-GRE
 			enqueueTerminalWake: ({ sessionId, prompt }) =>
 				Promise.resolve(wakeSink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 			now: () => ++now,
+			// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+			// policy as the consumeTerminalAuthority stub so the
+			// coordinator's effect interpreter is exercised without
+			// loading the Elm kernel. Production wiring uses
+			// `defaultElmAuthority`.
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 		})
 
 		const statusTool = createCommandStatusTool(manager, {
@@ -273,6 +285,12 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-GRE
 			enqueueTerminalWake: ({ sessionId, prompt }) =>
 				Promise.resolve(wakeSink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 			now: () => ++now,
+			// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+			// policy as the consumeTerminalAuthority stub so the
+			// coordinator's effect interpreter is exercised without
+			// loading the Elm kernel. Production wiring uses
+			// `defaultElmAuthority`.
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 		})
 
 		const statusTool = createCommandStatusTool(manager, {

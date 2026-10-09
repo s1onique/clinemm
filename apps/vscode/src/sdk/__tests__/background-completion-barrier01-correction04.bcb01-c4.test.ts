@@ -28,7 +28,7 @@
 
 import { type CoreSessionEvent } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
@@ -92,6 +92,12 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 		enqueueTerminalWake: () => Promise.resolve({ kind: "rejected" as const }),
 		discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
 		now: () => ++now,
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	const unconsumedOverride: { value: number } = { value: 0 }

@@ -471,7 +471,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			harness.setActiveSessionAndTask("session-bcnt01-other", "task-other")
 			const status = await harness.manager.status({ jobId: start.jobId, waitMs: 0 })
 			const snapshot = status.ok ? status.snapshot : null
-			harness.coordinator.consumeTerminal({
+			await await harness.coordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot ? snapshot.state : "exited",
 				exitCode: snapshot?.exitCode,
@@ -533,7 +533,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 				taskId: harness.activeTaskId,
 			})
 			// Terminal J1 -> should HOLD (J2 still alive)
-			harness.coordinator.consumeTerminal({
+			await await harness.coordinator.consumeTerminal({
 				jobId: j1.jobId,
 				terminalState: "exited",
 				exitCode: 0,
@@ -543,7 +543,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			expect(harness.sink.size()).toBe(0)
 			expect(harness.coordinator.diagnosticHeldCount()).toBe(1)
 			// Terminal J2 -> should DRAIN FIFO (J1 held first, then J2)
-			harness.coordinator.consumeTerminal({
+			await await harness.coordinator.consumeTerminal({
 				jobId: j2.jobId,
 				terminalState: "exited",
 				exitCode: 0,
@@ -618,7 +618,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			await start.terminalPromise
 			await sleep(50)
 			// Second consumeTerminal for the same jobId -> no_marker.
-			const decision = harness.coordinator.consumeTerminal({
+			const decision = await await harness.coordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: "exited",
 				exitCode: 0,
@@ -648,7 +648,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			})
 			const status = await harness.manager.status({ jobId: start.jobId, waitMs: 0 })
 			const snapshot = status.ok ? status.snapshot : null
-			harness.coordinator.consumeTerminal({
+			await await harness.coordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot ? snapshot.state : "cancelled",
 				exitCode: snapshot?.exitCode,
@@ -676,7 +676,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 				sessionId: harness.activeSessionId,
 				taskId: harness.activeTaskId,
 			})
-			harness.coordinator.consumeTerminal({
+			await await harness.coordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: "containment_failed",
 				exitCode: undefined,
@@ -698,7 +698,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			harness.coordinator.dispose()
 			expect(harness.coordinator.diagnosticDisposed()).toBe(true)
 			// Subsequent consumeTerminal is a no-op.
-			const decision = harness.coordinator.consumeTerminal({
+			const decision = await await harness.coordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: "exited",
 				exitCode: 0,
@@ -860,7 +860,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 				// The wake consumer reads manager.status() and
 				// forwards the snapshot state; we synthesize
 				// that snapshot read here.
-				realCoordinator.consumeTerminal({
+				await await realCoordinator.consumeTerminal({
 					jobId: start.jobId,
 					terminalState: "deadline_exceeded",
 					exitCode: undefined,
@@ -910,7 +910,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 				sessionId: "session-bcnt01-deadline02",
 				taskId: "task-bcnt01-deadline02",
 			})
-			realCoordinator.consumeTerminal({
+			await await realCoordinator.consumeTerminal({
 				jobId: "cmd-deadline02-mock",
 				terminalState: "deadline_exceeded",
 				exitCode: undefined,
@@ -1085,7 +1085,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 				sessionId,
 				taskId,
 			})
-			coordinator.consumeTerminal({
+			await await coordinator.consumeTerminal({
 				jobId: "cmd-bcnt01-wire02",
 				terminalState: "exited",
 				exitCode: 0,
@@ -1146,7 +1146,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 				sessionId: markerSessionId,
 				taskId: "task-bcnt01-wire02",
 			})
-			coordinator.consumeTerminal({
+			await await coordinator.consumeTerminal({
 				jobId: "cmd-bcnt01-wire02-mismatch",
 				terminalState: "exited",
 				exitCode: 0,

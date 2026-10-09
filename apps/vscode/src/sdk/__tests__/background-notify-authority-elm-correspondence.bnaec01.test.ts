@@ -22,7 +22,11 @@ import {
 	pickConsumeDecisionForAudit,
 	resetBackgroundNotifyAuthorityElmAuthorityForTests,
 } from "../background-notify-authority-elm"
-import { BackgroundNotifyCoordinator, type ConsumeTerminalDecision } from "../background-notify-coordinator"
+import {
+	BackgroundNotifyCoordinator,
+	type ConsumeTerminalDecision,
+	legacyConsumeTerminalPolicy,
+} from "../background-notify-coordinator"
 import { type CommandJobState } from "../command-job-manager"
 
 // ---------------------------------------------------------------------------
@@ -40,6 +44,13 @@ function makeCoordinator(opts?: {
 		resolveActiveOwner: opts?.resolveActiveOwner ?? (() => ({ sessionId: ACTIVE_SESSION, taskId: ACTIVE_TASK })),
 		enqueueTerminalWake: async () => ({ kind: "delivered" }),
 		now: () => (now += 1),
+		// ACT-CLINEMM-ELM-SEAM04: BNAEC01 is the differential
+		// correspondence corpus. The TS side drives the
+		// coordinator with the legacy policy (the SEAM03
+		// branch-by-branch decision) so the comparison isolates
+		// the Elm candidate. Production wiring uses
+		// `defaultElmAuthority` (the Elm kernel).
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 }
 
@@ -319,7 +330,7 @@ describe("BNAEC01: TS↔Elm correspondence (BackgroundNotifyAuthority)", () => {
 					: () => undefined,
 			})
 			entry.setupCoordinator(coordinator)
-			const tsDecision: ConsumeTerminalDecision = coordinator.consumeTerminal({
+			const tsDecision: ConsumeTerminalDecision = await await coordinator.consumeTerminal({
 				jobId: entry.input.jobId,
 				terminalState: translateToCommandJobState(entry.input.terminalState),
 				exitCode: entry.input.exitCode ?? undefined,

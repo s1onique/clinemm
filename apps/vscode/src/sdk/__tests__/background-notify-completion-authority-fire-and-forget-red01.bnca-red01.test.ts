@@ -36,7 +36,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 
 // Real production shape: wake lands after a microtask hop.
 // `enqueueTerminalWake` is fire-and-forget (mirror of
@@ -119,6 +119,12 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 				return { kind: "discarded" as const, jobId, promptId: match.id }
 			},
 			now: () => ++now,
+			// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+			// policy as the consumeTerminalAuthority stub so the
+			// coordinator's effect interpreter is exercised without
+			// loading the Elm kernel. Production wiring uses
+			// `defaultElmAuthority`.
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 		})
 
 		// Path A arm: register a marker.
@@ -129,7 +135,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 		})
 
 		// Path A fires (mirroring the listener after terminalPromise).
-		const aDecision = coordinator.consumeTerminal({
+		const aDecision = await await coordinator.consumeTerminal({
 			jobId,
 			terminalState: "exited",
 			exitCode: 0,
@@ -207,6 +213,12 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 				return { kind: "discarded" as const, jobId, promptId: sinkEntries[idx]?.id }
 			},
 			now: () => 1,
+			// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+			// policy as the consumeTerminalAuthority stub so the
+			// coordinator's effect interpreter is exercised without
+			// loading the Elm kernel. Production wiring uses
+			// `defaultElmAuthority`.
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 		})
 
 		coordinator.registerMarker({
@@ -214,7 +226,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 			sessionId,
 			taskId,
 		})
-		coordinator.consumeTerminal({
+		await await coordinator.consumeTerminal({
 			jobId,
 			terminalState: "exited",
 			exitCode: 0,

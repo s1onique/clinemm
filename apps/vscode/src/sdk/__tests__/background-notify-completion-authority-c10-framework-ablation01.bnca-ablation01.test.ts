@@ -19,7 +19,7 @@
 
 import { type CoreSessionEvent } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { createCommandStatusTool } from "../command-status-tool"
 import { MessageIdMinter } from "../message-id-minter"
@@ -82,6 +82,12 @@ function makeHarness(): ProductionHarness {
 			return { kind: "delivered" as const }
 		},
 		now: () => Date.now(),
+		// ACT-CLINEMM-ELM-SEAM04: tests inject the legacy SEAM03
+		// policy as the consumeTerminalAuthority stub so the
+		// coordinator's effect interpreter is exercised without
+		// loading the Elm kernel. Production wiring uses
+		// `defaultElmAuthority`.
+		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})
 
 	const coordinator = new SdkSessionEventCoordinator({
@@ -187,7 +193,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-FRA
 			const status = await h.manager.status({ jobId: start.jobId, waitMs: 0 })
 			if (!status.ok) return
 			const snapshot = status.snapshot
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot.state,
 				exitCode: snapshot.exitCode,
@@ -251,7 +257,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-FRA
 			const status = await h.manager.status({ jobId: start.jobId, waitMs: 0 })
 			if (!status.ok) return
 			const snapshot = status.snapshot
-			h.notifyCoordinator.consumeTerminal({
+			await await h.notifyCoordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot.state,
 				exitCode: snapshot.exitCode,
