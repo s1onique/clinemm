@@ -57,6 +57,44 @@
 **DOGFOOD_VERSION:** 4.1.16-03f055a96
 **VSIX_PATH / VSIX_BYTES / VSIX_SHA256 / INSTALLED_VERSION:** (NOT_BUILT — see C12 LIVE_UNOBSERVABLE; the `_ELM_KERNELS` row is in place and `extension.ts` is pinned, so a real operator run will stage the asset correctly).
 
+
+## Notification obligation contract (Path A / Path B)
+
+Per the existing `ResolveObligationReason` type
+(`background-notify-coordinator.ts:146`), the notification
+obligation is settled by EITHER:
+
+- **terminal wake delivered** (Path A: healthy `consumeTerminal`
+  produces a `drained` decision and dispatches a wake), OR
+- **canonical status explicitly observed** (Path B:
+  `command_status` → `resolveObligation` with reason
+  `canonical_status_observed`).
+
+The CORRECTION01 repair ensures the obligation survives
+across the seam: on a kernel failure, Path A classifies as
+`no_marker` and PRESERVES the marker; Path B can then drain
+the obligation via `canonical_status_observed`. The wake is
+NOT re-dispatched (the second half of the contract — Path B
+is a different delivery path, not a wake pathway).
+
+Proven by:
+- BNACUT04-OBLIGATION OBL-07: healthy Path A delivers the
+  wake (first half of the contract).
+- BNACUT04-OBLIGATION OBL-08: kernel failure Path A
+  preserves the marker; Path B `resolveObligation` with
+  `canonical_status_observed` settles the obligation. The
+  resolved decision records `canonical_status_observed` as
+  the resolution reason. The wake is NOT re-dispatched
+  (the contract is fulfilled, not lost).
+
+## Precise labels (per Factory review)
+
+- SEAM04_IMPLEMENTATION:   PASS
+- SEAM04_CORRECTION01:     PASS_STRUCTURAL
+- SEAM04_ELM_AUTHORITY:    REAL_PRODUCTION_SEAM
+- SEAM04_LIVE:             LIVE_UNOBSERVABLE
+- SEAM04_VSIX:             NOT_BUILT
+
 **Residue (P0..P2):**
 - P0: None. The obligation-conservation gap is closed.
 - P1: None. The adversarial SEQ-8 and SEQ-9 defects are corrected.

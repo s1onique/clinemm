@@ -296,3 +296,92 @@ describe("BNACUT04-OBLIGATION: P0 obligation conservation under kernel failure",
 		expect(h.coordinator.diagnosticMarkerCount()).toBe(0)
 	})
 })
+
+// =========================================================================
+// P0 contract clarification (Factory review):
+//
+// Notification obligation = terminal wake delivered
+//                       OR canonical status explicitly observed
+//
+// This is the existing Path A / Path B contract (see
+// `resolveObligationReason` in background-notify-coordinator.ts:146).
+// The CORRECTION01 tests prove the SECOND half (Path B recovery on
+// kernel failure). The new OBL-07..08 tests prove both halves of the
+// contract on the SAME marker:
+//
+// - OBL-07: healthy Path A delivers the wake (the FIRST half).
+// - OBL-08: kernel failure Path A preserves the marker; Path B
+//           resolveObligation with canonical_status_observed
+//           settles the obligation WITHOUT a wake (the SECOND
+//           half). This is the EXISTING contract — the model's
+//           command_status observation legitimately settles
+//           the obligation through a different delivery path.
+// =========================================================================
+describe("BNACUT04-OBLIGATION: dual-path obligation contract (Factory review)", () => {
+	it("OBL-07: healthy Path A delivers the wake (first half of the contract)", async () => {
+		const h = makeHarness()
+		h.coordinator.registerMarker({ jobId: "J-OBL-07", sessionId: ACTIVE_SESSION, taskId: ACTIVE_TASK })
+		const decision = await h.coordinator.consumeTerminal({
+			jobId: "J-OBL-07",
+			terminalState: "exited",
+			exitCode: 0,
+			reason: undefined,
+			isContainmentFailed: false,
+			outputTail: undefined,
+		})
+		expect(decision.kind).toBe("drained")
+		// Healthy path: wake IS delivered.
+		expect(h.enqueuedPrompts).toHaveLength(1)
+		expect(h.enqueuedPrompts[0].jobId).toBe("J-OBL-07")
+		// Marker is consumed.
+		expect(h.coordinator.diagnosticMarkerCount()).toBe(0)
+	})
+
+	it("OBL-08: kernel failure Path A settles via Path B canonical_status_observed (second half of the contract)", async () => {
+		const kernelOffline: ConsumeTerminalAuthorityFn = async () => ({
+			kind: "kernel_offline",
+			classification: "background_notify_authority_elm_kernel_offline",
+		})
+		const h = makeHarness({ consumeTerminalAuthority: kernelOffline })
+		h.coordinator.registerMarker({ jobId: "J-OBL-08", sessionId: ACTIVE_SESSION, taskId: ACTIVE_TASK })
+		const decision = await h.coordinator.consumeTerminal({
+			jobId: "J-OBL-08",
+			terminalState: "exited",
+			exitCode: 0,
+			reason: undefined,
+			isContainmentFailed: false,
+			outputTail: undefined,
+		})
+		expect(decision.kind).toBe("no_marker")
+		// Marker is preserved for Path B recovery.
+		expect(h.coordinator.diagnosticMarkerCount()).toBe(1)
+		// No wake fired on Path A.
+		expect(h.enqueuedPrompts).toHaveLength(0)
+		// Path B: command_status observation settles the
+		// obligation through canonical_status_observed (a
+		// different delivery path; this is the existing
+		// contract). No wake is delivered — the obligation is
+		// satisfied by the explicit status observation.
+		const resolved = h.coordinator.resolveObligation({
+			jobId: "J-OBL-08",
+			sessionId: ACTIVE_SESSION,
+			taskId: ACTIVE_TASK,
+			resolution: "canonical_status_observed",
+		})
+		expect(resolved.kind).toBe("resolved")
+		// The contract is fulfilled: obligation is settled,
+		// not lost. The model's terminal status was
+		// explicitly observed; no terminal wake is required.
+		expect(h.coordinator.diagnosticMarkerCount()).toBe(0)
+		// The wakeEnqueuedJobIds tracker was NOT populated by
+		// the resolved Path B (no wake to enqueue).
+		// h.enqueuedPrompts remains empty — the obligation
+		// settled via Path B's canonical_status_observed.
+		expect(h.enqueuedPrompts).toHaveLength(0)
+		// The resolved decision records canonical_status_observed
+		// as the resolution reason (per ResolveObligationReason).
+		if (resolved.kind === "resolved") {
+			expect(resolved.resolution).toBe("canonical_status_observed")
+		}
+	})
+})
