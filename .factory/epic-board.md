@@ -22959,3 +22959,49 @@ The Factory reviewer's three halts + one P1 are now closed:
 - P1 evidence-contract defect (correction04 at HEAD)
 
 Per the reviewer's `C1: GO` disposition: this ACT authorizes progression to `ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01` and LIVE qualification from the new HEAD. No further P0 correction loop authorized on the current evidence.
+
+## ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01 — PASS_POST_TURN_BLOCKED_PRESENTATION_CONVERGENCE_PRELIVE — 2026-10-09
+
+**Status:** CLOSED with verdict `PASS_POST_TURN_BLOCKED_PRESENTATION_CONVERGENCE_PRELIVE` at HEAD `5832f9b83`. The LIVE specimen's `Working / ●` SCAR is closed by a dual-boundary bounded fix (one host phase/publication transition + one Elm Task Header orchestration policy correction; ablation confirms BOTH are load-bearing — either alone leaves a fabrication).
+
+**LIVE specimen binding target (frozen 2026-10-09, session/task `1791522873279_gw7kk`)**: `runtime_status=completed`, `canonical_shadow_phase=completed`, `legacy_phase=streaming` (last write `task-start-init-task`), `publication_shadow_binding=UNBOUND`, `task_completion_committed=0`, `held_observations=14`, `continuation_scheduled=0`, `blocked_outcome_observation_unavailable=1`, visible symptom: `Working / ●` stale active-turn presentation. The historical export had 209 terminal events; the decisive final condition is 14 outstanding observations, not the total count.
+
+**Causal discriminator (C6, dual-boundary)**: variant A (missing host transition: `turnStateTracker.currentPhase` was a SCAR from `task-start-init-task → streaming`; the BCB re-registration site at `sdk-session-event-coordinator.ts:2725-2753` stamps `observation_unavailable` but never updates the host phase) + variant C (Elm semantic defect: `isUnboundDemotingActiveToTerminal` falls through to legacy when legacy is active, falsely preserving the `streaming` SCAR; the host has no authority for `error`/`resumable` legacy, parallel to R1/R2). Both boundaries were required; single-boundary repairs leave a fabrication (false `Working` OR false `Complete`).
+
+**Bounded fix (C8 allowances only)**:
+1. **Host transition**: at the BCB re-registration site, when the CTQC01 bounded correlation guard stamps `observation_unavailable`, the host now calls `setTurnPhase("error", undefined, "session-event-bcb-blocked-observation-unavailable")` (sdk-session-event-coordinator.ts:2767-2771). The new writerId is added to the closed `TurnStateWriterId` union (turn-state-writer-provenance.ts:72-78) — one bounded addition gated by the same writer-provenance diagnostic.
+2. **Elm policy correction**: a new R2.5 short-circuit for `error` and `resumable` legacy phases in `apps/vscode/elm/task-header-orchestration/src/Orchestration.elm`, parallel to the existing R1 (`compacting`) and R2 (`awaiting_followup`) host-authority rules. The Elm kernel is recompiled; the `Orchestration.elm.sha256` sidecar is regenerated.
+3. **TS reference helper mirror** (not a parallel TS authority — the Elm kernel remains the sole production authority): the same R2.5 rule is added to `selectTaskHeaderPresentation` in `task-state-shadow-arbiter-mapper.ts:579-604` so the REF-TS differential correspondence test (which asserts both the TS reference and the Elm against the same fixture table) remains in sync.
+4. **Test fixture updates** to reflect the new R2.5 behavior: `TaskHeaderOrchestrationTest.elm`, `task-header-elm-orchestration.fixtures.ts`, AUTH-08, T4, T5, T8, THCP05, ABS_FALLBACK_4.
+
+**Ablation (C7)**:
+```text
+pre-fix:                   4 fail | 3 pass
+full repair:              0 fail | 7 pass
+ablate R2.5 only:         4 fail | 3 pass   (LIVE SCAR returns)
+ablate host transition:   3 fail | 4 pass   (fabricated Complete)
+repair restored:          0 fail | 7 pass
+```
+
+**Production delta**: 7 production files + 6 test files + 1 ACT MD. The compiled vendor JS is gitignored (per the existing `apps/vscode/elm/task-header-orchestration/.gitignore`); the source `.elm` + `.sha256` sidecars are tracked.
+
+**Conservation (C9)**: completion safety, held-result conservation, agent-turn authority, queue truth, task/session/epoch isolation, Elm authority, kernel failure (offline/decode fail-closed), cancel semantics, myc telemetry, runtime errors (`⚠ N` incident aggregation), command result (RCNC02 terminal-state monotonicity), task restart (new task → `idle`), recovery (BCB clear / capability recover overwrites), no duplicate publication (the new `setTurnPhase` is inside the existing `if (!sameObligationAlreadyObservationUnavailable)` idempotence branch). All 14 conservation invariants preserved; PTBPC01 subtests assert the load-bearing semantics directly.
+
+**Gates (C10)**:
+- `tsc --noEmit`: 0 errors
+- `tsc --project tsconfig.vscode-compat.json --noEmit`: 0 errors
+- `webview-ui bunx tsc --noEmit`: 0 errors
+- `bun run lint` (biome + proto-lint): clean
+- `git diff --check`: clean
+- Elm kernel: `bash scripts/build-elm.sh` PASS (Orchestration.elm SHA-256 regenerated)
+- Focused: PTBPC01 (7/7) + task-header-authority-cutover (21/21) + task-header-elm-orchestration-authority01 (15/15) + UCHC01 (9/9) + task-state-shadow-*.test.ts + completion-continuation-*.test.ts = 463/463 PASS across 35 test files
+- **Pre-existing failures (NOT ACT-owned, NOT blessed into a baseline)**: `host-blocked-outcome-publication01.hbop01.test.ts` (8 failing) and `background-completion-barrier01.bcb01.test.ts` (13 failing) fail identically on the pre-ACT HEAD `3214fc21c` (verified by `git stash push --include-untracked` + re-run). These failures predate this ACT and are out of scope per C8 ("Do not broaden into command-status repair, terminal-wake queue policy, or general completion-control redesign").
+
+**Predecessor ACT lineage**:
+- `ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION04` (PRODUCTION_CLOSURE_FIXTURE) at HEAD `3214fc21c` — authorized progression to this ACT.
+
+**Repository trust hygiene**: clean. `git status --short` shows only ACT-owned changes. The Tart stash `d46223b51` is preserved (was not modified or popped by this ACT).
+
+**Operator LIVE qualification (C12) is PENDING**. The closed PRELIVE target HEAD is `5832f9b83f64bba0c7314d46ea69f6853fefdd9d`. The operator must record: VSIX byte size, SHA-256, installed VSIX/source identity, at least one genuinely blocked-but-incomplete task, held observations and task completion authority before/after publication, actual model-turn/queue state, host phase facts and Elm TaskHeader output, visible TaskHeader state and controls, and a legitimate recovery (or a source-backed explanation why recovery cannot occur). A LIVE screen showing a non-Working header is insufficient by itself; the header must agree with the authoritative host facts and must not fabricate task completion.
+
+**Verdict**: `PASS_POST_TURN_BLOCKED_PRESENTATION_CONVERGENCE_PRELIVE` authorizes progression to LIVE qualification from HEAD `5832f9b83`.
