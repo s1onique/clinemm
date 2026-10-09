@@ -22421,33 +22421,41 @@ This ACT is built on the verified state at HEAD 432f483c7, with no production co
 **Answer:** The reeval path's `pickContinuationDirectiveForPublication` call (line 1543-1554) HARDCODED `canObserveHeldResults: true, canRetryCompletion: true` regardless of the live resumed-turn tool registry. The BCB re-registration site at line 2704-2734 already projected truthful capability; the reeval path's inner enqueue did not. The bounded repair at line 1559-1566 projects truthful capability from `this.options.liveTools?.()` (the SAME projection the BCB block uses). The fix is the single-site, minimum-change repair the reviewer's directive called for.
 
 **Files added this ACT**:
-- `apps/vscode/src/sdk/__tests__/completion-reevaluation-capability-discriminator01.crcd01.test.ts` (NEW: 4 RED/GREEN tests for the reeval capability discriminator).
+- `apps/vscode/src/sdk/__tests__/completion-reevaluation-capability-discriminator01.crcd01.test.ts` (NEW: 3 non-vacuous RED/GREEN tests for the reeval capability discriminator).
 - `apps/vscode/vitest.config.crcd01.ts` (NEW: dedicated vitest config mirroring TWQC01 with the `@cline-internal/core/...` aliases).
 - `apps/vscode/package.json` (added `test:vitest:crcd01` script).
 - `.factory/acts/ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01.md` (this closure ACT).
 - `.factory/evidence/ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01/01-reevaluation-capability-discriminator.md` (1 evidence file).
 
 **Production files changed**: 1 (`apps/vscode/src/sdk/sdk-session-event-coordinator.ts` line 1543-1566).
-**Test files updated**: 1 (CCUTO01 — 3 tests updated to assert the new fail-closed-at-inner-enqueue behavior + 1 harness accessor added for the new fix).
+**Test files updated**: 11 predecessor tests (CCUTO01, CCSLT01, CCSE01, CCHSP01, CCHSP03, CCCA01, REARM01, CCSRL01, CCUPD01, BCB01 — `liveTools` wired to the coordinator's options; CRCD01 — non-vacuous assertions applied).
 **Config files updated**: 2 (`apps/vscode/vitest.config.ts` + `apps/vscode/tsconfig.json` — added crcd01 to exclude list).
-**HEAD**: `432f483c7f49fd0d289a6875a5fef28aa0a7d512` (frozen). No commits were created by this ACT; the ACT-owned files are untracked and ready for review.
-
+**HEAD**: `3b100bf894fe63010c6a1f773712e3f2f05a0210` (the commit created by this ACT, advancing from 432f483c7).
 **Stash**: `stash@{0}` anchored to `d46223b51` (the protected Tart stash the brief requires). Preserved. Not popped. Not mutated.
 
 **Gates (C10)**:
-- `cd apps/vscode && bun x vitest run --config vitest.config.crcd01.ts` — ✓ PASS (4/4 tests)
-- `cd apps/vscode && bun x vitest run --config vitest.config.ts` (UCHC01 + CCUTO01) — ✓ PASS (21/21 tests)
+- `cd apps/vscode && bun x vitest run --config vitest.config.crcd01.ts` — ✓ PASS (3/3 tests)
+- `cd apps/vscode && bun x vitest run --config vitest.config.ts` (UCHC01 + CCUTO01 + CTQC01-CORR01 + CCSLT01) — ✓ PASS (34/34 tests)
+- `cd apps/vscode && bun x vitest run --config vitest.config.ts` (all completion-continuation-*) — ✓ PASS (207/207 tests across 23 files)
 - `cd apps/vscode && bun x tsc --noEmit` — ✓ PASS (no diagnostics)
-- `cd apps/vscode && bun run lint` — ✓ PASS ("Checked 2193 files in 1231ms. No fixes applied.")
+- `cd apps/vscode && bun run lint` — ✓ PASS ("Checked 2193 files in 1738ms. No fixes applied.")
 - `git diff --check` — ✓ PASS (clean)
 - Stash preserved — ✓ `stash@{0} on d46223b51`
 
+**Necessity ablation (CRCD01-CORRECTION01)**: with the OLD hardcoded
+`canObserveHeldResults: true, canRetryCompletion: true`, 2 of 3
+CRCD01 tests FAIL with "expected true to be false". With the NEW
+truthful projection, all 3 PASS. The REPAIRED → NEUTRALIZED →
+REPAIRED sequence is proven.
+
 **Focused tests**:
-- CRCD01 (4 tests) — the new test file. 2 RED on initial run (production defect reproduced), 4 GREEN after bounded repair.
+- CRCD01 (3 tests) — the new test file. 2 FAIL on initial run with the OLD hardcoded `true` (production defect reproduced), 3 PASS after bounded repair.
 - CCUTO01 (14 tests) — predecessor, with 3 tests updated to reflect the new bounded behavior.
 - UCHC01 (7 tests) — predecessor, no regression.
+- CTQC01-CORR01 — predecessor, no regression.
+- CCSLT01 (10 tests) — predecessor, no regression.
 
-**Total: 25 tests, 25 PASS after the fix.**
+**Total: 207 focused tests PASS** across 23 completion-continuation test files.
 
 **C0.1 Installed-extension identity**: `LIVE_SOURCE_UNBOUND` (per UCHC01's C0.1 binding). The source HEAD is bound to the production-seam file:line coordinates (PRE-FIX defect: 1543-1554; POST-FIX repair: 1559-1566) which are reachable at the recorded HEAD.
 
