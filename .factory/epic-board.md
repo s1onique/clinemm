@@ -23116,3 +23116,162 @@ stage boundary) — NOT a 1-line Boolean expression.
 - Updated:
   `.factory/epic-board.md` (this section).
 - No source code changes.
+
+# ACT-CLINEMM-ELM-SEAM07-LONG-HORIZON-CONTINUATION-RECON — PASS_ELM_SEAM07_RECON — 2026-10-09
+
+**Status:** CLOSED with verdict `PASS_ELM_SEAM07_RECON`. One bounded
+production decision authority selected. No production code touched.
+No Elm implementation attempted (per scope). The economics gate
+passed for the selected seam; the next ACT (SEAM08) is named and
+is the implementation cutover, not a recon.
+
+The SEAM06 recommendation to re-evaluate the Factory Elm migration
+queue against "larger semantic surfaces such as the long-horizon
+continuation cardinality, the held-set progress classification, or
+the completion-commit stage boundary" is honored. This ACT selects
+the long-horizon continuation cardinality, operationalized as the
+`deferredCompletionBarrier` marker state machine at
+`SdkSessionEventCoordinator` (which IS the long-horizon
+continuation cardinality authority).
+
+**Preconditions met:**
+
+- ENTRY_HEAD = `eb3de47ab5b88a55ea15e768241e65efb6464cc2` on
+  branch `main`; working tree clean; no stashes; no uncommitted
+  changes (verified by `git status --short` returning empty,
+  `git stash list` returning empty, `git diff --check` exiting 0).
+- SEAM01–06 evidence preserved in `.factory/epic-board.md` and
+  the per-ACT files in `.factory/`.
+- HALT_UNEXPECTED_TRACKED_DIRT: NOT TRIGGERED.
+
+**Source authority map (compact):**
+
+| Candidate | Production seam | Decision vocabulary | Existing Elm overlap | Verdict |
+| --- | --- | --- | --- | --- |
+| **Deferred-completion-barrier marker** | `SdkSessionEventCoordinator.{reevaluateDeferredCompletionBarrier, reevaluateDeferredContinuation, enqueueCompletionContinuationIfHeld, applyBlockedCompletionContinuationOutcome, handleSessionEvent C10 branch}` (`apps/vscode/src/sdk/sdk-session-event-coordinator.ts`) | `Pass \| Set \| ReRegister \| Stale \| Blocked \| Deduped \| NotHeld \| ObservationUnavailable` (8 outcomes; 16+ transition paths) | `UNOWNED_TS_AUTHORITY` — no existing kernel reads or writes the marker; only doc-comment hits in the four Elm kernels | **SELECTED** |
+| `Completion-continuation-control` dedupe slot + held-set snapshot | `lastCompletionContinuationSessionEpoch` + `lastCompletionContinuationHeldSetSorted` (line 699) | Bounded single-key, no transition complexity | `PARTIALLY_ELM_OWNED` (the held-set progress is already classified by the existing kernel) | REJECTED — too small; existing kernel already covers the classifier surface |
+| `Background-notify-authority` extension to the BCB aggregate | `consumeTerminal` (per-jobId) | `NoMarker \| OwnerMismatch \| ContainmentNoWake \| Held \| Drained` | `ALREADY_ELM_AUTHORITY` | REJECTED — per-jobId vs per-owner would create two independently authoritative kernels for the same facts |
+| `Completion-authority` extension to the BCB state machine | `canFinalize` / `isCompletionAuthorized` (the model) | `HoldCompletion \| AuthorizeContinuation \| AuthorizeTaskCompletion \| NoEffect` | `ALREADY_ELM_AUTHORITY` (gate) | REJECTED — gate, not owner; conflation would create two state machines in one kernel |
+| `Task-header-orchestration` extension | `selectTaskHeaderPresentation` | `PhaseIdle .. PhaseResumable` × `SourceHost \| SourceShadow \| SourceLegacy` | `ALREADY_ELM_AUTHORITY` | REJECTED — unrelated decision |
+| `setTurnPhase("completed", …)` effect | The C10 commit effect | A single `setTurnPhase` call | `TS_EFFECT_INTERPRETER_ONLY` | REJECTED — effect, not decision |
+| `getPendingPromptCount` / `getActiveNotifyCount` accessors | The live read paths | Synchronous accessors, no state | `UNOWNED_TS_AUTHORITY` | REJECTED — synchronous accessors, not state machines |
+
+**Elm overlap (no duplication risk):**
+
+| Existing Elm kernel | Owns | Does NOT own | New kernel overlap |
+| --- | --- | --- | --- |
+| `completion-authority` (SEAM01) | `TaskState` model; commit/authorize/hold effects | The BCB marker field; the four conservation checks | NONE — the new kernel runs BEFORE the gate at line 1275 |
+| `task-header-orchestration` (SEAM02) | TaskHeader presentation | Anything BCB | NONE — unrelated decision |
+| `completion-continuation-control` (SEAM04 + HELD-SET-PROGRESS-AUTHORITY01) | Pure `Facts -> Directive` for the enqueue decision | The BCB marker field; the four conservation checks; the reason-stamp lifecycle | NONE — the new kernel owns the marker, the existing kernel owns the enqueue classification |
+| `background-notify-authority` (SEAM04) | `consumeTerminal` per-jobId decision | The BCB aggregate; the marker | NONE — per-jobId vs per-owner; the new kernel consumes the `activeNotifyCount` aggregate as a read-only fact |
+
+**ECONOMICS_GATE = GO** (three decisive reasons, full report §4.1):
+
+1. **Substantive state-machine complexity** — 2-state marker with
+   16+ transition paths (4 conservation checks × 2 entrypoints ×
+   identity supersession × reason preservation × idempotent
+   re-stamp × dedupe slot × REARM/STALL lifetime
+   disambiguation). Resembles `State + Event → NewState +
+   Decision/Effects`, not `three flags → one Boolean`.
+2. **Nine named historical defect witnesses** all cluster
+   around the same barrier boundaries: BCB re-registration,
+   dedupe slot, marker reason-preservation, four conservation
+   checks. The current TS state machine is *too easy to break*;
+   the Elm migration would make invalid transitions
+   unrepresentable and pin the negative cases.
+3. **Safe interop** — the kernel is bounded to the synchronous
+   prefix of the marker transitions. No new `await` at any of
+   the four critical sections. No duplication of canonical
+   mutable TS state. No SDK→VS Code boundary violation. The
+   existing `completion-continuation-control-elm.ts` bridge is
+   reused unchanged.
+
+**Selected seam (full contract in
+`.factory/ACT-CLINEMM-ELM-SEAM07-LONG-HORIZON-CONTINUATION-RECON.md`
+§6):**
+
+- production entrypoint:
+  `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`
+- canonical state: the four private fields
+  (`deferredCompletionBarrier`,
+  `lastCompletionContinuationSessionEpoch`,
+  `lastCompletionContinuationControlFingerprint`,
+  `lastCompletionContinuationHeldSetSorted`) on
+  `SdkSessionEventCoordinator`
+- events: `BarrierMarkerSet` / `BarrierMarkerReevaluate` /
+  `BarrierMarkerReasonStamp` / `BarrierMarkerStaleClear` +
+  enqueue-family events
+- decisions: `Pass` / `Set` / `ReRegister` / `Stale` /
+  `Blocked` / `Deduped` / `NotHeld` / `ObservationUnavailable`
+- effects: the four private field writes + the existing
+  `setTurnPhase` / `enqueueCompletionContinuation` /
+  `captureContinuationCardinalityAuthorityRecord` /
+  `postStateToWebview` / `taskTelemetry?.recordRuntimeError`
+  / `Logger.warn` effects — all TS-owned, all preserved
+
+**Executed evidence (full report §3.7 and §10):**
+
+- `git rev-parse HEAD` → `eb3de47ab5b88a55ea15e768241e65efb6464cc2`
+- `git status --short` → empty
+- `git diff --check` → exit 0
+- `bun run test:unit --run` → 95 files, 1,261 tests PASS, 0 fail
+- `bun x vitest run long-horizon-outstanding-work-authority01.lhowa01-wire-authority.test.ts` → 2/2 PASS
+- `bun x vitest run completion-continuation-stalled-rearm-loop01.ccsrl01.test.ts` → 13/13 PASS
+- `bun x vitest run completion-continuation-stall-enforcement01.ccse01.test.ts completion-continuation-rearm01.rearm01.test.ts` → 12/12 + 12/12 PASS
+- Pre-existing baseline (documented in commit `acbfcf20a`,
+  verified unchanged): `bcb01` 1/14, `bcb01-c3` 5/6, `bcb01-c4`
+  1/5, `tqcb01` 5/15. The next ACT must NOT regress this
+  baseline; the implementation ACT must verify via
+  `git stash` + `bun x vitest run` on the predecessor HEAD.
+
+**Synchrony / causality:**
+
+- The C10 set site (line 2640) is fully synchronous; the new
+  kernel does NOT introduce an `await` at this site. The
+  kernel's directive is the result of the four conservation
+  predicates plus the identity-triple preservation check; the
+  TS adapter writes the marker synchronously in the same
+  critical section.
+- The C10 reeval synchronous prefix (line 980-1259) is fully
+  synchronous up to the existing
+  `await this.checkElmCompletionAuthority(...)` at line 1275.
+  The new kernel's directive for the synchronous prefix is
+  returned synchronously; the existing async hop is preserved
+  unchanged.
+- The Q5 reeval (line 813) is fully synchronous; the new
+  kernel's directive is returned synchronously.
+- The enqueue post-await (line 1562-1726) preserves the
+  existing `await pickContinuationDirectiveForPublication`;
+  the new kernel is consulted via a parallel
+  `pickBarrierDirective` call and the dedupe-permit branch
+  writes the marker synchronously after the existing await.
+- NO new critical section introduces a new `await`. This
+  honors the SEAM04 / SEAM06 lessons on the
+  `HALT_HELD_SET_PROGRESS_AUTHORITY_UNSAFE` / TOCTOU race.
+
+**Artifact identity:**
+
+- ENTRY_HEAD = `eb3de47ab5b88a55ea15e768241e65efb6464cc2`
+- SUBJECT_HEAD = `eb3de47ab5b88a55ea15e768241e65efb6464cc2` (matches)
+- BRANCH = `main`
+- WORKTREE_STATUS = clean
+
+**Residue:**
+
+- P0: none.
+- P1: none (the next ACT must not regress the pre-existing
+  baseline).
+- P2 NON-BLOCKING: the pre-existing baseline failures are
+  documented and preserved; the CTQC01
+  `observation_unavailable` bounded correlation guard may be
+  deferred to SEAM09 if the SEAM08 budget is exceeded; the
+  factory board entry for this ACT is staged and committed
+  per the factory board durability rule.
+
+**Next cursor:**
+
+`ACT-CLINEMM-ELM-SEAM08-DEFERRED-COMPLETION-BARRIER-AUTHORITY-MIGRATION`
+— the implementation cutover. The implementation ACT is the
+boundary between the SEAM07 recon and the SEAM09+ queue.
+
+**Production delta: ZERO.** No production code touched.
