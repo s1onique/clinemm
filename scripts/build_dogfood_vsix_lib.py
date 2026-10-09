@@ -483,6 +483,20 @@ _ELM_KERNELS: list = [
         "vsix_entry": "extension/runtime-assets/background-notify-authority.js",
         "vsix_sha_entry": "extension/runtime-assets/background-notify-authority.js.sha256",
     },
+    {
+        # ACT-CLINEMM-ELM-SEAM08-DEFERRED-COMPLETION-BARRIER-AUTHORITY-MIGRATION:
+        # adds the bounded E3.1 post-await decision authority to the
+        # dogfood VSIX. Mirrors the other four kernel rows exactly.
+        "name": "deferred-completion-barrier",
+        "build_script": "apps/vscode/elm/deferred-completion-barrier/scripts/build-elm.sh",
+        "source_js": "elm/deferred-completion-barrier/vendor/deferred-completion-barrier.js",
+        "source_sha": "elm/deferred-completion-barrier/vendor/deferred-completion-barrier.js.sha256",
+        "staged_dir": "runtime-assets",
+        "staged_name": "deferred-completion-barrier.js",
+        "staged_sha_name": "deferred-completion-barrier.js.sha256",
+        "vsix_entry": "extension/runtime-assets/deferred-completion-barrier.js",
+        "vsix_sha_entry": "extension/runtime-assets/deferred-completion-barrier.js.sha256",
+    },
 ]
 
 # Backwards-compatible single-kernel constants — preserved because
