@@ -23518,3 +23518,63 @@ P2 (non-blocking): retained.
 **No production code changed.** The C6 production cutover remains deferred to a follow-up ACT.
 
 **Next cursor:** `ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER` — items 3-7 of the reviewer's execution order: production-coordinator baseline tests, wire the Elm consult into E3.1, prove in-flight owner/epoch supersession, regression gates + Elm necessity, commit/package/qualify live.
+
+## ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER — CLOSED — 2026-10-09
+
+**Status:** CLOSED at C6 (production cutover landed).
+
+**Verdict:** Production E3.1 cutover is ACTIVE. The Elm consult is wired into `enqueueCompletionContinuationIfheld` with commit-time identity revalidation. The C4/C13 invariant is preserved (every non-directive consult + every stale-identity check falls through to the TS predecessor path).
+
+**HEAD progression:**
+- ENTRY_HEAD: `c1b550135a286f1ad36297f46b5cca3f06decda0` (SEAM08.1 closed)
+- CUTOVER_HEAD: `3b82ba8160d91dfaac7da18362e451e13e4a248f`
+- DOCS_HEAD: 3b82ba816 + ACT record
+
+**Summary of the production cutover:**
+
+REVIEWER P0 (SEAM08.1 closure): settlement guarantee FIXED at two layers.
+- `defaultInvokeElmKernel` schedules a per-requestId setTimeout (5s default) that rejects the Promise with `DeferredCompletionBarrierRequestTimeoutError` on timeout. The reject path maps to a `decode_error` consult via the C4/C13 conservation contract.
+- `consultDeferredCompletionBarrierElmKernel` adds a public-boundary Promise.race with `responseTimeoutMs` (default 5s) covering custom `invokeForProduction` paths. Every code path removes the entry via a `finally` block.
+
+REVIEWER P1 (SEAM08.1 closure): duplicate-ID safety FIXED at two layers.
+- Public boundary checks `_publicPendingByRequestId` before registration. A collision is rejected as `decode_error` with reason `duplicate_request_id`; the in-flight request is left untouched. This applies to BOTH the default and custom invoke paths.
+- `defaultInvokeElmKernel` also checks `kernel.pending` for defense-in-depth.
+
+C6 production cutover (LANDED):
+- New `consultE31BarrierForFacts` private method on `SdkSessionEventCoordinator`. Calls the new Elm consult and routes the typed outcome to one of: `fallthrough` / `permit` / `clear_rearm` / `already_sent` / `no_held_job_ids`.
+- C5 stale-decision guard: the helper RE-READS the live marker (sessionId / taskId / epoch / marker presence) AFTER the consult completes. If anything has drifted, the outcome is downgraded to `fallthrough` so the TS predecessor runs.
+- E3.1 wiring: the helper is called between the existing held-set-progress consult (L1562) and the existing TS dedupe branches (L1633-1685). The Elm directive's `mustClearRearm` overrides the TS L1633 branch on the Elm-directive path.
+- Production activator: `setDeferredCompletionBarrierElmProductionKernelPath` in `apps/vscode/src/extension.ts` (line ~384) following the existing 4 SEAM-kernel activation convention.
+
+**New tests:**
+- `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-settlement-and-dupes.dcbsd01.test.ts` (8 tests, DCBSD-01..08)
+- 8/8 PASS
+
+**Results:**
+- 8/8 new tests PASS
+- 34/34 SEAM08 + SEAM08.1 + SEAM08.2 substrate tests PASS
+- 132/132 SEAM-related + production-coordinator tests PASS (with the new consult active)
+- bcb01 1/14 matches the pre-existing baseline
+- TypeScript typecheck: PASS
+- biome check: PASS (one pre-existing warning unrelated to this ACT)
+- 0 ACT-owned new failures
+
+**C13 authority audit:**
+- Elm E3.1: ACTIVE in production via `consultE31BarrierForFacts`
+- E1.1 / E2.1: NOT IMPLEMENTED (skipped per SEAM08 graded authority)
+- TS synchronous prefixes: ALL preserved
+- TS emergency fallback: `ElmUnavailable_UsePredecessor` for every non-directive + every stale-identity check
+- existing completion-authority + completion-continuation-control kernels: unchanged
+
+**Files changed:**
+- `apps/vscode/src/sdk/deferred-completion-barrier-elm.ts` (P0/P1 fixes, public-level pending map, public-boundary timer)
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (E3.1 wiring, `consultE31BarrierForFacts` helper)
+- `apps/vscode/src/extension.ts` (production activator)
+- `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-settlement-and-dupes.dcbsd01.test.ts` (NEW)
+
+**No new ACTs needed for the next E3.1 surface.**
+
+**Next cursor:**
+1. C5 real in-flight owner/epoch supersession test (a dedicated test that races the live state with the consult resolution)
+2. SEAM04 LIVE qualification (outstanding; a separate cursor)
+3. C7 VSIX packaging + live smoke (a SEAM04 cursor)
