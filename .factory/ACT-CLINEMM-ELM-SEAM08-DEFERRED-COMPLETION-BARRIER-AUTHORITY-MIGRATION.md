@@ -6,7 +6,7 @@
 
 **Date:** 2026-10-09
 **Entry HEAD:** `44f0394be13b3eae3d8aeaff3589323ca41956e0`
-**Final HEAD:** see final commit (post-substrate)
+**Final HEAD:** `1f7d4e8a31a6c51a1e84b1c9706d384965331338` (substrate)
 **Branch:** `main`
 
 ---
