@@ -120,6 +120,14 @@ old_docs/**
 # apps/vscode/elm/completion-authority/scripts/build-elm.sh.
 !runtime-assets/completion-authority.js
 !runtime-assets/completion-authority.js.sha256
+!runtime-assets/background-notify-authority.js
+!runtime-assets/background-notify-authority.js.sha256
+!runtime-assets/completion-continuation-control.js
+!runtime-assets/completion-continuation-control.js.sha256
+!runtime-assets/deferred-completion-barrier.js
+!runtime-assets/deferred-completion-barrier.js.sha256
+!runtime-assets/task-header-orchestration.js
+!runtime-assets/task-header-orchestration.js.sha256
 
 # Ignore E2E build files
 e2e-build.mjs
