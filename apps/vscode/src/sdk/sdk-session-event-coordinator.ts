@@ -716,30 +716,28 @@ export class SdkSessionEventCoordinator {
 	private lastCompletionContinuationSessionEpoch: string | undefined
 
 	/**
-	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY:
+	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01:
 	 *
-	 * Production stall fingerprint — the LAST typed control actually
-	 * enqueued through this coordinator. The fingerprint is the
-	 * `(sessionId, taskId, completionStatus, requiredAction,
-	 * heldObservationCount, heldJobIds-fingerprint)` tuple the
-	 * `shouldStallSameStateControl` predicate derives. Production
-	 * scheduler consumes this on every trigger and STOPS the enqueue
-	 * when the new would-be control fingerprint equals the last
-	 * one (model has produced identical state ⇒ no progress ⇒
-	 * pathological continuation loop).
+	 * Canonical sorted snapshot of the held-job-ids set that produced
+	 * the LAST successful enqueue through this coordinator. Stored
+	 * separately from `lastCompletionContinuationControlFingerprint` so
+	 * the stall discriminator can perform a SET comparison (pure
+	 * superset ⇒ no progress ⇒ stall) rather than a coarse
+	 * string-equality check. The pre-fix fingerprint included the
+	 * held count and the raw sorted IDs, so a passive superset
+	 * accumulation (new background terminals arriving while the model
+	 * has no observation capability) would shift the fingerprint and
+	 * BYPASS the stall detector. Storing the sorted set explicitly
+	 * closes the LIVE stalled-rearm-loop defect.
 	 *
 	 * Cleared by `clearCompletionContinuationSentForTesting` (test
 	 * backdoor). Not cleared on epoch advance — a stall across an
 	 * epoch is a stall, regardless of epoch bump (BIND_TIMEs).
 	 *
-	 * The fingerprint is `O(1)` memory (a single string) and
-	 * bounded by the number of distinct (status, action, jobset)
-	 * tuples — usually 1 in production, so 1 slot is plenty. A
-	 * Map<String, number> was considered for multi-key tracking
-	 * but adds bookkeeping for no gain (the production flow does
-	 * not need historical stall records — it only needs "is the
-	 * LAST one stalled?").
+	 * `undefined` means "no prior successful enqueue"; the first
+	 * enqueue is always permitted.
 	 */
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: written by the production code (L1907 / L1962)
 	private lastCompletionContinuationControlFingerprint: string | undefined
 
 	/**

@@ -67,13 +67,6 @@ interface ContinuationSend {
 	readonly delivery: "queue"
 }
 
-interface ContinuationSend {
-	readonly sessionId: string
-	readonly taskId?: string | undefined
-	readonly prompt: string
-	readonly delivery: "queue"
-}
-
 interface QualificationHarness {
 	readonly coordinator: SdkSessionEventCoordinator
 	readonly sendLog: ContinuationSend[]
@@ -358,7 +351,8 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			// Release the invoke with a valid `PermitEnqueue`
 			// (the directive the kernel WOULD have returned for
 			// the A/epoch=7 facts). The C5 guard should reject it.
-			ctl.release(permitDirective(false, capturedRequestId!))
+			if (capturedRequestId === null) throw new Error("DCBR01-01: invoke was not entered before release")
+			ctl.release(permitDirective(false, capturedRequestId))
 
 			// Await the enqueue outcome.
 			const outcome = await enqueuePromise
@@ -402,7 +396,7 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 	describe("P0 #2: production necessity — the Elm directive governs the coordinator's outcome", () => {
 		it("DCBR01-02: a healthy `SuppressDuplicate` directive suppresses the enqueue with `already_sent`", async () => {
 			const h = makeHarness({ heldJobIds: ["j1", "j2"] })
-			h.installInvoke(async (facts) => suppressDuplicateDirective(facts.requestId!))
+			h.installInvoke(async (facts) => suppressDuplicateDirective(facts.requestId ?? ""))
 			const outcome = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
 			// The Elm consult said: a prior successful enqueue for
 			// THIS exact dedupe key has already happened. Suppress.
@@ -427,7 +421,7 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			internal.lastCompletionContinuationControlFingerprint = "fingerprint"
 			expect(internal.lastCompletionContinuationSessionEpoch).toBe("PREV")
 
-			h.installInvoke(async (facts) => permitDirective(true, facts.requestId!))
+			h.installInvoke(async (facts) => permitDirective(true, facts.requestId ?? ""))
 			const outcome = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
 			// The Elm consult said: real progress — release the
 			// REARM dedupe and let the enqueue proceed.
@@ -447,7 +441,7 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			const finalDedupe = internal.lastCompletionContinuationSessionEpoch
 			expect(finalDedupe).toBeDefined()
 			expect(finalDedupe).not.toBe("PREV")
-			expect(finalDedupe!.length).toBeGreaterThan(0)
+			expect(finalDedupe?.length).toBeGreaterThan(0)
 		})
 
 		it("DCBR01-04: a healthy `PreserveBarrier` directive suppresses the enqueue with `no_held_job_ids`", async () => {
@@ -458,7 +452,7 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			// and returns `preserve_barrier`. This simulates the
 			// race the Elm consult catches.
 			const h = makeHarness({ heldJobIds: [] })
-			h.installInvoke(async (facts) => preserveBarrierDirective(facts.requestId!))
+			h.installInvoke(async (facts) => preserveBarrierDirective(facts.requestId ?? ""))
 			const outcome = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 1, h.activeTaskId)
 			// The Elm consult said: the held set is empty at the
 			// consult point (race). Suppress.
@@ -501,7 +495,7 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 
 		it("DCBR01-07: a `decode_error` (malformed echo) consult falls through to the TS predecessor", async () => {
 			const h = makeHarness({ heldJobIds: ["j1", "j2"] })
-			h.installInvoke(async (facts) => decodeErrorMalformed(facts.requestId!))
+			h.installInvoke(async (facts) => decodeErrorMalformed(facts.requestId ?? ""))
 			const outcome = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
 			// The consult is non-directive (`decode_error`); the
 			// TS predecessor runs.
@@ -519,7 +513,7 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			// guard sees `!this.deferredCompletionBarrier` and
 			// returns `not_held`.
 			h.coordinator.setDeferredCompletionBarrierForTesting(undefined)
-			h.installInvoke(async (facts) => rejectStaleIdentityDirective("marker_absent", facts.requestId!))
+			h.installInvoke(async (facts) => rejectStaleIdentityDirective("marker_absent", facts.requestId ?? ""))
 			const outcome = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
 			// The TS predecessor's L1627 guard returns `not_held`
 			// because the live marker is gone.
