@@ -56,6 +56,21 @@ import {
 	recordUnconsumedTerminalCountRead,
 } from "./completion-continuation-upstream-runtime"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
+// ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER:
+// the bounded E3.1 post-await transition (the dedupe-vs-permit
+// decision) is migrated to a new Elm kernel. The production
+// seam consults the new kernel AFTER the existing held-set-
+// progress consult and BEFORE the TS-owned dedupe branches.
+// On a `directive` outcome, the host revalidates the live
+// (sessionId, taskId, epoch) identity BEFORE applying the
+// directive (C5 stale-decision / TOCTOU guard). On any
+// non-directive outcome (kernel_offline / decode_error /
+// no_decision), the host falls through to the original TS
+// predecessor path (C4 / C13 conservation).
+import {
+	consultDeferredCompletionBarrierElmKernel,
+	type DeferredCompletionBarrierFactsInput,
+} from "./deferred-completion-barrier-elm"
 import {
 	enterExtensionHostHotloopHandleSessionEvent,
 	isExtensionHostHotloopDiagnosticEnabled,
@@ -949,6 +964,120 @@ export class SdkSessionEventCoordinator {
 		return false
 	}
 
+	/**
+	 * ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER:
+	 * consult the deferred-completion-barrier Elm kernel for
+	 * the E3.1 dedupe-vs-permit decision. The host retains all
+	 * effect ownership; the Elm outcome routes to the existing
+	 * TS branches.
+	 *
+	 * Returns one of:
+	 *   "fallthrough"      — Elm unavailable, decoder failure,
+	 *                         no_response, or stale identity; the
+	 *                         original TS predecessor path runs.
+	 *   "permit"           — the Elm consult says: this is a fresh
+	 *                         obligation; fall through to the
+	 *                         existing dedupe check. The Elm's
+	 *                         `mustClearRearm` was already applied
+	 *                         (or not) at the consult site.
+	 *   "clear_rearm"      — the Elm consult says: real progress;
+	 *                         release the REARM dedupe. (Equivalent
+	 *                         to the TS L1633 branch.)
+	 *   "already_sent"     — the Elm consult says: a prior successful
+	 *                         enqueue for THIS exact dedupe key has
+	 *                         already happened. Suppress.
+	 *   "no_held_job_ids"  — the Elm consult says: the held set is
+	 *                         empty at the consult point. Suppress.
+	 *
+	 * C5 stale-decision guard: the host revalidates the live
+	 * identity AFTER the consult completes but BEFORE the
+	 * outcome is returned. If the live state has drifted
+	 * (sessionId / taskId / epoch / marker presence), the
+	 * outcome is downgraded to `fallthrough` so the TS
+	 * predecessor runs.
+	 */
+	private async consultE31BarrierForFacts(
+		facts: DeferredCompletionBarrierFactsInput,
+	): Promise<"fallthrough" | "permit" | "clear_rearm" | "already_sent" | "no_held_job_ids"> {
+		let consultResult: Awaited<ReturnType<typeof consultDeferredCompletionBarrierElmKernel>>
+		try {
+			consultResult = await consultDeferredCompletionBarrierElmKernel(facts)
+		} catch (err) {
+			// C4 / C13: the consult promise rejected; surface as
+			// fallthrough so the original TS path runs.
+			Logger.warn(
+				`[SdkController] E3.1 deferred-completion-barrier consult threw; falling through to TS predecessor: ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			)
+			return "fallthrough"
+		}
+		// C5 stale-decision guard (commit-time identity
+		// revalidation). RE-READ the live state after the
+		// consult completes; if the live state has drifted
+		// since the kernel computed the directive, the
+		// directive is stale and the TS predecessor runs.
+		// The host reads:
+		//   - sessionId: must equal facts.sessionId
+		//   - taskId:    must equal facts.taskId
+		//   - epoch:     must equal facts.markerEpoch
+		//   - marker:    must still be present
+		{
+			const liveMarker = this.deferredCompletionBarrier
+			if (!liveMarker) {
+				return "fallthrough"
+			}
+			if (liveMarker.sessionId !== facts.sessionId) {
+				return "fallthrough"
+			}
+			if (liveMarker.taskId !== facts.taskId) {
+				return "fallthrough"
+			}
+			if (liveMarker.epoch !== facts.markerEpoch) {
+				return "fallthrough"
+			}
+		}
+		// Non-directive outcomes (kernel_offline /
+		// decode_error / no_decision) are fail-closed; the
+		// TS predecessor path runs.
+		if (consultResult.kind !== "directive") {
+			return "fallthrough"
+		}
+		const v = consultResult.value
+		switch (v.kind) {
+			case "permit_enqueue":
+				// The Elm consult's `mustClearRearm` is the
+				// authoritative signal. The TS L1633 branch
+				// (in the caller's pre-cond state) was
+				// pre-Elm-cutover; under SEAM08.2 the Elm's
+				// signal drives the same effect. We surface
+				// `clear_rearm` to the caller so the caller
+				// can decide whether to clear the dedupe slot.
+				// Note: the caller's existing `if
+				// (priorSortedHeld !== undefined)` branch
+				// (TS L1633) STILL runs on the fallthrough
+				// path; under the Elm-directive path, the
+				// Elm's signal OVERRIDES the TS branch via
+				// the explicit `clear_rearm` return.
+				return v.mustClearRearm ? "clear_rearm" : "permit"
+			case "suppress_duplicate":
+				return "already_sent"
+			case "preserve_barrier":
+				return "no_held_job_ids"
+			case "reject_stale_identity":
+				// The kernel saw facts that the host would
+				// have also rejected (identity mismatch,
+				// marker absent, epoch mismatch). The host's
+				// commit-time revalidation would have caught
+				// the same case (or stricter) — the Elm's
+				// rejection is an early signal. Fall through
+				// to the TS predecessor for safety.
+				return "fallthrough"
+			default:
+				return "fallthrough"
+		}
+	}
+
 	async reevaluateDeferredCompletionBarrier(): Promise<void> {
 		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 		// U1 discriminator. Every call increments
@@ -1661,6 +1790,72 @@ export class SdkSessionEventCoordinator {
 			// `failureReason: "malformed_facts"` and the dedupe
 			// slot is preserved.
 			this.lastCompletionContinuationSessionEpoch = undefined
+		}
+		// ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER:
+		// the bounded E3.1 transition (the dedupe-vs-permit
+		// decision) is now owned by the new deferred-completion-
+		// barrier Elm kernel. The host consults the kernel
+		// AFTER the held-set-progress consult and BEFORE the
+		// TS-owned dedupe branches. The Elm consult is a pure
+		// projection; the host retains all effect ownership.
+		// The Elm outcome routes to the existing TS branches:
+		//
+		//   PermitEnqueue  { mustClearRearm=true }  -> clear REARM, fall through to dedupe check
+		//   PermitEnqueue  { mustClearRearm=false } -> fall through to dedupe check
+		//   SuppressDuplicate                       -> emit already_sent (L1665 equivalent)
+		//   PreserveBarrier                          -> emit no_held_job_ids (L1678 equivalent)
+		//   RejectStaleIdentity                     -> fall through to ElmUnavailable_UsePredecessor
+		//   (kernel_offline / decode_error / no_decision / no_response)
+		//                                           -> fall through to ElmUnavailable_UsePredecessor
+		//
+		// C5 stale-decision guard: the host revalidates the
+		// live identity (sessionId, taskId, epoch, marker
+		// present) BEFORE applying the directive. If the live
+		// state has drifted since the consult, the directive
+		// is rejected and the host falls through to the TS
+		// predecessor path.
+		{
+			const e31Outcome = await this.consultE31BarrierForFacts({
+				sessionId: activeSessionId,
+				taskId,
+				markerSessionId: this.deferredCompletionBarrier?.sessionId ?? "",
+				markerTaskId: this.deferredCompletionBarrier?.taskId,
+				markerEpoch: this.deferredCompletionBarrier?.epoch ?? -1,
+				currentEpoch: epoch,
+				continuationSessionEpoch,
+				lastContinuationSessionEpoch: this.lastCompletionContinuationSessionEpoch,
+				currentHeldSetSorted: nextSortedHeld,
+				priorHeldSetSorted: this.lastCompletionContinuationHeldSetSorted,
+				heldJobCount: heldJobIds.length,
+				liveMarkerPresent: this.deferredCompletionBarrier !== undefined,
+			})
+			if (e31Outcome === "fallthrough") {
+				// Elm unavailable or rejected stale identity;
+				// the original TS path continues to run. No
+				// effect on the dedupe slot or the marker.
+			} else if (e31Outcome === "clear_rearm") {
+				// Real progress signal from the Elm consult;
+				// release the REARM dedupe. (Equivalent to the
+				// TS L1633 branch.)
+				this.lastCompletionContinuationSessionEpoch = undefined
+			} else if (e31Outcome === "already_sent") {
+				// Elm consult says: a prior successful
+				// enqueue for THIS exact dedupe key has
+				// already happened. Suppress.
+				recordDedupeSuppressed()
+				return Promise.resolve({ kind: "already_sent", continuationSessionEpoch })
+			} else if (e31Outcome === "no_held_job_ids") {
+				// Elm consult says: the held set is empty at
+				// the consult point (race between the
+				// heldJobIds read and the consult). Suppress.
+				recordNoHeldJobIds()
+				return Promise.resolve({ kind: "no_held_job_ids", heldJobIds })
+			}
+			// else "permit" -> fall through to the existing
+			// dedupe check below. The Elm consult's
+			// `mustClearRearm` was already applied above
+			// (or not), so the L1633 branch is now controlled
+			// by the Elm consult.
 		}
 		if (this.lastCompletionContinuationSessionEpoch === continuationSessionEpoch) {
 			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:

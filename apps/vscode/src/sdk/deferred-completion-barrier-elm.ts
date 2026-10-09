@@ -208,15 +208,62 @@ function nextRequestId(): string {
 }
 
 /**
- * REVIEWER P1: bounded response timeout. The production
- * consults do NOT use a deadline — the production consult
- * blocks on the pending map resolver, which only fires on
- * the matched response or on coordinator disposal. A
- * bounded timeout may be added in the cutover ACT as a test
- * guard (per ACT §C1: "A bounded timeout may be used as a
- * test guard. Do not promote an arbitrary 50 ms test
- * deadline to a production SLA.").
+ * ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER (REVIEWER P0):
+ * bounded response timeout. Every pending request MUST
+ * eventually resolve or reject; its map entry MUST be removed.
+ * The default is conservative (5 seconds) - long enough to
+ * absorb a single Platform.worker flush + outbound routing
+ * under any realistic load, short enough that a hung Elm
+ * kernel cannot pin a coordinator promise indefinitely.
+ *
+ * This is NOT a production SLA - it is the settlement
+ * guarantee. The cutover ACT may lower this for specific
+ * coordinator paths (e.g. terminal-idle re-eval) but the
+ * adapter-level default is intentionally conservative.
+ *
+ * The reject path maps to the existing C4 conservation
+ * contract: `no_response -> ElmUnavailable_UsePredecessor` -
+ * the `Promise` rejection is caught by
+ * `consultDeferredCompletionBarrierElmKernel`'s try/catch and
+ * surfaced as a `decode_error` consult, which the production
+ * caller falls through to the original TS predecessor path.
  */
+const DEFAULT_RESPONSE_TIMEOUT_MS = 5_000
+
+/**
+ * ACT-CLINEMM-ELM-SEAM08.2 (REVIEWER P0): the error class
+ * raised when a pending request times out. Surfaced via the
+ * public-adapter boundary as a `decode_error` consult.
+ */
+class DeferredCompletionBarrierRequestTimeoutError extends Error {
+	constructor(
+		public readonly requestId: string,
+		public readonly timeoutMs: number,
+	) {
+		super(`[deferred-completion-barrier-elm] no_response within ${timeoutMs}ms (requestId=${requestId})`)
+		this.name = "DeferredCompletionBarrierRequestTimeoutError"
+	}
+}
+
+/**
+ * ACT-CLINEMM-ELM-SEAM08.2 (REVIEWER P1): public-level
+ * pending-request map. The default invoke path uses
+ * `kernel.pending` (an Elm-kernel-internal map); the public
+ * boundary needs its own map to enforce duplicate-ID
+ * rejection when a custom `invokeForProduction` is supplied
+ * (the public boundary never touches `kernel.pending`).
+ *
+ * The two maps are kept in sync via the `defaultInvokeElmKernel`
+ * path; a public consult that uses a custom
+ * `invokeForProduction` only uses this public map.
+ *
+ * The map is intentionally separate from `kernel.pending` to
+ * keep the kernel-side concern (per-requestId routing of
+ * Elm outbound messages) decoupled from the public-adapter
+ * concern (settlement guarantee + duplicate-ID rejection at
+ * the public boundary).
+ */
+const _publicPendingByRequestId = new Map<string, true>()
 
 function loadCompiledElmKernel(): ElmKernelHandle | null {
 	if (_kernelInstance) {
@@ -568,25 +615,76 @@ async function defaultInvokeElmKernel(facts: DeferredCompletionBarrierFactsJson)
 	// `Decode.decodeString` parses it and the strict-typing
 	// checks fire.
 	const wireValue = JSON.stringify(facts)
-	// REVIEWER P0: register a per-requestId pending resolver
-	// BEFORE sending the inbound payload. The Elm kernel will
-	// emit the outbound message on the next event-loop tick;
-	// the pending map dispatches it to this consult's resolver
-	// only. A second concurrent consult with a different
-	// requestId will register a separate pending entry and
-	// will not see this consult's response.
+	// REVIEWER P1 (SEAM08.2): duplicate-requestId safety. If
+	// the same explicit requestId is already in flight, the
+	// in-flight request is left UNTOUCHED and this call is
+	// rejected as a contract violation. The pending map is
+	// not overwritten (so the original caller keeps its
+	// resolver). A genuine collision is rare in production
+	// (the default `nextRequestId()` is opaque + monotonic)
+	// but the public API explicitly accepts caller-supplied
+	// requestIds and must defend against them.
+	if (kernel.pending.has(requestId)) {
+		_decodeErrorCounter += 1
+		Logger.error(
+			`[deferred-completion-barrier-elm] duplicate_request_id: requestId=${requestId} already in flight; in-flight request untouched`,
+		)
+		return {
+			kind: "decode_error",
+			reason: `duplicate_request_id: requestId=${requestId} already in flight`,
+			classification: "deferred_completion_barrier_elm_decode_error",
+			requestId,
+		}
+	}
+	// REVIEWER P0 (SEAM08.2): register a per-requestId pending
+	// resolver BEFORE sending the inbound payload. The Elm
+	// kernel will emit the outbound message on the next
+	// event-loop tick; the pending map dispatches it to this
+	// consult's resolver only. The Promise is bounded by
+	// `responseTimeoutMs` so a hung kernel cannot pin the
+	// coordinator indefinitely. On settlement (response OR
+	// timeout OR sendInbound throw) the entry is removed
+	// from the pending map and the timer is cleared.
 	const response = await new Promise<unknown>((resolve, reject) => {
-		const entry: PendingRequest = {
-			resolve,
-			reject,
-			timer: null,
+		let entry: PendingRequest | null = null
+		const timeoutHandle = setTimeout(() => {
+			if (entry === null) return
+			const current = kernel.pending.get(requestId)
+			if (current === entry) {
+				kernel.pending.delete(requestId)
+			}
+			entry = null
+			reject(new DeferredCompletionBarrierRequestTimeoutError(requestId, DEFAULT_RESPONSE_TIMEOUT_MS))
+		}, DEFAULT_RESPONSE_TIMEOUT_MS)
+		entry = {
+			resolve: (v: unknown) => {
+				if (entry === null) return
+				clearTimeout(timeoutHandle)
+				if (kernel.pending.get(requestId) === entry) {
+					kernel.pending.delete(requestId)
+				}
+				entry = null
+				resolve(v)
+			},
+			reject: (err: Error) => {
+				if (entry === null) return
+				clearTimeout(timeoutHandle)
+				if (kernel.pending.get(requestId) === entry) {
+					kernel.pending.delete(requestId)
+				}
+				entry = null
+				reject(err)
+			},
+			timer: timeoutHandle,
 		}
 		kernel.pending.set(requestId, entry)
 		try {
 			kernel.sendInbound(wireValue)
 		} catch (err) {
-			kernel.pending.delete(requestId)
-			reject(err instanceof Error ? err : new Error(String(err)))
+			// The entry's own reject handler will clear the
+			// timer and delete the pending entry. We do not
+			// need a separate cleanup here.
+			entry.reject(err instanceof Error ? err : new Error(String(err)))
 		}
 	})
 	const out = response as OutboundMessage | null
@@ -621,18 +719,65 @@ export async function consultDeferredCompletionBarrierElmKernel(
 	options?: {
 		readonly invokeForProduction?: (facts: DeferredCompletionBarrierFactsJson) => Promise<DeferredCompletionBarrierElmConsult>
 		readonly requestId?: string | null
+		readonly responseTimeoutMs?: number
 	},
 ): Promise<DeferredCompletionBarrierElmConsult> {
 	const requestId = options?.requestId ?? nextRequestId()
 	const invoke = options?.invokeForProduction ?? defaultInvokeElmKernel
+	// REVIEWER P1 (SEAM08.2): duplicate-requestId safety at
+	// the PUBLIC boundary (independent of which invoke is
+	// used). The default-invoke path ALSO checks
+	// `kernel.pending` for the same key (a defense-in-depth
+	// measure), but the public-level check fires first and
+	// applies to BOTH the default and custom invoke paths.
+	if (_publicPendingByRequestId.has(requestId)) {
+		_decodeErrorCounter += 1
+		Logger.error(
+			`[deferred-completion-barrier-elm] duplicate_request_id: requestId=${requestId} already in flight at public boundary; in-flight request untouched`,
+		)
+		return {
+			kind: "decode_error",
+			reason: `duplicate_request_id: requestId=${requestId} already in flight`,
+			classification: "deferred_completion_barrier_elm_decode_error",
+			requestId,
+		}
+	}
+	_publicPendingByRequestId.set(requestId, true)
 	const facts = buildDeferredCompletionBarrierFactsJson(input, requestId)
+	// REVIEWER P0 (SEAM08.2): race the public-adapter
+	// Promise against the same settlement guarantee the
+	// default-invoke path uses. Without this outer race, a
+	// custom `invokeForProduction` that never resolves
+	// (or one that hangs under load) would pin the
+	// coordinator Promise indefinitely. The C4 conservation
+	// contract requires every consult to eventually surface
+	// `no_response` -> `ElmUnavailable_UsePredecessor`.
+	const timeoutMs = options?.responseTimeoutMs ?? DEFAULT_RESPONSE_TIMEOUT_MS
+	let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+	const timeoutPromise = new Promise<DeferredCompletionBarrierElmConsult>((resolve) => {
+		timeoutHandle = setTimeout(() => {
+			_decodeErrorCounter += 1
+			Logger.error(
+				`[deferred-completion-barrier-elm] no_response within ${timeoutMs}ms at public boundary (requestId=${requestId})`,
+			)
+			resolve({
+				kind: "decode_error",
+				reason: `no_response: consult did not settle within ${timeoutMs}ms`,
+				classification: "deferred_completion_barrier_elm_decode_error",
+				requestId,
+			})
+		}, timeoutMs)
+	})
 	try {
-		const result = await invoke(facts)
+		const invokePromise = invoke(facts)
+		const result = await Promise.race([invokePromise, timeoutPromise])
+		if (timeoutHandle !== null) clearTimeout(timeoutHandle)
 		// REVIEWER P1: every result passes through the strict
 		// public-adapter boundary validator. A custom
 		// `invokeForProduction` cannot bypass fail-closed.
 		return validateConsultResult(result, requestId)
 	} catch (err) {
+		if (timeoutHandle !== null) clearTimeout(timeoutHandle)
 		Logger.error(`[deferred-completion-barrier-elm] kernel threw: ${err instanceof Error ? err.message : String(err)}`)
 		_decodeErrorCounter += 1
 		return {
@@ -641,6 +786,14 @@ export async function consultDeferredCompletionBarrierElmKernel(
 			classification: "deferred_completion_barrier_elm_decode_error",
 			requestId,
 		}
+	} finally {
+		// REVIEWER P1 (SEAM08.2): the public-level pending
+		// entry MUST be removed on EVERY code path (success,
+		// failure, timeout, duplicate-rejection). Without
+		// the `finally`, a hung invoke or a thrown error would
+		// leak the entry and deadlock the next consult with
+		// the same requestId.
+		_publicPendingByRequestId.delete(requestId)
 	}
 }
 
@@ -654,4 +807,9 @@ export function getDeferredCompletionBarrierElmAuthorityCounters(): {
 export function resetDeferredCompletionBarrierElmAuthorityForTests(): void {
 	_kernelOfflineCounter = 0
 	_decodeErrorCounter = 0
+	// ACT-CLINEMM-ELM-SEAM08.2 (REVIEWER P1): the public
+	// pending map must be cleared between tests so a leaked
+	// entry from a hung test does not deadlock the next
+	// test's first consult.
+	_publicPendingByRequestId.clear()
 }

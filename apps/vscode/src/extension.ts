@@ -12,6 +12,7 @@ import { setCompletionContinuationControlElmProductionKernelPath } from "@/sdk/c
 import { dumpExtensionSideCompletionContinuationDeliveryCounters } from "@/sdk/completion-continuation-delivery-runtime-host"
 import { dumpExtensionSideCompletionContinuationUpstreamCounters } from "@/sdk/completion-continuation-upstream-runtime-host"
 import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
+import { setDeferredCompletionBarrierElmProductionKernelPath } from "@/sdk/deferred-completion-barrier-elm"
 import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
@@ -379,6 +380,19 @@ export async function activate(context: vscode.ExtensionContext) {
 	// non-shipped source-tree path.
 	setBackgroundNotifyAuthorityElmProductionKernelPath(
 		path.join(context.extensionUri.fsPath, "runtime-assets", "background-notify-authority.js"),
+	)
+	// ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER:
+	// pin the production kernel path for the deferred-completion-
+	// barrier Elm kernel. Mirrors the activation wiring of the
+	// other four kernels (the 5th row of `_ELM_KERNELS` in
+	// `scripts/build_dogfood_vsix_lib.py` stages this kernel
+	// into the VSIX at
+	// `extension/runtime-assets/deferred-completion-barrier.js`).
+	// The pin is set BEFORE the first consult so the loader
+	// reads the staged runtime asset, not a non-shipped
+	// source-tree path.
+	setDeferredCompletionBarrierElmProductionKernelPath(
+		path.join(context.extensionUri.fsPath, "runtime-assets", "deferred-completion-barrier.js"),
 	)
 	if (elmAuthorityActivation.enabled) {
 		Logger.log(`[ELM-AUTHORITY] enabled=true kernelPath=${elmAuthorityActivation.kernelPath}`)
