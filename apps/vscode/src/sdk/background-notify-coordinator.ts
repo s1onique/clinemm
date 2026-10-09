@@ -996,6 +996,38 @@ const defaultElmAuthority: ConsumeTerminalAuthorityFn = async (input) => invokeE
  */
 export class BackgroundNotifyCoordinator {
 	private readonly notificationMarkers = new Map<string, NotificationMarker>()
+	/**
+	 * ACT-CLINEMM-ELM-SEAM04-CORRECTION01 (P0):
+	 *
+	 * Reserved markers — moved out of `notificationMarkers`
+	 * synchronously at `consumeTerminal` entry, held here until
+	 * the Elm kernel decision is interpreted. This is the
+	 * bounded repair for the obligation-conservation gap
+	 * identified by the Factory reviewer:
+	 *
+	 *   - The original SEAM04 cutover deleted the marker
+	 *     synchronously at L1763, BEFORE awaiting the Elm
+	 *     kernel. On a classified failure (`kernel_offline`,
+	 *     `decode_error`, `response_timeout`,
+	 *     `response_mismatch`), the marker was already gone
+	 *     and `resolveObligation` (Path B) had nothing to
+	 *     drain — the notification obligation was silently
+	 *     lost.
+	 *   - The CORRECTION01 fix preserves the marker during
+	 *     the Elm decision. The marker is moved to
+	 *     `reservedMarkers` at entry (so a second
+	 *     `consumeTerminal` for the same jobId still sees
+	 *     no_marker — race-free ownership). On a healthy
+	 *     Elm decision (drained / held / containment_no_wake)
+	 *     the reserved marker is consumed. On
+	 *     `owner_mismatch` the reserved marker is RESTORED
+	 *     to `notificationMarkers` (so a future terminal
+	 *     event for the same jobId under the same owner
+	 *     is processable). On a classified failure, the
+	 *     reserved marker is RESTORED — Path B
+	 *     `resolveObligation` can then drain the obligation.
+	 */
+	private readonly reservedMarkers = new Map<string, NotificationMarker>()
 	private readonly heldTerminalResults = new Map<string, TerminalNotification[]>()
 	/**
 	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02:
@@ -1754,12 +1786,21 @@ export class BackgroundNotifyCoordinator {
 		if (this.disposed) {
 			return { kind: "no_marker" }
 		}
+		// ACT-CLINEMM-ELM-SEAM04-CORRECTION01 (P0): the marker is
+		// moved from `notificationMarkers` to `reservedMarkers` at
+		// entry (not deleted). A second `consumeTerminal` for the
+		// same jobId still sees no_marker (reservedMarkers is NOT
+		// consulted by the marker-read below). The reserved marker
+		// is consumed on a healthy policy decision and RESTORED
+		// on owner_mismatch or classified failure — preserving
+		// the notification obligation for Path B recovery.
 		const marker = this.notificationMarkers.get(input.jobId)
 		if (!marker) {
 			// Synchronous no_marker — no authority call needed.
 			this.recordDecision(input.jobId, "no_marker", undefined, 0, 0)
 			return { kind: "no_marker" }
 		}
+		this.reservedMarkers.set(input.jobId, marker)
 		this.notificationMarkers.delete(input.jobId)
 
 		// Snapshot the facts SYNCHRONOUSLY so the Elm policy sees
@@ -1797,17 +1838,36 @@ export class BackgroundNotifyCoordinator {
 		const authorityFn = this.options.consumeTerminalAuthority ?? defaultElmAuthority
 		const audit = await authorityFn(elmFacts)
 
+		// CORRECTION01 (P1 SEQ-9): if `dispose()` ran while the
+		// Elm decision was in flight, the post-await effect
+		// interpreter MUST NOT commit external effects (no wake
+		// dispatch, no audit-record classification of a
+		// healthy decision). The reserved marker is restored
+		// to `notificationMarkers` so the obligation is
+		// available for any subsequent `resolveObligation` call
+		// (dispose clears both maps, so this is defensive).
+		if (this.disposed) {
+			this.notificationMarkers.set(input.jobId, marker)
+			this.reservedMarkers.delete(input.jobId)
+			this.recordDecision(input.jobId, "no_marker", "disposed_while_in_flight", 0, 0)
+			return { kind: "no_marker" }
+		}
+
 		// Classify the audit. A `directive` carries the typed
 		// decision. Anything else is a classified infrastructure
-		// failure; the marker is already deleted (N9 containment
-		// deletion + standard pre-decision delete), the obligation
-		// is preserved for the next authority, and the audit sink
-		// records `no_marker` with the failure class as the reason
-		// for diagnostics.
+		// failure; the marker is RESTORED to `notificationMarkers`
+		// so `resolveObligation` (Path B) can drain the obligation
+		// on a subsequent `command_status` observation. The audit
+		// sink records `no_marker` with the failure class as the
+		// reason for diagnostics.
 		if (audit.kind !== "directive") {
 			const requestIdPart =
 				audit.kind === "decode_error" || audit.kind === "response_mismatch" ? `:${audit.requestId ?? ""}` : ""
 			const reason = `${audit.kind}${requestIdPart}`
+			// RESTORE the marker — obligation is preserved for
+			// Path B recovery.
+			this.notificationMarkers.set(input.jobId, marker)
+			this.reservedMarkers.delete(input.jobId)
 			this.recordDecision(input.jobId, "no_marker", reason, 0, 0)
 			return { kind: "no_marker" }
 		}
@@ -1824,23 +1884,22 @@ export class BackgroundNotifyCoordinator {
 		// matching the predecessor semantics.
 		switch (decision.kind) {
 			case "no_marker": {
-				// The Elm policy decided no_marker. The marker
-				// was already deleted synchronously; record the
-				// decision for the audit sink.
+				// The Elm policy decided no_marker. Consume the
+				// reserved marker (it was moved to reservedMarkers
+				// at entry; we now drop it because the policy
+				// verdict is no_marker).
+				this.reservedMarkers.delete(input.jobId)
 				this.recordDecision(input.jobId, "no_marker", undefined, 0, 0)
 				return { kind: "no_marker" }
 			}
 			case "owner_mismatch": {
-				// Restore the marker — owner_mismatch MUST NOT
+				// RESTORE the marker — owner_mismatch MUST NOT
 				// delete the marker (a future terminal event for
 				// the same jobId under the SAME owner should
-				// still be processable). The predecessor at
-				// L1685 also deleted before checking owner; the
-				// Elm policy flips this to preserve the marker.
-				// Restore + record + return.
-				if (!this.notificationMarkers.has(input.jobId)) {
-					this.notificationMarkers.set(input.jobId, marker)
-				}
+				// still be processable). The reserved marker
+				// (from L1803) is moved back to notificationMarkers.
+				this.notificationMarkers.set(input.jobId, marker)
+				this.reservedMarkers.delete(input.jobId)
 				const ownerKeyPair = activeOwnerAtEntry
 					? `active=${activeOwnerAtEntry.sessionId}/${activeOwnerAtEntry.taskId ?? ""} vs marker=${marker.sessionId}/${marker.taskId ?? ""}`
 					: "owner_absent"
@@ -1853,8 +1912,9 @@ export class BackgroundNotifyCoordinator {
 			}
 			case "containment_no_wake": {
 				// The marker was already deleted upstream per the
-				// N9 contract. The TS effect interpreter records
-				// the decision and returns.
+				// N9 contract. Consume the reserved marker and
+				// return.
+				this.reservedMarkers.delete(input.jobId)
 				this.recordDecision(input.jobId, "containment_no_wake", undefined, 0, 0)
 				return { kind: "containment_no_wake", jobId: decision.jobId }
 			}
@@ -1864,7 +1924,10 @@ export class BackgroundNotifyCoordinator {
 					// Defensive: Elm should not return `held`
 					// without an active owner (the policy gates
 					// on NoActiveOwner BEFORE Held). If it does,
-					// record and treat as no_marker.
+					// record and treat as no_marker; restore the
+					// marker so Path B can still drain it.
+					this.notificationMarkers.set(input.jobId, marker)
+					this.reservedMarkers.delete(input.jobId)
 					this.recordDecision(input.jobId, "no_marker", "elm_held_no_active_owner", 0, 0)
 					return { kind: "no_marker" }
 				}
@@ -1887,6 +1950,11 @@ export class BackgroundNotifyCoordinator {
 			case "drained": {
 				const activeOwner = activeOwnerAtEntry
 				if (!activeOwner) {
+					// Defensive: Elm should not return `drained`
+					// without an active owner. Restore the marker
+					// so Path B can still drain it.
+					this.notificationMarkers.set(input.jobId, marker)
+					this.reservedMarkers.delete(input.jobId)
 					this.recordDecision(input.jobId, "no_marker", "elm_drained_no_active_owner", 0, 0)
 					return { kind: "no_marker" }
 				}
@@ -2065,6 +2133,10 @@ export class BackgroundNotifyCoordinator {
 		}
 		this.disposed = true
 		this.notificationMarkers.clear()
+		// ACT-CLINEMM-ELM-SEAM04-CORRECTION01: clear reserved
+		// markers too (they would otherwise leak across a
+		// dispose/recreate lifecycle).
+		this.reservedMarkers.clear()
 		this.heldTerminalResults.clear()
 		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
 		// CORRECTION02: dual-delivery arbitration tracker is
