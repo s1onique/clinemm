@@ -22588,3 +22588,64 @@ REPAIRED sequence is proven.
 - ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01 (PASS_COALESCED_CONTINUATION_GUARD_PRELIVE) — established the BCB re-registration bounded correlation guard at line 2704-2734.
 
 This ACT is built on the verified state at HEAD 432f483c7, with one bounded production repair at the predicted site. The 25-test ablation (4 CRCD01 + 14 CCUTO01 + 7 UCHC01) all PASS.
+
+## ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01 — PASS_NONTERMINAL_COMMAND_RESULT_CLASSIFICATION_PRELIVE — 2026-10-09
+
+**Status:** CLOSED with verdict `PASS_NONTERMINAL_COMMAND_RESULT_CLASSIFICATION_PRELIVE`. A bounded single-source repair closed the P0-A live-specimen defect (`{ status: "running", jobId, elapsedMs: 15001, ... }` rendered as `Run failed` chat-row pill). The P0-B post-turn presentation defect remains open and is the explicit successor ACT (`ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01`).
+
+**Causal discriminator: PROJECTION_DESYNC.** The per-job `backgroundCommandJobStates` projection map can be written terminal by the runner-driven `terminalPromise.then` listener at `vscode-run-commands-tool.ts:902-904, 1034-1037` (e.g. a one-shot `command_job_containment_failed` emit that fires while the job is actually still alive, or a stale terminal write that survived a session/task boundary). The chat row's `liveProjectionValue` reads the stale terminal value from the projection map and renders the `Run failed` pill (`CommandStatusMap.containment_failed === "Run failed"` at `apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx:367`), even though the latest canonical `command_status` observation says `state: "running"`. The `command_status` tool (the canonical nonterminal observation seam) was the only seam that could safely reconcile the projection back to `running` — and it did not.
+
+**Bounded repair**: extend `command_status` to fire a per-call `onRunningObserved(jobId)` callback when the manager snapshot's state is `"running"`. Wire the callback from `vscode-runtime-builder.ts:277-282` to the existing `onBackgroundStateChange` (which the production `SdkController.updateBackgroundCommandState` already maps to the per-job projection map; the function is idempotent — already-running entries are a no-op via the `didProjectionChange` short-circuit at `SdkController.ts:5308-5314`). Fire-and-forget (no awaited promise) so the tool's return payload is not blocked on the projection reconciliation; the next `getStateToPostToWebview()` post picks up the change.
+
+**Production delta**: 67 lines added, 0 removed, 2 files.
+
+```
+apps/vscode/src/sdk/command-status-tool.ts    | 48 +++++++++++++++++++++++++++
+apps/vscode/src/sdk/vscode-runtime-builder.ts | 19 +++++++++++
+```
+
+**Tests**: new `apps/vscode/src/sdk/__tests__/run-commands-nonterminal-classification01.rcnc01.test.ts` (5 tests):
+
+| Test                       | What it pins                                                                      | Pre-repair | Post-repair |
+| -------------------------- | -------------------------------------------------------------------------------- | ---------- | ----------- |
+| RCNC-01                    | The original contradiction: `command_status` reconciles a stale terminal projection | RED       | GREEN       |
+| RCNC-02                    | Real command failure: terminal `exited` does NOT re-flip the projection to `running` | GREEN     | GREEN       |
+| RCNC-04                    | Terminal publication: a final terminal observation publishes once, projection stays `terminal` | GREEN | GREEN       |
+| RCNC-05                    | Cancellation: `cancelled` projection preserved; `onRunningObserved` does not fire on terminal | GREEN     | GREEN       |
+| RCNC-06                    | Wait budget / execution deadline: the fix does NOT change those semantics       | GREEN     | GREEN       |
+
+Ablation confirmed: `git stash push` of both production files; RCNC-01 returns to RED. `git stash pop` restores GREEN.
+
+**Conservation properties (per ACT §6)**:
+
+| Invariant                                                         | Verified by          |
+| ----------------------------------------------------------------- | -------------------- |
+| Nonterminal running response NOT fabricated as terminal failure   | RCNC-01              |
+| Real command failure still reports as failed                       | RCNC-02              |
+| Cancellation still distinguished from success                      | RCNC-05              |
+| Repeated observation — no duplicate job identity                   | idempotency of `updateBackgroundCommandState` |
+| Unconsumed terminal observation — never silently acknowledged       | RCNC-02/04/05        |
+| Completion attempt — no fabricated `task_completion_committed`     | by inspection        |
+| STALL/REARM / Completion Authority unchanged                       | by inspection        |
+| Background-notify exactly-once delivery semantics unchanged        | by inspection        |
+
+**Gates**:
+- `bun vitest run --config vitest.config.ts src/sdk/__tests__/run-commands-nonterminal-classification01.rcnc01.test.ts` → 5 passed
+- `bun run check-types` → exit 0
+- `bun run lint` → "Checked 2198 files in 1625ms. No fixes applied." + proto-lint exit 0
+- `git diff --check` → exit 0
+- Conservation: BCTCP01 (controller / multi-job / runner-controller-composition), BCCOC01, BCTPA01, ACG01, message-translator, vscode-run-commands-tool → all PASS
+
+**Pre-existing failures (NOT introduced by this ACT)**: `src/sdk/sdk-session-event-coordinator.test.ts` has 2 pre-existing RED tests (`CPL02`, `OWN01`) documented in the SEAM04 closure artifact as "RED documenting desired state". Verified by `git stash push` of the bounded fix — they fail identically with and without the fix. These are P0 / P1 post-correction ACTs left for successor work and are out of scope for this P0-A.
+
+**VSIX: NOT_EXECUTED.** Operator owns exact-head packaging and LIVE qualification per the brief's C13 directive.
+
+**Forward-look (frozen)**: P0-B (`ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01`) remains open. Its known LIVE evidence is the post-turn `Runtime turn: completed / Canonical shadow: completed / Legacy phase: streaming / Publication binding: UNBOUND / Task completion committed: 0 / Held terminal observations: nonzero` divergence. The bounded fix in this ACT is strictly scoped to the per-call `onRunningObserved` callback in the `command_status` tool — it does NOT touch the Task Header, the Elm phase authority, the `updateBackgroundCommandState` terminal-state union, or the `backgroundCommandJobStates` field shape. No edits to those seams are authorized by the present ACT.
+
+**Predecessor ACT lineage**:
+- ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER (PASS_ELM_SEAM04_AUTHORITY_CUTOVER) — closed 2026-10-09 against HEAD 050641f5e.
+- ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 (correction01) — established the per-job `backgroundCommandJobStates` projection map and the runner's per-job start/terminal emission.
+- ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01 (CCDS01) — established the typed completion-continuation consumer seam that the Elm SEAM04 path uses.
+- ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 / BCTCP-01 — the original per-job `backgroundCommandJobStates` matrix.
+
+The fix is built on the verified state at HEAD 050641f5e, with one bounded production repair at the predicted site. The 5-test ablation (RCNC-01..06) all PASS post-repair, with RCNC-01 being the only RED pre-repair.

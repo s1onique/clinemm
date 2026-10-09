@@ -274,10 +274,28 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 			// resolver through to `command_status` so terminal-state
 			// observation drains the notify marker (Path B resolution
 			// source — the canonical fix for TQ3_RESULT_OBSERVATION_NOT_CONNECTED).
+			//
+			// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01:
+			// thread the host's `onBackgroundStateChange` callback into
+			// the `command_status` tool's `onRunningObserved` seam. A
+			// nonterminal `command_status` observation
+			// (manager snapshot `state === "running"`) reconciles the
+			// per-job projection map from any stale terminal value
+			// (e.g. a one-shot `command_job_containment_failed` emit
+			// that fired while the job was actually still alive) back
+			// to `"running"`. This is the bounded fix for the live
+			// P0 where a `Run failed` chat row pill coexists with a
+			// `{ status: "running", ... }` `command_status` tool
+			// result. The host's `updateBackgroundCommandState(true,
+			// jobId)` is idempotent; a no-op when the projection is
+			// already `running`.
 			tools.push(
 				createCommandStatusTool(options.commandJobManager, {
 					backgroundNotifyCoordinator: options.backgroundNotifyCoordinator,
 					resolveActiveOwner: options.resolveActiveOwner,
+					onRunningObserved: options.onBackgroundStateChange
+						? (jobId) => options.onBackgroundStateChange?.(true, jobId, undefined)
+						: undefined,
 				}),
 			)
 			// Mutating — registered through the command-policy adapter

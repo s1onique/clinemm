@@ -115,10 +115,36 @@ function readCancelInput(input: unknown): CancelCommandInput {
  * (b) the optional `backgroundNotifyCoordinator` and
  * `resolveActiveOwner` callbacks were wired by the host, and
  * (c) the marker's owner triple matches the active owner.
+ *
+ * ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01:
+ * the per-call `onRunningObserved` callback fires when this tool
+ * observes a `state: "running"` snapshot. The host (production
+ * `SdkController` via the `vscode-runtime-builder.ts` wiring)
+ * reconciles the `backgroundCommandJobStates` projection map
+ * from a stale terminal value back to `running` so the chat row's
+ * `liveProjectionTerminalReason` does not retain a "Run failed"
+ * pill (the `containment_failed` projection under
+ * `CommandStatusMap.containment_failed === "Run failed"` in
+ * `apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx:367`)
+ * after a nonterminal canonical observation. The callback fires
+ * ONLY for `state: "running"` snapshots; terminal observations
+ * pass through unchanged and do NOT invoke this seam (the
+ * existing Path A / B / C / C' terminal drain is the terminal
+ * authority).
  */
 export interface CreateCommandStatusToolOptions {
 	backgroundNotifyCoordinator?: BackgroundNotifyCoordinator
 	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
+	/**
+	 * ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01:
+	 * optional per-call callback fired with the observed
+	 * `jobId` when the manager snapshot's `state` is
+	 * `"running"`. Production wiring (see
+	 * `vscode-runtime-builder.ts:277-282`) forwards this to
+	 * the host's `updateBackgroundCommandState(true, jobId)`
+	 * (idempotent — already-running entries are a no-op).
+	 */
+	onRunningObserved?: (jobId: string) => void
 }
 
 /**
@@ -214,6 +240,28 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 				return [{ ok: false, error: `unknown_job: ${typed.jobId}` }]
 			}
 			const snap = status.snapshot
+			// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01:
+			// Nonterminal-observation reconciliation. When the manager
+			// snapshot's state is `"running"`, fire the host's
+			// `onRunningObserved` callback so the
+			// `backgroundCommandJobStates` projection map is reconciled
+			// from any stale terminal value (e.g. a one-shot
+			// `command_job_containment_failed` emit that fired while the
+			// job was actually still alive) back to `"running"`. The
+			// callback is OPTIONAL: production code wires it via
+			// `vscode-runtime-builder.ts:277-282` and the host's
+			// `SdkController.updateBackgroundCommandState(true, jobId)`
+			// semantics. The callback is FIRE-AND-FORGET (no awaited
+			// promise) so the tool's return payload is not blocked on
+			// the projection reconciliation; the next
+			// `getStateToPostToWebview()` post picks up the change.
+			// Terminal observations do NOT fire the callback — the
+			// existing Path A / B / C / C' terminal drain is the
+			// terminal authority, and reasserting `running` would
+			// race the terminal listener.
+			if (snap.state === "running") {
+				options.onRunningObserved?.(typed.jobId)
+			}
 			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
 			// Path B resolution. When this status call observes a
 			// TERMINAL state on a job that was registered with
