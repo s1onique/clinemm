@@ -152,14 +152,71 @@ export function buildDeferredCompletionBarrierFactsJson(
 // Kernel loader (mirrors the prior kernels' pattern)
 // ---------------------------------------------------------------------------
 
+interface PendingRequest {
+	readonly resolve: (outbound: unknown) => void
+	readonly reject: (err: Error) => void
+	readonly timer: ReturnType<typeof setTimeout> | null
+}
+
 interface ElmKernelHandle {
 	sendInbound: (jsonString: string) => void
-	recvOutbound: () => unknown
+	/**
+	 * Pending-request map keyed by `requestId`. The adapter owns
+	 * the map; the kernel only reads / writes through the
+	 * `sendInbound` surface. The outbound subscription is owned
+	 * by the loader (registered in `loadCompiledElmKernel`); the
+	 * per-requestId dispatch is internal to the adapter.
+	 */
+	pending: Map<string, PendingRequest>
 }
 
 let _kernelInstance: ElmKernelHandle | null = null
 let _kernelLoadAttempted = false
 let _kernelLoadError: string | null = null
+let _productionKernelPath: string | null = null
+
+/**
+ * ACT-CLINEMM-ELM-SEAM08.1-E3.1-AUTHORITY-CUTOVER (REVIEWER P1):
+ * the production activator sets this BEFORE the first consult.
+ * When set, the loader reads the staged runtime asset from the
+ * packaged extension (the canonical VSIX path). When null, the
+ * loader falls back to the source-tree vendor path (test/dev
+ * mode).
+ */
+export function setDeferredCompletionBarrierElmProductionKernelPath(path: string | null): void {
+	_productionKernelPath = path
+}
+
+export function getDeferredCompletionBarrierElmProductionKernelPath(): string | null {
+	return _productionKernelPath
+}
+
+/**
+ * ACT-CLINEMM-ELM-SEAM08.1-E3.1-AUTHORITY-CUTOVER (REVIEWER P0):
+ * unique request ID generator. The adapter generates a fresh
+ * opaque token for EVERY consult; the Elm kernel echoes the
+ * token back on the outbound message; the pending-map
+ * dispatch routes the response to the matching resolver
+ * only. A missing-token or token-mismatched response is
+ * dropped (the caller's consult will resolve via its own
+ * timeout, not by stealing another request's response).
+ */
+let _requestIdCounter = 0
+function nextRequestId(): string {
+	_requestIdCounter = (Date.now() * 1000 + _requestIdCounter + 1) % 0x7fffffff
+	return `dcb-${_requestIdCounter.toString(36)}-${Math.floor(Math.random() * 0xffffff).toString(36)}`
+}
+
+/**
+ * REVIEWER P1: bounded response timeout. The production
+ * consults do NOT use a deadline — the production consult
+ * blocks on the pending map resolver, which only fires on
+ * the matched response or on coordinator disposal. A
+ * bounded timeout may be added in the cutover ACT as a test
+ * guard (per ACT §C1: "A bounded timeout may be used as a
+ * test guard. Do not promote an arbitrary 50 ms test
+ * deadline to a production SLA.").
+ */
 
 function loadCompiledElmKernel(): ElmKernelHandle | null {
 	if (_kernelInstance) {
@@ -175,9 +232,18 @@ function loadCompiledElmKernel(): ElmKernelHandle | null {
 	// apps/vscode/src/sdk/completion-continuation-control-elm.ts.
 	const path = require("node:path") as typeof import("node:path")
 	const fs = require("node:fs") as typeof import("node:fs")
+	// ACT-CLINEMM-ELM-SEAM08.1-E3.1-AUTHORITY-CUTOVER (REVIEWER P1):
+	// the candidate paths now cover BOTH the source-tree vendor
+	// (test/back-door load) AND the installed VSIX runtime-assets
+	// path (production load). The production activator sets
+	// `_productionKernelPath` via `setDeferredCompletionBarrierElmProductionKernelPath`
+	// BEFORE the first consult; that path is the canonical
+	// resolution for the packaged extension. The source-tree
+	// candidate is a fallback for dev-mode and test runs.
 	const candidatePaths = [
+		_productionKernelPath,
 		path.resolve(__dirname, "..", "..", "elm", "deferred-completion-barrier", "vendor", "deferred-completion-barrier.js"),
-	]
+	].filter((p): p is string => typeof p === "string" && p.length > 0)
 	let code: string | null = null
 	for (const candidate of candidatePaths) {
 		if (fs.existsSync(candidate)) {
@@ -232,18 +298,42 @@ function loadCompiledElmKernel(): ElmKernelHandle | null {
 		_kernelLoadError = "Elm kernel app is missing inbound/outbound ports"
 		return null
 	}
-	let lastOutbound: unknown = null
+	// ACT-CLINEMM-ELM-SEAM08.1-E3.1-AUTHORITY-CUTOVER (REVIEWER P0):
+	// the adapter owns a per-requestId pending map; the kernel
+	// only emits via `outbound.subscribe`. The handler routes
+	// each outbound message to the resolver keyed by the
+	// echoed `requestId`. Two concurrent consults cannot swap
+	// responses because each resolver fires only when its
+	// specific requestId arrives.
+	const pending = new Map<string, PendingRequest>()
 	app.ports.outbound.subscribe((v: unknown) => {
-		lastOutbound = v
+		// C4 conservation: a `ready` message has no requestId
+		// and no pending entry. It is informational only and
+		// is silently dropped (the kernel confirms init).
+		if (v === null || typeof v !== "object") return
+		const msg = v as { readonly kind?: string; readonly requestId?: unknown }
+		if (msg.kind === "ready") return
+		const requestId = typeof msg.requestId === "string" ? msg.requestId : null
+		if (requestId === null) {
+			// REVIEWER P0: the Elm kernel echoes correlation
+			// identifiers; the TS transport MUST enforce
+			// correlation. An outbound message with a missing
+			// requestId is a contract violation — the
+			// requestId is required for any consult that has
+			// a non-direct response shape.
+			return
+		}
+		const entry = pending.get(requestId)
+		if (!entry) return
+		pending.delete(requestId)
+		if (entry.timer !== null) clearTimeout(entry.timer)
+		entry.resolve(v)
 	})
 	_kernelInstance = {
 		sendInbound(value: unknown) {
-			lastOutbound = null
 			app?.ports.inbound.send(value)
 		},
-		recvOutbound() {
-			return lastOutbound
-		},
+		pending,
 	}
 	return _kernelInstance
 }
@@ -265,6 +355,7 @@ export function resetDeferredCompletionBarrierElmKernelForTests(): void {
 	_kernelInstance = null
 	_kernelLoadAttempted = false
 	_kernelLoadError = null
+	_productionKernelPath = null
 }
 
 // ---------------------------------------------------------------------------
@@ -362,41 +453,88 @@ let _kernelOfflineCounter = 0
 let _decodeErrorCounter = 0
 
 /**
- * Invoke the compiled Elm kernel with the given semantic facts.
- * Returns a typed `DeferredCompletionBarrierElmConsult`. The
- * caller MUST treat every non-`directive` outcome as
- * `ElmUnavailable_UsePredecessor` and run the original TS
- * predecessor path (C4 conservation).
+ * ACT-CLINEMM-ELM-SEAM08.1-E3.1-AUTHORITY-CUTOVER (REVIEWER P1):
+ * strict public-adapter boundary validator. Runs on EVERY
+ * consult result — including custom `invokeForProduction` —
+ * to enforce the closed directive schema. Unknown kinds,
+ * missing required fields (e.g. `mustClearRearm` on a
+ * `permit_enqueue`), and wrong `requestId` echoes are
+ * rejected as `decode_error` BEFORE the result leaves the
+ * adapter. The prior substrate was too permissive (a custom
+ * invoke could return any shape; the default decoder coerced
+ * missing `mustClearRearm` to `false`).
  */
-export async function consultDeferredCompletionBarrierElmKernel(
-	input: DeferredCompletionBarrierFactsInput,
-	options?: {
-		readonly invokeForProduction?: (facts: DeferredCompletionBarrierFactsJson) => Promise<DeferredCompletionBarrierElmConsult>
-		readonly requestId?: string | null
-	},
-): Promise<DeferredCompletionBarrierElmConsult> {
-	const requestId = options?.requestId ?? null
-	const invoke = options?.invokeForProduction ?? defaultInvokeElmKernel
-	const facts = buildDeferredCompletionBarrierFactsJson(input, requestId)
-	try {
-		const result = await invoke(facts)
-		// C13: every non-directive outcome is a fail-closed
-		// signal. The `directive` outcome is the SOLE path
-		// through which Elm can authorize an effect.
-		// `defaultInvokeElmKernel` runs the decoder before
-		// returning; a custom `invokeForProduction` is expected
-		// to also run the decoder OR to return a non-`directive`
-		// outcome (kernel_offline / decode_error / no_decision).
+function validateConsultResult(
+	result: DeferredCompletionBarrierElmConsult,
+	expectedRequestId: string | null,
+): DeferredCompletionBarrierElmConsult {
+	if (result.kind !== "directive") {
+		// Non-directive outcomes (kernel_offline / decode_error /
+		// no_decision) are accepted as-is.
 		return result
-	} catch (err) {
-		Logger.error(`[deferred-completion-barrier-elm] kernel threw: ${err instanceof Error ? err.message : String(err)}`)
+	}
+	// Strict requestId echo: the directive's requestId MUST
+	// match the expected requestId. A mismatch is a contract
+	// violation; the directive cannot be honored.
+	if (result.requestId !== expectedRequestId) {
 		_decodeErrorCounter += 1
 		return {
 			kind: "decode_error",
-			reason: err instanceof Error ? err.message : String(err),
+			reason: `directive requestId=${String(result.requestId)} does not match expected=${String(expectedRequestId)}`,
 			classification: "deferred_completion_barrier_elm_decode_error",
-			requestId,
+			requestId: expectedRequestId,
 		}
+	}
+	// Strict value-kind validation: every directive variant
+	// has a closed shape. The default decoder already validates
+	// most cases; this is a second-pass guard for the custom
+	// `invokeForProduction` path.
+	const v = result.value
+	switch (v.kind) {
+		case "permit_enqueue":
+			// `mustClearRearm` MUST be an actual boolean (not
+			// coerced from undefined). The default decoder uses
+			// `=== true` which collapses undefined to false;
+			// the strict validator enforces a real boolean.
+			if (typeof (v as { mustClearRearm: unknown }).mustClearRearm !== "boolean") {
+				_decodeErrorCounter += 1
+				return {
+					kind: "decode_error",
+					reason: "permit_enqueue directive missing boolean mustClearRearm",
+					classification: "deferred_completion_barrier_elm_decode_error",
+					requestId: expectedRequestId,
+				}
+			}
+			return result
+		case "suppress_duplicate":
+		case "preserve_barrier":
+			return result
+		case "reject_stale_identity": {
+			const reason = (v as { reason: unknown }).reason
+			if (
+				reason !== "marker_absent" &&
+				reason !== "session_mismatch" &&
+				reason !== "task_mismatch" &&
+				reason !== "epoch_mismatch"
+			) {
+				_decodeErrorCounter += 1
+				return {
+					kind: "decode_error",
+					reason: `reject_stale_identity directive has invalid reason=${String(reason)}`,
+					classification: "deferred_completion_barrier_elm_decode_error",
+					requestId: expectedRequestId,
+				}
+			}
+			return result
+		}
+		default:
+			_decodeErrorCounter += 1
+			return {
+				kind: "decode_error",
+				reason: `unknown directive kind=${String((v as { kind: unknown }).kind)}`,
+				classification: "deferred_completion_barrier_elm_decode_error",
+				requestId: expectedRequestId,
+			}
 	}
 }
 
@@ -410,16 +548,48 @@ async function defaultInvokeElmKernel(facts: DeferredCompletionBarrierFactsJson)
 			classification: "deferred_completion_barrier_elm_kernel_offline",
 		}
 	}
+	const requestId = facts.requestId
+	if (requestId === null) {
+		// REVIEWER P0: the production consult MUST generate a
+		// unique requestId and pass it through the wire. A
+		// null requestId at the default-invoke seam is a
+		// programming error (the public
+		// `consultDeferredCompletionBarrierElmKernel` wrapper
+		// always sets one).
+		_decodeErrorCounter += 1
+		return {
+			kind: "decode_error",
+			reason: "consult produced null requestId; cannot correlate response",
+			classification: "deferred_completion_barrier_elm_decode_error",
+			requestId: null,
+		}
+	}
 	// C15: pre-serialize to a JSON string so the kernel's
 	// `Decode.decodeString` parses it and the strict-typing
 	// checks fire.
 	const wireValue = JSON.stringify(facts)
-	kernel.sendInbound(wireValue)
-	// Wait one event-loop tick for the Platform.worker to flush
-	// the outbound port. The same pattern is used by every prior
-	// SEAM kernel.
-	await new Promise<void>((resolve) => setTimeout(resolve, 0))
-	const out = kernel.recvOutbound() as OutboundMessage | null
+	// REVIEWER P0: register a per-requestId pending resolver
+	// BEFORE sending the inbound payload. The Elm kernel will
+	// emit the outbound message on the next event-loop tick;
+	// the pending map dispatches it to this consult's resolver
+	// only. A second concurrent consult with a different
+	// requestId will register a separate pending entry and
+	// will not see this consult's response.
+	const response = await new Promise<unknown>((resolve, reject) => {
+		const entry: PendingRequest = {
+			resolve,
+			reject,
+			timer: null,
+		}
+		kernel.pending.set(requestId, entry)
+		try {
+			kernel.sendInbound(wireValue)
+		} catch (err) {
+			kernel.pending.delete(requestId)
+			reject(err instanceof Error ? err : new Error(String(err)))
+		}
+	})
+	const out = response as OutboundMessage | null
 	if (out === null) {
 		_decodeErrorCounter += 1
 		return {
@@ -428,6 +598,50 @@ async function defaultInvokeElmKernel(facts: DeferredCompletionBarrierFactsJson)
 		}
 	}
 	return decodeBarrierDirective(out)
+}
+
+/**
+ * Public consult entry point. Generates a unique `requestId`
+ * (when one is not supplied), invokes the kernel, runs the
+ * result through the strict public-adapter boundary
+ * validator, and returns a typed
+ * `DeferredCompletionBarrierElmConsult`.
+ *
+ * REVIEWER P0: every consult has its own opaque `requestId`;
+ * the kernel echoes it; the adapter's pending-map dispatch
+ * routes the response to the matching resolver only.
+ *
+ * REVIEWER P1: every result passes through
+ * `validateConsultResult` which enforces the closed
+ * directive schema (including mandatory `mustClearRearm`).
+ * A custom `invokeForProduction` cannot bypass fail-closed.
+ */
+export async function consultDeferredCompletionBarrierElmKernel(
+	input: DeferredCompletionBarrierFactsInput,
+	options?: {
+		readonly invokeForProduction?: (facts: DeferredCompletionBarrierFactsJson) => Promise<DeferredCompletionBarrierElmConsult>
+		readonly requestId?: string | null
+	},
+): Promise<DeferredCompletionBarrierElmConsult> {
+	const requestId = options?.requestId ?? nextRequestId()
+	const invoke = options?.invokeForProduction ?? defaultInvokeElmKernel
+	const facts = buildDeferredCompletionBarrierFactsJson(input, requestId)
+	try {
+		const result = await invoke(facts)
+		// REVIEWER P1: every result passes through the strict
+		// public-adapter boundary validator. A custom
+		// `invokeForProduction` cannot bypass fail-closed.
+		return validateConsultResult(result, requestId)
+	} catch (err) {
+		Logger.error(`[deferred-completion-barrier-elm] kernel threw: ${err instanceof Error ? err.message : String(err)}`)
+		_decodeErrorCounter += 1
+		return {
+			kind: "decode_error",
+			reason: err instanceof Error ? err.message : String(err),
+			classification: "deferred_completion_barrier_elm_decode_error",
+			requestId,
+		}
+	}
 }
 
 export function getDeferredCompletionBarrierElmAuthorityCounters(): {
