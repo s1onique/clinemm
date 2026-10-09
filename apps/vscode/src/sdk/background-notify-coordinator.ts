@@ -2191,6 +2191,7 @@ export class BackgroundNotifyCoordinator {
  *   remainingNotify == 0  -> drained
  *   malformed facts       -> no_marker (fail-closed)
  */
+export type { ConsumeTerminalAuthorityFn }
 export const legacyConsumeTerminalPolicy: ConsumeTerminalAuthorityFn = async (input) => {
 	// The SEAM03 TS predecessor does NOT validate `exitCode` or
 	// `remainingNotify` (it trusts the caller). The Elm kernel IS
