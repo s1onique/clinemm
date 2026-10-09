@@ -23413,7 +23413,7 @@ order in §4 of the correction ACT. First discriminator is
 the synchronous interop probe (E3.1, E1.1, E2.1) before any
 production authority change.
 
-## ACT-CLINEMM-ELM-SEAM08-DEFERRED-COMPLETION-BARRIER-AUTHORITY-MIGRATION — IN_PROGRESS — 2026-10-09
+## ACT-CLINEMM-ELM-SEAM08-DEFERRED-COMPLETION-BARRIER-AUTHORITY-MIGRATION — CLOSED — 2026-10-09
 
 **Status:** CLOSED at C5 (PASS_ELM_SEAM08_SUBSTRATE)
 
