@@ -49,12 +49,22 @@
  *       `observation_unavailable` is distinct from
  *       `awaiting_followup` (user-actionable).
  *   - PTBPC-05: Task/session replacement — late publication for K
- *       does not affect K+1.
+ *       does not affect K+1. P1 amendment: deliver K's late event
+ *       through the actual `handleSessionEvent` channel and
+ *       assert the production session-replacement filter at
+ *       `sdk-session-event-coordinator.ts:2164-2167` drops it.
  *   - PTBPC-06: Publication-binding ambiguity — UNBOUND does not
  *       automatically prefer canonical.
  *   - PTBPC-07: Real webview correspondence — projection flows
- *       through the existing `stateLabel` consumer to assert
- *       visible phase is not "Working" in the blocked scenario.
+ *       through the REAL `stateLabel` consumer imported from
+ *       `taskHeaderTelemetryHelpers.ts`. P1 amendment: replaces
+ *       the local `livePhases` set with the real helper.
+ *   - PTBPC-08: Recovery on the SAME task — the host's `error`
+ *       write is overwritten by a fresh `completed` write when
+ *       the BCB clears and a fresh completion turn succeeds. P1
+ *       amendment: the pre-amendment suite only checked the
+ *       forward path; this proves the R2.5 rule does not stick
+ *       when the underlying state genuinely resolves.
  *
  * Hard rule: no new mock framework. The coordinator is the real
  * `SdkSessionEventCoordinator`; the selector is the real
@@ -65,7 +75,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-
+import { stateLabel } from "../../../webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers"
 import type { ContinuationDirective } from "../completion-continuation-control-elm"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
@@ -141,6 +151,14 @@ interface PtbpcHarness {
 	readonly setHeldCount: (n: number) => void
 	readonly getMarkerReason: () => string | undefined
 	readonly getTrackerPhase: () => string
+	/**
+	 * ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01 (P1 amendment):
+	 * swap the active session/task and replace the publication owner
+	 * (`TurnStateTracker`) with a fresh one. Mirrors production
+	 * where each task owns its own tracker; the harness's coordinator
+	 * and `setTurnPhase` callback rebind to the new tracker.
+	 */
+	readonly swapActiveSessionTask: (newSessionId: string, newTaskId: string, newTracker: TurnStateTracker) => void
 }
 
 function makeHarness(
@@ -153,11 +171,13 @@ function makeHarness(
 	} = {},
 ): PtbpcHarness {
 	const minter = new MessageIdMinter()
-	const tracker = new TurnStateTracker(minter)
+	const initialTracker = new TurnStateTracker(minter)
 	const translatorState = new MessageTranslatorState(minter)
 
-	const activeSessionId = opts.activeSessionId ?? "session-ptbpc01"
-	const activeTaskId = opts.activeTaskId ?? "task-ptbpc01"
+	let activeSessionId: string = opts.activeSessionId ?? "session-ptbpc01"
+	let activeTaskId: string = opts.activeTaskId ?? "task-ptbpc01"
+	// Mutable current tracker: rebinds on `swapActiveSessionTask`.
+	let currentTracker: TurnStateTracker = initialTracker
 
 	let heldIds: readonly string[] = opts.initialHeldIds ?? []
 	let heldCount = opts.initialHeldIds?.length ?? 0
@@ -193,13 +213,17 @@ function makeHarness(
 		return Promise.resolve()
 	}
 
-	const fakeActiveSession = {
+	let fakeActiveSession: {
+		sessionId: string
+		sdkHost: { send: typeof sendFn }
+		unsubscribe: () => void
+		startResult: { sessionId: string }
+		isRunning: boolean
+	} = {
 		sessionId: activeSessionId,
-		sdkHost: {
-			send: sendFn,
-		} as never,
+		sdkHost: { send: sendFn } as never,
 		unsubscribe: () => undefined,
-		startResult: { sessionId: activeSessionId } as never,
+		startResult: { sessionId: activeSessionId },
 		isRunning: false,
 	}
 
@@ -221,10 +245,13 @@ function makeHarness(
 		getTask: () => ({ taskId: activeTaskId }) as never,
 		postStateToWebview: () => Promise.resolve(undefined),
 		setTurnPhase: ((phase, _anchorTs, writerId) => {
-			tracker.setWithWriter(phase, undefined, { writerId: writerId as never })
+			// Writes to the *current* tracker, not a closed-over
+			// snapshot — so a `swapActiveSessionTask` rebinds the
+			// publication owner to the new task's tracker.
+			currentTracker.setWithWriter(phase, undefined, { writerId: writerId as never })
 			setTurnPhaseCallsLog.push({ phase: String(phase), writerId: String(writerId ?? "unknown-legacy-writer") })
 		}) as NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>,
-		getTurnPhase: () => tracker.currentPhase,
+		getTurnPhase: () => currentTracker.currentPhase,
 		hasRunningBackgroundJobForOwner: () => false,
 		getActiveJobOwnershipSnapshot: () => [],
 		getActiveSessionHost: () => undefined,
@@ -240,7 +267,7 @@ function makeHarness(
 		getOutstandingAutonomousWork: () => false,
 		getLaunchedBackgroundJobIds: () => [],
 		enqueueCompletionContinuation: buildSdkControllerEnqueueCompletionContinuation({
-			getActiveSession: () => fakeActiveSession,
+			getActiveSession: () => fakeActiveSession as never,
 			liveTools: () => liveTools,
 			invokeElmForProduction: async () => ({
 				kind: "directive" as const,
@@ -268,9 +295,13 @@ function makeHarness(
 
 	return {
 		coordinator,
-		tracker,
-		activeSessionId,
-		activeTaskId,
+		tracker: initialTracker,
+		get activeSessionId() {
+			return activeSessionId
+		},
+		get activeTaskId() {
+			return activeTaskId
+		},
 		sendLog,
 		setTurnPhaseCalls: () => setTurnPhaseCallsLog.slice(),
 		setLiveTools: (tools) => {
@@ -288,7 +319,19 @@ function makeHarness(
 			const barrier = coordinator.getDeferredCompletionBarrierForTesting() as { reason?: string } | undefined
 			return barrier?.reason
 		},
-		getTrackerPhase: () => tracker.currentPhase,
+		getTrackerPhase: () => currentTracker.currentPhase,
+		swapActiveSessionTask: (newSessionId: string, newTaskId: string, newTracker: TurnStateTracker) => {
+			activeSessionId = newSessionId
+			activeTaskId = newTaskId
+			currentTracker = newTracker
+			fakeActiveSession = {
+				sessionId: newSessionId,
+				sdkHost: { send: sendFn } as never,
+				unsubscribe: () => undefined,
+				startResult: { sessionId: newSessionId },
+				isRunning: false,
+			}
+		},
 	}
 }
 
@@ -472,52 +515,115 @@ describe("ACT-CLINEMM-...-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01 — histo
 	})
 
 	it("PTBPC-05: task/session replacement — late publication for K does not affect K+1", async () => {
-		// PTBPC-05: capture a blocked publication for task K,
-		// replace K with K+1, deliver K's late projection. Assert
-		// K+1's TaskHeader state, controls, and telemetry remain
-		// unchanged.
-		const hK = makeHarness({
+		// PTBPC-05: drive K to a blocked verdict on a single harness
+		// (shared coordinator / `postStateToWebview` owner), then
+		// SWAP the active session/task + tracker to K+1 (the
+		// production shape: K+1 owns a fresh publication tracker,
+		// the coordinator rebinds to it). Deliver a LATE K event
+		// (a `done` for K's sessionId) through the actual
+		// `handleSessionEvent` channel after the swap. Assert the
+		// production session-replacement filter at
+		// `sdk-session-event-coordinator.ts:2164-2167` drops the
+		// stale event, K+1's tracker remains `idle`, and the
+		// `setTurnPhaseCalls` log does NOT record a K+1-side
+		// `error` write.
+		//
+		// The pre-P1-amendment version of this test built two
+		// INDEPENDENT harnesses and never delivered K's late
+		// publication through K+1's owner. That was an
+		// evidence-contract defect: the test did not exercise the
+		// actual webview publication owner's isolation across
+		// task/session replacement.
+		const h = makeHarness({
 			activeSessionId: "session-ptbpc01-K",
 			activeTaskId: "task-ptbpc01-K",
 			initialHeldIds: SEVEN_HELD_IDS,
 			initialLiveTools: ["other_tool"],
 		})
 		// Seed K's legacy tracker to `streaming` (LIVE SCAR).
-		hK.tracker.setWithWriter("streaming", undefined, { writerId: "controller-task-start-init-task" as never })
-		await emitCompletionTurn(hK.coordinator, hK.activeSessionId, hK.coordinator["options"].messageTranslatorState)
+		h.tracker.setWithWriter("streaming", undefined, { writerId: "controller-task-start-init-task" as never })
+		await emitCompletionTurn(h.coordinator, h.activeSessionId, h.coordinator["options"].messageTranslatorState)
 		await new Promise<void>((r) => setTimeout(r, 50))
-		expect(hK.getMarkerReason()).toBe("observation_unavailable")
-		const kPhase = hK.tracker.currentPhase
+		expect(h.getMarkerReason()).toBe("observation_unavailable")
+		expect(h.getTrackerPhase()).toBe("error")
 
-		const hK1 = makeHarness({
-			activeSessionId: "session-ptbpc01-K1",
-			activeTaskId: "task-ptbpc01-K1",
-			initialHeldIds: [],
-			initialLiveTools: ["command_status"],
-		})
-		expect(hK1.getTrackerPhase()).toBe("idle")
+		// Snapshot K's tracker and the K-side setTurnPhase log.
+		const kPhase = h.tracker.currentPhase
+		const kCalls = h.setTurnPhaseCalls().slice()
+		expect(kCalls).toEqual(
+			expect.arrayContaining([
+				{
+					phase: "error",
+					writerId: "session-event-bcb-blocked-observation-unavailable",
+				},
+			]),
+		)
+		const orphanedKTracker = h.tracker
 
-		const kProjection = await pickTaskHeaderPresentationForPublication({
-			canonicalShadowPhase: "completed",
-			currentLegacyPhase: kPhase as never,
-			seq: hK.tracker.get().seq,
-			canonicalShadowObservedTurnSeq: undefined,
-		})
-		// K's projection is the bounded blocked truth — must not be
-		// `streaming` (the LIVE SCAR) and not fabricated `completed`.
-		expect(kProjection.phase).not.toBe("streaming")
-		expect(kProjection.phase).not.toBe("completed")
+		// SWAP to K+1. The harness's coordinator + setTurnPhase
+		// callback rebind to the new tracker. This is the actual
+		// webview publication owner shape after task replacement:
+		// the same coordinator/UI host now points at K+1's fresh
+		// `TurnStateTracker`.
+		const k1Tracker = new TurnStateTracker(new MessageIdMinter())
+		h.swapActiveSessionTask("session-ptbpc01-K1", "task-ptbpc01-K1", k1Tracker)
+		expect(h.getTrackerPhase()).toBe("idle")
+		expect(h.activeSessionId).toBe("session-ptbpc01-K1")
+		expect(h.activeTaskId).toBe("task-ptbpc01-K1")
+
+		// Deliver K's LATE event through the actual webview
+		// publication owner — the coordinator's `handleSessionEvent`
+		// channel. In production this is the postStateToWebview
+		// boundary; the coordinator's session-replacement filter
+		// at sdk-session-event-coordinator.ts:2164-2167 must
+		// drop the stale K event because the active session is
+		// now K+1.
+		await h.coordinator.handleSessionEvent(
+			agentEvent("session-ptbpc01-K", {
+				type: "done",
+				reason: "completed",
+				text: "Late K completion event.",
+				iterations: 1,
+			}),
+		)
+		await new Promise<void>((r) => setTimeout(r, 50))
+
+		// K+1's tracker (the ACTIVE publication owner) is still
+		// `idle`. The production session-replacement filter dropped
+		// the stale K event; no `setTurnPhase` write was emitted
+		// for K+1's tracker. The K `error` SCAR is confined to
+		// the orphaned K tracker.
+		expect(h.getTrackerPhase()).toBe("idle")
+		expect(k1Tracker.currentPhase).toBe("idle")
+		expect(orphanedKTracker.currentPhase).toBe("error")
+		expect(orphanedKTracker).not.toBe(k1Tracker)
+
+		// The `setTurnPhaseCalls` log did NOT grow after the swap
+		// (K+1 received zero writes from the late K event).
+		expect(h.setTurnPhaseCalls().length).toBe(kCalls.length)
 
 		// K+1's projection (fresh, no held, capability available,
 		// legacy=idle) is the existing idle presentation.
 		const k1Projection = await pickTaskHeaderPresentationForPublication({
 			canonicalShadowPhase: "idle",
 			currentLegacyPhase: "idle",
-			seq: hK1.tracker.get().seq,
-			canonicalShadowObservedTurnSeq: hK1.tracker.get().seq,
+			seq: k1Tracker.get().seq,
+			canonicalShadowObservedTurnSeq: k1Tracker.get().seq,
 		})
 		expect(k1Projection.phase).toBe("idle")
-		expect(hK1.getTrackerPhase()).toBe("idle")
+
+		// K's projection is the bounded blocked truth — must not be
+		// `streaming` (the LIVE SCAR) and not fabricated `completed`.
+		// We assert this from K's own (orphaned) tracker, since K
+		// is no longer the active task.
+		const kProjection = await pickTaskHeaderPresentationForPublication({
+			canonicalShadowPhase: "completed",
+			currentLegacyPhase: kPhase as never,
+			seq: orphanedKTracker.get().seq,
+			canonicalShadowObservedTurnSeq: undefined,
+		})
+		expect(kProjection.phase).not.toBe("streaming")
+		expect(kProjection.phase).not.toBe("completed")
 	})
 
 	it("PTBPC-06: publication-binding ambiguity — UNBOUND does not automatically prefer canonical", async () => {
@@ -555,11 +661,14 @@ describe("ACT-CLINEMM-...-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01 — histo
 
 	it("PTBPC-07: real webview correspondence — visible label is not 'Working' in the blocked scenario", async () => {
 		// PTBPC-07: pass the production-published projection to the
-		// real existing React presentation helper
-		// (taskHeaderPresentationStateLabel) and assert the visible
-		// label is not "Working". The webview mirror test — do not
-		// rely solely on a helper that copies the React predicates
-		// into the test.
+		// REAL existing webview presentation helper (`stateLabel`
+		// in `taskHeaderTelemetryHelpers.ts`) and assert the
+		// visible label is not "Working" (the LIVE SCAR). The
+		// pre-P1-amendment version of this test built a local
+		// `livePhases` set that COPIED the React predicates
+		// into the test — that proved nothing about the real
+		// webview consumer. This amendment imports the actual
+		// helper and asserts against its output.
 		const h = makeHarness({
 			initialHeldIds: FOURTEEN_HELD_IDS,
 			initialLiveTools: ["other_tool"],
@@ -577,18 +686,106 @@ describe("ACT-CLINEMM-...-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01 — histo
 			canonicalShadowObservedTurnSeq: undefined,
 		})
 
-		// Live phases per the documented semantic in
-		// apps/vscode/webview-ui/src/components/chat/task-header/
-		// taskHeaderTelemetryHelpers.ts (`stateLabel` mapping):
-		//   streaming → "Working" (live)
-		//   awaiting_approval → "Approval" (live)
-		//   awaiting_followup → "Your turn" (live)
-		//   compacting → "Compacting" (live)
-		//   completed → "Complete" (live:false)
-		//   error → "Error" (live:false)
-		//   resumable → "Paused" (live:false)
-		//   idle → "Idle" (live:false)
-		const livePhases = new Set(["streaming", "awaiting_approval", "awaiting_followup", "compacting"])
-		expect(livePhases.has(projection.phase)).toBe(false)
+		// Drive the projection through the REAL webview consumer
+		// (`stateLabel` from `taskHeaderTelemetryHelpers.ts` —
+		// the same helper that TaskHeader.tsx imports and renders).
+		// The label must NOT be "Working" (the LIVE SCAR's
+		// visible symptom). It must also NOT be "Complete" (the
+		// inverse fabrication that the Elm R2.5 fix prevents).
+		const visibleLabel = stateLabel(projection.phase).label
+		expect(visibleLabel).not.toBe("Working")
+		expect(visibleLabel).not.toBe("Complete")
+		// The visible state must be a terminal/blocked phase
+		// (live:false). The stateLabel mapping is the source of
+		// truth for the visible label ↔ phase correspondence; the
+		// blocked scenario should land on a non-live label.
+		expect(stateLabel(projection.phase).live).toBe(false)
+	})
+
+	it("PTBPC-08: recovery — same task transitions from blocked `error` to a genuine resumed turn", async () => {
+		// PTBPC-08: drive the same task from a blocked `error`
+		// verdict (BCB `observation_unavailable`, host `error`
+		// write per PTBPC01's host transition) into a genuine
+		// resumed turn. Assert the host updates its phase
+		// (`completed`) before the Elm R2.5 rule can retain a
+		// stale `error`. The pre-P1-amendment test suite only
+		// checked the forward path (blocked → "Working" SCAR);
+		// this amendment exercises the recovery path on the SAME
+		// task and proves the host transition's R2.5 short-circuit
+		// does not stick when the underlying state genuinely
+		// resolves.
+		//
+		// Production path (sdk-session-event-coordinator.ts):
+		//   1. BCB re-registration stamps `observation_unavailable`
+		//      → host transition writes `error` (PTBPC01 #1).
+		//   2. Marker clear + capability recovered + fresh
+		//      completion turn → existing C10 path fires
+		//      `setTurnPhase("completed", ...)` at line 1294.
+		//   3. R2.5 only fires for `error`/`resumable` legacy; the
+		//      fresh `completed` write is consumed by the
+		//      `completed` source path.
+		const h = makeHarness({
+			activeSessionId: "session-ptbpc01-recovery",
+			activeTaskId: "task-ptbpc01-recovery",
+			initialHeldIds: SEVEN_HELD_IDS,
+			initialLiveTools: ["other_tool"],
+		})
+		// Seed the legacy tracker to `streaming` (LIVE SCAR).
+		h.tracker.setWithWriter("streaming", undefined, { writerId: "controller-task-start-init-task" as never })
+		// Drive K to the blocked verdict.
+		await emitCompletionTurn(h.coordinator, h.activeSessionId, h.coordinator["options"].messageTranslatorState)
+		await new Promise<void>((r) => setTimeout(r, 50))
+		expect(h.getMarkerReason()).toBe("observation_unavailable")
+		expect(h.getTrackerPhase()).toBe("error")
+		const blockedCalls = h.setTurnPhaseCalls().slice()
+		expect(blockedCalls).toEqual(
+			expect.arrayContaining([
+				{
+					phase: "error",
+					writerId: "session-event-bcb-blocked-observation-unavailable",
+				},
+			]),
+		)
+
+		// Recover: clear the held set + recover the observation
+		// capability, then drive a fresh completion turn. The
+		// existing C10 path fires `setTurnPhase("completed", ...)`
+		// when the Elm authority gate AUTHORIZEs the completion.
+		h.setHeldCount(0)
+		h.setLiveTools(["command_status"])
+		await emitCompletionTurn(h.coordinator, h.activeSessionId, h.coordinator["options"].messageTranslatorState)
+		await new Promise<void>((r) => setTimeout(r, 50))
+		// The production runtime calls `notifyAgentTurnDone` after
+		// the `done` event to trigger the BCB reevaluation
+		// (`reevaluateDeferredCompletionBarrier` at L952). That
+		// reeval is what clears the marker when the four
+		// conservation checks pass and Elm AUTHORIZEs. The
+		// harness simulates the full production seam by calling
+		// it explicitly here.
+		await h.coordinator.notifyAgentTurnDone(h.activeSessionId)
+		await new Promise<void>((r) => setTimeout(r, 50))
+
+		// The host's LATEST `setTurnPhase` write is `completed` —
+		// it OVERWROTE the previous `error` write. The Elm R2.5
+		// rule does not retain a stale `error`; the projection
+		// is the existing successful-completion presentation.
+		const allCalls = h.setTurnPhaseCalls()
+		expect(allCalls.length).toBeGreaterThan(blockedCalls.length)
+		expect(allCalls[allCalls.length - 1].phase).toBe("completed")
+		expect(h.getTrackerPhase()).toBe("completed")
+		expect(h.getMarkerReason()).toBeUndefined()
+
+		// The projection (real selector + real `stateLabel` webview
+		// consumer) reads `completed`, not a stale `error`.
+		const projection = await pickTaskHeaderPresentationForPublication({
+			canonicalShadowPhase: "completed",
+			currentLegacyPhase: h.tracker.currentPhase as never,
+			seq: h.tracker.get().seq,
+			canonicalShadowObservedTurnSeq: h.tracker.get().seq,
+		})
+		expect(projection.phase).toBe("completed")
+		const visibleLabel = stateLabel(projection.phase).label
+		expect(visibleLabel).toBe("Complete")
+		expect(stateLabel(projection.phase).live).toBe(false)
 	})
 })

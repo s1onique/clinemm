@@ -378,5 +378,3 @@ No new Elm kernel. No second TS semantic authority. No forced task completion. N
 **Success criterion met**: an inactive, incomplete task is no longer falsely presented as an executing model turn — without ever inventing successful task completion. The Task Header shows "Error" (host-owned, `live: false`) for the LIVE specimen's exact fact tuple, not "Working" and not "Complete".
 
 **Operator LIVE qualification** is pending per C12. The source HEAD below is the closed PRELIVE target. The operator must record: VSIX byte size, SHA-256, installed VSIX/source identity, at least one genuinely blocked-but-incomplete task, held observations and task completion authority before/after publication, actual model-turn/queue state, host phase facts and Elm TaskHeader output, visible TaskHeader state and controls, and a legitimate recovery (or a source-backed explanation why recovery cannot occur). A LIVE screen showing a non-Working header is insufficient by itself; the header must agree with the authoritative host facts and must not fabricate task completion.
-
-
