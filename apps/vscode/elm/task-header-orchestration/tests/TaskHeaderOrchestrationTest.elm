@@ -124,15 +124,40 @@ fixtures =
         , seq = 50
         }
 
-    -- R4-1: ABSENCE FALLBACK
-    , Fixture "R4: shadow absent falls through to legacy"
+    -- R2.5: HOST ERROR / RESUMABLE OVERRIDE (PTBPC01)
+    , Fixture "R2.5: error legacy beats canonical shadow (host authority)"
+        { canonicalShadowPhase = Just PhaseCompleted
+        , currentLegacyPhase = PhaseError
+        , seq = 13
+        , canonicalShadowObservedTurnSeq = Just 13
+        }
+        { phase = PhaseError
+        , source = SourceHost
+        , seq = 13
+        }
+    , Fixture "R2.5: resumable legacy beats canonical shadow (host authority)"
+        { canonicalShadowPhase = Just PhaseCompleted
+        , currentLegacyPhase = PhaseResumable
+        , seq = 14
+        , canonicalShadowObservedTurnSeq = Just 14
+        }
+        { phase = PhaseResumable
+        , source = SourceHost
+        , seq = 14
+        }
+
+    -- R4-1: ABSENCE FALLBACK — the legacy R4 behavior for
+    -- `resumable` has been SUPERSEDED by R2.5 (PTBPC01). R4
+    -- still applies to non-host-authority phases when the shadow
+    -- is absent.
+    , Fixture "R4: shadow absent + resumable legacy -> R2.5 host authority (PTBPC01)"
         { canonicalShadowPhase = Nothing
         , currentLegacyPhase = PhaseResumable
         , seq = 3
         , canonicalShadowObservedTurnSeq = Nothing
         }
         { phase = PhaseResumable
-        , source = SourceLegacy
+        , source = SourceHost
         , seq = 3
         }
 

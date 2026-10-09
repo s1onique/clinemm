@@ -19,6 +19,10 @@ Correspondence with `selectTaskHeaderPresentation`:
     currentLegacyPhase == PhaseAwaitingFollowup
       => { phase = PhaseAwaitingFollowup, source = SourceHost, seq = facts.seq }
 
+  R2.5 (HOST ERROR / RESUMABLE — PTBPC01):
+    currentLegacyPhase == PhaseError OR currentLegacyPhase == PhaseResumable
+      => { phase = currentLegacyPhase, source = SourceHost, seq = facts.seq }
+
   R3 (CANONICAL SHADOW):
     canonicalShadowPhase = Just p
     AND NOT stale(...)
@@ -42,6 +46,20 @@ Auxiliary predicates (closed):
     (canonicalShadowObservedTurnSeq == Nothing)
     AND terminalShadowPhase (unwrap canonicalShadowPhase)
     AND activeLegacyPhase currentLegacyPhase
+
+ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01 (PTBPC01):
+  R2.5 was added so that when the host has authoritatively written
+  `error` or `resumable` (e.g. the BCB re-registration site at
+  sdk-session-event-coordinator.ts:2725-2753 stamping
+  `observation_unavailable`, or the host's cancelTask writing
+  `resumable`), the host's authority wins over an UNBOUND canonical
+  shadow that may be projecting a different terminal phase. The
+  host-owned terminal/blocked phase is the truthful user-visible
+  surface; the SCAR shadow projection is not. This closes the
+  dual-boundary defect (host `currentLegacyPhase` is `streaming` and
+  the UNBOUND-demotion guard falls through to legacy, falsely
+  showing Working) and the inverse (legacy is `idle`/anything and
+  the shadow's `completed` is trusted, fabricating completion).
 
 This module NEVER:
   * reads global state;
@@ -78,6 +96,30 @@ projectPresentation facts =
     -- R2 — HOST AWAITING_FOLLOWUP OVERRIDE (host authority for the
     -- user-owned phase the canonical shadow cannot represent).
     else if facts.currentLegacyPhase == Domain.PhaseAwaitingFollowup then
+        Domain.Presentation
+            facts.currentLegacyPhase
+            SourceHost
+            facts.seq
+
+    -- R2.5 — HOST ERROR / RESUMABLE OVERRIDE (PTBPC01). The host
+    -- has authoritatively written a terminal/blocked phase that
+    -- the canonical shadow cannot demote: `error` is the
+    -- blocked-but-incomplete verdict (e.g. BCB
+    -- `observation_unavailable`), `resumable` is the user-cancelled
+    -- pause verdict. Both are host-owned terminal/blocked phases;
+    -- the SCAR shadow projection (UNBOUND) is not authoritative.
+    -- Mirrors R1/R2's structure so the consumer sees
+    -- source=SourceHost and the existing stateLabel mapping
+    -- renders "Error" / "Paused" (live:false). Without this
+    -- rule, the SCAR shadow is trusted and the user sees a
+    -- fabricated "Complete" or a stale "Working".
+    else if facts.currentLegacyPhase == Domain.PhaseError then
+        Domain.Presentation
+            facts.currentLegacyPhase
+            SourceHost
+            facts.seq
+
+    else if facts.currentLegacyPhase == Domain.PhaseResumable then
         Domain.Presentation
             facts.currentLegacyPhase
             SourceHost

@@ -2750,6 +2750,25 @@ export class SdkSessionEventCoordinator {
 													failureReason: "observation_unavailable" as const,
 												},
 											)
+											// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
+											// (PTBPC01): the BCB has authoritatively stamped
+											// the `observation_unavailable` blocked verdict.
+											// The host's `currentLegacyPhase` was a SCAR (e.g.
+											// `streaming` from `task-start-init-task`); the Elm
+											// TaskHeader R2.5 rule (`error` host authority)
+											// trusts the host's `error` write over an UNBOUND
+											// canonical shadow. This is the bounded
+											// host-phase/publication transition that closes
+											// the LIVE specimen's `Working` SCAR without
+											// fabricating completion. The next
+											// `reevaluateDeferredCompletionBarrier` (or
+											// epoch-supersession clearing the marker) will
+											// overwrite this write when the BCB clears.
+											this.options.setTurnPhase?.(
+												"error",
+												undefined,
+												"session-event-bcb-blocked-observation-unavailable",
+											)
 										}
 									} else {
 										// canObserveHeldResults === true OR === null (capability unknown).

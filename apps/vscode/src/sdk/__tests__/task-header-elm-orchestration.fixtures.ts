@@ -129,16 +129,46 @@ export const taskHeaderOrchestrationFixtures: readonly TaskHeaderOrchestrationFi
 		expected: { phase: "awaiting_approval", source: "legacy", seq: 50 },
 	},
 
-	// R4-1: ABSENCE FALLBACK (Hub/Remote)
+	// R2.5-1: HOST ERROR / RESUMABLE OVERRIDE (PTBPC01).
+	// When the host has authoritatively written `error` or
+	// `resumable`, the Elm kernel respects the host's authority
+	// over the canonical shadow. This is the bounded Elm
+	// policy correction that closes the LIVE specimen's
+	// `Working` SCAR without fabricating completion.
 	{
-		label: "R4: shadow absent falls through to legacy",
+		label: "R2.5: error legacy beats canonical shadow (host authority)",
+		facts: {
+			canonicalShadowPhase: "completed",
+			currentLegacyPhase: "error",
+			seq: 13,
+			canonicalShadowObservedTurnSeq: 13,
+		},
+		expected: { phase: "error", source: "host", seq: 13 },
+	},
+	{
+		label: "R2.5: resumable legacy beats canonical shadow (host authority)",
+		facts: {
+			canonicalShadowPhase: "completed",
+			currentLegacyPhase: "resumable",
+			seq: 14,
+			canonicalShadowObservedTurnSeq: 14,
+		},
+		expected: { phase: "resumable", source: "host", seq: 14 },
+	},
+
+	// R4-1: ABSENCE FALLBACK (Hub/Remote) — the legacy R4
+	// absence-fallback behavior for `resumable`/`error` has been
+	// SUPERSEDED by R2.5 (PTBPC01). R4 still applies to the
+	// non-host-authority phases when the shadow is absent.
+	{
+		label: "R4: shadow absent + resumable legacy -> R2.5 host authority (PTBPC01)",
 		facts: {
 			canonicalShadowPhase: undefined,
 			currentLegacyPhase: "resumable",
 			seq: 3,
 			canonicalShadowObservedTurnSeq: undefined,
 		},
-		expected: { phase: "resumable", source: "legacy", seq: 3 },
+		expected: { phase: "resumable", source: "host", seq: 3 },
 	},
 
 	// R4-2: ABSENCE FALLBACK (idle finished)

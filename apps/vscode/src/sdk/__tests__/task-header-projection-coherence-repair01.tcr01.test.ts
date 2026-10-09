@@ -907,7 +907,11 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 				canonicalShadowObservedTurnSeq: 7,
 			}),
 		)
-		expect(out).toEqual({ phase: "error", source: "shadow", seq: 7 })
+		// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
+		// (PTBPC01): R2.5 host authority overrides the canonical
+		// shadow for `error` legacy. The host's `error` write wins
+		// (source=host) over a fresh shadow that agrees.
+		expect(out).toEqual({ phase: "error", source: "host", seq: 7 })
 	})
 
 	it("T5: resumable task reopened from History → Resume presentation preserved (shadow absent)", () => {
@@ -918,7 +922,11 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 				seq: 3,
 			}),
 		)
-		expect(out).toEqual({ phase: "resumable", source: "legacy", seq: 3 })
+		// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
+		// (PTBPC01): R2.5 host authority overrides the absence
+		// fallback for `resumable` legacy. The host's `resumable`
+		// write wins (source=host) over the shadow-absent fallback.
+		expect(out).toEqual({ phase: "resumable", source: "host", seq: 3 })
 	})
 
 	it("T6: completed task reopened → completed presentation preserved (shadow absent)", () => {
@@ -953,8 +961,11 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 				canonicalShadowObservedTurnSeq: 5,
 			}),
 		)
+		// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
+		// (PTBPC01): R2.5 host authority wins for `resumable` legacy
+		// (source=host), even over a stale shadow projection.
 		expect(out.phase).toBe("resumable")
-		expect(out.source).toBe("legacy")
+		expect(out.source).toBe("host")
 	})
 
 	it("T9: stale older projection/generation cannot overwrite newer authoritative phase (THE LIVE CONTRADICTION)", () => {

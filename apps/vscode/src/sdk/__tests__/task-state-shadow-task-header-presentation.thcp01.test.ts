@@ -232,7 +232,7 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / shadow branc
 })
 
 describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / absence fallback", () => {
-	it("THCP05: shadow absent + legacy `resumable` → source='legacy', phase='resumable' (Hub/Remote)", () => {
+	it("THCP05: shadow absent + legacy `resumable` → R2.5 host authority (PTBPC01)", () => {
 		const out = selectTaskHeaderPresentation(
 			inputs({
 				canonicalShadowPhase: undefined,
@@ -240,7 +240,11 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / absence fall
 				seq: 4,
 			}),
 		)
-		expect(out).toEqual({ phase: "resumable", source: "legacy", seq: 4 })
+		// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
+		// (PTBPC01): R2.5 host authority for `resumable` legacy
+		// overrides the absence fallback. The host's `resumable`
+		// write wins (source=host).
+		expect(out).toEqual({ phase: "resumable", source: "host", seq: 4 })
 	})
 
 	it("ABS_FALLBACK_2: shadow absent + legacy `awaiting_approval` → source='legacy'", () => {
@@ -265,7 +269,7 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / absence fall
 		expect(out).toEqual({ phase: "idle", source: "legacy", seq: 1 })
 	})
 
-	it("ABS_FALLBACK_4: shadow absent + legacy `error` → source='legacy', phase='error'", () => {
+	it("ABS_FALLBACK_4: shadow absent + legacy `error` → R2.5 host authority (PTBPC01)", () => {
 		const out = selectTaskHeaderPresentation(
 			inputs({
 				canonicalShadowPhase: undefined,
@@ -273,7 +277,11 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / absence fall
 				seq: 13,
 			}),
 		)
-		expect(out).toEqual({ phase: "error", source: "legacy", seq: 13 })
+		// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
+		// (PTBPC01): R2.5 host authority for `error` legacy
+		// overrides the absence fallback. The host's `error`
+		// write wins (source=host).
+		expect(out).toEqual({ phase: "error", source: "host", seq: 13 })
 	})
 })
 

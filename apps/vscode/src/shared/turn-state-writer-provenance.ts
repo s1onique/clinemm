@@ -69,6 +69,13 @@ export type TurnStateWriterId =
 	| "session-event-turn-complete-awaiting-followup"
 	| "session-event-turn-complete-awaiting-followup-liveness"
 	| "session-event-turn-complete-resumable-straggler-preserve"
+	// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
+	// (PTBPC01): host authority for the blocked-but-incomplete
+	// verdict when the BCB has stamped `observation_unavailable`
+	// at sdk-session-event-coordinator.ts:2767. Parallel to the
+	// other session-event-* writerIds that record the BCB's
+	// transition with full provenance.
+	| "session-event-bcb-blocked-observation-unavailable"
 	| "interaction-handle-mistake-limit"
 	| "interaction-handle-tool-approval"
 	| "interaction-resolve-tool-approval-message-response"

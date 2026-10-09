@@ -576,6 +576,32 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 			seq: input.seq,
 		}
 	}
+	// 2.5. ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
+	// (PTBPC01): HOST ERROR / RESUMABLE OVERRIDE. The host has
+	// authoritatively written a terminal/blocked phase that the
+	// canonical shadow cannot demote: `error` is the
+	// blocked-but-incomplete verdict (e.g. BCB
+	// `observation_unavailable`), `resumable` is the user-cancelled
+	// pause verdict. Both are host-owned terminal/blocked phases;
+	// the SCAR shadow projection (UNBOUND) is not authoritative.
+	// This is a TS-side mirror of the Elm kernel's R2.5 policy
+	// correction. The TS reference helper is not the production
+	// authority (the Elm kernel is), but keeping the two in sync
+	// preserves the differential correspondence fixture suite.
+	if (input.currentLegacyPhase === "error") {
+		return {
+			phase: "error",
+			source: "host",
+			seq: input.seq,
+		}
+	}
+	if (input.currentLegacyPhase === "resumable") {
+		return {
+			phase: "resumable",
+			source: "host",
+			seq: input.seq,
+		}
+	}
 	// 3. CANONICAL SHADOW — the shadow's `turnPhase` is the
 	// authority for 6 of the 8 phases (idle / streaming /
 	// awaiting_approval / completed / error / resumable). It

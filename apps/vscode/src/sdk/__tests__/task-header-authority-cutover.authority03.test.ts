@@ -266,13 +266,18 @@ describe("ACT-CLINEMM-...-ORCHESTRATION03-AUTHORITY / C13 authority test matrix 
 			expected: { phase: "streaming", source: "legacy", seq: 7 },
 		},
 		{
-			label: "AUTH-08 legacy absence (no canonical shadow)",
+			label: "AUTH-08 legacy absence (no canonical shadow) + error legacy -> R2.5 host authority (PTBPC01)",
 			inputs: inputs({
 				canonicalShadowPhase: undefined,
 				currentLegacyPhase: "error",
 				seq: 8,
 			}),
-			expected: { phase: "error", source: "legacy", seq: 8 },
+			// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01:
+			// the R2.5 Elm policy correction extends host authority
+			// to `error` and `resumable`. The host's `error` write
+			// wins over the absence-fallback, source=host (parallel
+			// to R1's `compacting` and R2's `awaiting_followup`).
+			expected: { phase: "error", source: "host", seq: 8 },
 		},
 		{
 			label: "AUTH-09 seq preservation",
