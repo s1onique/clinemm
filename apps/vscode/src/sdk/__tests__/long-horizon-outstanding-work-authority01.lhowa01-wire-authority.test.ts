@@ -261,7 +261,7 @@ async function startAndCompleteBackgroundJob(
 	}
 	await h.manager.cancel({ jobId: start.jobId })
 	await start.terminalPromise
-	await await h.notifyCoordinator.consumeTerminal({
+	await h.notifyCoordinator.consumeTerminal({
 		jobId: start.jobId,
 		terminalState: "exited",
 		exitCode: 0,

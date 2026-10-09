@@ -597,7 +597,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 				exitCode: 0,
 				outputTail: "STARTED\nFINISHED\n",
 			})
-			await await harness.notifyCoordinator.consumeTerminal({
+			await harness.notifyCoordinator.consumeTerminal({
 				jobId: harness.jobId,
 				terminalState: "exited",
 				exitCode: 0,
@@ -668,7 +668,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 				reason: "natural",
 				outputTail: "OK\n",
 			})
-			await await harness.notifyCoordinator.consumeTerminal({
+			await harness.notifyCoordinator.consumeTerminal({
 				jobId: harness.jobId,
 				terminalState: "exited",
 				exitCode: 0,
@@ -848,7 +848,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 				reason: "natural",
 				outputTail: "OK\n",
 			})
-			await await harness.notifyCoordinator.consumeTerminal({
+			await harness.notifyCoordinator.consumeTerminal({
 				jobId: harness.jobId,
 				terminalState: "exited",
 				exitCode: 0,

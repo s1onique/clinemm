@@ -870,7 +870,7 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-03 (matrix C — lost
 		// coordinator to call markWakeDispatchFailed(J). The
 		// marker is drained and the wake is definitively lost
 		// (no wake-driven turn will fire).
-		await await h.notifyCoordinator.consumeTerminal({
+		await h.notifyCoordinator.consumeTerminal({
 			jobId,
 			terminalState: "exited",
 			exitCode: 0,
@@ -973,7 +973,7 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-05 (matrix E — two 
 		h.translatorState.recordLaunchedBackgroundJob(j40)
 		// J20 consumed (the originating turn's completion belongs
 		// to J40 not J20 per the BCCOC01 narrow per-job predicate).
-		await await h.notifyCoordinator.consumeTerminal({
+		await h.notifyCoordinator.consumeTerminal({
 			jobId: j20,
 			terminalState: "exited",
 			exitCode: 0,
@@ -1008,7 +1008,7 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-05 (matrix E — two 
 		h.notifyCoordinator.registerMarker({ jobId: j40, sessionId: h.activeSessionId, taskId: h.activeTaskId })
 		h.translatorState.recordLaunchedBackgroundJob(j20)
 		h.translatorState.recordLaunchedBackgroundJob(j40)
-		await await h.notifyCoordinator.consumeTerminal({
+		await h.notifyCoordinator.consumeTerminal({
 			jobId: j20,
 			terminalState: "exited",
 			exitCode: 0,

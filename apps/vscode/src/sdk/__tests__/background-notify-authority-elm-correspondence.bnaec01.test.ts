@@ -330,7 +330,7 @@ describe("BNAEC01: TS↔Elm correspondence (BackgroundNotifyAuthority)", () => {
 					: () => undefined,
 			})
 			entry.setupCoordinator(coordinator)
-			const tsDecision: ConsumeTerminalDecision = await await coordinator.consumeTerminal({
+			const tsDecision: ConsumeTerminalDecision = await coordinator.consumeTerminal({
 				jobId: entry.input.jobId,
 				terminalState: translateToCommandJobState(entry.input.terminalState),
 				exitCode: entry.input.exitCode ?? undefined,

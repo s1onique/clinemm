@@ -98,7 +98,7 @@ describe("CCCL01 -- RED: wake_created.jobId must reach sdkHost.send(input)", () 
 			sessionId: session.sessionId,
 			taskId: "task-ccard-1",
 		})
-		const decision = await await coordinator.consumeTerminal({
+		const decision = await coordinator.consumeTerminal({
 			jobId: SENTINEL,
 			terminalState: "exited",
 			exitCode: 0,
@@ -149,7 +149,7 @@ describe("CCCL01 -- RED: wake_created.jobId must reach sdkHost.send(input)", () 
 		coordinator.registerMarker({ jobId: J1, sessionId: session.sessionId, taskId: "task-ccard-2" })
 		coordinator.registerMarker({ jobId: J2, sessionId: session.sessionId, taskId: "task-ccard-2" })
 
-		const d1 = await await coordinator.consumeTerminal({
+		const d1 = await coordinator.consumeTerminal({
 			jobId: J1,
 			terminalState: "exited",
 			exitCode: 0,
@@ -158,7 +158,7 @@ describe("CCCL01 -- RED: wake_created.jobId must reach sdkHost.send(input)", () 
 		})
 		expect(d1.kind).toBe("held")
 
-		const d2 = await await coordinator.consumeTerminal({
+		const d2 = await coordinator.consumeTerminal({
 			jobId: J2,
 			terminalState: "exited",
 			exitCode: 0,

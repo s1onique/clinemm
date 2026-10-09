@@ -8,7 +8,7 @@
  *
  *   1. agent starts run_commands(notifyOnCompletion: true) → J1 RUNNING
  *   2. J1 terminates BEFORE the model emits done-without-completion
- *   3. await await BackgroundNotifyCoordinator.consumeTerminal(J1) DRAINS — enqueues
+ *   3. await BackgroundNotifyCoordinator.consumeTerminal(J1) DRAINS — enqueues
  *      a wake into PendingPromptsController via the production transport
  *   4. agent emits done-without-completion
  *   5. Q5 composition seam (Branch 4):
@@ -281,7 +281,7 @@ async function startAndCompleteBackgroundJob(
 	await start.terminalPromise
 
 	// Manually call consumeTerminal with a synthetic terminalState.
-	await await harness.notifyCoordinator.consumeTerminal({
+	await harness.notifyCoordinator.consumeTerminal({
 		jobId: start.jobId,
 		terminalState: "exited",
 		exitCode: 0,

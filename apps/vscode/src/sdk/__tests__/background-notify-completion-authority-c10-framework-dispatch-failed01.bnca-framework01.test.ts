@@ -210,7 +210,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / CORRECTI
 				const status = await h.manager.status({ jobId: start.jobId, waitMs: 0 })
 				if (!status.ok) return
 				const snapshot = status.snapshot
-				await await h.notifyCoordinator.consumeTerminal({
+				await h.notifyCoordinator.consumeTerminal({
 					jobId: start.jobId,
 					terminalState: snapshot.state,
 					exitCode: snapshot.exitCode,
@@ -278,7 +278,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / CORRECTI
 				const status = await h.manager.status({ jobId: start.jobId, waitMs: 0 })
 				if (!status.ok) return
 				const snapshot = status.snapshot
-				await await h.notifyCoordinator.consumeTerminal({
+				await h.notifyCoordinator.consumeTerminal({
 					jobId: start.jobId,
 					terminalState: snapshot.state,
 					exitCode: snapshot.exitCode,
@@ -323,7 +323,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / CORRECTI
 				const status = await h.manager.status({ jobId: start.jobId, waitMs: 0 })
 				if (!status.ok) return
 				const snapshot = status.snapshot
-				await await h.notifyCoordinator.consumeTerminal({
+				await h.notifyCoordinator.consumeTerminal({
 					jobId: start.jobId,
 					terminalState: snapshot.state,
 					exitCode: snapshot.exitCode,

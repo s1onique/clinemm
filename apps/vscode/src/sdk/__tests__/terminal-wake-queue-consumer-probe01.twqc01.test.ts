@@ -329,7 +329,7 @@ describe("ACT-CLINEMM-P0-TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01 / TWQC01", () => {
 			// drives the production dispatchAndTrackWake path
 			// at background-notify-coordinator.ts:1530-1620.
 			coordinator.registerMarker({ jobId: JOB_ID, sessionId: SESSION_ID, taskId: TASK_ID })
-			const decision = await await coordinator.consumeTerminal({
+			const decision = await coordinator.consumeTerminal({
 				jobId: JOB_ID,
 				terminalState,
 				exitCode: 0,
@@ -444,7 +444,7 @@ describe("ACT-CLINEMM-P0-TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01 / TWQC01", () => {
 			})
 
 			coordinator.registerMarker({ jobId: JOB_ID, sessionId: SESSION_ID, taskId: TASK_ID })
-			const decision = await await coordinator.consumeTerminal({
+			const decision = await coordinator.consumeTerminal({
 				jobId: JOB_ID,
 				terminalState,
 				exitCode: 0,
@@ -523,7 +523,7 @@ describe("ACT-CLINEMM-P0-TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01 / TWQC01", () => {
 			})
 
 			coordinator.registerMarker({ jobId: JOB_ID, sessionId: SESSION_ID, taskId: TASK_ID })
-			const decision = await await coordinator.consumeTerminal({
+			const decision = await coordinator.consumeTerminal({
 				jobId: JOB_ID,
 				terminalState,
 				exitCode: 0,

@@ -16,7 +16,7 @@
  *
  *   This file closes the gap. It exercises the REAL chain:
  *
- *     await await BackgroundNotifyCoordinator.consumeTerminal(jobId=SENTINEL)
+ *     await BackgroundNotifyCoordinator.consumeTerminal(jobId=SENTINEL)
  *       -> real `enqueueTerminalWake` callback (with jobId)
  *       -> real `buildSdkControllerEnqueueTerminalWake` closure
  *       -> real `sdkHost.send` -> real `LocalRuntimeHost.runTurn`

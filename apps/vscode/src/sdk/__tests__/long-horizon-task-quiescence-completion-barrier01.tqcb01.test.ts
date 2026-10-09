@@ -362,7 +362,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			expect(h.tracker.currentPhase).not.toBe("completed")
 			expect(h.completionCommitCount()).toBe(0)
 
-			await await h.notifyCoordinator.consumeTerminal({
+			await h.notifyCoordinator.consumeTerminal({
 				jobId: "B-red03",
 				terminalState: "exited",
 				exitCode: 0,
@@ -404,7 +404,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			})
 			h.registerMarker("J-ctl03")
 
-			await await h.notifyCoordinator.consumeTerminal({
+			await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-ctl03",
 				terminalState: "exited",
 				exitCode: 0,
@@ -569,7 +569,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 
 			// Resolve notify=true marker via Path A. The
 			// notify=false sibling D is STILL RUNNING.
-			await await h.notifyCoordinator.consumeTerminal({
+			await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-mixed",
 				terminalState: "exited",
 				exitCode: 0,
@@ -639,7 +639,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			h.resolveObligation("J-A")
 			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
 
-			const decision = await await h.notifyCoordinator.consumeTerminal({
+			const decision = await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-A",
 				terminalState: "exited",
 				exitCode: 0,
@@ -670,7 +670,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			})
 			h.registerMarker("J-B")
 
-			await await h.notifyCoordinator.consumeTerminal({
+			await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-B",
 				terminalState: "exited",
 				exitCode: 0,
@@ -713,7 +713,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			expect(h.tracker.currentPhase).toBe("completed")
 			expect(h.completionCommitCount()).toBe(1)
 
-			const decision = await await h.notifyCoordinator.consumeTerminal({
+			const decision = await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-C",
 				terminalState: "exited",
 				exitCode: 0,
@@ -740,7 +740,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			h.registerMarker("J-A")
 			h.registerMarker("J-B")
 
-			await await h.notifyCoordinator.consumeTerminal({
+			await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-A",
 				terminalState: "exited",
 				exitCode: 0,
@@ -748,7 +748,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 				isContainmentFailed: false,
 				outputTail: undefined,
 			})
-			await await h.notifyCoordinator.consumeTerminal({
+			await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-B",
 				terminalState: "exited",
 				exitCode: 0,
@@ -792,7 +792,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			// Simulate notify=false: just call consumeTerminal
 			// without ever registering a marker. consumeTerminal
 			// will return no_marker and MUST NOT enqueue any wake.
-			const decision = await await h.notifyCoordinator.consumeTerminal({
+			const decision = await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-D-notifyfalse",
 				terminalState: "exited",
 				exitCode: 0,
@@ -820,7 +820,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 				writerId: "task-start-init-task",
 			})
 			h.registerMarker("J-F")
-			await await h.notifyCoordinator.consumeTerminal({
+			await h.notifyCoordinator.consumeTerminal({
 				jobId: "J-F",
 				terminalState: "exited",
 				exitCode: 0,
@@ -1032,7 +1032,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			await start.terminalPromise
 
 			// 3. Path A — consumeTerminal enqueues a wake.
-			const consumeDecision = await await notifyCoordinator.consumeTerminal({
+			const consumeDecision = await notifyCoordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot.state,
 				exitCode: snapshot.exitCode,

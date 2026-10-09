@@ -245,7 +245,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 / BC
 				jobIds: ["cmd_bccoc_own2"],
 				noPreRecordedOwnership: true,
 			})
-			await await harness.notifyCoordinator.consumeTerminal({
+			await harness.notifyCoordinator.consumeTerminal({
 				jobId: "cmd_bccoc_own2",
 				terminalState: "exited",
 				exitCode: 0,
@@ -331,7 +331,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 / BC
 			// addresses, and the carrier conservatively suppresses
 			// when ANY owned job is alive.
 			const harness = makeHarness({ jobIds: ["cmd_bccoc_J1a", "cmd_bccoc_J2a"] })
-			await await harness.notifyCoordinator.consumeTerminal({
+			await harness.notifyCoordinator.consumeTerminal({
 				jobId: "cmd_bccoc_J2a",
 				terminalState: "exited",
 				exitCode: 0,
@@ -382,7 +382,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 / BC
 
 		it("BCCOC-CONSUME-OWNED: owned job has marker consumed -> completion flows through", async () => {
 			const harness = makeHarness({ jobIds: ["cmd_bccoc_consumed"] })
-			await await harness.notifyCoordinator.consumeTerminal({
+			await harness.notifyCoordinator.consumeTerminal({
 				jobId: "cmd_bccoc_consumed",
 				terminalState: "exited",
 				exitCode: 0,

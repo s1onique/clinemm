@@ -135,7 +135,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 		})
 
 		// Path A fires (mirroring the listener after terminalPromise).
-		const aDecision = await await coordinator.consumeTerminal({
+		const aDecision = await coordinator.consumeTerminal({
 			jobId,
 			terminalState: "exited",
 			exitCode: 0,
@@ -226,7 +226,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 			sessionId,
 			taskId,
 		})
-		await await coordinator.consumeTerminal({
+		await coordinator.consumeTerminal({
 			jobId,
 			terminalState: "exited",
 			exitCode: 0,

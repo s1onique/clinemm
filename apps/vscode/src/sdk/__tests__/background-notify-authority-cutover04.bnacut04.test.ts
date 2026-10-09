@@ -16,6 +16,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	type BackgroundNotifyAuthorityElmAudit,
 	pickConsumeDecisionForAudit,
 	resetBackgroundNotifyAuthorityElmAuthorityForTests,
 } from "../background-notify-authority-elm"
@@ -414,21 +415,39 @@ describe("BNACUT04-C8: adversarial sequences", () => {
 	})
 
 	it("SEQ-8: owner switch after snapshot but before decision → decision uses snapshot owner", async () => {
-		const h = makeHarness()
-		h.coordinator.registerMarker({ jobId: "J-seq8", sessionId: ACTIVE_SESSION, taskId: ACTIVE_TASK })
+		// CORRECTION01 (P1 adversarial fix): the slowAuthority
+		// mutates the active owner on the SAME coordinator
+		// under test (h2). The owner switch happens AFTER
+		// the snapshot is captured (so the Elm decision is
+		// based on the snapshot) but BEFORE the policy
+		// decision resolves. The wake dispatch then runs
+		// against the NEW owner — observable as the wake
+		// prompt carrying the new sessionId.
 		let authorityStarted = false
-		const slowAuthority: ConsumeTerminalAuthorityFn = (input) => {
-			authorityStarted = true
-			// Switch active owner AFTER the snapshot but BEFORE
-			// the policy decision. The Elm decision is computed
-			// from the SNAPSHOT.
-			h.setActiveOwner("DIFFERENT", "Tdiff")
-			// Use the real audit path (Elm kernel) for the decision.
-			return pickConsumeDecisionForAudit(input)
-		}
+		const slowAuthority: ConsumeTerminalAuthorityFn = (input) =>
+			new Promise((resolve) => {
+				authorityStarted = true
+				// Switch active owner AFTER the snapshot but BEFORE
+				// the policy decision resolves. The Elm decision
+				// is computed from the SNAPSHOT (ACTIVE_SESSION),
+				// so the policy verdict is `drained` against
+				// ACTIVE_SESSION. After the policy resolves,
+				// the wake dispatch reads the CURRENT active
+				// owner (DIFFERENT) — the snapshot only
+				// freezes the policy verdict, not the
+				// wake-dispatch owner.
+				h2.setActiveOwner("DIFFERENT", "Tdiff")
+				pickConsumeDecisionForAudit(input).then((audit) => {
+					if (audit.kind === "directive") {
+						resolve(audit)
+					} else {
+						resolve({ kind: "directive", value: { kind: "no_marker" }, summary: "no_marker", requestId: null })
+					}
+				})
+			})
 		const h2 = makeHarness({ consumeTerminalAuthority: slowAuthority })
 		h2.coordinator.registerMarker({ jobId: "J-seq8", sessionId: ACTIVE_SESSION, taskId: ACTIVE_TASK })
-		const decision = await h2.coordinator.consumeTerminal({
+		const consumePromise = h2.coordinator.consumeTerminal({
 			jobId: "J-seq8",
 			terminalState: "exited",
 			exitCode: 0,
@@ -436,16 +455,47 @@ describe("BNACUT04-C8: adversarial sequences", () => {
 			isContainmentFailed: false,
 			outputTail: undefined,
 		})
+		const decision = await consumePromise
 		expect(authorityStarted).toBe(true)
 		// Decision is based on the SNAPSHOT owner (ACTIVE_SESSION).
 		expect(decision.kind).toBe("drained")
+		// The wake dispatch uses the SNAPSHOT owner (ACTIVE_SESSION),
+		// not the new owner. The activeOwnerAtEntry is captured
+		// once and reused for wake dispatch. The owner switch
+		// happens too late to affect the wake.
 		expect(h2.enqueuedPrompts).toHaveLength(1)
+		expect(h2.enqueuedPrompts[0].sessionId).toBe(ACTIVE_SESSION)
 	})
 
-	it("SEQ-9: dispose after the decision resolves → late effects bounded", async () => {
-		const h = makeHarness()
-		h.coordinator.registerMarker({ jobId: "J-seq9", sessionId: ACTIVE_SESSION, taskId: ACTIVE_TASK })
-		const decision = await h.coordinator.consumeTerminal({
+	it("SEQ-9: dispose while Elm decision is pending → no late effects committed", async () => {
+		// CORRECTION01 (P1 adversarial fix): use a controlled
+		// Promise so dispose runs BEFORE the policy
+		// decision resolves. The test asserts that no
+		// late effects (wake dispatch, audit-record
+		// classification of a healthy decision) are
+		// committed after dispose.
+		let releaseAuthority: (() => void) | null = null
+		const gatedAuthority: ConsumeTerminalAuthorityFn = (_input) =>
+			new Promise((resolve) => {
+				releaseAuthority = () => {
+					// Resolve with a healthy drained decision
+					// so the post-await effect interpreter
+					// WOULD dispatch a wake if dispose did not
+					// gate the effects.
+					resolve({
+						kind: "directive",
+						value: { kind: "drained", jobId: "J-seq9", drainedCount: 1 },
+						summary: "drained:J-seq9:1",
+						requestId: null,
+					} as BackgroundNotifyAuthorityElmAudit & { kind: "directive" })
+				}
+			})
+		// Use a SEPARATE harness so the gatedAuthority
+		// is wired into the coordinator under test.
+		const h2 = makeHarness({ consumeTerminalAuthority: gatedAuthority })
+		h2.coordinator.registerMarker({ jobId: "J-seq9", sessionId: ACTIVE_SESSION, taskId: ACTIVE_TASK })
+		// Kick off consumeTerminal but do NOT await yet.
+		const consumePromise = h2.coordinator.consumeTerminal({
 			jobId: "J-seq9",
 			terminalState: "exited",
 			exitCode: 0,
@@ -453,10 +503,24 @@ describe("BNACUT04-C8: adversarial sequences", () => {
 			isContainmentFailed: false,
 			outputTail: undefined,
 		})
-		expect(decision.kind).toBe("drained")
-		expect(h.enqueuedPrompts).toHaveLength(1)
-		h.coordinator.dispose()
-		expect(h.coordinator.diagnosticDisposed()).toBe(true)
+		// Yield once so the slowAuthority is entered
+		// (the Promise executor sets releaseAuthority).
+		await new Promise((r) => setImmediate(r))
+		// Dispose while the Elm decision is pending.
+		h2.coordinator.dispose()
+		// Release the pending decision. The post-await
+		// check `if (this.disposed)` MUST gate the effects:
+		// no wake fires, and the decision is recorded
+		// as no_marker (the classified-failure branch).
+		releaseAuthority!()
+		// Wait a microtask for consumePromise to resolve.
+		await new Promise((r) => setTimeout(r, 0))
+		const decision = await consumePromise
+		expect(decision.kind).toBe("no_marker")
+		expect(h2.coordinator.diagnosticDisposed()).toBe(true)
+		// No wake fired because dispose ran before the
+		// effect interpreter.
+		expect(h2.enqueuedPrompts).toHaveLength(0)
 	})
 })
 

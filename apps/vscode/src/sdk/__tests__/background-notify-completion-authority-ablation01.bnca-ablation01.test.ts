@@ -161,7 +161,7 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-ABL
 			const status = await manager.status({ jobId: start.jobId, waitMs: 0 })
 			if (!status.ok) return
 			const snapshot = status.snapshot
-			await await notifyCoordinator.consumeTerminal({
+			await notifyCoordinator.consumeTerminal({
 				jobId: start.jobId,
 				terminalState: snapshot.state,
 				exitCode: snapshot.exitCode,
