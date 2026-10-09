@@ -23412,3 +23412,57 @@ suites are green.
 order in §4 of the correction ACT. First discriminator is
 the synchronous interop probe (E3.1, E1.1, E2.1) before any
 production authority change.
+
+## ACT-CLINEMM-ELM-SEAM08-DEFERRED-COMPLETION-BARRIER-AUTHORITY-MIGRATION — IN_PROGRESS — 2026-10-09
+
+**Status:** CLOSED at C5 (PASS_ELM_SEAM08_SUBSTRATE)
+
+**Verdict:** `PASS_ELM_SEAM08_SUBSTRATE` — compiled Elm candidate and correspondence proven; production authority cutover deferred to `SEAM08.1-E3.1-AUTHORITY-CUTOVER`.
+
+**HEAD progression:**
+- ENTRY_HEAD: `44f0394be13b3eae3d8aeaff3589323ca41956e0`
+- SUBSTRATE_HEAD: `1f7d4e8a31a6c51a1e84b1c0706d384965331338`
+- DOCS_HEAD: `4d5a9ac56`
+
+**Summary:**
+
+The bounded E3.1 post-await transition in
+`SdkSessionEventCoordinator.enqueueCompletionContinuationIfHeld`
+(sdk-session-event-coordinator.ts:1442-1726) was migrated to a
+new Elm kernel as a substrate-only decision authority.
+
+**Kernel:** `apps/vscode/elm/deferred-completion-barrier/` (Domain, Policy, Codec, Main + scripts)
+**TS adapter:** `apps/vscode/src/sdk/deferred-completion-barrier-elm.ts`
+**Tests:** 15/15 PASS
+- dcbeid01 (C1+C2+C3 interop discriminator): 10/10
+- dcbesd01 (C5 stale-decision / TOCTOU): 5/5
+
+**Conservation:** 47/47 PASS across 6 conservation test files (rearm01, ccse01, ccsa01, ccslt01, dcbeid01, dcbesd01). 0 ACT-owned new failures.
+
+**Graded authority applied (per CORRECTION01):**
+- E3.1 — bounded post-await decision authority
+- E1.1 — read-only validation (skipped; not justified)
+- E2.1 — conditional expansion (out of scope; would create dual completion authority)
+
+**E3.1 closed vocabulary (4 directive sum):**
+- `PermitEnqueue { mustClearRearm : Bool }`
+- `SuppressDuplicate`
+- `PreserveBarrier`
+- `RejectStaleIdentity { reason : BarrierDecisionReason }`
+
+**C13 invariant:** kernel absence is `ElmUnavailable_UsePredecessor` (the full original TS predecessor decision). Never an unconditional `Pass`.
+
+**Build artifacts:**
+- Compiled JS: 32KB, SHA-256 `30dbf762b0ce1ba292f28fef186fac977903cc02837c457ed047dbfeb9d48bbb`
+- `_ELM_KERNELS` table now has 5 rows
+
+**Files:**
+- New: `.factory/ACT-CLINEMM-ELM-SEAM08-DEFERRED-COMPLETION-BARRIER-AUTHORITY-MIGRATION.md` (669 lines, 21 sections)
+- New: `apps/vscode/elm/deferred-completion-barrier/{.gitignore,elm.json,elm.json.sha256,scripts/build-elm.sh,scripts/test-elm.sh,src/{Codec,Domain,Main,Policy}.elm,src/*.elm.sha256,tests/elm.json,vendor/.gitignore}`
+- New: `apps/vscode/src/sdk/deferred-completion-barrier-elm.ts`
+- New: `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-interop-discriminator.dcbeid01.test.ts`
+- New: `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-stale-decision.dcbesd01.test.ts`
+- Modified: `scripts/build_dogfood_vsix_lib.py` (5th kernel row appended)
+- No production code changes
+
+**Next cursor:** `SEAM08.1-E3.1-AUTHORITY-CUTOVER` — bounded merge of the new Elm consult into the production `enqueueCompletionContinuationIfHeld` path with commit-time identity revalidation in TS. The substrate must be reviewed first; the cutover is properly scoped (touches a critical production path; the existing `control-authority REMOVE-LEGACY-TS-AUTHORITY` ACT is a good template for the bounded-merge plan).
