@@ -5,8 +5,10 @@ import assert from "node:assert"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
 import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
+import { setBackgroundNotifyAuthorityElmProductionKernelPath } from "@/sdk/background-notify-authority-elm"
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
 import { dumpExtensionSideElmAuthorityCounters } from "@/sdk/completion-authority-elm-authority-runtime-host"
+import { setCompletionContinuationControlElmProductionKernelPath } from "@/sdk/completion-continuation-control-elm"
 import { dumpExtensionSideCompletionContinuationDeliveryCounters } from "@/sdk/completion-continuation-delivery-runtime-host"
 import { dumpExtensionSideCompletionContinuationUpstreamCounters } from "@/sdk/completion-continuation-upstream-runtime-host"
 import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
@@ -48,7 +50,6 @@ import {
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
 import { setTaskHeaderElmProductionKernelPath } from "@/sdk/task-header-elm-shadow"
-import { setCompletionContinuationControlElmProductionKernelPath } from "@/sdk/completion-continuation-control-elm"
 import {
 	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
 	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
@@ -366,6 +367,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	// `task-header-orchestration.js`.
 	setCompletionContinuationControlElmProductionKernelPath(
 		path.join(context.extensionUri.fsPath, "runtime-assets", "completion-continuation-control.js"),
+	)
+
+	// ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER (C11):
+	// pin the production kernel path for the background-notify-authority
+	// Elm kernel. The fourth row of `_ELM_KERNELS` in
+	// `scripts/build_dogfood_vsix_lib.py` stages this kernel into
+	// the VSIX at `extension/runtime-assets/background-notify-authority.js`.
+	// The pin is set BEFORE the first `BackgroundNotifyCoordinator.consumeTerminal`
+	// call so the loader reads the staged runtime asset, not a
+	// non-shipped source-tree path.
+	setBackgroundNotifyAuthorityElmProductionKernelPath(
+		path.join(context.extensionUri.fsPath, "runtime-assets", "background-notify-authority.js"),
 	)
 	if (elmAuthorityActivation.enabled) {
 		Logger.log(`[ELM-AUTHORITY] enabled=true kernelPath=${elmAuthorityActivation.kernelPath}`)

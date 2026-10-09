@@ -29,7 +29,6 @@ ACT-CLINEMM-ELM-SEAM03-BACKGROUND-NOTIFY-AUTHORITY:
   `scripts/build_dogfood_vsix_lib.py:_ELM_KERNELS` in this ACT).
 -}
 import Codec
-import Domain exposing (ConsumeDecision(..))
 import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
 import Policy
@@ -69,55 +68,53 @@ init _ =
 
 updateMain : Msg -> Model -> ( Model, Cmd Msg )
 updateMain (Step jsonString) _ =
-    case Codec.factsFromString jsonString of
-        Ok facts ->
+    case Codec.envelopeFromString jsonString of
+        Ok envelope ->
             let
                 decision =
-                    Policy.decide facts
+                    Policy.decide envelope.facts
             in
             ( ()
-            , outbound
-                (Encode.object
-                    [ ( "kind", Encode.string "directive" )
-                    , ( "decision", Codec.encodeDecision decision )
-                    , ( "summary", Encode.string (summaryOf decision) )
-                    ]
-                )
+            , outbound (Codec.envelopeToOutbound envelope.requestId decision)
             )
 
         Err err ->
+            -- Decode errors are CORRELATED when the inbound still
+            -- carried a requestId (e.g. version mismatch, partial
+            -- owner). We attempt to extract the requestId so the
+            -- TS adapter can reject the matching pending entry
+            -- rather than leave it pending until the timeout.
+            let
+                requestId : Maybe String
+                requestId =
+                    case Decode.decodeString Decode.value jsonString of
+                        Ok raw ->
+                            case Decode.decodeValue (Decode.field "requestId" Decode.string) raw of
+                                Ok rid ->
+                                    Just rid
+
+                                Err _ ->
+                                    Nothing
+
+                        Err _ ->
+                            Nothing
+            in
             ( ()
             , outbound
                 (Encode.object
                     [ ( "kind", Encode.string "decode_error" )
                     , ( "error", Encode.string (Decode.errorToString err) )
+                    , ( "requestId"
+                      , case requestId of
+                            Just rid ->
+                                Encode.string rid
+
+                            Nothing ->
+                                Encode.null
+                      )
                     ]
                 )
             )
-
-
-{-| Compact one-line diagnostic summary of the decision. Used for
-the C14 differential correspondence fixtures and for the LIVE
-operator's dogfood dump. The TS adapter does NOT consult this
-field.
--}
-summaryOf : ConsumeDecision -> String
-summaryOf d =
-    case d of
-        NoMarker ->
-            "no_marker"
-
-        OwnerMismatch ->
-            "owner_mismatch"
-
-        ContainmentNoWake jobId ->
-            "containment_no_wake:" ++ jobId
-
-        Held jobId heldCount ->
-            "held:" ++ jobId ++ ":" ++ String.fromInt heldCount
-
-        Drained jobId drainedCount ->
-            "drained:" ++ jobId ++ ":" ++ String.fromInt drainedCount
 
 
 subscriptions : Model -> Sub Msg

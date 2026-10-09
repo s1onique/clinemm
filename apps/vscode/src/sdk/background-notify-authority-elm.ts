@@ -108,11 +108,13 @@ export type BackgroundNotifyAuthorityElmAudit =
 			readonly kind: "directive"
 			readonly value: BackgroundNotifyAuthorityDecision
 			readonly summary: string
+			readonly requestId: string | null
 	  }
 	| {
 			readonly kind: "decode_error"
 			readonly reason: string
 			readonly classification: "background_notify_authority_elm_decode_error"
+			readonly requestId: string | null
 	  }
 	| {
 			readonly kind: "kernel_offline"
@@ -121,6 +123,18 @@ export type BackgroundNotifyAuthorityElmAudit =
 	| {
 			readonly kind: "no_decision"
 			readonly classification: "background_notify_authority_elm_no_decision"
+	  }
+	| {
+			readonly kind: "response_timeout"
+			readonly requestId: string
+			readonly timeoutMs: number
+			readonly classification: "background_notify_authority_elm_response_timeout"
+	  }
+	| {
+			readonly kind: "response_mismatch"
+			readonly requestId: string | null
+			readonly reason: string
+			readonly classification: "background_notify_authority_elm_response_mismatch"
 	  }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +181,25 @@ interface OutboundMessage {
 	}
 	readonly summary?: string
 	readonly error?: string
+	readonly requestId?: string | null
+}
+
+/**
+ * Extract the `requestId` from an outbound message if present. The
+ * Elm kernel echoes the inbound `requestId` back on every outbound
+ * (directive, decode_error) so the TS adapter can route responses
+ * to the right pending entry. `ready` has no `requestId` (no
+ * inbound yet). Returns `null` when missing.
+ */
+function extractRequestId(out: unknown): string | null {
+	if (out === null || typeof out !== "object") {
+		return null
+	}
+	const msg = out as OutboundMessage
+	if (typeof msg.requestId === "string" && msg.requestId.length > 0) {
+		return msg.requestId
+	}
+	return null
 }
 
 function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
@@ -175,9 +208,11 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 			kind: "decode_error",
 			reason: "kernel emitted no outbound message (null/object)",
 			classification: "background_notify_authority_elm_decode_error",
+			requestId: null,
 		}
 	}
 	const msg = out as OutboundMessage
+	const requestId = extractRequestId(out)
 	if (msg.kind === "directive") {
 		const decisionValue = msg.decision
 		if (decisionValue === null || typeof decisionValue !== "object" || typeof decisionValue.kind !== "string") {
@@ -185,6 +220,7 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 				kind: "decode_error",
 				reason: "directive message missing typed decision.kind",
 				classification: "background_notify_authority_elm_decode_error",
+				requestId,
 			}
 		}
 		switch (decisionValue.kind) {
@@ -193,12 +229,14 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 					kind: "directive",
 					value: { kind: "no_marker" },
 					summary: msg.summary ?? "no_marker",
+					requestId,
 				}
 			case "owner_mismatch":
 				return {
 					kind: "directive",
 					value: { kind: "owner_mismatch" },
 					summary: msg.summary ?? "owner_mismatch",
+					requestId,
 				}
 			case "containment_no_wake":
 				if (typeof decisionValue.jobId !== "string") {
@@ -206,12 +244,14 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 						kind: "decode_error",
 						reason: "containment_no_wake directive missing jobId",
 						classification: "background_notify_authority_elm_decode_error",
+						requestId,
 					}
 				}
 				return {
 					kind: "directive",
 					value: { kind: "containment_no_wake", jobId: decisionValue.jobId },
 					summary: msg.summary ?? `containment_no_wake:${decisionValue.jobId}`,
+					requestId,
 				}
 			case "held":
 				if (typeof decisionValue.jobId !== "string" || typeof decisionValue.heldCount !== "number") {
@@ -219,6 +259,7 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 						kind: "decode_error",
 						reason: "held directive missing jobId or heldCount",
 						classification: "background_notify_authority_elm_decode_error",
+						requestId,
 					}
 				}
 				return {
@@ -229,6 +270,7 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 						heldCount: decisionValue.heldCount,
 					},
 					summary: msg.summary ?? `held:${decisionValue.jobId}:${decisionValue.heldCount}`,
+					requestId,
 				}
 			case "drained":
 				if (typeof decisionValue.jobId !== "string" || typeof decisionValue.drainedCount !== "number") {
@@ -236,6 +278,7 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 						kind: "decode_error",
 						reason: "drained directive missing jobId or drainedCount",
 						classification: "background_notify_authority_elm_decode_error",
+						requestId,
 					}
 				}
 				return {
@@ -246,12 +289,14 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 						drainedCount: decisionValue.drainedCount,
 					},
 					summary: msg.summary ?? `drained:${decisionValue.jobId}:${decisionValue.drainedCount}`,
+					requestId,
 				}
 			default:
 				return {
 					kind: "decode_error",
 					reason: `unknown decision kind: ${String(decisionValue.kind)}`,
 					classification: "background_notify_authority_elm_decode_error",
+					requestId,
 				}
 		}
 	}
@@ -260,6 +305,7 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 			kind: "decode_error",
 			reason: msg.error ?? "(missing error message)",
 			classification: "background_notify_authority_elm_decode_error",
+			requestId,
 		}
 	}
 	if (msg.kind === "ready") {
@@ -272,6 +318,7 @@ function decodeDirective(out: unknown): BackgroundNotifyAuthorityElmAudit {
 		kind: "decode_error",
 		reason: `unknown outbound kind: ${String(msg.kind)}`,
 		classification: "background_notify_authority_elm_decode_error",
+		requestId,
 	}
 }
 
@@ -394,12 +441,56 @@ interface ElmRoot {
 	readonly Elm?: ElmNamespace
 }
 
-let _outboundListener: ((v: unknown) => void) | null = null
-let _lastOutbound: unknown = null
+// SEAM04 request correlation — see routeOutbound / settlePending below.
 
-function setLastOutbound(v: unknown): void {
-	_lastOutbound = v
+interface PendingEntry {
+	readonly resolve: (audit: BackgroundNotifyAuthorityElmAudit) => void
+	readonly timeoutHandle: ReturnType<typeof setTimeout> | null
+	readonly timeoutMs: number
 }
+
+const _pendingByRequestId = new Map<string, PendingEntry>()
+
+let _requestIdCounter = 0
+function nextRequestId(): string {
+	_requestIdCounter = (Date.now() * 1000 + _requestIdCounter + 1) % 0x7fffffff
+	return `bna-${_requestIdCounter.toString(36)}-${Math.floor(Math.random() * 0xffffff).toString(36)}`
+}
+
+function settlePending(requestId: string, audit: BackgroundNotifyAuthorityElmAudit): boolean {
+	const entry = _pendingByRequestId.get(requestId)
+	if (!entry) return false
+	_pendingByRequestId.delete(requestId)
+	if (entry.timeoutHandle !== null) clearTimeout(entry.timeoutHandle)
+	entry.resolve(audit)
+	return true
+}
+
+function routeOutbound(out: unknown): void {
+	if (out === null || typeof out !== "object") {
+		Logger.error("[background-notify-authority-elm] outbound null/non-object")
+		return
+	}
+	const msg = out as OutboundMessage
+	if (msg.kind === "ready") return
+	const requestId = extractRequestId(out)
+	if (requestId === null) {
+		Logger.error(`[background-notify-authority-elm] response_mismatch: outbound has no requestId (kind=${msg.kind})`)
+		return
+	}
+	const audit = decodeDirective(out)
+	settlePending(requestId, audit)
+}
+
+function disposeAllPending(reason: BackgroundNotifyAuthorityElmAudit): void {
+	for (const [, entry] of _pendingByRequestId) {
+		if (entry.timeoutHandle !== null) clearTimeout(entry.timeoutHandle)
+		entry.resolve(reason)
+	}
+	_pendingByRequestId.clear()
+}
+
+let _legacyLastOutbound: unknown = null
 
 function loadCompiledElmKernel(): CompiledElmKernel | null {
 	if (cachedKernel) return cachedKernel
@@ -434,8 +525,13 @@ function loadCompiledElmKernel(): CompiledElmKernel | null {
 		}
 		return null
 	}
-	_outboundListener = setLastOutbound
-	app.ports.outbound.subscribe(_outboundListener)
+	app.ports.outbound.subscribe(routeOutbound)
+	// Legacy bridge: also write to `_legacyLastOutbound` so the
+	// `recvOutbound()` shim returns the most recent outbound. The
+	// BNAEC01 audit path uses this for its single-shot call.
+	app.ports.outbound.subscribe((v) => {
+		_legacyLastOutbound = v
+	})
 	_kernelDiagnostic = {
 		..._kernelDiagnostic,
 		stage: "ready",
@@ -446,9 +542,7 @@ function loadCompiledElmKernel(): CompiledElmKernel | null {
 			app.ports.inbound.send(value)
 		},
 		recvOutbound(): unknown {
-			const v = _lastOutbound
-			_lastOutbound = null
-			return v
+			return _legacyLastOutbound
 		},
 	}
 	return cachedKernel
@@ -564,42 +658,123 @@ export function ensureElmKernelEvaluated(kernelPath: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Audit-only Elm invocation. Returns a typed
- * `BackgroundNotifyAuthorityElmAudit` for the test surface and the
- * diagnostic dump. The production caller is **NOT** supposed to
- * use this function in this ACT; the TS `consumeTerminal` method
- * remains the live authority. The next ACT
- * (`ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER`)
- * is the explicit successor for the live cutover.
+ * ACT-CLINEMM-ELM-SEAM04 — Production path.
  *
- * The function:
- *  1. Serializes the input through `JSON.stringify` (C15).
- *  2. Invokes the kernel through the inbound port.
- *  3. Waits one microtask tick for the outbound message to land.
- *  4. Decodes the message and returns a typed audit value.
+ * Correlated-async Elm invocation. Returns a Promise that resolves
+ * to a typed `BackgroundNotifyAuthorityElmAudit`. The Promise is
+ * settled by either:
+ *
+ *   1. The Elm kernel's outbound message (the `requestId` is
+ *      echoed back by the kernel so we route the response to the
+ *      right pending entry).
+ *   2. A timeout (default 5s) — emits a `response_timeout` audit
+ *      with the `requestId` and `timeoutMs` for diagnostics.
+ *   3. A dispose call — emits a `kernel_offline` audit.
+ *
+ * Failure modes are EXPLICITLY classified. The TS effect
+ * interpreter in `BackgroundNotifyCoordinator.consumeTerminal` is
+ * the SOLE consumer of the resulting decision; the `decision.kind`
+ * is the load-bearing authority, and infrastructure failures
+ * (`kernel_offline`, `decode_error`, `response_timeout`,
+ * `response_mismatch`) MUST be surfaced as classified failures
+ * rather than silently collapsing to `no_marker` (per C3 gate).
  */
-export async function pickConsumeDecisionForAudit(
+export interface InvokeElmOptions {
+	readonly requestId?: string
+	readonly timeoutMs?: number
+}
+
+export const DEFAULT_BNA_ELM_TIMEOUT_MS = 5_000
+
+export async function invokeElmForConsumeDecision(
 	input: BackgroundNotifyAuthorityFactsInput,
+	options: InvokeElmOptions = {},
 ): Promise<BackgroundNotifyAuthorityElmAudit> {
 	ensureElmKernelEvaluated(resolveProductionKernelPath())
 	const kernel = loadCompiledElmKernel()
 	if (!kernel) {
+		_kernelOfflineCounter++
 		return {
 			kind: "kernel_offline",
 			classification: "background_notify_authority_elm_kernel_offline",
 		}
 	}
-	const wireValue = JSON.stringify(buildFactsJson(input))
-	kernel.sendInbound(wireValue)
-	await new Promise<void>((resolve) => setTimeout(resolve, 0))
-	const out = kernel.recvOutbound()
-	if (out === null) {
-		return {
-			kind: "no_decision",
-			classification: "background_notify_authority_elm_no_decision",
-		}
+	const requestId = options.requestId ?? nextRequestId()
+	const timeoutMs = options.timeoutMs ?? DEFAULT_BNA_ELM_TIMEOUT_MS
+	const envelope = {
+		version: 1,
+		requestId,
+		facts: {
+			jobId: input.jobId,
+			terminalState: input.terminalState,
+			isContainmentFailed: input.isContainmentFailed,
+			exitCode: input.exitCode === null ? -1 : input.exitCode,
+			reason: input.reason ?? null,
+			outputTail: input.outputTail ?? null,
+			markerSessionId: input.markerSessionId,
+			markerTaskId: input.markerTaskId,
+			activeOwnerSessionId: input.activeOwnerSessionId,
+			activeOwnerTaskId: input.activeOwnerTaskId,
+			remainingNotify: input.remainingNotify,
+		},
 	}
-	return decodeDirective(out)
+	const wireValue = JSON.stringify(envelope)
+
+	const promise = new Promise<BackgroundNotifyAuthorityElmAudit>((resolve) => {
+		const timeoutHandle = setTimeout(() => {
+			// If the timeout fires first, the entry will still be
+			// present; remove it and resolve as `response_timeout`.
+			// If a real response has already settled the entry,
+			// the second delete is a no-op.
+			const stillPending = _pendingByRequestId.delete(requestId)
+			if (stillPending) {
+				resolve({
+					kind: "response_timeout",
+					requestId,
+					timeoutMs,
+					classification: "background_notify_authority_elm_response_timeout",
+				})
+			}
+		}, timeoutMs)
+		_pendingByRequestId.set(requestId, { resolve, timeoutHandle, timeoutMs })
+		try {
+			kernel.sendInbound(wireValue)
+		} catch (err) {
+			// Synchronous throw from the kernel port. Settle the
+			// pending entry as a kernel_offline so the consumer
+			// sees a classified failure rather than a hung promise.
+			settlePending(requestId, {
+				kind: "kernel_offline",
+				classification: "background_notify_authority_elm_kernel_offline",
+			})
+			Logger.error(`[background-notify-authority-elm] sendInbound threw: ${errorNameOf(err)}`)
+		}
+	})
+
+	const audit = await promise
+	if (audit.kind === "decode_error") {
+		_decodeErrorCounter++
+	} else if (audit.kind === "kernel_offline") {
+		_kernelOfflineCounter++
+	} else if (audit.kind === "response_timeout") {
+		_responseTimeoutCounter++
+	} else if (audit.kind === "response_mismatch") {
+		_responseMismatchCounter++
+	}
+	return audit
+}
+
+/**
+ * Backwards-compatible audit-only entry point. Wraps
+ * `invokeElmForConsumeDecision` with a short timeout for the
+ * BNAEC01 test surface. The test does NOT inspect correlation
+ * (it asserts only the decision kind), so the synthetic
+ * `requestId` is fine.
+ */
+export async function pickConsumeDecisionForAudit(
+	input: BackgroundNotifyAuthorityFactsInput,
+): Promise<BackgroundNotifyAuthorityElmAudit> {
+	return invokeElmForConsumeDecision(input, { timeoutMs: 2_000 })
 }
 
 /**
@@ -612,15 +787,32 @@ export function failClosedNoMarker(): BackgroundNotifyAuthorityDecision {
 
 let _kernelOfflineCounter = 0
 let _decodeErrorCounter = 0
+let _responseTimeoutCounter = 0
+let _responseMismatchCounter = 0
 
 export function getBackgroundNotifyAuthorityElmAuthorityCounters(): {
 	readonly kernelOffline: number
 	readonly decodeError: number
+	readonly responseTimeout: number
+	readonly responseMismatch: number
+	readonly pendingRequestCount: number
 } {
-	return { kernelOffline: _kernelOfflineCounter, decodeError: _decodeErrorCounter }
+	return {
+		kernelOffline: _kernelOfflineCounter,
+		decodeError: _decodeErrorCounter,
+		responseTimeout: _responseTimeoutCounter,
+		responseMismatch: _responseMismatchCounter,
+		pendingRequestCount: _pendingByRequestId.size,
+	}
 }
 
 export function resetBackgroundNotifyAuthorityElmAuthorityForTests(): void {
 	_kernelOfflineCounter = 0
 	_decodeErrorCounter = 0
+	_responseTimeoutCounter = 0
+	_responseMismatchCounter = 0
+	disposeAllPending({
+		kind: "kernel_offline",
+		classification: "background_notify_authority_elm_kernel_offline",
+	})
 }

@@ -1,11 +1,16 @@
 module Codec exposing
-    ( factsDecoder
+    ( Envelope
+    , factsDecoder
     , factsFromString
+    , envelopeDecoder
+    , envelopeFromString
+    , envelopeToOutbound
     , encodeDecision
     , encodeTerminalState
     , encodeMarkerPresence
     , encodeOwnerKey
     , encodeJobExitCode
+    , summaryOf
     )
 
 
@@ -67,12 +72,112 @@ import Json.Encode as Encode exposing (Value)
 -- ---------------------------------------------------------------------------
 
 
-factsDecoder : Decoder Facts
-factsDecoder =
+{-| Inbound envelope: `version`, optional `requestId` (opaque, host-owned
+correlation token), and the typed `facts`. The `requestId` is a
+host-owned passthrough — the kernel does NOT consult it for policy
+decisions; it only echoes it back on the outbound envelope so the
+TS adapter can route concurrent requests to the right pending
+resolver.
+
+Wire envelope (C2 correlation protocol):
+
+  {
+    "version": 1,
+    "requestId": "opaque-host-token",  -- optional, may be null
+    "facts": { ... }
+  }
+
+When `requestId` is missing or `null` the kernel still emits a
+directive; the TS adapter treats that as a non-correlated call
+(used by the BNAEC01 audit-only path).
+-}
+type alias Envelope =
+    { version : Int
+    , requestId : Maybe String
+    , facts : Facts
+    }
+
+
+envelopeDecoder : Decoder Envelope
+envelopeDecoder =
+    Decode.value
+        |> Decode.andThen buildEnvelope
+
+
+{-| Build an `Envelope` from the full inbound `Decode.Value`. The
+`requestId` is extracted via `decodeOptionalString` so a missing
+field resolves to `Nothing` (NOT a `Field` error). `version` and
+`facts` are decoded strictly.
+-}
+buildEnvelope : Decode.Value -> Decoder Envelope
+buildEnvelope raw =
     Decode.map2
-        (\_ facts -> facts)
+        (\version facts ->
+            Envelope version (decodeOptionalStringFromValue raw) facts
+        )
         (Decode.field "version" versionDecoder)
         (Decode.field "facts" factsObjectDecoder)
+
+
+{-| Extract the optional `requestId` from a `Decode.Value`. The
+field is OPTIONAL: missing or `null` both resolve to `Nothing`,
+present string resolves to `Just <string>`. We deliberately
+catch the `Field` error so the optional semantics work.
+-}
+decodeOptionalStringFromValue : Decode.Value -> Maybe String
+decodeOptionalStringFromValue raw =
+    case Decode.decodeValue (Decode.field "requestId" decodeNullableString) raw of
+        Ok v ->
+            v
+
+        Err _ ->
+            Nothing
+
+
+factsDecoder : Decoder Facts
+factsDecoder =
+    Decode.field "facts" factsObjectDecoder
+
+
+envelopeFromString : String -> Result Decode.Error Envelope
+envelopeFromString =
+    Decode.decodeString envelopeDecoder
+
+
+envelopeToOutbound : Maybe String -> ConsumeDecision -> Value
+envelopeToOutbound requestId decision =
+    Encode.object
+        [ ( "kind", Encode.string "directive" )
+        , ( "decision", encodeDecision decision )
+        , ( "summary", Encode.string (summaryOf decision) )
+        , ( "requestId"
+          , case requestId of
+                Just rid ->
+                    Encode.string rid
+
+                Nothing ->
+                    Encode.null
+          )
+        ]
+
+
+summaryOf : ConsumeDecision -> String
+summaryOf d =
+    case d of
+        NoMarker ->
+            "no_marker"
+
+        OwnerMismatch ->
+            "owner_mismatch"
+
+        ContainmentNoWake jobId ->
+            "containment_no_wake:" ++ jobId
+
+        Held jobId heldCount ->
+            "held:" ++ jobId ++ ":" ++ String.fromInt heldCount
+
+        Drained jobId drainedCount ->
+            "drained:" ++ jobId ++ ":" ++ String.fromInt drainedCount
 
 
 versionDecoder : Decoder Int
