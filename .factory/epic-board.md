@@ -22707,3 +22707,97 @@ The fix is built on the verified state at HEAD 050641f5e, with one bounded produ
 | LIVE post-fix                                      | NOT_EXECUTED          |
 
 The committed RCNC01 patch (`9e512dba9`) is preserved; this ACT only adds the discriminator test that closes the reviewer's halt. No production code change.
+
+## ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION02 — TERMINAL_STATE_MONOTONICITY_SAFETY — 2026-10-09
+
+**Status:** CLOSED with verdict `TERMINAL_STATE_MONOTONICITY_SAFETY` after adding two adversarial tests and a one-bounded-repair at the publication boundary that closed the Factory reviewer's halt `HALT_TERMINAL_STATE_MONOTONICITY_NOT_PROVEN`. Production delta is small (one optional 4th parameter on `onBackgroundStateChange` threaded through 3 type aliases + the controller's projection branch; one `evidence?.isLiveInManager === true` guard at the writer).
+
+**What the reviewer identified**: a terminal projection (e.g. `containment_failed`) can be silently revoked by a delayed running observation. RCNC02-03's reconciliation path (a `command_status` poll observing a `running` snapshot) fires the bounded fix's `onRunningObserved` callback, which forwards to `updateBackgroundCommandState(true, jobId, undefined)`. The pre-repair controller unconditionally wrote `"running"` to the projection map, overwriting any terminal value. The reviewer's T1-T5 scenario:
+- T1: `command_status` captures J=running
+- T2: J genuinely terminates
+- T3: terminal callback publishes `containment_failed`
+- T4: delayed running observation invokes `onRunningObserved(J)`
+- T5: UI incorrectly reverts to `Backgrounded`
+
+**Production causal ordering (the discriminator)**: the runner's terminal listener fires AFTER the manager has finalized the job (the manager's `terminalPromise` resolves only after `finalize()` runs, and the listener is `start.terminalPromise.then(...)`). So by the time the projection is updated to a terminal reason, the manager has already moved the job from `this.active` to `this.terminal`. A subsequent `command_status` observes a terminal snapshot, and the bounded fix's `onRunningObserved` callback does NOT fire (gated by `snap.state === "running"` at `command-status-tool.ts:262-264`). The race is prevented by the natural ordering.
+
+**The bounded repair** (one optional parameter + one writer guard):
+- `command-status-tool.ts:262-264` — the `onRunningObserved` callback now receives `(jobId, { isLiveInManager: true })` evidence. The manager snapshot's `state === "running"` is the canonical liveness evidence.
+- `vscode-runtime-builder.ts:296-298` — the closure forwards the evidence parameter through to the host's `updateBackgroundCommandState`.
+- `SdkController.updateBackgroundCommandState` — accepts an optional 4th `evidence` parameter. In the `running && taskId` branch, the writer refuses to overwrite a terminal projection UNLESS `evidence?.isLiveInManager === true`:
+  ```ts
+  if (
+      evidence?.isLiveInManager !== true &&
+      this.backgroundCommandJobStates[taskId] !== undefined &&
+      this.backgroundCommandJobStates[taskId] !== "running"
+  ) {
+      // Terminal monotonicity: do not overwrite.
+      return
+  }
+  this.backgroundCommandJobStates[taskId] = "running"
+  ```
+- The runner's start-side call carries `evidence = undefined` (a fresh jobId's projection is `undefined`; the guard does not fire); the runner's terminal-side call sets `running = false` and lands in the per-job terminal branch (no overwrite). The bounded fix's `command_status` path carries `{ isLiveInManager: true }` and reconciles (RCNC02-03). A stale-by-causal-ordering direct invocation without evidence is refused (RCNC02-05/06).
+- 3 type aliases updated with the optional 4th parameter: `vscode-run-commands-tool.ts:onBackgroundStateChange`, `sdk-session-lifecycle.ts:onBackgroundStateChange`, `vscode-session-host.ts:onBackgroundStateChange`, plus the runtime builder's own `onBackgroundStateChange` option.
+
+**Adversarial tests** (RCNC02-05/06) — both reproduce the pre-repair risk, both pass with the guard:
+
+| Test | Discriminator | Pre-repair | Post-repair |
+| ---- | ------------- | ---------- | ----------- |
+| RCNC02-05 | A stale running observation delivered AFTER a genuine terminal publication must NOT revert the terminal projection to `"running"`. Drives the supervisor to a natural exit (genuine terminal via the production `terminalPromise.then` listener), then delivers a direct `h.onRunningObserved(jobId)` callback without evidence. Asserts the projection stays terminal. | RED (projection reverts to "running") | GREEN (guard refuses) |
+| RCNC02-06 | A genuine `containment_failed` publication is NOT silently revoked by a later running observation. Publishes the projection to `containment_failed` (the runner's listener publication), then delivers a stale `onRunningObserved(jobId)` callback without evidence. Asserts the projection stays `containment_failed`. | RED (projection reverts to "running") | GREEN (guard refuses) |
+
+**Ablation**: confirmed the guard is load-bearing. Replacing the guard body with a no-op returns RCNC02-05 and RCNC02-06 to RED (4 passed, 2 failed). Restoring the guard returns all 6 RCNC02 tests to GREEN.
+
+**Production delta**: 8 files changed, 319 insertions, 9 deletions. The bounded fix is strictly scoped to the `running && taskId` branch in `updateBackgroundCommandState` and the threading of an optional evidence parameter through 4 type aliases. No new architecture, no Elm kernel change, no protocol migration.
+
+**Files changed** (this correction ACT):
+
+| File | Change |
+| ---- | ------ |
+| `apps/vscode/src/sdk/SdkController.ts` | +54 lines: optional `evidence` parameter on `updateBackgroundCommandState`; terminal-monotonicity guard in the `running && taskId` branch |
+| `apps/vscode/src/sdk/command-status-tool.ts` | +33 lines: optional `evidence` parameter on the `onRunningObserved` callback type; passes `{ isLiveInManager: true }` at the `if (snap.state === "running")` site |
+| `apps/vscode/src/sdk/vscode-runtime-builder.ts` | +34 lines: optional `evidence` parameter on the runtime builder's `onBackgroundStateChange` option; closure forwards evidence to the host |
+| `apps/vscode/src/sdk/vscode-run-commands-tool.ts` | +19 lines: optional `evidence` parameter on the runner's `onBackgroundStateChange` type |
+| `apps/vscode/src/sdk/sdk-session-lifecycle.ts` | +8 lines: optional `evidence` parameter on the lifecycle's `onBackgroundStateChange` type |
+| `apps/vscode/src/sdk/vscode-session-host.ts` | +8 lines: optional `evidence` parameter on the session host's `onBackgroundStateChange` type |
+| `apps/vscode/src/sdk/__tests__/run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts` | +164 lines: 2 new tests (RCNC02-05/06); updated harness types to forward `evidence` |
+| `apps/vscode/src/sdk/__tests__/run-commands-nonterminal-classification01.rcnc01.test.ts` | +8/-1 lines: updated the `onRunningObserved` spy assertion to expect the new `evidence` argument |
+
+**Gates**:
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts` → **6 passed (RCNC02-01..06)**
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-classification01.rcnc01.test.ts` → **5 passed (no regression)**
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-{controller,multi-job-controller,runner-controller-composition}.test.ts` → **13 passed (no regression)**
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-runner-seam.test.ts` → **5 passed (no regression)**
+- Full `bun run test:vitest` → 706 passed, 382 failed-or-RED-desired; the failed set is unchanged by this ACT (the pre-existing BCB01-C2/C4, BCTCP-RUNNER-SEAM, and the 2 RCNC01 seed `sdk-session-event-coordinator.test.ts:CPL02/OWN01` failures documented as "RED documenting desired state" in the predecessor ACT). `git stash push` of the bounded fix returns identical failures — pre-existing, not introduced.
+- `cd apps/vscode && bun x tsc --noEmit --project tsconfig.json` → exit 0 (0 errors)
+- `cd apps/vscode && bun x biome check --no-errors-on-unmatched <7 changed source files>` → "Checked 7 files in 241ms. No fixes applied." (pre-existing non-blocking infos on unrelated lines)
+- `git diff --check` → exit 0
+- VSIX packaging: NOT_EXECUTED (operator-owned exact-head packaging per C13 directive)
+- LIVE post-fix qualification: NOT_EXECUTED
+
+**Conservation properties**:
+
+| Invariant | Verified by |
+| --------- | ----------- |
+| Nonterminal running response NOT fabricated as terminal failure | RCNC02-01 |
+| Real command failure still reports as failed | RCNC-02 (rcnc01), RCNC02-04 |
+| Cancellation still distinguished from success | RCNC-05 (rcnc01) |
+| Repeated observation — no duplicate job identity | RCNC-03 (rcnc01) idempotency, RCNC02-03 |
+| **NEW: stale `onRunningObserved` callback without evidence does NOT revert a terminal projection** | **RCNC02-05** |
+| **NEW: a genuine `containment_failed` publication is NOT silently revoked by a later running observation** | **RCNC02-06** |
+| Completion attempt — no fabricated `task_completion_committed` | by inspection |
+| STALL/REARM / Completion Authority unchanged | by inspection |
+| Background-notify exactly-once delivery semantics unchanged | by inspection |
+| Runner's start-side call still sets the projection to `"running"` (fresh jobId) | by inspection (guard only fires for non-`undefined` non-`"running"` projections) |
+| Runner's terminal-side call still sets the projection to the terminal reason (not a `running` write) | by inspection (the `!running && taskId !== undefined` branch is unchanged) |
+
+**Forward-look**:
+- **P0-B post-turn-presentation** remains the explicit successor ACT (`ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01`), unchanged.
+- **LIVE post-fix qualification** of the bounded fix + this monotonicity guard is the only way to confirm the original P0-A mechanism. Operator owns the exact-head packaging and the LIVE verification per the brief's C13 directive.
+- The 4-type-alias threading of `evidence` is a structural change to the `onBackgroundStateChange` signature. Any future caller of `updateBackgroundCommandState` from outside the runner (e.g. the legacy `cancelBackgroundCommand()` fast-path) is unaffected: the parameter is optional, and the guard only fires for `running` writes that would overwrite a terminal projection — the legacy path only does `!running` writes.
+
+**Predecessor ACT lineage**:
+- `ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01` (PASS_NONTERMINAL_COMMAND_RESULT_CLASSIFICATION_PRELIVE) at HEAD `9e512dba9` — established the bounded fix.
+- `ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION01` (BOUNDED_RUN_COMMANDS_TOOL_RESULT_DISCRIMINATOR) at HEAD `c2a8992eb` — closed the reviewer's `HALT_REAL_COMMAND_RESULT_SEAM_NOT_EXERCISED` by exercising the real production composition; this correction02 ACT closes the reviewer's `HALT_TERMINAL_STATE_MONOTONICITY_NOT_PROVEN` with two adversarial tests and the bounded writer guard.
+
+The committed RCNC-01 patch (`9e512dba9`) and the RCNC02-01..04 discriminator (`c2a8992eb`) are preserved; this ACT only adds the bounded monotonicity guard + 2 new adversarial tests. No production semantic regression in any of the load-bearing paths.

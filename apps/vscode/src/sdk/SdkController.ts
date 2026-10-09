@@ -5251,6 +5251,26 @@ export class Controller {
 		 * semantics (BCTCP-CTL-02, BTCONT-CTL-04).
 		 */
 		terminalState?: Exclude<CommandJobState, "running">,
+		/**
+		 * ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+		 * (RCNC02-05/06): the monotonicity evidence for `running`
+		 * reconciliation writes. When set, `evidence.isLiveInManager
+		 * === true` authorizes the controller to OVERWRITE a
+		 * terminal projection with `"running"` — the bounded fix's
+		 * load-bearing path (RCNC02-03 reconciles a stale
+		 * `containment_failed` back to `"running"` while the job
+		 * is still alive in the manager). When undefined (legacy
+		 * callers, the runner's terminal publication, the test
+		 * seam), the controller refuses to overwrite a terminal
+		 * projection — a stale-by-causal-ordering observation
+		 * must NOT silently revoke a genuine terminal publication
+		 * (RCNC02-05/06). The runner's start-side call carries
+		 * `evidence = undefined` because the projection for a
+		 * fresh jobId is `undefined` (the gate below only
+		 * fires when the projection is already terminal, so the
+		 * runner's calls are unaffected).
+		 */
+		evidence?: { isLiveInManager?: boolean },
 	): Promise<void> {
 		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
 		// (correction01): the scalar `backgroundCommandRunning` is
@@ -5280,6 +5300,40 @@ export class Controller {
 		//                                     still send the legacy
 		//                                     (false, undefined) shape.
 		if (running && taskId) {
+			// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+			// (RCNC02-05/06 — terminal monotonicity guard): the
+			// publication boundary refuses to overwrite a terminal
+			// projection with a `running` value UNLESS the bounded
+			// fix's `onRunningObserved(jobId, { isLiveInManager: true
+			// })` evidence is present. The bounded fix's callback is
+			// fired from `command-status-tool.ts:262-264` ONLY when
+			// the manager snapshot's `state === "running"` — i.e. the
+			// job is alive in the manager. A genuine terminal
+			// publication (runner or manual desync) places the job
+			// in `this.terminal` (or removes it entirely), so a
+			// subsequent `command_status` would observe a terminal
+			// snapshot and the callback would NOT fire. Defense in
+			// depth: a stale-by-causal-ordering direct invocation
+			// (e.g. a future caller, or the test seam at
+			// `rcnc02.test.ts:RCNC02-05`) carries no evidence, so
+			// the guard refuses to overwrite. A real `containment_
+			// failed` (a safety failure the model needs to know
+			// about) is not silently revoked by a merely-running
+			// snapshot. The runner's start-side call carries
+			// `evidence = undefined` (a fresh jobId has no prior
+			// projection, so the guard below does not fire); the
+			// runner's terminal publication sets `running = false`
+			// and lands in the per-job terminal branch below.
+			if (
+				evidence?.isLiveInManager !== true &&
+				this.backgroundCommandJobStates[taskId] !== undefined &&
+				this.backgroundCommandJobStates[taskId] !== "running"
+			) {
+				// Terminal monotonicity: do not overwrite. The
+				// projection stays terminal. The chat row's pill
+				// keeps the genuine terminal reason.
+				return
+			}
 			this.backgroundCommandJobStates[taskId] = "running"
 		} else if (!running && taskId !== undefined) {
 			// Per-job terminal — the runner's load-bearing signal

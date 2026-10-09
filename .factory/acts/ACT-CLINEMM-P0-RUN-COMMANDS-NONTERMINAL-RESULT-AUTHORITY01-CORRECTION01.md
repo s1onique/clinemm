@@ -85,3 +85,73 @@ It does NOT prove that the hypothesised desync **did** fire in the original fail
 | P0-B post-turn-presentation                        | REMAINS OPEN          |
 | Exact source HEAD                                  | `9e512dba9` + rcnc02 test |
 | LIVE post-fix                                      | NOT_EXECUTED          |
+
+---
+
+# ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION02 — TERMINAL_STATE_MONOTONICITY_SAFETY — 2026-10-09
+
+## 1. Reviewer halt (follow-up)
+
+After the RCNC02-01..04 discriminator at HEAD `c2a8992eb` closed the reviewer's `HALT_REAL_COMMAND_RESULT_SEAM_NOT_EXERCISED`, the reviewer issued a follow-up halt:
+
+> **HALT_TERMINAL_STATE_MONOTONICITY_NOT_PROVEN**
+> "RCNC02-03 demonstrates this sequence: [running → containment_failed → running via command_status]. That is acceptable only if the terminal projection is known to be stale. But the production callback cannot determine that. It receives a job ID, not a causally ordered observation version or terminal-publication identity. ... This is a new correctness risk introduced by the reconciliation mechanism."
+
+The reviewer demanded two adversarial tests and a bounded repair at the observation/publication boundary if the risk reproduces.
+
+## 2. Two adversarial tests
+
+| Test | Discriminator |
+| ---- | ------------- |
+| RCNC02-05 | Stale running observation after genuine terminal publication. Drive a natural exit (the production `terminalPromise.then` listener publishes the terminal reason), then deliver a stale `h.onRunningObserved(jobId)` callback. Projection must stay terminal. |
+| RCNC02-06 | Genuine `containment_failed` publication is NOT silently revoked by a later running observation. Publish `containment_failed` via the production closure, then deliver a stale `h.onRunningObserved(jobId)` callback. Projection must stay `containment_failed`. |
+
+## 3. Risk confirmed
+
+Both tests fail against the pre-repair controller (the `running && taskId` branch unconditionally writes `"running"`):
+
+```
+AssertionError: expected 'running' to be 'exited' // RCNC02-05
+AssertionError: expected 'running' to be 'containment_failed' // RCNC02-06
+```
+
+## 4. Bounded repair
+
+The publication boundary needs an evidence-gated monotonicity guard. The `command_status` tool is the canonical nonterminal observation seam; it has the manager's snapshot in hand. The discriminator: `snap.state === "running"` implies the job is alive in `manager.active` — the evidence that authorizes reconciliation. A direct invocation without that evidence is a stale-by-causal-ordering callback and must be refused.
+
+**One optional 4th parameter `evidence?: { isLiveInManager?: boolean }` on `onBackgroundStateChange`**, threaded through 4 type aliases (`vscode-run-commands-tool.ts`, `sdk-session-lifecycle.ts`, `vscode-session-host.ts`, `vscode-runtime-builder.ts`) and the `updateBackgroundCommandState` writer. The writer guards:
+
+```ts
+if (
+    evidence?.isLiveInManager !== true &&
+    this.backgroundCommandJobStates[taskId] !== undefined &&
+    this.backgroundCommandJobStates[taskId] !== "running"
+) {
+    // Terminal monotonicity: do not overwrite. The projection stays terminal.
+    return
+}
+this.backgroundCommandJobStates[taskId] = "running"
+```
+
+The runner's start-side call carries `evidence = undefined` (a fresh jobId's projection is `undefined`; the guard does not fire). The runner's terminal-side call sets `running = false` and lands in the per-job terminal branch (no overwrite). The bounded fix's `command_status` path carries `{ isLiveInManager: true }` and reconciles (RCNC02-03). A stale direct invocation without evidence is refused (RCNC02-05/06).
+
+## 5. Test results
+
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts` → 6 passed (RCNC02-01..06)
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-classification01.rcnc01.test.ts` → 5 passed (no regression; updated the spy assertion to expect the new evidence argument)
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-{controller,multi-job-controller,runner-controller-composition}.test.ts` → 13 passed (no regression)
+
+## 6. Ablation
+
+Replacing the guard body with a no-op returns RCNC02-05 and RCNC02-06 to RED (4 passed, 2 failed). Restoring the guard returns all 6 RCNC02 tests to GREEN.
+
+## 7. Disposition
+
+| Claim | Decision |
+| ----- | -------- |
+| Original P0-A mechanism is the hypothesised desync | PLAUSIBLE, not proven |
+| Terminal-state monotonicity regression risk | CONFIRMED (RCNC02-05/06 pre-repair) |
+| Bounded fix closes the monotonicity risk | CONFIRMED (RCNC02-05/06 post-repair) |
+| Original bounded fix is preserved (RCNC02-01..04) | PASS, all 4 GREEN |
+| P0-B post-turn-presentation | REMAINS OPEN |
+| LIVE post-fix | NOT_EXECUTED |

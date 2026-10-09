@@ -143,8 +143,22 @@ export interface CreateCommandStatusToolOptions {
 	 * `vscode-runtime-builder.ts:277-282`) forwards this to
 	 * the host's `updateBackgroundCommandState(true, jobId)`
 	 * (idempotent — already-running entries are a no-op).
+	 *
+	 * ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+	 * (RCNC02-05/06): the callback receives an `evidence`
+	 * parameter carrying the manager's liveness verdict. The
+	 * tool ALWAYS passes `{ isLiveInManager: true }` when the
+	 * snapshot's `state === "running"` (the job is alive in
+	 * the manager). The host's `updateBackgroundCommandState`
+	 * uses this evidence to authorize the bounded fix's
+	 * load-bearing reconciliation path: a `running` write that
+	 * overwrites a terminal projection is permitted ONLY when
+	 * `evidence.isLiveInManager === true`. A direct invocation
+	 * without evidence (e.g. a stale-by-causal-ordering test
+	 * seam) is refused — a genuine terminal publication is not
+	 * silently revoked.
 	 */
-	onRunningObserved?: (jobId: string) => void
+	onRunningObserved?: (jobId: string, evidence?: { isLiveInManager?: boolean }) => void
 }
 
 /**
@@ -260,7 +274,22 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 			// terminal authority, and reasserting `running` would
 			// race the terminal listener.
 			if (snap.state === "running") {
-				options.onRunningObserved?.(typed.jobId)
+				// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+				// (RCNC02-05/06): pass the manager's liveness
+				// evidence to the host. The manager snapshot
+				// state is `"running"`, so the job is alive in
+				// `manager.active`. The host's
+				// `updateBackgroundCommandState` uses this
+				// evidence to authorize the bounded fix's
+				// load-bearing reconciliation path: a `running`
+				// write that overwrites a terminal projection
+				// is permitted ONLY when the manager confirms
+				// the job is alive. A delayed stale observation
+				// (after a genuine terminal publication) cannot
+				// produce a manager-`running` snapshot because
+				// the manager's `finalize()` has already moved
+				// the job to `this.terminal`.
+				options.onRunningObserved?.(typed.jobId, { isLiveInManager: true })
 			}
 			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
 			// Path B resolution. When this status call observes a

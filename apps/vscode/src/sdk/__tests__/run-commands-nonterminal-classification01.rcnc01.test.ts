@@ -257,7 +257,13 @@ describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01 / RCNC01", 
 
 			// THE BOUNDED FIX: the projection MUST be reconciled
 			// to "running" by the command_status observation.
-			expect(status.onRunningObservedSpy).toHaveBeenCalledWith(jobId)
+			// The callback is invoked with
+			// `(jobId, { isLiveInManager: true })` per the
+			// RCNC02-05/06 terminal-monotonicity contract
+			// (the manager snapshot's `state === "running"` is
+			// the evidence that authorizes the bounded fix's
+			// load-bearing reconciliation path).
+			expect(status.onRunningObservedSpy).toHaveBeenCalledWith(jobId, { isLiveInManager: true })
 			expect(harness.projection[jobId]).toBe("running")
 		} finally {
 			await harness.manager.dispose()

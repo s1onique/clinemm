@@ -145,6 +145,14 @@ export interface VscodeSessionHostOptions {
 		running: boolean,
 		jobId: string | undefined,
 		terminalState?: Exclude<CommandJobState, "running">,
+		/**
+		 * ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+		 * (RCNC02-05/06): the monotonicity evidence forwarded by
+		 * the bounded fix's `onRunningObserved` callback. See
+		 * `vscode-run-commands-tool.ts:onBackgroundStateChange`
+		 * for the contract. Pass-through only.
+		 */
+		evidence?: { isLiveInManager?: boolean },
 	) => void
 	/**
 	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: optional

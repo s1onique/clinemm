@@ -137,6 +137,25 @@ export interface VscodeExtraToolsOptions {
 		running: boolean,
 		jobId: string | undefined,
 		terminalState?: Exclude<CommandJobState, "running">,
+		/**
+		 * ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+		 * (RCNC02-05/06): the monotonicity evidence. The bounded
+		 * fix's `onRunningObserved(jobId, evidence)` callback
+		 * passes `{ isLiveInManager: true }` when the manager
+		 * snapshot's state is "running" (the job is alive in
+		 * `manager.active`). The host's
+		 * `updateBackgroundCommandState` uses this evidence to
+		 * authorize the bounded fix's load-bearing
+		 * reconciliation path: a `running` write that overwrites
+		 * a terminal projection is permitted ONLY when the
+		 * evidence confirms the manager says the job is alive.
+		 * A direct invocation without evidence (e.g. a stale-
+		 * by-causal-ordering test seam) is refused — a genuine
+		 * terminal publication is not silently revoked. See
+		 * `vscode-run-commands-tool.ts:onBackgroundStateChange`
+		 * for the full contract.
+		 */
+		evidence?: { isLiveInManager?: boolean },
 	) => void
 	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
@@ -289,12 +308,25 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 			// result. The host's `updateBackgroundCommandState(true,
 			// jobId)` is idempotent; a no-op when the projection is
 			// already `running`.
+			//
+			// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+			// (RCNC02-05/06 — terminal monotonicity): the
+			// `onRunningObserved(jobId, evidence)` callback forwards
+			// the manager's liveness evidence through to the host.
+			// The host's `updateBackgroundCommandState` requires
+			// `evidence.isLiveInManager === true` to authorize a
+			// `running` write that overwrites a terminal projection
+			// (the bounded fix's load-bearing reconciliation
+			// path). A direct invocation without evidence (e.g. a
+			// stale-by-causal-ordering test seam) is refused —
+			// a genuine terminal publication is not silently
+			// revoked.
 			tools.push(
 				createCommandStatusTool(options.commandJobManager, {
 					backgroundNotifyCoordinator: options.backgroundNotifyCoordinator,
 					resolveActiveOwner: options.resolveActiveOwner,
 					onRunningObserved: options.onBackgroundStateChange
-						? (jobId) => options.onBackgroundStateChange?.(true, jobId, undefined)
+						? (jobId, evidence) => options.onBackgroundStateChange?.(true, jobId, undefined, evidence)
 						: undefined,
 				}),
 			)

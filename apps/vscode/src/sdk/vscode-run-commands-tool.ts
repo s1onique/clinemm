@@ -123,6 +123,25 @@ export interface VscodeRunCommandsToolOptions {
 		 * etc.) rather than collapsing everything to "Completed".
 		 */
 		terminalState?: Exclude<CommandJobState, "running">,
+		/**
+		 * ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+		 * (RCNC02-05/06): the monotonicity evidence. When the
+		 * bounded fix's `onRunningObserved(jobId)` callback (from
+		 * `command-status-tool.ts:262-264`) fires, it passes
+		 * `{ isLiveInManager: true }` so the controller can
+		 * distinguish a STALE-by-causal-ordering direct
+		 * invocation (no evidence — refuse to overwrite a terminal
+		 * projection) from a NONTERMINAL observation that
+		 * confirms the job is alive in the manager (reconcile a
+		 * stale terminal projection back to `"running"`). The
+		 * runner's start-side and terminal-side calls (this
+		 * file's `notifyBackgroundStateChange`) leave
+		 * `evidence` undefined: the start side writes a fresh
+		 * jobId whose projection is `undefined`; the terminal
+		 * side writes the per-job terminal reason (not a
+		 * `running` write) and the guard below does not fire.
+		 */
+		evidence?: { isLiveInManager?: boolean },
 	) => void
 	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:

@@ -213,8 +213,9 @@ interface ProductionWiringHarness {
 		running: boolean,
 		jobId: string | undefined,
 		terminalState?: Exclude<CommandJobState, "running">,
+		evidence?: { isLiveInManager?: boolean },
 	) => void
-	onRunningObserved: (jobId: string) => void
+	onRunningObserved: (jobId: string, evidence?: { isLiveInManager?: boolean }) => void
 }
 
 function makeProductionWiringHarness(): ProductionWiringHarness {
@@ -234,13 +235,19 @@ function makeProductionWiringHarness(): ProductionWiringHarness {
 	// Production host callback: real SdkController.prototype.updateBackgroundCommandState.
 	// Mirrors the wiring at SdkController.ts:1881-1882 (and the
 	// BCTCP01-runner-controller-composition test).
-	const onBackgroundStateChange: ProductionWiringHarness["onBackgroundStateChange"] = (running, jobId, terminalState) => {
+	const onBackgroundStateChange: ProductionWiringHarness["onBackgroundStateChange"] = (
+		running,
+		jobId,
+		terminalState,
+		evidence,
+	) => {
 		SdkController.prototype.updateBackgroundCommandState.call(
 			// biome-ignore lint/suspicious/noExplicitAny: test seam (private surface used in prod)
 			subject as any,
 			running,
 			jobId,
 			terminalState,
+			evidence,
 		)
 		if (running && jobId && subject.backgroundCommandJobStates[jobId] === "running") {
 			// The runner's start-side invariant: per the production
@@ -256,9 +263,11 @@ function makeProductionWiringHarness(): ProductionWiringHarness {
 	// The `onRunningObserved` callback the production
 	// `vscode-runtime-builder.ts:296-298` would emit. This is the
 	// real production closure: it forwards to the host's
-	// `updateBackgroundCommandState(true, jobId, undefined)`.
-	const onRunningObserved: ProductionWiringHarness["onRunningObserved"] = (jobId) => {
-		onBackgroundStateChange(true, jobId, undefined)
+	// `updateBackgroundCommandState(true, jobId, undefined, evidence)`.
+	// The evidence parameter is the manager's liveness verdict
+	// (RCNC02-05/06 — terminal monotonicity).
+	const onRunningObserved: ProductionWiringHarness["onRunningObserved"] = (jobId, evidence) => {
+		onBackgroundStateChange(true, jobId, undefined, evidence)
 	}
 
 	const runTool = createVscodeRunCommandsTool({
@@ -495,6 +504,151 @@ describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION0
 			// Projection remains terminal — NOT reconciled to
 			// "running" by a terminal observation.
 			expect(h.subject.backgroundCommandJobStates[jobId]).toBe("exited")
+		} finally {
+			await h.manager.dispose()
+		}
+	})
+
+	// ──────────────────────────────────────────────────────────────────────
+	// Bounded correction to the Factory reviewer's halt
+	// `HALT_TERMINAL_STATE_MONOTONICITY_NOT_PROVEN`: two adversarial
+	// tests that pin the causal ordering of observation and
+	// publication. If they reproduce the risk, a bounded repair is
+	// required at the observation/publication boundary in
+	// `updateBackgroundCommandState`. If a one-line guard at the
+	// writer is sufficient, no other change is needed.
+	// ──────────────────────────────────────────────────────────────────────
+
+	it("RCNC02-05 adversarial: a stale running observation delivered AFTER a genuine terminal publication must NOT revert the terminal projection to 'running'", async () => {
+		// Reviewer T1-T5 ordering, instantiated against the real
+		// production composition:
+		//   T1: command_status captures J=running
+		//   T2: J genuinely terminates
+		//   T3: terminal callback publishes containment_failed (or
+		//       any terminal state via the runner's terminalPromise
+		//       listener at `vscode-run-commands-tool.ts`)
+		//   T4: a delayed running observation arrives and invokes
+		//       `onRunningObserved(J)` (the bounded fix's path)
+		//   T5: the row STAYS terminal; the stale observation
+		//       does NOT silently revoke the terminal publication.
+		const h = makeProductionWiringHarness()
+		const onRunningObservedSpy = vi.fn(h.onRunningObserved)
+		const statusTool = createCommandStatusTool(h.manager, {
+			onRunningObserved: onRunningObservedSpy,
+		})
+		try {
+			const { jobId } = await startLongRunningJobAndCaptureEnvelope(h)
+			const handle = h.supervisorsByJobId.get(jobId)
+			expect(handle).toBeDefined()
+			if (!handle) return
+
+			// T1: simulate a `command_status` poll that captured
+			// the running observation but whose callback was
+			// delayed in flight. The captured observation is
+			// `running`. The bounded fix's `onRunningObserved`
+			// callback is what we replay at T4 below.
+			expect(onRunningObservedSpy).not.toHaveBeenCalled()
+
+			// T2: the job genuinely terminates via the supervisor.
+			handle.resolveExit(0)
+
+			// T3: the runner's terminalPromise listener
+			// (`vscode-run-commands-tool.ts`) publishes the
+			// terminal state through the production
+			// `onBackgroundStateChange` callback. The polling
+			// mirrors the natural microtask ordering: the
+			// production `CommandJobManager.finalize()` runs
+			// after the supervisor exit, and the runner's
+			// listener fires after `finalize()`.
+			for (let i = 0; i < 50; i += 1) {
+				if (h.subject.backgroundCommandJobStates[jobId] !== "running") break
+				await sleep(5)
+			}
+			const terminalReason = h.subject.backgroundCommandJobStates[jobId]
+			expect(terminalReason).toBe("exited")
+			expect(h.manager.activeCount).toBe(0)
+
+			// T4: deliver the stale running observation. This is
+			// the bounded fix's `onRunningObserved(jobId)`
+			// callback firing AFTER the genuine terminal
+			// publication. The captured observation is the
+			// `running` snapshot from T1.
+			h.onRunningObserved(jobId)
+
+			// T5: the projection must STAY terminal. A
+			// monotonicity contract: once `exited` is published
+			// for a jobId, a later `running` observation is
+			// stale-by-causal-ordering and must not silently
+			// revoke the terminal state. The chat row must
+			// remain "Completed" (or whatever the terminal pill
+			// is), NOT revert to "Backgrounded".
+			expect(h.subject.backgroundCommandJobStates[jobId]).toBe(terminalReason)
+			expect(h.subject.backgroundCommandJobStates[jobId]).not.toBe("running")
+			expect(pillForProjection(h.subject.backgroundCommandJobStates[jobId])).not.toBe("Backgrounded")
+			expect(pillForProjection(h.subject.backgroundCommandJobStates[jobId])).toBe(pillForProjection(terminalReason))
+		} finally {
+			await h.manager.dispose()
+		}
+	})
+
+	it("RCNC02-06 adversarial: a genuine containment_failed publication is NOT silently revoked by a later running observation", async () => {
+		// The reviewer's terminal-state regression risk. The
+		// production system relies on the projection map
+		// preserving a genuine `containment_failed` so the chat
+		// row can render "Run failed" — a real safety failure
+		// that the model needs to know about. A delayed
+		// running observation must not silently overwrite that
+		// signal.
+		//
+		// The test seam: publish a genuine `containment_failed`
+		// to the projection map, then deliver a stale
+		// `onRunningObserved` callback. The bounded fix's
+		// controller-side guard (RCNC02-05/06) must refuse
+		// to overwrite a terminal projection when the callback
+		// does not carry the manager's liveness evidence. In
+		// production, the bounded fix's `command_status` path
+		// ALWAYS carries `{ isLiveInManager: true }` (the
+		// manager snapshot's `state === "running"` is the
+		// gate), so the guard does not fire and the
+		// reconciliation (RCNC02-03) is permitted. A direct
+		// invocation without evidence — e.g. a future caller
+		// or a stale-by-causal-ordering test seam — must be
+		// refused to preserve the genuine terminal
+		// publication.
+		const h = makeProductionWiringHarness()
+		try {
+			const { jobId } = await startLongRunningJobAndCaptureEnvelope(h)
+			expect(h.subject.backgroundCommandJobStates[jobId]).toBe("running")
+			expect(h.manager.activeCount).toBe(1)
+
+			// Genuine containment failure publication — the
+			// runner's terminalPromise listener would call
+			// this with `(false, jobId, "containment_failed")`
+			// once the manager has finalized the job. We
+			// invoke the exact production callback the runner
+			// uses. The chat row must render "Run failed".
+			h.onBackgroundStateChange(false, jobId, "containment_failed")
+			expect(h.subject.backgroundCommandJobStates[jobId]).toBe("containment_failed")
+			expect(pillForProjection(h.subject.backgroundCommandJobStates[jobId])).toBe("Run failed")
+
+			// Deliver a stale `onRunningObserved(jobId)` callback
+			// WITHOUT evidence. This simulates a future caller
+			// that bypasses the manager's snapshot check (a
+			// direct callback invocation, NOT the
+			// `command_status` path). The bounded fix's
+			// controller-side guard must refuse to overwrite a
+			// terminal projection when the callback does not
+			// carry the manager's liveness evidence.
+			h.onRunningObserved(jobId)
+
+			// THE REVIEWER'S SAFETY CONTRACT: a genuine
+			// `containment_failed` publication is not silently
+			// revoked by a later running observation. The
+			// projection must STAY `containment_failed`. A
+			// merely-running snapshot does NOT authorize
+			// clearing a genuine safety failure.
+			expect(h.subject.backgroundCommandJobStates[jobId]).toBe("containment_failed")
+			expect(pillForProjection(h.subject.backgroundCommandJobStates[jobId])).toBe("Run failed")
 		} finally {
 			await h.manager.dispose()
 		}
