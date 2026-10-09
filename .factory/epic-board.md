@@ -23015,3 +23015,104 @@ The reviewer flagged three bounded evidence-contract defects in the conservation
 **Operator LIVE qualification (C12) is PENDING**. The closed PRELIVE target HEAD is `5832f9b83f64bba0c7314d46ea69f6853fefdd9d`. The operator must record: VSIX byte size, SHA-256, installed VSIX/source identity, at least one genuinely blocked-but-incomplete task, held observations and task completion authority before/after publication, actual model-turn/queue state, host phase facts and Elm TaskHeader output, visible TaskHeader state and controls, and a legitimate recovery (or a source-backed explanation why recovery cannot occur). A LIVE screen showing a non-Working header is insufficient by itself; the header must agree with the authoritative host facts and must not fabricate task completion. The bounded P1 amendment is now the PTBPC-01..08 suite; the operator's blocked-task specimen must satisfy PTBPC-01 (Working SCAR absent, Complete fabrication absent), PTBPC-05 (a late K event does not contaminate K+1), PTBPC-07 (the visible label is "Error" not "Working" not "Complete"), and PTBPC-08 (a fresh completion turn after the BCB clears produces "Complete" without R2.5 retaining a stale `error`).
 
 **Verdict**: `PASS_POST_TURN_BLOCKED_PRESENTATION_CONVERGENCE_PRELIVE` authorizes progression to LIVE qualification from HEAD `5832f9b83`.
+
+# ACT-CLINEMM-ELM-SEAM06-PROMPT-ADMISSION-CUTOVER — NOT_A_GOOD_ELM_SEAM — 2026-10-09
+
+**Status:** CLOSED with verdict `NOT_A_GOOD_ELM_SEAM`. The
+SEAM05-selected production decision authority
+(`LocalRuntimeHost.runTurn` lines 1244–1274) cannot be safely
+migrated to Elm: the seam is one synchronous Boolean
+expression, the four existing Elm kernels all use
+`Platform.worker` (which routes through the Elm scheduler via
+microtasks), and adding an `await` between `canStartRun()`
+observation and the enqueue / `executeTurn` effect would
+introduce the concurrent-call race the SEAM04 review
+specifically halted on (`HALT_HELD_SET_PROGRESS_AUTHORITY_UNSAFE`).
+No production code touched. No Elm kernel written.
+
+**Per the SEAM05 reviewer (verbatim from
+`.factory/ACT-CLINEMM-ELM-SEAM05-PROMPT-ADMISSION-RECON.md`,
+§Migration-economics watch):**
+
+> If the clean boundary proves expensive, record
+> `NOT_A_GOOD_ELM_SEAM` and select the next candidate rather
+> than forcing the migration.
+
+The clean boundary IS expensive here:
+- ~1,500 lines of new code (4 Elm files, 1 TS adapter,
+  4 test files, packaging wiring, host plumbing).
+- A new async boundary in a currently-synchronous path.
+- A new failure mode (kernel offline / decode failure /
+  no response) in a place where zero failure modes exist
+  today.
+- Universal `immediate` fallback is forbidden by SEAM05 P1-B;
+  the only safe fallback (the predecessor TS expression)
+  means Elm is not the authority.
+
+**Preconditions met:**
+
+- ENTRY_HEAD = `3eb40c5f8ed73e890452512e001b5af55daec9ff` on
+  branch `main`; working tree clean; no stashes; no
+  uncommitted changes.
+- SEAM01–05 evidence preserved in `.factory/epic-board.md`
+  and the per-ACT files in `.factory/`.
+- SEAM04 outstanding VSIX / live qualification remains a
+  separate cursor (this ACT does NOT claim it).
+- HALT_UNEXPECTED_TRACKED_DIRT: NOT TRIGGERED.
+
+**C0 recon summary (full report:
+`.factory/ACT-CLINEMM-ELM-SEAM06-PROMPT-ADMISSION-CUTOVER.md`):**
+
+| Field | Value |
+| --- | --- |
+| `SDK_COMPOSITION_SEAM` | `sdk/packages/core/src/runtime/host/host.ts:createLocalRuntimeHost` |
+| `AUTHORITY_CALLBACK_SEAM` | Would require new `LocalRuntimeHostOptions.promptAdmissionAuthority` option |
+| `ELM_RUNTIME_LOCATION` | `apps/vscode/elm/prompt-admission-authority/` (mirrors 4 existing kernels) |
+| `SYNCHRONOUS_CALL_CONTRACT` | **FAILED** — `Platform.worker` is fundamentally async |
+| `SDK_NON_VSCODE_CONSUMERS` | Hub, daemon, test rigs — none currently import VS Code Elm kernels |
+
+**C2 — synchronous interop**: `OBSERVED_ASYNCHRONOUS`. The
+compiled `background-notify-authority.js` shows port
+dispatch via `_Scheduler_binding` (a microtask). The
+corresponding TS adapter
+(`apps/vscode/src/sdk/background-notify-authority-elm.ts:700`)
+is `async function invokeElmForConsumeDecision(...)`.
+
+**C11 — economics**: For a 1-line, 12-case, synchronous
+Boolean expression, an Elm kernel requires ~1,500 lines of
+new code. The four existing Elm kernels (completion-authority,
+task-header-orchestration, completion-continuation-control,
+background-notify-authority) each have 5–6 outcomes, complex
+precedence, and rich validation — semantic surfaces that
+justify the migration cost. The prompt-admission decision is
+10–20× smaller and offers no analogous semantic surface.
+
+**Verdict**: `NOT_A_GOOD_ELM_SEAM`. The production TS
+expression at `local-runtime-host.ts:1244–1248` remains the
+LIVE admission authority, unchanged. The next ACT should
+re-evaluate the Factory Elm migration queue against larger
+semantic surfaces rather than this 12-case Boolean.
+
+**Production delta**: ZERO. No production code touched.
+
+**Residue**:
+- P0: none.
+- P1: none.
+- P2 NON-BLOCKING: SEAM05's 22-test mirror in
+  `sdk/packages/core/src/runtime/turn-queue/admission-decision.test.ts`
+  is preserved as a literal mirror. The production seam at
+  `local-runtime-host.ts:1227–1274` is the primary evidence
+  for the admission policy.
+
+**Recommended next candidate**: A larger semantic surface
+(e.g. the long-horizon continuation cardinality, the
+held-set progress classification, or the completion-commit
+stage boundary) — NOT a 1-line Boolean expression.
+
+**Files**:
+- New:
+  `.factory/ACT-CLINEMM-ELM-SEAM06-PROMPT-ADMISSION-CUTOVER.md`
+  (this ACT's full report).
+- Updated:
+  `.factory/epic-board.md` (this section).
+- No source code changes.
