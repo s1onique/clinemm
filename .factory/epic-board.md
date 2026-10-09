@@ -23466,3 +23466,55 @@ new Elm kernel as a substrate-only decision authority.
 - No production code changes
 
 **Next cursor:** `SEAM08.1-E3.1-AUTHORITY-CUTOVER` — bounded merge of the new Elm consult into the production `enqueueCompletionContinuationIfHeld` path with commit-time identity revalidation in TS. The substrate must be reviewed first; the cutover is properly scoped (touches a critical production path; the existing `control-authority REMOVE-LEGACY-TS-AUTHORITY` ACT is a good template for the bounded-merge plan).
+
+## ACT-CLINEMM-ELM-SEAM08.1-E3.1-AUTHORITY-CUTOVER — CLOSED — 2026-10-09
+
+**Status:** CLOSED at the substrate-level P0/P1 review (cutover deferred to SEAM08.2).
+
+**Verdict:** Substrate-level transport correlation, strict validation, and production-path lookup are FIXED. The C6 production cutover is deferred to a follow-up ACT.
+
+**HEAD progression:**
+- ENTRY_HEAD: `a47fda90dc0f3d961b28e24d737b54e3de608791` (SEAM08 closed)
+- P0P1_FIXES_HEAD: `d27061a9d359b2e4efde19bf621da5d56b4d2375`
+- DOCS_HEAD: `d27061a9d` + ACT record
+
+**Summary of fixes (REVIEWER items addressed):**
+
+REVIEWER P0 (transport correlation): FIXED
+- Replaced the shared `lastOutbound` slot with a per-requestId pending map.
+- Every consult generates a unique `requestId` via `nextRequestId()`.
+- The handler routes each outbound message to the resolver keyed by the echoed `requestId`.
+- Two concurrent consults cannot swap responses; reverse order, duplicates, missing responses all fail-closed.
+- Removed the permissive `=== true` coercion of `mustClearRearm`.
+
+REVIEWER P1 (installed asset lookup): FIXED
+- Added `setDeferredCompletionBarrierElmProductionKernelPath(path)` / `getDeferredCompletionBarrierElmProductionKernelPath()` API.
+- Loader consults the production path FIRST, source-tree vendor path as fallback.
+- Mirrors the prior 4 SEAM-kernel activation convention.
+
+REVIEWER P1 (custom decoder bypass): FIXED
+- New `validateConsultResult` runs on EVERY consult result (default + custom `invokeForProduction`).
+- Unknown kinds, missing required fields, wrong `requestId` echoes, unknown reasons all rejected as `decode_error`.
+- The prior substrate's `=== true` permissive coercion is removed.
+
+REVIEWER P1 (real stale-response race): DEFERRED to SEAM08.2 (production cutover ACT).
+- dcbesd01 proves the kernel emits `RejectStaleIdentity` for facts with mismatched identities (substrate-level evidence).
+- The real race (facts initially valid -> host state changes -> kernel returns valid `PermitEnqueue` -> TS refuses stale commit) is deferred because the production commit interpreter does not yet exist.
+
+P2 (non-blocking): retained.
+
+**New tests:**
+- `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-transport-correlation.dcbtc01.test.ts` (11 tests, DCBTC-01..11)
+- 11/11 PASS
+
+**Results:**
+- 11/11 new transport-correlation tests PASS
+- 26/26 substrate tests (dcbeid01 + dcbesd01 + dcbtc01) PASS
+- 47/47 focused conservation tests (rearm01, ccse01, ccsa01, ccslt01) PASS
+- Total: 58/58 across 7 test files
+- TypeScript typecheck: PASS
+- biome check: PASS
+
+**No production code changed.** The C6 production cutover remains deferred to a follow-up ACT.
+
+**Next cursor:** `ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER` — items 3-7 of the reviewer's execution order: production-coordinator baseline tests, wire the Elm consult into E3.1, prove in-flight owner/epoch supersession, regression gates + Elm necessity, commit/package/qualify live.
