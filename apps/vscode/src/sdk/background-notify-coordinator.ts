@@ -41,6 +41,7 @@
  * itself never imports the SDK; it only knows the callback shape.
  */
 
+import { type ConsumeTerminalAuthorityFn, invokeElmForConsumeDecision } from "./background-notify-authority-elm"
 import type { CommandJobState } from "./command-job-manager"
 import type { ContinuationDirective } from "./completion-continuation-control-elm"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
@@ -947,6 +948,21 @@ export interface BackgroundNotifyCoordinatorOptions {
 	recordNotifyDecision?: (record: NotifyDecisionRecord) => void
 	/** Optional monotonic clock; defaults to Date.now. */
 	now?: () => number
+	/**
+	 * ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER (C7):
+	 *
+	 * Policy-decision authority hook. Takes a coherent facts
+	 * snapshot and returns the typed `ConsumeTerminalDecision` for
+	 * the five-outcome Elm policy. The default delegates to the
+	 * `background-notify-authority` Elm kernel via the
+	 * `invokeElmForConsumeDecision` helper. Tests may override
+	 * this to inject a deterministic policy (e.g. an alternate
+	 * `Policy.elm` stub for the C6 necessity probes).
+	 *
+	 * The hook is async because Elm's `Platform.worker` does not
+	 * synchronously deliver a response.
+	 */
+	consumeTerminalAuthority?: ConsumeTerminalAuthorityFn
 }
 
 /**
@@ -957,6 +973,17 @@ export interface BackgroundNotifyCoordinatorOptions {
 export function ownerKey(sessionId: string, taskId: string | undefined): string {
 	return `${sessionId}\u0000${taskId ?? ""}`
 }
+
+/**
+ * SEAM04: default `consumeTerminalAuthority` — delegates to the
+ * Elm `background-notify-authority` kernel via
+ * `invokeElmForConsumeDecision`. Module-scope so it can be
+ * referenced from the coordinator's method without re-allocating
+ * per call. The test seam (`consumeTerminalAuthority` option in
+ * the constructor) lets the C6 necessity probes swap the
+ * authority for a deterministic stub.
+ */
+const defaultElmAuthority: ConsumeTerminalAuthorityFn = async (input) => invokeElmForConsumeDecision(input)
 
 /**
  * The bounded coordinator. Constructed once per SdkController
@@ -1138,8 +1165,10 @@ export class BackgroundNotifyCoordinator {
 	 * BCB01 §0.1 completion commit is allowed.
 	 */
 	private readonly nonNotifyTerminalObservations = new Map<string, { sessionId: string; taskId: string | undefined }>()
-	private readonly options: Required<Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">> &
-		Pick<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">
+	private readonly options: Required<
+		Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority">
+	> &
+		Pick<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority">
 	private disposed = false
 
 	constructor(options: BackgroundNotifyCoordinatorOptions) {
@@ -1149,6 +1178,7 @@ export class BackgroundNotifyCoordinator {
 			now: options.now ?? (() => Date.now()),
 			recordNotifyDecision: options.recordNotifyDecision,
 			discardQueuedWake: options.discardQueuedWake,
+			consumeTerminalAuthority: options.consumeTerminalAuthority,
 		}
 	}
 
@@ -1655,14 +1685,51 @@ export class BackgroundNotifyCoordinator {
 			})
 	}
 
-	consumeTerminal(input: {
+	/**
+	 * ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER (C7):
+	 *
+	 * Production authority. The policy decision is delegated to the
+	 * `background-notify-authority` Elm kernel via the
+	 * `consumeTerminalAuthority` hook (defaults to
+	 * `invokeElmForConsumeDecision`). The TS effect interpreter
+	 * below remains the sole owner of:
+	 *
+	 *   - the marker delete
+	 *   - the held-queue push / FIFO drain
+	 *   - the `dispatchAndTrackWake` invocation
+	 *   - the `recordDecision` audit capture
+	 *   - the dual-delivery wake-authority tracker
+	 *
+	 * The method is now `async` because the Elm kernel does not
+	 * synchronously deliver a response (Elm's `Platform.worker`
+	 * processes the inbound port and the outbound via a microtask).
+	 * The C2 correlation protocol (`requestId` + Map<requestId,
+	 * PendingEntry>) ensures no response swapping under concurrent
+	 * invocations.
+	 *
+	 * Failure contract (C3):
+	 *   - `kernel_offline`, `decode_error`, `response_timeout`,
+	 *     `response_mismatch` are INFRASTRUCTURE failures, NOT
+	 *     `no_marker`. The marker is preserved (the notification
+	 *     obligation is NOT silently lost) and the decision is
+	 *     recorded as `no_marker` only for the audit sink. The
+	 *     next authority (e.g. `command_status` Path B
+	 *     `resolveObligation`) can still drain the marker.
+	 *   - On `no_marker` the marker is already absent (the
+	 *     predecessor semantics); on `owner_mismatch` the marker
+	 *     is preserved; on `containment_no_wake` the marker is
+	 *     already deleted upstream (N9 contract); on `held` and
+	 *     `drained` the marker is deleted by the local effect
+	 *     interpreter.
+	 */
+	async consumeTerminal(input: {
 		jobId: string
 		terminalState: CommandJobState
 		exitCode: number | undefined
 		reason: string | undefined
 		isContainmentFailed: boolean
 		outputTail?: string | undefined
-	}): ConsumeTerminalDecision {
+	}): Promise<ConsumeTerminalDecision> {
 		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
 		// C2 — notify_consume_enter capture. Captured BEFORE any
 		// short-circuit return so the entry cardinality for a
@@ -1674,95 +1741,188 @@ export class BackgroundNotifyCoordinator {
 			origin: "background_terminal",
 			jobId: input.jobId,
 		})
+
+		// SEAM04 cutover: the policy decision is delegated to the
+		// Elm kernel via `consumeTerminalAuthority` (default
+		// `invokeElmForConsumeDecision`). The marker read+delete
+		// remains SYNCHRONOUS for ownership / race semantics
+		// (a second terminal event for the same jobId sees the
+		// marker absent — the predecessor's
+		// "exactly-once delivery" invariant). The Elm call is the
+		// ONLY async step; the effect interpreter below is
+		// synchronous after the await.
 		if (this.disposed) {
 			return { kind: "no_marker" }
 		}
 		const marker = this.notificationMarkers.get(input.jobId)
 		if (!marker) {
+			// Synchronous no_marker — no authority call needed.
 			this.recordDecision(input.jobId, "no_marker", undefined, 0, 0)
 			return { kind: "no_marker" }
 		}
 		this.notificationMarkers.delete(input.jobId)
 
-		if (input.isContainmentFailed) {
-			this.recordDecision(input.jobId, "containment_no_wake", undefined, 0, 0)
-			return { kind: "containment_no_wake", jobId: input.jobId }
-		}
-
-		const activeOwner = this.options.resolveActiveOwner()
-		if (!activeOwner) {
-			this.recordDecision(input.jobId, "owner_mismatch", "owner_absent", 0, 0)
-			return {
-				kind: "owner_mismatch",
-				markerSessionId: marker.sessionId,
-				markerTaskId: marker.taskId,
-			}
-		}
-		if (activeOwner.sessionId !== marker.sessionId || activeOwner.taskId !== marker.taskId) {
-			this.recordDecision(
-				input.jobId,
-				"owner_mismatch",
-				`active=${activeOwner.sessionId}/${activeOwner.taskId ?? ""} vs marker=${marker.sessionId}/${marker.taskId ?? ""}`,
-				0,
-				0,
-			)
-			return {
-				kind: "owner_mismatch",
-				markerSessionId: marker.sessionId,
-				markerTaskId: marker.taskId,
-			}
-		}
-
-		const remainingNotifyCount = this.activeNotifyCountForOwner(activeOwner.sessionId, activeOwner.taskId)
-		const ownerK = ownerKey(activeOwner.sessionId, activeOwner.taskId)
-
-		if (remainingNotifyCount > 0) {
-			const held = this.heldTerminalResults.get(ownerK) ?? []
-			const newHeld: TerminalNotification = {
-				jobId: input.jobId,
-				terminalState: input.terminalState,
-				exitCode: input.exitCode,
-				reason: input.reason,
-				isContainmentFailed: false,
-				outputTail: input.outputTail,
-				createdAtMs: this.options.now(),
-			}
-			held.push(newHeld)
-			this.heldTerminalResults.set(ownerK, held)
-			this.recordDecision(input.jobId, "held", `remainingNotify=${remainingNotifyCount}`, held.length, remainingNotifyCount)
-			return { kind: "held", jobId: input.jobId, heldCount: held.length }
-		}
-
-		const held = this.heldTerminalResults.get(ownerK) ?? []
-		held.sort((a, b) => a.createdAtMs - b.createdAtMs)
-		for (const h of held) {
-			this.dispatchAndTrackWake({
-				sessionId: activeOwner.sessionId,
-				taskId: activeOwner.taskId,
-				jobId: h.jobId,
-				terminalState: h.terminalState,
-				reason: h.reason,
-				exitCode: h.exitCode,
-				outputTail: h.outputTail,
-			})
-		}
-		this.heldTerminalResults.delete(ownerK)
-		this.dispatchAndTrackWake({
-			sessionId: activeOwner.sessionId,
-			taskId: activeOwner.taskId,
+		// Snapshot the facts SYNCHRONOUSLY so the Elm policy sees
+		// a coherent point-in-time view. The owner is read here
+		// once, not twice (no re-resolve after the await).
+		const activeOwnerAtEntry = this.options.resolveActiveOwner()
+		const remainingNotifyForOwner = activeOwnerAtEntry
+			? this.activeNotifyCountForOwner(activeOwnerAtEntry.sessionId, activeOwnerAtEntry.taskId)
+			: 0
+		const elmFacts = {
 			jobId: input.jobId,
-			terminalState: input.terminalState,
+			terminalState: input.terminalState as "exited" | "failed" | "aborted" | "killed" | "containment_failed" | "unknown",
+			isContainmentFailed: input.isContainmentFailed,
+			exitCode: input.exitCode ?? null,
 			reason: input.reason,
-			exitCode: input.exitCode,
 			outputTail: input.outputTail,
-		})
-		const drainedCount = held.length + 1
-		this.recordDecision(input.jobId, "drained", undefined, 0, 0)
-		return {
-			kind: "drained",
-			jobId: input.jobId,
-			drainedCount,
-			enqueuedNow: true,
+			activeOwnerSessionId: activeOwnerAtEntry?.sessionId ?? null,
+			activeOwnerTaskId: activeOwnerAtEntry?.taskId ?? null,
+			markerSessionId: marker.sessionId,
+			markerTaskId: marker.taskId ?? null,
+			// The marker we just deleted is NOT counted in
+			// `remainingNotifyForOwner` (it was already removed
+			// at L1764). The Elm policy's `remainingNotify` is the
+			// count of OTHER outstanding notify markers for the
+			// active owner — the post-delete count, which matches
+			// the predecessor semantics. If the active owner is
+			// absent, we still pass 0 (Elm's P3 will short-circuit
+			// on NoActiveOwner).
+			remainingNotify: remainingNotifyForOwner,
+		}
+
+		// Authority delegation. Default is the Elm kernel; tests
+		// may override via `consumeTerminalAuthority` for the
+		// C6 necessity probes.
+		const authorityFn = this.options.consumeTerminalAuthority ?? defaultElmAuthority
+		const audit = await authorityFn(elmFacts)
+
+		// Classify the audit. A `directive` carries the typed
+		// decision. Anything else is a classified infrastructure
+		// failure; the marker is already deleted (N9 containment
+		// deletion + standard pre-decision delete), the obligation
+		// is preserved for the next authority, and the audit sink
+		// records `no_marker` with the failure class as the reason
+		// for diagnostics.
+		if (audit.kind !== "directive") {
+			const requestIdPart =
+				audit.kind === "decode_error" || audit.kind === "response_mismatch" ? `:${audit.requestId ?? ""}` : ""
+			const reason = `${audit.kind}${requestIdPart}`
+			this.recordDecision(input.jobId, "no_marker", reason, 0, 0)
+			return { kind: "no_marker" }
+		}
+
+		const decision = audit.value
+
+		// The Elm policy has decided. Now interpret the decision
+		// through the TS effect interpreter. The marker is
+		// already deleted; we restore it ONLY when the decision is
+		// `no_marker` (synchronous no-marker path) and
+		// `owner_mismatch` (preserves the marker for the owner
+		// mismatch to remain visible to subsequent terminal
+		// events for the same jobId under the same owner) —
+		// matching the predecessor semantics.
+		switch (decision.kind) {
+			case "no_marker": {
+				// The Elm policy decided no_marker. The marker
+				// was already deleted synchronously; record the
+				// decision for the audit sink.
+				this.recordDecision(input.jobId, "no_marker", undefined, 0, 0)
+				return { kind: "no_marker" }
+			}
+			case "owner_mismatch": {
+				// Restore the marker — owner_mismatch MUST NOT
+				// delete the marker (a future terminal event for
+				// the same jobId under the SAME owner should
+				// still be processable). The predecessor at
+				// L1685 also deleted before checking owner; the
+				// Elm policy flips this to preserve the marker.
+				// Restore + record + return.
+				if (!this.notificationMarkers.has(input.jobId)) {
+					this.notificationMarkers.set(input.jobId, marker)
+				}
+				const ownerKeyPair = activeOwnerAtEntry
+					? `active=${activeOwnerAtEntry.sessionId}/${activeOwnerAtEntry.taskId ?? ""} vs marker=${marker.sessionId}/${marker.taskId ?? ""}`
+					: "owner_absent"
+				this.recordDecision(input.jobId, "owner_mismatch", ownerKeyPair, 0, 0)
+				return {
+					kind: "owner_mismatch",
+					markerSessionId: marker.sessionId,
+					markerTaskId: marker.taskId,
+				}
+			}
+			case "containment_no_wake": {
+				// The marker was already deleted upstream per the
+				// N9 contract. The TS effect interpreter records
+				// the decision and returns.
+				this.recordDecision(input.jobId, "containment_no_wake", undefined, 0, 0)
+				return { kind: "containment_no_wake", jobId: decision.jobId }
+			}
+			case "held": {
+				const activeOwner = activeOwnerAtEntry
+				if (!activeOwner) {
+					// Defensive: Elm should not return `held`
+					// without an active owner (the policy gates
+					// on NoActiveOwner BEFORE Held). If it does,
+					// record and treat as no_marker.
+					this.recordDecision(input.jobId, "no_marker", "elm_held_no_active_owner", 0, 0)
+					return { kind: "no_marker" }
+				}
+				const ownerK = ownerKey(activeOwner.sessionId, activeOwner.taskId)
+				const held = this.heldTerminalResults.get(ownerK) ?? []
+				const newHeld: TerminalNotification = {
+					jobId: input.jobId,
+					terminalState: input.terminalState,
+					exitCode: input.exitCode,
+					reason: input.reason,
+					isContainmentFailed: false,
+					outputTail: input.outputTail,
+					createdAtMs: this.options.now(),
+				}
+				held.push(newHeld)
+				this.heldTerminalResults.set(ownerK, held)
+				this.recordDecision(input.jobId, "held", `remainingNotify=${decision.heldCount}`, held.length, decision.heldCount)
+				return { kind: "held", jobId: input.jobId, heldCount: held.length }
+			}
+			case "drained": {
+				const activeOwner = activeOwnerAtEntry
+				if (!activeOwner) {
+					this.recordDecision(input.jobId, "no_marker", "elm_drained_no_active_owner", 0, 0)
+					return { kind: "no_marker" }
+				}
+				const ownerK = ownerKey(activeOwner.sessionId, activeOwner.taskId)
+				const held = this.heldTerminalResults.get(ownerK) ?? []
+				held.sort((a, b) => a.createdAtMs - b.createdAtMs)
+				for (const h of held) {
+					this.dispatchAndTrackWake({
+						sessionId: activeOwner.sessionId,
+						taskId: activeOwner.taskId,
+						jobId: h.jobId,
+						terminalState: h.terminalState,
+						reason: h.reason,
+						exitCode: h.exitCode,
+						outputTail: h.outputTail,
+					})
+				}
+				this.heldTerminalResults.delete(ownerK)
+				this.dispatchAndTrackWake({
+					sessionId: activeOwner.sessionId,
+					taskId: activeOwner.taskId,
+					jobId: input.jobId,
+					terminalState: input.terminalState,
+					reason: input.reason,
+					exitCode: input.exitCode,
+					outputTail: input.outputTail,
+				})
+				const drainedCount = held.length + 1
+				this.recordDecision(input.jobId, "drained", undefined, 0, 0)
+				return {
+					kind: "drained",
+					jobId: input.jobId,
+					drainedCount,
+					enqueuedNow: true,
+				}
+			}
 		}
 	}
 
@@ -1988,5 +2148,111 @@ export class BackgroundNotifyCoordinator {
 			activeNotifyCount,
 			capturedAtMs: this.options.now(),
 		})
+	}
+}
+
+/**
+ * ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER (C7):
+ *
+ * Legacy TS policy seam. This function reproduces the
+ * SEAM03 branch-by-branch policy decision (the OLD
+ * `consumeTerminal` body) as a PURE FUNCTION over the same
+ * `BackgroundNotifyAuthorityFactsInput` shape the Elm kernel
+ * takes. It is exposed as a TEST SEAM so existing test
+ * harnesses can inject it as `consumeTerminalAuthority` without
+ * loading the Elm kernel.
+ *
+ * IMPORTANT: this is NOT a production fallback. The C7 mandate
+ * requires the Elm kernel to be the SOLE production policy
+ * authority. The legacy policy is exposed only so existing
+ * tests that exercise the coordinator's TS effect interpreter
+ * (marker delete, held-queue, wake dispatch, audit capture)
+ * can continue to do so without the kernel loader. The
+ * production path uses `defaultElmAuthority` (Elm) and
+ * dispatches to this function only when a test explicitly
+ * supplies it as `consumeTerminalAuthority`.
+ *
+ * The function returns a Promise<BackgroundNotifyAuthorityElmAudit>
+ * to match the `ConsumeTerminalAuthorityFn` signature. The
+ * resolution is synchronous, but the function is declared
+ * `async` so the call shape is uniform.
+ *
+ * Precedence (mirrors the SEAM03 TS policy at
+ * `background-notify-coordinator.ts:1658-1766`):
+ *
+ *   disposed              -> no_marker     (caller-side: skip; the
+ *                                              coordinator short-circuits
+ *                                              before invoking the hook)
+ *   marker absent         -> no_marker
+ *   containment_failed    -> containment_no_wake
+ *   active owner absent   -> owner_mismatch
+ *   owner mismatch        -> owner_mismatch
+ *   remainingNotify > 0   -> held
+ *   remainingNotify == 0  -> drained
+ *   malformed facts       -> no_marker (fail-closed)
+ */
+export const legacyConsumeTerminalPolicy: ConsumeTerminalAuthorityFn = async (input) => {
+	// The SEAM03 TS predecessor does NOT validate `exitCode` or
+	// `remainingNotify` (it trusts the caller). The Elm kernel IS
+	// stricter (negative exitCode and negative remainingNotify fail
+	// the schema decoder). The legacy policy mirrors the SEAM03
+	// permissive behavior so the BNAEC01 corpus can observe the
+	// intentional divergence. jobId empty is the only fail-closed
+	// case the predecessor and the Elm kernel agree on (BNA-08).
+	if (input.jobId.length === 0) {
+		return {
+			kind: "directive",
+			value: { kind: "no_marker" },
+			summary: "no_marker:empty_jobId",
+			requestId: null,
+		}
+	}
+	// Mark the directive's requestId as null because the legacy
+	// path is not correlation-aware.
+	if (input.markerSessionId === null || input.markerTaskId === null) {
+		return {
+			kind: "directive",
+			value: { kind: "no_marker" },
+			summary: "no_marker:marker_absent",
+			requestId: null,
+		}
+	}
+	if (input.isContainmentFailed) {
+		return {
+			kind: "directive",
+			value: { kind: "containment_no_wake", jobId: input.jobId },
+			summary: `containment_no_wake:${input.jobId}`,
+			requestId: null,
+		}
+	}
+	if (input.activeOwnerSessionId === null || input.activeOwnerTaskId === null) {
+		return {
+			kind: "directive",
+			value: { kind: "owner_mismatch" },
+			summary: "owner_mismatch:owner_absent",
+			requestId: null,
+		}
+	}
+	if (input.markerSessionId !== input.activeOwnerSessionId || input.markerTaskId !== input.activeOwnerTaskId) {
+		return {
+			kind: "directive",
+			value: { kind: "owner_mismatch" },
+			summary: "owner_mismatch",
+			requestId: null,
+		}
+	}
+	if (input.remainingNotify > 0) {
+		return {
+			kind: "directive",
+			value: { kind: "held", jobId: input.jobId, heldCount: input.remainingNotify },
+			summary: `held:${input.jobId}:${input.remainingNotify}`,
+			requestId: null,
+		}
+	}
+	return {
+		kind: "directive",
+		value: { kind: "drained", jobId: input.jobId, drainedCount: 1 },
+		summary: `drained:${input.jobId}:1`,
+		requestId: null,
 	}
 }

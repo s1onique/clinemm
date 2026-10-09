@@ -39,6 +39,17 @@ import { Logger } from "@/shared/services/Logger"
 // ---------------------------------------------------------------------------
 
 /**
+ * ACT-CLINEMM-ELM-SEAM04 (C7): the type of the
+ * `consumeTerminalAuthority` hook in
+ * `BackgroundNotifyCoordinatorOptions`. Exported here so the
+ * coordinator module can type the option without an inline
+ * `import()`.
+ */
+export type ConsumeTerminalAuthorityFn = (
+	input: BackgroundNotifyAuthorityFactsInput,
+) => Promise<BackgroundNotifyAuthorityElmAudit>
+
+/**
  * Host-side facts about one terminal event. Mirrors the Elm
  * `Facts` record 1:1 (see `apps/vscode/elm/background-notify-
  * authority/src/Domain.elm`).
