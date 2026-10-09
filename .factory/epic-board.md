@@ -23578,3 +23578,106 @@ C6 production cutover (LANDED):
 1. C5 real in-flight owner/epoch supersession test (a dedicated test that races the live state with the consult resolution)
 2. SEAM04 LIVE qualification (outstanding; a separate cursor)
 3. C7 VSIX packaging + live smoke (a SEAM04 cursor)
+
+## ACT-CLINEMM-ELM-SEAM08.3-E3.1-QUALIFICATION — PASS_WITH_NONBLOCKING_RESIDUE — 2026-10-09
+
+**Status:** CLOSED at C6 (real-coordinator qualification landed).
+
+**Verdict:** `PASS_WITH_NONBLOCKING_RESIDUE` — the E3.1 production cutover is now qualified on three central claims. Production code path is unchanged. Only one minimal test seam was added (a single private field with a backdoor setter). All 145 SEAM-related tests pass. The deferred-completion-barrier kernel is now correctly packaged into the dogfood VSIX (a SEAM08.2 packaging defect surfaced and was fixed in the same ACT).
+
+**HEAD progression:**
+- ENTRY_HEAD: `c568a80f4` (SEAM08.2 closed, before the test seam)
+- QUALIFICATION_HEAD: `4734df574` (test seam + new DCBR01 test file)
+- LINT-FIX_HEAD: `1f6e22525` (restored a field the biome auto-fix had erroneously removed + final lint cleanups)
+
+**The two central P0 causal claims the reviewer asked for:**
+
+P0 #1 (REAL COORDINATOR SUPERSESSION): `DCBR01-01` proves the C5 stale-decision guard rejects a stale `PermitEnqueue` directive. The harness seeds the marker at A/epoch=7, starts `enqueueCompletionContinuationIfHeld` without awaiting, mutates the marker to B/epoch=8 during the consult, then releases a valid `PermitEnqueue` directive against the OLD A/epoch=7 facts. The C5 guard re-reads the live state AFTER the await, detects the drift (`liveMarker.epoch !== facts.markerEpoch`), and downgrades to `fallthrough`. The marker is unchanged (still B/epoch=8), no completion commit fires, and the outcome is one of the legitimate TS-predecessor outcomes (not a consult-induced effect on B's state).
+
+P0 #2 (PRODUCTION NECESSITY): `DCBR01-02` through `DCBR01-08` prove the Elm directive governs the coordinator's outcome:
+- `DCBR01-02` SuppressDuplicate -> `already_sent` (no enqueue, no completion commit)
+- `DCBR01-03` PermitEnqueue{mustClearRearm:true} -> `delivered` (REARM dedupe cleared)
+- `DCBR01-04` PreserveBarrier -> `no_held_job_ids` (held set was empty at consult)
+- `DCBR01-05` kernel_offline -> TS predecessor runs (the enqueue IS delivered via the predecessor)
+- `DCBR01-06` malformed directive (unknown kind) -> rejected at the public-adapter boundary, falls through to TS predecessor
+- `DCBR01-07` decode_error -> TS predecessor runs
+- `DCBR01-08` RejectStaleIdentity(marker_absent) with the live marker gone -> C5 guard downgrades to fallthrough, TS predecessor returns `not_held`
+
+P1 (TIMEOUT / LATE-RESPONSE CLEANUP): `DCBR01-09` proves the public-boundary 5s timer settles a hung invoke within 5.005s (the harness's enqueue promise completes; the consult surfaces `no_response` -> TS predecessor). The substrate-level DCBSD-03 already proves the 50ms shortened-timer variant.
+
+**Test seam (single, minimal, production-safe):**
+
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts`:
+- New private field `_e31TestInvokeForProduction: ((facts) => Promise<DeferredCompletionBarrierElmConsult>) | undefined = undefined`
+- New backdoor setter `setE31TestInvokeForProductionForTests(invoke)`
+- `consultE31BarrierForFacts` passes the field as `invokeForProduction` to the public adapter when set
+
+The default is `undefined` (production path unchanged). Production code never sets this field. The custom invoke's return value is passed through `validateConsultResult` by the public adapter, so unknown kinds / wrong requestId echoes / missing mustClearRearm are still rejected as `decode_error` (REVIEWER P1 / SEAM08.1 invariant).
+
+**Results:**
+- 9/9 new DCBR01 tests PASS (DCBR01-01..09)
+- 14/14 test files PASS (rearm01, ccsrl01, ccslt01, ccse01, ccupd01, ccdco01, ccca01, cchsp01, cchsp03, dcbeid01, dcbesd01, dcbsd01, dcbtc01, dcbr01)
+- 145/145 tests PASS (vs SEAM08.2's 132/132 — added 9 new DCBR01 + 4 additional ablations/refactor)
+- TypeScript typecheck: PASS (0 errors)
+- biome check: PASS (0 warnings, 0 errors after lint cleanups)
+- 0 ACT-owned new failures
+
+**VSIX packaging fix (P0 surfaced by this ACT):**
+
+`apps/vscode/.vscodeignore`:
+- The SEAM08.2 ACT shipped a `.vscodeignore` that explicitly re-included ONLY `runtime-assets/completion-authority.js` + `.sha256`. The other 4 kernels (background-notify-authority, completion-continuation-control, deferred-completion-barrier, task-header-orchestration) were staged into `runtime-assets/` by `stage_elm_kernel_runtime_asset` but NOT re-included in `.vscodeignore`. A targeted inspection of the most recent `dist/dogfood/clinemm-4.1.16-5a1c485cb-*.vsix` showed: 0 of 7 existing VSIXs contained `deferred-completion-barrier.js`. The activation code in `apps/vscode/src/extension.ts:activate` looks for the kernel at `runtime-assets/deferred-completion-barrier.js`; without the .vscodeignore re-include, vsce filtered it out and the loader fell back to the source-tree vendor path (test/dev mode). The fix is the 8-line .vscodeignore re-include block (each kernel + sha256) — bounded, mirrors the existing SEAM03-fix convention, and verified by re-packaging a clean VSIX from this HEAD.
+
+**VSIX verification (gate 5):**
+- Built `dist/dogfood/clinemm-4.1.16-5a1c485cb-seam08.3-test.vsix` (39.46 MB, 144 files)
+- `unzip -l` confirms all 5 kernels are in `extension/runtime-assets/`:
+  - background-notify-authority.js (77486 bytes)
+  - background-notify-authority.js.sha256 (65 bytes)
+  - completion-authority.js (107835 bytes)
+  - completion-authority.js.sha256 (65 bytes)
+  - completion-continuation-control.js (75635 bytes)
+  - completion-continuation-control.js.sha256 (65 bytes)
+  - **deferred-completion-barrier.js (73554 bytes)** — previously MISSING from all 7 prior VSIXs
+  - **deferred-completion-barrier.js.sha256 (65 bytes)** — previously MISSING
+  - task-header-orchestration.js (72834 bytes)
+  - task-header-orchestration.js.sha256 (65 bytes)
+- SHA-256 of the staged `deferred-completion-barrier.js` matches the source vendor SHA: `30dbf762b0ce1ba292f28fef186fac977903cc02837c457ed047dbfeb9d48bbb`
+
+**Factory decision (per reviewer criteria):**
+
+```
+SEAM08.3_IMPLEMENTATION:           PASS
+SEAM08.3_PRODUCTION_REACH:         REAL_PRODUCTION_SEAM (the full SdkSessionEventCoordinator.enqueueCompletionContinuationIfHeld path is exercised)
+SEAM08.3_CAUSAL_NECESSITY:         PROVEN (DCBR01-02..08: each directive kind observably governs the outcome)
+SEAM08.3_STALE_COMMIT_SAFETY:      PROVEN (DCBR01-01: stale PermitEnqueue for A/ep7 is rejected by the C5 guard when the live marker is B/ep8; marker unchanged; no completion commit)
+SEAM08.3_VSIX:                     BUILT + KERNEL_VERIFIED (dist/dogfood/clinemm-4.1.16-5a1c485cb-seam08.3-test.vsix; deferred-completion-barrier.js present with matching SHA)
+SEAM08.3_LIVE:                     LIVE_UNOBSERVABLE (no installed display in this environment; the debug-harness qualification is a separate cursor)
+SEAM08.3_C5_RUNTIME_RACE:          PROVEN (DCBR01-01 races the live marker with the in-flight consult; the C5 guard re-reads the marker AFTER the await)
+```
+
+**Files changed:**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (test seam: +43 / -1)
+- `apps/vscode/.vscodeignore` (+8 lines: 4 kernels + 4 sha256 re-includes)
+- `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-coordinator-qualification.dcbr01.test.ts` (NEW, 9 tests, ~610 lines)
+
+**P2 non-blocking residue:**
+- `Policy.elm` blank line at EOF (carried from SEAM08; not blocking)
+- Invalid Factory `gate-summary.json` binding (carried from SEAM08; not blocking; the SEAM08.3 evidence in this ACT record is the source of truth)
+
+**No new Elm kernels. No E1.1 / E2.1 expansion. No broad coordinator refactor.** The production call site is unchanged when the test backdoor is `undefined` (the default). The .vscodeignore re-include is the minimum required to fix a packaging defect the reviewer flagged as a P0 evidence blocker (the SEAM08.2 ACT did not verify the kernel was actually in the VSIX).
+
+**Forbidden constraints respected:**
+- No new Elm kernels
+- No E1.1 / E2.1 expansion
+- No broad coordinator refactor (the test seam is a single private field + a backdoor setter)
+- No another substrate ACT (the C5 stale-decision guard, the public-boundary 5s timer, and the public-level pending map are all unchanged from SEAM08.2)
+
+**C13 authority audit (updated):**
+- Elm E3.1: ACTIVE in production via `consultE31BarrierForFacts` (unchanged from SEAM08.2)
+- E1.1 / E2.1: NOT IMPLEMENTED (skipped per SEAM08 graded authority; unchanged)
+- TS synchronous prefixes: ALL preserved (unchanged from SEAM08.2)
+- TS emergency fallback: `ElmUnavailable_UsePredecessor` for every non-directive + every stale-identity check (unchanged)
+- existing completion-authority + completion-continuation-control kernels: unchanged
+- The 5-kernel production activator set in `apps/vscode/src/extension.ts:activate` now correctly ships all 5 kernels in the VSIX (the SEAM08.2 .vscodeignore was filtering out 4 of 5 — this ACT fixed the .vscodeignore)
+
+**Next cursor:**
+- LIVE qualification on the installed dogfood VSIX (the SEAM04 cursor; a separate ACT that requires a display + a real BCB cycle)
