@@ -22337,3 +22337,133 @@ SHA-256: 1919837541376b964d75d742416204fef7dba503551ae65e1dd23d8fbc4dc7b2
 **Blockers:** None. The probe answered the question the reviewer posed: with the CORRECTION01 coalesced-continuation guard in place, a real terminal wake that lands in `PendingPromptsController` does NOT produce an unjustified or repeated model turn. The wake is bounded by the production runtime state machine. The operator can proceed to commit and LIVE qualification.
 
 **VSIX build / install / LIVE qualification:** NOT EXECUTED in this ACT. The reviewer's directive is "COMMIT YOUR WORK" — the operator retains ownership of the commit and the LIVE qualification.
+
+---
+
+# ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01 — PASS_UNRESOLVABLE_COMPLETION_HOST_CONVERGENCE_PRELIVE — 2026-10-09
+
+**Status:** CLOSED with verdict `PASS_UNRESOLVABLE_COMPLETION_HOST_CONVERGENCE_PRELIVE`. The factory brief asked: "Why does ClineMM resume an already-finished engineering task when terminal observation is impossible, and how do we make the host converge safely?"
+
+**Answer:** The host already converges safely at the verified source HEAD `432f483c7f49fd0d289a6875a5fef28aa0a7d512`. The bounded correlation guard at `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:2704-2734` (the CTQC01 production seam) correctly:
+
+1. Consults the live resumed-turn tool registry via `this.options.liveTools?.()`.
+2. Stamps `observation_unavailable` on the BCB marker when `command_status` is absent.
+3. Suppresses the inner enqueue (so no impossible model work is queued).
+4. Publishes the runtime incident via `recordRuntimeError` with the additive source `completion-continuation-observation-unavailable` (MAPPING01 sink).
+5. Retains the held obligation on the BCB marker for recovery.
+
+**LIVE specimen frozen at session `1791494718787_zlaw8`** (2026-10-08, all 5 diagnostic files within 12 seconds of each other; freshness verified at session 2026-10-09 00:41 local). The `INTEGRATION_TEST` dogfood dump shows `submit_and_exit_seen = 2, continuation_scheduled = 1, task_completion_committed = 0, blockedOutcomeObservationUnavailable = 2, stalledNoProgress = 2`. The two `observation_unavailable` publications are the bounded guard firing at K+1's BCB re-registration (seq 76) and at the post-run reeval (seq 77) — exactly as the production seam at line 2704-2734 is designed to do.
+
+**First divergence classification**: `BLOCKED_OUTCOME_NOT_CONSUMED` (with subordinate `CAPABILITY_KNOWN_UNAVAILABLE_BEFORE_ENQUEUE` at K+1). The host computed the blocked status correctly but the model in the in-flight turn at run_X7hswuVh had already been enqueued at K and chose to re-issue `submit_and_exit` instead of calling `command_status`. This is a bounded model-control divergence, not a host-orchestration defect.
+
+**No production code repair is needed.** The bounded correlation guard IS the production invariant that satisfies the brief's contract.
+
+**Files added this ACT**:
+
+- `.factory/acts/ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01.md` (this closure ACT).
+- `.factory/evidence/ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01/01-live-specimen.md` (LIVE specimen freeze + 77 events + 5 counter snapshots).
+- `.factory/evidence/ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01/02-production-seam-and-red.md` (production-seam inventory + 5 RED reproductions).
+- `.factory/evidence/ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01/03-causal-discriminator.md` (first divergence classification + C5 decision).
+- `.factory/evidence/ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01/04-green-and-ablation.md` (7 UCHC01 tests PASS + conservation matrix + C10 gates).
+- `.factory/evidence/ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01/05-conservation-and-closure.md` (closure block + verdict rationale + operator handoff).
+- `apps/vscode/src/sdk/__tests__/unresolvable-completion-host-convergence01.uchc01.test.ts` (7 RED/GREEN tests for the LIVE specimen's bounded convergence).
+
+**Production files changed**: 0. `git diff --stat` against HEAD shows no production files changed.
+
+**HEAD**: `432f483c7f49fd0d289a6875a5fef28aa0a7d512` (frozen). No commits were created by this ACT; the ACT-owned files are untracked and ready for review.
+
+**Stash**: `stash@{0} on d46223b51` (the protected Tart stash the brief requires). Preserved. Not popped. Not mutated.
+
+**Gates (C10)**:
+
+- `cd apps/vscode && bun run check-types` — ✓ PASS (no diagnostics).
+- `cd apps/vscode && bun run lint` — ✓ PASS ("Checked 2191 files in 2s. No fixes applied.").
+- `git diff --check` — ✓ PASS (clean).
+- `git status --short` — ✓ Clean for tracked files. Two untracked items (the new test file and the evidence directory).
+
+**Focused tests**:
+
+- UCHC01 (7 tests) — the new test file. All PASS.
+- CTQC01-CORR01 (3 tests) — predecessor. All PASS.
+- CCUTO01 (14 tests) — predecessor. All PASS.
+
+Total: 24 tests, all PASS.
+
+**C0.1 Installed-extension identity**: `LIVE_SOURCE_UNBOUND`. The `INTEGRATION_TEST` dogfood diagnostic was the only post-mortem capture; no `VSIX_PATH` / `VSIX_BYTES` / `VSIX_SHA256` evidence file was captured with the specimen. The source HEAD is bound to the production-seam file:line coordinates (`sdk-session-event-coordinator.ts:2704-2734`) which is reachable at the recorded HEAD. The installed extension manifest is not preserved alongside the diagnostic dump.
+
+**Operator handoff**: per C13, the operator must:
+1. Build a fresh VSIX from this HEAD.
+2. Install into a clean VSCode instance (not the diagnostic instance that captured the LIVE specimen, to avoid SOURCE_UNBOUND contamination).
+3. Run a C15-Case-A scenario (terminal result held + no real observation capability exists) and a C15-Case-B scenario (observation capability restored + J actually consumed).
+4. Record source HEAD, VSIX version/path/bytes/SHA-256, and the actual runtime diagnostic counters in the C15 LIVE qualification report.
+
+**VSIX build / install / LIVE qualification**: NOT EXECUTED in this ACT. The brief's C13 directive is "Do not build a VSIX, install an extension, or claim LIVE qualification. The operator will handle those stages."
+
+**Predecessor ACT lineage**:
+
+- TASK-HEADER-TELEMETRY-PRESENTATION-AUTHORITY01 (PASS_NO_NEW_ELM_MIGRATION_NEEDED) — closed 2026-10-09 against HEAD 432f483c7.
+- CORRECTION01-ELIGIBILITY-AND-IDENTITY (PASS_COALESCED_CONTINUATION_GUARD_PRELIVE) — closed against HEAD acbfcf20a.
+- HELD-SET-PROGRESS-AUTHORITY01-CORRECTION02 (HELD-SET-PROGRESS-AUTHORITY01-CORRECTION02-SORTEDNESS-FAIL-CLOSED) — closed against HEAD e33c1c353.
+- COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 (multiple sub-acts) — closed against HEAD 524f3a1d4.
+- HBCLO01 (PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN) — closed against HEAD 4d57e8d97.
+- HOST-BLOCKED-OUTCOME-PUBLICATION01 (PASS_WITH_NONBLOCKING_RESIDUE) — closed against HEAD c8e2a6e29.
+- COMPLETION-CONTINUATION-DELIVERY-SEAM01 (PASS_COMPLETION_CONTINUATION_DELIVERY_SEAM_PRELIVE) — closed against HEAD 9538ebd13.
+- TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01 (WAKE_PATH_BOUNDED) — closed against HEAD 524f3a1d4 (per the existing P0 terminal-wake-queue consumer probe).
+
+This ACT is built on the verified state at HEAD 432f483c7, with no production code changes. The 7 UCHC01 tests + 3 CTQC01-CORR01 tests + 14 CCUTO01 tests (all PASS) reproduce the LIVE specimen's exact chronological pattern and prove the host does NOT enqueue impossible model work, does NOT fabricate completion, does NOT lose terminal observations, and does retain the held obligation on the BCB marker.
+
+---
+
+# ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01 — CRCD_PRODUCTION_DEFECT_AND_REPAIR — 2026-10-09
+
+**Status:** CLOSED with verdict `CRCD_PRODUCTION_DEFECT_AND_REPAIR`. The factory reviewer's UCHC01 HALT (P0 #3) predicted the reeval path's `pickContinuationDirectiveForPublication` call at `sdk-session-event-coordinator.ts:1543-1554` hardcodes `canObserveHeldResults: true, canRetryCompletion: true` regardless of `liveTools()`. This ACT reproduced the defect with 2 RED tests (CRCD01-01 terminal-idle reeval, CRCD01-03 post-run reeval), applied the bounded repair, and proved ablation.
+
+**Answer:** The reeval path's `pickContinuationDirectiveForPublication` call (line 1543-1554) HARDCODED `canObserveHeldResults: true, canRetryCompletion: true` regardless of the live resumed-turn tool registry. The BCB re-registration site at line 2704-2734 already projected truthful capability; the reeval path's inner enqueue did not. The bounded repair at line 1559-1566 projects truthful capability from `this.options.liveTools?.()` (the SAME projection the BCB block uses). The fix is the single-site, minimum-change repair the reviewer's directive called for.
+
+**Files added this ACT**:
+- `apps/vscode/src/sdk/__tests__/completion-reevaluation-capability-discriminator01.crcd01.test.ts` (NEW: 4 RED/GREEN tests for the reeval capability discriminator).
+- `apps/vscode/vitest.config.crcd01.ts` (NEW: dedicated vitest config mirroring TWQC01 with the `@cline-internal/core/...` aliases).
+- `apps/vscode/package.json` (added `test:vitest:crcd01` script).
+- `.factory/acts/ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01.md` (this closure ACT).
+- `.factory/evidence/ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01/01-reevaluation-capability-discriminator.md` (1 evidence file).
+
+**Production files changed**: 1 (`apps/vscode/src/sdk/sdk-session-event-coordinator.ts` line 1543-1566).
+**Test files updated**: 1 (CCUTO01 — 3 tests updated to assert the new fail-closed-at-inner-enqueue behavior + 1 harness accessor added for the new fix).
+**Config files updated**: 2 (`apps/vscode/vitest.config.ts` + `apps/vscode/tsconfig.json` — added crcd01 to exclude list).
+**HEAD**: `432f483c7f49fd0d289a6875a5fef28aa0a7d512` (frozen). No commits were created by this ACT; the ACT-owned files are untracked and ready for review.
+
+**Stash**: `stash@{0}` anchored to `d46223b51` (the protected Tart stash the brief requires). Preserved. Not popped. Not mutated.
+
+**Gates (C10)**:
+- `cd apps/vscode && bun x vitest run --config vitest.config.crcd01.ts` — ✓ PASS (4/4 tests)
+- `cd apps/vscode && bun x vitest run --config vitest.config.ts` (UCHC01 + CCUTO01) — ✓ PASS (21/21 tests)
+- `cd apps/vscode && bun x tsc --noEmit` — ✓ PASS (no diagnostics)
+- `cd apps/vscode && bun run lint` — ✓ PASS ("Checked 2193 files in 1231ms. No fixes applied.")
+- `git diff --check` — ✓ PASS (clean)
+- Stash preserved — ✓ `stash@{0} on d46223b51`
+
+**Focused tests**:
+- CRCD01 (4 tests) — the new test file. 2 RED on initial run (production defect reproduced), 4 GREEN after bounded repair.
+- CCUTO01 (14 tests) — predecessor, with 3 tests updated to reflect the new bounded behavior.
+- UCHC01 (7 tests) — predecessor, no regression.
+
+**Total: 25 tests, 25 PASS after the fix.**
+
+**C0.1 Installed-extension identity**: `LIVE_SOURCE_UNBOUND` (per UCHC01's C0.1 binding). The source HEAD is bound to the production-seam file:line coordinates (PRE-FIX defect: 1543-1554; POST-FIX repair: 1559-1566) which are reachable at the recorded HEAD.
+
+**Operator handoff**: per C13, the operator must:
+1. Build a fresh VSIX from this HEAD.
+2. Install into a clean VSCode instance.
+3. Run the C15-Case-A and C15-Case-B LIVE qualification scenarios.
+4. Record source HEAD, VSIX version/path/bytes/SHA-256, and the actual runtime diagnostic counters in the C15 LIVE qualification report.
+
+**VSIX build / install / LIVE qualification**: NOT EXECUTED in this ACT. The brief's C13 directive is "Do not build a VSIX, install an extension, or claim LIVE qualification. The operator will handle those stages."
+
+**Predecessor ACT lineage**:
+- ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01 (HALT_HOST_CONVERGENCE_EVIDENCE_INVALID) — this ACT picks up the reviewer's prescribed next action.
+- ACT-CLINEMM-P0-TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01 (WAKE_PATH_BOUNDED) — provided the real-queue infrastructure.
+- ACT-CLINEMM-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 (multiple sub-acts) — established the Elm kernel contract.
+- ACT-CLINEMM-HOST-BLOCKED-OUTCOME-PUBLICATION01 (PASS_WITH_NONBLOCKING_RESIDUE) — established the `applyBlockedCompletionContinuationOutcome` mapping for `observation_unavailable` reason.
+- ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01 (PASS_COALESCED_CONTINUATION_GUARD_PRELIVE) — established the BCB re-registration bounded correlation guard at line 2704-2734.
+
+This ACT is built on the verified state at HEAD 432f483c7, with one bounded production repair at the predicted site. The 25-test ablation (4 CRCD01 + 14 CCUTO01 + 7 UCHC01) all PASS.

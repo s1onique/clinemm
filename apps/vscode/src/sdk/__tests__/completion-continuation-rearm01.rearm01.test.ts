@@ -217,6 +217,10 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 			})
 			return Promise.resolve({ kind: "delivered" as const })
 		},
+		// CRCD01: wire the liveTools accessor so the inner enqueue's
+		// truthful capability projection (sdk-session-event-coordinator.ts:1559-1562)
+		// reads truthful capability from the test's live registry.
+		liveTools: () => ["command_status", "submit_and_exit"],
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	return {

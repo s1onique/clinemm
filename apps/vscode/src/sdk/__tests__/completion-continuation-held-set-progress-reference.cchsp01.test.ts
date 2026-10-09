@@ -112,6 +112,10 @@ function makeHchspHarness(opts: { heldJobIds?: readonly string[] } = {}): HchspH
 			})
 			return Promise.resolve({ kind: "delivered" as const })
 		},
+		// CRCD01: wire the liveTools accessor so the inner enqueue's
+		// truthful capability projection (sdk-session-event-coordinator.ts:1559-1562)
+		// reads truthful capability from the test's live registry.
+		liveTools: () => ["command_status", "submit_and_exit"],
 	} as unknown as SdkSessionEventCoordinatorOptions)
 	coordinator.setDeferredCompletionBarrierForTesting({
 		sessionId,
@@ -142,11 +146,7 @@ async function flushElmKernels(): Promise<void> {
 }
 
 async function callEnqueueIfHeld(h: HchspHarness): Promise<{ kind: string }> {
-	const result = await h.coordinator.enqueueCompletionContinuationIfHeld(
-		h.sessionId,
-		h.countRef,
-		h.taskId,
-	)
+	const result = await h.coordinator.enqueueCompletionContinuationIfHeld(h.sessionId, h.countRef, h.taskId)
 	await flushElmKernels()
 	return result
 }

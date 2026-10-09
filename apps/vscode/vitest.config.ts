@@ -248,6 +248,15 @@ export default defineConfig({
 			// Excluded here to keep the base config's @cline/core stub
 			// alias in scope (the bridge config owns this test).
 			"src/sdk/__tests__/terminal-wake-queue-consumer-probe01.twqc01.test.ts",
+			// ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01
+			// / CRCD01: the reevaluation-trigger capability discriminator.
+			// Real LocalRuntimeHost + real PendingPromptsController +
+			// real `pickContinuationDirectiveForPublication` consult +
+			// real `enqueueCompletionContinuationIfHeld` chain. Runs
+			// under `vitest.config.crcd01.ts` which adds the
+			// `@cline-internal/core/...` aliases. Excluded here to
+			// keep the base config's @cline/core stub alias in scope.
+			"src/sdk/__tests__/completion-reevaluation-capability-discriminator01.crcd01.test.ts",
 			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3-R5
 			// (persistence phase): the instance-store + typed-projector
 			// tests run under the dedicated

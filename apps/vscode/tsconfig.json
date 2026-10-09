@@ -207,6 +207,14 @@
 		// Excluded here to keep the base config's @cline/core stub
 		// alias in scope (mirror entry in `vitest.config.ts`).
 		"src/sdk/__tests__/terminal-wake-queue-consumer-probe01.twqc01.test.ts",
+		// ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01
+		// / CRCD01: the reevaluation capability discriminator. Real
+		// `LocalRuntimeHost` + real `PendingPromptsController` + real
+		// `pickContinuationDirectiveForPublication` consult. Runs
+		// under `vitest.config.crcd01.ts` which adds the
+		// `@cline-internal/core/...` aliases. Excluded here to
+		// keep the base config's @cline/core stub alias in scope.
+		"src/sdk/__tests__/completion-reevaluation-capability-discriminator01.crcd01.test.ts",
 		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
 		// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
 		// full-composition witness — REAL factory + REAL

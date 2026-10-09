@@ -103,6 +103,14 @@ function makeHarness(
 					return Promise.resolve({ kind: "delivered" as const })
 				}
 			: undefined,
+		// CRCD01: wire the liveTools accessor so the inner enqueue's
+		// truthful capability projection (sdk-session-event-coordinator.ts:1559-1562)
+		// reads truthful capability from the test's live registry.
+		// These tests exercise the stall/STALL path with held>0 and
+		// expect the inner enqueue to return ObserveThenRetry
+		// (delivered) or stalled_no_progress. Without this, the
+		// fix would project capability=false and fail-closed.
+		liveTools: () => ["command_status", "submit_and_exit"],
 	} as unknown as SdkSessionEventCoordinatorOptions)
 	coordinator.setDeferredCompletionBarrierForTesting({ sessionId, taskId, epoch: translatorState.getMinter().epoch })
 	return { coordinator, sendLog, sessionId, taskId, heldJobIds }

@@ -1540,11 +1540,30 @@ export class SdkSessionEventCoordinator {
 		// inlined `isStrictSupersetOf` check that used to live
 		// here is GONE. The Elm kernel's `failureReason` is the
 		// SOLE semantic authority.
+		//
+		// ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01:
+		// The capability projection must be TRUTHFUL — it is derived
+		// from the live resumed-turn tool registry via
+		// `this.options.liveTools?.()`. The previous implementation
+		// hardcoded `canObserveHeldResults: true, canRetryCompletion:
+		// true` which bypassed the bounded correlation guard the
+		// BCB re-registration site (line 2704-2734) provides — the
+		// reeval path could enqueue a continuation that the model
+		// could not observe, repeating the original LIVE defect.
+		// The fix projects truthful capability the same way the BCB
+		// block does (the closed-scheme `liveToolNames` lookup at
+		// line 2707). `liveTools === undefined` is treated as
+		// `false` (honest "I don't know") so the Elm kernel can
+		// fail-closed via the existing `observation_unavailable`
+		// directive.
+		const liveToolNames = this.options.liveTools?.() ?? undefined
+		const canObserveHeldResults = liveToolNames !== undefined ? liveToolNames.includes("command_status") : false
+		const canRetryCompletion = liveToolNames !== undefined ? liveToolNames.includes("submit_and_exit") : false
 		const directive = await pickContinuationDirectiveForPublication({
 			unconsumedCount: heldJobIds.length,
 			capabilities: {
-				canObserveHeldResults: true,
-				canRetryCompletion: true,
+				canObserveHeldResults,
+				canRetryCompletion,
 			},
 			priorHeldSetSorted: priorSortedHeld,
 			currentHeldSetSorted: nextSortedHeld,

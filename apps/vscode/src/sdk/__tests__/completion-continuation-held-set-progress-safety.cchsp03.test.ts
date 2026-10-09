@@ -44,9 +44,7 @@ interface SafetyHarness {
 	taskIdRef: string
 }
 
-function makeSafetyHarness(opts: {
-	heldJobIds?: readonly string[]
-} = {}): SafetyHarness {
+function makeSafetyHarness(opts: { heldJobIds?: readonly string[] } = {}): SafetyHarness {
 	const sessionId = "session-cchsp03"
 	const taskId = "task-cchsp03"
 	const heldJobIds = opts.heldJobIds ?? ["j1", "j2", "j3"]
@@ -111,6 +109,10 @@ function makeSafetyHarness(opts: {
 			})
 			return Promise.resolve({ kind: "delivered" as const })
 		},
+		// CRCD01: wire the liveTools accessor so the inner enqueue's
+		// truthful capability projection (sdk-session-event-coordinator.ts:1559-1562)
+		// reads truthful capability from the test's live registry.
+		liveTools: () => ["command_status", "submit_and_exit"],
 	} as unknown as SdkSessionEventCoordinatorOptions)
 	coordinator.setDeferredCompletionBarrierForTesting({
 		sessionId,
@@ -142,11 +144,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFET
 			const h = makeSafetyHarness({
 				heldJobIds: ["j1", ""],
 			})
-			const result = await h.coordinator.enqueueCompletionContinuationIfHeld(
-				h.sessionId,
-				1,
-				h.taskIdRef,
-			)
+			const result = await h.coordinator.enqueueCompletionContinuationIfHeld(h.sessionId, 1, h.taskIdRef)
 			await flushElmKernels()
 			expect(result.kind).toBe("fail_closed")
 			if (result.kind === "fail_closed") {
@@ -166,11 +164,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFET
 			const h = makeSafetyHarness({
 				heldJobIds: ["j1", "j2", "j3"],
 			})
-			const result = await h.coordinator.enqueueCompletionContinuationIfHeld(
-				h.sessionId,
-				1,
-				h.taskIdRef,
-			)
+			const result = await h.coordinator.enqueueCompletionContinuationIfHeld(h.sessionId, 1, h.taskIdRef)
 			await flushElmKernels()
 			expect(result.kind).toBe("delivered")
 			expect(h.sendLog.length).toBe(1)
@@ -182,11 +176,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFET
 			const h = makeSafetyHarness({ heldJobIds: ["j1", "j2", "j3"] })
 			// K: first call. prior=undefined, current=[j1,j2,j3] →
 			// Indeterminate → ObserveThenRetry → delivered.
-			const first = h.coordinator.enqueueCompletionContinuationIfHeld(
-				h.sessionId,
-				1,
-				h.taskIdRef,
-			)
+			const first = h.coordinator.enqueueCompletionContinuationIfHeld(h.sessionId, 1, h.taskIdRef)
 			// K+1: second call. Either:
 			//   (a) the dedupe slot was marked by K before K+1's
 			//       Elm call → K+1 returns `already_sent`;
@@ -194,11 +184,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFET
 			//       prior snapshot K stored → NoProgress →
 			//       FailClosed StalledNoProgress.
 			// Either way: exactly one delivery.
-			const second = h.coordinator.enqueueCompletionContinuationIfHeld(
-				h.sessionId,
-				1,
-				h.taskIdRef,
-			)
+			const second = h.coordinator.enqueueCompletionContinuationIfHeld(h.sessionId, 1, h.taskIdRef)
 			const [a, b] = await Promise.all([first, second])
 			await flushElmKernels()
 			const kinds = [a.kind, b.kind]
@@ -211,9 +197,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFET
 			// Elm verdict is the stall verdict.)
 			const otherKind = kinds.find((k) => k !== "delivered")
 			expect(otherKind).toBeDefined()
-			expect(
-				["stalled_no_progress", "already_sent", "fail_closed"].includes(otherKind!),
-			).toBe(true)
+			expect(["stalled_no_progress", "already_sent", "fail_closed"].includes(otherKind!)).toBe(true)
 		})
 
 		it("the dedupe slot is NOT marked on a fail_closed outcome (no future call can be poisoned)", async () => {
@@ -224,11 +208,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFET
 			const h = makeSafetyHarness({
 				heldJobIds: ["j1", ""],
 			})
-			const first = await h.coordinator.enqueueCompletionContinuationIfHeld(
-				h.sessionId,
-				1,
-				h.taskIdRef,
-			)
+			const first = await h.coordinator.enqueueCompletionContinuationIfHeld(h.sessionId, 1, h.taskIdRef)
 			await flushElmKernels()
 			expect(first.kind).toBe("fail_closed")
 			// Now switch to a valid heldJobIds list. A new call

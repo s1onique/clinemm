@@ -212,7 +212,11 @@ function makeHarness(opts: { sessionId?: string; taskId?: string; heldJobIds?: r
 		wasWakeDispatchFailed: () => false,
 		isWakeAuthoritySettled: () => false,
 		getLaunchedBackgroundJobIds: () => [],
-		enqueueCompletionContinuation: (input: { sessionId: string; taskId: string | undefined; heldJobIds: readonly string[] }) => {
+		enqueueCompletionContinuation: (input: {
+			sessionId: string
+			taskId: string | undefined
+			heldJobIds: readonly string[]
+		}) => {
 			sendLog.push({
 				prompt: `mock:${input.heldJobIds.join(",")}`,
 				sessionId: input.sessionId,
@@ -220,6 +224,12 @@ function makeHarness(opts: { sessionId?: string; taskId?: string; heldJobIds?: r
 			})
 			return Promise.resolve({ kind: "delivered" as const })
 		},
+		// CRCD01: wire the liveTools accessor so the inner enqueue's
+		// truthful capability projection (sdk-session-event-coordinator.ts:1559-1562)
+		// reads truthful capability from the test's live registry.
+		// The test exercises the BCB re-registration with held=1 and
+		// the model has the available tools, so capability=true.
+		liveTools: () => ["command_status", "submit_and_exit"],
 	} as unknown as SdkSessionEventCoordinatorOptions)
 	// Seed the initial deferredCompletionBarrier so the FIRST BCB
 	// re-registration actually runs (the BCB predicate checks

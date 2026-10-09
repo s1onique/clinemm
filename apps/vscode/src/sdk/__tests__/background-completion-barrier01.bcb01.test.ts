@@ -237,6 +237,10 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		// observations for the owner).
 		getUnconsumedOwnedTerminalResultCount: () =>
 			notifyCoordinator.unconsumedTerminalCountForOwner(activeSessionId, activeTaskId),
+		// CRCD01: wire the liveTools accessor so the inner enqueue's
+		// truthful capability projection (sdk-session-event-coordinator.ts:1559-1562)
+		// reads truthful capability from the test's live registry.
+		liveTools: () => ["command_status", "submit_and_exit"],
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	const registerNotifyJob = (jobId: string): void => {
