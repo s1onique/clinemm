@@ -23275,3 +23275,140 @@ continuation cardinality authority).
 boundary between the SEAM07 recon and the SEAM09+ queue.
 
 **Production delta: ZERO.** No production code touched.
+
+# ACT-CLINEMM-ELM-SEAM07-CORRECTION01 — PASS_ELM_SEAM07_CORRECTION01 — 2026-10-09
+
+**Status:** CLOSED with verdict `PASS_ELM_SEAM07_CORRECTION01`. The
+SEAM07 recon at
+`.factory/ACT-CLINEMM-ELM-SEAM07-LONG-HORIZON-CONTINUATION-RECON.md`
+is corrected in place per the reviewer C1:GO decision.
+
+The reviewer-supplied decision is honored:
+
+```
+SEAM07  PASS_ELM_SEAM07_RECON
+        ECONOMICS_GATE = GO
+
+SEAM08  AUTHORIZED FOR BOUNDED IMPLEMENTATION
+        FIRST GATE = SYNCHRONOUS_INTEROP_DISCRIMINATOR
+
+SEAM04  LIVE QUALIFICATION STILL OUTSTANDING
+```
+
+**Corrections applied:**
+
+1. **P0 synchrony correction** — the original SEAM07 §6
+   `synchrony / ordering requirements` claimed the kernel call
+   is "returned synchronously" and that the marker write happens
+   "in the same critical section." This is unsupportable on
+   the existing Elm port bridge. The Elm
+   `ElmNamespace` shape at
+   `apps/vscode/src/sdk/completion-continuation-control-elm.ts:454-466`
+   exposes only `inbound.send(value)` and
+   `outbound.subscribe(callback)` — no synchronous response is
+   possible. The existing production caller at
+   `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1562`
+   already uses `await pickContinuationDirectiveForPublication(...)`.
+   The correction ACT amends the SEAM07 §6 paragraph to
+   describe the GRADED INTEROP model: E3.1 (extend the existing
+   await at line 1562) + E1.1 (read-only validation at the
+   synchronous-prefix sites) + E2.1 (post-1275 authority via the
+   existing await at line 1275). SEAM08 is authorized to begin
+   with E3.1 + E1.1 only.
+
+2. **P1 failure-fallback correction** — the original SEAM07 §6
+   `failure conservation` said "decode-error: TS adapter returns
+   Pass." This is wrong: the predecessor TS predicate can return
+   a BLOCKING decision; a universal `Pass` would recreate the
+   premature-completion class of failures this migration is
+   intended to prevent. The correction ACT amends the SEAM07
+   §6 paragraph to specify `ElmUnavailable_UsePredecessor`:
+   the fallback evaluates the FULL original TS predicate inline
+   and writes the marker accordingly. The fallback is recorded
+   in the kernel diagnostic (`failureClass` non-null). SEAM08
+   must add a unit test that exercises `kernel = NULL` and
+   asserts the marker state matches the predecessor's output
+   for each of the four conservation checks.
+
+3. **P2 documentary correction** — the original SEAM07 §10
+   `Artifact identity` repeated `ENTRY_HEAD` as `SUBJECT_HEAD`.
+   The correction ACT records both values distinctly:
+   `ENTRY_HEAD = eb3de47ab5b88a55ea15e768241e65efb6464cc2`
+   (the SEAM07 entry) and
+   `SUBJECT_HEAD = 98ea70031cfb5eedc476df4b4e0c226a19b042ab`
+   (the SEAM07 commit).
+
+**SEAM08 authorized order (per the reviewer's required order):**
+
+1. Interop discriminator first — a small executable probe
+   exercising the actual compiled Elm port boundary, run
+   BEFORE any production authority change. The probe must
+   call `inbound.send(<facts>)` and await the `outbound`
+   subscription, assert the directive is one of the 8
+   closed-schema outcomes, assert bounded timing
+   (`Promise.race([kernelCall, timeout(50ms)])`), assert
+   the corrected failure fallback for `kernel = NULL`, and
+   assert the kernel speaks on the same port pair as the
+   existing `completion-continuation-control` kernel.
+
+2. Failure conservation — implement the
+   `ElmUnavailable_UsePredecessor` discriminator and the
+   four unit tests (one per conservation check) that
+   exercise `kernel = NULL` and assert the marker state
+   matches the predecessor's output.
+
+3. Production correspondence — exercise the real
+   `SdkSessionEventCoordinator` constructor (NOT a mirrored
+   test-local reducer). Use the existing
+   `setDeferredCompletionBarrierForTesting` accessor for
+   setup; the real `enqueueCompletionContinuationIfHeld`,
+   `reevaluateDeferredCompletionBarrier`, etc. for exercise.
+
+4. One bounded transition migration — start with the
+   E3.1 path (enqueue post-await, no new await, no new
+   critical section). If the GREEN case passes, expand to
+   E1.1 (read-only validation at (a), (b), (c) prefix),
+   then E2.1 (post-1275 authority at (c) suffix).
+
+5. Conservation and necessity — preserve the Q5/C10,
+   REARM/STALL, dedupe, and C10 post-commit capture
+   ordering. Each migration step must add a unit test
+   that exercises the specific transition with the Elm
+   kernel offline AND online.
+
+**Pre-existing baseline:** bcb01 13/14, tqcb01 10/15,
+bcb01-c3 1/6, bcb01-c4 4/5 (documented in commit
+`acbfcf20a`, preserved unchanged). SEAM08 must NOT
+silently absorb these into a new test set or claim those
+suites are green.
+
+**Artifact identity:**
+
+- ENTRY_HEAD = `98ea70031cfb5eedc476df4b4e0c226a19b042ab`
+  (the SEAM07 commit)
+- SUBJECT_HEAD = `<recorded in this ACT's commit after the
+  commit lands>`
+- BRANCH = `main`
+- WORKTREE_STATUS = clean before this correction ACT's
+  commit
+
+**Files:**
+
+- New: `.factory/ACT-CLINEMM-ELM-SEAM07-CORRECTION01-SYNCHRONY-AND-FAILURE-FALLBACK.md`
+  (476 lines, 10 sections)
+- Amended in place:
+  `.factory/ACT-CLINEMM-ELM-SEAM07-LONG-HORIZON-CONTINUATION-RECON.md`
+  (§6 `synchrony / ordering requirements` and
+  §6 `failure conservation` paragraphs replaced; §8
+  `Next cursor` references the correction ACT)
+- Updated: `.factory/epic-board.md` (this section appended)
+- No source code changes
+- One commit: `<recorded after commit lands>`
+
+**Next cursor:**
+
+`ACT-CLINEMM-ELM-SEAM08-DEFERRED-COMPLETION-BARRIER-AUTHORITY-MIGRATION`
+— the implementation cutover, authorized ONLY under the
+order in §4 of the correction ACT. First discriminator is
+the synchronous interop probe (E3.1, E1.1, E2.1) before any
+production authority change.

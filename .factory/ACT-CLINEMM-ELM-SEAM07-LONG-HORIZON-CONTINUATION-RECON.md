@@ -809,35 +809,56 @@ unobservable:
     - The dedupe-slot write at line 1695 is observable ONLY through
       wasCompletionContinuationSentForTesting and the U10 counter
 
-synchrony / ordering requirements:
-    - C10 set site (line 2640): NO new await. The kernel's directive
-      is returned synchronously; the TS adapter does the marker write
-      in the same critical section.
-    - Q5 reeval (line 813): pure synchronous; the kernel is dispatched
-      synchronously and the TS adapter does the marker clear +
-      setTurnPhase in the same critical section.
-    - C10 reeval synchronous prefix (line 980-1259): pure synchronous;
-      the existing await at line 1275 (checkElmCompletionAuthority)
-      is preserved unchanged. The new kernel's directive for the
-      synchronous prefix is returned synchronously.
-    - Enqueue post-await (line 1562-1726): the existing await at line
-      1562 is preserved. The new kernel is consulted via a parallel
-      pickBarrierDirective call; the dedupe-permit branch writes the
-      marker synchronously after the existing await.
-    - No new critical section introduces a new await.
+synchrony / ordering requirements (corrected by
+ACT-CLINEMM-ELM-SEAM07-CORRECTION01 §2.1; the original "no new
+await" framing was unsupportable on the existing Elm port
+bridge, which is fundamentally async at the JavaScript
+level — see correction ACT §2.1 for the evidence and the
+graded interop model in correction ACT §3):
+    - The Elm port hop already incurs a microtask deferral;
+      the SEAM08 implementation MUST NOT add a SECOND hop on
+      the same path, and MUST NOT introduce a "wait for the
+      kernel to speak before writing the marker" pattern that
+      the original TS predicate did not require.
+    - C10 set site (line 2640): E1.1 read-only validation. The
+      kernel validates the state; the marker write remains
+      TS-owned.
+    - Q5 reeval (line 813): E1.1 read-only validation.
+    - C10 reeval synchronous prefix (line 980-1259): E1.1
+      read-only validation; the post-1275 path uses the
+      existing await via E2.1.
+    - Enqueue post-await (line 1562-1726): E3.1 — extend the
+      existing await at line 1562 to call pickBarrierDirective
+      alongside pickContinuationDirectiveForPublication.
+    - Graded interop: SEAM08 is authorized to begin with
+      E3.1 + E1.1 only (no new await, no new critical
+      section); E2.1 is added last if the GREEN case passes.
 
-failure conservation:
-    - Kernel offline / decode error / no response: TS adapter
-      fall-through to the EXISTING TS predicate (the inline
-      conservation checks), mirroring the SEAM05 P1-B universal
-      immediate fallback prohibition. The kernel is the
-      authoritative source for the closed-schema decision; when
-      the kernel is unavailable, the TS predicate chain IS the
-      conservative action (the predecessor semantics).
-    - decode-error: TS adapter returns Pass (conservation checks
-      re-evaluated inline); logged via Logger.warn.
-    - response-timeout: same as decode-error; bounded log + Pass
-      fall-through.
+failure conservation (corrected by
+ACT-CLINEMM-ELM-SEAM07-CORRECTION01 §2.2; the original
+"Pass" word was incorrect — the predecessor predicate can
+return a BLOCKING decision):
+    - When the Elm kernel is unavailable (kernel file missing,
+      evaluation failed, ports not present, port response
+      timeout, decode error, malformed directive, unsupported
+      runtime path), the TS adapter MUST evaluate the FULL
+      ORIGINAL TS predecessor predicate and write the marker
+      in the SAME critical section as the original TS code
+      would have.
+    - The fallback is labeled `ElmUnavailable_UsePredecessor`
+      and is recorded in the kernel diagnostic
+      (`failureClass` is non-null).
+    - The fallback is NOT a universal `Pass`; the resulting
+      marker state (set or clear) is whatever the original
+      TS predicate would have written.
+    - decode-error: TS adapter evaluates the full original
+      TS predicate inline; logs via Logger.warn; records
+      `ElmUnavailable_UsePredecessor` discriminator.
+    - response-timeout: same as decode-error.
+    - SEAM08 must add a unit test that exercises
+      `kernel = NULL` and asserts the marker state matches
+      the predecessor's output for each of the four
+      conservation checks.
     - No silent-fail-OPEN: the kernel is consulted BEFORE the
       inline predicate reads; a kernel HOLD is a terminal outcome
       that the TS adapter routes to the marker set / clear
