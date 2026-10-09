@@ -97,7 +97,18 @@
 **DOGFOOD_VERSION:** 4.1.16-03f055a96
 **VSIX / LIVE:** (NOT_BUILT — see C12 LIVE_UNOBSERVABLE).
 
-**Residue:** P0: None (obligation-conservation gap closed). P1: None. P2 NON-BLOCKING: pure-Elm `elm-test` deferred (env limitation).
+**Precise labels (per Factory review):**
+```
+SEAM04_IMPLEMENTATION:   PASS
+SEAM04_CORRECTION01:     PASS_STRUCTURAL
+SEAM04_ELM_AUTHORITY:    REAL_PRODUCTION_SEAM
+SEAM04_LIVE:             LIVE_UNOBSERVABLE
+SEAM04_VSIX:             NOT_BUILT
+```
+
+**Notification obligation contract:** Path A delivers a wake (healthy) OR Path B settles via `canonical_status_observed` (command_status observation — a different delivery path, NOT a wake pathway). Both halves proven by BNACUT04-OBLIGATION OBL-07..08 (8/8 GREEN).
+
+**Residue:** P0: None (obligation-conservation gap closed). P1: None (adversarial SEQ-8/SEQ-9 defects corrected). P2 NON-BLOCKING: pure-Elm `elm-test` deferred (env limitation).
 
 
 # ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFETY-AND-CLASSIFIER — PASS_HELD_SET_PROGRESS_ELM_AUTHORITY_PRELIVE — 2026-10-08
