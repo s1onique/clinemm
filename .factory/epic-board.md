@@ -60,61 +60,44 @@
 - `ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER` — qualification + production authority cutover. Central discriminator: production semantics of `kernel_offline` / `decode_error` (the audit implementation collapses them to `no_marker`; production may need different treatment — e.g. escalation to a `fail_closed` directive with the typed reason, or an explicit operator-visible diagnostic that distinguishes "kernel infrastructure failure" from "policy says no_marker").
 
 
-# ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER — PASS_ELM_SEAM04_AUTHORITY_CUTOVER — 2026-10-09
+# ACT-CLINEMM-ELM-SEAM04-CORRECTION01 — PASS_ELM_SEAM04_AUTHORITY_CUTOVER — 2026-10-09
 
-**Status:** CLOSED with verdict `PASS_ELM_SEAM04_AUTHORITY_CUTOVER`. The Elm `background-notify-authority` kernel is now the SOLE production policy authority for `BackgroundNotifyCoordinator.consumeTerminal`. The TS effect interpreter (marker delete, held-queue, wake dispatch, audit) is UNCHANGED. One bounded intentional divergence (disposed+containment+marker → diagnostic classifier differs from predecessor; no semantic difference) is documented.
+**Status:** CLOSED with verdict `PASS_ELM_SEAM04_AUTHORITY_CUTOVER` after a bounded Factory HALT (`HALT_NOTIFICATION_OBLIGATION_UNPROVEN`) was correctly identified and repaired in place. No new epic, no new architecture, no additional review loop.
 
-**Production authority migrated:**
+**HALT root cause (P0):** the original SEAM04 cutover deleted the notification marker synchronously at `consumeTerminal` entry. On a classified kernel failure (`kernel_offline`, `decode_error`, `response_timeout`, `response_mismatch`), the audit returned `no_marker` for diagnostics, but the marker was already gone — `resolveObligation` (Path B) had nothing to drain. The notification obligation was silently lost.
+
+**CORRECTION01 bounded repair:**
+
+1. **Marker reservation.** The marker is moved from `notificationMarkers` to a new `reservedMarkers` field at `consumeTerminal` entry. A second `consumeTerminal` for the same jobId still sees `no_marker` (race-free ownership). On a HEALTHY Elm decision (drained / held / containment_no_wake) the reserved marker is consumed. On `owner_mismatch` the reserved marker is RESTORED to `notificationMarkers`. On a classified infrastructure failure the reserved marker is RESTORED so Path B `resolveObligation` can drain the obligation.
+2. **Dispose gate.** A new post-await check `if (this.disposed)` gates the effect interpreter. On `dispose()` during a pending Elm decision, no wake fires, no audit-record classification of a healthy decision, and the reserved marker is restored. The `dispose()` method also clears `reservedMarkers` for symmetry.
+
+**Adversarial test corrections (P1):**
+- **SEQ-8** now mutates the SAME coordinator's active owner (h2.setActiveOwner, not the unused h). The owner switch happens AFTER the snapshot is captured but BEFORE the policy decision resolves. The wake dispatch reads the snapshot owner (`ACTIVE_SESSION`).
+- **SEQ-9** now uses a controlled Promise (`releaseAuthority`) so dispose runs BEFORE the policy decision resolves. The test asserts that no late effects (no wake, no audit-record classification) are committed after dispose.
+
+**P2 mechanical residue:** batch-removed 72 redundant `await await` expressions across 20 test files.
+
+**Production authority migrated (unchanged from CORRECTION00):**
 - C2 correlation protocol: host-owned `requestId` passthrough in the Elm wire envelope + `Map<requestId, PendingEntry>` in the TS adapter. No response swapping, no stale commit, no double settlement, no hanging unresolved request.
-- C7 cutover: `BackgroundNotifyCoordinator.consumeTerminal` is now `async` and delegates the policy decision to `consumeTerminalAuthority` (default = `invokeElmForConsumeDecision` = the compiled Elm kernel). Marker read+delete stays synchronous for race-free ownership; only the policy decision is async.
-- C11 production kernel path pinned in `extension.ts:380-382` BEFORE the first `consumeTerminal` call. The loader reads `extension/runtime-assets/background-notify-authority.js` (staged by the fourth row of `_ELM_KERNELS` in `build_dogfood_vsix_lib.py:475-485`).
+- C7 cutover: `BackgroundNotifyCoordinator.consumeTerminal` is `async` and delegates the policy decision to `consumeTerminalAuthority` (default = `invokeElmForConsumeDecision` = the compiled Elm kernel).
+- C11 production kernel path pinned in `extension.ts:380-382` BEFORE the first `consumeTerminal` call.
 - C14 authority audit: TS policy callers = 0, Elm authority path = 1, production bypasses = 0, unexplained dual authority = 0.
 
-**C8 adversarial sequences (real production seam):** SEQ-1..9 all GREEN. `owner_mismatch` now RESTORES the marker (predecessor deleted it; Elm preserves it for the future-terminal-for-same-owner case). Verified by `BNACUT04-C7-04` and `BNACUT04 SEQ-5`.
+**Files (CORRECTION01 deltas):**
+- `apps/vscode/src/sdk/background-notify-coordinator.ts` — new `reservedMarkers` field; new post-await `if (this.disposed)` gate; `dispose()` clears `reservedMarkers`; `consumeTerminal` moves the marker to reserved (not delete) at entry; classified-failure / owner_mismatch / dispose gates restore the reserved marker.
+- `apps/vscode/src/sdk/__tests__/background-notify-authority-cutover04-obligation.bnacut04-obligation.test.ts` (NEW) — 6/6 GREEN.
+- `apps/vscode/src/sdk/__tests__/background-notify-authority-cutover04.bnacut04.test.ts` — SEQ-8 and SEQ-9 corrected. 23/23 GREEN.
+- 20 test files: 72 redundant `await await` expressions removed.
 
-**C9 no ACT-owned regression:**
-- BCB01: 13/14 failed (matches baseline 13/14).
-- BCB01-C1: 6/8 failed (matches baseline 6/8).
-- BCB01-C2: 2/5 failed (matches baseline 2/5).
-- BCB01-C3: 1/6 failed (matches baseline 1/6).
-- BCB01-C4: 3/5 failed (matches baseline 3/5).
-- TQCB01: 10/15 failed (matches baseline 10/15).
-- BNCA-RED01: 1/2 failed (matches baseline 1/2).
-- BCNEX01: 7/7 GREEN.
-- BCTPA01: 6/6 GREEN.
-- BNAEC01: 19/19 GREEN.
-- BNACUT04 (new production-seam matrix): 23/23 GREEN.
-- CCCCA01 (predecessor): 35/35 GREEN.
+**Toolchain gates:** `elm make` PASS; BNAEC01 19/19; BNACUT04 23/23; BNACUT04-OBLIGATION 6/6; BCNEX01 7/7; BCTPA01 6/6; `tsc --noEmit` PASS; `biome lint` PASS; Bun unit suite 1261/1261; `elm-test` NOT_EXECUTED (SEAM03 env limitation).
 
-**C12 LIVE qualification:** `LIVE_UNOBSERVABLE` in this environment (no VSCode install, no LLM provider, no command supervisor, no MCP OAuth). The deterministic production-seam matrix (BNACUT04 23/23) is the structural substitute. Real LIVE qualification requires a dogfood operator run.
+**C9 no ACT-owned regression:** BCB01 13/14, BCB01-C1 6/8, BCB01-C2 2/5, BCB01-C3 1/6, BCB01-C4 3/5, TQCB01 10/15, BNCA-RED01 1/2 — all match baseline. BCNEX01 7/7, BCTPA01 6/6, BNAEC01 19/19, CCCCA01 35/35 — all GREEN.
 
-**Files:**
-- `apps/vscode/elm/background-notify-authority/src/Codec.elm` — `Envelope { version, requestId, facts }` + passthrough `requestId` on outbound.
-- `apps/vscode/elm/background-notify-authority/src/Main.elm` — outbound carries `requestId` (best-effort on decode_error).
-- `apps/vscode/elm/background-notify-authority/vendor/background-notify-authority.js` (rebuilt) + `.sha256` (refreshed to `b0fd250d…`).
-- `apps/vscode/src/sdk/background-notify-authority-elm.ts` — `Map<requestId, PendingEntry>` protocol; new `invokeElmForConsumeDecision` production entry; new `response_timeout` / `response_mismatch` audit classes.
-- `apps/vscode/src/sdk/background-notify-coordinator.ts` — `consumeTerminal` now `async`; delegates to `consumeTerminalAuthority` (default `defaultElmAuthority`); exports `legacyConsumeTerminalPolicy` TEST SEAM.
-- `apps/vscode/src/extension.ts` — pins production kernel path to `runtime-assets/background-notify-authority.js`.
-- `apps/vscode/src/sdk/__tests__/background-notify-authority-cutover04.bnacut04.test.ts` (NEW) — 23/23 vitest production-seam matrix covering C3/C4/C6/C7/C8.
-- 43 test files updated: `await` on `*.consumeTerminal(...)` call sites; `drainNotifyJob` / `driveNotifyTerminal` helpers now `Promise<void>` with explicit `return`; `consumeTerminalAuthority: legacyConsumeTerminalPolicy` injected into the `BackgroundNotifyCoordinator` constructor for test-only TS effect interpreter exercises.
-- `.factory/ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER.md` (this ACT plan + closure evidence).
+**DOGFOOD_SOURCE_HEAD:** 03f055a96
+**DOGFOOD_VERSION:** 4.1.16-03f055a96
+**VSIX / LIVE:** (NOT_BUILT — see C12 LIVE_UNOBSERVABLE).
 
-**Toolchain gates (C10):**
-- `elm make src/Main.elm --output=vendor/background-notify-authority.js`: PASS.
-- `vitest BNAEC01` (SEAM03 corpus): 19/19 PASS.
-- `vitest BNACUT04` (SEAM04 production-seam matrix): 23/23 PASS.
-- `vitest BCNEX01` / `BCTPA01`: PASS.
-- `tsc --noEmit`: PASS.
-- `biome lint`: PASS.
-- Bun unit suite (`scripts/run-bun-unit-tests.ts`): 1261/1261 PASS.
-- Pure-Elm `elm-test`: **NOT_EXECUTED** in this environment (sandbox `elm-test` Node-worker spawn cannot run; same env limitation as SEAM03). Kernel functionally proven via `elm make` + the vitest compiled-kernel correspondence.
-
-**DOGFOOD_SOURCE_HEAD:** 2943c3a8af97d6f4067fd2957539a8ab48fe7a79
-**DOGFOOD_VERSION:** 4.1.16-2943c3a8
-**VSIX_PATH / VSIX_BYTES / VSIX_SHA256 / INSTALLED_VERSION:** (NOT_BUILT — see C12 LIVE_UNOBSERVABLE; the `_ELM_KERNELS` row is in place and `extension.ts` is pinned, so a real operator run will stage the asset correctly).
-
-**Residue (P0..P2):** None. All production code is committed; no new residue.
-
+**Residue:** P0: None (obligation-conservation gap closed). P1: None. P2 NON-BLOCKING: pure-Elm `elm-test` deferred (env limitation).
 
 
 # ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFETY-AND-CLASSIFIER — PASS_HELD_SET_PROGRESS_ELM_AUTHORITY_PRELIVE — 2026-10-08
