@@ -240,3 +240,63 @@ The Factory reviewer's three halts are now closed:
 - HALT_REAL_COMMAND_RESULT_SEAM_NOT_EXERCISED (correction01 at `c2a8992eb`)
 - HALT_TERMINAL_STATE_MONOTONICITY_NOT_PROVEN (correction02 at `ebde4bc38`)
 - HALT_STALE_LIVENESS_EVIDENCE (this correction03)
+
+---
+
+# ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION04 — PRODUCTION_CLOSURE_FIXTURE — 2026-10-09
+
+## 1. Reviewer halt (follow-up to correction03)
+
+The Factory reviewer's `PASS_WITH_ONE_P1` verdict (C1: GO) identified the evidence-contract defect:
+
+> "RCNC02-07 uses the real `createCommandStatusTool` and real controller writer, but its test harness reimplements the runtime-builder's `onRunningObserved` closure. Consequently: the repair is supported by production source inspection; the deferred-snapshot behavior is executable; the exact production factory wiring is not independently exercised by RCNC02-07. This is a bounded P1 evidence-contract defect, not a demonstrated production failure. One appropriate correction is to instantiate the actual `createVscodeExtraTools` composition in the test and extract its real `command_status` tool, using the existing dependency-injection seams. No new architecture or production change is justified solely for test convenience."
+
+## 2. The bounded fix
+
+A new test-fixture helper `buildFactoryCommandStatusTool(h)` instantiates the canonical `createVscodeExtraTools(mcpHub, options)` factory (the same factory the host uses) and returns the `command_status` tool. RCNC02-07 now uses this factory-built tool. The factory's closure at `vscode-runtime-builder.ts:329-365` (with the `manager.isJobActive(jobId)` currentness re-check) is the closure that gets exercised — no harness mirror.
+
+## 3. Test seam
+
+```ts
+async function buildFactoryCommandStatusTool(h: ProductionWiringHarness): Promise<AgentTool> {
+    const mcpHubStub = { getServers: () => [] }
+    const tools = await createVscodeExtraTools(mcpHubStub as any, {
+        cwd: process.cwd(),
+        getTerminalManager: () => { throw new Error("foreground not used in background test") },
+        vscodeTerminalExecutionMode: "backgroundExec",
+        commandJobManager: h.manager,
+        onBackgroundStateChange: h.onBackgroundStateChange,
+    })
+    const statusTool = tools.find((t) => t.name === "command_status")
+    if (!statusTool) throw new Error("RCNC02-08 fixture: command_status tool not found in factory output")
+    return statusTool
+}
+```
+
+## 4. Ablation
+
+Replacing the production closure's `manager.isJobActive(jobId)` re-check with a no-op (via `sed`) makes RCNC02-07 return to RED even when using the factory-built tool (1 failed | 6 passed). The production closure is load-bearing; the test exercises the real code path.
+
+## 5. Test results
+
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts` → **7 passed (RCNC02-01..07)**
+- `cd apps/vscode && bun x tsc --noEmit --project tsconfig.json` → exit 0
+- `cd apps/vscode && bun x biome check` → 0 fixes applied
+- `git diff --check` → exit 0
+- LIVE post-fix qualification: NOT_EXECUTED
+
+## 6. Conservation
+
+The harness mirror (`h.onRunningObserved`) is retained for direct-invocation adversarial tests (RCNC02-05/06) that exercise the closure's contract outside a tool wrapper. The mirror and the production closure are now demonstrably equivalent under ablation: the test fails when either is removed from the re-check.
+
+## 7. Disposition
+
+| Claim | Decision |
+| ----- | -------- |
+| All three Factory halts closed | PASS (corrections 01/02/03) |
+| P1 evidence-contract defect (RCNC02-07 mirrors production closure) | CLOSED (this correction04) |
+| Original P0-A mechanism is the hypothesised desync | PLAUSIBLE, not proven |
+| P0-B post-turn-presentation | REMAINS OPEN |
+| LIVE post-fix | NOT_EXECUTED |
+
+The Factory reviewer's `C1: GO` disposition authorizes progression. No further P0 correction loop authorized on the current evidence. Next actions: build VSIX from the new HEAD, bind SHA-256, install, reproduce a real background-command session, then proceed to `ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01`.

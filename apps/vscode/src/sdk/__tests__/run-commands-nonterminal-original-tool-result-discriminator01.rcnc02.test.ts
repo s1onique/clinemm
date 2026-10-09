@@ -43,12 +43,14 @@
  * already kept it OPEN).
  */
 import type { SupervisableShellProcess } from "@cline/core"
+import type { AgentTool } from "@cline/shared"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { CommandJobManager, type CommandJobState } from "../command-job-manager"
 import { createCommandStatusTool } from "../command-status-tool"
 import { Controller as SdkController } from "../SdkController"
 import { createVscodeRunCommandsTool } from "../vscode-run-commands-tool"
+import { createVscodeExtraTools } from "../vscode-runtime-builder"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -340,6 +342,57 @@ async function startLongRunningJobAndCaptureEnvelope(h: ProductionWiringHarness)
 	}
 }
 
+/**
+ * Build the real production `command_status` tool via the canonical
+ * `createVscodeExtraTools` factory (`vscode-runtime-builder.ts:208`).
+ * The factory's closure at
+ * `vscode-runtime-builder.ts:329-365` does the bounded fix's
+ * RCNC02-07 currentness re-check via
+ * `manager.isJobActive(jobId)`. Returning this tool (rather than
+ * constructing `createCommandStatusTool` directly with a harness
+ * mirror closure) closes the Factory reviewer's P1
+ * "test mirrors the production closure" evidence-contract
+ * defect: the test exercises the EXACT production wiring, not a
+ * re-implementation.
+ *
+ * The McpHub stub returns zero servers so the factory's
+ * `mcpHub.getServers()` loop is a no-op. We pass
+ * `getTerminalManager` (truthy stub) so the factory enters the
+ * `if (options?.getTerminalManager)` branch and registers the
+ * `command_status` tool (the factory gates command_status on
+ * `commandJobManager` being provided, not on terminal mode).
+ */
+async function buildFactoryCommandStatusTool(h: ProductionWiringHarness): Promise<AgentTool> {
+	const mcpHubStub = {
+		getServers: () => [] as Array<{ name: string; config: { timeout?: number } }>,
+	}
+	const tools = await createVscodeExtraTools(
+		// biome-ignore lint/suspicious/noExplicitAny: test seam (minimal McpHub interface)
+		mcpHubStub as any,
+		{
+			cwd: process.cwd(),
+			getTerminalManager: () => {
+				throw new Error("foreground not used in background test")
+			},
+			vscodeTerminalExecutionMode: "backgroundExec",
+			commandJobManager: h.manager,
+			// Production closure: routes both the runner's start-side
+			// and the command_status tool's onRunningObserved through
+			// the harness's onBackgroundStateChange, which feeds the
+			// real SdkController.updateBackgroundCommandState
+			// writer. The factory's command_status closure
+			// additionally does the isJobActive re-check at
+			// vscode-runtime-builder.ts:329-365.
+			onBackgroundStateChange: h.onBackgroundStateChange,
+		},
+	)
+	const statusTool = tools.find((t) => t.name === "command_status")
+	if (!statusTool) {
+		throw new Error("RCNC02-08 fixture: command_status tool not found in factory output")
+	}
+	return statusTool
+}
+
 describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION01 / RCNC02", () => {
 	it("RCNC02-01 GREEN: original tool-result path is non-terminal by construction; envelope → projection=running → pill=Backgrounded (NEVER 'Run failed')", async () => {
 		const h = makeProductionWiringHarness()
@@ -549,9 +602,6 @@ describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION0
 		//       does NOT silently revoke the terminal publication.
 		const h = makeProductionWiringHarness()
 		const onRunningObservedSpy = vi.fn(h.onRunningObserved)
-		const statusTool = createCommandStatusTool(h.manager, {
-			onRunningObserved: onRunningObservedSpy,
-		})
 		try {
 			const { jobId } = await startLongRunningJobAndCaptureEnvelope(h)
 			const handle = h.supervisorsByJobId.get(jobId)
@@ -696,10 +746,22 @@ describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION0
 		// reason. The bounded fix's
 		// `onRunningObserved(jobId, { isLiveInManager: true })`
 		// callback is the load-bearing path under test.
+		//
+		// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+		// (RCNC02-08 — production closure): the `statusTool` is
+		// built via the canonical
+		// `createVscodeExtraTools(...)` factory
+		// (`vscode-runtime-builder.ts:208`) so the test exercises
+		// the EXACT production closure at
+		// `vscode-runtime-builder.ts:329-365`, including the
+		// `manager.isJobActive(jobId)` currentness re-check. The
+		// Factory reviewer's P1 "test mirrors the production
+		// closure" evidence-contract defect is closed here: the
+		// fixture builds the tool through the same factory the
+		// host (`SdkController`) uses, with the same wiring
+		// pattern.
 		const h = makeProductionWiringHarness()
-		const statusTool = createCommandStatusTool(h.manager, {
-			onRunningObserved: h.onRunningObserved,
-		})
+		const statusTool = await buildFactoryCommandStatusTool(h)
 		try {
 			// 1. Start a long-running job (real production path).
 			const { jobId } = await startLongRunningJobAndCaptureEnvelope(h)
@@ -712,7 +774,6 @@ describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION0
 			//    when it resolves. This simulates the
 			//    reviewer's scenario of a snapshot in flight
 			//    at the time the manager finalizes.
-			let deferredResolve: ((v: unknown) => void) | null = null
 			type DeferredSnapshot = {
 				ok: true
 				snapshot: {
@@ -725,12 +786,23 @@ describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION0
 					outputTruncated: boolean
 				}
 			}
+			let resolveDeferred: ((v: DeferredSnapshot) => void) | null = null
 			const deferredPromise = new Promise<DeferredSnapshot>((resolve) => {
-				deferredResolve = resolve as (v: unknown) => void
+				resolveDeferred = resolve
 			})
-			// biome-ignore lint/suspicious/noExplicitAny: test seam (override real production method)
+			// The resolveDeferred is set synchronously inside the
+			// Promise executor; capture it via a non-null accessor
+			// for use in step 5 below. (Promise executors run
+			// synchronously, so by the time we exit the
+			// `new Promise(...)` call, `resolveDeferred` is
+			// non-null.)
+			const getResolve = (): ((v: DeferredSnapshot) => void) => {
+				if (!resolveDeferred) throw new Error("deferred resolve not initialized")
+				return resolveDeferred
+			}
 			h.manager.status = vi.fn(
 				async () => deferredPromise as unknown as Awaited<ReturnType<typeof h.manager.status>>,
+				// biome-ignore lint/suspicious/noExplicitAny: test seam (override real production method)
 			) as any
 
 			// 3. Begin the command_status call (real production
@@ -775,7 +847,7 @@ describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION0
 			//    that was current at the snapshot time — but the
 			//    controller applies the write AFTER the
 			//    terminal publication.
-			deferredResolve!({
+			getResolve()({
 				ok: true,
 				snapshot: {
 					id: jobId,
