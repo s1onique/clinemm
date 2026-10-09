@@ -69,7 +69,9 @@ import { captureContinuationCardinalityAuthorityRecord } from "./continuation-ca
 // predecessor path (C4 / C13 conservation).
 import {
 	consultDeferredCompletionBarrierElmKernel,
+	type DeferredCompletionBarrierElmConsult,
 	type DeferredCompletionBarrierFactsInput,
+	type DeferredCompletionBarrierFactsJson,
 } from "./deferred-completion-barrier-elm"
 import {
 	enterExtensionHostHotloopHandleSessionEvent,
@@ -965,6 +967,31 @@ export class SdkSessionEventCoordinator {
 	}
 
 	/**
+	 * ACT-CLINEMM-ELM-SEAM08.3-E3.1-QUALIFICATION:
+	 *
+	 * Test-only seam: lets a test inject a custom
+	 * `invokeForProduction` for the E3.1 consult WITHOUT changing
+	 * the production path (the default is `undefined`, so the
+	 * production call uses the real `defaultInvokeElmKernel`). The
+	 * seam is a single private field with a test backdoor setter;
+	 * production code NEVER touches it. It exists to let the
+	 * SEAM08.3 race / necessity tests exercise the production
+	 * coordinator's E3.1 consult path with a controlled invoke
+	 * (e.g. one that holds the consult in flight while the test
+	 * mutates the live marker, or one that returns a specific
+	 * directive kind to verify the host routing).
+	 */
+	private _e31TestInvokeForProduction:
+		| ((facts: DeferredCompletionBarrierFactsJson) => Promise<DeferredCompletionBarrierElmConsult>)
+		| undefined = undefined
+
+	setE31TestInvokeForProductionForTests(
+		invoke: ((facts: DeferredCompletionBarrierFactsJson) => Promise<DeferredCompletionBarrierElmConsult>) | undefined,
+	): void {
+		this._e31TestInvokeForProduction = invoke
+	}
+
+	/**
 	 * ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER:
 	 * consult the deferred-completion-barrier Elm kernel for
 	 * the E3.1 dedupe-vs-permit decision. The host retains all
@@ -1001,7 +1028,19 @@ export class SdkSessionEventCoordinator {
 	): Promise<"fallthrough" | "permit" | "clear_rearm" | "already_sent" | "no_held_job_ids"> {
 		let consultResult: Awaited<ReturnType<typeof consultDeferredCompletionBarrierElmKernel>>
 		try {
-			consultResult = await consultDeferredCompletionBarrierElmKernel(facts)
+			// ACT-CLINEMM-ELM-SEAM08.3-E3.1-QUALIFICATION: when a test
+			// has injected `_e31TestInvokeForProduction`, route the
+			// consult through that custom invoke so the test can
+			// observe / control the kernel's response. The test seam
+			// only affects the E3.1 consult; production code never
+			// sets this field. The custom invoke's return value is
+			// passed through `validateConsultResult` by the public
+			// adapter, so unknown kinds / wrong requestId echoes /
+			// missing mustClearRearm are still rejected as
+			// `decode_error` (REVIEWER P1 / SEAM08.1 invariant).
+			consultResult = await consultDeferredCompletionBarrierElmKernel(facts, {
+				...(this._e31TestInvokeForProduction ? { invokeForProduction: this._e31TestInvokeForProduction } : {}),
+			})
 		} catch (err) {
 			// C4 / C13: the consult promise rejected; surface as
 			// fallthrough so the original TS path runs.
