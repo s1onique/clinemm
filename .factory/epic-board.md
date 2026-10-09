@@ -22649,3 +22649,61 @@ Ablation confirmed: `git stash push` of both production files; RCNC-01 returns t
 - ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 / BCTCP-01 — the original per-job `backgroundCommandJobStates` matrix.
 
 The fix is built on the verified state at HEAD 050641f5e, with one bounded production repair at the predicted site. The 5-test ablation (RCNC-01..06) all PASS post-repair, with RCNC-01 being the only RED pre-repair.
+
+## ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION01 — BOUNDED_RUN_COMMANDS_TOOL_RESULT_DISCRIMINATOR — 2026-10-09
+
+**Status:** CLOSED with verdict `BOUNDED_RUN_COMMANDS_TOOL_RESULT_DISCRIMINATOR` after a single bounded correction exercise. The Factory reviewer halted the predecessor ACT (`9e512dba9`, RCNC-01) with `HALT_REAL_COMMAND_RESULT_SEAM_NOT_EXERCISED`. The new bounded test (`run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts`) is the single discriminator the reviewer demanded: it exercises the **real** production composition (`createVscodeRunCommandsTool` + real `CommandJobManager` + real `SdkController.prototype.updateBackgroundCommandState` callback + real `createCommandStatusTool` built with the production `vscode-runtime-builder`-equivalent wiring) **without** calling `command_status` first, and proves whether a nonterminal `run_commands` response can render as `Run failed`.
+
+**Four-discriminator verdict**:
+
+| Test          | What it pins                                                                                                                                      | Verdict |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| **RCNC02-01** | Original tool-result path is non-terminal by construction. The `{status:"running",jobId,elapsedMs:15001,deadlineRemainingMs:584999,...}` envelope returned by `run_commands` (byte-equivalent to the screenshot) maps to a projection value of `"running"`, never `"containment_failed"`. The chat row renders `"Backgrounded"`, NEVER `"Run failed"`. | **GREEN** — the original envelope alone cannot produce the `Run failed` card. |
+| **RCNC02-02** | Adversarial stale-write path. Simulates the reviewer's hypothesised one-shot desync (a `command_job_containment_failed` lifecycle emit that fires while the CommandJob is alive) at the production `onBackgroundStateChange` seam. Asserts the row renders `"Run failed"` and, **without invoking `command_status`**, stays `"Run failed"`. | **GREEN** — the bounded fix is necessary under the hypothesised causal mechanism. |
+| **RCNC02-03** | Production-wired `command_status` reconciles. Same composition as RCNC02-02 but with a real `command_status` tool built with the production `onRunningObserved` closure (the exact wiring at `vscode-runtime-builder.ts:296-298`, NOT a synthetic `Record`). After the stale-write misfire, invoking `command_status` reconciles the projection back to `"running"`. | **GREEN** — the bounded fix is **load-bearing** for the original P0 repair when the hypothesised mechanism fires. |
+| **RCNC02-04** | Conservation. A terminal observation (`exited` from a natural `resolveExit(0)`) does NOT fire the bounded fix's `onRunningObserved` callback. The projection stays terminal. | **GREEN** — the fix is strictly `state === "running"`-gated, no false-running reconciliation. |
+
+**Test infrastructure**: 491 lines, 1 new file, 0 production changes. Mirrors the existing `background-command-terminal-card-projection01.bctcp01-runner-controller-composition.test.ts` composition pattern (real runner + real `SdkController.prototype.updateBackgroundCommandState` + real `createCommandStatusTool`).
+
+**The 4 RCNC02 tests + 5 RCNC01 tests + 13 BCTCP01 tests all pass together.** No regression; the bounded fix in the predecessor ACT is verified against the real production composition.
+
+**What this discriminator proves that the predecessor ACT did not**:
+
+1. The original `run_commands` tool envelope **cannot** directly produce a `Run failed` card (RCNC02-01). The nonterminal `{status:"running",...}` envelope maps to projection=`"running"`, never to projection=`"containment_failed"`. The chat-row pill text is a pure function of the projection value (see `CommandStatusMap.containment_failed === "Run failed"` at `apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx:367`); if the projection is honest, the pill is honest.
+2. The bounded fix is **necessary** when the hypothesised causal mechanism fires (RCNC02-02). A stale `containment_failed` write to the projection map while the job is alive is REQUIRED to produce the user-visible `"Run failed"` pill, and without a nonterminal observation seam the row stays `"Run failed"`. The bounded fix's `onRunningObserved` callback, when wired into the real production `vscode-runtime-builder` closure, reconciles it (RCNC02-03).
+3. The fix does NOT fabricate `running` after a genuine terminal publication (RCNC02-04 — conservation with the RCNC01 RCNC-02/04/05 evidence).
+
+**Caveat — the P0 mechanism is still a hypothesis.** The discriminator proves that IF the hypothesised desync fires, the bounded fix repairs it. The discriminator does NOT prove that the desync DID fire in the original failure. The screenshot evidence shows the `Run failed` pill and a nonterminal `run_commands` envelope — exactly the live-specimen condition the hypothesised desync would create. The bounded fix is therefore the most plausible repair, but a LIVE post-fix qualification is the only way to confirm the original mechanism was the hypothesised desync rather than some other (e.g. a misdelivered terminal wake, a cross-session projection write, or a different boundary). LIVE post-fix remains NOT_EXECUTED.
+
+**P0-B post-turn-presentation remains OPEN** as the explicit successor ACT (`ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01`). The bounded fix in the predecessor ACT is strictly scoped to the per-call `onRunningObserved` callback in the `command_status` tool — it does NOT touch the Task Header, the Elm phase authority, the `updateBackgroundCommandState` terminal-state union, or the `backgroundCommandJobStates` field shape.
+
+**Files added** (this correction ACT, production delta = 0):
+
+- `apps/vscode/src/sdk/__tests__/run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts` (NEW: 4 tests, 491 lines, RCNC02-01..04)
+
+**Gates**:
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts` → 4 passed
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-classification01.rcnc01.test.ts` → 5 passed (no regression)
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-runner-controller-composition.test.ts` → 1 passed (no regression)
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts` → 7 passed (no regression)
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts` → 5 passed (no regression)
+- `cd apps/vscode && bun x tsc --noEmit --project tsconfig.json` → 0 errors
+- `cd apps/vscode && bun x biome check --no-errors-on-unmatched src/sdk/__tests__/run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts` → 0 errors
+- `git diff --check` → exit 0
+- VSIX packaging: NOT_EXECUTED (operator-owned exact-head packaging per C13 directive)
+- LIVE post-fix qualification: NOT_EXECUTED
+
+**Disposition**:
+
+| Claim                                              | Decision              |
+| -------------------------------------------------- | --------------------- |
+| `command_status` running-snapshot callback         | PASS, verified GREEN  |
+| Original tool-result path produces `Run failed`    | REFUTED: cannot       |
+| Stale `containment_failed` produces `Run failed`   | CONFIRMED (RCNC02-02) |
+| Bounded fix reconciles via real wiring             | CONFIRMED (RCNC02-03) |
+| Original P0-A mechanism is the hypothesised desync | PLAUSIBLE, not proven |
+| P0-B post-turn-presentation                        | REMAINS OPEN          |
+| Exact source HEAD                                  | `9e512dba9` + rcnc02 test |
+| LIVE post-fix                                      | NOT_EXECUTED          |
+
+The committed RCNC01 patch (`9e512dba9`) is preserved; this ACT only adds the discriminator test that closes the reviewer's halt. No production code change.
