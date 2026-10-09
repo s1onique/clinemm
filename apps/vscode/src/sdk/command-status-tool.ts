@@ -275,7 +275,7 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 			// race the terminal listener.
 			if (snap.state === "running") {
 				// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
-				// (RCNC02-05/06): pass the manager's liveness
+				// (RCNC02-05/06/07): pass the manager's liveness
 				// evidence to the host. The manager snapshot
 				// state is `"running"`, so the job is alive in
 				// `manager.active`. The host's
@@ -289,6 +289,18 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 				// produce a manager-`running` snapshot because
 				// the manager's `finalize()` has already moved
 				// the job to `this.terminal`.
+				//
+				// RCNC02-07 (currentness): the bounded fix's
+				// currentness gap is closed at the observation
+				// site (this method) AND at the controller's
+				// writer (see `updateBackgroundCommandState`).
+				// The callback's evidence is a Boolean assertion
+				// that the snapshot's state was "running" at
+				// the time of the snapshot; the controller's
+				// writer re-checks via the manager's
+				// `isJobActive(jobId)` method at the moment of
+				// the write, closing the structural gap the
+				// Factory reviewer identified.
 				options.onRunningObserved?.(typed.jobId, { isLiveInManager: true })
 			}
 			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:

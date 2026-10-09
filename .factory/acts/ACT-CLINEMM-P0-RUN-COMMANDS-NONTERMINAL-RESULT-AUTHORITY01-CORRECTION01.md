@@ -155,3 +155,88 @@ Replacing the guard body with a no-op returns RCNC02-05 and RCNC02-06 to RED (4 
 | Original bounded fix is preserved (RCNC02-01..04) | PASS, all 4 GREEN |
 | P0-B post-turn-presentation | REMAINS OPEN |
 | LIVE post-fix | NOT_EXECUTED |
+
+---
+
+# ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION03 — STALE_LIVENESS_CURRENTNESS — 2026-10-09
+
+## 1. Reviewer halt (follow-up to correction02)
+
+After the bounded fix at HEAD `ebde4bc38` closed the reviewer's `HALT_TERMINAL_STATE_MONOTONICITY_NOT_PROVEN`, the reviewer issued another follow-up halt:
+
+> **HALT_STALE_LIVENESS_EVIDENCE**
+> "The production tool currently does this: `if (snap.state === "running") { options.onRunningObserved?.(typed.jobId, { isLiveInManager: true }) }`. The Boolean describes the snapshot that was obtained. It does not establish that the observation is still current when the controller applies it. The writer's new guard explicitly permits overwriting a terminal projection whenever `isLiveInManager === true`. Therefore the decisive sequence remains untested: [capture running snapshot → job genuinely terminates → runner publishes exited → older running snapshot resumes and invokes the callback with isLiveInManager: true → current guard permits the stale running write]. RCNC02-05 does not execute this sequence. ... Add RCNC02-07 against the production `createCommandStatusTool` and real controller writer. Use a deferred `manager.status()` result to capture a genuine `running` snapshot. While that result is held, complete the supervisor and wait until the existing runner listener publishes `exited`. Release the captured status result so the real callback supplies `{ isLiveInManager: true }`. The required invariant is: `expect(controller.backgroundCommandJobStates[jobId]).toBe('exited')`."
+
+## 2. The bounded probe (RCNC02-07)
+
+A new test `RCNC02-07 adversarial: a stale deferred running snapshot delivered through the real command_status tool seam must NOT revert a genuine terminal projection`. The test seam wraps `manager.status` with a deferred Promise, holds it in flight while the supervisor exits and the runner's terminal listener publishes `"exited"`, then resolves the deferred promise with a stale `{ state: "running" }` snapshot. The bounded fix's `onRunningObserved(jobId, { isLiveInManager: true })` callback is the load-bearing path under test.
+
+## 3. Risk confirmed
+
+Pre-repair RCNC02-07 returns to RED:
+```
+AssertionError: expected 'running' to be 'exited'
+```
+
+The current guard accepts the stale snapshot because the snapshot says `"running"` and the tool passes `{ isLiveInManager: true }` based on the snapshot's point-in-time verdict.
+
+## 4. The bounded repair
+
+A narrow, synchronous `CommandJobManager.isJobActive(jobId): boolean` public method (a single `Map.has` call) and a closure-level re-check at the runtime-builder's `onRunningObserved` construction site:
+
+```ts
+isJobActive(jobId: string): boolean {
+    return this.active.has(jobId)
+}
+```
+
+The runtime-builder closure:
+```ts
+onRunningObserved: options.onBackgroundStateChange
+    ? (jobId, evidence) => {
+        const manager = options.commandJobManager as NonNullable<typeof options.commandJobManager>
+        const currentEvidence = {
+            ...evidence,
+            isLiveInManager:
+                (evidence?.isLiveInManager ?? false) && manager.isJobActive(jobId),
+        }
+        if (!currentEvidence.isLiveInManager) {
+            // Stale snapshot — refuse the write.
+            return
+        }
+        options.onBackgroundStateChange?.(true, jobId, undefined, currentEvidence)
+    }
+    : undefined
+```
+
+The `isJobActive(jobId)` re-check at the moment of the callback invocation closes the observation/publication correlation boundary: a deferred running snapshot (captured at T1, but released after the runner's terminal listener has published the terminal reason) is rejected because `isJobActive(jobId) === false` at the moment of the write.
+
+## 5. Test results
+
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-original-tool-result-discriminator01.rcnc02.test.ts` → **7 passed (RCNC02-01..07)**
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/run-commands-nonterminal-classification01.rcnc01.test.ts` → **5 passed (no regression)**
+- `cd apps/vscode && bun run test:vitest -- src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-{controller,multi-job-controller,runner-controller-composition,runner-seam}.test.ts` → **18 passed (no regression)**
+- `cd apps/vscode && bun x tsc --noEmit --project tsconfig.json` → exit 0
+- `cd apps/vscode && bun x biome check` → 0 fixes applied
+- `git diff --check` → exit 0
+- LIVE post-fix qualification: NOT_EXECUTED
+
+## 6. Ablation
+
+Replacing the `manager.isJobActive(jobId)` re-check with a no-op returns RCNC02-07 to RED (1 failed | 6 passed). Restoring the re-check returns all 7 RCNC02 tests to GREEN.
+
+## 7. Disposition
+
+| Claim | Decision |
+| ----- | -------- |
+| Original P0-A mechanism is the hypothesised desync | PLAUSIBLE, not proven |
+| Terminal-state monotonicity regression risk (correction02) | CLOSED (RCNC02-05/06 GREEN) |
+| Stale deferred snapshot regression risk (correction03) | CLOSED (RCNC02-07 GREEN) |
+| Original bounded fix is preserved (RCNC02-01..04) | PASS, all 4 GREEN |
+| P0-B post-turn-presentation | REMAINS OPEN |
+| LIVE post-fix | NOT_EXECUTED |
+
+The Factory reviewer's three halts are now closed:
+- HALT_REAL_COMMAND_RESULT_SEAM_NOT_EXERCISED (correction01 at `c2a8992eb`)
+- HALT_TERMINAL_STATE_MONOTONICITY_NOT_PROVEN (correction02 at `ebde4bc38`)
+- HALT_STALE_LIVENESS_EVIDENCE (this correction03)

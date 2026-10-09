@@ -326,7 +326,43 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 					backgroundNotifyCoordinator: options.backgroundNotifyCoordinator,
 					resolveActiveOwner: options.resolveActiveOwner,
 					onRunningObserved: options.onBackgroundStateChange
-						? (jobId, evidence) => options.onBackgroundStateChange?.(true, jobId, undefined, evidence)
+						? (jobId, evidence) => {
+								// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+								// (RCNC02-07 — currentness): re-validate the
+								// manager's liveness at the moment of the
+								// callback invocation. The
+								// `command_status` tool's snapshot may have
+								// been taken at time T1 (the
+								// `isLiveInManager: true` evidence is a
+								// point-in-time Boolean); a deferred
+								// running snapshot — captured at T1, but
+								// released AFTER the runner's terminal
+								// listener has published the terminal
+								// reason — would otherwise silently revoke
+								// the terminal projection. The narrow,
+								// synchronous `manager.isJobActive(jobId)`
+								// check closes the observation/publication
+								// correlation boundary at the runtime-builder
+								// closure. A stale snapshot is rejected because
+								// `isJobActive(jobId) === false` at the
+								// moment of the callback. The bounded fix
+								// only fires when the manager confirms the
+								// job is alive at both observation AND
+								// publication times.
+								// biome-ignore lint/suspicious/noExplicitAny: closure is constructed inside `if (options.commandJobManager)`
+								const manager = options.commandJobManager as NonNullable<typeof options.commandJobManager>
+								const currentEvidence = {
+									...evidence,
+									isLiveInManager: (evidence?.isLiveInManager ?? false) && manager.isJobActive(jobId),
+								}
+								if (!currentEvidence.isLiveInManager) {
+									// Stale snapshot — refuse the write.
+									// The terminal projection (if any) is
+									// preserved.
+									return
+								}
+								options.onBackgroundStateChange?.(true, jobId, undefined, currentEvidence)
+							}
 						: undefined,
 				}),
 			)

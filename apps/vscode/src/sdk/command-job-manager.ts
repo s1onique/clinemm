@@ -2845,6 +2845,32 @@ export class CommandJobManager {
 	}
 
 	/**
+	 * ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+	 * (RCNC02-07): synchronous liveness check used by the bounded
+	 * fix's `onRunningObserved(jobId, evidence)` currentness
+	 * re-validation. Returns `true` iff the jobId is in the
+	 * manager's `active` map (i.e. the job has NOT been finalized).
+	 * The check is a single `Map.has` call — no I/O, no
+	 * allocation, safe to call on every bounded-fix callback
+	 * invocation. Unknown jobIds return `false`.
+	 *
+	 * The narrow, synchronous API is the canonical
+	 * observation/publication correlation boundary: the
+	 * `command_status` tool's snapshot may have been taken at
+	 * time T1 (the bounded fix's `isLiveInManager: true`
+	 * evidence is a point-in-time Boolean); the controller's
+	 * writer re-validates the active-set membership at the
+	 * moment of the write. A deferred running snapshot —
+	 * captured at T1, but released after the runner's terminal
+	 * listener has published the terminal reason — is
+	 * rejected because `isJobActive(jobId) === false` at the
+	 * moment of the write.
+	 */
+	isJobActive(jobId: string): boolean {
+		return this.active.has(jobId)
+	}
+
+	/**
 	 * Cancel a running job. Idempotent: re-cancelling a terminal or
 	 * already-cancelled job is a no-op.
 	 *

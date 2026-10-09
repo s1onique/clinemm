@@ -265,9 +265,25 @@ function makeProductionWiringHarness(): ProductionWiringHarness {
 	// real production closure: it forwards to the host's
 	// `updateBackgroundCommandState(true, jobId, undefined, evidence)`.
 	// The evidence parameter is the manager's liveness verdict
-	// (RCNC02-05/06 — terminal monotonicity).
+	// (RCNC02-05/06 — terminal monotonicity, RCNC02-07 —
+	// currentness). The production closure at
+	// `vscode-runtime-builder.ts:329-365` re-validates the
+	// manager's liveness at the moment of the callback via
+	// `manager.isJobActive(jobId)`. The harness's closure mirrors
+	// that production re-check so the test seam can exercise the
+	// observation/publication correlation boundary through the
+	// same code path the production runtime uses.
 	const onRunningObserved: ProductionWiringHarness["onRunningObserved"] = (jobId, evidence) => {
-		onBackgroundStateChange(true, jobId, undefined, evidence)
+		const currentEvidence = {
+			...evidence,
+			isLiveInManager: (evidence?.isLiveInManager ?? false) && manager.isJobActive(jobId),
+		}
+		if (!currentEvidence.isLiveInManager) {
+			// Stale snapshot — refuse the write. The terminal
+			// projection (if any) is preserved.
+			return
+		}
+		onBackgroundStateChange(true, jobId, undefined, currentEvidence)
 	}
 
 	const runTool = createVscodeRunCommandsTool({
@@ -649,6 +665,148 @@ describe("ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION0
 			// clearing a genuine safety failure.
 			expect(h.subject.backgroundCommandJobStates[jobId]).toBe("containment_failed")
 			expect(pillForProjection(h.subject.backgroundCommandJobStates[jobId])).toBe("Run failed")
+		} finally {
+			await h.manager.dispose()
+		}
+	})
+
+	// ──────────────────────────────────────────────────────────────────────
+	// ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01
+	// (RCNC02-07 — stale deferred snapshot via the real production
+	// tool seam). The Factory reviewer's
+	// `HALT_STALE_LIVENESS_EVIDENCE` halt: the boolean
+	// `isLiveInManager: true` evidence the bounded fix's
+	// `onRunningObserved(jobId, evidence)` callback carries is a
+	// point-in-time assertion, not a currentness check at the moment
+	// the controller applies the write. A deferred running
+	// snapshot — captured before the manager finalizes, but
+	// released AFTER the runner's terminal listener has published
+	// the terminal reason — would be accepted by the controller's
+	// current guard (`evidence?.isLiveInManager === true`) and
+	// silently revoke the terminal projection. This test exercises
+	// that exact sequence through the REAL production
+	// `createCommandStatusTool` + REAL controller writer.
+	// ──────────────────────────────────────────────────────────────────────
+
+	it("RCNC02-07 adversarial: a stale deferred running snapshot delivered through the real command_status tool seam must NOT revert a genuine terminal projection", async () => {
+		// Test seam: wrap the manager's `status` method with a
+		// deferred version so we can hold a stale "running"
+		// snapshot in flight while the supervisor exits and the
+		// runner's terminal listener publishes the terminal
+		// reason. The bounded fix's
+		// `onRunningObserved(jobId, { isLiveInManager: true })`
+		// callback is the load-bearing path under test.
+		const h = makeProductionWiringHarness()
+		const statusTool = createCommandStatusTool(h.manager, {
+			onRunningObserved: h.onRunningObserved,
+		})
+		try {
+			// 1. Start a long-running job (real production path).
+			const { jobId } = await startLongRunningJobAndCaptureEnvelope(h)
+			expect(h.subject.backgroundCommandJobStates[jobId]).toBe("running")
+			expect(h.manager.activeCount).toBe(1)
+
+			// 2. Wrap the manager's `status` method with a
+			//    deferred version. The replacement is a vi.fn
+			//    that returns a held promise; the test controls
+			//    when it resolves. This simulates the
+			//    reviewer's scenario of a snapshot in flight
+			//    at the time the manager finalizes.
+			let deferredResolve: ((v: unknown) => void) | null = null
+			type DeferredSnapshot = {
+				ok: true
+				snapshot: {
+					id: string
+					state: string
+					elapsedMs: number
+					deadlineRemainingMs: number
+					stdout: string
+					stderr: string
+					outputTruncated: boolean
+				}
+			}
+			const deferredPromise = new Promise<DeferredSnapshot>((resolve) => {
+				deferredResolve = resolve as (v: unknown) => void
+			})
+			// biome-ignore lint/suspicious/noExplicitAny: test seam (override real production method)
+			h.manager.status = vi.fn(
+				async () => deferredPromise as unknown as Awaited<ReturnType<typeof h.manager.status>>,
+			) as any
+
+			// 3. Begin the command_status call (real production
+			//    tool). Do NOT await yet — the call is in flight
+			//    and awaiting `manager.status()` would resolve
+			//    our held promise.
+			const statusCallPromise = statusTool.execute(
+				{ jobId, waitMs: 0 },
+				{ agentId: "test-agent", conversationId: "conv-rcnc02", iteration: 1 },
+			) as Promise<Array<{ ok: boolean; state?: string }>>
+
+			// 4. While the status is pending, drive the supervisor
+			//    to exit and let the runner's terminal listener
+			//    publish the terminal reason via the production
+			//    `onBackgroundStateChange` callback. The polling
+			//    mirrors the natural microtask ordering:
+			//    supervisor exit → manager `finalize()` → manager
+			//    resolves `terminalPromise` → listener fires
+			//    `notifyBackgroundStateChange(false, jobId,
+			//    "exited")` → projection updated.
+			const handle = h.supervisorsByJobId.get(jobId)
+			expect(handle).toBeDefined()
+			if (!handle) return
+			handle.resolveExit(0)
+			for (let i = 0; i < 50; i += 1) {
+				if (h.subject.backgroundCommandJobStates[jobId] !== "running") break
+				await sleep(5)
+			}
+			const terminalReason = h.subject.backgroundCommandJobStates[jobId]
+			expect(terminalReason).toBe("exited")
+			expect(pillForProjection(terminalReason)).toBe("Completed")
+			expect(h.manager.activeCount).toBe(0)
+
+			// 5. Now release the deferred status with a STALE
+			//    "running" snapshot. The snapshot in flight
+			//    says the job is alive (matches the
+			//    `command_status` tool's `snap.state === "running"`
+			//    gate), but the manager has already finalized
+			//    the job. The bounded fix's
+			//    `onRunningObserved(jobId, { isLiveInManager: true
+			//    })` callback fires with the manager's verdict
+			//    that was current at the snapshot time — but the
+			//    controller applies the write AFTER the
+			//    terminal publication.
+			deferredResolve!({
+				ok: true,
+				snapshot: {
+					id: jobId,
+					state: "running",
+					elapsedMs: 15001,
+					deadlineRemainingMs: 584999,
+					stdout: "",
+					stderr: "",
+					outputTruncated: false,
+				},
+			})
+
+			// 6. Wait for the command_status call to complete.
+			const statusResult = await statusCallPromise
+			expect(statusResult[0]?.ok).toBe(true)
+			expect(statusResult[0]?.state).toBe("running")
+
+			// THE REVIEWER'S INVARIANT: the projection MUST
+			// stay "exited" — a stale running snapshot
+			// delivered through the real production tool
+			// seam must NOT revert a genuine terminal
+			// publication. The current guard accepts the
+			// stale snapshot because the snapshot says
+			// "running" (the test seam's frozen value) and
+			// the tool passes `{ isLiveInManager: true }`
+			// (the snapshot's point-in-time verdict). This
+			// is the exact gap the reviewer's halt
+			// identifies.
+			expect(h.subject.backgroundCommandJobStates[jobId]).toBe(terminalReason)
+			expect(h.subject.backgroundCommandJobStates[jobId]).not.toBe("running")
+			expect(pillForProjection(h.subject.backgroundCommandJobStates[jobId])).not.toBe("Backgrounded")
 		} finally {
 			await h.manager.dispose()
 		}
