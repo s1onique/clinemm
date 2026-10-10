@@ -23842,3 +23842,94 @@ SEAM08.3_LIVE:                   LIVE_UNOBSERVABLE
 ```
 
 **Next cursor:** SEAM08 LIVE dogfood qualification. The production seam is now ready to be exercised against a real BCB cycle. The C5 timeout P1 follow-up (Promise.race does not cancel the losing promise) remains a separate bounded follow-up.
+
+# ACT-CLINEMM-P0-VERIFIED-SUBMISSION-TERMINAL-NONCONVERGENCE01 — PASS_COMPLETION_CONSERVATION_BLOCKED_AS_DESIGNED — 2026-10-10
+
+**Status:** CLOSED with verdict `PASS_COMPLETION_CONSERVATION_BLOCKED_AS_DESIGNED`.
+The LIVE specimen's three `submit_and_exit` cycles and three `error` phase
+publications are the **contract-correct** behavior of the production
+BCB01 / PTBPC01 / CRCD01 / CTQC01 / CCUTO01 stack on HEAD `c647e83ab`. No
+first divergent boundary is reproducible on the current source. The `4` in
+`unconsumedTerminalCountLast` is a global diagnostic counter snapshot, not
+a per-task held-observation set; the affected task's per-turn held count
+cannot be reconstructed from the supplied evidence because
+`BackgroundNotifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner` is
+process-ephemeral and the production seam does not record it in the CCA
+log.
+
+**Live specimen (exact, from the Oct 10 03:09 evidence files):**
+- `session` / `task`: `1791583363336_bmg3e`
+- `submit_and_exit_seen` × 3 (submitIds -19, -20, -21; all `origin: pending_prompt_drain`)
+- `agent_turn_done` × 3 (all `origin: explicit_user`)
+- `task_completion_committed` × **0** for the affected task (4 in the file are for OTHER sessions)
+- `terminal_committed` × 98 for the task (cumulative background-job terminal events; not the held set)
+- 3 `error` phase transitions, all with writerId `session-event-bcb-blocked-observation-unavailable`
+- `runtimeErrorCount`: 1 → 2 → 3 across the three cycles
+- `attemptCompletionSeen`: true on the first error snapshot (stateVersion 12633)
+- `terminalResponseCommittedThisTurn`: true on the first error snapshot
+- Final `selectedPhase: error`, `selectedSource: host`, `publicationShadowBinding: UNBOUND`
+- Task Header webview `buttonConfig: { primaryText: "Retry", secondaryText: "Start New Task", primaryAction: "retry", secondaryAction: "new_task" }`
+
+**First divergent boundary:** `EXPECTED_SAFETY_HOLD`. The bounded host
+correlation guard at
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3105-3120` (added
+by `ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01-CORRECTION01`)
+fires iff `unconsumedOwnedTerminalResultsForC10 > 0` AND
+`liveTools().includes("command_status") === false`. The guard stamps
+`deferredCompletionBarrier.reason = "observation_unavailable"`,
+publishes `applyBlockedCompletionContinuationOutcome({kind: "fail_closed", failureReason: "observation_unavailable"})`,
+and writes `setTurnPhase("error", undefined, "session-event-bcb-blocked-observation-unavailable")`.
+The 3 occurrences of the writerId in `turn-state-writer-provenance.jsonl`
+are the causal proof. The C10 completion-commit barrier correctly HOLDS
+(0 `task_completion_committed` for the task). The Task Header is
+correctly `Error` (host-sourced) with the actionable `Retry / Start New Task`
+UI — the PTBPC01 defect (`Working / ●` SCAR) is NOT present.
+
+**No host-scheduled unjustified continuation turn.** Every reentry
+`error → streaming` transition is paired with `controller-ask-response`
+(user approval/retry). `enqueueCompletionContinuationInvoked` = 0;
+`notify_consume_enter` = 0.
+
+**Production files changed:** 0. **Test files changed:** 0. **Diagnostic
+files changed:** 0.
+
+**C2.1 per-task held-observation identity:** not reconstructible from the
+supplied evidence (the per-task list is process-ephemeral in
+`BackgroundNotifyCoordinator`; the CCA log records substrate stages,
+not the held set; the ACT body forbids substituting 4 arbitrary jobIds
+from the 98 `terminal_committed`). The per-task held-set **existence**
+is causally proven by the writerId chain (the guard only fires iff the
+held set is positive), so the `EXPECTED_SAFETY_HOLD` classification is
+unaffected.
+
+**Predecessor ACT lineage (all contracts preserved, not reopened):**
+- `ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01-CORRECTION01` — bounded host correlation guard.
+- `P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01` (PTBPC01) — host `error` publication and Elm R2.5 rule.
+- `P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01` / `STALL-LIFETIME01` (d46223b51) — STALL/REARM lifetime separation; protected commit, reachable from HEAD, 4 commits reference it.
+- `P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01` — Elm Continuation Control production cutover.
+- `COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01` (CRCD01) — truthful resumed-turn tool registry projection.
+- `COMPLETION-CONTINUATION-UNRESOLVABLE-TERMINAL-OUTCOME01` (CCUTO01) — held-result conservation.
+- `BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01` (BCCA) — consumer-availability fail-closed.
+- `ELM-SEAM08.3-CORRECTION01-STALE-REQUEST-CONSERVATION` (HEAD `c647e83ab`) — current substrate.
+
+**Suggested follow-on ACT (out of scope here):** the actionable-recovery
+contract question. When the BCB has stamped `observation_unavailable` and
+the user-driven reentry cannot restore `command_status` (because the
+resumed-turn tool registry is unchanged across the retry), the current
+`Retry` button hits the same bounded correlation guard. A separate ACT
+would need to freeze a new public wire field or button-config
+discriminator (e.g. disable `Retry` and surface only `Start New Task`
+when the held set is non-empty AND the live registry lacks
+`command_status`). Verdict candidate: `HALT_HOST_BLOCKED_RECOVERY_CONTRACT_MISSING`.
+
+**Gates (inherited from HEAD `c647e83ab`; not re-executed in this run
+because the ACT introduces zero production change):**
+- TypeScript typecheck: PASS (0 errors, inherited from SEAM08.3 closure)
+- biome lint: PASS (0 errors, inherited from SEAM08.3 closure)
+- Diff-check: clean (no working-tree changes)
+- Focused conservation gates inherited from SEAM08.3: 7/7 E3.1, 19/19 BNAEC01, 14/14 CCUTO01, 13/13 CCSLT01, 7/7 REARM01, 89/89 related — all GREEN
+
+**VSIX:** NOT_EXECUTED (operator-owned, per ACT C0).
+**LIVE_POST_FIX:** NOT_EXECUTED (operator-owned, per ACT C0).
+
+**Verdict:** `PASS_COMPLETION_CONSERVATION_BLOCKED_AS_DESIGNED`.
