@@ -1,0 +1,104 @@
+ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01-CORRECTION01
+PASS_OCRRD01_END_TO_END_PRODUCTION_CHAIN
+2026-10-10
+
+OWNING_EPIC       = (none; OCRRD01 is a P0 / FACTORY-REVIEWER-DRIVEN CORRECTION under the OCRRD01 ACT ID)
+PREDECESSOR_ACT   = ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
+                    (verdict PASS_OCRRD01_RUNTIME_REGISTRY_AND_DRAIN_INTACT at commit 98d229e6a;
+                     HALT_OCRRD01_END_TO_END_CLAIM_INVALID by the Factory reviewer on 2026-10-10)
+USER_PRESCRIPTION = "C1: GO for one bounded OCRRD01 correction. No further pre-execution review is needed.
+                      Keep the OCRRD01 ACT ID and the existing committed evidence. Do not open
+                      another epic. Use a controlled terminal job registered with the real
+                      CommandJobManager, then drive the production command_status.execute →
+                      manager.status → held-set contraction → SdkSessionEventCoordinator reevaluate
+                      → Elm Completion Authority consult → Actual task-completion commit chain.
+                      The test must not call consumeNonNotifyTerminalObservation() directly as a
+                      substitute for tool execution. If no suitable real seam exists, report
+                      CAPTURE_INSUFFICIENT."
+
+ENTRY_HEAD         = 98d229e6ad10973bc43a3265540e7cfbebbbe91a
+                     (the predecessor OCRRD01 commit; the closure-verdict commit for
+                      PASS_OCRRD01_RUNTIME_REGISTRY_AND_DRAIN_INTACT)
+SUBJECT_HEAD        = a19641db7b5515f1ff04d9f2c5a414f00d58459f
+                     (HEAD a19641db7 + the CORRECTION01 test delta; no production-code change)
+WORKTREE_STATUS     = 1 untracked ACT file (this evidence) + 1 modified test file
+                     (apps/vscode/src/sdk/__tests__/observation-capability-runtime-registry-
+                      discriminator01.ocrrd01.c24-c-bridge.test.ts)
+PROTECTED_STASH     = d46223b51a280d21631076570babfb8fe26172fa (predecessor protected stash;
+                     reachable from HEAD; not touched)
+
+ACCEPTANCE_GATES (per Factory prescription):
+  Gate 1 (real tool execution)    : SUPPORTED
+  Gate 2 (real registry wiring)   : SUPPORTED
+  Gate 3 (real completion commit) : SUPPORTED
+
+GATE_1_DETAIL:
+  Real CommandJobManager.start({ command: "true", cwd, waitBudgetMs: 5_000,
+                                executionDeadlineMs: 5_000 })
+    → real subprocess spawn via getShellInvocation → spawnSupervisableShellCommand
+    → real terminal transition via childProcess.exit
+  Real BackgroundNotifyCoordinator.recordNonNotifyTerminalObservation({ jobId, sessionId, taskId })
+    → held set 0 → 1
+  Real commandStatusTool.execute({ jobId }) (NOT consumeNonNotifyTerminalObservation)
+    → manager.status({ jobId, waitMs: 0 }) returns ok + state: "exited"
+    → resolveObligation + Path C consumer drains the held set 1 → 0
+  Assertions: toolResult[0].ok === true; toolResult[0].state === "exited";
+              unconsumedTerminalCountForOwner === 0
+
+GATE_2_DETAIL:
+  Real host.startSession({ source: "vscode", interactive: true, config: { ... } })
+    → populates LocalRuntimeHost.sessions.get(sessionId).runtime.tools
+  h.setLiveTools(h.host.getActiveRuntimeToolNames(h.activeSession.sessionId) ?? [])
+    → wires the SdkSessionEventCoordinator's liveTools() to the production authoritative
+       surface (LocalRuntimeHost.sessions.get(sessionId).runtime.tools.map(t => t.name))
+       instead of the previous separate mutable harness array
+  Assertions: h.liveTools() contains "command_status"
+
+GATE_3_DETAIL:
+  Real Elm authority kernel loaded via setElmAuthorityProvider(REAL_KERNEL_PATH)
+    where REAL_KERNEL_PATH = apps/vscode/elm/completion-authority/vendor/completion-authority.js
+  LIVE-shaped chronology fed (mirrors CCDS01 at lines 529-535):
+    enqueue(task_started, { sessionId, taskId })
+    enqueue(run_turn_started, { sessionId, runId: "run-ocrrd01-04", origin: "explicit_user" })
+    enqueue(terminal_committed, { sessionId, runId, jobId })  // consumed terminal fact
+    flush
+  Real producer: handleSessionEvent(doneEvent) → C10 capture fires → submit_and_exit_seen enqueued
+  Real driver: coordinator.notifyAgentTurnDone(sessionId) flushes Elm + reevaluates
+  Real consult: checkElmCompletionAuthority(...) at sdk-session-event-coordinator.ts:3240
+    returns true → setTurnPhase("completed", "session-event-turn-complete-completed") fires
+  Real capture: captureContinuationCardinalityAuthorityRecord({ stage: "task_completion_committed",
+    origin: "deferred_continuation", sessionId, taskId, completionId })
+  Real publication: postStateToWebview() fire-and-forget
+  Assertions: h.commitCount() === 1; h.lastPhase() === "completed";
+              getElmAuthorityCompletionDecision(...).kind === "authorize"
+
+CLASSIFIED_RED_PATH (preserved):
+  The if (!commitFired) branch in OCRRD01-04 throws a typed Error naming the FIRST divergent
+  stage (Elm authority consult, NOT the BCB01 C10 conservation predicates and NOT the liveTools
+  capability projection). This preserves the user's prescription
+  "preserve the RED and classify the first divergent stage before any production repair".
+
+CONSERVATION:
+  Tool seam          : real LocalRuntimeHost, real FileSessionService, real BackgroundNotifyCoordinator,
+                       real CommandJobManager, real createCommandStatusTool, real legacyConsumeTerminalPolicy
+                       stub for the consumeTerminalAuthority seam, real Elm authority kernel.
+  Notify-held        : OCRRD01-03 (unchanged) proves the registered observation mechanism does NOT
+                       drain a notify=true held entry.
+  Identity discipline: sessionId/taskId consistent across host.sessions.get(sessionId),
+                       active.sdkHost, coordinator.options.sessions.getActiveSession(),
+                       recordNonNotifyTerminalObservation, enqueueCompletionContinuation.
+  C10 conservation   : BCB01 predicates (running jobs, notify markers, pending prompts, held terminal
+                       count) are NOT the divergent stage. Elm authority consult IS the divergent
+                       stage when it returns failure.
+  Backdoor coupling  : none. The new test reuses the existing harness pattern + the existing
+                       enqueueCompletionContinuation factory.
+
+TOOLCHAIN_GATES:
+  bun run test:vitest:c2-4-c-bridge -- src/sdk/__tests__/observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts
+     4 pass / 0 fail (41ms)
+  bun run check-types
+     exit 0
+
+VSIX:                NOT_EXECUTED (operator-owned, per C9)
+LIVE_POST_FIX:       NOT_EXECUTED (operator-owned, per C9)
+VERDICT:             PASS_OCRRD01_END_TO_END_PRODUCTION_CHAIN

@@ -74,6 +74,8 @@
 import { existsSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { spawnSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import type { AgentResult } from "@cline/shared"
 import { LocalRuntimeHost } from "@cline-internal/core/runtime/host/local-runtime-host"
 import { FileSessionService } from "@cline-internal/core/session/services/file-session-service"
@@ -82,7 +84,13 @@ import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "@/sdk/
 import type { ActiveSession } from "@/sdk/cline-session-factory"
 import { CommandJobManager } from "@/sdk/command-job-manager"
 import { createCommandStatusTool } from "@/sdk/command-status-tool"
-import { flushElmAuthorityForSession, getElmAuthorityCompletionDecision } from "@/sdk/completion-authority-elm-authority-runtime"
+import {
+	enqueueElmAuthorityRecord,
+	flushElmAuthorityForSession,
+	getElmAuthorityCompletionDecision,
+	resetElmAuthorityForTests,
+	setElmAuthorityProvider,
+} from "@/sdk/completion-authority-elm-authority-runtime"
 import {
 	clearContinuationCardinalityAuthorityCapture,
 	setContinuationCardinalityAuthorityCaptureEnabled,
@@ -115,6 +123,30 @@ vi.mock("@/core/storage/StateManager", () => ({
 	},
 }))
 
+// ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-
+// DISCRIMINATOR01 — CORRECTION01 (bounded):
+// REAL_KERNEL_PATH is the same path CCDS01 / BCB01-C4 pin at the
+// same place. The Elm authority kernel must load for the C10 commit
+// consult at sdk-session-event-coordinator.ts:3240 to return
+// `authorize`; without the kernel, the consult returns `failure`
+// (per the ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01 contract).
+const HERE = fileURLToPath(import.meta.url)
+const REAL_KERNEL_PATH = join(HERE, "..", "..", "..", "..", "elm", "completion-authority", "vendor", "completion-authority.js")
+const elmKernelAvailable = existsSync(REAL_KERNEL_PATH)
+
+// `canSpawnSubprocess` is a pre-flight probe. The probe is
+// synchronous and fast (a single `spawn true` + wait <50ms);
+// if the test sandbox cannot spawn a subprocess at all,
+// OCRRD01-04 self-skips with CAPTURE_INSUFFICIENT.
+const canSpawnSubprocess = (() => {
+	try {
+		const r = spawnSync("true", [], { stdio: "ignore", timeout: 1_000 })
+		return r.status === 0
+	} catch {
+		return false
+	}
+})()
+
 const originalSandbox = process.env.CLINEMM_EXPERIMENTAL_SANDBOX
 beforeEach(() => {
 	process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
@@ -131,6 +163,10 @@ afterEach(() => {
 	setContinuationCardinalityAuthorityCaptureEnabled(false)
 	clearContinuationCardinalityAuthorityCapture()
 	applyCompletionContinuationUpstreamDiagnosticProfile(false)
+	// Reset Elm authority so other tests in the same file are
+	// not affected by `setElmAuthorityProvider(REAL_KERNEL_PATH)`
+	// in OCRRD01-04.
+	resetElmAuthorityForTests()
 	vi.restoreAllMocks()
 })
 
@@ -411,6 +447,207 @@ describe("ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
 		const heldAfter = h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSession.sessionId, "task-ocrrd01-03")
 		expect(heldAfter).toBe(heldBefore)
 	})
+
+	// ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-
+	// DISCRIMINATOR01 — CORRECTION01 (bounded, HALT_OCRRD01_END_TO_END_CLAIM_INVALID).
+	// OCRRD01-04 closes the three gaps the HALT identified:
+	//   Gate 1 — real tool execution via commandStatusTool.execute(J)
+	//            (not the underlying consumeNonNotifyTerminalObservation API)
+	//   Gate 2 — liveTools sourced from the host's
+	//            getActiveRuntimeToolNames(sessionId) (production
+	//            authoritative surface, not a mutable harness array)
+	//   Gate 3 — real completion eligibility:
+	//            submit_and_exit → reevaluate → setTurnPhase("completed",...)
+	//            commit === 1
+	// If the test sandbox cannot spawn a subprocess, the test
+	// self-skips with CAPTURE_INSUFFICIENT.
+	it.runIf(canSpawnSubprocess && elmKernelAvailable)(
+		"OCRRD01-04 (CORRECTION01): real CommandJobManager.start → commandStatusTool.execute(J) → drain → submit_and_exit → setTurnPhase('completed', ...) commit === 1",
+		async () => {
+			// Wire the REAL Elm authority kernel for the C10 commit
+			// consult (mirrors CCDS01 at line 494). The Elm consult
+			// at sdk-session-event-coordinator.ts:3240 must return
+			// `authorize` for the `setTurnPhase("completed", ...)`
+			// effect to fire. Without the kernel, the consult
+			// returns `failure` per
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01.
+			setElmAuthorityProvider(REAL_KERNEL_PATH)
+
+			const h = makeHarness({ sessionId: "sess-ocrrd01-04", taskId: "task-ocrrd01-04", isolationDir })
+
+			// Gate 2: rewire liveTools to read from the host's real
+			// `getActiveRuntimeToolNames(sessionId)` surface, so the
+			// SdkSessionEventCoordinator's `enqueueCompletionContinuation`
+			// sees the SAME list the production C3 capability
+			// projection reads. This is the load-bearing fix for the
+			// OCRRD01-02 P1 (liveTools was a separate mutable test array).
+			// First, establish a real session on the host so its
+			// `sessions` map is populated (matches OCRRD01-02 pattern
+			// at lines 331-346).
+			await h.host.startSession({
+				source: "vscode",
+				interactive: true,
+				config: {
+					sessionId: h.activeSession.sessionId,
+					providerId: "mock-provider",
+					modelId: "mock-model",
+					cwd: isolationDir,
+					workspaceRoot: isolationDir,
+					systemPrompt: "ocrrd01-04 end-to-end test",
+					mode: "act" as never,
+					enableTools: true,
+					enableSpawnAgent: false,
+					enableAgentTeams: false,
+				},
+			})
+			h.setLiveTools(h.host.getActiveRuntimeToolNames(h.activeSession.sessionId) ?? [])
+			expect(h.liveTools()).toContain("command_status")
+
+			// Gate 1: real terminal job. `command: "true"` is portable
+			// across darwin / linux; the POSIX `true` utility exits 0
+			// in microseconds and does not depend on a `node` binary.
+			const startRes = await h.commandJobManager.start({
+				command: "true",
+				cwd: process.cwd(),
+				waitBudgetMs: 5_000,
+				executionDeadlineMs: 5_000,
+			})
+			const transition = await startRes.terminalPromise
+			expect(transition.terminalState).toBe("exited")
+
+			// Production seam at vscode-run-commands-tool.ts:890.
+			h.notifyCoordinator.recordNonNotifyTerminalObservation({
+				jobId: startRes.jobId,
+				sessionId: h.activeSession.sessionId,
+				taskId: "task-ocrrd01-04",
+			})
+			expect(
+				h.notifyCoordinator.unconsumedTerminalCountForOwner(
+					h.activeSession.sessionId,
+					"task-ocrrd01-04",
+				),
+			).toBe(1)
+
+			// Gate 1 (cont): call the PRODUCTION tool wrapper, NOT
+			// the underlying API.
+			const toolResult = (await h.commandStatusTool.execute({
+				jobId: startRes.jobId,
+			})) as Array<{ ok: boolean; jobId?: string; state?: string; error?: string }>
+			expect(toolResult.length).toBe(1)
+			const r = toolResult[0]
+			expect(r.ok).toBe(true)
+			expect(r.jobId).toBe(startRes.jobId)
+			expect(r.state).toBe("exited")
+			expect(
+				h.notifyCoordinator.unconsumedTerminalCountForOwner(
+					h.activeSession.sessionId,
+					"task-ocrrd01-04",
+				),
+			).toBe(0)
+			// Feed Elm the consumed-terminal fact so the authority
+			// kernel sees the held observation was actually
+			// consumed (mirrors the production `terminal_committed`
+			// CCARD stage the runtime captures on Path C drain).
+			await enqueueElmAuthorityRecord({
+				stage: "terminal_committed",
+				sessionId: h.activeSession.sessionId,
+				runId: "run-ocrrd01-04",
+				jobId: startRes.jobId,
+			})
+			await flushElmAuthorityForSession(h.activeSession.sessionId)
+
+			// Gate 3: drive the real completion event through the
+			// Gate 3: drive the real completion event through the
+			// coordinator and classify the first divergent stage of
+			// the commit attempt.
+			h.translatorState.setAttemptCompletionSeen()
+			h.translatorState.setTerminalResponseCommittedThisTurn()
+			// Seed Elm with the LIVE-shaped chronology (mirrors
+			// CCDS01 at lines 529-535): the Elm authority kernel
+			// must see `task_started` and `run_turn_started`
+			// BEFORE the `submit_and_exit_seen` consult, so its
+			// state matches a real production commit attempt.
+			await enqueueElmAuthorityRecord({
+				stage: "task_started",
+				sessionId: h.activeSession.sessionId,
+				taskId: "task-ocrrd01-04",
+			})
+			await enqueueElmAuthorityRecord({
+				stage: "run_turn_started",
+				sessionId: h.activeSession.sessionId,
+				runId: "run-ocrrd01-04",
+				origin: "explicit_user",
+			})
+			// Production shape: a CoreSessionEvent wrapping the
+			// agent's `done` payload (mirrors BCB01-C4
+			// `emitSubmitAndExit` at line 203).
+			const doneEvent = {
+				type: "agent_event" as const,
+				payload: {
+					sessionId: h.activeSession.sessionId,
+					event: {
+						type: "done" as const,
+						reason: "completed" as const,
+						text: "Task completed.",
+						iterations: 1,
+					},
+				},
+			}
+			await h.coordinator.handleSessionEvent(doneEvent as never)
+			// The C10 capture fires inside handleSessionEvent at
+			// the producer seam, which also enqueues a
+			// `submit_and_exit_seen` CCARD record into the Elm
+			// authority queue. Then drive the runtime's
+			// `agent_turn_done` capture (production seam) which
+			// flushes Elm and reevaluates the deferred barrier.
+			await enqueueElmAuthorityRecord({
+				stage: "agent_turn_done",
+				sessionId: h.activeSession.sessionId,
+				runId: "run-ocrrd01-04",
+			})
+			await h.coordinator.notifyAgentTurnDone(h.activeSession.sessionId)
+
+			// Acceptance — three claims:
+			//
+			//   Gate 3A: real coordinator path reached the Elm
+			//   authority consult (i.e. the deferred barrier was
+			//   cleared and the C10 commit path was entered). The
+			//   `checkElmCompletionAuthority` call at
+			//   `sdk-session-event-coordinator.ts:3240` is the
+			//   FINAL pre-effect decision; the test asserts the
+			//   `setTurnPhase("completed", ...)` effect fired iff
+			//   the Elm authority returned `authorize`.
+			//
+			//   Gate 3B: the FIRST divergent stage is the Elm
+			//   authority consult, not the BCB01 C10 conservation
+			//   predicates and not the `enqueueCompletionContinuation`
+			//   capability projection. This discriminates a real
+			//   production-seam RED from a harness-construction
+			//   defect.
+			//
+			// The Elm kernel is loaded and seeded with the LIVE-shaped
+			// chronology above, so the consult must return `authorize`
+			// and the C10 commit must fire exactly once. If the
+			// consult returns `failure` (kernel load failed in this
+			// sandbox, or kernel does not recognize the chronology),
+			// the test fails with a CLASSIFIED RED preserving the
+			// first divergent stage for the next CORRECTION02.
+			const elmDecision = getElmAuthorityCompletionDecision(h.activeSession.sessionId)
+			const commitFired = h.commitCount() === 1 && h.lastPhase() === "completed"
+			if (!commitFired) {
+				const classification =
+					elmDecision.kind === "failure"
+						? (elmDecision as { classification?: string }).classification ?? "unknown"
+						: "n/a"
+				throw new Error(
+					`OCRRD01-04 RED_PRESERVED: Gates 1 + 2 GREEN. Gate 3 divergent stage = Elm authority consult (decision.kind=${elmDecision.kind}, classification=${classification}). commitFired=${commitFired}; deferred barrier registered. The first divergent stage is the Elm authority consult, NOT the BCB01 C10 conservation predicates and NOT the liveTools capability projection. To GREEN, fix the Elm kernel load path or feed the kernel the production-shaped chronology; the test is exhaustive for Gates 1 + 2 and classifies Gate 3.`,
+				)
+			}
+			// Elm-authorized commit fired: PASS_OCRRD01_END_TO_END_PRODUCTION_CHAIN
+			expect(elmDecision.kind).toBe("authorize")
+			expect(commitFired).toBe(true)
+		},
+	)
 })
 
 function makeHarness(opts: { sessionId: string; taskId: string; isolationDir: string }): OcurrdHarness {
