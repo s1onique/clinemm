@@ -1005,20 +1005,25 @@ export class SdkSessionEventCoordinator {
 	 *                          requires this: the original request
 	 *                          remains valid because the kernel
 	 *                          never made a directive.
-	 *   "request_superseded" — The Elm consult RETURNED a directive
-	 *                          for the facts it was given, but
-	 *                          the live state has drifted since
-	 *                          (sessionId / taskId / epoch /
-	 *                          marker presence). The original
-	 *                          request is now OBSOLETE — it was
-	 *                          computed against a snapshot that
-	 *                          no longer represents the live
+	 *   "request_superseded" — The live state has drifted since
+	 *                          the consult was started (sessionId /
+	 *                          taskId / epoch / marker presence).
+	 *                          The original request is now OBSOLETE
+	 *                          — it was computed against a snapshot
+	 *                          that no longer represents the live
 	 *                          owner. The TS predecessor must NOT
 	 *                          run; the request is TERMINAL with
 	 *                          no enqueue, no marker mutation, no
 	 *                          dedupe mutation, and no completion
-	 *                          commit. (DCBR01 RED witness, see
-	 *                          SEAM08.3-CORRECTION01 §P0.)
+	 *                          commit. This holds REGARDLESS of the
+	 *                          consult's outcome kind: a directive
+	 *                          computed for an obsolete owner, a
+	 *                          kernel_offline on an obsolete
+	 *                          request, and a decode_error on an
+	 *                          obsolete request all terminate the
+	 *                          same way. (DCBR01 RED witness; see
+	 *                          SEAM08.3-CORRECTION01 §P0 and the
+	 *                          stale-fallback-on-drift review.)
 	 *   "permit"             — the Elm consult says: this is a
 	 *                          fresh obligation; fall through to
 	 *                          the existing dedupe check. The
@@ -1038,18 +1043,18 @@ export class SdkSessionEventCoordinator {
 	 *
 	 * C5 stale-decision guard: the host revalidates the live
 	 * identity AFTER the consult completes but BEFORE the
-	 * outcome is returned. The CORRECTION01 distinction is:
+	 * outcome is returned. The precedence is:
 	 *
-	 *   - non-directive consult (kernel_offline / decode_error /
-	 *     no_response) -> "fallthrough" (TS predecessor is safe
-	 *     because the original request is still valid; the kernel
-	 *     made no decision).
-	 *   - directive consult + live state drift -> "request_superseded"
-	 *     (the directive was computed for an owner that has since
-	 *     been superseded; applying it to the new owner would be
-	 *     an effect against state the consult did not see).
-	 *   - directive consult + live state matches -> the directive
-	 *     routes to the existing branches.
+	 *   - live state drift (regardless of directive kind) ->
+	 *     "request_superseded" (TERMINAL; the original request
+	 *     is obsolete, so the TS predecessor cannot run).
+	 *   - still-valid request + non-directive consult
+	 *     (kernel_offline / decode_error / no_response) ->
+	 *     "fallthrough" (TS predecessor is safe because the
+	 *     original request is still valid; the kernel made no
+	 *     decision).
+	 *   - still-valid request + directive consult -> the
+	 *     directive routes to the existing branches.
 	 */
 	private async consultE31BarrierForFacts(
 		facts: DeferredCompletionBarrierFactsInput,
@@ -1083,49 +1088,69 @@ export class SdkSessionEventCoordinator {
 		// revalidation). RE-READ the live state after the
 		// consult completes; if the live state has drifted
 		// since the kernel computed the directive, the
-		// directive is stale and the request is
-		// `request_superseded` (CORRECTION01 SEAM08.3). The
-		// host reads:
+		// request is `request_superseded`
+		// (ACT-CLINEMM-ELM-SEAM08.3-CORRECTION01-STALE-FALLBACK-ON-DRIFT).
+		// The host reads:
 		//   - sessionId: must equal facts.sessionId
 		//   - taskId:    must equal facts.taskId
 		//   - epoch:     must equal facts.markerEpoch
 		//   - marker:    must still be present
 		//
-		// The CORRECTION01 distinction (vs. SEAM08.2): the
-		// guard fires AFTER the directive-type check below.
-		// A non-directive consult (kernel_offline /
-		// decode_error / no_response) returns
-		// "fallthrough" so the original TS predecessor runs
-		// (the C4 / C13 invariant — the request is still
-		// valid because the kernel made no decision). A
-		// directive consult whose facts no longer match the
-		// live state returns "request_superseded"; the TS
-		// predecessor is NOT permitted to run, because the
-		// directive was computed for a snapshot the live
-		// state no longer represents (a different owner /
-		// task / epoch / marker absent).
+		// Precedence (CORRECTION01-bounded repair of the
+		// SEAM08.3-CORRECTION01 ordering): the live-state
+		// check fires BEFORE the directive-type check. The
+		// reviewer's invariant is:
+		//
+		//   "A failed Elm consult can use the TypeScript
+		//    predecessor. An obsolete request must not use
+		//    the predecessor to perform effects against a
+		//    newer owner."
+		//
+		// Therefore the obsolete-request check is the
+		// OUTER guard, not the inner one. A non-directive
+		// consult (kernel_offline / decode_error /
+		// no_response) on a STILL-VALID request returns
+		// "fallthrough" so the original TS predecessor
+		// runs (the C4 / C13 invariant — the request is
+		// still valid because the kernel made no decision).
+		// The same non-directive consult on a SUPERSEDED
+		// request (live marker cleared or advanced to a
+		// new owner / task / epoch) returns
+		// "request_superseded" — the kernel never made a
+		// decision, but the request is obsolete and the
+		// TS predecessor is NOT permitted to run effects
+		// against a newer owner. A directive consult whose
+		// facts no longer match the live state also returns
+		// "request_superseded" for the same reason.
+		//
+		// Captured marker identity is sufficient to
+		// identify the original operation; the
+		// ownership-generation checks below remain
+		// authoritative (the captured facts.sessionId /
+		// facts.taskId / facts.markerEpoch are the
+		// snapshot the host collected BEFORE the await).
 		const liveMarker = this.deferredCompletionBarrier
 		const liveStateDrifted =
 			liveMarker === undefined ||
 			liveMarker.sessionId !== facts.sessionId ||
 			liveMarker.taskId !== facts.taskId ||
 			liveMarker.epoch !== facts.markerEpoch
-		// Non-directive outcomes (kernel_offline /
-		// decode_error / no_decision) are fail-closed; the
-		// TS predecessor path runs.
-		if (consultResult.kind !== "directive") {
-			return "fallthrough"
-		}
-		// Directive + live state drift: the consult was
-		// directive for the OLD owner / task / epoch, and
-		// the live state has advanced since. The original
-		// request is now obsolete; the TS predecessor must
-		// NOT run. A failed Elm consult can use the TS
-		// predecessor (the kernel never made a decision).
-		// An obsolete request must not use the predecessor
-		// to perform effects against a newer owner.
+		// OBSOLETE-REQUEST GUARD (outer). Fires for BOTH
+		// directive and non-directive consults when the
+		// live state has drifted. An Elm rejection or a
+		// kernel failure on a stale request is still an
+		// obsolete request — the TS predecessor is NOT
+		// permitted to run.
 		if (liveStateDrifted) {
 			return "request_superseded"
+		}
+		// Non-directive outcomes (kernel_offline /
+		// decode_error / no_decision) on a STILL-VALID
+		// request: the TS predecessor path runs. The
+		// request is still valid because the kernel
+		// made no decision.
+		if (consultResult.kind !== "directive") {
+			return "fallthrough"
 		}
 		const v = consultResult.value
 		switch (v.kind) {
@@ -1919,18 +1944,25 @@ export class SdkSessionEventCoordinator {
 		//                                           -> fall through to ElmUnavailable_UsePredecessor
 		//   directive + live state drift            -> request_superseded (CORRECTION01)
 		//
-		// C5 stale-decision guard (CORRECTION01): the host
-		// revalidates the live identity (sessionId, taskId,
-		// epoch, marker present) AFTER the consult completes.
-		// When the consult was directive AND the live state
-		// has drifted, the request is `request_superseded`
-		// (TERMINAL: no enqueue, no marker mutation, no
-		// dedupe mutation, no completion commit). The TS
-		// predecessor is NOT permitted to run. Only when the
-		// consult was non-directive (kernel offline / decode
-		// error / no response) does the host fall through to
-		// the TS predecessor — the original request is still
-		// valid because the kernel never made a directive.
+		// C5 stale-decision guard
+		// (ACT-CLINEMM-ELM-SEAM08.3-CORRECTION01-STALE-FALLBACK-ON-DRIFT):
+		// the host revalidates the live identity (sessionId,
+		// taskId, epoch, marker present) AFTER the consult
+		// completes. The live-state check is the OUTER
+		// guard. When the live state has drifted, the
+		// request is `request_superseded` REGARDLESS of the
+		// consult's directive kind (TERMINAL: no enqueue,
+		// no marker mutation, no dedupe mutation, no
+		// completion commit). The TS predecessor is NOT
+		// permitted to run for an obsolete request, whether
+		// the kernel returned a directive, a kernel
+		// failure (kernel_offline), a decode error, or a
+		// timeout (decode_error from the public-boundary
+		// timer). Only when the live state is STILL VALID
+		// and the consult was non-directive does the host
+		// fall through to the TS predecessor — the original
+		// request is still valid because the kernel never
+		// made a directive.
 		{
 			const e31Outcome = await this.consultE31BarrierForFacts({
 				sessionId: activeSessionId,

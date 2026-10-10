@@ -515,6 +515,170 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			expect(h.sendLog.length).toBe(0)
 			expect(h.completionCommitCount()).toBe(0)
 		})
+
+		// DCBR01-01e: stale request resolved with `kernel_offline` is
+		// `request_superseded`. ACT-CLINEMM-ELM-SEAM08.3-CORRECTION01-
+		// STALE-FALLBACK-ON-DRIFT. The previous four tests cover a
+		// DIRECTIVE consult on a stale request. The SEAM08.3-CORRECTION01
+		// review flagged a P0 gap: an UNAVAILABLE Elm authority on a
+		// stale request (kernel_offline) was still returning
+		// "fallthrough" because the directive-type check fired BEFORE
+		// the live-state check. This test holds a real coordinator
+		// consult mid-flight, supersedes the marker, then resolves
+		// with `kernel_offline` and asserts that the consult returns
+		// `request_superseded` (no enqueue, no marker mutation, no
+		// dedupe mutation, no completion commit).
+		it("DCBR01-01e: a stale request resolved with `kernel_offline` is `request_superseded` (no enqueue, no marker mutation, no dedupe mutation, no completion commit)", async () => {
+			const h = makeHarness({
+				activeSessionId: "A",
+				activeTaskId: "T_A",
+				heldJobIds: ["j1", "j2"],
+			})
+			const initialMarker = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(initialMarker).toBeDefined()
+			expect(initialMarker?.sessionId).toBe("A")
+			expect(initialMarker?.taskId).toBe("T_A")
+
+			// Capture the dedupe slot BEFORE the marker drift.
+			const internal = h.coordinator as unknown as {
+				lastCompletionContinuationSessionEpoch: string | undefined
+			}
+			const dedupeBeforeDrift = internal.lastCompletionContinuationSessionEpoch
+
+			// Install a controllable invoke. The test will hold the
+			// consult in flight, mutate the marker to B/epoch=8, then
+			// release the invoke with `kernel_offline` (a NON-directive
+			// outcome).
+			const ctl = makeControllableInvoke()
+			let capturedRequestId: string | null = null
+			h.installInvoke(async (facts) => {
+				capturedRequestId = facts.requestId
+				return ctl.invoke(facts)
+			})
+
+			// Start the enqueue (do NOT await yet — the consult is
+			// now pending inside `consultE31BarrierForFacts`).
+			const enqueuePromise = h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
+
+			// Yield so the consult actually starts and the invoke is
+			// entered.
+			const deadline = Date.now() + 1000
+			while (capturedRequestId === null && Date.now() < deadline) {
+				await new Promise((r) => setImmediate(r))
+			}
+			expect(capturedRequestId).not.toBeNull()
+			expect(h.sendLog.length).toBe(0)
+			expect(h.completionCommitCount()).toBe(0)
+
+			// Mutate the live marker to a different owner (B/epoch=8).
+			h.coordinator.setDeferredCompletionBarrierForTesting({
+				sessionId: "B",
+				taskId: "T_B",
+				epoch: 8,
+			})
+			const driftedMarker = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(driftedMarker?.sessionId).toBe("B")
+			expect(driftedMarker?.epoch).toBe(8)
+
+			// Release the invoke with `kernel_offline`. The kernel
+			// made NO decision. The previous (buggy) precedence
+			// returned `fallthrough` and let the TS predecessor
+			// fire its effects against the NEW owner (B). The fix
+			// makes the live-state check the OUTER guard.
+			ctl.release(kernelOffline())
+
+			const outcome = await enqueuePromise
+
+			// P0 invariants for the stale-fallback-on-drift review:
+			expect(outcome.kind).toBe("request_superseded")
+			expect(h.sendLog.length).toBe(0)
+			const afterMarkerKernel = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(afterMarkerKernel?.sessionId).toBe("B")
+			expect(afterMarkerKernel?.taskId).toBe("T_B")
+			expect(afterMarkerKernel?.epoch).toBe(8)
+			expect(internal.lastCompletionContinuationSessionEpoch).toBe(dedupeBeforeDrift)
+			expect(h.completionCommitCount()).toBe(0)
+		})
+
+		// DCBR01-01f: stale request resolved with `decode_error` is
+		// `request_superseded`. ACT-CLINEMM-ELM-SEAM08.3-CORRECTION01-
+		// STALE-FALLBACK-ON-DRIFT. The mirror of DCBR01-01e: a
+		// NON-directive `decode_error` (malformed echo) on a stale
+		// request must also terminate the request without firing
+		// the TS predecessor.
+		it("DCBR01-01f: a stale request resolved with `decode_error` is `request_superseded` (no enqueue, no marker mutation, no dedupe mutation, no completion commit)", async () => {
+			const h = makeHarness({
+				activeSessionId: "A",
+				activeTaskId: "T_A",
+				heldJobIds: ["j1", "j2"],
+			})
+			const initialMarker = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(initialMarker).toBeDefined()
+			expect(initialMarker?.sessionId).toBe("A")
+			expect(initialMarker?.taskId).toBe("T_A")
+
+			// Capture the dedupe slot BEFORE the marker drift.
+			const internal = h.coordinator as unknown as {
+				lastCompletionContinuationSessionEpoch: string | undefined
+			}
+			const dedupeBeforeDrift = internal.lastCompletionContinuationSessionEpoch
+
+			// Install a controllable invoke. The test will hold the
+			// consult in flight, mutate the marker to B/epoch=8, then
+			// release the invoke with `decode_error` (a NON-directive
+			// outcome).
+			const ctl = makeControllableInvoke()
+			let capturedRequestId: string | null = null
+			h.installInvoke(async (facts) => {
+				capturedRequestId = facts.requestId
+				return ctl.invoke(facts)
+			})
+
+			// Start the enqueue (do NOT await yet — the consult is
+			// now pending inside `consultE31BarrierForFacts`).
+			const enqueuePromise = h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
+
+			// Yield so the consult actually starts and the invoke is
+			// entered.
+			const deadline = Date.now() + 1000
+			while (capturedRequestId === null && Date.now() < deadline) {
+				await new Promise((r) => setImmediate(r))
+			}
+			expect(capturedRequestId).not.toBeNull()
+			expect(h.sendLog.length).toBe(0)
+			expect(h.completionCommitCount()).toBe(0)
+
+			// Mutate the live marker to a different owner (B/epoch=8).
+			h.coordinator.setDeferredCompletionBarrierForTesting({
+				sessionId: "B",
+				taskId: "T_B",
+				epoch: 8,
+			})
+			const driftedMarker = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(driftedMarker?.sessionId).toBe("B")
+			expect(driftedMarker?.epoch).toBe(8)
+
+			// Release the invoke with `decode_error` (malformed
+			// echo). The kernel made NO decision. The previous
+			// (buggy) precedence returned `fallthrough` and let
+			// the TS predecessor fire its effects against the NEW
+			// owner (B). The fix makes the live-state check the
+			// OUTER guard.
+			if (capturedRequestId === null) throw new Error("DCBR01-01f: invoke was not entered before release")
+			ctl.release(decodeErrorMalformed(capturedRequestId))
+
+			const outcome = await enqueuePromise
+
+			// P0 invariants for the stale-fallback-on-drift review:
+			expect(outcome.kind).toBe("request_superseded")
+			expect(h.sendLog.length).toBe(0)
+			const afterMarkerDecode = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(afterMarkerDecode?.sessionId).toBe("B")
+			expect(afterMarkerDecode?.taskId).toBe("T_B")
+			expect(afterMarkerDecode?.epoch).toBe(8)
+			expect(internal.lastCompletionContinuationSessionEpoch).toBe(dedupeBeforeDrift)
+			expect(h.completionCommitCount()).toBe(0)
+		})
 	})
 
 	// -----------------------------------------------------------------

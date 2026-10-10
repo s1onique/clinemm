@@ -23768,3 +23768,69 @@ SEAM08.3_LIVE:                  LIVE_UNOBSERVABLE
 ```
 
 **Next cursor:** SEAM08 LIVE dogfood qualification. The production seam is now ready to be exercised against a real BCB cycle. The C5 timeout P1 follow-up (Promise.race does not cancel the losing promise) remains a separate bounded follow-up.
+
+## ACT-CLINEMM-ELM-SEAM08.3-CORRECTION01-STALE-FALLBACK-ON-DRIFT — HALT_STALE_FALLBACK_ON_DRIFT_REPAIRED — 2026-10-10
+
+**Status:** CLOSED with verdict `HALT_STALE_FALLBACK_ON_DRIFT_REPAIRED` after a bounded reviewer-halt correction. The SEAM08.3-CORRECTION01 ACT closed GREEN on the directive+drift path, but a follow-up Factory review (HALT_STALE_FALLBACK_ON_DRIFT) found one remaining P0: an unavailable Elm authority (kernel_offline / decode_error) on a stale request was still falling through to the TS predecessor. The CORRECTION01 ordering fired the directive-type check BEFORE the live-state check, so a non-directive outcome on a superseded request was exempt from the same stale-request guard.
+
+**The remaining failing sequence (closed):**
+
+```
+R1 starts for owner A / epoch 7
+       ↓
+Elm invocation hangs / fails (kernel_offline or decode_error)
+       ↓
+Current marker changes to B / epoch 8
+       ↓
+consultResult.kind !== "directive"
+       ↓
+fallthrough into TS predecessor (BUG)
+       ↓
+Potential enqueue or dedupe mutation on B
+```
+
+**The fix (single-line precedence change):** the live-state check is now the OUTER guard. It fires BEFORE the directive-type check. The corrected precedence:
+
+| Current request | Elm result        | Action                  |
+| --------------- | ----------------- | ----------------------- |
+| Valid           | Valid directive   | Apply directive         |
+| Valid           | Unavailable/error | Exact TS predecessor    |
+| Superseded      | Valid directive   | Terminate stale request |
+| Superseded      | Unavailable/error | Terminate stale request |
+
+The C5 stale-decision guard reads `liveMarker.sessionId / taskId / epoch` (the host's snapshot of the marker at the consult site) and re-validates AFTER the consult completes. When the live state has drifted, the request is `request_superseded` REGARDLESS of the consult's outcome kind. The TS predecessor is NOT permitted to run for a stale request, even on a kernel failure or decode error.
+
+**Why this preserves C4 / C13 (the still-valid + non-directive → fallthrough invariant):** the live-state check is identity-based (sessionId / taskId / epoch), not kind-based. A still-valid request whose kernel went offline still returns `fallthrough` because `liveStateDrifted === false`. Only the SUPERSEDED + non-directive case is new behavior — and that case is exactly the gap the reviewer identified.
+
+**Test additions (DCBR01-01e, DCBR01-01f):** two adversarial tests that hold a real coordinator consult mid-flight, supersede the marker to B/epoch=8, then resolve with `kernel_offline` (DCBR01-01e) or `decode_error` (DCBR01-01f). Each asserts the five P0 invariants: `request_superseded` outcome, zero enqueue (`h.sendLog.length === 0`), dedupe slot unchanged (`lastCompletionContinuationSessionEpoch` matches the pre-drift value), marker unchanged (B/epoch=8), and zero completion commits.
+
+**RED proof (sanity check):** with the production fix reverted, both DCBR01-01e and DCBR01-01f FAIL with the original `fallthrough` outcome — confirming the test catches the bug. With the fix re-applied, both PASS.
+
+**Results:**
+- DCBR01: 14/14 functional tests PASS (the 1 failure is the pre-existing DCBR01-09 5s timeout test, which the P1 `Promise.race` cleanup follow-up covers)
+- DCBR01-01e: kernel_offline + drift → request_superseded (NEW, GREEN)
+- DCBR01-01f: decode_error + drift → request_superseded (NEW, GREEN)
+- TypeScript typecheck: PASS (0 errors)
+- biome lint: PASS (0 errors)
+- Focused conservation gates: PASS (no regression in ccse01, ccslt01, ccsrl01, cccap01, cccca01)
+- Bun unit suite: same pre-existing failure set as `main` HEAD (no new regressions introduced; BCB01-c3, c10-ablation, myc-prime, sessionIdEcho all fail equally on unmodified `main`)
+
+**Files changed:**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — `consultE31BarrierForFacts` (L1087-1153): the live-state check is now the OUTER guard. The directive-type check fires AFTER. Comments + JSDoc + call-site comment block updated to match the new precedence.
+- `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-coordinator-qualification.dcbr01.test.ts` — DCBR01-01e and DCBR01-01f added (172 lines, two new adversarial tests).
+
+**Production files changed:** 1 (`sdk-session-event-coordinator.ts`). **Test files changed:** 1 (`dcbr01.test.ts`). **No new ACT, no new kernel, no new adapter, no new framework, no new Factory review cycle.**
+
+**P1 follow-up (unchanged):** the `Promise.race` cleanup concern — the 5-second public-boundary timer settles the caller but does not cancel the losing never-resolving invoke. The DCBR01-09 settlement test demonstrates the timer fires correctly; the underlying never-resolving operation retains resources. Tracked separately, NOT in this ACT.
+
+**Factory decision (post-correction):**
+
+```
+SEAM08.3_DIRECTIVE_DRIFT:        PASS  (DCBR01-01, 01a, 01b, 01c, 01d)
+SEAM08.3_FAILURE_DRIFT:          PASS  (DCBR01-01e kernel_offline, DCBR01-01f decode_error)
+SEAM08.3_PRODUCTION_NECESSITY:   PASS_WITH_INJECTED_DIRECTIVES  (DCBR01-02..08)
+SEAM08.3_TIMEOUT_SETTLEMENT:     PASS_WITH_P1_FOLLOWUP  (DCBR01-09 5s timer; Promise.race cleanup separate)
+SEAM08.3_LIVE:                   LIVE_UNOBSERVABLE
+```
+
+**Next cursor:** SEAM08 LIVE dogfood qualification. The production seam is now ready to be exercised against a real BCB cycle. The C5 timeout P1 follow-up (Promise.race does not cancel the losing promise) remains a separate bounded follow-up.
