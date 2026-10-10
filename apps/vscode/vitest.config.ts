@@ -257,6 +257,17 @@ export default defineConfig({
 			// `@cline-internal/core/...` aliases. Excluded here to
 			// keep the base config's @cline/core stub alias in scope.
 			"src/sdk/__tests__/completion-reevaluation-capability-discriminator01.crcd01.test.ts",
+			// ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
+			// / OCRRD01: the production-registry probe. Real
+			// LocalRuntimeHost + real BackgroundNotifyCoordinator + real
+			// CommandJobManager + real createCommandStatusTool
+			// (production factory). Closes the BOCR01 P0 residue
+			// (BCCR01's `command_status.execute` drain + the
+			// post-drain `task_completion_committed === 1` boundary).
+			// Runs under `vitest.config.c2-4-c-bridge.ts` which has the
+			// `@cline-internal/core/...` aliases. Excluded here to
+			// keep the base config's @cline/core stub alias in scope.
+			"src/sdk/__tests__/observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3-R5
 			// (persistence phase): the instance-store + typed-projector
 			// tests run under the dedicated

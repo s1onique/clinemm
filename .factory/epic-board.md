@@ -23982,3 +23982,76 @@ the new untracked test file.
 
 **Predecessor:** `ACT-CLINEMM-P0-VERIFIED-SUBMISSION-TERMINAL-NONCONVERGENCE01` (commit `1dd61a5d5`).
 **Successor (recommended):** a new ACT to charter the actionable-recovery-contract question — when the BCB has stamped `observation_unavailable` and the user-driven reentry cannot restore `command_status`, what is the next actionable UI surface? Verdict candidate: `HALT_HOST_BLOCKED_RECOVERY_CONTRACT_MISSING`. BOCR01 supports the host-side hold and recovery as correct; the remaining question is the UI contract for the case where the held set is positive and the live registry lacks `command_status` across a user-driven Retry.
+
+# ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01 — PASS_OCRRD01_RUNTIME_REGISTRY_AND_DRAIN_INTACT — 2026-10-10
+
+**Status:** CLOSED with verdict `PASS_OCRRD01_RUNTIME_REGISTRY_AND_DRAIN_INTACT`.
+
+Per Factory reviewer disposition on
+ACT-CLINEMM-P0-VERIFIED-SUBMISSION-TERMINAL-NONCONVERGENCE01 (commit
+`1dd61a5d5`) and
+ACT-CLINEMM-P0-BLOCKED-OBSERVATION-CAPABILITY-RECOVERY-PROBE01
+(commit `98d229e6a`).
+
+**Decisive question**: Why does the active runtime retain an
+observation obligation while lacking the capability to discharge it?
+
+**3/3 tests PASS** against the real production chain:
+
+| Test | Discriminator | Result |
+|---|---|---|
+| OCRRD01-01 | A. Held registration is correct | Production `command_status.execute` drains a non-notify held entry (Path C) — the BOCR01-04 closure gap |
+| OCRRD01-02 | C. Capability projection is correct | `LocalRuntimeHost.getActiveRuntimeToolNames` returns `command_status` for the active session |
+| OCRRD01-03 | A2. Held registration shape | Notify=true held is NOT drained by Path C — requires a separate terminal event (drained branch) |
+
+**Production chain exercised end-to-end** (no stubs for the held-set
+count, no mocked `command_status.execute`):
+
+```
+createCommandStatusTool(manager, options)   ← production factory
+  ↓
+tool.execute({ jobId: J })                  ← real production tool
+  ↓
+manager.status(J) → terminal snapshot
+  ↓
+hasActiveNotify(J) === false → Path C gate passes
+  ↓
+consumeNonNotifyTerminalObservation(J)     ← real production drain
+  ↓
+unconsumedTerminalCountForOwner = 0
+```
+
+Plus the upstream chain is verified by OCRRD01-02:
+
+```
+LocalRuntimeHost.getActiveRuntimeToolNames(sessionId)
+  → ClineCore.getActiveRuntimeToolNames
+  → VscodeSessionHost.liveTools
+  → SdkSessionEventCoordinator.liveTools
+```
+
+returns `["command_status", "submit_and_exit", ...]` (real runtime
+registry).
+
+**Files changed**: 1 NEW test file + 4 mirror config entries (added
+to `vitest.config.c2-4-c-bridge.ts` include, and to the base
+`vitest.config.ts` / `tsconfig.json` exclude arrays).
+
+**Gates**: `tsc --noEmit -p tsconfig.c2-4-c-bridge.json` PASS,
+`biome lint` PASS, focused tests 3/3 PASS, `git diff --check` clean.
+
+**VSIX**: NOT_EXECUTED (operator-owned, per C0).
+**LIVE_POST_FIX**: NOT_EXECUTED (operator-owned, per C0).
+
+**Predecessor**: `ACT-CLINEMM-P0-BLOCKED-OBSERVATION-CAPABILITY-RECOVERY-PROBE01`
+(commit `98d229e6a`, PASS_BOUNDED_COMPONENT_CONSERVATION).
+
+**Successor (recommended)**: a new ACT to charter the actionable-recovery-contract question
+— when the BCB has stamped `observation_unavailable` and the
+user-driven reentry cannot restore `command_status`, what is the
+next actionable UI surface? Verdict candidate:
+`HALT_HOST_BLOCKED_RECOVERY_CONTRACT_MISSING`. The OCRRD01
+result supports the host-side hold and recovery as correct; the
+remaining question is the UI contract for the case where the held
+set is positive and the live registry lacks `command_status` across
+a user-driven Retry.

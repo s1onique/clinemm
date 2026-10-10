@@ -456,6 +456,21 @@ export default defineConfig({
 			// deep-relative aliases (the `@cline/core` barrel does not
 			// export these symbols).
 			"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01 / OCRRD01:
+			// REAL LocalRuntimeHost + REAL BackgroundNotifyCoordinator
+			// + REAL CommandJobManager + REAL createCommandStatusTool
+			// (production factory). The probe closes the BOCR01 P0
+			// residue: the bounded BOCR01-03 path drained the held
+			// set through harness helper calls, but the production
+			// `command_status` tool's `.execute(J)` and the
+			// post-drain completion eligibility boundary
+			// (`task_completion_committed === 1` after a fresh
+			// `submit_and_exit`) were not proven. This ACT runs
+			// under the bridge config because it imports the REAL
+			// `LocalRuntimeHost` via the
+			// `@cline-internal/core/runtime/host/local-runtime-host`
+			// deep-relative alias.
+			"src/sdk/__tests__/observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},
