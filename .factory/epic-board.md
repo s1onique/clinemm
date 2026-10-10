@@ -23933,3 +23933,52 @@ because the ACT introduces zero production change):**
 **LIVE_POST_FIX:** NOT_EXECUTED (operator-owned, per ACT C0).
 
 **Verdict:** `PASS_COMPLETION_CONSERVATION_BLOCKED_AS_DESIGNED`.
+
+# ACT-CLINEMM-P0-BLOCKED-OBSERVATION-CAPABILITY-RECOVERY-PROBE01 — PASS_BOCR01_HOST_HOLD_AND_RECOVERY_INTACT — 2026-10-10
+
+**Status:** CLOSED with verdict `PASS_BOCR01_HOST_HOLD_AND_RECOVERY_INTACT`.
+The single causal chain (per Factory reviewer disposition on
+`ACT-CLINEMM-P0-VERIFIED-SUBMISSION-TERMINAL-NONCONVERGENCE01` at
+commit `1dd61a5d5`) drives the LIVE chronology end-to-end against the
+**REAL** `BackgroundNotifyCoordinator` +
+`SdkSessionEventCoordinator` + bounded host correlation guard.
+
+**Decisive question (per Factory reviewer):** Why does the active
+runtime retain an observation obligation while lacking the
+capability to discharge it?
+
+**Test file:** `apps/vscode/src/sdk/__tests__/blocked-observation-capability-recovery-probe01.bocr01.test.ts` (7 tests, all GREEN on HEAD `1dd61a5d5`).
+
+**Discrimination matrix (4 candidates, 7 tests):**
+
+| Test | Discriminates | Result |
+|---|---|---|
+| BOCR01-01: held-state establishment (notify=true held + BCB block) | Setup state for all subsequent probes | Held=2 (1 held + 1 live marker); BCB block fires; `setTurnPhase("error", ..., "session-event-bcb-blocked-observation-unavailable")` published; no continuation; no completion. ✅ |
+| BOCR01-02: second terminal event drains the held set | D: recovery is intact | Second `consumeTerminal(J-2)` returns `drained` (drainedCount=2); wakes dispatched for both J-1 and J-2; held=0. ✅ |
+| BOCR01-03: SINGLE CAUSAL CHAIN (the reviewer's question) | A vs B vs C vs D (all four) | Non-notify held observation + BCB block + capability restoration + command_status → held set contracts from 1 to 0. ✅ All four candidates discriminated: A supported, B refuted, C refuted, D refuted. |
+| BOCR01-04: command_status on a held notify=true job does NOT drain | A vs B (held is correct) | `resolveObligation` returns `no_marker`; `consumeNonNotifyTerminalObservation` is a no-op. Held set unchanged. ✅ A supported, B refuted. |
+| BOCR01-05: ablation — held=0 removes the BCB block | Held set is the cause | Override count to 0; submit; no `error` phase; no blocked-outcome publication. ✅ Confirms held set is the cause. |
+| BOCR01-06: cross-session / cross-task identity isolation | A2: ownership discipline | Foreign owner `resolveObligation(J-1)` returns `no_marker`; held set unchanged. ✅ |
+| BOCR01-07: same-task re-issued submit after BCB block | D: bounded guard idempotence | Second submit; `sameObligationAlreadyObservationUnavailable` short-circuits; tracker phase is not overwritten. ✅ |
+
+**Verdict:** `PASS_BOCR01_HOST_HOLD_AND_RECOVERY_INTACT`.
+
+The held-observation-while-lacking-capability symptom is the
+**contract-correct behavior of the production BCB01 / PTBPC01 /
+CRCD01 / CTQC01 / CCUTO01 stack**. The recovery contract is intact:
+for non-notify held observations, `command_status(J)` drains via Path
+C; for notify=true held observations, a subsequent `consumeTerminal`
+returns `drained` once the notify-marker set is empty. The bounded
+correlation guard's capability projection is truthful.
+
+**Production files changed:** 0. **Test files changed:** 1 (NEW). **Gates:**
+`tsc --noEmit -p tsconfig.json` PASS, `biome lint` PASS, 52/52 related
+tests PASS (UCHC01, PTBPC01, CCUTO01, CCSRL01, CCSLT01, CRCD01, BCCA,
+BOCR01), `git diff --check` clean, `git status --short` shows only
+the new untracked test file.
+
+**VSIX:** NOT_EXECUTED (operator-owned, per C0).
+**LIVE_POST_FIX:** NOT_EXECUTED (operator-owned, per C0).
+
+**Predecessor:** `ACT-CLINEMM-P0-VERIFIED-SUBMISSION-TERMINAL-NONCONVERGENCE01` (commit `1dd61a5d5`).
+**Successor (recommended):** a new ACT to charter the actionable-recovery-contract question — when the BCB has stamped `observation_unavailable` and the user-driven reentry cannot restore `command_status`, what is the next actionable UI surface? Verdict candidate: `HALT_HOST_BLOCKED_RECOVERY_CONTRACT_MISSING`. BOCR01 supports the host-side hold and recovery as correct; the remaining question is the UI contract for the case where the held set is positive and the live registry lacks `command_status` across a user-driven Retry.
