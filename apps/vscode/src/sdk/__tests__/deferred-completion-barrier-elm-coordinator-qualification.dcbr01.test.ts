@@ -836,7 +836,9 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 	// P1: TIMEOUT / LATE-RESPONSE CLEANUP
 	// -----------------------------------------------------------------
 	describe("P1: timeout / late-response cleanup", () => {
-		it("DCBR01-09: a custom invoke that NEVER resolves is settled by the public-boundary timer (the harness's enqueue completes within the 5s default)", async () => {
+		it("DCBR01-09: a custom invoke that NEVER resolves is settled by the public-boundary timer (the harness's enqueue completes within the 5s default)", {
+			timeout: 8000,
+		}, async () => {
 			const h = makeHarness({ heldJobIds: ["j1", "j2"] })
 			// A never-resolving custom invoke. The public-boundary
 			// timer in `consultDeferredCompletionBarrierElmKernel`

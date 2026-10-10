@@ -23815,6 +23815,14 @@ The C5 stale-decision guard reads `liveMarker.sessionId / taskId / epoch` (the h
 - Focused conservation gates: PASS (no regression in ccse01, ccslt01, ccsrl01, cccap01, cccca01)
 - Bun unit suite: same pre-existing failure set as `main` HEAD (no new regressions introduced; BCB01-c3, c10-ablation, myc-prime, sessionIdEcho all fail equally on unmodified `main`)
 
+**DCBR01-09 timeout classification (per reviewer disposition):** the reviewer disposition explicitly demanded classifying DCBR01-09 before live qualification, with three possible verdicts: (a) test timing or harness behavior, (b) a new P0 indicating a broken 5s settlement guarantee, or (c) regression. The classification result is **(a) test-harness behavior**, not a production regression.
+
+Evidence:
+- DCBR01-09 takes 5002.88ms to complete when run with `bun test --timeout 8000`. The internal `Promise.race` watchdog in the test body rejects at 6500ms with a clear "enqueue hung past 6.5s public-boundary timer" message; that message NEVER appears. The production 5s timer (`DEFAULT_RESPONSE_TIMEOUT_MS = 5_000` in `deferred-completion-barrier-elm.ts:231`) fires at exactly 5000ms, and the consult surfaces `decode_error(no_response)` → `fallthrough` → TS predecessor → `delivered`.
+- The 14ms gap between 5000ms (production timer fires) and 5002.88ms (test completion) is the post-timer assertion phase. The test was authored expecting bun to allow ~6.5s, but bun's default test timeout is 5000ms. The test's own 6500ms watchdog never gets a chance to fire because the host runner kills the test first.
+- The bounded fix: add `{ timeout: 8000 }` to the DCBR01-09 test only. This is a per-test runner setting, not a production-code change, and does not affect any other test.
+- The P1 follow-up (Promise.race does not cancel the losing never-resolving invoke) is a separate concern about resource cleanup, NOT about the 5s settlement guarantee. It is correctly tracked as a separate follow-up.
+
 **Files changed:**
 - `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — `consultE31BarrierForFacts` (L1087-1153): the live-state check is now the OUTER guard. The directive-type check fires AFTER. Comments + JSDoc + call-site comment block updated to match the new precedence.
 - `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-coordinator-qualification.dcbr01.test.ts` — DCBR01-01e and DCBR01-01f added (172 lines, two new adversarial tests).
