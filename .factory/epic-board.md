@@ -23681,3 +23681,90 @@ SEAM08.3_C5_RUNTIME_RACE:          PROVEN (DCBR01-01 races the live marker with 
 
 **Next cursor:**
 - LIVE qualification on the installed dogfood VSIX (the SEAM04 cursor; a separate ACT that requires a display + a real BCB cycle)
+
+## ACT-CLINEMM-ELM-SEAM08.3-CORRECTION01-STALE-REQUEST-CONSERVATION — PASS_SEAM08.3_CORRECTION01 — 2026-10-10
+
+**Status:** CLOSED with verdict `PASS_SEAM08.3_CORRECTION01`. The SEAM08.3 reviewer verdict was `HALT_STALE_DECISION_COMMIT_UNPROVEN`: DCBR01-01 did not prove the central stale-request conservation invariant because the test allowed the TS predecessor to enqueue after detecting staleness. The reviewer's bounded fix (six items, verbatim) is fully executed in this ACT.
+
+**The critical distinction** (per the reviewer's §16 of the SEAM08.3 verdict):
+
+> A failed Elm consult can use the TypeScript predecessor. An obsolete request must not use the predecessor to perform effects against a newer owner.
+
+The DCBR01-01 test was permissive: it allowed the consult to return `fallthrough` (which routes to the TS predecessor) when the live state had drifted. That contradicts the requested invariant:
+
+```
+Old request R1 for A/epoch 7
+       ↓
+Current marker becomes B/epoch 8
+       ↓
+R1 receives PermitEnqueue
+       ↓
+R1 must not enqueue for A or B
+R1 must not mutate B's dedupe slot
+R1 must not commit completion
+```
+
+**The fix (three layers):**
+
+1. **`consultE31BarrierForFacts`** distinguishes `authority_unavailable` (kernel offline / decode error / no_response) from `request_superseded` (directive consult whose live state has drifted). The order is load-bearing: a non-directive consult keeps the prior SEAM08.2 `fallthrough` semantics (TS predecessor runs). A directive consult whose facts have drifted is now `request_superseded` (terminal).
+
+2. **Call site of `consultE31BarrierForFacts`** in `enqueueCompletionContinuationIfHeld` adds a new `request_superseded` branch that returns immediately with `{ kind: "request_superseded" }`. No enqueue, no marker mutation, no dedupe mutation, no completion commit. The TS predecessor is NOT permitted to run for a directive consult whose facts have drifted.
+
+3. **New typed outcome** in the public return union of `enqueueCompletionContinuationIfHeld`. The `applyBlockedCompletionContinuationOutcome` mapping accepts the new union member (no-op; the stale-request conservation invariant is enforced at the call site, not in the mapping).
+
+**DCBR01-01 (now GREEN with 5 exact assertions):**
+
+```ts
+expect(outcome.kind).toBe("request_superseded")
+expect(h.sendLog.length).toBe(0)
+expect(afterMarker?.sessionId).toBe("B")
+expect(afterMarker?.taskId).toBe("T_B")
+expect(afterMarker?.epoch).toBe(8)
+expect(internal.lastCompletionContinuationSessionEpoch).toBe(dedupeBeforeDrift)
+expect(h.completionCommitCount()).toBe(0)
+```
+
+**DCBR01-01a/b/c/d (4 supplementary tests, all PASS):**
+- DCBR01-01a: epoch-only drift (sessionId + taskId match) → `request_superseded`
+- DCBR01-01b: sessionId-only drift → `request_superseded`
+- DCBR01-01c: taskId-only drift → `request_superseded`
+- DCBR01-01d: live marker cleared entirely mid-flight → `request_superseded`
+
+**DCBR01-08 (redefined):**
+The pre-existing DCBR01-08 cleared the marker BEFORE the call, so the L1664 guard fired before the consult was reached. The new DCBR01-08 holds the consult in flight, clears the live marker mid-flight, then releases a `RejectStaleIdentity` directive. The test now exercises the C5 guard as the title intended. Result: `request_superseded`.
+
+**Healthy-path and kernel-offline tests (no regression):**
+- DCBR01-02: SuppressDuplicate → already_sent (PASS)
+- DCBR01-03: PermitEnqueue{mustClearRearm:true} → delivered (PASS)
+- DCBR01-04: PreserveBarrier → no_held_job_ids (PASS)
+- DCBR01-05: kernel_offline → TS predecessor runs (PASS; C4 / C13 invariant preserved)
+- DCBR01-06: malformed directive → rejected at public boundary, TS predecessor (PASS)
+- DCBR01-07: decode_error → TS predecessor runs (PASS)
+- DCBR01-09: 5s public-boundary timer fires (PASS; settlement, not cancellation)
+
+**Results:**
+- DCBR01: 13/13 PASS (1 modified: DCBR01-01 now exact; 1 redefined: DCBR01-08 now exercises the C5 guard; 4 new: DCBR01-01a/01b/01c/01d)
+- Conservation suites: 102/102 PASS across 12 files (rearm01, ccse01, ccslt01, ccsa01, ccupd01, ccdco01, ccdco-red01, dcbesd01, dcbtc01, dcbeid01, dcbsd01, dcbr01)
+- Completion-control-elm suites: 56/56 PASS (cccec01, cccap01, ccmb01, ccnc01, ccld01, ccpw01, ccac01)
+- TypeScript typecheck: PASS (0 errors)
+- biome lint: PASS (0 errors)
+- biome format: PASS (0 errors)
+
+**Files changed:**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (~80 lines: `request_superseded` outcome, call site discriminator, helper type)
+- `apps/vscode/src/sdk/__tests__/deferred-completion-barrier-elm-coordinator-qualification.dcbr01.test.ts` (DCBR01-01 modified exact; DCBR01-01a/b/c/d added; DCBR01-08 redefined)
+
+**Factory decision:**
+
+```
+SEAM08.3_PRODUCTION_REACH:       PASS
+SEAM08.3_ELM_NECESSITY:         PASS_WITH_INJECTED_DIRECTIVES
+SEAM08.3_VSIX:                  BUILT (closed in c568a80f4)
+SEAM08.3_STALE_REQUEST_SAFETY:  PASS  (was HALT; now GREEN via the new
+                                      request_superseded outcome, exact
+                                      DCBR01-01 assertions, and the
+                                      four supplementary tests)
+SEAM08.3_LIVE:                  LIVE_UNOBSERVABLE
+```
+
+**Next cursor:** SEAM08 LIVE dogfood qualification. The production seam is now ready to be exercised against a real BCB cycle. The C5 timeout P1 follow-up (Promise.race does not cancel the losing promise) remains a separate bounded follow-up.

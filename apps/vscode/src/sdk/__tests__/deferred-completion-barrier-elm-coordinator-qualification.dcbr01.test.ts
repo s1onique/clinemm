@@ -288,7 +288,7 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 	// P0 #1: REAL COORDINATOR SUPERSESSION (the central stale-race)
 	// -----------------------------------------------------------------
 	describe("P0 #1: real coordinator supersession", () => {
-		it("DCBR01-01: a stale `PermitEnqueue` (marker advanced to B/epoch=8) is rejected by the C5 guard; marker unchanged; no completion commit", async () => {
+		it("DCBR01-01: a stale `PermitEnqueue` (marker advanced to B/epoch=8) is REJECTED with `request_superseded`; no enqueue, no marker mutation, no dedupe mutation, no completion commit", async () => {
 			const h = makeHarness({
 				activeSessionId: "A",
 				activeTaskId: "T_A",
@@ -304,8 +304,11 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			// consult in flight, mutate the marker to B/epoch=8,
 			// then release the invoke with a valid `PermitEnqueue`
 			// directive (computed against the OLD A/epoch=7 facts).
-			// The C5 stale-decision guard MUST downgrade to
-			// `fallthrough` because the live marker is now B/epoch=8.
+			// The C5 stale-decision guard MUST return
+			// `request_superseded` (NOT `fallthrough` — the
+			// SEAM08.2 verdict was: detecting staleness and then
+			// continuing the old operation is not stale-request
+			// rejection).
 			const ctl = makeControllableInvoke()
 			let capturedRequestId: string | null = null
 			h.installInvoke(async (facts) => {
@@ -333,12 +336,23 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			expect(h.sendLog.length).toBe(0)
 			expect(h.completionCommitCount()).toBe(0)
 
+			// Capture the dedupe slot BEFORE the marker drift so
+			// the test can assert it is unchanged after the
+			// consult returns.
+			const internal = h.coordinator as unknown as {
+				lastCompletionContinuationSessionEpoch: string | undefined
+			}
+			const dedupeBeforeDrift = internal.lastCompletionContinuationSessionEpoch
+
 			// Now mutate the live marker to a different owner
 			// (B / epoch=8). The consult's facts are still
 			// {sessionId:"A", taskId:"T_A", markerEpoch:7} (the
 			// snapshot the host collected BEFORE the await). The
-			// C5 guard will detect the drift and return
-			// `fallthrough` (so the TS predecessor runs).
+			// C5 guard will detect the drift AND, because the
+			// consult WAS directive (`PermitEnqueue`), it will
+			// return `request_superseded` (the TS predecessor is
+			// NOT permitted to run for a directive consult whose
+			// facts have drifted).
 			h.coordinator.setDeferredCompletionBarrierForTesting({
 				sessionId: "B",
 				taskId: "T_B",
@@ -350,43 +364,156 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 
 			// Release the invoke with a valid `PermitEnqueue`
 			// (the directive the kernel WOULD have returned for
-			// the A/epoch=7 facts). The C5 guard should reject it.
+			// the A/epoch=7 facts). The C5 guard should reject
+			// it as `request_superseded`.
 			if (capturedRequestId === null) throw new Error("DCBR01-01: invoke was not entered before release")
 			ctl.release(permitDirective(false, capturedRequestId))
 
 			// Await the enqueue outcome.
 			const outcome = await enqueuePromise
 
-			// The four P0 invariants the reviewer asked for:
-			//   1. no enqueue fired from the consult's stale
-			//      directive (the consult returned `fallthrough`)
-			//   2. the marker is unchanged (the consult did not
-			//      mutate it)
-			//   3. the dedupe slot is NOT pinned by the consult
-			//   4. no completion commit fired
-			//
-			// Note on invariant 1: the consult returned
-			// `fallthrough`, so the TS predecessor's L1633..L1685
-			// cascade ran. With a fresh dedupe slot and
-			// `priorSortedHeld === undefined` (first call), the
-			// cascade may pin the dedupe slot to the
-			// `continuationSessionEpoch = "A|T_A|<epoch>"` key —
-			// that is the TS-predecessor's LEGITIMATE enqueue
-			// against the LIVE marker (B/epoch=8). That is the
-			// ElmUnavailable_UsePredecessor path the C4
-			// conservation contract REQUIRES. The discriminator
-			// is the marker: the consult's stale
-			// `PermitEnqueue(mustClearRearm=false)` did NOT
-			// mutate the marker (the L1840 `clear_rearm` branch
-			// never ran). The marker is still B/epoch=8.
-			expect(h.completionCommitCount()).toBe(0)
+			// The four P0 invariants the reviewer asked for
+			// (SEAM08.3-CORRECTION01 §P0). Each is an exact
+			// assertion, not a permissive `toContain` check:
+			//   1. outcome.kind === "request_superseded"
+			//      (TERMINAL; the directive is rejected without
+			//      routing to the TS predecessor)
+			//   2. h.sendLog.length === 0
+			//      (no enqueue fired — neither from the consult
+			//      nor from the TS predecessor)
+			//   3. dedupe slot unchanged
+			//      (the consult did not pin B's dedupe slot with
+			//      a key computed against A's facts)
+			//   4. marker unchanged (B/epoch=8)
+			//      (the consult did not mutate the marker)
+			//   5. no completion commit fired
+			expect(outcome.kind).toBe("request_superseded")
+			expect(h.sendLog.length).toBe(0)
 			const afterMarker = h.coordinator.getDeferredCompletionBarrierForTesting()
 			expect(afterMarker?.sessionId).toBe("B")
 			expect(afterMarker?.taskId).toBe("T_B")
 			expect(afterMarker?.epoch).toBe(8)
-			// The outcome is one of the legitimate TS-predecessor
-			// outcomes. It is NOT a consult-induced effect on B.
-			expect(["delivered", "no_held_job_ids", "not_held", "already_sent"]).toContain(outcome.kind)
+			expect(internal.lastCompletionContinuationSessionEpoch).toBe(dedupeBeforeDrift)
+			expect(h.completionCommitCount()).toBe(0)
+		})
+
+		it("DCBR01-01a: a stale `PermitEnqueue` whose ONLY drift is an epoch change is also `request_superseded` (epoch-only supersession)", async () => {
+			const h = makeHarness({ heldJobIds: ["j1", "j2"] })
+			const ctl = makeControllableInvoke()
+			let capturedRequestId: string | null = null
+			h.installInvoke(async (facts) => {
+				capturedRequestId = facts.requestId
+				return ctl.invoke(facts)
+			})
+			const enqueuePromise = h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
+			const deadline = Date.now() + 1000
+			while (capturedRequestId === null && Date.now() < deadline) {
+				await new Promise((r) => setImmediate(r))
+			}
+			expect(capturedRequestId).not.toBeNull()
+			// Drift ONLY the epoch; sessionId and taskId match.
+			const initialMarker = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(initialMarker).toBeDefined()
+			h.coordinator.setDeferredCompletionBarrierForTesting({
+				sessionId: initialMarker?.sessionId ?? "",
+				taskId: initialMarker?.taskId,
+				epoch: (initialMarker?.epoch ?? 0) + 1,
+			})
+			if (capturedRequestId === null) throw new Error("DCBR01-01a: invoke was not entered before release")
+			ctl.release(permitDirective(false, capturedRequestId))
+			const outcome = await enqueuePromise
+			expect(outcome.kind).toBe("request_superseded")
+			expect(h.sendLog.length).toBe(0)
+			expect(h.completionCommitCount()).toBe(0)
+		})
+
+		it("DCBR01-01b: a stale `PermitEnqueue` whose ONLY drift is the sessionId (same taskId, same epoch) is `request_superseded`", async () => {
+			const h = makeHarness({ heldJobIds: ["j1", "j2"] })
+			const ctl = makeControllableInvoke()
+			let capturedRequestId: string | null = null
+			h.installInvoke(async (facts) => {
+				capturedRequestId = facts.requestId
+				return ctl.invoke(facts)
+			})
+			const enqueuePromise = h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
+			const deadline = Date.now() + 1000
+			while (capturedRequestId === null && Date.now() < deadline) {
+				await new Promise((r) => setImmediate(r))
+			}
+			expect(capturedRequestId).not.toBeNull()
+			const initialMarker = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(initialMarker).toBeDefined()
+			// Drift ONLY the sessionId.
+			h.coordinator.setDeferredCompletionBarrierForTesting({
+				sessionId: "OTHER_OWNER",
+				taskId: initialMarker?.taskId,
+				epoch: initialMarker?.epoch ?? 0,
+			})
+			if (capturedRequestId === null) throw new Error("DCBR01-01b: invoke was not entered before release")
+			ctl.release(permitDirective(false, capturedRequestId))
+			const outcome = await enqueuePromise
+			expect(outcome.kind).toBe("request_superseded")
+			expect(h.sendLog.length).toBe(0)
+			expect(h.completionCommitCount()).toBe(0)
+		})
+
+		it("DCBR01-01c: a stale `PermitEnqueue` whose ONLY drift is the taskId (same sessionId, same epoch) is `request_superseded`", async () => {
+			const h = makeHarness({ heldJobIds: ["j1", "j2"] })
+			const ctl = makeControllableInvoke()
+			let capturedRequestId: string | null = null
+			h.installInvoke(async (facts) => {
+				capturedRequestId = facts.requestId
+				return ctl.invoke(facts)
+			})
+			const enqueuePromise = h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
+			const deadline = Date.now() + 1000
+			while (capturedRequestId === null && Date.now() < deadline) {
+				await new Promise((r) => setImmediate(r))
+			}
+			expect(capturedRequestId).not.toBeNull()
+			const initialMarker = h.coordinator.getDeferredCompletionBarrierForTesting()
+			expect(initialMarker).toBeDefined()
+			// Drift ONLY the taskId.
+			h.coordinator.setDeferredCompletionBarrierForTesting({
+				sessionId: initialMarker?.sessionId ?? "",
+				taskId: "OTHER_TASK",
+				epoch: initialMarker?.epoch ?? 0,
+			})
+			if (capturedRequestId === null) throw new Error("DCBR01-01c: invoke was not entered before release")
+			ctl.release(permitDirective(false, capturedRequestId))
+			const outcome = await enqueuePromise
+			expect(outcome.kind).toBe("request_superseded")
+			expect(h.sendLog.length).toBe(0)
+			expect(h.completionCommitCount()).toBe(0)
+		})
+
+		it("DCBR01-01d: when the live marker is cleared entirely mid-flight, a directive consult is `request_superseded`", async () => {
+			const h = makeHarness({ heldJobIds: ["j1", "j2"] })
+			const ctl = makeControllableInvoke()
+			let capturedRequestId: string | null = null
+			h.installInvoke(async (facts) => {
+				capturedRequestId = facts.requestId
+				return ctl.invoke(facts)
+			})
+			const enqueuePromise = h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
+			const deadline = Date.now() + 1000
+			while (capturedRequestId === null && Date.now() < deadline) {
+				await new Promise((r) => setImmediate(r))
+			}
+			expect(capturedRequestId).not.toBeNull()
+			// Clear the live marker entirely.
+			h.coordinator.setDeferredCompletionBarrierForTesting(undefined)
+			expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeUndefined()
+			if (capturedRequestId === null) throw new Error("DCBR01-01d: invoke was not entered before release")
+			ctl.release(permitDirective(false, capturedRequestId))
+			const outcome = await enqueuePromise
+			// The directive was for the OLD marker; the live marker
+			// is gone. The directive is a directive (PermitEnqueue)
+			// and the live state has drifted, so the request is
+			// `request_superseded` (TERMINAL).
+			expect(outcome.kind).toBe("request_superseded")
+			expect(h.sendLog.length).toBe(0)
+			expect(h.completionCommitCount()).toBe(0)
 		})
 	})
 
@@ -503,22 +630,41 @@ describe("DCBR01 — real-coordinator E3.1 cutover qualification", () => {
 			expect(h.sendLog.length).toBe(1)
 		})
 
-		it("DCBR01-08: a `RejectStaleIdentity` consult is DOWNGRADED to `fallthrough` by the C5 guard when the live marker is gone; the TS predecessor returns `not_held`", async () => {
+		it("DCBR01-08: a `RejectStaleIdentity` directive consult whose live state has drifted is `request_superseded` (CORRECTION01: an Elm-rejected request never routes to the TS predecessor)", async () => {
 			const h = makeHarness({ heldJobIds: ["j1", "j2"] })
-			// The C5 guard's re-read after the await sees the
-			// live marker; if it matches, the directive is
-			// applied. We use `marker_absent` AFTER the marker
-			// is cleared; the C5 guard's `!liveMarker` check
-			// returns `fallthrough`. The TS predecessor's L1627
-			// guard sees `!this.deferredCompletionBarrier` and
-			// returns `not_held`.
+			// Under CORRECTION01: the consult is held in
+			// flight, the live marker is cleared mid-flight,
+			// then a `reject_stale_identity` directive is
+			// released. The consult was directive, the live
+			// state has drifted (marker gone), so the request
+			// is `request_superseded` (NOT `not_held` via the
+			// TS predecessor). The TS predecessor is NOT
+			// permitted to run for a directive consult whose
+			// facts have drifted.
+			const ctl = makeControllableInvoke()
+			let capturedRequestId: string | null = null
+			h.installInvoke(async (facts) => {
+				capturedRequestId = facts.requestId
+				return ctl.invoke(facts)
+			})
+			const enqueuePromise = h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
+			const deadline = Date.now() + 1000
+			while (capturedRequestId === null && Date.now() < deadline) {
+				await new Promise((r) => setImmediate(r))
+			}
+			expect(capturedRequestId).not.toBeNull()
+			// Clear the live marker mid-flight.
 			h.coordinator.setDeferredCompletionBarrierForTesting(undefined)
-			h.installInvoke(async (facts) => rejectStaleIdentityDirective("marker_absent", facts.requestId ?? ""))
-			const outcome = await h.coordinator.enqueueCompletionContinuationIfHeld(h.activeSessionId, 2, h.activeTaskId)
-			// The TS predecessor's L1627 guard returns `not_held`
-			// because the live marker is gone.
-			expect(outcome.kind).toBe("not_held")
+			if (capturedRequestId === null) throw new Error("DCBR01-08: invoke was not entered before release")
+			ctl.release(rejectStaleIdentityDirective("marker_absent", capturedRequestId))
+			const outcome = await enqueuePromise
+			// CORRECTION01: a directive consult whose live
+			// state has drifted is `request_superseded`,
+			// never `not_held` (the TS predecessor must not
+			// run for an Elm-rejected request).
+			expect(outcome.kind).toBe("request_superseded")
 			expect(h.sendLog.length).toBe(0)
+			expect(h.completionCommitCount()).toBe(0)
 		})
 	})
 
