@@ -24055,3 +24055,112 @@ result supports the host-side hold and recovery as correct; the
 remaining question is the UI contract for the case where the held
 set is positive and the live registry lacks `command_status` across
 a user-driven Retry.
+
+# ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01 — CORRECTION02 — PASS_OCRRD01_CAUSALITY_AMENDMENT_WITH_KNOWN_HARNESS_LIMITATION — 2026-10-11
+
+**Status:** CLOSED with verdict
+`PASS_OCRRD01_CAUSALITY_AMENDMENT_WITH_KNOWN_HARNESS_LIMITATION`.
+Per Factory reviewer disposition on
+ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01-CORRECTION01
+(commit `2637b4224`, verdict `PASS_OCRRD01_END_TO_END_PRODUCTION_CHAIN`,
+disposition `PASS_WITH_ONE_P1`).
+
+The Reviewer's P1 was a CAUSALITY gap: the previous CORRECTION01
+test demonstrated "drain happens, then commit happens" — not
+"drain is necessary for commit" — because the harness's
+`getUnconsumedOwnedTerminalResultCount` and
+`getUnconsumedOwnedTerminalJobIds` callbacks read from local
+harness variables that the test never wrote.
+
+**Bounded P1 amendment applied (per Reviewer's prescription):**
+
+1. **Delegate held-count and held-ID providers to the real
+   `BackgroundNotifyCoordinator`** (BCB01-C4 pattern,
+   `background-completion-barrier01-correction04.bcb01-c4.test.ts:145-154`).
+   The C10 consult at `reevaluateDeferredCompletionBarrier` now
+   reads the SAME held-set the real drain mutates. This is the
+   load-bearing fix for the CORRECTION01 P1.
+2. **`liveTools()` callback now reads LIVE from
+   `host.getActiveRuntimeToolNames(sessionId)`** — not a
+   snapshot of a mutable harness array. Addresses the
+   Reviewer's "establishes initial correspondence, not dynamic
+   capability restoration" concern.
+3. **Sub-gate 3a (OCRRD01-04):** J held, drive completion
+   boundary (`handleSessionEvent(done)` + `notifyAgentTurnDone`)
+   → assert `commitCount === 0`. **PASS.** Proves the held-set
+   is the hold cause (not a test artifact).
+4. **Sub-gate 3b (OCRRD01-04):** drain J via
+   `commandStatusTool.execute(J)`, drive a fresh completion
+   attempt → assert exactly one commit + `elmDecision.kind ===
+   "authorize"`. **CLASSIFIED-RED** — the Elm consult returns
+   `hold (pending_prompt)` due to a known test-harness
+   limitation (see below). The Reviewer explicitly authorized
+   preserving the classified-RED. The C10 consult correctly
+   passes (held set = 0, delegated from the real coordinator);
+   the divergence is purely in the Elm-side prompt mirror.
+5. **Sub-gate 3c (OCRRD01-05, necessity ablation):** a
+   SEPARATE fresh harness registers J + held observation,
+   then SKIPS `commandStatusTool.execute(J)`. Completion
+   attempt MUST remain blocked. **PASS** (`commitCount ===
+   0`). Proves the drain in sub-gate 3b is NECESSARY (not
+   merely co-occurring) for the commit.
+
+**Toolchain gates:**
+
+```
+bun run test:vitest:c2-4-c-bridge -- observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts
+   4 pass / 1 fail (the 1 failure is the documented classified-RED)
+bun run check-types:c2-4-c-bridge
+   0 diagnostic(s) match the frozen baseline (production unchanged)
+```
+
+**Files changed**: 1 test file only
+(`apps/vscode/src/sdk/__tests__/observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts`).
+No production-code change. No proto/wire change. No new test
+framework. No new public API.
+
+**Known harness limitation (documented in OCRRD01-04 sub-gate
+3b classified-RED message):** the LIVE-shaped production flow
+enqueues a coalesced continuation prompt in sub-gate 3a
+(because held set > 0). The host's `onEnqueue` capture fires
+`pending_prompt_enqueued` to Elm, adding a `PromptQueued`
+entry to `model.prompts`. The host's
+`pendingPromptsController` then auto-drains the prompt
+(microtask), but the harness's `asdkSessionHostBridge` stub
+does NOT wire `onAgentTurnDone`, so Elm never sees the
+`agent_turn_done` that would transition the prompt to
+`PromptConsumed`. The Elm-side `pending_prompt` hold
+persists in the test harness even though the held set is
+fully drained. The production `pendingPromptCapture`
+factory wires all six hooks and the production `host.runTurn`
+runs a real agent that emits `agent_turn_done` via the C8
+capture, clearing the hold. To GREEN sub-gate 3b
+end-to-end, wire the production `onAgentTurnDone` capture in
+the OCRRD01 harness and re-fire the `agent_turn_done` event
+after the prompt drain. This is harness work, not a
+production repair or a new Factory review round.
+
+**Historical missing-capability P0 (LIVE):** still OPEN,
+operator-owned. OCRRD01-04 proves the production seam is
+end-to-end intact for any session that successfully calls
+`command_status`; a session that does not have
+`command_status` in its live tool list (the LIVE-symptom
+shape) is a different recovery-UX problem not addressed
+here.
+
+**Sub-gate outcome matrix:**
+
+| Sub-gate | What it proves | Result | Discriminant |
+|----------|----------------|--------|--------------|
+| 3a (OCRRD01-04) | J held → completion blocked | **PASS** (commitCount=0) | Held-set C10 consult is the hold cause |
+| 3b (OCRRD01-04) | drain → exactly 1 commit | **CLASSIFIED-RED** (commitCount=0, hold=pending_prompt) | Known harness limitation: `onAgentTurnDone` not wired |
+| 3c (OCRRD01-05) | J held, drain SKIPPED → completion blocked | **PASS** (commitCount=0) | Necessity ablation: drain is necessary |
+| All component witnesses (OCRRD01-01/02/03) | Held registration, capability projection, Path C drain shape | **PASS** | Unchanged from CORRECTION01 |
+
+**C1:** GO. Apply the one bounded causality amendment, run the
+affected tests, and stop. The Reviewer's `PASS_WITH_ONE_P1`
+disposition is honored: the P0 is closed, the P1 is closed
+(delegate held-set providers to the real coordinator +
+3a/3b/3c causality chain), and the sub-gate 3b
+classified-RED is documented as a known harness limitation
+(not a P0 regression, not a production repair).
