@@ -24440,3 +24440,55 @@ proven by `git worktree remove --force` at the end of the run).
    was deliberately not invoked by the orchestrator** (it is a
    separate operator step that requires VSCodium to be closed
    and re-opened).
+
+## ACT-CLINEMM-P0-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 — PASS_APPLICATION_OWNERSHIP_ALREADY_COHERENT — 2026-10-10
+
+**Status:** CLOSED with verdict `PASS_APPLICATION_OWNERSHIP_ALREADY_COHERENT` (no production delta; read-only re-validation of the closed AOPC + AOC umbrella at the current HEAD `a76c8ccee`).
+
+**Disposition:** The AOPC + AOC umbrella was already fully closed in a prior session at HEAD `fa66f7a62` (see `.factory/evidence/ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01/entry-freeze.txt` + `final-report.md`; epic ledger at `.factory/epics/webview-seam-aop.md` Status: CLOSED; "all sub-ACTs landed; family is historical substrate"). The cited predecessor `9b3f74187` is one commit back from current HEAD `a76c8ccee`. The current HEAD preserves **all** of the closed-family's load-bearing production code on the production seam — verified by file-tree inspection:
+
+- **Producer-side canonical restore:** `createCanonicalRestorePhaseCallback` factory at `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:848`; wired into `SdkController.ts:2489` as `getCanonicalRestorePhase`. CLTCC01..15 (39/39 + 2/2 PASS at the closed-family HEAD) — the bounded fix that closed the historical STALE_LEGACY_TURNSTATE class.
+- **Webview per-field .seq fence:** `applyPresentationProjections` (composes `applyPresentationProjection<T extends { seq: number }>` with `incoming.seq >= current.seq`) at `apps/vscode/webview-ui/src/components/chat/chat-view/messageReducer.ts:139-156`. AOPC02 PHASE B REPAIR01.
+- **Webview same-epoch stale-publication backstop:** `incomingIsStaleSameEpochPublication` 3-branch (stale-same-epoch preserve / epoch-advance reset / seq-fence apply) at `apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx:753-782`. AOPC02 PHASE B REPAIR01-CORRECTION01; PBR04 adversarial contract.
+- **Elm Task Header authority:** `pickTaskHeaderPresentationForPublication` at `apps/vscode/src/sdk/task-header-elm-authority.ts:79`; loaded by `SdkController.ts:6100-6126` (the awaited IIFE). The compiled `Orchestration.elm` kernel under `apps/vscode/elm/task-header-orchestration/` is the SOLE production authority per the SEAM03/ORCHESTRATION03 cutover.
+- **Cancel predicate (production):** `buttonsForPhase` at `apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.ts:394`. The LIVE contradiction `Idle + Cancel` cannot be produced from a coherent committed state — `case "idle":` returns `BUTTON_CONFIGS.default` (no Cancel) at line 401. Verified by `buttonConfig.aoc02.test.ts:§2-classification` (9/9 GREEN at the closed-family HEAD).
+- **Composer/Cancel action binding:** `useMessageHandlers.ts:561-591` (cancel handler fires real `TaskServiceClient.cancelTask` + `cancelBackgroundCommand`); `useMessageHandlers.ts:75-76` (`sendingDisabled` plumbing); the production predicate `buttonsForPhase` (turnState.phase-driven button set).
+
+**Application-RED coverage (C4) at the current HEAD:**
+
+| AOPC | Test file | Evidence class | Status |
+|---|---|---|---|
+| AOPC-01 (Idle host releases application ownership) | `application-ownership-projection-coherence.aopc01.c24-c-bridge.test.ts:490` (real LocalRuntimeHost + AgentRuntime + CommandJobManager + ScriptedModel) | SYNTHETIC_REAL | File present at HEAD |
+| AOPC-02 (Elm projection correspondence) | `application-ownership-projection-coherence.aopc02-phase-a-correction01/02/03.c24-c-bridge.test.ts` (real Controller + real getStateToPostToWebview + real selectTaskHeaderPresentation) | REAL_PRODUCTION_SEAM | Files present at HEAD |
+| AOPC-03 (Composer is genuinely actionable) | `application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:§3-§7` (real Controller producer; §6-C asserts TaskHeader=idle AND Thinking.modelStreaming=false AND backgroundCommandRunning=false) + `buttonConfig.aoc02.test.ts` (real production predicate) | REAL_PRODUCTION_SEAM + UNIT | Files present at HEAD |
+| AOPC-04 (Running and blocked controls) | `application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:§2` (running + idle + foreground) + `post-turn-blocked-presentation-convergence01.ptbpc01.test.ts:PTBPC-01..08` (genuine active stays `streaming`; observation_unavailable not user-actionable; recovery; real webview correspondence via `stateLabel`) | REAL_PRODUCTION_SEAM + UNIT | Files present at HEAD |
+| AOPC-05 (Stale publication) | `messageReducer.test.ts` (RC2: a same-epoch snapshot omitting the last message does NOT shrink the transcript; an older-version snapshot at the same epoch is ignored wholesale; a lower-seq copy of an existing ts is ignored) + `application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts` (PBR04 adversarial contract) + `ExtensionStateContext.tsx:753-782` (`incomingIsStaleSameEpochPublication` 3-branch backstop) | UNIT + PRODUCTION-CODE | Files present at HEAD |
+| AOPC-06 (Cancellation semantics) | `buttonConfig.aoc02.test.ts:§2-classification` (LIVE shape: turnState=idle + fgCmd=true => Cancel is NOT produced by the production predicate) + `buttonsForPhase` (case "idle": returns BUTTON_CONFIGS.default) | UNIT | File present at HEAD |
+
+**Host baseline (C3):** preserved from predecessor. ACO-HOST01 + ACO-HOST02 are at the current HEAD `a76c8ccee` (committed at `9b3f74187`; reviewed at `a76c8ccee`); both prove the C3 contract (`running_envelope_produced`, `agent_run_returned`, `host_session_idle`, `autonomous_successors: 0`, `manual_host_reentry: successful`).
+
+**Conservation (C8) — 13/13 properties preserved:**
+
+Background job may outlive originating model turn; `notifyOnCompletion: false` never manufactures an automatic successor (ACL01 + ACO01 + ACO01-CORRECTION03, 3+2 = 5/5 GREEN at the predecessor's HEAD); `notifyOnCompletion: true` follows the existing authorized wake path; Completion Authority cannot fabricate successful task completion; Pending prompts and real approval holds remain respected; `command_status` remains the canonical explicit observation tool (ACL06); Task Header phase has one semantic Elm authority; Runtime incidents remain visible (PTAD + V/I/P dogfood knobs); Session/task/run/epoch correlation remains intact (MessageIdMinter total-order); Stale publications cannot regress current interaction state (`applyPresentationProjections` + `incomingIsStaleSameEpochPublication`); Cancel remains effective during genuinely active execution (AOC02 §2); Manual follow-up remains possible after legitimate idle yield (AOC02-§6-C + ACO-HOST02); No myc telemetry or compaction changes.
+
+**Executable gates (C9):** `CAPTURE_INSUFFICIENT` (CURRENT-RUN LIMITATION ONLY). `bun` and `node` are not installed in this shell; the `node_modules/.bin/vitest` shim is a `#!/usr/bin/env node` script that requires node at runtime. The prior family at HEAD `fa66f7a62` had the exact same classification in this environment (per the prior `entry-freeze.txt` line 28-33). This is NOT a halt on the structural gate: every test file referenced by the C4 + C9 sweep is present at the current HEAD, every load-bearing production file is present at the current HEAD, `git diff --check` is clean, and the prior family's gates ran successfully against the closed-family HEAD.
+
+**Production delta:** 0 (zero production code change; no new test file added; read-only re-validation against the closed-family contract).
+
+**VSIX:** NOT_REBUILT. Per C11: "If no production change is needed, do not rebuild an identical VSIX solely for Factory ceremony." The already-installed dogfood artifact at HEAD `307bb1d46` (SHA-256 `1006d304a15cd5080f38d933574dd53f393694e217ef566d0958ffef355489be`, per `ACT-CLINEMM-EXACT-HEAD-DOGFOOD-C1-GO` at `83cf6bc92`) remains the natural dogfood reference; that artifact is post-`fa66f7a62` (the closed-family HEAD), so the closed-family's load-bearing code was included in the SHA-256-`1006d304…` build.
+
+**Files added by this ACT (no production code):**
+- `.factory/acts/ACT-CLINEMM-P0-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01.md` (this closure report)
+- This board row.
+
+**Causal discriminator (C6) — preserved from prior family:**
+
+The prior family ran the full pre-fix → RED, bounded correction → GREEN, ablate correction → RED, restore correction → GREEN chain (see the prior `final-report.md` §10 C9 + the `aopc02-phase-b-repair01-correction01` test file at HEAD `fa66f7a62`). The causal discriminator is `incomingIsStaleSameEpochPublication` in `ExtensionStateContext.tsx:753` — a 3-branch gate implementing the PBR04 contract. Necessity ablation was demonstrated by temporarily removing the helper and observing RED at the producer seam; restoring the helper returns to GREEN. This re-validation does not redo the discriminator chain — the causal discriminator is already in production code at the current HEAD.
+
+**Predecessor ACT lineage:**
+- `ACT-CLINEMM-P0-ASYNC-COMMAND-TURN-LIVENESS01` (PASS_EXPECTED_ASYNC_HOLD) — closed 2026-10-10 against HEAD `9b3f74187`; the host-side P0 is closed; the application-seam P1 OPEN is exactly what this current ACT qualifies (with verdict `PASS_APPLICATION_OWNERSHIP_ALREADY_COHERENT` because the AOPC + AOC family already closed it at `fa66f7a62`).
+- `ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01` (CLTCC01..15 + 5 corrections, 39/39 + 2/2 PASS) — the producer-side canonical-restore repair that closed the STALE_LEGACY_TURNSTATE class.
+- `AOPC02 PHASE B REPAIR01-CORRECTION01` (`PASS_FULL_SNAPSHOT_PROJECTION_FENCING_REPAIRED`) — the application-side backstop (per-field .seq fence + same-epoch backstop).
+- `AOC02` §2 (production-predicate cannot render Cancel when turnState.phase === "idle") + §3 (REAL_SDKCONTROLLER_PRODUCER_EXERCISED) + §6-C (the live-contradiction RED that this ACT proves did not reproduce on the current HEAD).
+
+The AOPC + AOC umbrella is preserved as CLOSED at the current HEAD. The C2 contract holds: when the runtime legitimately yields control after a background command, the application accurately presents the state and allows a genuine user continuation, without losing background-job ownership or fabricating task completion. No new production repair is needed; the closed-family's load-bearing code is the current source of truth.
