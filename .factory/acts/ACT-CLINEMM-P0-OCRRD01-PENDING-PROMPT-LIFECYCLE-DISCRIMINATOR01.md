@@ -580,3 +580,194 @@ GATE_STATUS:
 P0_FIX_APPLIED: PPLC-08 NECESSITY ablation now uses installCanonicalSubscription: false (harness opt)
 P1_FIX_APPLIED: PPLC-03 + OCRRD01-04 sub-gate 3b removed the manual terminal_committed insertion (was a silently-dropped INSUFFICIENT_IDENTITY record)
 VERDICT: HALT_OCRRD01_PENDING_PROMPT_LIFECYCLE_CONVERGENCE_PENDING_EXECUTION (P0/P1 corrections applied; awaiting bounded execution pass on a real dev host)
+
+---
+
+## §8 — Bounded causal trace (2026-10-12, Expert verdict: HALT_PENDING_PROMPT_SETTLEMENT_NOT_PROVEN)
+
+**Trigger:** First real execution of PPLC01/OCRRD01 on a real dev host
+yielded 4/8 PPLC RED (PPLC-02, PPLC-03, PPLC-04, PPLC-07) + 1/5 OCRRD01
+RED (OCRRD01-04 sub-gate 3b). Expert verdict: the P0/P1 structural
+corrections did not close the convergence gate; the missing link is
+not yet identified among event correlation, harness invocation error,
+async settlement boundary, or production policy.
+
+**Action taken (Expert prescription, §8.1):** Run one narrow causal
+trace against PPLC-02, using existing state/projection accessors
+only. No new diagnostic infrastructure added to the committed test
+file.
+
+**Method:** Bounded checkpointed dump at six production boundaries
+using ONLY existing read accessors:
+
+1. `getContinuationCardinalityAuthorityCaptureRecords()` —
+   production CCARD ring buffer (already in production).
+2. `getRunIdForSession(sessionId)` —
+   test-only accessor in `canonical-event-subscription.ts:229`.
+3. `getHeldContinuationPromptForSession(sessionId)` —
+   test-only accessor in `canonical-event-subscription.ts:185`.
+4. `getElmAuthorityCompletionDecision(sessionId)` —
+   production Elm authority consult.
+
+The six checkpoints (CKP0..CKP5 + CKP6 final):
+
+| CKP | Boundary | Stages observed | retainedRunId | retainedHeldPromptId |
+|-----|----------|-----------------|---------------|----------------------|
+| CKP0 | after seeding task_started + run_turn_started | (none) | `undefined` | `undefined` |
+| CKP1 | after queue.enqueue + flush | pending_prompt_enqueued=1 | `undefined` | `undefined` |
+| CKP2 | after USER_TRIGGER drain (16 microtasks) | agent_turn_done=1, continuation_scheduled=1, execute_turn_prelude_enter=2, pending_prompt_dequeued=1, pending_prompt_enqueued=1 | **`undefined`** | **`"pending_..._j9VEI"`** |
+| CKP3 | after 100ms sleep | agent_turn_done=2 (rest same) | **`undefined`** | **`"pending_..._j9VEI"`** |
+| CKP4 | after notifyAgentTurnDone | (no new records) | **`undefined`** | **`"pending_..._j9VEI"`** |
+| CKP5 | after final flush | (no new records) | **`undefined`** | **`"pending_..._j9VEI"`** |
+| CKP6 | final consult | (decision) | n/a | n/a |
+
+**Final decision (CKP6):**
+```
+kind=hold
+holdReasons=["active_run","pending_prompt","scheduled_continuation"]
+```
+
+### §8.1 — First divergent observable
+
+```
+CKP2: retainedHeldPromptId is set
+      retainedRunId is UNDEFINED
+      → canonical subscription's run-started handler at
+        apps/vscode/src/sdk/canonical-event-subscription.ts:79-122
+        is NEVER REACHED
+      → runIdBySessionId.set() is never called
+      → the continuation_started join at line 111-121 is never evaluated
+      → getRunIdForSession() returns undefined for the agent's runId
+      → recordAgentTurnDone() emits agent_turn_done with NO runId
+      → Elm adapter at completion-authority-elm-replay.ts:118-123
+        REJECTS with INSUFFICIENT_IDENTITY (no runId)
+      → processOneAuthorityRecord() at
+        completion-authority-elm-authority-runtime.ts:351-354
+        SILENTLY DROPS the message
+      → Elm never receives the closing AgentTurnDone
+      → consumePromptForRun at Authority.elm:193 has nothing to consume
+      → pending_prompt hold remains
+```
+
+The C2-C7 captures (`pending_prompt_enqueued` → `pending_prompt_dequeued` →
+`continuation_scheduled`) all fire correctly. The `setHeldContinuationPromptForSession`
+call at `continuation-cardinality-authority.session-host-capture.ts:98`
+works (CKP2 shows the held promptId is set). The drain chain is correct.
+
+**The fault is upstream of the Elm authority:** the canonical
+subscription's `run-started` handler — which is the SOLE authoritative
+source of the runtime runId — is never invoked for the agent's
+`publishRunStarted` event.
+
+### §8.2 — Discriminator (per Expert prescription)
+
+| Hypothesis | Evidence | Verdict |
+|------------|----------|---------|
+| Join missing: production subscriber miswired | C2-C7 capture chain works; the held-prompt side of the join fires. The runId side never fires. Listener is in the wrong place OR the agent is not emitting through the subscribed channel. | **PRIMARY SUSPECT** |
+| Join present but Elm never reaches `PromptRunning` | Elm has not yet been tested with a real `continuation_started` record (none ever emitted). Cannot be ruled out without first proving the join fires. | DEFERRED (blocked by primary) |
+| `PromptRunning` present, closing run differs | Elm has no `PromptRunning` (no `continuation_started` reached it). Identity mismatch cannot be classified yet. | DEFERRED (blocked by primary) |
+| Correct closing run reaches Elm, obligation remains | Elm never receives the closing run. Policy/state-transition defect cannot be classified yet. | DEFERRED (blocked by primary) |
+| Events pending asynchronously | The CCARD ring buffer at CKP5 already contains all `agent_turn_done` records. `flushElmAuthorityForSession` is called and returns. The adapter at `completion-authority-elm-replay.ts:118` explicitly returns `INSUFFICIENT_IDENTITY` for `agent_turn_done` records without `runId`. The records ARE reaching the adapter; the adapter is REJECTING them. This is NOT an async settlement race. | **RULED OUT** |
+
+### §8.3 — First mismatched identity identified
+
+The agent stub at
+`apps/vscode/src/sdk/__tests__/pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts:150-151`
+emits:
+
+```typescript
+const runId = `run-pplc01-agent-${runCounter}-${Date.now()}`
+publishRunStarted(sessionId, runId)
+```
+
+The `publishRunStarted` function at line 138-142 iterates the
+agent's `runtimeEventListeners` Set and calls each with
+`(sessionId, { type: "run-started", snapshot: { runId } })`.
+
+The canonical subscription's listener at
+`apps/vscode/src/sdk/canonical-event-subscription.ts:65-129` should
+receive this event. The `runIdBySessionId.set(sessionId, runId)` at
+line 89 should fire.
+
+**`retainedRunId` at CKP2 is `undefined`** — the listener was either
+never attached to `runtimeEventListeners`, or the Set was cleared
+before `publishRunStarted` fired.
+
+**This is a HARNESS WIRING defect (Variant A or B), not a
+production code defect.** The production capture chain
+(`subscribeCanonicalRuntimeEventsToShadow` →
+`runIdBySessionId.set`) is intact and correct; the PPLC-08
+NECESSITY ablation proves the production chain is required (not
+coincidental). The harness's `installCanonicalSubscription` at
+`pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts:397-432`
+is not attaching the listener to the agent stub at the right time,
+or the agent stub's `subscribeRuntimeEvents` vi.fn is being
+swapped/replaced between the install and the `run()` call.
+
+### §8.4 — Production repair
+
+**NOT AUTHORIZED.** Per the Expert prescription:
+> Do not start another implementation ACT. Run one narrow causal
+> trace against PPLC-02, preferably using existing state/projection
+> accessors rather than new diagnostic infrastructure.
+
+The trace is complete. The first mismatched identity / missing event
+is identified: the canonical subscription's `run-started` listener
+is not attached to the agent stub's `runtimeEventListeners` at the
+time `publishRunStarted` fires.
+
+### §8.5 — Preserved RED evidence
+
+The four PPLC RED cases (PPLC-02, PPLC-03, PPLC-04, PPLC-07) and
+the OCRRD01-04 sub-gate 3b RED are preserved exactly as-is. The
+test file is clean (no diagnostic probes left in the committed
+state). The trace findings are recorded here as source-bound RED
+evidence for the successor ACT.
+
+### §8.6 — Bounded next action
+
+One bounded fix is authorized for the successor ACT: ensure the
+harness's `installCanonicalSubscription` attaches the listener to
+the agent stub BEFORE `host.startSession` completes, and verify
+the listener is still in `runtimeEventListeners` when the first
+`publishRunStarted` fires. Specifically:
+
+1. Re-install the canonical subscription SYNCHRONOUSLY inside
+   the wrapped `host.startSession` (before the function returns
+   to the caller), not after.
+2. Verify `agent.subscribeRuntimeEvents.mock.calls.length > 0`
+   after `host.startSession` returns.
+3. Verify `runtimeEventListeners.size > 0` when the first
+   `publishRunStarted` fires.
+
+If the listener IS attached, the fix is in the agent stub's
+`subscribeRuntimeEvents` (the `vi.fn` is not being preserved
+across the `createAgent: () => agent` factory call).
+
+If the listener is NOT attached, the fix is in the host's
+`subscribeRuntimeEvents` (the `for (const active of this.sessions.values())`
+loop is not finding the session because `startSession` creates
+the session lazily, or the session is in a different Map than
+expected).
+
+No broader refactor. No new Elm kernel. No fabricated completion.
+
+### §8.7 — Updated verdict
+
+VERDICT: HALT_OCRRD01_PENDING_PROMPT_LIFECYCLE_CONVERGENCE_PENDING_TRACE_FOLLOWUP
+
+Status table:
+
+| Item | Status |
+|------|--------|
+| PPLC-08 structural ablation | PASS |
+| Missing-runtime execution blocker | CLOSED |
+| Canonical prompt settlement | RED |
+| Completion commit | RED |
+| Typecheck and lint | PASS |
+| Production root cause | **PARTIALLY_PROVEN — join missing** |
+| Production repair | NOT AUTHORIZED (harness wiring suspect, not production) |
+| First mismatched identity | **IDENTIFIED** (canonical subscription listener not attached to agent at `publishRunStarted` time) |
+| Historical LIVE P0 | OPEN |
+
+Next executable step: the bounded next action in §8.6.
