@@ -224,7 +224,19 @@ function makeFileSessionService(isolationDir: string): FileSessionService {
 	return new FileSessionService(join(isolationDir, "sessions"))
 }
 
-function makeHarness(opts: { sessionId: string; taskId: string; isolationDir: string; autoStart?: boolean }): PplcHarness {
+function makeHarness(opts: {
+	sessionId: string
+	taskId: string
+	isolationDir: string
+	autoStart?: boolean
+	// Expert verdict (2026-10-12, PPLC-08 correction): the
+	// harness must expose a flag to disable the canonical
+	// subscription so the NECESSITY ablation can isolate the
+	// canonical subscription's causal role. Default: true
+	// (preserves existing PPLC-01..07 behavior). PPLC-08 sets
+	// it to false.
+	installCanonicalSubscription?: boolean
+}): PplcHarness {
 	const minter = new MessageIdMinter()
 	const tracker = new TurnStateTracker(minter)
 	const translatorState = new MessageTranslatorState(minter)
@@ -397,20 +409,27 @@ function makeHarness(opts: { sessionId: string; taskId: string; isolationDir: st
 			},
 			opts.sessionId,
 		)
-	// Eagerly install (a no-op if the session has not been started yet).
-	installCanonicalSubscription()
-
-	// Wrap `host.startSession` so the canonical subscription is
-	// re-installed automatically after every session start. The
-	// point-in-time subscription iterates the host's currently
-	// active sessions; the new session would not be observed
-	// otherwise.
-	const wrappedStartSession = host.startSession.bind(host)
-	host.startSession = (async (input: Parameters<typeof host.startSession>[0]) => {
-		const result = await wrappedStartSession(input)
+	// Expert verdict (2026-10-12, PPLC-08 correction): the
+	// canonical subscription install is gated behind
+	// `installCanonicalSubscription` (default true) so the
+	// PPLC-08 NECESSITY ablation can isolate the causal role
+	// of the canonical subscription.
+	if (opts.installCanonicalSubscription !== false) {
+		// Eagerly install (a no-op if the session has not been started yet).
 		installCanonicalSubscription()
-		return result
-	}) as typeof host.startSession
+
+		// Wrap `host.startSession` so the canonical subscription is
+		// re-installed automatically after every session start. The
+		// point-in-time subscription iterates the host's currently
+		// active sessions; the new session would not be observed
+		// otherwise.
+		const wrappedStartSession = host.startSession.bind(host)
+		host.startSession = (async (input: Parameters<typeof host.startSession>[0]) => {
+			const result = await wrappedStartSession(input)
+			installCanonicalSubscription()
+			return result
+		}) as typeof host.startSession
+	}
 
 	return {
 		host,
@@ -674,6 +693,25 @@ describe("ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — pr
 	// claim a real `setTurnPhase("completed", ...)` is reachable for a
 	// session whose only outstanding obligation is a notify=false held
 	// terminal observation drained by `command_status`.
+	//
+	// Expert verdict (2026-10-12, P1 fix): the previous version of this
+	// test manually enqueued an Elm authority record of stage
+	// `terminal_committed` after the real drain. Inspection of
+	// `completion-authority-elm-replay.ts:124-149` shows the adapter
+	// rejects `terminal_committed` with `INSUFFICIENT_IDENTITY` when
+	// the record lacks `ownerId` and `terminalKind` (the REAL schema
+	// does not carry those), and
+	// `completion-authority-elm-authority-runtime.ts:351-354` silently
+	// drops INSUFFICIENT_IDENTITY records. The manual `terminal_committed`
+	// insertion therefore never reached Elm — it was a no-op that
+	// was misclassified as a causal producer. The C10 commit chain
+	// is provable WITHOUT it: Elm decides `authorize` on the basis
+	// of the prompt + run + job state, and a `terminal_committed`
+	// fact only registers a job for tracking (it does not gate
+	// the commit decision). The test no longer seeds the
+	// `terminal_committed` record; its claim is therefore a clean
+	// production-seam test (no Elm seeding past the run_started fact
+	// shared with PPLC-02/04/05/06/07).
 	// -------------------------------------------------------------------------
 	it.runIf(canSpawnSubprocess && elmKernelAvailable)(
 		"PPLC-03: real drain -> real submit_and_exit -> Elm authorize -> exactly one setTurnPhase(completed) commit",
@@ -769,19 +807,7 @@ describe("ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — pr
 				expect(r.state).toBe("exited")
 				expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSession.sessionId, "task-pplc01-03")).toBe(0)
 
-				// 5) Feed Elm the consumed-terminal fact so the authority
-				//    kernel sees the held observation was actually consumed
-				//    (mirrors the production `terminal_committed` CCARD stage
-				//    the runtime captures on Path C drain).
-				await enqueueElmAuthorityRecord({
-					stage: "terminal_committed",
-					sessionId: h.activeSession.sessionId,
-					runId: "run-pplc01-03-1",
-					jobId: startRes.jobId,
-				})
-				await flushElmAuthorityForSession(h.activeSession.sessionId)
-
-				// 6) Drive the production completion boundary. The C9
+				// 5) Drive the production completion boundary. The C9
 				//    `submit_and_exit_seen` capture fires inside
 				//    `handleSessionEvent(done)`. The TS-side barrier
 				//    consults MUST pass (held=0, no prompts, no
@@ -789,6 +815,19 @@ describe("ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — pr
 				//    reached; the Elm authority consult MUST return
 				//    `authorize` for `setTurnPhase("completed", ...)`
 				//    to fire.
+				//
+				// P1 fix (2026-10-12): the previous version of this
+				// step manually enqueued a `terminal_committed` Elm
+				// authority record. Inspection of the adapter
+				// (completion-authority-elm-replay.ts:124-149) shows
+				// such a record is rejected with
+				// `INSUFFICIENT_IDENTITY` (no `ownerId` / `terminalKind`
+				// in the REAL schema) and silently dropped
+				// (completion-authority-elm-authority-runtime.ts:351-354),
+				// so it never reached Elm. The C10 commit chain is
+				// therefore provable WITHOUT it. The test no longer
+				// seeds the `terminal_committed` record; the
+				// production-seam claim is now clean.
 				h.translatorState.setAttemptCompletionSeen()
 				h.translatorState.setTerminalResponseCommittedThisTurn()
 				const doneEvent = {
@@ -807,7 +846,7 @@ describe("ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — pr
 				await h.coordinator.notifyAgentTurnDone(h.activeSession.sessionId)
 				await flushElmAuthorityForSession(h.activeSession.sessionId)
 
-				// 7) Verify the full commit chain.
+				// 6) Verify the full commit chain.
 				const elmDecision = getElmAuthorityCompletionDecision(h.activeSession.sessionId)
 				expect(elmDecision.kind).toBe("authorize")
 				expect(h.commitCount()).toBe(1)
@@ -1219,6 +1258,13 @@ describe("ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — pr
 	// the canonical subscription is wired; PPLC-08 proves that with
 	// the canonical subscription withheld, the OCRRD01-04 sub-gate 3b
 	// RED returns. Together: the production chain IS necessary.
+	//
+	// Expert verdict (2026-10-12, PPLC-08 correction): the harness
+	// now exposes an `installCanonicalSubscription: false` opt that
+	// disables BOTH the eager install AND the startSession-wrap,
+	// so the canonical subscription is NEVER installed in this
+	// ablation. This is the load-bearing change that makes the
+	// negative test actually isolate the canonical subscription.
 	// -------------------------------------------------------------------------
 	it.runIf(canSpawnSubprocess && elmKernelAvailable)(
 		"PPLC-08: NECESSITY ablation — without canonical subscription, the pending_prompt hold returns",
@@ -1237,6 +1283,14 @@ describe("ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — pr
 				taskId: "task-pplc01-08",
 				isolationDir,
 				autoStart: false,
+				// P0 fix (2026-10-12): disable the harness's
+				// canonical-subscription install AND its
+				// startSession-wrap. This is the only way the
+				// NECESSITY ablation can isolate the canonical
+				// subscription's causal role; otherwise the
+				// harness installs the subscription behind the
+				// test's back and the negative test is invalid.
+				installCanonicalSubscription: false,
 			})
 
 			try {

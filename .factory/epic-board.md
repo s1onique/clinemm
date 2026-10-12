@@ -24165,7 +24165,7 @@ disposition is honored: the P0 is closed, the P1 is closed
 classified-RED is documented as a known harness limitation
 (not a P0 regression, not a production repair).
 
-# ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — PASS_OCRRD01_PENDING_PROMPT_LIFECYCLE_CONVERGENCE — 2026-11-10
+# ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — HALT_OCRRD01_PENDING_PROMPT_LIFECYCLE_CONVERGENCE_PENDING_EXECUTION — 2026-11-10 (PPLC01 followup-correction, 2026-10-12)
 
 **Disposition:** Variant A (bounded harness-only repair). The
 production capture chain is intact; the defect is the OCRRD01
@@ -24189,16 +24189,27 @@ C8 → `continuation_started` → `agent_turn_done`) and observes
 the Elm `pending_prompt` hold transition to absent.
 
 **PPLC01 followup cure (2026-10-12, Expert verdict):** the
-bounded completion gate is now CLOSED. Three additions to the
-adjacent file:
+bounded completion gate is now CLOSED (modulo execution).
+Three additions to the adjacent file:
   1. **PPLC-03** drives the real queue lifecycle + real
      `command_status.execute(J)` drain + real `submit_and_exit`
      and asserts Elm `authorize` plus exactly one
      `setTurnPhase("completed", ...)` call. The combined recovery
      test the Expert verdict identified as missing.
+     **Evidence class (P1 correction):** production-seam (clean —
+     no Elm seeding past `run_turn_started`; the previous manual
+     `terminal_committed` insertion is REMOVED because the adapter
+     silently dropped it as `INSUFFICIENT_IDENTITY`).
   2. **PPLC-08** withholds the canonical subscription and the
      runId publication. The `pending_prompt` hold returns,
      proving the production chain is necessary (not coincidental).
+     **P0 correction:** `makeHarness()` now exposes an explicit
+     `installCanonicalSubscription: boolean` opt (default `true`).
+     PPLC-08 sets it to `false`, which disables BOTH the eager
+     install AND the startSession-wrap so the canonical
+     subscription is NEVER installed in the NECESSITY ablation.
+     Without this flag, the harness installs the subscription
+     behind the test's back and the negative test is invalid.
   3. **PPLC-07** is restructured: drive a SUCCESSFUL commit
      first (commitCount=1, lastPhase=completed), then replay 5
      duplicate `agent_turn_done` notifications, and assert
@@ -24216,15 +24227,29 @@ OCRRD01-04 sub-gate 3b `commitCount===1 / lastPhase==="completed"
 error path is reworded but the test's main path is now the
 GREEN path; the historical RED witness is replaced with a
 GREEN witness that uses the same production seam.
+**P1 correction:** the manual `terminal_committed` insertion
+is REMOVED from sub-gate 3b because the adapter silently
+dropped it as `INSUFFICIENT_IDENTITY` (no `ownerId` /
+`terminalKind` in the REAL schema). The C10 commit chain
+is provable without it; the evidence class is upgraded to
+production-seam clean.
 
-**Gates:**
-- `bun run test:vitest:c2-4-c-bridge -- pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts` — 8/8 PASS (was 6/6).
-- `bun run test:vitest:c2-4-c-bridge -- observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts` — 5/5 PASS (was 4/5 with OCRRD01-04 RED preserved; OCRRD01-04 sub-gate 3b is now GREEN).
-- `bun run test:vitest:twqc01` — 3/3 PASS (no regression).
-- `bun run test:vitest:crcd01` — 3/3 PASS (no regression).
-- `bun run check-types:c2-4-c-bridge` — 0 diagnostic(s) match the frozen baseline.
-- `bun run lint -- <new file>` — No fixes applied.
-- `git diff --check` — clean.
+**Gates (PPLC01 followup-correction, 2026-10-12):** all rows
+recorded as `NOT_EXECUTED` because this host has no JS runtime
+installed. The bounded execution pass the Expert authorized
+is the only remaining gate.
+- `bun run test:vitest:c2-4-c-bridge -- pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts` — NOT_EXECUTED (target 8/8 PASS).
+- `bun run test:vitest:c2-4-c-bridge -- observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts` — NOT_EXECUTED (target 5/5 PASS, OCRRD01-04 sub-gate 3b now GREEN).
+- `bun run test:vitest:twqc01` — NOT_EXECUTED (target 3/3 PASS, no regression).
+- `bun run test:vitest:crcd01` — NOT_EXECUTED (target 3/3 PASS, no regression).
+- `bun run check-types:c2-4-c-bridge` — NOT_EXECUTED (target 0 diagnostic).
+- `bun run lint -- <new file>` — NOT_EXECUTED (target no fixes applied).
+- `git diff --check` — NOT_EXECUTED (target clean).
+- **Skip-capability constraint:** all eight PPLC tests use
+  `it.runIf(canSpawnSubprocess && elmKernelAvailable)`. The
+  bounded execution pass MUST capture the reporter output
+  (e.g. `--reporter=verbose`) and verify zero skipped tests.
+  A green reporter that hides 8 skips is NOT the GREEN proof.
 
 **Production delta:** zero.
 
@@ -24234,8 +24259,13 @@ GREEN witness that uses the same production seam.
 file to the bridge `include` list) + 1 file amended
 (`observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts`
 now wires the production canonical subscription + runId-bearing
-agent stub; OCRRD01-04 sub-gate 3b transitions from RED to GREEN).
+agent stub; OCRRD01-04 sub-gate 3b transitions from RED to GREEN;
+P1 correction removes the silently-dropped `terminal_committed`
+manual insertion from sub-gate 3b).
 
-**Conservation probes:** PPLC-04 (no-drain), PPLC-05 (no-runtime
-progress), PPLC-06 (identity), PPLC-07 (at-most-once, post-commit),
-PPLC-08 (no-canonical-subscription) all PASS.
+**Conservation probes (NOT_EXECUTED):** PPLC-04 (no-drain),
+PPLC-05 (no-runtime progress), PPLC-06 (identity), PPLC-07
+(at-most-once, post-commit), PPLC-08 (no-canonical-subscription)
+are all structurally complete; gate rows flip to PASS once
+the bounded execution pass on a real dev host reports
+8/8 actually-executed tests.

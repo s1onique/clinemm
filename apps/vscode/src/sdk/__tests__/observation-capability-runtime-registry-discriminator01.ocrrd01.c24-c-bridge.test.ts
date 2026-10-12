@@ -587,8 +587,20 @@ describe("ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
 			// sub-gates 3a and 3b consult the same Elm state; the
 			// C10 predicate short-circuits in 3a (before the Elm
 			// consult) so 3a's Elm state is irrelevant to its
-			// outcome. 3b re-feeds `terminal_committed` AFTER the
-			// drain and re-consults.
+			// outcome. Sub-gate 3b drains the held set via
+			// `commandStatusTool.execute(J)` and re-consults.
+			// P1 fix (2026-10-12): the previous version of 3b
+			// also re-fed a `terminal_committed` CCARD record
+			// into the Elm authority. That record was silently
+			// dropped as `INSUFFICIENT_IDENTITY` by the adapter
+			// (see completion-authority-elm-replay.ts:124-149) and
+			// never reached Elm. The C10 commit chain is provable
+			// WITHOUT it: Elm decides `authorize` on the basis of
+			// the prompt + run + job state, and a
+			// `terminal_committed` fact only registers a job for
+			// tracking (it does not gate the commit decision). The
+			// re-feed is removed; 3b's evidence class is upgraded
+			// to production-seam clean.
 			// =================================================================
 			await enqueueElmAuthorityRecord({
 				stage: "task_started",
@@ -669,8 +681,12 @@ describe("ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
 			// API). The held-set count the C10 consult reads now
 			// drops to 0 — the same value Elm observes in
 			// `computeHoldReasons` (UnconsumedTerminalObservation
-			// becomes empty because we feed `terminal_committed` to
-			// Elm).
+			// becomes empty). P1 fix (2026-10-12): we no longer
+			// re-feed a `terminal_committed` record into the Elm
+			// authority; that record was silently dropped as
+			// `INSUFFICIENT_IDENTITY` and never reached Elm. The
+			// held-set drain alone is the production causal
+			// producer for sub-gate 3b's Elm transition.
 			const toolResult = (await h.commandStatusTool.execute({
 				jobId: startRes.jobId,
 			})) as Array<{ ok: boolean; jobId?: string; state?: string; error?: string }>
@@ -680,16 +696,27 @@ describe("ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
 			expect(r.jobId).toBe(startRes.jobId)
 			expect(r.state).toBe("exited")
 			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSession.sessionId, "task-ocrrd01-04")).toBe(0)
-			// Feed Elm the consumed-terminal fact so the authority
-			// kernel sees the held observation was actually
-			// consumed (mirrors the production `terminal_committed`
-			// CCARD stage the runtime captures on Path C drain).
-			await enqueueElmAuthorityRecord({
-				stage: "terminal_committed",
-				sessionId: h.activeSession.sessionId,
-				runId: "run-ocrrd01-04",
-				jobId: startRes.jobId,
-			})
+			// P1 fix (2026-10-12, OCRRD01): the previous version of
+			// this block also fed a `terminal_committed` CCARD
+			// record into the Elm authority. Inspection of
+			// completion-authority-elm-replay.ts:124-149 shows the
+			// adapter rejects `terminal_committed` records with
+			// `INSUFFICIENT_IDENTITY` when they lack `ownerId` /
+			// `terminalKind` (the REAL schema does not carry those),
+			// and
+			// completion-authority-elm-authority-runtime.ts:351-354
+			// silently drops INSUFFICIENT_IDENTITY records. The
+			// manual `terminal_committed` insertion therefore never
+			// reached Elm — it was a no-op that was misclassified
+			// as a causal producer. The C10 commit chain is
+			// provable WITHOUT it: Elm decides `authorize` on the
+			// basis of the prompt + run + job state, and a
+			// `terminal_committed` fact only registers a job for
+			// tracking (it does not gate the commit decision). The
+			// test no longer seeds the `terminal_committed` record;
+			// its claim is now a clean production-seam test (no
+			// Elm seeding past the run_started fact shared with
+			// PPLC-01..08).
 			await flushElmAuthorityForSession(h.activeSession.sessionId)
 
 			// Fresh eligible completion attempt: the deferred
