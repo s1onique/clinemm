@@ -24762,3 +24762,70 @@ This is a bounded CORRECTION01 of the BRPU01 ACT. The factory disposition on BRP
 **Public protocol delta:** 0 (only the production accessor was renamed; the wire field is byte-identical to BRPU01).
 
 **VERDICT:** `PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE` — All five HALT findings addressed with executable evidence. The producer accessor is now named for production. The end-to-end chain (real coordinator → real projection → real consumer selector) is exercised in 9 new tests. Identity, clearing, and stale-publication behaviors are all proven against the real production chain. The canonical typecheck is clean. VSIX rebuild + LIVE qualification are the operator's handoff (C13/C14: install exact-head VSIX, exercise LIVE-A through LIVE-D).
+
+# ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01-CORRECTION02 — BRPU01-C2 — PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE — 2026-10-12
+
+This is a bounded CORRECTION02 of the BRPU01 ACT. The Factory disposition on BRPU01-C1 at `234fbe240` was `HALT_BRPU01_C1_PRODUCTION_CONVERGENCE_NOT_PROVEN` with one P0 evidence blocker (the C-1 test did not instantiate a real Controller) and one P1 production-lifetime concern.
+
+**HALT findings (all RESOLVED):**
+
+- **P0 #1 (REAL_SDKCONTROLLER_PRODUCER = NOT_EXECUTED)**: NEW test file `host-blocked-recovery-publication-and-ui-authority01-correction02.brpu01-c2.c24-c-bridge.test.ts` exercises the ACTUAL `Controller.getStateToPostToWebview()` against the REAL production coordinator + REAL `BackgroundNotifyCoordinator` + REAL bounded host correlation guard. 7 tests / 7 PASS.
+- **P1 #1 (Clearing depends on externally induced bumpEpoch)**: Recorded as the PRODUCTION_LIFETIME_CONTRACT in BRPU-C2-07. The BCB marker is bounded by the marker's `epoch` field matching the minter's current epoch. The canonical release operation is `MessageIdMinter.bumpEpoch()`, which the production controller invokes on every legitimate boundary (task-start, history-open, reinit, mode-rebuild, cancel). After a legitimate same-task drain + bumpEpoch + reeval, the host authoritatively clears the marker on the next `getStateToPostToWebview()` push. BRPU-C2-07 proves this end-to-end through the REAL producer.
+
+**Production delta on `234fbe240` (BRPU01-C1):**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (no change from C-1)
+- `apps/vscode/src/sdk/SdkController.ts` (no change from C-1)
+- `apps/vscode/src/sdk/blocked-recovery-projection.ts` (no change from C-1)
+- `apps/vscode/vitest.config.c2-4-c-bridge.ts` (added the C-2 test to the bridge include)
+- `apps/vscode/vitest.config.ts` (excluded the C-2 test from the base config)
+- `apps/vscode/src/sdk/__tests__/host-blocked-recovery-publication-and-ui-authority01-correction01.brpu01-c1.test.ts` (header comment updated to clarify C-1 is COMPOSED_PRODUCTION_COMPONENT evidence; the REAL_SDKCONTROLLER_PRODUCER is in C-2)
+
+**Test delta on `234fbe240` (NEW):**
+- `apps/vscode/src/sdk/__tests__/host-blocked-recovery-publication-and-ui-authority01-correction02.brpu01-c2.c24-c-bridge.test.ts` (NEW; 7 tests; real Controller via the AOPC02 harness pattern; real `controller.getStateToPostToWebview()`; real `snapshot.blockedRecovery` read; real coordinator + BackgroundNotifyCoordinator + bounded host correlation guard + same-epoch publication fence predicate from ExtensionStateContext.tsx:753-757)
+
+**ACT closure:** `.factory/acts/ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01-CORRECTION02.md`
+
+**Predecessor ACT lineage (P0 recovery contract lineage, complete):**
+```
+VSTN01 → BOCR01 → OCRRD01 → PPLC01 → AOPC01 → HBCLO01 → HBOP01
+→ HBRC01 (HALT) → EPSD01 → BRPU01 → BRPU01-C1 (HALT_CONVERGENCE) → BRPU01-C2
+```
+
+**Focused test execution on Node 26.0.0 (real runtime, the reviewer's required gate):**
+- BRPU01: 13/13 PASS
+- BRPU01-C1: 9/9 PASS
+- BRPU01-C2: 7/7 PASS (NEW; real Controller producer)
+- HBRC01: 13/13 PASS
+- BOCR01: 7/7 PASS
+- buttonConfig: 37/37 PASS
+- buttonConfig.aoc02: 9/9 PASS
+- buttonConfig.blocked-recovery01: 11/11 PASS
+- AOC01: 4/4 PASS; AOC02.section6: 4/4 PASS
+- messageReducer: 16/16 PASS; w1-epoch: 3/3 PASS
+- Total: 133/133 PASS
+
+**C12 gates:**
+- TYPECHECK: 0 errors (entire repo, including the new C-2 file)
+- LINT: 0 ACT-owned errors (1 pre-existing `noNonNullAssertion` in `SdkController.ts:3557` NOT my regression)
+- WEBVIEW_BUILD: NOT_RUN (no production change to the webview bundle)
+- VSIX: NOT_BUILT (per C13)
+- LIVE: NOT_QUALIFIED (per C14; React render + postMessage + control-click are the operator's handoff)
+
+**Conservation:** All 16 C11 invariants from BRPU01 / BRPU01-C1 preserved. Elm authority unchanged. Public protocol delta: 0.
+
+**What C-2 proves vs. what is still out of scope:**
+
+| Boundary | Status | Evidence |
+|----------|--------|----------|
+| Real Controller construction | PROVEN | BRPU01-C2 |
+| Real `getStateToPostToWebview()` execution | PROVEN | BRPU01-C2 |
+| Real `snapshot.blockedRecovery` field on real `ExtensionState` | PROVEN | BRPU01-C2 |
+| Real `controller.sessionEvents` BCB stamping | PROVEN | BRPU01-C2 |
+| Real `controller.backgroundNotifyCoordinator` registerMarker | PROVEN | BRPU01-C2 |
+| Real same-epoch publication fence predicate (ExtensionStateContext.tsx:753-757) | PROVEN | BRPU01-C2 |
+| Real `getButtonConfigFromState` / `buttonsForPhase` selector | PROVEN | BRPU01-C1 + C-2 |
+| Actual `ExtensionStateContext` React render | NOT_EXERCISED | out of scope (C-3) |
+| Actual React control click → `TaskServiceClient.newTask` | NOT_QUALIFIED | LIVE (C14) |
+| Actual `postMessage` round-trip | NOT_QUALIFIED | LIVE (C14) |
+
+**VERDICT:** `PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE` — All HALT findings addressed with executable evidence. The REAL_SDKCONTROLLER_PRODUCER is proven via a real Controller + real `getStateToPostToWebview()` + real `snapshot.blockedRecovery`. The PRODUCTION_LIFETIME_CONTRACT is recorded and proven (BRPU-C2-07). The 7 new tests + 126 existing focused tests = 133/133 PASS. The React render + postMessage + LIVE qualification are the operator's handoff (C13/C14: install exact-head VSIX, exercise LIVE-A through LIVE-D from the original BRPU01 ACT).

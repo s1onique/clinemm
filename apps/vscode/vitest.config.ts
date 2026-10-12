@@ -175,6 +175,13 @@ export default defineConfig({
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01-
+			// CORRECTION02 — BRPU01-C2: real SdkController publication
+			// discriminator. Lives under the c2-4-c-bridge config (not
+			// this base config) because it imports the real Controller
+			// via the bridge alias chain and exercises the real
+			// getStateToPostToWebview() against the real coordinator.
+			"src/sdk/__tests__/host-blocked-recovery-publication-and-ui-authority01-correction02.brpu01-c2.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
 			// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
 			// full-composition witness — REAL factory + REAL

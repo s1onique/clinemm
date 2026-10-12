@@ -76,6 +76,16 @@ export default defineConfig({
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01-
+			// CORRECTION02 — BRPU01-C2: real SdkController publication
+			// discriminator. Mirrors the AOPC02 PHASE-A-CORRECTION02
+			// harness pattern (real Controller via vi.mock on heavy
+			// deps; real `controller.getStateToPostToWebview()`; real
+			// `snapshot.blockedRecovery` read off the returned
+			// `ExtensionState`; real coordinator + real
+			// BackgroundNotifyCoordinator + real bounded host
+			// correlation guard stamp and clear the BCB marker).
+			"src/sdk/__tests__/host-blocked-recovery-publication-and-ui-authority01-correction02.brpu01-c2.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01 / AOC02
 			// §3: REAL SdkController producer-object discriminator. Uses
 			// the same harness shape as AOPC02 PHASE-A-CORRECTION02 but
