@@ -111,16 +111,30 @@ function makeAgentStub(opts: { autoStart?: boolean; sessionId?: string } = {}) {
 	const sessionId = opts.sessionId ?? "sess-pplc01"
 	let running = false
 	let ready = autoStart
-	// `subscribeRuntimeEvents` signature (production):
-	//   (listener: (sessionId: string, event: AgentRuntimeEvent) => void) => Unsubscribe
-	// The canonical subscription at
-	// `subscribeCanonicalRuntimeEventsToShadow` calls the listener
-	// with BOTH `sessionId` (so stale-session events are dropped) and
-	// the `event` payload. The harness's listener therefore takes
-	// `(sessionId, event)` and forwards the `event` to a Set of
-	// typed listeners that the agent stub's `run` / `continue`
-	// publish into.
-	const runtimeEventListeners = new Set<(sessionId: string, event: { type: string; snapshot?: { runId?: string } }) => void>()
+	// `subscribeRuntimeEvents` signature (production — see
+	// `SessionRuntimeOrchestrator.subscribeRuntimeEvents` at
+	// `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:721`):
+	//   (listener: (event: AgentRuntimeEvent) => void) => Unsubscribe
+	//
+	// The listener is invoked with ONE argument — the event payload.
+	// The sessionId is captured at the `LocalRuntimeHost.subscribeRuntimeEvents`
+	// fanout (`local-runtime-host.ts:1971-1992`), which wraps the
+	// canonical subscription's listener as `(event) => canonicalListener(sessionId, event)`.
+	//
+	// The previous harness incorrectly used a TWO-argument signature
+	// `(sessionId, event) => void` for the listener AND called the
+	// listener with `(sessionId, event)`. That signature mismatch
+	// caused the host's wrapper (which takes ONE argument) to receive
+	// the sessionId string as its `event` parameter, dropping the
+	// real `run-started` event. The production
+	// `subscribeCanonicalRuntimeEventsToShadow` listener at
+	// `apps/vscode/src/sdk/canonical-event-subscription.ts:65-128` then
+	// saw `event.type === undefined` and the `runIdBySessionId.set()`
+	// was never reached.
+	//
+	// The fix (PPLC-02 §8.1 bounded harness correction): align the
+	// harness with the production AgentRuntime contract.
+	const runtimeEventListeners = new Set<(event: { type: string; snapshot?: { runId?: string } }) => void>()
 	let runCounter = 0
 	const makeResult = (): AgentResult =>
 		({
@@ -135,9 +149,11 @@ function makeAgentStub(opts: { autoStart?: boolean; sessionId?: string } = {}) {
 			startedAt: new Date(),
 			endedAt: new Date(),
 		}) as AgentResult
-	const publishRunStarted = (sessionId: string, runId: string) => {
+	const publishRunStarted = (runId: string) => {
 		for (const listener of runtimeEventListeners) {
-			listener(sessionId, { type: "run-started", snapshot: { runId } })
+			// ONE-argument listener call (matches the production
+			// SessionRuntimeOrchestrator.subscribeRuntimeEvents contract).
+			listener({ type: "run-started", snapshot: { runId } })
 		}
 	}
 	const run = vi.fn(async (): Promise<AgentResult> => {
@@ -148,7 +164,7 @@ function makeAgentStub(opts: { autoStart?: boolean; sessionId?: string } = {}) {
 		// (subscribeCanonicalRuntimeEventsToShadow) can emit
 		// `run_turn_started` + `continuation_started` to Elm.
 		const runId = `run-pplc01-agent-${runCounter}-${Date.now()}`
-		publishRunStarted(sessionId, runId)
+		publishRunStarted(runId)
 		await new Promise((r) => setImmediate(r))
 		await new Promise((r) => setImmediate(r))
 		running = false
@@ -158,7 +174,7 @@ function makeAgentStub(opts: { autoStart?: boolean; sessionId?: string } = {}) {
 		running = true
 		runCounter += 1
 		const runId = `run-pplc01-agent-${runCounter}-${Date.now()}`
-		publishRunStarted(sessionId, runId)
+		publishRunStarted(runId)
 		await new Promise((r) => setImmediate(r))
 		await new Promise((r) => setImmediate(r))
 		running = false
@@ -174,14 +190,12 @@ function makeAgentStub(opts: { autoStart?: boolean; sessionId?: string } = {}) {
 		}),
 		subscribe: vi.fn(() => () => {}),
 		subscribeEvents: vi.fn(() => () => {}),
-		subscribeRuntimeEvents: vi.fn(
-			(listener: (sessionId: string, event: { type: string; snapshot?: { runId?: string } }) => void) => {
-				runtimeEventListeners.add(listener)
-				return () => {
-					runtimeEventListeners.delete(listener)
-				}
-			},
-		),
+		subscribeRuntimeEvents: vi.fn((listener: (event: { type: string; snapshot?: { runId?: string } }) => void) => {
+			runtimeEventListeners.add(listener)
+			return () => {
+				runtimeEventListeners.delete(listener)
+			}
+		}),
 		subscribeRecoveryStateChange: vi.fn(() => () => {}),
 		getAgentId: vi.fn(() => "agent_pplc01"),
 		getConversationId: vi.fn(() => "conv_pplc01"),

@@ -179,11 +179,30 @@ afterEach(() => {
 function makeAgentStub(opts: { sessionId?: string } = {}) {
 	const sessionId = opts.sessionId ?? "sess-ocrrd01"
 	let running = false
-	const runtimeEventListeners = new Set<(sessionId: string, event: { type: string; snapshot?: { runId?: string } }) => void>()
+	// `subscribeRuntimeEvents` signature (production — see
+	// `SessionRuntimeOrchestrator.subscribeRuntimeEvents` at
+	// `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:721`):
+	//   (listener: (event: AgentRuntimeEvent) => void) => Unsubscribe
+	//
+	// The listener is invoked with ONE argument — the event payload.
+	// The sessionId is captured at the `LocalRuntimeHost.subscribeRuntimeEvents`
+	// fanout (`local-runtime-host.ts:1971-1992`), which wraps the
+	// canonical subscription's listener as `(event) => canonicalListener(sessionId, event)`.
+	//
+	// PPLC-02 §8.1 bounded harness correction: the previous
+	// OCRRD01-04 RED was the same root cause as the PPLC RED —
+	// the harness used a TWO-argument listener signature and
+	// called the listener with `(sessionId, event)`, causing
+	// the host's wrapper to receive the sessionId string as the
+	// `event` parameter. Aligning with the production contract
+	// here closes the OCRRD01-04 sub-gate 3b acceptance.
+	const runtimeEventListeners = new Set<(event: { type: string; snapshot?: { runId?: string } }) => void>()
 	let runCounter = 0
 	const publishRunStarted = (runId: string) => {
 		for (const listener of runtimeEventListeners) {
-			listener(sessionId, { type: "run-started", snapshot: { runId } })
+			// ONE-argument listener call (matches the production
+			// SessionRuntimeOrchestrator.subscribeRuntimeEvents contract).
+			listener({ type: "run-started", snapshot: { runId } })
 		}
 	}
 	const run = vi.fn(async (_prompt: string) => {
@@ -243,14 +262,12 @@ function makeAgentStub(opts: { sessionId?: string } = {}) {
 		}),
 		subscribe: vi.fn(() => () => {}),
 		subscribeEvents: vi.fn(() => () => {}),
-		subscribeRuntimeEvents: vi.fn(
-			(listener: (sessionId: string, event: { type: string; snapshot?: { runId?: string } }) => void) => {
-				runtimeEventListeners.add(listener)
-				return () => {
-					runtimeEventListeners.delete(listener)
-				}
-			},
-		),
+		subscribeRuntimeEvents: vi.fn((listener: (event: { type: string; snapshot?: { runId?: string } }) => void) => {
+			runtimeEventListeners.add(listener)
+			return () => {
+				runtimeEventListeners.delete(listener)
+			}
+		}),
 		subscribeRecoveryStateChange: vi.fn(() => () => {}),
 		getAgentId: vi.fn(() => "agent_ocrrd01"),
 		getConversationId: vi.fn(() => "conv_ocrrd01"),
