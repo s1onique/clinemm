@@ -531,3 +531,138 @@ invariant is satisfied.
 **The async command cannot leave the agent in an unjustified,
 unobservable dead zone.** This is the success criterion the ACT
 was asked to establish. It is established.
+
+## 14. C14 — Factory reviewer response (P1 + P2)
+
+The Factory reviewer accepted `PASS_EXPECTED_ASYNC_HOLD` for the
+host contract but identified one open P1 and three P2 findings.
+This section records the bounded response to each.
+
+### C14.1 P1 — Application ownership remains unproven (OPEN)
+
+The reviewer accepted:
+
+> "The host can be correct while the application remains
+> unusable."
+
+The reviewer identified the next ACT to qualify:
+
+> `ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01`
+>
+> "When the host has completed the agent run and returned to
+> idle after `RUNNING(jobId)`, does ClineMM return interaction
+> ownership to the user and display the correct Task
+> Header/composer state?"
+
+This ACT explicitly **does not** address that P1. The P1 lives
+above `LocalRuntimeHost` (in the webview composer + Task
+Header) and is the next ACT to qualify. A separate
+`ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01`
+must connect the proven idle host state to the real webview
+composer and Task Header, using the existing Elm presentation
+authority rather than creating another kernel.
+
+The reviewer explicitly stated:
+
+> "Do not loop through further reviews of ACO01 or the
+> `notifyOnCompletion` design."
+
+Therefore the P1 is recorded as OPEN and out of scope for this
+ACT. No new tests, no new production code, no new Elm kernel
+are introduced for the application seam in this ACT.
+
+### C14.2 P2 — `git diff --check` on evidence logs (FIXED)
+
+The reviewer flagged:
+
+> "The closure reports `git diff --check` as clean, but the
+> supplied committed range digest reports four trailing
+> blank-line errors in evidence logs. This is documentary
+> residue. Batch it during terminal cleanup; no new review
+> cycle."
+
+**Fix:** stripped the trailing blank line from the 4 evidence
+logs (`acl01-green-post-repair.log`, `acl01-red-raw.log`,
+`aco01-c03-red-raw.log`, `aco01-red-raw.log`) so the
+committed blob now ends in a single `\n` (the canonical POSIX
+"text file ends with newline" rule). The 5th log
+(`aco01-and-c03-green-post-repair.log`) was already correct
+and is unchanged. Re-verified with `git diff --check` after
+the fix: clean.
+
+### C14.3 P2 — environment isolation in `aco01-correction03.c24-c-bridge.test.ts` (FIXED)
+
+The reviewer flagged:
+
+> "The tests modify `CLINEMM_EXPERIMENTAL_SANDBOX`. In
+> particular, the correction03 test sets the variable
+> directly in `beforeEach`; the supplied diff does not
+> independently prove restoration in its teardown. Ensure
+> each suite restores the previous value, preferably using
+> Vitest's `vi.stubEnv` / `vi.unstubAllEnvs` mechanism."
+
+**Fix:** added `CLINEMM_EXPERIMENTAL_SANDBOX` to the existing
+`envSnapshot` in the `describe` block of
+`async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts`
+and added a verbatim restore in `afterEach` (the
+delete-on-undefined / set-on-defined pattern that already
+exists in the sibling
+`async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts:227-233`).
+The substrate workaround now provably cannot leak across
+sibling suites.
+
+The reviewer also preferred `vi.stubEnv` / `vi.unstubAllEnvs`.
+Those are cleaner, but the pattern used in the sibling file
+is the de-facto local convention for this repo (60+ test
+files use `process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"`
+with no `vi.stubEnv`). Switching to `vi.stubEnv` here would
+be a one-off deviation from the local convention; a separate
+"vitest env-var convention" ACT is the right home for that
+if it is ever wanted. The current `afterEach` restoration
+is the same shape as the sibling and meets the reviewer's
+substantive requirement ("restore the previous value,
+independently provable").
+
+### C14.4 P2 — terminology `CASE_F_EXPECTED_HOLD` vs "completion barrier" (FIXED)
+
+The reviewer flagged:
+
+> "`CASE_F_EXPECTED_HOLD` describes a voluntary idle/yield
+> rather than a completion barrier holding an active run.
+> Keep that distinction in the report."
+
+**Fix:** the ACO01 report's `note` and `user_ownership_yielded`
+field in `async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts`
+were updated:
+
+- `user_ownership_yielded` changed from
+  `result.status === "completed"` (a conflation of "agent
+  run finished" with "user can now type") to the string
+  `"NOT_PROVEN_AT_HOST_TEST"` (an explicit seam-acknowledgment
+  marker that this field is a webview/composer observation,
+  not a host observation).
+- `note` updated from the stale "Result: terminal result is
+  ORPHANED." claim (which contradicted the new
+  `CASE_F_EXPECTED_HOLD` classification) to a verbatim
+  "voluntary idle/yield, NOT a completion barrier holding an
+  active run, and NOT a dead zone" claim, with the
+  `command_status(jobId)` and `notifyOnCompletion: true`
+  release conditions named explicitly.
+
+Both edits are documentary (they do not change what the test
+asserts). All four executable gates remain GREEN after the
+edits: 5/5 ACL01, 3/3 ACO01, 2/2 CORRECTION03, bridge
+typecheck 0 baseline drift, canonical tsc --noEmit clean,
+lint clean.
+
+### C14.5 Closure of the P2 loop
+
+The three P2 findings are closed by bounded documentary /
+environment-isolation fixes. No new tests were created, no
+new production code was touched, no new Elm kernel was
+introduced, and no application-seam work was attempted.
+The host-side verdict `PASS_EXPECTED_ASYNC_HOLD` is unchanged
+from the prior commit (`9b3f74187`).
+
+The open P1 (application ownership projection) is recorded
+as `OUT_OF_SCOPE_OPEN` and is the next ACT to qualify.

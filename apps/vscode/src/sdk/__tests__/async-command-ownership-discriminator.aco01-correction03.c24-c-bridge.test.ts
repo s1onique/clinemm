@@ -552,6 +552,16 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03", () 
 	const envSnapshot = {
 		HOME: process.env.HOME,
 		CLINE_DIR: process.env.CLINE_DIR,
+		// ACT-CLINEMM-P0-ASYNC-COMMAND-TURN-LIVENESS01 review response
+		// (P2 environment isolation): the original `beforeEach` only
+		// saved HOME + CLINE_DIR; the substrate workaround
+		// `CLINEMM_EXPERIMENTAL_SANDBOX=off` was set but not
+		// restored. Save it here and restore it in `afterEach` so
+		// the test's substrate workaround does not leak across
+		// sibling suites. This matches the explicit
+		// save+restore pattern in the sibling
+		// `async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts`.
+		CLINEMM_EXPERIMENTAL_SANDBOX: process.env.CLINEMM_EXPERIMENTAL_SANDBOX,
 	}
 	let isolatedHomeDir = ""
 	let manager: CommandJobManager
@@ -593,6 +603,18 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03", () 
 		await manager.dispose()
 		process.env.HOME = envSnapshot.HOME
 		process.env.CLINE_DIR = envSnapshot.CLINE_DIR
+		// ACT-CLINEMM-P0-ASYNC-COMMAND-TURN-LIVENESS01 review response
+		// (P2 environment isolation): restore the previous
+		// substrate env var verbatim. If the env var was unset
+		// before this suite ran, `delete` it (do not set it to
+		// the literal string "undefined" or empty). This matches
+		// the explicit save+restore pattern in the sibling
+		// `async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts`.
+		if (envSnapshot.CLINEMM_EXPERIMENTAL_SANDBOX === undefined) {
+			delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+		} else {
+			process.env.CLINEMM_EXPERIMENTAL_SANDBOX = envSnapshot.CLINEMM_EXPERIMENTAL_SANDBOX
+		}
 		rmSync(isolatedHomeDir, { recursive: true, force: true })
 	})
 

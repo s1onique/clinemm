@@ -61,4 +61,3 @@ stdout | src/sdk/__tests__/async-command-ownership-discriminator.aco01-correctio
       Tests  1 failed | 1 passed (2)
    Start at  13:17:45
    Duration  3.10s (transform 1.94s, setup 0ms, import 2.90s, tests 85ms, environment 0ms)
-

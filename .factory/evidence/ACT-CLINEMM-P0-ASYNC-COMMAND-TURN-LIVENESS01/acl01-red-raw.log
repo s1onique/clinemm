@@ -12,4 +12,3 @@
       Tests  4 failed | 1 passed (5)
    Start at  13:17:32
    Duration  2.27s (transform 1.35s, setup 2.07s, import 85ms, tests 18ms, environment 0ms)
-

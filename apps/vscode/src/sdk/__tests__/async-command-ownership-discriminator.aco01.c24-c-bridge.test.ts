@@ -349,10 +349,34 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01", () => {
 					active_after_terminal_wait: managerAfterTerminal,
 				},
 				successor_scheduled: false,
-				user_ownership_yielded: result.status === "completed",
+				// ACT-CLINEMM-P0-ASYNC-COMMAND-TURN-LIVENESS01 review
+				// response (P2 terminology): "user_ownership_yielded"
+				// is a boolean over the *application seam* (webview
+				// composer + Task Header) — it is NOT observable at
+				// the host seam. We previously collapsed it onto
+				// `result.status === "completed"`, which is a proxy
+				// for "agent run finished", not for "the user can
+				// now type into the composer". Mark this field as
+				// `NOT_PROVEN_AT_HOST_TEST` to make the seam
+				// distinction explicit (the actual application
+				// ownership projection is the next ACT to qualify:
+				// ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01).
+				user_ownership_yielded: "NOT_PROVEN_AT_HOST_TEST",
 				classification,
 			},
-			note: "successor_scheduled=false because: (a) the agent run returned after seeing RUNNING and the model emitted a final 'stop' finish; (b) no host-side continuation hook exists in the production code path that the test exercises (this matches ACL02's SOURCE_RECON in the parent epic); (c) the terminal completion of the child process is observed (activeCount went 1→0) but nothing in the runtime consumed the terminal result. Result: terminal result is ORPHANED.",
+			// ACT-CLINEMM-P0-ASYNC-COMMAND-TURN-LIVENESS01 review
+			// response (P2 terminology): the previous note claimed
+			// the terminal result was "ORPHANED" — that language
+			// was stale and contradicted the new
+			// `CASE_F_EXPECTED_HOLD` classification. The terminal
+			// result is NOT orphaned: the model owns polling (per
+			// the production tool description pinned by ACL06) and
+			// can observe it via `command_status(jobId)`, or opt
+			// in to a host wake via
+			// `notifyOnCompletion: true` on the original call.
+			// This is a voluntary idle/yield, not a completion
+			// barrier holding an active run.
+			note: "successor_scheduled=false because: (a) the agent run returned after seeing RUNNING and the model emitted a final 'stop' finish; (b) no host-side continuation hook exists in the production code path that the test exercises (this matches ACL02's SOURCE_RECON in the parent epic); (c) the terminal completion of the child process is observed (activeCount went 1→0) and is observable via `command_status(jobId)` per the production tool description (ACL06), or via a `notifyOnCompletion: true` opt-in wake. Verdict: this is the canonical HOST_DEFERRED_FOREGROUND 'model owns polling' contract — a voluntary idle yield, NOT a completion barrier holding an active run, and NOT a dead zone. Classification: CASE_F_EXPECTED_HOLD.",
 		}
 
 		console.log("\n[ACO01 REPORT]\n" + JSON.stringify(report, null, 2))

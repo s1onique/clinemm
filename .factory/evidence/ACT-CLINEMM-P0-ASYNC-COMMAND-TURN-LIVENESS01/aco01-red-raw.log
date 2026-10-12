@@ -62,4 +62,3 @@ stdout | src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bri
       Tests  2 failed | 1 passed (3)
    Start at  13:17:26
    Duration  2.20s (transform 1.26s, setup 0ms, import 2.07s, tests 17ms, environment 0ms)
-
