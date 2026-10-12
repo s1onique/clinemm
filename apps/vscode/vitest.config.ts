@@ -268,6 +268,19 @@ export default defineConfig({
 			// `@cline-internal/core/...` aliases. Excluded here to
 			// keep the base config's @cline/core stub alias in scope.
 			"src/sdk/__tests__/observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01
+			// / PPLC01: real LocalRuntimeHost + real
+			// PendingPromptsController + real BackgroundNotifyCoordinator
+			// + real CommandJobManager + real createCommandStatusTool
+			// (production factory) + real SdkSessionEventCoordinator +
+			// real Elm authority kernel. Closes the OCRRD01-04
+			// `pending_prompt` hold evidence gap by driving the real
+			// queue lifecycle. Runs under
+			// `vitest.config.c2-4-c-bridge.ts` which has the
+			// `@cline-internal/core/...` aliases. Excluded here to
+			// keep the base config's @cline/core stub alias in scope.
+			// Mirrors the OCRRD01 sibling exclusion just above.
+			"src/sdk/__tests__/pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3-R5
 			// (persistence phase): the instance-store + typed-projector
 			// tests run under the dedicated

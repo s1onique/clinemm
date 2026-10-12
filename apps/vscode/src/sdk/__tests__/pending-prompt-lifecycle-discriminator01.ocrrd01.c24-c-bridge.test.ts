@@ -140,15 +140,23 @@ function makeAgentStub(opts: { autoStart?: boolean; sessionId?: string } = {}) {
 		({
 			finishReason: "completed" as const,
 			text: "",
-			messages: [] as readonly never[],
-			toolCalls: [] as readonly never[],
+			// ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01
+			// bounded harness correction: `AgentResult.messages` is a
+			// mutable `MessageWithMetadata[]` (NOT a `readonly` array).
+			// The harness's empty `[]` literal must be assignable to
+			// it; widening via `unknown` is the documented escape
+			// hatch when the intent is "this stub has no messages"
+			// and TypeScript otherwise rejects the readonly→mutable
+			// narrowing. Mirrors the OCRRD01 sibling's pattern.
+			messages: [] as unknown as AgentResult["messages"],
+			toolCalls: [] as unknown as AgentResult["toolCalls"],
 			durationMs: 1,
 			iterations: 1,
 			usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalCost: 0 },
 			model: { id: "mock-model", provider: "mock-provider" },
 			startedAt: new Date(),
 			endedAt: new Date(),
-		}) as AgentResult
+		}) as unknown as AgentResult
 	const publishRunStarted = (runId: string) => {
 		for (const listener of runtimeEventListeners) {
 			// ONE-argument listener call (matches the production
@@ -256,7 +264,16 @@ function makeHarness(opts: {
 	const translatorState = new MessageTranslatorState(minter)
 	const isolationDir = opts.isolationDir
 
-	const commandJobManager = new CommandJobManager({} as never, { command_notice_lifetime: "session" as never })
+	// ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01
+	// bounded harness correction: `CommandJobManager`'s constructor
+	// takes a single `CommandJobManagerOptions` argument (or zero)
+	// and the (no-longer-supported) `command_notice_lifetime` field
+	// is not part of the contract. The harness's intent is "real
+	// `CommandJobManager` with production defaults"; the OCRRD01
+	// sibling and every other PPLC-adjacent test (BCB01-C2, ACL02,
+	// AOPC01, etc.) instantiate with no arguments. Mirrors that
+	// pattern.
+	const commandJobManager = new CommandJobManager()
 	const sessionService = makeFileSessionService(isolationDir)
 	const { agent, gate } = makeAgentStub({ autoStart: opts.autoStart ?? true, sessionId: opts.sessionId })
 
@@ -379,8 +396,22 @@ function makeHarness(opts: {
 			return notifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner(opts.sessionId, tid)
 		},
 		getPendingPromptCount: (sid: string | undefined) => {
-			if (sid === opts.sessionId) return { available: true, count: host.pendingPrompts.count(sid).count }
-			return { available: true, count: 0 }
+			// ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01
+			// bounded harness correction: `host.pendingPrompts.count(sid)`
+			// returns the `PendingPromptCountRead` discriminated union
+			// (`{ available: true; count } | { available: false }`). The
+			// `available: false` arm is reserved for Hub/Remote hosts
+			// whose mirror can lag; `LocalRuntimeHost` is documented
+			// to ALWAYS return the `available: true; count` arm, but
+			// TypeScript cannot narrow through the indirection. Cast
+			// to `PendingPromptCountRead` so the field is read once
+			// against the typed value (rather than two-arg `.count`
+			// inlining that the discriminated union rejects).
+			if (sid === opts.sessionId) {
+				const read = host.pendingPrompts.count(sid)
+				return { available: true as const, count: (read as { available: true; count: number }).count }
+			}
+			return { available: true as const, count: 0 }
 		},
 		getActiveNotifyCount: () => 0,
 		hasActiveNotify: () => false,
@@ -811,9 +842,19 @@ describe("ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — pr
 				//    The BCB + resolveActiveOwner wiring (added in PPLC-03
 				//    followup) makes this a real state transition: the held
 				//    observation for `startRes.jobId` is consumed.
-				const toolResult = (await h.commandStatusTool.execute({
-					jobId: startRes.jobId,
-				})) as Array<{ ok: boolean; jobId?: string; state?: string; error?: string }>
+				// Bounded harness correction (ACT-CLINEMM-P0-OCRRD01-
+				// PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01): the typed
+				// `AgentTool.execute` signature is `(input, context: AgentToolContext) => …`. Production
+				// `agent-runtime.ts:3288` always passes both. The `command_status` tool
+				// itself only consults `input` (it never reads the context), so a minimal
+				// controlled `AgentToolContext` — only the required `agentId` and `iteration`
+				// fields, mirroring the production runtime's stamp — satisfies the type
+				// contract without introducing latent authority-slot plumbing that the harness
+				// does not exercise.
+				const toolResult = (await h.commandStatusTool.execute(
+					{ jobId: startRes.jobId },
+					{ agentId: "act-pplc01-agent", iteration: 0 },
+				)) as Array<{ ok: boolean; jobId?: string; state?: string; error?: string }>
 				expect(toolResult.length).toBe(1)
 				const r = toolResult[0]
 				expect(r.ok).toBe(true)

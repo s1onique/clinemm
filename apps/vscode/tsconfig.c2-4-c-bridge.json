@@ -189,7 +189,18 @@
 		// (system vs user) survives the producer -> consumer chain at
 		// the `state.messages` boundary. The bridge aliases resolve
 		// the production SDK classes for typecheck.
-		"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01
+		// / PPLC01: real `LocalRuntimeHost` + real
+		// `PendingPromptsController` + real `BackgroundNotifyCoordinator`
+		// + real `CommandJobManager` + real `createCommandStatusTool`
+		// (production factory) + real `SdkSessionEventCoordinator` +
+		// real Elm authority kernel. Closes the OCRRD01-04
+		// `pending_prompt` hold evidence gap by driving the real
+		// queue lifecycle (C4 -> C5 -> C6 -> C7 -> C8) and observing
+		// the Elm `pending_prompt` hold transition. The bridge
+		// aliases resolve the production SDK classes for typecheck.
+		"src/sdk/__tests__/pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",
