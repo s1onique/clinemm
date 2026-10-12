@@ -24492,3 +24492,145 @@ The prior family ran the full pre-fix → RED, bounded correction → GREEN, abl
 - `AOC02` §2 (production-predicate cannot render Cancel when turnState.phase === "idle") + §3 (REAL_SDKCONTROLLER_PRODUCER_EXERCISED) + §6-C (the live-contradiction RED that this ACT proves did not reproduce on the current HEAD).
 
 The AOPC + AOC umbrella is preserved as CLOSED at the current HEAD. The C2 contract holds: when the runtime legitimately yields control after a background command, the application accurately presents the state and allows a genuine user continuation, without losing background-job ownership or fabricating task completion. No new production repair is needed; the closed-family's load-bearing code is the current source of truth.
+
+# ACT-CLINEMM-P0-HOST-BLOCKED-RECOVERY-CONTRACT01 — HALT_RECOVERY_PRODUCT_CONTRACT_REQUIRED — 2026-10-12
+
+**Status:** CLOSED with verdict `HALT_RECOVERY_PRODUCT_CONTRACT_REQUIRED` at HEAD `d75e050beb`. The host safety is contract-correct (held-observation conservation, no fabrication, no automatic unbounded loop), but the user-visible Retry affordance is the **SAME** `api_req_failed` button set as a genuine transport failure. The user-driven Retry click is a normal `askResponse` (`useMessageHandlers.ts:453-461` -> `SdkController.askResponse` -> `SdkFollowupCoordinator.askResponse` -> `continueIdleSession` -> `fireAndForgetSend(sdkHost, sessionId, "[TASK RESUMPTION] …")`) that re-enters the **same** runtime with the **same** `liveTools`; the bounded guard's `sameObligationAlreadyObservationUnavailable` short-circuit (BOCR01-07) prevents a duplicate `observation_unavailable` stamp, but the model still cannot call `command_status(J)`. A bounded UI fix (disable Retry when the BCB marker carries `observation_unavailable`) would require a new public wire field (e.g. `TurnState.writerId` or `TurnState.blockedReason`), which C9 forbids without explicit operator acceptance of the new contract. This ACT stops at the contract-freeze boundary; the missing product contract is named for operator decision.
+
+**Decisive question (per C0):** When the host retains legitimate terminal-observation obligations but the active resumed runtime cannot execute `command_status`, what supported action can restore progress without fabricating observation, discarding obligations, or scheduling an impossible model turn?
+
+**Decisive answer (C7 + C9):** The only supported automatic recovery is the model-driven `command_status(J)` drain (BOCR01-03, OCRRD01-04), which requires capability restoration. The only supported user-actionable recovery is `Start New Task`, which establishes a new `(sessionId, taskId)` and does not silently reattribute the old held set (BOCR01-06). The user's Retry click is **not** a recovery mechanism in this state; it reaches the same dead end with the held set conserved. No progress, no fabrication, no automatic unbounded loop — the host safety is correct, the missing product contract is the UI affordance discrimination.
+
+**Test file (REAL_PRODUCTION_SEAM + SYNTHETIC_REAL):** `apps/vscode/src/sdk/__tests__/host-blocked-recovery-contract01.hbrc01.test.ts` (NEW, 729 lines, 13 tests across 6 describe blocks: source-bound witnesses [WITNESS-1..5], BRC-01a/b/c, BRC-02 [control case], BRC-03, BRC-04, BRC-05a/b). The test exercises the production `BackgroundNotifyCoordinator` + `SdkSessionEventCoordinator` end-to-end (mirroring the BOCR01 harness pattern) and reads the production TS source via `readFileSync` to assert the closed wire shape (TurnState has no writerId field; buttonsForPhase has no writerId parameter; the `error` phase from BCB-block renders identically to api_req_failed).
+
+**Source-bound witnesses (WITNESS-1..5):**
+- WITNESS-1: `SdkController.askResponse` is the only controller seam the webview Retry button reaches; no `setLiveTools` / `rebuildRuntime` in the Retry path.
+- WITNESS-2: the bounded correlation guard at `sdk-session-event-coordinator.ts:3113-3154` publishes a SINGLE typed blocked outcome with the closed-enum reason `observation_unavailable`; `sameObligationAlreadyObservationUnavailable` short-circuits on the second submit_and_exit.
+- WITNESS-3: `ExtensionState.turnState` does NOT carry `writerId` / `blockedReason` / `observationUnavailable` (closed wire shape; no BCB-block UI discrimination is possible without a NEW public field).
+- WITNESS-4: `buttonsForPhase` collapses every `error` phase to `BUTTON_CONFIGS.api_req_failed` (Retry + Start New Task); the writerId is NOT consulted by the webview; the `errorTypes` list contains ONLY `"api_req_failed"`.
+- WITNESS-5: `SdkController.getStateToPostToWebview` projects `turnState: this.turnStateTracker.get()` from the tracker; no `writerId` field is added on the wire.
+
+**Production-seam causal chain (BRC-01..05):**
+- BRC-01a: held observation + liveTools lacking command_status publishes a SINGLE observation_unavailable blocked outcome on the FIRST submit_and_exit; held set conserved; no continuation enqueue; no wake fired; completion NOT fabricated.
+- BRC-01b: a second submit_and_exit on the BCR-blocked state short-circuits via `sameObligationAlreadyObservationUnavailable` (BOCR01-07); held set preserved; no new blocked outcome stamp; tracker phase stays "error".
+- BRC-01c: contract RED — the user's Retry click is the same `yesButtonClicked` the production code maps to `fireAndForgetSend`; there is NO production contract that distinguishes a Retry in this state from a Retry in a genuine `api_req_failed` state.
+- BRC-02: liveTools gains `command_status` + `command_status.resolveObligation(J)` drains the held set (control case; the existing supported mechanism; BOCR01-03 + OCRRD01-04).
+- BRC-03: three back-to-back same-task submit_and_exit cycles do NOT amplify the blocked-outcome publication; no automatic unbounded loop.
+- BRC-04: a held observation on task-K is keyed by `(sessionId-K, taskId-K)`; task-K+1's BCB sees a fresh held set, NOT the K obligation (BOCR01-06 cross-session/cross-task identity isolation).
+- BRC-05a: a BCB-blocked error phase renders the SAME button set as a genuine `api_req_failed`; the production code does not consult the writerId.
+- BRC-05b: a future bounded UI fix would require a NEW public wire field (`TurnState.writerId` or `blockedReason`); the current production code has neither.
+
+**Causal discriminator (C7):**
+- A (Runtime registration defect) — REFUTED (liveTools gains command_status in BRC-02; Path C drain is intact).
+- B (Publication defect) — REFUTED (bounded guard reads liveTools() truthfully at `sdk-session-event-coordinator.ts:3108-3110`).
+- C (Retry contract defect) — REFUTED (Retry is a normal askResponse; no recovery-specific branch in `useMessageHandlers.executeButtonAction("retry")`; WITNESS-1 source-bound assertion confirms no `setLiveTools` / `rebuildRuntime` in `SdkController.askResponse`).
+- **D (Recovery ownership absent) — CONFIRMED** (the only supported automatic recovery is model-driven `command_status(J)`; the user's Retry does not own capability restoration).
+- **E (UI projection defect) — CONFIRMED** (the `error` phase from BCB-block renders identically to api_req_failed; TurnState has no writerId field; buttonsForPhase has no writerId parameter; a bounded UI fix would require a new public wire field, out of C9 scope).
+- F (Correct explicit hold) — CONFIRMED (preserved; held set conserved; no fabrication; no automatic unbounded loop).
+- G (Conservation violation) — REFUTED (BCB01 / OCRRD01 / BOCR01 conservation gates all GREEN).
+- H (Insufficient capture) — REFUTED (the capability-restoration path is fully captured; the Retry path is fully captured; the task-replacement path is fully captured).
+
+**Conservation (C10) — 18/18 properties:** all 18 invariants preserved. The OPEN question is conservation 17 (the missing UI contract for the BCB-blocked state). The production code passes the conservation tests. The C0 question is answered: **no supported automatic recovery action exists** in the production code when the live runtime lacks `command_status`. The truthful, supported action is `Start New Task` (which establishes a new session/task lifetime and does not silently reattribute the held observation).
+
+**Explicitly forbidden (per C9 + C0):**
+- Fabricating `command_status(J)` responses — REFUSED.
+- Deleting held observations merely to authorize completion — REFUSED.
+- Overriding Elm Completion Authority — REFUSED.
+- Resetting BCB state to make Retry appear successful — REFUSED.
+- Automatically submitting `submit_and_exit` again without causal progress — REFUSED.
+- Adding a fourth completion-related authority — REFUSED.
+- Converting user Retry into a hidden unbounded auto-retry — REFUSED.
+- Allowing stale session/task/epoch results to mutate a replacement task — REFUSED.
+- Permanent diagnostic state inside React functional updaters — REFUSED.
+- Adding new public wire/protocol fields without separately freezing their contract — REFUSED.
+
+**Executable gates (C11):** `CAPTURE_INSUFFICIENT` (CURRENT-RUN LIMITATION ONLY). `bun` and `node` are not installed in this shell; the `node_modules/.bin/vitest` shim is a `#!/usr/bin/env node` script that requires node at runtime. The prior family at HEAD `d75e050beb` has the same classification in this environment. The new test file is a vitest-native suite (no bridge config, no bun:test import) and is NOT picked up by the `@vscode/test-cli` integration runner (it lives in `src/sdk/__tests__/` which is excluded from `tsconfig.test.json`). The vitest config (`vitest.config.ts`) includes `src/sdk/**/*.test.ts` automatically. The bounded execution pass on a real dev host is operator-owned.
+
+```bash
+cd apps/vscode
+bun run check-types
+bun run lint
+bunx vitest run src/sdk/__tests__/host-blocked-recovery-contract01.hbrc01.test.ts
+```
+
+**Production delta:** 0 (zero production code change; one new test file; one ACT row). No new test framework, no new public API, no new harness pattern. No proto/wire change. The closed `TurnState` interface and the closed `errorTypes` list are the structural witnesses the next ACT must charter a public contract change for, if a UI fix is desired.
+
+**VSIX:** NOT_REBUILT. Per C13: "If no production change is needed, do not rebuild an identical VSIX solely for Factory ceremony."
+
+**Files added by this ACT (no production code):**
+- `apps/vscode/src/sdk/__tests__/host-blocked-recovery-contract01.hbrc01.test.ts` (NEW, 729 lines, 13 tests across 6 describe blocks).
+- `.factory/acts/ACT-CLINEMM-P0-HOST-BLOCKED-RECOVERY-CONTRACT01.md` (this ACT closure report).
+- This board row.
+
+**Predecessor ACT lineage:**
+- `ACT-CLINEMM-P0-VERIFIED-SUBMISSION-TERMINAL-NONCONVERGENCE01` (PASS_COMPLETION_CONSERVATION_BLOCKED_AS_DESIGNED) at HEAD `c647e83ab` — the historical LIVE symptom (session `1791583363336_bmg3e`, 3 submit attempts, 4 held jobs process-ephemeral and not reconstructable from a post-mortem trace).
+- `ACT-CLINEMM-P0-BLOCKED-OBSERVATION-CAPABILITY-RECOVERY-PROBE01` (PASS_BOCR01_HOST_HOLD_AND_RECOVERY_INTACT) at HEAD `98d229e6a` — the bounded component conservation proof; closed the host-side hold/recovery as contract-correct; the remaining question is the UI contract for the case where the held set is positive and the live registry lacks `command_status` across a user-driven Retry.
+- `ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01` (PASS_OCRRD01_RUNTIME_REGISTRY_AND_DRAIN_INTACT) at HEAD `a19641db7` — the production chain end-to-end (real `LocalRuntimeHost` -> real `command_status.execute` -> Path C drain).
+- `ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01` (HALT_OCRRD01_PENDING_PROMPT_LIFECYCLE_CONVERGENCE_PENDING_EXECUTION) at HEAD `d0cf08565` — the prompt lifecycle convergence (bounded completion gate; bounded execution pass on a real dev host is the only remaining gate).
+- `ACT-CLINEMM-P0-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01` (PASS_APPLICATION_OWNERSHIP_ALREADY_COHERENT) at HEAD `d75e050beb` — the AOPC + AOC umbrella closure; the C0 mission of the current ACT is the post-AOPC / post-OCRRD01 / post-BOCR01 question of what supported action can restore progress in the held-observation-while-lacking-capability symptom.
+
+**Operator decision required:** charter a new ACT to freeze a new public wire field (`TurnState.writerId` or `TurnState.blockedReason`) + implement the bounded UI fix (disable Retry when the BCB marker carries `observation_unavailable`), OR leave the UI as-is and document the truthful, conservative `Start New Task` recovery as the only supported user action. The current ACT is the contract-freeze ACT; the implementation ACT is the next-step ACT and is NOT chartered by this ACT.
+
+# ACT-CLINEMM-P0-RECOVERY-PRODUCT-CONTRACT-FREEZE-PROBE01 — EPSD01 — PASS_EPSD01_NO_EXISTING_PUBLICATION_DISTINGUISHES_BCB_BLOCK_FROM_API_REQ_FAILED — 2026-10-12
+
+**Status:** CLOSED with verdict `PASS_EPSD01_NO_EXISTING_PUBLICATION_DISTINGUISHES_BCB_BLOCK_FROM_API_REQ_FAILED` at HEAD `d75e050beb`. The Factory reviewer's required existing-publication-surface discriminator (C0: "Can the current host distinguish `observation_unavailable` from `api_req_failed` at an existing webview publication boundary, with sufficient session/task identity and lifetime to choose the correct recovery controls?") is empirically answered **NO** — the current wire surface is insufficient. A new additive, closed-enum, task-correlated wire field is the smallest justified change. The HBCLO01-V1 decision to keep the `RuntimeErrorSource` off the wire was a load-bearing contract; reversing it is a deliberate opt-in. The HALT from HBRC01 is preserved; the discriminating follow-up is the next-step ACT and is NOT chartered by this ACT.
+
+**Decisive question (per reviewer's C0):** Can the current host distinguish `observation_unavailable` from `api_req_failed` at an existing webview publication boundary, with sufficient session/task identity and lifetime to choose the correct recovery controls?
+
+**Decisive answer (C7):** NO. The four required observations extracted from the production source:
+
+1. **Host state** — the BCB-blocked state is the private `deferredCompletionBarrier` marker (typed `reason: "observation_unavailable"`) on the SdkSessionEventCoordinator AND a `recordRuntimeError` call with `source: "completion-continuation-observation-unavailable"`. The SdkController has zero references to the marker (private field). The `RuntimeErrorIncident` payload is captured for forensic logging but NOT projected to the wire (`task-telemetry-tracker.ts:546-552`: "The structured payload ... is NOT projected to the wire in V1 — the counter is the only thing the webview renders").
+
+2. **Webview fields** — `turnState: { phase, anchorTs, seq }` (closed wire, no `writerId`/`blockedReason`/`bcrMarker`/`bcbMarker`); `taskTelemetry.runtimeErrorCount: number` (a count, not a cause; conflated with EPERM, spawn failures, etc.); `taskHeaderPresentation.source: "host" | "shadow" | "legacy"` (an authority label, not a cause); `runtimeErrorIncident`, `deferredCompletionBarrier`, `bcrMarker`/`bcbMarker` are NOT on the wire. **The wire cannot disambiguate the two states.**
+
+3. **Button selector output** — `buttonsForPhase(turnState, anchoredMessage, foregroundCommandRunning)` does NOT consult `runtimeErrorCount`, `RuntimeErrorSource`, `blockedReason`, or `state.taskTelemetry`. The `case "error":` branch returns `BUTTON_CONFIGS.api_req_failed` (Retry + Start New Task) for ALL `error`-phase sources. `getButtonConfigFromState(messages, turnState, mode, foregroundCommandRunning)` does NOT take a `taskTelemetry` argument. The two states are byte-identical on the wire and rendered identically.
+
+4. **Real Retry action's effect on runtime capabilities** — `useMessageHandlers.executeButtonAction("retry")` maps to `askResponse(...)`. `SdkController.askResponse` does NOT call `setLiveTools` / `rebuildRuntime` / `reinitializeRuntime` / `liveTools`. The Retry re-enters the same liveTools closure. The HBRC01 WITNESS-1 + BRC-01a/b/c source-bound witnesses are conclusive without end-to-end test execution: the SdkController's `askResponse` body has zero capability-restoration calls.
+
+**Causal discriminator (C7):**
+
+| Reviewer condition | This ACT's finding |
+|---|---|
+| Existing publication surface distinguishes `observation_unavailable` from `api_req_failed`? | NO |
+| Existing field provides sufficient typed, correlated information? | NO (`runtimeErrorCount` is monotonic and conflates sources) |
+| `writerId` would suffice? | NO (provenance, not a user-facing recovery policy — reviewer's own framing) |
+| New public wire field justified? | YES (the smallest additive change; matches the existing `RuntimeErrorSource` shape + `correlationId` task-correlation) |
+
+**Production test execution (the reviewer's required gate):** Node 26.0.0 was available at `/opt/homebrew/bin/node` (the `bun` and `node` shims the previous ACT could not find are now visible). The HBRC01 focused test execution on a real Node runtime:
+
+```
+cd apps/vscode && /opt/homebrew/bin/node /Volumes/.../node_modules/.bin/vitest run src/sdk/__tests__/host-blocked-recovery-contract01.hbrc01.test.ts
+✓ src/sdk/__tests__/host-blocked-recovery-contract01.hbrc01.test.ts (13 tests) 13ms
+Test Files  1 passed (1)
+Tests  13 passed (13)
+```
+
+13/13 PASS. BOCR01 (the precondition chain) also 7/7 PASS. HBCLO01 5/7 fails and HBOP01 8/12 fails are **pre-existing on the unmodified tree at HEAD `d75e050beb`** (verified by `git stash` + rerun). The HBRC01 ACT does not introduce any test regression.
+
+**Production delta:** 0 (zero production code change; one new ACT file). No new wire field; the discriminator is a recon ACT that does not authorize the production change.
+
+**VSIX:** NOT_REBUILT. Per C13: "If no production change is needed, do not rebuild an identical VSIX solely for Factory ceremony."
+
+**Files added by this ACT (no production code):**
+- `.factory/acts/ACT-CLINEMM-P0-RECOVERY-PRODUCT-CONTRACT-FREEZE-PROBE01.md` (NEW, 149 lines).
+- This board row.
+
+**HBCLO01-V1 load-bearing decision (preserved, not reversed):** the HBCLO01 ACT closure and the `TaskTelemetryTracker.recordRuntimeError` body comment both record the V1 decision to keep the `RuntimeErrorSource` off the wire. Reversing that is a deliberate, opt-in, narrow additive change. The next ACT must charter that change explicitly, freeze the contract (candidate: `taskTelemetry.blockedRecoverySource?: "completion-continuation-observation-unavailable" | "completion-continuation-stalled" | "completion-continuation-delivery-rejected"`), update the SdkController's `getStateToPostToWebview` projection, update the webview's `getButtonConfigFromState` signature to accept the new field, and update the HBCLO01 tests (which also fixes the 5/7 pre-existing HBCLO01 test failures — the same code path that publishes `runtimeErrorCount` publishes the new field).
+
+**Factory disposition:**
+- Host conservation: Previously supported; no contradiction observed.
+- Recovery ownership gap: Confirmed; no automatic recovery action exists in the production code.
+- UI Retry ambiguity: Confirmed; the `error` phase from a BCB-block is rendered identically to `api_req_failed`.
+- Existing publication surface: Empirically insufficient; the discriminator confirms the HBRC01 HALT.
+- New public wire field: Justified (smallest additive, closed-enum, task-correlated).
+- HBRC01 executable gates: `PASS` on a real Node runtime (13/13).
+- BOCR01 executable gates: `PASS` on a real Node runtime (7/7).
+- Production repair: NOT authorized yet; the next ACT must charter the new wire field.
+
+**Predecessor ACT lineage:**
+- `HBRC01` (HALT_RECOVERY_PRODUCT_CONTRACT_REQUIRED) at HEAD `d75e050beb` — the previous contract-freeze ACT, whose HALT this EPSD01 ACT confirms.
+- `HBCLO01` (PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN) — additive `RuntimeErrorSource` value + `recordRuntimeError` call; V1 wire closed.
+- `HBOP01` (PASS_HOST_BLOCKED_OUTCOME_PUBLICATION) — typed `reason` field on `deferredCompletionBarrier`.
+- `BOCR01`, `OCRRD01`, `AOPC01`, `PPLC01`, `VSTN01` (see HBRC01 board row for full lineage).
+
+**Operator decision required (next ACT):** charter a new ACT to freeze a new public wire field (`taskTelemetry.blockedRecoverySource?: <closed-enum subset of RuntimeErrorSource>`, with `correlationId = ${sessionId}|${taskId}|${enqueueEpoch}` task-correlation) + implement the bounded UI fix (disable Retry when the field is set; surface a clearer "blocked, requires Start New Task" copy) + update the HBCLO01 tests to assert the new field is on the wire. The current ACT is the discriminator ACT; the implementation ACT is the next-step ACT and is NOT chartered by this ACT.
