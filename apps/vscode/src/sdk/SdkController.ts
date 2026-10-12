@@ -87,6 +87,8 @@ import {
 	BackgroundNotifyCoordinator,
 	formatCompletionContinuationPrompt,
 } from "./background-notify-coordinator"
+// ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
+import { projectBlockedRecovery } from "./blocked-recovery-projection"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
@@ -5972,6 +5974,16 @@ export class Controller {
 				// canonical projection (it already returns the strip-or-
 				// undefined shape the wire field expects).
 				taskTelemetry: this.taskTelemetry.get(),
+				// ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01:
+				// Pure read-only projection of the host's current recovery-control
+				// state. The BCB barrier in `SdkSessionEventCoordinator` is the
+				// single source of truth; this read NEVER mutates the barrier,
+				// NEVER increments `runtimeErrorCount`, and NEVER recomputes the
+				// held set. The field is set ONLY when the barrier is present
+				// AND its `reason === "observation_unavailable"`. See
+				// `projectBlockedRecovery` for the projection contract and
+				// C5.1 invariants.
+				blockedRecovery: projectBlockedRecovery(this.sessionEvents?.getDeferredCompletionBarrierForTesting?.()),
 				// ACT-MYC-CLINEMM02-C: session-start prime automation
 				// projection. Read the latest recorded prime result for
 				// the active session id (the module-level singleton in

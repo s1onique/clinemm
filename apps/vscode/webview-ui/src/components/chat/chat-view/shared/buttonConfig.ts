@@ -1,4 +1,4 @@
-import type { ClineMessage, ClineSayTool, TurnState } from "@shared/ExtensionMessage"
+import type { BlockedRecoveryProjection, ClineMessage, ClineSayTool, TurnState } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 
 /**
@@ -46,6 +46,21 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		secondaryText: "Start New Task",
 		primaryAction: "retry",
 		secondaryAction: "new_task",
+	},
+	// ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
+	// A BCB-held `observation_unavailable` blocks the current task. The
+	// user can neither Resume nor Retry the current task because
+	// `command_status` is unavailable and the host conserves the held
+	// terminal observation; only Start New Task is supported. The
+	// `sendingDisabled` flag keeps the composer locked so a typed
+	// message cannot bypass the recovery restriction.
+	api_req_failed_blocked: {
+		sendingDisabled: true,
+		enableButtons: true,
+		primaryText: "Start New Task",
+		secondaryText: undefined,
+		primaryAction: "new_task",
+		secondaryAction: undefined,
 	},
 	// ACT-CLINEMM: advisory, not error. Continue + Dismiss — neither forces
 	// a new task and neither aborts the runtime. The session stays resumable.
@@ -395,6 +410,7 @@ export function buttonsForPhase(
 	turnState: TurnState,
 	anchoredMessage: ClineMessage | undefined,
 	foregroundCommandRunning = false,
+	blockedRecovery: BlockedRecoveryProjection | undefined = undefined,
 ): ButtonConfig {
 	switch (turnState.phase) {
 		case "idle":
@@ -409,10 +425,24 @@ export function buttonsForPhase(
 		case "resumable":
 			return BUTTON_CONFIGS.resume_task
 		case "error":
-			// Only api_req_failed (genuine transport failure) reaches this branch.
-			// mistake_limit_reached is emitted under `awaiting_followup` so the
-			// advisory surfaces as a non-blocking input prompt with Continue +
-			// Dismiss instead of an error-styled Retry + Start New Task.
+			// ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
+			// The host's BCB barrier is the only authority for "this task is
+			// currently blocked". When the barrier reason is
+			// `observation_unavailable`, the ordinary `api_req_failed` Retry
+			// affordance is suppressed because the live runtime cannot restore
+			// the missing observation capability. Mistake_limit_reached is
+			// emitted under `awaiting_followup` so the advisory surfaces as a
+			// non-blocking input prompt with Continue + Dismiss instead of an
+			// error-styled Retry + Start New Task.
+			//
+			// Identity conservation (BRPU-02): a blocked projection for
+			// task K does not affect K+1. The sessionId / taskId / epoch
+			// identity is consulted by the producer (`getStateToPostToWebview`)
+			// before the field is set, so a webview-rendered button set
+			// always reflects the current active obligation.
+			if (blockedRecovery?.reason === "observation_unavailable") {
+				return BUTTON_CONFIGS.api_req_failed_blocked
+			}
 			return BUTTON_CONFIGS.api_req_failed
 		case "awaiting_followup":
 			// followup / plan_mode_respond / mistake_limit_reached — input
@@ -431,16 +461,25 @@ export function buttonsForPhase(
 /**
  * Single entry point for button config. Uses the authoritative TurnState when present (SDK
  * path); otherwise falls back to the legacy tail-walking heuristic (classic/older state).
+ *
+ * ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
+ * The `blockedRecovery` argument is the host's current recovery-control
+ * projection (see `BlockedRecoveryProjection`). When present with
+ * `reason: "observation_unavailable"`, the selector MUST return
+ * `BUTTON_CONFIGS.api_req_failed_blocked` (Start New Task only) for the
+ * `error` phase, NOT the ordinary `BUTTON_CONFIGS.api_req_failed`
+ * (Retry + Start New Task).
  */
 export function getButtonConfigFromState(
 	messages: ClineMessage[],
 	turnState: TurnState | undefined,
 	mode: Mode = "act",
 	foregroundCommandRunning = false,
+	blockedRecovery: BlockedRecoveryProjection | undefined = undefined,
 ): ButtonConfig {
 	if (turnState) {
 		const anchored = turnState.anchorTs !== undefined ? messages.find((m) => m.ts === turnState.anchorTs) : undefined
-		return buttonsForPhase(turnState, anchored, foregroundCommandRunning)
+		return buttonsForPhase(turnState, anchored, foregroundCommandRunning, blockedRecovery)
 	}
 	return getButtonConfigForMessages(messages, mode)
 }

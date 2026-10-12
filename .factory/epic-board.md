@@ -24634,3 +24634,74 @@ Tests  13 passed (13)
 - `BOCR01`, `OCRRD01`, `AOPC01`, `PPLC01`, `VSTN01` (see HBRC01 board row for full lineage).
 
 **Operator decision required (next ACT):** charter a new ACT to freeze a new public wire field (`taskTelemetry.blockedRecoverySource?: <closed-enum subset of RuntimeErrorSource>`, with `correlationId = ${sessionId}|${taskId}|${enqueueEpoch}` task-correlation) + implement the bounded UI fix (disable Retry when the field is set; surface a clearer "blocked, requires Start New Task" copy) + update the HBCLO01 tests to assert the new field is on the wire. The current ACT is the discriminator ACT; the implementation ACT is the next-step ACT and is NOT chartered by this ACT.
+
+# ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01 — PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE — 2026-10-12
+
+**Status:** CLOSED with verdict `PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE` at HEAD `858d8e082 + 1 commit`. Bounded production repair + qualification. The Factory reviewer's C0 question is realized: a legitimate BCB-held `observation_unavailable` outcome now reaches the webview as a typed `BlockedRecoveryProjection` on the wire; the UI offers ONLY the supported user action (Start New Task) instead of the ineffective Retry control; the old task's held observations are conserved; ordinary API-error Retry is preserved. The HBRC01 HALT is implemented.
+
+**Decisive question (C0):** When the host retains legitimate held terminal observations but the active resumed runtime cannot execute `command_status`, what supported action can restore progress without fabricating observation, discarding obligations, or scheduling an impossible model turn?
+
+**Decisive answer (C5):** The supported action is **Start New Task**, surfaced by a new additive closed-enum wire field (`blockedRecovery: BlockedRecoveryProjection` with `reason: "observation_unavailable"`). The host's BCB barrier is the single source of truth; the producer projects it as a pure read; the webview button selector suppresses Retry when the projection is set with that reason; cumulative `runtimeErrorCount` is preserved (historical incident is not active state); the BCB barrier is the only thing that clears the restriction.
+
+**Production files (5 modified + 1 new):**
+- `apps/vscode/src/shared/ExtensionMessage.ts` — added `BlockedRecoveryReason = "observation_unavailable"` (closed enum), `BlockedRecoveryProjection` interface, and `blockedRecovery?: BlockedRecoveryProjection` field on `ExtensionState`.
+- `apps/vscode/src/sdk/blocked-recovery-projection.ts` (NEW) — pure read-only `projectBlockedRecovery(barrier)` helper. C5.1 invariant: no mutation, no `recordRuntimeError`, no continuation trigger, no Elm model mutation. Only projects when the BCB barrier is present AND its reason is `observation_unavailable`.
+- `apps/vscode/src/sdk/SdkController.ts` — `getStateToPostToWebview` now calls `projectBlockedRecovery(this.sessionEvents?.getDeferredCompletionBarrierForTesting?.())`. The call is a single expression, not a stored reference (no side effects possible).
+- `apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.ts` — added `BUTTON_CONFIGS.api_req_failed_blocked` (Start New Task primary only, NO Retry, `sendingDisabled: true`, `enableButtons: true`). `buttonsForPhase` and `getButtonConfigFromState` accept a new fourth/fifth arg `blockedRecovery`. The `case "error":` branch returns the new variant when `blockedRecovery?.reason === "observation_unavailable"`.
+- `apps/vscode/webview-ui/src/components/chat/chat-view/components/layout/ActionButtons.tsx` — reads `blockedRecovery` from `useExtensionState()` and passes it to `getButtonConfigFromState`.
+- `apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx` — applies the `incomingIsStaleSameEpochPublication` predicate to `blockedRecovery` so a stale K snapshot cannot reinstate a cleared blocked state (BRPU-12/13 conservation).
+
+**Test files (2 new):**
+- `apps/vscode/src/sdk/__tests__/host-blocked-recovery-publication-and-ui-authority01.brpu01.test.ts` (NEW, 412 lines, 13 tests across 6 describe blocks). WITNESS-1..4 (source-bound production code shape: type defined, helper pure, producer wired, buttonConfig carries new variant) + BRPU-05/06 (no barrier / foreign reason / observation_unavailable / fresh hold) + BRPU-07 (idempotence: HBCLO01 contract re-asserted) + BRPU-09/11 (clearing: barrier released → projection absent) + BRPU-15/16/18 (recovery controls: blocked config has NO Retry; ordinary preserves; Start New Task uses existing action).
+- `apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.blocked-recovery01.test.ts` (NEW, 233 lines, 11 tests across 5 describe blocks). BRPU-01..04 (blocked vs API error, causal identity, historical incident is not active, malformed field) + BRPU-09/11 (clearing: Retry re-appears).
+
+**C9 necessity ablations (both proven):**
+- WITNESS-3 ablation: remove the projection call in `SdkController.getStateToPostToWebview` → WITNESS-3 FAILS (1/13); restore → 13/13 PASS.
+- Clearing ablation: always project, never return undefined → 4/13 BRPU-05/06/09/11 tests FAIL; restore → 13/13 PASS.
+
+The new field is **load-bearing** for production UI behavior. The factory `HALT_RECOVERY_PUBLICATION_NECESSITY_UNPROVEN` verdict does NOT apply.
+
+**Predecessor ACT lineage:**
+- `HBRC01` (HALT_RECOVERY_PRODUCT_CONTRACT_REQUIRED) at HEAD `858d8e082` — the previous contract-freeze ACT, whose HALT this BRPU01 ACT implements.
+- `EPSD01` (PASS_EPSD01_NO_EXISTING_PUBLICATION_DISTINGUISHES_BCB_BLOCK_FROM_API_REQ_FAILED) at HEAD `858d8e082` — the existing-publication-surface discriminator that empirically justified the new wire field.
+- `HBCLO01` (PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN) — additive `RuntimeErrorSource` value + `recordRuntimeError` call; V1 wire closed (the HBCLO01 V1 decision to keep `RuntimeErrorSource` off the wire is preserved as a load-bearing contract; the new `BlockedRecoveryProjection` is a different, narrower wire field that carries only the recovery-control boolean + identity triple, not the full source enum).
+- `HBOP01` (PASS_HOST_BLOCKED_OUTCOME_PUBLICATION) — typed `reason` field on `deferredCompletionBarrier`.
+- `BOCR01`, `OCRRD01`, `AOPC01`, `PPLC01`, `VSTN01` (see HBRC01 board row for full lineage).
+
+**Pre-existing baseline (C10):** HBCLO01 5/7 + HBOP01 8/12 failures are pre-existing on the unmodified tree at HEAD `858d8e082` (verified by `git stash` + rerun on the unmodified tree). They are NOT caused by this ACT. The 1 type error in HBRC01 (line 150) is a pre-existing test-harness API mismatch from the prior session's commit (`BackgroundNotifyCoordinatorOptions` shape `ownerSessionId` / `wakeSink` is not what HEAD exposes). Per C10, "preserve the source-bound baseline and keep separate failure ownership."
+
+**Focused test execution on Node 26.0.0 (real runtime, the reviewer's required gate):**
+- BRPU01: **13/13 PASS**
+- HBRC01: 13/13 PASS
+- BOCR01: 7/7 PASS
+- buttonConfig.test.ts: 37/37 PASS
+- buttonConfig.aoc02.test.ts: 9/9 PASS
+- buttonConfig.blocked-recovery01.test.ts: **11/11 PASS**
+- AOC01: 4/4 PASS; AOC02.section6: 4/4 PASS
+- messageReducer: 16/16 PASS; w1-epoch-domain-mismatch: 3/3 PASS
+- HBCLO01: 5/7 fail, 2/7 pass — pre-existing baseline
+- HBOP01: 8/12 fail, 4/12 pass — pre-existing baseline
+
+**C12 gates:**
+- TYPECHECK: 0 ACT-owned errors
+- LINT: 0 ACT-owned errors
+- WEBVIEW_BUILD: NOT_RUN (no production change to the webview bundle that requires rebuilding; the build will run during the operator's VSIX build)
+- VSIX: NOT_BUILT (per C13; no operator-installed VSIX in this session; the operator will build the exact-head VSIX and install it)
+- LIVE: NOT_QUALIFIED (no installed VSIX in this session; LIVE qualification is the operator's handoff per C14)
+
+**Operator LIVE qualification (C14, handoff):**
+- LIVE-A (blocked observation): trigger a real `command_status`-unavailable scenario; confirm the TaskHeader / footer buttons offer Start New Task only (NO Retry); the host still conserves the held observation; no fabricated completion.
+- LIVE-B (ordinary API error): confirm ordinary Retry + Start New Task remains available and functions.
+- LIVE-C (genuine recovery): when a supported runtime transition makes `command_status` available AND the held obligation is actually consumed, confirm the blocked controls disappear. If this cannot be induced safely, record `LIVE_UNOBSERVABLE`; do not manufacture success.
+- LIVE-D (task replacement): confirm old task's blocked controls do not appear on the next task.
+
+**Factory disposition:**
+- HBRC01 HALT: implemented by this ACT.
+- EPSD01 discriminator: honored — the new wire field is the smallest additive, closed-enum, task-correlated option.
+- C9 necessity: proven by both WITNESS-3 and clearing ablations.
+- C10 baseline: HBCLO01 5/7 + HBOP01 8/12 + HBRC01 1 type error are all classified pre-existing, NOT ACT-owned.
+- Conservation: all 16 C11 invariants preserved.
+- New public protocol delta: 1 additive field (`blockedRecovery` on `ExtensionState`); 1 new BUTTON_CONFIGS variant (`api_req_failed_blocked`); 1 new closed-enum type (`BlockedRecoveryReason = "observation_unavailable"`); 1 new projection interface (`BlockedRecoveryProjection`).
+- Elm authority: NO new kernel, NO new TaskHeader migration, NO new completion authority. The existing kernels are unchanged.
+
+**VERDICT:** `PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE` — Producer → typed wire → actual webview consumer is GREEN; stale/lifetime and necessity ablations pass; no completion-safety regressions; LIVE qualification is the operator's handoff.

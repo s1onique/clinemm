@@ -123,6 +123,21 @@ export interface ExtensionState {
 	 */
 	turnState?: TurnState
 	/**
+	 * ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
+	 *
+	 * The host's current recovery-control projection (see
+	 * {@link BlockedRecoveryProjection}). When present with
+	 * `reason: "observation_unavailable"`, the webview's button selector
+	 * MUST suppress the ordinary Retry affordance and surface Start New
+	 * Task as the only supported recovery action.
+	 *
+	 * Optional and additive. Absent when no eligible active recovery
+	 * restriction exists. Lifetime: stamped on every
+	 * `getStateToPostToWebview` push; cleared when the BCB barrier is
+	 * released.
+	 */
+	blockedRecovery?: BlockedRecoveryProjection
+	/**
 	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative runtime-derived task
 	 * metrics, owned by the host-side {@link TaskTelemetryTracker} and surfaced
 	 * to the Task Header as a read-only projection.
@@ -719,6 +734,50 @@ export interface TurnState {
 	anchorTs?: number
 	/** Monotonic; the webview keeps the highest-seq TurnState and ignores older ones. */
 	seq: number
+}
+
+/**
+ * ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
+ *
+ * The host's current recovery-control projection. The webview selects
+ * permitted user actions from this projection rather than inferring them
+ * from cumulative `runtimeErrorCount` or from `turnState.phase` alone.
+ *
+ * `observation_unavailable` is the ONLY reason that disables the
+ * ordinary `api_req_failed` Retry affordance. The host owns whether a
+ * current blocked observation obligation exists; the webview is a
+ * consumer.
+ *
+ * Wire semantics:
+ *  - Additive and optional. Absent when no eligible active recovery
+ *    restriction exists for the active session/task/epoch.
+ *  - Closed-enum typed. Only the BCB barrier reason
+ *    `"observation_unavailable"` projects to a non-undefined value
+ *    (the other `DeferredCompletionBarrierReason` values —
+ *    `"stalled_no_progress"` and `"delivery_rejected"` — do NOT
+ *    currently imply the user cannot Retry; their semantics are
+ *    "wait for reevaluation" not "no path forward").
+ *  - Current-state, not cumulative. Cleared when the BCB barrier is
+ *    released (genuine observation drain or authorized lifecycle
+ *    disposal).
+ *  - Session/task/epoch correlated via the same identity triple the
+ *    BCB barrier itself uses.
+ *  - Read-only: the webview never writes this field. Publication is a
+ *    pure read of the BCB barrier state in
+ *    `SdkController.getStateToPostToWebview`.
+ *  - Stale-publication conservation: the webview reducer gates the
+ *    field on the same `stateVersion` high-water mark it already
+ *    applies to `turnState` / `taskHeaderPresentation` /
+ *    `thinkingPresentation`; an older-version snapshot never re-
+ *    establishes a cleared blocked state.
+ */
+export type BlockedRecoveryReason = "observation_unavailable"
+
+export interface BlockedRecoveryProjection {
+	readonly reason: BlockedRecoveryReason
+	readonly sessionId: string
+	readonly taskId: string | undefined
+	readonly enqueueEpoch: number
 }
 
 /**

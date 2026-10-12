@@ -789,6 +789,23 @@ export const ExtensionStateContextProvider: React.FC<{
 								stateVersion: nextReplica.stateVersion,
 								taskHeaderPresentation: gatedProjections.taskHeaderPresentation,
 								thinkingPresentation: gatedProjections.thinkingPresentation,
+								// ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
+								// BRPU-12 / BRPU-13 (stale-publication conservation):
+								// when the incoming snapshot is stale at the same
+								// epoch (older stateVersion than committed, see the
+								// `incomingIsStaleSameEpochPublication` predicate
+								// above), preserve the committed `blockedRecovery`
+								// wholesale. This stops a delayed K snapshot from
+								// re-establishing a cleared blocked state (a stale
+								// blocked snapshot must not reinstate disabled
+								// Retry after a newer clearing publication has
+								// committed). On a non-stale or replica-advance
+								// publication, the spread above already adopts
+								// `stateData.blockedRecovery` (undefined for
+								// clearing, present for setting).
+								blockedRecovery: incomingIsStaleSameEpochPublication
+									? prevState.blockedRecovery
+									: stateData.blockedRecovery,
 								autoApprovalSettings: shouldUpdateAutoApproval
 									? stateData.autoApprovalSettings
 									: prevState.autoApprovalSettings,

@@ -30,6 +30,11 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 		backgroundCommandRunning,
 		stateVersion: wireStateVersion,
 		_ptadPushId: wirePtadPushId,
+		// ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01:
+		// The host's current recovery-control projection. When set with
+		// `reason: "observation_unavailable"`, the button selector suppresses
+		// the ordinary `api_req_failed` Retry affordance.
+		blockedRecovery,
 	} = useExtensionState()
 
 	// Tracks the ask the user last acted on. Clicking a footer button latches this so the
@@ -51,8 +56,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 	// buttons immune to trailing bookkeeping messages and never disagree with the thinking
 	// indicator (RC1).
 	const buttonConfig = useMemo(() => {
-		return getButtonConfigFromState(messages, turnState, mode, foregroundCommandRunning)
-	}, [messages, turnState, mode, foregroundCommandRunning])
+		return getButtonConfigFromState(messages, turnState, mode, foregroundCommandRunning, blockedRecovery)
+	}, [messages, turnState, mode, foregroundCommandRunning, blockedRecovery])
 
 	// Identity of the ask that currently owns the footer buttons. The button config objects are
 	// shared singletons (e.g. BUTTON_CONFIGS.tool_approve), so two consecutive identical asks
