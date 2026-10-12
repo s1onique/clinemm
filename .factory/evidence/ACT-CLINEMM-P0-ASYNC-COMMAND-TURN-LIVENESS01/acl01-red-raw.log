@@ -1,0 +1,15 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ❯ src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts (5 tests | 4 failed) 18ms
+     × RUNNING_JOB_MUST_NOT_BE_SILENTLY_ABANDONED - projection must reset when the background job terminates 12ms
+     × NO_JOB_DONE_YIELDS_TO_USER - fast command completes synchronously, no orphaned job 2ms
+     × INTENTIONAL_DETACH_TYPED_INTENT - production run_commands input schema has no typed intent field 1ms
+     ✓ TOOL_DESCRIPTION_PROVENANCE - production run_commands description mentions long-running + tmp-file guidance (does NOT prove the RUNNING(jobId) contract) 0ms
+     × TERMINAL_EVENT_CARDINALITY - terminalPromise resolves exactly once per job 1ms
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 1 passed (5)
+   Start at  13:17:32
+   Duration  2.27s (transform 1.35s, setup 2.07s, import 85ms, tests 18ms, environment 0ms)
+

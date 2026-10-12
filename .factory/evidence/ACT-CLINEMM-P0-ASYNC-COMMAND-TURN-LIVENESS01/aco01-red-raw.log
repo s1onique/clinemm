@@ -1,0 +1,65 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+stdout | src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts > ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01 > ACO01 — after RUNNING(jobId) the surrounding agent run returns without scheduling any successor
+
+[ACO01 REPORT]
+{
+  "ACO01": {
+    "tool_returned_running": true,
+    "tool_result_job_id": "cmd_mv53lryk3zzsms2p",
+    "model_step_count": 2,
+    "model_step_count_after_terminal": 2,
+    "agent_run_returned": true,
+    "result_status": "completed",
+    "final_runtime_status": "completed",
+    "background_command_state": {
+      "active_before_terminal_wait": 0,
+      "active_after_terminal_wait": 0
+    },
+    "successor_scheduled": false,
+    "user_ownership_yielded": true,
+    "classification": "CASE_D_DEAD_ZONE"
+  },
+  "note": "successor_scheduled=false because: (a) the agent run returned after seeing RUNNING and the model emitted a final 'stop' finish; (b) no host-side continuation hook exists in the production code path that the test exercises (this matches ACL02's SOURCE_RECON in the parent epic); (c) the terminal completion of the child process is observed (activeCount went 1→0) but nothing in the runtime consumed the terminal result. Result: terminal result is ORPHANED."
+}
+
+stdout | src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts > ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01 > ACO02 — terminal completion racing agent.run() return does not duplicate or lose continuation
+
+[ACO02 REPORT]
+{
+  "ACO02": {
+    "classification": "NO_DUPLICATE_CONTINUATION",
+    "model_request_count": 2,
+    "result_status": "completed",
+    "manager_active": 0
+  },
+  "note": "ACO02 invariant: terminal completion that races agent.run() return does NOT cause duplicate continuation. modelRequestCount===2 and manager.activeCount===0 after the wait."
+}
+
+stdout | src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts > ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01 > ACO03 — terminal completion after agent.run() returns does not produce any successor model step
+
+[ACO03 REPORT]
+{
+  "ACO03": {
+    "classification": "CASE_D_DEAD_ZONE",
+    "model_requests_at_run_return": 2,
+    "model_requests_after_terminal": 2,
+    "active_at_run_return": 0,
+    "active_after_terminal": 0,
+    "result_status": "completed",
+    "final_runtime_status": "completed"
+  },
+  "note": "ACO03 critical: terminal completion arrived AFTER agent.run() returned. The model_request_count delta (modelRequestsAfterTerminal - modelRequestsAfterRun) is exactly 0. Nothing consumed the terminal result. This is the canonical DEAD_ZONE RED: terminal job result later becomes available; still no successor."
+}
+
+ ❯ src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts (3 tests | 2 failed) 17ms
+     × ACO01 — after RUNNING(jobId) the surrounding agent run returns without scheduling any successor 15ms
+     ✓ ACO02 — terminal completion racing agent.run() return does not duplicate or lose continuation 1ms
+     × ACO03 — terminal completion after agent.run() returns does not produce any successor model step 1ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  13:17:26
+   Duration  2.20s (transform 1.26s, setup 0ms, import 2.07s, tests 17ms, environment 0ms)
+

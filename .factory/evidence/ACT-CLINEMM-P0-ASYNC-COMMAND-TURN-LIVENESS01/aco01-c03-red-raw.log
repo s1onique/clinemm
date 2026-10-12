@@ -1,0 +1,64 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+stdout | src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts > ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03 > ACO-HOST01 — real deferred RUNNING(jobId) through LocalRuntimeHost: no autonomous host successor
+[ACO-HOST01 report] {
+  "ACO_HOST01": {
+    "producer_running_state_asserted": true,
+    "real_RUNNING_envelope_produced": false,
+    "runTurn_returned": true,
+    "result_finish_reason": "completed",
+    "pendingPrompts_before_runTurn": 0,
+    "pendingPrompts_after_runTurn": 0,
+    "pendingPrompts_after_terminal": 0,
+    "host_events_before_runTurn": 2,
+    "host_events_after_runTurn": 40,
+    "host_events_after_terminal": 40,
+    "host_events_emitted_after_runTurn": [],
+    "successor_events_after_terminal": [],
+    "manager_activeCount_after_terminal": 0,
+    "session_status": "idle",
+    "session_last_interactive_finish_reason": "not_exposed_on_public_session_record_use_run_finish_reason",
+    "classification_inputs": {
+      "host_scheduled_successor": false,
+      "host_emitted_successor_event": false,
+      "host_queued_prompt": false
+    },
+    "HOST_AUTONOMOUS_WAKEUP_ABSENT_PROVEN": true,
+    "HOST_SESSION_AFTER_TURN_IDLE_PROVEN": true,
+    "HOST_MANUAL_REENTRY_PROVEN": true,
+    "CASE_D_DEAD_ZONE_AT_HOST": "REJECTED — idle + pendingPrompts=0 + manual reentry are not consistent with a full dead zone (see P1 classification rejection)",
+    "APPLICATION_USER_OWNERSHIP": "NOT_PROVEN_AT_HOST_TEST — webview/composer seam lives above LocalRuntimeHost",
+    "APPLICATION_PRESENTATION_COHERENCE": "NOT_PROVEN_AT_HOST_TEST — Idle+Thinking+Cancel bug is at the application seam (next ACT: ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01)"
+  }
+}
+
+stdout | src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts > ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03 > ACO-HOST02 — after real RUNNING + clean completion, host.runTurn accepts a follow-up prompt (host-level manual re-entry)
+[ACO-HOST02 report] {
+  "ACO_HOST02": {
+    "first_run_finish_reason": "completed",
+    "first_run_persisted_messages": 4,
+    "second_run_returned": true,
+    "second_run_finish_reason": "completed",
+    "pending_after_followup": 0,
+    "session_status_after_followup": "idle",
+    "session_last_finish_reason_after_followup": "not_exposed_on_public_session_record_use_run_finish_reason",
+    "classification_inputs": {
+      "host_manual_reentry": true,
+      "user_ownership_AT_APPLICATION_SEAM": "NOT_PROVEN_AT_HOST_TEST"
+    },
+    "HOST_MANUAL_REENTRY_PROVEN": true,
+    "CASE_D_DEAD_ZONE_AT_HOST": "REJECTED — manual reentry with finishReason=completed is not consistent with a full dead zone"
+  },
+  "note": "CORRECTION03 verdict: HOST_MANUAL_REENTRY_PROVEN. The host's runTurn is callable again after a REAL deferred RUNNING(jobId) + clean completion, and the follow-up dispatches to the agent (finishReason=completed). This is the canonical idle-yield contract at the host seam — NOT a proof of user-ownership at the application seam (that lives in the webview + composer, above LocalRuntimeHost)."
+}
+
+ ❯ src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts (2 tests | 1 failed) 85ms
+     × ACO-HOST01 — real deferred RUNNING(jobId) through LocalRuntimeHost: no autonomous host successor 47ms
+     ✓ ACO-HOST02 — after real RUNNING + clean completion, host.runTurn accepts a follow-up prompt (host-level manual re-entry) 37ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  13:17:45
+   Duration  3.10s (transform 1.94s, setup 0ms, import 2.90s, tests 85ms, environment 0ms)
+

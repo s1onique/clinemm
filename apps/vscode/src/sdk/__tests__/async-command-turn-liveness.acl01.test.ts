@@ -53,7 +53,7 @@
  */
 
 import { createShellTool } from "@cline/core"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
 import { createVscodeRunCommandsTool } from "../vscode-run-commands-tool"
 
@@ -88,6 +88,25 @@ vi.mock("@services/telemetry", () => ({
 const originalPlatform = process.platform
 const originalEnv = { ...process.env }
 
+/**
+ * ACT-CLINEMM-P0-ASYNC-COMMAND-TURN-LIVENESS01:
+ *
+ * The Mac experimental seatbelt substrate is the default on
+ * darwin. In the vitest worker, the seatbelt substrate cannot
+ * reliably `process.kill(-pid, ...)` the spawned child — see
+ * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01's
+ * review-correction03 test for the same workaround. We disable
+ * the experimental seatbelt for the duration of these tests so
+ * the manager takes the legacy direct-spawn path and the actual
+ * `/bin/sh -c 'sleep 5'` child can run.
+ *
+ * This is a HOST-SUBSTRATE workaround; the production code path
+ * is unchanged.
+ */
+const TEST_SANDBOX_ENV = "CLINEMM_EXPERIMENTAL_SANDBOX"
+beforeEach(() => {
+	process.env[TEST_SANDBOX_ENV] = "off"
+})
 afterEach(() => {
 	vi.useRealTimers()
 	Object.defineProperty(process, "platform", { value: originalPlatform })
@@ -147,7 +166,10 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL01", () => {
 			expect(parsed.status).toBe("running")
 			expect(typeof parsed.jobId).toBe("string")
 			expect(parsed.jobId).toMatch(/^cmd_/)
-			expect(onBackgroundStateChange).toHaveBeenCalledWith(true, parsed.jobId)
+			// Start-side: (true, jobId, undefined). The third
+			// (terminalState) argument is omitted on the start
+			// side per the BCTCP01 correction01 contract.
+			expect(onBackgroundStateChange).toHaveBeenCalledWith(true, parsed.jobId, undefined)
 			expect(manager.activeCount).toBeGreaterThan(0)
 			const jobId = parsed.jobId
 
@@ -156,7 +178,12 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL01", () => {
 
 			await new Promise((r) => setTimeout(r, 200))
 			const calls = onBackgroundStateChange.mock.calls
-			const sawTerminal = calls.some((args) => args[0] === false && args[1] === undefined)
+			// BCTCP01 correction01 contract: terminal callback
+			// carries (false, jobId, terminalState) — the
+			// pre-correction01 (false, undefined) aggregate is
+			// gone. The per-job terminalState for `sleep 5`
+			// (which exits 0 on its own) is "exited".
+			const sawTerminal = calls.some((args) => args[0] === false && args[1] === parsed.jobId && args[2] === "exited")
 			expect(sawTerminal).toBe(true)
 		} finally {
 			await manager.dispose()
@@ -216,9 +243,29 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL03", () => {
 // `createShellTool` and inspect the resulting
 // `inputSchema` JSON Schema. The
 // `additionalProperties: false` field is the
-// load-bearing structural fact: there is no room for a
-// typed `intent` field today. If a future change adds
-// such a field (e.g. `properties.intent`), this test
+// load-bearing structural fact: there is no room for an
+// UNKNOWN typed intent field. The PRODUCTION schema
+// already carries a known typed opt-in field
+// `notifyOnCompletion` (see
+// sdk/packages/core/src/extensions/tools/schemas.ts:166
+// and the
+// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01
+// contract). ACL04 now pins the actual production
+// shape:
+//
+//   (a) `commands` is the only field required to drive
+//       the tool;
+//   (b) `notifyOnCompletion` is the canonical typed
+//       opt-in for the host-wake path (model can set
+//       it to true to ask the runtime to enqueue a
+//       bounded continuation prompt after the bg-job
+//       reaches a terminal state);
+//   (c) `additionalProperties: false` still rejects
+//       every other invented field (`intent`,
+//       `detach`, `fire_and_forget`, `background`).
+//
+// If a future change adds ANOTHER field beyond
+// `commands` and `notifyOnCompletion`, this test
 // fails RED and the test author MUST update the
 // dispatching contract accordingly.
 //
@@ -227,7 +274,7 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL03", () => {
 // is a TYPED-CONTRACT freeze.
 //
 describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL04", () => {
-	it("INTENTIONAL_DETACH_TYPED_INTENT - production run_commands input schema has no typed intent field", () => {
+	it("INTENTIONAL_DETACH_TYPED_INTENT - production run_commands input schema carries commands + notifyOnCompletion; rejects every other invented field", () => {
 		const tool = createShellTool(async () => "ok", {
 			cwd: process.cwd(),
 			bashTimeoutMs: 30_000,
@@ -238,15 +285,25 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL04", () => {
 		expect(schema.type).toBe("object")
 
 		const properties = schema.properties as Record<string, unknown>
-		expect(Object.keys(properties).sort()).toEqual(["commands"])
+		// The production schema's typed intent is the pair
+		// (commands, notifyOnCompletion). notifyOnCompletion
+		// is OPTIONAL (a model-side opt-in for the host-wake
+		// path; default false). The schema does not expose
+		// any other intent-shaped field.
+		expect(Object.keys(properties).sort()).toEqual(["commands", "notifyOnCompletion"])
 
 		const commands = properties.commands as Record<string, unknown>
 		expect(commands.type).toBe("array")
 
-		// The load-bearing assertion: the schema rejects all
-		// fields except `commands`. A typed `intent` /
-		// `detach` / `fire_and_forget` field is forbidden
-		// by the schema itself.
+		const notifyOnCompletion = properties.notifyOnCompletion as Record<string, unknown>
+		expect(notifyOnCompletion.type).toBe("boolean")
+
+		// The load-bearing assertion: the schema still
+		// rejects UNKNOWN fields. `notifyOnCompletion` is
+		// the only allowed opt-in; the invented fields
+		// (`intent`, `detach`, `fire_and_forget`,
+		// `background`) are still forbidden by the schema
+		// itself.
 		expect(schema.additionalProperties).toBe(false)
 		expect((properties as Record<string, unknown>).intent).toBeUndefined()
 		expect((properties as Record<string, unknown>).detach).toBeUndefined()

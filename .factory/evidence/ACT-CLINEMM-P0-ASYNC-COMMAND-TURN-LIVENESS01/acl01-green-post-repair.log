@@ -1,0 +1,12 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts (5 tests) 10274ms
+     ✓ RUNNING_JOB_MUST_NOT_BE_SILENTLY_ABANDONED - projection must reset when the background job terminates  5232ms
+     ✓ TERMINAL_EVENT_CARDINALITY - terminalPromise resolves exactly once per job  5026ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  13:25:55
+   Duration  12.53s (transform 1.31s, setup 2.05s, import 96ms, tests 10.27s, environment 0ms)
+

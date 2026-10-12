@@ -559,6 +559,18 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03", () 
 	let scriptStep = 0
 
 	beforeEach(() => {
+		// ACT-CLINEMM-P0-ASYNC-COMMAND-TURN-LIVENESS01:
+		// Disable the darwin experimental seatbelt for the
+		// duration of these tests so the manager takes the
+		// legacy direct-spawn path and the actual
+		// `/bin/sh -c 'sleep 5'` child can run. The production
+		// code path is unchanged; this is a HOST-SUBSTRATE
+		// workaround for the vitest worker (same workaround as
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
+		// review-correction03 and
+		// ACT-CLINEMM-P0-ASYNC-COMMAND-TURN-LIVENESS01's
+		// sibling ACL01 fix).
+		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
 		isolatedHomeDir = mkdtempSync(join(tmpdir(), "aco02-host-bridge-"))
 		process.env.HOME = isolatedHomeDir
 		process.env.CLINE_DIR = join(isolatedHomeDir, ".cline")
