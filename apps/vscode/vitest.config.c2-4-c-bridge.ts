@@ -471,6 +471,16 @@ export default defineConfig({
 			// `@cline-internal/core/runtime/host/local-runtime-host`
 			// deep-relative alias.
 			"src/sdk/__tests__/observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01:
+			// Real `LocalRuntimeHost` + real `PendingPromptsController`
+			// + real `BackgroundNotifyCoordinator` + real
+			// `CommandJobManager` + real `createCommandStatusTool`
+			// (production factory) + real `SdkSessionEventCoordinator`
+			// + real Elm authority kernel. Closes the OCRRD01-04
+			// `pending_prompt` hold evidence gap by driving the real
+			// queue lifecycle (C4 -> C5 -> C6 -> C7 -> C8) and
+			// observing the Elm `pending_prompt` hold transition.
+			"src/sdk/__tests__/pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

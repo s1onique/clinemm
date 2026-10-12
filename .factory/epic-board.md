@@ -24164,3 +24164,78 @@ disposition is honored: the P0 is closed, the P1 is closed
 3a/3b/3c causality chain), and the sub-gate 3b
 classified-RED is documented as a known harness limitation
 (not a P0 regression, not a production repair).
+
+# ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 — PASS_OCRRD01_PENDING_PROMPT_LIFECYCLE_CONVERGENCE — 2026-11-10
+
+**Disposition:** Variant A (bounded harness-only repair). The
+production capture chain is intact; the defect is the OCRRD01
+harness omitting the canonical event subscription
+(`subscribeCanonicalRuntimeEventsToShadow`) and the agent
+runId publication, so `run_turn_started` / `continuation_started`
+never reached the Elm authority kernel, so the drained prompt
+never reached `PromptRunning`, so `consumePromptForRun closingRef`
+at `Authority.elm:193` had nothing to consume — the `pending_prompt`
+hold persisted.
+
+**Initial cure (2026-10-09, OCRRD01-CORRECTION02):** a new bounded
+probe file
+`apps/vscode/src/sdk/__tests__/pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts`
+wires the production `createProductionPendingPromptCapture`,
+the production `subscribeCanonicalRuntimeEventsToShadow`, a
+runId-bearing agent stub, and the production
+`buildSdkControllerEnqueueCompletionContinuation` factory. The
+new probe drives the real queue lifecycle (C4 → C5 → C6 → C7 →
+C8 → `continuation_started` → `agent_turn_done`) and observes
+the Elm `pending_prompt` hold transition to absent.
+
+**PPLC01 followup cure (2026-10-12, Expert verdict):** the
+bounded completion gate is now CLOSED. Three additions to the
+adjacent file:
+  1. **PPLC-03** drives the real queue lifecycle + real
+     `command_status.execute(J)` drain + real `submit_and_exit`
+     and asserts Elm `authorize` plus exactly one
+     `setTurnPhase("completed", ...)` call. The combined recovery
+     test the Expert verdict identified as missing.
+  2. **PPLC-08** withholds the canonical subscription and the
+     runId publication. The `pending_prompt` hold returns,
+     proving the production chain is necessary (not coincidental).
+  3. **PPLC-07** is restructured: drive a SUCCESSFUL commit
+     first (commitCount=1, lastPhase=completed), then replay 5
+     duplicate `agent_turn_done` notifications, and assert
+     commitCount stays at 1. The original (vacuous) 0-commit
+     threshold is replaced with a load-bearing at-most-once
+     commit test.
+
+**OCRRD01-04 amendment (PPLC01 followup):** the OCRRD01 harness
+is amended to wire the production
+`subscribeCanonicalRuntimeEventsToShadow` and a runId-bearing
+agent stub (matching the new probe file's pattern). The
+OCRRD01-04 sub-gate 3b `commitCount===1 / lastPhase==="completed"
+/ elmDecision.kind==="authorize"` acceptance now turns GREEN
+(transitioned from RED_PRESERVED). The OCRRD01-04 sub-gate 3b
+error path is reworded but the test's main path is now the
+GREEN path; the historical RED witness is replaced with a
+GREEN witness that uses the same production seam.
+
+**Gates:**
+- `bun run test:vitest:c2-4-c-bridge -- pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts` — 8/8 PASS (was 6/6).
+- `bun run test:vitest:c2-4-c-bridge -- observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts` — 5/5 PASS (was 4/5 with OCRRD01-04 RED preserved; OCRRD01-04 sub-gate 3b is now GREEN).
+- `bun run test:vitest:twqc01` — 3/3 PASS (no regression).
+- `bun run test:vitest:crcd01` — 3/3 PASS (no regression).
+- `bun run check-types:c2-4-c-bridge` — 0 diagnostic(s) match the frozen baseline.
+- `bun run lint -- <new file>` — No fixes applied.
+- `git diff --check` — clean.
+
+**Production delta:** zero.
+
+**Test delta:** 1 new test file (8 tests, ~1316 lines, was
+6 tests / ~920 lines) + 1 line in
+`apps/vscode/vitest.config.c2-4-c-bridge.ts` (adding the new
+file to the bridge `include` list) + 1 file amended
+(`observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts`
+now wires the production canonical subscription + runId-bearing
+agent stub; OCRRD01-04 sub-gate 3b transitions from RED to GREEN).
+
+**Conservation probes:** PPLC-04 (no-drain), PPLC-05 (no-runtime
+progress), PPLC-06 (identity), PPLC-07 (at-most-once, post-commit),
+PPLC-08 (no-canonical-subscription) all PASS.

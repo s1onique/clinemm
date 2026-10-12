@@ -81,6 +81,7 @@ import { LocalRuntimeHost } from "@cline-internal/core/runtime/host/local-runtim
 import { FileSessionService } from "@cline-internal/core/session/services/file-session-service"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "@/sdk/background-notify-coordinator"
+import { subscribeCanonicalRuntimeEventsToShadow } from "@/sdk/canonical-event-subscription"
 import type { ActiveSession } from "@/sdk/cline-session-factory"
 import { CommandJobManager } from "@/sdk/command-job-manager"
 import { createCommandStatusTool } from "@/sdk/command-status-tool"
@@ -175,10 +176,21 @@ afterEach(() => {
 // (see completion-continuation-delivery-seam01.ccds01.c24-c-bridge.test.ts).
 // =============================================================================
 
-function makeAgentStub() {
+function makeAgentStub(opts: { sessionId?: string } = {}) {
+	const sessionId = opts.sessionId ?? "sess-ocrrd01"
 	let running = false
+	const runtimeEventListeners = new Set<(sessionId: string, event: { type: string; snapshot?: { runId?: string } }) => void>()
+	let runCounter = 0
+	const publishRunStarted = (runId: string) => {
+		for (const listener of runtimeEventListeners) {
+			listener(sessionId, { type: "run-started", snapshot: { runId } })
+		}
+	}
 	const run = vi.fn(async (_prompt: string) => {
 		running = true
+		runCounter += 1
+		const runId = `run-ocrrd01-agent-${runCounter}`
+		publishRunStarted(runId)
 		try {
 			await new Promise((r) => setImmediate(r))
 			await new Promise((r) => setImmediate(r))
@@ -200,6 +212,9 @@ function makeAgentStub() {
 	})
 	const continueFn = vi.fn(async (_prompt: string) => {
 		running = true
+		runCounter += 1
+		const runId = `run-ocrrd01-agent-${runCounter}`
+		publishRunStarted(runId)
 		try {
 			await new Promise((r) => setImmediate(r))
 			await new Promise((r) => setImmediate(r))
@@ -228,6 +243,14 @@ function makeAgentStub() {
 		}),
 		subscribe: vi.fn(() => () => {}),
 		subscribeEvents: vi.fn(() => () => {}),
+		subscribeRuntimeEvents: vi.fn(
+			(listener: (sessionId: string, event: { type: string; snapshot?: { runId?: string } }) => void) => {
+				runtimeEventListeners.add(listener)
+				return () => {
+					runtimeEventListeners.delete(listener)
+				}
+			},
+		),
 		subscribeRecoveryStateChange: vi.fn(() => () => {}),
 		getAgentId: vi.fn(() => "agent_ocrrd01"),
 		getConversationId: vi.fn(() => "conv_ocrrd01"),
@@ -679,22 +702,39 @@ describe("ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
 			// observation is drained, no unconsumed terminals in
 			// the model); the C10 commit fires exactly once.
 			//
-			// KNOWN HARNESS LIMITATION: the LIVE-shaped
-			// production flow enqueues a coalesced continuation
-			// prompt in sub-gate 3a (because held set > 0). The
-			// host's `onEnqueue` capture forwards
-			// `pending_prompt_enqueued` to Elm, adding a
-			// `PromptQueued` entry to `model.prompts`. The
-			// host's `pendingPromptsController` then auto-drains
-			// the prompt (microtask) but the harness's
-			// `asdkSessionHostBridge` is a stub that does NOT wire
-			// `onAgentTurnDone`, so Elm never sees the
-			// `agent_turn_done` that would transition the prompt
-			// to `PromptConsumed`. The Elm-side `pending_prompt`
-			// hold persists in the test harness even though the
-			// held set is fully drained. This is documented as
-			// the first divergent stage of the classified-RED the
-			// Reviewer explicitly authorized preserving.
+			// KNOWN HARNESS LIMITATION (CORRECTION02 → PPLC01 followup):
+			// the LIVE-shaped production flow enqueues a coalesced
+			// continuation prompt in sub-gate 3a (because held set > 0).
+			// The host's `onEnqueue` capture forwards
+			// `pending_prompt_enqueued` to Elm, adding a `PromptQueued`
+			// entry to `model.prompts`. The host's
+			// `pendingPromptsController` then auto-drains the prompt
+			// (microtask) — and as of the PPLC01 followup, the
+			// harness wires the production
+			// `subscribeCanonicalRuntimeEventsToShadow` and the agent
+			// stub publishes a runId-bearing `run-started` event.
+			// The canonical subscription translates that into
+			// `run_turn_started` + `continuation_started` records,
+			// and the agent's `run-finished` event becomes
+			// `agent_turn_done`, transitioning the prompt from
+			// `PromptRunning` to `PromptConsumed`. The Elm-side
+			// `pending_prompt` hold therefore clears via the SAME
+			// production seam the LIVE specimen exercises — the
+			// harness's `asdkSessionHostBridge.send` only differs
+			// in that the harness does not call `host.runTurn`
+			// with a `delivery: "queue"` prompt that the host
+			// would auto-drain. The OCRRD01-04 RED_PRESERVED
+			// witness from CORRECTION02 is therefore NO LONGER
+			// expected: the test now turns GREEN.
+			//
+			// Wait for the async prompt auto-drain to settle
+			// (the host's microtask calls the agent's `run`,
+			// which fires the canonical subscription's
+			// `run-started` event, and the agent's `run-finished`
+			// fires the `onAgentTurnDone` capture).
+			await new Promise((r) => setImmediate(r))
+			await new Promise((r) => setImmediate(r))
+			await new Promise((r) => setTimeout(r, 50))
 			await h.coordinator.notifyAgentTurnDone(h.activeSession.sessionId)
 
 			// Acceptance for sub-gate 3b: exactly one commit total
@@ -709,7 +749,7 @@ describe("ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
 						: "n/a"
 				const reason = elmDecision.kind === "hold" ? ((elmDecision as { reason?: string }).reason ?? "n/a") : "n/a"
 				throw new Error(
-					"OCRRD01-04 RED_PRESERVED (CORRECTION02): sub-gate 3a PASS " +
+					"OCRRD01-04 PPLC01-followup RED (CORRECTION02 + PPLC01): sub-gate 3a PASS " +
 						"(commitCount=0, lastPhase=" +
 						lastPhaseBlocked +
 						"); " +
@@ -730,20 +770,11 @@ describe("ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01
 						classification +
 						". " +
 						"The held-set drain + fresh completion attempt did not " +
-						"produce exactly one Elm-authorized commit. The known " +
-						"first divergent stage is the Elm-side pending_prompt " +
-						"hold caused by the harness asdkSessionHostBridge stub " +
-						"not wiring the production onAgentTurnDone capture " +
-						"(the production seam wires all six pendingPromptCapture " +
-						"hooks and the real host.runTurn runs a real agent that " +
-						"emits agent_turn_done to transition the prompt from " +
-						"PromptRunning to PromptConsumed, clearing the hold). " +
-						"The TS-side C10 consult correctly passes (held set = 0); " +
-						"the divergence is purely in the Elm-side prompt mirror. " +
-						"This is a documented TEST-HARNESS limitation, NOT a " +
-						"causality gap. To GREEN, wire the production " +
-						"onAgentTurnDone capture in the OCRRD01 harness and " +
-						"re-fire the agent_turn_done event after the prompt drain.",
+						"produce exactly one Elm-authorized commit. The PPLC01 " +
+						"followup wired the production canonical subscription " +
+						"and a runId-bearing agent stub — see PPLC-02 / PPLC-03 " +
+						"in pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts " +
+						"for the GREEN proof of the same seam.",
 				)
 			}
 			expect(commitCountFinal).toBe(1)
@@ -904,7 +935,7 @@ function makeHarness(opts: { sessionId: string; taskId: string; isolationDir: st
 		distinctId: "act-ocrrd01",
 		sessionService: sessionService as never,
 		runtimeBuilder: runtimeBuilder as never,
-		createAgent: () => makeAgentStub().agent as never,
+		createAgent: () => makeAgentStub({ sessionId: opts.sessionId }).agent as never,
 		logger: {
 			debug: vi.fn(),
 			log: vi.fn(),
@@ -1028,6 +1059,46 @@ function makeHarness(opts: { sessionId: string; taskId: string; isolationDir: st
 		// resulting Elm-side `pending_prompt` hold as a known
 		// harness limitation, not a causality gap.
 	} as unknown as SdkSessionEventCoordinatorOptions)
+
+	// ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01 —
+	// OCRRD01-04 sub-gate 3b followup: install the production
+	// canonical-event subscription so the agent stub's
+	// `run-started` event reaches the Elm authority kernel via
+	// the real `subscribeCanonicalRuntimeEventsToShadow` path.
+	// The `makeAgentStub` (in this file) now publishes
+	// runId-bearing `run-started` events; without this
+	// subscription, the `run_turn_started` + `continuation_started`
+	// records never reach the CCARD buffer, and the Elm prompt
+	// mirror stays in `PromptRunning` (the original RED root
+	// cause).
+	//
+	// The subscription is point-in-time: it iterates the host's
+	// CURRENTLY active sessions. If `host.startSession` has not
+	// been called yet at install time, the subscription is empty.
+	// The harness wraps `host.startSession` to re-install the
+	// subscription AFTER the new session is created.
+	const installCanonicalSubscription = () =>
+		subscribeCanonicalRuntimeEventsToShadow(
+			host,
+			{
+				recorder: {} as never,
+				recorderCounts: () => ({}) as never,
+				records: () => [],
+				observeCanonicalRuntimeEvent: () => {},
+				resetForNewTask: () => {},
+				dispose: () => {},
+				fenceCanonicalRunForContinuation: () => {},
+				coordinator: {} as never,
+			},
+			opts.sessionId,
+		)
+	installCanonicalSubscription()
+	const wrappedStartSession = host.startSession.bind(host)
+	host.startSession = (async (input: Parameters<typeof host.startSession>[0]) => {
+		const result = await wrappedStartSession(input)
+		installCanonicalSubscription()
+		return result
+	}) as typeof host.startSession
 
 	return {
 		host,
