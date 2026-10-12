@@ -1,0 +1,44 @@
+{
+  "act": "ACT-CLINEMM-EXACT-HEAD-DOGFOOD-C1-GO",
+  "verdict": "PASS",
+  "build_command": "python3 scripts/build-dogfood-vsix.py",
+  "build_env": {
+    "PATH": "/opt/homebrew/bin:$PATH",
+    "BUN_TMPDIR": "/tmp/dogfood-bun-tmp",
+    "BUN_INSTALL": "/tmp/dogfood-bun-install",
+    "HOME": "/tmp/dogfood-elm-home"
+  },
+  "source_head": "307bb1d46d92a0c0175e273f275a55629431032f",
+  "source_version": "4.1.16-5a1c485cb",
+  "dogfood_version": "4.1.16-5a1c485cb-307bb1d46",
+  "artifact": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-5a1c485cb-307bb1d46.vsix",
+  "sha256": "1006d304a15cd5080f38d933574dd53f393694e217ef566d0958ffef355489be",
+  "bytes": 44018517,
+  "skip_typecheck": false,
+  "elm_version": "0.19.2",
+  "elm_bin": "/opt/homebrew/bin/elm",
+  "elm_bin_sha256": "3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b",
+  "elm_toolchain_resolver_reason": "homebrew slot /opt/homebrew/bin/elm",
+  "pre_build_gates": {
+    "pplc01_bridge": "8/8 PASS",
+    "ocrrd01_bridge": "5/5 PASS",
+    "bridge_typecheck": "PASS (0 NEW diagnostics vs baseline, PPLC01 included)",
+    "lint_changed_files": "PASS (0 diagnostics, 0 fixes)",
+    "aco01_pre_existing_failure": "NOT a regression (re-verified on pristine b1de112d2, CASE_D_DEAD_ZONE is documented test design)"
+  },
+  "build_artifact_lines": "clinemm-4.1.16-5a1c485cb-307bb1d46.vsix  (211 files, 41.98 MB)",
+  "vsix_payload_sections": {
+    "LICENSE.txt": "11.08 KB",
+    "package.json": "24.37 KB",
+    "skills-lock.json": "0.24 KB",
+    "assets": "13 files / 20.74 KB",
+    "baselines": "3 files / 0.28 KB",
+    "bin": "6 files / 12.34 MB (ripgrep platform binaries)",
+    "dist": "1 file / 25.13 MB (extension.js + sourcemap)",
+    "elm": "151 files / 118.28 MB (Elm kernel sources + build artifacts)",
+    "runtime-assets": "10 files / 398.11 KB (5 staged Elm kernels + .sha256 sidecars)",
+    "walkthrough": "5 files / 2.59 KB",
+    "webview-ui": "16 files / 9.4 MB (webview build output)"
+  },
+  "invariants_enforced": ["D01_EXACT_SOURCE_BINDING", "D02_CLEAN_SOURCE_ONLY", "D03_SOURCE_IMMUTABILITY", "D04_ISOLATED_BUILD", "D05_LOCKFILE_AUTHORITY", "D06_CANONICAL_BUILD", "D07_PACKAGE_VERSION", "D08_PACKAGE_VERIFICATION", "D09_PAYLOAD_SANITY", "D10_ARTIFACT_IDENTITY", "D11_OPTIONAL_INSTALL", "D12_CLEANUP"]
+}

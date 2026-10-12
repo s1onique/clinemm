@@ -1,0 +1,352 @@
++ git status --porcelain=v1 --untracked-files=all
++ git rev-parse HEAD
++ git rev-parse --short=9 HEAD
++ git worktree add --detach /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree 307bb1d46d92a0c0175e273f275a55629431032f
+Preparing worktree (detached HEAD 307bb1d46)
+Updating files:  77% (8663/11138)Updating files:  78% (8688/11138)Updating files:  79% (8800/11138)Updating files:  80% (8911/11138)Updating files:  81% (9022/11138)Updating files:  82% (9134/11138)Updating files:  83% (9245/11138)Updating files:  84% (9356/11138)Updating files:  85% (9468/11138)Updating files:  86% (9579/11138)Updating files:  87% (9691/11138)Updating files:  88% (9802/11138)Updating files:  89% (9913/11138)Updating files:  90% (10025/11138)Updating files:  91% (10136/11138)Updating files:  92% (10247/11138)Updating files:  93% (10359/11138)Updating files:  94% (10470/11138)Updating files:  95% (10582/11138)Updating files:  96% (10693/11138)Updating files:  97% (10804/11138)Updating files:  98% (10916/11138)Updating files:  99% (11027/11138)Updating files: 100% (11138/11138)Updating files: 100% (11138/11138), done.
+HEAD is now at 307bb1d46 test(SDK): PPLC01/OCRRD01 build wiring — bake PPLC01 bridge test into canonical typecheck + base vitest exclude (matches OCRRD01 sibling)
++ git rev-parse HEAD
++ bun install --frozen-lockfile
+[0m[1mbun install [0m[2mv1.3.14 (0d9b296a)[0m
+Resolving dependencies
+Resolved, downloaded and extracted [2]
+
+[0m[2m[35m$[0m [2m[1mhusky[0m
+
+[0m[32m+[0m [1m@biomejs/biome[0m[2m@2.4.5[0m
+[0m[32m+[0m [1m@types/bun[0m[2m@1.3.14[0m
+[0m[32m+[0m [1m@types/node[0m[2m@25.9.5[0m
+[0m[32m+[0m [1mhusky[0m[2m@9.1.7[0m
+[0m[32m+[0m [1mlint-staged[0m[2m@16.4.0[0m
+[0m[32m+[0m [1mvitest[0m[2m@4.1.10[0m
+[0m[32m+[0m [1mnanoid[0m[2m@5.1.16[0m
+[0m[32m+[0m [1mtypescript[0m[2m@5.9.3[0m
+
+[32m4786[0m packages[0m installed [0m[2m[[1m7.48s[0m[2m][0m[0m
++ bun run build:sdk
+[0m[2m[35m$[0m [2m[1mbun --production -F './sdk/packages/*' build[0m
+[?2026h[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36m[2mWaiting for 2 other script(s)[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mRunning...[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mRunning...[0m
+[?2026l[?2026h[0G[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36m[2mWaiting for 2 other script(s)[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m│[0m [0m[2m[35m$[0m [2m[1mbun scripts/generate-theme.ts --check[0m
+[36m└─[0m [36mRunning...[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mRunning...[0m
+[?2026l[?2026h[0G[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36m[2mWaiting for 2 other script(s)[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m│[0m [0m[2m[35m$[0m [2m[1mbun scripts/generate-theme.ts --check[0m
+[36m│[0m @cline/ui generated theme files are current
+[36m└─[0m [36mRunning...[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mRunning...[0m
+[?2026l[?2026h[0G[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36m[2mWaiting for 2 other script(s)[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m│[0m [0m[2m[35m$[0m [2m[1mbun scripts/generate-theme.ts --check[0m
+[36m│[0m @cline/ui generated theme files are current
+[36m│[0m @cline/ui theme contract is valid
+[36m└─[0m [36mRunning...[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mRunning...[0m
+[?2026l[?2026h[0G[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36m[2mWaiting for 2 other script(s)[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m│[0m [0m[2m[35m$[0m [2m[1mbun scripts/generate-theme.ts --check[0m
+[36m│[0m @cline/ui generated theme files are current
+[36m│[0m @cline/ui theme contract is valid
+[36m└─[0m [36mDone in 1.35 s[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mRunning...[0m
+[?2026l[?2026h[0G[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mRunning...[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m│[0m [0m[2m[35m$[0m [2m[1mbun scripts/generate-theme.ts --check[0m
+[36m│[0m @cline/ui generated theme files are current
+[36m│[0m @cline/ui theme contract is valid
+[36m└─[0m [36mDone in 1.35 s[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mDone in 2.52 s[0m
+[?2026l[?2026h[0G[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36m[2mWaiting for 1 other script(s)[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36mRunning...[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mDone in 726 ms[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m│[0m [0m[2m[35m$[0m [2m[1mbun scripts/generate-theme.ts --check[0m
+[36m│[0m @cline/ui generated theme files are current
+[36m│[0m @cline/ui theme contract is valid
+[36m└─[0m [36mDone in 1.35 s[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mDone in 2.52 s[0m
+[?2026l[?2026h[0G[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mRunning...[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36mDone in 3.26 s[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mDone in 726 ms[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m│[0m [0m[2m[35m$[0m [2m[1mbun scripts/generate-theme.ts --check[0m
+[36m│[0m @cline/ui generated theme files are current
+[36m│[0m @cline/ui theme contract is valid
+[36m└─[0m [36mDone in 1.35 s[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mDone in 2.52 s[0m
+[?2026l[?2026h[0G[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1m@cline/sdk[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mDone in 594 ms[0m
+[1m@cline/shared[0m build $ [2mBUILD_MODE=package bun bun.mts[0m
+[36m└─[0m [36mDone in 1.29 s[0m
+[1m@cline/core[0m build $ [2mbun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts[0m
+[36m└─[0m [36mDone in 3.26 s[0m
+[1m@cline/agents[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mDone in 726 ms[0m
+[1m@cline/ui[0m build $ [2mbun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json[0m
+[36m│[0m [0m[2m[35m$[0m [2m[1mbun scripts/generate-theme.ts --check[0m
+[36m│[0m @cline/ui generated theme files are current
+[36m│[0m @cline/ui theme contract is valid
+[36m└─[0m [36mDone in 1.35 s[0m
+[1m@cline/llms[0m build $ [2mbun run bun.mts && bun tsc -p tsconfig.build.json[0m
+[36m└─[0m [36mDone in 2.52 s[0m
+[?2026l+ bun run vscode:prepublish
+[0m[2m[35m$[0m [2m[1mbun run package[0m
+[0m[2m[35m$[0m [2m[1mbun run sync-parser-helper && bun run check-types && bun run build:webview && bun run lint && bun esbuild.mjs --production[0m
+[0m[2m[35m$[0m [2m[1mnode scripts/sync-parser-helper.mjs[0m
+  /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode: copied 5 platform binaries
+copied 5 binaries to 1 consumer app(s).
+[0m[2m[35m$[0m [2m[1mbun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit[0m
+[0m[2m[35m$[0m [2m[1mnode scripts/build-proto.mjs[0m
+(node:14727) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1m[34mCompiling Protocol Buffers...[39m[22m
+[36mProcessing 24 proto files from[39m /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/proto
+Generated ProtoBus files at:
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/webview-ui/src/services/grpc-client.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/vscode/protobus-service-types.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/vscode/protobus-services.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/standalone/protobus-server-setup.ts
+Generated Host Bridge client files at:
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/host-bridge-client-types.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/standalone/host-bridge-clients.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/vscode/hostbridge-grpc-service-config.ts
+[0m[2m[35m$[0m [2m[1mbiome format --config-path ./biome.jsonc src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched[0m
+Formatted 329 files in 35ms. Fixed 1 file.
+[0m[2m[35m$[0m [2m[1mbunx tsc --project tsconfig.vscode-compat.json --noEmit[0m
+[0m[2m[35m$[0m [2m[1mbun run protos && cd webview-ui && bun run build[0m
+[0m[2m[35m$[0m [2m[1mnode scripts/build-proto.mjs[0m
+(node:15775) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1m[34mCompiling Protocol Buffers...[39m[22m
+[36mProcessing 24 proto files from[39m /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/proto
+Generated ProtoBus files at:
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/webview-ui/src/services/grpc-client.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/vscode/protobus-service-types.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/vscode/protobus-services.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/standalone/protobus-server-setup.ts
+Generated Host Bridge client files at:
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/host-bridge-client-types.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/standalone/host-bridge-clients.ts
+- /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/src/generated/hosts/vscode/hostbridge-grpc-service-config.ts
+[0m[2m[35m$[0m [2m[1mbiome format --config-path ./biome.jsonc src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched[0m
+Formatted 329 files in 31ms. Fixed 1 file.
+[0m[2m[35m$[0m [2m[1mtsc -b && vite build[0m
+(node:15902) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Building webview for vscode
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 7208 modules transformed.
+rendering chunks...
+build/index.html                                            0.37 kB
+build/assets/geist-mono-symbols2-wght-normal.woff2          5.81 kB
+build/assets/geist-mono-cyrillic-ext-wght-normal.woff2      6.18 kB
+build/assets/geist-mono-vietnamese-wght-normal.woff2        7.70 kB
+build/assets/geist-mono-cyrillic-wght-normal.woff2         12.94 kB
+build/assets/geist-mono-latin-ext-wght-normal.woff2        14.70 kB
+build/assets/geist-mono-latin-wght-normal.woff2            23.13 kB
+build/assets/codicon.ttf                                   80.19 kB
+build/assets/index.css                                    135.54 kB
+build/assets/index.js                                   9,551.66 kB
+✓ built in 9.26s
+[0m[2m[35m$[0m [2m[1mbiome lint --config-path ./biome.jsonc --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && bun run lint:proto[0m
+Checked 1792 files in 1297ms. No fixes applied.
+[0m[2m[35m$[0m [2m[1mbash ./scripts/proto-lint.sh[0m
+[watch] build started
+[watch] build finished
++ git status --porcelain=v1 --untracked-files=all
++ /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/completion-authority/scripts/build-elm.sh
+[build-elm] compiling Main.elm -> vendor/completion-authority.js (elm 0.19.2 via /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/completion-authority/vendor/elm)
+Verifying dependencies (0/8)Verifying dependencies (1/8)Verifying dependencies (2/8)Verifying dependencies (3/8)Verifying dependencies (4/8)Verifying dependencies (5/8)Verifying dependencies (6/8)Verifying dependencies (7/8)Verifying dependencies (8/8)                            Dependencies ready!
+Compiling ...Compiling (1)Compiling (2)Compiling (3)Compiling (4)Success! Compiled 4 modules.
+
+    Main ───> /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/completion-authority/vendor/completion-authority.js
+
+[build-elm] done:
+   elm version             -> 0.19.2
+   elm compiler path       -> /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/completion-authority/vendor/elm
+   elm compiler sha256     -> 3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
+   completion-authority.js -> 15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c
+   Main.elm               -> fae9be55d4b1480cdab821804f92797328cf52ebca0c5a031ba72eb5c92c3f77
+   Authority.elm          -> c9b1b0f9431c74e77b87701a4c08a1d501ca4f28433d1d2f5b3928bcd358c724
+   Domain.elm             -> 08d94352aa4ab23a3cfd4d2348fe0a1bd02715d885daa0efafbeda36b5695891
+   Codec.elm              -> c4e9d48397c1bb6f2a04d43a6ad5477f46980ce4955164b3d440f66489c6e1bb
+   elm.json               -> f80085e147781d502776a7e0c60f4860e0fde8e9e067337b2cc5eab451be1091
++ /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/task-header-orchestration/scripts/build-elm.sh
+[build-elm] compiling Main.elm -> vendor/task-header-orchestration.js (elm 0.19.2 via /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/task-header-orchestration/vendor/elm)
+Verifying dependencies (0/8)Verifying dependencies (1/8)Verifying dependencies (2/8)Verifying dependencies (3/8)Verifying dependencies (4/8)Verifying dependencies (5/8)Verifying dependencies (6/8)Verifying dependencies (7/8)Verifying dependencies (8/8)                            Dependencies ready!
+Compiling ...Compiling (1)Compiling (2)Compiling (3)Compiling (4)Success! Compiled 4 modules.
+
+    Main ───> /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/task-header-orchestration/vendor/task-header-orchestration.js
+
+[build-elm] done:
+   elm version                   -> 0.19.2
+   elm compiler path             -> /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/task-header-orchestration/vendor/elm
+   elm compiler sha256           -> 3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
+   task-header-orchestration.js  -> d4cf4350264002e5bab41253f7f853b0637d1e1d51dce7d87a1108487d3e9d92
+   Main.elm                      -> c88a53e2e464bcb2a0419692dfc19477314a372eedb63ed80ede7a025f15b638
+   Orchestration.elm             -> 450110ecece59351cf8b2c0502281231737e3e15fe35362903a81e7c85d91da4
+   Domain.elm                    -> 0533a61bcf972ba5f0f094e2abd66d86a659e27b559874bae8ad3c1770b74343
+   Codec.elm                     -> a7ef83abc23cdb5295556eef66824e4ed4f1e58c001e14c2a3cb0bb195175dfa
+   elm.json                      -> e73250f50f4388517313ae9e1daa1c079b7d3f089f9206016243d590439d1f4e
++ /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/completion-continuation-control/scripts/build-elm.sh
+[build-elm] compiling Main.elm -> vendor/completion-continuation-control.js (elm 0.19.2 via /opt/homebrew/bin/elm)
+Verifying dependencies (0/8)Verifying dependencies (1/8)Verifying dependencies (2/8)Verifying dependencies (3/8)Verifying dependencies (4/8)Verifying dependencies (5/8)Verifying dependencies (6/8)Verifying dependencies (7/8)Verifying dependencies (8/8)                            Dependencies ready!
+Compiling ...Compiling (1)Compiling (2)Compiling (3)Compiling (4)Success! Compiled 4 modules.
+
+    Main ───> /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/completion-continuation-control/vendor/completion-continuation-control.js
+
+[build-elm] done:
+   elm version                            -> 0.19.2
+   elm compiler path                      -> /opt/homebrew/bin/elm
+   elm compiler sha256                    -> 3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
+   completion-continuation-control.js     -> 89f9a36bcf9d1206a34e12fe9a108bfe4bbb9ab16c3b194bd7eaccbac63592aa
+   Main.elm                               -> 9c2dd00446756e003dbce673e89e017381c44585c2c4fa9a746ce474a4911616
+   Policy.elm                             -> 33b002be848dd19de866d58605bfbd2a38fb0bf2bea55654a9dc57b19f455d15
+   Domain.elm                             -> 30e42cfc412b69144a47163e6510bba945a6ce0c2e8b3f2d643200ce617e7d7f
+   Codec.elm                              -> 741fe2a1e0e6f687e06e90da6a1eedd14856581483b8de0558ac4d336508c86c
+   elm.json                               -> 5cc07bb51b26ea1fc3d63c9fb4d0f830fae08153755f84896f09806c66169d99
++ /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/background-notify-authority/scripts/build-elm.sh
+[build-elm] compiling Main.elm -> vendor/background-notify-authority.js (elm 0.19.2 via /opt/homebrew/bin/elm)
+Verifying dependencies (0/8)Verifying dependencies (1/8)Verifying dependencies (2/8)Verifying dependencies (3/8)Verifying dependencies (4/8)Verifying dependencies (5/8)Verifying dependencies (6/8)Verifying dependencies (7/8)Verifying dependencies (8/8)                            Dependencies ready!
+Compiling ...Compiling (1)Compiling (2)Compiling (3)Compiling (4)Success! Compiled 4 modules.
+
+    Main ───> /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/background-notify-authority/vendor/background-notify-authority.js
+
+[build-elm] done:
+   elm version                            -> 0.19.2
+   elm compiler path                      -> /opt/homebrew/bin/elm
+   elm compiler sha256                    -> 3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
+   background-notify-authority.js         -> b0fd250dcff001d1fc06f48cca5e74b039689f16978a528d048b0440aca82b40
+   Main.elm                               -> bd8847343c4ecdc7bf0de2f3213a50cebcea0f84bf2e02f1ab93d19f66d010a8
+   Policy.elm                             -> 17d667d7ab72f6b341552107ce240a3129bac0f34046767f41bbd65246e28b9d
+   Domain.elm                             -> 84a8e5c4431b2c96ba7c31ec48bd9dc559cbbe37d46b419ca0219a61ce0f1cdd
+   Codec.elm                              -> 25fa9850a0b94cb12211363657e938eed7f20515eeb61232c008e4b4cfc71b6c
+   elm.json                               -> ca85ad0e37096aeeefc7a7427f13485186ed54072bb3e294fbb98eb4ae50ac3f
++ /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/deferred-completion-barrier/scripts/build-elm.sh
+[build-elm] compiling Main.elm -> vendor/deferred-completion-barrier.js (elm 0.19.2 via /opt/homebrew/bin/elm)
+Verifying dependencies (0/7)Verifying dependencies (1/7)Verifying dependencies (2/7)Verifying dependencies (3/7)Verifying dependencies (4/7)Verifying dependencies (5/7)Verifying dependencies (6/7)Verifying dependencies (7/7)                            Dependencies ready!
+Compiling ...Compiling (1)Compiling (2)Compiling (3)Compiling (4)Success! Compiled 4 modules.
+
+    Main ───> /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/elm/deferred-completion-barrier/vendor/deferred-completion-barrier.js
+
+[build-elm] done:
+   elm version                            -> 0.19.2
+   elm compiler path                      -> /opt/homebrew/bin/elm
+   elm compiler sha256                    -> 3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
+   deferred-completion-barrier.js         -> 30dbf762b0ce1ba292f28fef186fac977903cc02837c457ed047dbfeb9d48bbb
+   Main.elm                               -> 00322b80c5a4f850c13fcfd934c9bde5daa1e5e718ec7da2aacb65fc35561918
+   Policy.elm                             -> 29f30bb3a2fc7d3512b78bb22a8ce5ea93fa2d7ef5ab6c81a31eb32f7ef8ec1f
+   Domain.elm                             -> e31b7520d75b9881fb20e416b040f8d43ad2a966c2984333b17e26b3a86a9112
+   Codec.elm                              -> fc6c92879204b20fd732edb39373b2cb3bf186a69d651d3d596a786fb658ad67
+   elm.json                               -> 95275f90f2dd78613089ec15ccdd430ee1b124256adaaa279e13cf476695f15e
++ /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/node_modules/.bin/vsce package --no-dependencies --allow-package-secrets sendgrid --out /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/dist/clinemm-4.1.16-5a1c485cb-307bb1d46.vsix
+(node:17556) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Executing prepublish script 'npm run vscode:prepublish'...
+(node:17573) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> clinemm@4.1.16-5a1c485cb-307bb1d46 vscode:prepublish
+> true
+
+[104m[30m INFO [39m[49m [1m[34mFiles included in the VSIX:[39m[22m
+[1m[34m[39m[22m[1mclinemm-4.1.16-5a1c485cb-307bb1d46.vsix[22m
+├─ [Content_Types].xml 
+├─ extension.vsixmanifest 
+└─ [1mextension/[22m
+   ├─ LICENSE.txt [90m[11.08 KB][39m
+   ├─ package.json [90m[24.37 KB][39m
+   ├─ readme.md 
+   ├─ skills-lock.json [90m[0.24 KB][39m
+   ├─ [1massets/[22m [32m(13 files)[39m [90m[20.74 KB][39m
+   ├─ [1mbaselines/[22m [32m(3 files)[39m [90m[0.28 KB][39m
+   ├─ [1mbin/[22m [32m(6 files)[39m [90m[12.34 MB][39m
+   ├─ [1mdist/[22m [32m(1 file)[39m [90m[25.13 MB][39m
+   ├─ [1melm/[22m [32m(151 files)[39m [33m[118.28 MB][39m
+   ├─ [1mruntime-assets/[22m [32m(10 files)[39m [90m[398.11 KB][39m
+   ├─ [1mwalkthrough/[22m [32m(5 files)[39m [90m[2.59 KB][39m
+   └─ [1mwebview-ui/[22m [32m(16 files)[39m [90m[9.4 MB][39m
+
+=> Run [1mvsce ls --tree[22m to see all included files.
+
+[42m[30m DONE [39m[49m Packaged: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree/apps/vscode/dist/clinemm-4.1.16-5a1c485cb-307bb1d46.vsix [1m(211 files, 41.98 MB)[22m
++ git worktree remove --force /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-bWJxCS/clinemm-dogfood-h2iz0wno/worktree
+{
+  "source_head": "307bb1d46d92a0c0175e273f275a55629431032f",
+  "source_version": "4.1.16-5a1c485cb",
+  "dogfood_version": "4.1.16-5a1c485cb-307bb1d46",
+  "artifact": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-5a1c485cb-307bb1d46.vsix",
+  "sha256": "1006d304a15cd5080f38d933574dd53f393694e217ef566d0958ffef355489be",
+  "bytes": 44018517,
+  "skip_typecheck": false,
+  "elm_version": "0.19.2",
+  "elm_bin": "/opt/homebrew/bin/elm",
+  "elm_bin_sha256": "3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b",
+  "elm_toolchain_resolver_reason": "homebrew slot /opt/homebrew/bin/elm"
+}

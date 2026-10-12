@@ -24336,3 +24336,107 @@ completes, and verify the listener is still in
 `runtimeEventListeners` when the first `publishRunStarted`
 fires. No broader refactor. No new Elm kernel. No fabricated
 completion. Production repair remains NOT AUTHORIZED.
+
+# ACT-CLINEMM-EXACT-HEAD-DOGFOOD-C1-GO — PASS — 2026-10-12
+
+**Verdict:** PASS (Expert reviewer `PASS_WITH_NONBLOCKING_RESIDUE`,
+C1: GO, exact-HEAD packaging authorized).
+
+**Status:** `HALT_DOGFOOD_TYPECHECK_TEST_BOUNDARY` = **CLOSED**
+(via the bounded PPLC01/OCRRD01 build wiring committed at
+`307bb1d46d92a0c0175e273f275a55629431032f`). `VSIX packaging`
+= **EXECUTED**. `Installed LIVE recovery` = **OPEN** (per the
+Expert disposition: "the next valuable evidence is the
+installed session demonstrating real observation consumption,
+truthful capability publication, and exactly one Elm-authorized
+completion commit").
+
+**Sequence honored:** the Expert's "Artifact identity caveat"
+required that the source HEAD of the VSIX artifact be
+discovered (not assumed) and the worktree be clean before
+packaging. The 4 PPLC01 wiring files referenced in the Expert
+digest were still uncommitted at session start; they were
+committed as a single bounded build-wiring commit
+(`307bb1d46`) with zero production code changes, then re-verified
+on the new HEAD before the dogfood build ran.
+
+**Bounded commit `307bb1d46` (PPLC01/OCRRD01 build wiring):**
+4 files modified, +89/-10 lines, no production code touched,
+no Elm authority touched. Three mechanical wirings (mirror the
+OCRRD01 sibling exclusion pattern at `vitest.config.ts:265-279`,
+`tsconfig.json:222-236`, `tsconfig.c2-4-c-bridge.json:189`),
+plus 3 bounded test-only corrections in the PPLC01 bridge
+test (`AgentResult.messages/toolCalls` `readonly never[]` widening,
+`new CommandJobManager()` zero-arg, `commandStatusTool.execute(input,
+AgentToolContext)`, `pendingPrompts.count` cast to
+`{available:true;count:number}`).
+
+**Re-verified on `307bb1d46` (post-commit):**
+
+| Gate | Result |
+|---|---|
+| PPLC01 bridge (8/8) | **PASS** |
+| OCRRD01 bridge (5/5) | **PASS** |
+| Bridge typecheck (PPLC01 in scope) | **PASS** (0 NEW diagnostics vs frozen baseline) |
+| Lint on the 4 changed files | **PASS** (0 diagnostics, 0 fixes) |
+| ACO01/03 pre-existing CASE_D_DEAD_ZONE failure | **NOT A REGRESSION** (re-verified on pristine `b1de112d2` with identical 2/3 shape; the test is designed to surface a known production gap) |
+
+**Exact-HEAD dogfood VSIX build manifest** (per the Expert
+"discover the current HEAD" directive, not the old digest's
+`b1de112d2` SHA):
+
+| Field | Value |
+|---|---|
+| `source_head` | `307bb1d46d92a0c0175e273f275a55629431032f` |
+| `source_version` | `4.1.16-5a1c485cb` |
+| `dogfood_version` | `4.1.16-5a1c485cb-307bb1d46` |
+| `artifact` | `dist/dogfood/clinemm-4.1.16-5a1c485cb-307bb1d46.vsix` |
+| `sha256` | `1006d304a15cd5080f38d933574dd53f393694e217ef566d0958ffef355489be` |
+| `bytes` | 44,018,517 (~41.98 MB) |
+| `skip_typecheck` | `false` (full `bun run package` typecheck ran) |
+| `elm_version` | `0.19.2` |
+| `elm_bin` | `/opt/homebrew/bin/elm` (sha256 `3e65ac3e…`) |
+| `vsce tree` | 211 files, 41.98 MB |
+| `runtime-assets` | 10 files / 398.11 KB (5 Elm kernels + .sha256 sidecars) |
+| `shasum -a 256` independent re-verify | **MATCH** (`1006d304a15cd5080f38d933574dd53f393694e217ef566d0958ffef355489be`) |
+
+**Build environment workarounds** (build-host local, no code
+change): `BUN_TMPDIR=/tmp/dogfood-bun-tmp` (the macOS `$TMPDIR`
+under `/private/var/folders/0g/...` is not writable for the Bun
+child process spawned from the git-worktree); `HOME=/tmp/dogfood-elm-home`
+(pre-seeded with a writable copy of `~/.elm/0.19.2/packages/lock` to
+bypass the macOS provenance/sandbox denial on
+`/Volumes/UserData/Users/chistyakov/.elm/0.19.2/packages/lock`
+when the homebrew `elm` runs from the deeply-nested worktree).
+
+**D01..D12 invariants all satisfied** (D02 CLEAN_SOURCE_ONLY
+proven by `git status --porcelain` after the commit, before
+the build; D04 ISOLATED_BUILD proven by `git worktree add
+--detach` in `clinemm-sandbox-temp-…`; D05 LOCKFILE_AUTHORITY
+proven by `bun install --frozen-lockfile`; D06 CANONICAL_BUILD
+proven by `bun run build:sdk` + `bun run vscode:prepublish`
+with full typecheck + webview + lint + esbuild; D07
+PACKAGE_VERSION proven by `4.1.16-5a1c485cb-307bb1d46`;
+D08 PACKAGE_VERIFICATION proven by vsce manifest Version
+matching dogfood_version; D09 PAYLOAD_SANITY proven by
+extension/dist/extension.js + webview-ui/ assets present;
+D10 ARTIFACT_IDENTITY proven by SHA-256 above; D12 CLEANUP
+proven by `git worktree remove --force` at the end of the run).
+
+**Files added by this ACT (no production code):**
+- `.factory/acts/ACT-CLINEMM-EXACT-HEAD-DOGFOOD-C1-GO/`
+  (the closure report + 8 evidence files: 01-pplc01-bridge.txt,
+  02-ocrrd01-bridge.txt, 03-bridge-typecheck.txt,
+  04-lint-changed-files.txt, 09-aco01-pre-existing-failure.md,
+  10-dogfood-build.txt, result.json, ACT-CLINEMM-EXACT-HEAD-DOGFOOD-C1-GO.md)
+- This board row.
+
+**Next steps** (Expert disposition, unchanged from `C1: GO`):
+1. Install the artifact:
+   `codium-cline --install-extension dist/dogfood/clinemm-4.1.16-5a1c485cb-307bb1d46.vsix`
+2. Run the installed session demonstrating real observation
+   consumption, truthful capability publication, and exactly one
+   Elm-authorized completion commit. **D11 OPTIONAL_INSTALL
+   was deliberately not invoked by the orchestrator** (it is a
+   separate operator step that requires VSCodium to be closed
+   and re-opened).
