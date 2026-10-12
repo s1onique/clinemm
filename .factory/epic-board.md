@@ -24956,3 +24956,106 @@ SEAM09_LIVE:                     NOT_QUALIFIED (SEAM10 obligation)
 7. Confirm 49/49 GREEN on the recon + full-coordinator regression
    suite (R1-R6 + 43 baseline) and 0 ACT-owned new failures on
    the wider vitest sweep.
+
+## ACT-CLINEMM-ELM-SEAM10-INTEROP-DISC — NOT_A_GOOD_ELM_SEAM — 2026-10-12
+
+**Status:** CLOSED with verdict `NOT_A_GOOD_ELM_SEAM`. The reviewer-mandated interop discriminator was executed against the SEAM09 frozen contract. The discriminator returns the disposition `NOT_A_GOOD_ELM_SEAM` based on 6 enumerated reasons. The SEAM10 production cutover is **not authorized**.
+
+**Reviewer verdict honored (verbatim):**
+
+> P0 — SEAM10 repeats the SEAM06 synchronous-interop mistake
+>
+> The frozen plan proposes: `consultToolApprovalAuthorityForRequest(request, hostFacts): VerdictTag` It explicitly requires a synchronous Elm decision inside the approval-policy evaluation. But our earlier SEAM06 investigation already rejected synchronous Elm `Platform.worker` interop using the existing substrate.
+>
+> P1 — The nine tags are not the complete authorization contract.
+>
+> The existing command-policy callback returns more than ALLOW/DENY: `{ approved, decision: { kind, reason, source }, executionPlan, hostAuthorization }`.
+>
+> P1 — The migration economics are not established for the selected sub-seam.
+
+> C1: GO to SEAM10 discriminator; NO-GO for immediate production cutover.
+
+**Preconditions met:**
+
+- ENTRY_HEAD = `ff80cddbf92a4e9b834fe75359d17e64a687949b` on branch `main` (the SEAM09 commit); working tree clean; no stashes; no uncommitted changes.
+- SEAM01–09 evidence preserved in `.factory/epic-board.md` and the per-ACT files in `.factory/`.
+- HALT_UNEXPECTED_TRACKED_DIRT: NOT TRIGGERED.
+
+**Discriminator (the executable evidence):**
+
+```text
+$ cd apps/vscode && bun vitest run \
+    src/sdk/__tests__/tool-approval-authority-elm-interop-discriminator.tpaeid01.test.ts
+
+ ✓ src/sdk/__tests__/tool-approval-authority-elm-interop-discriminator.tpaeid01.test.ts (11 tests) 65ms
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   exitCode 0
+```
+
+Cross-regression (60/60 GREEN, exitCode 0): 11 (TPAEID01) + 43 (full coordinator regression) + 6 (SEAM09 recon R1-R6) = 60. TypeScript typecheck: 0 errors.
+
+**Test families (TPAEID-01 through TPAEID-10):**
+
+| ID | Family | What it proves | Result |
+| --- | --- | --- | --- |
+| TPAEID-01 | Synchronous-impossibility theorem | `Platform.worker` consult takes ≥ 1 event-loop tick; the SEAM09 "synchronous consult" claim is **unsupportable**. | CONFIRMED |
+| TPAEID-02 | TOCTOU window measurement | The consult takes > 0ms wall-clock; the verdict commits at T1 > T0; an explicit snapshot/revalidate boundary is required. | CONFIRMED |
+| TPAEID-03 | Fail-closed on `kernel_offline` | Existing bridge surfaces `kind: "kernel_offline"`; production caller falls through to TS predecessor. No fabricated ALLOW. | PASS |
+| TPAEID-04 | Fail-closed on `decode_error` | Existing bridge surfaces `kind: "decode_error"` for malformed directives. No fabricated ALLOW. | PASS |
+| TPAEID-05 | Fail-closed on `response_timeout` | A hung kernel is bounded by the public-boundary timer (5s in production, 50ms in test). The verdict is never stuck, never defaults to ALLOW. | PASS |
+| TPAEID-06 | Evidence conservation | 3 of 9 VerdictTags (ALLOW_SDK_POLICY, ALLOW_HOST_CALLBACK, REFORMULATE) carry an evidence-loss hazard. | CONFIRMED |
+| TPAEID-07 | Migration economics — LoC measurement | The LoC delta is not established by the discriminator; deferred to the next ACT. | DEFERRED |
+| TPAEID-08 | Existing-await-boundary economics | At the post-L466 await, the host callback already returns 5 fields; the Elm `VerdictTag` (1 field) is a strict loss. | CONFIRMED |
+| TPAEID-09 | Reformulation side-channel | The `REFORMULATE` tag is an indirect side effect via a class field (`pendingReformulationSlot` at L522); the SEAM04 "kernel classifies, TS commits" pattern does not apply. | CONFIRMED |
+| TPAEID-10 | Disposition harness | The disposition is one of `{GO_SEAM10, NOT_A_GOOD_ELM_SEAM, HALT_APPROVAL_AUTHORITY_UNSAFE}`. | RECORDED |
+| auxiliary | Tag enumeration | 9 VerdictTags as SEAM09 frozen contract defines; 4 of 9 are permissive-if-defaulted. | DOCUMENTED |
+
+**The 6 reasons for `NOT_A_GOOD_ELM_SEAM`:**
+
+1. **Platform.worker is fundamentally async.** Every one of the 5 existing kernels uses the per-requestId pending-map + `setTimeout` + `Promise.race` pattern. SEAM06 confirmed; SEAM07 corrected its plan to avoid it; SEAM09's claim is wrong.
+2. **TOCTOU window is non-zero.** The verdict body at `runRequestToolApproval:427-608` is already bounded by the existing await at L466. Adding an Elm consult on the post-`await` side introduces a second non-zero async hop.
+3. **3 of 9 VerdictTags carry an evidence-loss hazard.** The existing `evaluateCommandToolApproval` returns 5 fields; a `VerdictTag` is 1 field. The adapter would have to re-run the host policy lattice to reconstruct the evidence, creating dual authority.
+4. **The host callback already returns full evidence.** The post-L466 await already returns the right answer. The Elm cutover would add +1 async hop for a `VerdictTag` that is strictly less informative.
+5. **REFORMULATE is an indirect side effect.** The `REFORMULATE` tag requires the TS adapter to mutate `this.pendingReformulationSlot` (class field) at L522. The Elm kernel cannot perform this mutation. The SEAM04 pattern does not apply.
+6. **Mirrors SEAM06.** The verdict body is too small and too synchronous to justify an Elm kernel. The SEAM06 12-case delivery decision and the SEAM10 9-tag policy decision both fall into the "small synchronous projection + ~600 LoC Elm cost + new async hop ⇒ cutover is not worth it" trap.
+
+**Production delta: ZERO.** The production TS expression remains the live authority unchanged. No Elm kernel written. No TS adapter added. No host callback introduced. No probe code point added. The 6th Elm kernel position in `_ELM_KERNELS` remains unallocated.
+
+**Gates:**
+- `git status --short` → empty before this ACT's commit.
+- `git diff --check` → exit 0.
+- `vitest tool-approval-authority-elm-interop-discriminator` → 11/11 PASS, exitCode 0.
+- `vitest sdk-interaction-coordinator` + `vitest approval-rejection-correlation-fail-closed-recon01` + `vitest tool-approval-authority-elm-interop-discriminator` → 60/60 PASS, exitCode 0.
+- `tsc --noEmit` → 0 errors, exitCode 0.
+- HALT_P0_TRIGGERED: NO. HALT_P1_TRIGGERED: NO.
+
+**Factory decision:**
+```
+SEAM10_DISCRIMINATOR:    PASS (executed per reviewer C1)
+SEAM10_DISPOSITION:      NOT_A_GOOD_ELM_SEAM
+SEAM10_CUTOVER:          NOT AUTHORIZED
+SEAM10_INTEROP_PROOF:    SYNCHRONOUS_IMPOSSIBLE (TPAEID-01 CONFIRMED)
+SEAM10_EVIDENCE_LOSS:    3_OF_9_TAGS_AT_RISK (TPAEID-06 CONFIRMED)
+SEAM10_SIDE_CHANNEL:     REFORMULATE_INDIRECT (TPAEID-09 CONFIRMED)
+SEAM10_NEXT_CURSOR:      NEW_RECON_FOR_DIFFERENT_CANDIDATE
+```
+
+**Predecessor ACT lineage (SEAM10 interop-disc lineage, complete):**
+```
+SEAM09 (tool-approval-lifecycle-recon, GREEN) → SEAM10 (interop-disc, NOT_A_GOOD_ELM_SEAM)
+```
+
+**Next cursor (NOT a retry of this candidate):**
+
+The 6th Elm kernel position in `_ELM_KERNELS` remains unallocated. The next ACT (if any) should be a **recon ACT for a different candidate**, NOT the tool-approval verdict body. Possible next candidates, in priority order:
+
+1. The full `evaluateCommandToolApproval` host callback (the canonical command-policy lattice in `sdk/packages/core/src/runtime/command-policy/`) — but lives in the SDK, conflicts with the SEAM06 "SDK must stay clean of VSCode assets" finding; would need a dedicated recon to scope.
+2. The `pendingToolApprovalResolve` slot lifecycle (L1067-L1103 + L930-L931 + L1102) — but necessarily TS-only because the user IS the answer source; the Elm "consult" model is incompatible with the destructive single-slot Promise machine. SEAM09 already concluded this; do not re-litigate.
+3. A different production decision authority entirely. The next ACT should re-evaluate the Factory Elm migration queue against a candidate where: (a) the existing await boundary is the natural cutover point, (b) the projection is bounded enough to be a stable Elm model, (c) the evidence payload can be carried through the wire without loss, (d) the migration is motivated by a specific correctness benefit (not a "this is policy, Elm is good at policy" generalization).
+
+**Files added (3):**
+- `apps/vscode/src/sdk/__tests__/tool-approval-authority-elm-interop-discriminator.tpaeid01.test.ts` (the discriminator; 11 tests; ~470 lines)
+- `.factory/ACT-CLINEMM-ELM-SEAM10-INTEROP-DISC.md` (this ACT plan, board-cursor, 551 lines)
+- `.factory/acts/ACT-CLINEMM-ELM-SEAM10-INTEROP-DISC.md` (canonical ACT plan, identical content per SEAM07 convention, 551 lines)
+- `.factory/evidence/ACT-CLINEMM-ELM-SEAM10-INTEROP-DISC/executable-witness.md` (witness log)
