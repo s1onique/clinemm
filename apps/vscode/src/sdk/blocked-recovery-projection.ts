@@ -1,6 +1,11 @@
 /**
  * ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
  *
+ * CORRECTION01: the producer accessor on `SdkSessionEventCoordinator`
+ * is now `getCurrentDeferredCompletionBarrier()` (the production read
+ * path). The test-only `*ForTesting` alias is kept for existing test
+ * sites but is NOT the production read path.
+ *
  * Pure read-only projection of the host's current blocked-recovery
  * state for the wire.
  *
@@ -18,7 +23,7 @@
  * unit tests can exercise the projection logic without instantiating
  * the full SdkController (which requires a vscode ExtensionContext).
  * The SdkController calls this helper with the live BCB barrier
- * (the shape returned by `getDeferredCompletionBarrierForTesting()`).
+ * (the shape returned by `getCurrentDeferredCompletionBarrier()`).
  */
 
 import type { BlockedRecoveryProjection, BlockedRecoveryReason } from "@shared/ExtensionMessage"

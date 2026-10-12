@@ -2481,7 +2481,32 @@ export class SdkSessionEventCoordinator {
 	 * `undefined` for markers registered solely by the BCB
 	 * predicate (a fresh hold, not a typed blocked verdict).
 	 */
-	getDeferredCompletionBarrierForTesting():
+	/**
+	 * ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01-CORRECTION01:
+	 * PRODUCTION READ ACCESSOR for the deferred-completion-barrier marker.
+	 *
+	 * Returns a frozen snapshot of the BCB marker so callers can project
+	 * it onto the webview's blocked-recovery control surface. The
+	 * returned shape is `{ sessionId, taskId, epoch, reason }`:
+	 *   - `sessionId` / `taskId` / `epoch` are the identity triple from
+	 *     the producer side (set by the BCB admission guard at
+	 *     `enqueueCompletionContinuationIfHeld`).
+	 *   - `reason` is the typed BCB verdict set by
+	 *     `applyBlockedCompletionContinuationOutcome`. It is `undefined`
+	 *     for markers registered solely by the BCB predicate (a fresh
+	 *     hold, not a typed blocked verdict).
+	 *
+	 * The accessor is a PURE READ. It does NOT mutate the barrier,
+	 * increment `runtimeErrorCount`, recompute the held set, or trigger
+	 * any continuation. The marker itself is at-most-one; concurrent
+	 * callers all see the same identity triple.
+	 *
+	 * This is the production read path. SdkController.getStateToPostToWebview
+	 * calls this to project `blockedRecovery` onto the webview.
+	 * `getDeferredCompletionBarrierForTesting` is a thin alias kept for
+	 * existing test sites.
+	 */
+	getCurrentDeferredCompletionBarrier():
 		| {
 				readonly sessionId: string
 				readonly taskId: string | undefined
@@ -2496,6 +2521,22 @@ export class SdkSessionEventCoordinator {
 			epoch: this.deferredCompletionBarrier.epoch,
 			reason: this.deferredCompletionBarrier.reason,
 		}
+	}
+
+	/**
+	 * DEPRECATED alias of `getCurrentDeferredCompletionBarrier` kept for
+	 * the existing test sites. New code (especially production callers)
+	 * SHOULD call the production accessor. Behavior is identical.
+	 */
+	getDeferredCompletionBarrierForTesting():
+		| {
+				readonly sessionId: string
+				readonly taskId: string | undefined
+				readonly epoch: number
+				readonly reason?: DeferredCompletionBarrierReason
+		  }
+		| undefined {
+		return this.getCurrentDeferredCompletionBarrier()
 	}
 
 	/**

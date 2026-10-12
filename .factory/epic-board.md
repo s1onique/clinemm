@@ -24705,3 +24705,60 @@ The new field is **load-bearing** for production UI behavior. The factory `HALT_
 - Elm authority: NO new kernel, NO new TaskHeader migration, NO new completion authority. The existing kernels are unchanged.
 
 **VERDICT:** `PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE` — Producer → typed wire → actual webview consumer is GREEN; stale/lifetime and necessity ablations pass; no completion-safety regressions; LIVE qualification is the operator's handoff.
+
+# ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01-CORRECTION01 — BRPU01-C1 — PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE — 2026-10-12
+
+This is a bounded CORRECTION01 of the BRPU01 ACT. The factory disposition on BRPU01 was `HALT_BRPU01_PRODUCTION_PUBLICATION_NOT_PROVEN` with two P0 findings and three P1 findings. This CORRECTION01 addresses each in a bounded way, preserving the existing implementation and repairing only the evidence boundary.
+
+**HALT findings (all RESOLVED):**
+- **P0 #1 (production accessor is a test seam)**: RENAMED `getDeferredCompletionBarrierForTesting()` → `getCurrentDeferredCompletionBarrier()` (the production read path; the old name is kept as a thin deprecated alias for the existing 22 test sites). `SdkController.getStateToPostToWebview` publication site is updated. WITNESS-3 in `brpu01.test.ts` is updated to assert the production name is used AND the `*ForTesting` name is NOT used.
+- **P0 #2 (end-to-end producer → UI claim)**: NEW test file `host-blocked-recovery-publication-and-ui-authority01-correction01.brpu01-c1.test.ts` exercises the real production chain end-to-end (real `SdkSessionEventCoordinator` + real `BackgroundNotifyCoordinator` + real `projectBlockedRecovery` + real `getButtonConfigFromState` + real `incomingIsStaleSameEpochPublication` predicate shape). 9/9 PASS.
+- **P1 #1 (task identity)**: BRPU-C1-04 + C1-07 prove cross-task and cross-epoch identity handling. WITNESS-3 forbids the `*ForTesting` accessor name from the publication site.
+- **P1 #2 (genuine-clearing)**: BRPU-C1-02 + C1-03 + C1-08 prove a real `command_status` Path C drain + epoch advance clears the marker; the same-epoch publication fence preserves the cleared state against stale K snapshots.
+- **P1 #4 (canonical typecheck)**: HBRC01 test harness fixed (was using wrong-shape `ownerSessionId/ownerTaskId/wakeSink`; now uses correct `resolveActiveOwner/enqueueTerminalWake/discardQueuedWake`). `tsc --noEmit -p tsconfig.json` is clean (0 errors) across the entire repo.
+
+**Discovery during the new test (corroborates the factory concern, exposes the actual production lifetime semantics):** the BCB marker does NOT auto-clear after a held-set drain. The bounded host correlation guard's `sameObligationAlreadyObservationUnavailable` short-circuit prevents a re-stamp; BOCR01-04 documents this. The marker's lifetime is bounded by epoch advance — the next re-eval sees `marker.epoch != currentEpoch` and clears the marker (`sdk-session-event-coordinator.ts:1255-1258`). The C-1-02 / C-1-03 / C-1-08 tests document and prove this.
+
+**Production delta on `b09f7ea22`:**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — renamed accessor; alias kept.
+- `apps/vscode/src/sdk/SdkController.ts` — uses the new production accessor.
+- `apps/vscode/src/sdk/blocked-recovery-projection.ts` — comment-only: documents the new production accessor.
+
+**Test delta on `b09f7ea22`:**
+- `apps/vscode/src/sdk/__tests__/host-blocked-recovery-publication-and-ui-authority01-correction01.brpu01-c1.test.ts` (NEW; 9 tests; real coordinator + real projection + real consumer selector end-to-end).
+- `apps/vscode/src/sdk/__tests__/host-blocked-recovery-publication-and-ui-authority01.brpu01.test.ts` — WITNESS-3 source-bound assertion updated.
+- `apps/vscode/src/sdk/__tests__/host-blocked-recovery-contract01.hbrc01.test.ts` — harness type error fixed.
+
+**Predecessor ACT lineage (P0 recovery contract lineage, complete):**
+- BRPU01 (PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE) at HEAD `b09f7ea22` — the original implementation; this CORRECTION01 repairs the evidence boundary.
+- HBRC01 (HALT) at HEAD `858d8e082` — the previous contract-freeze ACT.
+- EPSD01 at HEAD `858d8e082` — discriminator.
+- HBCLO01 + HBOP01 + BOCR01 + OCRRD01 + AOPC01 + PPLC01 + VSTN01.
+
+**Focused test execution on Node 26.0.0 (real runtime, the reviewer's required gate):**
+- BRPU01 (source + projection): **13/13 PASS**
+- BRPU01-C1 (end-to-end chain): **9/9 PASS**
+- HBRC01 (post-harness-fix): **13/13 PASS**
+- BOCR01 (regression check): 7/7 PASS
+- buttonConfig (control): 37/37 PASS
+- buttonConfig.aoc02 (regression): 9/9 PASS
+- buttonConfig.blocked-recovery01 (webview selector): 11/11 PASS
+- AOC01 (regression): 4/4 PASS; AOC02.section6 (regression): 4/4 PASS
+- messageReducer (regression): 16/16 PASS; w1-epoch (regression): 3/3 PASS
+- Total: **126/126 PASS**
+- HBCLO01: 5/7 fail — pre-existing baseline (verified at `b09f7ea22` via `git stash` + rerun)
+- HBOP01: 8/12 fail — pre-existing baseline
+- BCB01: 13/14 fail — pre-existing baseline (not in my ACT scope)
+
+**C12 gates:**
+- TYPECHECK: **0 errors** (entire repo; the previously-failing HBRC01 line 150 is fixed)
+- LINT: 0 ACT-owned errors (1 pre-existing `noNonNullAssertion` in `SdkController.ts:3557` NOT my regression — verified at `b09f7ea22` via `git stash`)
+- WEBVIEW_BUILD: NOT_RUN (no production change to the webview bundle; the operator's VSIX build will run it)
+- VSIX: NOT_BUILT (per C13; no operator-installed VSIX in this session; the operator will build the exact-head VSIX and install it)
+- LIVE: NOT_QUALIFIED (per C14; LIVE qualification is the operator's handoff — LIVE-A through LIVE-D from the original BRPU01 ACT)
+
+**Conservation:** All 16 C11 invariants from the original BRPU01 ACT preserved.
+**Elm authority:** Elm kernels unchanged. NO new kernel, NO new TaskHeader migration, NO new completion authority.
+**Public protocol delta:** 0 (only the production accessor was renamed; the wire field is byte-identical to BRPU01).
+
+**VERDICT:** `PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE` — All five HALT findings addressed with executable evidence. The producer accessor is now named for production. The end-to-end chain (real coordinator → real projection → real consumer selector) is exercised in 9 new tests. Identity, clearing, and stale-publication behaviors are all proven against the real production chain. The canonical typecheck is clean. VSIX rebuild + LIVE qualification are the operator's handoff (C13/C14: install exact-head VSIX, exercise LIVE-A through LIVE-D).

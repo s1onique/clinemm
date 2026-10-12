@@ -5983,7 +5983,12 @@ export class Controller {
 				// AND its `reason === "observation_unavailable"`. See
 				// `projectBlockedRecovery` for the projection contract and
 				// C5.1 invariants.
-				blockedRecovery: projectBlockedRecovery(this.sessionEvents?.getDeferredCompletionBarrierForTesting?.()),
+				//
+				// CORRECTION01: the production accessor is now
+				// `getCurrentDeferredCompletionBarrier` (the test-only
+				// `*ForTesting` alias is retained for existing test sites but
+				// must not be the production read path).
+				blockedRecovery: projectBlockedRecovery(this.sessionEvents?.getCurrentDeferredCompletionBarrier?.()),
 				// ACT-MYC-CLINEMM02-C: session-start prime automation
 				// projection. Read the latest recorded prime result for
 				// the active session id (the module-level singleton in

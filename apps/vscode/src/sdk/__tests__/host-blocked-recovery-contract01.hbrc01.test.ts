@@ -146,16 +146,19 @@ function makeHbrcHarness(opts: { activeSessionId?: string; activeTaskId?: string
 	let liveTools: readonly string[] | undefined = ["submit_and_exit"]
 	let now = 0
 
+	// CORRECTION01: BackgroundNotifyCoordinator's actual options use
+	// `resolveActiveOwner` (a callback) + `enqueueTerminalWake` (an async
+	// sink). The previous `ownerSessionId/ownerTaskId/wakeSink` shape
+	// was a wrong-shape cast and produced a TS2353 type error that
+	// blocked the canonical build gate. The corrected shape mirrors
+	// the production wiring at `SdkController.ts:1458`.
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
-		ownerSessionId: activeSessionId,
-		ownerTaskId: activeTaskId,
-		wakeSink: {
-			enqueue: ({ jobId, prompt }: { jobId: string; prompt: string }) => {
-				wakeLog.push({ sessionId: activeSessionId, jobId, prompt })
-				return { kind: "delivered" as const }
-			},
-			discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
+		enqueueTerminalWake: async ({ sessionId, prompt, jobId }) => {
+			wakeLog.push({ sessionId, jobId: jobId ?? "", prompt })
+			return { kind: "delivered" as const }
 		},
+		discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
 		now: () => ++now,
 		consumeTerminalAuthority: legacyConsumeTerminalPolicy,
 	})

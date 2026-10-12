@@ -161,15 +161,16 @@ describe("ACT-CLINEMM-P0-BRPU01 / blocked recovery — host publication (RED + G
 		})
 
 		it("WITNESS-3: SdkController.getStateToPostToWebview calls projectBlockedRecovery with the live BCB barrier (read-only)", () => {
-			// The producer must read the barrier via the existing
-			// `getDeferredCompletionBarrierForTesting()` accessor (the
-			// only production seam that exposes the marker). The call
-			// must be a single expression, not a stored reference.
+			// CORRECTION01: the producer must read the barrier via the
+			// production accessor `getCurrentDeferredCompletionBarrier()`
+			// (the test-only `*ForTesting` alias is NOT a production
+			// read path). The call must be a single expression, not
 			const getStateBody = SdkControllerSource.slice(
 				SdkControllerSource.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>"),
 			)
 			expect(getStateBody).toMatch(/blockedRecovery:\s*projectBlockedRecovery\(/)
-			expect(getStateBody).toMatch(/this\.sessionEvents\?\.getDeferredCompletionBarrierForTesting\?\.\(\)/)
+			expect(getStateBody).toMatch(/this\.sessionEvents\?\.getCurrentDeferredCompletionBarrier\?\.\(\)/)
+			expect(getStateBody).not.toMatch(/getDeferredCompletionBarrierForTesting/)
 			// Must NOT assign the projection to any side-effect variable
 			// (the call must be a pure expression).
 			expect(getStateBody).not.toMatch(/const\s+blockedRecovery\s*=/)
