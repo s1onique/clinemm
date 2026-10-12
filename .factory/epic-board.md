@@ -24829,3 +24829,130 @@ VSTN01 → BOCR01 → OCRRD01 → PPLC01 → AOPC01 → HBCLO01 → HBOP01
 | Actual `postMessage` round-trip | NOT_QUALIFIED | LIVE (C14) |
 
 **VERDICT:** `PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE` — All HALT findings addressed with executable evidence. The REAL_SDKCONTROLLER_PRODUCER is proven via a real Controller + real `getStateToPostToWebview()` + real `snapshot.blockedRecovery`. The PRODUCTION_LIFETIME_CONTRACT is recorded and proven (BRPU-C2-07). The 7 new tests + 126 existing focused tests = 133/133 PASS. The React render + postMessage + LIVE qualification are the operator's handoff (C13/C14: install exact-head VSIX, exercise LIVE-A through LIVE-D from the original BRPU01 ACT).
+
+## ACT-CLINEMM-ELM-SEAM09-TOOL-APPROVAL-LIFECYCLE-RECON — PASS_ELM_SEAM09_RECON — 2026-10-12
+
+**Status:** CLOSED with verdict `PASS_ELM_SEAM09_RECON`. One bounded production decision authority selected. No production code touched. No Elm implementation attempted (per scope). The economics gate passed for the selected sub-seam; the next ACT (SEAM10) is the implementation cutover, not another recon.
+
+**Preconditions met:**
+- ENTRY_HEAD = `179800d36b14c564069f06cd9f701aa575b974da` on branch `main`; working tree clean; no stashes; no uncommitted changes.
+- SEAM01–08 evidence preserved (all four prior PASS / `NOT_A_GOOD_ELM_SEAM` / substrate / cutover / correction entries still present in this board file).
+- The prior tool-approval-correlation recon
+  (`ACT-CLINEMM-APPROVAL-REJECTION-CORRELATION-FAIL-CLOSED-RECON01`,
+  closed `CORRELATION_DEFECT_NOT_REPRODUCED` at the
+  `SdkInteractionCoordinator` real production seam) is the
+  load-bearing execution-path witness for this ACT.
+- HALT_UNEXPECTED_TRACKED_DIRT: NOT TRIGGERED.
+
+**Selected production decision authority (bounded sub-seam):**
+
+The synchronous ALLOW/ASK/REFORMULATE/DENY/EDIT_ALLOW/EDIT_ASK
+policy-evaluation decision inside
+`SdkInteractionCoordinator.runRequestToolApproval` at
+`apps/vscode/src/sdk/sdk-interaction-coordinator.ts:427-608`. This
+is the **only** production code path that classifies a
+`ToolApprovalRequest` into a closed-enum verdict. The class's two
+other responsibilities (a) pending-slot registration + ASK card
+publication at L686-L758, and (b) response correlation + cleanup at
+L906-L969 + L1067-L1103 are necessarily TS-owned (the user IS the
+answer source and the Promise-resolver effect cannot move to Elm).
+
+**Early economic gate (7 criteria):**
+1. Meaningful temporal state transitions — **YES** (pending slot → published card → user response → settlement → cleanup; single-slot Promise resolver transitions through `unset → set → set+message → unset+cleared` on every request).
+2. Authority not already owned by Elm — **YES** (no Elm kernel references `pendingToolApprovalResolve`, `pendingToolApprovalMessage`, `resolvePendingToolApproval`, or `clearPending`; the 5 existing kernels are completion/notify/header/barrier authorities and do not touch the tool-approval ask/response correlation).
+3. Multiple event sources interact with the same state — **YES** (four: `SdkController` mode change, `SdkTaskControlCoordinator` cancel/clear/switch, webview `askResponse` yes/no, `SdkFollowupCoordinator` re-routing of a follow-up message as a queued answer).
+4. Coherent ownership boundary exists — **YES** (`SdkInteractionCoordinator` is the *sole* owner of the pending slot, the per-tool message, the reformulation slot, the editor decision carrier, and the response-correlation logic).
+5. Asynchronous Elm consult compatible — **PARTIAL / SPLIT** (slot's Promise-resolver is necessarily TS-owned; policy-evaluation step is a pure synchronous projection that IS the natural Elm seam — mirroring how `BackgroundNotifyCoordinator.consumeTerminal` is split between the Elm classifier and the TS marker owner).
+6. TypeScript can retain effects without creating dual authority — **YES** (the slot owner remains the TS class; the Elm kernel only classifies; the two-layer pattern is identical to SEAM04's `consultE31BarrierForFacts`).
+7. Existing tests can exercise the real production path — **YES** (the 6/6 GREEN `approval-rejection-correlation-fail-closed-recon01.test.ts` + 43/43 GREEN `sdk-interaction-coordinator.test.ts` are the regression harness).
+
+**Verdict tag enum (closed, 9 tags):**
+`ALLOW_SDK_POLICY`, `ALLOW_HOST_CALLBACK`, `DENY_HARD`, `REFORMULATE`, `DENY_EDITOR_NO_ROOT`, `DENY_EDITOR_NO_SETTINGS`, `ALLOW_EDITOR`, `ASK_EDITOR`, `ASK_DEFAULT`. The TS adapter dispatches on the tag; ALLOW_*/DENY_*/REFORMULATE return immediately (preserving the existing `decision` / `executionPlan` evidence shapes), ASK_* falls through to the existing L686-L758 ask-card publication path. No new effects; no new host callbacks; no new message-state fields; no new probe code points.
+
+**Executable witness (the 4 SEAM09 spec cases via the REAL production class):**
+
+```text
+$ cd apps/vscode && bun vitest run \
+    src/sdk/__tests__/approval-rejection-correlation-fail-closed-recon01.test.ts
+
+ ✓ src/sdk/__tests__/approval-rejection-correlation-fail-closed-recon01.test.ts (6 tests) 1039ms
+     ✓ R5: clearPending('Task switched') rejects A; a subsequent B in the same session still re-ASKs  555ms
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   exitCode 0
+```
+
+| SEAM09 spec case | Test case | Status |
+| --- | --- | --- |
+| 1. Normal approval | R1 YES (line 125) | GREEN |
+| 1. Normal rejection | R1/R2/R3/R4 NO | GREEN |
+| 2. Duplicate response | R4 second + third (lines 211-212) | GREEN |
+| 3. Wrong identity | R1 different toolCallId, R2 different command | GREEN |
+| 4. Late after teardown | R5 clearPending, R6 stale yes-click | GREEN |
+
+Full coordinator regression: 43/43 GREEN at HEAD 179800d36.
+
+**Files added (3):**
+- `.factory/ACT-CLINEMM-ELM-SEAM09-TOOL-APPROVAL-LIFECYCLE-RECON.md` (this ACT plan + frozen contract; 681 lines)
+- `.factory/acts/ACT-CLINEMM-ELM-SEAM09-TOOL-APPROVAL-LIFECYCLE-RECON.md` (canonical ACT plan, identical content per SEAM07 convention)
+- `.factory/evidence/ACT-CLINEMM-ELM-SEAM09-TOOL-APPROVAL-LIFECYCLE-RECON/executable-witness.md` (R1-R6 + 43-test regression witness log)
+
+**Production files changed**: ZERO. The TypeScript `runRequestToolApproval` method remains the LIVE authority. A `NEEDS-EXPLICIT-CUTOVER` marker is implicit (the verdict body has not yet been marked with the successor ACT name) — SEAM10 will mark it as part of the cutover.
+
+**Gates (inherited from baseline):**
+- `tsc --noEmit` — PASS (0 errors; no production code touched)
+- `biome lint` — PASS (0 ACT-owned errors; no production code touched)
+- `vitest approval-rejection-correlation-fail-closed-recon01` — 6/6 PASS
+- `vitest sdk-interaction-coordinator` — 43/43 PASS
+- `elm make` — NOT_EXECUTED (no Elm kernel added in this ACT; SEAM10 will add it)
+- `elm-test` — NOT_EXECUTED (no Elm test added; SEAM10 will add it)
+- `vsce package` — NOT_BUILT (no kernel to stage; SEAM10 will stage the 6th row)
+
+**Predecessor ACT lineage (SEAM09 recon lineage, complete):**
+```
+SEAM01 (completion-authority, cutover GREEN) → SEAM02 (task-header-orchestration, GREEN) →
+SEAM03 (background-notify-authority substrate, GREEN) → SEAM04 (background-notify-authority cutover, GREEN) →
+SEAM05 (prompt-admission-recon, GREEN) → SEAM06 (NOT_A_GOOD_ELM_SEAM) →
+SEAM07 (long-horizon-continuation-recon, GREEN) →
+SEAM08 (deferred-completion-barrier migration) →
+SEAM08.1 (E3.1 authority cutover) → SEAM08.2 (E3.1 production cutover, 132/132 GREEN) →
+SEAM08.3 (C5 stale-decision, GREEN) → SEAM08.3-CORRECTION01 (stale-fallback, GREEN) →
+APPROVAL-REJECTION-CORRELATION-FAIL-CLOSED-RECON01 (6/6 GREEN) →
+SEAM09 (tool-approval-lifecycle-recon, GREEN)
+```
+
+**Factory decision:**
+```
+SEAM09_RECON:                    PASS
+SEAM09_ECONOMICS_GATE:           PASS (7/7 criteria met for the bounded sub-seam)
+SEAM09_OVERLAP_WITH_SEAM01_08:   NONE (no Elm kernel references the tool-approval lifecycle)
+SEAM09_FROZEN_CONTRACT:          9-tag closed-enum VerdictTag
+SEAM09_INTEROP_COST:             ~600 LoC additive (TS consult + Elm kernel + 1 test + 1 VSIX row)
+SEAM09_NEXT_CURSOR:              SEAM10 = tool-approval-authority Elm cutover
+SEAM09_VSIX:                     NOT_BUILT (SEAM10 obligation)
+SEAM09_LIVE:                     NOT_QUALIFIED (SEAM10 obligation)
+```
+
+**Next cursor (SEAM10, not this ACT):**
+1. Add the `tool-approval-authority` Elm kernel under
+   `apps/vscode/elm/tool-approval-authority/` (Domain.elm / Policy.elm
+   / Codec.elm / Main.elm + tests) with the 9-tag closed-enum VerdictTag.
+2. Add the `tool-approval-authority-elm.ts` adapter under
+   `apps/vscode/src/sdk/` with
+   `consultToolApprovalAuthorityForRequest(request, hostFacts) → VerdictTag`
+   (synchronous, fail-closed on kernel_offline / decode_error).
+3. Wire the consult between L425 and L427 of
+   `runRequestToolApproval`, preserving the existing
+   `decision` / `executionPlan` evidence shapes.
+4. Activate via `setToolApprovalAuthorityElmProductionKernelPath`
+   in `extension.ts` (following the 5th-kernel convention; will
+   become the 6th).
+5. Add the focused correspondence test
+   `tool-approval-authority-elm-correspondence.tpaec01.test.ts`
+   (mirroring BNAEC01) covering all 9 verdict tags via the
+   real compiled kernel.
+6. Add the production-staging row to
+   `scripts/build_dogfood_vsix_lib.py:_ELM_KERNELS`.
+7. Confirm 49/49 GREEN on the recon + full-coordinator regression
+   suite (R1-R6 + 43 baseline) and 0 ACT-owned new failures on
+   the wider vitest sweep.
