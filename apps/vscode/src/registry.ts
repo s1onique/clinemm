@@ -46,6 +46,21 @@ const ClineCommands = {
 	// serializes the bounded ring to <globalStorageUri>/turn-state-writer-provenance.jsonl.
 	ToggleTurnStateWriterProvenanceDiagnostic: prefix + ".debug.toggleTurnStateWriterProvenanceDiagnostic",
 	DumpTurnStateWriterProvenanceDiagnostic: prefix + ".debug.dumpTurnStateWriterProvenanceDiagnostic",
+	// ACT-CLINEMM-BCB-CAPTURE01: debug commands for the BCB
+	// observation-unavailable decision-boundary capture. Default
+	// off. The toggle flips a workspace-state flag (`bcbObsCapEnabled`)
+	// and the dump serializes the bounded ring to
+	// <globalStorageUri>/bcb-observation-unavailable-capture.jsonl.
+	// The capture is the bounded read-only diagnostic recommended by
+	// ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01 §13.8 to
+	// close the `CAPTURE_INSUFFICIENT` gap on a future live run.
+	// REMOVAL_TRIGGER: first of (a) cause isolated, (b) capture
+	// insufficient, (c) successor evidence supersedes. On removal,
+	// this registry entry + the package.json declarations + the
+	// extension.ts handlers + the diagnostic module + the runtime
+	// module + the production recorder call MUST be removed TOGETHER.
+	ToggleBcbObservationUnavailableCapture: prefix + ".debug.toggleBcbObservationUnavailableCapture",
+	DumpBcbObservationUnavailableCapture: prefix + ".debug.dumpBcbObservationUnavailableCapture",
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// (twenty-ninth-pass) — debug dump command for the temporary
 	// Q1..Q4 W-carrier trace observer. The dump is unconditional

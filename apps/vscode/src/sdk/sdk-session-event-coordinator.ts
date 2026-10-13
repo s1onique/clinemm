@@ -1,4 +1,9 @@
 import type { AgentEvent, CoreSessionEvent, PendingPromptCountRead } from "@cline/core"
+import {
+	type BcbObservationUnavailableWriterId,
+	isBcbObservationUnavailableCaptureEnabled,
+	recordBcbObservationUnavailableCapture,
+} from "@shared/bcb-observation-unavailable-capture"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import { refreshClineRecommendedModels } from "@/core/controller/models/refreshClineRecommendedModels"
 import type { StateManager } from "@/core/storage/StateManager"
@@ -3151,6 +3156,21 @@ export class SdkSessionEventCoordinator {
 										liveToolNames !== undefined ? liveToolNames.includes("command_status") : null
 									const sameObligationAlreadyObservationUnavailable =
 										this.deferredCompletionBarrier?.reason === "observation_unavailable"
+									// ACT-CLINEMM-BCB-CAPTURE01 (eligibility-taken branch):
+									// capture the evaluated liveTools() result + the
+									// sameObligationAlreadyObservationUnavailable guard at the
+									// SAME boundary the production predicates consult. The
+									// record reuses already-evaluated production locals —
+									// it does NOT call liveTools() a second time. The
+									// writerId, requestedPhase, and committedPhase are
+									// captured locally and stamped at the END of the BCB
+									// block (in `if (canObserveHeldResults === false)` /
+									// `else`) so a single record per cycle reports the
+									// actual final writer + phase transitions.
+									let bcbCapturedWriterId: BcbObservationUnavailableWriterId =
+										"session-event-bcb-eligible-no-bcb-writer"
+									let bcbCapturedRequestedPhase: TurnPhase | undefined
+									let bcbCapturedCommittedPhase: TurnPhase | undefined
 									if (canObserveHeldResults === false) {
 										// Bounded correlation: the model has no observation
 										// mechanism. Publish a SINGLE typed blocked
@@ -3158,6 +3178,12 @@ export class SdkSessionEventCoordinator {
 										// held with reason stamped. The next cycle (if
 										// it has the same identity + different capability)
 										// is allowed to retry.
+										// ACT-CLINEMM-BCB-CAPTURE01: stamp the actual
+										// BCB-writer identity + requested phase. The
+										// committed phase is stamped after the setTurnPhase
+										// effect runs below.
+										bcbCapturedWriterId = "session-event-bcb-blocked-observation-unavailable"
+										bcbCapturedRequestedPhase = "error"
 										const capturedSessionId = activeSession.sessionId
 										const capturedTaskId = this.options.getTask?.()?.taskId
 										const capturedEnqueueEpoch = this.options.messageTranslatorState.getMinter().epoch
@@ -3192,6 +3218,9 @@ export class SdkSessionEventCoordinator {
 												undefined,
 												"session-event-bcb-blocked-observation-unavailable",
 											)
+											// ACT-CLINEMM-BCB-CAPTURE01: stamp the
+											// committed phase after the setTurnPhase effect.
+											bcbCapturedCommittedPhase = "error"
 										}
 									} else {
 										// canObserveHeldResults === true OR === null (capability unknown).
@@ -3256,6 +3285,36 @@ export class SdkSessionEventCoordinator {
 													}`,
 												)
 											})
+									}
+									// ACT-CLINEMM-BCB-CAPTURE01: fire a single record per
+									// BCB cycle, stamping the actual final writerId +
+									// requested phase + committed phase at the end of the
+									// BCB decision block. The record reuses already-
+									// evaluated production locals — no extra liveTools()
+									// invocation. The capture is a complete no-op when
+									// the diagnostic is disabled.
+									if (isBcbObservationUnavailableCaptureEnabled()) {
+										recordBcbObservationUnavailableCapture({
+											sessionId: activeSession.sessionId,
+											taskId: this.options.getTask?.()?.taskId,
+											epoch: this.options.messageTranslatorState.getMinter().epoch,
+											eligibleForCoalescedContinuation: true,
+											unconsumedOwnedTerminalResultsForC10,
+											ownedTerminalJobIdsForC10: unconsumedOwnedTerminalJobIdsForC10,
+											outstandingAutonomousWork,
+											ownerStillRunningForC10,
+											heldObligationForC10,
+											suppressOriginatingCompletion,
+											liveToolsAvailable: liveToolNames !== undefined,
+											liveToolsIncludesCommandStatus: liveToolNames?.includes("command_status") ?? false,
+											liveToolsCount: liveToolNames?.length ?? 0,
+											liveToolsValue: liveToolNames,
+											canObserveHeldResults,
+											sameObligationAlreadyObservationUnavailable,
+											writerId: bcbCapturedWriterId,
+											requestedPhase: bcbCapturedRequestedPhase,
+											committedPhase: bcbCapturedCommittedPhase,
+										})
 									}
 								}
 							} else {

@@ -1,5 +1,23 @@
 # ACT-CLINEMM-ELM-SEAM03-BACKGROUND-NOTIFY-AUTHORITY — PASS_ELM_SEAM03_SUBSTRATE — 2026-10-09
 
+# ACT-CLINEMM-BCB-CAPTURE01 — PASS_CAPTURE_DELIVERED + LIVE_QUALIFICATION_BLOCKED_BY_ENV — 2026-10-13
+
+**Status:** CLOSED with verdict `PASS_CAPTURE_DELIVERED + LIVE_QUALIFICATION_BLOCKED_BY_ENV`. The bounded read-only BCB observation-unavailable decision-boundary capture diagnostic is delivered exactly as the prior ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01 §13.8 disposition recommended: it captures the four BCB predicate inputs (liveTools, held-result ownership/count, suppressOriginatingCompletion, selected writer) plus the evaluated `canObserveHeldResults` and `sameObligationAlreadyObservationUnavailable` guard, correlated by sessionId / taskId / epoch / capturedAt. The capture reuses the already-evaluated production locals — it does NOT invoke `liveTools()` a second time. The diagnostic is DEFAULT_OFF, read-only, bounded (64-record ring), test-visible, and removable.
+
+**Executable test gate:** 26/26 PASS in `bcb-observation-unavailable-capture.bcapt01.test.ts`. The 5 ACT §4 categories are satisfied (BCAPT-01.1, -01.2, -02.1, -03.1, -04.1, -05.1, BCAPT-EQUIV, BCAPT-DIAG, BCAPT-CMD, BCAPT-RED-ISOLATION).
+
+**Typecheck / lint:** `tsc --noEmit` PASS (0 errors). `biome lint --diagnostic-level=error` PASS (the `use-cache-service.grit` rule excluded for the new runtime module, mirroring the same exclusion the TSWPD / PTAD runtimes use).
+
+**Related tests unchanged:** BOCR01 7/7, CTQC01-corr01 3/3, UCHC01 7/7, PTBPC01 8/8, CCUTO01 14/14 — all PASS. The 3 intentionally RED L2847 witnesses in `task-terminal-divergence-red01.tdd-red01.test.ts` remain RED (isolated, NOT weakened, NOT re-introduced, NOT discarded). The 19 pre-existing BCB01 / BCB01-c2 / BCB01-c3 failures (13+5+1) are NOT caused by this ACT (verified by `git stash` baseline).
+
+**Live qualification:** BLOCKED BY ENV. The exact-head VSIX (`clinemm-4.1.16-bcb-capture01.vsix`, 60,496,397 bytes, SHA-256 `591ee8e3b6319462a50ab817a93b91627298d98c0eb6d7904f66c98c534ee302`) is BUILT but cannot be installed — `~/.vscodium-clinemm/extensions/` is on a read-only mount (`touch` + `chmod` both fail with `Operation not permitted`). No root-cause isolation is claimed (the ACT §5 spec is explicit on this point). The successor ACT must run a live task with the diagnostic enabled in a writable environment to resolve `LIVE_REPRODUCED` / `LIVE_NO_REPRO` / `CAPTURE_INSUFFICIENT`.
+
+**Files added (3):** `apps/vscode/src/shared/bcb-observation-unavailable-capture.ts`, `apps/vscode/src/sdk/bcb-observation-unavailable-capture-runtime.ts`, `apps/vscode/src/sdk/__tests__/bcb-observation-unavailable-capture.bcapt01.test.ts`.
+
+**Files changed (5, bounded):** `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (1 import + 1 type alias + 1 captured-locals declaration + 3 capture site invocations; no semantic change to the production path), `apps/vscode/src/registry.ts` (2 new command constants), `apps/vscode/src/extension.ts` (1 import + 2 registerCommand), `apps/vscode/package.json` (2 new command contributions), `apps/vscode/biome.jsonc` (1 line in the use-cache-service.grit exclude list).
+
+**No repair in this ACT.** The diagnostic is the instrument for the next live run; the narrowly-scoped next repair proposal is DEFERRED to a successor ACT after a live capture resolves the classification.
+
 **Status:** CLOSED with verdict `PASS_ELM_SEAM03_SUBSTRATE` after a bounded reviewer-halt correction. The original draft closed as `PASS_ELM_SEAM03_AUTHORITY`, but the Factory reviewer halted with `HALT_AUTHORITY_NOT_CUT_OVER`: the digest itself stated authority was not migrated, so the verdict contradicted the evidence. Verdict now correctly states **substrate only** — production authority remains TS, and cutover is the explicit goal of the next ACT (`ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER`).
 
 **Substrate proven:**

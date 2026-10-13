@@ -204,7 +204,8 @@
 				"!!src/sdk/post-terminal-authority-diagnostic-runtime.ts",
 				"!!src/sdk/turn-state-writer-provenance-runtime.ts",
 				"!!src/sdk/host-ownership-diagnostic-runtime.ts",
-				"!!src/sdk/w-carrier-trace-runtime.ts"
+				"!!src/sdk/w-carrier-trace-runtime.ts",
+				"!!src/sdk/bcb-observation-unavailable-capture-runtime.ts"
 			],
 			"plugins": [
 				"src/dev/grit/use-cache-service.grit"

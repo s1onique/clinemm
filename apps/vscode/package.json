@@ -217,6 +217,16 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.toggleBcbObservationUnavailableCapture",
+				"title": "Cline: Toggle BCB Observation-Unavailable Capture",
+				"category": "Cline"
+			},
+			{
+				"command": "cline.debug.dumpBcbObservationUnavailableCapture",
+				"title": "Cline: Dump BCB Observation-Unavailable Capture",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.debug.dumpWCarrierTrace",
 				"title": "Cline Debug: Dump W Carrier Trace",
 				"category": "Cline"

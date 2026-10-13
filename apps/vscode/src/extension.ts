@@ -7,6 +7,10 @@ import * as vscode from "vscode"
 import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
 import { setBackgroundNotifyAuthorityElmProductionKernelPath } from "@/sdk/background-notify-authority-elm"
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
+import {
+	dumpExtensionSideBcbObservationUnavailableCapture,
+	toggleBcbObservationUnavailableCaptureWorkspaceEnabled,
+} from "@/sdk/bcb-observation-unavailable-capture-runtime"
 import { dumpExtensionSideElmAuthorityCounters } from "@/sdk/completion-authority-elm-authority-runtime-host"
 import { setCompletionContinuationControlElmProductionKernelPath } from "@/sdk/completion-continuation-control-elm"
 import { dumpExtensionSideCompletionContinuationDeliveryCounters } from "@/sdk/completion-continuation-delivery-runtime-host"
@@ -978,6 +982,33 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[TSWPD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Turn-state writer-provenance dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-BCB-CAPTURE01: debug commands for the BCB
+		// observation-unavailable decision-boundary capture. Default
+		// off. The toggle flips a workspace-state flag and the dump
+		// flushes the bounded ring to
+		// <globalStorageUri>/bcb-observation-unavailable-capture.jsonl.
+		// REMOVAL_TRIGGER: see registry.ts.
+		vscode.commands.registerCommand(commands.ToggleBcbObservationUnavailableCapture, async () => {
+			const next = await toggleBcbObservationUnavailableCaptureWorkspaceEnabled(context)
+			const status = next ? "ENABLED" : "DISABLED"
+			Logger.log(`[BCBOBSCAP] Workspace toggle → ${status}`)
+			void vscode.window.showInformationMessage(
+				`BCB observation-unavailable capture: ${status}. Future BCB decisions will ${
+					next ? "now be recorded" : "stop being recorded (existing records preserved)"
+				}.`,
+			)
+		}),
+		vscode.commands.registerCommand(commands.DumpBcbObservationUnavailableCapture, async () => {
+			try {
+				const filePath = await dumpExtensionSideBcbObservationUnavailableCapture(context)
+				void vscode.window.showInformationMessage(`BCB observation-unavailable capture: → ${filePath}.`)
+			} catch (err) {
+				Logger.error("[BCBOBSCAP] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`BCB observation-unavailable capture dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),
