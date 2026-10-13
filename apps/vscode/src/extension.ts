@@ -2,6 +2,10 @@
 // Import the module and reference it with the alias vscode in your code below
 
 import assert from "node:assert"
+import {
+	isBcbObservationUnavailableCaptureEnabled as _isBcbObservationUnavailableCaptureEnabledForDump,
+	getBcbObservationUnavailableCaptureRecords,
+} from "@shared/bcb-observation-unavailable-capture"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
 import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
@@ -20,6 +24,7 @@ import { setDeferredCompletionBarrierElmProductionKernelPath } from "@/sdk/defer
 import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
+	applyBcbObservationUnavailableDiagnosticProfile,
 	applyCompletionContinuationDeliveryDiagnosticProfile,
 	applyCompletionContinuationUpstreamDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
@@ -204,6 +209,33 @@ export async function activate(context: vscode.ExtensionContext) {
 	// first observation. Verified by
 	// `order_diagnostic_armed_before_first_writer.test.ts`.
 	applyTurnStateWriterProvenanceDiagnosticProfile(process.env, isDogfoodRuntime(process.env), context)
+
+	// ACT-CLINEMM-BCB-CAPTURE-ACTIVATION01: arm the BCB
+	// observation-unavailable capture diagnostic at the SAME
+	// EARLIEST initialization seam, BEFORE SdkController construction
+	// (sibling to the TSWPD activation above; both are
+	// workspace-state-aware). The helper composes the effective
+	// capture state using the minimum necessary precedence (see
+	// dogfood-diagnostic-profile.ts BCB section): the operator
+	// toggle (`cline.debug.toggleBcbObservationUnavailableCapture`)
+	// ALWAYS wins over the dogfood profile; the profile only fills
+	// in the fresh-install `undefined` case so a `dogfood` install
+	// is auto-enabled without operator action. The capture is at
+	// the BCB decision boundary in
+	// `sdk-session-event-coordinator.ts:3146-3194`, so running this
+	// BEFORE SdkController construction guarantees the seam is
+	// armed BEFORE the first
+	// `SdkSessionEventCoordinator` BCB writer. The
+	// `effectiveEnabled` post-call state is the single source of
+	// truth for the on-host diagnostic status; the dump command
+	// + Logger channel reflect that state without new public APIs.
+	// Verified by
+	// `bcb-observation-unavailable-dogfood-profile-activation.bcbcap01.test.ts`.
+	const bcbObsCapActivation = applyBcbObservationUnavailableDiagnosticProfile(isDogfoodRuntime(process.env), context)
+	Logger.log(
+		`[BCBOBSCAP] profile activation: enabled=${bcbObsCapActivation.enabled} ` +
+			`flipped=${bcbObsCapActivation.flipped} source=${bcbObsCapActivation.source}`,
+	)
 
 	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
 	// Arm the TaskHeader selector-input capture (THSICAP) at the SAME
@@ -1003,8 +1035,21 @@ ${ctx.cellJson || "{}"}
 		}),
 		vscode.commands.registerCommand(commands.DumpBcbObservationUnavailableCapture, async () => {
 			try {
+				// ACT-CLINEMM-BCB-CAPTURE-ACTIVATION01: surface the
+				// diagnostic status (enabled / record count) via the
+				// Logger channel BEFORE writing the JSONL so an
+				// operator can confirm whether the diagnostic was
+				// actually enabled at the time of the dump. An empty
+				// JSONL is no longer ambiguous: it is now annotated
+				// with the reason (DISABLED | ENABLED-NO-CAPTURES-YET
+				// | ENABLED-AND-CAPTURED-N). No new wire field; no new
+				// public API. The existing JSONL schema is unchanged.
+				const enabledAtDump = _isBcbObservationUnavailableCaptureEnabledForDump()
+				const recordsAtDump = getBcbObservationUnavailableCaptureRecords()
 				const filePath = await dumpExtensionSideBcbObservationUnavailableCapture(context)
-				void vscode.window.showInformationMessage(`BCB observation-unavailable capture: → ${filePath}.`)
+				const statusMsg = `enabled=${enabledAtDump} recordsAtDump=${recordsAtDump.length} file=${filePath}`
+				Logger.log(`[BCBOBSCAP] dump: ${statusMsg}`)
+				void vscode.window.showInformationMessage(`BCB observation-unavailable capture: → ${filePath} (${statusMsg}).`)
 			} catch (err) {
 				Logger.error("[BCBOBSCAP] dump failed", err)
 				void vscode.window.showErrorMessage(

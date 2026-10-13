@@ -123,6 +123,11 @@ async function ensureDirectory(pathname: string): Promise<void> {
  * subsequently disabled. The shared module's `getRecords()` is the
  * single source of truth; this function never touches the ring
  * directly.
+ *
+ * The diagnostic status (enabled / record count) is observable to
+ * the operator via the JSONL file content (empty = no captures fired)
+ * and via the workspace toggle command's UI message. This module
+ * stays host-side I/O only — it does NOT log to the VS Code channel.
  */
 export async function dumpExtensionSideBcbObservationUnavailableCapture(
 	context: BcbObservationUnavailableCaptureContext,

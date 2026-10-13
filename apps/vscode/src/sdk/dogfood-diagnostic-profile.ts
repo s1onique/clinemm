@@ -117,6 +117,11 @@
  */
 
 import {
+	isBcbObservationUnavailableCaptureEnabled as _isBcbObservationUnavailableCaptureEnabled,
+	disableBcbObservationUnavailableCapture,
+	enableBcbObservationUnavailableCapture,
+} from "@shared/bcb-observation-unavailable-capture"
+import {
 	disableTurnStateWriterProvenanceDiagnostic,
 	enableTurnStateWriterProvenanceDiagnostic,
 	isTurnStateWriterProvenanceDiagnosticEnabled,
@@ -1704,4 +1709,143 @@ export function initializeElmAuthorityRuntime(kernelPath: string | null): {
 		flipped: !wasEnabled,
 		kernelPath,
 	}
+}
+
+// ===========================================================================
+// ACT-CLINEMM-BCB-CAPTURE-ACTIVATION01 — central dogfood profile resolver
+// for the BCB observation-unavailable capture diagnostic. The diagnostic
+// itself (BCAPT01, `apps/vscode/src/shared/bcb-observation-unavailable-
+// capture.ts`) was delivered DEFAULT_OFF with a manual operator toggle
+// (`cline.debug.toggleBcbObservationUnavailableCapture`) writing the
+// workspace-state key `bcbObsCapEnabled`. The prior ACT
+// (ACT-CLINEMM-BCB-CAPTURE01) closed as
+// `PASS_CAPTURE_DELIVERED + LIVE_QUALIFICATION_BLOCKED_BY_ENV` and
+// observed at the live site that a `dogfood` install never enabled the
+// capture — so the bounded ring stayed empty. The cause was the absence
+// of any dogfood-profile auto-enable: the extension host had no signal
+// to flip the module-level `enabled` boolean from `false` to `true` on
+// activation.
+//
+// CONTRACT — frozen in this ACT (mirrors BJLA / BOCOR / CCARD: no env
+// override layer, no parser, no override matrix). The minimum necessary
+// precedence, declared by this ACT and tested by
+// `bcb-observation-unavailable-dogfood-profile-activation.bcbcap01.test.ts`,
+// is:
+//
+//   workspace toggle  === true  (operator explicit ON, possibly from
+//                                a prior session)                 -> ON
+//   workspace toggle  === false (operator explicit OFF)           -> OFF
+//   workspace toggle  === undefined  (fresh install, no toggle):
+//       isDogfood === true                                           -> ON
+//       isDogfood === false                                          -> OFF
+//
+// The operator toggle (one Command Palette action writing
+// `bcbObsCapEnabled` in `context.workspaceState`) ALWAYS wins over
+// the dogfood profile. The profile only fills in the fresh-install
+// `undefined` case. This is the minimum necessary precedence: a
+// researcher who explicitly disabled the diagnostic in a prior
+// session is NOT silently re-enabled by the next dogfood launcher,
+// AND a fresh dogfood install is auto-enabled without operator
+// action.
+//
+// The module seam is
+// `@shared/bcb-observation-unavailable-capture.ts#enableBcbObservationUnavailableCapture`
+// / `disableBcbObservationUnavailableCapture`. The resolver arms it
+// idempotently. The activation helper is called from
+// `extension.ts:activate` (sibling to the existing BJLA / BOCOR /
+// CCARD / TSWPD activations); there is exactly ONE production
+// activation path.
+//
+// The dump command + the host-side dump runtime remain unconditional
+// (mirrors BCAPT01 / PTAD / TSWPD convention: dump is always
+// callable, dump != clear, dump != enable). The activation helper
+// does NOT clear the ring on disable — records captured before the
+// toggle remain queryable and dumpable.
+//
+// The `effectiveEnabled` post-call state is the single source of
+// truth for the on-host diagnostic status; the dump command + Logger
+// channel reflect that state without new public APIs.
+//
+// HONEST STOP RULE (mirrors BJLA / BOCOR / CCARD / BCAPT01):
+//   Once the BCB cause is isolated AND the bounded repair is
+//   qualified (PASS_CASE_*) OR the diagnostic is classified
+//   CAPTURE_INSUFFICIENT OR HALT_RED_NOT_REPRODUCED OR successor
+//   evidence supersedes it, this resolver + the workspace-toggle
+//   runtime module + the dump runtime + the Command Palette
+//   registration + the registry entry + the package.json command
+//   declaration + the production recorder call MUST be removed
+//   TOGETHER.
+// ===========================================================================
+
+/**
+ * Narrow structural type for the bits of `vscode.ExtensionContext` the
+ * BCB activation helper needs (mirrors TSWPD activation). The wider
+ * `vscode.ExtensionContext` from `extension.ts:activate` is
+ * structurally compatible; this module does NOT import `vscode` for
+ * type information.
+ */
+export interface BcbObservationUnavailableDiagnosticContext {
+	readonly workspaceState: {
+		get<T>(key: string): T | undefined
+	}
+}
+
+/**
+ * THE single production activation helper for the BCB
+ * observation-unavailable capture seam. Called from
+ * `extension.ts:activate` (sibling to the BJLA / BOCOR / CCARD /
+ * TSWPD activations); there is exactly ONE production activation
+ * path, no copied orchestration in tests.
+ *
+ * Precedence (frozen, see ACT §3 / §6 / §7):
+ *
+ *   1. explicit operator ON  (workspaceState.bcbObsCapEnabled === true)  -> ON
+ *   2. explicit operator OFF (workspaceState.bcbObsCapEnabled === false) -> OFF
+ *   3. fresh install (workspaceState.bcbObsCapEnabled === undefined):
+ *        isDogfood === true  -> ON
+ *        isDogfood === false -> OFF
+ *
+ * Idempotent: only mutates the module-level `enabled` flag when the
+ * resolved state diverges from the current state.
+ *
+ * Returns `{ enabled, flipped, source }` so the operator / Logger
+ * channel can see exactly why the diagnostic is on or off after
+ * activation. `source` distinguishes:
+ *
+ *   "workspace-on"  — operator explicit ON, honored regardless of profile
+ *   "workspace-off" — operator explicit OFF, honored regardless of profile
+ *   "profile-on"    — fresh install + dogfood identity
+ *   "profile-off"   — fresh install + public identity
+ */
+export function applyBcbObservationUnavailableDiagnosticProfile(
+	isDogfood: boolean,
+	context: BcbObservationUnavailableDiagnosticContext,
+): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+	readonly source: "workspace-on" | "workspace-off" | "profile-on" | "profile-off"
+} {
+	const workspaceToggle = context.workspaceState.get<boolean>("bcbObsCapEnabled")
+	let should: boolean
+	let source: "workspace-on" | "workspace-off" | "profile-on" | "profile-off"
+	if (workspaceToggle === true) {
+		should = true
+		source = "workspace-on"
+	} else if (workspaceToggle === false) {
+		should = false
+		source = "workspace-off"
+	} else {
+		should = isDogfood
+		source = isDogfood ? "profile-on" : "profile-off"
+	}
+	const was = _isBcbObservationUnavailableCaptureEnabled()
+	if (should && !was) {
+		enableBcbObservationUnavailableCapture()
+		return { enabled: true, flipped: true, source }
+	}
+	if (!should && was) {
+		disableBcbObservationUnavailableCapture()
+		return { enabled: false, flipped: true, source }
+	}
+	return { enabled: should, flipped: false, source }
 }

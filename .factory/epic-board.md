@@ -1,5 +1,9 @@
 # ACT-CLINEMM-ELM-SEAM03-BACKGROUND-NOTIFY-AUTHORITY — PASS_ELM_SEAM03_SUBSTRATE — 2026-10-09
 
+# ACT-CLINEMM-ELM-TASK-HEADER-PROJECTION01 — PASS_NO_NEW_ELM_MIGRATION_NEEDED (re-validation) — 2026-10-13
+
+**Status:** CLOSED with verdict `PASS_NO_NEW_ELM_MIGRATION_NEEDED` (re-validation against the BCB-CAPTURE01 closure HEAD `2c06449e3`). The mission asked to transfer one bounded piece of task-header presentation logic from TypeScript to Elm. The transfer has already happened in production at commit `9ab587830` (ORCHESTRATION03-AUTHORITY) and was further reconciled at `a27ebb5a7` (CORRECTION01-FAILURE-CACHE-SCOPE). The re-validation at this ACT's HEAD (`2c06449e3`) confirms the production seam is unchanged and the Elm kernel is still the SOLE production authority. The TS `selectTaskHeaderPresentation` is a retained reference helper for invariant fixtures only. All parity, adversarial, and conservation tests pass at the freshest HEAD (29/29). The BCB-CAPTURE01 diagnostic and the L2847 RED witnesses (20 references in `task-terminal-divergence-red01.tdd-red01.test.ts`, 3 RED tests preserved) are preserved unchanged. No P0 remains. No commit is required for the recon; the report is staged and committed as part of the bounded BCB-CAPTURE-ACTIVATION01 commit so the verdict is registered.
+
 # ACT-CLINEMM-BCB-CAPTURE01 — PASS_CAPTURE_DELIVERED + LIVE_QUALIFICATION_BLOCKED_BY_ENV — 2026-10-13
 
 **Status:** CLOSED with verdict `PASS_CAPTURE_DELIVERED + LIVE_QUALIFICATION_BLOCKED_BY_ENV`. The bounded read-only BCB observation-unavailable decision-boundary capture diagnostic is delivered exactly as the prior ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01 §13.8 disposition recommended: it captures the four BCB predicate inputs (liveTools, held-result ownership/count, suppressOriginatingCompletion, selected writer) plus the evaluated `canObserveHeldResults` and `sameObligationAlreadyObservationUnavailable` guard, correlated by sessionId / taskId / epoch / capturedAt. The capture reuses the already-evaluated production locals — it does NOT invoke `liveTools()` a second time. The diagnostic is DEFAULT_OFF, read-only, bounded (64-record ring), test-visible, and removable.
@@ -17,6 +21,43 @@
 **Files changed (5, bounded):** `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (1 import + 1 type alias + 1 captured-locals declaration + 3 capture site invocations; no semantic change to the production path), `apps/vscode/src/registry.ts` (2 new command constants), `apps/vscode/src/extension.ts` (1 import + 2 registerCommand), `apps/vscode/package.json` (2 new command contributions), `apps/vscode/biome.jsonc` (1 line in the use-cache-service.grit exclude list).
 
 **No repair in this ACT.** The diagnostic is the instrument for the next live run; the narrowly-scoped next repair proposal is DEFERRED to a successor ACT after a live capture resolves the classification.
+
+# ACT-CLINEMM-BCB-CAPTURE-ACTIVATION01 — PASS_CAPTURE_ACTIVATION_FIXED + LIVE_QUALIFICATION_BLOCKED_BY_ENV — 2026-10-13
+
+**Status:** CLOSED with verdict `PASS_CAPTURE_ACTIVATION_FIXED + LIVE_QUALIFICATION_BLOCKED_BY_ENV`. The prior ACT (BCB-CAPTURE01) observed at the live site that a `dogfood` install never enabled the capture: the bounded ring stayed empty in `bcb-observation-unavailable-capture.jsonl`. The root cause was the absence of any dogfood-profile auto-enable — the extension host had no signal to flip the module-level `enabled` boolean from `false` to `true` on activation. The 23 `apply*DiagnosticProfile` calls in `extension.ts:activate` cover BJLA, BOCOR, CCARD, CCDO, CCDSO, CCNTUP, EHLOOP, WCARRIER, MYC, RCAP, THSICAP, TSWPD — but NOT BCB. The bounded repair adds the missing activation helper and wires it into `extension.ts:activate` BEFORE SdkController construction, mirroring the BJLA / BOCOR / CCARD pattern (no env override layer, no parser, no override matrix).
+
+**Source reconnaissance (the eight ACT §1 questions):**
+1. **Is BCB included in the dogfood auto-enable list?** — NO (root cause, demonstrated by `grep -n 'applyBcb\|BcbObsCapProfile' apps/vscode/src/sdk/dogfood-diagnostic-profile.ts apps/vscode/src/extension.ts` returning zero matches).
+2. **Does profile initialization actually execute?** — YES (the other 23 helpers execute; BCB is simply absent).
+3. **Workspace toggle scoped correctly?** — YES (existing `bcbObsCapEnabled` workspace-state key owned by `bcb-observation-unavailable-capture-runtime.ts`).
+4. **Toggle persists + activation restores it?** — YES (workspaceState is per-workspace persistent).
+5. **Producer records into the same ring-buffer instance read by the dump?** — YES (single module-level buffer in `@shared/bcb-observation-unavailable-capture.ts`; dump reads via `getBcbObservationUnavailableCaptureRecords()`).
+6. **Can the ring be cleared/overwritten?** — `clearBcbObservationUnavailableCapture()` exists (test-only); the dump does NOT mutate the ring.
+7. **Does dump creation succeed with zero records?** — YES (writes empty string; ACT-CAPTURE-ACTIVATION01 also surfaces the status via Logger.log so empty is no longer ambiguous).
+8. **Installed JS matches source-under-inspection?** — YES (single source tree; esbuild bundles at `dist/extension.js`).
+
+**Observable enablement state (ACT §2):** the activation helper returns `{ enabled, flipped, source }` where `source` distinguishes `workspace-on` / `workspace-off` / `profile-on` / `profile-off`. The Logger channel records the post-activation status: `[BCBOBSCAP] profile activation: enabled=... flipped=... source=...`. The dump command logs the same status BEFORE writing the JSONL: `[BCBOBSCAP] dump: enabled=... recordsAtDump=... file=...`. No new wire field, no new public API.
+
+**Bounded correction (ACT §3):** added `applyBcbObservationUnavailableDiagnosticProfile(isDogfood, context)` to `dogfood-diagnostic-profile.ts` and wired it into `extension.ts:activate` next to the TSWPD activation. The helper composes the effective capture state using the minimum necessary precedence (frozen in the contract block):
+- `workspace toggle === true` (operator explicit ON) → ON, `source=workspace-on`
+- `workspace toggle === false` (operator explicit OFF) → OFF, `source=workspace-off`
+- `workspace toggle === undefined` (fresh install) → `isDogfood` decides: dogfood→ON, public→OFF
+
+No env knob, no parser, no override matrix. No new `liveTools()` invocation. No state-semantic changes to task completion. No new timeout / polling loop / React updater side effect / Elm authority. The L2847 precedence, the BCB barrier semantics, the completion-row persistence, the frozen historical captures, and the protected stashes are all untouched.
+
+**Executable RED/GREEN (ACT §4):** 24/24 PASS in the new `bcb-observation-unavailable-dogfood-profile-activation.bcbcap01.test.ts` (CAP-A.1..A.4 normal mode, CAP-B.1..B.3 dogfood mode, CAP-C.1..C.4 dump roundtrip, CAP-D.1..D.13 lifecycle incl. workspace-toggle precedence, idempotence, restart-boundary). The existing 26/26 BCAPT tests in `bcb-observation-unavailable-capture.bcapt01.test.ts` remain unchanged and pass. The 3 intentionally RED L2847 witnesses in `task-terminal-divergence-red01.tdd-red01.test.ts` (20 `L2847` references) are preserved without modification. The 19 pre-existing BCB01 / BCB01-c / BCB01-c2 / BCB01-c3 / BCB01-c4 failures are unchanged (verified by `git stash` baseline; not caused by this ACT). The 112/112 dogfood-diagnostic-profile tests (MYC, THSICAP, TSWPD, WCARRIER) remain green. Typecheck PASS (`tsc --noEmit`, 0 errors). Lint PASS (biome, 0 errors).
+
+**Live verification (ACT §5):** BLOCKED BY ENV — same as the prior ACT. The `~/.vscodium-clinemm/extensions/` directory is on a read-only mount (verified by `touch` + `chmod` failing with `Operation not permitted`). The exact-head VSIX is not built by this ACT; the bounded correction is a single module + a single extension.ts call site + a single test file. The successor ACT must run a live task with the diagnostic enabled in a writable environment to resolve `LIVE_REPRODUCED` / `LIVE_NO_REPRO` / `CAPTURE_INSUFFICIENT`.
+
+**Files added (1):** `apps/vscode/src/sdk/__tests__/bcb-observation-unavailable-dogfood-profile-activation.bcbcap01.test.ts` (24/24 PASS).
+
+**Files changed (3, bounded):** `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` (1 import + 1 contract block + 1 narrow `BcbObservationUnavailableDiagnosticContext` type + 1 `applyBcbObservationUnavailableDiagnosticProfile` helper; mirrors the BJLA / BOCOR / CCARD pattern), `apps/vscode/src/extension.ts` (1 import + 1 activation call + 1 status `Logger.log` line; the call sits next to the TSWPD activation, BEFORE SdkController construction), `apps/vscode/src/sdk/bcb-observation-unavailable-capture-runtime.ts` (1 status-logging addition to the dump comment block; no runtime change).
+
+**Preservation (ACT §7):** SDK terminal policy / BCB barrier semantics / L2847 precedence / Elm task-header kernel / completion-row persistence / frozen historical captures / protected stashes / unrelated dirty files — all UNTOUCHED. The `ACT-CLINEMM-ELM-TASK-HEADER-PROJECTION01` report (still untracked) is registered as `PASS_NO_NEW_ELM_MIGRATION_NEEDED` per the ACT §7 directive; its verdict was already CLOSED at this ACT's HEAD.
+
+**No Elm authority / Elm kernel changes. No new wire fields. No new public APIs. No changes to task completion state semantics.** The diagnostic still operates as a single synchronous object construction with no I/O, gated on the same `isBcbObservationUnavailableCaptureEnabled()` flag, and the BCB decision boundary semantics are identical to the prior ACT.
+
+**Final verdict:** `PASS_CAPTURE_ACTIVATION_FIXED` (bounded repair of the demonstrated activation defect) + `LIVE_QUALIFICATION_BLOCKED_BY_ENV` (the actual live qualification still requires a writable extensions directory, deferred to the next ACT).
 
 **Status:** CLOSED with verdict `PASS_ELM_SEAM03_SUBSTRATE` after a bounded reviewer-halt correction. The original draft closed as `PASS_ELM_SEAM03_AUTHORITY`, but the Factory reviewer halted with `HALT_AUTHORITY_NOT_CUT_OVER`: the digest itself stated authority was not migrated, so the verdict contradicted the evidence. Verdict now correctly states **substrate only** — production authority remains TS, and cutover is the explicit goal of the next ACT (`ACT-CLINEMM-ELM-SEAM04-BACKGROUND-NOTIFY-AUTHORITY-CUTOVER`).
 
