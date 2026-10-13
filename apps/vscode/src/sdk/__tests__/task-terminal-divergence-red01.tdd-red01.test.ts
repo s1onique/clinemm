@@ -24,18 +24,24 @@
 // sequence through the REAL production seam
 // (SdkSessionEventCoordinator → MessageTranslatorState → appendAndEmit).
 //
-// ACT-CLINEMM-CORR01 expansion (REVISED UNDER P0 EVIDENCE HALT):
+// ACT-CLINEMM-CORR01 expansion (CLOSED_HALTED_CLEAN — evidence recovered):
 //
 //  1. The captured epoch-3 writer at seq 1870 in the live provenance
 //     capture is `session-event-bcb-blocked-observation-unavailable`
-//     (per user-supplied evidence). The previously-asserted
-//     `session-event-turn-complete-error` was inferred from a
-//     transcript-statistics argument (five prior `command_status`
-//     invocations in the messages file), which does NOT establish the
-//     value of `liveTools()` at the final `submit_and_exit` timestamp.
-//     That inference is WITHDRAWN.
+//     (per user-supplied writer-provenance bundle, restored to
+//     `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/`,
+//     SHA-256 `d58cc10ff2a101227c61dcf3dc6e8ee5dee2e3e1200414ad412c8469aab7ba1f`).
+//     The writer record is AUTHORITATIVE.
 //
-//  2. The original TDD-01.A/B assertions forbade the transient
+//  2. The previously-asserted `session-event-turn-complete-error` was
+//     inferred from a transcript-statistics argument (five prior
+//     `command_status` invocations in the messages file), which does
+//     NOT establish the value of `liveTools()` at the final
+//     `submit_and_exit` timestamp. That inference is WITHDRAWN.
+//     No `session-event-turn-complete-error` record exists in the
+//     live capture for the SEAM10 turn.
+//
+//  3. The original TDD-01.A/B assertions forbade the transient
 //     setTurnPhase("error", ..., "session-event-turn-complete-error")
 //     at L2850 from firing. That is over-constrained — the production
 //     code intentionally fires it on the done event when wasErrorSeen()
@@ -45,15 +51,17 @@
 //     errorSeen-precedence defect; they are NOT claimed to be the
 //     live firing branch.
 //
-//  3. TDD-05a reproduces the BCB writer branch through the real
+//  4. TDD-05a reproduces the BCB writer branch through the real
 //     SdkSessionEventCoordinator. The exact unavailable input is
 //     `canObserveHeldResults === false` at
 //     `sdk-session-event-coordinator.ts:3154`. TDD-05a is a real
 //     production-seam witness of the BCB writer, but its inputs are
 //     SYNTHETIC — it injects `liveTools = ["read_files", "run_commands"]`
 //     to satisfy the `canObserveHeldResults === false` precondition.
+//     TDD-05a is the correct `REAL_PRODUCTION_SEAM` witness of the
+//     live firing branch.
 //
-//  4. TDD-05b is RE-CLASSIFIED as SYNTHETIC_REAL. It injects
+//  5. TDD-05b is RE-CLASSIFIED as SYNTHETIC_REAL. It injects
 //     `recoverable: false` to select the L2847 error branch and adds
 //     `command_status` to `liveTools`. The L2847 branch fires
 //     `session-event-turn-complete-error`, but that is the result of
@@ -62,18 +70,20 @@
 //     of the L2847 behavior; it is NOT evidence of what the live
 //     branch was.
 //
-//  5. TDD-08 is the necessity ablation — the BCB result is
+//  6. TDD-08 is the necessity ablation — the BCB result is
 //     independent of the L2847 precedence.
 //
-//  6. The actual live firing branch is REPORTED AS
-//     `CAPTURE_INSUFFICIENT`. The user-supplied writer record at
-//     seq 1870 is treated as authoritative; the cause of
-//     `canObserveHeldResults === false` cannot be reconstructed from
-//     the on-disk captures available to this ACT (no
-//     `turn-state-writer-provenance.jsonl` file from the live
-//     33v63 task is present; the runtime-diag captures do not
-//     carry writerId; the messages file does not carry writerId).
-//     The reconciliation cannot proceed without stronger evidence.
+//  7. The cause of `canObserveHeldResults === false` in the live
+//     capture REMAINS `CAPTURE_INSUFFICIENT` (the recovered bundle
+//     does not contain the `liveTools()` value at the BCB writer
+//     firing moment — the PTAD record at stateVersion 1871 has no
+//     `liveTools` field). The recommended next ACT is a DEFAULT_OFF,
+//     read-only diagnostic at the BCB decision boundary to capture
+//     the four BCB predicate inputs (liveTools, held-result
+//     ownership/count, suppressOriginatingCompletion, selected writer)
+//     on a future live run. The independent L2847 precedence RED can
+//     proceed as a separately scoped repair ACT, but its closure must
+//     NOT claim to have fixed the live incident.
 //
 // RED invariant (CORR01 §3):
 //   For ANY turn that produces a `say: "completion_result"` row with

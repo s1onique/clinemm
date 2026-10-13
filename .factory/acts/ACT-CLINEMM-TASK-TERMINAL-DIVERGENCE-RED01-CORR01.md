@@ -1,10 +1,16 @@
-# ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01 — HALT_LIVE_PROVENANCE_RECONCILED_CAPTURE_INSUFFICIENT — 2026-10-13
+# ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01 — CLOSED_HALTED_CLEAN — EVIDENCE RECOVERED — 2026-10-13
 
-**Status:** HALTED on P0 evidence reconciliation. The user-supplied live
-provenance capture records the epoch-3 writer at seq 1870 as
-`session-event-bcb-blocked-observation-unavailable`. The previously-issued
-CORR01 (commit `560c25889`, verdict `RED_REPRODUCED_LIVE_BOUNDARY`) is
-REVERTED.
+**Status:** CLOSED with verdict `CLOSED_HALTED_CLEAN — evidence recovered`.
+The user-supplied writer-provenance bundle has been located, restored
+to the ClineMM evidence workspace, and SHA-256 verified. The captured
+writer record at seq 1870 (epoch 3,
+`session-event-bcb-blocked-observation-unavailable`) is authoritative
+and confirms the BCB writer as the live firing branch.
+
+The previously-issued CORR01 (commit `560c25889`, verdict
+`RED_REPRODUCED_LIVE_BOUNDARY`) is REVERTED. The corrected
+HALT record (commit `15a0ff885`) is in turn amended by §13 below
+to reflect the recovered evidence.
 
 **The P0 halt is honored in full:**
 
@@ -292,3 +298,254 @@ writer-provenance capture.
 No production code touched. No fix attempted. No Elm work. No
 unrelated cleanup. The independent error-precedence RED witness is
 preserved for a later bounded repair ACT.
+
+---
+
+# CORR01 §13 — Evidence recovery and closure (2026-10-13, ~10:51)
+
+## 13.1 Status update
+
+The user-supplied evidence bundle has been located and restored to
+the ClineMM evidence workspace at:
+
+```
+.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/
+```
+
+The bundle contains 9 original diagnostic/counter files + README +
+SHA256SUMS manifest. SHA-256 verification on the restored
+`turn-state-writer-provenance(20261012-191844).jsonl` matches
+`d58cc10ff2a101227c61dcf3dc6e8ee5dee2e3e1200414ad412c8469aab7ba1f`
+exactly. All 9 file hashes match the SHA256SUMS manifest.
+
+## 13.2 The writer-provenance record is real and authoritative
+
+The bundle's `turn-state-writer-provenance(20261012-191844).jsonl`
+contains 14 records total; 8 of them are for the live task
+`1791831094459_33v63`. The full chronology of the live task's
+turn-state writes:
+
+| L | writerId | taskId | epoch | seq (previous) | seq (committed) | phase (committed) | capturedAt (ms) |
+|---|---|---|---|---|---|---|---|
+| 3 | `task-start-init-task` | 33v63 | 2 | 10 | (streaming) | streaming | 1791831094824 |
+| 4 | `session-event-turn-complete-completed` | 33v63 | 2 | 13 | (completed) | completed | 1791831592406 |
+| 5 | `compaction-enter` | 33v63 | 2 | 764 | (compacting) | compacting | 1791831776202 |
+| 6 | `compaction-restore-entry-preserve` | 33v63 | 2 | 767 | (completed) | completed | 1791831789239 |
+| 7 | `controller-ask-response` | 33v63 | 2 | 772 | (streaming) | streaming | 1791831790776 |
+| 8 | `controller-epoch-transition-reseed` | 33v63 | 3 | 776 | (streaming) | streaming | 1791831790777 |
+| 9 | **`session-event-bcb-blocked-observation-unavailable`** | **33v63** | **3** | **778** | **1870** | **error** | **1791832467488** |
+| 10 | `controller-clear-task` | 33v63 | 3 | 1870 | (idle) | idle | 1791832592055 |
+
+**The BCB writer is the live firing branch.** No `session-event-turn-complete-error`
+record exists in the live capture for the SEAM10 turn. The L2847
+precedence defect (which would have fired `session-event-turn-complete-error`)
+was NOT the live firing branch.
+
+## 13.3 The BCB writer record (verbatim)
+
+```json
+{
+  "capturedAt": 1791832467488,
+  "writerId": "session-event-bcb-blocked-observation-unavailable",
+  "taskId": "1791831094459_33v63",
+  "epoch": 3,
+  "previous": {"phase": "streaming", "seq": 778},
+  "requested": {"phase": "error"},
+  "committed": {"phase": "error", "seq": 1870}
+}
+```
+
+This record was committed at `capturedAt=1791832467488` (which is
+exactly the `submitted (verified=true)` result ts of msg 317,
+`ts=1791832467480`, +8ms — the time the SDK's
+`submit_and_exit` result returned).
+
+## 13.4 The PTAD-extension record at stateVersion 1871 (verbatim key fields)
+
+```json
+{
+  "stateVersion": 1871,
+  "_ptadPushId": 1871,
+  "capturedAt": 1791832467534,
+  "epoch": 3,
+  "taskId": "1791831094459_33v63",
+  "runtimeStatus": "idle",
+  "runtimeModelStreaming": false,
+  "runtimeAwaitingApproval": false,
+  "runtimePendingToolCount": 0,
+  "legacyPhase": "error",
+  "legacySeq": 1870,
+  "taskHeaderPresentation": {"phase": "error", "source": "host", "seq": 1870},
+  "attemptCompletionSeen": true,
+  "terminalResponseCommittedThisTurn": true,
+  "taskTelemetry": {
+    "startedAt": 1791831094902,
+    "endedAt": 1791832467488,
+    "toolCalls": 166,
+    "recoveryBudgetFailures": 0,
+    "mechanism": {"total": 166, "edit": 5, "command": 104, "read": 34, "search": 7, "mcp": 9, ...}
+  }
+}
+```
+
+**Key observations:**
+- `attemptCompletionSeen: true` — the completion tool was seen.
+- `terminalResponseCommittedThisTurn: true` — the completion tool's
+  terminal response was committed.
+- `runtimePendingToolCount: 0` — no pending tool calls at the BCB
+  writer firing moment.
+- `runtimeTooling` is not in the captured record (the field does not
+  exist in this PTAD shape).
+- `taskTelemetry.toolCalls: 166`, `mechanism.command: 104` — the
+  agent had called 166 tools total (104 commands, 34 reads, 7
+  searches, 5 edits, 9 mcp, etc.).
+- The BCB writer fired at `capturedAt=1791832467488` (8ms after the
+  `submit_and_exit` result at 1791832467480).
+
+## 13.5 The post-BCB reopen transition
+
+After `controller-clear-task` (L10 of writer-provenance, ts
+1791832592055), the post-terminal-authority-diagnostic-extension
+record at stateVersion 1878 (ts 1791832593267) shows:
+
+```json
+{
+  "stateVersion": 1878,
+  "epoch": 5,
+  "legacyPhase": "completed",
+  "legacySeq": 1877,
+  "taskHeaderPresentation": {"phase": "completed", "source": "legacy", "seq": 1877}
+}
+```
+
+`source: "legacy"` (NOT "host") — the reopen path reads from the
+persisted `TurnStateTracker` snapshot, not from the live
+turn-state. This is the persisted `say: "completion_result"` row
+with `isAuthoritativelyCompletedResult: true` (the BCB filter at L2818
+suppresses the LIVE row but the persisted state survives).
+
+## 13.6 The on-reopen divergence — preserved
+
+The live capture confirms the original RED01 diagnosis: at the live
+writer (stateVersion 1871, source=host, phase=error), the task
+header reads "Error". On reopen (stateVersion 1878, source=legacy,
+phase=completed), the task header reads "Completed". The divergence
+is real and reproduced by the live capture.
+
+The cause of `canObserveHeldResults === false` in the live capture
+REMAINS UNRESOLVED. The bundle does not contain the
+`liveTools()` value at the BCB writer firing moment. The PTAD
+record at stateVersion 1871 has `runtimePendingToolCount: 0` and
+`runtimeAwaitingApproval: false`, but no `liveTools` field.
+
+The PTAD record at stateVersion 1871 also has
+`attemptCompletionSeen: true` and
+`terminalResponseCommittedThisTurn: true` — the completion tool
+was already committed at the BCB writer firing moment. The BCB
+writer fired AFTER the completion tool's terminal response was
+committed, which means the completion tool's `content_end` was
+already on the wire. This is consistent with the BCB writer
+firing because the held-terminal-result check
+(`eligibleForCoalescedContinuation` at L3146-3147) was satisfied
+at the same time the completion tool was committed.
+
+## 13.7 The verdict is now `CLOSED_HALTED_CLEAN`
+
+The P0 evidence reconciliation is complete:
+
+- The missing writer-provenance artifact is RECOVERED and RESTORED.
+- The user's writer record at seq 1870 (epoch 3,
+  `session-event-bcb-blocked-observation-unavailable`) is VERIFIED
+  and AUTHORITATIVE.
+- The previously-issued CORR01 (`RED_REPRODUCED_LIVE_BOUNDARY`) is
+  WITHDRAWN — it claimed `session-event-turn-complete-error` was
+  the live firing branch, but no such record exists in the live
+  capture. The actual live firing branch was the BCB writer.
+- TDD-05a is the correct `REAL_PRODUCTION_SEAM` witness of the
+  BCB writer (with SYNTHETIC inputs).
+- TDD-05b is correctly reclassified as `SYNTHETIC_REAL` (its
+  preconditions are injected; it is independent of the BCB question).
+- TDD-01.A/B + TDD-07 are the independent `SYNTHETIC_REAL` witness
+  of the L2847 `wasErrorSeen()` precedence defect. They are NOT
+  the live firing branch (the live firing branch was the BCB
+  writer, not L2847). The L2847 defect is a separate issue that
+  the live capture did not exercise.
+- The cause of `canObserveHeldResults === false` in the live
+  capture is `CAPTURE_INSUFFICIENT` — the bundle does not contain
+  the `liveTools()` value at the BCB writer firing moment.
+
+## 13.8 Recommended next ACT scope (per user)
+
+The user recommends:
+
+1. **One DEFAULT_OFF, read-only, targeted diagnostic at the existing
+   BCB decision boundary**, recording:
+   - The actual `liveTools()` result at the BCB decision point.
+   - The held-result ownership and count.
+   - The `suppressOriginatingCompletion` state.
+   - The selected writer.
+   - All correlated by task, epoch, and turn.
+2. **Dogfood once.** If the failure reproduces, repair that exact
+   branch. If not, retain `CAPTURE_INSUFFICIENT`.
+3. **The independent L2847 precedence RED can proceed as a
+   separately scoped repair**, but its closure must NOT claim to
+   have fixed the live incident (the live incident was the BCB
+   writer, not L2847).
+
+The recommended diagnostic should:
+- Be DEFAULT_OFF (no production behavior change in the default path).
+- Be gated by a single workspace toggle (mirroring the pattern in
+  `turn-state-writer-provenance.ts` and `post-terminal-authority-diagnostic.ts`).
+- Capture only at the BCB decision boundary (L3146-3194) — NOT
+  the entire turn-state.
+- Carry task, epoch, turn, and the four BCB predicate inputs.
+- Be test-visible via the existing `Equiv`-style pattern.
+
+A bounded next ACT should be ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RECON02
+(or ACT-CLINEMM-BCB-DIAGNOSTIC01) with the exact scope above. This
+ACT (CORR01) does NOT include the diagnostic.
+
+## 13.9 Files restored
+
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/turn-state-writer-provenance(20261012-191844).jsonl` (3037 bytes, SHA-256 `d58cc10ff2a101227c61dcf3dc6e8ee5dee2e3e1200414ad412c8469aab7ba1f`)
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/task-header-selector-input-capture(20261012-191843).jsonl`
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/post-terminal-authority-diagnostic-extension(20261012-191845).jsonl`
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/post-terminal-authority-diagnostic-webview(20261012-191843).jsonl`
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/continuation-cardinality-authority(20261012-191842).jsonl`
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/continuation-cardinality-authority.counters(20261012-191848).json`
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/completion-continuation-upstream.counters(20261012-191848).json`
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/completion-continuation-delivery.counters(20261012-191849).json`
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/completion-authority-elm-authority.counters(20261012-191849).json`
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/SHA256SUMS` (manifest)
+- `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/README.md` (original user-supplied notes)
+
+## 13.10 Final verdict
+
+`CLOSED_HALTED_CLEAN — evidence recovered`.
+
+- The captured writer-provenance file is restored and SHA-verified.
+- The BCB writer is confirmed as the live firing branch.
+- TDD-01.A/B + TDD-07 remain RED (the L2847 precedence defect,
+  separate issue, preserved for a later bounded repair).
+- TDD-05a remains GREEN (the BCB writer is reachable through the
+  real production seam).
+- TDD-05b is correctly reclassified as SYNTHETIC_REAL.
+- The cause of `canObserveHeldResults === false` in the live
+  capture is `CAPTURE_INSUFFICIENT` (the bundle does not contain
+  the `liveTools()` value at the BCB writer firing moment).
+- The independent L2847 precedence RED can proceed as a
+  separately scoped repair ACT, but its closure must NOT claim
+  to have fixed the live incident.
+- The recommended next ACT is a DEFAULT_OFF, read-only diagnostic
+  at the BCB decision boundary to capture the four BCB predicate
+  inputs (liveTools, held-result ownership/count, suppressOriginatingCompletion,
+  selected writer) on a future live run.
+
+RED01 commits `52eb6c644` and `77f290c49` are preserved in the
+git history. The first CORR01 attempt (`560c25889`) was reverted
+via `git reset --soft HEAD~1` and replaced with the corrected
+HALT record (`15a0ff885`). This commit amends the HALT record to
+reflect the recovered evidence and the closed-halted-clean verdict.
+The evidence bundle restore is a documentation-only change (no
+source code, no test code, no production code).
+
