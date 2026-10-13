@@ -1539,11 +1539,32 @@ export class LocalRuntimeHost implements RuntimeHost {
 	/**
 	 * ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-ELM-PRODUCTION-WIRING:
 	 * Synchronous accessor for the names of the tools the runtime
-	 * has registered on the next model request for `sessionId`. Reads
-	 * `active.runtime.tools` (the `BuiltRuntime.tools: AgentTool[]`
-	 * list the runtime will hand to the provider on the resumed
-	 * turn). Returns `undefined` when the session is not active on
-	 * this host — the consumer falls back to the historical default
+	 * has registered on the next model request for `sessionId`.
+	 *
+	 * ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01:
+	 * Returns the **merged** list `[...active.runtime.tools,
+	 * ...(active.config.extraTools ?? [])]` — exactly mirroring the
+	 * merge at `local-runtime-host.ts:834` that builds the
+	 * `agentConfig.tools` for `AgentRuntime`. The agent's
+	 * `tools: Map<string, AgentTool>` (at `agent-runtime.ts:590`) is
+	 * populated from `agentConfig.tools` (at
+	 * `agent-runtime.ts:1422-1424`), so the merged list is the
+	 * SAME list the model actually sees. The previous
+	 * `active.runtime.tools` only returned the runtime-builder's
+	 * `finalTools` (a stale subset), which excluded host-supplied
+	 * `extraTools` — including `command_status` on the VSCode path
+	 * (registered by `createVscodeExtraTools` at
+	 * `vscode-runtime-builder.ts:289-372` when a
+	 * `commandJobManager` is present). The stale subset caused
+	 * the BCB `canObserveHeldResults` projection to read `false`
+	 * even when the model had the observation mechanism
+	 * (live specimen task `1791887696629_cg31u`, 2026-10-13T10:48:08Z),
+	 * triggering the `session-event-bcb-blocked-observation-unavailable`
+	 * writer and an `error` phase commit. The repair makes the
+	 * surface truthful.
+	 *
+	 * Returns `undefined` when the session is not active on this
+	 * host — the consumer falls back to the historical default
 	 * `[command_status, submit_and_exit]` snapshot in that case.
 	 *
 	 * NOT on the `RuntimeHost` interface (same architectural rule as
@@ -1558,7 +1579,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 		if (!sessionId) return undefined
 		const active = this.sessions.get(sessionId)
 		if (!active) return undefined
-		return active.runtime.tools.map((t) => t.name)
+		return [...active.runtime.tools, ...(active.config.extraTools ?? [])].map((t) => t.name)
 	}
 
 	/**

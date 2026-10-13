@@ -1,4 +1,47 @@
-# ACT-CLINEMM-ELM-SEAM03-BACKGROUND-NOTIFY-AUTHORITY — PASS_ELM_SEAM03_SUBSTRATE — 2026-10-09
+# ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01 — PASS_REPAIR_STRUCTURAL_LIVE_PENDING — 2026-10-13
+
+**Status:** CLOSED with verdict `PASS_REPAIR_STRUCTURAL_LIVE_PENDING`. The bounded production-seam repair for the live BCB observation-unavailable incident (`1791887696629_cg31u`, 2026-10-13T10:48:08Z) is delivered exactly as the causal discriminator required. The capture is the `LocalRuntimeHost.getActiveRuntimeToolNames` accessor at `sdk/packages/core/src/runtime/host/local-runtime-host.ts:1557-1582`, which previously returned a stale subset (`active.runtime.tools` only — the runtime-builder's `BuiltRuntime.tools`) of the model-facing tool registry. The model-facing registry is built by the merge at `local-runtime-host.ts:834`: `[...runtime.tools, ...(configWithProvider.extraTools ?? [])]`. The `command_status` tool is added by `createVscodeExtraTools` to the `extraTools` slot (vscode-runtime-builder.ts:289-372), so the previous accessor always returned a list WITHOUT `command_status`, even when the model had the observation mechanism. This caused the BCB `canObserveHeldResults` projection to read `false` (verbatim match to the LIVE capture's value) and the `session-event-bcb-blocked-observation-unavailable` writer to fire, committing the `error` phase. The repair makes the surface truthful: it returns the SAME merge the model-facing `agentConfig.tools` uses. The change is a single accessor-method body, no public API rename, no new field, no protocol change, no Elm authority change, no new timeout, no new React updater, no L2847 precedence repair, no broad task-lifecycle refactoring.
+
+**Causal discriminator results (5 ablations on the production BCB seam):**
+- A (live specimen): liveTools missing `command_status` → BCB writer fires, phase=`error`. REPRODUCES the LIVE incident.
+- B (command_status present): same held set + 6 liveTools → BCB writer does NOT fire, `canObserveHeldResults=true`. The seam's decision flips on the capability projection alone.
+- C (zero unconsumed): eligibility branch not entered → no BCB writer. Barrier is correctly guarded.
+- D (liveTools() === undefined): `canObserveHeldResults=null` → falls through to `enqueueCompletionContinuationIfHeld`. The seam refuses to publish `observation_unavailable` on a null projection (CORRECTION01 contract at `sdk-session-event-coordinator.ts:3143-3150`).
+- E (production accessor chain): the load-bearing causality test. `runtime.tools` alone is the **stale subset** (the BUG); `runtime.tools + extraTools` is the **merged list** (the REPAIR). The BCB decision flips accordingly.
+
+**Executable test gate (ACT §4-6):**
+- `bcb-observation-unavailable-observability-repair01.bcbobsrv01.test.ts` — **13/13 PASS** (live specimen reproduction + 5 ablations + 5 conservation).
+- `bcb-observation-unavailable-capture.bcapt01.test.ts` — **26/26 PASS** (preserved).
+- `bcb-observation-unavailable-dogfood-profile-activation.bcbcap01.test.ts` — **24/24 PASS** (preserved).
+- `observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts` — **5/5 PASS** (real `LocalRuntimeHost` integration).
+- `task-terminal-divergence-red01.tdd-red01.test.ts` — **3 RED / 11 PASS** (L2847 RED witnesses preserved: TDD-01.A, TDD-01.B, TDD-07).
+- `host-blocked*`, `blocked-observation-capability-recovery-probe01`, `completion-continuation-stall-enforcement01` — **117/117 PASS**.
+- The 19 pre-existing BCB01 / BCB01-C / BCB01-C1 / BCB01-C2 / BCB01-C3 / BCB01-C4 failures and the 8 FRSP01 runtime-followup-resume-subscription-parity failures are unchanged from baseline (verified by `git stash` before/after).
+
+**Typecheck / lint:** `tsc --noEmit` PASS (0 errors). `biome lint --diagnostic-level=error` PASS (0 errors on both the new test file and the production source).
+
+**SDK rebuild:** `bun run build:sdk` PASS. The bundled `extension/dist/extension.js` contains the repair as a single line: `return[...r.runtime.tools,...r.config.extraTools??[]].map(n=>n.name)`.
+
+**Conservation (§6):** Normal completion without held results preserved; held, observable results preserved (no false-positive BCB block); held, genuinely unobservable results still trigger the BCB writer (genuine failures not concealed); background-result ownership and exactly-once consumption preserved (the BCB marker still stamps on held work, the same-obligation guard at `sdk-session-event-coordinator.ts:3157` is preserved); no cross-session or stale-epoch continuation; the 3 L2847 RED witnesses are preserved; the existing BCB completion / continuation / task-header contracts are unchanged.
+
+**Files changed (1, bounded):**
+- `sdk/packages/core/src/runtime/host/local-runtime-host.ts` — single accessor-method body change (`getActiveRuntimeToolNames`). One extra spread operator + the `extraTools` array from `active.config`. No new public API, no new field, no protocol change, no Elm authority change, no new timeout, no new React updater.
+
+**Files added (1):**
+- `apps/vscode/src/sdk/__tests__/bcb-observation-unavailable-observability-repair01.bcbobsrv01.test.ts` — 13-test production-seam witness. Reuses the existing `SdkSessionEventCoordinator` + the existing BCB capture diagnostic; no new harness framework.
+
+**Evidence added (1):**
+- `.factory/evidence/ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01/live-captures/` (README + SHA256SUMS + the VSIX).
+- `.factory/acts/ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01.md` (the full ACT plan + evidence + verdict).
+
+**Live qualification (ACT §7):** BLOCKED BY ENV. The exact-head VSIX (`clinemm-4.1.16-bcbobsrv01.vsix`, 60,497,077 bytes, SHA-256 `f914ac837a022a74f831adabb3a734ddf0511001300f4083e810d3bd924658a0`) is BUILT but cannot be installed — `~/.vscodium-clinemm/extensions/` is on a read-only mount (`touch` + `chmod` both fail with `Operation not permitted`). No live success is claimed (the ACT §7 spec is explicit on this point). The successor ACT (or operator) must run a live task with the bounded repair installed in a writable environment to resolve `LIVE_REPRODUCED` / `LIVE_NO_REPRO`. A successful live result requires correct terminal handling AND conservation of outstanding terminal results — not simply a green header.
+
+**Preservation (ACT §7):** SDK terminal policy / BCB barrier semantics (BCB01 §0.1) / L2847 precedence / Elm task-header kernel / held-set progress authority / deferred completion barrier / completion-row persistence / frozen historical captures at `.factory/evidence/ACT-CLINEMM-BCB-CAPTURE01/live-captures/` + `.factory/evidence/ACT-CLINEMM-TASK-TERMINAL-DIVERGENCE-RED01-CORR01/live-captures/` + the BCAP01 + BCBCCAP01 / BCCAP01 closure state — all UNTOUCHED. The pre-existing 19 BCB01-family + 8 FRSP01 failures are unchanged (verified by `git stash` before/after on the BCB01 family).
+
+**Final verdict:** `PASS_REPAIR_STRUCTURAL_LIVE_PENDING` (bounded production-seam repair structurally verified + live qualification deferred to a writable-environment successor ACT).
+
+
+
 
 # ACT-CLINEMM-ELM-TASK-HEADER-PROJECTION01 — PASS_NO_NEW_ELM_MIGRATION_NEEDED (re-validation) — 2026-10-13
 
