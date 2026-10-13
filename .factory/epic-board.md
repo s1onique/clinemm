@@ -25118,3 +25118,173 @@ The 6th Elm kernel position in `_ELM_KERNELS` remains unallocated. The next ACT 
 - `.factory/ACT-CLINEMM-ELM-SEAM10-INTEROP-DISC.md` (this ACT plan, board-cursor, 551 lines)
 - `.factory/acts/ACT-CLINEMM-ELM-SEAM10-INTEROP-DISC.md` (canonical ACT plan, identical content per SEAM07 convention, 551 lines)
 - `.factory/evidence/ACT-CLINEMM-ELM-SEAM10-INTEROP-DISC/executable-witness.md` (witness log)
+
+# ACT-CLINEMM-ELM-SEAM11-ASYNC-AUTHORITY-RECON — NOT_A_GOOD_ELM_SEAM — 2026-10-13
+
+**Status:** CLOSED with verdict `NOT_A_GOOD_ELM_SEAM`. The bounded
+executable discriminator was executed against the SEAM11 candidate
+inventory (Candidate A: pending-prompt admission and consumption;
+Candidate B: background-job ownership FSM; Candidate C: task/turn
+lifecycle admission). The discriminator returns the disposition
+`NOT_A_GOOD_ELM_SEAM` based on ten reasons enumerated in PACEID-10.
+**The SEAM11 production cutover is not authorized for any of the
+three named candidates.**
+
+This is a legitimate exit. The strongest candidate (Candidate A)
+fails the interop, ownership, evidence, and economics gates per
+ACT §4. The remaining two candidates (B and C) fail their own
+gates (BCB critical-path exclusion, I/O coupling) without the
+discriminator needing to be run against them.
+
+**Preconditions met:**
+- ENTRY_HEAD = `b544b5ca1` on `main` (the BCB-CAPTURE-ACTIVATION01 commit, matching the ACT spec entry); working tree clean; no stashes; no uncommitted changes.
+- SEAM01–10 evidence preserved.
+- BCB capture activation fix at `b544b5ca1` committed and verified (24/24 GREEN).
+- L2847 RED witnesses preserved (3 RED / 11 PASS).
+- HALT_UNEXPECTED_TRACKED_DIRT: NOT TRIGGERED.
+- BCB production repair: NOT in scope (per ACT §7).
+
+**Source reconnaissance (the eight ACT §1 questions answered):**
+1. **Is BCB in the dogfood auto-enable list?** YES — the activation helper at `applyBcbObservationUnavailableDiagnosticProfile` (BCB-CAPTURE-ACTIVATION01) flips the module-level `enabled` boolean from `false` to `true` on `extension.ts:activate`.
+2. **Does profile initialization actually execute?** YES — verified by `bcbcap01.test.ts` 24/24 GREEN.
+3. **Workspace toggle scoped correctly?** YES — `bcbObsCapEnabled` workspace-state key owned by `bcb-observation-unavailable-capture-runtime.ts`.
+4. **Toggle persists + activation restores it?** YES — workspaceState is per-workspace persistent.
+5. **Producer records into the same ring-buffer instance read by the dump?** YES — single module-level buffer in `@shared/bcb-observation-unavailable-capture.ts`.
+6. **Can the ring be cleared/overwritten?** `clearBcbObservationUnavailableCapture()` exists (test-only); the dump does NOT mutate the ring.
+7. **Does dump creation succeed with zero records?** YES — writes empty string.
+8. **Installed JS matches source-under-inspection?** YES — installed extension version `4.1.16-5a1c485cb-b544b5ca1` matches the source commit `b544b5ca1`.
+
+**Existing Elm authority inventory (5 kernels):**
+| Kernel | SEAM | Status |
+|---|---|---|
+| `completion-authority` | SEAM01 | REAL_PRODUCTION_SEAM, SYNCHRONOUS REAL |
+| `task-header-orchestration` | SEAM02 | REAL_PRODUCTION_SEAM, LIVE |
+| `completion-continuation-control` | SEAM07 | REAL_PRODUCTION_SEAM, CORRECTION01_PASS_STRUCTURAL |
+| `background-notify-authority` | SEAM04 | REAL_PRODUCTION_SEAM, LIVE_UNOBSERVABLE (env) |
+| `deferred-completion-barrier` | SEAM08 | REAL_PRODUCTION_SEAM, LIVE_QUALIFICATION_BLOCKED_BY_ENV |
+
+**No new 6th kernel position allocated in `_ELM_KERNELS`.** The SEAM10 verdict (`NOT_A_GOOD_ELM_SEAM`) is preserved; no new migration is authorized.
+
+**Candidate analysis (the three named candidates):**
+
+### Candidate A — Pending-prompt admission and consumption (STRONGEST)
+Production chain at `sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts:1-712`:
+- `LocalRuntimeHost.runTurn` admission (L1244-L1248) — 1-line boolean **REJECTED in SEAM06** (12-case → 3-output, ~1500 LoC of new code for 1 line of TS).
+- `PendingPromptService` (L204-L377): pure queue-mutation primitives (enqueue/update/delete/consumeSteer/shiftNext/requeueFront) — 4-outcome closed enum (dedupe_as_queue / dedupe_as_steer / fresh_queue / fresh_steer), **below the 5-6 outcome prior-kernel threshold**.
+- `PendingPromptsController.drain` (L522-L653): `async` function with `await this.deps.send(...)` + re-entrant `queueMicrotask` + error-branch `requeueFront` — **irrecoverably TS-side** (Elm `Platform.worker` cannot own an async state machine with re-entrant control flow without a new Promise port).
+- The C4/C5/C6 capture hooks carry `(delivery, jobId, runtimeControlKind)` structural evidence that a closed 4-tag Elm projection would lose (TPAEID-06 hazard).
+- The queue state lives in `ActiveSession.pendingPrompts` in the SDK; the 5 existing kernels are VSCode-only — shipping the kernel as an SDK runtime asset conflicts with the existing 5-kernel VSCode-only convention (SEAM06 finding).
+
+### Candidate B — Background-job ownership FSM
+- The two "background" modules (`background-owner-correlation.ts`, `background-job-liveness-authority.ts`) are **DIAGNOSTIC CAPTURE rings** (default-off, removable), not decision authorities.
+- The terminal-consumption decision surface is already on Elm (SEAM04 `consumeTerminalAuthority`).
+- ACT §3 explicit exclusion: "Do not migrate the active BCB observation-unavailable path while its causal repair remains unresolved."
+
+### Candidate C — Task/turn lifecycle admission
+- `SdkTaskStartCoordinator.initTask` and `reinitExistingTaskFromId` are deeply I/O-coupled: profile resolution, session-id allocation, fence-token checks, `sessions.startNewSession` (async with supersession), history-item updates, postStateToWebview.
+- The L2847 precedence defect (`wasErrorSeen()` fires before `wasAttemptCompletionSeen()` at the `done` event in `setTurnPhase` at `sdk-session-event-coordinator.ts:2850-2920`) is the only bounded, pure decision in this family — but it lives **on the BCB critical path** (setTurnPhase → terminal phase → BCB activation), and ACT §3 explicitly excludes it. It's also RED in the witness, and the CORRECTION01 ACT has not run yet.
+- The resume phase derivation (`showTaskWithId` → derive phase from last message) is a 3-line if/else with 3 outcomes — far below the 5-6 outcome prior-kernel threshold.
+
+**Discriminator (PACEID01) — 10/10 PASS:**
+
+```text
+$ cd apps/vscode && bun vitest run \
+    src/sdk/__tests__/prompt-admission-and-consumption-elm-interop-discriminator.paceid01.test.ts
+
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+ ✓ src/sdk/__tests__/prompt-admission-and-consumption-elm-interop-discriminator.paceid01.test.ts (10 tests) 9ms
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   exitCode 0
+```
+
+The discriminator mirrors the SEAM10 TPAEID01 pattern. It uses the
+existing `consultDeferredCompletionBarrierElmKernel` async public
+adapter and the real compiled `deferred-completion-barrier` kernel
+as a stand-in "Elm-shaped worker." It does NOT add a new kernel,
+does NOT modify the production entrypoint, and does NOT introduce
+a new host callback.
+
+**10 test families (PACEID-01..10):**
+- PACEID-01: Synchronous-impossibility theorem — PASS
+- PACEID-02: Queue-mutation purity (4-tag closed enum, below 5-6 outcome threshold) — PASS
+- PACEID-03: Drain-as-async-state-machine — PASS
+- PACEID-04: SDK/VSCode kernel placement — PASS
+- PACEID-05: Rejected-candidate preservation (SEAM05/SEAM06) — PASS
+- PACEID-06: Evidence-loss hazard — PASS
+- PACEID-07: Migration economics — PASS
+- PACEID-08: Async state machine preservation — PASS
+- PACEID-09: Duplication of existing authorities — PASS
+- PACEID-10: Disposition harness = `NOT_A_GOOD_ELM_SEAM` — PASS
+
+**L2847 RED preservation (regression check):**
+```text
+$ bun vitest run src/sdk/__tests__/task-terminal-divergence-red01.tdd-red01.test.ts
+ Test Files  1 failed (1)
+      Tests  3 failed | 11 passed (14)
+```
+**3 RED / 11 PASS preserved** — matches the BCB01-CORR01 baseline.
+
+**BCB activation verification (regression check):**
+```text
+$ bun vitest run src/sdk/__tests__/bcb-observation-unavailable-dogfood-profile-activation.bcbcap01.test.ts
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+```
+**24/24 GREEN** — BCB activation fix at `b544b5ca1` is verified.
+
+**Prior discriminators (regression check):**
+```text
+$ bun vitest run \
+    src/sdk/__tests__/tool-approval-authority-elm-interop-discriminator.tpaeid01.test.ts \
+    src/sdk/__tests__/deferred-completion-barrier-elm-interop-discriminator.dcbeid01.test.ts
+ Test Files  2 passed (2)
+      Tests  21 passed (21)
+```
+**21/21 PASS** — no regression on SEAM10 TPAEID + SEAM08 DCBEID.
+
+**Migration economics:**
+- TypeScript retirable: ~158 LoC (the synchronous queue-mutation primitives; the `drain` is irrecoverably TS-side).
+- Elm + adapter introduced: ~1005 LoC (Domain.elm + Policy.elm + Codec.elm + Main.elm + tests + TS adapter + plumbing).
+- Net growth: 6.4x. New Promise port required (a new async control-flow dependency the SEAM10 verdict explicitly excludes).
+- ROI: **negative**.
+
+**Factory decision:**
+```
+SEAM11_DISCRIMINATOR:   PASS (executed per ACT spec C1: GO)
+SEAM11_DISPOSITION:     NOT_A_GOOD_ELM_SEAM
+SEAM11_CUTOVER:         NOT AUTHORIZED
+SEAM11_INTEROP_PROOF:   ASYNC_STATE_MACHINE_IRRECOVERABLY_TS_SIDE (PACEID-03/08)
+SEAM11_EVIDENCE_LOSS:   C4_C5_C6_STRUCTURAL_EVIDENCE_AT_RISK (PACEID-06)
+SEAM11_MIGRATION_ECON:  NEGATIVE_ROI_6.4X_GROWTH (PACEID-07)
+SEAM11_NEXT_CURSOR:     NO_NEW_ELM_SEAM (per ACT §6/§8)
+```
+
+**Predecessor ACT lineage (SEAM11 recon lineage, complete):**
+```
+SEAM05 (prompt-admission-recon, GREEN) → SEAM06 (admission-cutover, NOT_A_GOOD_ELM_SEAM)
+SEAM09 (tool-approval-lifecycle-recon, GREEN) → SEAM10 (interop-disc, NOT_A_GOOD_ELM_SEAM)
+SEAM11 (async-authority-recon, NOT_A_GOOD_ELM_SEAM)
+```
+
+**Next cursor (NOT a retry of any of the three candidates):**
+The 6th Elm kernel position in `_ELM_KERNELS` remains unallocated. Per ACT §6/§8, when no eligible candidate survives bounded investigation, the next ACT is either (a) a recon for a different candidate (per SEAM10 §9 next-cursor menu), OR (b) a follow-up `NO_NEW_ELM_SEAM` ACT that explicitly closes the Factory Elm migration queue. Possible next candidates per SEAM10 §9:
+1. The full `evaluateCommandToolApproval` host callback (lives in SDK, conflicts with the SEAM06 "SDK must stay clean of VSCode assets" finding; would need a dedicated recon to scope).
+2. The `pendingToolApprovalResolve` slot lifecycle (necessarily TS-only because the user IS the answer source; SEAM09 already concluded this; do not re-litigate).
+3. A different production decision authority entirely (with a natural existing await boundary, a bounded stable Elm model, evidence carried through the wire, and a specific correctness benefit).
+
+**Files added (4):**
+- `apps/vscode/src/sdk/__tests__/prompt-admission-and-consumption-elm-interop-discriminator.paceid01.test.ts` (the discriminator; 10 tests; ~400 lines)
+- `.factory/ACT-CLINEMM-ELM-SEAM11-ASYNC-AUTHORITY-RECON.md` (this ACT plan, board-cursor, 432 lines)
+- `.factory/acts/ACT-CLINEMM-ELM-SEAM11-ASYNC-AUTHORITY-RECON.md` (canonical ACT plan, identical content per SEAM07 convention, 432 lines)
+- `.factory/evidence/ACT-CLINEMM-ELM-SEAM11-ASYNC-AUTHORITY-RECON/executable-witness.md` (witness log)
+
+**Precise labels:**
+```
+SEAM11_RECON:        PASS (executed per ACT spec C1: GO)
+SEAM11_DISPOSITION:  NOT_A_GOOD_ELM_SEAM
+SEAM11_CUTOVER:      NOT AUTHORIZED
+SEAM11_KERNEL:       6TH_POSITION_REMAINS_UNALLOCATED
+SEAM11_PRODUCTION:   NO_CODE_TOUCHED
+```
