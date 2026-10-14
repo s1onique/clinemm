@@ -746,6 +746,69 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			}
 
 			let start: Awaited<ReturnType<typeof manager.start>> | undefined
+			// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+			// Reserve 1 observation-capacity slot BEFORE
+			// `manager.start()` is called. The reservation is the
+			// load-bearing seam: if the BCB cannot guarantee a
+			// backing slot for the eventual obligation, the
+			// command MUST NOT be launched (HTEC01 design
+			// blocker / CORR04 documented this as the bounded
+			// repair). The reservation is released on:
+			//   - fast-path terminal in-band (no obligation)
+			//   - launch failure (no job exists)
+			//   - successful consumption (Path A/B/C/C')
+			//   - coordinator disposal
+			// The reservation is attached to the jobId on
+			// `registerMarker` (notify=true) or
+			// `recordNonNotifyTerminalObservation` (notify=false).
+			// Fail-closed semantics: when the BCB or
+			// `resolveActiveOwner` is missing in production, an
+			// observation-bearing launch is refused (no
+			// silent capacity bypass). See
+			// `apps/vscode/src/sdk/background-notify-coordinator.ts`
+			// for the synchronous, atomic-in-the-JS-event-loop
+			// admission contract.
+			const notifyRequested = context.metadata?.notifyOnCompletion === true
+			let permitId: string | undefined
+			const ownerResolution = options.resolveActiveOwner?.() ?? undefined
+			const requiresObservationContract = true
+			const admissionResult = requiresObservationContract
+				? options.backgroundNotifyCoordinator?.tryReserveObservationCapacity({
+						owner: ownerResolution,
+					})
+				: undefined
+			if (
+				requiresObservationContract &&
+				notifyRequested &&
+				(!options.backgroundNotifyCoordinator ||
+					!options.resolveActiveOwner ||
+					!ownerResolution)
+			) {
+				// Fail-closed: an observation-bearing launch
+				// without the admission authority is a bypass.
+				// This is the load-bearing invariant (ADM-21).
+				throw new Error(
+					"[Observation-capacity admission failed: a notify-enabled background command was attempted without the BCB admission authority. This is a fail-closed refusal, NOT a transient error; the host (SdkController) is expected to provide backgroundNotifyCoordinator + resolveActiveOwner in production.]",
+				)
+			}
+			if (admissionResult?.kind === "at_capacity") {
+				throw new Error(
+					`[Observation-capacity admission refused: at_capacity (used=${admissionResult.capacity.used}/total=${admissionResult.capacity.total}). The runtime cannot guarantee a terminal-observation backing slot for a new background command. Existing obligations are preserved. Retry after the model observes one of the held terminal results via command_status.]`,
+				)
+			}
+			if (admissionResult?.kind === "invalid_owner") {
+				throw new Error(
+					"[Observation-capacity admission refused: invalid_owner (no active session/task at launch). The host owns the disposition; this is a fail-closed refusal for an observation-bearing launch with no resolvable owner.]",
+				)
+			}
+			if (admissionResult?.kind === "disposed") {
+				throw new Error(
+					"[Observation-capacity admission refused: disposed (the BCB has been disposed). The host must not admit new background commands after disposal.]",
+				)
+			}
+			if (admissionResult?.kind === "reserved") {
+				permitId = admissionResult.permitId
+			}
 			try {
 				start = await manager.start(
 					{
@@ -770,6 +833,19 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// result so diagnostics written to stderr are not silently
 				// lost. Mirrors the bash executor's combineOutput behavior.
 				const combinedOutput = start.stderr.length > 0 ? `${start.stdout}\n[stderr]\n${start.stderr}` : start.stdout
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+				// fast-path terminal in-band: the command finished within
+				// the wait budget, the model receives the terminal result
+				// synchronously via `combinedOutput` / `CommandExitError`,
+				// and NO observation obligation is created. Release the
+				// pre-launch permit immediately so the slot is free for
+				// the next admission. The fast-path case is the only case
+				// where the permit is released WITHOUT creating a marker /
+				// non-notify observation.
+				if (start.state !== "running" && permitId !== undefined) {
+					options.backgroundNotifyCoordinator?.releaseReservation(permitId)
+					permitId = undefined
+				}
 				// RUNNING returns a structured snapshot so the model can
 				// observe status + jobId. Terminal results retain the
 				// existing stdout/exitCode shape for backward compatibility.
@@ -788,12 +864,12 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// needs no wake. (Correction01 closes the
 				// overpromoted "fast-path never registered" claim:
 				// fast-path = synchronous; running = detached.)
-				const notifyRequested = context.metadata?.notifyOnCompletion === true
 				if (
 					start.state === "running" &&
 					notifyRequested &&
 					options.backgroundNotifyCoordinator &&
-					options.resolveActiveOwner
+					options.resolveActiveOwner &&
+					permitId !== undefined
 				) {
 					// ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01: observational trigger for the V8 allocation sampler. Fires exactly once per process (state-machine guard). NEVER throws; NEVER alters command semantics.
 					triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
@@ -801,11 +877,44 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					triggerExtensionHostCpuProfilerOnFirstQualifyingJob()
 					const owner = options.resolveActiveOwner()
 					if (owner) {
-						options.backgroundNotifyCoordinator.registerMarker({
+						// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+						// attach the permit to the jobId BEFORE the
+						// marker is registered. The BCB will reject
+						// the registration if the permit is not
+						// attached to this exact jobId.
+						const attachResult = options.backgroundNotifyCoordinator.attachReservationToJob({
+							permitId,
+							jobId: start.jobId,
+							owner,
+						})
+						if (attachResult.kind !== "attached" && attachResult.kind !== "already_attached") {
+							// Fail closed: the permit could not
+							// be attached. Release it and refuse
+							// to start the marker.
+							options.backgroundNotifyCoordinator.releaseReservation(permitId)
+							throw new Error(
+								`[Observation-capacity admission failed: permit attach refused (${attachResult.kind}). The runtime cannot guarantee a terminal-observation backing slot. This is a fail-closed refusal, NOT a transient error; the host owns the disposition.]`,
+							)
+						}
+						const registerResult = options.backgroundNotifyCoordinator.registerMarker({
 							jobId: start.jobId,
 							sessionId: owner.sessionId,
 							taskId: owner.taskId,
+							permitId,
 						})
+						if (registerResult.kind === "permit_not_attached") {
+							// Defense in depth: the permit must
+							// be attached to the jobId before
+							// the marker is registered. The
+							// attach step above should have
+							// already succeeded, so this is
+							// only reachable if the BCB state
+							// changed in between.
+							options.backgroundNotifyCoordinator.releaseReservation(permitId)
+							throw new Error(
+								"[Observation-capacity admission failed: permit was not attached at registerMarker time. The host owns the disposition.]",
+							)
+						}
 						// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
 						// Record this jobId in the per-turn
 						// `MessageTranslatorState` ownership hint at the
@@ -932,16 +1041,40 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 						// agent must still observe the terminal fact
 						// (via `command_status` or the finalization
 						// turn) before completion commits.
-						if (!notifyRequested && options.backgroundNotifyCoordinator && options.resolveActiveOwner) {
-							const owner = options.resolveActiveOwner()
-							if (owner) {
-								options.backgroundNotifyCoordinator.recordNonNotifyTerminalObservation({
-									jobId,
-									sessionId: owner.sessionId,
-									taskId: owner.taskId,
-								})
+						if (
+						!notifyRequested &&
+						options.backgroundNotifyCoordinator &&
+						options.resolveActiveOwner &&
+						permitId !== undefined
+					) {
+						const owner = options.resolveActiveOwner()
+						if (owner) {
+							// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+							// attach the pre-launch permit to the
+							// jobId and pass it to the BCB so the
+							// reservation slot transitions into an
+							// observation obligation.
+							const attachResult = options.backgroundNotifyCoordinator.attachReservationToJob({
+								permitId,
+								jobId,
+								owner,
+							})
+							if (attachResult.kind === "attached" || attachResult.kind === "already_attached") {
+								const recordResult =
+									options.backgroundNotifyCoordinator.recordNonNotifyTerminalObservation({
+										jobId,
+										sessionId: owner.sessionId,
+										taskId: owner.taskId,
+										permitId,
+									})
+								if (recordResult.kind === "permit_not_attached") {
+									options.backgroundNotifyCoordinator.releaseReservation(permitId)
+								}
+							} else {
+								options.backgroundNotifyCoordinator.releaseReservation(permitId)
 							}
 						}
+					}
 					})
 					// ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01:
 					// The foreground->background handoff is irrevocably true
@@ -1031,6 +1164,21 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 						: `[Command exited with code ${start.exitCode ?? 1}]`,
 				)
 			} catch (error) {
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+				// on a launch-time throw (manager.start rejected,
+				// or the per-job seeder above threw a fail-closed
+				// error), the job may or may not have a
+				// `terminalPromise` callback attached. The
+				// reservation is released if it has not been
+				// attached to an obligation map. If it has been
+				// attached (e.g. the marker was registered and
+				// then the wake-listener threw), the BCB's own
+				// terminal/consume paths will release it when
+				// the obligation settles.
+				if (permitId !== undefined) {
+					options.backgroundNotifyCoordinator?.releaseReservation(permitId)
+					permitId = undefined
+				}
 				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 				// on any thrown error (CommandExitError, spawn_failed,
 				// etc.) the background command is no longer in-flight.

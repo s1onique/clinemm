@@ -75,6 +75,128 @@ export const NOTIFY_WAKE_PROMPT_SOFT_TARGET_BYTES = 4096
 export const MAX_TERMINAL_RECEIPTS = 128
 
 /**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+ *
+ * Hard cap on the secondary `capacityDroppedReceipts` store. The
+ * secondary map is APPEND-ONLY (HTEC01-CORR03) and the cap is
+ * identical to the primary cap. The total observation capacity
+ * is the sum of the two caps:
+ *
+ *   MAX_OBSERVATION_CAPACITY = MAX_TERMINAL_RECEIPTS * 2
+ *                           = 256 (default)
+ *
+ * The admission contract (tryReserveObservationCapacity) treats
+ * this as the total budget for: pending reservations + active
+ * notify markers + reserved markers + non-notify terminal
+ * observations + primary receipts + secondary receipts.
+ */
+export const MAX_CAPACITY_DROPPED_RECEIPTS = 128
+
+/**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+ *
+ * The single-source-of-truth observation capacity (the upper
+ * bound on the conservation invariant). The admission contract
+ * refuses a new reservation when the existing observation-bearing
+ * state would cross this threshold.
+ *
+ * Defined as `MAX_TERMINAL_RECEIPTS + MAX_CAPACITY_DROPPED_RECEIPTS`
+ * (= 256) to mirror the two map caps the BCB already maintains.
+ * The number is a CAP, not a target — production traffic is
+ * expected to remain far below it; reaching it is a hard
+ * capacity-rejection event.
+ */
+export const MAX_OBSERVATION_CAPACITY = MAX_TERMINAL_RECEIPTS + MAX_CAPACITY_DROPPED_RECEIPTS
+
+/**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+ *
+ * Result of `tryReserveObservationCapacity`. The contract is
+ * synchronous, atomic-in-the-JS-event-loop (no `await` between
+ * the check and the record), and idempotent on re-use of a
+ * `permitId` (the second reserve with the same explicit
+ * `permitId` is treated as the same reservation and returns
+ * `reserved` with the same id).
+ *
+ *   - `reserved`     : a permit was issued; the host MAY proceed
+ *                      to call `manager.start()`.
+ *   - `at_capacity`  : the observation budget is exhausted; the
+ *                      host MUST refuse to start the job.
+ *   - `disposed`     : the coordinator has been disposed; the
+ *                      host MUST refuse to start the job.
+ *   - `invalid_owner`: the owner could not be resolved
+ *                      (sessionId / taskId missing). The host
+ *                      MUST refuse to start the job (fail
+ *                      closed).
+ */
+export type ReserveObservationCapacityResult =
+	| { kind: "reserved"; permitId: string; capacity: { used: number; total: number } }
+	| { kind: "at_capacity"; capacity: { used: number; total: number } }
+	| { kind: "disposed" }
+	| { kind: "invalid_owner" }
+
+/**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+ *
+ * Result of `attachReservationToJob`. The contract is
+ * synchronous and idempotent: re-attaching the same `(permitId,
+ * jobId, owner)` triple returns `already_attached`. A permit
+ * may only be attached to a single jobId; a second attach with
+ * a different jobId is rejected.
+ *
+ *   - `attached`        : the permit's reservation slot has been
+ *                         transferred to the new obligation
+ *                         (notify marker or non-notify
+ *                         observation); the host may publish
+ *                         the jobId.
+ *   - `already_attached`: the same permit was already attached
+ *                         to the same jobId (idempotent).
+ *   - `invalid_permit`  : the permitId is unknown or already
+ *                         released.
+ *   - `owner_mismatch`  : the attached owner triple does not
+ *                         match the permit's resolved owner.
+ *   - `disposed`        : the coordinator has been disposed.
+ */
+export type AttachReservationResult =
+	| { kind: "attached" }
+	| { kind: "already_attached" }
+	| { kind: "invalid_permit" }
+	| { kind: "owner_mismatch" }
+	| { kind: "disposed" }
+
+/**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+ *
+ * Result of `releaseReservation`. The contract is idempotent
+ * (a second release is a `not_found` no-op).
+ */
+export type ReleaseReservationResult =
+	| { kind: "released" }
+	| { kind: "not_found" }
+	| { kind: "disposed" }
+
+
+/**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+ *
+ * Internal record kept in `pendingReservations` for each issued
+ * permit. The triple is resolved from the BCB's own
+ * `resolveActiveOwner` at the moment of reservation (not at
+ * attach time) so the obligation's launch-time identity is
+ * captured exactly once and cannot drift across a session
+ * switch.
+ */
+interface PendingReservationRecord {
+	permitId: string
+	sessionId: string
+	taskId: string | undefined
+	reservedAtMs: number
+	/** Whether the permit has been attached to a jobId. */
+	attachedJobId: string | undefined
+}
+
+
+/**
  * Single-source-of-truth prefix for the terminal-wake prompt produced
  * by `formatTerminalWakePrompt`. Exported so the synthetic-prompt
  * predicate in `sdk-user-message-mapping.ts` can match the wake with a
@@ -1039,6 +1161,20 @@ export interface BackgroundNotifyCoordinatorOptions {
 	 * synchronously deliver a response.
 	 */
 	consumeTerminalAuthority?: ConsumeTerminalAuthorityFn
+	/**
+	 * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+	 *
+	 * Optional capacity override (TEST-ONLY). The default is
+	 * `MAX_OBSERVATION_CAPACITY` (256 = 128 primary receipts + 128
+	 * secondary receipts). When set, the admission contract
+	 * refuses to issue a new permit if the total observation-bearing
+	 * state would cross this threshold. Production code MUST leave
+	 * this undefined so the cap remains aligned with the two
+	 * bounded receipt stores. Tests use a smaller value (e.g. 1)
+	 * to exercise the at-capacity boundary without filling the
+	 * 256-slot budget.
+	 */
+	maxObservationCapacity?: number
 }
 
 /**
@@ -1071,6 +1207,55 @@ const defaultElmAuthority: ConsumeTerminalAuthorityFn = async (input) => invokeE
  * microtask, so no locking is required.
  */
 export class BackgroundNotifyCoordinator {
+	/**
+	 * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+	 *
+	 * Pending observation-capacity reservations. A permit is
+	 * issued by `tryReserveObservationCapacity` BEFORE the host
+	 * calls `manager.start()`. The permit holds 1 slot in the
+	 * total observation capacity budget. The permit either:
+	 *
+	 *   - attaches to a jobId via `attachReservationToJob`
+	 *     (becomes an obligation: a notify marker via the existing
+	 *     `registerMarker` API, or a non-notify terminal observation
+	 *     via `recordNonNotifyTerminalObservation`). The slot stays
+	 *     consumed until the obligation is settled.
+	 *
+	 *   - is released via `releaseReservation` (fast-path terminal,
+	 *     launch failure, or coordinator disposal). The slot is
+	 *     returned to the budget.
+	 *
+	 *   - is released by the BCB's own terminal/consume paths when
+	 *     the attached obligation is settled (Path A / B / C / C',
+	 *     `resolveObligation`, `consumeTerminalReceipt`,
+	 *     `consumeNonNotifyTerminalObservation`, `dispose`).
+	 *
+	 * The total admission invariant is:
+	 *
+	 *   pendingReservations.size
+	 *   + notificationMarkers.size
+	 *   + reservedMarkers.size
+	 *   + nonNotifyTerminalObservations.size
+	 *   + terminalReceipts.size
+	 *   + capacityDroppedReceipts.size
+	 *   <= maxObservationCapacity   (default MAX_OBSERVATION_CAPACITY)
+	 *
+	 * The permit is keyed by `permitId` (opaque string). The
+	 * value carries the resolved owner triple and the moment of
+	 * issue; on attach, the obligation map's owner triple is
+	 * the same one resolved at the reserve call.
+	 */
+	private readonly pendingReservations = new Map<string, PendingReservationRecord>()
+	private permitSequence = 0
+	/**
+	 * Adjacency: which jobId a given permit is attached to (if
+	 * any). Used by the consume paths to find the permit and
+	 * release the reservation slot when the obligation settles.
+	 * `attachedJobIdByPermitId.set(permitId, jobId)` is set by
+	 * `attachReservationToJob`; deleted by the consume paths and
+	 * `releaseReservation` when the permit is fully released.
+	 */
+	private readonly attachedJobIdByPermitId = new Map<string, string>()
 	private readonly notificationMarkers = new Map<string, NotificationMarker>()
 	/**
 	 * ACT-CLINEMM-ELM-SEAM04-CORRECTION01 (P0):
@@ -1324,10 +1509,24 @@ export class BackgroundNotifyCoordinator {
 		{ sessionId: string; taskId: string | undefined; receipt: CompactTerminalReceipt }
 	>()
 	private readonly options: Required<
-		Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority">
+		Omit<
+			BackgroundNotifyCoordinatorOptions,
+			"recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority" | "maxObservationCapacity"
+		>
 	> &
-		Pick<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority">
+		Pick<
+			BackgroundNotifyCoordinatorOptions,
+			"recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority"
+		>
 	private disposed = false
+	/**
+	 * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+	 * The configurable observation-capacity budget. Defaults to
+	 * `MAX_OBSERVATION_CAPACITY` (= 256). Tests inject a smaller
+	 * value to exercise the at-capacity boundary without filling
+	 * the 256-slot budget.
+	 */
+	private readonly maxObservationCapacity: number
 
 	constructor(options: BackgroundNotifyCoordinatorOptions) {
 		this.options = {
@@ -1338,14 +1537,261 @@ export class BackgroundNotifyCoordinator {
 			discardQueuedWake: options.discardQueuedWake,
 			consumeTerminalAuthority: options.consumeTerminalAuthority,
 		}
+		const cap = options.maxObservationCapacity ?? MAX_OBSERVATION_CAPACITY
+		if (!Number.isInteger(cap) || cap < 1) {
+			throw new Error(
+				`BackgroundNotifyCoordinator: maxObservationCapacity must be a positive integer (received ${cap}). ` +
+					"This is the load-bearing admission-budget cap; refusing to construct a coordinator with a non-positive value.",
+			)
+		}
+		this.maxObservationCapacity = cap
 	}
 
-	registerMarker(input: { jobId: string; sessionId: string; taskId: string | undefined }): void {
+	// ========================================================================
+	// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+	// Synchronous, atomic-in-the-JS-event-loop reservation contract.
+	// See `ReserveObservationCapacityResult` and `AttachReservationResult`
+	// for the wire-level contracts.
+	// ========================================================================
+
+	/**
+	 * Reserve 1 observation-capacity slot. Called by the host at
+	 * the pre-launch boundary (BEFORE `manager.start()`). The
+	 * method is SYNCHRONOUS: it neither performs an `await` nor
+	 * yields to the event loop between the capacity check and
+	 * the slot record. Two concurrent reservations in the same
+	 * microtask will observe the post-increment state of the
+	 * prior call.
+	 *
+	 * Idempotency: a second call with the same explicit
+	 * `permitId` returns `reserved` referencing the existing
+	 * permit. This is the load-bearing call/return contract;
+	 * the host MUST treat the returned `permitId` as opaque
+	 * and pass it back to `attachReservationToJob` /
+	 * `releaseReservation`.
+	 *
+	 * Owner resolution: the host MAY supply the owner triple
+	 * (preferred — host has the launch-time session/task
+	 * identity). When omitted, the BCB calls its own
+	 * `resolveActiveOwner` to capture the triple. A missing
+	 * owner is `invalid_owner` (fail closed).
+	 */
+	tryReserveObservationCapacity(input?: {
+		owner?: { sessionId: string; taskId: string | undefined }
+		permitId?: string
+	}): ReserveObservationCapacityResult {
 		if (this.disposed) {
-			return
+			return { kind: "disposed" }
+		}
+		// Re-use of an explicit permitId is idempotent: the second
+		// call returns the existing permit. This is the contract
+		// the host relies on to retry a launch without
+		// double-charging capacity.
+		if (input?.permitId !== undefined) {
+			const existing = this.pendingReservations.get(input.permitId)
+			if (existing) {
+				const used = this.computeObservationUsed()
+				return {
+					kind: "reserved",
+					permitId: existing.permitId,
+					capacity: { used, total: this.maxObservationCapacity },
+				}
+			}
+		}
+		// Resolve the owner triple. The host may supply the
+		// launch-time identity directly (preferred), or the BCB
+		// may call its own `resolveActiveOwner` (which the
+		// production SdkController wires to the active session).
+		const resolved = input?.owner ?? this.options.resolveActiveOwner() ?? undefined
+		if (!resolved || !resolved.sessionId) {
+			return { kind: "invalid_owner" }
+		}
+		// Capacity check (atomic — no `await` before the record).
+		const used = this.computeObservationUsed()
+		if (used >= this.maxObservationCapacity) {
+			return {
+				kind: "at_capacity",
+				capacity: { used, total: this.maxObservationCapacity },
+			}
+		}
+		// Issue the permit. The id is either the host-supplied
+		// string (must be non-empty and unique) or a
+		// monotonically-increasing sequence. The `attachedJobId`
+		// is set by `attachReservationToJob` later.
+		this.permitSequence += 1
+		const permitId = input?.permitId ?? `permit-${this.permitSequence}`
+		const record: PendingReservationRecord = {
+			permitId,
+			sessionId: resolved.sessionId,
+			taskId: resolved.taskId,
+			reservedAtMs: this.options.now(),
+			attachedJobId: undefined,
+		}
+		this.pendingReservations.set(permitId, record)
+		const nextUsed = this.computeObservationUsed()
+		return {
+			kind: "reserved",
+			permitId,
+			capacity: { used: nextUsed, total: this.maxObservationCapacity },
+		}
+	}
+
+	/**
+	 * Attach a previously-reserved permit to a jobId. The
+	 * method is SYNCHRONOUS and idempotent on the
+	 * `(permitId, jobId, owner)` triple. A second attach with
+	 * the same triple is `already_attached`; a second attach
+	 * with a different jobId is `invalid_permit` (the permit is
+	 * single-use).
+	 */
+	attachReservationToJob(input: {
+		permitId: string
+		jobId: string
+		owner?: { sessionId: string; taskId: string | undefined }
+	}): AttachReservationResult {
+		if (this.disposed) {
+			return { kind: "disposed" }
+		}
+		const record = this.pendingReservations.get(input.permitId)
+		if (!record) {
+			return { kind: "invalid_permit" }
+		}
+		if (input.owner) {
+			const expected = ownerKey(record.sessionId, record.taskId)
+			const got = ownerKey(input.owner.sessionId, input.owner.taskId)
+			if (expected !== got) {
+				return { kind: "owner_mismatch" }
+			}
+		}
+		if (record.attachedJobId === input.jobId) {
+			return { kind: "already_attached" }
+		}
+		if (record.attachedJobId !== undefined && record.attachedJobId !== input.jobId) {
+			return { kind: "invalid_permit" }
+		}
+		record.attachedJobId = input.jobId
+		this.attachedJobIdByPermitId.set(input.permitId, input.jobId)
+		return { kind: "attached" }
+	}
+
+	/**
+	 * Release a reservation. Idempotent. The host calls this
+	 * on fast-path terminal, launch failure, or a failed
+	 * attach-then-register call.
+	 */
+	releaseReservation(permitId: string): ReleaseReservationResult {
+		if (this.disposed) {
+			return { kind: "disposed" }
+		}
+		const record = this.pendingReservations.get(permitId)
+		if (!record) {
+			return { kind: "not_found" }
+		}
+		this.pendingReservations.delete(permitId)
+		this.attachedJobIdByPermitId.delete(permitId)
+		return { kind: "released" }
+	}
+
+	/**
+	 * Find a permit attached to the given jobId. Used by the
+	 * BCB's own terminal / consume paths to release the
+	 * reservation slot when the obligation settles.
+	 */
+	private findAttachedPermitIdForJob(jobId: string): string | undefined {
+		for (const [permitId, attachedJobId] of this.attachedJobIdByPermitId) {
+			if (attachedJobId === jobId) {
+				return permitId
+			}
+		}
+		return undefined
+	}
+
+	/**
+	 * Compute the total observation-bearing state for the
+	 * admission invariant. A permit that has been attached to
+	 * an obligation map (notificationMarkers /
+	 * nonNotifyTerminalObservations) is counted through the
+	 * obligation map, NOT through pendingReservations — the
+	 * slot is conserved on the transition. Unattached permits
+	 * (the host has not yet registered the obligation) are
+	 * counted through pendingReservations.
+	 */
+	computeObservationUsed(): number {
+		let attachedPermits = 0
+		for (const record of this.pendingReservations.values()) {
+			if (record.attachedJobId !== undefined) {
+				attachedPermits += 1
+			}
+		}
+		const unattachedPermits = this.pendingReservations.size - attachedPermits
+		return (
+			unattachedPermits +
+			this.notificationMarkers.size +
+			this.reservedMarkers.size +
+			this.nonNotifyTerminalObservations.size +
+			this.terminalReceipts.size +
+			this.capacityDroppedReceipts.size
+		)
+	}
+
+	/**
+	 * Diagnostic accessor: how many permits are currently held
+	 * in `pendingReservations`.
+	 */
+	diagnosticPendingReservationCount(): number {
+		return this.pendingReservations.size
+	}
+
+	/**
+	 * Diagnostic accessor: total observation-bearing state.
+	 */
+	diagnosticObservationUsed(): number {
+		return this.computeObservationUsed()
+	}
+
+	/**
+	 * Diagnostic accessor: the configured capacity.
+	 */
+	diagnosticMaxObservationCapacity(): number {
+		return this.maxObservationCapacity
+	}
+
+	registerMarker(input: {
+		jobId: string
+		sessionId: string
+		taskId: string | undefined
+		/**
+		 * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+		 * Optional permitId. When supplied, the BCB verifies the
+		 * permit is attached to this jobId (i.e. the host has
+		 * already called `attachReservationToJob(permitId, jobId)`).
+		 * If the permit is not attached, the marker is NOT
+		 * registered — fail closed. The host MUST release the
+		 * permit on this failure path. When omitted, the marker
+		 * is registered without an admission contract (legacy
+		 * path, ADM-22).
+		 */
+		permitId?: string
+	}): { kind: "registered" } | { kind: "permit_not_attached" } {
+		if (this.disposed) {
+			return { kind: "permit_not_attached" }
 		}
 		if (this.notificationMarkers.has(input.jobId)) {
-			return
+			// Idempotent re-registration: the existing marker
+			// owns the slot. The permit (if any) is bound to
+			// the same jobId via attachedJobIdByPermitId.
+			return { kind: "registered" }
+		}
+		// HTEC02: when a permitId is supplied, refuse registration
+		// unless the permit is attached to THIS jobId. This is
+		// the load-bearing invariant: every marker MUST be
+		// accounted for in the capacity budget at the moment of
+		// registration, not at the moment of consumption.
+		if (input.permitId !== undefined) {
+			const record = this.pendingReservations.get(input.permitId)
+			if (!record || record.attachedJobId !== input.jobId) {
+				return { kind: "permit_not_attached" }
+			}
 		}
 		const marker: NotificationMarker = {
 			jobId: input.jobId,
@@ -1355,6 +1801,7 @@ export class BackgroundNotifyCoordinator {
 			createdAtMs: this.options.now(),
 		}
 		this.notificationMarkers.set(input.jobId, marker)
+		return { kind: "registered" }
 	}
 
 	activeNotifyCountForOwner(sessionId: string, taskId: string | undefined): number {
@@ -1471,9 +1918,35 @@ export class BackgroundNotifyCoordinator {
 	 * Idempotency: re-registering the same jobId for the same
 	 * (sessionId, taskId) is a no-op (it is already in the set).
 	 */
-	recordNonNotifyTerminalObservation(input: { jobId: string; sessionId: string; taskId: string | undefined }): void {
-		if (this.disposed) return
-		if (!input.jobId || typeof input.jobId !== "string") return
+	recordNonNotifyTerminalObservation(input: {
+		jobId: string
+		sessionId: string
+		taskId: string | undefined
+		/**
+		 * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+		 * Optional permitId. When supplied, the BCB verifies the
+		 * permit is attached to this jobId (i.e. the host has
+		 * already called `attachReservationToJob(permitId, jobId)`).
+		 * If the permit is not attached, the observation is NOT
+		 * registered — fail closed. The host MUST release the
+		 * permit on this failure path. When omitted, the
+		 * observation is registered without an admission contract
+		 * (legacy path, ADM-22).
+		 */
+		permitId?: string
+	}): { kind: "recorded" } | { kind: "permit_not_attached" } {
+		if (this.disposed) return { kind: "permit_not_attached" }
+		if (!input.jobId || typeof input.jobId !== "string") {
+			return { kind: "permit_not_attached" }
+		}
+		// HTEC02: verify the permit is attached to this jobId
+		// (when supplied).
+		if (input.permitId !== undefined) {
+			const record = this.pendingReservations.get(input.permitId)
+			if (!record || record.attachedJobId !== input.jobId) {
+				return { kind: "permit_not_attached" }
+			}
+		}
 		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION02:
 		// key by jobId with owner triple as value (the consumer
 		// seam needs the owner triple to verify owner-mismatch).
@@ -1483,6 +1956,7 @@ export class BackgroundNotifyCoordinator {
 			sessionId: input.sessionId,
 			taskId: input.taskId,
 		})
+		return { kind: "recorded" }
 	}
 
 	/**
@@ -1518,6 +1992,15 @@ export class BackgroundNotifyCoordinator {
 		// (if any) for this jobId is no longer needed (the obligation
 		// is drained).
 		this.terminalReceipts.delete(input.jobId)
+		// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+		// release the permit attached to this jobId (the slot is
+		// returned to the budget). The lookup is a no-op when no
+		// permit is attached (legacy path, ADM-22).
+		const permitId = this.findAttachedPermitIdForJob(input.jobId)
+		if (permitId !== undefined) {
+			this.pendingReservations.delete(permitId)
+			this.attachedJobIdByPermitId.delete(permitId)
+		}
 	}
 
 	/**
@@ -2464,6 +2947,13 @@ export class BackgroundNotifyCoordinator {
 				// obligation is settled (N9 contract — no wake).
 				// Clear the receipt.
 				this.terminalReceipts.delete(input.jobId)
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+				// release the permit attached to this jobId.
+				const permitId = this.findAttachedPermitIdForJob(input.jobId)
+				if (permitId !== undefined) {
+					this.pendingReservations.delete(permitId)
+					this.attachedJobIdByPermitId.delete(permitId)
+				}
 				this.recordDecision(input.jobId, "containment_no_wake", undefined, 0, 0)
 				return { kind: "containment_no_wake", jobId: decision.jobId }
 			}
@@ -2536,6 +3026,13 @@ export class BackgroundNotifyCoordinator {
 				// The wake is the canonical authority; the receipt
 				// is no longer needed.
 				this.terminalReceipts.delete(input.jobId)
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+				// release the permit attached to this jobId.
+				const permitIdDrain = this.findAttachedPermitIdForJob(input.jobId)
+				if (permitIdDrain !== undefined) {
+					this.pendingReservations.delete(permitIdDrain)
+					this.attachedJobIdByPermitId.delete(permitIdDrain)
+				}
 				const drainedCount = held.length + 1
 				this.recordDecision(input.jobId, "drained", undefined, 0, 0)
 				return {
@@ -2599,6 +3096,15 @@ export class BackgroundNotifyCoordinator {
 			// `command_status` for this jobId will see no held
 			// obligation and will not need the receipt.
 			this.terminalReceipts.delete(input.jobId)
+			// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+			// release the permit attached to this jobId (the slot
+			// is returned to the budget). The lookup is a no-op
+			// when no permit is attached (legacy path, ADM-22).
+			const permitId = this.findAttachedPermitIdForJob(input.jobId)
+			if (permitId !== undefined) {
+				this.pendingReservations.delete(permitId)
+				this.attachedJobIdByPermitId.delete(permitId)
+			}
 		}
 
 		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
@@ -2692,6 +3198,15 @@ export class BackgroundNotifyCoordinator {
 			return
 		}
 		this.disposed = true
+		// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
+		// pending reservations are process-ephemeral too. The
+		// dispose() teardown returns every outstanding permit's
+		// slot to the budget. Any in-flight admit/attach/release
+		// calls after dispose() return `disposed` (defense in
+		// depth — the host has no business calling them after
+		// dispose).
+		this.pendingReservations.clear()
+		this.attachedJobIdByPermitId.clear()
 		this.notificationMarkers.clear()
 		// ACT-CLINEMM-ELM-SEAM04-CORRECTION01: clear reserved
 		// markers too (they would otherwise leak across a
