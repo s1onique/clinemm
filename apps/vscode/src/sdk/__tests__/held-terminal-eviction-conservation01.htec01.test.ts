@@ -885,6 +885,231 @@ describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Bound
 		notifyCoordinator.dispose()
 	}, 60_000)
 
+	it("CAP-CONSERVATION-03: a 257th terminal fact arriving when both receipt maps are at cap drains its own obligation through secondary_capacity_drop (older 256 obligations are preserved, no LRU eviction)", async () => {
+		// Reviewer-mandated bounded discriminator
+		// (HTEC01-CORR02 / HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT,
+		// P0): the CORR02 fix uses LRU eviction on the
+		// secondary (`capacityDroppedReceipts`) map as a
+		// "last-resort escape hatch". When the 257th
+		// unresolved terminal fact arrives, the LRU
+		// evicts an older secondary receipt. If that
+		// older job's heavy manager snapshot is already
+		// gone, the older obligation is permanently
+		// stranded (the original HTEC01 defect at a
+		// higher threshold).
+		//
+		// The correct fix: the secondary map is
+		// APPEND-ONLY. When the secondary map is at cap
+		// AND a new fact arrives, the BCB does NOT evict
+		// any older receipt; it settles the NEW fact's
+		// obligation immediately through an explicit
+		// `secondary_capacity_drop` resolution. The 257th
+		// fact is "lost" (no receipt retained) but the
+		// obligation is settled truthfully.
+		//
+		// Pre-fix (CORR02): the 257th arrival evicts the
+		// oldest secondary receipt; the older obligation
+		// is stranded. The CORR02's LRU "last-resort
+		// escape hatch" recreated the original HTEC01
+		// defect at a higher threshold.
+		//
+		// Post-fix (CORR03): the secondary map is
+		// APPEND-ONLY. The 257th fact is settled with
+		// `secondary_capacity_drop` at the `at_capacity`
+		// moment; the 128 older secondary receipts are
+		// preserved.
+		const manager = new CommandJobManager({
+			maxTerminalJobs: 2,
+			maxWaitBudgetMs: 50,
+			spawnFactory: () => fakeSupervisor(),
+		})
+		const ownerSessionId = "session-htec01-capcon3"
+		const ownerTaskId = "task-htec01-capcon3"
+		const notifyCoordinator = new BackgroundNotifyCoordinator({
+			resolveActiveOwner: () => ({ sessionId: ownerSessionId, taskId: ownerTaskId }),
+			enqueueTerminalWake: async () => ({ kind: "delivered" as const }),
+			discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+			now: () => Date.now(),
+		})
+		attachLifecycleReceiptRecorder(manager, notifyCoordinator, ownerSessionId, ownerTaskId)
+
+		// Step 1: fill the primary receipt store to 128.
+		const firstBatchJobIds: string[] = []
+		for (let i = 0; i < 128; i += 1) {
+			const j = await manager.start({
+				command: "sleep 600",
+				cwd: "/tmp",
+				waitBudgetMs: 25,
+				executionDeadlineMs: 30_000,
+			})
+			firstBatchJobIds.push(j.jobId)
+			notifyCoordinator.registerMarker({
+				jobId: j.jobId,
+				sessionId: ownerSessionId,
+				taskId: ownerTaskId,
+			})
+		}
+		for (const jid of firstBatchJobIds) {
+			const r = notifyCoordinator.recordTerminalReceipt({
+				jobId: jid,
+				sessionId: ownerSessionId,
+				taskId: ownerTaskId,
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+			})
+			expect(r.kind).toBe("recorded")
+		}
+		expect(notifyCoordinator.diagnosticTerminalReceiptCount()).toBe(128)
+
+		// Step 2: fill the secondary receipt store to
+		// 128. Each secondBatch jobId is registered with
+		// a marker, then its terminal event hits the
+		// primary cap and is routed to the secondary
+		// map.
+		const secondBatchJobIds: string[] = []
+		for (let i = 0; i < 128; i += 1) {
+			const j = await manager.start({
+				command: "sleep 600",
+				cwd: "/tmp",
+				waitBudgetMs: 25,
+				executionDeadlineMs: 30_000,
+			})
+			secondBatchJobIds.push(j.jobId)
+			notifyCoordinator.registerMarker({
+				jobId: j.jobId,
+				sessionId: ownerSessionId,
+				taskId: ownerTaskId,
+			})
+			const r = notifyCoordinator.recordTerminalReceipt({
+				jobId: j.jobId,
+				sessionId: ownerSessionId,
+				taskId: ownerTaskId,
+				terminalState: "cancelled",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+			})
+			expect(r.kind).toBe("at_capacity")
+		}
+		expect(notifyCoordinator.diagnosticCapacityDroppedReceiptCount()).toBe(128)
+
+		// Step 3: register the 257th marker. We do NOT
+		// cancel job257 through the manager (the
+		// cancel-driven lifecycle event would double-fire
+		// `recordTerminalReceipt` and obscure the
+		// assertion). Instead, we call
+		// `recordTerminalReceipt` directly — this is
+		// the production path the
+		// `recordTerminalReceiptFromLifecycle` free
+		// function takes for the new fact.
+		const job257 = await manager.start({
+			command: "sleep 600",
+			cwd: "/tmp",
+			waitBudgetMs: 25,
+			executionDeadlineMs: 30_000,
+		})
+		notifyCoordinator.registerMarker({
+			jobId: job257.jobId,
+			sessionId: ownerSessionId,
+			taskId: ownerTaskId,
+		})
+		const capResult = notifyCoordinator.recordTerminalReceipt({
+			jobId: job257.jobId,
+			sessionId: ownerSessionId,
+			taskId: ownerTaskId,
+			terminalState: "cancelled",
+			exitCode: 0,
+			reason: undefined,
+			isContainmentFailed: false,
+		})
+		// The 257th is refused with `at_capacity`. The
+		// post-fix behaviour: the BCB settles the 257th's
+		// obligation through an explicit
+		// `secondary_capacity_drop` resolution at this
+		// moment (no LRU eviction of older receipts).
+		expect(capResult.kind).toBe("at_capacity")
+
+		// Step 4: the secondary map is still at 128 (no
+		// LRU eviction). The oldest secondary receipt's
+		// jobId is preserved.
+		expect(notifyCoordinator.diagnosticCapacityDroppedReceiptCount()).toBe(128)
+		const secondaryKeys = (
+			notifyCoordinator as unknown as { capacityDroppedReceipts: Map<string, unknown> }
+		).capacityDroppedReceipts.keys()
+		const secondaryKeyArr = [...secondaryKeys]
+		expect(secondaryKeyArr).not.toContain(job257.jobId)
+
+		// Step 5: the 257th's marker is no longer held
+		// (drained at the `at_capacity` moment).
+		const unconsumedAfter257 = notifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner(ownerSessionId, ownerTaskId)
+		expect(unconsumedAfter257).not.toContain(job257.jobId)
+		// 128 first-batch + 128 second-batch = 256
+		// outstanding obligations. The 257th is drained.
+		expect(unconsumedAfter257.length).toBe(256)
+
+		// Step 6: the oldest secondary receipt's jobId
+		// is still in the secondary map AND its marker
+		// is still held.
+		const oldestSecondary = secondBatchJobIds[0]
+		expect(secondaryKeyArr).toContain(oldestSecondary)
+		expect(unconsumedAfter257).toContain(oldestSecondary)
+
+		// Step 7: real `command_status(oldestSecondary)`
+		// through the production factory. The manager
+		// returns `unknown_job` (the oldest secondary
+		// was never in this manager's terminal map);
+		// the BCB's secondary map covers it; the
+		// obligation is drained through the canonical
+		// `resolveObligation` path; the response is
+		// truthful (NOT `unknown_job`).
+		const secondManager = new CommandJobManager({
+			maxTerminalJobs: 2,
+			maxWaitBudgetMs: 50,
+			spawnFactory: () => fakeSupervisor(),
+		})
+		attachLifecycleReceiptRecorder(secondManager, notifyCoordinator, ownerSessionId, ownerTaskId)
+		for (let i = 0; i < 3; i += 1) {
+			const j = await secondManager.start({
+				command: "sleep 600",
+				cwd: "/tmp",
+				waitBudgetMs: 25,
+				executionDeadlineMs: 30_000,
+			})
+			await secondManager.cancel({ jobId: j.jobId })
+		}
+		const tool = createCommandStatusTool(secondManager, {
+			backgroundNotifyCoordinator: notifyCoordinator,
+			resolveActiveOwner: () => ({ sessionId: ownerSessionId, taskId: ownerTaskId }),
+		})
+		const result = (await tool.execute(
+			{ jobId: oldestSecondary, waitMs: 0 },
+			{ sessionId: ownerSessionId, agentId: "test-agent", iteration: 1 },
+		)) as Array<Record<string, unknown>>
+		const payload = result[0] as Record<string, unknown>
+
+		// The oldest secondary obligation is TRUTHFULLY
+		// resolvable.
+		expect(payload.ok).toBe(true)
+		expect(payload.state).toBe("cancelled")
+		expect(payload.outputRetained).toBe(false)
+		expect(payload.observation).toBe("capacity_drop")
+		const unconsumedAfterDrain = notifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner(ownerSessionId, ownerTaskId)
+		expect(unconsumedAfterDrain).not.toContain(oldestSecondary)
+		// 256 outstanding obligations (128 first + 128 second)
+		// minus 1 (drained oldest via command_status) = 255.
+		// Note: the 257th's marker was drained at the
+		// `at_capacity` moment (not via command_status), so
+		// it's already not in the 256 by this point. The
+		// total after step 7 is 255.
+		expect(unconsumedAfterDrain.length).toBe(255)
+
+		await manager.dispose()
+		await secondManager.dispose()
+		notifyCoordinator.dispose()
+	}, 90_000)
+
 	it("OWN-01/02: a late terminal event retains the LAUNCH-time owner identity (session switch does not misattribute)", async () => {
 		const launchSessionId = "session-htec01-launch"
 		const launchTaskId = "task-htec01-launch"

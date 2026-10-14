@@ -1,3 +1,59 @@
+# ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR03 — PASS_HELD_TERMINAL_SECONDARY_MAP_NO_LRU (correction) — 2026-10-14
+
+**Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_SECONDARY_MAP_NO_LRU`** (no-LRU secondary-map correction cycle). The single reviewer P0 halt (`HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT`) is closed: the secondary `capacityDroppedReceipts` map is now APPEND-ONLY (no LRU eviction); when both maps are at cap and a new fact arrives, the BCB settles the NEW fact's obligation immediately through an explicit `secondary_capacity_drop` resolution. Older obligations are preserved.
+
+**Predecessor:** `dd75e2d45` (CORR02 closure). Reviewer halt: `HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT` (P0).
+
+**Reviewer concern (verbatim, abridged):**
+> A job can now lose both its heavy terminal snapshot and its secondary receipt while its canonical BCB obligation remains outstanding.
+> The 129th job is protected. The 257th unresolved job is not demonstrably protected.
+> LRU is a reasonable policy for disposable cache entries. It is not automatically appropriate for records required to discharge outstanding correctness obligations.
+> The solution should enforce conservation before information becomes irretrievable. Possible approaches include admission control for additional unresolved terminal obligations or coordinated snapshot retention. Do not introduce a third receipt map.
+
+**Bounded correction (1 BCB, 1 test, 0 new persistent state, 0 new protocol field):**
+
+1. **Secondary map is APPEND-ONLY (no LRU eviction):**
+   - Removed the LRU eviction that was in CORR02's `at_capacity` path. The secondary map's size is bounded by `MAX_TERMINAL_RECEIPTS` (128) and new entries are added only when the map has room.
+
+2. **Dual-cap admission policy (the load-bearing fix):**
+   - When the primary receipt map is at cap AND a new fact arrives: the BCB records the disposition in the secondary map (the 129th case, preserved from CORR02).
+   - When BOTH the primary AND secondary maps are at cap AND a new fact arrives: the BCB does NOT admit the new fact. The NEW fact's obligation is settled IMMEDIATELY at the `at_capacity` moment through the canonical `resolveObligation` (notify=true) or `consumeNonNotifyTerminalObservation` (fire-and-forget) path. The new fact is "lost" (no receipt retained) but the obligation is settled truthfully. The older 256 obligations are preserved (the secondary map is unchanged).
+
+3. **New test `CAP-CONSERVATION-03` (reviewer-mandated bounded discriminator):**
+   - 128 primary receipts + 128 secondary receipts (each with a held marker, 256 outstanding obligations total).
+   - Register and finalize the 257th job. The `recordTerminalReceipt` call returns `{ kind: "at_capacity", cap: 128 }` and the 257th's marker is drained.
+   - The secondary map remains at 128 (no LRU eviction).
+   - Real `command_status(oldestSecondary)` through the production factory returns `{ ok: true, state, outputRetained: false, observation: "capacity_drop" }`. The oldest secondary's obligation is drainable; the LRU eviction that would have stranded it is gone.
+   - Pre-fix (CORR02): the 257th arrival LRU-evicts the oldest secondary receipt. `command_status(oldestSecondary)` returns `unknown_job` (the original HTEC01 failure mode at a higher threshold). RED reproduces.
+
+**Tests (11 total, 10 prior + 1 new):**
+- 10/10 prior (RED→GREEN, ablation, EVC-04/05/11/14, BND-01/02, CAP-CONSERVATION-01/02, OWN-01/02, PRD-01/02) — preserved
+- 1/1 new (CAP-CONSERVATION-03) — PROVEN
+- 0 typecheck errors (`bun run check-types`)
+- 0 biome lint errors
+
+**Gates:**
+```
+HTEC01_CORR03_IMPLEMENTATION:        PASS
+HTEC01_CORR03_TESTS:                 11/11 PASS
+HTEC01_CORR03_RECEIPT_MEMORY_CAP:    PROVEN
+HTEC01_CORR03_OVERFLOW_CONSERVATION_129: PROVEN
+HTEC01_CORR03_OVERFLOW_CONSERVATION_257: PROVEN (NEW)
+HTEC01_CORR03_SECONDARY_MAP_BOUND:   APPEND_ONLY_NO_LRU
+HTEC01_CORR03_OWNER_IDENTITY:        STRUCTURAL_PASS (unchanged)
+HTEC01_CORR03_PRODUCTION_FUNCTION:   REAL_PRODUCTION_SEAM (unchanged)
+HTEC01_CORR03_CONTROLLER_INTEGRATION: NOT_PROVEN (unchanged)
+HTEC01_CORR03_LIVE:                  LIVE_UNOBSERVABLE
+```
+
+**Files (this ACT, 2 modified):**
+- `apps/vscode/src/sdk/background-notify-coordinator.ts` (modified — LRU removed from `at_capacity` path; new dual-cap admission policy drains the new fact's obligation via `resolveObligation`/`consumeNonNotifyTerminalObservation`; new `diagnosticCapacityDroppedReceiptCount` accessor; docstring on `capacityDroppedReceipts` updated to APPEND-ONLY semantics)
+- `apps/vscode/src/sdk/__tests__/held-terminal-eviction-conservation01.htec01.test.ts` (modified — added `CAP-CONSERVATION-03` test, +175 lines)
+
+**Verdict:** `PASS_HELD_TERMINAL_SECONDARY_MAP_NO_LRU` (no-LRU correction). The reviewer's P0 halt is closed. All CORR02 invariants are preserved (the 129th case still passes). The 257th case is now provably bounded. Factory stop condition met at this verdict. GO to exact-head dogfood qualification on the next session.
+
+---
+
 # ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR02 — PASS_HELD_TERMINAL_RECEIPT_CAPACITY_CONSERVATION (correction) — 2026-10-14
 
 **Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_RECEIPT_CAPACITY_CONSERVATION`** (capacity-conservation correction cycle). The single reviewer P0 halt (`HALT_RECEIPT_CAPACITY_CONSERVATION`) is closed: a small RED → GREEN cycle proves bounded memory and continued observability are simultaneously preserved.

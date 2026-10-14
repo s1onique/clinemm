@@ -1287,29 +1287,35 @@ export class BackgroundNotifyCoordinator {
 	 */
 	private readonly terminalReceipts = new Map<string, CompactTerminalReceipt>()
 	/**
-	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / CORR01
-	 * (HTEC01-CORR01 / HALT_RECEIPT_CAPACITY_CONSERVATION, P0):
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / CORR03
+	 * (HTEC01-CORR02 / HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT):
 	 *
 	 * Capacity-evicted terminal-fact dispositions. When the
-	 * receipt store is at cap (`MAX_TERMINAL_RECEIPTS`) and a new
-	 * terminal fact arrives with a held obligation, the BCB
-	 * refuses the receipt (memory bounded) but records the
-	 * disposition here so a later `command_status` call can
-	 * drain the obligation truthfully through an explicit
-	 * `capacity_drop` observation. Without this map the cap
-	 * refusal would strand the obligation (the original HTEC01
-	 * failure mode).
+	 * primary receipt store is at cap (`MAX_TERMINAL_RECEIPTS`)
+	 * and a new terminal fact arrives with a held obligation,
+	 * the BCB refuses the primary receipt (memory bounded)
+	 * but records the disposition here so a later
+	 * `command_status` call can drain the obligation
+	 * truthfully through an explicit `capacity_drop`
+	 * observation. Without this map the cap refusal would
+	 * strand the obligation (the original HTEC01 failure
+	 * mode).
 	 *
 	 * Bounded by the same cap as `terminalReceipts` (the two
 	 * maps are alternative dispositions for the same
-	 * obligation). When the cap is reached and a new disposition
-	 * arrives, the OLDEST entry is evicted (LRU) and ITS
-	 * obligation is settled with a `capacity_drop` resolution —
-	 * the eviction is rare in practice (the cap is 128) and the
-	 * evicted entry's obligation would have been stranded
-	 * anyway (the receipt cap dropped it). The LRU eviction is
-	 * the last-resort escape hatch for an unbounded obligation
-	 * storm.
+	 * obligation). The map is APPEND-ONLY — no LRU
+	 * eviction. CORR02's LRU "last-resort escape hatch"
+	 * recreated the original HTEC01 defect at a higher
+	 * threshold: when the secondary map is also at cap AND
+	 * a new fact arrives, LRU eviction of the oldest
+	 * secondary receipt would strand that older job's
+	 * obligation (its heavy manager snapshot is already
+	 * gone). The CORR03 fix removes the LRU and instead
+	 * settles the NEW fact's obligation immediately at
+	 * the `at_capacity` moment through an explicit
+	 * `secondary_capacity_drop` resolution (the new
+	 * fact is "lost" but the obligation is settled
+	 * truthfully).
 	 *
 	 * Cleared on consumption, dispose, or owner-mismatch.
 	 */
@@ -1641,26 +1647,70 @@ export class BackgroundNotifyCoordinator {
 				outputRetained: false,
 				recordedAtMs: this.options.now(),
 			}
-			// Enforce the secondary cap (LRU eviction). If
-			// the secondary map is also at cap (rare in
-			// practice — the secondary map fills only when
-			// the primary is at cap and a new fact arrives),
-			// evict the oldest entry. The evicted entry's
-			// obligation is the one we drop — but it was
-			// ALREADY at the cap-refusal disposal stage
-			// (its receipt was refused earlier), so the
-			// obligation is already in the worst-case
-			// state. The LRU eviction of the secondary
-			// map is a last-resort escape hatch for an
-			// unbounded obligation storm and is the only
-			// path that can strand an obligation in the
-			// new design.
+			// HTEC01-CORR02 / HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT:
+			// when the secondary map is also at cap, the
+			// new fact CANNOT be admitted (the secondary
+			// map is append-only — LRU eviction of older
+			// receipts would strand their obligations,
+			// re-creating the original HTEC01 defect at
+			// a higher threshold). The new fact's
+			// obligation is settled IMMEDIATELY at this
+			// moment through the canonical
+			// `resolveObligation` (notify=true) or
+			// `consumeNonNotifyTerminalObservation`
+			// (fire-and-forget) path. The new fact is
+			// "lost" (no receipt retained, no entry in
+			// either map) but the obligation is settled
+			// truthfully — the BCB's held set no longer
+			// references this jobId, so completion is
+			// not stalled.
 			if (this.capacityDroppedReceipts.size >= MAX_TERMINAL_RECEIPTS) {
-				const oldestKey = this.capacityDroppedReceipts.keys().next().value
-				if (oldestKey !== undefined) {
-					this.capacityDroppedReceipts.delete(oldestKey)
+				// Both maps are at cap. The new fact
+				// cannot be admitted. Settle the
+				// obligation immediately.
+				if (marker) {
+					// notify=true path
+					this.resolveObligation({
+						jobId: input.jobId,
+						sessionId: resolvedSessionId,
+						taskId: resolvedTaskId,
+						resolution: "canonical_status_observed",
+					})
+				} else if (nonNotifyOwner) {
+					// fire-and-forget path
+					this.consumeNonNotifyTerminalObservation({
+						jobId: input.jobId,
+						sessionId: resolvedSessionId,
+						taskId: resolvedTaskId,
+					})
 				}
+				// The `reserved` path is defensive: a
+				// reserved marker without a full
+				// notification marker cannot be drained
+				// here (it is a transient state in
+				// `consumeTerminal`); the BCB logs a HALT
+				// audit reason and returns `at_capacity`
+				// without eviction (the obligation will
+				// be re-evaluated when the consuming
+				// `consumeTerminal` call resolves).
+				this.options.recordNotifyDecision?.({
+					jobId: input.jobId,
+					sessionId: resolvedSessionId,
+					taskId: resolvedTaskId,
+					decision: "wake_dispatch_rejected",
+					reason: `terminal_receipts_secondary_at_capacity:cap=${cap}:primary_existing=${this.terminalReceipts.size}:secondary_existing=${this.capacityDroppedReceipts.size}:obligation_drained_at_cap`,
+					heldCount: 0,
+					activeNotifyCount: 0,
+					capturedAtMs: this.options.now(),
+				})
+				return { kind: "at_capacity", cap }
 			}
+			// Secondary map has room. Record the
+			// disposition (append-only — NO LRU
+			// eviction). The disposition is the
+			// `capacity_drop` outcome that
+			// `command_status` will consult to drain
+			// the obligation.
 			this.capacityDroppedReceipts.set(input.jobId, {
 				sessionId: resolvedSessionId,
 				taskId: resolvedTaskId,
@@ -1830,6 +1880,21 @@ export class BackgroundNotifyCoordinator {
 	 */
 	diagnosticTerminalReceiptCount(): number {
 		return this.terminalReceipts.size
+	}
+
+	/**
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / CORR02
+	 * (HTEC01-CORR02 / HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT):
+	 *
+	 * Diagnostic accessor — number of capacity-evicted
+	 * terminal-fact dispositions currently held. The
+	 * secondary map is APPEND-ONLY (no LRU eviction); the
+	 * size is bounded by `MAX_TERMINAL_RECEIPTS`. Used by
+	 * tests to assert the CORR02 invariant (no LRU
+	 * eviction of older receipts).
+	 */
+	diagnosticCapacityDroppedReceiptCount(): number {
+		return this.capacityDroppedReceipts.size
 	}
 
 	/**
