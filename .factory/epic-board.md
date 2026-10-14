@@ -25515,3 +25515,224 @@ SEAM11_CUTOVER:      NOT AUTHORIZED
 SEAM11_KERNEL:       6TH_POSITION_REMAINS_UNALLOCATED
 SEAM11_PRODUCTION:   NO_CODE_TOUCHED
 ```
+
+---
+
+# ACT-CLINEMM-ELM-SEAM11-WEBVIEW-REPLICA-AUTHORITY-RECON — NOT_A_GOOD_ELM_SEAM — 2026-10-14
+
+**Status:** CLOSED with verdict `NOT_A_GOOD_ELM_SEAM`. The
+`messageReducer.ts` candidate for a persistent Elm replica owner
+fails the C1 React-ownership discriminator on six architectural
+grounds enumerated in WR-11. The SEAM11 webview-replica
+production cutover is **not authorized**. No new Elm kernel
+position is allocated; the 5-kernel convention is preserved.
+
+**Subject HEAD:** `513ae0f6122fbf3a20397521020250fd9f38eff3`
+(post TERMINAL-REPORT-CARDINALITY-REPAIR01-CORR01 closure).
+
+## Preconditions (verified)
+
+- `ENTRY_HEAD = 513ae0f61` on branch `main`; working tree clean;
+  no stashes; no uncommitted changes.
+- SEAM01–10 evidence preserved in this board and the per-ACT
+  files in `.factory/`.
+- The reported SEAM10 closure (`356c67714`) is correct as a
+  historical closure pointer; the actual current HEAD is
+  `513ae0f61` (matches `git rev-parse HEAD` at entry).
+- HALT_UNEXPECTED_TRACKED_DIRT: NOT TRIGGERED.
+- The prior SEAM11 (async-authority-recon, `NOT_A_GOOD_ELM_SEAM`,
+  `b544b5ca1`) closed the prompt-admission / background-job-FSM /
+  task-lifecycle candidates. This SEAM11 investigates a fourth
+  candidate (`messageReducer.ts` transcript replica) and is a
+  different file.
+- The existing 5 Elm kernels
+  (`completion-authority`, `task-header-orchestration`,
+  `completion-continuation-control`, `background-notify-authority`,
+  `deferred-completion-barrier`) are REAL_PRODUCTION_SEAM and
+  preserved.
+
+## Source ownership map (C0)
+
+The webview has exactly **two writers** of `clineMessages` /
+`turnState` / `epoch` / `stateVersion`:
+
+| Writer | Source | Authoritative previous state | State mutation |
+|---|---|---|---|
+| **W1** `ExtensionStateContext.tsx:684-819` | `subscribeToState` JSON snapshot | `prevState` (React-authoritative) | `clineMessages`, `turnState`, `epoch`, `stateVersion`, two presentation projections, `blockedRecovery`, `autoApprovalSettings` |
+| **W2** `ExtensionStateContext.tsx:1008-1037` | `subscribeToPartialMessage` per-message callback | `prevState` (React-authoritative) | `clineMessages` ONLY (`epoch` / `stateVersion` / `turnState` NOT copied — see R-MP-SRC-DISCREPANCY) |
+
+37 reader sites under `webview-ui/src/components/`; 0 other
+writers. The W1/W2 split is intentional and is the **single
+behavioral contract** the migration would have to preserve.
+
+## React ownership discriminator (C1) — REACT_OWNERSHIP_MODEL = NOT_JUSTIFIED_UNDER_CURRENT_CONSTRAINTS
+
+> **Calibration note (post-review):** the original entry
+> recorded this as `NOT_VIABLE`. A Factory review identified
+> `useSyncExternalStore`
+> (https://react.dev/reference/react/useSyncExternalStore) as
+> a valid React integration mechanism for external state
+> owners, which breaks the strict-impossibility claim. The
+> verdict is re-stated as
+> `REACT_OWNERSHIP_MODEL = NOT_JUSTIFIED_UNDER_CURRENT_CONSTRAINTS`
+> (an economic and scope-specific rejection, matching the
+> SEAM06 / SEAM10 / SEAM11-async precedent family).
+
+12 mandatory questions answered in the ACT §3. The dispositive
+findings:
+
+- A `useSyncExternalStore` integration is architecturally
+  viable (React's official external-store pattern), but the
+  proofs (event ordering, initialization, payload
+  conservation, recovery, latency) are not demonstrated at
+  the current ClineMM scope. A naïve in-updater Elm port is
+  forbidden by `react-updater-purity-probe.test.tsx` (5/5
+  PASS). A second-fence implementation in the updater would
+  be a second canonical state machine for the same fields —
+  forbidden by ACT §9.
+- The W1/W2 split is a behavioral contract: a unified Elm
+  model would either widen W2's authority (changes R08 / R14
+  behavior) or re-implement the W1/W2 split as separate
+  model paths (second state machine).
+
+## Frozen semantics (C2)
+
+14 invariant families (R01–R14) pinned by the existing test
+corpus (no new property invented). All four test files
+preserved at `513ae0f6`:
+
+| Test | Result |
+|---|---|
+| `messageReducer.test.ts` | 16/16 PASS |
+| `__tests__/c2-replay-red.test.ts` | 7/7 PASS |
+| `__tests__/react-updater-purity-probe.test.tsx` | 5/5 PASS |
+| `__tests__/aopc02-phase-b-straggler-replay.test.tsx` | 11/11 PASS |
+
+**Total: 39 PASS, 0 FAIL.**
+
+## Probe and economics (C3–C8) — not executed
+
+Per ACT §3 exit rule (narrowed post-review: "If no
+**economically justified** single-owner architecture can be
+identified, stop with `NOT_A_GOOD_ELM_SEAM`") and §9 stop
+condition ("If every failure requires a second persistent
+transcript owner plus an event journal: `NOT_A_GOOD_ELM_SEAM`"),
+the C3–C7 executable probe is **not justified** when C1 has
+already returned `NOT_JUSTIFIED_UNDER_CURRENT_CONSTRAINTS`. The
+C8 economics gate is `ECONOMICS_GATE = NO_GO` for three
+structural reasons (revised post-review):
+
+1. **Single-owner not justified under current ClineMM
+   constraints** (the integration proofs — event ordering,
+   initialization, payload conservation, recovery, latency —
+   are not demonstrated at the current scope; the
+   strict-impossibility claim is withdrawn).
+2. **React functional-updater purity is a hard contract for
+   the existing path** (a naïve in-updater Elm port is
+   forbidden; a `useSyncExternalStore` integration is a
+   different contract that requires its own test certification).
+3. **The ClineMessage payload cost is one contributor, not the
+   whole story** (R12 forbids schema narrowing; the 100 MB/s
+   figure is `INFERRED / NOT MEASURED`; the actual cost is the
+   absence of demonstrated proofs, not the raw serialization
+   rate; the identity/payload split is correctly excluded by
+   the ACT's §5 fail-fast rule).
+
+## Verdict
+
+```
+SEAM11_WEBVIEW_REPLICA_RECON:        PASS (executed per ACT spec C0–C2: GO)
+SEAM11_WEBVIEW_REPLICA_REACT_OWNERSHIP: NOT_JUSTIFIED_UNDER_CURRENT_CONSTRAINTS (revised post-review from NOT_VIABLE)
+SEAM11_WEBVIEW_REPLICA_DISPOSITION:  NOT_A_GOOD_ELM_SEAM (economic and scope-specific; not a proof of architectural impossibility)
+SEAM11_WEBVIEW_REPLICA_CUTOVER:      NOT AUTHORIZED
+SEAM11_WEBVIEW_REPLICA_KERNEL:       6TH_POSITION_REMAINS_UNALLOCATED
+SEAM11_WEBVIEW_REPLICA_PRODUCTION:   NO_PRODUCTION_CODE_TOUCHED
+SEAM11_WEBVIEW_REPLICA_RECON_REASONS: WR-11-R1..R6 (see ACT §15; revised post-review)
+SEAM11_WEBVIEW_REPLICA_HALT_P1:      YES, RESOLVED — see "Post-review calibration" below
+```
+
+## Post-review calibration (HALT_P1 resolution)
+
+The Factory reviewer's
+`HALT_EVIDENCE_OVERCLAIM_AND_UNBOUND_CLOSURE` identified two
+overclaims and one P0 artifact-binding issue. All three are
+corrected in this closure:
+
+1. **Overclaim — strict-impossibility framing.** The original
+   entry framed the C1 discriminator as a proof of architectural
+   impossibility. The `useSyncExternalStore` React integration
+   (https://react.dev/reference/react/useSyncExternalStore) is
+   a legitimate React integration mechanism for external state
+   owners and breaks the strict-impossibility claim. The verdict
+   is re-stated as
+   `REACT_OWNERSHIP_MODEL = NOT_JUSTIFIED_UNDER_CURRENT_CONSTRAINTS`
+   (an economic and scope-specific rejection, matching the
+   SEAM06 / SEAM10 / SEAM11-async precedent family).
+2. **Overclaim — 100 MB/s serialization estimate.** The 100 MB/s
+   figure in the ACT §8 is a **bounded worst-case estimate**, not
+   a benchmark. Labeled `INFERRED / NOT MEASURED`. The actual
+   cost is the **absence of demonstrated proofs** (event
+   ordering, initialization, payload conservation, recovery,
+   latency), not the raw serialization rate.
+3. **P0 — artifact binding.** The pre-commit state showed 1
+   modified + 3 untracked files while the report claimed
+   `WORKTREE_STATUS = clean`. Resolved by the closure commit
+   recorded in the Identity section below.
+
+## Predecessor ACT lineage (SEAM11 recon lineage, complete)
+
+```
+SEAM05 (prompt-admission-recon, GREEN) → SEAM06 (admission-cutover, NOT_A_GOOD_ELM_SEAM)
+SEAM09 (tool-approval-lifecycle-recon, GREEN) → SEAM10 (interop-disc, NOT_A_GOOD_ELM_SEAM)
+SEAM11 (async-authority-recon, NOT_A_GOOD_ELM_SEAM)                  [b544b5ca1, 2026-10-13]
+SEAM11 (webview-replica-authority-recon, NOT_A_GOOD_ELM_SEAM)        [513ae0f61, 2026-10-14]  ← THIS ENTRY
+```
+
+**The 6th Elm kernel position in `_ELM_KERNELS` remains
+unallocated after this recon.** The 5 existing kernels are
+preserved.
+
+## Next cursor
+
+Per ACT §11, `SEAM11_REPLICA_CONTRACT` is **not frozen** (the
+economics gate failed). The next SEAM11 successor (if any) must
+be a recon for a different candidate seam, per the SEAM10 §9
+next-cursor menu and the SEAM11-async §10 closure precedent.
+The `messageReducer.ts` candidate is closed; no follow-up
+production cutover is authorized.
+
+## Files added (3) and modified (1)
+
+- `.factory/ACT-CLINEMM-ELM-SEAM11-WEBVIEW-REPLICA-AUTHORITY-RECON.md`
+  (this ACT plan + board cursor, 869 lines after calibration)
+- `.factory/acts/ACT-CLINEMM-ELM-SEAM11-WEBVIEW-REPLICA-AUTHORITY-RECON.md`
+  (canonical ACT plan, identical content per SEAM07 convention,
+  869 lines after calibration)
+- `.factory/evidence/ACT-CLINEMM-ELM-SEAM11-WEBVIEW-REPLICA-AUTHORITY-RECON/executable-witness.md`
+  (witness log, 165 lines after calibration)
+- `.factory/epic-board.md` (this entry, modified; +199 lines
+  including the post-review calibration)
+
+## Identity
+
+| Field | Value |
+|---|---|
+| `ENTRY_HEAD` | `513ae0f6122fbf3a20397521020250fd9f38eff3` |
+| `SUBJECT_HEAD` | recorded at the closure commit (the ACT's only commit records the Factory artifacts and the calibration changes — not the pre-ACT `ENTRY_HEAD`) |
+| Branch | `main` |
+| Worktree status | clean at exit after the closure commit (empty `git status --short` post-commit) |
+| Probe binary SHA-256 | not produced (C3 not executed; per stop conditions) |
+| Commits made | 1 (the closure commit — Factory artifacts only, no production code) |
+| Files modified | 0 production files; 1 board file (`epic-board.md`); 3 new Factory files |
+| Stashes | 0 |
+| Tag pushes | 0 |
+
+## Verdict (final)
+
+`NOT_A_GOOD_ELM_SEAM` (economic and scope-specific disposition;
+**not** a proof of architectural impossibility). The SEAM11
+webview-replica production cutover is **not authorized**. The
+5-kernel convention is preserved. The 6th position remains
+unallocated. The HALT_P1 from the Factory reviewer's
+`HALT_EVIDENCE_OVERCLAIM_AND_UNBOUND_CLOSURE` is resolved by
+the calibration documented above.
