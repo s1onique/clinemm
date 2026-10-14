@@ -1,3 +1,33 @@
+# ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR04 - PASS_HELD_TERMINAL_NO_MANUFACTURED_OBSERVATION (correction) - 2026-10-14
+
+**Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_NO_MANUFACTURED_OBSERVATION`**. Reviewer P0 halt `HALT_TERMINAL_OBSERVATION_SETTLED_WITHOUT_OBSERVATION` closed: the BCB no longer manufactures an Observed event at the secondary cap; the new fact obligation stays held; the host (production code) owns the disposition decision.
+
+**Predecessor:** `00c8a66d3` (CORR03 closure). Reviewer halt: `HALT_TERMINAL_OBSERVATION_SETTLED_WITHOUT_OBSERVATION` (P0).
+
+**Reviewer concern:** the 257th-job fallback settles a new terminal-observation obligation immediately when both maps are full, without retaining the terminal fact or requiring a subsequent `command_status` observation. Reviewer invariant: `TerminalCommitted AND (Observed OR AuthorizedDisposition) => MaySettle`. Capacity exhaustion alone must not imply `AuthorizedDisposition`. "Never manufacture a terminal observation simply because memory is exhausted."
+
+**Design inspection:** the existing `registerMarker` boundary in `vscode-run-commands-tool.ts` is post-launch (`manager.start()` runs first, then `registerMarker()` runs second). A synchronous admission contract requires a new `admitNotifyJob()` BCB method called BEFORE `manager.start()`, plus a host refactor. Per reviewer instruction: "if not [feasible], stop with an exact design blocker rather than adding more fallback state". The bounded repair is to remove the manufactured observation; the BCB stops settling at cap; the obligation stays held; the host owns the disposition.
+
+**Bounded correction (1 BCB, 1 test, 0 new persistent state, 0 new protocol field):**
+
+1. **Remove the manufactured observation (load-bearing fix):** CORR03 at-secondary-cap path called `resolveObligation` or `consumeNonNotifyTerminalObservation` for the new fact. CORR04 removes the drain. The at-cap path now: (a) refuses to record the new fact (memory bounded), (b) does NOT drain the new fact obligation, (c) returns `at_capacity` to the caller, (d) the marker stays in the held set, (e) the audit log records `obligation_held_for_host_disposition`.
+
+2. **Preserve CORR03 APPEND-ONLY semantic:** secondary map is still APPEND-ONLY (no LRU eviction). 128th older obligations remain drainable through `command_status` returning `capacity_drop` truthfully.
+
+3. **Modified CAP-CONSERVATION-03 test (the witness):** 128 primary + 128 secondary receipts (256 obligations). 257th `recordTerminalReceipt` returns `at_capacity`. The 257th marker is NOT drained. Real `command_status(257)` returns `unknown_job` (truthful no-observation signal, NOT a manufactured `capacity_drop`). Real `command_status(oldestSecondary)` returns `capacity_drop` (128th older obligations remain drainable).
+
+**Design limitation (documented, NOT a code defect):** the >cap case leaves the 257th obligation stuck. The host can take action via the HALT audit log. The reviewer preferred long-term design is admission control at the marker-registration boundary - out of scope for the current ACT per the reviewers "stop with an exact design blocker" instruction.
+
+**Tests:** 10/10 prior preserved. 1/1 modified (CAP-CONSERVATION-03). 0 typecheck errors. 0 biome lint errors.
+
+**Gates:** HTEC01_CORR04_IMPLEMENTATION PASS. HTEC01_CORR04_TESTS 11/11 PASS. HTEC01_CORR04_RECEIPT_MEMORY_CAP PROVEN. HTEC01_CORR04_OVERFLOW_CONSERVATION_129 PROVEN. HTEC01_CORR04_OVERFLOW_CONSERVATION_257 PROVEN (held_for_host_disposition). HTEC01_CORR04_OBSERVATION_CONSERVED PROVEN (no manufactured observation). HTEC01_CORR04_NO_LRU_SECONDARY PROVEN. HTEC01_CORR04_LIVE LIVE_UNOBSERVABLE. HTEC01_CORR04_ADMISSION_CONTRACT DESIGN_BLOCKER (out of scope).
+
+**Files (this ACT, 2 modified):** `apps/vscode/src/sdk/background-notify-coordinator.ts` (removed manufactured observation in at-secondary-cap path; new HALT audit reason `obligation_held_for_host_disposition`). `apps/vscode/src/sdk/__tests__/held-terminal-eviction-conservation01.htec01.test.ts` (CAP-CONSERVATION-03 assertions changed).
+
+**Verdict:** `PASS_HELD_TERMINAL_NO_MANUFACTURED_OBSERVATION`. The reviewer P0 halt is closed. The CORR03 APPEND-ONLY semantic is preserved. The 257th case is provably bounded without manufactured observations. Factory stop condition met. GO to exact-head dogfood qualification.
+
+---
+
 # ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR03 — PASS_HELD_TERMINAL_SECONDARY_MAP_NO_LRU (correction) — 2026-10-14
 
 **Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_SECONDARY_MAP_NO_LRU`** (no-LRU secondary-map correction cycle). The single reviewer P0 halt (`HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT`) is closed: the secondary `capacityDroppedReceipts` map is now APPEND-ONLY (no LRU eviction); when both maps are at cap and a new fact arrives, the BCB settles the NEW fact's obligation immediately through an explicit `secondary_capacity_drop` resolution. Older obligations are preserved.

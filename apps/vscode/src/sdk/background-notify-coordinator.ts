@@ -1649,57 +1649,66 @@ export class BackgroundNotifyCoordinator {
 			}
 			// HTEC01-CORR02 / HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT:
 			// when the secondary map is also at cap, the
-			// new fact CANNOT be admitted (the secondary
-			// map is append-only — LRU eviction of older
-			// receipts would strand their obligations,
-			// re-creating the original HTEC01 defect at
-			// a higher threshold). The new fact's
-			// obligation is settled IMMEDIATELY at this
-			// moment through the canonical
-			// `resolveObligation` (notify=true) or
-			// `consumeNonNotifyTerminalObservation`
-			// (fire-and-forget) path. The new fact is
-			// "lost" (no receipt retained, no entry in
-			// either map) but the obligation is settled
-			// truthfully — the BCB's held set no longer
-			// references this jobId, so completion is
-			// not stalled.
+			// new fact CANNOT be admitted. The secondary
+			// map is append-only (no LRU eviction — that
+			// would strand older obligations). The new
+			// fact's terminal classification is observed
+			// (the BCB saw the lifecycle event) but the
+			// obligation is NOT settled here. The marker
+			// stays in the BCB's held set. The runtime
+			// accepts that the >cap case may stall the
+			// completion for this jobId; the host
+			// (production code) sees the HALT audit log
+			// and can take action (cancel the work,
+			// dispose the coordinator).
+			//
+			// HTEC01-CORR04 / HALT_TERMINAL_OBSERVATION_SETTLED_WITHOUT_OBSERVATION:
+			// the CORR03 implementation drained the
+			// obligation at the cap via the canonical
+			// `resolveObligation` / `consumeNonNotifyTerminalObservation`
+			// path. That manufactured a "settled" event
+			// without an `Observed` (the agent never
+			// received the terminal fact). The reviewer's
+			// invariant forbids that:
+			//   TerminalCommitted ∧ (Observed ∨ AuthorizedDisposition) ⇒ MaySettle
+			// "Capacity exhaustion alone must not imply
+			// `AuthorizedDisposition`." The new fact
+			// refrains from settling; the obligation
+			// stays held; the host owns the disposition.
+			//
+			// The reviewer's preferred long-term design
+			// is admission control at `registerMarker` /
+			// `manager.start` time (synchronous, no TOCTOU).
+			// That is a host-level contract change. The
+			// existing boundary is post-launch
+			// (`manager.start` runs first, `registerMarker`
+			// runs second), so synchronous admission
+			// control requires a new `admitNotifyJob`
+			// BCB method called before `manager.start`
+			// and a host refactor. Per the reviewer's
+			// instruction ("if not [feasible], stop with
+			// an exact design blocker rather than adding
+			// more fallback state"), this is the
+			// design-blocker shape: the BCB stops
+			// manufacturing observations, the host
+			// owns the disposition decision.
 			if (this.capacityDroppedReceipts.size >= MAX_TERMINAL_RECEIPTS) {
 				// Both maps are at cap. The new fact
-				// cannot be admitted. Settle the
-				// obligation immediately.
-				if (marker) {
-					// notify=true path
-					this.resolveObligation({
-						jobId: input.jobId,
-						sessionId: resolvedSessionId,
-						taskId: resolvedTaskId,
-						resolution: "canonical_status_observed",
-					})
-				} else if (nonNotifyOwner) {
-					// fire-and-forget path
-					this.consumeNonNotifyTerminalObservation({
-						jobId: input.jobId,
-						sessionId: resolvedSessionId,
-						taskId: resolvedTaskId,
-					})
-				}
-				// The `reserved` path is defensive: a
-				// reserved marker without a full
-				// notification marker cannot be drained
-				// here (it is a transient state in
-				// `consumeTerminal`); the BCB logs a HALT
-				// audit reason and returns `at_capacity`
-				// without eviction (the obligation will
-				// be re-evaluated when the consuming
-				// `consumeTerminal` call resolves).
+				// cannot be admitted. The BCB does
+				// NOT drain the obligation here —
+				// draining would be a manufactured
+				// observation (the agent has not
+				// received the terminal fact). The
+				// marker stays in the held set; the
+				// audit log records the cap-as-stall
+				// for the host.
 				this.options.recordNotifyDecision?.({
 					jobId: input.jobId,
 					sessionId: resolvedSessionId,
 					taskId: resolvedTaskId,
 					decision: "wake_dispatch_rejected",
-					reason: `terminal_receipts_secondary_at_capacity:cap=${cap}:primary_existing=${this.terminalReceipts.size}:secondary_existing=${this.capacityDroppedReceipts.size}:obligation_drained_at_cap`,
-					heldCount: 0,
+					reason: `terminal_receipts_secondary_at_capacity:cap=${cap}:primary_existing=${this.terminalReceipts.size}:secondary_existing=${this.capacityDroppedReceipts.size}:obligation_held_for_host_disposition`,
+					heldCount: this.notificationMarkers.size + this.heldTerminalResults.size,
 					activeNotifyCount: 0,
 					capturedAtMs: this.options.now(),
 				})

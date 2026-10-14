@@ -885,39 +885,53 @@ describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Bound
 		notifyCoordinator.dispose()
 	}, 60_000)
 
-	it("CAP-CONSERVATION-03: a 257th terminal fact arriving when both receipt maps are at cap drains its own obligation through secondary_capacity_drop (older 256 obligations are preserved, no LRU eviction)", async () => {
+	it("CAP-CONSERVATION-03: a 257th terminal fact arriving when both receipt maps are at cap does NOT drain its own obligation (no manufactured observation; older 128 secondary obligations remain drainable through capacity_drop)", async () => {
 		// Reviewer-mandated bounded discriminator
 		// (HTEC01-CORR02 / HALT_CAPACITY_DROP_LRU_RECREATES_ORIGINAL_DEFECT,
-		// P0): the CORR02 fix uses LRU eviction on the
-		// secondary (`capacityDroppedReceipts`) map as a
-		// "last-resort escape hatch". When the 257th
-		// unresolved terminal fact arrives, the LRU
-		// evicts an older secondary receipt. If that
-		// older job's heavy manager snapshot is already
-		// gone, the older obligation is permanently
-		// stranded (the original HTEC01 defect at a
-		// higher threshold).
+		// P0, plus HTEC01-CORR04 /
+		// HALT_TERMINAL_OBSERVATION_SETTLED_WITHOUT_OBSERVATION):
+		// the CORR02 fix used LRU eviction on the
+		// secondary map. CORR03 removed the LRU but
+		// ALSO drained the new fact's obligation
+		// through the canonical `resolveObligation`
+		// path at the cap. The CORR04 reviewer halt
+		// identified that the CORR03 drain was a
+		// manufactured observation: the agent never
+		// received the terminal fact, but the BCB
+		// settled the obligation as if it had. That
+		// violates the reviewer's invariant:
+		//   TerminalCommitted ∧ (Observed ∨ AuthorizedDisposition) ⇒ MaySettle
+		// "Capacity exhaustion alone must not imply
+		// `AuthorizedDisposition`."
 		//
-		// The correct fix: the secondary map is
-		// APPEND-ONLY. When the secondary map is at cap
-		// AND a new fact arrives, the BCB does NOT evict
-		// any older receipt; it settles the NEW fact's
-		// obligation immediately through an explicit
-		// `secondary_capacity_drop` resolution. The 257th
-		// fact is "lost" (no receipt retained) but the
-		// obligation is settled truthfully.
+		// The CORR04 fix removes the manufactured
+		// drain. The BCB's `recordTerminalReceipt`
+		// at-cap path now:
+		//   - Refuses to record the new fact
+		//     (memory bounded).
+		//   - Does NOT drain the new fact's obligation.
+		//     The marker stays in the held set. The
+		//     agent's `command_status(newJobId)` will
+		//     return the truthful `unknown_job` (no
+		//     manufactured observation).
+		//   - The 128 older secondary receipts are
+		//     preserved (APPEND-ONLY from CORR03).
+		//     The agent's `command_status(oldestSecondary)`
+		//     still returns the truthful
+		//     `capacity_drop` (CORR02 disposition).
 		//
-		// Pre-fix (CORR02): the 257th arrival evicts the
-		// oldest secondary receipt; the older obligation
-		// is stranded. The CORR02's LRU "last-resort
-		// escape hatch" recreated the original HTEC01
-		// defect at a higher threshold.
-		//
-		// Post-fix (CORR03): the secondary map is
-		// APPEND-ONLY. The 257th fact is settled with
-		// `secondary_capacity_drop` at the `at_capacity`
-		// moment; the 128 older secondary receipts are
-		// preserved.
+		// The runtime accepts that the >cap case may
+		// stall the completion for the new jobId. The
+		// host (production code) sees the HALT audit
+		// log and owns the disposition decision (cancel
+		// the work, dispose the coordinator, restart).
+		// The reviewer's preferred long-term design is
+		// admission control at the marker-registration
+		// boundary, but that requires a host-level
+		// contract change (`admitNotifyJob` called
+		// before `manager.start`). Per the reviewer's
+		// "stop with an exact design blocker" — that
+		// is a separate work item.
 		const manager = new CommandJobManager({
 			maxTerminalJobs: 2,
 			maxWaitBudgetMs: 50,
@@ -1025,10 +1039,15 @@ describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Bound
 			isContainmentFailed: false,
 		})
 		// The 257th is refused with `at_capacity`. The
-		// post-fix behaviour: the BCB settles the 257th's
-		// obligation through an explicit
-		// `secondary_capacity_drop` resolution at this
-		// moment (no LRU eviction of older receipts).
+		// post-CORR04 behaviour: the BCB does NOT drain
+		// the 257th's obligation here. The marker stays
+		// in the held set. The runtime accepts that the
+		// >cap case may stall the completion for this
+		// jobId; the host (production code) sees the
+		// HALT audit log and owns the disposition
+		// decision. The agent will see a truthful
+		// `unknown_job` on `command_status(257)` — not
+		// a manufactured observation.
 		expect(capResult.kind).toBe("at_capacity")
 
 		// Step 4: the secondary map is still at 128 (no
@@ -1041,13 +1060,14 @@ describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Bound
 		const secondaryKeyArr = [...secondaryKeys]
 		expect(secondaryKeyArr).not.toContain(job257.jobId)
 
-		// Step 5: the 257th's marker is no longer held
-		// (drained at the `at_capacity` moment).
+		// Step 5: the 257th's marker is STILL held
+		// (the BCB did not drain it). The host owns the
+		// disposition decision.
 		const unconsumedAfter257 = notifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner(ownerSessionId, ownerTaskId)
-		expect(unconsumedAfter257).not.toContain(job257.jobId)
-		// 128 first-batch + 128 second-batch = 256
-		// outstanding obligations. The 257th is drained.
-		expect(unconsumedAfter257.length).toBe(256)
+		expect(unconsumedAfter257).toContain(job257.jobId)
+		// 128 first-batch + 128 second-batch + 1 (257th
+		// stuck) = 257 outstanding obligations.
+		expect(unconsumedAfter257.length).toBe(257)
 
 		// Step 6: the oldest secondary receipt's jobId
 		// is still in the secondary map AND its marker
@@ -1057,13 +1077,16 @@ describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Bound
 		expect(unconsumedAfter257).toContain(oldestSecondary)
 
 		// Step 7: real `command_status(oldestSecondary)`
-		// through the production factory. The manager
-		// returns `unknown_job` (the oldest secondary
-		// was never in this manager's terminal map);
-		// the BCB's secondary map covers it; the
-		// obligation is drained through the canonical
-		// `resolveObligation` path; the response is
-		// truthful (NOT `unknown_job`).
+		// AND `command_status(257)` through the
+		// production factory. The manager returns
+		// `unknown_job` for both (neither is in this
+		// manager's terminal map). The BCB's secondary
+		// map covers the oldest secondary; the 257th has
+		// no receipt (the cap refusal dropped it) and
+		// no manufactured observation. The 128 older
+		// obligations are still drainable through
+		// `capacity_drop`; the 257th's `command_status`
+		// returns the truthful `unknown_job`.
 		const secondManager = new CommandJobManager({
 			maxTerminalJobs: 2,
 			maxWaitBudgetMs: 50,
@@ -1083,27 +1106,54 @@ describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Bound
 			backgroundNotifyCoordinator: notifyCoordinator,
 			resolveActiveOwner: () => ({ sessionId: ownerSessionId, taskId: ownerTaskId }),
 		})
-		const result = (await tool.execute(
+
+		// Step 7a: the oldest secondary obligation is
+		// TRUTHFULLY resolvable through the secondary
+		// map (the 128th older obligations are NOT
+		// affected by the 257th's cap refusal).
+		const oldestResult = (await tool.execute(
 			{ jobId: oldestSecondary, waitMs: 0 },
 			{ sessionId: ownerSessionId, agentId: "test-agent", iteration: 1 },
 		)) as Array<Record<string, unknown>>
-		const payload = result[0] as Record<string, unknown>
+		const oldestPayload = oldestResult[0] as Record<string, unknown>
+		expect(oldestPayload.ok).toBe(true)
+		expect(oldestPayload.state).toBe("cancelled")
+		expect(oldestPayload.outputRetained).toBe(false)
+		expect(oldestPayload.observation).toBe("capacity_drop")
 
-		// The oldest secondary obligation is TRUTHFULLY
-		// resolvable.
-		expect(payload.ok).toBe(true)
-		expect(payload.state).toBe("cancelled")
-		expect(payload.outputRetained).toBe(false)
-		expect(payload.observation).toBe("capacity_drop")
+		// Step 7b: the 257th's `command_status` returns
+		// the truthful `unknown_job` (the BCB did not
+		// manufacture an observation at the cap). The
+		// host (production code) owns the disposition;
+		// the BCB's held set still references the 257th
+		// (the marker is alive), so the BCB does NOT
+		// pretend the 257th is gone.
+		const stuckResult = (await tool.execute(
+			{ jobId: job257.jobId, waitMs: 0 },
+			{ sessionId: ownerSessionId, agentId: "test-agent", iteration: 1 },
+		)) as Array<Record<string, unknown>>
+		const stuckPayload = stuckResult[0] as Record<string, unknown>
+		// The tool returns `unknown_job` because the
+		// 257th's receipt is not in either map AND the
+		// BCB did not drain the obligation. The
+		// `unknown_job` response is the truthful
+		// "observation not available" signal — NOT a
+		// manufactured `capacity_drop`. The host sees
+		// this and can take action (cancel the 257th,
+		// dispose the coordinator).
+		expect(stuckPayload.ok).toBe(false)
+		expect(String(stuckPayload.error)).toContain("unknown_job")
+
+		// Step 7c: the held set after the
+		// `command_status` calls. The oldest secondary
+		// is drained by the consumption path; the 257th
+		// is still held (it was never admitted AND
+		// never drained). Total: 128 first + 127
+		// second (drained 1) + 1 (257th stuck) = 256.
 		const unconsumedAfterDrain = notifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner(ownerSessionId, ownerTaskId)
 		expect(unconsumedAfterDrain).not.toContain(oldestSecondary)
-		// 256 outstanding obligations (128 first + 128 second)
-		// minus 1 (drained oldest via command_status) = 255.
-		// Note: the 257th's marker was drained at the
-		// `at_capacity` moment (not via command_status), so
-		// it's already not in the 256 by this point. The
-		// total after step 7 is 255.
-		expect(unconsumedAfterDrain.length).toBe(255)
+		expect(unconsumedAfterDrain).toContain(job257.jobId)
+		expect(unconsumedAfterDrain.length).toBe(256)
 
 		await manager.dispose()
 		await secondManager.dispose()
