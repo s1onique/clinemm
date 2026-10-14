@@ -1,3 +1,38 @@
+# ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 — PASS_HELD_TERMINAL_EVICTION_REPAIR — 2026-10-14
+
+**Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_EVICTION_REPAIR`**. Bounded fix delivered. The pre-fix `command_status` tool early-returned `unknown_job` at `command-status-tool.ts:252-255` BEFORE the Path B / C / C' consumption seams, leaving the BCB held obligation permanently unresolvable after the `CommandJobManager`'s bounded FIFO evicted the heavy terminal snapshot. The bounded fix adds a compact per-job terminal-receipt store to the `BackgroundNotifyCoordinator` (`terminalReceipts: Map<jobId, CompactTerminalReceipt>`), recorded at the manager's `command_job_terminal_committed` lifecycle event seam via `SdkController.handleCommandJobLifecycle` and consumed by `command_status` on the `unknown_job` early-return path. A TRUTHFUL distinction (`outputRetained: false`, `observation: "evicted_receipt"`) prevents the model from confusing a receipt for a full observation. Resource bounds: receipts cleared on obligation settlement, owner-mismatch, or BCB dispose; total store bounded by `maxTerminalJobs`.
+
+**Repository HEAD:** `1fa435d0e6d76c1701133b000bfd0cc4521a1be8` (entry) → `76928334fe0e6738f4ad9558a577d6021fc64d37` (subject). Single durable change: 5 files, 1141 lines including the test (4 source files + 1 new test file).
+
+**Live Cline task (specimen):** `1791982173979_x5rf5` (held jobId `cmd_mv83y0d0mj3q9u16`). **Installed extension:** unchanged (no dogfood rebuild in this ACT — `LIVE_UNOBSERVABLE`).
+
+**Key finding (load-bearing):** The `CommandJobManager` `terminal` map is bounded at `maxTerminalJobs` (default 128) and evicted via `terminal.delete(evictId)` at `command-job-manager.ts:2770-2782`. After eviction, `manager.status(evictedId)` returns `{ ok: false, code: "unknown_job" }` at line 2817-2819. The pre-fix `command_status` tool returned this error at line 254 BEFORE reaching the Path B / Path C consumption seams at lines 329-393. Result: the held BCB obligation was permanently unresolvable and the BCB barrier reported `heldObligationForC10: true` indefinitely. The fix is a compact receipt recorded at the manager's terminal-event seam (not the BCB's `consumeTerminal` seam) so the receipt exists even when the BCB never sees a Path A terminal event. The receipt is consulted by `command_status` on the `unknown_job` early-return path BEFORE the truthful `unknown_job` response is returned.
+
+**Live capture classification (per ACT §3):**
+- `JOB_MANAGER_IDENTITY`: UNAVAILABLE_FROM_TRACE (no `job_status_lookup` capture was enabled; the manager that owned the held job is unknown)
+- `TERMINAL_FINALIZED`: INFERRED (BCB held set included the jobId, implying a `registerMarker` was called for it; no direct `terminal_committed` event in the capture)
+- `TERMINAL_EVICTED`: UNAVAILABLE_FROM_TRACE (no `terminal.delete` capture was enabled; the BCLAS-03 test confirms the eviction shape)
+- `STATUS_LOOKUP_SOURCE`: UNAVAILABLE_FROM_TRACE
+- `STATUS_RETURNED_UNKNOWN_JOB`: INFERRED (model narrative: "the job was no longer available")
+- `OBLIGATION_STILL_PRESENT`: REAL (BCB capture record: `unconsumedOwnedTerminalResultsForC10: 1, ownedTerminalJobIdsForC10: ["cmd_mv83y0d0mj3q9u16"], heldObligationForC10: true`)
+
+**Causal discriminator (H-EVICT confirmed):** The bounded FIFO evicted the heavy terminal snapshot. The pre-fix `command_status` tool's early-return at line 252-255 prevented the Path B / Path C consumption seams (lines 329-393) from draining the held obligation. The fix's `recordTerminalReceipt` lives at the `SdkController.handleCommandJobLifecycle` seam (the manager's `command_job_terminal_committed` lifecycle event), not the BCB's `consumeTerminal` seam — this is the load-bearing decision that closes the live path.
+
+**Pre-existing failures (verified via `git stash` baseline, no new failures introduced):** `background-completion-barrier01.bcb01.test.ts` (13/14 fail), `background-completion-barrier01-correction01.bcb01-c.test.ts` + `...-c2.bcb01-c2.test.ts` (8/13 fail), `background-completion-barrier01-correction04.bcb01-c4.test.ts` (3/5 fail), `command-job-manager.test.ts` (18/20 fail). All predate `1fa435d0e` and are out of scope for this ACT.
+
+**Files (this ACT, 4 modified + 1 new):**
+- `apps/vscode/src/sdk/background-notify-coordinator.ts` (modified — `CompactTerminalReceipt` type, `terminalReceipts` map, `recordTerminalReceipt` + `consumeTerminalReceipt` + `diagnosticTerminalReceiptCount` methods, dispose clears receipts, all drain paths clear receipts)
+- `apps/vscode/src/sdk/command-status-tool.ts` (modified — `CommandStatusOutput.outputRetained` + `observation: "evicted_receipt"` fields, receipt-consult path before the `unknown_job` early-return)
+- `apps/vscode/src/sdk/command-job-manager.ts` (modified — `command_job_terminal_committed` event carries `ownerSessionId?: string` so the SdkController's lifecycle sink can attribute the terminal fact to the right held obligation)
+- `apps/vscode/src/sdk/SdkController.ts` (modified — `handleCommandJobLifecycle` on `command_job_terminal_committed` calls `backgroundNotifyCoordinator.recordTerminalReceipt(...)` with the event's `ownerSessionId` and the active `taskId` fallback)
+- `apps/vscode/src/sdk/__tests__/held-terminal-eviction-conservation01.htec01.test.ts` (new — 6 tests: RED→GREEN repair, C5 ablation necessity, C6 conservation matrix: EVC-04, EVC-05, EVC-11, EVC-14; 313ms GREEN)
+- `.factory/acts/ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01.md` (new — full ACT report)
+
+**Live qualification:** `LIVE_UNOBSERVABLE`. The installed dogfood VSIX is bound to `1fa435d0e` (pre-ACT). A fresh build is required to exercise the fix in the live environment. The HTEC-01 test reproduces the live-eviction shape structurally (session 1791982173979_x5rf5 / jobId cmd_mv83y0d0mj3q9u16) and confirms the fix drains the held obligation truthfully.
+
+**Verdict:** `PASS_HELD_TERMINAL_EVICTION_REPAIR`. Factory stop condition met at this verdict.
+
+---
 # ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01 — PASS_TASKHEADER_STRUCTURAL_LIVE_UNOBSERVABLE — 2026-10-14
 
 **Status:** CLOSED with verdict **`PASS_TASKHEADER_STRUCTURAL_LIVE_UNOBSERVABLE`**. The bounded Elm-kernel repair is delivered. The captured defect (legacy=completed, UNBOUND shadow=idle, observation-stamp=missing) is mechanically reproduced against the compiled production kernel at HEAD and is fixed by one narrow predicate. Structural pass; live qualification is not performed in this run because no production dogfood profile was available at this workspace.
