@@ -1762,6 +1762,18 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						const storedInput = state.getStreamingToolInput()
 						const ts = state.clearStreamingTool()
 						const resultText = getCompletionResultText(storedInput)
+						// ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 (TRCR01):
+						// read the held-vs-committed bit the restoration caller
+						// (`finalizePersistedToolUse`) threaded onto the event.
+						// The live streaming path never sets this field, so
+						// `isAuthoritativeCompletion` is `undefined` and the
+						// `!== false` check below preserves the existing live
+						// "always stamp the marker" behavior. The restoration
+						// path passes `false` for HELD completion attempts so
+						// the marker is omitted on those rows.
+						const eventAuthority = (event as AgentEvent & { isAuthoritativeCompletion?: boolean })
+							.isAuthoritativeCompletion
+						const isAuthoritativeCompletion = eventAuthority !== false
 						// Finalize the say:"completion_result" (non-partial)
 						// This renders the green completion box.
 						messages.push({
@@ -1778,13 +1790,28 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 							// (resume / retry / follow-up / compaction) so the
 							// webview can key on a stable marker rather than the
 							// mutable task-level TurnState.phase.
-							isAuthoritativelyCompletedResult: true,
+							//
+							// ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 (TRCR01):
+							// HELD completion attempts (those followed by a
+							// runtime-control completion_continuation_control user
+							// message in the persisted transcript) omit this marker
+							// so the per-row terminalReportFraming primary-marker
+							// path renders the held summary without the "Completed"
+							// badge. The summary text is still preserved (historical
+							// activity, ACT §1.4). The held-vs-committed distinction
+							// is read from the persisted runtime-control marker, not
+							// from message ordering.
+							...(isAuthoritativeCompletion ? { isAuthoritativelyCompletedResult: true } : {}),
 						})
 						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a
 						// finalized completion_result is the canonical terminal-response
 						// surface — record it so the session-event coordinator can promote
 						// the turn to "completed" (it checks this flag in addition to
-						// wasAttemptCompletionSeen).
+						// wasAttemptCompletionSeen). HELD attempts also set this
+						// (the live translator's in-memory TurnState.phase tracker
+						// still reflects the held attempt's local completion for
+						// the live session — the TRCR01 repair only affects the
+						// persisted-row marker that drives reopen rendering).
 						state.setTerminalResponseCommittedThisTurn()
 						// Only the say:"completion_result" is emitted (the green box). No
 						// ask:"completion_result" is produced — the webview's footer/buttons read
@@ -2493,6 +2520,20 @@ function finalizePersistedToolUse(
 	state: MessageTranslatorState,
 	output?: unknown,
 	isError?: boolean,
+	// ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 (TRCR01): when
+	// `false`, the completion-tool content_end MUST NOT stamp the
+	// `isAuthoritativelyCompletedResult:true` marker. This is the
+	// minimal seam used to distinguish a HELD completion attempt from a
+	// COMMITTED one at restoration time, without inventing a new marker
+	// or breaking the existing live-streaming seam. The caller (in
+	// `sdkMessagesToClineMessages`) computes the bit by scanning forward
+	// in the persisted transcript for a runtime-control
+	// completion_continuation_control user message after this tool's
+	// tool_result. Defaults to `true` so the LIVE streaming path is
+	// unchanged (the live translator's `content_end` always passes
+	// through this helper with the default — see
+	// `agentEventToMessages` for completion tools).
+	isAuthoritativeCompletion: boolean = true,
 ): ClineMessage[] {
 	// Reuse the same content_start → content_end path as live SDK events. The
 	// start event seeds MessageTranslatorState with the tool input; the end event
@@ -2516,6 +2557,13 @@ function finalizePersistedToolUse(
 			toolCallId: toolUse.id,
 			output,
 			error: isError ? extractToolOutputText(output) : undefined,
+			// ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 (TRCR01):
+			// thread the held-vs-committed bit into the completion-tool
+			// content_end so the per-row `isAuthoritativelyCompletedResult`
+			// marker is omitted on HELD attempts. The agentEventToMessages
+			// completion branch reads this on the synchronous path; ignored
+			// by every other tool type.
+			...(isCompletionTool(toolUse.name) ? { isAuthoritativeCompletion } : {}),
 		} as AgentEvent,
 		state,
 	)
@@ -2568,6 +2616,108 @@ export function sdkMessagesToClineMessages(
 			clineMessages.push(...finalizePersistedToolUse(toolUse, state))
 		}
 		pendingToolUses.clear()
+	}
+
+	// ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 (TRCR01) +
+	// CORR01: pre-scan the transcript for the durable runtime-control
+	// held-submission marker. The marker is a user message whose
+	// metadata carries
+	//   { runtimeAuthority: "host_runtime_control",
+	//     kind: "completion_continuation_control" }
+	//
+	// The CORR01 ACT tightened the attribution: a runtime-control
+	// observes a SPECIFIC completion attempt — the one whose tool_result
+	// is the most recent completion-tool tool_result in the source
+	// transcript BEFORE the runtime-control. The correction is the
+	// "nearest eligible prior completion" test, expressed in the
+	// `isCompletionToolHeld` helper as: there exists a runtime-control
+	// in the interval `(trIdx, nextCompletionToolUseIdx)`, where
+	// `nextCompletionToolUseIdx` is the source-transcript index of the
+	// next completion tool_use (or `messages.length` if there is none).
+	// This is the multiple-completion-episodes contract: a runtime-control
+	// defers one specific submission, not every earlier submission in
+	// the transcript.
+	const runtimeControlIndices: number[] = []
+	for (let i = 0; i < messages.length; i++) {
+		const m = messages[i]
+		if (m.role !== "user") continue
+		const metadata = (m as { metadata?: { runtimeAuthority?: unknown; kind?: unknown } }).metadata
+		if (metadata?.runtimeAuthority === "host_runtime_control" && metadata?.kind === "completion_continuation_control") {
+			runtimeControlIndices.push(i)
+		}
+	}
+	// The index in the SOURCE transcript at which a given `tool_result`
+	// was found, used to compare against `runtimeControlIndices` for the
+	// held-vs-committed decision. The tool_result for tool_use T is the
+	// earliest user-message index whose content includes a
+	// `tool_result` block with `tool_use_id === T.id`.
+	const toolResultSourceIndex = new Map<string, number>()
+	for (let i = 0; i < messages.length; i++) {
+		const m = messages[i]
+		if (m.role !== "user") continue
+		const content = m.content
+		if (!Array.isArray(content)) continue
+		for (const block of content) {
+			if (block && typeof block === "object" && (block as { type?: unknown }).type === "tool_result") {
+				const toolUseId = (block as { tool_use_id?: unknown }).tool_use_id
+				if (typeof toolUseId === "string" && !toolResultSourceIndex.has(toolUseId)) {
+					toolResultSourceIndex.set(toolUseId, i)
+				}
+			}
+		}
+	}
+	// CORR01: also record the source-transcript index of every
+	// completion tool_use block. The next-completion tool_use after a
+	// given tool_result is the upper bound of the held-vs-committed
+	// search interval. The list is sorted by source index because the
+	// scan is in source order.
+	const completionToolUseSourceIndices: number[] = []
+	for (let i = 0; i < messages.length; i++) {
+		const m = messages[i]
+		if (m.role !== "assistant") continue
+		const content = m.content
+		if (!Array.isArray(content)) continue
+		for (const block of content) {
+			if (
+				block &&
+				typeof block === "object" &&
+				(block as { type?: unknown }).type === "tool_use" &&
+				isCompletionTool((block as { name?: unknown }).name as string)
+			) {
+				completionToolUseSourceIndices.push(i)
+				break // one completion tool_use per assistant message is enough
+			}
+		}
+	}
+	// CORR01: held-vs-committed test, per the nearest-eligible-prior
+	// correlation. A completion is HELD iff a runtime-control
+	// completion_continuation_control user message exists in the
+	// source-transcript interval `(trIdx, nextCompletionToolUseIdx)`,
+	// where `nextCompletionToolUseIdx` is the index of the next
+	// completion tool_use (or `messages.length` if there is none). This
+	// is the host's "observe before re-issuing" prompt, and the
+	// completion that immediately precedes it (by tool_result
+	// adjacency) is the one the control defers. Earlier completions
+	// in earlier episodes are NOT revoked by a later episode's
+	// runtime-control.
+	const isCompletionToolHeld = (toolUseId: string): boolean => {
+		const trIdx = toolResultSourceIndex.get(toolUseId)
+		if (trIdx === undefined) return false
+		// Upper bound: source index of the next completion tool_use
+		// strictly after this completion's tool_result. If none, the
+		// upper bound is end-of-transcript.
+		let upper = messages.length
+		for (const cuIdx of completionToolUseSourceIndices) {
+			if (cuIdx > trIdx) {
+				upper = cuIdx
+				break
+			}
+		}
+		// Held iff any runtime-control index sits in (trIdx, upper).
+		for (const rcIdx of runtimeControlIndices) {
+			if (rcIdx > trIdx && rcIdx < upper) return true
+		}
+		return false
 	}
 
 	// Add or update by ts — the synthesized turn-end `done` below retags an already-emitted
@@ -2754,7 +2904,24 @@ export function sdkMessagesToClineMessages(
 			}
 
 			pendingToolUses.delete(block.tool_use_id)
-			clineMessages.push(...finalizePersistedToolUse(toolUse, state, block.content, block.is_error))
+			// ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 (TRCR01):
+			// for completion tools only, compute the held-vs-committed bit
+			// by scanning forward for a runtime-control
+			// completion_continuation_control user message in the source
+			// transcript. Non-completion tools always pass `true` (the
+			// default). The held bit causes the restoration emit to OMIT
+			// the `isAuthoritativelyCompletedResult:true` marker on this
+			// row, so the per-row terminalReportFraming primary-marker path
+			// renders the held summary without the "Completed" badge.
+			clineMessages.push(
+				...finalizePersistedToolUse(
+					toolUse,
+					state,
+					block.content,
+					block.is_error,
+					!isCompletionTool(toolUse.name) || !isCompletionToolHeld(block.tool_use_id),
+				),
+			)
 		}
 	}
 

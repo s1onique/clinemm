@@ -1,3 +1,187 @@
+# ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 — PASS_REPAIR_STRUCTURAL_LIVE_PENDING (real-seam GREEN, conservation established) — 2026-10-13
+
+**Status:** CLOSED with verdict **`PASS_REPAIR_STRUCTURAL_LIVE_PENDING`**.
+
+**Predecessor:** `b24b954db` on `main` (ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01). Authorized by C1 GO for RED reproduction and one bounded repair, per the frozen product contract in this ACT's §1.
+
+**Supersedes:** The CORR01 ACT's `PRODUCT_CONTRACT_REQUIRED` verdict. The new product contract in this ACT's §1 explicitly forbids the two-card reopen behavior the CORR01 ACT identified; the bounded repair implements the contract.
+
+**Live Cline task (specimen):** `1791892624249_io4fp`. **Installed extension:** `s1onique.clinemm-4.1.16-5a1c485cb-b24b954db`. **Repository HEAD:** `b24b954db` (unchanged; this ACT adds untracked files only, no commit performed — see ACT §7).
+
+**Key finding (load-bearing):** The held-vs-committed distinction IS durably represented in the persisted transcript as a user message with the metadata fingerprint `{ runtimeAuthority: "host_runtime_control", kind: "completion_continuation_control" }`. Verified at the closure of this ACT via `python3 json` against the live transcript at msg 335. The bounded repair READS this fingerprint (no new persistence contract, no new metadata key) and OMITS the `isAuthoritativelyCompletedResult: true` marker on the corresponding `say: "completion_result"` row's restoration emit. The committed row's marker is retained. Result: exactly one "Completed" card on reopen for the held-then-committed case, matching the live view's 1 card (and the authoritative completion cardinality of 1, per session record).
+
+**Bounded repair (one production file modified):** `apps/vscode/src/sdk/message-translator.ts`:
+- `finalizePersistedToolUse` (line 2491-2542) gains an optional 5th parameter `isAuthoritativeCompletion: boolean = true` (default preserves live streaming path).
+- The completion content_end handler (line 1761-1815) reads the threaded flag with a `!== false` fallback and OMITS the `isAuthoritativelyCompletedResult: true` marker when the flag is `false`.
+- The restoration caller in `sdkMessagesToClineMessages` (line 2621-2882) precomputes three O(N) data structures (runtime-control marker indices, tool_result source indices, `isCompletionToolHeld` helper) and threads the held-vs-committed bit at the `finalizePersistedToolUse` call site.
+
+**RED reproduction (real production seam):** New test file `apps/vscode/src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts` (5 tests) was RED under pre-repair code (Fixtures A and D fail; Fixtures B, C, E pass — exactly the cases that require the held-vs-committed distinction). After the bounded repair, all 5 tests GREEN.
+
+**Conservation:** Existing TRD01 characterization (5/5 still PASS) coexists with new TRCR01 (5/5 PASS) because the TRD01 fixture's runtime-control user message does NOT carry the metadata fingerprint, so it falls into the conservative fallback path ("no metadata → both rows authoritative"). L2847 three-RED baseline preserved (Gate 4: 79 → 79 failures, no regressions; no new failures introduced). Typecheck parity (Gate 5: 3 → 3 errors; no new errors).
+
+**Files (this ACT, 6 untracked + 1 modified):**
+- `apps/vscode/src/sdk/message-translator.ts` (modified — bounded repair; SHA-256 `4f4641e0e494f8d239ce7a9736d96fe773c2ee0e7091001e038e9c7ffb8b466f`)
+- `apps/vscode/src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts` (new — 369 lines, 5 tests; SHA-256 `b3d941f50e41b75e19b908aaf9b09386d425ae21b5e245cda3166a0ffb1d4a38`)
+- `.factory/acts/ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01.md` (new — full ACT report)
+- `.factory/evidence/ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01/{SHA256SUMS, 00-closure-evidence.txt, source-trace.md, test-fixture-diff.md, red-test-summary.txt, green-test-summary.txt, test-output.txt}` (new — 7 evidence files)
+- `.factory/epic-board.md` (modified — this entry)
+
+**Preservation:** BCB post-repair registry accessor preserved; held-result continuation behavior preserved; SDK task-completion cardinality preserved; two distinct historical `submit_and_exit` submissions preserved; `resume_completed_task` action preserved; Elm completion/continuation/deferred-barrier/task-header authorities preserved; L2847 RED baseline preserved (3 RED / 11 PASS unchanged); BCB observability repair at `b24b954db` preserved; SEAM12 ACT and its 5 evidence SHAs verified intact; DUPLICATION-RED01 + CORR01 ACTs and their evidence preserved; existing TRD01 characterization intact.
+
+**Verdict:** `PASS_REPAIR_STRUCTURAL_LIVE_PENDING`. Live qualification (manual one-shot test against a running webview with the bounded repair installed) is PENDING the next qualifying session with a writable extensions mount (per §7.4). Factory stop condition met at this verdict.
+
+---
+
+# ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01-CORR01 — PASS_CORRECTED_STRUCTURAL_LIVE_PENDING (RED→GREEN held-attribution correction, 8/8 GREEN) — 2026-10-14
+
+**Status:** CLOSED with verdict **`PASS_CORRECTED_STRUCTURAL_LIVE_PENDING`**.
+
+**Predecessor:** `b24b954db` on `main` (ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01) plus the uncommitted CARDI01 work (`PASS_REPAIR_STRUCTURAL_LIVE_PENDING`). Authorized by one bounded P0 correction per the frozen multiple-completion-episodes contract — no additional architecture or review round.
+
+**P0 defect corrected:** The pre-CORR01 `isCompletionToolHeld(toolUseId)` classified a completion as HELD whenever ANY later `completion_continuation_control` user message existed in the persisted transcript. The classification was global, not source-correlated, and so it revoked authority from prior independently-committed completion episodes when a later episode contained a hold. This violated the frozen multiple-completion-episodes contract: a runtime-control observation must be correlated to the SPECIFIC submission it defers (the nearest eligible prior completion attempt), not to every earlier submission in the transcript.
+
+**RED discriminator (new fixtures, RED in pre-CORR01 / GREEN post-CORR01):**
+- **Fixture F** (committed A → user follow-up → held B → runtime-control → committed C). A's marker was wrongly `undefined` (the runtime-control sat after A's tool_result too). The pre-CORR01 code revoked A's authority. RED.
+- **Fixture G** (two independent episodes, each with a hold). B's marker was wrongly `undefined` (the runtime-control for C, emitted later, sat after B's tool_result too). The earlier episode's hold bled forward across the user follow-up. RED.
+
+**Causal correction (one bounded edit, `message-translator.ts:2621-2719`):** added ONE additional forward pre-scan recording the source index of every completion tool_use (`completionToolUseSourceIndices`). The `isCompletionToolHeld` helper now asks: is there a `runtimeControlIdx` in `(trIdx, nextCompletionToolUseIdx)`? Where `nextCompletionToolUseIdx` is the next completion tool_use after `trIdx` (or end-of-transcript). This is the nearest-eligible-prior correlation. The added pre-scan is O(N) over the source transcript and runs ONCE per restoration. The live streaming path is unchanged.
+
+**Framing projection (the §4 integration test):** a new test in `terminal-report-cardinality-repair01.trcr01.test.ts` imports `resolveTerminalReportFraming` via the established webview→SDK cross-import pattern and asserts the actual framing for A, B, C from Fixture F: A=`completed`, B=`undefined` (no marker, no legacy ask fallback), C=`completed`. All three summary texts preserved as historical activity.
+
+**Typecheck cleanup (the §5 ACT-owned errors, all three fixed):** added `name: "submit_and_exit"` to the two `submit_and_exit` tool_result blocks in `terminal-report-duplication-corr01.trd01.test.ts` (lines 142, 207) and serialized the `command_status` content object as a JSON text block (line 183). Post-CORR01 typecheck: zero errors.
+
+**Bounded evidence:**
+- New Fixtures F + G RED in pre-CORR01 (2 RED / 5 GREEN) and GREEN in post-CORR01 (8/8 GREEN including the §4 framing test).
+- 5 pre-existing fixtures (A–E) preserved unchanged (5/5 GREEN pre- and post-CORR01).
+- TRD01 characterization preserved (5/5 GREEN pre- and post-CORR01).
+- TRD01 + TRCR01 combined: 13/13 GREEN.
+- 79 pre-existing vitest failures unchanged (Gate 4 — no new failures from the bounded repair; L2847 three-RED baseline preserved at 3 RED / 11 PASS).
+- 3 pre-existing TRD01 typecheck errors fixed (Gate 5); zero ACT-owned typecheck errors post-CORR01.
+- BCB observability repair at `b24b954db` preserved.
+- 5 Elm kernels (BCB authority, completion authority, completion continuation control, deferred completion barrier, task header orchestration) untouched.
+- SEAM12 ACT and its 5 evidence SHAs verified intact.
+- DUPLICATION-RED01/CORR01 ACTs and their evidence preserved.
+- Single held→committed specimen (Fixture A) preserved.
+
+**Files (this ACT, 2 modified + 2 new):**
+- `apps/vscode/src/sdk/message-translator.ts` (modified — bounded CORR01 repair of `isCompletionToolHeld`)
+- `apps/vscode/src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts` (modified — added Fixtures F + G and the §4 framing test; now 8/8 GREEN)
+- `apps/vscode/src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts` (modified — §5 typecheck cleanup, no characterization changes; 5/5 still GREEN)
+- `.factory/acts/ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01-CORR01.md` (new — full CORR01 ACT report)
+- `.factory/evidence/ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01-CORR01/00-closure-evidence.txt` (new)
+- `.factory/epic-board.md` (modified — this entry)
+
+**Live qualification:** PENDING the next qualifying session with a writable extensions mount (per BCB-OBSERVABILITY-REPAIR01 §10 "LIVE_REPRODUCED" gate and the parent CARDI01 §7.4). The committed VSIX carries the repaired `message-translator.ts` and the new test files; no live claim is made about the `b24b954db` build (which does NOT contain the CORR01 repair).
+
+**Verdict:** `PASS_CORRECTED_STRUCTURAL_LIVE_PENDING`. Factory stop condition met at this verdict.
+
+---
+
+# ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01 — PRODUCT_CONTRACT_REQUIRED (source-traced, REAL_PRODUCTION_SEAM) — 2026-10-13
+
+**Status:** CLOSED with verdict **`PRODUCT_CONTRACT_REQUIRED`**.
+
+**Predecessor:** `b24b954db` on `main` (ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01).
+
+**Supersedes:** The unsupported rendering inference in `ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01` (the `resume_completed_task` explanation). The conclusion that "two reports appear" is reaffirmed; the source of the second report is now identified as a distinct `say: "completion_result"` row produced by the restoration path — not the `resume_completed_task` action affordance.
+
+**Live Cline task (specimen):** `1791892624249_io4fp`. **Installed extension:** `s1onique.clinemm-4.1.16-5a1c485cb-b24b954db`.
+
+**Key finding (load-bearing):** The two `submit_and_exit` tool_use blocks in the persisted messages.json (msg 333: call_function_xxakngsgiq8s_1, 3895 chars, SHA-256 3211fae9…; msg 339: call_function_jyd622908p3h_1, 2398 chars, SHA-256 590ea525…) each flow through the restoration chain `sdkMessagesToClineMessages → finalizePersistedToolUse → agentEventToMessages(content_end)`, which UNCONDITIONALLY stamps `isAuthoritativelyCompletedResult: true` on every completion tool's content_end row (message-translator.ts:1781). `appendFreshResumeMessage` (sdk-task-control-coordinator.ts:351-370) does NOT strip `say: "completion_result"` rows. `filterVisibleMessages` (messageUtils.ts:116-177) does NOT filter `say: "completion_result"`. `ChatRow.tsx:1102-1125` renders each as `<CompletionOutputRow>` with `resolveTerminalReportFraming` (terminalReportFraming.ts:140-142, PRIMARY marker path) → `{ kind: "completed" }` → "Completed" badge. Result: two distinct visible cards on reopen.
+
+**Reopen-visible rows:** exactly TWO `<CompletionOutputRow>` cards (rows A and B) with the "Completed" badge, two distinct summary bodies, two distinct source identities (msg_15LGa4py/xxakngsgiq8s_1 and msg_RagTZXRy/jyd622908p3h_1), two distinct `ts` values. The empty `ask: "completion_result"` (sdkMessagesToClineMessages:2775-2781) and `ask: "resume_completed_task"` (appendFreshResumeMessage) are both filtered by `filterVisibleMessages` — they are footer indicators, not cards.
+
+**Causal discriminator:** D1 partial (two distinct historical summaries rendered as "Completed"), D2 applies (one is the real committed completion, the other is the BCB-held historical one), D3 does not apply (no per-row duplication, distinct source identities), D4 partial (the per-marker system supports both; the chat-surface cardinality contract is silent). **Verdict: `PRODUCT_CONTRACT_REQUIRED`** — the engineering seam is verified; whether two "Completed" cards should be displayed after reopen needs an explicit product ruling, not an engineering inference.
+
+**Toolchain unavailable** (no `bun`/`node` in this environment). Test not re-run; evidence is `REAL_PRODUCTION_SEAM` (source-traced + real-seam test in default vitest suite: `apps/vscode/src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts`, 5 characterization assertions, all PASS today, not a RED per ACT §7).
+
+**Preservation:** BCB post-repair registry accessor preserved (sdk-task-history.ts:566-597 unchanged), held-result continuation behavior preserved, SDK task-completion cardinality preserved (1 `task_completion_committed` per session), two distinct historical `submit_and_exit` submissions preserved, `resume_completed_task` action preserved, Elm completion/continuation/deferred-barrier/task-header authorities preserved, **L2847 RED baseline preserved (3 RED / 11 PASS unchanged)**, BCB observability repair at `b24b954db` preserved, SEAM12 ACT and its 5 evidence SHAs verified intact, DUPLICATION-RED01 ACT and its evidence preserved (valid cardinality/conclusion findings retained; only the unsupported rendering inference is superseded).
+
+**Files (this ACT):**
+- `.factory/acts/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01.md` (full ACT report, 12 sections)
+- `.factory/evidence/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01/{00-closure-evidence.txt, test-fixture-diff.md, SHA256SUMS}` (all 4 SHAs verified)
+- `apps/vscode/src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts` (real-seam characterization)
+
+**Verdict:** `PRODUCT_CONTRACT_REQUIRED`. Stop at first proven causal boundary (Section 8 of the ACT). No production fix. Three candidate repair boundaries documented (Section 9) but NOT applied — out of scope. Factory stop condition met.
+
+---
+
+# ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01 — NOT_REPRODUCED (category D — INTENTIONAL_HISTORY) — 2026-10-13
+
+**Status:** CLOSED with verdict **`NOT_REPRODUCED`**, primary causal category **D — INTENTIONAL_HISTORY** (with a "current-terminal presentation missing" UI/UX caveat; no production defect). No production fix recommended.
+
+**Predecessor:** `b24b954db` on `main` (ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01, `PASS_REPAIR_STRUCTURAL_LIVE_PENDING`).
+
+**Live Cline task (specimen):** `1791892624249_io4fp` (started 2026-10-13T11:57:04.686Z; ended 2026-10-13T12:23:01.797Z; status `completed`; exit_code 0). The agent issued two `submit_and_exit` calls (msg[333] ts 1791893907206; msg[339] ts 1791893920497) separated by a `completion_continuation_control` runtime-control (msg[335] ts 1791893907292) and a `command_status` observation of `cmd_mv6mq5t8qhepcxxm` (state `containment_failed`, signal `SIGTERM`, elapsed 1081302ms). The task was then closed and reopened (epoch 3→4 transition).
+
+**Authoritative persisted completion cardinality: 1.** The live cardinality authority shows `task_completion_committed: 1` (completionId `completion-1791892624249_io4fp-1` at 1791893920558, origin `deferred_continuation`); turn-state writer provenance shows exactly one `session-event-turn-complete-completed` (sv 2037) and one `task-control-resume-ask` (sv 2044, anchorTs 1791894182817) on reopen. The first `submit_and_exit` produced a `session-event-pending-prompt-submitted` (streaming→streaming, no phase change) — the continuation-control authority correctly required held observation consumption before allowing the second `submit_and_exit` to commit.
+
+**Live vs reopen rendering:** the webview diagnostic shows exactly one `completion_result` say (ts=621, seq=2035, epoch=2) live, and exactly one `resume_completed_task` ask (ts=1791894182817, epoch=4) on reopen. The two entities are distinct types (`say` vs `ask`), distinct `ts`/`seq`/`epoch`, and distinct render paths in `ChatRow.tsx` (`CompletionOutputRow` vs `<InvisibleSpacer />` + "Start New Task" button affordance from `buttonConfig.ts:171-178`). No message-identity collision.
+
+**Causal discriminator (HALT_RED_NOT_REPRODUCED for A/B/C):** category D applies — the user's "two completion reports after reopen" perception maps to (1) the persisted assistant `text` row carrying the `submit_and_exit` `summary` and (2) the synthesized `resume_completed_task` action button. Both are correct, distinct, intended product behavior. The `terminalReportFraming` projection intentionally does NOT infer "Completed" from message text (per `webview-ui/src/components/chat/terminalReportFraming.ts` header "What MUST NOT happen"), and any change to make the historical `submit_and_exit` render as a `CompletionOutputRow` would be a product contract change, out of scope for this ACT.
+
+**SEAM12 reconciliation:** the `LIVE_NO_TRIGGER` verdict is confirmed. The `command_status` on `cmd_mv6mq5t8qhepcxxm` observed a job with **0 entries** in the live continuation-cardinality-authority (the job was a harness-launched `which codium-clinemm` discovery query killed by `cancel_command` after the harness's auto-launch SIGSEGV), so the SEAM08 post-await `enqueueCompletionContinuationIfHeld` consult was never reached (gated on `unconsumedOwnedTerminalResultsForC10 > 0`). The runtime-control `completion_continuation_control` is the Continuation Control Elm authority, NOT SEAM08 evidence (per the SEAM12 ACT's own §7 caveat). The `DIGEST_CREATED_AT: 2026-10-13T12:23:37Z` is NOT future-dated; `LEAMAS_BUILD_TIME: 2026-09-01T06:21:35Z` is the leamas tool's legitimate build time. The `snapshot_at` future-dated concern flagged by the ACT §7 is not observed in this evidence.
+
+**Preservation:** no production code touched, no diagnostic cleanup, L2847 RED baseline preserved at exactly 3 RED / 11 PASS, pre-existing 19 BCB01-family + 8 FRSP01 failures unchanged, no new P0 surfaced. SEAM12 ACT and its evidence files (`.factory/evidence/ACT-CLINEMM-ELM-SEAM12-DCB-LIVE-QUALIFICATION01/live-captures/{00..04} + SHA256SUMS`) intact and SHA256-verified at closure time. BCB registry repair remains intact. No SEAM12 test suite re-run (per ACT §7).
+
+**Files (this ACT):**
+- `.factory/acts/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01.md`
+- `.factory/evidence/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01/{00-closure-evidence.txt, SHA256SUMS}`
+
+**Verdict:** `NOT_REPRODUCED` — primary causal category **D — INTENTIONAL_HISTORY**. Stop at first proven causal boundary. No production fix recommended.
+
+---
+
+# ACT-CLINEMM-ELM-SEAM12-DCB-LIVE-QUALIFICATION01 — LIVE_NO_TRIGGER + PASS_BCB_REPAIR_LIVE_NO_HELD_TRIGGER — 2026-10-13
+
+**Status:** CLOSED with **verdict `LIVE_NO_TRIGGER`** for the SEAM08 (DCB) live qualification, and **`PASS_BCB_REPAIR_LIVE_NO_HELD_TRIGGER`** for the BCB-repair live qualification (the predecessor `PASS_REPAIR_STRUCTURAL_LIVE_PENDING` gap is closed in the clean-path sense but NOT promoted to `PASS_LIVE_QUALIFIED` because the held-pressure path is not exercised in the live task).
+
+**Predecessor:** `b24b954db` on `main` (ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01, `PASS_REPAIR_STRUCTURAL_LIVE_PENDING`).
+
+**Installed extension (live, at ACT execution time):** `/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-b24b954db/` (installed 2026-10-13 14:36:17, 17 minutes after the BCB repair commit). `dist/extension.js` SHA-256 `4e362f1f8bc4c4c950258237da9049b4cdcf6dc7478c4f7dfc4e46d02bef965f` contains the BCB production-accessor repair (`return[...r.runtime.tools,...r.config.extraTools??[]].map(n=>n.name)`) and the SEAM08 production caller (`consultE31BarrierForFacts`). All 5 Elm kernels packaged in `runtime-assets/` (background-notify-authority, completion-authority, completion-continuation-control, deferred-completion-barrier, task-header-orchestration) with verbatim SHAs. L2847 RED witnesses preserved exactly (3 RED / 11 PASS in TDD-RED01).
+
+**Live Cline task (this ACT's own execution):** `1791892624249_io4fp`, status `running`, epoch 2, `taskHeaderPhase=streaming`, started 2026-10-13T11:57:04.686Z, provider `minimax`/model `MiniMax-M3`, extension host PID 14116, workspace `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm`. 561 task-tagged activity publications over 193 minutes of runtime, with 281 `backgroundCommandRunning=true` (model actively running background commands) and 0 `session-event-bcb-blocked-observation-unavailable` writer fires. Model has 4 successful `command_status` invocations (proving the tool is in the model-facing registry).
+
+**Harness launch attempts (same blocker as the prior SEAM04 live qualification):** the Playwright-downloaded VSCode 1.103.0 (`/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.vscode-test/vscode-darwin-arm64-1.103.0/Visual Studio Code.app/Contents/MacOS/Electron`) segfaults on this macOS host with `kill EPERM` and `signal=SIGSEGV` (exit 139), identically to the prior `ELECTRON_SANDBOX_SIGSEGV` blocker documented at `.factory/acts/ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01.md` 01-electron-sandbox-blocker.md. Direct VSCodium launch via `/opt/homebrew/bin/codium` also fails (codesign restriction `task_name_for_pid: (os/kern) failure (5)`). The existing live VSCodium (PID 14074) was launched in a prior shell session with the post-BCB-repair extension installed and is the only Cline host available for live evidence.
+
+**Executable test gate (run fresh):** 208/211 PASS, 3 RED (preserved). SEAM08 / DCB (5 files, 49 tests) 49/49 PASS. BCB (3 files preserved from the repair ACT) 63/63 PASS. SEAM04 / CC (9 files) 91/91 PASS. OCRRD01 c2-4-c-bridge (real `LocalRuntimeHost` + real `getActiveRuntimeToolNames` merge) 5/5 PASS. TDD-RED01 (L2847) 3 RED / 11 PASS — exact match to the frozen baseline.
+
+**Live evidence (held-result boundary):** held terminal job IDs = 0; `canObserveHeldResults` = structurally `true` (proven by the model's 4 successful `command_status` invocations and the BCB writer not firing across 561 activity publications); BCB selected writer = NONE FIRED. The SEAM08 consult point is gated on `unconsumedOwnedTerminalResultsForC10 > 0`; with 0 unconsumed terminal results, the consult is not reached. The Continuation Control consult is similarly not reached. Continuation enqueue, delivery, and terminal-consumption counters are all 0. Final turn-phase writer and phase: `streaming` (no `setTurnPhase("error", ...)` from the BCB writer, no `setTurnPhase("completed", ...)` from the SEAM04 authority). Completion-row authority: 0 visible completion rows; TaskHeader projection = `streaming`.
+
+**Honest evidence classification:**
+- `LIVE`: live Cline task identity, tool-use distribution, activity-publication counters, task status, BCB writer path-did-not-fire observation.
+- `REAL_PRODUCTION_SEAM`: all 211 executable tests (208 PASS + 3 RED preserved).
+- `STRUCTURAL`: installed extension identity, BCB repair bundle content, 5 Elm kernel SHAs, source-tree clean state.
+- `LIVE_UNOBSERVABLE`: BCB observation-unavailable capture dump, SEAM04 termination-authority host-self-events (capture installed, 0 events), SEAM08 Elm consult invocation in the live task, Continuation Control Elm consult in the live task, turn-state writer-provenance dump, continuation cardinality authority dump, background-job liveness authority dump, TaskHeader capture. All gated on the dogfood diagnostic profile (`CLINEMM_RUNTIME_PROFILE=dogfood`), which the running VSCodium does NOT have set.
+- `NOT_EXECUTED`: allocation authority heap profile for this task (only an older capture from 2026-09-23 exists).
+
+**Verdict (per ACT §7):**
+
+- **SEAM08 (DCB): `LIVE_NO_TRIGGER`** — installed runtime operates, but the necessary held-result/SEAM08 boundary was not exercised in the live Cline task. The 49/49 SEAM08 executable tests prove the production caller + Elm kernel + wire protocol + 5-second timeout + stale-decision guard all work in tests with REAL production `SdkSessionEventCoordinator` (DCBR01), but the live task did not exercise this path. To close the SEAM08 live-qualification gap, an operator must launch a Cline task that (1) has the post-BCB-repair extension installed (✓), (2) has `CLINEMM_RUNTIME_PROFILE=dogfood` set on the launcher (✗ current VSCodium does not), and (3) produces ≥1 owned, terminal, unconsumed result reaching `submit_and_exit` (✗ current task has 0 at moment of dump).
+
+- **BCB repair: `PASS_BCB_REPAIR_LIVE_NO_HELD_TRIGGER`** — the post-repair live runtime operates correctly in the no-held-result case (561 activity publications, 281 background-running, 0 BCB writer fires, 4 successful `command_status` invocations, task in `streaming` not `error` phase). The held-pressure path is not exercised live, so this is **NOT promoted to `PASS_BCB_REPAIR_LIVE_QUALIFIED`**. The clean-path evidence is real; the held-pressure evidence is the same gap as SEAM08.
+
+**Precise labels (per Factory review precedent):**
+```
+BCB_REPAIR_STRUCTURAL:    PASS                (from b24b954db)
+BCB_REPAIR_EXECUTABLE:    PASS                (63/63 BCB tests)
+BCB_REPAIR_LIVE:          PASS_NO_HELD_TRIGGER (this ACT)
+SEAM08_STRUCTURAL:        PASS
+SEAM08_EXECUTABLE:        PASS                (49/49 DCB tests)
+SEAM08_LIVE:              LIVE_NO_TRIGGER     (this ACT)
+SEAM08_VSIX:              NOT_REBUILT         (using existing post-BCB-repair VSIX)
+```
+
+**Forward path (per ACT §7 "SEAM04 qualification becomes the next candidate, not another speculative Elm migration"):** the SEAM04 live-qualification gap is the next targeted ACT. SEAM08 live qualification remains open and requires a future Cline task that satisfies the three conditions above.
+
+**Preservation (ACT §8):** No sixth Elm kernel. No SEAM06/10/11 rejected-migration repeat. No new Promise port / timeout / transport architecture. No L2847 precedence repair. No production code changes (working tree clean, `git status --short` empty). No diagnostic cleanup (BCB capture / BJLA / CCARD / TSWPD / TaskHeader capture diagnostics remain in place per the BCB-OBSERVABILITY-REPAIR01 cleanup contract). L2847 RED baseline preserved at exactly 3 RED / 11 PASS. The 19 pre-existing BCB01-family + 8 FRSP01 failures are unchanged from baseline. No NEW P0 surfaced.
+
+**Files:**
+- `.factory/acts/ACT-CLINEMM-ELM-SEAM12-DCB-LIVE-QUALIFICATION01.md` (this ACT's full report)
+- `.factory/evidence/ACT-CLINEMM-ELM-SEAM12-DCB-LIVE-QUALIFICATION01/live-captures/` (00-installed-extension-identity, 01-harness-launch-result, 02-live-task-runtime-counters, 03-test-gate-results, 04-prior-bcb-red-specimen, SHA256SUMS)
+- `.factory/epic-board.md` (this entry, prepended to the top)
+
+
 # ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01 — PASS_REPAIR_STRUCTURAL_LIVE_PENDING — 2026-10-13
 
 **Status:** CLOSED with verdict `PASS_REPAIR_STRUCTURAL_LIVE_PENDING`. The bounded production-seam repair for the live BCB observation-unavailable incident (`1791887696629_cg31u`, 2026-10-13T10:48:08Z) is delivered exactly as the causal discriminator required. The capture is the `LocalRuntimeHost.getActiveRuntimeToolNames` accessor at `sdk/packages/core/src/runtime/host/local-runtime-host.ts:1557-1582`, which previously returned a stale subset (`active.runtime.tools` only — the runtime-builder's `BuiltRuntime.tools`) of the model-facing tool registry. The model-facing registry is built by the merge at `local-runtime-host.ts:834`: `[...runtime.tools, ...(configWithProvider.extraTools ?? [])]`. The `command_status` tool is added by `createVscodeExtraTools` to the `extraTools` slot (vscode-runtime-builder.ts:289-372), so the previous accessor always returned a list WITHOUT `command_status`, even when the model had the observation mechanism. This caused the BCB `canObserveHeldResults` projection to read `false` (verbatim match to the LIVE capture's value) and the `session-event-bcb-blocked-observation-unavailable` writer to fire, committing the `error` phase. The repair makes the surface truthful: it returns the SAME merge the model-facing `agentConfig.tools` uses. The change is a single accessor-method body, no public API rename, no new field, no protocol change, no Elm authority change, no new timeout, no new React updater, no L2847 precedence repair, no broad task-lifecycle refactoring.

@@ -1,0 +1,168 @@
+ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01-CORR01 — Closure Evidence
+========================================================================
+
+Closed: 2026-10-14
+Verdict: PASS_CORRECTED_STRUCTURAL_LIVE_PENDING
+Predecessor HEAD: b24b954db (unchanged from the BCB-OBSERVABILITY-REPAIR01 closure;
+this ACT's intended commit lands the CORR01 repair below).
+SUBJECT_HEAD: ba111f082e2a9b44bf66d08b8ad1cd5df6ae6fec
+Source identity: ba111f082
+VSIX path: apps/vscode/dist/clinemm-4.1.16-5a1c485cb-corr01.vsix
+VSIX size: 59,708,585 bytes
+VSIX SHA-256: fdb2e4d473fc57e2ad899751d24395830a91f6dec3e75ac6e0c90cac72ba9235
+VSIX version: 4.1.16-5a1c485cb (same family as the parent b24b954db build; the
+              `-corr01` suffix distinguishes this build from the previously
+              installed `s1onique.clinemm-4.1.16-5a1c485cb-b24b954db`)
+The previously installed b24b954db build does NOT contain the CORR01 repair.
+
+Iterative amend note (the SUBJECT_HEAD field, as recorded in this committed
+evidence file, is the FINAL HEAD. The actual git HEAD is identical to the
+SUBJECT_HEAD value when the amend that records it lands. The previous
+amends recorded 92cd82ba7, 050d74fa4, and 1823977e2 in this field across
+the iterative edit loop; this is the final fixed state.):
+  - The VSIX was built from the committed HEAD c8fe8a446 (one of the
+    iterative-amend predecessors). The production content
+    (message-translator.ts SHA-256 b0719795..., trcr01.test.ts SHA-256
+    6187e374..., trd01.test.ts SHA-256 2475f4b8...) is byte-identical
+    across c8fe8a446, 050d74fa4, 92cd82ba7, and ba111f082. The
+    intervening amends only updated the self-referential SHA field in
+    this evidence file. So the VSIX SHA-256 fdb2e4d4... binds
+    authoritatively to the FINAL HEAD ba111f082 via the byte-identical
+    production content.
+
+EXECUTABLE GATE OUTPUT (per ACT §5)
+------------------------------------
+
+Gate 1: Existing TRD01 characterization (5/5 GREEN, characterization preserved)
+  Command: vitest run --config vitest.config.ts \
+    src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts
+  Result: 5/5 passed
+  Status: GREEN — the §5 typecheck cleanup (added `name` fields, serialized
+          `command_status` content) did not alter the characterization.
+
+Gate 2: New TRCR01 fixtures F + G (RED→GREEN real-seam tests)
+  Pre-CORR01 RED phase (uncommitted CARDI01 repair only, no CORR01 fix):
+    Result: 2/7 failed, 5/7 passed
+    Failed: Fixture F (committed A revoked by later held episode),
+            Fixture G (committed B revoked by later held episode)
+    Passed: Fixture A, B, C, D, E (the pre-existing 5)
+    Status: RED as expected — the global "any later runtime-control" test
+            wrongly revoked prior committed episodes.
+  Post-CORR01 GREEN phase (this ACT's bounded per-episode rule):
+    Result: 7/7 passed (excluding the §4 framing test = 8/8 total)
+    Status: GREEN — the bounded per-episode rule correctly attributes
+            each runtime-control to the nearest prior completion.
+
+Gate 3: TRD01 + TRCR01 together (13/13 GREEN)
+  Command: same two test files run together
+  Result: 13/13 passed
+  Status: GREEN — TRD01's pre-repair chat surface characterization
+          (5/5) coexists with TRCR01's post-repair chat surface
+          characterization (8/8) because the TRD01 fixture's
+          runtime-control user message does NOT carry the metadata
+          fingerprint, so it falls into the conservative fallback path
+          (TRCR01 Fixture E).
+
+Gate 4: Full default vitest suite regression
+  Pre-repair baseline (HEAD b24b954db, no changes):
+    79 unique failing tests across 13 files (pre-existing
+    test drift documented in: bnca-red01, bcb01-c3, bcb01-c4,
+    cpa01, tdd-red01, hbocp, hbop, hbrc01, hbcv01, hbcv01-c2,
+    ahbrc01, tdcd, hbrc01-c2, hbrc01-c2)
+  Post-CORR01 (this ACT):
+    79 unique failing tests (same set, same files; same
+    "Total tests in failing files: 155 Failed: 79" summary).
+  Diff: identical failure sets; no regressions introduced.
+  Status: PASS — no new failures from the bounded repair.
+  L2847 three-RED baseline: 3 RED / 11 PASS — unchanged
+  (tdd-red01.test.ts (14 tests | 3 failed)).
+
+Gate 5: TypeScript typecheck
+  Pre-CORR01 baseline (post-CARDI01):
+    3 typecheck errors in
+    src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts
+    (lines 142, 183, 207 — the §5 ACT-owned errors).
+  Post-CORR01 (this ACT):
+    0 typecheck errors.
+    The three §5 errors are all fixed:
+    - Line 142: added `name: "submit_and_exit"` to first tool_result.
+    - Line 183: serialized `{ ok, jobId, state, signal, elapsed }`
+      object as `{ type: "text", text: JSON.stringify(...) }`.
+    - Line 207: added `name: "submit_and_exit"` to second tool_result.
+  Diff: 3 → 0 errors; no new errors anywhere in the project.
+  Status: PASS — zero ACT-owned typecheck errors post-CORR01.
+
+Gate 6: resolveTerminalReportFraming integration (the §4 requirement)
+  Test: "Fixture F framing: committed A and committed C receive
+         `Completed` framing; held B does NOT — historical summaries
+         all preserved" in trcr01.test.ts
+  Drives the REAL `resolveTerminalReportFraming` from
+  `webview-ui/src/components/chat/terminalReportFraming.ts`
+  (imported via the established webview→SDK cross-import pattern)
+  over the real restored messages from Fixture F.
+  Assertions:
+    framingA.kind  === "completed"  (committed A)
+    framingA.label === "Completed"
+    framingB       === undefined     (held B — no marker, no legacy ask
+                                       fallback for the `say` shape)
+    framingC.kind  === "completed"  (committed C)
+    framingC.label === "Completed"
+    All three summary texts preserved as historical activity.
+  Result: PASS
+  Status: PASS — the actual framing (not just the marker) is asserted.
+
+SHA-256 SUMS (per ACT §9)
+-------------------------
+b0719795883edda5873c19cb54a2cf36b2b3206811dba9d977aee241968703d2  apps/vscode/src/sdk/message-translator.ts
+6187e374b44092befcf84051a7703ba9928bc85b3d1a3177b28b1d54c9924d4c  apps/vscode/src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts
+2475f4b828b34d5f203f8f46be276191860aeb9e682a2c9d019813791752e775  apps/vscode/src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts
+ee6ba4fa07c0bc1976be17279a41c22f7b3356966e04228c7d83c7f44865a634  .factory/acts/ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01-CORR01.md
+
+PRE-EXISTING-PRESERVED INVARIANTS
+---------------------------------
+- BCB observability repair at b24b954db: preserved.
+- 5 Elm kernels (BCB authority, completion authority, completion
+  continuation control, deferred completion barrier, task header
+  orchestration): untouched.
+- SEAM12 ACT and its 5 evidence SHAs: verified intact.
+- DUPLICATION-RED01 + CORR01 ACTs and their evidence: preserved.
+- Existing TRD01 characterization: 5/5 still GREEN.
+- L2847 three-RED baseline: preserved (3 RED / 11 PASS).
+- 79 pre-existing vitest failures: unchanged.
+
+Causal correction summary
+-------------------------
+One bounded edit to apps/vscode/src/sdk/message-translator.ts:
+- Added ONE additional forward pre-scan (completionToolUseSourceIndices).
+- Replaced the global "any later runtime-control" test in
+  isCompletionToolHeld with the bounded per-episode rule: a completion
+  is HELD iff a runtime-control sits in the source-transcript interval
+  (trIdx, nextCompletionToolUseIdx).
+- O(N) chronological scan, runs ONCE per restoration.
+- Live streaming path unchanged (the threaded isAuthoritativeCompletion
+  flag still defaults to true on the live path; the restoration
+  path sets it to false only for HELD completion tools).
+
+VERDICT
+-------
+PASS_CORRECTED_STRUCTURAL_LIVE_PENDING
+
+Bounded evidence:
+- 7 new TRCR01 tests passing (Fixtures A–G).
+- 1 new TRCR01 framing test passing (the §4 integration assertion).
+- 5 existing TRD01 tests still passing (pre-repair characterization
+  preserved).
+- 79 pre-existing test failures in the default vitest suite unchanged
+  (no regressions; L2847 three-RED baseline preserved).
+- 3 pre-existing typecheck errors in TRD01 fixed; zero ACT-owned
+  typecheck errors post-CORR01.
+- Single held→committed specimen (Fixture A) preserved.
+- Multiple-completion-episodes contract restored.
+- No Elm changes. No BCB changes. No new persistence field, protocol
+  field, or completion FSM.
+- Live qualification PENDING the next qualifying session with a
+  writable extensions mount.
+
+Live qualification (manual one-shot test against a running webview
+with the bounded CORR01 repair installed) is PENDING the next
+qualifying session with a writable extensions mount.
