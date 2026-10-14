@@ -578,6 +578,25 @@ export type CommandJobLifecycleEventInput =
 	| {
 			readonly event: "command_job_terminal_committed"
 			readonly jobId: string
+			/**
+			 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+			 * the launch-time session + task identity. Threaded
+			 * so the `BackgroundNotifyCoordinator` (via the
+			 * `onCommandJobLifecycle` sink in `SdkController`)
+			 * can record a compact terminal receipt at the same
+			 * seam the manager emits the canonical terminal-fact
+			 * event. Without the owner triple, the BCB cannot
+			 * attribute the terminal fact to the right held
+			 * obligation (the active session may differ from
+			 * the job's owner session after a session switch).
+			 *
+			 * Both fields are OPTIONAL for forward compatibility
+			 * with older consumers that do not yet thread them;
+			 * the `SdkController` reads them as a fallback to
+			 * the active-session/active-task resolver.
+			 */
+			readonly ownerSessionId?: string
+			readonly ownerTaskId?: string | null
 			readonly terminationReason: TerminationReason
 			readonly exitCode: number | null
 			readonly signal: string | null
@@ -725,6 +744,22 @@ export type CommandJobLifecycleEvent =
 	| {
 			readonly event: "command_job_terminal_committed"
 			readonly jobId: string
+			/**
+			 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+			 * the launch-time session + task identity. Threaded
+			 * so the `BackgroundNotifyCoordinator` (via the
+			 * `onCommandJobLifecycle` sink in `SdkController`)
+			 * can record a compact terminal receipt at the same
+			 * seam the manager emits the canonical terminal-fact
+			 * event. Without the owner triple, the BCB cannot
+			 * attribute the terminal fact to the right held
+			 * obligation.
+			 *
+			 * OPTIONAL for forward compatibility with older
+			 * consumers that do not yet thread them.
+			 */
+			readonly ownerSessionId?: string
+			readonly ownerTaskId?: string | null
 			readonly terminationReason: TerminationReason
 			readonly exitCode: number | null
 			readonly signal: string | null
@@ -2643,6 +2678,18 @@ export class CommandJobManager {
 			this.emitCommandJobLifecycle({
 				event: "command_job_terminal_committed",
 				jobId: job.id,
+				// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+				// thread the launch-time owner SESSION so the
+				// `BackgroundNotifyCoordinator` (via the
+				// `onCommandJobLifecycle` sink in `SdkController`)
+				// can record a compact terminal receipt at the
+				// SAME seam the manager emits the canonical
+				// terminal-fact event. The task identity is
+				// resolved by the SdkController's lifecycle
+				// handler at runtime (via the active-task
+				// resolver) — see
+				// `SdkController.handleCommandJobLifecycle`.
+				ownerSessionId: job.ownerSessionId,
 				terminationReason: job.terminationReason,
 				exitCode: job.exitCode ?? null,
 				signal: job.signal ?? null,

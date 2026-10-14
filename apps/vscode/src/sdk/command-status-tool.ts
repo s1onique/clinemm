@@ -52,6 +52,33 @@ export interface CommandStatusOutput {
 	 * jobs and on non-blocking (waitMs==0) status reads.
 	 */
 	notification?: "pending"
+	/**
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+	 * Truthful distinction carried by a `command_status` response
+	 * that consulted the BCB's compact terminal-receipt store
+	 * (the `CommandJobManager` returned `unknown_job` because the
+	 * heavy terminal snapshot was evicted by the bounded FIFO).
+	 * The model MUST treat the absence of stdout/stderr as a
+	 * truthful signal that the heavy output was NOT retained —
+	 * the terminal classification is real but the output must
+	 * be re-observed via a fresh `run_commands` invocation.
+	 *
+	 * When `false`, the model MUST NOT claim full output is
+	 * available. The only truthful response is the
+	 * `state` + `exitCode` + `signal` payload.
+	 *
+	 * `undefined` (default) means the response is from a
+	 * NON-evicted manager snapshot — the full output IS
+	 * available in `stdout` / `stderr`.
+	 */
+	outputRetained?: boolean
+	/**
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+	 * Set to `"evicted_receipt"` when the response is the
+	 * compact-receipt path (heavy output was evicted). Absent
+	 * for non-evicted responses.
+	 */
+	observation?: "evicted_receipt"
 }
 
 export interface CancelCommandInput {
@@ -251,6 +278,80 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 
 			const status = await manager.status({ jobId: typed.jobId, waitMs })
 			if (!status.ok) {
+				// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+				// the manager returned `unknown_job` — the heavy
+				// terminal snapshot was evicted by the bounded FIFO
+				// (see command-job-manager.ts:2770-2782). The
+				// pre-fix code returned the early error WITHOUT
+				// consulting the BCB, leaving the held obligation
+				// permanently unresolvable.
+				//
+				// Bounded repair: consult the
+				// BackgroundNotifyCoordinator's compact terminal-
+				// receipt store. If a receipt exists for this
+				// jobId AND the supplied owner triple matches,
+				// the BCB drains the obligation through the
+				// canonical observation path (Path B
+				// `resolveObligation` for notify=true, Path C
+				// `consumeNonNotifyTerminalObservation` for
+				// fire-and-forget) and returns a TRUTHFUL response
+				// that distinguishes:
+				//
+				//   - state: receipt.terminalState (canonical fact)
+				//   - exitCode: receipt.exitCode     (when present)
+				//   - signal: receipt.signal         (when present)
+				//   - outputRetained: false          (truthful: heavy
+				//                                    output evicted)
+				//   - observation: "evicted_receipt" (load-bearing
+				//                                    distinction)
+				//
+				// If the receipt is absent (the BCB never observed
+				// a terminal fact for this jobId), OR the owner
+				// doesn't match, fall through to the truthful
+				// `unknown_job` response.
+				if (options.backgroundNotifyCoordinator && options.resolveActiveOwner) {
+					const activeOwner = options.resolveActiveOwner()
+					if (activeOwner) {
+						const receiptDecision = options.backgroundNotifyCoordinator.consumeTerminalReceipt({
+							jobId: typed.jobId,
+							sessionId: activeOwner.sessionId,
+							taskId: activeOwner.taskId,
+						})
+						if (receiptDecision.kind === "resolved") {
+							const r = receiptDecision.receipt
+							return [
+								{
+									ok: true,
+									jobId: r.jobId,
+									// The terminal classification is the
+									// canonical fact; the model MUST be
+									// able to see it.
+									state: r.terminalState,
+									elapsedMs: 0,
+									deadlineRemainingMs: 0,
+									// TRUTHFUL: stdout/stderr were evicted
+									// from the manager. Do NOT fabricate
+									// them. The model must re-run the
+									// command to recover full output.
+									stdout: "",
+									stderr: "",
+									outputTruncated: false,
+									...(r.exitCode !== undefined ? { exitCode: r.exitCode } : {}),
+									...(r.reason !== undefined && r.reason !== null ? { signal: r.reason } : {}),
+									// The receipt is the load-bearing
+									// truthful distinction: the heavy
+									// output was evicted but the
+									// terminal classification was
+									// preserved.
+									outputRetained: false,
+									observation: "evicted_receipt",
+								},
+							]
+						}
+						// owner_mismatch or not_present: fall through
+						// to the truthful unknown_job response.
+					}
+				}
 				return [{ ok: false, error: `unknown_job: ${typed.jobId}` }]
 			}
 			const snap = status.snapshot

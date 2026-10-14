@@ -106,6 +106,60 @@ export interface TerminalNotification {
 	readonly createdAtMs: number
 }
 
+/**
+ * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+ *
+ * Compact per-job terminal-fact receipt — the terminal
+ * classification (state, exitCode, signal, containment verdict)
+ * WITHOUT the heavy stdout/stderr payload. Recorded by the
+ * `BackgroundNotifyCoordinator` at the moment a `consumeTerminal`
+ * call (Path A) or a fire-and-forget terminal observation
+ * (Path C/C') carries the canonical terminal fact.
+ *
+ * The receipt's sole purpose is to allow a LATER `command_status`
+ * call to drain the BCB held-set obligation when the
+ * `CommandJobManager` has already evicted the heavy terminal
+ * snapshot from its bounded FIFO (e.g. after more than
+ * `maxTerminalJobs` jobs have finalized).
+ *
+ * The receipt is the truthful ground for the eviction case: it
+ * carries the terminal classification the manager already
+ * finalized, so the model receives a real terminal fact (not a
+ * fabricated "unavailable" verdict). The `outputRetained: false`
+ * flag is the load-bearing distinction: the heavy stdout/stderr
+ * payload was evicted; the terminal classification was not.
+ *
+ * Bounded by the same cap the manager enforces on its heavy
+ * terminal map: `terminalReceipts.size <= maxTerminalJobs`. The
+ * BCB records the receipt BEFORE the manager's FIFO eviction
+ * completes (the `vscode-run-commands-tool.ts:827-873` terminal
+ * listener fires synchronously inside the manager's
+ * `runTerminationSequence` finalize path), so the receipt is
+ * added for every job whose terminal fact the BCB has seen.
+ *
+ * Cleared in three ways:
+ *   1. `consumeTerminalReceipt` (Path B / Path C / Path C' canonical
+ *      observation consumed the obligation; the receipt is the
+ *      authoritative drain);
+ *   2. The same drain paths invoked by `command_status` against a
+ *      non-evicted terminal snapshot (Path B / C / C' did not need
+ *      the receipt; clear it);
+ *   3. `dispose()` (process-ephemeral state).
+ */
+export interface CompactTerminalReceipt {
+	readonly jobId: string
+	readonly sessionId: string
+	readonly taskId: string | undefined
+	readonly terminalState: CommandJobState
+	readonly exitCode: number | undefined
+	readonly reason: string | undefined
+	readonly isContainmentFailed: boolean
+	/** Always false — the heavy stdout/stderr payload was NOT retained. */
+	readonly outputRetained: false
+	/** Capture timestamp; the BCB's `now()` at recording time. */
+	readonly recordedAtMs: number
+}
+
 /** Result of a consumeTerminal call. Used by tests + diagnostic capture. */
 export type ConsumeTerminalDecision =
 	| { kind: "no_marker" }
@@ -1197,6 +1251,19 @@ export class BackgroundNotifyCoordinator {
 	 * BCB01 §0.1 completion commit is allowed.
 	 */
 	private readonly nonNotifyTerminalObservations = new Map<string, { sessionId: string; taskId: string | undefined }>()
+	/**
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+	 *
+	 * Compact per-job terminal-fact receipts (see
+	 * `CompactTerminalReceipt`). Keyed by `jobId`. The store
+	 * preserves the terminal classification AFTER the
+	 * `CommandJobManager`'s heavy `terminal` map has evicted the
+	 * job, so a later `command_status` call can still drain the
+	 * BCB held-set obligation truthfully. Bounded by the manager's
+	 * `maxTerminalJobs` cap; cleared on consumption, dispose, or
+	 * owner-mismatch.
+	 */
+	private readonly terminalReceipts = new Map<string, CompactTerminalReceipt>()
 	private readonly options: Required<
 		Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority">
 	> &
@@ -1387,6 +1454,178 @@ export class BackgroundNotifyCoordinator {
 			return
 		}
 		this.nonNotifyTerminalObservations.delete(input.jobId)
+		// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01: the
+		// non-notify observation has been consumed; the receipt
+		// (if any) for this jobId is no longer needed (the obligation
+		// is drained).
+		this.terminalReceipts.delete(input.jobId)
+	}
+
+	/**
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+	 *
+	 * Record a compact terminal-fact receipt for `jobId`. Called
+	 * at the moment the BCB observes the canonical terminal
+	 * classification — at the `consumeTerminal` Path A listener
+	 * site (vscode-run-commands-tool.ts:865) and at the
+	 * `command_status` Path B / C / C' terminal-observation seam
+	 * (command-status-tool.ts:329-393). The receipt's purpose is
+	 * to allow a LATER `command_status` call to drain the BCB
+	 * held-set obligation when the `CommandJobManager` has already
+	 * evicted the heavy terminal snapshot.
+	 *
+	 * The receipt is recorded only when the BCB has a held
+	 * obligation for `jobId` (i.e. a live `notificationMarkers`
+	 * entry for notify=true, OR a `nonNotifyTerminalObservations`
+	 * entry for fire-and-forget). A terminal fact with no held
+	 * obligation is a no-op for the receipt store.
+	 *
+	 * Idempotency: re-recording the same jobId replaces the prior
+	 * receipt. Bounded: the receipt's lifetime tracks the
+	 * obligation's lifetime — when the obligation is consumed
+	 * (any path), the receipt is cleared. On `dispose()`, the
+	 * whole store is cleared.
+	 */
+	recordTerminalReceipt(input: {
+		jobId: string
+		sessionId: string
+		taskId: string | undefined
+		terminalState: CommandJobState
+		exitCode: number | undefined
+		reason: string | undefined
+		isContainmentFailed: boolean
+	}): void {
+		if (this.disposed) return
+		if (!input.jobId || typeof input.jobId !== "string") return
+		// Only record when there is a held obligation for this
+		// jobId. The obligation is held if EITHER:
+		//   - a live `notificationMarkers` entry (notify=true), OR
+		//   - a `nonNotifyTerminalObservations` entry
+		//     (fire-and-forget), OR
+		//   - a `reservedMarkers` entry (the marker was moved
+		//     here at `consumeTerminal` entry — the receipt is
+		//     recorded at the SAME entry seam, so the marker
+		//     has just been moved out of `notificationMarkers`
+		//     and into `reservedMarkers`; the receipt MUST be
+		//     recorded so a later Path B drain can succeed).
+		// The `reservedMarkers.has` check is the load-bearing
+		// one for the `consumeTerminal` Path A entry seam.
+		const hasMarker = this.notificationMarkers.has(input.jobId)
+		const hasReserved = this.reservedMarkers.has(input.jobId)
+		const hasNonNotify = this.nonNotifyTerminalObservations.has(input.jobId)
+		if (!hasMarker && !hasReserved && !hasNonNotify) {
+			return
+		}
+		// `outputRetained` is the bounded fix's load-bearing
+		// truthful distinction: the heavy stdout/stderr payload
+		// is NOT retained in the receipt. The model can never
+		// confuse a receipt for a full observation.
+		const receipt: CompactTerminalReceipt = {
+			jobId: input.jobId,
+			sessionId: input.sessionId,
+			taskId: input.taskId,
+			terminalState: input.terminalState,
+			exitCode: input.exitCode,
+			reason: input.reason,
+			isContainmentFailed: input.isContainmentFailed,
+			outputRetained: false,
+			recordedAtMs: this.options.now(),
+		}
+		this.terminalReceipts.set(input.jobId, receipt)
+	}
+
+	/**
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+	 *
+	 * Consult + drain the compact terminal-receipt store for
+	 * `jobId`. Called from the `command_status` tool at the
+	 * `unknown_job` early-return seam
+	 * (command-status-tool.ts:252-255) when the
+	 * `CommandJobManager` returned `unknown_job` because the heavy
+	 * terminal snapshot was evicted.
+	 *
+	 * Owner-mismatch semantics: the supplied `(sessionId, taskId)`
+	 * triple MUST match the receipt's owner triple. A foreign
+	 * owner cannot drain the obligation through the receipt.
+	 *
+	 * If the receipt exists AND the owner matches, the BCB
+	 * drains the obligation through the canonical
+	 * `resolveObligation` (notify=true) or
+	 * `consumeNonNotifyTerminalObservation` (fire-and-forget) path
+	 * and returns the receipt. The receipt is then cleared from
+	 * the store (idempotent — a second call returns `not_present`).
+	 *
+	 * If the receipt does not exist for `jobId`, returns
+	 * `not_present` — the BCB never observed a terminal fact for
+	 * this jobId, so there is no truthful ground to drain.
+	 */
+	consumeTerminalReceipt(input: {
+		jobId: string
+		sessionId: string
+		taskId: string | undefined
+	}):
+		| { kind: "resolved"; receipt: CompactTerminalReceipt }
+		| { kind: "not_present" }
+		| { kind: "owner_mismatch"; receiptSessionId: string; receiptTaskId: string | undefined } {
+		if (this.disposed) {
+			return { kind: "not_present" }
+		}
+		if (!input.jobId || typeof input.jobId !== "string") {
+			return { kind: "not_present" }
+		}
+		const receipt = this.terminalReceipts.get(input.jobId)
+		if (!receipt) {
+			return { kind: "not_present" }
+		}
+		// Owner-isolation guard. A foreign owner cannot drain a
+		// receipt it does not own; matches the Path B / C
+		// owner-mismatch checks.
+		if (receipt.sessionId !== input.sessionId || receipt.taskId !== input.taskId) {
+			return {
+				kind: "owner_mismatch",
+				receiptSessionId: receipt.sessionId,
+				receiptTaskId: receipt.taskId,
+			}
+		}
+		// The receipt's owner matches. Drain the obligation through
+		// the canonical observation path. The drain is idempotent
+		// — if the obligation was already consumed (e.g. by a
+		// parallel `command_status` Path B), the resolveObligation
+		// / consumeNonNotifyTerminalObservation call is a no-op.
+		// We still clear the receipt because the obligation is
+		// gone (no future `command_status` needs it).
+		const isNotify = this.notificationMarkers.has(input.jobId)
+		if (isNotify) {
+			const decision = this.resolveObligation({
+				jobId: input.jobId,
+				sessionId: input.sessionId,
+				taskId: input.taskId,
+				resolution: "canonical_status_observed",
+			})
+			// The receipt is consumed regardless of the
+			// resolveObligation decision (the obligation is
+			// settled either way).
+			void decision
+		} else {
+			this.consumeNonNotifyTerminalObservation({
+				jobId: input.jobId,
+				sessionId: input.sessionId,
+				taskId: input.taskId,
+			})
+		}
+		this.terminalReceipts.delete(input.jobId)
+		return { kind: "resolved", receipt }
+	}
+
+	/**
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+	 *
+	 * Diagnostic accessor — number of compact terminal receipts
+	 * currently held. Used by tests to assert the bounded-fix
+	 * invariant.
+	 */
+	diagnosticTerminalReceiptCount(): number {
+		return this.terminalReceipts.size
 	}
 
 	/**
@@ -1802,6 +2041,24 @@ export class BackgroundNotifyCoordinator {
 		}
 		this.reservedMarkers.set(input.jobId, marker)
 		this.notificationMarkers.delete(input.jobId)
+		// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+		// record a compact terminal receipt BEFORE the Elm policy
+		// decision. The receipt's purpose is to allow a LATER
+		// `command_status` call (Path B / C / C' on a manager
+		// that has already evicted the heavy terminal snapshot)
+		// to drain the held obligation. The receipt is keyed by
+		// jobId and survives the marker deletion above. It is
+		// cleared on consumption (resolveObligation /
+		// consumeNonNotifyTerminalObservation) or on dispose.
+		this.recordTerminalReceipt({
+			jobId: input.jobId,
+			sessionId: marker.sessionId,
+			taskId: marker.taskId,
+			terminalState: input.terminalState,
+			exitCode: input.exitCode,
+			reason: input.reason,
+			isContainmentFailed: input.isContainmentFailed,
+		})
 
 		// Snapshot the facts SYNCHRONOUSLY so the Elm policy sees
 		// a coherent point-in-time view. The owner is read here
@@ -1889,6 +2146,9 @@ export class BackgroundNotifyCoordinator {
 				// at entry; we now drop it because the policy
 				// verdict is no_marker).
 				this.reservedMarkers.delete(input.jobId)
+				// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+				// the obligation is settled. Clear the receipt.
+				this.terminalReceipts.delete(input.jobId)
 				this.recordDecision(input.jobId, "no_marker", undefined, 0, 0)
 				return { kind: "no_marker" }
 			}
@@ -1900,6 +2160,13 @@ export class BackgroundNotifyCoordinator {
 				// (from L1803) is moved back to notificationMarkers.
 				this.notificationMarkers.set(input.jobId, marker)
 				this.reservedMarkers.delete(input.jobId)
+				// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+				// the obligation is preserved (marker restored).
+				// The receipt stays so a later `command_status`
+				// Path B can drain it. The owner triple stored
+				// in the receipt is the marker's owner (not the
+				// active owner's), matching the owner-mismatch
+				// semantics.
 				const ownerKeyPair = activeOwnerAtEntry
 					? `active=${activeOwnerAtEntry.sessionId}/${activeOwnerAtEntry.taskId ?? ""} vs marker=${marker.sessionId}/${marker.taskId ?? ""}`
 					: "owner_absent"
@@ -1915,6 +2182,10 @@ export class BackgroundNotifyCoordinator {
 				// N9 contract. Consume the reserved marker and
 				// return.
 				this.reservedMarkers.delete(input.jobId)
+				// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+				// obligation is settled (N9 contract — no wake).
+				// Clear the receipt.
+				this.terminalReceipts.delete(input.jobId)
 				this.recordDecision(input.jobId, "containment_no_wake", undefined, 0, 0)
 				return { kind: "containment_no_wake", jobId: decision.jobId }
 			}
@@ -1982,6 +2253,11 @@ export class BackgroundNotifyCoordinator {
 					exitCode: input.exitCode,
 					outputTail: input.outputTail,
 				})
+				// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+				// obligation is settled (drained — wake delivered).
+				// The wake is the canonical authority; the receipt
+				// is no longer needed.
+				this.terminalReceipts.delete(input.jobId)
 				const drainedCount = held.length + 1
 				this.recordDecision(input.jobId, "drained", undefined, 0, 0)
 				return {
@@ -2039,6 +2315,12 @@ export class BackgroundNotifyCoordinator {
 			if (!this.wakeEnqueuedJobIds.has(input.jobId)) {
 				this.wakeAuthoritySettledJobIds.add(input.jobId)
 			}
+			// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+			// the obligation for `jobId` is settled. The receipt
+			// (if any) is no longer needed; a future
+			// `command_status` for this jobId will see no held
+			// obligation and will not need the receipt.
+			this.terminalReceipts.delete(input.jobId)
 		}
 
 		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
@@ -2159,6 +2441,12 @@ export class BackgroundNotifyCoordinator {
 		// (the BCB01 §0.1 barrier consults them only within a single
 		// session lifetime).
 		this.nonNotifyTerminalObservations.clear()
+		// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+		// compact terminal receipts are process-ephemeral too (the
+		// receipt store's only purpose is to drain a held obligation
+		// whose heavy manager snapshot was evicted; on dispose the
+		// whole held set is gone, so the receipts go with it).
+		this.terminalReceipts.clear()
 	}
 
 	diagnosticMarkerCount(): number {

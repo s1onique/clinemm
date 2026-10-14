@@ -5540,6 +5540,39 @@ export class Controller {
 			// post-delta state. This is O(1) per event.
 			this.taskTelemetry.recordActiveCommandJobs(event.activeCommandJobs)
 			this.scheduleGaugePost()
+			// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+			// at the manager's `command_job_terminal_committed`
+			// event seam, record a compact terminal receipt in
+			// the BCB. The receipt's purpose is to allow a LATER
+			// `command_status` call to drain the held obligation
+			// when the manager has evicted the heavy terminal
+			// snapshot from its bounded FIFO.
+			//
+			// The lifecycle event carries the launch-time owner
+			// session. The task identity falls back to the
+			// active-task resolver (via `this.task?.taskId`),
+			// matching the owner triple the BCB already consults
+			// for `unconsumedOwnedTerminalJobIdsForOwner`. The
+			// BCB's `recordTerminalReceipt` consults its own held
+			// obligation maps and records a receipt only when a
+			// held obligation exists for the jobId — so a
+			// terminal fact with no held obligation is a
+			// zero-cost no-op.
+			if (event.event === "command_job_terminal_committed") {
+				const ownerSessionId = event.ownerSessionId
+				const ownerTaskId = event.ownerTaskId ?? this.task?.taskId
+				if (ownerSessionId !== undefined) {
+					this.backgroundNotifyCoordinator?.recordTerminalReceipt({
+						jobId: event.jobId,
+						sessionId: ownerSessionId,
+						taskId: ownerTaskId,
+						terminalState: event.jobState,
+						exitCode: event.exitCode ?? undefined,
+						reason: event.signal ?? undefined,
+						isContainmentFailed: event.jobState === "containment_failed",
+					})
+				}
+			}
 		} catch (e) {
 			Logger.warn(
 				`[SdkController] Failed to forward lifecycle event ${event.event} (jobId=${event.jobId}): ${e instanceof Error ? e.message : String(e)}`,
