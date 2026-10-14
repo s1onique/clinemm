@@ -27,6 +27,7 @@ Correspondence with `selectTaskHeaderPresentation`:
     canonicalShadowPhase = Just p
     AND NOT stale(...)
     AND NOT unbound_demote(...)
+    AND NOT unobserved_idle_demoting_completion(...)
       => { phase = p, source = SourceShadow, seq = facts.seq }
 
   R4 (LEGACY ABSENCE):
@@ -46,6 +47,53 @@ Auxiliary predicates (closed):
     (canonicalShadowObservedTurnSeq == Nothing)
     AND terminalShadowPhase (unwrap canonicalShadowPhase)
     AND activeLegacyPhase currentLegacyPhase
+  unobserved_idle_demoting_completion =
+    (canonicalShadowObservedTurnSeq == Nothing)
+    AND (unwrap canonicalShadowPhase == PhaseIdle)
+    AND currentLegacyPhase == PhaseCompleted
+
+ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01:
+  A third narrowly-scoped UNBOUND-shadow demotion guard. The previous
+  `unbound_demote` predicate (UNBOUND-SHADOW-AUTHORITY-RECON01) only
+  protected ACTIVE legacy phases (`streaming` / `awaiting_approval`)
+  from an UNBOUND shadow projecting a TERMINAL phase. The LIVE-bug
+  case for this ACT is the COMMITMENT counterpart: the host has
+  authoritatively written `currentLegacyPhase = completed` (the
+  completion evidence has been committed to TurnStateTracker) while
+  the canonical shadow was sampled at the seam but never observed
+  `idle` (no `lastObservedTurnSeqByPhase` entry for the projected
+  phase, so the selector-local `canonicalShadowObservedTurnSeq` is
+  `Nothing`). In that case the UNBOUND shadow's `idle` projection
+  is a never-observed state with no provenance to demote the host's
+  committed `completed`. The selector falls through to the legacy
+  branch.
+
+  This guard is INTENTIONALLY narrow:
+    * only the EXACT triple
+        legacy = completed
+        shadow = idle
+        canonicalShadowObservedTurnSeq = Nothing
+      triggers it;
+    * a shadow with a numeric observation stamp (even an older one)
+      is unaffected -- the existing `stale` and `unbound_demote`
+      branches still apply;
+    * a shadow that observed `idle` AT or AFTER the current `seq`
+      is unaffected -- it is a legitimate shadow observation and
+      the shadow branch wins;
+    * a shadow projecting `completed` (or any other terminal
+      phase) is unaffected -- the only demotion the LIVE bug
+      exhibits is `idle` against a committed `completed`.
+
+  This guard does NOT make `completed` permanently sticky. A new
+  task lifecycle that legitimately transitions the host back to a
+  different `currentLegacyPhase` (e.g. `idle` for a new task) is
+  unaffected: the predicate's third clause
+  `currentLegacyPhase == PhaseCompleted` does not match, and the
+  existing R3 shadow branch runs with its standard precedence.
+  The host's `currentLegacyPhase` is the single source of truth
+  for what the TaskHeader should show; this guard simply forbids
+  the unobserved `idle` shadow from demoting the host's committed
+  `completed`.
 
 ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01 (PTBPC01):
   R2.5 was added so that when the host has authoritatively written
@@ -139,7 +187,11 @@ projectPresentation facts =
                 legacyPresentation facts
 
             Just shadowPhase ->
-                if isShadowStale facts || isUnboundDemotingActiveToTerminal facts shadowPhase then
+                if
+                    isShadowStale facts
+                        || isUnboundDemotingActiveToTerminal facts shadowPhase
+                        || isUnobservedIdleDemotingCompletion facts shadowPhase
+                then
                     legacyPresentation facts
 
                 else
@@ -207,6 +259,42 @@ isUnboundDemotingActiveToTerminal facts shadowPhase =
     case facts.canonicalShadowObservedTurnSeq of
         Nothing ->
             isTerminalShadowPhase shadowPhase && isActiveLegacyPhase facts.currentLegacyPhase
+
+        Just _ ->
+            False
+
+
+{-| Unobserved-idle-demoting-completion guard.
+
+  unobserved_idle_demoting_completion =
+    (canonicalShadowObservedTurnSeq == Nothing)
+    AND (canonicalShadowPhase == PhaseIdle)
+    AND currentLegacyPhase == PhaseCompleted
+
+Bounded guard added by
+ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01: an
+UNBOUND shadow (no `canonicalShadowObservedTurnSeq`) that has never
+observed `idle` (so `canonicalShadowPhase = idle` is a
+never-observed initial-state projection) MUST NOT demote a
+committed host-side `completed` to `idle`. The host's committed
+`completed` is the truthful user-visible surface; the unobserved
+`idle` shadow is not. The selector falls through to the legacy
+branch when this predicate holds.
+
+This guard is the COMMITMENT counterpart to
+`isUnboundDemotingActiveToTerminal`: the previous guard protected
+ACTIVE legacy phases from being demoted to a TERMINAL shadow
+phase; this guard protects a host-COMMITTED `completed` from
+being demoted to an UNOBSERVED `idle` shadow phase. Both guards
+require the missing-observation-stamp signature; neither fires
+when the shadow has a numeric `canonicalShadowObservedTurnSeq`.
+
+-}
+isUnobservedIdleDemotingCompletion : Facts -> TurnPhase -> Bool
+isUnobservedIdleDemotingCompletion facts shadowPhase =
+    case facts.canonicalShadowObservedTurnSeq of
+        Nothing ->
+            shadowPhase == Domain.PhaseIdle && facts.currentLegacyPhase == Domain.PhaseCompleted
 
         Just _ ->
             False

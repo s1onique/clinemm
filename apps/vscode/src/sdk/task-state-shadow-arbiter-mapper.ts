@@ -641,6 +641,22 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 	// explicit-staleness path above (REPAIR01-CORRECTION02)
 	// remains the primary mechanism; this UNBOUND gate is a
 	// complementary, narrowly-scoped second condition.
+	//
+	// ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01:
+	// Bound the authority of an UNBOUND shadow (no
+	// `canonicalShadowObservedTurnSeq`) that has never observed
+	// `idle` (so the projection is a never-observed initial-state
+	// `idle` from a TaskModel that has not yet observed any
+	// turn) so that it cannot demote an authoritative
+	// host-COMMITTED `completed` to `idle`. The host's committed
+	// `completed` is the truthful user-visible surface; the
+	// unobserved `idle` shadow is not. The selector falls
+	// through to the legacy branch in that case. This is the
+	// COMMITMENT counterpart to the previous guard: the previous
+	// guard protected ACTIVE legacy phases; this guard protects
+	// committed `completed`. Both guards require the
+	// missing-observation-stamp signature; neither fires when
+	// the shadow has a numeric `canonicalShadowObservedTurnSeq`.
 	if (input.canonicalShadowPhase !== undefined) {
 		const isShadowStale =
 			input.canonicalShadowObservedTurnSeq !== undefined && input.seq > input.canonicalShadowObservedTurnSeq
@@ -651,7 +667,17 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 			input.canonicalShadowObservedTurnSeq === undefined &&
 			isTerminalShadowPhase(input.canonicalShadowPhase) &&
 			isActiveLegacyPhase(input.currentLegacyPhase)
-		if (!isShadowStale && !isUnboundDemotingActiveToTerminal) {
+		// UNOBSERVED-idle demoting completion gate: UNBOUND shadow
+		// projecting a never-observed `idle` cannot demote a host-
+		// committed `completed`. Intentionally narrow: only the
+		// exact triple
+		//   legacy=completed, shadow=idle, observation-stamp=missing
+		// triggers it. A shadow with a numeric stamp is unaffected.
+		const isUnobservedIdleDemotingCompletion =
+			input.canonicalShadowObservedTurnSeq === undefined &&
+			input.canonicalShadowPhase === "idle" &&
+			input.currentLegacyPhase === "completed"
+		if (!isShadowStale && !isUnboundDemotingActiveToTerminal && !isUnobservedIdleDemotingCompletion) {
 			return {
 				phase: input.canonicalShadowPhase,
 				source: "shadow",

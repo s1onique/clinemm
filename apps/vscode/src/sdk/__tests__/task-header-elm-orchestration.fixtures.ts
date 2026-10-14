@@ -218,6 +218,130 @@ export const taskHeaderOrchestrationFixtures: readonly TaskHeaderOrchestrationFi
 		},
 		expected: { phase: "streaming", source: "legacy", seq: 27545 },
 	},
+
+	// ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01
+	// G01..G11 conservation matrix.
+	// G01: captured defect -- legacy=completed, shadow=idle, UNBOUND
+	{
+		label: "G01: TUIDC01 captured defect -- legacy completed wins",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "completed",
+			seq: 1309,
+			canonicalShadowObservedTurnSeq: undefined,
+		},
+		expected: { phase: "completed", source: "legacy", seq: 1309 },
+	},
+	// G02: TUSA01 active guard
+	{
+		label: "G02: TUSA01 active guard -- legacy streaming wins",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "streaming",
+			seq: 50,
+			canonicalShadowObservedTurnSeq: undefined,
+		},
+		expected: { phase: "streaming", source: "legacy", seq: 50 },
+	},
+	// G03: TUSA01 approval guard
+	{
+		label: "G03: TUSA01 approval guard -- legacy awaiting_approval wins",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "awaiting_approval",
+			seq: 51,
+			canonicalShadowObservedTurnSeq: undefined,
+		},
+		expected: { phase: "awaiting_approval", source: "legacy", seq: 51 },
+	},
+	// G04: legitimate observed idle (stamp present)
+	{
+		label: "G04: legitimate observed idle -- shadow wins (stamp present)",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "completed",
+			seq: 100,
+			canonicalShadowObservedTurnSeq: 100,
+		},
+		expected: { phase: "idle", source: "shadow", seq: 100 },
+	},
+	// G05: stale observed idle
+	{
+		label: "G05: stale observed idle -- legacy completed wins (staleness gate)",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "completed",
+			seq: 105,
+			canonicalShadowObservedTurnSeq: 90,
+		},
+		expected: { phase: "completed", source: "legacy", seq: 105 },
+	},
+	// G06: valid observed completion
+	{
+		label: "G06: valid observed completion -- shadow wins (legitimate observation)",
+		facts: {
+			canonicalShadowPhase: "completed",
+			currentLegacyPhase: "completed",
+			seq: 110,
+			canonicalShadowObservedTurnSeq: 110,
+		},
+		expected: { phase: "completed", source: "shadow", seq: 110 },
+	},
+	// G07: no canonical shadow (R4 absence)
+	{
+		label: "G07: no canonical shadow -- legacy completed (R4 absence)",
+		facts: {
+			canonicalShadowPhase: undefined,
+			currentLegacyPhase: "completed",
+			seq: 120,
+			canonicalShadowObservedTurnSeq: undefined,
+		},
+		expected: { phase: "completed", source: "legacy", seq: 120 },
+	},
+	// G08: PTBPC01 error override
+	{
+		label: "G08: PTBPC01 error override -- host wins",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "error",
+			seq: 130,
+			canonicalShadowObservedTurnSeq: undefined,
+		},
+		expected: { phase: "error", source: "host", seq: 130 },
+	},
+	// G09: PTBPC01 resumable override
+	{
+		label: "G09: PTBPC01 resumable override -- host wins",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "resumable",
+			seq: 140,
+			canonicalShadowObservedTurnSeq: undefined,
+		},
+		expected: { phase: "resumable", source: "host", seq: 140 },
+	},
+	// G10: TCCC01 awaiting_followup override
+	{
+		label: "G10: TCCC01 awaiting_followup override -- host wins",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "awaiting_followup",
+			seq: 150,
+			canonicalShadowObservedTurnSeq: undefined,
+		},
+		expected: { phase: "awaiting_followup", source: "host", seq: 150 },
+	},
+	// G11: R1 compacting override
+	{
+		label: "G11: R1 compacting override -- host wins",
+		facts: {
+			canonicalShadowPhase: "idle",
+			currentLegacyPhase: "compacting",
+			seq: 160,
+			canonicalShadowObservedTurnSeq: undefined,
+		},
+		expected: { phase: "compacting", source: "host", seq: 160 },
+	},
 ] as const
 
 /**

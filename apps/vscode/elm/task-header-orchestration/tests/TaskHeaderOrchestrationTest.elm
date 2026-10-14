@@ -196,6 +196,121 @@ fixtures =
         , source = SourceLegacy
         , seq = 27545
         }
+
+    -- ------------------------------------------------------------------
+    -- ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01
+    -- G01..G11 conservation matrix.
+    -- ------------------------------------------------------------------
+    , Fixture "G01: TUIDC01 captured defect -- legacy completed wins"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseCompleted
+        , seq = 1309
+        , canonicalShadowObservedTurnSeq = Nothing
+        }
+        { phase = PhaseCompleted
+        , source = SourceLegacy
+        , seq = 1309
+        }
+    , Fixture "G02: TUSA01 active guard -- legacy streaming wins"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseStreaming
+        , seq = 50
+        , canonicalShadowObservedTurnSeq = Nothing
+        }
+        { phase = PhaseStreaming
+        , source = SourceLegacy
+        , seq = 50
+        }
+    , Fixture "G03: TUSA01 approval guard -- legacy awaiting_approval wins"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseAwaitingApproval
+        , seq = 51
+        , canonicalShadowObservedTurnSeq = Nothing
+        }
+        { phase = PhaseAwaitingApproval
+        , source = SourceLegacy
+        , seq = 51
+        }
+    , Fixture "G04: legitimate observed idle -- shadow wins (stamp present)"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseCompleted
+        , seq = 100
+        , canonicalShadowObservedTurnSeq = Just 100
+        }
+        { phase = PhaseIdle
+        , source = SourceShadow
+        , seq = 100
+        }
+    , Fixture "G05: stale observed idle -- legacy completed wins (staleness gate)"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseCompleted
+        , seq = 105
+        , canonicalShadowObservedTurnSeq = Just 90
+        }
+        { phase = PhaseCompleted
+        , source = SourceLegacy
+        , seq = 105
+        }
+    , Fixture "G06: valid observed completion -- shadow wins (legitimate observation)"
+        { canonicalShadowPhase = Just PhaseCompleted
+        , currentLegacyPhase = PhaseCompleted
+        , seq = 110
+        , canonicalShadowObservedTurnSeq = Just 110
+        }
+        { phase = PhaseCompleted
+        , source = SourceShadow
+        , seq = 110
+        }
+    , Fixture "G07: no canonical shadow -- legacy completed (R4 absence)"
+        { canonicalShadowPhase = Nothing
+        , currentLegacyPhase = PhaseCompleted
+        , seq = 120
+        , canonicalShadowObservedTurnSeq = Nothing
+        }
+        { phase = PhaseCompleted
+        , source = SourceLegacy
+        , seq = 120
+        }
+    , Fixture "G08: PTBPC01 error override -- host wins"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseError
+        , seq = 130
+        , canonicalShadowObservedTurnSeq = Nothing
+        }
+        { phase = PhaseError
+        , source = SourceHost
+        , seq = 130
+        }
+    , Fixture "G09: PTBPC01 resumable override -- host wins"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseResumable
+        , seq = 140
+        , canonicalShadowObservedTurnSeq = Nothing
+        }
+        { phase = PhaseResumable
+        , source = SourceHost
+        , seq = 140
+        }
+    , Fixture "G10: TCCC01 awaiting_followup override -- host wins"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseAwaitingFollowup
+        , seq = 150
+        , canonicalShadowObservedTurnSeq = Nothing
+        }
+        { phase = PhaseAwaitingFollowup
+        , source = SourceHost
+        , seq = 150
+        }
+    , Fixture "G11: R1 compacting override -- host wins"
+        { canonicalShadowPhase = Just PhaseIdle
+        , currentLegacyPhase = PhaseCompacting
+        , seq = 160
+        , canonicalShadowObservedTurnSeq = Nothing
+        }
+        { phase = PhaseCompacting
+        , source = SourceHost
+        , seq = 160
+        }
     ]
 
 

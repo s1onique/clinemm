@@ -1,3 +1,11 @@
+# ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01 — PASS_TASKHEADER_STRUCTURAL_LIVE_UNOBSERVABLE — 2026-10-14
+
+**Status:** CLOSED with verdict **`PASS_TASKHEADER_STRUCTURAL_LIVE_UNOBSERVABLE`**. The bounded Elm-kernel repair is delivered. The captured defect (legacy=completed, UNBOUND shadow=idle, observation-stamp=missing) is mechanically reproduced against the compiled production kernel at HEAD and is fixed by one narrow predicate. Structural pass; live qualification is not performed in this run because no production dogfood profile was available at this workspace.
+
+**Repository HEAD:** `c64b869541f70d9d5423973c4b93b71436f41bc1` (unchanged; tracked diffs only, no commit performed).
+
+**Key finding:** The UNBOUND-shadow demotion guard added by `ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01` (`isUnboundDemotingActiveToTerminal`) only protected ACTIVE legacy phases from an UNBOUND shadow's terminal projection. It did NOT protect a host-COMMITTED `completed` from an UNBOUND shadow projecting a never-observed `idle`. The compiled Elm kernel at HEAD returns `{ phase: "idle", source: "shadow", seq: 1309 }` for the captured fixture `{ canonicalShadowPhase: "idle", currentLegacyPhase: "completed", seq: 1309, canonicalShadowObservedTurnSeq: undefined }`. After the bounded repair, the same compiled kernel returns `{ phase: "completed", source: "legacy", seq: 1309 }`.
+
 # ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 — PASS_REPAIR_STRUCTURAL_LIVE_PENDING (real-seam GREEN, conservation established) — 2026-10-13
 
 **Status:** CLOSED with verdict **`PASS_REPAIR_STRUCTURAL_LIVE_PENDING`**.
@@ -25736,3 +25744,79 @@ webview-replica production cutover is **not authorized**. The
 unallocated. The HALT_P1 from the Factory reviewer's
 `HALT_EVIDENCE_OVERCLAIM_AND_UNBOUND_CLOSURE` is resolved by
 the calibration documented above.
+
+---
+
+# ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01 — full body
+
+## Bounded repair (one new predicate in `Orchestration.elm`, mirrored in TS reference):
+
+- `apps/vscode/elm/task-header-orchestration/src/Orchestration.elm` gains `isUnobservedIdleDemotingCompletion : Facts -> TurnPhase -> Bool` (lines 293-300) that fires only for the EXACT triple `legacy=completed, shadow=idle, observation-stamp=Nothing`. The R3 decision ORs this into the existing fall-through: `if isShadowStale facts || isUnboundDemotingActiveToTerminal facts shadowPhase || isUnobservedIdleDemotingCompletion facts shadowPhase then legacyPresentation facts else ...`.
+- `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts` `selectTaskHeaderPresentation` mirrors the new gate in its R3 branch (lines 670-680) to preserve differential correspondence.
+- New test file `apps/vscode/src/sdk/__tests__/task-header-unobserved-idle-demotes-completed.tuidc01.test.ts` (6 tests) drives the REAL compiled Elm kernel via `invokeElmKernel` AND the REAL production publication adapter `pickTaskHeaderPresentationForPublication` (no DI) for the G01 captured defect + seq preservation + the §9 adversarial new-task lifecycle.
+- `apps/vscode/elm/task-header-orchestration/tests/TaskHeaderOrchestrationTest.elm` and `apps/vscode/src/sdk/__tests__/task-header-elm-orchestration.fixtures.ts` add the G01..G11 conservation matrix (11 cases) which the differential correspondence test iterates mechanically (×3 surface: REF-TS, ELM-AUTH, SEQ = 33 new tests).
+
+## Necessity probe (per ACT §7):
+
+Two ablations. (a) Removing the `|| isUnobservedIdleDemotingCompletion` clause from `Orchestration.elm` reverts the TUIDC01 RED tests to 2 failed, 1 passed; restoring flips them to 3 passed. (b) Disabling the new gate in the TS reference selector and re-running the differential correspondence test produces 6 REF-TS failures (5 are pre-existing TS-REF↔Elm drift unrelated to this ACT; 1 is the G01 captured defect that motivates the ACT). Restoring flips all 78 back to PASS.
+
+## Conservation matrix (per ACT §7):
+
+All 11 cases verified. G01 (captured defect) → completed/legacy; G02 (TUSA01 streaming) → streaming/legacy; G03 (TUSA01 awaiting_approval) → awaiting_approval/legacy; G04 (legitimate observed idle, stamp present) → idle/shadow; G05 (stale observed idle) → completed/legacy; G06 (valid observed completion) → completed/shadow; G07 (no canonical shadow) → completed/legacy; G08 (PTBPC01 error) → error/host; G09 (PTBPC01 resumable) → resumable/host; G10 (TCCC01 awaiting_followup) → awaiting_followup/host; G11 (R1 compacting) → compacting/host. The new guard is INTENTIONALLY narrow: it only fires on the exact G01 triple.
+
+## Production reach (per ACT §8):
+
+The real production publication adapter `pickTaskHeaderPresentationForPublication` (in `apps/vscode/src/sdk/task-header-elm-authority.ts`, called from `SdkController.ts:6117-6142` reaching `ExtensionState.taskHeaderPresentation`) returns `{ phase: "completed", source: "legacy", seq: 1309 }` for the G01 fixture — verified by `TUIDC01-PUB` test (no DI). The TUIDC01-PUB-LIFECYCLE test additionally proves the §9 invariant: a new task that legitimately returns the host to `legacy=idle, shadow=idle, UNBOUND` correctly displays `idle` (the new guard's third clause `currentLegacyPhase == PhaseCompleted` does not match, so R3 shadow branch runs). `completed` is NOT permanently sticky.
+
+## Test gate results (per ACT §10):
+
+- RED reproduction: `task-header-unobserved-idle-demotes-completed.tuidc01.test.ts` (RED suite, 3 tests) — 2 failed / 1 passed at HEAD; 3 passed after repair.
+- Elm compilation: `bash apps/vscode/elm/task-header-orchestration/scripts/build-elm.sh` — exit 0, 0.19.2.
+- Elm pure tests (`elm-test`): **NOT_EXECUTED — environment limitation** (sandbox denies `~/.elm/0.19.2/packages/lock`; the TS-side correspondence test drives the SAME compiled kernel and is the canonical coverage for the kernel's contract).
+- Compiled Elm correspondence: `task-header-elm-orchestration-authority01.test.ts` — **78/78 PASS** (45 original + 11 G01..G11 × 3 surfaces = 78).
+- TypeScript reference correspondence: same 78 tests, all 78 PASS.
+- Production publication test: `task-header-unobserved-idle-demotes-completed.tuidc01.test.ts` publication block — **3/3 PASS** (TUIDC01-PUB, TUIDC01-PUB-SEQ, TUIDC01-PUB-LIFECYCLE).
+- Existing TaskHeader regression suites: `bun run test:vitest -- src/sdk/__tests__/task-header-` — **15 files / 223 tests PASS** (TUSA01, TCR01, PTBPC01, CTA01, LTZ01, LAC01, TUSIX01, runtime-error-counter, etc.; no regressions).
+- Full task-header + task-state-shadow suite: **33 files / 485 tests PASS** (zero regressions, baseline + new G01..G11 fixtures all green).
+- TypeScript typecheck: `bunx tsc --noEmit` — exit 0, no errors.
+- Biome lint: `bunx biome lint ...` — exit 0, no fixes applied.
+- `git diff --check` — exit 0.
+
+## Artifact identity (per ACT §11):
+
+```
+ENTRY_HEAD                = c64b869541f70d9d5423973c4b93b71436f41bc1
+SUBJECT_HEAD              = c64b869541f70d9d5423973c4b93b71436f41bc1 (same as ENTRY; no commit performed; tracked diffs only)
+DOGFOOD_SOURCE_HEAD       = c64b869541f70d9d5423973c4b93b71436f41bc1
+PACKAGE_VERSION           = (no fresh VSIX build performed in this run)
+VSIX_PATH                 = NOT_BUILT
+VSIX_BYTES                = NOT_BUILT
+VSIX_SHA256               = NOT_BUILT
+TASK_HEADER_KERNEL_SHA256 = e25f2868fab55b06b8dd319c538932cabe63d627cca898da17120e474a58debe (was d4cf4350264002e5bab41253f7f853b0637d1e1d51dce7d87a1108487d3e9d92)
+INSTALLED_VERSION         = NOT_INSTALLED
+```
+
+## Live: LIVE_UNOBSERVABLE
+
+No production dogfood profile was available at this workspace; the live-capture diagnostic at `apps/vscode/src/sdk/task-header-selector-input-capture.ts` is OPT-IN (`CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1=1`) and was not enabled. The published fixture shape from ACT §3 is exercised STRUCTURALLY against the production compiled kernel and the production publication adapter.
+
+## Diagnostic cleanup (per ACT §12):
+
+The temporary `task-header-selector-input-capture.ts` capture diagnostic REMAINS in place. Its removal trigger ("first successful LIVE binding of PUBLICATION_SHADOW_BINDING + LOCAL_SHADOW_TURNSEQ for a recurrence, OR CAPTURE_INSUFFICIENT") is NOT yet reached. The ACT's §3 critical provenance check found no live `stateVersion=1310` record on disk; the published fixture shape (from the prompt's §3 table) was used to drive the structural RED. CAPTURE_INSUFFICIENT is NOT a true classification here because the §3 published fixture shape and the §4 predicted RED are mechanically consistent — the production kernel returned the predicted `idle`/`shadow` tuple for that input — so the structural reproduction is valid. The capture diagnostic stays so the next operator can re-run with the env var enabled and bind a real recurrence.
+
+## Residue:
+
+- P0: none.
+- P1: none.
+- P2: 1 — no production dogfood profile in this workspace means no `LIVE_QUALIFICATION` for this ACT; the structural verdict (`PASS_TASKHEADER_STRUCTURAL_LIVE_UNOBSERVABLE`) is the honest classification. To promote to `PASS_TASKHEADER_LIVE`, an operator with a working dogfood profile (and a fresh `stateVersion=1310`-shape recurrence) can run: (1) `bun run package` to build a fresh exact-head VSIX, (2) install the VSIX, (3) complete a real task without close/reopen, (4) confirm TaskHeader shows "Complete".
+
+## Files modified:
+
+- `apps/vscode/elm/task-header-orchestration/src/Orchestration.elm` (new predicate + doc comment + R3 wiring)
+- `apps/vscode/elm/task-header-orchestration/src/Orchestration.elm.sha256` (sidecar)
+- `apps/vscode/elm/task-header-orchestration/vendor/task-header-orchestration.js` (rebuilt; sha256 e25f2868...)
+- `apps/vscode/elm/task-header-orchestration/vendor/task-header-orchestration.js.sha256` (sidecar)
+- `apps/vscode/elm/task-header-orchestration/tests/TaskHeaderOrchestrationTest.elm` (G01..G11 conservation matrix)
+- `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts` (mirrored gate in TS reference)
+- `apps/vscode/src/sdk/__tests__/task-header-elm-orchestration.fixtures.ts` (G01..G11 conservation matrix)
+- `apps/vscode/src/sdk/__tests__/task-header-unobserved-idle-demotes-completed.tuidc01.test.ts` (new test file, 6 tests)
