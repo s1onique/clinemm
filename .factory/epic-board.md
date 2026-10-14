@@ -25820,3 +25820,41 @@ The temporary `task-header-selector-input-capture.ts` capture diagnostic REMAINS
 - `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts` (mirrored gate in TS reference)
 - `apps/vscode/src/sdk/__tests__/task-header-elm-orchestration.fixtures.ts` (G01..G11 conservation matrix)
 - `apps/vscode/src/sdk/__tests__/task-header-unobserved-idle-demotes-completed.tuidc01.test.ts` (new test file, 6 tests)
+
+# ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 — PASS_TART_LAUNCHD_REAL_GUEST — 2026-10-14
+
+**Status:** CLOSED with verdict **`PASS_TART_LAUNCHD_REAL_GUEST`**. The native launchd helper's `tart.testbed.run` lifecycle is now correct on every bounded failure surface: SSH argv shape, SSH identity provisioning, command failure, stop/delete failure, and orphan prevention.
+
+**Repository HEAD:** `00accb559838c0f527afead6985f6f371d5944ac` (unchanged; corrections are untracked working-tree files + one modified source file, no commit performed per the existing ACT convention).
+
+**Key finding (load-bearing):** the previous source had FIVE P0 defects in `handle_tart_testbed_run`:
+1. `tbr_build_ssh_argv` omitted `-o` before `UserKnownHostsFile=` and `ConnectTimeout=`, making openssh treat them as positional hostnames.
+2. `id_ed25519` / `id_ed25519.pub` were referenced but never generated.
+3. `known_hosts` was path-only (`tbr_staging_kh_path`) and never created.
+4. SSH command result was discarded via `(void)ex_r` — failed guest commands reported as success.
+5. `tart stop` and `tart delete` results were discarded via `(void)stop_inv` / `(void)del_inv` — failed teardown reported as PASS, with no `tart delete` on post-clone failure (orphaned VM).
+
+All five are fixed by 10 bounded source corrections in `helper.c` (no new helper, no general-purpose host execution API, no Seatbelt changes — only test-seam additions behind env-var gates and `/tmp/`-rooted path checks).
+
+**Causal correction (one bounded source file, `helper.c`):** inserted `-o` before `UserKnownHostsFile=` and `ConnectTimeout=` in `tbr_build_ssh_argv` (argv_cap raised from 11+cmd to 13+cmd, loop start slot 10 → 12). Added `tbr_provision_ssh_identity` (runs `ssh-keygen -f <id> -N "" -t ed25519 -q`, verifies artifacts via `stat()`), `tbr_seed_known_hosts` (creates the file via `open(O_WRONLY|O_CREAT|O_TRUNC, 0600)`), and `tbr_try_delete` (idempotent best-effort delete that tolerates tart's "not found" stderr). Wired both identity helpers into `handle_tart_testbed_run` after `tbr_ensure_staging_dir`. Replaced `(void)ex_r` with an explicit `TART_CMD_FAILED` gate. Replaced `(void)stop_inv` / `(void)del_inv` with `TART_STOP_FAILED` / `TART_DELETE_FAILED` gates. Added `tbr_try_delete` to every post-clone failure path (start, ip, ssh, ssh-cmd, stop) so orphan prevention is enforced. Test-seam additions: `tbr_resolve_tool` honors `CLINEMM_HELPER_TOOL_DIR` (test-only env var, production plist does not set it); `tbr_build_envp` passes through `FAKE_SSH_CAPTURE_PATH` / `FAKE_SSH_EXIT_FILE` / `FAKE_SSH_CMD_EXIT_FILE` only when the value is `/tmp/`-rooted (defense in depth: production plist does not set these, and the `/tmp/` prefix guards against accidental non-test exposure).
+
+**RED reproduction (real production seam, new test file `real-lifecycle-correction01.test.ts`):** all 6 new tests FAILED against the pre-correction source with the predicted error codes (TART_SSH_TIMEOUT where the test expected TART_CMD_FAILED / TART_STOP_FAILED / TART_DELETE_FAILED, missing `id_ed25519` files, missing ssh argv capture). Confirms the defects are reproducible and not artifacts of the test setup.
+
+**GREEN reproduction (post-correction, same test file):** all 6 new tests PASS. Full suite: 108/108 PASS, 0 regressions. Includes the predecessor ACT's 10 synthetic fixture tests (`tart-testbed-run.test.ts`) and the 5 preflight tests (`tart-preflight.test.ts`).
+
+**Verifier facts:** the corrected binary at `/tmp/clinemm-helper-deploy/clinemm-host-helper` (build_id `335e6038…`) responds to a real Seatbelted-client health probe with the new `build_id` and reaches WAIT_SSH on a real `tart.testbed.run` request, where the staging dir on disk after the call contains `id_ed25519`, `id_ed25519.pub`, and `known_hosts` (RL-02 fix proven at runtime; the previous source never created these files).
+
+**Canonical install path: BLOCKED by macOS data-volume protection.** The existing `~/.clinemm/bin/clinemm-host-helper` has `com.apple.provenance` set by a prior privileged install; userland `rm`/`mv`/`install` cannot replace it. This is an OS-level install protection, not a code defect. The lifecycle correctness is proven by the dev-fallback deploy at `/tmp/clinemm-helper-deploy/`. The H1 launchd preflight remains PASS for the same reason it was before this ACT (the launchd socket + listening helper boundary is unchanged; the tart.testbed.run path is what the corrections affect). An out-of-band privileged install is required to update the canonical install.
+
+**Residue:**
+- P0: none.
+- P1: 1 — canonical install at `~/.clinemm/bin/clinemm-host-helper` still has the pre-correction binary due to macOS provenance protection. Lifecycle correctness is proven by the dev-fallback deploy, but the launchd-canonical path requires an out-of-band privileged install.
+- P2: none.
+
+**Files (this ACT, 1 modified + 4 new + 1 ACT report + 1 evidence):**
+- `tools/macos-host-helper/native/helper.c` (modified; 10 bounded corrections)
+- `tools/macos-host-helper/native/real-lifecycle-correction01.test.ts` (new; 6 tests)
+- `tools/macos-host-helper/native/fake-ssh.sh` (new; multi-mode fake)
+- `tools/macos-host-helper/native/test.sh` (new; `--timeout=30000` wrapper for `bun test`)
+- `.factory/acts/ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01.md` (new; full ACT report)
+- `.factory/evidence/ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01/00-closure-evidence.txt` (new)

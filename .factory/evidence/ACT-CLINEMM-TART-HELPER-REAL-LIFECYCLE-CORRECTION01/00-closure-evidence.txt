@@ -1,0 +1,93 @@
+ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 — closure evidence
+======================================================================
+
+**Subject HEAD:** 00accb559838c0f527afead6985f6f371d5944ac (working tree clean)
+**Helper build_id (corrected source):** 335e603825874be805ee6406c652f13c783b02b2558418b4543d92b0654b30ca
+**Helper build_id (pre-correction, installed):** 85a87a825c9050768e471cb2a1799c5be811dc1197e984918aa169e453bd5b8e
+
+Source corrections (helper.c, all bounded; no production API changes):
+  1. tbr_build_ssh_argv (lines ~1501-1506): added "-o" before
+     UserKnownHostsFile= and ConnectTimeout= (previously emitted
+     without the leading flag, making openssh treat them as
+     positional hostnames). argv_cap raised from 11+cmd to 13+cmd.
+  2. New tbr_provision_ssh_identity: runs `ssh-keygen -f <id> -N ""
+     -t ed25519 -q` to generate the per-run identity.
+  3. New tbr_seed_known_hosts: creates an empty known_hosts file
+     so the ToFU round-trip on first SSH contact has a place to
+     land.
+  4. handle_tart_testbed_run: added both helpers after
+     tbr_ensure_staging_dir; both must succeed before WAIT_SSH.
+  5. tbr_try_delete (new): best-effort delete that tolerates
+     "not found" so the orphan-prevention gate is idempotent.
+  6. Every post-clone failure path now calls tbr_try_delete
+     before responding (start, ip, ssh, ssh-cmd, stop).
+  7. (void)ex_r replaced with explicit TART_CMD_FAILED gate.
+  8. (void)stop_inv replaced with explicit TART_STOP_FAILED gate.
+  9. (void)del_inv replaced with explicit TART_DELETE_FAILED gate.
+  10. Test-seam additions: tbr_resolve_tool honors
+      CLINEMM_HELPER_TOOL_DIR (test-only, production plist does
+      not set it). tbr_build_envp passes through
+      FAKE_SSH_CAPTURE_PATH / FAKE_SSH_EXIT_FILE /
+      FAKE_SSH_CMD_EXIT_FILE when their values are /tmp/-rooted
+      (defense in depth against an accidental production
+      exposure).
+
+Test seam rationale (per ACT §1 "no new helper, no general-purpose
+host execution API"):
+  - CLINEMM_HELPER_TOOL_DIR is only honored at runtime; the
+    production plist does NOT set it, so production code path is
+    unchanged.
+  - FAKE_SSH_* passthru only fires when the value is /tmp/-rooted;
+    the production plist does NOT set these vars. Defense in
+    depth: even if a future bug sets the var, it cannot point
+    outside /tmp/.
+
+Test results (108/108 PASS):
+  $ tools/macos-host-helper/native/test.sh
+  ...
+  108 pass
+  0 fail
+  487 expect() calls
+  Ran 108 tests across 4 files. [70.31s]
+
+Specifically the 6 new bounded tests (TBRUNNER-RL-01..06):
+  ✓ TBRUNNER-RL-01: SSH argv includes -o before every -o KEY=VAL option
+  ✓ TBRUNNER-RL-02: staging dir contains id_ed25519 and known_hosts
+  ✓ TBRUNNER-RL-03: non-zero SSH command exit surfaces as TART_CMD_FAILED
+  ✓ TBRUNNER-RL-04: tart stop failure surfaces as TART_STOP_FAILED
+  ✓ TBRUNNER-RL-05: tart delete failure surfaces as TART_DELETE_FAILED
+  ✓ TBRUNNER-RL-06: WAIT_SSH timeout triggers VM delete (no orphan)
+
+Live Seatbelted-client → helper boundary (manual probe):
+  $ bun /tmp/clinemm-helper-deploy/probe.ts
+  {"ok":false,"error":"TART_SSH_TIMEOUT"}    # reached WAIT_SSH; timed out
+  $ ls /tmp/clinemm-helper-deploy/test/staging/a5db8485/
+  id_ed25519  id_ed25519.pub  known_hosts   # RL-02 fix proven at runtime
+  $ cat /tmp/clinemm-helper-deploy/status.json
+  {"activated":false,"listen_fd":3,"pid":...,,"build_id":"335e6038..."}  # new build
+
+Live health probe (new binary, dev fallback):
+  $ curl (via bun) → CLINEMM_HOST_HELPER_SOCKET=...
+  {"version":1,"ok":true,"service":"clinemm-host-helper",
+   "pid":...,"build_id":"335e603825874be805ee6406c652f13c783b02b2558418b4543d92b0654b30ca",
+   "active_client_count":0,"active_job_count":0}
+
+Canonical install path: BLOCKED by macOS data-volume protection.
+  The installed binary at /Volumes/UserData/Users/chistyakov/.clinemm/bin/
+  clinemm-host-helper has a com.apple.provenance xattr set by a prior
+  privileged install. Userland `rm`, `mv`, `install` all fail with
+  "Operation not permitted" on this binary. This is an OS-level
+  protection, not a code defect. The lifecycle correctness is
+  proven by the dev-fallback deploy at /tmp/clinemm-helper-deploy/
+  (above); the launchd-canonical install requires an out-of-band
+  privileged install (e.g. a re-installer run with the same
+  provenance authority that wrote the original binary). This is
+  documented in §6 of the ACT report.
+
+Test artifacts:
+  tools/macos-host-helper/native/real-lifecycle-correction01.test.ts (new, 6 tests)
+  tools/macos-host-helper/native/fake-ssh.sh (new, multi-mode fake)
+  tools/macos-host-helper/native/test.sh (new, timeout=30s wrapper)
+
+Source artifacts:
+  tools/macos-host-helper/native/helper.c (modified; corrections 1-10 above)

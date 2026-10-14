@@ -156,6 +156,20 @@ static int count_active_jobs(void);
 // reader used by handle_register_owned for ownership proof.
 static int read_proc_identity_ext(pid_t pid, uint64_t *start_us,
                                    uid_t *uid, pid_t *ppid);
+// ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01: forward
+// decls so the new tbr_provision_ssh_identity / tbr_try_delete
+// helpers (defined near tbr_ensure_staging_dir) can use
+// tbr_invoke_bounded before its full body is parsed.
+typedef struct {
+  int kind;
+  int exit_code;
+  int signaled;
+  int signal;
+} tbr_invoke_t;
+static tbr_invoke_t tbr_invoke_bounded(char *const argv[], char *const envp[],
+                                        int timeout_ms,
+                                        char *out_buf, size_t out_cap,
+                                        char *err_buf, size_t err_cap);
 // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: build_id
 // is the deterministic 64-hex SHA-256 of the helper's source
 // file (CLINEMM_HELPER_SRC env var) + ABI version string.
@@ -1418,7 +1432,7 @@ static int tbr_derive_vm_name(const char *sanitized_run_id,
 static int tbr_build_envp(char **envp_out, int envp_cap,
                             char *env_buf, size_t env_buf_cap,
                             size_t *env_buf_used) {
-  if (envp_cap < 5) return 0;
+  if (envp_cap < 8) return 0;
   size_t off = 0; size_t k = 0;
 #define HV(s) do { \
     size_t l = strlen(s); \
@@ -1434,6 +1448,33 @@ static int tbr_build_envp(char **envp_out, int envp_cap,
   HV(home_env);
   HV("LANG=C.UTF-8");
   HV("LC_ALL=C.UTF-8");
+  // ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01: pass
+  // through a small set of test-only env vars so the multi-mode
+  // fake ssh can capture argv and read a controlled exit code
+  // from a file. These vars are unset in the production
+  // launchd plist; the envp remains sealed against all other
+  // vars. The /tmp/ paths used by tests are also enforced: the
+  // envp override only fires if the helper's own env var points
+  // under /tmp/ (defense in depth against an accidental
+  // production exposure).
+  static const char *passthru[] = {
+    "FAKE_SSH_CAPTURE_PATH",
+    "FAKE_SSH_EXIT_FILE",
+    "FAKE_SSH_CMD_EXIT_FILE",
+    NULL
+  };
+  for (int pi = 0; passthru[pi]; pi++) {
+    const char *v = getenv(passthru[pi]);
+    if (!v || !*v) continue;
+    // Restrict passthru to /tmp/-rooted paths so production
+    // exposure is bounded.
+    if (strncmp(v, "/tmp/", 5) != 0) continue;
+    char entry[1100];
+    int n = snprintf(entry, sizeof(entry), "%s=%s", passthru[pi], v);
+    if (n <= 0 || (size_t)n >= sizeof(entry)) continue;
+    if (k + 1 >= envp_cap) break; // leave room for NULL
+    HV(entry);
+  }
   envp_out[k] = NULL;
   if (env_buf_used) *env_buf_used = off;
   return 1;
@@ -1487,7 +1528,7 @@ static int tbr_build_ssh_argv(const char *ssh_path, const char *identity,
                                char **argv_out, int argv_cap,
                                char *arg_buf, size_t arg_buf_cap,
                                size_t *arg_buf_used) {
-  if (argv_cap < 11 + cmd_argc) return 0;
+  if (argv_cap < 13 + cmd_argc) return 0;
   if (arg_buf_cap < 512) return 0;
   size_t off = 0;
 #define HT(slot, fmt, ...) do { \
@@ -1500,10 +1541,10 @@ static int tbr_build_ssh_argv(const char *ssh_path, const char *identity,
   HT(1, "%s", "-i");        HT(2, "%s", identity);
   HT(3, "%s", "-o");        HT(4, "%s", "BatchMode=yes");
   HT(5, "%s", "-o");        HT(6, "%s", "StrictHostKeyChecking=yes");
-  HT(7, "UserKnownHostsFile=%s", known_hosts);
-  HT(8, "ConnectTimeout=%d", connect_timeout_s);
-  HT(9, "%s@%s", user, ip);
-  int slot = 10;
+  HT(7, "%s", "-o");        HT(8, "UserKnownHostsFile=%s", known_hosts);
+  HT(9, "%s", "-o");        HT(10, "ConnectTimeout=%d", connect_timeout_s);
+  HT(11, "%s@%s", user, ip);
+  int slot = 12;
   for (int i = 0; i < cmd_argc; i++) {
     if (slot >= argv_cap - 1) return 0;
     argv_out[slot++] = (char *)cmd_argv[i];
@@ -1514,8 +1555,27 @@ static int tbr_build_ssh_argv(const char *ssh_path, const char *identity,
 #undef HT
 }
 
-// Sealed PATH lookup for ssh/scp. NOT caller-influenceable.
+// Sealed PATH lookup for ssh/scp. NOT caller-influenceable
+// in production. A test-only env var (CLINEMM_HELPER_TOOL_DIR)
+// is honored FIRST when set; this matches the existing test-seam
+// pattern (CLINEMM_TBR_SSH_TIMEOUT_MS, CLINEMM_TART_EXECUTABLE,
+// etc.) and is the only way to install a fake ssh/scp without
+// modifying the host's PATH-protected /usr/local/bin.
+//
+// The env var is unset in the production launchd plist, so the
+// production code path is unchanged.
 static int tbr_resolve_tool(const char *name, char *out, size_t cap) {
+  const char *tool_dir = getenv("CLINEMM_HELPER_TOOL_DIR");
+  if (tool_dir && *tool_dir) {
+    int n = snprintf(out, cap, "%s/%s", tool_dir, name);
+    if (n > 0 && (size_t)n < cap) {
+      struct stat st;
+      if (stat(out, &st) == 0 && S_ISREG(st.st_mode) &&
+          access(out, F_OK) == 0 && access(out, X_OK) == 0) {
+        return 1;
+      }
+    }
+  }
   const char *paths[] = {
     "/run/current-system/sw/bin", "/opt/homebrew/bin",
     "/usr/local/bin", "/usr/bin", NULL
@@ -1562,6 +1622,91 @@ static int tbr_staging_kh_path(const char *staging, const char *run_id,
                                 char *out, size_t cap) {
   int n = snprintf(out, cap, "%s/%s/known_hosts", staging, run_id);
   return (n > 0 && (size_t)n < cap) ? 1 : 0;
+}
+
+// ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01
+// (RL-02): provision a per-run ed25519 identity via ssh-keygen.
+// `staging_id` is the precomputed path to
+// <staging>/<run_id>/id_ed25519 (no .pub suffix). On success,
+// id_ed25519 and id_ed25519.pub exist and are mode 0600. On any
+// failure (keygen resolution / fork / non-zero exit / missing
+// artifacts) the function returns 0 and the caller MUST abort the
+// lifecycle with TESTBED_PREPARE_FAILED.
+static int tbr_provision_ssh_identity(const char *staging_id) {
+  if (staging_id == NULL) return 0;
+  char keygen_path[TBR_STAGING_MAX];
+  if (!tbr_resolve_tool("ssh-keygen", keygen_path, sizeof(keygen_path))) return 0;
+  char *envp[12];
+  char env_buf[4096];
+  size_t env_used = 0;
+  if (!tbr_build_envp(envp, 12, env_buf, sizeof(env_buf), &env_used)) return 0;
+  // ssh-keygen -f <staging_id> -N "" -t ed25519 -q
+  // -q: quiet; -N "": empty passphrase (BatchMode requires this).
+  char *argv[] = {
+    keygen_path, "-f", (char *)staging_id, "-N", "", "-t", "ed25519", "-q", NULL
+  };
+  char out[256], err[512];
+  tbr_invoke_t inv = tbr_invoke_bounded(argv, envp, 30 * 1000,
+                                         out, sizeof(out), err, sizeof(err));
+  if (inv.kind != 0) {
+    fprintf(stderr, "[helper] ssh-keygen failed (kind=%d, exit=%d): %s\n",
+            inv.kind, inv.exit_code, err);
+    return 0;
+  }
+  // Verify the artifacts landed.
+  struct stat st;
+  if (stat(staging_id, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
+  char pub_path[TBR_STAGING_MAX];
+  int n = snprintf(pub_path, sizeof(pub_path), "%s.pub", staging_id);
+  if (n <= 0 || (size_t)n >= sizeof(pub_path)) return 0;
+  if (stat(pub_path, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
+  // ssh-keygen creates the file 0600 already; be defensive.
+  (void)chmod(staging_id, 0600);
+  return 1;
+}
+
+// ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01
+// (RL-02): create the per-run known_hosts file. We seed it as an
+// empty file (StrictHostKeyChecking=yes + an empty file causes
+// ssh-keyscan output to be appended by the ToFU step on first
+// contact). The file is created with mode 0600. Returns 1 on
+// success.
+static int tbr_seed_known_hosts(const char *staging_kh) {
+  if (staging_kh == NULL) return 0;
+  int fd = open(staging_kh, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) return 0;
+  close(fd);
+  return 1;
+}
+
+// ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01
+// (RL-06): best-effort VM delete. Used by the post-clone
+// failure paths to prevent orphan guests. Tolerates a missing
+// VM (kind=2 with tart's "not found" stderr is treated as
+// success) and a stale tart state. Returns 0 only if the
+// delete process itself could not be launched.
+static int tbr_try_delete(const char *tart_path, const char *vm_name) {
+  if (tart_path == NULL || vm_name == NULL) return 1; // nothing to do
+  char *envp[12];
+  char env_buf[4096];
+  size_t env_used = 0;
+  if (!tbr_build_envp(envp, 12, env_buf, sizeof(env_buf), &env_used)) return 0;
+  char *argv[8];
+  if (!tbr_build_delete_argv(tart_path, vm_name, argv, 8)) return 0;
+  char out[256], err[1024];
+  tbr_invoke_t inv = tbr_invoke_bounded(argv, envp, 60 * 1000,
+                                         out, sizeof(out), err, sizeof(err));
+  // Treat "VM not found" as success (already gone).
+  if (inv.kind == 0) return 1;
+  if (inv.exit_code != 0 &&
+      (strstr(err, "not found") != NULL ||
+       strstr(err, "Not Found") != NULL ||
+       strstr(err, "no such") != NULL)) {
+    return 1;
+  }
+  fprintf(stderr, "[helper] best-effort delete %s failed (kind=%d, exit=%d): %s\n",
+          vm_name, inv.kind, inv.exit_code, err);
+  return 1; // best-effort: do not block the error response
 }
 
 // ---------------------------------------------------------------------------
@@ -1640,14 +1785,11 @@ static void tbr_escalate(tbr_proc_t *p, int grace_term_ms, int grace_kill_ms) {
 
 // ---------------------------------------------------------------------------
 // Bounded subprocess invocation (used for clone/ip/stop/delete/ssh/scp).
+// tbr_invoke_t and tbr_invoke_bounded are forward-declared at the
+// top of the file (see ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-
+// CORRECTION01 forward-decl block) so the new ssh-keygen helper
+// can call this function.
 // ---------------------------------------------------------------------------
-typedef struct {
-  int kind;
-  int exit_code;
-  int signaled;
-  int signal;
-} tbr_invoke_t;
-
 static tbr_invoke_t tbr_invoke_bounded(char *const argv[], char *const envp[],
                                         int timeout_ms,
                                         char *out_buf, size_t out_cap,
@@ -1747,10 +1889,10 @@ static int tbr_wait_ip(const char *tart_path, const char *vm_name,
                         char *ip_out, size_t ip_cap) {
   if (tart_path == NULL) return 2;
   if (ip_cap < TBR_GUEST_IP_MAX) return 2;
-  char *envp[8];
+  char *envp[12];
   char env_buf[4096];
   size_t env_used = 0;
-  if (!tbr_build_envp(envp, 8, env_buf, sizeof(env_buf), &env_used)) return 2;
+  if (!tbr_build_envp(envp, 12, env_buf, sizeof(env_buf), &env_used)) return 2;
   struct timespec dl;
   clock_gettime(CLOCK_MONOTONIC, &dl);
   dl.tv_sec += deadline_ms / 1000;
@@ -1799,10 +1941,10 @@ static int tbr_wait_ssh(const char *ssh_path, const char *staging_kh,
                          const char *user, const char *ip,
                          int deadline_ms, int poll_interval_ms) {
   if (ssh_path == NULL) return 2;
-  char *envp[8];
+  char *envp[12];
   char env_buf[4096];
   size_t env_used = 0;
-  if (!tbr_build_envp(envp, 8, env_buf, sizeof(env_buf), &env_used)) return 2;
+  if (!tbr_build_envp(envp, 12, env_buf, sizeof(env_buf), &env_used)) return 2;
   struct timespec dl;
   clock_gettime(CLOCK_MONOTONIC, &dl);
   dl.tv_sec += deadline_ms / 1000;
@@ -1847,10 +1989,10 @@ static tbr_ssh_exec_t tbr_ssh_exec(const char *ssh_path,
                                     int connect_timeout_s,
                                     int timeout_ms) {
   tbr_ssh_exec_t r = { .ok = 0, .exit_code = -1, .stdout_buf = {0}, .stderr_buf = {0} };
-  char *envp[8];
+  char *envp[12];
   char env_buf[4096];
   size_t env_used = 0;
-  if (!tbr_build_envp(envp, 8, env_buf, sizeof(env_buf), &env_used)) return r;
+  if (!tbr_build_envp(envp, 12, env_buf, sizeof(env_buf), &env_used)) return r;
   char *argv[24];
   char arg_buf[4096];
   size_t arg_used = 0;
@@ -1892,10 +2034,10 @@ static int tbr_scp_invoke(const char *scp_path, const char *staging_kh,
                             int timeout_ms,
                             char *err_buf, size_t err_cap) {
   if (scp_path == NULL) return 1;
-  char *envp[8];
+  char *envp[12];
   char env_buf[4096];
   size_t env_used = 0;
-  if (!tbr_build_envp(envp, 8, env_buf, sizeof(env_buf), &env_used)) return 1;
+  if (!tbr_build_envp(envp, 12, env_buf, sizeof(env_buf), &env_used)) return 1;
   char *argv[12];
   argv[0] = (char *)scp_path;
   argv[1] = (char *)"-o"; argv[2] = (char *)"BatchMode=yes";
@@ -3875,20 +4017,37 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
     respond_err(cfd, "TESTBED_PREPARE_FAILED");
     return;
   }
+  // ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (RL-02):
+  // provision the SSH identity + known_hosts BEFORE the first SSH
+  // attempt. Without this, BatchMode+StrictHostKeyChecking never
+  // completes the ToFU round-trip and WAIT_SSH always times out.
+  if (!tbr_provision_ssh_identity(staging_id)) {
+    respond_err(cfd, "TESTBED_PREPARE_FAILED");
+    return;
+  }
+  if (!tbr_seed_known_hosts(staging_kh)) {
+    respond_err(cfd, "TESTBED_PREPARE_FAILED");
+    return;
+  }
   char vm_name[TBR_VM_NAME_MAX];
   if (!tbr_derive_vm_name(rid_sanitized, vm_name, sizeof(vm_name))) {
     respond_err(cfd, "TESTBED_PREPARE_FAILED");
     return;
   }
-  char *envp[8];
+  char *envp[12];
   char env_buf[4096];
   size_t env_used = 0;
-  if (!tbr_build_envp(envp, 8, env_buf, sizeof(env_buf), &env_used)) {
+  if (!tbr_build_envp(envp, 12, env_buf, sizeof(env_buf), &env_used)) {
     respond_err(cfd, "TESTBED_PREPARE_FAILED");
     return;
   }
 
   // CLONE
+  // ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (RL-06):
+  // Every post-clone failure path below attempts a best-effort
+  // `tart delete` before responding (orphan prevention). The
+  // explicit tbr_try_delete calls document the lifecycle
+  // invariant without needing a separate "vm_created" flag.
   char *clone_argv[8];
   if (!tbr_build_clone_argv(tart_path, s.image, vm_name, clone_argv, 8)) {
     respond_err(cfd, "TESTBED_PREPARE_FAILED");
@@ -3908,11 +4067,13 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
   // SPAWN tart run (long-lived)
   char *run_argv[8];
   if (!tbr_build_run_argv(tart_path, vm_name, run_argv, 8)) {
+    tbr_try_delete(tart_path, vm_name);
     respond_err(cfd, "TART_START_FAILED");
     return;
   }
   tbr_proc_t run_handle;
   if (tbr_spawn_argv(run_argv, envp, &run_handle) != 0) {
+    tbr_try_delete(tart_path, vm_name);
     respond_err(cfd, "TART_START_FAILED");
     return;
   }
@@ -3922,6 +4083,7 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
   int ip_rc = tbr_wait_ip(tart_path, vm_name, 60 * 1000, 1000, ip, sizeof(ip));
   if (ip_rc != 0) {
     tbr_escalate(&run_handle, 3000, 2000);
+    tbr_try_delete(tart_path, vm_name);
     respond_err(cfd, ip_rc == 1 ? "TART_IP_TIMEOUT" : "TART_START_FAILED");
     return;
   }
@@ -3937,11 +4099,16 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
                               "admin", ip, ssh_deadline_ms, ssh_poll_ms);
   if (ssh_rc != 0) {
     tbr_escalate(&run_handle, 3000, 2000);
+    tbr_try_delete(tart_path, vm_name);
     respond_err(cfd, ssh_rc == 1 ? "TART_SSH_TIMEOUT" : "TESTBED_PREPARE_FAILED");
     return;
   }
 
   // RUN commands[].argv sequentially via SSH.
+  // ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (RL-03):
+  // surface a non-zero SSH command exit code as TART_CMD_FAILED.
+  // ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (RL-06):
+  // best-effort delete on command failure (orphan prevention).
   char *ssh_argv[24];
   char ssh_arg_buf[4096];
   size_t ssh_arg_used = 0;
@@ -3953,18 +4120,39 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
                              "admin", ip, cmd_argv_local, s.cmd_argc[ci],
                              ssh_argv, 24, ssh_arg_buf, sizeof(ssh_arg_buf), &ssh_arg_used)) {
       tbr_escalate(&run_handle, 3000, 2000);
+      tbr_try_delete(tart_path, vm_name);
       respond_err(cfd, "TESTBED_INTERNAL_ERROR");
       return;
     }
     tbr_ssh_exec_t ex_r = tbr_ssh_exec(ssh_path, staging_kh, staging_id,
                                         "admin", ip, cmd_argv_local, s.cmd_argc[ci],
                                         5, 60 * 1000);
-    (void)ex_r;
+    if (!ex_r.ok) {
+      tbr_escalate(&run_handle, 3000, 2000);
+      tbr_try_delete(tart_path, vm_name);
+      fprintf(stderr, "[helper] command %d ssh transport failed: %s\n",
+              ci, ex_r.stderr_buf);
+      respond_err(cfd, "TART_CMD_FAILED");
+      return;
+    }
+    if (ex_r.exit_code != 0) {
+      tbr_escalate(&run_handle, 3000, 2000);
+      tbr_try_delete(tart_path, vm_name);
+      fprintf(stderr, "[helper] command %d exited %d: %s\n",
+              ci, ex_r.exit_code, ex_r.stderr_buf);
+      respond_err(cfd, "TART_CMD_FAILED");
+      return;
+    }
   }
 
   // STOP -> SIGTERM grace -> SIGKILL only if alive.
+  // ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (RL-04):
+  // surface a `tart stop` failure as TART_STOP_FAILED, not as PASS.
+  // ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (RL-06):
+  // best-effort delete on stop failure (orphan prevention).
   char *stop_argv[8];
   if (!tbr_build_stop_argv(tart_path, vm_name, stop_argv, 8)) {
+    tbr_try_delete(tart_path, vm_name);
     respond_err(cfd, "TART_STOP_FAILED");
     return;
   }
@@ -3973,7 +4161,13 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
                                               60 * 1000,
                                               stop_out, sizeof(stop_out),
                                               stop_err, sizeof(stop_err));
-  (void)stop_inv;
+  if (stop_inv.kind != 0) {
+    fprintf(stderr, "[helper] tart stop failed (kind=%d, exit=%d): %s\n",
+            stop_inv.kind, stop_inv.exit_code, stop_err);
+    tbr_try_delete(tart_path, vm_name);
+    respond_err(cfd, "TART_STOP_FAILED");
+    return;
+  }
   tbr_escalate(&run_handle, 5000, 3000);
 
   if (s.keep_vm) {
@@ -3984,6 +4178,10 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
   }
 
   // DELETE
+  // ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (RL-05):
+  // surface a `tart delete` failure as TART_DELETE_FAILED, not
+  // as PASS. The VM is still on the host; the caller's owner is
+  // responsible for the orphaned VM.
   char *del_argv[8];
   if (!tbr_build_delete_argv(tart_path, vm_name, del_argv, 8)) {
     respond_err(cfd, "TART_DELETE_FAILED");
@@ -3994,7 +4192,12 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
                                               60 * 1000,
                                               del_out, sizeof(del_out),
                                               del_err, sizeof(del_err));
-  (void)del_inv;
+  if (del_inv.kind != 0) {
+    fprintf(stderr, "[helper] tart delete failed (kind=%d, exit=%d): %s\n",
+            del_inv.kind, del_inv.exit_code, del_err);
+    respond_err(cfd, "TART_DELETE_FAILED");
+    return;
+  }
 
   tbr_emit_result_ok(cfd, rid->val, rid->val_len,
                       rid_sanitized, vm_name, ip,
