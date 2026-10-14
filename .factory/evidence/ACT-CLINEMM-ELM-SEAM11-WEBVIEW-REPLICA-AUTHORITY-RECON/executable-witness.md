@@ -162,3 +162,11 @@ persistent state) is unchanged.
 | Files modified | 0 production files; 1 board file (`epic-board.md`); 3 new Factory files (this witness + the two ACT plan copies) |
 | Stashes | 0 |
 | Tag pushes | 0 |
+
+## Final SUBJECT_HEAD (recorded at the actual closure)
+
+`58a2ab0f59b28be14b38774a66826f882bb04b63` — `git rev-parse HEAD`
+at the end of the ACT. The witness was amended twice with
+`--amend --no-edit` (no content change beyond the SUBJECT_HEAD
+correction itself) to record the final SHA; the only file
+touched on each amend was this witness.
