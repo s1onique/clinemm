@@ -26088,3 +26088,84 @@ All five are fixed by 10 bounded source corrections in `helper.c` (no new helper
 - `tools/macos-host-helper/native/test.sh` (new; `--timeout=30000` wrapper for `bun test`)
 - `.factory/acts/ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01.md` (new; full ACT report)
 - `.factory/evidence/ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01/00-closure-evidence.txt` (new)
+
+# ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION - PASS_HTEC02_PRELAUNCH_ADMISSION - 2026-10-15
+
+**Status:** CLOSED with verdict **`PASS_HTEC02_PRELAUNCH_ADMISSION`**. Reviewer P0 design blocker
+documented in HTEC01-CORR04 (the pre-launch admission contract was missing) is closed:
+the BCB now exposes a synchronous, atomic-in-the-JS-event-loop admission API, and
+`vscode-run-commands-tool` calls it BEFORE `manager.start()`. The 257th observation-bearing
+launch is refused with a structured `at_capacity` error; `manager.start()` is NOT called; the
+existing obligations are preserved; no foreign obligation is affected.
+
+**Predecessor:** `272d9d1f1` (HTEC01-CORR04 closure). The CORR04 commit explicitly documented
+this ACT as the bounded repair: "synchronous admission contract requires a new
+`admitNotifyJob()` BCB method called BEFORE `manager.start()`, plus a host refactor".
+
+**Files modified (3):**
+- `apps/vscode/src/sdk/background-notify-coordinator.ts` (+531 lines): new public API
+  `tryReserveObservationCapacity` / `attachReservationToJob` / `releaseReservation`;
+  internal `pendingReservations: Map<permitId, PendingReservationRecord>` and
+  `attachedJobIdByPermitId: Map<permitId, jobId>` maps; new types
+  `ReserveObservationCapacityResult` / `AttachReservationResult` /
+  `ReleaseReservationResult`; new constants `MAX_CAPACITY_DROPPED_RECEIPTS` and
+  `MAX_OBSERVATION_CAPACITY` (= 256); new diagnostic accessors
+  `diagnosticPendingReservationCount` / `diagnosticObservationUsed` /
+  `diagnosticMaxObservationCapacity`; `registerMarker` /
+  `recordNonNotifyTerminalObservation` extended to accept an optional `permitId`
+  (fail-closed when the permit is not attached to the jobId);
+  `consumeTerminal` / `resolveObligation` /
+  `consumeNonNotifyTerminalObservation` / `dispose` release the attached permit.
+- `apps/vscode/src/sdk/vscode-run-commands-tool.ts` (+170 lines): pre-launch
+  admission at the background execution boundary. The host calls
+  `tryReserveObservationCapacity` before `manager.start()`. On `reserved`, the
+  permit is attached to the jobId on `registerMarker` (notify=true) or via the
+  `terminalPromise` listener calling `recordNonNotifyTerminalObservation`
+  (notify=false). The permit is released on fast-path terminal in-band delivery,
+  on launch throw, and on coordinator disposal. Fail-closed semantics: a
+  notify-enabled background command without the BCB admission authority is
+  refused (no silent capacity bypass; ADM-21).
+- `apps/vscode/src/sdk/__tests__/held-terminal-eviction-conservation02.htec02.test.ts`
+  (new file, 642 lines): 29 tests covering RED-01/02/03, ADM-01..ADM-22, and
+  integration-01..03 (real `createVscodeRunCommandsTool` + real BCB + real
+  `CommandJobManager`).
+
+**Bounded contract (HTEC-02 GREEN):**
+```
+pendingReservations (unattached)
++ notificationMarkers
++ reservedMarkers
++ nonNotifyTerminalObservations
++ terminalReceipts
++ capacityDroppedReceipts
+<= maxObservationCapacity   (default 256)
+```
+
+A permit is reserved BEFORE `manager.start()`. The permit is attached to the
+jobId on `registerMarker` / `recordNonNotifyTerminalObservation`. The slot is
+transferred from `pendingReservations` to the obligation map (no double-counting).
+The slot is released by the BCB's own terminal/consume paths when the obligation
+settles. The slot is released by the host on fast-path terminal in-band
+delivery and on launch throw.
+
+**Conservation matrix (HTEC-02 tests):**
+- RED-01: 256 occupied markers + 1 new request → `at_capacity` (no manager.start)
+- RED-02: concurrent reservations with capacity=1 → exactly one `reserved`, one `at_capacity`
+- RED-03: non-notify observation with permit → attaches, transition into obligation
+- ADM-01..22: adversarial conservation (single-slot, multi-slot, concurrent,
+  non-notify, owner, receipt-slot-freed, cross-session, duplicate, heavy
+  snapshot eviction, dispose, capacity-pressure paths)
+- integration-01: a notify-enabled background command is admitted
+- integration-02: with effective capacity exhausted, the next command is refused BEFORE manager.start
+- integration-03: after settling the first obligation, the second is admitted
+- ablation-01: bypass → 257th obligation reenters the unsafe state (RED reproduces)
+
+**Gates:** HTEC02_IMPLEMENTATION PASS. HTEC02_TESTS 29/29 PASS. HTEC02_TYPE_CHECK 0 errors.
+HTEC02_BIOME_LINT 0 errors. HTEC01_TESTS 11/11 PRESERVED. Pre-existing test failures
+(vscode-run-commands-tool.background-state.test.ts, bcb01-c.test.ts, bccoc01.test.ts,
+bnca-red01.test.ts, c10-filter-ablation01.ablation.test.ts, command-job-manager.test.ts)
+verified pre-existing via stash-and-compare against HEAD 272d9d1f1 (not introduced
+by this ACT).
+
+**Verdict:** `PASS_HTEC02_PRELAUNCH_ADMISSION`.
+
