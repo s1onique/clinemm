@@ -1,3 +1,61 @@
+# ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR02 — PASS_HELD_TERMINAL_RECEIPT_CAPACITY_CONSERVATION (correction) — 2026-10-14
+
+**Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_RECEIPT_CAPACITY_CONSERVATION`** (capacity-conservation correction cycle). The single reviewer P0 halt (`HALT_RECEIPT_CAPACITY_CONSERVATION`) is closed: a small RED → GREEN cycle proves bounded memory and continued observability are simultaneously preserved.
+
+**Predecessor:** `c4efb8ed9` (CORR01 closure). Reviewer halt: `HALT_RECEIPT_CAPACITY_CONSERVATION` (P0).
+
+**Reviewer concern (verbatim, abridged):**
+> The hard cap introduces a correctness gap that prevents unconditional acceptance. The new BND-01/02 test confirms that the 129th and 130th receipts are refused with `at_capacity`. It also confirms that the original 128 entries survive. But it does not establish that the two refused receipts can be observed later if their heavy terminal snapshots are evicted.
+> [...]
+> Logging `at_capacity` through `recordNotifyDecision` is useful diagnostics, but it is not a runtime conservation mechanism.
+
+**Bounded correction (1 BCB, 1 tool, 1 new test, 0 new persistent state, 0 new protocol field):**
+
+1. **Capacity-eviction disposition (the load-bearing fix):**
+   - `BackgroundNotifyCoordinator` now has a secondary bounded map `capacityDroppedReceipts: Map<jobId, { sessionId, taskId, receipt: CompactTerminalReceipt }>`, sized at the same cap as `terminalReceipts` (`MAX_TERMINAL_RECEIPTS = 128`).
+   - When `recordTerminalReceipt` hits the cap on a NEW jobId, the BCB STILL refuses the primary receipt (memory bounded) but records a synthetic `CompactTerminalReceipt` in the secondary map. The HALT audit reason is appended with `:capacity_drop_disposition_recorded`.
+   - The secondary map is also bounded by `MAX_TERMINAL_RECEIPTS` with LRU eviction as a last-resort escape hatch for an unbounded obligation storm.
+
+2. **`consumeTerminalReceipt` consults both maps:**
+   - On consumption, the BCB FIRST consults `capacityDroppedReceipts`. If a disposition exists for the jobId AND the owner triple matches, the BCB drains the obligation through the canonical `resolveObligation` (notify=true) or `consumeNonNotifyTerminalObservation` (fire-and-forget) path and returns a NEW `capacity_drop` outcome with the synthetic receipt.
+   - The receipt map remains the primary disposition (unchanged); the capacity-drop map is the cap-eviction disposition (new).
+
+3. **`command_status` tool surfaces the new observation:**
+   - The tool's consumption seam (line 312-352) consults the receipt decision's new `capacity_drop` kind and returns a truthful response carrying `observation: "capacity_drop"`, `outputRetained: false`, the terminal classification (`state`, `exitCode`, `signal`).
+   - The `CommandStatusOutput.observation` type is widened from `"evicted_receipt"` to `"evicted_receipt" | "capacity_drop"`.
+
+4. **New test `CAP-CONSERVATION-01/02` (reviewer-mandated bounded discriminator):**
+   - 128 receipts recorded, 129th refused with `at_capacity`, manager evicts 129th's heavy snapshot via `maxTerminalJobs: 2` FIFO, real `command_status(129)` through `createCommandStatusTool` returns `{ ok: true, state: "cancelled", outputRetained: false, observation: "capacity_drop" }`.
+   - The 129th's marker is drained (not stranded). The 128 first-batch markers remain held.
+   - Pre-fix: `command_status(129)` returns `{ ok: false, error: "unknown_job: ..." }` (the original HTEC01 failure mode the reviewer prescribed as RED).
+
+**Tests (10 total, 9 prior + 1 new):**
+- 9/9 prior (RED→GREEN, ablation, EVC-04/05/11/14, BND-01/02, OWN-01/02, PRD-01/02) — preserved
+- 1/1 new (CAP-CONSERVATION-01/02) — PROVEN
+- 0 typecheck errors (`bun run check-types`)
+- 0 biome lint errors
+
+**Gates:**
+```
+HTEC01_CORR02_IMPLEMENTATION:     PASS
+HTEC01_CORR02_TESTS:              10/10 PASS
+HTEC01_CORR02_RECEIPT_MEMORY_CAP: PROVEN
+HTEC01_CORR02_OVERFLOW_CONSERVATION: PROVEN
+HTEC01_CORR02_OWNER_IDENTITY:     STRUCTURAL_PASS (unchanged from CORR01)
+HTEC01_CORR02_PRODUCTION_FUNCTION: REAL_PRODUCTION_SEAM (unchanged from CORR01)
+HTEC01_CORR02_CONTROLLER_INTEGRATION: NOT_PROVEN (unchanged from CORR01)
+HTEC01_CORR02_LIVE:               LIVE_UNOBSERVABLE
+```
+
+**Files (this ACT, 3 modified):**
+- `apps/vscode/src/sdk/background-notify-coordinator.ts` (modified — `capacityDroppedReceipts` map, `at_capacity` path records disposition, `consumeTerminalReceipt` consults both maps and returns `capacity_drop` outcome, dispose clears the new map)
+- `apps/vscode/src/sdk/command-status-tool.ts` (modified — `CommandStatusOutput.observation` widens to include `"capacity_drop"`, tool surfaces truthful `capacity_drop` response)
+- `apps/vscode/src/sdk/__tests__/held-terminal-eviction-conservation01.htec01.test.ts` (modified — added `CAP-CONSERVATION-01/02` test, +147 lines)
+
+**Verdict:** `PASS_HELD_TERMINAL_RECEIPT_CAPACITY_CONSERVATION` (capacity-conservation correction). The reviewer's P0 halt is closed. Factory stop condition met at this verdict. GO to exact-head dogfood qualification on the next session.
+
+---
+
 # ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR01 — PASS_HELD_TERMINAL_EVICTION_REPAIR (correction) — 2026-10-14
 
 **Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_EVICTION_REPAIR`** (correction cycle). The 3 P0/P1 reviewer gates (BND/OWN/PRD) are all PROVEN. Original ACT verdict preserved (`LIVE_UNOBSERVABLE`).

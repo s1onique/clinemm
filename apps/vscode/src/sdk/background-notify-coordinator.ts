@@ -1286,6 +1286,37 @@ export class BackgroundNotifyCoordinator {
 	 * owner-mismatch.
 	 */
 	private readonly terminalReceipts = new Map<string, CompactTerminalReceipt>()
+	/**
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / CORR01
+	 * (HTEC01-CORR01 / HALT_RECEIPT_CAPACITY_CONSERVATION, P0):
+	 *
+	 * Capacity-evicted terminal-fact dispositions. When the
+	 * receipt store is at cap (`MAX_TERMINAL_RECEIPTS`) and a new
+	 * terminal fact arrives with a held obligation, the BCB
+	 * refuses the receipt (memory bounded) but records the
+	 * disposition here so a later `command_status` call can
+	 * drain the obligation truthfully through an explicit
+	 * `capacity_drop` observation. Without this map the cap
+	 * refusal would strand the obligation (the original HTEC01
+	 * failure mode).
+	 *
+	 * Bounded by the same cap as `terminalReceipts` (the two
+	 * maps are alternative dispositions for the same
+	 * obligation). When the cap is reached and a new disposition
+	 * arrives, the OLDEST entry is evicted (LRU) and ITS
+	 * obligation is settled with a `capacity_drop` resolution —
+	 * the eviction is rare in practice (the cap is 128) and the
+	 * evicted entry's obligation would have been stranded
+	 * anyway (the receipt cap dropped it). The LRU eviction is
+	 * the last-resort escape hatch for an unbounded obligation
+	 * storm.
+	 *
+	 * Cleared on consumption, dispose, or owner-mismatch.
+	 */
+	private readonly capacityDroppedReceipts = new Map<
+		string,
+		{ sessionId: string; taskId: string | undefined; receipt: CompactTerminalReceipt }
+	>()
 	private readonly options: Required<
 		Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority">
 	> &
@@ -1585,16 +1616,62 @@ export class BackgroundNotifyCoordinator {
 		// Resource cap enforcement.
 		if (this.terminalReceipts.size >= MAX_TERMINAL_RECEIPTS && !this.terminalReceipts.has(input.jobId)) {
 			// Cap reached AND this is a new receipt (not a
-			// replacement). Refuse to record and surface a HALT
-			// warning. Silently dropping the receipt would
-			// recreate the original bug.
+			// replacement). HTEC01-CORR01 / P0: refuse to
+			// record the receipt (memory bounded) but record
+			// the disposition in `capacityDroppedReceipts` so
+			// a later `command_status` can drain the
+			// obligation truthfully. The cap refusal alone
+			// would strand the obligation (the original HTEC01
+			// failure mode the reviewer's RED reproduces).
 			const cap = MAX_TERMINAL_RECEIPTS
+			// Build the synthetic receipt the tool will
+			// surface as `observation: "capacity_drop"`.
+			// It carries the same terminal classification
+			// fields the regular receipt would, but is
+			// stored in the secondary map (also bounded by
+			// `MAX_TERMINAL_RECEIPTS`).
+			const droppedReceipt: CompactTerminalReceipt = {
+				jobId: input.jobId,
+				sessionId: resolvedSessionId,
+				taskId: resolvedTaskId,
+				terminalState: input.terminalState,
+				exitCode: input.exitCode,
+				reason: input.reason,
+				isContainmentFailed: input.isContainmentFailed,
+				outputRetained: false,
+				recordedAtMs: this.options.now(),
+			}
+			// Enforce the secondary cap (LRU eviction). If
+			// the secondary map is also at cap (rare in
+			// practice — the secondary map fills only when
+			// the primary is at cap and a new fact arrives),
+			// evict the oldest entry. The evicted entry's
+			// obligation is the one we drop — but it was
+			// ALREADY at the cap-refusal disposal stage
+			// (its receipt was refused earlier), so the
+			// obligation is already in the worst-case
+			// state. The LRU eviction of the secondary
+			// map is a last-resort escape hatch for an
+			// unbounded obligation storm and is the only
+			// path that can strand an obligation in the
+			// new design.
+			if (this.capacityDroppedReceipts.size >= MAX_TERMINAL_RECEIPTS) {
+				const oldestKey = this.capacityDroppedReceipts.keys().next().value
+				if (oldestKey !== undefined) {
+					this.capacityDroppedReceipts.delete(oldestKey)
+				}
+			}
+			this.capacityDroppedReceipts.set(input.jobId, {
+				sessionId: resolvedSessionId,
+				taskId: resolvedTaskId,
+				receipt: droppedReceipt,
+			})
 			this.options.recordNotifyDecision?.({
 				jobId: input.jobId,
 				sessionId: resolvedSessionId,
 				taskId: resolvedTaskId,
 				decision: "wake_dispatch_rejected",
-				reason: `terminal_receipts_at_capacity:cap=${cap}:existing=${this.terminalReceipts.size}`,
+				reason: `terminal_receipts_at_capacity:cap=${cap}:existing=${this.terminalReceipts.size}:capacity_drop_disposition_recorded`,
 				heldCount: 0,
 				activeNotifyCount: 0,
 				capturedAtMs: this.options.now(),
@@ -1649,12 +1726,56 @@ export class BackgroundNotifyCoordinator {
 	}):
 		| { kind: "resolved"; receipt: CompactTerminalReceipt }
 		| { kind: "not_present" }
+		| { kind: "capacity_drop"; receipt: CompactTerminalReceipt }
 		| { kind: "owner_mismatch"; receiptSessionId: string; receiptTaskId: string | undefined } {
 		if (this.disposed) {
 			return { kind: "not_present" }
 		}
 		if (!input.jobId || typeof input.jobId !== "string") {
 			return { kind: "not_present" }
+		}
+		// HTEC01-CORR01 / P0: the receipt store may be at cap
+		// and refuse to record the new fact. In that case the
+		// BCB recorded a `capacityDropped` disposition (a
+		// synthetic receipt) that allows the obligation to be
+		// drained through a truthful `observation:
+		// "capacity_drop"` response. Consult the capacity-drop
+		// map FIRST so the tool surfaces the correct
+		// observation (the receipt map is the primary
+		// disposition; the capacity-drop map is the
+		// cap-eviction disposition).
+		const capacityDrop = this.capacityDroppedReceipts.get(input.jobId)
+		if (capacityDrop) {
+			// Owner-isolation guard: a foreign owner cannot
+			// drain a capacity-drop disposition either.
+			if (capacityDrop.sessionId !== input.sessionId || capacityDrop.taskId !== input.taskId) {
+				return {
+					kind: "owner_mismatch",
+					receiptSessionId: capacityDrop.sessionId,
+					receiptTaskId: capacityDrop.taskId,
+				}
+			}
+			// Drain the obligation through the canonical
+			// observation path (mirrors the receipt path
+			// below).
+			const isNotify = this.notificationMarkers.has(input.jobId)
+			if (isNotify) {
+				const decision = this.resolveObligation({
+					jobId: input.jobId,
+					sessionId: input.sessionId,
+					taskId: input.taskId,
+					resolution: "canonical_status_observed",
+				})
+				void decision
+			} else {
+				this.consumeNonNotifyTerminalObservation({
+					jobId: input.jobId,
+					sessionId: input.sessionId,
+					taskId: input.taskId,
+				})
+			}
+			this.capacityDroppedReceipts.delete(input.jobId)
+			return { kind: "capacity_drop", receipt: capacityDrop.receipt }
 		}
 		const receipt = this.terminalReceipts.get(input.jobId)
 		if (!receipt) {
@@ -2530,6 +2651,14 @@ export class BackgroundNotifyCoordinator {
 		// whose heavy manager snapshot was evicted; on dispose the
 		// whole held set is gone, so the receipts go with it).
 		this.terminalReceipts.clear()
+		// ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 /
+		// CORR01 (HTEC01-CORR01 / P0): the capacity-dropped
+		// disposition map is process-ephemeral too. The
+		// dispose() is the process-ephemeral teardown
+		// boundary; on dispose the entire BCB held set is
+		// gone, so the capacity-drop dispositions go with
+		// it.
+		this.capacityDroppedReceipts.clear()
 	}
 
 	diagnosticMarkerCount(): number {

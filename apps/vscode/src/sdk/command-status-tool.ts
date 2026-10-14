@@ -77,8 +77,18 @@ export interface CommandStatusOutput {
 	 * Set to `"evicted_receipt"` when the response is the
 	 * compact-receipt path (heavy output was evicted). Absent
 	 * for non-evicted responses.
+	 *
+	 * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / CORR01
+	 * (HTEC01-CORR01 / P0): set to `"capacity_drop"` when the
+	 * response is the capacity-eviction disposition (the BCB
+	 * was at its `MAX_TERMINAL_RECEIPTS` cap and refused to
+	 * record this fact, but recorded an explicit
+	 * `capacity_drop` disposition so the obligation is
+	 * drainable). The model MUST treat this as the canonical
+	 * terminal observation for the jobId (the BCB will not
+	 * emit a wake for it because the marker is drained).
 	 */
-	observation?: "evicted_receipt"
+	observation?: "evicted_receipt" | "capacity_drop"
 }
 
 export interface CancelCommandInput {
@@ -345,6 +355,34 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 									// preserved.
 									outputRetained: false,
 									observation: "evicted_receipt",
+								},
+							]
+						}
+						// HTEC01-CORR01 / P0: the receipt store was at
+						// cap and refused to record this fact. The
+						// BCB recorded an explicit `capacity_drop`
+						// disposition (a synthetic receipt) so the
+						// obligation is drainable. The response
+						// carries the same terminal classification
+						// fields as the evicted_receipt path, with
+						// the `capacity_drop` observation as the
+						// truthful distinction.
+						if (receiptDecision.kind === "capacity_drop") {
+							const r = receiptDecision.receipt
+							return [
+								{
+									ok: true,
+									jobId: r.jobId,
+									state: r.terminalState,
+									elapsedMs: 0,
+									deadlineRemainingMs: 0,
+									stdout: "",
+									stderr: "",
+									outputTruncated: false,
+									...(r.exitCode !== undefined ? { exitCode: r.exitCode } : {}),
+									...(r.reason !== undefined && r.reason !== null ? { signal: r.reason } : {}),
+									outputRetained: false,
+									observation: "capacity_drop",
 								},
 							]
 						}

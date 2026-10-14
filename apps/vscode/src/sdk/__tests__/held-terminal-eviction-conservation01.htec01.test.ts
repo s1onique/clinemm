@@ -743,6 +743,148 @@ describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Bound
 		notifyCoordinator.dispose()
 	}, 30_000)
 
+	it("CAP-CONSERVATION-01/02: a 129th terminal fact refused by the cap remains drainable through the BCB's explicit capacity_drop disposition (no completion stall after eviction)", async () => {
+		// Reviewer-mandated bounded discriminator (HTEC01-CORR01 / P0).
+		// The cap refuses to RECORD the 129th receipt. The
+		// reviewer's central concern is that the 129th's held
+		// obligation then becomes unresolvable. The fix is for
+		// the BCB to take an explicit, safe terminal disposition
+		// (a synthetic "capacity_drop" resolution) at the
+		// `at_capacity` moment, so the obligation is drainable.
+		// This test asserts that disposition and that a real
+		// `command_status(129)` returns a truthful response.
+		//
+		// Manager cap is 2 so the 129th's heavy snapshot is
+		// evicted by the bounded FIFO when we drive 2 more
+		// jobs through the manager. That guarantees
+		// `manager.status(129)` returns `unknown_job` and the
+		// BCB's `consumeTerminalReceipt` is consulted.
+		const manager = new CommandJobManager({
+			maxTerminalJobs: 2,
+			maxWaitBudgetMs: 50,
+			spawnFactory: () => fakeSupervisor(),
+		})
+		const ownerSessionId = "session-htec01-capcon"
+		const ownerTaskId = "task-htec01-capcon"
+		const notifyCoordinator = new BackgroundNotifyCoordinator({
+			resolveActiveOwner: () => ({ sessionId: ownerSessionId, taskId: ownerTaskId }),
+			enqueueTerminalWake: async () => ({ kind: "delivered" as const }),
+			discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+			now: () => Date.now(),
+		})
+		attachLifecycleReceiptRecorder(manager, notifyCoordinator, ownerSessionId, ownerTaskId)
+		// Step 1: register 128 markers and record 128 receipts.
+		const firstBatchJobIds: string[] = []
+		for (let i = 0; i < 128; i += 1) {
+			const j = await manager.start({
+				command: "sleep 600",
+				cwd: "/tmp",
+				waitBudgetMs: 25,
+				executionDeadlineMs: 30_000,
+			})
+			firstBatchJobIds.push(j.jobId)
+			notifyCoordinator.registerMarker({
+				jobId: j.jobId,
+				sessionId: ownerSessionId,
+				taskId: ownerTaskId,
+			})
+		}
+		for (const jid of firstBatchJobIds) {
+			const r = notifyCoordinator.recordTerminalReceipt({
+				jobId: jid,
+				sessionId: ownerSessionId,
+				taskId: ownerTaskId,
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+			})
+			expect(r.kind).toBe("recorded")
+		}
+		expect(notifyCoordinator.diagnosticTerminalReceiptCount()).toBe(128)
+
+		// Step 2: register the 129th marker and cancel job129
+		// through the manager. The BCB's `recordTerminalReceipt`
+		// MUST return `at_capacity`.
+		const job129 = await manager.start({
+			command: "sleep 600",
+			cwd: "/tmp",
+			waitBudgetMs: 25,
+			executionDeadlineMs: 30_000,
+		})
+		notifyCoordinator.registerMarker({
+			jobId: job129.jobId,
+			sessionId: ownerSessionId,
+			taskId: ownerTaskId,
+		})
+		await manager.cancel({ jobId: job129.jobId })
+		const capResult = notifyCoordinator.recordTerminalReceipt({
+			jobId: job129.jobId,
+			sessionId: ownerSessionId,
+			taskId: ownerTaskId,
+			terminalState: "cancelled",
+			exitCode: 0,
+			reason: undefined,
+			isContainmentFailed: false,
+		})
+		expect(capResult.kind).toBe("at_capacity")
+
+		// Step 3: pre-fix, the 129th's marker is still held
+		// (cap refusal dropped the receipt, NOT the marker).
+		expect(notifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner(ownerSessionId, ownerTaskId)).toContain(job129.jobId)
+
+		// Step 4: force eviction of the 129th's heavy terminal
+		// snapshot. With maxTerminalJobs: 2 and job129 already
+		// in manager.terminal, cancel 2 more jobs to overflow
+		// the FIFO. The manager evicts the oldest (job129).
+		const evictA = await manager.start({
+			command: "sleep 600",
+			cwd: "/tmp",
+			waitBudgetMs: 25,
+			executionDeadlineMs: 30_000,
+		})
+		await manager.cancel({ jobId: evictA.jobId })
+		const evictB = await manager.start({
+			command: "sleep 600",
+			cwd: "/tmp",
+			waitBudgetMs: 25,
+			executionDeadlineMs: 30_000,
+		})
+		await manager.cancel({ jobId: evictB.jobId })
+		const postEvict = await manager.status({ jobId: job129.jobId, waitMs: 0 })
+		expect(postEvict.ok).toBe(false)
+		if (!postEvict.ok) {
+			expect(postEvict.code).toBe("unknown_job")
+		}
+
+		// Step 5: invoke real `command_status(129)` through
+		// the production factory.
+		const tool = createCommandStatusTool(manager, {
+			backgroundNotifyCoordinator: notifyCoordinator,
+			resolveActiveOwner: () => ({ sessionId: ownerSessionId, taskId: ownerTaskId }),
+		})
+		const result = (await tool.execute(
+			{ jobId: job129.jobId, waitMs: 0 },
+			{ sessionId: ownerSessionId, agentId: "test-agent", iteration: 1 },
+		)) as Array<Record<string, unknown>>
+		const payload = result[0] as Record<string, unknown>
+
+		// Step 6: obligation is TRUTHFULLY resolvable. The
+		// response carries the BCB's `capacity_drop`
+		// observation (NOT `unknown_job`).
+		expect(payload.ok).toBe(true)
+		expect(payload.state).toBe("cancelled")
+		expect(payload.outputRetained).toBe(false)
+		expect(payload.observation).toBe("capacity_drop")
+		const unconsumedAfter = notifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner(ownerSessionId, ownerTaskId)
+		expect(unconsumedAfter).not.toContain(job129.jobId)
+		// The 128 first-batch markers are still held.
+		expect(unconsumedAfter.length).toBe(128)
+
+		await manager.dispose()
+		notifyCoordinator.dispose()
+	}, 60_000)
+
 	it("OWN-01/02: a late terminal event retains the LAUNCH-time owner identity (session switch does not misattribute)", async () => {
 		const launchSessionId = "session-htec01-launch"
 		const launchTaskId = "task-htec01-launch"
