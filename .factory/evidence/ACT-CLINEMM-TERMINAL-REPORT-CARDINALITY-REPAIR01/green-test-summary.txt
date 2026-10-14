@@ -1,0 +1,3 @@
+ ✓ src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts (5 tests) 5ms
+ Test Files  1 passed (1)
+      Tests  5 passed (5)

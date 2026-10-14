@@ -1,0 +1,33 @@
+# Installed extension identity (live, at ACT execution time)
+#
+# Discovered via /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/
+
+Directory:        /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-b24b954db
+Installed at:     2026-10-13 14:36:17 +0300
+Source HEAD:      b24b954db932caf738c26a43408e07e8558c0304 (BCB repair commit)
+package.json:     "version": "4.1.16-5a1c485cb-b24b954db" (auto-appended build head)
+Source version:   4.1.16-5a1c485cb (apps/vscode/package.json - unchanged by BCB repair)
+Engine:           vscode ^1.101.0
+Extension host PID (current run): 14116
+Live Cline task:  1791892624249_io4fp
+Cline version (runtime): 4.1.16-5a1c485cb
+Provider / model: minimax / MiniMax-M3
+Started:          2026-10-13T11:57:04.686Z
+Status:           running (no exit_code, no error phase)
+
+# Bundled repair (BCB observation-unavailable)
+grep dist/extension.js: return[...r.runtime.tools,...r.config.extraTools??[]].map(n=>n.name)
+                 (one line: getActiveRuntimeToolNames merges runtime.tools with extraTools
+                 — the same merge used by the model-facing agentConfig.tools at
+                 local-runtime-host.ts:834)
+
+# Bundled SEAM08 production caller
+grep dist/extension.js: consultE31BarrierForFacts
+                 (production SEAM08 post-await consult; uses consultDeferredCompletionBarrierElmKernel)
+
+# Five Elm kernels packaged (runtime-assets/, all production-bundled):
+b0fd250dcff001d1fc06f48cca5e74b039689f16978a528d048b0440aca82b40  /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-b24b954db/runtime-assets/background-notify-authority.js
+15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c  /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-b24b954db/runtime-assets/completion-authority.js
+89f9a36bcf9d1206a34e12fe9a108bfe4bbb9ab16c3b194bd7eaccbac63592aa  /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-b24b954db/runtime-assets/completion-continuation-control.js
+30dbf762b0ce1ba292f28fef186fac977903cc02837c457ed047dbfeb9d48bbb  /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-b24b954db/runtime-assets/deferred-completion-barrier.js
+d4cf4350264002e5bab41253f7f853b0637d1e1d51dce7d87a1108487d3e9d92  /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-b24b954db/runtime-assets/task-header-orchestration.js

@@ -1,0 +1,29 @@
+# Prior live specimen: 1791887696629_cg31u (PRE-repair, the BCB defect that triggered the repair)
+
+# Session identity (from /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/sessions/1791887696629_cg31u/1791887696629_cg31u.json):
+#   session_id: 1791887696629_cg31u
+#   started_at: 2026-10-13T10:34:57.058Z
+#   ended_at:   2026-10-13T10:50:26.136Z
+#   status:     completed
+#   exit_code:  0
+#   source:     vscode
+#   version:    (pre-repair)
+
+# BCB observation at 2026-10-13T10:48:08.373Z (per BCB-OBSERVABILITY-REPAIR01 §1):
+#   liveToolsIncludesCommandStatus: false
+#   liveToolsValue: ["read_files","search_codebase","fetch_web_content","editor","submit_and_exit"]
+#   canObserveHeldResults: false
+#   writerId: "session-event-bcb-blocked-observation-unavailable"
+#   requestedPhase: "error"
+#   committedPhase: "error"
+# Held terminal jobs: 2 (per the BCB capture)
+# Continuation enqueue and delivery: 0
+
+# This is the LIVE specimen that the BCB-OBSERVABILITY-REPAIR01 repair fixes.
+# The pre-repair code returned a stale subset (runtime.tools only, missing the
+# extraTools slot where command_status is registered), causing canObserve=false
+# and the BCB writer to fire even though the model had the observation mechanism.
+
+# The repair (b24b954db) makes the accessor return the SAME merge used by the
+# model-facing agentConfig.tools at local-runtime-host.ts:834:
+#   return [...r.runtime.tools, ...(r.config.extraTools ?? [])].map(n => n.name)

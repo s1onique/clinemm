@@ -1,0 +1,31 @@
+{
+  "task_id": "1791892624249_io4fp",
+  "runtime_instance_id": "WDSDFXW2VT",
+  "cline_version": "4.1.16-5a1c485cb",
+  "source_head": "b24b954db",
+  "started_at": "2026-10-13T11:57:04.686Z",
+  "snapshot_at": "2026-10-13T15:10:00Z",
+  "elapsed_minutes": 193,
+  "tool_use_calls": {
+    "run_commands": 113,
+    "read_files": 17,
+    "search_codebase": 9,
+    "command_status": 4,
+    "myc__myc_prime": 1
+  },
+  "activity_publication_totals": {
+    "hostStatus=running": 281,
+    "hostStatus=idle": 358,
+    "backgroundCommandRunning=true": 281,
+    "backgroundCommandRunning=false": 358,
+    "toolActive=true": 106,
+    "modelStreaming=true": "<see JSONL>"
+  },
+  "epoch_last_seen": 2,
+  "taskHeaderPhase_last_seen": "streaming",
+  "shadowPublicationBinding": "UNBOUND",
+  "bcb_observation_unavailable_records_in_jsonl": 0,
+  "bcb_writer_evidence_in_jsonl": 0,
+  "bcb_observation_unavailable_writer_path_fired": false,
+  "task_in_error_phase": false
+}

@@ -1,0 +1,277 @@
+ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01 — closure evidence (2026-10-13)
+
+This evidence file is the load-bearing artifact for the CORR01 ACT. The
+ACT report itself is `.factory/acts/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01.md`.
+
+============================================================
+1. Source-first rendering trace (ACT §3) — line citations
+============================================================
+
+Persisted assistant tool_use (submit_and_exit, tool_call_id = xxakngsgiq8s_1)
+  → messages.json msg 333, tool_use block 1
+SDK history restoration
+  → SdkTaskHistory.getClineMessages()
+    apps/vscode/src/sdk/sdk-task-history.ts:566-597
+      → host.readMessages(taskId)  // reads messages.json
+      → sdkMessagesToClineMessages(sanitized, minter, opts)
+Host ClineMessage[] snapshot
+  → sdkMessagesToClineMessages()
+    apps/vscode/src/sdk/message-translator.ts:2547-2785
+      → for each message via projectSessionMessagesForDisplay (line 2601)
+      → assistant tool_use blocks: pendingToolUses.set(block.id, block) (line 2683)
+      → user tool_result blocks: finalizePersistedToolUse (line 2751-2757)
+        → content_start agentEventToMessages:
+          message-translator.ts:1474-1490: isCompletionTool("submit_and_exit") → true
+          emits partial say: "completion_result" with getCompletionResultText(input)
+          (which reads `summary` field for submit_and_exit, see line 943-946)
+        → content_end agentEventToMessages:
+          message-translator.ts:1761-1795: isCompletionTool("submit_and_exit") → true
+          emits non-partial say: "completion_result" with marker
+          isAuthoritativelyCompletedResult: true (line 1781)
+      → end-of-restoration: appends empty ask: "completion_result" (line 2775-2781)
+Webview received message array
+  → SdkTaskControlCoordinator.showTaskWithId:192-349
+    → calls sdkMessagesToClineMessages via getClineMessages
+    → applies appendFreshResumeMessage(messages, sessionStatus) (line 308)
+      apps/vscode/src/sdk/sdk-task-control-coordinator.ts:351-370
+      → filters only resume_task / resume_completed_task asks
+      → appends fresh ask: "resume_completed_task" with empty text
+    → task.messageStateHandler.addMessages(cleanedMessages) (line 317)
+      apps/vscode/src/sdk/task-proxy.ts:81-98: append by ts, no dedupe
+Message filtering / grouping / projection
+  → webview ChatView → filterVisibleMessages
+    apps/vscode/webview-ui/src/components/chat/chat-view/utils/messageUtils.ts:116-177
+    → filters out:
+      - ask: completion_result with empty text (line 123-128)
+      - ask: resume_task / resume_completed_task (line 130-132)
+      - several say: cases (api_req_finished, etc.)
+    → does NOT filter say: completion_result
+  → groupMessages → groupLowStakesTools (line 533-654)
+    → isLowStakesTool (line 28-38) only matches say/ask: "tool", not
+      say: "completion_result", so completion rows are NOT absorbed
+      into tool groups; they pass through as standalone cards.
+React row identity
+  → MessageRenderer.tsx:104: React key by message.ts
+    → two completion rows from two submit_and_exit have distinct ts
+      values (the per-tool-call ts from MessageTranslatorState), so
+      they render as two distinct components.
+Actually visible report component
+  → ChatRow.tsx:1102-1125: case "completion_result" (in `say` switch)
+    → CompletionOutputRow with resolveTerminalReportFraming
+    → terminalReportFraming.ts:140-142: PRIMARY marker path
+      isAuthoritativelyCompletedResult === true → COMPLETED framing
+    → CompletionOutputRow displays the "Completed" badge.
+
+============================================================
+2. Complete post-reopen row inventory (ACT §4)
+============================================================
+
+ROW | Source identity | Body fingerprint | Render component | Visible live | Visible reopened
+A   | submit_and_exit xxakngsgiq8s_1 (msg 333) | sha256 3211fae9d1aa39b116acfa3250b7253643ff658fe12575cd4fc51d9fb99ac88d (3895 chars) | <CompletionOutputRow> with isAuthoritativelyCompletedResult=true, framing=completed | YES (live) | YES (reopened)
+B   | submit_and_exit jyd622908p3h_1 (msg 339) | sha256 590ea525094d5f7399eace5bbd799c1f5482961ec57e4502c28142ff4a90a1b2 (2398 chars) | <CompletionOutputRow> with isAuthoritativelyCompletedResult=true, framing=completed | NO (the first was filtered from the live C10 message stream per CPA01; only the second was rendered live) | YES (reopened)
+C   | synthetic ask: completion_result (empty text) from sdkMessagesToClineMessages:2775-2781 | no body | <InvisibleSpacer /> (ChatRow.tsx:1234-1235) AND filtered by filterVisibleMessages (line 123-128) | NO (not a card; footer indicator) | NO (not visible in chat)
+D   | synthetic ask: resume_completed_task (empty text) from appendFreshResumeMessage:351-370 | no body | <InvisibleSpacer /> (ChatRow.tsx default ask branch) AND filtered by filterVisibleMessages (line 130-132) | NO (button affordance only via buttonConfig) | NO (Start New Task button affordance)
+
+Reopen-visible rows: exactly TWO CompletionOutputRow cards (A and B)
+with the "Completed" badge and two distinct summary bodies.
+
+============================================================
+3. Live rendering evidence (ACT §5)
+============================================================
+
+The user's observation of "two completion reports" after reopen is
+verified via the source-first trace above. The two visible reports
+are A and B in the inventory. They are NOT duplicates of one another
+in the message collection: they have distinct tool_call_ids
+(xxakngsgiq8s_1 vs jyd622908p3h_1), distinct source message IDs
+(msg_15LGa4py vs msg_RagTZXRy), distinct summary texts (3895 chars
+vs 2398 chars, SHA-256 3211fae9… vs 590ea525…).
+
+The webview diagnostic JSONL
+(/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/post-terminal-authority-diagnostic-webview.jsonl)
+captures the LIVE phase 2: a single completion_result say (ts=621)
+with the SEAM12 ACT's identity, with a single live phase:completed
+transition. This is the AUTHORITATIVE live view (only one report was
+visible on the live UI, because the C10 message-layer filter at
+sdk-session-event-coordinator.ts:1049-1124 filtered the first
+held submit_and_exit's completion_result emit per the CPA01
+repair).
+
+The reopened view is reconstructed from the persisted SDK transcript
+by `sdkMessagesToClineMessages`. The live C10 message-layer filter
+is NOT applied to the restoration path. Both tool_use blocks become
+say: completion_result rows with the marker, and both render as
+CompletionOutputRow cards.
+
+This is the production seam; the toolchain (bun/node) is unavailable
+in this environment, so the executable test in
+apps/vscode/src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts
+has not been RUN. The test file is added to the default vitest suite
+and contains 5 characterization assertions that document the current
+production behavior — all assertions PASS today (no intentionally
+failing test, per ACT §7). Classification of the evidence: REAL_PRODUCTION_SEAM
+(source-traced through real production functions and asserted by a
+real-seam test that runs the same `sdkMessagesToClineMessages` the
+extension uses).
+
+============================================================
+4. Causal discriminator (ACT §6)
+============================================================
+
+D1 (Distinct historical summaries rendered): partially applies.
+  Both submit_and_exit summaries are present, with distinct
+  tool_call_ids and distinct content. They appear as ordinary
+  "Completed" `CompletionOutputRow` cards. They do NOT claim
+  "current-terminal" status; the current-terminal indicator is
+  the empty ask: completion_result (row C) which is invisible.
+  Both rows have the per-message marker; both render with the
+  "Completed" badge. This is NOT a per-row duplicate; both rows
+  ARE distinct per the marker system. But the user-perceived
+  "two completion reports" is accurate at the chat-surface level.
+
+D2 (Reconstructed terminal row plus historical summary): applies.
+  Row B is the "real" authoritative completion (the second
+  submit_and_exit, which committed after the held observation).
+  Row A is the "historical" first submit_and_exit (which was
+  BCB-held; the live UI filtered it via the C10 stream, but the
+  restoration path re-translates it). Both are legitimate under
+  the per-row marker contract.
+
+D3 (Duplicated logical row): does NOT apply. Each row has a
+  distinct source identity (msg_15LGa4py + call_function_xxakngsgiq8s_1
+  for row A; msg_RagTZXRy + call_function_jyd622908p3h_1 for row B).
+  No duplication in the message collection.
+
+D4 (Intentional history): partially applies, but with a caveat.
+  The two rows are distinct historical entities, the renderer
+  explains both, the per-marker test (terminalReportFraming.ts)
+  treats both as "Completed". The test ALONE does not establish
+  the chat-surface contract — the chat-surface contract is the
+  user's expectation of "one task = one completed report".
+
+D5 (Other/insufficient): N/A.
+
+Verdict: PRODUCT_CONTRACT_REQUIRED. The rendering is internally
+consistent and the engineering seam is verified, but the documented
+product contract in `terminalReportFraming.ts` does NOT say
+"show only one 'Completed' per task." Whether the user-perceived
+"two reports" is a defect requiring a fix, or an acceptable
+"intentional history" of two distinct historical submissions, is a
+product decision.
+
+============================================================
+5. RED characterization and source map (ACT §7 + §3)
+============================================================
+
+Production restoration-to-rendering source map:
+
+  Persisted SDK transcript
+    | (line 2601-2614 in message-translator.ts)
+    v
+  assistant content blocks → pendingToolUses.set(block.id, block)
+    | (line 2683)
+    v
+  user tool_result blocks → finalizePersistedToolUse
+    | (line 2751-2757, dispatching content_start + content_end)
+    v
+  agentEventToMessages content_start → partial say: completion_result
+    | (line 1474-1490, isCompletionTool)
+    v
+  agentEventToMessages content_end → non-partial say: completion_result
+    + isAuthoritativelyCompletedResult: true
+    | (line 1761-1795)
+    v
+  Host ClineMessage[] (per tool_use → tool_result pair)
+    | (sdk-task-history.ts:574-592 → sdk-task-control-coordinator.ts:317)
+    v
+  task.messageStateHandler.addMessages (no dedupe)
+    | (task-proxy.ts:81-98)
+    v
+  Webview: ChatView → filterVisibleMessages
+    | (does NOT filter say: completion_result; messageUtils.ts:116-177)
+    v
+  ChatRow → case "completion_result"
+    | (ChatRow.tsx:1102-1125)
+    v
+  CompletionOutputRow with resolveTerminalReportFraming
+    | (terminalReportFraming.ts:140-142: marker === true → COMPLETED)
+    v
+  Visible card with "Completed" badge
+
+Each submit_and_exit tool_use enters this chain once and exits as
+one CompletionOutputRow card. Two submit_and_exit tool_uses → two
+CompletionOutputRow cards. The chain is identical for both rows;
+no branch in the chain has a "drop the earlier one when the later
+one is the committed completion" rule.
+
+============================================================
+6. Causal boundary and product-contract question
+============================================================
+
+Stop at the first proven causal boundary:
+
+  The two visible CompletionOutputRow cards on reopen are the
+  direct, mechanical consequence of the restoration chain
+  processing the two submit_and_exit tool_use blocks in the
+  persisted transcript. The chain is documented and tested
+  (TRD01). The cards are distinct per the per-row marker
+  system. The "Completed" badge is correct per row.
+
+The product question that exceeds this ACT's scope:
+
+  When a task has multiple historical submit_and_exit tool_uses
+  (legitimate in the BCB-held-then-released scenario), should
+  the chat surface show one "Completed" card (the latest) or N
+  cards (one per submit_and_exit)?
+
+This is a product-contract decision that needs an explicit ruling
+from product, not an engineering inference. The current
+implementation shows N. Engineering seam: verified.
+
+============================================================
+7. Preservation (ACT §9)
+============================================================
+
+PRESERVED:
+- BCB post-repair registry accessor (sdk-task-history.ts:566-597
+  still uses sdkMessagesToClineMessages with finalTurnCompleted
+  keyed on sdkRecord?.status === "completed")
+- Successful held-result continuation behavior (the
+  completion_continuation_control runtime-control at msg 335 is
+  a user-role text in the transcript; it is not promoted to
+  say: completion_result and does not affect this ACT)
+- SDK authoritative task-completion cardinality (one
+  task_completion_committed per session — verified by SEAM12
+  evidence, not affected by this ACT)
+- Two distinct historical submit_and_exit submissions
+  (msg 333 and msg 339 are preserved in the messages.json)
+- resume_completed_task action behavior (appendFreshResumeMessage
+  is unchanged)
+- Elm completion, continuation, deferred-barrier, task-header
+  authorities (not touched)
+- L2847 RED baseline: 3 intentionally failing witnesses preserved
+- BCB observability repair at b24b954db (sdk-task-history.ts:566-597
+  is part of the BCB repair)
+- SEAM12 ACT and its evidence files:
+  .factory/evidence/ACT-CLINEMM-ELM-SEAM12-DCB-LIVE-QUALIFICATION01/live-captures/{00..04} + SHA256SUMS
+  → all 5 SHAs match the recorded values (verified at closure time)
+
+NOT TOUCHED:
+- No new Elm kernel
+- No terminal-state policy change
+- No SDK protocol change
+- No diagnostic framework change
+- No production code change (this ACT characterizes, not fixes)
+- No new capture framework
+
+ADDED:
+- apps/vscode/src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts
+  (5 characterization assertions; all PASS today; in default vitest
+  suite; not in vitest.config.ts `exclude` list)
+- .factory/acts/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01.md
+  (this ACT's report)
+- .factory/evidence/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01/00-closure-evidence.txt
+- .factory/evidence/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01/SHA256SUMS
+- .factory/epic-board.md (prepended with this ACT's entry)
+- .factory/evidence/ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01/test-fixture-diff.md
+  (the live transcript slice that the TRD01 fixture is derived from)

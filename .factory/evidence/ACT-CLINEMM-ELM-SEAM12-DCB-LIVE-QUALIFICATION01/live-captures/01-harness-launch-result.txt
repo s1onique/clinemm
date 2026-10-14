@@ -1,0 +1,37 @@
+# Debug harness launch attempts (replay of prior SEAM04 live-qualification blocker)
+
+# Attempt 1: with original harness (PID 6096, --auto-launch on port 19229)
+# Electron binary: .vscode-test/vscode-darwin-arm64-1.103.0/Visual Studio Code.app/Contents/MacOS/Electron
+# Result: SIGSEGV (exit 139) — identical to the blocker documented in
+#   .factory/acts/ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01.md
+#   01-electron-sandbox-blocker.md
+#
+# Playwright call log:
+#   - launching .../Electron --inspect=0 --remote-debugging-port=0 --inspect-extensions=9230
+#     --extensionDevelopmentPath=.../apps/vscode --disable-extensions --disable-workspace-trust
+#     --no-sandbox --disable-updates --skip-welcome --skip-release-notes --disable-gpu
+#     --disable-gpu-compositing --disable-software-rasterizer --disable-dev-shm-usage
+#     --user-data-dir=.../cline-debug-profile-XXXXXX /tmp/clinemm-live
+#   - launched pid=XXXXX
+#   - <kill>  <will force kill>
+#   - exception while trying to kill process: Error: kill EPERM
+#   - <process did exit: exitCode=null, signal=SIGSEGV>
+
+# Attempt 2: with VSCODE_TEST_VERSION=1.100.0 (downloaded)
+# Result: Failed to download and unzip VS Code 1.100.0
+#   (download attempt aborted; harness stays up)
+
+# Attempt 3: direct VSCodium launch via /opt/homebrew/bin/codium (with dogfood env)
+# Result: task_name_for_pid: (os/kern) failure (5) — codesign error
+#   (sandbox restricts direct VSCodium launch from this shell)
+
+# The existing VSCodium process (PID 14074) was launched in a prior shell session
+# (started at 2:36 PM) with the post-BCB-repair extension installed at
+# /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/
+# It runs the live Cline task 1791892624249_io4fp (PID 14116 in the same process group).
+
+# Conclusion: same environmental blocker as the prior SEAM04 live qualification.
+# The harness's downloaded VSCode 1.103.0 segfaults under Playwright on this macOS host.
+# Direct VSCodium launch also fails (codesign restriction).
+# The existing VSCodium (which has the post-BCB-repair extension) is operational
+# and is the live Cline task we are running right now.

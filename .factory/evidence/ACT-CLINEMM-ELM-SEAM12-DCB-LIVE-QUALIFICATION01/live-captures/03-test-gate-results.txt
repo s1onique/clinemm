@@ -1,0 +1,36 @@
+# Executable test gate (all run via vitest, no VSCode host required)
+
+# SEAM08 / DCB tests (5 files, 49 tests):
+#   deferred-completion-barrier-elm-coordinator-qualification.dcbr01.test.ts         15/15 PASS
+#   deferred-completion-barrier-elm-interop-discriminator.dcbeid01.test.ts          10/10 PASS
+#   deferred-completion-barrier-elm-settlement-and-dupes.dcbsd01.test.ts             8/8  PASS
+#   deferred-completion-barrier-elm-stale-decision.dcbesd01.test.ts                  5/5  PASS
+#   deferred-completion-barrier-elm-transport-correlation.dcbtc01.test.ts           11/11 PASS
+# Total: 49/49 PASS
+
+# BCB tests (3 files, 63 tests, all preserved from BCB-OBSERVABILITY-REPAIR01):
+#   bcb-observation-unavailable-observability-repair01.bcbobsrv01.test.ts            13/13 PASS
+#   bcb-observation-unavailable-capture.bcapt01.test.ts                              26/26 PASS
+#   bcb-observation-unavailable-dogfood-profile-activation.bcbcap01.test.ts          24/24 PASS
+# Total: 63/63 PASS
+
+# SEAM04 / CC tests (9 files, 91 tests):
+#   completion-continuation-control-authority01.ccca01.test.ts                       35/35 PASS
+#   completion-continuation-control-elm-authority-cutover.ccac01.test.ts              6/6  PASS
+#   completion-continuation-control-elm-capability.cccap01.test.ts                    8/8  PASS
+#   completion-continuation-control-elm-conservation.cccs01.test.ts                  5/5  PASS
+#   completion-continuation-control-elm-correspondence.cccec01.test.ts                9/9  PASS
+#   completion-continuation-control-elm-loader-discriminator.ccld01.test.ts          7/7  PASS
+#   completion-continuation-control-elm-malformed.ccmb01.test.ts                    15/15 PASS
+#   completion-continuation-control-elm-namespace-coexistence.ccnc01.test.ts         2/2  PASS
+#   completion-continuation-control-elm-production-wiring.ccpw01.test.ts              4/4  PASS
+# Total: 91/91 PASS
+
+# L2847 RED preservation (TDD-RED01, 1 file, 14 tests):
+#   3 RED (TDD-01.A, TDD-01.B, TDD-07) / 11 PASS
+# EXACTLY MATCHES the frozen BCB-OBSERVABILITY-REPAIR01 baseline.
+
+# OCRRD01 c2-4-c-bridge (real LocalRuntimeHost integration, 1 file, 5 tests):
+#   observation-capability-runtime-registry-discriminator01.ocrrd01.c24-c-bridge.test.ts  5/5 PASS
+
+# Grand total: 211 tests, 3 RED (preserved) / 208 PASS / 0 NEW failures.

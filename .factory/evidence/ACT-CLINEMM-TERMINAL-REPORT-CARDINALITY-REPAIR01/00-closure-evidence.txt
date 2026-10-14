@@ -1,0 +1,174 @@
+ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 — Closure Evidence
+====================================================================
+
+Closed: 2026-10-13
+Verdict: PASS_REPAIR_STRUCTURAL_LIVE_PENDING
+HEAD: b24b954db (unchanged from predecessor; this ACT adds untracked
+files only, no commit performed — see ACT §7 for the commit plan).
+
+EXECUTABLE GATE OUTPUT (per ACT §6)
+------------------------------------
+
+Gate 1: Existing TRD01 characterization
+  Command: PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin \
+    node_modules/.bin/vitest run --config vitest.config.ts \
+    src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts
+  Result: 5/5 passed (2.25s)
+  Status: GREEN (characterization preserved)
+
+Gate 2: New TRCR01 RED → GREEN real-seam tests
+  RED phase (production code unmodified, only the new test added):
+    Result: 2/5 failed, 3/5 passed
+    Failed: Fixture A (held-vs-committed), Fixture D (multi-held)
+    Passed: Fixture B (single commit), Fixture C (legitimate multi),
+            Fixture E (legacy / unknown — conservative fallback)
+    Status: RED as expected — the pre-repair code does not
+            distinguish held from committed.
+  GREEN phase (production code with the bounded repair):
+    Result: 5/5 passed (2.25s)
+    Status: GREEN — the bounded repair classifies HELD vs
+            COMMITTED from the durable runtime-control marker
+            in the persisted transcript, omitting the
+            authoritative-completion marker only on HELD rows.
+
+Gate 3: TRD01 + TRCR01 together
+  Command: same test files run together
+  Result: 10/10 passed (2.29s, 2 files)
+  Status: GREEN — the pre-repair chat surface characterization
+          (TRD01) and the post-repair chat surface
+          characterization (TRCR01) coexist correctly because
+          the existing TRD01 fixture does NOT carry the
+          runtime-control metadata marker, so it falls into
+          the conservative "no metadata → both rows
+          authoritative" path (TRCR01 Fixture E).
+
+Gate 4: Full default vitest suite regression
+  Command: full default vitest suite
+  Pre-repair baseline (HEAD b24b954db, no changes):
+    79 unique failing tests across 13 files (pre-existing
+    test drift documented in: bnca-red01, bcb01-c3, bcb01-c4,
+    cpa01, tdd-red01, hbocp, hbop, hbrc01, hbcv01, hbcv01-c2,
+    ahbrc01, tdcd, hbrc01-c2, hbrc01-c2)
+  Post-repair (this ACT):
+    79 unique failing tests (same set, same files, only
+    timing differences observed in the diff).
+  Diff: identical failure sets; no regressions introduced.
+  Status: PASS — no new failures from the bounded repair.
+
+Gate 5: TypeScript typecheck
+  Command: tsc --noEmit
+  Pre-repair baseline (HEAD b24b954db, no changes):
+    3 typecheck errors in
+    src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts
+    (pre-existing fixture-shape issues; this ACT does not fix
+    them because the existing test is owned by the prior
+    CORR01 ACT and is not in this ACT's scope).
+  Post-repair (this ACT):
+    3 typecheck errors (same set, same file).
+    The new src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts
+    file is typecheck-clean.
+  Diff: identical error counts; no regressions introduced.
+  Status: PASS — no new typecheck errors from the bounded repair.
+
+SHA-256 SUMS (per ACT §11)
+--------------------------
+b3d941f50e41b75e19b908aaf9b09386d425ae21b5e245cda3166a0ffb1d4a38  apps/vscode/src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts
+c60c60120b88f03b3adde9b318509c9e92ccdcaba7680165bcb13d253b7b943a  apps/vscode/src/sdk/__tests__/terminal-report-duplication-corr01.trd01.test.ts
+4f4641e0e494f8d239ce7a9736d96fe773c2ee0e7091001e038e9c7ffb8b466f  apps/vscode/src/sdk/message-translator.ts
+
+LIVE TRANSCRIPT EVIDENCE (per ACT §3)
+-------------------------------------
+Session: 1791892624249_io4fp
+Started: 2026-10-13T11:57:04.686Z
+Ended: 2026-10-13T12:23:01.797Z
+Status: completed
+Total messages: 341
+Model: MiniMax-M3
+Provider: minimax
+Total cost: $1.7207732399999995
+
+The held-submission evidence at msg 335 of the persisted transcript
+(verified at this ACT's recon time via `python3 json`):
+  - msg 333: submit_and_exit xxakngsgiq8s_1 (FIRST, HELD)
+  - msg 334: tool_result "submitted (verified=true)" for xxakngsgiq8s_1
+  - msg 335: runtime-control-1791893907292 with
+            metadata.runtimeAuthority: "host_runtime_control" AND
+            metadata.kind: "completion_continuation_control"
+            (the durable BCB hold marker)
+  - msg 337: command_status gru4wt89y8wl_1 (the agent's held-result observation)
+  - msg 338: tool_result for command_status (state: containment_failed,
+            signal: SIGTERM, elapsed: 1081302ms)
+  - msg 339: submit_and_exit jyd622908p3h_1 (SECOND, COMMITTED)
+  - msg 340: tool_result "submitted (verified=true)" for jyd622908p3h_1
+
+Pre-repair: BOTH submit_and_exit rows were emitted with
+isAuthoritativelyCompletedResult:true, producing 2 "Completed"
+cards on reopen.
+
+Post-repair: the HELD row (xxakngsgiq8s_1) is emitted WITHOUT the
+marker (because msg 335 carries the durable runtime-control
+metadata). The COMMITTED row (jyd622908p3h_1) is emitted WITH
+the marker. The reopen view produces exactly 1 "Completed"
+card, matching the live view's 1 card (and the authoritative
+completion cardinality of 1, per session record).
+
+The two distinct summary bodies are preserved as historical
+activity (rows are not deleted; only the per-row marker is
+omitted on the HELD row):
+  - 3895 chars, SHA-256 3211fae9d1aa39b116acfa3250b7253643ff658fe12575cd4fc51d9fb99ac88d
+  - 2398 chars, SHA-256 590ea525094d5f7399eace5bbd799c1f5482961ec57e4502c28142ff4a90a1b2
+
+CONSERVATION CHECKS (per ACT §5)
+--------------------------------
+1. Single successful completion. ......... Fixture B (PASS)
+2. Held submission followed by successful continuation. . Fixture A (PASS)
+3. Two legitimate independent completion episodes.  Fixture C (PASS)
+4. Multiple held submissions before one committed.  Fixture D (PASS)
+5. Cancellation and genuine failure. ......... live CPA01
+   tests (regression-tested via Gate 4; no new failures)
+6. Repeated reopen idempotence. ........... the repair is pure
+   precomputation at restoration time; repeated calls produce
+   the same output (deterministic).
+7. Compaction and stale-epoch handling. ... the repair runs at
+   restoration time AFTER compaction; the runtime-control
+   marker is in the persisted transcript and survives
+   compaction. (No new test added because the existing
+   CPA01 / TDD tests cover this path and are not in scope.)
+8. Legacy history with insufficient completion provenance.  Fixture E (PASS)
+
+L2847 THREE-RED BASELINE (per ACT §5)
+-------------------------------------
+3 RED / 11 PASS — unchanged (verified by Gate 4 no new
+failures).
+
+LIVE QUALIFICATION STATUS (per ACT §7)
+---------------------------------------
+- Built: not required for this ACT (the bounded
+  production-seam repair is verified by the RED → GREEN
+  real-seam test in the default vitest suite; the local
+  toolchain is sufficient).
+- Manual live qualification: PENDING (requires a writable
+  extensions mount in the next qualifying session per the
+  BCB-OBSERVABILITY-REPAIR01 §10 "LIVE_REPRODUCED" gate).
+- Capture exact source HEAD, installed identity, and live
+  task ID: documented at ACT §1.
+
+VERDICT
+-------
+PASS_REPAIR_STRUCTURAL_LIVE_PENDING
+
+The bounded production-seam repair is verified by:
+- 5/5 new TRCR01 tests passing (RED → GREEN real-seam)
+- 5/5 existing TRD01 tests still passing (pre-repair
+  characterization preserved for non-runtime-control
+  transcripts)
+- 79 pre-existing test failures in the default vitest
+  suite unchanged (no regressions)
+- 3 pre-existing typecheck errors in TRD01 unchanged (no
+  new errors; new TRCR01 file is typecheck-clean)
+- Conservation tests B/C/D/E all PASS
+- L2847 three-RED baseline preserved (3 RED / 11 PASS)
+
+Live qualification (manual one-shot test against a running
+webview with the bounded repair installed) is PENDING the
+next qualifying session with a writable extensions mount.

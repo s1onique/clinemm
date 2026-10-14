@@ -1,0 +1,71 @@
+# ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01 — closure evidence
+
+# Identity
+HEAD:                b24b954db (expected predecessor BCB-OBSERVABILITY-REPAIR01)
+Installed extension: s1onique.clinemm-4.1.16-5a1c485cb-b24b954db at
+                     /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/
+Live task session:   1791892624249_io4fp (started 2026-10-13T11:57:04.686Z)
+Live task cwd:       /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+Live task model:     minimax / MiniMax-M3
+Extension host PID:  14116 (current run)
+
+# Persisted evidence
+Session JSON:        /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/sessions/1791892624249_io4fp/1791892624249_io4fp.json (status=completed, exit_code=0)
+Messages JSON:       /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/sessions/1791892624249_io4fp/1791892624249_io4fp.messages.json (341 messages, 1218166 bytes)
+                     Two submit_and_exit tool_use blocks at msg 333 (ts 1791893907206) and msg 339 (ts 1791893920497).
+                     Held-observation runtime-control at msg 335 (ts 1791893907292, kind=completion_continuation_control).
+                     command_status on cmd_mv6mq5t8qhepcxxm at msg 337-338 (ts 1791893913014-1791893913026).
+
+# Cardinality authority (live, this task)
+File: /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/continuation-cardinality-authority.jsonl
+Events: 289
+submit_and_exit_seen: 2 (submitId submit-...-1 at 1791893907228, submitId submit-...-2 at 1791893920519)
+task_completion_committed: 1 (completionId completion-1791892624249_io4fp-1 at 1791893920558, origin deferred_continuation, run run_X2sJc8rF)
+terminal_committed: 275
+pending_prompt_enqueued: 1 (at 1791893907248, after first submit_and_exit)
+pending_prompt_dequeued: 1
+continuation_scheduled: 1
+continuation_started: 1 (at 1791893907305, promptId pending_1791893907248_3FaW_)
+agent_turn_done: 2
+execute_turn_prelude_enter: 2
+task_started: 1
+
+# Turn-state writer provenance (live, this task)
+File: /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/turn-state-writer-provenance.jsonl
+Events: 24
+- 1791893907248 session-event-pending-prompt-submitted, streaming→streaming, seq 2008 (first submit_and_exit; does NOT transition to completed)
+- 1791893920558 session-event-turn-complete-completed, streaming→completed, seq 2037 (second submit_and_exit; the ONE authoritative completion)
+- 1791894181769 controller-clear-task, completed→idle, seq 2039 (reopen, clear old task)
+- 1791894181773 controller-epoch-transition-reseed, epoch 3, idle, seq 2040
+- 1791894182719 controller-epoch-transition-reseed, epoch 4, idle, seq 2043
+- 1791894182818 task-control-resume-ask, epoch 4, idle→completed, seq 2044, anchorTs 1791894182817 (the synthesized resume ask)
+
+# Webview post-terminal-authority-diagnostic (live, this task)
+File (extension): /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/post-terminal-authority-diagnostic-extension.jsonl
+File (webview):   /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/post-terminal-authority-diagnostic-webview.jsonl
+
+Live (epoch 2) terminal events:
+- sv 2031 (1791893920522): messageTail {ts:621, say:completion_result, partial:true, seq:2034, epoch:2}
+- sv 2031 (1791893920547): messageTail {ts:621, say:completion_result, seq:2035}
+- sv 2036 (1791893920561): messageTail {ts:621, say:completion_result, partial:false, seq:2035}
+- sv 2038 (1791893920610): extension state attemptCompletionSeen=true, terminalResponseCommittedThisTurn=true
+- sv 2038 (1791893920642): messageTail {ts:621, say:completion_result, partial:false, seq:2035}, phase=completed
+
+Reopen (epoch 4) terminal events:
+- sv 2041 (1791894181860): epoch 3, phase=idle
+- sv 2042 (1791894181911): epoch 3, phase=idle
+- sv 2045 (1791894182885): epoch 4, messageTail {ts:1791894182817, type:ask, ask:resume_completed_task}
+- sv 2045 (1791894182895): buttonConfig {sendingDisabled:false, enableButtons:true, primaryText:Start New Task, primaryAction:new_task}, phase=completed
+
+# SEAM12 evidence integrity check
+File: .factory/evidence/ACT-CLINEMM-ELM-SEAM12-DCB-LIVE-QUALIFICATION01/live-captures/SHA256SUMS
+All 5 evidence files (00..04) match their recorded SHAs.
+
+# HELD-JOB CARDINALITY (live, this task)
+File: continuation-cardinality-authority.jsonl
+Search for jobId 'cmd_mv6mq5t8qhepcxxm': 0 entries
+The job was launched by the harness (which codium-clinemm discovery), killed by cancel_command
+after harness auto-launch SIGSEGV, and was NEVER tracked in the live in-task cardinality
+authority. This confirms SEAM12's LIVE_NO_TRIGGER verdict: the SEAM08 post-await
+enqueueCompletionContinuationIfHeld consult was not reached (gated on
+unconsumedOwnedTerminalResultsForC10 > 0).

@@ -1,0 +1,12 @@
+     × Fixture A: held submit_and_exit is NOT marked authoritative; committed one IS; both summary texts preserved 5ms
+     ✓ Fixture B: single submit_and_exit with no runtime-control in transcript → exactly one authoritative row 0ms
+     ✓ Fixture C: two LEGITIMATE independent completion episodes with NO runtime-control → both authoritative (multi-episode contract) 0ms
+     × Fixture D: two HELD attempts followed by one committed → only the committed row is authoritative 2ms
+     ✓ Fixture E: legacy / unknown runtime-control shape (no metadata.kind) → conservative: both rows stay authoritative (no fabrication of held-ness) 0ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts > ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 — TRCR01 (held-vs-committed at restoration) > Fixture A: held submit_and_exit is NOT marked authoritative; committed one IS; both summary texts preserved
+AssertionError: expected true not to be true // Object.is equality
+ FAIL  src/sdk/__tests__/terminal-report-cardinality-repair01.trcr01.test.ts > ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 — TRCR01 (held-vs-committed at restoration) > Fixture D: two HELD attempts followed by one committed → only the committed row is authoritative
+AssertionError: expected [ { ts: 3, type: 'say', …(4) }, …(2) ] to have a length of 1 but got 3
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
