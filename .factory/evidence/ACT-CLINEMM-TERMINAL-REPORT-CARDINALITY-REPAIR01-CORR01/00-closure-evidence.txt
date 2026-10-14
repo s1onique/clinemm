@@ -15,20 +15,22 @@ VSIX version: 4.1.16-5a1c485cb (same family as the parent b24b954db build; the
               installed `s1onique.clinemm-4.1.16-5a1c485cb-b24b954db`)
 The previously installed b24b954db build does NOT contain the CORR01 repair.
 
-Iterative amend note (the SUBJECT_HEAD field, as recorded in this committed
-evidence file, is the FINAL HEAD. The actual git HEAD is identical to the
-SUBJECT_HEAD value when the amend that records it lands. The previous
-amends recorded 92cd82ba7, 050d74fa4, and 1823977e2 in this field across
-the iterative edit loop; this is the final fixed state.):
-  - The VSIX was built from the committed HEAD c8fe8a446 (one of the
-    iterative-amend predecessors). The production content
+Iterative amend note (informational; the SUBJECT_HEAD field, as recorded in
+this committed evidence file, names the commit whose source tree produced
+the VSIX. The current git HEAD is one amend ahead because recording the
+SUBJECT_HEAD via amend produces a new SHA. The production content is
+byte-identical across the amend chain; the VSIX binds authoritatively to
+the production content, not to the recorded SHA.):
+  - The VSIX was built from the committed HEAD c8fe8a446 (a predecessor
+    of the SUBJECT_HEAD ba111f082; both contain the same production
+    content). The production content
     (message-translator.ts SHA-256 b0719795..., trcr01.test.ts SHA-256
     6187e374..., trd01.test.ts SHA-256 2475f4b8...) is byte-identical
-    across c8fe8a446, 050d74fa4, 92cd82ba7, and ba111f082. The
-    intervening amends only updated the self-referential SHA field in
-    this evidence file. So the VSIX SHA-256 fdb2e4d4... binds
-    authoritatively to the FINAL HEAD ba111f082 via the byte-identical
-    production content.
+    across the entire amend chain (1823977e2 → 050d74fa4 → c8fe8a446
+    → 92cd82ba7 → ba111f082 → 0f56b25c). The intervening amends only
+    updated the self-referential SUBJECT_HEAD field in this evidence
+    file. So the VSIX SHA-256 fdb2e4d4... binds authoritatively to
+    the production content carried by the SUBJECT_HEAD ba111f082.
 
 EXECUTABLE GATE OUTPUT (per ACT §5)
 ------------------------------------
