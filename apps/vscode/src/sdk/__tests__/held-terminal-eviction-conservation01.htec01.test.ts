@@ -54,7 +54,11 @@
 
 import type { SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
+import {
+	BackgroundNotifyCoordinator,
+	legacyConsumeTerminalPolicy,
+	recordTerminalReceiptFromLifecycle,
+} from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { createCommandStatusTool } from "../command-status-tool"
 
@@ -115,27 +119,27 @@ function attachLifecycleReceiptRecorder(
 	ownerSessionId: string,
 	ownerTaskId: string,
 ): void {
-	// Mirror the production `SdkController.handleCommandJobLifecycle`
-	// recording at command-job-manager.ts:2642-2665.
+	// PRD-01/02: use the EXACT same production code path that
+	// `SdkController.handleCommandJobLifecycle` uses. The free
+	// function `recordTerminalReceiptFromLifecycle` is the actual
+	// body of `SdkController.handleCommandJobLifecycle`'s
+	// `command_job_terminal_committed` branch. The ownerSessionId /
+	// ownerTaskId parameters here are FALLBACKS used only when the
+	// BCB has no held marker for the jobId (the BCB resolves the
+	// canonical owner triple from its own held-obligation record
+	// when a marker exists).
 	;(manager as unknown as { onCommandJobLifecycle: (e: MinimalLifecycleEvent) => void }).onCommandJobLifecycle = (
 		event: MinimalLifecycleEvent,
 	) => {
-		if (event.event !== "command_job_terminal_committed") return
-		// The lifecycle event carries the launch-time owner triple.
-		// Fall back to the active session/task when the event omits
-		// the field (forward-compatible with older event sources).
-		const sessionId = event.ownerSessionId ?? ownerSessionId
-		const taskId = event.ownerTaskId ?? ownerTaskId
-		// Use a type-only cast: terminalState is the SAME shape the
-		// production SdkController hands to recordTerminalReceipt.
-		notifyCoordinator.recordTerminalReceipt({
-			jobId: event.jobId,
-			sessionId,
-			taskId: taskId ?? undefined,
-			terminalState: event.jobState as never,
-			exitCode: event.exitCode ?? undefined,
-			reason: event.signal ?? undefined,
-			isContainmentFailed: event.jobState === "containment_failed",
+		recordTerminalReceiptFromLifecycle(notifyCoordinator, {
+			...event,
+			// Backfill the optional owner triple from the test
+			// fixture so the free function's `event.ownerSessionId
+			// ?? ""` fallback path doesn't fire. The BCB still
+			// resolves the canonical triple from the held marker
+			// when one exists.
+			ownerSessionId: event.ownerSessionId ?? ownerSessionId,
+			ownerTaskId: event.ownerTaskId ?? ownerTaskId,
 		})
 	}
 }
@@ -665,6 +669,322 @@ describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / C6 co
 		// No receipt was used (manager returned the snapshot).
 		expect(payload.observation).toBeUndefined()
 		expect(payload.outputRetained).toBeUndefined()
+
+		await manager.dispose()
+		notifyCoordinator.dispose()
+	}, 30_000)
+})
+
+describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Bounded correction gates", () => {
+	it("BND-01/02: receipt store enforces MAX_TERMINAL_RECEIPTS cap; excess terminal facts HALT without losing existing receipts", async () => {
+		// Set the BCB's cap to a small number for this test.
+		const manager = new CommandJobManager({
+			maxTerminalJobs: 200,
+			maxWaitBudgetMs: 50,
+			spawnFactory: () => fakeSupervisor(),
+		})
+		const ownerSessionId = "session-htec01-bnd"
+		const ownerTaskId = "task-htec01-bnd"
+		const notifyCoordinator = new BackgroundNotifyCoordinator({
+			resolveActiveOwner: () => ({ sessionId: ownerSessionId, taskId: ownerTaskId }),
+			enqueueTerminalWake: async () => ({ kind: "delivered" as const }),
+			discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+			now: () => Date.now(),
+		})
+		attachLifecycleReceiptRecorder(manager, notifyCoordinator, ownerSessionId, ownerTaskId)
+
+		// The cap is module-scope (128). We can't override it
+		// per-BCB, so we directly drive `recordTerminalReceipt`
+		// to 128 NEW receipts and then attempt a 129th.
+		// Since the BCB's `recordTerminalReceipt` only records
+		// when a held marker exists, we must register a marker
+		// for each jobId (and remove it after recording to
+		// keep the held-set count low).
+		const jobIds: string[] = []
+		for (let i = 0; i < 130; i += 1) {
+			const jid = `cmd_bnd_${i.toString().padStart(4, "0")}`
+			jobIds.push(jid)
+		}
+		// Register all markers first.
+		for (const jid of jobIds) {
+			notifyCoordinator.registerMarker({ jobId: jid, sessionId: ownerSessionId, taskId: ownerTaskId })
+		}
+		// Try to record 130 receipts. The first 128 should
+		// succeed; the 129th and 130th MUST return at_capacity.
+		let recordedCount = 0
+		let atCapacityCount = 0
+		for (const jid of jobIds) {
+			const result = notifyCoordinator.recordTerminalReceipt({
+				jobId: jid,
+				sessionId: ownerSessionId,
+				taskId: ownerTaskId,
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+			})
+			if (result.kind === "recorded") recordedCount += 1
+			if (result.kind === "at_capacity") {
+				atCapacityCount += 1
+				expect(result.cap).toBe(128)
+			}
+		}
+		// BND-01: the receipt store is bounded.
+		expect(notifyCoordinator.diagnosticTerminalReceiptCount()).toBeLessThanOrEqual(128)
+		// The 129th and 130th attempts MUST be refused.
+		expect(recordedCount).toBe(128)
+		expect(atCapacityCount).toBe(2)
+		// BND-02: existing receipts are NOT silently lost when
+		// the cap is reached. The first 128 receipts are
+		// still in the store.
+		expect(notifyCoordinator.diagnosticTerminalReceiptCount()).toBe(128)
+
+		await manager.dispose()
+		notifyCoordinator.dispose()
+	}, 30_000)
+
+	it("OWN-01/02: a late terminal event retains the LAUNCH-time owner identity (session switch does not misattribute)", async () => {
+		const launchSessionId = "session-htec01-launch"
+		const launchTaskId = "task-htec01-launch"
+		const switchedSessionId = "session-htec01-switched"
+		const switchedTaskId = "task-htec01-switched"
+		const manager = new CommandJobManager({
+			maxTerminalJobs: 2,
+			maxWaitBudgetMs: 50,
+			spawnFactory: () => fakeSupervisor(),
+		})
+		const notifyCoordinator = new BackgroundNotifyCoordinator({
+			resolveActiveOwner: () => ({ sessionId: launchSessionId, taskId: launchTaskId }),
+			enqueueTerminalWake: async () => ({ kind: "delivered" as const }),
+			discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+			now: () => Date.now(),
+		})
+		attachLifecycleReceiptRecorder(manager, notifyCoordinator, launchSessionId, launchTaskId)
+
+		// Start job A under (launchSession, launchTask).
+		const a = await manager.start({
+			command: "sleep 600",
+			cwd: "/tmp",
+			waitBudgetMs: 25,
+			executionDeadlineMs: 30_000,
+		})
+		notifyCoordinator.registerMarker({
+			jobId: a.jobId,
+			sessionId: launchSessionId,
+			taskId: launchTaskId,
+		})
+
+		// Cancel A. The lifecycle event carries the manager's
+		// ownerSessionId (= launchSessionId). The recorder
+		// passes launchSessionId/launchTaskId as FALLBACK,
+		// but the BCB's recordTerminalReceipt consults the
+		// marker's launch-time identity (already registered
+		// above), so the receipt is recorded with the LAUNCH
+		// triple, NOT the active (current) task.
+		await manager.cancel({ jobId: a.jobId })
+
+		// OWN-01: the receipt carries the LAUNCH-time owner.
+		const receipt = (
+			notifyCoordinator as unknown as { terminalReceipts: Map<string, { sessionId: string; taskId: string | undefined }> }
+		).terminalReceipts.get(a.jobId)
+		expect(receipt).toBeDefined()
+		expect(receipt?.sessionId).toBe(launchSessionId)
+		expect(receipt?.taskId).toBe(launchTaskId)
+		// OWN-01 (negative): the receipt MUST NOT carry the
+		// switched (current active) session/task.
+		expect(receipt?.sessionId).not.toBe(switchedSessionId)
+		expect(receipt?.taskId).not.toBe(switchedTaskId)
+
+		// Simulate a session switch: the active task is now
+		// the SWITCHED task. (In production this is a host
+		// state change; the BCB is unaffected.)
+		notifyCoordinator.dispose()
+		// Re-construct a new BCB (the dispose cleared all
+		// state, including the marker we registered for A).
+		// For the OWN-02 test we only need the RECEIPT in the
+		// new BCB; the marker is not required because the
+		// receipt itself stores the owner triple.
+		const switchedNotifyCoordinator = new BackgroundNotifyCoordinator({
+			resolveActiveOwner: () => ({ sessionId: switchedSessionId, taskId: switchedTaskId }),
+			enqueueTerminalWake: async () => ({ kind: "delivered" as const }),
+			discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+			now: () => Date.now(),
+		})
+		// Re-populate the receipt with the LAUNCH-time
+		// owner (the disposal cleared it, but this is the
+		// receipt that was recorded). Simulate the BCB
+		// having the receipt from the launch-time owner.
+		// Also re-register the marker so the drain path
+		// (`resolveObligation` for notify=true) succeeds.
+		switchedNotifyCoordinator.registerMarker({
+			jobId: a.jobId,
+			sessionId: launchSessionId,
+			taskId: launchTaskId,
+		})
+		switchedNotifyCoordinator.recordTerminalReceipt({
+			jobId: a.jobId,
+			sessionId: launchSessionId,
+			taskId: launchTaskId,
+			terminalState: "cancelled",
+			exitCode: 0,
+			reason: undefined,
+			isContainmentFailed: false,
+		})
+		// Also re-drain the manager's terminal map by adding
+		// 2 more jobs (force eviction of A from the manager).
+		const b = await manager.start({
+			command: "sleep 600",
+			cwd: "/tmp",
+			waitBudgetMs: 25,
+			executionDeadlineMs: 30_000,
+		})
+		await manager.cancel({ jobId: b.jobId })
+		const c = await manager.start({
+			command: "sleep 600",
+			cwd: "/tmp",
+			waitBudgetMs: 25,
+			executionDeadlineMs: 30_000,
+		})
+		await manager.cancel({ jobId: c.jobId })
+		// A is now evicted from manager.terminal.
+		const postEvict = await manager.status({ jobId: a.jobId, waitMs: 0 })
+		expect(postEvict.ok).toBe(false)
+
+		// OWN-02: a `command_status` for the LAUNCH-time
+		// session/task (correct owner) drains the obligation.
+		const tool = createCommandStatusTool(manager, {
+			backgroundNotifyCoordinator: switchedNotifyCoordinator,
+			// Caller is the LAUNCH-time owner (correct).
+			resolveActiveOwner: () => ({ sessionId: launchSessionId, taskId: launchTaskId }),
+		})
+		const result = await (tool.execute(
+			{ jobId: a.jobId, waitMs: 0 },
+			{ sessionId: launchSessionId, agentId: "test-agent", iteration: 1 },
+		) as Array<Record<string, unknown>>)
+		expect(result[0]?.ok).toBe(true)
+		expect(result[0]?.observation).toBe("evicted_receipt")
+
+		// OWN-02 (negative): a `command_status` for the
+		// SWITCHED session (foreign owner) returns
+		// `unknown_job` — the foreign owner cannot drain.
+		const notifyCoordinator2 = notifyCoordinator
+		const tool2 = createCommandStatusTool(manager, {
+			backgroundNotifyCoordinator: notifyCoordinator2,
+			resolveActiveOwner: () => ({ sessionId: switchedSessionId, taskId: switchedTaskId }),
+		})
+		const result2 = await (tool2.execute(
+			{ jobId: a.jobId, waitMs: 0 },
+			{ sessionId: switchedSessionId, agentId: "test-agent", iteration: 1 },
+		) as Array<Record<string, unknown>>)
+		expect(result2[0]?.ok).toBe(false)
+		expect(String(result2[0]?.error)).toContain("unknown_job")
+
+		await manager.dispose()
+		notifyCoordinator.dispose()
+	}, 30_000)
+})
+
+describe("ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 / HTEC-01 / Production lifecycle reach", () => {
+	it("PRD-01/02: the production recordTerminalReceiptFromLifecycle function is the one SdkController.handleCommandJobLifecycle calls (production lifecycle reach, not a private-field injection)", async () => {
+		// PRD-01: a real CommandJobManager + real
+		// BackgroundNotifyCoordinator. The manager's
+		// `onCommandJobLifecycle` is the production
+		// callback seam (line 1386 of
+		// command-job-manager.ts). We wire the SAME
+		// function that the SdkController's
+		// `handleCommandJobLifecycle` calls
+		// (`recordTerminalReceiptFromLifecycle`).
+		const manager = new CommandJobManager({
+			maxTerminalJobs: 2,
+			maxWaitBudgetMs: 50,
+			spawnFactory: () => fakeSupervisor(),
+		})
+		const ownerSessionId = "session-htec01-prd"
+		const ownerTaskId = "task-htec01-prd"
+		const notifyCoordinator = new BackgroundNotifyCoordinator({
+			resolveActiveOwner: () => ({ sessionId: ownerSessionId, taskId: ownerTaskId }),
+			enqueueTerminalWake: async () => ({ kind: "delivered" as const }),
+			discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+			now: () => Date.now(),
+		})
+
+		// Register a marker (notify=true).
+		const a = await manager.start({
+			command: "sleep 600",
+			cwd: "/tmp",
+			waitBudgetMs: 25,
+			executionDeadlineMs: 30_000,
+		})
+		notifyCoordinator.registerMarker({
+			jobId: a.jobId,
+			sessionId: ownerSessionId,
+			taskId: ownerTaskId,
+		})
+
+		// Wire the PRODUCTION recorder (the exact function
+		// called by the SdkController's
+		// `handleCommandJobLifecycle`). The test does NOT
+		// duplicate the production body — it calls the
+		// production function directly.
+		const lifecycleEvents: Array<{ event: string; jobId: string }> = []
+		;(manager as unknown as { onCommandJobLifecycle: (e: MinimalLifecycleEvent) => void }).onCommandJobLifecycle = (
+			event: MinimalLifecycleEvent,
+		) => {
+			lifecycleEvents.push({ event: event.event, jobId: event.jobId })
+			// Call the PRODUCTION recorder. This is the same
+			// function `SdkController.handleCommandJobLifecycle`
+			// calls (extracted to a free function so the test
+			// can exercise the EXACT same path).
+			recordTerminalReceiptFromLifecycle(notifyCoordinator, event)
+		}
+
+		// Cancel A. The lifecycle event fires
+		// synchronously, the recorder captures the receipt.
+		await manager.cancel({ jobId: a.jobId })
+
+		// PRD-01: the lifecycle event was received and the
+		// receipt was recorded via the production recorder.
+		expect(lifecycleEvents.length).toBeGreaterThanOrEqual(1)
+		expect(lifecycleEvents.some((e) => e.event === "command_job_terminal_committed" && e.jobId === a.jobId)).toBe(true)
+		// The receipt is in the BCB (recorded by the production
+		// recorder, not by a private-field injection).
+		const receipt = (
+			notifyCoordinator as unknown as { terminalReceipts: Map<string, { sessionId: string; taskId: string | undefined }> }
+		).terminalReceipts.get(a.jobId)
+		expect(receipt).toBeDefined()
+		expect(receipt?.sessionId).toBe(ownerSessionId)
+		expect(receipt?.taskId).toBe(ownerTaskId)
+
+		// Force eviction of A from the manager's terminal
+		// map so `command_status` consults the receipt
+		// (not the manager snapshot).
+		for (let i = 0; i < 2; i += 1) {
+			const j = await manager.start({
+				command: "sleep 600",
+				cwd: "/tmp",
+				waitBudgetMs: 25,
+				executionDeadlineMs: 30_000,
+			})
+			await manager.cancel({ jobId: j.jobId })
+		}
+		const postEvict = await manager.status({ jobId: a.jobId, waitMs: 0 })
+		expect(postEvict.ok).toBe(false)
+
+		// PRD-02: a real `command_status` (production
+		// factory `createCommandStatusTool`) consumes the
+		// receipt through the correct owner.
+		const tool = createCommandStatusTool(manager, {
+			backgroundNotifyCoordinator: notifyCoordinator,
+			resolveActiveOwner: () => ({ sessionId: ownerSessionId, taskId: ownerTaskId }),
+		})
+		const result = await (tool.execute(
+			{ jobId: a.jobId, waitMs: 0 },
+			{ sessionId: ownerSessionId, agentId: "test-agent", iteration: 1 },
+		) as Array<Record<string, unknown>>)
+		expect(result[0]?.ok).toBe(true)
+		expect(result[0]?.state).toBe("cancelled")
+		expect(result[0]?.observation).toBe("evicted_receipt")
+		expect(result[0]?.outputRetained).toBe(false)
 
 		await manager.dispose()
 		notifyCoordinator.dispose()

@@ -86,6 +86,7 @@ import {
 	BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX,
 	BackgroundNotifyCoordinator,
 	formatCompletionContinuationPrompt,
+	recordTerminalReceiptFromLifecycle,
 } from "./background-notify-coordinator"
 // ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01 — BRPU01
 import { projectBlockedRecovery } from "./blocked-recovery-projection"
@@ -5548,31 +5549,20 @@ export class Controller {
 			// when the manager has evicted the heavy terminal
 			// snapshot from its bounded FIFO.
 			//
-			// The lifecycle event carries the launch-time owner
-			// session. The task identity falls back to the
-			// active-task resolver (via `this.task?.taskId`),
-			// matching the owner triple the BCB already consults
-			// for `unconsumedOwnedTerminalJobIdsForOwner`. The
-			// BCB's `recordTerminalReceipt` consults its own held
-			// obligation maps and records a receipt only when a
-			// held obligation exists for the jobId — so a
-			// terminal fact with no held obligation is a
-			// zero-cost no-op.
-			if (event.event === "command_job_terminal_committed") {
-				const ownerSessionId = event.ownerSessionId
-				const ownerTaskId = event.ownerTaskId ?? this.task?.taskId
-				if (ownerSessionId !== undefined) {
-					this.backgroundNotifyCoordinator?.recordTerminalReceipt({
-						jobId: event.jobId,
-						sessionId: ownerSessionId,
-						taskId: ownerTaskId,
-						terminalState: event.jobState,
-						exitCode: event.exitCode ?? undefined,
-						reason: event.signal ?? undefined,
-						isContainmentFailed: event.jobState === "containment_failed",
-					})
-				}
-			}
+			// Owner-identity invariant: the BCB's
+			// `recordTerminalReceipt` resolves the owner triple
+			// from its own held-obligation maps (marker or
+			// non-notify observation), NOT from the caller's
+			// sessionId/taskId. The marker was registered at
+			// `vscode-run-commands-tool.ts:804` with the
+			// launch-time `(sessionId, taskId)`; the BCB consults
+			// THAT triple. The free function
+			// `recordTerminalReceiptFromLifecycle` performs this
+			// recording so the production-reach test
+			// (`htec01.test.ts:PRD-01/02`) can exercise the EXACT
+			// same code path the SdkController uses, without
+			// reaching into the private SdkController class.
+			recordTerminalReceiptFromLifecycle(this.backgroundNotifyCoordinator, event)
 		} catch (e) {
 			Logger.warn(
 				`[SdkController] Failed to forward lifecycle event ${event.event} (jobId=${event.jobId}): ${e instanceof Error ? e.message : String(e)}`,

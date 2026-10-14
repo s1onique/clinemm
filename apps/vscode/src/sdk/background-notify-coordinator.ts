@@ -53,6 +53,28 @@ export const NOTIFY_WAKE_PROMPT_MAX_BYTES = 8192
 export const NOTIFY_WAKE_PROMPT_SOFT_TARGET_BYTES = 4096
 
 /**
+ * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+ *
+ * Hard cap on the `terminalReceipts` store. When the cap is
+ * reached, `recordTerminalReceipt` returns
+ * `{ kind: "at_capacity" }` WITHOUT recording and surfaces a HALT
+ * via `recordNotifyDecision`. This is the bounded-fix's
+ * resource-conservation invariant: a finite receipt store, never
+ * silently growing into a second unbounded cache. Matches the
+ * `CommandJobManager.MAX_TERMINAL_JOBS` cap (same semantic
+ * boundary: how many terminal jobs the runtime keeps around).
+ *
+ * The cap is intentionally identical to the manager's heavy
+ * retention cap (128). Exceeding this cap means the BCB holds
+ * more unresolved terminal facts than the manager has room to
+ * retain; the caller must drain some before the next can be
+ * recorded. This is the load-bearing resource/authority
+ * trade-off: a cap that loses obligations to a fixed bound is
+ * safer than a "best-effort" cap that grows unbounded.
+ */
+export const MAX_TERMINAL_RECEIPTS = 128
+
+/**
  * Single-source-of-truth prefix for the terminal-wake prompt produced
  * by `formatTerminalWakePrompt`. Exported so the synthetic-prompt
  * predicate in `sdk-user-message-mapping.ts` can match the wake with a
@@ -1474,56 +1496,116 @@ export class BackgroundNotifyCoordinator {
 	 * held-set obligation when the `CommandJobManager` has already
 	 * evicted the heavy terminal snapshot.
 	 *
-	 * The receipt is recorded only when the BCB has a held
-	 * obligation for `jobId` (i.e. a live `notificationMarkers`
-	 * entry for notify=true, OR a `nonNotifyTerminalObservations`
-	 * entry for fire-and-forget). A terminal fact with no held
-	 * obligation is a no-op for the receipt store.
+	 * Owner-triple resolution (load-bearing): the receipt's
+	 * `(sessionId, taskId)` triple is ALWAYS resolved from the
+	 * BCB's own held-obligation maps, NOT from the caller's
+	 * `input.sessionId` / `input.taskId`. This is the
+	 * conservation-of-launch-identity invariant: a job's
+	 * notification marker is registered at
+	 * `vscode-run-commands-tool.ts:804` with the launch-time
+	 * `(sessionId, taskId)`. A later lifecycle event from the
+	 * `SdkController` may carry a DIFFERENT active-task identity
+	 * (after a session switch) — using that identity would
+	 * misattribute the receipt to an unrelated task. The BCB
+	 * looks up the marker and copies the LAUNCH-TIME owner triple
+	 * from there. The `input.sessionId` / `input.taskId` are
+	 * IGNORED except as a fallback when no marker is present
+	 * (in which case the receipt is recorded against the
+	 * non-notify observation's owner, or against the input
+	 * triple as a last resort — and the BCB logs a HALT warning
+	 * for the last-resort case).
 	 *
-	 * Idempotency: re-recording the same jobId replaces the prior
-	 * receipt. Bounded: the receipt's lifetime tracks the
-	 * obligation's lifetime — when the obligation is consumed
-	 * (any path), the receipt is cleared. On `dispose()`, the
-	 * whole store is cleared.
+	 * Resource cap (load-bearing): the receipt store is bounded
+	 * to `MAX_TERMINAL_RECEIPTS` (default 128 — same as the
+	 * CommandJobManager's `maxTerminalJobs`). When the cap is
+	 * reached, `recordTerminalReceipt` returns `{ kind:
+	 * "at_capacity" }` WITHOUT recording and emits a HALT warning
+	 * via the optional `recordNotifyDecision` audit sink.
+	 * Silently dropping the receipt would recreate the original
+	 * bug (held obligation unresolvable); the HALT surfaces the
+	 * resource/authority trade-off explicitly.
+	 *
+	 * The BCB's `dispose()` clears the whole store; the per-receipt
+	 * lifetime is bounded by the obligation's lifetime (cleared
+	 * on `resolveObligation` / `consumeNonNotifyTerminalObservation`
+	 * / `consumeTerminal` settled paths).
 	 */
 	recordTerminalReceipt(input: {
 		jobId: string
+		/**
+		 * FALLBACK sessionId. IGNORED when a held marker or
+		 * non-notify observation exists for this jobId
+		 * (the BCB uses the marker/observation's launch-time
+		 * sessionId instead). Used only as a last-resort when
+		 * the BCB has no held obligation for this jobId AND
+		 * the caller is still asking us to record — this should
+		 * be rare and indicates a wiring issue, surfaced as a
+		 * HALT warning.
+		 */
 		sessionId: string
+		/**
+		 * FALLBACK taskId. Same semantics as `sessionId`.
+		 */
 		taskId: string | undefined
 		terminalState: CommandJobState
 		exitCode: number | undefined
 		reason: string | undefined
 		isContainmentFailed: boolean
-	}): void {
-		if (this.disposed) return
-		if (!input.jobId || typeof input.jobId !== "string") return
-		// Only record when there is a held obligation for this
-		// jobId. The obligation is held if EITHER:
-		//   - a live `notificationMarkers` entry (notify=true), OR
-		//   - a `nonNotifyTerminalObservations` entry
-		//     (fire-and-forget), OR
-		//   - a `reservedMarkers` entry (the marker was moved
-		//     here at `consumeTerminal` entry — the receipt is
-		//     recorded at the SAME entry seam, so the marker
-		//     has just been moved out of `notificationMarkers`
-		//     and into `reservedMarkers`; the receipt MUST be
-		//     recorded so a later Path B drain can succeed).
-		// The `reservedMarkers.has` check is the load-bearing
-		// one for the `consumeTerminal` Path A entry seam.
-		const hasMarker = this.notificationMarkers.has(input.jobId)
+	}): { kind: "recorded" } | { kind: "no_obligation" } | { kind: "at_capacity"; cap: number } {
+		if (this.disposed) return { kind: "no_obligation" }
+		if (!input.jobId || typeof input.jobId !== "string") return { kind: "no_obligation" }
+		// Owner-triple resolution: prefer the marker's launch-time
+		// triple, then the non-notify observation's owner triple,
+		// then the caller's fallback. The MARKER path is the only
+		// one that guarantees a stable launch-time identity.
+		const marker = this.notificationMarkers.get(input.jobId) ?? this.reservedMarkers.get(input.jobId)
+		const nonNotifyOwner = this.nonNotifyTerminalObservations.get(input.jobId)
+		const hasMarker = !!marker
 		const hasReserved = this.reservedMarkers.has(input.jobId)
-		const hasNonNotify = this.nonNotifyTerminalObservations.has(input.jobId)
+		const hasNonNotify = !!nonNotifyOwner
 		if (!hasMarker && !hasReserved && !hasNonNotify) {
-			return
+			return { kind: "no_obligation" }
 		}
-		// `outputRetained` is the bounded fix's load-bearing
-		// truthful distinction: the heavy stdout/stderr payload
-		// is NOT retained in the receipt. The model can never
-		// confuse a receipt for a full observation.
+		// Resolve owner from the held-obligation record. The
+		// `input.sessionId` / `input.taskId` fallbacks are only
+		// consulted if the held record lacks an identity (defensive).
+		let resolvedSessionId: string
+		let resolvedTaskId: string | undefined
+		if (marker) {
+			resolvedSessionId = marker.sessionId
+			resolvedTaskId = marker.taskId
+		} else if (nonNotifyOwner) {
+			resolvedSessionId = nonNotifyOwner.sessionId
+			resolvedTaskId = nonNotifyOwner.taskId
+		} else {
+			// Has reserved but no marker snapshot (defensive).
+			resolvedSessionId = input.sessionId
+			resolvedTaskId = input.taskId
+		}
+		// Resource cap enforcement.
+		if (this.terminalReceipts.size >= MAX_TERMINAL_RECEIPTS && !this.terminalReceipts.has(input.jobId)) {
+			// Cap reached AND this is a new receipt (not a
+			// replacement). Refuse to record and surface a HALT
+			// warning. Silently dropping the receipt would
+			// recreate the original bug.
+			const cap = MAX_TERMINAL_RECEIPTS
+			this.options.recordNotifyDecision?.({
+				jobId: input.jobId,
+				sessionId: resolvedSessionId,
+				taskId: resolvedTaskId,
+				decision: "wake_dispatch_rejected",
+				reason: `terminal_receipts_at_capacity:cap=${cap}:existing=${this.terminalReceipts.size}`,
+				heldCount: 0,
+				activeNotifyCount: 0,
+				capturedAtMs: this.options.now(),
+			})
+			return { kind: "at_capacity", cap }
+		}
+		// Record (or replace) the receipt.
 		const receipt: CompactTerminalReceipt = {
 			jobId: input.jobId,
-			sessionId: input.sessionId,
-			taskId: input.taskId,
+			sessionId: resolvedSessionId,
+			taskId: resolvedTaskId,
 			terminalState: input.terminalState,
 			exitCode: input.exitCode,
 			reason: input.reason,
@@ -1532,6 +1614,7 @@ export class BackgroundNotifyCoordinator {
 			recordedAtMs: this.options.now(),
 		}
 		this.terminalReceipts.set(input.jobId, receipt)
+		return { kind: "recorded" }
 	}
 
 	/**
@@ -2616,4 +2699,63 @@ export const legacyConsumeTerminalPolicy: ConsumeTerminalAuthorityFn = async (in
 		summary: `drained:${input.jobId}:1`,
 		requestId: null,
 	}
+}
+
+/**
+ * ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01:
+ *
+ * The PRODUCTION lifecycle-receipt recorder. The
+ * `CommandJobManager`'s `onCommandJobLifecycle` sink calls this
+ * function (via `SdkController.handleCommandJobLifecycle`) when
+ * a `command_job_terminal_committed` event fires. The recorder
+ * forwards the event's terminal classification to the BCB's
+ * `recordTerminalReceipt` (which resolves the canonical owner
+ * triple from the held-obligation record).
+ *
+ * Extracted from `SdkController.handleCommandJobLifecycle` as a
+ * free function so the production-reach test
+ * (`htec01.test.ts:PRD-01/02`) can exercise the EXACT same code
+ * path the SdkController uses, without reaching into the
+ * private `SdkController` class.
+ *
+ * The function is a no-op for any lifecycle event other than
+ * `command_job_terminal_committed`. Errors are swallowed (logged
+ * via `console.warn` in production; the BCB's `recordTerminalReceipt`
+ * is itself error-safe).
+ */
+export function recordTerminalReceiptFromLifecycle(
+	coordinator: BackgroundNotifyCoordinator | undefined,
+	event: {
+		event: string
+		jobId: string
+		ownerSessionId?: string
+		ownerTaskId?: string | null
+		jobState: string
+		exitCode?: number | null
+		signal?: string | null
+	},
+): { kind: "recorded" } | { kind: "no_obligation" } | { kind: "at_capacity"; cap: number } | { kind: "ignored" } {
+	if (event.event !== "command_job_terminal_committed") {
+		return { kind: "ignored" }
+	}
+	if (!coordinator) {
+		return { kind: "no_obligation" }
+	}
+	return coordinator.recordTerminalReceipt({
+		jobId: event.jobId,
+		// Fallback owner session (used only when BCB has no held
+		// marker for this jobId). The BCB's `recordTerminalReceipt`
+		// resolves the canonical sessionId from the held-obligation
+		// record (marker or non-notify observation) — the
+		// launch-time identity, NOT the current active session.
+		sessionId: event.ownerSessionId ?? "",
+		// Fallback taskId. Deliberately `undefined` so the BCB does
+		// NOT consult any "current active task" — it resolves the
+		// canonical taskId from the held-obligation record.
+		taskId: event.ownerTaskId ?? undefined,
+		terminalState: event.jobState as never,
+		exitCode: event.exitCode ?? undefined,
+		reason: event.signal ?? undefined,
+		isContainmentFailed: event.jobState === "containment_failed",
+	})
 }
