@@ -1,3 +1,54 @@
+# ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR01 — PASS_HELD_TERMINAL_EVICTION_REPAIR (correction) — 2026-10-14
+
+**Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_EVICTION_REPAIR`** (correction cycle). The 3 P0/P1 reviewer gates (BND/OWN/PRD) are all PROVEN. Original ACT verdict preserved (`LIVE_UNOBSERVABLE`).
+
+**Predecessor:** `72cab0274` (HTEC01 closure). Reviewer halt: `HALT_HELD_TERMINAL_RECEIPT_CONSERVATION_UNPROVEN`.
+
+**Repository HEAD:** `76928334f` (CORR00 source) → `c4efb8ed9` (CORR01 subject). 3 files, 532 insertions, 80 deletions.
+
+**Bounded correction (1 BCB, 1 controller, 1 test, 0 new persistent state):**
+
+1. **BND-01/02 — Hard cap on receipt store:**
+   - `MAX_TERMINAL_RECEIPTS=128` constant in `background-notify-coordinator.ts`
+   - `recordTerminalReceipt` returns `{ kind: "at_capacity", cap }` when the cap is reached AND the receipt is a new one (not a replacement)
+   - HALT surfaced via `recordNotifyDecision` audit sink (NOT a silent drop)
+   - New test BND-01/02 verifies: 130 markers registered, 128 receipts recorded, 2 returns `{ kind: "at_capacity", cap: 128 }`, the 128 receipts are NOT lost
+
+2. **OWN-01/02 — Launch-time owner identity preservation:**
+   - `recordTerminalReceipt` resolves owner triple from held-obligation record (marker or non-notify observation), NOT from caller input
+   - `SdkController.handleCommandJobLifecycle` no longer falls back to `this.task?.taskId` (the reviewer's specific concern)
+   - The SdkController now passes `event.ownerTaskId ?? undefined` (a placeholder; the BCB resolves the canonical triple from its held marker)
+   - New test OWN-01/02 verifies: register marker under (S1, T1), simulate session switch to (S2, T2), the receipt's owner triple is (S1, T1) — NOT the switched (S2, T2)
+
+3. **PRD-01/02 — Production lifecycle reach:**
+   - Extracted `recordTerminalReceiptFromLifecycle` as a free function in `background-notify-coordinator.ts`
+   - `SdkController.handleCommandJobLifecycle` now calls this free function (instead of inlining the body)
+   - The test wires the SAME free function into `manager.onCommandJobLifecycle` — no private-field injection of a test mirror
+   - New test PRD-01/02 verifies: production function records a receipt and a real `command_status` consumes it through the correct owner
+
+**Tests (9 total, 6 original + 3 new gate tests):**
+- 6/6 original (RED→GREEN, ablation, EVC-04/05/11/14) — preserved
+- 3/3 new gates (BND-01/02, OWN-01/02, PRD-01/02) — all PROVEN
+- 0 regressions in BCLAS / host-blocked-recovery / background-notify-exactly-once-presentation
+- 0 typecheck errors
+- 0 biome lint errors
+
+**Pre-existing failures (verified via `git stash` baseline, no new failures):** `background-completion-barrier01.bcb01.test.ts` (13/14), `background-completion-barrier01-correction{01,02,03,04}.bcb01-c*.test.ts`, `command-job-manager.test.ts` (18/20). All predate `1fa435d0e`.
+
+**Gates:**
+```
+HTEC01_IMPLEMENTATION:       PASS
+HTEC01_CAUSAL_REPRODUCTION:  SYNTHETIC_REAL
+HTEC01_OWNER_IDENTITY:       PROVEN
+HTEC01_RESOURCE_BOUNDS:      PROVEN
+HTEC01_PRODUCTION_REACH:     REAL_PRODUCTION_SEAM
+HTEC01_ORIGINAL_LIVE_CAUSE:  UNAVAILABLE_FROM_TRACE
+HTEC01_LIVE_QUALIFICATION:  LIVE_UNOBSERVABLE
+```
+
+**Verdict:** `PASS_HELD_TERMINAL_EVICTION_REPAIR` (correction). Factory stop condition met at this verdict. GO to exact-head dogfood qualification on the next session.
+
+---
 # ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01 — PASS_HELD_TERMINAL_EVICTION_REPAIR — 2026-10-14
 
 **Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_EVICTION_REPAIR`**. Bounded fix delivered. The pre-fix `command_status` tool early-returned `unknown_job` at `command-status-tool.ts:252-255` BEFORE the Path B / C / C' consumption seams, leaving the BCB held obligation permanently unresolvable after the `CommandJobManager`'s bounded FIFO evicted the heavy terminal snapshot. The bounded fix adds a compact per-job terminal-receipt store to the `BackgroundNotifyCoordinator` (`terminalReceipts: Map<jobId, CompactTerminalReceipt>`), recorded at the manager's `command_job_terminal_committed` lifecycle event seam via `SdkController.handleCommandJobLifecycle` and consumed by `command_status` on the `unknown_job` early-return path. A TRUTHFUL distinction (`outputRetained: false`, `observation: "evicted_receipt"`) prevents the model from confusing a receipt for a full observation. Resource bounds: receipts cleared on obligation settlement, owner-mismatch, or BCB dispose; total store bounded by `maxTerminalJobs`.
