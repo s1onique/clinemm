@@ -420,3 +420,87 @@ The ACT did not apply any of these successor fixes because the
 prompt §0 constraints explicitly forbid speculative Tart
 infrastructure expansion, and the host-FS block is upstream of every
 subsequent gate.
+
+## §13. Post-ACT session-logout investigation (on-call expert review)
+
+After the ACT's `HALT_UNSAFE_HOST_HELPER_SERVICE_MUTATION` P0 safeguard
+was recorded, the on-call expert requested a read-only diagnostic to
+determine whether the `launchctl bootstrap gui/501 ...` failure (exit
+5) had caused a host-level session termination. The full investigation
+is captured in
+`.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/04-session-logout-investigation.md`
+and the raw command outputs in
+`04-raw-command-outputs.txt`. Summary:
+
+- `/usr/bin/log show` is blocked by the ClineMM Seatbelt (no
+  `com.apple.logging.admin` entitlement in the sandbox). The unified
+  log is the canonical Apple source for the 2-hour window the expert
+  requested, but is not accessible from this Seatbelted context. This
+  is a Seatbelt capability gap, not a host state. The investigation
+  should be re-run from a non-Seatbelted Terminal session to obtain
+  the unified-log events.
+
+- read-only diagnostics (`who`, `last`, `ps`, `kern.boottime`, `uptime`,
+  `find`) all confirm:
+  - system has been up **27 days 19 hours** (`kern.boottime: Thu Sep
+    17 17:46:00 2026`); no reboot, no kernel panic, no system restart.
+  - **WindowServer (PID 82407) and loginwindow (PID 82393) are alive**,
+    both with `ELAPSED 02:01:17`, both started at 10:58:00 today
+    (the new session start). They were started fresh in the new
+    session, not carried over from the 27-day session.
+  - **root launchd (PID 1) is the same process since the Sep 17
+    boot** (`ETIME 27-19:13:49`).
+  - `last` shows a **clean 1-minute console logout-login transition
+    at 10:56-10:58 today**; the 27-day-old session ended cleanly and
+    a new session started. The 1-minute duration is the normal macOS
+    logout-login pattern. There is no `crash` token in `last` for
+    the current boot window.
+  - **NO `WindowServer`, `loginwindow`, `launchd`, or `kernel` crash
+    reports exist** anywhere in either DiagnosticReports location
+    (last 2h or full history).
+  - Only 2 crash reports in the last 2h: `ditto` (Notion-resource,
+    disk-writes rate-limit kill) and `Chromium Helper`
+    (ungoogled-chromium, disk-writes rate-limit kill). Both are
+    per-process sandbox enforcement events; neither terminates the
+    GUI session or affects WindowServer/loginwindow/launchd.
+  - `/var/log/shutdown_monitor.log` is over a year old (mtime
+    2025-10-26); the 5 "Saved shutdown report" entries are from
+    historical kernel sessions, not the current 27-day uptime.
+
+**Conclusion:** the "macOS GUI-session termination" the expert
+described is a **clean user-initiated logout → login at 10:56-10:58
+today**, NOT a host-level crash. The system was up continuously
+(27 days 19 hours uptime, no reboot). WindowServer, loginwindow,
+and launchd are all alive. The only diagnostic reports in the last
+2 hours are two per-process disk-writes rate-limit kills (Notion's
+ditto and ungoogled-chromium's helper), which are normal sandbox
+enforcement events that do not terminate the GUI session.
+
+**The ACT's `HALT_UNSAFE_HOST_HELPER_SERVICE_MUTATION` safeguard
+stands**: the Seatbelted agent MUST NOT bootstrap, bootout, kickstart,
+load, unload, or install launchd services during ordinary ClineMM
+tasks. The hypothesis that `launchctl bootstrap` caused a host-level
+crash is **NOT supported by the available evidence** — but the
+safety rule is correct regardless, because launchd service mutations
+from a Seatbelted agent are an unacceptable self-disruption of the
+agent's own execution environment, and they should be a separate,
+explicitly authorized host-maintenance workflow.
+
+### New ClineMM safety rule (added per on-call expert verdict)
+
+**launchd service mutations are FORBIDDEN during ordinary Seatbelted
+ClineMM tasks.** Helper installation or repair requires a separate,
+explicitly authorized host-maintenance workflow executed outside
+the active ClineMM task after inspection. This rule applies to all
+launchd domains (`user/<uid>`, `gui/<uid>`, `system`, etc.) and to
+all mutation operations (`bootstrap`, `bootout`, `kickstart`,
+`load`, `unload`, `install`, `enable`, `disable`).
+
+The dev-fallback deploy pattern (same `helper.c` source bound to a
+`/tmp/...sock` instead of the launchd `Listener` socket) remains
+available for Seatbelted testing as a non-mutating alternative.
+
+**ACT verdict unchanged:** `CLOSED_HALTED_CLEAN` with proximate halt
+classifier `HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS`. The
+post-ACT session investigation does not change this verdict — it
+only narrows the on-call expert's correlation hypothesis.

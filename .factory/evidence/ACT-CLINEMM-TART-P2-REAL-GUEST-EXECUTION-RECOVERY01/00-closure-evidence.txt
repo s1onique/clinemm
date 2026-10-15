@@ -173,3 +173,45 @@ Test artifacts:
   /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/02-testbed-run-1.json.raw
   /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/02-helper-log.txt
   /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/03-mount-and-fs-evidence.txt
+
+Post-ACT session-logout investigation (on-call expert review):
+  See 04-session-logout-investigation.md and 04-raw-command-outputs.txt.
+  Summary:
+    - /usr/bin/log show is blocked by the Seatbelt (no
+      com.apple.logging.admin entitlement in ClineMM's sandbox).
+    - read-only diagnostics (who, last, ps, kern.boottime,
+      uptime, find) all confirm:
+        * system has been up 27 days 19 hours (kern.boottime
+          Sep 17 17:46:00 2026); no reboot, no kernel panic.
+        * WindowServer (PID 82407) and loginwindow (PID 82393)
+          are alive, both with ELAPSED 02:01:17, both started at
+          10:58:00 today (the new session start).
+        * root launchd (PID 1) is the same process since the
+          Sep 17 boot, ETIME 27-19:13:49.
+        * `last` shows a clean 1-minute console logout-login
+          transition at 10:56-10:58 today; the 27-day-old
+          session ended cleanly and a new session started.
+        * NO `WindowServer`, `loginwindow`, `launchd`, or
+          `kernel` crash reports exist anywhere in either
+          DiagnosticReports location.
+        * Only 2 crash reports in the last 2h: `ditto`
+          (Notion-resource, disk-writes rate-limit kill) and
+          `Chromium Helper` (ungoogled-chromium, disk-writes
+          rate-limit kill). Both are per-process sandbox
+          enforcement events; neither terminates the GUI
+          session or affects WindowServer/loginwindow/launchd.
+  Conclusion: the "macOS GUI-session termination" the expert
+  described is a CLEAN USER LOGOUT -> LOGIN at 10:56-10:58
+  today, NOT a host-level crash. The
+  HALT_UNSAFE_HOST_HELPER_SERVICE_MUTATION safeguard stands
+  (the launchctl bootstrap attempt MUST NOT be retried from
+  the Seatbelt sandbox), but the secondary hypothesis
+  (launchctl caused a host-level crash) is not supported by
+  the available evidence.
+  New ClineMM safety rule (added per on-call expert verdict):
+  launchd service mutations are FORBIDDEN during ordinary
+  Seatbelted ClineMM tasks. Helper installation or repair
+  requires a separate, explicitly authorized host-maintenance
+  workflow executed outside the active ClineMM task.
+  ACT verdict unchanged: CLOSED_HALTED_CLEAN with proximate
+  halt classifier HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS.

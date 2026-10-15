@@ -1,0 +1,2 @@
+/Library/Logs/DiagnosticReports/Chromium Helper_2026-10-15-123701_MacBook-Pro-3.diag
+/Library/Logs/DiagnosticReports/ditto_2026-10-15-105926_MacBook-Pro-3.diag

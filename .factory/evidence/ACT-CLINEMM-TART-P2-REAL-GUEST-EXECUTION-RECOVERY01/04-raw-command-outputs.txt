@@ -1,0 +1,76 @@
+=== date -Is; who; launchctl managername; launchctl manageruid ===
+2026-10-15T12:58:55+03:00
+chistyakov console      2026-10-15 10:58
+chistyakov ttys001      2026-10-15 10:58
+Aqua
+501
+
+=== who -b; uptime ===
+         system boot  2026-09-17 17:46
+ 12:59:27  up 27 days 19:13,  2 users,  load average: 8.28, 7.36, 7.12
+
+=== sysctl kern.boottime ===
+kern.boottime: { sec = 1789656360, usec = 200954 } Thu Sep 17 17:46:00 2026
+
+=== last -10 ===
+chistyakov ttys001                         Thu Oct 15 10:58   still logged in
+chistyakov console                         Thu Oct 15 10:58   still logged in
+chistyakov ttys001                         Thu Oct 15 10:56 - 10:56  (00:00)
+chistyakov console                         Thu Oct 15 10:56 - 10:58  (00:01)
+chistyakov ttys017                         Sat Oct 10 13:10 - 13:10  (00:00)
+chistyakov ttys001                         Fri Oct  9 14:14 - 14:14  (00:00)
+chistyakov ttys000                         Thu Sep 17 17:46 - 17:46  (00:00)
+chistyakov console                         Thu Sep 17 17:46 - 10:56 (27+17:10)
+reboot time                                Thu Sep 17 17:46
+chistyakov ttys000                         Thu Sep 10 03:28 - crash (7+14:17)
+
+=== ps -p 82407 (WindowServer) ===
+  PID  PPID USER           ELAPSED COMMAND
+82407     1 _windowserver 02:01:17 (WindowServer)
+
+=== ps -p 82393 (loginwindow) ===
+  PID  PPID USER        ELAPSED COMMAND
+82393     1 chistyakov 02:01:17 /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow console
+
+=== ps -p 1 (root launchd) ===
+  PID  PPID USER     ETIME    COMMAND
+    1     0 root 27-19:13:49 (launchd)
+
+=== /usr/bin/log show --last 2h --predicate 'loginwindow OR WindowServer OR launchd' ===
+log: Cannot run while sandboxed
+
+=== find DiagnosticReports -mmin -180 ===
+/Library/Logs/DiagnosticReports/Chromium Helper_2026-10-15-123701_MacBook-Pro-3.diag
+/Library/Logs/DiagnosticReports/ditto_2026-10-15-105926_MacBook-Pro-3.diag
+
+=== find DiagnosticReports -iname '*WindowServer*' -o -iname '*loginwindow*' -o -iname '*launchd*' -o -iname '*kernel*' ===
+(empty)
+
+=== /var/log/shutdown_monitor.log mtime ===
+-rw-r--r-- 1 root wheel 6432 Oct 26  2025 /var/log/shutdown_monitor.log
+
+=== ditto crash report (head) ===
+Date/Time:        2026-10-15 10:56:47.159 +0300
+End time:         2026-10-15 10:59:22.897 +0300
+OS Version:       macOS 14.7.4 (Build 23H420)
+Architecture:     arm64e
+Command:          ditto
+Path:             /usr/bin/ditto
+Codesigning ID:   com.apple.ditto
+Resource Coalition: "notion.id"(592140)
+Event:            disk writes
+Action taken:     none
+Writes:           2147.57 MB of file backed memory dirtied over 156 seconds (13.79 MB per second average), exceeding limit of 24.86 KB per second over 86400 seconds
+
+=== Chromium Helper crash report (head) ===
+Date/Time:        2026-10-15 10:56:44.975 +0300
+End time:         2026-10-15 12:37:00.849 +0300
+OS Version:       macOS 14.7.4 (Build 23H420)
+Architecture:     arm64e
+Command:          Chromium Helper
+Path:             /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper
+Identifier:       org.chromium.Chromium.helper
+Resource Coalition: 591968
+Event:            disk writes
+Action taken:     none
+Writes:           2147.49 MB of file backed memory dirtied over 6016 seconds (356.97 KB per second average), exceeding limit of 24.86 KB per second over 86400 seconds
