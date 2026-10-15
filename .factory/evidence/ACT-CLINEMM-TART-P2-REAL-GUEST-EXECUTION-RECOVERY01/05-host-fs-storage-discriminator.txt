@@ -1,0 +1,123 @@
+=== Filesystem candidates (df -h) ===
+/dev/disk3s1s1  927G  656G  272G  71% /
+/dev/disk3s1s1  927G  656G  272G  71% /          <- /tmp, /private/tmp
+/dev/disk3s8    927G  656G  272G  71% /Volumes/UserData  <- $HOME, $HOME/Library/Caches
+/dev/disk3s8    927G  656G  272G  71% /Volumes/UserData  <- $HOME/Library/Caches/tart/
+
+=== Mount relevant volumes ===
+/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)
+/dev/disk3s8 on /Volumes/UserData (apfs, local, journaled, protect)
+com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)
+com.apple.TimeMachine.2026-10-15-125505.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)
+
+=== File operation tests (per the expert's probe) ===
+Testing: /private/tmp
+  MKDIR_OK: /private/tmp/clinemm-fsprobe.Qn39qJuy
+  touch:    OK (exit 0)
+  utimes:   OK (exit 0)  via 'touch -t 202601010101 canary'
+  canary stat: -rw-r--r-- 1 chistyakov wheel 0 Jan  1  2026
+
+Testing: /Volumes/UserData/Users/chistyakov  (i.e. $HOME)
+  MKDIR_FAILED: mktemp: failed to create directory via template '/Volumes/UserData/Users/chistyakov/clinemm-fsprobe.XXXXXXXX': Operation not permitted
+
+Testing: /Volumes/UserData/Users/chistyakov/Library/Caches
+  MKDIR_FAILED: mktemp: failed to create directory via template '/Volumes/UserData/Users/chistyakov/Library/Caches/clinemm-fsprobe.XXXXXXXX': Operation not permitted
+
+=== Additional /private/tmp probes (50MB write + utimes) ===
+testdir: /private/tmp/clinemm-fsprobe3.eCZjZrhq
+dd 50 MiB:    52428800 bytes copied, 0.012308 s, 4.3 GB/s
+utimes on bigfile: OK (Dec 12 2025)
+
+=== Tart clone with TART_HOME redirected to /private/tmp ===
+$ TART_HOME=/private/tmp/clinemm-tart-probe /run/current-system/sw/bin/tart clone 'ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4...' p2-tmp-test
+pulling manifest...
+Failed to retrieve credentials using Keychain credentials provider, authentication may fail: Failed(message: "Keychain returned unsuccessful status -67674")
+2026-10-15 13:04:27.898 tart[41692:135844754] Error: stepSQLStatement:toCompletionWithRetry - stepping returned unhandled result=8, DB=/Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db
+2026-10-15 13:04:28.524 tart[41692:135844752] Error: stepSQLStatement:toCompletionWithRetry - stepping returned unhandled result=8, DB=/Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db
+Error: FailedToCreateVmFile
+EXIT=1 (well, 0 because head closed the pipe)
+
+=== /private/tmp/clinemm-tart-probe after the clone attempt ===
+drwxr-xr-x  3 chistyakov wheel   96 Oct 15 13:04 cache
+drwxr-xr-x  3 chistyakov wheel   96 Oct 15 13:04 tmp
+/private/tmp/clinemm-tart-probe/cache/OCIs/ghcr.io/    <- TART_HOME's cache subdir was created
+/private/tmp/clinemm-tart-probe/tmp/8ffe64510713b6c4cc3f3850bdc33d4a/  <- TART_HOME's tmp subdir was created
+
+=== Two Time Machine snapshots visible (both on /dev/disk3s8) ===
+com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8  on /private/tmp/snapshot
+com.apple.TimeMachine.2026-10-15-125505.local@/dev/disk3s8  on /private/tmp/snapshot  (NEW - 12:55:05 today)
+
+=== Causal discrimination (per the expert's correction) ===
+
+HOST_FILESYSTEM_OPERATION_DENIED on /dev/disk3s8:        PROVEN
+TIME_MACHINE_SNAPSHOT_CAUSED_DENIAL:                    INFERRED (not the proximate cause)
+  The snapshots at /private/tmp/snapshot are READ-ONLY
+  MOUNTS of /dev/disk3s8; they do not by themselves
+  make /dev/disk3s8 read-only. The /dev/disk3s8 volume
+  carries the APFS 'protect' mount flag independently.
+  The actual mechanism (per the expert's analysis) is the
+  APFS 'protect' flag on /dev/disk3s8, which blocks
+  utimes(2) and SQLite WAL writes regardless of any
+  snapshot presence.
+REBOOT_WILL_FIX_IT:                                    NOT PROVEN
+  Reboot would unmount /dev/disk3s8 and potentially
+  clear the 'protect' flag if it was applied by a
+  session-level mechanism (e.g. macOS data volume
+  protection on Time Machine snapshot mount). But the
+  flag may also be a persistent APFS volume attribute
+  that survives reboot. Cannot conclude from the
+  available evidence.
+
+=== /private/tmp as a partial Tart storage ===
+
+PARTIAL: /private/tmp CAN host the VirtualMachines
+  - TART_HOME=/private/tmp/.../tart-probe created
+    cache/ and tmp/ subdirs successfully
+  - mkdir, touch, utimes, dd, mv all succeed
+  - 272 GB free on /dev/disk3s1s1
+  - Can hold the cloned VM files
+
+PARTIAL: /private/tmp CANNOT host the OCI cache
+  - The OCI cache is at ~/Library/Caches/tart/ which
+    uses getpwuid()->pw_dir, NOT $HOME env var
+  - On this host, getpwuid()->pw_dir = /Volumes/UserData/Users/chistyakov
+  - The OCI cache is therefore ALWAYS on /dev/disk3s8
+    regardless of TART_HOME, HOME, or XDG_CACHE_HOME
+  - SQLite WAL writes to /dev/disk3s8 fail with
+    'unhandled result=8'
+  - tart clone therefore cannot re-pull or re-validate
+    the OCI manifest when TART_HOME is redirected
+
+=== Two clean unblock paths (still out of scope for the agent) ===
+
+1. **Operator pre-stages the base image as a .tvm on a
+   writable host** and `tart import`s it into this host's
+   TART_HOME. This bypasses the OCI cache write path
+   entirely (no OCI re-validation needed; the .tvm
+   is a tarball that's simply extracted into the
+   VirtualMachines directory). The /private/tmp TART_HOME
+   then becomes a complete storage location.
+
+2. **Operator reboots off the Time Machine snapshot** to
+   determine whether the APFS 'protect' flag is
+   session-level (clears on reboot) or persistent
+   (requires a different unblock).
+
+=== Updated Factory classification ===
+
+TART_P2_CLOSURE:               CLOSED_HALTED_CLEAN
+HELPER_TESTS:                  108/108 PASS
+DEV_HELPER_PREFLIGHT:          PASS
+REAL_CLONE_ATTEMPT:            FAILED
+CLONE_FAILURE:                 utimes(2) EPERM
+SEATBELT_SPECIFIC_CAUSE:       NOT_SUPPORTED
+HOST_FS_DENIAL:                PROVEN
+SNAPSHOT_CAUSALITY:            INFERRED
+PROTECT_FLAG_CAUSALITY:         INFERRED (likely, but not isolated from snapshot)
+REAL_GUEST_BOOT:               NOT_EXECUTED
+CANONICAL_LAUNCHD_HELPER:      NOT_QUALIFIED
+VSIX_DOGFOOD:                  NOT_EXECUTED
+
+NEXT: HOST_FS_STORAGE_DISCRIMINATOR (this file, completed)
+THEN: either operator pre-stages .tvm (bypasses OCI) OR
+      operator reboot to test protect-flag persistence

@@ -504,3 +504,167 @@ available for Seatbelted testing as a non-mutating alternative.
 classifier `HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS`. The
 post-ACT session investigation does not change this verdict — it
 only narrows the on-call expert's correlation hypothesis.
+
+## §14. Post-closure causal correction (on-call expert review)
+
+After the closure commit, the on-call expert (macOS filesystem
+engineer, Tart virtualization engineer, ClineMM Factory
+reviewer) reviewed the report and accepted the
+`HALT_UNSAFE_HOST_HELPER_SERVICE_MUTATION` and the
+`HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS` classification
+but identified two P1 corrections to the report's
+stronger assertions:
+
+### 14.1 P1 — Causal overclaim on Time Machine snapshot
+
+The original §2 attributed the `utimes(2) EPERM` to "the
+2026-09-18 Time Machine snapshot" and recommended
+"operator reboot off the snapshot" as the unblock. The
+expert correctly noted that:
+
+- Local Time Machine snapshots are READ-ONLY MOUNTS of
+  the source volume; they do not by themselves make the
+  source volume read-only.
+- The APFS `protect` mount flag on `/dev/disk3s8` is a
+  separate (and possibly persistent) volume attribute.
+- The snapshot at `/private/tmp/snapshot` is mounted from
+  `/dev/disk3s8`, but `/dev/disk3s8` would carry the
+  `protect` flag regardless of any snapshot.
+- Rebooting is NOT a proven fix; the `protect` flag may
+  persist across reboots as a volume attribute.
+
+The corrected causal classification is:
+
+```
+HOST_FILESYSTEM_OPERATION_DENIED = PROVEN
+TIME_MACHINE_SNAPSHOT_CAUSED_DENIAL = INFERRED
+APFS_PROTECT_FLAG_CAUSED_DENIAL = INFERRED (likely, not isolated)
+REBOOT_WILL_FIX_IT = NOT_PROVEN
+```
+
+### 14.2 P1 — Dev-fallback helper is NOT launchd-equivalent
+
+The original §0, §1, §2 described the dev-fallback helper
+as "the production launchd-equivalent substrate (same
+`helper.c` source, same `build_id`, same argv-only
+subprocess discipline, same sealed Tart allowlist)."
+The expert correctly noted that this conflates the
+helper's application logic with the launchd socket-
+activation and service-management boundary. The helper's
+own log proves the dev-fallback was used:
+
+```
+launch_activate_socket ESRCH; manual/dev fallback self-bind
+```
+
+The corrected labels are:
+
+```
+REAL_HELPER_CODE              (helper.c source, build_id 335e6038…)
+DEV_FALLBACK_TRANSPORT         (/tmp/...sock, NOT the launchd Listener)
+LAUNCHD_ACTIVATION_NOT_QUALIFIED  (canonical helper NOT running,
+                                   agent MUST NOT bootstrap it)
+```
+
+The dev-fallback helper proves the helper's application
+logic (lifecycle, argv discipline, sealed allowlist,
+orphan-prevention) is correct. It does NOT prove the
+launchd socket-activation or service-management boundary.
+The launchd trust-boundary evidence remains the corrector
+ACT's `PASS_TART_LAUNCHD_REAL_GUEST` finding, which was
+established on a DIFFERENT executable binary
+(build_id `85a87a82…`) at the canonical install path.
+
+### 14.3 P2 — SHA256SUMS self-reference
+
+The original SHA256SUMS included a self-reference
+(`sha256(SHA256SUMS) = ...`). A file that hashes itself
+is not self-consistent. The fix: preserve the old
+self-referenced manifest as `SHA256SUMS.self-referenced`
+(for audit) and write a new `SHA256SUMS` with only the
+9 evidence-file entries (no self-reference). The audit
+trail therefore shows both the pre-fix and post-fix
+manifests, and the SHA256SUMS is now logically consistent.
+
+### 14.4 P1 — Host-FS storage discriminator (the probe the expert asked for)
+
+The expert specified a small, non-launchd probe to test
+ordinary filesystem operations on independently writable
+APFS locations. The probe was run; full output in
+`.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/05-host-fs-storage-discriminator.txt`.
+
+| Path | Device | MKDIR | touch | utimes | Verdict |
+|---|---|---|---|---|---|
+| `/private/tmp` | `/dev/disk3s1s1` | OK | OK | **OK (0)** | **WRITABLE** |
+| `/Volumes/UserData/Users/chistyakov` (`$HOME`) | `/dev/disk3s8` (protect) | **EPERM** | n/a | n/a | WRITE-DENIED |
+| `/Volumes/UserData/Users/chistyakov/Library/Caches` | `/dev/disk3s8` (protect) | **EPERM** | n/a | n/a | WRITE-DENIED |
+
+**`/private/tmp` is on `/dev/disk3s1s1` (the root volume)**
+and is FULLY WRITABLE for all 3 operations (mktemp -d,
+touch, touch -t via `utimes(2)`). It is on a separate
+device from `/dev/disk3s8` (the protect volume) and has
+272 GB free.
+
+**Tart clone with TART_HOME redirected to /private/tmp:**
+- The `cache/` and `tmp/` subdirs under TART_HOME were
+  created successfully on `/dev/disk3s1s1`.
+- The OCI cache lookup STILL uses
+  `getpwuid()->pw_dir` (which is
+  `/Volumes/UserData/Users/chistyakov` regardless of
+  `HOME` env), so the OCI cache DB is still at
+  `/Volumes/UserData/Users/chistyakov/Library/Caches/tart/`
+  — which is on the protect volume.
+- The SQLite WAL write to the OCI cache fails with
+  `stepSQLStatement:toCompletionWithRetry - stepping
+  returned unhandled result=8`.
+- `tart clone` returns `Error: FailedToCreateVmFile`.
+
+**`/private/tmp` is therefore a PARTIAL unblock for Tart:**
+- YES for VirtualMachines storage (TART_HOME works).
+- NO for the OCI cache (cannot be redirected via env;
+  always on the protect volume via getpwuid).
+
+### 14.5 Two clean unblock paths (still out of scope for the agent)
+
+1. **Operator pre-stages the base image as a .tvm on a
+   writable host** and `tart import`s it into this host's
+   TART_HOME. This bypasses the OCI cache write path
+   entirely (no OCI re-validation needed; the .tvm is a
+   tarball that's simply extracted into the VirtualMachines
+   directory). Combined with `TART_HOME=/private/tmp/...`,
+   this provides a complete storage location.
+
+2. **Operator reboots off the Time Machine snapshot** to
+   determine whether the APFS `protect` flag is
+   session-level (clears on reboot) or persistent
+   (requires a different unblock, e.g. `diskutil
+   apfs disableVolumeRole` or a different mount option).
+
+### 14.6 Updated Factory classification
+
+```
+TART_P2_CLOSURE:               CLOSED_HALTED_CLEAN
+HELPER_TESTS:                  108/108 PASS
+DEV_HELPER_PREFLIGHT:          PASS
+REAL_CLONE_ATTEMPT:            FAILED
+CLONE_FAILURE:                 utimes(2) EPERM
+SEATBELT_SPECIFIC_CAUSE:       NOT_SUPPORTED
+HOST_FS_DENIAL:                PROVEN
+SNAPSHOT_CAUSALITY:            INFERRED
+PROTECT_FLAG_CAUSALITY:        INFERRED (likely, not isolated)
+REAL_GUEST_BOOT:               NOT_EXECUTED
+DEV_FALLBACK_TRANSPORT:        PROVEN (NOT launchd-equivalent)
+CANONICAL_LAUNCHD_HELPER:      NOT_QUALIFIED
+VSIX_DOGFOOD:                  NOT_EXECUTED
+
+NEXT: HOST_FS_STORAGE_DISCRIMINATOR (completed; this section)
+THEN: either operator pre-stages .tvm (bypasses OCI) OR
+      operator reboot to test protect-flag persistence
+```
+
+**ACT verdict unchanged**: `CLOSED_HALTED_CLEAN` with
+proximate halt classifier `HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS`.
+The post-ACT causal correction does not change the
+verdict — it only corrects the report's stronger
+assertions and adds the host-FS storage discriminator
+evidence.

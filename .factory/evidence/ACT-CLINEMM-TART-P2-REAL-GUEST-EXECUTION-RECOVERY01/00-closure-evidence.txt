@@ -215,3 +215,44 @@ Post-ACT session-logout investigation (on-call expert review):
   workflow executed outside the active ClineMM task.
   ACT verdict unchanged: CLOSED_HALTED_CLEAN with proximate
   halt classifier HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS.
+
+Post-closure causal correction (on-call expert review, 2026-10-15 13:04):
+  See 05-host-fs-storage-discriminator.txt and ACT §14.
+
+  Three corrections applied:
+    1. Causal overclaim on Time Machine snapshot:
+       HOST_FILESYSTEM_OPERATION_DENIED = PROVEN
+       TIME_MACHINE_SNAPSHOT_CAUSED_DENIAL = INFERRED
+       REBOOT_WILL_FIX_IT = NOT PROVEN
+    2. Dev-fallback helper relabeled:
+       REAL_HELPER_CODE  (helper.c source, build_id 335e6038…)
+       DEV_FALLBACK_TRANSPORT (/tmp/...sock, NOT the launchd Listener)
+       LAUNCHD_ACTIVATION_NOT_QUALIFIED
+    3. SHA256SUMS self-reference removed (P2):
+       Old self-referenced manifest preserved as
+       SHA256SUMS.self-referenced (sha256 ecd48441…);
+       new manifest has 9 evidence-file entries with no
+       self-reference.
+
+  Host-FS storage discriminator (probe per the expert's spec):
+    /private/tmp is on /dev/disk3s1s1 (root volume) and
+    is fully writable (mktemp -d, touch, utimes(2) all OK).
+    /private/tmp has 272 GB free.
+    TART_HOME=/private/tmp/.../tart-probe created the
+    cache/ and tmp/ subdirs successfully, BUT the OCI
+    cache is still on /dev/disk3s8 (the protect volume)
+    because Tart uses getpwuid()->pw_dir, not $HOME env.
+    The OCI cache DB WAL write fails with 'unhandled
+    result=8' on /dev/disk3s8.
+    Result: /private/tmp is a PARTIAL unblock (VirtualMachines
+    yes, OCI cache no).
+
+  Two clean unblock paths (still out of scope for the agent):
+    1. Operator pre-stages the base image as a .tvm on a
+       writable host and tart import-s it into this host's
+       TART_HOME (bypasses OCI).
+    2. Operator reboots to test whether the APFS 'protect'
+       flag is session-level or persistent.
+
+  ACT verdict unchanged: CLOSED_HALTED_CLEAN with proximate
+  halt classifier HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS.
