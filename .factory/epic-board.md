@@ -26504,3 +26504,231 @@ The terminal-vocabulary guard in the late-release hook is a
 separate hardening refinement and is out of scope for this
 disposition.
 
+---
+
+# ACT-CLINEMM-HTEC02-POST-START-LATE-TERMINAL-RELEASE-CORRECTION01 — Executable discriminator (C1 GO) — 2026-10-15
+
+**Reviewer:** ClineMM Factory reviewer.
+**Predecessor:** `c456ba6f7` (reviewer disposition: C1 GO bounded
+harness fix, `spawnFactory` injection proposed).
+**Node runtime found at runtime location:** Node 24.19.0
+(`/nix/store/8cbb8r8mkaz6z7si022ks2b78qqy9sz4-nodejs-slim-24.19.0/bin/node`).
+The previous turn's "no JS runtime available" was a PATH issue, not a
+machine issue. Node is reachable.
+
+## Exact five-test executable results (CORR05 HEAD, no edits)
+
+Command (run from `apps/vscode`):
+
+```
+./node_modules/.bin/vitest run --config vitest.config.ts \
+  -t 'integration-01|integration-02|integration-03|ABLATION-REAL-01|POST-START-FAILURE-01' \
+  src/sdk/__tests__/held-terminal-eviction-conservation02.htec02.test.ts
+```
+
+Output (verbatim from /tmp/corr05-vitest.out):
+
+```
+✓ src/sdk/__tests__/held-terminal-eviction-conservation02.htec02.test.ts (35 tests | 30 skipped) 20333ms
+   ✓ integration-01: a notify-enabled background command is admitted  5046ms
+   ✓ integration-02: with effective observation capacity exhausted, the next command is refused BEFORE manager.start  5047ms
+   ✓ integration-03: after the first command is settled, the second is admitted  5082ms
+   ✓ ABLATION-REAL-01: bypassing admission only at the production call site admits a second real run_commands despite exhausted capacity 121ms
+   ✓ POST-START-FAILURE-01: when attachReservationToJob fails after manager.start() returns running, the job is cancelled through the supervised lifecycle and the permit is released 5042ms
+
+Test Files  1 passed (1)
+     Tests  5 passed | 30 skipped (35)
+   Duration  23.27s
+```
+
+**All 5 tests the digest claimed were failing pass on CORR05 HEAD
+without any harness modification.** POST-START-FAILURE-01 reaches
+the bounded-repair path in 5042ms (not a generic `Command failed`),
+the `attach refused` substring is in the error envelope, and the
+`pendingReservations` count is 0 after the controlled
+`resolveTerminal()`.
+
+The trailing `kill EPERM` warnings come from the vitest fork-pool
+SHUTTING DOWN (after `Test Files 1 passed (1)` printed). They do
+NOT originate from the test bodies. The runtime kill happens on
+`ForksPoolWorker.stop()`, which is the post-test cleanup path.
+The test results themselves are unaffected.
+
+## Full HTEC02 file — 35/35 pass
+
+```
+./node_modules/.bin/vitest run --config vitest.config.ts \
+  src/sdk/__tests__/held-terminal-eviction-conservation02.htec02.test.ts
+
+Test Files  1 passed (1)
+     Tests  35 passed (35)
+   Duration  37.77s
+```
+
+This includes POST-START-TIMEOUT-01 (the timeout conservation
+test) and POST-START-TIMEOUT-02 (the hung-cancel test) — both
+green.
+
+## Typecheck — clean
+
+```
+./node_modules/.bin/tsc --noEmit -p .
+exit 0
+```
+
+## BCB-C2 — 3/5 pass, 2 pre-existing failures
+
+`background-completion-barrier01-correction02.bcb01-c2.test.ts`:
+
+```
+   × BCB-21: command_status on terminal notify=false job drains observation exactly once  76ms
+   ✓ BCB-22: command_status does NOT drain when state=running (no terminal fact delivered)  5046ms
+   ✓ BCB-23: command_status idempotency — second call on already-drained observation is a no-op  72ms
+   ✓ BCB-24: command_status owner-mismatch — stale session cannot drain observation  71ms
+   × BCB-25: REAL integration — run_commands + command_status → barrier releases → exactly 1 commit  437ms
+```
+
+Failure shape (both):
+
+```
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts:306:38
+   304|   // 5. Barrier can now release on next reevaluation.
+   305|   await emitCompletionTurn(h.coordinator, h.activeSessionId, h.transl…)
+   306|   expect(h.completionCommitCount()).toBe(1)
+          |                                  ^
+```
+
+Both `BCB-21` and `BCB-25` fail at `expect(h.completionCommitCount()).toBe(1)`.
+This is a **barrier-release failure**: the BCB's completion
+barrier did not commit a single `completion_result` after the
+test exercised `command_status` Path B. The failure is on the
+`completionCommitCount` observation, not on a tool.execute()
+import or a spawnFactory candidate.
+
+**Pre-existing verification.** I checked out the parent commit
+`12d411fd0`'s version of this test file and re-ran:
+
+```
+git show 12d411fd0:apps/vscode/src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts > apps/vscode/src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts
+./node_modules/.bin/vitest run --config vitest.config.ts src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts
+
+   × BCB-21: command_status on terminal notify=false job drains observation exactly once  70ms
+   × BCB-22: command_status does NOT drain when state=running (no terminal fact delivered)  7ms
+   ✓ BCB-23: command_status idempotency — second call on already-drained observation is a no-op  62ms
+   ✓ BCB-24: command_status owner-mismatch — stale session cannot drain observation  69ms
+   × BCB-25: REAL integration — run_commands + command_status → barrier releases → exactly 1 commit  443ms
+```
+
+At parent `12d411fd0` the file is 3/5 (BCB-21, BCB-22, BCB-25 fail).
+At CORR05 HEAD `c1992443d` the file is 3/5 (BCB-21, BCB-25 fail).
+CORR05 fixed BCB-22 (its targeted test reshape) and left the other
+two untouched. **The BCB-21/BCB-25 failures are pre-existing in
+the parent baseline.** They are not CORR05-owned.
+
+Restoration:
+
+```
+cp /tmp/HEAD-bcb-c2.test.ts apps/vscode/src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts
+git diff --stat apps/vscode/src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts
+# (no output — file is restored to CORR05 HEAD)
+```
+
+## My previous disposition was wrong on the root cause
+
+The previous turn (`c456ba6f7`) diagnosed the 5 HTEC02 test
+failures as a real-subprocess `spawnFactory` problem, based on
+the digest's `vscode` import claim and the production code's
+own documentation at `command-job-manager.ts:373-388`. The
+executable evidence falsifies that diagnosis:
+
+- The 5 HTEC02 tests **pass without any harness change**.
+- A real `/bin/sh -c 'sleep 5'` IS spawned by the test bodies
+  (the production `spawnSupervisableShellCommand` runs because
+  no `spawnFactory` is injected). On this node-24.19.0 /
+  vitest-4.1.10 environment, those subprocesses are spawned
+  and torn down without EPERM. Each `integration-NN` test runs
+  in ~5 seconds and exits cleanly. The bounded settlement
+  helper inside the production code calls `manager.cancel()`
+  on the supervised job; the cancel path succeeds.
+- The `EPERM` seen at vitest fork-pool shutdown is a
+  Vitest-vs-Node-cleanup interaction, not a test-body EPERM.
+  The two events are unrelated and the cleanup EPERM does not
+  invalidate the test result (`Test Files 1 passed (1)` is
+  printed BEFORE the EPERM).
+
+The previous disposition's "5 failures needing a spawnFactory
+injection" was a non-existent problem in this environment. The
+hypothesized fix is unnecessary.
+
+## Disposition (corrected)
+
+```
+CORR05_LATE_RELEASE:           PASS_STRUCTURAL
+CORR05_TIMEOUT_TESTS:          PASS_EXECUTABLE  (POST-START-TIMEOUT-01
+                                                AND POST-START-TIMEOUT-02
+                                                both green; INVARIANT 6
+                                                is production-callback-
+                                                driven)
+CORR05_HTEC02:                 35/35 PASS
+CORR05_BCB_C2_TARGETED_FIX:    PASS  (BCB-22 went from fail-at-parent
+                                       to pass-at-CORR05; CORR05's
+                                       test reshape is the correct
+                                       change for the running-handoff
+                                       non-notify observation behavior)
+CORR05_BCB_C2_UNRELATED_FAIL:  2 pre-existing (BCB-21, BCB-25;
+                                       introduced by 6abd73a15
+                                       BCB01 CORRECTION01..04;
+                                       present at parent 12d411fd0;
+                                       NOT touched by CORR05)
+CORR05_CANONICAL_GATE:         GREEN_FOR_CORR05_SCOPE
+BCB_C2_BCB_21_25:              PRE-EXISTING_BCB01_FAILURE
+                               (out of scope for this ACT; barrier-
+                               release failure, not late-terminal-
+                               release failure)
+CORR05_COMMIT:                 c1992443d
+REVIEW_DISPOSITION_HEAD:       c456ba6f7
+EXECUTABLE_DISCRIMINATOR_HEAD: <this commit>
+CORR05_LIVE:                   LIVE_UNOBSERVABLE
+
+DECISION: C1_GO_NO_HARNESS_FIX_NEEDED
+DOGFOOD:  NOT_YET_AUTHORIZED
+```
+
+The previous turn's bounded `spawnFactory` injection is **NOT
+applied** because the executable evidence shows the HTEC02 tests
+are already green on the configured vitest runner. Applying a
+non-load-bearing change to the test harness would weaken the
+reviewer's claim that "no production code touched" and is
+contrary to the user's "If the tests turn green, close this
+cursor and build the exact-head VSIX" instruction.
+
+The pre-existing BCB-21/BCB-25 failures are **out of scope** for
+this ACT. They live in `bcb01-c2.test.ts` (a BCB01-CORRECTION02
+file, NOT a HTEC02 / CORR05 file), they were introduced by
+`6abd73a15` (BCB01 CORRECTION01..04 closure), they fail in the
+parent commit `12d411fd0` (proven by direct re-execution on the
+parent), and CORR05 did not touch them. The BCB's completion
+barrier has a separate failure that needs a separate bounded
+ACT; that ACT is not this one.
+
+### Next actions
+
+1. Proceed to exact-head VSIX qualification (per user instruction
+   "If the tests turn green, close this cursor and build the
+   exact-head VSIX—without starting another review round").
+2. The pre-existing BCB-21/BCB-25 failure is recorded as a
+   separate disposition in this board (NOT opened here; the
+   correct next step is a follow-up ACT scoped to BCB01
+   barrier-release semantics, not a CORR05 follow-up).
+3. The terminal-vocabulary guard in the late-release hook
+   remains a hardening refinement (reviewer addendum, not P0).
+   It can land in a separate hardening ACT if desired.
+
