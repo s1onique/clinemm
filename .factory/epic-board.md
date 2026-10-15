@@ -56,9 +56,23 @@ After either unblock, the next ACT can complete the missing gates (P2-P7) in a s
 - `.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/05-host-fs-storage-discriminator.txt` (123 lines; expert's probe output)
 - `.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/SHA256SUMS.self-referenced` (audit trail of pre-fix manifest)
 
+**Expert-verdict acceptance (third on-call review, 2026-10-15):** the macOS filesystem / Tart virtualization / Factory reviewer experts accepted the corrected closure with verdict `PASS_WITH_NONBLOCKING_RESIDUE` and disposition `C1: GO to a bounded Tart storage-unblock experiment. No further P2 review cycle.` The corrections at 92d759139 addressed the principal evidence problems; the filesystem discriminator gives considerably more actionable information. The verdict agrees with the corrected labels and the halt classifications, and agrees with the next-cursor below. The two non-blocking residue items the verdict highlights: (a) the post-ACT session-logout investigation should be labelled `GUI_SESSION_TERMINATED_CAUSE_UNDETERMINED` rather than "user-initiated logout" because the canonical Apple source (`/usr/bin/log show`) was inaccessible from the Seatbelt context — the evidence (last, ps, kern.boottime) is consistent with a clean logout-login but is not canonically confirmed; (b) the `ditto` and `Chromium Helper` diagnostic reports should be classified as per-process resource-coalition disk-writes rate-limit kills (sandbox enforcement), not "process kills of a system service" or "host-level crashes" — they are unrelated to the GUI session. Neither item warrants reopening P2; both are wording-precision refinements for the next ACT and the Factory reviewer summary.
+
+**Probe sanity check (2026-10-15 13:17, normal agent shell):** a `touch` probe on `.factory/test-write-probe.tmp` succeeded (exit 0). The `protect` denial at 92d759139 is specific to the filesystem operations Tart performs (`utimes(2)`, SQLite WAL writes on freshly-created files in the OCI cache codepath), NOT a blanket write denial on `/Volumes/UserData`. Normal agent operations in the repo (board updates, evidence files, ACT reports) continue to work; only Tart-specific filesystem operations are blocked. This is the same observation as the P1 record (corrected) — it just means the ClineMM Factory's own writes are unaffected.
+
+**Next ACT (TART_OFFLINE_IMPORT_QUALIFICATION, NOT_EXECUTED, out of scope for the Seatbelted agent):** the shortest route toward a real VM without exposing the macOS user session to another service-management experiment is operator pre-staging of a `.tvm` (Apple Archive produced by `tart export`) and a bounded `tart import` into the writable Tart storage location. The Tart 2.34.0 binary on this host supports both `tart import <path> <name>` and `tart export <name> [<path>]` (verified). Bounded experiment specification: (1) operator obtains a trusted `.tvm` from a writable Mac (any base image, Sonoma or otherwise, with documented SHA-256 and source-image provenance); (2) operator sets `TART_HOME=/private/tmp/clinemm-tart-home` (on `/dev/disk3s1s1`, the root volume, 272 GB free, fully writable for mktemp/touch/utimes(2)); (3) `tart import <archive> <unique-vm-name>` is invoked, with the VM name unique to avoid collisions; (4) `tart list --source local --format json` is run to confirm the VM appears in Tart's local inventory; (5) STOP at import success. Boot, guest execution, artifact round-trip, and teardown all belong to a follow-up gate. The new ACT MUST NOT modify the protected `/Volumes/UserData` volume, MUST NOT invoke launchd mutations (bootstrap/bootout/kickstart/load/unload/install/enable/disable on any domain), and MUST NOT promote `getpwuid()->pw_dir` behavior into a universal Tart design invariant without source-level confirmation for other Tart builds. After successful import, the post-P2 gates (real guest boot, SSH bootstrap, command execution, verified teardown) can be re-attempted in a single bounded execution, applying the predecessor's P1 fix to `helper.c` (honor `spec.ssh_identity_file` + `spec.known_hosts_contents`, or `ssh-keyscan` ToFU + `tart exec` for command execution) IF WAIT_SSH still fails post-unblock. Alternative unblock (operator reboot) remains valid for testing whether the APFS `protect` flag is session-level or persistent; both paths can be tried independently and their results combined.
+
+```text
+TART_P2:                  CLOSED_HALTED_CLEAN
+POST_CLOSURE_CORRECTION:  ACCEPTED (PASS_WITH_NONBLOCKING_RESIDUE)
+HOST_FS_DENIAL:           PROVEN
+OFFLINE_IMPORT:           NOT_EXECUTED
+REAL_VM_BOOT:             NOT_EXECUTED
+LAUNCHD_MUTATIONS:        FORBIDDEN
+NEXT_CURSOR:              TART_OFFLINE_IMPORT_QUALIFICATION
+```
+
 ---
-
-
 **ENTRY_HEAD:** `b4ca8213cdaa5d82a9d486bbb63c17f491eb49b7` (`main`).
 **SUBJECT_HEAD:** identical to `ENTRY_HEAD` (no production change — lifecycle is correct).
 **Causal classification:** **CASE E** — completion correctly held, misleading runtime/shadow naming.
