@@ -26276,3 +26276,231 @@ structurally fixed. The 5 environmental test failures are classified
 as pre-existing in the same runner/environment and are not blocking
 for the production-correctness gate.
 
+---
+
+# ACT-CLINEMM-HTEC02-POST-START-LATE-TERMINAL-RELEASE-CORRECTION01 — Reviewer disposition (C1 GO bounded harness fix) — 2026-10-15
+
+**Reviewer:** ClineMM Factory reviewer.
+**Predecessor:** `c1992443d` closure (`PASS_HTEC02_LATE_TERMINAL_RELEASE`,
+`HALT_LATE_SETTLEMENT_PERMIT_LEAK` closed).
+
+## Late-release hook — verified by inspection
+
+The auto-release hook is installed at the top of `failClosedPostLaunch`
+(`apps/vscode/src/sdk/vscode-run-commands-tool.ts:1290-1321`):
+
+```
+if (permitId !== undefined && startedJob.terminalPromise) {
+    let lateTerminalReleased = false
+    const expectedPermitId = permitId
+    const expectedJobId = startedJob.jobId
+    startedJob.terminalPromise.then((transition) => {
+        if (lateTerminalReleased) return
+        lateTerminalReleased = true
+        if (transition.jobId !== expectedJobId) return
+        const result = options.backgroundNotifyCoordinator?.releaseReservation(expectedPermitId)
+        void result
+    })
+}
+```
+
+The hook satisfies the four reviewer-prescribed properties:
+
+1. **Exactly-once:** `lateTerminalReleased` closure flag short-circuits
+   every call after the first.
+2. **Identity-check:** `transition.jobId !== expectedJobId` defends
+   against releasing another owner's permit if the manager ever
+   produces a transition for a different job.
+3. **Dispose-safe:** the BCB's `releaseReservation` returns
+   `{ kind: "disposed" }` after disposal; the hook discards the
+   return value (`void result`).
+4. **Idempotent vs bounded-settlement happy path:** the bounded
+   settlement branch already releases on the `terminal_observed`
+   outcome; on the late path the BCB returns
+   `{ kind: "not_found" }` for the now-released permit, and the
+   hook discards the return value. Re-release is a no-op.
+
+PATCH HYGIENE PASS. Commit `c1992443d` touches exactly the four
+files the board advertises (the production tool, the HTEC02 tests,
+the BCB-C2 test, the Factory board). The digests confirm.
+
+### Reviewer addendum — terminal-state vocabulary guard
+
+The hook checks `transition.jobId` but does NOT check
+`transition.terminalState`. The `TerminalTransition` type
+(command-job-manager.ts:190-194) guarantees
+`terminalState: Exclude<CommandJobState, "running">` — i.e. one of
+`exited | deadline_exceeded | cancelled | spawn_failed |
+containment_failed`. The contract is correct, but the hook should
+mirror it as defense in depth: a malformed transition that
+happened to share a jobId would still release the permit, even
+though the production path can never produce one. A bounded
+follow-up should:
+
+- Add a `transition.terminalState` vocabulary check inside the
+  hook (defense in depth).
+- Assert the vocabulary in the focused HTEC02 timeout suite
+  alongside the existing terminal-state observations.
+
+This is a hardening refinement, not a P0. It does not block
+the C1 GO.
+
+## Five affected tests — independent re-analysis
+
+The user's digest classifies 3 of the 5 failures as pre-existing
+on the parent commit `12d411fd0` (integration-01/02/03) and 2 as
+ACT-owned (ABLATION-REAL-01, POST-START-FAILURE-01). The
+hierarchy is correct but a sharper statement is warranted:
+
+| Test                  | Introduced in            | ACT-ownership       |
+| --------------------- | ------------------------ | ------------------- |
+| integration-01        | `12d411fd0` (pre-CORR05) | HTEC02 admission    |
+| integration-02        | `12d411fd0` (pre-CORR05) | HTEC02 admission    |
+| integration-03        | `12d411fd0` (pre-CORR05) | HTEC02 admission    |
+| ABLATION-REAL-01      | `c1992443d` (CORR05)     | CORR05 (in scope)   |
+| POST-START-FAILURE-01 | `c1992443d` (CORR05)     | CORR05 (in scope)   |
+
+`git log -S` confirms that ABLATION-REAL-01 and
+POST-START-FAILURE-01 were first added by `c1992443d`; neither
+test exists in the parent commit `12d411fd0` or in the
+pre-board-update commit `77004346b`. The 3 `integration-NN`
+tests predate CORR05 — they are NOT "pre-existing in the parent
+baseline" in the sense of the prior HALT; they are
+HTEC02-admission-owned failures that predate CORR05 by one
+commit. Either way, `ACT_OWNED_NEW_FAILURES = 2` (not 0) is
+correct.
+
+### The board's root-cause hypothesis is not supported
+
+The board states: "the `vscode-run-commands-tool` transitively
+imports the `vscode` module (via `apps/vscode/src/utils/shell.ts`),
+which is unavailable in the vitest worker. The tool's `execute()`
+path throws an uncaughtException during import, producing the
+empty `result` payload observed."
+
+Three lines of evidence falsify this hypothesis:
+
+1. `apps/vscode/vitest.config.ts:509` already aliases
+   `vscode: path.resolve(__dirname, "src/test/vscode-vitest-stub.ts")`.
+   The import is NOT unavailable.
+2. The same test file (and dozens of others in
+   `apps/vscode/src/sdk/__tests__/`) import
+   `createVscodeRunCommandsTool` and call `tool.execute()` in the
+   same vitest worker. They work. If the import path were the
+   cause, those would fail too.
+3. The production code itself documents the actual cause. At
+   `apps/vscode/src/sdk/command-job-manager.ts:373-388` the
+   `spawnFactory` option is described as a "test-only override"
+   because "the same code under bun-spawned vitest workers hits
+   EPERM" on `process.kill(-pid, ...)`. The 5 failing tests all
+   call `new CommandJobManager()` WITHOUT a `spawnFactory`, so
+   the real `spawnSupervisableShellCommand` is invoked — a real
+   `sh -c 'sleep 5'` is spawned — and the subsequent
+   `manager.cancel()` / terminate path tries to kill the process
+   group, which EPERMs in the vitest worker. The same pattern
+   (inject a `spawnFactory` that returns a fake
+   `SupervisableShellProcess`) is what
+   `apps/vscode/src/sdk/__tests__/run-commands-nonterminal-classification01.rcnc01.test.ts:141-182`
+   uses successfully.
+
+The user's prescription ("Vitest explicitly supports mocking a
+nonexistent module such as `vscode`") was a reasonable guess, but
+it does not match the actual failure mechanism. Mocking `vscode`
+will not fix the 5 tests.
+
+### The correct next execution
+
+The bounded harness fix is: inject a `spawnFactory` in the 5
+affected tests so the manager does NOT spawn a real subprocess.
+This is local to HTEC02 (no production code change). The
+correction is bounded:
+
+```
+function fakeSpawnFactory() {
+    const exitPromise = new Promise<number | null>(() => {})
+    const supervisor = Object.freeze({
+        exit: exitPromise as unknown as Promise<never>,
+        pid: ++spawnedPidCounter,
+        pgid: spawnedPidCounter,
+        killTree: async () => {},
+        terminateTree: async () => ({ treeTerminated: true, escalatedToKill: false, epermDetected: false }),
+        stdoutSnapshot: () => ({ text: "", totalChars: 0, dropped: false }),
+        stderrSnapshot: () => ({ text: "", totalChars: 0, dropped: false }),
+    })
+    return supervisor
+}
+
+new CommandJobManager({ spawnFactory: () => fakeSpawnFactory() })
+```
+
+The same `SupervisableShellProcess` shape is used in rcnc01's
+`fakeSupervisor()`. Tests that need a controlled
+`terminalPromise` (ABLATION-REAL-01, POST-START-FAILURE-01,
+POST-START-TIMEOUT-01/-02) already monkey-patch
+`manager.start`, so the spawn-factory is invoked only via the
+un-monkey-patched call site. Tests that need the real
+`terminalPromise` to drive the bounded settlement
+(integration-01/02/03) get a long-lived `terminalPromise` that
+stays pending for the duration of the test — exactly the
+behavior they need.
+
+The 5 tests must each be re-run individually, with this
+correction, and each must reach its intended assertion:
+
+- `integration-01`: the `running` envelope must be observed.
+- `integration-02`: the `at_capacity` refusal must come from
+  the BCB (not a generic `error` field).
+- `integration-03`: the second call must be admitted after the
+  first settles.
+- `ABLATION-REAL-01`: the bypass must be exercised at the
+  production call site and the second `tool.execute()` must
+  produce a distinct running jobId.
+- `POST-START-FAILURE-01`: the bounded-repair path must engage
+  (NOT a generic `Command failed: ...`); the post-launch
+  `attach refused` substring must appear in `error`; the
+  `pendingReservations` count must be 0.
+
+The `POST-START-FAILURE-01` test also depends on the
+`POST-START-TIMEOUT-01` test's late-release hook behaving
+correctly. Both share the controlled `terminalPromise` harness.
+If the late-release hook (verified by inspection above) and the
+spawn-factory fix both pass, the canonical-gate is GREEN.
+
+## Disposition
+
+```
+CORR05_LATE_RELEASE:           PASS_STRUCTURAL   (verified by inspection)
+CORR05_TIMEOUT_TESTS:          PASS_REPORTED     (POST-START-TIMEOUT-01
+                                                 INVARIANT 6 is now
+                                                 production-callback-driven)
+CORR05_ACT_OWNED_FAILURES:     2                 (ABLATION-REAL-01,
+                                                 POST-START-FAILURE-01)
+CORR05_PARENT_OWNED_FAILURES:  3                 (integration-01/02/03,
+                                                 owned by HTEC02 admission)
+CORR05_CANONICAL_GATE:         NOT_GREEN
+CORR05_TERMINAL_VOCAB_GUARD:   NOT_PRESENT       (reviewer addendum)
+CORR05_COMMIT:                 c1992443d
+CORR05_LIVE:                   LIVE_UNOBSERVABLE
+
+DECISION: C1_GO_BOUNDED_HARNESS_FIX
+DOGFOOD:  NOT_YET_AUTHORIZED
+```
+
+The late-release hook is structurally correct, satisfies the
+four reviewer-prescribed properties, and the
+`POST-START-TIMEOUT-01` INVARIANT 6 is now driven by the
+production callback (not a manual test call). No architectural
+review is necessary. The remaining blocker is one bounded
+test-harness correction: inject a `spawnFactory` in the 5
+affected tests so the manager does not spawn a real subprocess
+under the vitest worker. The board's `vscode`-mocking
+prescription is replaced by this `spawnFactory` injection (the
+board's hypothesis was testable in static analysis and does
+not hold).
+
+Once the 5 tests pass, the canonical gate is GREEN and the
+project proceeds directly to exact-head VSIX qualification.
+The terminal-vocabulary guard in the late-release hook is a
+separate hardening refinement and is out of scope for this
+disposition.
+
