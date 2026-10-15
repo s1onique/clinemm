@@ -1,26 +1,34 @@
-# ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01 - CAPTURE_INSUFFICIENT - 2026-10-15
+# ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01 - PASS_CAUSAL_CLASSIFICATION_NO_REPAIR - 2026-10-15 (correction)
 
-**Status:** HALTED at Phase 0 with verdict **`CAPTURE_INSUFFICIENT`** and P0 stop rule applied. No production change attempted.
+**Status:** CLOSED with verdict **`PASS_CAUSAL_CLASSIFICATION_NO_REPAIR`** (supersedes the earlier `CAPTURE_INSUFFICIENT` HALT after a path-corrected re-examination located the captures at `/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/`).
 
-**ENTRY_HEAD:** `b4ca8213cdaa5d82a9d486bbb63c17f491eb49b7` (`main` — `ACT-CLINEMM-TART-P1-REAL-GUEST-LAUNCHD-QUALIFICATION02: CLOSED_HALTED_CLEAN`).
-**SUBJECT_HEAD:** identical to `ENTRY_HEAD` (no production change).
-**DOGFOOD_SOURCE_HEAD:** N/A — no dogfood build (no GREEN to qualify).
+**ENTRY_HEAD:** `b4ca8213cdaa5d82a9d486bbb63c17f491eb49b7` (`main`).
+**SUBJECT_HEAD:** identical to `ENTRY_HEAD` (no production change — lifecycle is correct).
+**Causal classification:** **CASE E** — completion correctly held, misleading runtime/shadow naming.
 
-**Phase-0 finding (the only finding):** the prompt supplies 10 capture files with timestamps `20261015-0652*` plus session id `1792045691672_s0nzn` as load-bearing evidence. None of these exist on this checkout. `git stash list` is empty; `git status --short` is clean; `find . -name '*20261015*'` returns no hits; `find . -name '*s0nzn*'` returns no hits; the newest `.factory/evidence/` directory is dated 2026-10-14 (`TART-HELPER-REAL-LIFECYCLE-CORRECTION01`); the most recent `main` commit is unrelated to completion-shadow lifecycle. The ACT ID `COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01` does not appear anywhere in the git history.
+**Key counters (durable copy at `…/sources/`):** `task_completion_committed: 0`; `submit_and_exit_seen: 3`; `continuation_started: 2`; `agent_turn_done: 3`; held-set 11→3 with `ownerStillRunningForC10: true`; `lastStopReason: "owner_still_running"`; `blockedOutcomeStalledNoProgress: 1`; `enqueueCompletionContinuationInvoked: 2`; 2 continuations delivered; 14 legacy phase writes, **zero** to `completed`; 63 TaskHeader captures all `selectedPhase: "streaming"`; 64 runtime/shadow/legacy captures — index 51 (sv=1989) and 63 (sv=2024) show `runtime=completed, shadow=completed, legacy=streaming` (per-run signal from `reconstructRunResult` at `task-state-shadow-observer.ts:331`).
 
-**Why `CAPTURE_INSUFFICIENT` (not `NOT_REPRODUCED`):** the prompt's safety rules say *"If production source and captures cannot distinguish cases: `CAPTURE_INSUFFICIENT`"* and *"A running-job status response is not proof of terminal observation."* A `NOT_REPRODUCED` verdict would require a real CSD-01..05 discriminator against the production seam at the named owner/epoch. With no `taskId`, no `sessionEpoch`, no `stateVersion`, no `producer`, no `runTurn` record, and no held-obligation progression table, **no real-seam discriminator is possible** — any test would be a mock-only reproduction against an unattested capture, which the prompt labels `HYPOTHESIS_ONLY` and forbids as a stand-alone GREEN.
+**Mandatory safety invariant upheld:** `DisplayComplete` (TaskHeader, legacy phase, webview snapshot) does NOT precede canonical C10 commit. C10 commit never fired; legacy phase never left `streaming`; TaskHeader never showed `completed`. The only `completed` values are per-run signals in the diagnostic, not task-completion.
 
-**What was NOT done (and why):** no production change; no Elm kernel rebuild; no BCB / C10 modification; no webview modification; no commit on the source tree (this ACT owns zero source changes).
+**Why no repair:** per the prompt's verbatim rule — *"If `runtime=completed` means only turn termination and downstream projections are behaving according to their contracts, the core completion hold is legitimate. Return: `PASS_CAUSAL_CLASSIFICATION_NO_REPAIR`. A separate product decision may clarify status naming, but this ACT must not weaken completion authority."* The lifecycle is correct. The C10/continuation/legacy-phase publication seam, the Elm TaskHeader selector, the BCB observation barrier, and the completion authority are all correct. The per-run "completed" naming in the post-terminal-authority-diagnostic is a product-contract decision (per-run vs. task-level status), out of scope for this ACT.
 
-**P0 / P1 / P2 residue:** P0 = 0; P1 = 0; P2 = 0.
+**P0 / P1 / P2 residue:** P0 = 0; P1 = 0; P2 = 1 (closure-evidence and board entry rewritten from `CAPTURE_INSUFFICIENT` to `PASS_CAUSAL_CLASSIFICATION_NO_REPAIR` — prior wording replaced).
 
-**Predecessor lineage (informational, not a basis for closure here):** `ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01` (2026-10-09, `PASS_CAUSAL_CLASSIFICATION_NO_REPAIR` on a different incident shape — capability-unavailable continuation path); `ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01` (2026-10-07, closed); `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-CORRECTION02` (2026-09-29, in-progress). None of these is the same incident; none produces the captures the prompt references.
+**Predecessor lineage (informational):** CRCD01 (2026-10-09) `PASS_CAUSAL_CLASSIFICATION_NO_REPAIR`; COMPLETION-CONTINUATION-CONTROL-AUTHORITY01 (2026-10-07, closed); COMPLETION-AUTHORITY-ELM-SHADOW01-CORRECTION02 (2026-09-29, in-progress). This ACT's CASE-E verdict aligns with CRCD01.
 
-**Evidence:** `.factory/evidence/ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01/00-closure-evidence.md`. **Verdict:** `CAPTURE_INSUFFICIENT`.
+**Evidence:** `.factory/evidence/ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01/00-closure-evidence.md` (210 lines). **Verdict:** `PASS_CAUSAL_CLASSIFICATION_NO_REPAIR`.
 
 ---
 
-# ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR04 - PASS_HELD_TERMINAL_NO_MANUFACTURED_OBSERVATION (correction) - 2026-10-14
+# ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01 - CAPTURE_INSUFFICIENT - 2026-10-15 (SUPERSEDED)
+
+**Status:** SUPERSEDED by the corrected `PASS_CAUSAL_CLASSIFICATION_NO_REPAIR` entry above. The original `CAPTURE_INSUFFICIENT` HALT was a probe-path defect on my side; the captures were durably located after a path-corrected re-examination. This entry is preserved for audit lineage only.
+
+**Phase-0 finding (the only finding at the time of HALT):** the prompt supplies 10 capture files with timestamps `20261015-0652*` plus session id `1792045691672_s0nzn` as load-bearing evidence. None of these exist on this checkout. `git stash list` is empty; `git status --short` is clean; `find . -name '*20261015*'` returns no hits; `find . -name '*s0nzn*'` returns no hits; the newest `.factory/evidence/` directory is dated 2026-10-14 (`TART-HELPER-REAL-LIFECYCLE-CORRECTION01`); the ACT ID does not appear in git history. The captures were later found at `/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/` as flat-named files (without the timestamp suffix the prompt described).
+
+**Original verdict:** `CAPTURE_INSUFFICIENT` (retracted). **Superseded verdict:** see the corrected entry above — `PASS_CAUSAL_CLASSIFICATION_NO_REPAIR`.
+
+---
 
 **Status:** CLOSED with verdict **`PASS_HELD_TERMINAL_NO_MANUFACTURED_OBSERVATION`**. Reviewer P0 halt `HALT_TERMINAL_OBSERVATION_SETTLED_WITHOUT_OBSERVATION` closed: the BCB no longer manufactures an Observed event at the secondary cap; the new fact obligation stays held; the host (production code) owns the disposition decision.
 

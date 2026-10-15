@@ -1,0 +1,14 @@
+{
+  "total": 0,
+  "states": 18,
+  "decodeErrors": 0,
+  "kernelErrors": 0,
+  "authorize": 0,
+  "hold": 0,
+  "failure": 0,
+  "fallbackUsed": 0,
+  "sessionsActive": 1,
+  "lastDecision": "authorize",
+  "lastClassification": null,
+  "lastHoldReasons": []
+}

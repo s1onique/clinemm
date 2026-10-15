@@ -1,0 +1,15 @@
+{
+  "total": 2,
+  "callbackEntered": 2,
+  "activeSessionMissing": 0,
+  "sessionIdMismatch": 0,
+  "sdkHostSendEntered": 2,
+  "delivered": 2,
+  "rejected": 0,
+  "sessionGone": 0,
+  "noHeldJobIds": 0,
+  "sendThrew": 0,
+  "lastOutcome": "delivered",
+  "lastRequestedSessionMatched": true,
+  "pendingPromptEnqueuedObserved": null
+}
