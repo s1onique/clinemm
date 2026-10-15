@@ -1,0 +1,30 @@
+=== Mount state at ACT start ===
+$ mount | grep -E '/dev/disk3s[0-9]|TimeMachine'
+/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)
+/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)
+/dev/disk3s8 on /Volumes/UserData (apfs, local, journaled, protect)
+com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)
+
+=== Write-blocked witness on the protected volume ===
+$ mkdir -p /Volumes/UserData/Users/chistyakov/Library/Application\ Support/com.cirruslabs.tart
+mkdir: cannot create directory '/Volumes/UserData/Users/chistyakov/Library/Application Support/com.cirruslabs.tart': Operation not permitted
+EXIT=1
+
+$ touch /Volumes/UserData/Users/chistyakov/Library/Caches/clinemm-canary-test
+touch: cannot touch '/Volumes/UserData/Users/chistyakov/Library/Caches/clinemm-canary-test': Operation not permitted
+EXIT=1
+
+=== Tart clone from terminal (no helper, no Seatbelt) — same error ===
+$ /run/current-system/sw/bin/tart clone 'ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49' p2-default
+utimes(2) failed: Operation not permitted
+EXIT=1
+
+=== Tart clone via the dev-fallback helper (capture of the helper's stderr) ===
+$ bun /tmp/clinemm-p2-fresh/testbed-run.ts
+{"ok":false,"error":"TART_CLONE_FAILED"}
+helper.log: [helper] clone failed: utimes(2) failed: Operation not permitted
+
+=== OCI cache SQLite WAL write failure (observed when TART_HOME is redirected) ===
+DB=/Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db
+stepSQLStatement:toCompletionWithRetry - stepping returned unhandled result=8
+Error: FailedToCreateVmFile

@@ -1,0 +1,175 @@
+ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01 - closure evidence
+======================================================================
+
+Subject HEAD: a24336db5476478ebcb33563754f2aed39b05fb1 (main, clean)
+Verdict: CLOSED_HALTED_CLEAN with proximate halt classifier
+       HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS
+
+Predecessor lineage (informational):
+- ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (2026-10-08):
+  PASS_TART_LAUNCHD_REAL_GUEST; 10 bounded helper.c corrections; canonical
+  install BLOCKED by macOS provenance; dev-fallback deploy used as control.
+- ACT-CLINEMM-TART-P1-REAL-GUEST-LAUNCHD-QUALIFICATION02 (2026-10-15):
+  CLOSED_HALTED_CLEAN at Gate B2 HALT_GUEST_SSH_BOOTSTRAP_UNAVAILABLE;
+  halted at WAIT_SSH because the cached Cirrus base has no preinstalled
+  pubkey for the helper's per-run ed25519.
+
+Phase 0 - Recovery ledger (read-only):
+  ENTRY_HEAD:                a24336db5476478ebcb33563754f2aed39b05fb1
+  SUBJECT_HEAD:              identical (no production change)
+  DOGFOOD_SOURCE_HEAD:       identical
+  INSTALLED_HELPER_BUILD_ID: 85a87a825c9050768e471cb2a1799c5be811dc1197e984918aa169e453bd5b8e
+  INSTALLED_HELPER_SHA256:   ccd5257402745b4e8940dda9a5d020f09984063aea26ca5c1561a4b492d6366c
+  IN_TREE_HELPER_BUILD_ID:   335e603825874be805ee6406c652f13c783b02b2558418b4543d92b0654b30ca
+  IN_TREE_HELPER_SHA256:     91094cca50304976fc80945669b31c545bd44ef21b7c53ec94425033f79f0e6d
+  HELPER_SOURCE_SHA256:      0ad058a8e7a10ec3ddc78949c2b93256499897271cecc1c5c3a3898d642298bd
+  HOST_OS_VERSION:           macOS 14.7.4 (23H420) arm64
+  TART_VERSION:              2.34.0
+  BASE_IMAGE_DIGEST:         sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49
+  CACHE_PATH:                ~/Library/Caches/tart/ (Cache.db 49152B + WAL 469712B)
+
+  P0 safeguard (mid-ACT, per on-call expert verdict):
+    HALT_UNSAFE_HOST_HELPER_SERVICE_MUTATION
+    Reason: launchctl bootstrap gui/501 ... failed with exit 5 from the
+    Seatbelt sandbox; subsequent launchctl bootout/bootstrap/kickstart
+    are FORBIDDEN. Service recovery is an out-of-band host-maintenance
+    operation, not part of this ACT.
+  Recovery path used: dev-fallback helper at /tmp/clinemm-p2-fresh/
+  (same helper.c source, same build_id 335e6038..., same argv-only
+  subprocess discipline, same sealed Tart allowlist; only the socket
+  bind path differs).
+
+Phase 1 - Live helper preflight: PASS
+  Evidence: 01-preflight.json.raw
+  Helper response (dev-fallback, build_id 335e6038..., with
+  CLINEMM_TART_CACHE_DIR=/tmp/clinemm-p2-cache/canary):
+    {
+      "executionBoundary": "launchd",
+      "serviceIdentity":   { "uid": 501, "username": "chistyakov" },
+      "cacheWrite":        { "attempted": true, "succeeded": true },
+      "tart":              { "available": true, "version": "2.34.0",
+                              "localListSucceeded": true, "ociListSucceeded": true },
+      "overall": "PASS"
+    }
+  Cache discriminator re-verified: ~/Library/Caches/... -> EPERM
+  (macOS APFS protect on /dev/disk3s8); /tmp/.../ (directory) ->
+  EISDIR; /tmp/.../canary (file) -> PASS.
+
+Phase 2 - Real clone/boot probe: HALT (TART_CLONE_FAILED)
+  Evidence: 02-testbed-run-1.json.raw + 02-helper-log.txt
+  Helper response:
+    {"ok": false, "error": "TART_CLONE_FAILED"}
+  Helper stderr:
+    [helper] launch_activate_socket ESRCH; manual/dev fallback self-bind
+    [helper] clone failed: utimes(2) failed: Operation not permitted
+  Helper successfully:
+    - parsed the closed spec
+    - resolved sealed tart (/run/current-system/sw/bin/tart v2.34.0)
+    - resolved ssh + scp from /usr/bin
+    - created per-run staging /tmp/clinemm-p2-staging/p2real01 (mode 0700)
+    - generated id_ed25519 + id_ed25519.pub (RL-02 fix proven at runtime)
+    - seeded empty known_hosts (RL-02 fix proven at runtime)
+    - invoked tart clone ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4... p2real01
+  Clone failed at utimes(2) step on the protected user-data volume.
+  Same error reproduces standalone (no helper, no Seatbelt):
+    $ /run/current-system/sw/bin/tart clone '.../e2ebdfc4...' p2-default
+    utimes(2) failed: Operation not permitted
+    EXIT=1
+  No local VMs left after the call:
+    $ /run/current-system/sw/bin/tart list --source local --format json
+    []
+
+Phase 2 - Root cause discriminator: HOST_FS_TART_CLONE_BLOCKED_BY_TIME_MACHINE_SNAPSHOT_VOLUME
+  Evidence: 03-mount-and-fs-evidence.txt
+  $ mount | grep -E '/dev/disk3s[0-9]|TimeMachine'
+  /dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)
+  /dev/disk3s8 on /Volumes/UserData (apfs, local, journaled, protect)
+  com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)
+
+  $ mkdir -p /Volumes/UserData/Users/chistyakov/Library/Application Support/com.cirruslabs.tart
+  mkdir: cannot create directory '...': Operation not permitted
+
+  This is the same host-FS condition documented in
+  ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01
+  (HALT_HOST_BOOTED_FROM_TIME_MACHINE_SNAPSHOT_PROTECTS_USERDATA,
+  c4-host-ablation/result.json). The unblock is operator reboot off
+  the snapshot OR operator pre-staging the base image as a .tvm on a
+  writable host and tart import-ing it. Both are out-of-band host
+  maintenance forbidden from the Seatbelt sandbox.
+
+Phase 3 - Guest execution transport: NOT EXECUTED
+  Blocked at Phase 2 (clone failure). SSH transport is closed-schema-
+  validated by the helper (TBRUNNER-RL-01..06 108-test PASS). Tart
+  guest agent IS AVAILABLE (tart exec --help) on the cached Cirrus
+  base (non-vanilla Cirrus image); bounded transport substitution to
+  tart exec is sanctioned by the prompt 4.1 but is NOT exercised
+  because the upstream clone never completed.
+
+Phase 4 - Verified teardown: NOT EXECUTED
+  Helper's tbr_try_delete orphan-prevention fired on the TART_CLONE_FAILED
+  path (no leftover local VMs; staging dir p2real01 left intact as
+  a witness per the prompt's "Preserve the original failure" rule).
+  Helper's tbr_escalate was not exercised (tbr_spawn_argv for tart
+  run was not reached).
+
+Phase 5 - Artifact round-trip: NOT EXECUTED (blocked by Phase 2)
+Phase 6 - Seatbelt provenance: PARTIAL
+  Phase 1 preflight + Phase 2 testbed.run dispatched from a Seatbelted
+  Bun script against the dev-fallback helper (production launchd-
+  equivalent substrate per the 0 P0 safeguard). Canonical LaunchAgent-
+  managed helper is NOT running; the Seatbelted agent MUST NOT bootstrap
+  it. PASS_TART_LAUNCHD_REAL_GUEST for the helper code is carried forward
+  from the corrector ACT.
+Phase 7 - VSIX dogfood: NOT EXECUTED (blocked by Phase 2)
+
+Executable gates (per prompt 9):
+  Helper protocol + dispatch + lifecycle (test.sh 108/108): PASS
+    (proves the helper lifecycle code is correct; the ACT only ran
+    the test suite, NOT any VM; 487 expect() calls; 70.01s wallclock)
+  Tart-testbed backend (not re-run): not affected by this ACT
+  Launchd client (not re-run): not affected by this ACT
+  Typecheck for changed TS files: N/A (no TS changes)
+  Native compilation: N/A (no source changes; in-tree binary is the
+    pre-existing 91094cca... built Oct 15 09:31, in-tree helper.c
+    SHA-256 0ad058a8... unchanged)
+  git diff --check: clean at start, ACT changes are .factory/ only
+
+Test vs real-host evidence:
+  01-preflight.json.raw            REAL (dev-fallback helper, real tart)
+  02-testbed-run-1.json.raw        REAL (dev-fallback helper, real tart)
+  02-helper-log.txt                REAL (helper stderr)
+  03-mount-and-fs-evidence.txt     REAL (mount, mkdir, standalone tart clone)
+  bun test --timeout=30000 108/108 TEST (fake-tart + fake-ssh seam)
+
+Failure rules (per prompt 10) assessment:
+  P0 rules: all N/A or NO violation (full table in ACT 9)
+  P1 rules: cache path corrected (file vs directory), argv correct,
+            tbr_try_delete fired (no orphan)
+  P2 non-blocking: ACT-owned changes are .factory/{acts,evidence} only
+
+Final verdict (per prompt 12):
+  HELPER_IDENTITY:        PASS_WITH_NONBLOCKING_RESIDUE
+  HELPER_PREFLIGHT:       PASS
+  REAL_VM_BOOT:           NOT_EXECUTED (HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS)
+  REAL_GUEST_EXEC:        NOT_EXECUTED
+  REAL_TEARDOWN:          NOT_EXECUTED
+  ARTIFACT_ROUNDTRIP:     NOT_EXECUTED
+  SEATBELT_PROVENANCE:    PARTIAL
+  VSIX_DOGFOOD:           NOT_EXECUTED
+
+  Overall: CLOSED_HALTED_CLEAN
+
+Successor ACT prescriptions (NOT applied; out of scope per 0):
+  - Operator reboot off the Time Machine snapshot
+    (or pre-stage .tvm and tart import) -> re-run P2-P7
+  - Predecessor's P1 fix (honor spec.ssh_identity_file +
+    ssh-keyscan ToFU) -> if WAIT_SSH still fails after unblock
+  - Tart guest agent substitution -> if SSH is proven blocked
+
+Test artifacts:
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/acts/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01.md
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/00-closure-evidence.txt
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/01-preflight.json.raw
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/02-testbed-run-1.json.raw
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/02-helper-log.txt
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/03-mount-and-fs-evidence.txt

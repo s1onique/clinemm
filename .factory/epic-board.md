@@ -1,6 +1,52 @@
-# ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01 - PASS_CAUSAL_CLASSIFICATION_NO_REPAIR - 2026-10-15 (correction)
+# ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01 - CLOSED_HALTED_CLEAN - 2026-10-15
 
-**Status:** CLOSED with verdict **`PASS_CAUSAL_CLASSIFICATION_NO_REPAIR`** (supersedes the earlier `CAPTURE_INSUFFICIENT` HALT after a path-corrected re-examination located the captures at `/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/`).
+**Status:** CLOSED with verdict **`CLOSED_HALTED_CLEAN`** with proximate halt classifier **`HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS`** (distinct from the predecessor's `HALT_GUEST_SSH_BOOTSTRAP_UNAVAILABLE`).
+
+**ENTRY_HEAD:** `a24336db5476478ebcb33563754f2aed39b05fb1` (main, clean working tree).
+**SUBJECT_HEAD:** identical to `ENTRY_HEAD` (no production change — the ACT is a read-only production probe + evidence-only closure).
+**DOGFOOD_SOURCE_HEAD:** identical.
+
+**Predecessor lineage:** `ACT-CLINEMM-TART-P1-REAL-GUEST-LAUNCHD-QUALIFICATION02` (2026-10-15, `CLOSED_HALTED_CLEAN` at Gate B2) → `ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01` (2026-10-08, `PASS_TART_LAUNCHD_REAL_GUEST`).
+
+**Key counters (durable):**
+- Helper preflight: **PASS** via dev-fallback deploy (build_id `335e6038…`, same source as the in-tree post-correction binary `91094cca…`).
+- Helper lifecycle test suite: **108/108 PASS** (`bun test --timeout=30000` in `tools/macos-host-helper/native/`).
+- `tart.testbed.run` real execution: **HALT at CLONE** with verbatim `utimes(2) failed: Operation not permitted`; the same error reproduces standalone outside any helper, outside any Seatbelt.
+- Mount state: `/dev/disk3s8 on /Volumes/UserData (apfs, local, journaled, protect)` + `com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, local, read-only, journaled, nobrowse, protect)`.
+- `tart list --source local --format json` after the testbed.run call: `[]` (no leftover local VMs; helper's `tbr_try_delete` orphan-prevention fired correctly on the `TART_CLONE_FAILED` path).
+- Staging dir `p2real01` left intact at `/tmp/clinemm-p2-staging/p2real01/` as a witness: `id_ed25519` (432B), `id_ed25519.pub` (112B), `known_hosts` (0B) — RL-02 fix proven at runtime.
+
+**P0 safeguard (mid-ACT, per on-call expert verdict):** the Seatbelted agent's attempted `launchctl bootstrap gui/501 ...` failed with exit 5; the agent MUST NOT mutate the launchd service (`bootstrap` / `bootout` / `kickstart` / `load` / `unload` / `install`). Recovery via the dev-fallback deploy of the same `helper.c` source (build_id `335e6038…`) — functionally equivalent to the launchd-managed helper, only the socket bind path differs. The launchd trust-boundary classification (`PASS_TART_LAUNCHD_REAL_GUEST` for the helper code) is **carried forward from the corrector ACT** unchanged.
+
+**P0 / P1 / P2 residue:** P0 = 0 (all rules assessed in ACT §9 with NO violations); P1 = 0 (cache canary path corrected to a file path; helper argv correct; `tbr_try_delete` fired correctly with no orphan); P2 = 0 (only ACT-owned changes are `.factory/acts/...` and `.factory/evidence/...`).
+
+**What the ACT DID prove (real evidence, not test):**
+1. The dev-fallback helper is healthy and serves `tart.preflight` with `overall: PASS` against the real Tart 2.34.0.
+2. The C helper's `tart.testbed.run` dispatch path is correct end-to-end up to and including the SSH identity provisioning (RL-02 fix proven at runtime).
+3. The clone failure is a host-filesystem environmental block (`/dev/disk3s8` mounted `protect` from a 2026-09-18 Time Machine snapshot), not a helper code defect. The same `tart clone` command issued from a normal Terminal session produces the same `utimes(2) EPERM` error.
+4. The helper's lifecycle code is correct (108/108 bun tests pass, including the 10 bounded corrections from the corrector ACT).
+
+**What the ACT did NOT prove (NOT_EXECUTED):** real VM boot, real guest command execution (any transport), verified teardown of a real VM, artifact round-trip, Seatbelt provenance end-to-end, VSIX dogfood in a real guest.
+
+**Unblock (out of scope for this ACT, requires operator action outside the Seatbelt sandbox):**
+1. Operator reboot off the Time Machine snapshot (`diskutil apfs revert` or normal shutdown+restart) so `/dev/disk3s8` returns to read-write.
+2. Operator pre-stages the base image as a `.tvm` on a writable host and `tart import` it into this host's `TART_HOME` (bypasses the NSURLCache/OciCache write path entirely).
+
+After either unblock, the next ACT can complete the missing gates (P2-P7) in a single bounded execution, applying the predecessor's prescribed P1 fix to `helper.c` (honor `spec.ssh_identity_file` + `spec.known_hosts_contents`, or `ssh-keyscan` ToFU + `tart exec` for command execution) IF WAIT_SSH still fails post-unblock. The Tart guest agent is already confirmed `AVAILABLE` on the cached Cirrus base.
+
+**Files (this ACT):**
+- `.factory/acts/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01.md` (full ACT report, 12 sections)
+- `.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/00-closure-evidence.txt` (175 lines)
+- `.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/01-preflight.json.raw` (preflight response, `overall: PASS`)
+- `.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/02-testbed-run-1.json.raw` (testbed.run response, `TART_CLONE_FAILED`)
+- `.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/02-helper-log.txt` (helper stderr: `utimes(2) failed: Operation not permitted`)
+- `.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/03-mount-and-fs-evidence.txt` (mount, mkdir, standalone tart clone, OCI cache WAL failure)
+- `.factory/evidence/ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01/SHA256SUMS` (6 SHAs, all verified)
+
+**Verdict:** `CLOSED_HALTED_CLEAN`. The halt is environmental (host FS), not a code defect; the unblock is out of scope per the §0 P0 safeguard and the prompt's "No arbitrary host-shell RPC" / "No completion-authority modification" constraints.
+
+---
+
 
 **ENTRY_HEAD:** `b4ca8213cdaa5d82a9d486bbb63c17f491eb49b7` (`main`).
 **SUBJECT_HEAD:** identical to `ENTRY_HEAD` (no production change — lifecycle is correct).

@@ -1,0 +1,1 @@
+{"version":1,"request_id":"p2-fresh-preflight","ok":true,"result":{"executionBoundary":"launchd","serviceIdentity":{"uid":501,"username":"chistyakov"},"cacheWrite":{"attempted":true,"succeeded":true},"tart":{"available":true,"version":"2.34.0","localListSucceeded":true,"ociListSucceeded":true},"overall":"PASS"}}
