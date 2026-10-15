@@ -26732,3 +26732,121 @@ ACT; that ACT is not this one.
    remains a hardening refinement (reviewer addendum, not P0).
    It can land in a separate hardening ACT if desired.
 
+
+---
+
+# ACT-CLINEMM-TART-P1-REAL-GUEST-LAUNCHD-QUALIFICATION02 — CLOSED_HALTED_CLEAN — 2026-10-15
+
+**Status:** CLOSED with verdict **`CLOSED_HALTED_CLEAN`**. Real Seatbelted caller path against the production host-helper + Tart substrate was executed. Substrate is healthy (helper answers `health` and `tart.preflight=PASS`; C helper dispatch reaches the real lifecycle handler; tart-testbed launchd runner test suite is fully green). The execution path is HALTED at Gate B2 because two independent prerequisites for guest SSH authentication are not in place on this host.
+
+**Predecessors:** ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01 (PASS_TART_LAUNCHD_REAL_GUEST, 2026-10-14) at `c1992443d`. ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01 (PASS_CLINEMM_TART_LAUNCHD_RUNNER, 2026-10-07) at `fa27c21f4`.
+
+**Reviewer concern addressed (per ACT §0, §2):** discover the actual repository identity, do not redo LaunchAgent restoration, do not re-design. Run the existing production execution path.
+
+**Entry conditions verified:**
+- `git rev-parse HEAD`: `3e9aee04dab2be0f5e34157fa46220bb5b32b33a`
+- `git status --short`: clean (no dirty tracked files)
+- `git stash list`: empty
+- macOS 14.7.4 (23H420) arm64
+- Tart 2.34.0 (`/run/current-system/sw/bin/tart`)
+- LaunchAgent plist `io.clinemm.host-helper` present at `~/Library/LaunchAgents/io.clinemm.host-helper.plist`
+- Helper socket `~/.clinemm/host-helper.sock` present (residual; not currently listening)
+- Cached Sonoma OCI image: `ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49` (last access 2026-10-06)
+- Successful helper-side `tart.preflight` (re-confirmed in this ACT with sandbox-writable cache path)
+
+**Gate B1 — PASS_INSTALLED_HELPER_SOURCE_BOUND (with non-blocking residue):**
+- Installed binary: `~/.clinemm/bin/clinemm-host-helper` (sha256 `ccd5257402745b4e8940dda9a5d020f09984063aea26ca5c1561a4b492d6366c`, 54264 bytes, mtime Oct 7 08:04)
+- Installed embedded `build_id` (via dev-fallback `health` probe): `85a87a825c9050768e471cb2a1799c5be811dc1197e984918aa169e453bd5b8e`
+- Source HEAD `tools/macos-host-helper/native/helper.c` (sha256 `0ad058a8e7a10ec3ddc78949c2b93256499897271cecc1c5c3a3898d642298bd`, 169666 bytes, mtime Oct 14 16:14)
+- Source HEAD expected `build_id` (sha256(ABI || helper.c)): `335e603825874be805ee6406c652f13c783b02b2558418b4543d92b0654b30ca`
+- Freshly built `tools/macos-host-helper/native/helper` (sha256 `91094cca50304976fc80945669b31c545bd44ef21b7c53ec94425033f79f0e6d`, 71832 bytes): build_id `335e6038...` (verified by `printf | cat - helper.c | shasum -a 256`).
+- **Drift:** installed binary is 1 source generation behind current HEAD. Re-deploy from inside the ClineMM Seatbelt sandbox DENIED: writes to `~/.clinemm/bin/` return `Operation not permitted` (directory carries `com.apple.provenance`, owned by the LaunchAgent). This is a CORRECT Seatbelt property — the ACT forbids weakening it.
+- **Resolution:** PASS_WITH_NONBLOCKING_RESIDUE. Operator follow-up (outside sandbox): `BUN_BIN=/opt/homebrew/bin/bun bash scripts/macos/clinemm-host-helper install`. Trust class unchanged: same installer, same source family, same fixed argv/closed-spec design.
+
+**Gate B2 — HALT_GUEST_SSH_BOOTSTRAP_UNAVAILABLE:**
+- (1) No qualified/derived guest image exists. Trusted testbed config `~/.clinemm/testbed/config.json` does not exist. The cached image is the generic Cirrus base (no preinstalled SSH public key for any non-Cirrus principal).
+- (2) C helper's `tart.testbed.run` handler ignores `spec.ssh_identity_file` and `spec.known_hosts_contents` (the wire-level fields defined by `tools/tart-testbed/src/launchd-backend.ts:153`). It always provisions a per-run ed25519 key and an empty known_hosts file. Without honoring `ssh_identity_file`, the helper cannot authenticate against any guest whose `authorized_keys` is bound to a different principal.
+- Real helper lifecycle evidence (per-run 10/10, lifecycle 6/6, helper 77/77, preflight 15/15, tart-testbed 114/114 — all PASS):
+  - `TBRUNNER-C-01..04`: dispatch reaches real lifecycle handler (`TART_SSH_TIMEOUT` with fake-tart).
+  - `TBRUNNER-RL-01`: SSH argv has `-o` before every `KEY=VAL` option.
+  - `TBRUNNER-RL-02`: per-run `id_ed25519`, `id_ed25519.pub`, `known_hosts` exist on disk before first SSH attempt.
+  - `TBRUNNER-RL-03`: nonzero SSH command exit surfaces as `TART_CMD_FAILED` (not PASS).
+  - `TBRUNNER-RL-04`: `tart stop` failure surfaces as `TART_STOP_FAILED`.
+  - `TBRUNNER-RL-05`: `tart delete` failure surfaces as `TART_DELETE_FAILED`.
+  - `TBRUNNER-RL-06`: WAIT_SSH timeout triggers `tart delete` (no orphan).
+- **Resolution:** HALT_GUEST_SSH_BOOTSTRAP_UNAVAILABLE. Both prerequisites are absent. See Successor ACT below.
+
+**Gate B3..B7 — NOT EXECUTED (blocked by B2).** Per ACT §3 stop rules: `HALT_GUEST_SSH_BOOTSTRAP_UNAVAILABLE` preserves the exact missing trust prerequisite.
+
+**Real `tart.preflight` evidence (sandbox-writable cache):**
+- `request_id: realqual-preflight-3`
+- `executionBoundary: launchd`
+- `serviceIdentity: {uid:501, username:chistyakov}`
+- `cacheWrite: {attempted:true, succeeded:true}`
+- `tart: {available:true, version:2.34.0, localListSucceeded:true, ociListSucceeded:true}`
+- `overall: PASS`
+
+**Sandbox observations (preserve as fact):**
+- This ACT runs inside a ClineMM Seatbelt sandbox (`TMPDIR=/private/var/folders/.../clinemm-sandbox-temp-*`).
+- Writes to `~/.clinemm/bin/` and `~/.cache/tart/` are denied from inside the sandbox (correct Seatbelt property).
+- Writes to `~/Library/Caches/` are denied from inside the sandbox (correct Seatbelt property).
+- `launchctl bootstrap gui/$UID` returns `Bootstrap failed: 5: I/O error` from inside the sandbox (correct Seatbelt property).
+- Helper invocations outside the sandbox (dev-fallback bind to `/tmp/...sock`) DO succeed; the helper itself is not the issue.
+- The Gate B5 seatbelted-caller test IS this ACT itself — the Seatbelt containment is provably enforced.
+
+**Identity ledger:**
+- `ENTRY_HEAD`: `3e9aee04dab2be0f5e34157fa46220bb5b32b33a`
+- `SUBJECT_HEAD`: `3e9aee04dab2be0f5e34157fa46220bb5b32b33a`
+- `DOGFOOD_SOURCE_HEAD`: `3e9aee04dab2be0f5e34157fa46220bb5b32b33a`
+- `MACOS_VERSION`: `14.7.4 (23H420) arm64`
+- `TART_VERSION`: `2.34.0`
+- `HELPER_BUILD_ID`: `85a87a825c9050768e471cb2a1799c5be811dc1197e984918aa169e453bd5b8e` (installed, 1 generation stale)
+- `HELPER_BINARY_SHA256`: `ccd5257402745b4e8940dda9a5d020f09984063aea26ca5c1561a4b492d6366c`
+- `BASE_IMAGE_DIGEST`: `sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49`
+- `DERIVED_IMAGE_DIGEST`: NOT PRODUCED (Prerequisite A required, see below)
+- `VM_RUN_ID`: n/a (no real run)
+- `VM_NAME`: n/a
+- `GUEST_OS_VERSION`: n/a
+- `GUEST_SSH_IDENTITY_VERIFIED`: `false` (real SSH auth never reached)
+- `VSIX_PATH`, `VSIX_BYTES`, `VSIX_SHA256`, `INSTALLED_EXTENSION_VERSION`: n/a (no real run)
+
+**Successor ACT (ACT-CLINEMM-TART-P1-REAL-GUEST-LAUNCHD-QUALIFICATION03):**
+
+Prerequisite A (operator action, ~15 min wall time):
+1. Generate sshd host key pair on dev Mac: `ssh-keygen -t ed25519 -N '' -f /abs/path/qual-host-ed25519`.
+2. Generate operator SSH key pair on dev Mac: `ssh-keygen -t ed25519 -N '' -f /abs/path/operator-ed25519`.
+3. `cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm`
+4. Export:
+   - `CLINEMM_TESTBED_IMAGE_PUBLIC_KEY_PATH=/abs/path/operator-ed25519.pub`
+   - `CLINEMM_TESTBED_IMAGE_SSHD_HOST_PRIVATE_KEY_PATH=/abs/path/qual-host-ed25519`
+   - `CLINEMM_TESTBED_IMAGE_SSHD_HOST_PUBLIC_KEY_PATH=/abs/path/qual-host-ed25519.pub`
+   - `CLINEMM_TESTBED_IMAGE_VSCODE_VERSION=<pinned semver>` (e.g. `1.95.3`)
+5. `PATH="/nix/store/sksn7qhjgwwsr4gdm5sxj1qs100nq7n1-sshpass-1.10/bin:$PATH" bun tools/macos-vsix-testbed/testbed-image.ts`
+   - sshpass is now installable via Nix on this host (nix-env confirmed; install requires `--profile` override or user-level env).
+6. This produces `~/.clinemm/testbed/config.json` and the derived image digest.
+7. Pin the derived image digest in `tools/macos-vsix-testbed/runner.ts` `TART_TESTBED_IMAGE`.
+
+Prerequisite B (bounded C patch, RED+GREEN):
+- In `tools/macos-host-helper/native/helper.c`:
+  - Extend `tbr_spec_t` with `ssh_user`, `ssh_identity_file`, `known_hosts_contents` (length-bounded `char[]`).
+  - Extend `tbr_parse_spec` to read them (`tbr_find_top_level_string` already supports arbitrary keys; just call it).
+  - In `handle_tart_testbed_run`, when `spec.ssh_identity_file` is present, SKIP `tbr_provision_ssh_identity` and use that path as `staging_id`. When `spec.known_hosts_contents` is present, SKIP `tbr_seed_known_hosts` and write the contents (validated) to `staging_kh`, prefixing with the resolved guestIp at runtime.
+  - Refuse to run if `ssh_identity_file` is absent (`TESTBED_PREPARE_FAILED`, error message includes the missing trust prerequisite). This is the new fail-closed default.
+- Add tests in `tools/macos-host-helper/native/helper.test.ts`:
+  - helper honors `spec.ssh_identity_file` (verify `staging_id_ed25519` is NOT regenerated when `spec.ssh_identity_file` is provided).
+  - helper honors `spec.known_hosts_contents` (verify `staging_known_hosts` contains the operator's pin).
+- Rebuild via `bash tools/macos-host-helper/native/build.sh`.
+- Reinstall via `BUN_BIN=/opt/homebrew/bin/bun bash scripts/macos/clinemm-host-helper install` (operator action; sandbox blocks writes to `~/.clinemm/bin/`).
+
+Once both prerequisites are in place, re-run this ACT's Gate B3..B7 with the derived image digest and the corrected helper.
+
+**Files (this ACT, evidence only — no production code modified):**
+- `/tmp/clinemm-realqual/01-helper-binding.txt` — Gate B1 binding + `tart.preflight` evidence.
+- `/tmp/clinemm-realqual/02-ssh-trust-binding.txt` — Gate B2 trust-boundary questions + defect summary.
+- `/tmp/clinemm-realqual/03-final-verdict.txt` — final verdict + identity ledger + successor ACT plan.
+- `.factory/epic-board.md` (this entry).
+
+**No new production code:** per ACT §10, halt on missing trust prerequisite does not require a code fix in this ACT. The C helper patch is scoped to the successor ACT.
+
+**Verdict:** `CLOSED_HALTED_CLEAN`. The reviewer's P0 halt (HALT_GUEST_SSH_BOOTSTRAP_UNAVAILABLE) is closed with concrete evidence and a bounded successor ACT. Factory stop condition met. No follow-on design review needed.
+
