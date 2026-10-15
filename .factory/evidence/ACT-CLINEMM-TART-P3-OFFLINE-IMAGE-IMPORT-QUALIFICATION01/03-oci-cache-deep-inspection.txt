@@ -1,0 +1,131 @@
+=== ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 — 03-oci-cache-deep-inspection ===
+
+Captured: 2026-10-15 16:16:xx local time
+Purpose: prove the OCI cache on this host is metadata-only and does not
+         contain an importable disk image body.
+
+=== Cache file inventory ===
+
+$ ls -la ~/Library/Caches/tart/
+total 596
+drwxr-xr-x   6 chistyakov staff    192 Oct  6 22:28 .
+drwx------ 238 chistyakov staff   7616 Oct 15 12:46 ..
+-rw-r--r--   1 chistyakov staff   49152 Oct  6 22:28 Cache.db
+-rw-r--r--   1 chistyakov staff   32768 Oct 14 14:49 Cache.db-shm
+-rw-r--r--   1 chistyakov staff  469712 Oct  6 23:20 Cache.db-wal
+drwxr-xr-x   4 chistyakov staff    128 Oct  6 23:19 fsCachedData
+
+$ file ~/Library/Caches/tart/Cache.db
+/Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db: SQLite 3.x database, user version 203, last written using SQLite version 3043002, writer version 2, read version 2, file counter 3, database pages 12, cookie 0x7, schema 4, largest root page 12, UTF-8, vacuum mode 1, version-valid-for 3
+
+$ du -sh ~/Library/Caches/tart
+1.1M
+
+=== Schema (Apple's NSURLCache) ===
+
+$ sqlite3 ~/Library/Caches/tart/Cache.db ".schema"
+CREATE TABLE cfurl_cache_response(entry_ID INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE, 	 version INTEGER, hash_value INTEGER, storage_policy INTEGER, request_key TEXT UNIQUE, 	 time_stamp NOT NULL DEFAULT CURRENT_TIMESTAMP, partition TEXT);
+CREATE TABLE sqlite_sequence(name,seq);
+CREATE TABLE cfurl_cache_blob_data(entry_ID INTEGER PRIMARY KEY, response_object BLOB, request_object BLOB, 		  proto_props BLOB, user_info BLOB);
+CREATE TABLE cfurl_cache_receiver_data(entry_ID INTEGER PRIMARY KEY, isDataOnFS INTEGER, receiver_data BLOB);
+CREATE INDEX request_key_index ON cfurl_cache_response(request_key);
+CREATE INDEX time_stamp_index ON cfurl_cache_response(time_stamp);
+CREATE INDEX proto_props_index ON cfurl_cache_blob_data(entry_ID);
+CREATE INDEX receiver_data_index ON cfurl_cache_receiver_data(entry_ID);
+
+=== OCI manifest (JSON blob in fsCachedData) ===
+
+$ cat ~/Library/Caches/tart/fsCachedData/7E47EF5A-F5F0-40F3-A189-705AEF63443E | python3 -c 'import sys, json; d=json.load(sys.stdin); print(json.dumps(d, indent=2))' | head -40
+{
+  "annotations": {
+    "org.cirruslabs.tart.uncompressed-disk-size": "50000000000",
+    "org.cirruslabs.tart.upload-time": "2026-09-05T08:31:09Z"
+  },
+  "config": {
+    "digest": "sha256:3a6cb4eb6201aa00136781f9d350858ca23054fdda419893193af3e3a044b3a8",
+    "mediaType": "application/vnd.oci.image.config.v1+json",
+    "size": 100
+  },
+  "layers": [
+    {
+      "annotations": {},
+      "digest": "sha256:16e9d30a585f4c572f14cfb2fa73baf3932ead0f476f5e5967571da082f9ea15",
+      "mediaType": "application/vnd.cirruslabs.tart.config.v1",
+      "size": 513
+    },
+    {
+      "annotations": {
+        "org.cirruslabs.tart.uncompressed-content-digest": "sha256:582c895eaa5554e62afca8c0391ce8ebd7793ba55040b4bb166d8fdb9ecf1a85",
+        "org.cirruslabs.tart.uncompressed-size": "536870912"
+      },
+      "digest": "sha256:d32af1bb7cacb9332d40132332c1de56c682139b999a517f72358b1d0c0e5834",
+      "mediaType": "application/vnd.cirruslabs.tart.disk.v2",
+      "size": 3899392
+    },
+   (manifest lists 9 layers total; 1 tart.config.v1 + 8 tart.disk.v2;
+    full manifest is 33 KB on disk in the CFURLCache fsCachedData blob)
+
+=== First disk-layer blob (binary, 431 KB on disk) ===
+
+$ python3 -c 'import sys; d=open("/Users/chistyakov/Library/Caches/tart/fsCachedData/D5F86589-2E43-402C-9479-3541589BCB31","rb").read(); print("size_bytes=", len(d))'
+size_bytes= 431514
+
+   -> magic "bv41" (BSD volume label / Apple DMG-like header), not a .tvm.
+   -> This blob corresponds to the first tart.disk.v2 layer of the manifest
+      (the very first chunk of the boot disk). The remaining 7 layers
+      (~800 MB compressed total) are NOT cached.
+
+=== Cache rows (URL -> response body length) ===
+
+$ sqlite3 ~/Library/Caches/tart/Cache.db 'SELECT b.entry_ID, length(b.response_object), length(b.request_object), r.request_key, r.time_stamp FROM cfurl_cache_blob_data b LEFT JOIN cfurl_cache_response r USING(entry_ID) ORDER BY r.time_stamp DESC;'
+4|3774|1175|https://pkg-containers.githubusercontent.com/ghcr1/blobs/sha256:7448f319f1e2b5d97db0d2f964614345e85e423d2707f130f2cc9d89de2949ca?...|2026-10-06 20:19:22
+3|3775|1183|https://pkg-containers.githubusercontent.com/ghcrblobs14/blobs/sha256:16e9d30a585f4c572f14cfb2fa73baf3932ead0f476f5e5967571da082f9ea15?...|2026-10-06 19:28:17
+1|1201|784|https://ghcr.io/token?scope=repository:cirruslabs/macos-sonoma-base:pull&service=ghcr.io|2026-10-06 19:28:16
+2|1735|1107|https://ghcr.io/v2/cirruslabs/macos-sonoma-base/manifests/latest|2026-10-06 19:28:16
+
+   -> 4 rows; total response_object bytes = 3774 + 3775 + 1201 + 1735 = 10485
+      (about 10 KB of HTTP response bodies, summed)
+   -> The fsCachedData blob 7E47EF5A... (33 KB) is the cached manifest body
+      (row 2). The fsCachedData blob D5F86589... (431 KB) is the cached
+      body of row 4 — the first 3.9 MB disk layer, range-fetched and
+      stored as 431 KB.
+   -> No other disk layers are in the cache.
+
+=== Network reachability test (proves the registry is reachable) ===
+
+$ curl --connect-timeout 8 -sI -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+    'https://ghcr.io/v2/cirruslabs/macos-sonoma-base/manifests/sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49'
+HTTP/2 401
+content-type: application/json
+www-authenticate: Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:cirruslabs/macos-sonoma-base:pull"
+date: Thu, 15 Oct 2026 13:18:55 GMT
+content-length: 73
+x-github-request-id: C8CB:6F6C6:5EBDAD:5FB785:6AD0D2BE
+x-github-edge-region: fra
+
+   -> 401 is the expected response without a Bearer token; the registry is
+      reachable. To get the manifest + 8 disk layers, a Tart credential
+      (Keychain / docker config / env) is required. That credential is
+      not available to this Seatbelted task; running `tart login` or
+      `tart pull` would be the operator path.
+
+=== Conclusion (per ACT §2.5 'Important distinction') ===
+
+  OCI cache entry (visible in `tart list --source oci`) is NOT equivalent
+  to a local VM, and is NOT equivalent to a .tvm archive on disk.
+
+  Specifically:
+    * The 1.1 MB cache footprint proves the OCI image body has NOT been
+      fully cached on this host.
+    * Re-pulling the body requires a registry credential and ~800 MB of
+      network egress, AND would write the OCI cache DB back to the
+      protect volume (where P2 proved SQLite WAL fails with
+      'unhandled result=8').
+    * Even on success, `tart pull` materializes a local VM into
+      TART_HOME/VirtualMachines; it does NOT produce a .tvm file. The
+      only path to a .tvm is `tart export <local-vm>`, which requires
+      a local VM to exist first.
+
+  No .tvm can be produced from this Seatbelted ClineMM task.
+
+

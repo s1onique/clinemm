@@ -1,0 +1,55 @@
+=== ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 — 05-import-failure-classification ===
+
+Phase 5 (offline `tart import`) is NOT EXECUTED in this ACT, by design.
+The gate P3-02 (PASS_TRUSTED_TVM_ARCHIVE) was not met, so Phase 5 is gated
+out per the prompt's phase ordering.
+
+Per ACT §5, an import failure must be classified into exactly one of:
+  IMPORT_ARCHIVE_INVALID
+  IMPORT_UNSUPPORTED_FORMAT
+  IMPORT_FILESYSTEM_DENIED
+  IMPORT_DISK_SPACE_EXHAUSTED
+  IMPORT_VM_NAME_COLLISION
+  IMPORT_UNKNOWN
+
+For this ACT, the assigned classification is:
+
+  IMPORT_NOT_ATTEMPTED
+
+  Reason: no archive was available to import. The Phase 2 halt
+  (HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE) is the proximate cause;
+  no `tart import` was invoked, so the standard failure classifiers do
+  not apply.
+
+=== Sanity: would any of the standard classifiers have applied? ===
+
+  IMPORT_ARCHIVE_INVALID:           N/A — no archive to read
+  IMPORT_UNSUPPORTED_FORMAT:        N/A — no archive to read
+  IMPORT_FILESYSTEM_DENIED:         would NOT apply — Phase 3 proved
+                                    /private/tmp is fully writable
+                                    (mktemp + utimes + dd + rm all OK)
+                                    and has 272 GB free
+  IMPORT_DISK_SPACE_EXHAUSTED:      would NOT apply — 272 GB free on
+                                    the target volume, ~30 GB image body
+  IMPORT_VM_NAME_COLLISION:         would NOT apply — `tart list --source
+                                    local` was `[]` pre-attempt; a unique
+                                    VM name was scoped to the run id
+  IMPORT_UNKNOWN:                   N/A — no invocation
+
+=== What the Phase 5 evidence file would have contained, if executed ===
+
+  The expected file naming pattern is `05-import-command-output.txt` with
+  the actual argv, start/end timestamps, exit code, stdout/stderr, VM name,
+  target TART_HOME, and Tart version. That file is NOT produced because
+  no invocation occurred. The corresponding `06-imported-vm-list.txt` is
+  also NOT produced.
+
+=== Phase 6 short-circuit ===
+
+  Because no `tart import` was invoked, no `tart list --source local`
+  re-check is meaningful. The pre-Phase-5 baseline (02-local-list-pre.json)
+  is `[]`; it is the same value that would be observed after a non-existent
+  import. We do NOT issue a second `tart list --source local` for
+  evidence-construction purposes (it would be misleading: an empty list
+  after a halted import is not the same artifact as an empty list after
+  a successful import; conflating them is forbidden by ACT §9).

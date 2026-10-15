@@ -1,0 +1,141 @@
+=== ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 — 07-expert-review-corrections ===
+
+Captured: 2026-10-15 (post-closure expert review by Tart virtualization
+engineer, macOS filesystem engineer, Factory reviewer).
+
+This file records the two evidence qualifications and one important finding
+from the post-closure expert review. The verdict
+`CLOSED_HALTED_CLEAN` with proximate halt
+`HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE` is **unchanged**; the corrections
+are wording-precision refinements to the report's stronger assertions.
+
+=== Qualification 1: archive search was incomplete ===
+
+The P3 report's 02-source-archive-search.txt contained a 90-second find
+that was cancelled. The expert's correction: a cancelled filesystem-wide
+search does NOT prove that no `.tvm` exists anywhere on the machine; it
+establishes that none was found in the inspected paths before cancellation.
+
+CORRECTED LANGUAGE: replace "No `.tvm` archive file exists on this host"
+with "No `.tvm` archive file was found on the inspected paths
+(/Volumes, /private/tmp, /tmp, /opt, /Users, /nix, ~/Library/Caches/tart,
+~/Library/Application Support/tart, /opt/homebrew, /Library/Caches/tart)
+before the 90-second search was cancelled. The empty Tart local inventory
+(tart list --source local == []) and the absence of an identified archive
+on those paths are sufficient to support the halt, but the search was
+not exhaustive over the entire host filesystem."
+
+The halt classifier `HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE` is preserved
+because (a) the inspection covered the locations where a Tart-exported
+`.tvm` would naturally be stored, (b) `tart list --source local` is the
+authoritative Tart local inventory and it was `[]`, and (c) no other Mac
+is reachable from this Seatbelted ClineMM task.
+
+=== Qualification 2: Time Machine snapshot does not establish protect-flag causality ===
+
+The P3 report's 00-closure-evidence.txt said: "if anything, [the new
+snapshot] has been freshly reinforced by the new snapshot mount." The
+expert's correction: a new snapshot and an unchanged mount flag establish
+chronology, not causality. The P2 classification stands as-is:
+`HOST_FILESYSTEM_OPERATION_DENIED = PROVEN, TIME_MACHINE_SNAPSHOT_CAUSED_DENIAL
+= INFERRED, REBOOT_WILL_FIX_IT = NOT PROVEN`. The APFS 'protect' flag on
+/dev/disk3s8 is the more likely mechanism but was not isolated from the
+snapshot.
+
+CORRECTED LANGUAGE: replace the "freshly reinforced" wording with "A new
+Time Machine snapshot was taken TODAY (2026-10-15 12:55:05) on
+/dev/disk3s8, after the P2 closure. This snapshot is read-only and is
+chronologically adjacent to the P2-era snapshot. The `protect` APFS mount
+flag on /dev/disk3s8 is unchanged from the P2 era; whether the new
+snapshot has any causal effect on the `protect` flag is not isolated
+(P2's classification of causality remains INFERRED, not PROVEN)."
+
+=== Important finding: anonymous OCI pull is permitted for public repos ===
+
+The P3 report's 03-oci-cache-deep-inspection.txt said: "Re-pulling the
+body requires a registry credential and ~800 MB of network egress, AND
+would re-write the OCI cache DB back to the protect volume (where P2
+proved SQLite WAL fails with 'unhandled result=8')." The expert's
+correction: a registry HTTP 401 without a token does NOT prove that a
+private credential is required. OCI registries commonly issue a Bearer
+challenge and may provide anonymous pull tokens for public repositories.
+
+The supplied P3 evidence (curl -sI on the pinned manifest URL) only
+proved registry reachability, not whether anonymous acquisition is
+permitted. The expert is correct: an anonymous Bearer token IS available
+for the pinned public repository.
+
+VERIFICATION (executed in this corrections capture, 2026-10-15 13:30 UTC):
+
+  $ curl -s 'https://ghcr.io/token?service=ghcr.io&scope=repository:cirruslabs/macos-sonoma-base:pull'
+    -> returns a 68-character anonymous bearer token (no credential required)
+
+  $ curl -sI -H "Authorization: Bearer <anon-token>" \
+        -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+        'https://ghcr.io/v2/cirruslabs/macos-sonoma-base/manifests/sha256:e2ebdfc4...'
+    -> HTTP/2 200
+    -> content-type: application/vnd.oci.image.manifest.v1+json
+    -> content-length: 33461  (matches the 33 KB manifest in the OCI cache)
+    -> docker-content-digest: sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49
+       (exactly matches the ACT-pinned digest)
+
+IMPLICATIONS FOR THE P3 HALT:
+
+  1. The credential-blame is removed from the out-of-band unblock
+     instruction. An operator on a writable Mac does NOT need to set
+     TART_REGISTRY_USERNAME / TART_REGISTRY_PASSWORD. They can run
+     `tart pull` directly because ghcr.io/cirruslabs/macos-sonoma-base
+     permits anonymous pull.
+
+  2. The P3 halt's proximate cause `HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE`
+     is UNAFFECTED — no .tvm is on this host regardless of whether the
+     registry requires a credential or not. The halt classifier stands.
+
+  3. The deeper P2 halt (SQLite WAL write fails on the protect volume)
+     is also UNAFFECTED — anonymous pull still goes through the OCI
+     cache, and the OCI cache DB write is what fails. The /private/tmp
+     TART_HOME workaround is still the only unblock path; the unblock
+     still requires a .tvm to be delivered from another host.
+
+CORRECTED OUT-OF-BAND UNBLOCK (replaces the four-step procedure in
+00-closure-evidence.txt §"Out-of-band unblock required"):
+
+  An operator with access to a different writable Apple Silicon Mac (or a
+  Tart-aware CI runner) must:
+    (a) on that host, run
+        $ TART_HOME=/some/writable/path \
+          tart pull ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49
+        (no login / no credential required; anonymous Bearer token works
+         for this public repository; verified in this corrections file).
+    (b) capture the actual VM name returned by
+        $ TART_HOME=/some/writable/path \
+          tart list --source local --format json
+    (c) run
+        $ TART_HOME=/some/writable/path \
+          tart export "<local-vm-name>" /path/on/writable/storage/sonoma-base.tvm
+    (d) record the source-host Tart version, source VM name, archive
+        bytes, and archive SHA-256, then deliver the .tvm to this host
+        at a path readable by the ClineMM task runtime (any path under
+        /private/tmp is acceptable; the run-bound TART_HOME at
+        /private/tmp/clinemm-tart-p3-20261015T131912Z-30833 is left ready).
+
+=== Final dispositions (per the expert's review) ===
+
+  P3_VERDICT:              CLOSED_HALTED_CLEAN
+  P3_ARCHIVE_AVAILABLE:    NO
+  P3_STORAGE:              PASS
+  P3_IMPORT:               NOT_EXECUTED
+  P3_GUEST_BOOT:           NOT_EXECUTED
+
+  PRODUCTION_REPAIR:       NONE
+  NEXT_DEPENDENCY:         TRUSTED_TVM_ARCHIVE
+  NEXT_CURSOR:             P3_IMPORT_RESUMPTION (a follow-up ACT or
+                           the next P3 execution once a .tvm is delivered)
+  P4_AUTHORIZED:           NO
+
+  This file replaces the in-ACT wording where the corrections apply.
+  The verdict is unchanged.
+
+
+
+

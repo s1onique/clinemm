@@ -1,3 +1,82 @@
+# ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 - CLOSED_HALTED_CLEAN - 2026-10-15
+
+**Status:** CLOSED with verdict **`CLOSED_HALTED_CLEAN`** with proximate halt classifier **`HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE`** (distinct from the predecessor's `HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS`).
+
+**ENTRY_HEAD:** `cbb94f6a24b078011c991fef4ed68d2f8c28c6f0` (main, clean working tree; identical to P2's ENTRY_HEAD plus the P2 closure commit message — no production change in this ACT either).
+**SUBJECT_HEAD:** identical to `ENTRY_HEAD` (no production change in this ACT — the ACT is a read-only production probe + bounded operator experiment + evidence-only closure).
+**DOGFOOD_SOURCE_HEAD:** identical.
+
+**Predecessor lineage:** `ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01` (2026-10-15, `CLOSED_HALTED_CLEAN` at host-FS halt) → `ACT-CLINEMM-TART-P1-REAL-GUEST-LAUNCHD-QUALIFICATION02` (2026-10-15) → `ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01` (2026-10-08, `PASS_TART_LAUNCHD_REAL_GUEST`).
+
+**Key counters (durable):**
+- Repository: clean at `cbb94f6a24b078011c991fef4ed68d2f8c28c6f0` (main). `git status --short` empty. No stashes. No tracked dirt.
+- Host: macOS 14.7.4 (23H420), arm64 (Apple Silicon), uid=501 chistyakov.
+- Tart 2.34.0 at `/nix/store/crsnipsi18a4ac0vvim0c4093mwf1l1h-tart-2.34.0/Applications/tart.app/Contents/MacOS/tart` (canonical: `/run/current-system/sw/bin/tart`).
+- `tart import --help`: `tart import <path> <name>` (path = `.tvm` file). `tart export --help`: `tart export <name> [<path>]`.
+- `tart list --source local --format json` → `[]` (no local VM).
+- `tart list --source oci --format json` → 2 entries including the **pinned** `ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49`. Cache is metadata-only (1.1 MB total: 49 KB SQLite DB + 470 KB WAL + 33 KB manifest blob + 431 KB first-disk-layer blob); ~800 MB of remaining disk layers are NOT cached.
+- Writable TART_HOME candidate independently re-confirmed on this host: `/private/tmp/clinemm-tart-p3-20261015T131912Z-30833` (mode 700, owner chistyakov:wheel, 272 GB free on `/dev/disk3s1s1`, mktemp+utimes+shasum+rm probe cycle all OK; empty probe SHA-256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`).
+- **NEW observation (2026-10-15 16:19 local):** the host's APFS mount state has changed since the P2 closure. A new Time Machine snapshot `com.apple.TimeMachine.2026-10-15-125505.local@/dev/disk3s8` is now mounted read-only at `/private/tmp/snapshot` (in addition to the P2-era `2026-09-18-165509` snapshot). The `protect` APFS mount flag on `/dev/disk3s8` (`/Volumes/UserData`) remains; if anything, the new snapshot reinforces it. The `/private/tmp` TART_HOME workaround proven in P2 is still the only unblock path and remains valid today. Reboot was NOT performed (per ACT §0 hard constraints).
+
+**What the ACT DID prove (real evidence, not test):**
+1. Tart 2.34.0 is installed and supports the `tart import` / `tart export` syntax required for offline import.
+2. The P2 host-FS state is unchanged (and reinforced by a new Time Machine snapshot today) — the `protect` flag on `/dev/disk3s8` is still active.
+3. The pinned OCI reference is present in the OCI cache but the cache holds only 1.1 MB of HTTP metadata, not a 30 GB importable artifact.
+4. `/private/tmp` is genuinely a valid TART_HOME for a future operator-driven P3 retry (272 GB free, mktemp+utimes+rm cycle all OK).
+5. None of the four ACT §3 preferred `.tvm` sources is reachable from this Seatbelted ClineMM task.
+
+**What the ACT did NOT prove (NOT_EXECUTED):**
+- No `.tvm` archive was obtained.
+- No `tart import` was executed.
+- No `tart export` was executed.
+- No local VM was created.
+- No real guest boot, guest SSH bootstrap, or guest command execution.
+- No VSIX dogfood in any real guest.
+- No production source change (no production diff at all in this ACT).
+
+**Out-of-band unblock required (for a future P3 retry):**
+An operator with access to a different writable Apple Silicon Mac (or a Tart-aware CI host) must:
+1. run `tart pull ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4...` there,
+2. run `tart export <pulled-vm> /path/on/writable/storage/sonoma-base.tvm` there,
+3. record the source-host Tart version, source VM name, archive bytes, and archive SHA-256,
+4. deliver the `.tvm` to this host at a path readable by the ClineMM task runtime (any path under `/private/tmp` is acceptable; the run-bound TART_HOME at `/private/tmp/clinemm-tart-p3-20261015T131912Z-30833` is left ready).
+
+After delivery, a fresh P3 ACT can re-execute Phases 4-6 against that archive.
+
+**Files (ACT-owned evidence references):**
+- `.factory/acts/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01.md` (full ACT spec)
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/00-closure-evidence.txt` (281 lines)
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/01-tart-capability-recon.txt`
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/02-source-archive-search.txt`
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/03-oci-cache-deep-inspection.txt`
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/04-tart-home-storage-probe.txt`
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/05-import-failure-classification.txt`
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/06-conservation-and-safety.txt`
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/01-oci-list-pre.json` (pre-Phase-5 baseline)
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/02-local-list-pre.json` (pre-Phase-5 baseline; `[]`)
+- `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/SHA256SUMS` (9 evidence files + self; self-referencing-free per the P2 correction's pattern)
+
+```text
+TART_P3:                    CLOSED_HALTED_CLEAN
+PROXIMATE_HALT:             HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE
+HOST_FS_DENIAL_PERSISTS:    PROVEN (protect flag still on /dev/disk3s8; new snapshot at 12:55:05 today reinforces it)
+/private/tmp_TART_HOME:     PROVEN_USABLE (mktemp+utimes+rm cycle OK; 272 GB free on /dev/disk3s1s1)
+OCI_CACHE_BODY:             NOT_FULLY_CACHED (1.1 MB metadata only; ~800 MB disk layers not on host)
+TART_PULL_AVOIDED:          HONORED (no unbounded OCI retry per ACT §0)
+TART_IMPORT:                NOT_EXECUTED (gated out by missing .tvm)
+LOCAL_VM_PRESENT:           NOT_EXECUTED (gated out by Phase 5)
+LAUNCHD_MUTATIONS:          FORBIDDEN (no service mutations in this ACT)
+SEATBELT_RELAXATION:        NONE (Seatbelted ClineMM task only)
+PRODUCTION_DIFF:            NONE (working tree clean at HEAD)
+NEXT_CURSOR:                ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01-CORRECTION01 (or successor), once a trusted .tvm is delivered to this host
+```
+
+**Verdict:** `CLOSED_HALTED_CLEAN`. The halt is an out-of-band source-availability problem, not a code defect and not a host-FS defect. The `/private/tmp` unblock path proven in P2 is still valid; this ACT confirmed the storage side of that unblock but could not supply the `.tvm` input that the unblock requires. The P4 cursor `ACT-CLINEMM-TART-P4-IMPORTED-SONOMA-REAL-GUEST-LIFECYCLE01` is **not** opened until P3 has a real import success.
+
+**Post-closure expert review (Tart virtualization engineer, macOS filesystem engineer, Factory reviewer):** verdict **accepted** as `CLOSED_HALTED_CLEAN` with two wording qualifications and one important finding. (1) The 90-second filesystem-wide `find` was cancelled; it does NOT prove that no `.tvm` exists anywhere on the machine — the halt is supported by the empty `tart list --source local` and the absence of an identified archive on the natural Tart storage paths, not by an exhaustive search. (2) The new Time Machine snapshot at 2026-10-15-125505 does NOT establish causality for the `protect` flag; chronology, not causality; the P2 classification (`HOST_FILESYSTEM_OPERATION_DENIED = PROVEN, TIME_MACHINE_SNAPSHOT_CAUSED_DENIAL = INFERRED, REBOOT_WILL_FIX_IT = NOT PROVEN`) is preserved. (3) **Important finding:** the P3 report overclaimed when it said "Re-pulling the body requires a registry credential." Verified in this correction: a 68-character anonymous Bearer token from `https://ghcr.io/token` (no credential required) lets the registry return HTTP 200 + the pinned manifest (`docker-content-digest: sha256:e2ebdfc4...`). The credential-blame is removed from the out-of-band unblock instruction; an operator on a writable Mac can run `tart pull` directly without `TART_REGISTRY_USERNAME/PASSWORD`. The P3 halt's proximate cause and the P2 host-FS halt are both unaffected by this finding (anonymous pull still goes through the OCI cache DB on the protect volume). See `.factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/07-expert-review-corrections.txt` for the full diffs and the verified anonymous-OCI-pull test.
+
+---
+
 # ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01 - CLOSED_HALTED_CLEAN - 2026-10-15
 
 **Status:** CLOSED with verdict **`CLOSED_HALTED_CLEAN`** with proximate halt classifier **`HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS`** (distinct from the predecessor's `HALT_GUEST_SSH_BOOTSTRAP_UNAVAILABLE`).

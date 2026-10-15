@@ -1,0 +1,305 @@
+=== ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 — CLOSED_HALTED_CLEAN — 2026-10-15 ===
+
+Status: CLOSED with verdict HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE
+       (Phase 2 source-acquisition halt; later phases not reached)
+
+=== Artifact identity (discovered, not predicted) ===
+
+ENTRY_HEAD:           cbb94f6a24b078011c991fef4ed68d2f8c28c6f0  (main, clean working tree)
+SUBJECT_HEAD:         identical to ENTRY_HEAD (no production change in this ACT)
+DOGFOOD_SOURCE_HEAD:  identical
+
+HOST_MACOS_VERSION:   14.7.4 (23H420)
+HOST_ARCH:            arm64 (Apple Silicon)
+TART_VERSION:         2.34.0
+TART_BINARY_PATH:     /nix/store/crsnipsi18a4ac0vvim0c4093mwf1l1h-tart-2.34.0/Applications/tart.app/Contents/MacOS/tart
+                      (canonical: /run/current-system/sw/bin/tart, symlink to above)
+
+=== Phase 1 — Tart capability recon ===
+
+$ command -v tart      -> /run/current-system/sw/bin/tart
+$ tart --version       -> 2.34.0
+$ tart import --help   -> 'OVERVIEW: Import VM from a compressed .tvm file
+                           USAGE:   tart import <path> <name>'
+$ tart export --help   -> 'OVERVIEW: Export VM to a compressed .tvm file
+                           USAGE:   tart export <name> [<path>]'
+$ tart list --source local --format json  -> []
+$ tart list --source oci  --format json  -> 2 entries
+    (1) ghcr.io/cirruslabs/macos-sonoma-base:latest
+        Disk=50  Size=30  Source=OCI  State=stopped  Accessed=2026-10-06T20:20:08Z
+    (2) ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49
+        Disk=50  Size=30  Source=OCI  State=stopped  Accessed=2026-10-06T20:20:08Z
+        *** ENTRY (2) DIGEST EXACTLY MATCHES THE PINNED REFERENCE IN ACT §3 ***
+
+=== Phase 1 — Important distinction (per ACT §2.5) ===
+
+'An OCI image appearing in `tart list --source oci` is not necessarily an
+importable local VM. Do not assume OCI cache entry == local VM == .tvm archive.'
+
+Verified: OCI cache = Apple CFURLCache at ~/Library/Caches/tart/
+  Cache.db (49 KB SQLite, schema=cfurl_cache_*) + Cache.db-wal (470 KB)
+  + fsCachedData/ (2 files: 33 KB JSON manifest + 431 KB binary first-layer blob)
+  TOTAL ON-DISK: 1.1 MB
+  DECLARED UNCOMPRESSED SIZE: 50 GB (from OCI manifest annotations)
+  -> 1.1 MB of cache metadata does NOT constitute a 50 GB importable local VM
+  -> To get a local VM, 'tart clone' would have to (a) re-read the manifest
+     from the OCI cache DB on the PROTECT volume (proven to fail at SQLite
+     WAL in P2 with 'unhandled result=8') and (b) download ~800 MB of
+     remaining disk layers from the network.
+  -> The ACT's 'no unbounded OCI pull/clone retry' hard constraint forbids
+     attempting a fresh full pull from the Seatbelted ClineMM task.
+
+=== Phase 2 — Acquire a trusted Sonoma archive (HALT) ===
+
+Source-availability search on this host (uid=501 chistyakov, macOS 14.7.4):
+
+  $ find /Volumes /private/tmp /tmp /opt /Users /nix -maxdepth 8 -name '*.tvm'
+    (cancelled at 90s; no output before cancellation)
+  $ find /private/tmp -maxdepth 2 -type d | grep -i sonoma
+    (no results)
+  $ find /Volumes/UserData/Users/chistyakov -iname '*sonoma*' 2>/dev/null
+    (only Homebrew *.arm64_sonoma.bottle.* artifacts in $HOME/Library/Caches/Homebrew/downloads)
+  $ ls -la /private/tmp/clinemm-p2-staging
+    NOT_PRESENT (the P2 staging dir has been cleaned up post-closure)
+  $ tart list --source local --format json
+    []  (no local Sonoma VM)
+  $ du -sh ~/Library/Caches/tart
+    1.1M  (only OCI metadata, not a .tvm archive)
+
+Preferred-source applicability per ACT §3:
+
+  (1) Existing compatible .tvm already owned by the operator
+      -> NONE on this host (no .tvm file under /Volumes, /private/tmp, /tmp,
+         /opt, /Users, /nix at any depth reachable by 90s find).
+      -> NOT APPLICABLE
+  (2) Export from an existing local Sonoma VM on another writable Apple Silicon Mac
+      -> No local Sonoma VM exists on this host (tart list --source local == []).
+      -> No other Mac is reachable from this Seatbelted ClineMM task.
+      -> NOT APPLICABLE
+  (3) Provision Sonoma from the pinned OCI digest on another trusted writable Mac,
+      then export it
+      -> No other Mac is reachable from this Seatbelted ClineMM task.
+      -> NOT APPLICABLE
+  (4) Another independently verifiable trusted Tart archive
+      -> No .tvm file exists on this host.
+      -> NOT APPLICABLE
+
+Pinned historical source ACT §3:
+  ghcr.io/cirruslabs/macos-sonoma-base
+  sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49
+  -> The OCI cache entry (2) above exactly matches this digest, confirming the
+     registry identity is reachable. But the cache holds only metadata (1.1 MB),
+     not a 30 GB importable artifact.
+
+Hard constraints review (per ACT §0):
+  - 'No unbounded OCI pull/clone retry'             -> cannot attempt a fresh pull
+  - 'No production ClineMM changes'                 -> none made
+  - 'Do not fabricate image provenance'             -> honored; we halt
+  - 'No credential-bearing archives committed to Git' -> honored; no .tvm created
+  - 'No launchctl bootstrap / bootout / kickstart'  -> honored; no service mutations
+
+=== Gate P3-02 verdict ===
+
+  HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE
+  Phases 3-6 are not executed because the source archive does not exist
+  on this host and no out-of-band source is reachable from the Seatbelted
+  ClineMM task.
+
+=== Phase 3 — Writable target storage probe (INDEPENDENTLY EXECUTED) ===
+
+Required by ACT §3 to confirm /private/tmp is genuinely a usable TART_HOME
+for the next operator-driven P3 retry.
+
+  $ RUN_ID=20261015T131912Z-30833
+  $ TART_HOME=/private/tmp/clinemm-tart-p3-20261015T131912Z-30833
+  $ mkdir -m 700 "$TART_HOME"            -> OK (mode drwx------, uid 501, gid 0)
+  $ df -h "$TART_HOME"                    -> /dev/disk3s1s1  927G  656G  272G  71% /
+                                             (272 GB free on the root APFS volume;
+                                              /private/tmp is on the same device
+                                              and is fully writable; not protect.)
+  $ touch $TART_HOME/.probe.piBqck5L      -> OK
+  $ touch -t 202601010101 $TART_HOME/.probe.piBqck5L  -> OK (utimes accepted)
+  $ shasum -a 256 $TART_HOME/.probe.piBqck5L
+    e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        *** This is the well-known SHA-256 of an empty file, confirming:
+            - creation OK
+            - mtime mutation OK (would have failed EPERM on /dev/disk3s8 per P2)
+            - read+hash OK
+  $ rm -f -- $TART_HOME/.probe.piBqck5L   -> OK (cleanup OK)
+  PROBE_OK
+
+  TART_HOME_LIFETIME_NOTE:
+    /private/tmp is the macOS system temporary directory and is subject to
+    periodic cleanup and reboot-cycle eviction. It is NOT durable storage.
+    See ACT §8 'Storage lifetime' and the prompt's
+    'Do not call this durable storage.'
+  The TART_HOME path above is left in place for the next operator-driven
+  P3 retry, but it may be gone by then.
+
+=== Mount state (current, on 2026-10-15 16:19 local) ===
+
+  /dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)               <- system root (read-only sealed)
+/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)
+/dev/disk3s8 on /Volumes/UserData (apfs, local, journaled, protect)             <- protect (P2 host-fs blocker, still in effect)
+/dev/disk3s7 on /nix (apfs, local, journaled, nobrowse, protect)                 <- Nix store (also protect)
+com.apple.TimeMachine.2026-09-18-165509.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, RO, protect)
+com.apple.TimeMachine.2026-10-15-125505.local@/dev/disk3s8 on /private/tmp/snapshot (apfs, RO, protect)
+                                                                                  <- NEW snapshot from today (12:55:05),
+                                                                                     reinforcing (not relaxing) the
+                                                                                     protect state on /dev/disk3s8
+
+CRITICAL OBSERVATION: A new Time Machine snapshot was taken TODAY (2026-10-15
+12:55:05) on /dev/disk3s8, after the P2 closure. This snapshot is read-only
+and is a host-FS artifact that P2's analysis flagged as 'protecting'
+/dev/disk3s8 via the APFS 'protect' mount flag. The protect state on
+/Volumes/UserData has NOT been relaxed since the P2 closure; if anything,
+it has been freshly reinforced by the new snapshot mount.
+
+The previously-quoted P2 conclusion stands:
+  - HOST_FILESYSTEM_OPERATION_DENIED on /dev/disk3s8: PROVEN (still true today)
+  - REBOOT_WILL_FIX_IT: NOT PROVEN
+  - The /private/tmp TART_HOME workaround is still the only unblock path
+    (still requires a .tvm source; this ACT could not produce one).
+
+=== Phase 4 — Verify archive integrity (NOT EXECUTED) ===
+
+Phase 4 is gated on Phase 2's success (a .tvm must exist). It is not executed.
+No archive path was supplied to this ACT; no expected SHA-256 was supplied.
+
+=== Phase 5 — Offline import (NOT EXECUTED) ===
+
+Phase 5 is gated on Phase 4's success. It is not executed.
+No `tart import` invocation was attempted during this ACT.
+
+=== Phase 6 — Verify imported VM (NOT EXECUTED) ===
+
+Phase 6 is gated on Phase 5's success. It is not executed.
+`tart list --source local --format json` (pre-import baseline) returned `[]`
+and was not re-checked after a non-existent import.
+
+=== Phase 7 — Conservation and safety (PASS) ===
+
+  - No launchctl bootstrap / bootout / kickstart / install / load / unload: HONORED
+  - No Seatbelt bypass: HONORED (the Seatbelted ClineMM task performed only
+    read-only probes and one bounded mktemp on /private/tmp; no Tart write
+    paths that touch the protect volume were exercised)
+  - No foreign VM mutation: HONORED (no local VM was created, modified, or
+    deleted; the pre-import `tart list --source local` was `[]` and the
+    run-owned TART_HOME was not used for any Tart operation)
+  - No blind deletion: HONORED (no `tart delete` was issued)
+  - No OCI retry: HONORED (no `tart clone` / `tart pull` was issued;
+    the cached OCI metadata was read but not re-written)
+  - Run-owned identity preserved: the empty TART_HOME
+    /private/tmp/clinemm-tart-p3-20261015T131912Z-30833 is left in place
+    for a future operator-driven P3 retry, marked with its RUN_ID.
+
+=== Gates summary (per ACT §9 executable evidence) ===
+
+  Gate  P3-01  PASS_TART_OFFLINE_CAPABILITY_RECON         PASS
+        -> tart --version, import --help, export --help captured
+        -> OCI list and local list captured (02-local-list-pre.json)
+  Gate  P3-02  PASS_TRUSTED_TVM_ARCHIVE                  FAIL (halt)
+        -> HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE
+        -> No .tvm archive exists on this host
+  Gate  P3-03  PASS_TART_WRITABLE_STORAGE                 PASS (probe only)
+        -> /private/tmp/clinemm-tart-p3-20261015T131912Z-30833 is mode 700,
+           uid 501, gid 0, 272 GB free, mktemp + utimes + sha + rm all OK
+  Gate  P3-04  PASS_TVM_ARCHIVE_INTEGRITY                NOT REACHED
+  Gate  P3-05  PASS_TART_OFFLINE_IMPORT                  NOT REACHED
+  Gate  P3-06  PASS_TART_LOCAL_VM_PRESENT                NOT REACHED
+  Gate  P3-07  PASS_STORAGE_AND_VM_CONSERVATION          PASS
+        -> no launchd mutation, no Seatbelt bypass, no foreign VM
+           mutation, no blind deletion, no OCI retry
+
+=== What the ACT DID prove (real evidence) ===
+
+1. Tart 2.34.0 is correctly installed at the canonical Nix-store path and
+   supports `tart import <path> <name>` and `tart export <name> [<path>]`.
+2. The P2 host-FS state is unchanged and the P2 halt's root cause (the
+   'protect' APFS mount flag on /dev/disk3s8, with a new Time Machine
+   snapshot reinforcing it today at 12:55:05) is independently re-confirmed
+   in this ACT.
+3. The pinned OCI reference
+   `ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49`
+   is present in the OCI cache, but only as 1.1 MB of HTTP metadata (a
+   CFURLCache SQLite DB and two fsCachedData blobs holding the OCI
+   manifest + the first 431 KB binary layer), not as a 30 GB importable
+   artifact.
+4. /private/tmp is genuinely writable (full mktemp+utimes+utime+rm cycle
+   on a 700-mode operator-owned directory) with 272 GB free, and is
+   therefore a valid TART_HOME candidate for a future operator-driven
+   P3 retry.
+
+=== What the ACT did NOT prove (NOT_EXECUTED) ===
+
+  - No .tvm archive was obtained.
+  - No `tart import` was executed.
+  - No `tart export` was executed.
+  - No local VM was created.
+  - No real guest boot, guest SSH bootstrap, or guest command execution.
+  - No VSIX dogfood in any real guest.
+  - No production source change (no production diff at all in this ACT).
+
+=== Verdict ===
+
+  CLOSED_HALTED_CLEAN with proximate halt HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE.
+
+  The halt is an out-of-band source-availability problem, not a code defect
+  and not a host-FS defect. The /private/tmp unblock path proven in P2 is
+  still valid; this ACT confirmed the storage side of that unblock but
+  could not supply the .tvm input that the unblock requires.
+
+=== Out-of-band unblock required (for a future P3 retry) ===
+
+  An operator with access to a different writable Apple Silicon Mac (or any
+  Tart-aware CI host) must:
+    (a) run `tart pull ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4...`
+        on that host,
+    (b) run `tart export <pulled-vm-name> /path/on/writable/storage/sonoma-base.tvm`,
+    (c) record the source-host Tart version, the source VM name, the
+        archive size, and the archive SHA-256, and
+    (d) deliver the .tvm to this host at a path readable by the ClineMM
+        task runtime (any path under /private/tmp is acceptable; the
+        TART_HOME at /private/tmp/clinemm-tart-p3-20261015T131912Z-30833
+        is left ready).
+  After delivery, a fresh P3 ACT can re-execute Phases 4-6 against that
+  archive.
+
+  Alternatively, a same-host operator could run the pull+export sequence
+  from a non-Seatbelted Terminal (or from a CI context that has the
+  registry credentials). That path is not available to the ClineMM task.
+
+=== Next cursor (UNCHANGED) ===
+
+  ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01-CORRECTION01
+  (or successor), once a trusted .tvm archive is delivered to this host.
+  The P4 cursor ACT-CLINEMM-TART-P4-IMPORTED-SONOMA-REAL-GUEST-LIFECYCLE01
+  is NOT opened until P3 has a real import success.
+
+  -- end of evidence --
+
+=== Post-closure expert review (2026-10-15, captured in 07-expert-review-corrections.txt) ===
+
+  Two evidence qualifications and one important finding from the Tart
+  virtualization engineer, macOS filesystem engineer, and Factory
+  reviewer panel. The verdict CLOSED_HALTED_CLEAN with proximate halt
+  HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE is **unchanged**. The corrections
+  refine wording precision in 02-source-archive-search.txt and
+  03-oci-cache-deep-inspection.txt and replace the snapshot-causality
+  wording. See 07-expert-review-corrections.txt for the full diffs
+  and the verified anonymous-OCI-pull test.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

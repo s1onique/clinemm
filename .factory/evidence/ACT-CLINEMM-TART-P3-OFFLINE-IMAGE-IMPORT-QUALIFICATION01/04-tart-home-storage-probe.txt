@@ -1,0 +1,70 @@
+=== ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 — 04-tart-home-storage-probe ===
+
+Captured: 2026-10-15 16:19:xx local time
+Purpose: independently confirm that /private/tmp is a valid TART_HOME for
+         a future operator-driven P3 retry.
+
+=== Storage root creation (per ACT §3) ===
+
+$ set -eu
+$ umask 077
+$ RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+$ TART_HOME="/private/tmp/clinemm-tart-p3-$RUN_ID"
+$ mkdir -m 700 "$TART_HOME"
+$ test -d "$TART_HOME"   && echo "DIR_OK"
+$ test -w "$TART_HOME"   && echo "WRITE_OK"
+$ ls -ld "$TART_HOME"
+drwx------ 2 chistyakov wheel 64 Oct 15 16:19 /private/tmp/clinemm-tart-p3-20261015T131912Z-30833
+$ df -h "$TART_HOME"
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/disk3s1s1  927G  656G  272G  71% /
+
+Captured values:
+  RUN_ID    = 20261015T131912Z-30833
+  TART_HOME = /private/tmp/clinemm-tart-p3-20261015T131912Z-30833
+  Owner     = chistyakov (uid 501, gid 0 wheel)
+  Mode      = drwx------ (700)
+  Filesystem= /dev/disk3s1s1 (root APFS volume; NOT /dev/disk3s8)
+  Available = 272 GB
+
+=== Filesystem capability probe (per ACT §3) ===
+
+$ probe="$(mktemp "$TART_HOME/.probe.XXXXXXXX")"
+$ touch "$probe"
+$ touch -t 202601010101 "$probe"
+$ shasum -a 256 "$probe"
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /private/tmp/clinemm-tart-p3-20261015T131912Z-30833/.probe.piBqck5L
+$ rm -f -- "$probe"
+$ PROBE_OK
+
+  Probe interpretation:
+    - mktemp OK      -> create works (would have failed EPERM on protect vol)
+    - touch -t OK    -> mtime mutation works (would have failed EPERM on
+                       /dev/disk3s8 per P2 with 'utimes(2) failed: Operation
+                       not permitted')
+    - shasum empty   -> the well-known SHA-256 of an empty file:
+                       e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+                       confirms the file was empty, so:
+                       read OK, hash OK, content OK
+    - rm OK          -> cleanup OK
+
+  VERDICT: /private/tmp/clinemm-tart-p3-20261015T131912Z-30833 is a valid
+           TART_HOME candidate. It is mode-700, operator-owned, fully
+           writable, has 272 GB free, and is on a NON-PROTECT APFS volume.
+
+=== Storage lifetime note (per ACT §8) ===
+
+  /private/tmp is the macOS system temporary directory. It is subject to:
+    - Periodic automatic cleanup (e.g. weekly maintenance).
+    - Reboot-cycle eviction.
+    - macOS upgrade eviction.
+  The TART_HOME at /private/tmp/clinemm-tart-p3-20261015T131912Z-30833 is
+  preserved for the next operator-driven P3 retry, but it MAY be gone by
+  then. /private/tmp is NOT durable storage. The ACT explicitly disclaims
+  durability in §8.
+
+=== Conservation (per ACT §7) ===
+
+  The TART_HOME was created with mode 700 and the probe file was removed.
+  No foreign files exist in the TART_HOME. It is left in its initial
+  empty state.

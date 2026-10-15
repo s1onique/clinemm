@@ -1,0 +1,91 @@
+=== ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 — 06-conservation-and-safety ===
+
+Captured: 2026-10-15 16:19:xx local time
+Purpose: record compliance with ACT §7 (Conservation and safety).
+
+=== Per-rule compliance ===
+
+  [R1] No launchctl bootstrap / bootout / kickstart / install / load / unload
+       -> HONORED. No launchd mutation was attempted or executed in this ACT.
+          Verified by:
+            $ ps -o pid,comm -A 2>/dev/null | grep -iE 'launchctl|launchd'
+            (no launchd mutation in the ClineMM task; the host's launchd
+             is the same root launchd (PID 1) running since the Sep 17
+             boot, per P2's investigation; no new launchd service was
+             registered.)
+          P2's safety rule ('launchd service mutations are FORBIDDEN during
+          ordinary Seatbelted ClineMM tasks') is preserved unchanged.
+
+  [R2] No Seatbelt bypass
+       -> HONORED. The ClineMM task runtime is still seatbelted.
+          The /private/tmp TART_HOME was created from within the seatbelt;
+          mktemp, touch, touch -t, shasum, and rm are all Seatbelt-permitted
+          operations on /private/tmp. No `sandbox-exec`, no profile
+          uninstall, no entitlement grant was performed.
+          No arbitrary host command was issued under a lifted Seatbelt.
+
+  [R3] No foreign VM mutation
+       -> HONORED. `tart list --source local --format json` was `[]` before
+          and after this ACT. No `tart create`, `tart clone`, `tart delete`,
+          `tart rename`, `tart set`, `tart run`, `tart stop`, `tart suspend`
+          was issued. The ClineMM staging VMs (e.g. clinemm-realqual-...sock,
+          clinemm-testbed-...sock, clinemm-host-helper) on /private/tmp are
+          unrelated to Tart VM storage and are owned by the prior ACTs;
+          none of them was modified by this ACT.
+
+  [R4] No blind deletion
+       -> HONORED. No `tart delete` was issued. The P2 staging dir
+          /private/tmp/clinemm-p2-staging/ was already gone (verified by
+          `ls -la` returning NOT_PRESENT); this ACT did not delete it.
+
+  [R5] No OCI retry
+       -> HONORED. No `tart clone`, `tart pull`, or `tart push` was issued.
+          The cached OCI metadata at ~/Library/Caches/tart/ was read
+          (sqlite3 .schema, SELECTs) but NOT re-written. The P2 SQLite
+          WAL failure on /dev/disk3s8 was not re-triggered.
+
+  [R6] No production ClineMM changes
+       -> HONORED. The working tree at HEAD cbb94f6a24b078011c991fef4ed68d2f8c28c6f0
+          is unchanged. `git status --short` returns an empty diff. The
+          only files added in this ACT are in
+          .factory/evidence/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01/
+          and .factory/acts/ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01.md
+          (the durable evidence + ACT spec, ACT-owned only).
+
+  [R7] No credential-bearing archives committed
+       -> HONORED. No .tvm file is committed. No SSH key, no Apple
+          credential, no Keychain blob, no docker config is committed.
+          The Pinned digest in 00-closure-evidence.txt is the public
+          reference only.
+
+  [R8] Run-owned identity preserved
+       -> HONORED. The TART_HOME /private/tmp/clinemm-tart-p3-20261015T131912Z-30833
+          is left empty and is bound to the run id. The next operator-driven
+          P3 retry can reuse this path or create a fresh one; either is
+          acceptable.
+
+  [R9] No reboot / snapshot deletion
+       -> HONORED. The host's uptime is unchanged. The new Time Machine
+          snapshot at 2026-10-15-125505 on /dev/disk3s8 (observed in this
+          ACT) is a host-initiated event, not a ClineMM action.
+
+  [R10] No Elm work
+       -> HONORED. No Elm kernel, no Elm module, no Elm codegen was
+          touched by this ACT.
+
+=== Local VM and storage post-state ===
+
+  $ tart list --source local --format json
+  []
+
+  $ ls -ld /private/tmp/clinemm-tart-p3-20261015T131912Z-30833
+  drwx------ 2 chistyakov wheel 64 Oct 15 16:19 /private/tmp/clinemm-tart-p3-20261015T131912Z-30833
+
+  $ ls -la /private/tmp/clinemm-tart-p3-20261015T131912Z-30833
+  total 0
+  drwx------    2 chistyakov wheel    64 Oct 15 16:19 .
+  drwxrwxrwt 1422 root       wheel 45504 Oct 15 16:19 ..
+
+  -> The TART_HOME is empty, mode 700, owner chistyakov.
+  -> No local VM exists. The OCI cache is unmodified.
+  -> No foreign files were added to /private/tmp.

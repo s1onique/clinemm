@@ -1,0 +1,108 @@
+=== ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 — 01-tart-capability-recon ===
+
+Captured: 2026-10-15 16:14:xx local time
+Host:     macOS 14.7.4 (23H420), arm64 (Apple Silicon)
+User:     chistyakov (uid 501), seatbelted ClineMM task
+
+$ command -v tart
+/run/current-system/sw/bin/tart
+
+$ readlink -f "$(which tart)"
+/nix/store/crsnipsi18a4ac0vvim0c4093mwf1l1h-tart-2.34.0/Applications/tart.app/Contents/MacOS/tart
+
+$ ls -la /run/current-system/sw/bin/tart
+lrwxr-xr-x  1 root wheel 64 Jan  1  1970 /run/current-system/sw/bin/tart -> /nix/store/crsnipsi18a4ac0vvim0c4093mwf1l1h-tart-2.34.0/bin/tart
+
+$ tart --version
+2.34.0
+
+$ tart import --help
+OVERVIEW: Import VM from a compressed .tvm file
+
+USAGE: tart import <path> <name>
+
+ARGUMENTS:
+  <path>                  Path to a file created with "tart export".
+  <name>                  Destination VM name.
+
+OPTIONS:
+  --version               Show the version.
+  -h, --help              Show help information.
+
+$ tart export --help
+OVERVIEW: Export VM to a compressed .tvm file
+
+USAGE: tart export <name> [<path>]
+
+ARGUMENTS:
+  <name>                  Source VM name.
+  <path>                  Path to the destination file.
+
+OPTIONS:
+  --version               Show the version.
+  -h, --help              Show help information.
+
+$ tart list --source local --format json
+[]
+
+$ tart list --source oci --format json
+[
+  {
+    "Disk" : 50,
+    "Running" : false,
+    "Name" : "ghcr.io\/cirruslabs\/macos-sonoma-base:latest",
+    "Size" : 30,
+    "Accessed" : "2026-10-06T20:20:08Z",
+    "State" : "stopped",
+    "Source" : "OCI"
+  },
+  {
+    "Accessed" : "2026-10-06T20:20:08Z",
+    "Name" : "ghcr.io\/cirruslabs\/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49",
+    "Disk" : 50,
+    "State" : "stopped",
+    "Source" : "OCI",
+    "Size" : 30,
+    "Running" : false
+  }
+]
+
+$ tart --help  (top-level subcommands relevant to P3)
+USAGE: tart <subcommand>
+  create                  Create a VM
+  clone                   Clone a VM
+  run                     Run a VM
+  set                     Modify VM's configuration
+  get                     Get a VM's configuration
+  list                    List created VMs
+  login                   Login to a registry
+  logout                  Logout from a registry
+  ip                      Get VM's IP address
+  exec                    Execute a command in a running VM
+  pull                    Pull a VM from a registry
+  push                    Push a VM to a registry
+  import                  Import VM from a compressed .tvm file
+  export                  Export VM to a compressed .tvm file
+  prune                   Prune OCI and IPSW caches or local VMs
+  rename                  Rename a local VM
+  stop                    Stop a VM
+  delete                  Delete a VM
+  suspend                 Suspend a VM
+
+$ tart pull --help
+OVERVIEW: Pull a VM from a registry
+Pulls a virtual machine from a remote OCI-compatible registry. Supports
+authorization via Keychain (see "tart login --help"),
+Docker credential helpers defined in ~/.docker/config.json or via
+TART_REGISTRY_USERNAME/TART_REGISTRY_PASSWORD environment variables.
+USAGE: tart pull <remote-name> [--insecure] [--concurrency <concurrency>]
+*** 'tart pull' materializes a local VM into TART_HOME/VirtualMachines, NOT
+    a .tvm file. There is no Tart subcommand that produces a .tvm from
+    an OCI source; 'tart export' requires an existing local VM.
+
+Key fact 1: 'tart list --source local' returns [].  -> no local VM exists.
+Key fact 2: The OCI cache at ~/Library/Caches/tart/ holds only metadata
+            (1.1 MB total), not the 30 GB image body. (See 03-oci-cache.txt.)
+Key fact 3: The pinned digest
+            ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49
+            is present in the OCI list, confirming registry identity reachability.

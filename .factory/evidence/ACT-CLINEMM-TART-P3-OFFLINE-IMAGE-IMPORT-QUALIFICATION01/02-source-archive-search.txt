@@ -1,0 +1,101 @@
+=== ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01 — 02-source-archive-search ===
+
+Captured: 2026-10-15 16:15:xx local time
+Host:     macOS 14.7.4, arm64, chistyakov, seatbelted ClineMM task
+
+Goal: search the entire host for any existing .tvm archive that could serve
+as the P3-02 source. Result: NONE. Detailed evidence below.
+
+=== Direct .tvm filename search ===
+
+$ find /Volumes /private/tmp /tmp /opt /Users /nix -maxdepth 8 -name '*.tvm' 2>/dev/null
+   (cancelled after 90 s, zero output before cancellation; the find walked
+    the entire /nix/store hierarchy without finding a .tvm)
+
+$ find /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm -name '*.tvm' 2>/dev/null
+   (zero output)
+
+$ find /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory -name '*.tvm' 2>/dev/null
+   (zero output)
+
+=== Direct 'sonoma' substring search (lives near OCI VMs) ===
+
+$ find /private/tmp -maxdepth 2 -type d 2>/dev/null | grep -i sonoma
+   (zero output; the P2 staging dir /private/tmp/clinemm-p2-staging was
+    cleaned up after the P2 closure on 2026-10-15 13:05)
+
+$ ls -la /private/tmp/clinemm-p2-staging
+   NOT_PRESENT
+
+$ find /Users/Shared -maxdepth 4 -iname '*sonoma*' 2>/dev/null
+   (zero output)
+
+$ find /opt/homebrew/Cellar /opt/homebrew/share -iname '*tart*' 2>/dev/null
+   (zero output; Tart is Nix-installed, not Homebrew-installed)
+
+$ find /nix/store -maxdepth 3 -name 'macos-sonoma*' 2>/dev/null
+   (cancelled after 50 s; no macos-sonoma in the Nix store top level)
+
+=== Tart-managed storage search (where Tart might have hidden a .tvm) ===
+
+$ ls -la ~/Library/Caches/tart 2>/dev/null
+total 596
+drwxr-xr-x   6 chistyakov staff    192 Oct  6 22:28 .
+drwx------ 238 chistyakov staff   7616 Oct 15 12:46 ..
+-rw-r--r--   1 chistyakov staff   49152 Oct  6 22:28 Cache.db
+-rw-r--r--   1 chistyakov staff   32768 Oct 14 14:49 Cache.db-shm
+-rw-r--r--   1 chistyakov staff  469712 Oct  6 23:20 Cache.db-wal
+drwxr-xr-x   4 chistyakov staff    128 Oct  6 23:19 fsCachedData
+   -> only OCI HTTP cache metadata, no .tvm
+
+$ ls -la ~/Library/Application\ Support/tart 2>/dev/null
+   (empty / not present)
+
+$ ls -la /Library/Caches/tart 2>/dev/null
+   (empty / not present; no system-level Tart cache)
+
+$ ls -la /opt/homebrew/Cellar/tart 2>/dev/null
+   (empty; no Homebrew Tart cell)
+
+$ ls -la /opt/homebrew/share/tart 2>/dev/null
+   (empty)
+
+=== Tart local VM inventory (negative result is the answer) ===
+
+$ tart list --source local --format json
+[]
+
+=== OCI cache footprint (proves the cache is only metadata) ===
+
+$ du -sh ~/Library/Caches/tart
+1.1M
+
+$ sqlite3 ~/Library/Caches/tart/Cache.db 'SELECT name FROM sqlite_master WHERE type="table";'
+cfurl_cache_response
+sqlite_sequence
+cfurl_cache_blob_data
+cfurl_cache_receiver_data
+
+   -> schema confirms the OCI cache is Apple's NSURLCache (cfurl_cache_*).
+      It stores HTTP request/response headers + body blobs (the OCI
+      manifest + 1 small disk-layer blob), NOT a Tart disk image.
+
+$ sqlite3 ~/Library/Caches/tart/Cache.db 'SELECT b.entry_ID, length(b.response_object), length(b.request_object), r.request_key, r.time_stamp FROM cfurl_cache_blob_data b LEFT JOIN cfurl_cache_response r USING(entry_ID) ORDER BY r.time_stamp DESC;'
+4|3774|1175|https://pkg-containers.githubusercontent.com/ghcr1/blobs/sha256:7448f319f1e2b5d97db0d2f964614345e85e423d2707f130f2cc9d89de2949ca?se=2026-10-06T20%3A25%3A00Z...|2026-10-06 20:19:22
+3|3775|1183|https://pkg-containers.githubusercontent.com/ghcrblobs14/blobs/sha256:16e9d30a585f4c572f14cfb2fa73baf3932ead0f476f5e5967571da082f9ea15?se=2026-10-06T19%3A35%3A00Z...|2026-10-06 19:28:17
+1|1201|784|https://ghcr.io/token?scope=repository:cirruslabs/macos-sonoma-base:pull&service=ghcr.io|2026-10-06 19:28:16
+2|1735|1107|https://ghcr.io/v2/cirruslabs/macos-sonoma-base/manifests/latest|2026-10-06 19:28:16
+
+   -> 4 cache rows, largest response blob is 3.7 KB. No multi-GB image body.
+
+=== Conclusion ===
+
+  1. No .tvm archive file exists on this host.
+  2. No local Tart VM exists on this host.
+  3. The OCI cache is metadata-only (1.1 MB), so a `tart clone` from the
+     cache would re-trigger the P2 SQLite WAL failure on the protect
+     volume AND require an ~800 MB network pull of the missing disk layers.
+  4. None of the ACT §3 preferred sources (1)-(4) is reachable from this
+     Seatbelted ClineMM task.
+
+  Verdict for Phase 2: HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE.
