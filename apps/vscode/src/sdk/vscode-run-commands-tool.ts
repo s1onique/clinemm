@@ -71,6 +71,116 @@ export const FOREGROUND_COMMAND_AUTO_PROCEED_MS = 300 * 1000
 export const PROCEED_LOG_MAX_BYTES = 10 * 1024 * 1024
 const PROCEED_LOG_FINAL_MESSAGE_MAX_CHARS = 4096
 
+/**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+ * (CORR-POST-START-FAILURE-01): bounded wait for the
+ * supervised-lifecycle settlement of a just-started job that
+ * the host is about to cancel due to a post-launch admission
+ * failure. The cap is intentionally small (5 seconds per
+ * stage) so the fail-closed path does not block the tool
+ * response indefinitely on an unkillable process; the
+ * manager's own deadline watchdog remains the authoritative
+ * termination guarantor after this wait elapses.
+ *
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+ * (CORR-POST-START-TIMEOUT-01): the cap is a CAP ON THE
+ * TOOL'S WAIT, not on the supervised job. A timer that fires
+ * is NOT a verified terminal settlement. The post-launch
+ * failure containment distinguishes three outcomes and only
+ * releases the reservation slot on a verified `terminal`
+ * settlement; a `timeout` (or a `cancel_error`) leaves the
+ * permit held and reports a "containment pending" error so
+ * the host can decide whether to wait for the manager's own
+ * deadline watchdog (the real authoritative termination
+ * guarantor after this cap elapses). The conserved permit
+ * keeps the admission slot occupied, so a fresh
+ * observation-bearing launch is refused at the BCB's capacity
+ * check (see POST-START-TIMEOUT-01 INVARIANT 5); the host
+ * CANNOT admit another job while the supervised one is
+ * still unowned. The slot is released only by the auto-
+ * release hook (CORR-POST-START-LATE-TERMINAL-01) when the
+ * manager's deadline watchdog reaches terminality, or by
+ * coordinator disposal.
+ *
+ * The cancel and the settle race each get this cap (so the
+ * total bounded wait is ~2x the cap). The cancel cap is
+ * intentionally larger than the manager's TERM_GRACE_MS
+ * (5000ms; see command-job-manager.ts:878) so the production
+ * happy path (where the cancel waits for the process death)
+ * has enough headroom. The settle cap is the original 5s
+ * (the post-cancel wait for the terminalPromise to resolve).
+ */
+const POST_LAUNCH_FAIL_CLOSED_CANCEL_TIMEOUT_MS = 10_000
+const POST_LAUNCH_FAIL_CLOSED_SETTLE_TIMEOUT_MS = 5_000
+
+/**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+ * (CORR-POST-START-TIMEOUT-01): discriminated outcome of the
+ * post-launch failure containment. The single critical
+ * invariant is
+ *
+ *   Timeout ≠ terminal_observed ≠ cancel_error
+ *
+ * - `terminal_observed`  : the supervised job's `terminalPromise`
+ *                          resolved before the bounded wait
+ *                          elapsed. The permit MAY be released.
+ * - `timeout`            : the bounded wait elapsed WITHOUT a
+ *                          terminal settlement. The permit MUST
+ *                          stay held; the supervised job may
+ *                          still be running.
+ * - `cancel_error`       : `manager.cancel(...)` rejected (the
+ *                          supervised lifecycle's termination
+ *                          call itself failed). The permit MUST
+ *                          stay held; the supervised job's
+ *                          terminality is UNKNOWN.
+ *
+ * The 3 cases are not interchangeable. A timer that fires
+ * tells the tool to stop waiting; it does NOT establish that
+ * the supervised job has terminated.
+ */
+type PostLaunchSettlementOutcome =
+	| { kind: "terminal_observed"; terminalTransition: { becameIdle: boolean; jobId: string; terminalState: string } }
+	| { kind: "timeout" }
+	| { kind: "cancel_error"; error: unknown }
+	| { kind: "cancel_settled_ok" }
+
+/**
+ * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+ * (CORR-POST-START-TIMEOUT-01): the post-launch failure
+ * containment throws this error class so the outer
+ * try/catch (which would otherwise release the permit
+ * on any thrown error) can distinguish the fail-closed
+ * throw from other launch-time throws.
+ *
+ * The `permitReleasedOnThrow` field carries the
+ * permit-release decision made by the fail-closed path:
+ *   - `true`  : the fail-closed path already released
+ *               the permit (the `terminal_observed` happy
+ *               path of the post-launch repair). The
+ *               outer catch MUST NOT release again.
+ *   - `false` : the fail-closed path conserved the
+ *               permit (the `timeout` / `cancel_error`
+ *               paths of the post-launch repair). The
+ *               outer catch MUST NOT release (the permit
+ *               stays held; the supervised job's
+ *               terminality is UNKNOWN).
+ *
+ * Without this distinction, the outer catch's
+ * `releaseReservation(permitId)` would silently
+ * re-release a permit that the fail-closed path
+ * deliberately conserved — restoring the original
+ * P0 conservation gap (timeout ≠ terminal ≠
+ * authorized release).
+ */
+class PostLaunchFailClosedError extends Error {
+	readonly permitReleasedOnThrow: boolean
+	constructor(message: string, permitReleasedOnThrow: boolean) {
+		super(message)
+		this.name = "PostLaunchFailClosedError"
+		this.permitReleasedOnThrow = permitReleasedOnThrow
+	}
+}
+
 /** Options for creating the VSCode run_commands tool. */
 export interface VscodeRunCommandsToolOptions {
 	/** Workspace root directory. */
@@ -780,9 +890,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			if (
 				requiresObservationContract &&
 				notifyRequested &&
-				(!options.backgroundNotifyCoordinator ||
-					!options.resolveActiveOwner ||
-					!ownerResolution)
+				(!options.backgroundNotifyCoordinator || !options.resolveActiveOwner || !ownerResolution)
 			) {
 				// Fail-closed: an observation-bearing launch
 				// without the admission authority is a bypass.
@@ -846,6 +954,506 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					options.backgroundNotifyCoordinator?.releaseReservation(permitId)
 					permitId = undefined
 				}
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+				// (CORR-POST-START-FAILURE-01 + CORR-POST-START-TIMEOUT-01):
+				// bounded post-launch failure containment. When a
+				// post-launch admission step fails (attach /
+				// register / record), the job has ALREADY been
+				// started via `manager.start()` and is running.
+				// The pre-fix code released the permit and threw,
+				// leaving the job running unowned by the BCB. The
+				// bounded repair:
+				//
+				//   1. Run two concurrent operations: the
+				//      `manager.cancel(...)` call (which goes
+				//      through the production termination path —
+				//      SIGTERM -> escalate -> SIGKILL ->
+				//      `terminalPromise` resolves) AND a bounded
+				//      race between the supervised job's
+				//      `terminalPromise` and a
+				//      POST_LAUNCH_FAIL_CLOSED_SETTLE_TIMEOUT_MS
+				//      timer.
+				//   2. The settlement is observed by ONE of
+				//      three outcomes:
+				//        - `terminal_observed`: the supervised
+				//          job's terminalPromise resolved; the
+				//          permit MAY be released.
+				//        - `timeout`: the bounded wait elapsed
+				//          without observing terminality; the
+				//          permit MUST stay held; the manager's
+				//          own deadline watchdog is the
+				//          authoritative termination guarantor.
+				//        - `cancel_error`: the cancel call itself
+				//          rejected; the supervised job's
+				//          terminality is UNKNOWN; the permit
+				//          MUST stay held.
+				//   3. Release the permit ONLY on
+				//      `terminal_observed`. The other two
+				//      outcomes conserve the slot so a later
+				//      admission cannot consume it. The host
+				//      (SdkController) decides what to do next
+				//      (cancel via a different channel, wait
+				//      for the manager's deadline watchdog,
+				//      etc.).
+				//   4. Throw the fail-closed error. The error
+				//      message identifies the phase, the detail,
+				//      and the bounded-repair outcome so the
+				//      host's diagnostic capture can attribute
+				//      the failure correctly.
+				//
+				// This is the LOAD-BEARING repair for the
+				// post-launch orphan hazard. It is applied at
+				// all four post-launch failure sites (notify
+				// attach, notify register, non-notify attach,
+				// non-notify record). The helper is
+				// `async () => Promise<never>` -- it always
+				// throws, so TypeScript narrows the caller's
+				// code after the `await` to unreachable (no
+				// fallthrough to the downstream registration
+				// / projection logic).
+				//
+				// Bind `start` to a narrowed local so the helper
+				// closure sees a non-undefined type. The outer
+				// `start` is declared as
+				// `Awaited<...> | undefined` (line 761); after the
+				// `await manager.start()` it is defined, but the
+				// closure would not see that narrowing. `startedJob`
+				// is the narrowed handle.
+				const startedJob = start
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+				// (CORR-POST-START-TIMEOUT-01): the post-launch
+				// failure containment is split into a settlement
+				// step (run BEFORE `failClosedPostLaunch` is
+				// invoked) and a reporting step. The settlement
+				// step returns a `PostLaunchSettlementOutcome`
+				// and the reporting step decides whether to
+				// release the permit. Splitting the two ensures
+				// the permit-release decision is gated on the
+				// actual observed terminality, not on a timer.
+				//
+				// (CORR-POST-START-LATE-TERMINAL-01): a
+				// LATE-arriving terminal settlement (after the
+				// bounded wait elapses with `timeout` or after
+				// a hung `cancel` produces `cancel_error`) MUST
+				// release the permit exactly once. The helper
+				// itself only knows the settlement observed
+				// during the bounded wait; a settlement arriving
+				// later must be handled by an exactly-once
+				// cleanup hook attached to the supervised job's
+				// `terminalPromise` BEFORE the helper engages.
+				// The hook is installed unconditionally here
+				// (regardless of which settlement branch wins)
+				// because the supervisor's deadline watchdog
+				// is the authoritative termination guarantor
+				// and will reach terminality eventually. The
+				// hook is fire-and-forget; the helper does NOT
+				// await it (the helper returns immediately
+				// after the bounded wait). Idempotency: the
+				// BCB's `releaseReservation` returns `not_found`
+				// for a re-release, so the hook is safe even
+				// if it fires after the helper already released
+				// the permit on the `terminal_observed` happy
+				// path. Disposal: the hook handles
+				// `{ kind: "disposed" }` gracefully (no-op).
+				// Job identity: the hook validates
+				// `transition.jobId === startedJob.jobId` to
+				// guarantee it does not release another owner's
+				// permit if the supervised job's terminal
+				// transition is somehow for a different job
+				// (defense in depth).
+				//
+				// The implementation runs two concurrent
+				// operations:
+				//
+				//   1. `cancelTask` — calls `manager.cancel(...)`
+				//      and writes the result to `cancelSettled`
+				//      when it resolves OR rejects.
+				//   2. `settleRace` — races the supervised job's
+				//      `terminalPromise` against a bounded timer
+				//      (POST_LAUNCH_FAIL_CLOSED_SETTLE_TIMEOUT_MS).
+				//      On every outcome the timer is cleared so
+				//      the Node timer queue does not retain a
+				//      leaked handle past this scope.
+				//
+				// The two run concurrently; whichever settles
+				// first determines the outcome. The
+				// POST-START-TIMEOUT-02 test covers the case
+				// where `cancelTask` itself never resolves: in
+				// that case `settleRace` wins on the timer and
+				// we report `timeout` (NOT a hung tool).
+				//
+				// Order of outcome precedence:
+				//   terminal_observed > cancel_error > timeout
+				// because `terminal_observed` is the only state
+				// that authorizes a permit release; `cancel_error`
+				// indicates the supervised-lifecycle call itself
+				// failed; `timeout` indicates we lost the race
+				// without seeing either terminality or a cancel
+				// rejection.
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+				// (CORR-POST-START-TIMEOUT-01): the post-launch
+				// failure containment is split into a settlement
+				// step (run BEFORE `failClosedPostLaunch` is
+				// invoked) and a reporting step. The settlement
+				// step returns a `PostLaunchSettlementOutcome`
+				// and the reporting step decides whether to
+				// release the permit. Splitting the two ensures
+				// the permit-release decision is gated on the
+				// actual observed terminality, not on a timer.
+				//
+				// The implementation runs the cancel and the
+				// settle race as TWO STAGES with INDEPENDENT
+				// bounds:
+				//
+				//   Stage 1: cancel with bounded wait.
+				//     `manager.cancel(...)` is awaited. The
+				//     cancel itself is bounded by a timer
+				//     (POST_LAUNCH_FAIL_CLOSED_SETTLE_TIMEOUT_MS)
+				//     so a hung cancel does NOT block the tool.
+				//     The cancel timer is cleared on every
+				//     outcome (success, error, or timer fire).
+				//
+				//   Stage 2: settle race (post-cancel).
+				//     AFTER the cancel settles "ok", the
+				//     settle race begins. The settle race
+				//     races the supervised job's
+				//     `terminalPromise` against a bounded
+				//     timer. The settle timer is cleared on
+				//     every outcome.
+				//
+				// Total budget: ~2x the per-stage bound
+				// (cancel-time + settle-time). For the
+				// production happy path, the cancel settles
+				// when the supervised process death
+				// resolves the terminalPromise in the same
+				// code path, and the settle race is
+				// near-instant. For the unhappy paths, the
+				// per-stage caps bound the tool's response
+				// time.
+				//
+				// Order of outcome precedence:
+				//   terminal_observed > cancel_error > timeout
+				// because `terminal_observed` is the only
+				// state that authorizes a permit release;
+				// `cancel_error` indicates the supervised-
+				// lifecycle call itself failed; `timeout`
+				// indicates the settle race's bounded wait
+				// elapsed without observing terminality.
+				// `cancel_settled_ok` is the internal
+				// sentinel that signals "stage 1 done, run
+				// stage 2"; it is consumed by the outer
+				// code and never reaches the reporter.
+				const cancelSettled: { error: unknown; ok: boolean; timedOut: boolean } = {
+					error: undefined,
+					ok: false,
+					timedOut: false,
+				}
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+				// (CORR-POST-START-TIMEOUT-01): the settlement
+				// step is LAZY — it is only computed when
+				// `failClosedPostLaunch` is invoked (i.e. when
+				// a post-launch admission step fails). On the
+				// happy path, no cancel is issued and the
+				// settle race is never run; the
+				// `settlementOutcome` is undefined and the
+				// marker registration proceeds immediately
+				// after `manager.start()` returns. On the
+				// post-launch failure path, the lazy function
+				// is invoked, the cancel is issued, the settle
+				// race is run, and the result is consumed by
+				// the reporter.
+				const computeSettlement = async (): Promise<PostLaunchSettlementOutcome> => {
+					// Stage 1: cancel with a bounded wait. The
+					// cancel timer is cleared on every outcome.
+					const cancelSettle: PostLaunchSettlementOutcome = await (async () => {
+						let cancelTimerHandle: ReturnType<typeof setTimeout> | undefined
+						const cancelTimerPromise = new Promise<"timeout">((resolve) => {
+							cancelTimerHandle = setTimeout(() => resolve("timeout"), POST_LAUNCH_FAIL_CLOSED_CANCEL_TIMEOUT_MS)
+						})
+						const cancelPromise = manager
+							.cancel({
+								jobId: startedJob.jobId,
+								origin: "other:host_admission_failure",
+							})
+							.then(
+								(): "ok" => {
+									cancelSettled.ok = true
+									return "ok"
+								},
+								(error): "error" => {
+									cancelSettled.error = error
+									return "error"
+								},
+							)
+						const cancelOutcome = await Promise.race([cancelPromise, cancelTimerPromise])
+						if (cancelTimerHandle !== undefined) {
+							clearTimeout(cancelTimerHandle)
+						}
+						if (cancelOutcome === "timeout") {
+							// The cancel itself hung. The
+							// supervised job's terminality
+							// is UNKNOWN. The permit MUST
+							// stay held.
+							cancelSettled.timedOut = true
+							return {
+								kind: "cancel_error",
+								error: new Error(
+									`manager.cancel() did not settle within the bounded wait (${POST_LAUNCH_FAIL_CLOSED_CANCEL_TIMEOUT_MS}ms)`,
+								),
+							}
+						}
+						if (cancelOutcome === "error") {
+							// The cancel threw. The
+							// supervised job's terminality
+							// is UNKNOWN. The permit MUST
+							// stay held.
+							return { kind: "cancel_error", error: cancelSettled.error }
+						}
+						// Cancel settled "ok". Move to Stage 2.
+						return { kind: "cancel_settled_ok" as const }
+					})()
+					// Stage 2: settle race (post-cancel). The
+					// settle race is the ONLY authoritative
+					// terminality signal: it races the
+					// supervised job's `terminalPromise`
+					// against a bounded timer. Runs ONLY
+					// after the cancel has settled "ok";
+					// otherwise the stage-1 outcome is the
+					// settlement.
+					return await (async (): Promise<PostLaunchSettlementOutcome> => {
+						if (cancelSettle.kind !== "cancel_settled_ok") {
+							return cancelSettle
+						}
+						let settleTimerHandle: ReturnType<typeof setTimeout> | undefined
+						const settleTimerPromise = new Promise<"timeout">((resolve) => {
+							settleTimerHandle = setTimeout(() => resolve("timeout"), POST_LAUNCH_FAIL_CLOSED_SETTLE_TIMEOUT_MS)
+						})
+						// The supervised job's
+						// `terminalPromise` is the ONLY
+						// authoritative terminality
+						// signal. It is guaranteed to
+						// resolve (it never rejects —
+						// see
+						// `command-job-manager.ts:218-220`);
+						// the `.catch` is defense-in-depth.
+						const terminalSettled = startedJob.terminalPromise.then(
+							(transition): PostLaunchSettlementOutcome => ({
+								kind: "terminal_observed",
+								terminalTransition: {
+									becameIdle: transition.becameIdle,
+									jobId: transition.jobId,
+									terminalState: transition.terminalState as string,
+								},
+							}),
+							(error): PostLaunchSettlementOutcome => ({ kind: "cancel_error", error }),
+						)
+						const outcome = await Promise.race([
+							terminalSettled,
+							settleTimerPromise.then((): PostLaunchSettlementOutcome => ({ kind: "timeout" })),
+						])
+						// Clear the settle timer on every
+						// outcome; the race may have settled
+						// via `terminal_observed` and the
+						// timer would otherwise remain armed
+						// in the Node timer queue.
+						if (settleTimerHandle !== undefined) {
+							clearTimeout(settleTimerHandle)
+						}
+						return outcome
+					})()
+				}
+				const failClosedPostLaunch = async (phase: "attach" | "register" | "record", detail: string): Promise<never> => {
+					// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+					// (CORR-POST-START-LATE-TERMINAL-01): install the
+					// exactly-once auto-release hook on the supervised
+					// job's `terminalPromise` BEFORE the bounded
+					// settlement step runs. The hook is the ONLY
+					// release path for the fail-closed case because
+					// the BCB's normal consume path is unreachable
+					// (the post-launch admission step rejected the
+					// obligation registration, so the consume paths
+					// cannot find this jobId). The hook fires
+					// fire-and-forget on the supervised job's eventual
+					// terminal transition. It validates the expected
+					// jobId (defense in depth: avoids releasing
+					// another owner's permit if the manager ever
+					// produces a transition for a different job),
+					// is exactly-once via a closure flag, and is
+					// dispose-safe (handles the BCB's `disposed`
+					// result as a no-op). Idempotency: a re-release
+					// of the same permit is a BCB `not_found`
+					// no-op, so the hook is safe even when the
+					// bounded-settlement branch already released
+					// the permit on the `terminal_observed` happy
+					// path (the closure flag short-circuits the
+					// second call entirely).
+					if (permitId !== undefined && startedJob.terminalPromise) {
+						let lateTerminalReleased = false
+						const expectedPermitId = permitId
+						const expectedJobId = startedJob.jobId
+						startedJob.terminalPromise.then((transition) => {
+							if (lateTerminalReleased) {
+								return
+							}
+							lateTerminalReleased = true
+							if (transition.jobId !== expectedJobId) {
+								// Defense in depth: the manager's contract
+								// is one terminalPromise per jobId, so
+								// this should never fire. If it does,
+								// do not release the permit (it belongs
+								// to a different owner).
+								return
+							}
+							const result = options.backgroundNotifyCoordinator?.releaseReservation(expectedPermitId)
+							// `released` : the permit was held; we
+							// successfully recovered the slot. The
+							// late terminal settlement is now
+							// reflected in the BCB's bookkeeping.
+							// `not_found` : the permit was already
+							// released (by the bounded-settlement
+							// branch on the `terminal_observed` happy
+							// path, or by coordinator disposal). No-op.
+							// `disposed` : the BCB was disposed between
+							// the helper's fail-closed throw and the
+							// supervised job's terminality. No-op.
+							void result
+						})
+					}
+					// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+					// (CORR-POST-START-TIMEOUT-01): the permit-release
+					// decision is gated on the SETTLEMENT OUTCOME, not
+					// on a timer.
+					//
+					// - `terminal_observed` : the supervised job's
+					//   terminalPromise resolved before the bounded
+					//   wait. The job is now in the manager's
+					//   terminal map. Release the permit.
+					//
+					// - `timeout` : the bounded wait elapsed WITHOUT
+					//   observing terminality. The supervised job
+					//   may still be running. DO NOT release the
+					//   permit. Throw a "containment pending" error
+					//   so the host knows the slot is conserved.
+					//   The manager's own deadline watchdog
+					//   (executionDeadlineMs, default 30s) remains
+					//   the authoritative termination guarantor
+					//   after this wait.
+					//
+					// - `cancel_error` : `manager.cancel(...)` itself
+					//   rejected. The supervised job's terminality
+					//   is UNKNOWN. DO NOT release the permit. Throw
+					//   a "containment pending" error.
+					//
+					// A late-arriving terminal settlement (after
+					// this function returns) is handled by the
+					// auto-release hook installed at the TOP of
+					// this helper (CORR-POST-START-LATE-TERMINAL-01).
+					// The hook attaches a single exactly-once
+					// `.then()` to the supervised job's
+					// `terminalPromise` BEFORE the bounded
+					// settlement step runs. When the supervisor
+					// eventually reaches terminality (whether
+					// during the bounded wait or after it), the
+					// hook releases the permit exactly once,
+					// independent of the settlement outcome. The
+					// fail-closed path does NOT register an
+					// obligation with the BCB (the obligation
+					// registration was rejected at the
+					// post-launch admission step), so the BCB's
+					// normal consume path cannot release the
+					// permit; the hook is the ONLY release path
+					// for this fail-closed case. The hook is
+					// fire-and-forget: the helper does NOT
+					// await it. The hook is exactly-once via a
+					// closure flag. The hook is dispose-safe
+					// (handles { kind: 'disposed' } gracefully).
+					// The hook validates the expected jobId
+					// (defense in depth).
+					// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+					// (CORR-POST-START-TIMEOUT-01): the settlement
+					// is computed LAZILY here. On the happy
+					// path (post-launch admission succeeds),
+					// this function is never called, so the
+					// settlement is never computed and the
+					// supervised job is NOT cancelled. The
+					// settlement is only computed when a
+					// post-launch admission step fails AND
+					// the fail-closed repair is engaged.
+					// The settlement step ran and returned a
+					// discriminated outcome. The auto-release
+					// hook (CORR-POST-START-LATE-TERMINAL-01)
+					// has already been installed above; this
+					// is the bounded-settlement branch only.
+					const settlementOutcome = await computeSettlement()
+					if (settlementOutcome.kind === "terminal_observed" && permitId !== undefined) {
+						options.backgroundNotifyCoordinator?.releaseReservation(permitId)
+						permitId = undefined
+					}
+					// Build the error message. The text is
+					// intentionally distinct between the three
+					// outcomes:
+					//
+					// - terminal_observed: "cancelled through the
+					//   supervised lifecycle and the permit has
+					//   been released" (preserved verbatim so the
+					//   existing happy-path test
+					//   POST-START-FAILURE-01 still passes).
+					//
+					// - timeout: NO "cancelled" claim, NO
+					//   "permit has been released" claim. The
+					//   message identifies the bounded-wait
+					//   timeout and the containment-pending
+					//   disposition so the host's diagnostic
+					//   capture can attribute the failure
+					//   correctly.
+					//
+					// - cancel_error: similar to timeout but
+					//   identifies the cancel-call failure as
+					//   the cause of the unknown-state outcome.
+					if (settlementOutcome.kind === "terminal_observed") {
+						throw new PostLaunchFailClosedError(
+							`[Observation-capacity admission failed: post-launch ${phase} refused (${detail}). The runtime cannot guarantee a terminal-observation backing slot for a job that was already started. The job has been cancelled through the supervised lifecycle and the permit has been released. This is a fail-closed refusal, NOT a transient error; the host owns the disposition.]`,
+							true,
+						)
+					}
+					if (settlementOutcome.kind === "timeout") {
+						// Containment pending. The bounded wait
+						// elapsed; the supervised job MAY still
+						// be running. The reservation slot
+						// stays held. The host is the only
+						// authority that can decide the next
+						// action.
+						throw new PostLaunchFailClosedError(
+							`[Observation-capacity admission failed: post-launch ${phase} refused (${detail}). The runtime cannot guarantee a terminal-observation backing slot for a job that was already started. The post-launch settlement bounded wait (${POST_LAUNCH_FAIL_CLOSED_SETTLE_TIMEOUT_MS}ms) elapsed WITHOUT observing the supervised job's terminal state (containment pending); the manager's own deadline watchdog remains the authoritative termination guarantor. The reservation slot has been CONSERVED (not released) because timeout does not establish that the supervised job has terminated. This is a fail-closed refusal, NOT a transient error; the host owns the disposition.]`,
+							false,
+						)
+					}
+					// cancel_error
+					if (settlementOutcome.kind !== "cancel_error") {
+						// `cancel_settled_ok` is consumed
+						// internally by stage 2; it MUST
+						// NOT reach this reporter. If it
+						// does, treat it as a defensive
+						// fallback (throw a timeout-style
+						// error; do not release the
+						// permit). This branch is
+						// unreachable in normal
+						// operation; the type narrowing
+						// makes it a static guarantee.
+						throw new PostLaunchFailClosedError(
+							`[Observation-capacity admission failed: post-launch ${phase} refused (${detail}). The runtime cannot guarantee a terminal-observation backing slot for a job that was already started. Internal invariant violation: the post-launch settlement returned an unexpected outcome (kind=${settlementOutcome.kind}). The reservation slot has been CONSERVED (not released) as a defensive measure. This is a fail-closed refusal, NOT a transient error; the host owns the disposition.]`,
+							false,
+						)
+					}
+					const errMessage =
+						settlementOutcome.error instanceof Error
+							? settlementOutcome.error.message
+							: String(settlementOutcome.error)
+					throw new PostLaunchFailClosedError(
+						`[Observation-capacity admission failed: post-launch ${phase} refused (${detail}). The runtime cannot guarantee a terminal-observation backing slot for a job that was already started. The supervised-lifecycle cancel call itself failed (${errMessage}); the supervised job's terminality is UNKNOWN and the reservation slot has been CONSERVED (not released). This is a fail-closed refusal, NOT a transient error; the host owns the disposition.]`,
+						false,
+					)
+				}
 				// RUNNING returns a structured snapshot so the model can
 				// observe status + jobId. Terminal results retain the
 				// existing stdout/exitCode shape for backward compatibility.
@@ -875,7 +1483,20 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
 					// ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01: sibling observational trigger for the rolling V8 CPU profiler. Shares the same trigger seam (notify-enabled background command) but uses an INDEPENDENT state machine + env knob (CLINEMM_DIAG_CPU_PROFILE). NEVER throws; NEVER alters command semantics.
 					triggerExtensionHostCpuProfilerOnFirstQualifyingJob()
-					const owner = options.resolveActiveOwner()
+					// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+					// (CORR-OWNER-HANDOFF-01): the reservation was issued
+					// against the LAUNCH-TIME owner (S1/T1) before
+					// `manager.start()`. After the await, the active
+					// owner may have switched (e.g. S2/T2) — the
+					// owner-switch hazard repaired in HTEC01. The
+					// notify path MUST attach/register the marker
+					// under the SAME owner that the permit was reserved
+					// for, NOT the current active owner. Re-resolving
+					// the owner here recreates the HTEC01 hazard
+					// (admit under S1, register under S2, BCB rejects
+					// on owner_mismatch, the job is now in flight
+					// without an obligation).
+					const owner = ownerResolution
 					if (owner) {
 						// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
 						// attach the permit to the jobId BEFORE the
@@ -888,13 +1509,17 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 							owner,
 						})
 						if (attachResult.kind !== "attached" && attachResult.kind !== "already_attached") {
-							// Fail closed: the permit could not
-							// be attached. Release it and refuse
-							// to start the marker.
-							options.backgroundNotifyCoordinator.releaseReservation(permitId)
-							throw new Error(
-								`[Observation-capacity admission failed: permit attach refused (${attachResult.kind}). The runtime cannot guarantee a terminal-observation backing slot. This is a fail-closed refusal, NOT a transient error; the host owns the disposition.]`,
-							)
+							// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+							// (CORR-POST-START-FAILURE-01): the permit
+							// could not be attached. The job is
+							// ALREADY running (manager.start() returned
+							// running). The bounded repair cancels the
+							// job through the supervised lifecycle,
+							// awaits settlement, releases the permit,
+							// and throws fail-closed -- the job does
+							// NOT continue untracked. See
+							// `failClosedPostLaunch` defined above.
+							await failClosedPostLaunch("attach", `permit attach refused (${attachResult.kind})`)
 						}
 						const registerResult = options.backgroundNotifyCoordinator.registerMarker({
 							jobId: start.jobId,
@@ -903,16 +1528,18 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 							permitId,
 						})
 						if (registerResult.kind === "permit_not_attached") {
-							// Defense in depth: the permit must
-							// be attached to the jobId before
-							// the marker is registered. The
-							// attach step above should have
-							// already succeeded, so this is
+							// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+							// (CORR-POST-START-FAILURE-01): defense in
+							// depth -- the attach step above should
+							// have already succeeded, so this is
 							// only reachable if the BCB state
-							// changed in between.
-							options.backgroundNotifyCoordinator.releaseReservation(permitId)
-							throw new Error(
-								"[Observation-capacity admission failed: permit was not attached at registerMarker time. The host owns the disposition.]",
+							// changed in between. The bounded repair
+							// cancels the job, awaits settlement,
+							// releases the permit, and throws
+							// fail-closed.
+							await failClosedPostLaunch(
+								"register",
+								"permit was not attached at registerMarker time (BCB state changed between attach and register)",
 							)
 						}
 						// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
@@ -983,6 +1610,103 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					}
 				}
 
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+				// (CORR-NONNOTIFY-HANDOFF-01): non-notify fire-and-forget
+				// background jobs MUST establish their observation obligation
+				// at the RUNNING handoff, NOT at terminality. The previous
+				// placement inside `terminalPromise.then(...)` (which only
+				// fires once the job has reached terminal state) had three
+				// failure modes:
+				//
+				//   1. Between `manager.start()` returning "running" and the
+				//      job reaching terminality, the BCB has no obligation
+				//      for this jobId. A `command_status` call cannot find
+				//      a non-notify observation to consume; the BCB01 §0.1
+				//      second conjunct (unconsumed terminal results == 0)
+				//      cannot be evaluated while the job is running.
+				//   2. If the active owner switches between the running
+				//      handoff and the terminal handoff, the attach on the
+				//      terminal side re-resolves the owner and can fail
+				//      owner_mismatch — at which point the permit is
+				//      released, but the running job's obligation ownership
+				//      was never established. The slot is freed but the
+				//      terminal fact is now unowned.
+				//   3. The fast-path "release on attach failure" inside the
+				//      terminal callback is the dangerous sequence called
+				//      out in the review: the in-flight job has no
+				//      observation ownership, and the permit has been
+				//      returned. A follow-up `command_status` finds nothing
+				//      to consume.
+				//
+				// The corrected placement establishes the obligation while
+				// the job is running (after `manager.start()` returns
+				// "running", with a captured launch-time owner). On any
+				// failure, the permit is released and the host is fail-
+				// closed (refuses to start the marker). The terminal
+				// callback no longer creates the obligation; it only
+				// forwards the terminal fact to the projection.
+				if (
+					start.state === "running" &&
+					!notifyRequested &&
+					options.backgroundNotifyCoordinator &&
+					permitId !== undefined &&
+					ownerResolution
+				) {
+					const owner = ownerResolution
+					// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+					// (CORR-OWNER-HANDOFF-01): attach the permit to the
+					// jobId under the LAUNCH-TIME owner (S1/T1) — the
+					// same owner the permit was reserved for. The
+					// current active owner may have switched (S2/T2);
+					// re-resolving would recreate the HTEC01 hazard.
+					const attachResult = options.backgroundNotifyCoordinator.attachReservationToJob({
+						permitId,
+						jobId: start.jobId,
+						owner,
+					})
+					if (attachResult.kind !== "attached" && attachResult.kind !== "already_attached") {
+						// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+						// (CORR-POST-START-FAILURE-01): the permit
+						// could not be attached at the running
+						// handoff. The job is ALREADY running.
+						// The bounded repair cancels the job
+						// through the supervised lifecycle, awaits
+						// settlement, releases the permit, and
+						// throws fail-closed. See
+						// `failClosedPostLaunch` defined above.
+						await failClosedPostLaunch("attach", `non-notify permit attach refused (${attachResult.kind})`)
+					}
+					// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+					// register the non-notify terminal observation
+					// at the running handoff so the BCB01 §0.1
+					// invariant (unconsumed terminal results == 0)
+					// is observable as soon as the job is admitted.
+					// The owning agent observes the terminal fact
+					// through `command_status` (the canonical
+					// production consumer at
+					// `command-status-tool.ts:289-298`).
+					const recordResult = options.backgroundNotifyCoordinator.recordNonNotifyTerminalObservation({
+						jobId: start.jobId,
+						sessionId: owner.sessionId,
+						taskId: owner.taskId,
+						permitId,
+					})
+					if (recordResult.kind === "permit_not_attached") {
+						// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+						// (CORR-POST-START-FAILURE-01): defense in
+						// depth -- the attach step above should
+						// have already succeeded, so this is
+						// only reachable if the BCB state changed
+						// in between. The bounded repair cancels
+						// the job, awaits settlement, releases the
+						// permit, and throws fail-closed.
+						await failClosedPostLaunch(
+							"record",
+							"non-notify permit was not attached at recordNonNotifyTerminalObservation time (BCB state changed between attach and record)",
+						)
+					}
+				}
+
 				if (start.state === "running") {
 					// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
 					// (correction01 / Factory
@@ -1029,52 +1753,17 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					// collapsing every terminal into "Completed".
 					start.terminalPromise.then(({ jobId, terminalState }) => {
 						notifyBackgroundStateChange(false, jobId, terminalState)
-						// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
-						// For non-notify fire-and-forget jobs (the
-						// `notifyOnCompletion !== true` branch above did
-						// NOT call `registerMarker`), record the
-						// terminal identity with the
-						// BackgroundNotifyCoordinator so the BCB01 §0.1
-						// second conjunct (unconsumed terminal results
-						// == 0) is observable. The wake itself is
-						// suppressed by user opt-out, but the owning
-						// agent must still observe the terminal fact
-						// (via `command_status` or the finalization
-						// turn) before completion commits.
-						if (
-						!notifyRequested &&
-						options.backgroundNotifyCoordinator &&
-						options.resolveActiveOwner &&
-						permitId !== undefined
-					) {
-						const owner = options.resolveActiveOwner()
-						if (owner) {
-							// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
-							// attach the pre-launch permit to the
-							// jobId and pass it to the BCB so the
-							// reservation slot transitions into an
-							// observation obligation.
-							const attachResult = options.backgroundNotifyCoordinator.attachReservationToJob({
-								permitId,
-								jobId,
-								owner,
-							})
-							if (attachResult.kind === "attached" || attachResult.kind === "already_attached") {
-								const recordResult =
-									options.backgroundNotifyCoordinator.recordNonNotifyTerminalObservation({
-										jobId,
-										sessionId: owner.sessionId,
-										taskId: owner.taskId,
-										permitId,
-									})
-								if (recordResult.kind === "permit_not_attached") {
-									options.backgroundNotifyCoordinator.releaseReservation(permitId)
-								}
-							} else {
-								options.backgroundNotifyCoordinator.releaseReservation(permitId)
-							}
-						}
-					}
+						// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+						// (CORR-NONNOTIFY-HANDOFF-01): the non-notify
+						// observation obligation is now established at the
+						// RUNNING handoff (above), not at terminality. By the
+						// time this terminal callback fires, the BCB already
+						// owns the obligation for this jobId under the
+						// LAUNCH-TIME owner (CORR-OWNER-HANDOFF-01). The
+						// canonical production consumer (the `command_status`
+						// tool, Path C) drains the obligation when the agent
+						// observes the terminal fact; this callback only
+						// forwards the terminal pill to the projection map.
 					})
 					// ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01:
 					// The foreground->background handoff is irrevocably true
@@ -1164,18 +1853,40 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 						: `[Command exited with code ${start.exitCode ?? 1}]`,
 				)
 			} catch (error) {
-				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
-				// on a launch-time throw (manager.start rejected,
-				// or the per-job seeder above threw a fail-closed
-				// error), the job may or may not have a
-				// `terminalPromise` callback attached. The
-				// reservation is released if it has not been
-				// attached to an obligation map. If it has been
-				// attached (e.g. the marker was registered and
-				// then the wake-listener threw), the BCB's own
-				// terminal/consume paths will release it when
-				// the obligation settles.
-				if (permitId !== undefined) {
+				// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+				// (CORR-POST-START-TIMEOUT-01): when the
+				// `failClosedPostLaunch` helper throws, the
+				// throw carries the permit-release decision
+				// via the `permitReleasedOnThrow` flag. The
+				// outer catch MUST honor that decision:
+				//   - `true`  : the fail-closed path already
+				//               released the permit (the
+				//               `terminal_observed` happy
+				//               path). The outer catch MUST
+				//               NOT release again.
+				//   - `false` : the fail-closed path conserved
+				//               the permit (the `timeout` /
+				//               `cancel_error` paths of the
+				//               post-launch repair). The
+				//               outer catch MUST NOT release
+				//               either; the permit stays
+				//               held because the supervised
+				//               job's terminality is UNKNOWN
+				//               (timeout) or the cancel
+				//               call itself failed
+				//               (cancel_error).
+				//   - The throw is NOT a `PostLaunchFailClosedError`
+				//     (e.g. the launch-time pre-cancel throw,
+				//     or a `CommandExitError` from the fast
+				//     path). The pre-cancel throws happen
+				//     BEFORE any settlement step; the
+				//     `failClosedPostLaunch` helper was
+				//     never called; the permit was never
+				//     attached to an obligation. The catch
+				//     releases the permit (this matches
+				//     the original pre-fix behavior).
+				const isFailClosedThrow = error instanceof PostLaunchFailClosedError
+				if (permitId !== undefined && (!isFailClosedThrow || error.permitReleasedOnThrow)) {
 					options.backgroundNotifyCoordinator?.releaseReservation(permitId)
 					permitId = undefined
 				}

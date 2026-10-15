@@ -348,17 +348,28 @@ describe("BCB01-C2 — CORRECTION02 — real production consumer seam", () => {
 			h.ownedJobs.push({ jobId, notify: false })
 
 			// command_status with waitMs=0 returns immediately with state=running.
+			// No terminal fact is delivered → no observation is drained
+			// by command_status. The count is UNCHANGED across the
+			// running command_status call (1, not 0, because the
+			// non-notify observation is now established at the
+			// running handoff per
+			// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
+			// (CORR-NONNOTIFY-HANDOFF-01); the pre-fix behavior
+			// registered the observation only at terminality, which
+			// left the BCB without an obligation while the job
+			// was running — the exact hazard the bounded fix
+			// repairs). The LOAD-BEARING assertion is that the
+			// count is unchanged across the running command_status
+			// call (the drain contract).
+			const countBefore = h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)
+			expect(countBefore).toBe(1)
 			const statusResult = (await statusTool.execute(
 				{ jobId, waitMs: 0 },
 				{ sessionId: h.activeSessionId, agentId: "test-agent", iteration: 1 },
 			)) as Array<{ ok: boolean; state?: string }>
 			expect(statusResult[0]?.ok).toBe(true)
 			expect(statusResult[0]?.state).toBe("running")
-
-			// No terminal fact was delivered → no observation is drained.
-			// (No observation was ever registered yet either, since the job
-			// is still running.)
-			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
+			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(countBefore)
 
 			// Barrier still holds (running job).
 			expect(h.hasRunningBackgroundJobForOwner()).toBe(true)
