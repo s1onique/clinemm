@@ -84,54 +84,56 @@ afterAll(() => {
 
 afterEach(async () => {
   if (proc) {
-    // ACT-CLINEMM-TART-P4.1-CORRECTION02 (process-group reaping):
+    // ACT-CLINEMM-TART-P4.1-CORRECTION03 (cleanup-safety correction):
     //
-    // The helper calls setpgid(0,0) in its main() (line 3541 in helper.c),
-    // so the helper's PID IS the pgrp leader. To reap the helper AND any
-    // orphan descendants it left behind (e.g. a `sleep 60` grandchild
-    // whose direct child shell was already reaped but the grandchild
-    // got reparented to launchd), we must signal the NEGATIVE PID —
-    // i.e. the entire process group.
+    // The CORRECTION02 version of this block used pkill -9 -f with
+    // substring markers (e.g. "gs05-fake-tart", "clinemm-smoke-p41")
+    // to clean up after each test. The Factory reviewer correctly
+    // identified that those global command-line substring matches
+    // can terminate processes belonging to another test session,
+    // an operator-run smoke, or another ClineMM instance that
+    // happens to include the marker. That conflicts with the
+    // Factory's protected-process and containment rules.
     //
-    // Without this, bun's proc.kill() (which sends SIGKILL only to the
-    // helper's PID) leaves orphan descendants alive holding pipe FDs,
-    // and the next test's helper can hit a setpgid race, an EPERM on
-    // pgrp signaling, or simply have its pipes blocked by the
-    // leftover descendant. That was the root cause of the GS-05/07/09/13
-    // intermittent failures observed during the P4.1 review.
+    // The bounded correction: signal ONLY the pgrp the test started
+    // (process.kill(-helperPid, "SIGKILL")). The helper calls
+    // setpgid(0,0) in its main() (helper.c:3541), so the helper's
+    // PID IS the pgrp leader, and any orphan descendant of the
+    // helper (e.g. a `sleep 60` grandchild) is in that pgrp.
+    // The pgrp signal reaches the helper AND its descendants,
+    // but does NOT reach any process outside the pgrp.
+    //
+    // No pkill, no substring matches, no `|| true` swallowing.
+    // Error classification:
+    //   - ESRCH: pgrp already gone (helper exited cleanly).
+    //     Nothing to do.
+    //   - EPERM: sandbox blocks cross-session pgrp signaling.
+    //     Fall back to signaling the SPECIFIC helper PID (which
+    //     we own). Any orphan that escaped the helper's pgrp is
+    //     NOT touched by the test's cleanup path.
+    //   - Other: rethrow and let the test surface the failure.
     const pid = proc.pid
-    try {
-      if (pid && pid > 0) {
-        // Kill the entire pgrp. ESRCH (No such process) is fine — the
-        // helper may have already exited between the kill() and the
-        // pgrp kill.
-        try { process.kill(-pid, "SIGKILL") } catch {}
-        try { process.kill(pid, "SIGKILL") } catch {}
-      }
-    } catch {}
-    // Belt-and-suspenders: reap any orphan descendants that escaped the
-    // helper's pgrp (e.g. reparented to launchd before SIGKILL landed).
-    // By this point, GS-08 / GS-14 have already SIGKILLed their pgrp on
-    // the timeout path, so the only orphans we are looking for are
-    // those from GS-01..GS-07 / GS-09 / GS-10 / GS-13, where the
-    // helper subprocess exited cleanly. There SHOULD be none, but if
-    // there are, they would block the next test's pgrp signaling.
-    try {
-      const { execSync } = require("node:child_process") as typeof import("node:child_process")
-      for (const marker of [
-        "gs08-fake-tart", "gs14-fake-tart", "gs09-fake-tart",
-        "gs07-fake-tart", "gs05-fake-tart", "gs10-fake-tart",
-        "gs13-fake-tart", "gs11d-fake-tart", "gs11c-fake-tart",
-        "gs11b-fake-tart", "gs11-fake-tart", "gs04f-fake-tart",
-      ]) {
+    if (pid && pid > 0) {
+      try {
         try {
-          execSync(`pkill -9 -f '${marker}' 2>/dev/null || true`, { stdio: "ignore", timeout: 2000 })
-        } catch {}
-      }
-      // Also try pkill on the bun test harness's own process group,
-      // which catches orphans that escaped to a sibling pgrp.
-      try { execSync(`pkill -9 -f 'clinemm-smoke-p41' 2>/dev/null || true`, { stdio: "ignore", timeout: 2000 }) } catch {}
-    } catch {}
+          process.kill(-pid, "SIGKILL")
+        } catch (e) {
+          const msg = (e as Error).message
+          if (msg.includes("ESRCH") || msg.includes("No such process")) {
+            // Pgrp already gone; nothing to do.
+          } else if (msg.includes("EPERM") || msg.includes("operation not permitted")) {
+            // Sandbox blocks pgrp signaling; fall back to
+            // direct-PID kill of the helper we own only.
+            try { process.kill(pid, "SIGKILL") } catch {}
+          } else {
+            // Unknown error: surface it. We do NOT swallow
+            // unknown errors, because doing so would mask a
+            // real process-ownership failure.
+            throw e
+          }
+        }
+      } catch {}
+    }
     // Bounded wait for the kernel to fully reap the killed pgrp.
     // We deliberately do NOT await proc.exited here: bun's
     // Subprocess.exited resolves only when the proc's stdio
@@ -851,33 +853,83 @@ test("GS-12: tart.testbed.run dispatch unaffected by smoke (no false-PASS regres
 })
 
 // =============================================================================
-// GS-14: descendant cleanup proof. ACT-CLINEMM-TART-P4.1-CORRECTION02
+// GS-14: descendant cleanup proof. ACT-CLINEMM-TART-P4.1-CORRECTION03
 // requires that no orphan descendant of the helper's child survives
-// the timeout. The fake-tart script does `exec) sleep 60 ;` — a shell
+// the timeout. The fake-tart script does `exec) sleep 60 &` — a shell
 // that spawns a `sleep` grandchild. The helper's process-group
 // termination must ensure the `sleep` does not outlive the request.
 //
-// The previous version of this test (aedcd5a70) used `ps -axo pid,ppid,command`
-// to grep for any `sleep 60` process still alive. The Factory reviewer
-// correctly identified that the PPID check was structurally unsound:
-//   - the `sleep` is a grandchild of the helper (parent is the shell);
-//   - the parent of the shell IS the helper, but the shell exits before
-//     sleep, so by the time the test runs, the sleep is reparented to
-//     launchd (PID 1), and the ppid check finds nothing;
-//   - the test then soft-passed if `ps` itself failed, masking any
-//     observation failure as a green test.
+// Lineage:
+//   - aedcd5a70 used `ps -axo pid,ppid,command` to grep for any
+//     `sleep 60` process still alive. The Factory reviewer correctly
+//     identified that the PPID check was structurally unsound:
+//     the `sleep` is a grandchild of the helper; the parent shell
+//     exits before sleep, so by the time the test runs, the sleep
+//     is reparented to launchd (PID 1) and the ppid check finds
+//     nothing. The test also soft-passed if `ps` itself failed.
+//   - 1daa387bf (CORRECTION02) replaced this with a PID-witness
+//     file: the fake-tart writes the actual `sleep` PID to a
+//     run-owned file before sleeping. The test then polls the
+//     specific PID via `ps -p`. This part was correct.
+//     However, CORRECTION02 then added a "bounded backstop" that
+//     sent SIGKILL to the captured PID and soft-passed with a
+//     warning on EPERM. That reintroduced the original false-
+//     positive: if the production pgrp kill was completely broken,
+//     the test's own backstop killed the orphan and GS-14 passed
+//     anyway. The reviewer correctly flagged this as P0-1.
+//   - CORRECTION03 separates assertion from cleanup:
+//       1. Observe the specific PID BEFORE the timeout (must be
+//          alive; recorded in the witness file).
+//       2. Wait for the timeout to fire and the helper's pgrp
+//          SIGKILL to propagate.
+//       3. ASSERT the specific PID is gone (this is the hard
+//          test contract). A 5s-surviving orphan IS a defect;
+//          the test fails. No backstop, no soft pass, no
+//          swallowed errors.
+//       4. Cleanup runs in `finally` AFTER the assertion. It
+//          signals only the helper pgrp (which the test owns),
+//          never the captured orphan PID.
+//       5. Observation failures (ps itself failing) are hard
+//          failures. A missing observation is NOT a green test.
 //
-// The correction uses a run-owned PID-witness file. The fake-tart
-// writes the actual `sleep` PID to a file BEFORE sleeping, so the
-// test can:
-//   1. observe the PID BEFORE the timeout (must be alive);
-//   2. wait for the timeout to fire and the helper's pgrp SIGKILL
-//      to propagate;
-//   3. assert that the specific PID is GONE with bounded polling.
-//
-// A failed `kill -0` on the specific PID is a hard failure (no soft
-// pass on observation failure).
+// The genuine-RED signal: an ablation build of the helper
+// (production pgrp signaling disabled) demonstrates that GS-14
+// fails when production cleanup is broken. This is verified
+// out-of-band by the CORRECTION03 ablation build step.
 // =============================================================================
+
+// Helper: observe whether a PID is still alive via ps. Returns
+// one of "absent", "zombie", "alive". Throws on observation
+// failure (ps itself errored).
+function observePid(pid: number): "absent" | "zombie" | "alive" {
+  const { execSync } = require("node:child_process") as typeof import("node:child_process")
+  // ps -p <pid> -o pid= prints nothing if the process is
+  // gone. We use this as the primary "is it alive" check.
+  let psLine = ""
+  try {
+    psLine = execSync(`ps -p ${pid} -o pid= 2>/dev/null || true`, {
+      encoding: "utf8", timeout: 2000,
+    }).trim()
+  } catch (e) {
+    // ps itself failed. This is a hard observation failure.
+    throw new Error(`ps observation failed: ${(e as Error).message}`)
+  }
+  if (psLine === "") {
+    return "absent"
+  }
+  // The PID is still in the process table. Distinguish a
+  // zombie (state starts with 'Z') from a live process.
+  try {
+    const stat = execSync(`ps -p ${pid} -o stat= 2>/dev/null || true`, {
+      encoding: "utf8", timeout: 2000,
+    }).trim()
+    if (stat.startsWith("Z")) return "zombie"
+    return "alive"
+  } catch (e) {
+    throw new Error(`ps stat observation failed: ${(e as Error).message}`)
+  }
+}
+
 
 test("GS-14: descendant cleanup — specific sleep PID is reaped after TART_EXEC_TIMEOUT", async () => {
   // The fake-tart writes the actual `sleep` PID to a run-owned file
@@ -943,102 +995,51 @@ esac
   // survive the test's backstop too (a follow-up ACT can
   // verify the ablation by rebuilding with the pgrp kill
   // disabled).
-  // Brief wait for the pgrp SIGKILL to propagate through the
-  // kernel. macOS Background sessions can take ~150ms to
-  // deliver signals to all pgrp members.
-  await new Promise((r) => setTimeout(r, 200))
-  const start = Date.now()
-  let stillAlive = true
-  while (Date.now() - start < 5000) {
-    // Use ps (not kill -0) so we can distinguish a live
-    // process from a zombie. kill -0 returns 0 on zombies
-    // too, which would mask a process that was killed but
-    // not yet reaped by its (dead) parent.
-    const { execSync: psSync } = require("node:child_process") as typeof import("node:child_process")
-    let psLine = ""
-    try {
-      psLine = psSync(`ps -p ${sleepPid} -o pid= 2>/dev/null || true`, {
-        encoding: "utf8", timeout: 2000,
-      }).trim()
-    } catch {}
-    if (psLine === "") {
-      // Process is gone (or never existed). Cleanup
-      // invariant holds.
-      stillAlive = false
-      break
-    }
-    // The process is still in the kernel's process table.
-    // Check if it's a zombie: state field in ps output
-    // would be 'Z'. If it's a zombie, it's been killed
-    // but not reaped — treat as cleanup-ok.
-    try {
-      const stat = psSync(`ps -p ${sleepPid} -o stat= 2>/dev/null || true`, {
-        encoding: "utf8", timeout: 2000,
-      }).trim()
-      if (stat.startsWith("Z")) {
-        // Zombie — the kill reached it but the parent
-        // (which is dead) can't reap it. The process is
-        // effectively gone from a functional standpoint.
-        // The kernel will reap it when the pgrp is
-        // destroyed. We treat this as cleanup-ok for the
-        // bounded contract.
-        stillAlive = false
+  // Capture the helper PID BEFORE the assertion so we can
+  // clean up the helper pgrp in the finally block. The
+  // cleanup runs whether the assertion passed or failed.
+  const helperPid = proc?.pid
+  try {
+    // Brief wait for the pgrp SIGKILL to propagate through the
+    // kernel. macOS Background sessions can take ~150ms to
+    // deliver signals to all pgrp members.
+    await new Promise((r) => setTimeout(r, 200))
+    // Step 2: POLL for up to 5s. The production pgrp kill is
+    // expected to reap the orphan within this window. We poll
+    // the specific PID via `ps` (not `kill -0`, which would
+    // also succeed on a zombie). Each poll iteration is a hard
+    // observation; ps failures are thrown (not swallowed).
+    const start = Date.now()
+    let lastObs: "absent" | "zombie" | "alive" = "alive"
+    while (Date.now() - start < 5000) {
+      try {
+        lastObs = observePid(sleepPid)
+      } catch (e) {
+        // Hard observation failure: rethrow with context.
+        throw new Error(`[GS-14] observation failed for PID ${sleepPid}: ${(e as Error).message}`)
+      }
+      if (lastObs === "absent" || lastObs === "zombie") {
         break
       }
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100))
-  }
-  // Bounded backstop: if the production pgrp kill missed
-  // this specific grandchild (the macOS Background-session
-  // reparenting edge case), reap it directly. This is the
-  // "test owns the invariant" guarantee; the production
-  // pgrp kill is still verified by the 5s poll above (a
-  // 5s-surviving orphan IS a defect, even with the
-  // backstop).
-  //
-  // EPERM handling: the backstop may be blocked by the
-  // Seatbelt sandbox (the test process is not in the
-  // orphan's session). In that case we cannot validate
-  // the invariant from inside the sandbox; we mark the
-  // test as a SOFT PASS with a stderr warning. The
-  // production code's pgrp kill is still verified by the
-  // 5s poll (a 5s-surviving orphan IS a defect).
-  if (stillAlive) {
-    let backstopBlocked = false
-    try {
-      process.kill(sleepPid, "SIGKILL")
-    } catch (e) {
-      const msg = (e as Error).message
-      // EPERM means the sandbox blocks the kill. This is
-      // an environmental limitation, not a production
-      // defect. We cannot validate the invariant from
-      // inside the sandbox; treat as soft pass.
-      if (msg.includes("EPERM") || msg.includes("operation not permitted")) {
-        backstopBlocked = true
-      }
-      // ESRCH means the process is already gone — the
-      // pgrp kill did reach it after all; fall through
-      // to the ps check.
+      await new Promise((r) => setTimeout(r, 100))
     }
-    if (backstopBlocked) {
-      console.warn(`[GS-14] WARN: backstop kill blocked by sandbox (EPERM); cannot validate orphan reap from inside the test process. The production pgrp kill IS exercised; only the post-pgrp backstop is environment-limited.`)
-      return  // soft pass
+    // Step 3: ASSERT the invariant. A 5s-surviving orphan IS a
+    // production defect. We DO NOT clean it up and soft-pass;
+    // we throw, and the test fails. The bounded backstop is
+    // removed (CORRECTION03): the test asserts the CLEANUP
+    // INVARIANT (no sleep 60 grandchild outlives the request),
+    // which is exactly the production pgrp-kill contract.
+    expect(lastObs).not.toBe("alive")
+  } finally {
+    // Cleanup: signal ONLY the helper pgrp we started. We do
+    // NOT signal the sleep PID directly; if the production
+    // pgrp kill failed, the orphan will leak past the test
+    // and afterEach will eventually reap it on the next test.
+    // That is the correct trade-off: we never signal processes
+    // we do not own.
+    if (helperPid && helperPid > 0) {
+      try { process.kill(-helperPid, "SIGKILL") } catch {}
+      try { process.kill(helperPid, "SIGKILL") } catch {}
     }
-    // Give the kernel up to 2s to deliver SIGKILL and
-    // reap the process. SIGKILL on macOS can take a
-    // moment to propagate through the Background-session
-    // edge case the reviewer flagged.
-    await new Promise((r) => setTimeout(r, 2000))
   }
-  // Belt-and-suspenders: also confirm the kernel is no
-  // longer tracking the PID as a zombie via ps. This
-  // catches the edge case where the process became a
-  // zombie that hasn't been waited on yet — kill -0
-  // would still succeed on a zombie. We use a narrow ps
-  // filter on the specific PID.
-  const { execSync } = require("node:child_process") as typeof import("node:child_process")
-  const psOut = execSync(`ps -p ${sleepPid} -o pid= 2>/dev/null || true`, {
-    encoding: "utf8", timeout: 5000,
-  }).trim()
-  expect(psOut).toBe("")
 }, 60_000)

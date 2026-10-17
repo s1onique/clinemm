@@ -1,0 +1,84 @@
+ISOLATED HELPER BUILD — 2026-10-17 (CORRECTION03 pre-commit, RED)
+
+Source HEAD:        ACT-CLINEMM-TART-P4.1-CORRECTION03 (uncommitted working tree)
+                    1daa387bf (main; the CORRECTION02 commit) + CORRECTION03 test-side diff
+Helper source:     tools/macos-host-helper/native/helper.c
+  (helper.c SHA-256: 4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e)
+
+This SHA matches the CORRECTION02 recorded value (4575997c...) at the
+1daa387bf commit. The CORRECTION03 changes are test-side only — the
+production helper.c is byte-identical to 1daa387bf.
+
+The CORRECTION03 ACT explicitly does NOT modify the production helper:
+per the reviewer's bounded plan, the bounded corrections are:
+  1. Test-side separation of assertion from cleanup (no backstop).
+  2. Removal of pkill -f from afterEach (use run-owned pgrp kill only).
+  3. Verify exact-head helper.c binding (above).
+  4. Preserve the previous three GREEN runs as historical evidence.
+  5. Document the executable gate failure (see 02-executable-gate.txt).
+
+Helper binary:
+  Path:             tools/macos-host-helper/native/helper
+  Architecture:     Mach-O 64-bit executable arm64
+  SHA-256:          947cf462d177e1231aa68d43a11a64382edff20455108b690cbfbe580fbb4983
+  (Same as the CORRECTION02 binary. The CORRECTION03 ACT does not
+  rebuild the helper because no production code changed.)
+
+Bound to source HEAD: 1daa387bf (CORRECTION02 commit)
+  Source SHA-256:    4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e
+  Binary SHA-256:    947cf462d177e1231aa68d43a11a64382edff20455108b690cbfbe580fbb4983
+  Embedded build_id: f727e7029b14aace5367e42252072d8010761462aff3cba6232f8ef43443a10b
+  (Build_id from 1daa387bf is preserved; the binary has not changed.)
+
+Test results (CORRECTION03 hermetic suite, 1 run): RED.
+  Run 1: 0 pass, 1 fail (GS-14 expected RED — see 02-executable-gate.txt
+                            for the cause; the test is now correctly
+                            sensitive to production pgrp-kill timing
+                            and to environment saturation)
+
+  [GS-14] test result: lastObs="alive" after 5041ms — the
+  production pgrp-kill did reach the orphan (verified: PID 67296
+  `sleep 60` was reaped by the kernel after the test's 5s poll
+  window ended) but slower than the test's 5s window. This is
+  the test correctly detecting a real timing defect in the
+  production code, NOT a false positive.
+
+  Environment saturation: as of 2026-10-17T23:18, the system
+  has 2,300+ leaked helper processes from prior test runs
+  (PID 105, 109, 260, 279, 750, 987, 988, 990, 995, 1000, 1108,
+  1122, 1123, 1182, 1290, 1294, 1304, 1314, 1319, ..., 86914,
+  89030, 92704, 98100). These are all <defunct> or
+  Background-session orphans. The CORRECTION02 pkill -f was
+  expected to clean these up but was failing in the test
+  environment (test shell cannot `kill -KILL -<pgrp>` —
+  operation not permitted, EPERM). The new afterEach uses
+  only run-owned pgrp kill, which CANNOT reach these orphan
+  processes (they belong to previous test sessions). This is
+  the intended behavior: never signal processes we do not own.
+
+  The previous 3/3 GREEN runs from CORRECTION02 (see
+  .factory/evidence/ACT-CLINEMM-TART-P4.1-POSTREVIEW-CORRECTION01/
+  01-isolated-helper-build.txt for the recorded results) are
+  preserved as historical evidence. The current RED is a
+  consequence of:
+    (a) the new test correctly detecting a real production
+        timing defect (the 5s window is too short for this
+        environment's signal propagation), AND
+    (b) accumulated process leaks that the CORRECTION02 pkill
+        was masking via global process-name matching (now
+        removed per the reviewer's P0-2 correction).
+
+  The reviewer explicitly asked for "Preserve the previous
+  three GREEN runs as historical evidence." The previous
+  GREEN runs are preserved in the CORRECTION02 evidence file.
+  The new test design no longer hides the underlying timing
+  defect, which is the correct outcome of the bounded
+  correction.
+
+Historical evidence (CORRECTION02, 3/3 GREEN, 78/78 total):
+  Run 1: 26 pass, 0 fail
+  Run 2: 26 pass, 0 fail
+  Run 3: 26 pass, 0 fail
+  Total: 78/78 (100%) across 3 runs
+  Source: .factory/evidence/ACT-CLINEMM-TART-P4.1-POSTREVIEW-CORRECTION01/
+          01-isolated-helper-build.txt
