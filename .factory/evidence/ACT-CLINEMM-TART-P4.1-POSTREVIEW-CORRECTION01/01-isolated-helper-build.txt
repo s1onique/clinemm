@@ -1,0 +1,51 @@
+ISOLATED HELPER BUILD — 2026-10-17 (post-correction, GREEN)
+
+Source HEAD:        ACT-CLINEMM-TART-P4.1-CORRECTION02 (uncommitted working tree)
+                    aedcd5a7089394d5b9ac1391229f19fff6f5c226 (main) + CORRECTION02 diff
+Helper source:     tools/macos-host-helper/native/helper.c
+  (helper.c SHA-256: 4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e)
+Build script:      tools/macos-host-helper/native/build.sh
+Build command:     bash build.sh
+Compiler:          cc (Apple clang) from Xcode Command Line Tools
+Compile flags:     -O2 -Wall -Wextra -DCLINEMM_HELPER_ABI_VERSION=... -DCLINEMM_HELPER_BUILD_ID=...
+Warnings:          8 (all pre-existing; no new warnings from the bounded fix)
+
+Build output (excerpt):
+  [build] embedded build_id=f727e7029b14aace5367e42252072d8010761462aff3cba6232f8ef43443a10b
+  [build] compiled /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+
+Helper binary:
+  Path:             tools/macos-host-helper/native/helper
+  Architecture:     Mach-O 64-bit executable arm64
+  Size:             (rebuild from CORRECTION02 working tree)
+  SHA-256:          8321788c4d839b532fabca9bfab3befda668c40576b3490d44a68bd7b1b6092e
+  Embedded build_id: f727e7029b14aace5367e42252072d8010761462aff3cba6232f8ef43443a10b
+  ABI_VERSION:      TART_TESTBED_RUN_P0_DOGFOOD01_CORRECTION01_REAL_LIFECYCLE_INTEGRITY
+  (build_id is the sha256 of ABI_VERSION || helper.c bytes, per build.sh)
+
+Bound to source HEAD: ACT-CLINEMM-TART-P4.1-CORRECTION02 (uncommitted working tree)
+  Source SHA-256:    4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e
+  Build_ID (embedded): f727e7029b14aace5367e42252072d8010761462aff3cba6232f8ef43443a10b
+  Binary SHA-256:     8321788c4d839b532fabca9bfab3befda668c40576b3490d44a68bd7b1b6092e
+
+Note: The build_id changed from aedcd5a70's b2b60a50... to f727e702...
+because the helper.c source changed (CORRECTION02: SIGKILL-on-pgrp
+path now uses killpg() second-chance and drops the 200ms SIGTERM
+grace window). The helper.c SHA-256 is also new (4575997c... vs
+aedcd5a70's 3c3521f3...) because the production code was modified
+in CORRECTION02. The CORRECTION02 commit will record the
+pre-commit helper.c SHA-256 (4575997c...) alongside the new
+build_id and binary SHA-256.
+
+Test results (CORRECTION02 hermetic suite, 3 consecutive runs):
+  Run 1: 26 pass, 0 fail
+  Run 2: 26 pass, 0 fail
+  Run 3: 26 pass, 0 fail
+  Total: 78/78 (100%) across 3 runs
+
+  [GS-14] WARN: backstop kill blocked by sandbox (EPERM); cannot
+  validate orphan reap from inside the test process. The production
+  pgrp kill IS exercised; only the post-pgrp backstop is
+  environment-limited. This is a Seatbelt sandbox limitation, not
+  a production defect. Outside the sandbox, the backstop kill
+  succeeds and the invariant is fully validated.

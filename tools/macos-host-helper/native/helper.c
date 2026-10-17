@@ -4394,15 +4394,28 @@ static tbr_invoke_t smoke_invoke_bounded(char *const argv[], char *const envp[],
       // collected `sleep` 60s later.
       pid_t child_pgid = getpgid(pid);
       if (child_pgid == pid) {
+        // ACT-CLINEMM-TART-P4.1-CORRECTION02: go STRAIGHT to
+        // SIGKILL on the pgrp (no SIGTERM grace window).
+        // The previous implementation sent SIGTERM, waited
+        // 200ms, then SIGKILL'd any survivors. The 200ms
+        // wait window let macOS reparent a grandchild (e.g.
+        // `sleep` child of an `sh` shell that exited on
+        // SIGTERM) to launchd BEFORE the SIGKILL landed, and
+        // the reparented process escaped the pgrp kill.
+        // SIGKILL is uncatchable and does not give the
+        // kernel time to reparent.
         if (!sig_sent) {
-          (void)kill(-pid, SIGTERM);
+          (void)kill(-pid, SIGKILL);
+          (void)killpg(child_pgid, SIGKILL);
           sig_sent = 1;
         }
-        usleep(200000);
+        usleep(50000);  // brief wait for kernel to deliver
         int kill_rc = kill(-pid, 0);
         int kill_errno = kill_rc < 0 ? errno : 0;
         if (kill_rc == 0) {
+          // Pgrp still alive. Belt-and-suspenders.
           (void)kill(-pid, SIGKILL);
+          (void)killpg(child_pgid, SIGKILL);
         } else if (kill_errno == ESRCH) {
           // Group already gone; fall back to per-process kill
           // for the direct child only.
@@ -4412,20 +4425,18 @@ static tbr_invoke_t smoke_invoke_bounded(char *const argv[], char *const envp[],
           // cross-session kill. The per-process fallback is
           // a best-effort: the helper still reaps.
           (void)kill(pid, SIGKILL);
-          // Even after per-process SIGKILL of the direct child,
-          // descendants (e.g. `sleep` grandchild of `sh`) are
-          // still in the pgrp and may be holding pipe FDs open.
-          // We MUST reach them too. Try killpg() (different
-          // syscall path that uses the session as the target
-          // on macOS) and iterate ps-like discovery. As a
-          // last resort, scan /tmp and kill any process whose
-          // pgrp matches our child_pgid — but that's racy.
-          // For this ACT, the bounded fallback is: use
-          // killpg(pgid, SIGKILL) which on macOS Background
-          // sessions does NOT hit the same EPERM.
-          if (killpg(child_pgid, SIGKILL) < 0) {
-          } else {
-          }
+          // ACT-CLINEMM-TART-P4.1-CORRECTION02: the previous
+          // implementation had an empty killpg() body. The
+          // killpg() call now actually fires as a second-chance
+          // path on macOS. Note: the GS-14 PID-witness test
+          // demonstrated that the macOS Background-session
+          // orphan-reparenting race may still leak a
+          // grandchild in a narrow window — the bounded
+          // backstop in the test reaps the specific orphan PID
+          // after the 5s poll, but the production code's pgrp
+          // kill is still the load-bearing first line of
+          // defense.
+          (void)killpg(child_pgid, SIGKILL);
         }
       } else {
         // Child did not start a new group; signal the direct

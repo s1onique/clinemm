@@ -1,0 +1,28 @@
+{
+  "_comment": "HERMETIC-ONLY placeholder — NOT real-guest evidence. The real guest smoke (operator-driven tart run + agent-driven tart.guest.smoke + operator-driven tart stop) is a Phase 2 operator-side step that requires the imported VM to be started. This file documents the hermetic test response shape for traceability.",
+  "scope": "hermetic (fake-tart only; no real guest)",
+  "gs_08_hermetic_response": {
+    "request": {"version": 1, "request_id": "gs-08", "method": "tart.guest.smoke"},
+    "response": {
+      "version": 1,
+      "request_id": "gs-08",
+      "ok": false,
+      "service": "clinemm-host-helper",
+      "result": {
+        "helper_build_id": "b2b60a5002d4de47b23b76092f3354ac3085e7f93903e6f6d01f7139af117058",
+        "authorized_vm": "clinemm-p3-sonoma-imported",
+        "tart_path": "<fake-tart>",
+        "tart_version": "fake-tart 1.0.0",
+        "results": {
+          "sw_vers": {"exit_code": -1, "timeout": true, "duration_ms": 28000, "stdout": "", "stderr": ""},
+          "uname_a":  {"exit_code": 0,  "timeout": false, "duration_ms": 0, "stdout": "", "stderr": ""}
+        },
+        "duration_ms": 28000,
+        "any_truncated": false,
+        "overall": "TART_EXEC_TIMEOUT"
+      }
+    },
+    "elapsed_ms_observed": 31240,
+    "interpretation": "sw_vers hit the 28s request deadline (kill(-pid, SIGKILL) signaled the entire pgrp, including the sleep grandchild); the handler took the fail-fast path; uname_a was NOT run; response arrived within the 35s socket deadline."
+  }
+}
