@@ -118,6 +118,17 @@ export const ALLOWED_METHODS: ReadonlySet<string> = new Set<string>([
 	// cwd, env, signal escalation, and VM lifecycle. Returns a
 	// structured TestbedResult-shaped response.
 	"tart.testbed.run",
+	// ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01:
+	// Tart guest smoke. Caller supplies no fields beyond the
+	// protocol envelope. The handler reads the trusted
+	// operator-bound configuration from CLINEMM_SMOKE_VM /
+	// CLINEMM_SMOKE_TART_HOME (NOT from the request), validates
+	// the TART_HOME storage identity, resolves Tart from the
+	// sealed allowlist, and runs the two fixed guest
+	// diagnostics /usr/bin/sw_vers and /usr/bin/uname -a. The
+	// dispatch lives in the C helper; the TS fallback server
+	// returns METHOD_NOT_AVAILABLE_IN_TS_FALLBACK.
+	"tart.guest.smoke",
 ])
 
 /**
@@ -201,6 +212,14 @@ export const METHOD_REQUIRED_KEYS: Readonly<
 	// argv, env, cwd, or the Tart executable path. The 10
 	// forbidden keys remain rejected at any nesting level.
 	"tart.testbed.run": new Set<string>(["spec"]),
+	// ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01:
+	// tart.guest.smoke has NO caller-supplied fields. The
+	// envelope is exactly { version, request_id, method }.
+	// Any extra field is rejected by the parser as
+	// UNKNOWN_FIELD (via the allowedKeys set computed
+	// below) or FORBIDDEN_KEY (via the FORBIDDEN_REQUEST_KEYS
+	// check at the top of parseRequest).
+	"tart.guest.smoke": new Set<string>([]),
 }
 
 export interface ParsedHealthRequest {
@@ -283,6 +302,18 @@ export interface ParsedTartTestbedRunRequest {
 	readonly spec: Record<string, unknown>
 }
 
+// ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01:
+// tart.guest.smoke is a SEMANTIC RPC. The envelope is exactly
+// the protocol tuple — no fields influence authority or argv.
+// The C helper reads the trusted operator-bound configuration
+// from CLINEMM_SMOKE_VM / CLINEMM_SMOKE_TART_HOME (NOT from the
+// request) and runs the two fixed guest diagnostics.
+export interface ParsedTartGuestSmokeRequest {
+	readonly version: 1
+	readonly request_id: string
+	readonly method: "tart.guest.smoke"
+}
+
 export type ParsedRequest =
 	| ParsedHealthRequest
 	| ParsedTestbedRequest
@@ -293,6 +324,7 @@ export type ParsedRequest =
 	| ParsedHelperRestartRequest
 	| ParsedTartPreflightRequest
 	| ParsedTartTestbedRunRequest
+	| ParsedTartGuestSmokeRequest
 
 export type ParseError =
 	| "BAD_JSON"
@@ -580,6 +612,23 @@ export function parseRequest(raw: string): ParseResult {
 				request_id: obj.request_id,
 				method: "tart.testbed.run",
 				spec: parsedSpec as Record<string, unknown>,
+			},
+		}
+	}
+	// ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01:
+	// tart.guest.smoke has NO caller-supplied fields. The
+	// allowedKeys set at the top of parseRequest already
+	// restricts the envelope to { version, request_id, method }
+	// (the method's required-keys set is empty). The
+	// FORBIDDEN_REQUEST_KEYS check already rejects any
+	// exec-shaped field. We just emit the typed value here.
+	if (obj.method === "tart.guest.smoke") {
+		return {
+			ok: true,
+			value: {
+				version: 1,
+				request_id: obj.request_id,
+				method: "tart.guest.smoke",
 			},
 		}
 	}
@@ -886,6 +935,20 @@ export function dispatch(
 	// executable allowlist. Reach the C helper via the
 	// launchd-managed AF_UNIX socket to exercise this capability.
 	case "tart.testbed.run":
+		return {
+			ok: false,
+			error: "METHOD_NOT_AVAILABLE_IN_TS_FALLBACK",
+		}
+	// ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01:
+	// The TS fallback server does NOT support tart.guest.smoke
+	// either — the smoke runs `tart exec` against the
+	// operator-bound VM, which depends on the launchd-managed
+	// helper's HOME (the operator's Aqua session), argv-only
+	// subprocesses, and the sealed Tart executable allowlist.
+	// Reach the C helper via the launchd-managed AF_UNIX socket
+	// (or a dev-fallback socket during qualification) to exercise
+	// this capability.
+	case "tart.guest.smoke":
 		return {
 			ok: false,
 			error: "METHOD_NOT_AVAILABLE_IN_TS_FALLBACK",

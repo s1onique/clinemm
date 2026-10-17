@@ -1858,7 +1858,7 @@ static tbr_invoke_t tbr_invoke_bounded(char *const argv[], char *const envp[],
   int st = 0;
   struct timespec reap_deadline; clock_gettime(CLOCK_MONOTONIC, &reap_deadline);
   reap_deadline.tv_sec += 5;
-  pid_t wr2;
+  pid_t wr2 = waitpid(pid, &st, WNOHANG);
   while ((wr2 = waitpid(pid, &st, WNOHANG)) == 0) {
     struct timespec rn; clock_gettime(CLOCK_MONOTONIC, &rn);
     if (rn.tv_sec >= reap_deadline.tv_sec) {
@@ -2498,6 +2498,14 @@ static void handle_tart_preflight(int cfd, const kv_t *rid);
 // and returns the explicit "TART_TESTBED_RUN_NOT_IMPLEMENTED" error
 // to preserve the wire shape and prevent silent no-op detection.
 static void handle_tart_testbed_run(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs);
+// ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01:
+// tart.guest.smoke has no caller fields beyond the protocol envelope.
+// The handler reads the trusted CLINEMM_SMOKE_VM / CLINEMM_SMOKE_TART_HOME
+// env vars (operator-configured, not caller-supplied), validates the
+// TART_HOME storage identity, resolves the Tart executable from the
+// sealed allowlist, and runs the two fixed diagnostic commands. No
+// caller-controlled argv, no shell, no VM lifecycle mutation.
+static void handle_tart_guest_smoke(int cfd, const kv_t *rid);
 
 // client.open: returns a fresh client_token bound to the
 // kernel-authenticated peer (UID + PID). No caller-supplied
@@ -3159,6 +3167,50 @@ static void handle_connection(int cfd) {
   // suite's RPC matrix.
   if (strcmp(m->val, "tart.testbed.run") == 0) {
     handle_tart_testbed_run(cfd, r, kvs, nkvs);
+    close(cfd);
+    return;
+  }
+  // ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01:
+  // Semantic Tart guest smoke. The envelope has been parsed (and
+  // any extra field already failed the dispatcher's parser-level
+  // FORBIDDEN_KEY check). The handler reads the trusted operator
+  // configuration from CLINEMM_SMOKE_VM / CLINEMM_SMOKE_TART_HOME
+  // (NOT from the request), validates the TART_HOME storage
+  // identity, resolves Tart from the sealed allowlist, and runs
+  // the two fixed diagnostic commands. No shell, no caller argv,
+  // no VM lifecycle mutation. The VM name and TART_HOME are
+  // operator-bound; the handler refuses to dispatch when either
+  // env var is missing.
+  //
+  // CLOSED-ENVELOPE GUARD (P0-2): the C parser uses a UNION of
+  // all method-specific recognized keys, so `spec` (which is
+  // required by tart.testbed.run) is accepted on a
+  // tart.guest.smoke request by parse_envelope(). The
+  // tart.guest.smoke handler is structurally closed (it reads
+  // ONLY CLINEMM_SMOKE_* env vars, NEVER the parsed kvs), so
+  // honoring an extra `spec` would not gain arbitrary command
+  // execution. But the closed-envelope contract per ACT §2 is
+  // "exactly { version, request_id, method }" — we therefore
+  // reject any extra top-level field at the dispatch boundary
+  // so the wire-level contract is observed symmetrically with
+  // the TS layer's METHOD_REQUIRED_KEYS guard. This prevents
+  // a future regression where the smoke handler accidentally
+  // reads from the parsed kvs and treats a caller-supplied
+  // `spec` as authoritative.
+  if (strcmp(m->val, "tart.guest.smoke") == 0) {
+    if (nkvs != 3 ||
+        find_kv(kvs, nkvs, "spec") != NULL ||
+        find_kv(kvs, nkvs, "subject_head") != NULL ||
+        find_kv(kvs, nkvs, "vsix_path") != NULL ||
+        find_kv(kvs, nkvs, "vsix_sha256") != NULL ||
+        find_kv(kvs, nkvs, "client_token") != NULL ||
+        find_kv(kvs, nkvs, "job_token") != NULL ||
+        find_kv(kvs, nkvs, "pgid") != NULL) {
+      respond_err(cfd, "FORBIDDEN_KEY");
+      close(cfd);
+      return;
+    }
+    handle_tart_guest_smoke(cfd, r);
     close(cfd);
     return;
   }
@@ -4202,4 +4254,790 @@ static void handle_tart_testbed_run(int cfd, const kv_t *rid,
   tbr_emit_result_ok(cfd, rid->val, rid->val_len,
                       rid_sanitized, vm_name, ip,
                       NULL, NULL, "PASS", NULL);
+}
+
+// =============================================================================
+// ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01:
+// handle_tart_guest_smoke — bounded, fixed guest-diagnostic smoke.
+//
+// The RPC envelope is exactly { version, request_id, method } — the
+// parse layer has already rejected any extra field as FORBIDDEN_KEY
+// (see is_recognized_key + is_forbidden_key in parse_envelope). The
+// handler therefore has no caller-controlled fields: the VM name
+// and TART_HOME come from the operator-bound environment
+// (CLINEMM_SMOKE_VM, CLINEMM_SMOKE_TART_HOME), not from the request.
+//
+// Behavior:
+//   1. Read CLINEMM_SMOKE_VM and CLINEMM_SMOKE_TART_HOME. If either
+//      is empty/missing, return SMOKE_NOT_CONFIGURED (no fork).
+//   2. Validate the TART_HOME storage identity (directory, no
+//      symlink resolution, owner UID matches, vms/ subdir exists).
+//      Failure -> SMOKE_NOT_CONFIGURED (configuration concern).
+//   3. Resolve Tart from the sealed TART_TRUSTED_PATHS allowlist.
+//      Failure -> TART_NOT_FOUND.
+//   4. Capture `tart --version` (bounded 10s) for the response.
+//   5. Run `<tart> exec <vm> /usr/bin/sw_vers` (bounded 30s).
+//   6. Run `<tart> exec <vm> /usr/bin/uname -a` (bounded 30s).
+//   7. Classify overall=PASS only if both exit 0 and neither
+//      output was truncated. Truncation is detected structurally
+//      by the per-stream capture loop (the read() returns MORE
+//      bytes than the buffer can hold; the unwritten tail is
+//      counted in `truncated`).
+//   8. Emit the structured JSON response.
+//
+// Forbidden: no shell, no caller-controlled argv, no VM creation,
+// no VM stop, no VM delete, no helper restart, no LaunchAgent
+// modification. The only argv vectors constructed in this handler
+// are the two <tart> exec <vm> /usr/bin/... invocations.
+// =============================================================================
+
+// Per-diagnostic captured result.
+typedef struct {
+  int    invoked;          // 1 if the diagnostic was actually run
+  int    exit_code;        // subprocess exit code (or -1 if not run)
+  int    timeout;          // 1 if the diagnostic hit the wallclock deadline
+  int    truncated;        // 1 if the captured output was bounded by the buffer cap
+  int    duration_ms;      // wallclock duration
+  char   stdout_buf[2048]; // bounded stdout (real sw_vers is <500B, real uname -a is <300B)
+  char   stderr_buf[512];  // bounded stderr
+} smoke_diag_t;
+
+// Bounded argv-only subprocess with EXPLICIT truncation detection.
+// Returns tbr_invoke_t.kind semantics AND sets *out_truncated /
+// *err_truncated to 1 if the corresponding stream was bounded
+// by the buffer cap (more bytes were available than we could
+// hold). timeout_ms is the wallclock deadline in milliseconds.
+//
+// Process-group termination (ACT-CLINEMM-TART-P4.1-POSTREVIEW-CORRECTION01):
+// the child calls setpgid(0,0) to start a new process group. The
+// parent mirrors that with setpgid(pid,pid) (race-safe) so the
+// parent can signal the entire group via kill(-pid, ...) without
+// risking the parent's own group. We verify the group identity
+// (getpgid(pid) == pid) before signaling and we fall back to a
+// per-process kill only on ESRCH (the group is already gone). This
+// prevents orphaned descendants (e.g. a `sleep` grandchild of an
+// `sh` parent) from inheriting stdout/stderr FDs and holding the
+// pipes open after the direct child is killed.
+static tbr_invoke_t smoke_invoke_bounded(char *const argv[], char *const envp[],
+                                          int timeout_ms,
+                                          char *out_buf, size_t out_cap,
+                                          int *out_truncated,
+                                          char *err_buf, size_t err_cap,
+                                          int *err_truncated) {
+  if (out_truncated) *out_truncated = 0;
+  if (err_truncated) *err_truncated = 0;
+  tbr_invoke_t r = { .kind = 3, .exit_code = -1, .signaled = 0, .signal = 0 };
+  int out_pipe[2], err_pipe[2];
+  if (pipe(out_pipe) != 0) return r;
+  if (pipe(err_pipe) != 0) { close(out_pipe[0]); close(out_pipe[1]); return r; }
+  pid_t pid = fork();
+  if (pid < 0) {
+    close(out_pipe[0]); close(out_pipe[1]); close(err_pipe[0]); close(err_pipe[1]);
+    return r;
+  }
+  if (pid == 0) {
+    close(out_pipe[0]); close(err_pipe[0]);
+    dup2(out_pipe[1], STDOUT_FILENO);
+    dup2(err_pipe[1], STDERR_FILENO);
+    close(out_pipe[1]); close(err_pipe[1]);
+    if (setpgid(0, 0) < 0 && errno != EACCES && errno != EPERM) { _exit(126); }
+    execve(argv[0], argv, envp);
+    _exit(127);
+  }
+  // Set the pipe read ends to non-blocking so the post-kill
+  // drain (and the regular poll loop on slow pipes) can never
+  // block waiting for an orphaned descendant to close the
+  // write end. This is the load-bearing fix for the GS-08
+  // "grandchild holds pipe FDs open" defect on macOS where
+  // group-kill can return EPERM and the helper must fall
+  // back to per-process kill (which leaves descendants
+  // orphaned with the pipe FDs).
+  int nbflags = fcntl(out_pipe[0], F_GETFL, 0);
+  if (nbflags >= 0) (void)fcntl(out_pipe[0], F_SETFL, nbflags | O_NONBLOCK);
+  nbflags = fcntl(err_pipe[0], F_GETFL, 0);
+  if (nbflags >= 0) (void)fcntl(err_pipe[0], F_SETFL, nbflags | O_NONBLOCK);
+  // Parent: race-safely establish the child's process group.
+  // Idempotent with the child's setpgid(0,0) above; only
+  // matters in the narrow race where we win the race and the
+  // child has not yet called setpgid. Without it, kill(-pid)
+  // would target the helper's own group.
+  (void)setpgid(pid, pid);
+  close(out_pipe[1]); close(err_pipe[1]);
+  struct timespec deadline;
+  clock_gettime(CLOCK_MONOTONIC, &deadline);
+  deadline.tv_sec += timeout_ms / 1000;
+  deadline.tv_nsec += (timeout_ms % 1000) * 1000000L;
+  if (deadline.tv_nsec >= 1000000000L) { deadline.tv_sec++; deadline.tv_nsec -= 1000000000L; }
+  size_t out_off = 0, err_off = 0;
+  struct pollfd pfds[2] = {
+    { .fd = out_pipe[0], .events = POLLIN },
+    { .fd = err_pipe[0], .events = POLLIN },
+  };
+  int open_fds = 2;
+  int sig_sent = 0;
+  while (open_fds > 0) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    long ms_left = (deadline.tv_sec - now.tv_sec) * 1000L
+                 + (deadline.tv_nsec - now.tv_nsec) / 1000000L;
+    if (ms_left < 0) ms_left = 0;
+    int pr = poll(pfds, 2, (int)ms_left);
+    if (pr < 0) { if (errno == EINTR) continue; break; }
+    if (pr == 0) {
+      // === TIMEOUT BRANCH ===
+      // Bound signaling to the CHILD's process group so any
+      // descendants (e.g. a `sleep` grandchild of an `sh`
+      // parent) are also terminated. Without this, `sh -c
+      // 'sleep 60'` would kill the shell but leave `sleep`
+      // holding the stdout/stderr pipe FDs — and the helper's
+      // poll loop would block until the kernel finally
+      // collected `sleep` 60s later.
+      pid_t child_pgid = getpgid(pid);
+      if (child_pgid == pid) {
+        if (!sig_sent) {
+          (void)kill(-pid, SIGTERM);
+          sig_sent = 1;
+        }
+        usleep(200000);
+        int kill_rc = kill(-pid, 0);
+        int kill_errno = kill_rc < 0 ? errno : 0;
+        if (kill_rc == 0) {
+          (void)kill(-pid, SIGKILL);
+        } else if (kill_errno == ESRCH) {
+          // Group already gone; fall back to per-process kill
+          // for the direct child only.
+          (void)kill(pid, SIGKILL);
+        } else if (kill_errno == EPERM) {
+          // macOS Background sessions can return EPERM on
+          // cross-session kill. The per-process fallback is
+          // a best-effort: the helper still reaps.
+          (void)kill(pid, SIGKILL);
+          // Even after per-process SIGKILL of the direct child,
+          // descendants (e.g. `sleep` grandchild of `sh`) are
+          // still in the pgrp and may be holding pipe FDs open.
+          // We MUST reach them too. Try killpg() (different
+          // syscall path that uses the session as the target
+          // on macOS) and iterate ps-like discovery. As a
+          // last resort, scan /tmp and kill any process whose
+          // pgrp matches our child_pgid — but that's racy.
+          // For this ACT, the bounded fallback is: use
+          // killpg(pgid, SIGKILL) which on macOS Background
+          // sessions does NOT hit the same EPERM.
+          if (killpg(child_pgid, SIGKILL) < 0) {
+          } else {
+          }
+        }
+      } else {
+        // Child did not start a new group; signal the direct
+        // child only. This is the safe fallback that prevents
+        // killing the helper's own group.
+        if (!sig_sent) { (void)kill(pid, SIGTERM); sig_sent = 1; }
+        usleep(200000);
+        if (kill(pid, 0) == 0) (void)kill(pid, SIGKILL);
+      }
+      r.kind = 1;
+      // After the kill, the direct child is dead (SIGKILL
+      // cannot be caught). The post-kill drain is a best-
+      // effort to capture buffered output before the helper
+      // closes the pipes. The drain is bounded at 300ms
+      // total: 50ms for SIGKILL propagation + 250ms for the
+      // drain loop. With O_NONBLOCK set on the pipe FDs, the
+      // drain never blocks indefinitely — if the orphan
+      // descendant (e.g. `sleep` grandchild of `sh`) holds
+      // the pipe FDs open after the direct child dies, the
+      // poll times out cleanly and we move on.
+      usleep(50000);
+      {
+        struct timespec pk; clock_gettime(CLOCK_MONOTONIC, &pk);
+        pk.tv_nsec += 250 * 1000000L;
+        if (pk.tv_nsec >= 1000000000L) { pk.tv_sec++; pk.tv_nsec -= 1000000000L; }
+        int ppr;
+        do {
+          struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
+          long ms = (pk.tv_sec - now.tv_sec) * 1000L + (pk.tv_nsec - now.tv_nsec) / 1000000L;
+          if (ms < 0) ms = 0;
+          if (ms > 50) ms = 50;
+          ppr = poll(pfds, 2, (int)ms);
+          if (ppr < 0) { if (errno == EINTR) continue; break; }
+          if (ppr == 0) break;
+          for (int i = 0; i < 2; i++) {
+            if (!(pfds[i].revents & (POLLIN | POLLHUP))) continue;
+            char buf[1024];
+            ssize_t got = read(pfds[i].fd, buf, sizeof(buf));
+            if (got == 0) { pfds[i].fd = -1; open_fds--; continue; }
+            if (got < 0) {
+              if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
+              pfds[i].fd = -1; open_fds--; continue;
+            }
+            char *dst = (i == 0) ? out_buf : err_buf;
+            size_t *offp = (i == 0) ? &out_off : &err_off;
+            size_t cap = (i == 0) ? out_cap : err_cap;
+            size_t room = (cap > *offp + 1) ? (cap - *offp - 1) : 0;
+            if ((size_t)got > room) {
+              if (i == 0) { if (out_truncated) *out_truncated = 1; }
+              else        { if (err_truncated) *err_truncated = 1; }
+              if (room > 0) { memcpy(dst + *offp, buf, room); *offp += room; }
+            } else if (got > 0) {
+              memcpy(dst + *offp, buf, (size_t)got); *offp += (size_t)got;
+            }
+          }
+        } while (open_fds > 0);
+      }
+      break;
+    }
+    for (int i = 0; i < 2; i++) {
+      if (!(pfds[i].revents & (POLLIN | POLLHUP))) continue;
+      char buf[1024];
+      ssize_t got = read(pfds[i].fd, buf, sizeof(buf));
+      if (got < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // O_NONBLOCK: no data ready right now. Defer this fd
+          // for the next poll cycle.
+          pfds[i].events = 0;
+          continue;
+        }
+        // Any other read error: treat as EOF.
+        pfds[i].fd = -1; open_fds--; continue;
+      }
+      if (got == 0) { pfds[i].fd = -1; open_fds--; continue; }
+      char *dst = (i == 0) ? out_buf : err_buf;
+      size_t *offp = (i == 0) ? &out_off : &err_off;
+      size_t cap = (i == 0) ? out_cap : err_cap;
+      size_t room = (cap > *offp + 1) ? (cap - *offp - 1) : 0;
+      if ((size_t)got > room) {
+        // More bytes were available than the buffer can hold;
+        // this is a structural truncation signal.
+        if (i == 0) { if (out_truncated) *out_truncated = 1; }
+        else        { if (err_truncated) *err_truncated = 1; }
+        if (room > 0) { memcpy(dst + *offp, buf, room); *offp += room; }
+      } else if (got > 0) {
+        memcpy(dst + *offp, buf, (size_t)got); *offp += (size_t)got;
+      }
+    }
+  }
+  if (out_buf && out_cap > 0) out_buf[out_off] = '\0';
+  if (err_buf && err_cap > 0) err_buf[err_off] = '\0';
+  close(out_pipe[0]); close(err_pipe[0]);
+  // === REAP ===
+  // Bounded reap with hard deadline. The timeout classification
+  // is already set; we just need to give the kernel a bounded
+  // window to collect the direct child. If the reap is stuck
+  // (e.g. the child is in a state the kernel cannot reap),
+  // we abandon the reap and return with the timeout already set.
+  int st = 0;
+  struct timespec reap_deadline; clock_gettime(CLOCK_MONOTONIC, &reap_deadline);
+  reap_deadline.tv_sec += 2;
+  pid_t wr2 = 0;
+  while (1) {
+    wr2 = waitpid(pid, &st, WNOHANG);
+    if (wr2 != 0) break;
+    struct timespec rn; clock_gettime(CLOCK_MONOTONIC, &rn);
+    if (rn.tv_sec >= reap_deadline.tv_sec) {
+      (void)kill(pid, SIGKILL);
+      struct timespec bk; clock_gettime(CLOCK_MONOTONIC, &bk);
+      bk.tv_sec += 1;
+      while (rn.tv_sec < bk.tv_sec) {
+        wr2 = waitpid(pid, &st, WNOHANG);
+        if (wr2 != 0) break;
+        usleep(50000);
+        clock_gettime(CLOCK_MONOTONIC, &rn);
+      }
+      if (wr2 == 0) {
+      }
+      break;
+    }
+    usleep(50000);
+  }
+  if (wr2 == pid) {
+    if (WIFEXITED(st)) {
+      r.exit_code = WEXITSTATUS(st);
+      r.kind = (r.kind == 1) ? 1 : (r.exit_code == 0 ? 0 : 2);
+    } else if (WIFSIGNALED(st)) {
+      r.signaled = 1; r.signal = WTERMSIG(st);
+      r.kind = (r.kind == 1) ? 1 : 2;
+    }
+  }
+  return r;
+}
+
+// Validate the operator-bound TART_HOME storage identity.
+// Returns 0 on success, -1 on any failure (with a one-line reason
+// emitted to stderr). The check enforces:
+//   - lstat() succeeds, is a directory
+//   - realpath() succeeds, result is not a symlink (lstat on canonical)
+//   - vms/ subdirectory exists and is a directory
+//   - access(X_OK) succeeds (tart can write lock files there)
+//   - owner UID equals the helper's UID
+static int smoke_validate_tart_home(const char *path) {
+  if (path == NULL || *path == '\0') return -1;
+  struct stat st;
+  if (lstat(path, &st) != 0) {
+    fprintf(stderr, "[helper] smoke: TART_HOME lstat failed: %s errno=%d\n", path, errno);
+    return -1;
+  }
+  if (!S_ISDIR(st.st_mode)) {
+    fprintf(stderr, "[helper] smoke: TART_HOME not a directory: %s\n", path);
+    return -1;
+  }
+  char resolved[1024];
+  if (realpath(path, resolved) == NULL) {
+    fprintf(stderr, "[helper] smoke: TART_HOME realpath failed: %s errno=%d\n", path, errno);
+    return -1;
+  }
+  struct stat rst;
+  if (lstat(resolved, &rst) != 0) {
+    fprintf(stderr, "[helper] smoke: TART_HOME canonical lstat failed: %s\n", resolved);
+    return -1;
+  }
+  if (S_ISLNK(rst.st_mode)) {
+    fprintf(stderr, "[helper] smoke: TART_HOME is a symlink (unsafe): %s\n", resolved);
+    return -1;
+  }
+  if (rst.st_uid != getuid()) {
+    fprintf(stderr, "[helper] smoke: TART_HOME owner uid=%u != helper uid=%u\n",
+            (unsigned)rst.st_uid, (unsigned)getuid());
+    return -1;
+  }
+  // vms/ subdirectory must exist
+  char vms_path[1280];
+  int n = snprintf(vms_path, sizeof(vms_path), "%s/vms", resolved);
+  if (n <= 0 || (size_t)n >= sizeof(vms_path)) return -1;
+  struct stat vst;
+  if (lstat(vms_path, &vst) != 0 || !S_ISDIR(vst.st_mode)) {
+    fprintf(stderr, "[helper] smoke: TART_HOME/vms not a directory: %s\n", vms_path);
+    return -1;
+  }
+  // X_OK for write
+  if (access(resolved, X_OK) != 0) {
+    fprintf(stderr, "[helper] smoke: TART_HOME not accessible (X_OK): %s\n", resolved);
+    return -1;
+  }
+  return 0;
+}
+
+// Build the sealed envp for the tart exec child. Includes the
+// configured TART_HOME explicitly (so the child tart uses the
+// operator-bound storage identity, NOT the caller's $TART_HOME).
+// PATH is a fixed allowlist (no caller reach). Returns 1 on
+// success, 0 on capacity overflow.
+//
+// The caller-supplied envp array must hold
+// SMOKE_ENVP_ENTRY_COUNT + 1 slots: the count of fixed
+// entries PLUS a NULL terminator (Apple's execve(2) contract
+// requires a NULL-terminated pointer array; the previous
+// `envp[6]` size wrote envp[6] = NULL out of bounds).
+// The capacity check below enforces that contract.
+#define SMOKE_ENVP_ENTRY_COUNT 6
+static int smoke_build_envp(char **envp, int envp_cap,
+                             char *env_buf, size_t env_buf_cap,
+                             size_t *env_buf_used,
+                             const char *tart_home) {
+  if (envp_cap < SMOKE_ENVP_ENTRY_COUNT + 1) return 0;
+  size_t off = 0; size_t k = 0;
+#define HV(s) do { \
+    size_t l = strlen(s); \
+    if (off + l + 1 > env_buf_cap) return 0; \
+    memcpy(env_buf + off, s, l); env_buf[off + l] = '\0'; \
+    envp[k++] = env_buf + off; off += l + 1; \
+  } while (0)
+  HV("PATH=/usr/local/bin:/opt/homebrew/bin:/run/current-system/sw/bin:/usr/bin:/bin");
+  char home_env[1100];
+  const char *home = getenv("HOME");
+  if (!home || !*home) home = "/tmp";
+  if (snprintf(home_env, sizeof(home_env), "HOME=%s", home) <= 0) return 0;
+  HV(home_env);
+  HV("LANG=C.UTF-8");
+  HV("LC_ALL=C.UTF-8");
+  HV("TMPDIR=/tmp");
+  // Operator-bound TART_HOME is INJECTED EXPLICITLY. This
+  // overrides any TART_HOME the child might inherit from the
+  // helper's own environment — the child always uses the
+  // configured storage identity.
+  char tart_home_env[1100];
+  if (snprintf(tart_home_env, sizeof(tart_home_env), "TART_HOME=%s", tart_home) <= 0) return 0;
+  HV(tart_home_env);
+  envp[k] = NULL;
+  if (env_buf_used) *env_buf_used = off;
+  return 1;
+#undef HV
+}
+
+// Emit the structured smoke response. The body is a single
+// result object with helper_build_id, authorized_vm, tart_home,
+// tart_path, tart_version, per-diagnostic results, and the
+// overall classification. The response is bounded by MAX_FRAME
+// (which already accounts for the envelope and the diagnostics'
+// bounded buffers).
+static void respond_smoke_err(int cfd, const void *request_id, size_t request_id_len,
+                               const char *code) {
+  // Length-aware JSON escaping for request_id (the caller
+  // controls its content; raw %.*s would emit a malformed
+  // payload if request_id contained a quote or backslash).
+  // `code` is a frozen internal enum, so it is safe to inline.
+  char buf[512];
+  size_t off = 0;
+  int n = snprintf(buf + off, sizeof(buf) - off,
+    "{\"version\":1,\"request_id\":");
+  if (n <= 0 || (size_t)n >= sizeof(buf) - off) return;
+  off += (size_t)n;
+  int idn = write_json_string(buf + off, sizeof(buf) - off, request_id, request_id_len);
+  if (idn < 0) return;
+  off += (size_t)idn;
+  n = snprintf(buf + off, sizeof(buf) - off,
+    ",\"ok\":false,\"error\":\"%s\"}\n", code);
+  if (n <= 0 || (size_t)n >= sizeof(buf) - off) return;
+  off += (size_t)n;
+  (void)write_all(cfd, buf, off);
+}
+
+// Render the JSON-escaped result. Uses a bounded response buffer
+// to keep MAX_FRAME discipline. The captured diagnostic buffers
+// are themselves bounded (4096 / 1024), so the worst-case
+// response is small. If the body cannot fit, falls back to
+// RESULT_TRUNCATED to prevent emitting a partial success.
+static void respond_smoke_full(int cfd, const void *request_id, size_t request_id_len,
+                                const char *build_id,
+                                const char *authorized_vm,
+                                const char *tart_home,
+                                const char *tart_path,
+                                const char *tart_version,
+                                const smoke_diag_t *sw_vers,
+                                const smoke_diag_t *uname_a,
+                                int total_duration_ms,
+                                int any_truncated,
+                                const char *overall) {
+  // Build the body into a stack buffer. The truncated-by-design
+  // stdout buffers are 2048 bytes each; the JSON-escaped form
+  // may be up to ~2x that (4096 bytes), so two diagnostics'
+  // stdout contributes up to 8192 bytes escaped. Stderr
+  // (2x512) contributes up to 2048 bytes escaped. Total
+  // bounded payload: ~10 KiB + envelope (~500 bytes) + slack.
+  // We use 16 KiB for the body and 8 KiB for the final envelope
+  // so the total well-formed response is bounded and within
+  // MAX_FRAME (which the wire contract honors by serializing the
+  // full response in one write_all() call).
+  static char body[16 * 1024];
+  size_t off = 0;
+  int n;
+  // helper_build_id, authorized_vm, tart_home, tart_path are
+  // operator-derived (validated upstream) but the JSON-escape
+  // path is uniform — defense in depth and consistent with
+  // the rest of the file. tart_version is JSON-escaped below.
+  n = snprintf(body + off, sizeof(body) - off,
+               "{\"helper_build_id\":");
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  int esc_n = write_json_string(body + off, sizeof(body) - off,
+                                 build_id ? build_id : "",
+                                 build_id ? strlen(build_id) : 0);
+  if (esc_n < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)esc_n;
+  n = snprintf(body + off, sizeof(body) - off, ",\"authorized_vm\":");
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  esc_n = write_json_string(body + off, sizeof(body) - off,
+                             authorized_vm ? authorized_vm : "",
+                             authorized_vm ? strlen(authorized_vm) : 0);
+  if (esc_n < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)esc_n;
+  n = snprintf(body + off, sizeof(body) - off, ",\"tart_home\":");
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  esc_n = write_json_string(body + off, sizeof(body) - off,
+                             tart_home ? tart_home : "",
+                             tart_home ? strlen(tart_home) : 0);
+  if (esc_n < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)esc_n;
+  n = snprintf(body + off, sizeof(body) - off, ",\"tart_path\":");
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  esc_n = write_json_string(body + off, sizeof(body) - off,
+                             tart_path ? tart_path : "",
+                             tart_path ? strlen(tart_path) : 0);
+  if (esc_n < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)esc_n;
+  n = snprintf(body + off, sizeof(body) - off, ",\"tart_version\":");
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  int v = write_json_string(body + off, sizeof(body) - off,
+                             tart_version ? tart_version : "",
+                             tart_version ? strlen(tart_version) : 0);
+  if (v < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)v;
+  n = snprintf(body + off, sizeof(body) - off,
+               ",\"results\":{\"sw_vers\":{\"exit_code\":%d,\"timeout\":%s,\"truncated\":%s,\"duration_ms\":%d,\"stdout\":",
+               sw_vers->exit_code,
+               sw_vers->timeout ? "true" : "false",
+               sw_vers->truncated ? "true" : "false",
+               sw_vers->duration_ms);
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  v = write_json_string(body + off, sizeof(body) - off, sw_vers->stdout_buf, strlen(sw_vers->stdout_buf));
+  if (v < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)v;
+  n = snprintf(body + off, sizeof(body) - off, ",\"stderr\":");
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  v = write_json_string(body + off, sizeof(body) - off, sw_vers->stderr_buf, strlen(sw_vers->stderr_buf));
+  if (v < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)v;
+  n = snprintf(body + off, sizeof(body) - off, "},\"uname_a\":{\"exit_code\":%d,\"timeout\":%s,\"truncated\":%s,\"duration_ms\":%d,\"stdout\":",
+               uname_a->exit_code,
+               uname_a->timeout ? "true" : "false",
+               uname_a->truncated ? "true" : "false",
+               uname_a->duration_ms);
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  v = write_json_string(body + off, sizeof(body) - off, uname_a->stdout_buf, strlen(uname_a->stdout_buf));
+  if (v < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)v;
+  n = snprintf(body + off, sizeof(body) - off, ",\"stderr\":");
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+  v = write_json_string(body + off, sizeof(body) - off, uname_a->stderr_buf, strlen(uname_a->stderr_buf));
+  if (v < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)v;
+  n = snprintf(body + off, sizeof(body) - off,
+               "}},\"duration_ms\":%d,\"any_truncated\":%s,\"overall\":\"%s\"}",
+               total_duration_ms,
+               any_truncated ? "true" : "false",
+               overall);
+  if (n <= 0 || (size_t)n >= sizeof(body) - off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)n;
+
+  // Final envelope. Sized to comfortably hold envelope + body
+  // + LF terminator. Worst case: body is ~10 KiB (escaped 2*2048
+  // stdout + 2*512 stderr) + envelope ~500 bytes = ~11 KiB.
+  // We use 20 KiB for ample slack.
+  char env_buf[20 * 1024];
+  size_t env_off = 0;
+  // request_id is JSON-escaped via write_json_string (caller
+  // controls its content; raw %.*s would emit malformed JSON
+  // if the id contained a quote or backslash).
+  int hn = snprintf(env_buf + env_off, sizeof(env_buf) - env_off,
+    "{\"version\":1,\"request_id\":");
+  if (hn <= 0 || (size_t)hn >= sizeof(env_buf) - env_off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  env_off += (size_t)hn;
+  int esc_id = write_json_string(env_buf + env_off, sizeof(env_buf) - env_off,
+                                  request_id, request_id_len);
+  if (esc_id < 0) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  env_off += (size_t)esc_id;
+  hn = snprintf(env_buf + env_off, sizeof(env_buf) - env_off,
+    ",\"ok\":%s,\"service\":\"clinemm-host-helper\",\"pid\":%d,\"uid\":%d,\"result\":",
+    (strcmp(overall, "PASS") == 0) ? "true" : "false",
+    (int)getpid(), (int)getuid());
+  if (hn <= 0 || (size_t)hn >= sizeof(env_buf) - env_off) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  env_off += (size_t)hn;
+  if (sizeof(env_buf) - env_off < off + 4) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  memcpy(env_buf + env_off, body, off);
+  env_off += off;
+  if (env_off + 3 > sizeof(env_buf)) { respond_smoke_err(cfd, request_id, request_id_len, "INTERNAL_TRUNCATION"); return; }
+  env_buf[env_off++] = '}';
+  env_buf[env_off++] = '\n';
+  (void)write_all(cfd, env_buf, env_off);
+}
+
+// Wallclock helper.
+static long long smoke_now_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL;
+}
+
+static void handle_tart_guest_smoke(int cfd, const kv_t *rid) {
+  // (1) Trusted operator configuration.
+  const char *smoke_vm = getenv("CLINEMM_SMOKE_VM");
+  const char *smoke_tart_home = getenv("CLINEMM_SMOKE_TART_HOME");
+  if (smoke_vm == NULL || *smoke_vm == '\0' ||
+      smoke_tart_home == NULL || *smoke_tart_home == '\0') {
+    respond_smoke_err(cfd, rid->val, rid->val_len, "SMOKE_NOT_CONFIGURED");
+    return;
+  }
+  // Sanity: VM name must be a short opaque token (no slashes, no
+  // spaces, no shell metacharacters) so even an accidental
+  // bypass of the argv-only path cannot redirect the binary.
+  size_t vm_len = strlen(smoke_vm);
+  if (vm_len == 0 || vm_len > 64) {
+    respond_smoke_err(cfd, rid->val, rid->val_len, "SMOKE_NOT_CONFIGURED");
+    return;
+  }
+  for (size_t i = 0; i < vm_len; i++) {
+    char c = smoke_vm[i];
+    int ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+             (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.';
+    if (!ok) {
+      respond_smoke_err(cfd, rid->val, rid->val_len, "SMOKE_NOT_CONFIGURED");
+      return;
+    }
+  }
+  // Sanity: TART_HOME must be a short absolute POSIX path.
+  size_t th_len = strlen(smoke_tart_home);
+  if (th_len == 0 || th_len > 512 || smoke_tart_home[0] != '/') {
+    respond_smoke_err(cfd, rid->val, rid->val_len, "SMOKE_NOT_CONFIGURED");
+    return;
+  }
+
+  // (2) TART_HOME storage identity.
+  if (smoke_validate_tart_home(smoke_tart_home) != 0) {
+    respond_smoke_err(cfd, rid->val, rid->val_len, "SMOKE_NOT_CONFIGURED");
+    return;
+  }
+
+  // (3) Tart executable resolution (sealed allowlist).
+  const char *tart_path = tart_resolve_executable();
+  if (tart_path == NULL) {
+    respond_smoke_err(cfd, rid->val, rid->val_len, "TART_NOT_FOUND");
+    return;
+  }
+
+  // Build the sealed envp for the tart child. The array holds
+  // SMOKE_ENVP_ENTRY_COUNT entries + one NULL terminator (the
+  // execve(2) contract requires a NULL-terminated array). The
+  // capacity check inside smoke_build_envp is
+  // `envp_cap >= SMOKE_ENVP_ENTRY_COUNT + 1` so a NULL is
+  // always written within the array bounds.
+  char *envp[SMOKE_ENVP_ENTRY_COUNT + 1];
+  char env_buf[8192];
+  size_t env_used = 0;
+  if (!smoke_build_envp(envp, SMOKE_ENVP_ENTRY_COUNT + 1, env_buf, sizeof(env_buf), &env_used, smoke_tart_home)) {
+    respond_smoke_err(cfd, rid->val, rid->val_len, "INTERNAL_ERROR");
+    return;
+  }
+
+  // (4) `tart --version` for the response (bounded 10s).
+  char version_buf[256] = {0};
+  char version_err[512] = {0};
+  char *const argv_version[] = { (char *)tart_path, (char *)"--version", NULL };
+  tbr_invoke_t v_inv = tbr_invoke_bounded(argv_version, envp,
+                                           10 * 1000,
+                                           version_buf, sizeof(version_buf),
+                                           version_err, sizeof(version_err));
+  if (v_inv.kind != 0) {
+    respond_smoke_err(cfd, rid->val, rid->val_len, "TART_EXEC_FAILED");
+    return;
+  }
+  // Trim trailing whitespace.
+  size_t vlen = strlen(version_buf);
+  while (vlen > 0 && (version_buf[vlen - 1] == '\n' || version_buf[vlen - 1] == '\r' ||
+                       version_buf[vlen - 1] == ' '  || version_buf[vlen - 1] == '\t')) {
+    version_buf[--vlen] = '\0';
+  }
+  if (vlen > 64) version_buf[64] = '\0';
+
+  // (5) `<tart> exec <vm> /usr/bin/sw_vers` (bounded).
+  // Per-diagnostic timeout is bounded by the request-level
+  // deadline so the two diagnostics cannot, in aggregate, exceed
+  // it. The first diagnostic to time out triggers a request-level
+  // fail-fast: the second diagnostic is NOT run, and the response
+  // is emitted with TART_EXEC_TIMEOUT within the same request.
+#define SMOKE_PER_DIAG_TIMEOUT_MS (30 * 1000)
+#define SMOKE_REQUEST_DEADLINE_MS (28 * 1000)
+  long long request_t0 = smoke_now_ms();
+  long long request_deadline_ms = request_t0 + SMOKE_REQUEST_DEADLINE_MS;
+  smoke_diag_t sw_vers = {0};
+  int any_timeout = 0;
+  {
+    long long now = smoke_now_ms();
+    int this_timeout = (int)(request_deadline_ms - now);
+    if (this_timeout > SMOKE_PER_DIAG_TIMEOUT_MS) this_timeout = SMOKE_PER_DIAG_TIMEOUT_MS;
+    if (this_timeout < 1) this_timeout = 1;  // never pass 0
+    long long t0 = smoke_now_ms();
+    char *const argv[] = {
+      (char *)tart_path, (char *)"exec", (char *)smoke_vm, (char *)"/usr/bin/sw_vers", NULL
+    };
+    int o_trunc = 0, e_trunc = 0;
+    tbr_invoke_t inv = smoke_invoke_bounded(argv, envp,
+                                             this_timeout,
+                                             sw_vers.stdout_buf, sizeof(sw_vers.stdout_buf), &o_trunc,
+                                             sw_vers.stderr_buf, sizeof(sw_vers.stderr_buf), &e_trunc);
+    long long t1 = smoke_now_ms();
+    sw_vers.invoked = 1;
+    sw_vers.exit_code = inv.exit_code;
+    sw_vers.duration_ms = (int)(t1 - t0);
+    sw_vers.timeout = (inv.kind == 1) ? 1 : 0;
+    sw_vers.truncated = (o_trunc || e_trunc) ? 1 : 0;
+    if (sw_vers.timeout) any_timeout = 1;
+  }
+  // Fail-fast: if the first diagnostic timed out, do NOT run
+  // the second. The request as a whole is now TART_EXEC_TIMEOUT
+  // and any further subprocess would only consume more of the
+  // client's deadline without changing the result. uname_a
+  // stays at its zeroed default (exit_code=-1, timeout=0,
+  // duration_ms=0, stdout/stderr empty) so the response
+  // clearly distinguishes "not run" from "ran and exited
+  // nonzero".
+  if (any_timeout) {
+    int total_duration = (int)(smoke_now_ms() - request_t0);
+    respond_smoke_full(cfd, rid->val, rid->val_len,
+                       g_build_id ? g_build_id : "",
+                       smoke_vm,
+                       smoke_tart_home,
+                       tart_path,
+                       version_buf,
+                       &sw_vers,
+                       &(smoke_diag_t){0},  // uname_a: not run
+                       total_duration,
+                       0,
+                       "TART_EXEC_TIMEOUT");
+    return;
+  }
+
+  // (6) `<tart> exec <vm> /usr/bin/uname -a` (bounded).
+  smoke_diag_t uname_a = {0};
+  {
+    long long now = smoke_now_ms();
+    int this_timeout = (int)(request_deadline_ms - now);
+    if (this_timeout > SMOKE_PER_DIAG_TIMEOUT_MS) this_timeout = SMOKE_PER_DIAG_TIMEOUT_MS;
+    if (this_timeout < 1) this_timeout = 1;
+    long long t0 = smoke_now_ms();
+    char *const argv[] = {
+      (char *)tart_path, (char *)"exec", (char *)smoke_vm, (char *)"/usr/bin/uname", (char *)"-a", NULL
+    };
+    int o_trunc = 0, e_trunc = 0;
+    tbr_invoke_t inv = smoke_invoke_bounded(argv, envp,
+                                             this_timeout,
+                                             uname_a.stdout_buf, sizeof(uname_a.stdout_buf), &o_trunc,
+                                             uname_a.stderr_buf, sizeof(uname_a.stderr_buf), &e_trunc);
+    long long t1 = smoke_now_ms();
+    uname_a.invoked = 1;
+    uname_a.exit_code = inv.exit_code;
+    uname_a.duration_ms = (int)(t1 - t0);
+    uname_a.timeout = (inv.kind == 1) ? 1 : 0;
+    uname_a.truncated = (o_trunc || e_trunc) ? 1 : 0;
+    if (uname_a.timeout) any_timeout = 1;
+  }
+
+  // (7) Classification. Truncation OR nonzero OR timeout = NOT PASS.
+  int any_truncated = (sw_vers.truncated || uname_a.truncated) ? 1 : 0;
+  int any_nonzero = (sw_vers.exit_code != 0 || uname_a.exit_code != 0) ? 1 : 0;
+  // any_timeout is function-scope (declared at step 5) and
+  // accumulates per-diagnostic timeout flags. By the time we
+  // reach step 7, the first-diagnostic fail-fast path has
+  // already returned; any_timeout at this point reflects
+  // whether the SECOND diagnostic timed out (which only
+  // happens if the request deadline fires during uname_a
+  // after sw_vers succeeded).
+  const char *overall;
+  if (any_truncated)        overall = "RESULT_TRUNCATED";
+  else if (any_timeout)     overall = "TART_EXEC_TIMEOUT";
+  else if (any_nonzero)     overall = "GUEST_COMMAND_NONZERO";
+  else                      overall = "PASS";
+  // total_duration: request wallclock. For the first-diagnostic
+  // fail-fast path we return early above with the same value.
+  // For the second-diagnostic timeout path (rare: sw_vers
+  // succeeded and then uname_a was capped by the request
+  // deadline) this captures the full request duration.
+  int total_duration = (int)(smoke_now_ms() - request_t0);
+
+  respond_smoke_full(cfd, rid->val, rid->val_len,
+                     g_build_id ? g_build_id : "",
+                     smoke_vm,
+                     smoke_tart_home,
+                     tart_path,
+                     version_buf,
+                     &sw_vers,
+                     &uname_a,
+                     total_duration,
+                     any_truncated,
+                     overall);
 }

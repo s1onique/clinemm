@@ -1,0 +1,28 @@
+{
+  "_comment": "Placeholder — operator-driven real guest smoke is OUT OF SCOPE for this bounded fix.",
+  "reason": "The installed Sonoma VM is not currently running. Per the ACT, the real guest smoke (operator-driven tart run + agent-driven tart.guest.smoke + operator-driven tart stop) is a Phase 2 operator-side step that requires the imported VM to be started. This bounded fix qualifies the hermetic test suite to the point where Phase 2 can be executed safely.",
+  "gs_08_hermetic_response": {
+    "request": {"version": 1, "request_id": "gs-08", "method": "tart.guest.smoke"},
+    "response": {
+      "version": 1,
+      "request_id": "gs-08",
+      "ok": false,
+      "service": "clinemm-host-helper",
+      "result": {
+        "helper_build_id": "",
+        "authorized_vm": "clinemm-p3-sonoma-imported",
+        "tart_path": "<fake-tart>",
+        "tart_version": "fake-tart 1.0.0",
+        "results": {
+          "sw_vers": {"exit_code": -1, "timeout": true, "duration_ms": ~30000, "stdout": "", "stderr": ""},
+          "uname_a":  {"exit_code": 0,  "timeout": false, "duration_ms": 0, "stdout": "", "stderr": ""}
+        },
+        "duration_ms": ~30000,
+        "any_truncated": false,
+        "overall": "TART_EXEC_TIMEOUT"
+      }
+    },
+    "elapsed_ms_observed": 31240,
+    "interpretation": "sw_vers hit the 28s request deadline (kill(-pid, SIGKILL) signaled the entire pgrp, including the sleep grandchild); the handler took the fail-fast path; uname_a was NOT run; response arrived within the 35s socket deadline."
+  }
+}

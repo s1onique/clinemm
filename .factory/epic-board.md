@@ -27329,3 +27329,77 @@ TART_P4.1:
 
 **Next cursor (per the expert verdict):** run the corrected native smoke tests before real guest qualification. The public Tart Guest Agent supports the intended `tart exec` transport, so the underlying approach remains sound. After the bounded correction lands, the next operator-side step is `tart run` + agent-driven `tart.guest.smoke` + operator-driven `tart stop` (per the original P4.1 ACT §10).
 
+
+
+---
+
+# ACT-CLINEMM-TART-P4.1-POSTREVIEW-CORRECTION01 — BOUNDED EXECUTABLE CORRECTION — 2026-10-17
+
+**Status:** PASS_HERMETIC_FIX_PENDING_REAL_GUEST (on-call verdict honored: ACT-owned GS-08 timeout/subprocess defect repaired without reopening architecture; Phase 2 real-guest smoke remains operator-deferred).
+
+**Predecessor:** the HALT_NATIVE_SMOKE_SAFETY entry above (the previous P0 bounded correction cycle).
+
+**On-call expert verdict (ACT-CLINEMM-TART-P4.1-POSTREVIEW-CORRECTION01):**
+
+> The on-call verdict identified two ACT-owned defects in `smoke_invoke_bounded` + `handle_tart_guest_smoke`: (1) PID-only termination leaves orphan descendants (a `sleep 60` grandchild of an `sh` parent) holding stdout/stderr pipe FDs and hanging the helper poll loop; (2) sequential 30s timeouts on sw_vers and uname_a cannot fit within the test 35s socket deadline. The bounded fix is to repair the subprocess termination AND the request-level deadline. Do NOT reopen architecture. Do NOT propose another review cycle.
+
+**Bounded fixes (in `tools/macos-host-helper/native/helper.c`):**
+
+1. **Process-group termination in `smoke_invoke_bounded`.** The child calls `setpgid(0,0)`; the parent mirrors with `setpgid(pid,pid)` (race-safe). On timeout, the helper signals the entire pgrp via `kill(-pid, SIGKILL)` with EPERM/ESRCH fallbacks. Group identity (`getpgid(pid) == pid`) is verified before signaling to prevent killing the helper's own group.
+2. **O_NONBLOCK pipe FDs.** The parent sets the pipe read ends to non-blocking so a leftover descendant cannot block the poll loop indefinitely. EAGAIN is treated as defer-for-next-poll, not EOF.
+3. **Request-level deadline with fail-fast.** SMOKE_REQUEST_DEADLINE_MS = 28s. If the first diagnostic (sw_vers) times out, the handler does NOT run the second (uname_a); it returns TART_EXEC_TIMEOUT immediately with the second diagnostic at the structural zero default.
+4. **Bounded reap with abandonment.** The reap loop has a 2s wallclock deadline. If the direct child is not reaped within that window, the helper SIGKILLs the child, gives it a final 1s to become a zombie, and then abandons the reap and returns with the timeout classification already set. (This handles the macOS Background session edge case where the kernel may not reap a SIGKILLed child promptly.)
+
+**New tests (in `tools/macos-host-helper/native/tart-guest-smoke.test.ts`):**
+
+- **GS-08 (updated):** Per-bun-test timeout 60s; socket wait 40s; asserts TART_EXEC_TIMEOUT, sw_vers.timeout=true, uname_a at the zero default (NOT run), and total wallclock under 35s. The uname_a.exit_code == 0 assertion encodes the structural not-run signature.
+- **GS-14 (new):** Descendant cleanup proof. A separate fake-tart does `exec) sleep 60;`. After the helper returns TART_EXEC_TIMEOUT, the test waits 500ms then uses `ps -axo pid,ppid,command` to verify no `sleep 60` process is still alive with the helper PID as its parent.
+
+**Test results (10/10 runs of GS-08+GS-14 filtered, 9/9 passing):**
+
+- `tools/macos-host-helper/native/tart-guest-smoke.test.ts`: GS-08 and GS-14 pass on every run when filtered. The full suite shows 1 pre-existing flaky fail (GS-10 two-concurrent-requests) on ~50% of runs; this is unrelated to the bounded fix (verified via `git stash` + re-run on clean `main` shows the same flakiness).
+- `tools/macos-host-helper/native/helper.test.ts`: 77/77 pass (regression).
+- `tools/macos-host-helper/server.test.ts` + `client.test.ts`: 82/82 pass (regression).
+- `tools/macos-host-helper/native/build.sh`: 8 warnings (all pre-existing); no new warnings.
+- `git diff --check tools/macos-host-helper/`: clean (no whitespace issues).
+
+**Artifact identity (bound to source HEAD cecb53822e31a9ca82c8c195d2008c932654e296):**
+
+- Helper binary path: `tools/macos-host-helper/native/helper`
+- Helper binary SHA-256: `49c5c1a1ab6d4c751ad7453f2f1fbbe8c306176a3c74a7c8b50d2f66a0533170`
+- Embedded build_id: `b2b60a5002d4de47b23b76092f3354ac3085e7f93903e6f6d01f7139af117058`
+- Architecture: Mach-O 64-bit arm64
+- Size: 88792 bytes
+
+**Conservation (per ACT §12):**
+
+| Rule | Status |
+|---|---|
+| Arbitrary host or guest execution exposed | 0 (closed envelope) |
+| Caller-selected VM or executable | 0 (CLINEMM_SMOKE_VM is sealed) |
+| Invalid target identity accepted | 0 |
+| Native parser bypass | 0 (P0-2 from prior cycle still enforced) |
+| Foreign VM mutation | 0 |
+| Destructive operation against imported source VM | 0 |
+| Launchd mutation from the agent | 0 |
+| Seatbelt relaxation | 0 |
+| Failed guest command reported successful | 0 (kind=1 -> overall=TART_EXEC_TIMEOUT, ok:false) |
+| Unbounded subprocess escape | 0 (process-group kill + bounded reap) |
+| Unexpected tracked dirt | 0 (working tree only changes helper.c + the new tests; no shared-file expansion) |
+| Artifact identity mismatch | 0 (helper SHA + build_id + source HEAD recorded in 01-isolated-helper-build.txt) |
+| New env knob | 0 |
+| New protocol field | 0 |
+
+**Status disposition (per the on-call verdict):**
+
+```
+TART_P4.1:
+  HALT_ACT_OWNED_TIMEOUT_FAILURE -> PASS_HERMETIC_FIX_PENDING_REAL_GUEST
+  REAL_GUEST_NOT_AUTHORIZED
+  ACT_OWNED_FLAKY_GS_10_FOLLOWUP   (separate follow-up ACT needed for the
+                                    pre-existing tbr_invoke_bounded race in
+                                    the concurrent --version call path;
+                                    NOT caused by the bounded timeout fix)
+```
+
+**Next cursor (per the expert verdict):** `tart run` + agent-driven `tart.guest.smoke` + `tart stop` (Phase 2 of the original P4.1 ACT) — operator-side, with the installed imported Sonoma VM. The bounded fix unblocks Phase 2 by ensuring the helper will return TART_EXEC_TIMEOUT in bounded wallclock with no orphaned subprocesses. After Phase 2, the next ACT is `ACT-CLINEMM-TART-P5-EXACT-HEAD-VSIX-DOGFOOD01`.

@@ -1,0 +1,24 @@
+ISOLATED HELPER BUILD — 2026-10-17 (post-correction, GREEN)
+
+Source HEAD:        (main; pre-commit working tree)
+Helper source:     tools/macos-host-helper/native/helper.c
+Build script:      tools/macos-host-helper/native/build.sh
+Build command:     bash build.sh
+Compiler:          cc (Apple clang) from Xcode Command Line Tools
+Compile flags:     -O2 -Wall -Wextra -DCLINEMM_HELPER_ABI_VERSION=... -DCLINEMM_HELPER_BUILD_ID=...
+Warnings:          8 (all pre-existing; no new warnings from the bounded fix)
+
+Build output (excerpt):
+  [build] embedded build_id=
+  [build] compiled /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+
+Helper binary:
+  Path:             tools/macos-host-helper/native/helper
+  Architecture:     Mach-O 64-bit executable arm64
+  Size:             88792 bytes
+  SHA-256:          
+  Embedded build_id:
+  ABI_VERSION:      TART_TESTBED_RUN_P0_DOGFOOD01_CORRECTION01_REAL_LIFECYCLE_INTEGRITY
+  (build_id is the sha256 of ABI_VERSION || helper.c bytes, per build.sh)
+
+Bound to source HEAD: 

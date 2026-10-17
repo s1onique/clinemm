@@ -1,0 +1,55 @@
+GS-08 RED WITNESS — captured 2026-10-17 against the freshly built helper
+binary (pre-correction). The new test file tart-guest-smoke.test.ts is
+untracked, so this is an ACT-owned failure (not a pre-existing test
+failure on main).
+
+$ cd tools/macos-host-helper/native && bash test.sh tart-guest-smoke.test.ts
+tart-guest-smoke.test.ts:
+ ✓ RPC-01: valid tart.guest.smoke envelope with no caller fields is accepted by parser
+ ✓ RPC-02: extra 'command' field rejected by C parse layer (FORBIDDEN_KEY)
+ ✓ RPC-03: extra 'vm_name' field rejected by C parse layer (FORBIDDEN_KEY)
+ ✓ RPC-04: extra 'argv' field rejected by C parse layer (FORBIDDEN_KEY)
+ ✓ RPC-05: extra 'env' field rejected by C parse layer (FORBIDDEN_KEY)
+ ✓ GS-04: missing CLINEMM_SMOKE_VM fails closed with SMOKE_NOT_CONFIGURED (no fork)
+ ✓ GS-04b: missing CLINEMM_SMOKE_TART_HOME fails closed with SMOKE_NOT_CONFIGURED
+ ✓ GS-04c: malformed CLINEMM_SMOKE_VM (path injection) is refused
+ ✓ GS-04d: malformed CLINEMM_SMOKE_TART_HOME (not absolute) is refused
+ ✓ GS-04e: TART_HOME that is a regular file (not a directory) fails closed
+ ✓ GS-04f: TART_HOME with no vms/ subdirectory fails closed
+ ✓ GS-03: tart executable absent (override) -> TART_NOT_FOUND
+ ✓ GS-01: happy path — both fixed diagnostics exit 0 with realistic bodies -> overall PASS
+ ✓ GS-05: wrong VM name -> GUEST_COMMAND_NONZERO (no false PASS) — fake-tart rejects unknown
+ ✓ GS-07: guest command returns nonzero (fake exit 7) -> GUEST_COMMAND_NONZERO
+ ✗ GS-08: guest command exceeds 30s timeout -> TART_EXEC_TIMEOUT (child reaped, no orphan)  [30003.31ms]
+   ^ this test timed out after 30000ms.
+ ✓ GS-09: oversize output (64 KiB) -> RESULT_TRUNCATED, ok:false
+ ✓ GS-10: two concurrent smoke requests both succeed with correct request_id correlation
+ ✓ GS-11: raw socket bypass — extra 'argv' field rejected by native parse layer
+ ✓ GS-11b: raw socket bypass — extra 'command' field rejected by native parse layer
+ ✓ GS-11c: raw socket bypass — extra 'spec' field rejected by dispatch boundary
+ ✓ GS-11d: raw socket bypass — extra 'client_token' field rejected by dispatch boundary
+ ✓ GS-13: request_id with quote + backslash survives JSON round-trip (P0-3 emit-escape)
+ ✓ GS-12: tart.testbed.run dispatch unaffected by smoke (no false-PASS regression)
+
+ 1 tests failed:
+ ✗ GS-08: guest command exceeds 30s timeout -> TART_EXEC_TIMEOUT (child reaped, no orphan)  [30003.31ms]
+ 23 pass
+ 1 fail
+ 64 expect() calls
+ Ran 24 tests across 1 file.  [35.06s]
+
+ROOT CAUSE (on-call expert verdict):
+  Defect 1: smoke_invoke_bounded() signals only the immediate child
+            (kill(pid, ...)). The fake-tart's `sh -c 'sleep 60'` has a
+            `sleep` grandchild in the same pgrp. The pgrp signal was
+            not used. Orphaned sleep inherits the pipe FDs and holds
+            them open.
+  Defect 2: handle_tart_guest_smoke() runs sw_vers (30s timeout) THEN
+            uname_a (30s timeout) sequentially. The test's 35s socket
+            deadline cannot accommodate 60s of helper wallclock, so
+            bun's 30s test harness timeout fires first.
+
+EXIT REASON: GS-08 timed out at 30s (bun test harness) before the
+            helper could respond (handler was blocked in the post-kill
+            pipe drain waiting for the orphan sleep to release the
+            pipe FDs).
