@@ -1,0 +1,333 @@
+[0m
+real-lifecycle-correction01.test.ts:
+[0m[1m264 |[0m         image: IMAGE,
+[0m[1m265 |[0m         commands: [{ argv: [[0m[32m"echo"[0m, [0m[32m"ok"[0m] }],
+[0m[1m266 |[0m       }),
+[0m[1m267 |[0m     })
+[0m[1m268 |[0m     [0m[35mawait[0m send(ctx, req)
+[0m[1m269 |[0m     expect(existsSync(ctx.sshCapturedPath))[0m[3m[1m.toBe[0m([0m[33mtrue[0m)
+                                                  [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [32mtrue[0m
+Received: [31mfalse[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mreal-lifecycle-correction01.test.ts[0m[2m:[0m[33m269[0m[2m:[33m45[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-01: SSH argv includes -o before every -o KEY=VAL option[0m [0m[2m[[1m390.77ms[0m[2m][0m
+[0m[1m316 |[0m       [0m[35mif[0m (hasId && hasPub && hasKh) {
+[0m[1m317 |[0m         found = [0m[33mtrue[0m
+[0m[1m318 |[0m         [0m[35mbreak[0m
+[0m[1m319 |[0m       }
+[0m[1m320 |[0m     }
+[0m[1m321 |[0m     expect(found)[0m[3m[1m.toBe[0m([0m[33mtrue[0m)
+                        [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [32mtrue[0m
+Received: [31mfalse[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mreal-lifecycle-correction01.test.ts[0m[2m:[0m[33m321[0m[2m:[33m19[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-02: staging dir contains id_ed25519 and known_hosts after tart.testbed.run[0m [0m[2m[[1m271.61ms[0m[2m][0m
+[0m[1m346 |[0m         commands: [{ argv: [[0m[32m"false"[0m] }],
+[0m[1m347 |[0m       }),
+[0m[1m348 |[0m     })
+[0m[1m349 |[0m     [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(ctx, req))
+[0m[1m350 |[0m     expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m351 |[0m     expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_CMD_FAILED"[0m)
+                             [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_C[0m[32mMD[0m[32m_FAILED"[0m
+Received: [0m[31m"TART_C[0m[31mLONE[0m[31m_FAILED"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mreal-lifecycle-correction01.test.ts[0m[2m:[0m[33m351[0m[2m:[33m24[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-03: non-zero SSH command exit surfaces as TART_CMD_FAILED (not PASS)[0m [0m[2m[[1m480.44ms[0m[2m][0m
+[0m[1m376 |[0m         commands: [{ argv: [[0m[32m"true"[0m] }],
+[0m[1m377 |[0m       }),
+[0m[1m378 |[0m     })
+[0m[1m379 |[0m     [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(ctx, req))
+[0m[1m380 |[0m     expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m381 |[0m     expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_STOP_FAILED"[0m)
+                             [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"T[0m[32mART_STOP[0m[32m_FAILED"[0m
+Received: [0m[31m"T[0m[31mESTBED_PREPARE[0m[31m_FAILED"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mreal-lifecycle-correction01.test.ts[0m[2m:[0m[33m381[0m[2m:[33m24[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-04: tart stop failure surfaces as TART_STOP_FAILED[0m [0m[2m[[1m249.15ms[0m[2m][0m
+[0m[1m404 |[0m         commands: [{ argv: [[0m[32m"true"[0m] }],
+[0m[1m405 |[0m       }),
+[0m[1m406 |[0m     })
+[0m[1m407 |[0m     [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(ctx, req))
+[0m[1m408 |[0m     expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m409 |[0m     expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_DELETE_FAILED"[0m)
+                             [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_[0m[32mDELET[0m[32mE_FAILED"[0m
+Received: [0m[31m"TART_[0m[31mCLON[0m[31mE_FAILED"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mreal-lifecycle-correction01.test.ts[0m[2m:[0m[33m409[0m[2m:[33m24[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-05: tart delete failure surfaces as TART_DELETE_FAILED[0m [0m[2m[[1m459.37ms[0m[2m][0m
+[0m[1m436 |[0m         commands: [{ argv: [[0m[32m"true"[0m] }],
+[0m[1m437 |[0m       }),
+[0m[1m438 |[0m     })
+[0m[1m439 |[0m     [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(ctx, req))
+[0m[1m440 |[0m     expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m441 |[0m     expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_SSH_TIMEOUT"[0m)
+                             [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_SSH_TIMEOUT"[0m
+Received: [0m[31m"TESTBED_PREPARE_FAILED"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mreal-lifecycle-correction01.test.ts[0m[2m:[0m[33m441[0m[2m:[33m24[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-06: WAIT_SSH timeout triggers VM delete (no orphan)[0m [0m[2m[[1m243.56ms[0m[2m][0m
+[0m
+tart-preflight.test.ts:
+[0m[32m✓[0m[0m[1m RPC-01: valid tart.preflight envelope accepted (happy path)[0m [0m[2m[[1m1010.66ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m RPC-02: envelope with extra 'command' field is rejected (anti-shell)[0m [0m[2m[[1m604.84ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m RPC-02b: envelope with arbitrary extra fields is rejected[0m [0m[2m[[1m608.63ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m RPC-03: unknown method -> METHOD_NOT_ALLOWED[0m [0m[2m[0.77ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m RPC-04: missing request_id -> MISSING_REQUEST_ID/BAD_REQUEST[0m [0m[2m[0.54ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-01: cache canary succeeds on a writable directory[0m [0m[2m[[1m1120.17ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-02: cache canary on read-only parent -> CACHE_WRITE_FAILED[0m [0m[2m[[1m1011.97ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-03: cache canary failure dominates Tart success (no false PASS)[0m [0m[2m[[1m1116.79ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-04: Tart executable absent -> TART_NOT_FOUND[0m [0m[2m[[1m615.09ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-05: tart --version succeeds with bounded version capture[0m [0m[2m[[1m1023.11ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-06: tart --version returns nonzero -> TART_EXEC_FAILED[0m [0m[2m[[1m780.83ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-07: tart --version hangs past deadline -> TART_EXEC_FAILED[0m [0m[2m[[0m[33m15795.45ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-08: tart list --source local succeeds[0m [0m[2m[[1m878.49ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-09: tart list --source local nonzero -> TART_EXEC_FAILED[0m [0m[2m[[1m1028.18ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PF-10: full preflight PASS on the happy path[0m [0m[2m[[1m1134.82ms[0m[2m][0m
+[0m
+tart-guest-smoke.test.ts:
+[0m[32m✓[0m[0m[1m RPC-01: valid tart.guest.smoke envelope with no caller fields is accepted by parser[0m [0m[2m[[1m441.87ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m RPC-02: extra 'command' field rejected by C parse layer (FORBIDDEN_KEY)[0m [0m[2m[[1m433.87ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m RPC-03: extra 'vm_name' field rejected by C parse layer (FORBIDDEN_KEY)[0m [0m[2m[[1m435.59ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m RPC-04: extra 'argv' field rejected by C parse layer (FORBIDDEN_KEY)[0m [0m[2m[[1m436.55ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m RPC-05: extra 'env' field rejected by C parse layer (FORBIDDEN_KEY)[0m [0m[2m[[1m429.72ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-04: missing CLINEMM_SMOKE_VM fails closed with SMOKE_NOT_CONFIGURED (no fork)[0m [0m[2m[[1m425.87ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-04b: missing CLINEMM_SMOKE_TART_HOME fails closed with SMOKE_NOT_CONFIGURED[0m [0m[2m[[1m425.30ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-04c: malformed CLINEMM_SMOKE_VM (path injection) is refused[0m [0m[2m[[1m434.43ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-04d: malformed CLINEMM_SMOKE_TART_HOME (not absolute) is refused[0m [0m[2m[[1m441.80ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-04e: TART_HOME that is a regular file (not a directory) fails closed[0m [0m[2m[[1m433.62ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-04f: TART_HOME with no vms/ subdirectory fails closed[0m [0m[2m[[1m441.31ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-03: tart executable absent (override) -> TART_NOT_FOUND[0m [0m[2m[[1m429.06ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-01: happy path — both fixed diagnostics exit 0 with realistic bodies -> overall PASS[0m [0m[2m[[1m800.76ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-05: wrong VM name -> GUEST_COMMAND_NONZERO (no false PASS) — fake-tart rejects unknown[0m [0m[2m[[1m732.46ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-07: guest command returns nonzero (fake exit 7) -> GUEST_COMMAND_NONZERO[0m [0m[2m[[1m800.45ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-08: guest command exceeds 30s timeout -> TART_EXEC_TIMEOUT (child reaped, no orphan)[0m [0m[2m[[0m[33m31363.45ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-09: oversize output (64 KiB) -> RESULT_TRUNCATED, ok:false[0m [0m[2m[[1m876.40ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-10: two concurrent smoke requests both succeed with correct request_id correlation[0m [0m[2m[[1m996.39ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-11: raw socket bypass — extra 'argv' field rejected by native parse layer[0m [0m[2m[[1m427.41ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-11b: raw socket bypass — extra 'command' field rejected by native parse layer[0m [0m[2m[[1m433.37ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-11c: raw socket bypass — extra 'spec' field rejected by dispatch boundary (P0-2 closed-envelope)[0m [0m[2m[[1m432.97ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-11d: raw socket bypass — extra 'client_token' field rejected by dispatch boundary (P0-2 closed-envelope)[0m [0m[2m[[1m444.03ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-13: request_id with quote + backslash survives JSON round-trip (P0-3 emit-escape)[0m [0m[2m[[1m796.99ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-13b: client disconnect during response does not crash helper (P0-3 disconnect contract)[0m [0m[2m[[1m1001.35ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m GS-12: tart.testbed.run dispatch unaffected by smoke (no false-PASS regression)[0m [0m[2m[[1m447.50ms[0m[2m][0m
+[0m[1m1323 |[0m       [0m[35mawait[0m [0m[35mnew[0m [0m[1mPromise[0m((r) => setTimeout(r, [0m[33m10[0m))
+[0m[1m1324 |[0m     }
+[0m[1m1325 |[0m     [0m[35mconst[0m pidStr = readFileSync(pidFile, [0m[32m"utf8"[0m)[0m[3m[1m.trim[0m()
+[0m[1m1326 |[0m     [0m[35mconst[0m pid = parseInt(pidStr, [0m[33m10[0m)
+[0m[1m1327 |[0m     [0m[35mif[0m (!Number[0m[3m[1m.isFinite[0m(pid) || pid [0m<[0m= [0m[33m0[0m) {
+[0m[1m1328 |[0m       [0m[35mthrow[0m [0m[35mnew[0m [0m[1mError[0m([0m[32m`[GS-14] pid file contains invalid PID: "[0m${pidStr}[0m[32m"`[0m)
+                       [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[GS-14] pid file contains invalid PID: ""[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-guest-smoke.test.ts[0m[2m:[0m[33m1328[0m[2m:[33m17[0m[2m)[0m
+[0m[31m✗[0m[0m[1m GS-14: descendant cleanup — specific sleep PID is reaped after TART_EXEC_TIMEOUT[0m [0m[2m[[1m666.82ms[0m[2m][0m
+[0m
+tart-pg-id-discriminator.test.ts:
+[0m[32m✓[0m[0m[1m PGID-DISC: real helper + child fork — observe pgrp identity, prove kill(-helperPid) target[0m [0m[2m[[1m5352.07ms[0m[2m][0m
+[0m
+helper.test.ts:
+[0m[32m✓[0m[0m[1m status file reports activated=false (not under launchd)[0m [0m[2m[0.48ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m socket mode is 0600 (user-only)[0m
+[0m[32m✓[0m[0m[1m health method returns OK envelope[0m [0m[2m[4.42ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: response echoes request_id EXACTLY[0m [0m[2m[0.70ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: each round-trip preserves request_id verbatim[0m [0m[2m[2.93ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m unknown method -> METHOD_NOT_ALLOWED[0m [0m[2m[0.48ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m each forbidden key rejected with FORBIDDEN_KEY[0m [0m[2m[3.72ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m extra unknown key rejected[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m missing request_id -> BAD_REQUEST[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m missing method -> BAD_REQUEST[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m wrong version -> UNSUPPORTED_VERSION[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m version as string -> UNSUPPORTED_VERSION[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m bad json -> BAD_JSON[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m nested object -> FORBIDDEN_SHAPE[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m oversize -> OVERSIZE[0m [0m[2m[2.46ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m empty request_id -> MISSING_REQUEST_ID[0m [0m[2m[0.19ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m FFI symbol probe: launch_activate_socket resolves via bun:ffi[0m [0m[2m[4.18ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m compiled binary is not empty and is executable[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m source file declares launch_activate_socket integration[0m [0m[2m[0.31ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: fail-closed fallback matrix is encoded in source[0m [0m[2m[0.50ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: status file records launchd_rc for forensics[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: helper source emits request_id in response[0m [0m[2m[0.33ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: source declares JSON-escape emitter write_json_string[0m [0m[2m[0.49ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: response is valid JSON for adversarial request_ids[0m [0m[2m[1.37ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: each round-trip preserves request_id verbatim (escape-shaped)[0m [0m[2m[0.37ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: injection-shaped request_id stays data, not structure[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: source declares hex_value + utf8_encode + Unicode decode[0m [0m[2m[0.29ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: \uXXXX round-trips BMP characters (snowman, controls)[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: surrogate pair \uD83D\uDE80 decodes to 🚀 (supplementary plane)[0m [0m[2m[0.33ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: supplementary plane codepoint (🚀) round-trips end-to-end via JSON.stringify[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: mixed \uXXXX + short escapes + injection round-trip[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: same ID with raw UTF-8 in wire (Bun JSON.stringify behavior) round-trips[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: malformed \uXXXX fails closed (BAD_JSON)[0m [0m[2m[0.81ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: client API round-trips Unicode escapes[0m [0m[2m[3.19ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: RED -- embedded NUL in request_id round-trips[0m [0m[2m[0.28ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: lone \u0000 request_id is NOT rejected as empty[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: leading NUL byte preserved[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: trailing NUL byte preserved[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: a\u0001b (control, not NUL) still round-trips[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: rocket-\u{1F680} (supplementary plane) still round-trips[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: source declares val_len + length-aware write_json_string[0m [0m[2m[0.23ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: kv_t uses length, not NUL termination, at the consume site[0m
+[0m[32m✓[0m[0m[1m CORRECTION05: client API round-trips embedded NUL[0m [0m[2m[0.78ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: a\u0000b\u0000c -- multiple embedded NULs[0m [0m[2m[0.29ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed.run-installed-vsix-smoke invokes runner and splices result[0m [0m[2m[[1m896.97ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects non-existent runner with RUNNER_NOT_FOUND[0m [0m[2m[[1m610.92ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects runner with non-zero exit with INTERNAL_ERROR[0m [0m[2m[[1m781.14ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects envelope with traversal .. with BAD_REQUEST[0m [0m[2m[[1m609.41ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects envelope with non-.vsix path[0m [0m[2m[[1m609.34ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects envelope with forbidden keys (anti-shell)[0m [0m[2m[1.09ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: health method unaffected by testbed changes (regression)[0m [0m[2m[0.67ms[0m[2m][0m
+[skip] CORRECTION01 bounded-lifecycle test: substrate blocks SIGKILL on children (Background session). Production code is correct; CI on developer Mac will run.
+[0m[32m✓[0m[0m[1m CORRECTION01: runner that holds stdout open past deadline is SIGKILLed and reports TIMEOUT[0m [0m[2m[0.26ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION01: CLINEMM_TESTBED_TIMEOUT_SECONDS override > default is ignored[0m [0m[2m[[1m870.05ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: production-seam — C helper execve reaches the trusted testbed config[0m [0m[2m[[1m792.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: production-seam — missing trusted config → runner fails closed (no Tart)[0m [0m[2m[[1m998.79ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: production-seam — corrupt trusted config (group-writable) → runner fails closed[0m [0m[2m[[1m795.54ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-01: health includes build_id + active counts (new generation proof)[0m [0m[2m[0.54ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-02: client.open returns 32-hex token + kernel peer identity[0m [0m[2m[0.29ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-03: random token on register-owned is DENY_UNKNOWN_CLIENT[0m [0m[2m[0.28ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-04: register-owned rejects non-hex / wrong-length tokens (BAD_REQUEST)[0m [0m[2m[0.63ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-05: register-owned rejects non-positive / non-integer pgid[0m [0m[2m[0.89ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-06: register-owned on root-owned leader (PID 1) is DENY_OWNERSHIP[0m [0m[2m[1.37ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-07: terminate-owned with unknown job_token is DENY_UNKNOWN_JOB[0m [0m[2m[0.33ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-08: helper.restart requested when no jobs -> RESTARTING[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-09: source declares the new methods + capability store + peer identity[0m [0m[2m[0.79ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-10 (review-correction01): register-owned on a foreign-PGID-leader is refused[0m [0m[2m[0.38ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-11 (review-correction01): source-level proof of PPID ownership check[0m [0m[2m[0.26ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-12 (review-correction01): peer_identity() fails closed on LOCAL_PEERPID error[0m [0m[2m[0.22ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-13 (review-correction01): terminate/release success envelopes use write_json_string for request_id[0m [0m[2m[0.16ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-14 (review-correction01): source declares request_id in terminate + release success envelopes[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-15 (review-correction01): source declares build-time embedded build_id[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-16 (review-correction01): Makefile/build.sh no longer suppress implicit-function-declaration warnings[0m [0m[2m[0.37ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-17 (review-correction02): release_owned success path calls clear_job_slot[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-18 (review-correction02): terminate_owned reclaims the slot on EVERY terminal branch[0m [0m[2m[0.22ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-19 (review-correction02): live test - register/release > CLINEMM_MAX_JOBS does NOT exhaust[0m [0m[2m[[1m645.31ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-20 (review-correction02): client.close handler exists and reclaims the client slot[0m [0m[2m[0.36ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PGID-21 (review-correction02): live test - client.close reclaims the slot[0m [0m[2m[[1m605.74ms[0m[2m][0m
+[0m
+tart-testbed-run.test.ts:
+[0m[1m143 |[0m       commands: [{ argv: [[0m[32m"echo"[0m, [0m[32m"hi"[0m] }],
+[0m[1m144 |[0m     }),
+[0m[1m145 |[0m   })
+[0m[1m146 |[0m   [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(req))
+[0m[1m147 |[0m   expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m148 |[0m   expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_SSH_TIMEOUT"[0m)
+                           [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_[0m[32mSSH_TIMEOUT[0m[32m"[0m
+Received: [0m[31m"TART_[0m[31mCLONE_FAILED[0m[31m"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-testbed-run.test.ts[0m[2m:[0m[33m148[0m[2m:[33m22[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-01: dispatch reaches real lifecycle handler (TART_SSH_TIMEOUT with fake-tart)[0m [0m[2m[[1m262.00ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m TBRUNNER-C-02: extra top-level field rejected by parse layer (FORBIDDEN_KEY)[0m [0m[2m[0.57ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m TBRUNNER-C-03: missing spec field rejected[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[1m190 |[0m       commands: [{ argv: [[0m[32m"echo"[0m] }],
+[0m[1m191 |[0m     }),
+[0m[1m192 |[0m   })
+[0m[1m193 |[0m   [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(req))
+[0m[1m194 |[0m   expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m195 |[0m   expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_SSH_TIMEOUT"[0m)
+                           [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_[0m[32mSSH_TIMEOUT[0m[32m"[0m
+Received: [0m[31m"TART_[0m[31mCLONE_FAILED[0m[31m"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-testbed-run.test.ts[0m[2m:[0m[33m195[0m[2m:[33m22[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-04: dispatch path reaches real handler (TART_SSH_TIMEOUT with fake-tart)[0m [0m[2m[[1m73.79ms[0m[2m][0m
+[0m[1m212 |[0m       commands: [{ argv: [[0m[32m"true"[0m] }],
+[0m[1m213 |[0m     }),
+[0m[1m214 |[0m   })
+[0m[1m215 |[0m   [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(req))
+[0m[1m216 |[0m   expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m217 |[0m   expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_SSH_TIMEOUT"[0m)
+                           [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_SSH_TIMEOUT"[0m
+Received: [0m[31m"TESTBED_PREPARE_FAILED"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-testbed-run.test.ts[0m[2m:[0m[33m217[0m[2m:[33m22[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-09-1: SSH unavailable -> TART_SSH_TIMEOUT (not TART_IP_TIMEOUT)[0m [0m[2m[[1m63.90ms[0m[2m][0m
+[0m[1m234 |[0m       keep_vm: [0m[33mtrue[0m,
+[0m[1m235 |[0m     }),
+[0m[1m236 |[0m   })
+[0m[1m237 |[0m   [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(req))
+[0m[1m238 |[0m   expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m239 |[0m   expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_SSH_TIMEOUT"[0m)
+                           [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_SSH_TIMEOUT"[0m
+Received: [0m[31m"TESTBED_PREPARE_FAILED"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-testbed-run.test.ts[0m[2m:[0m[33m239[0m[2m:[33m22[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-09-2: keep_vm=true reaches KEEP_VM after SSH fails (NO delete after)[0m [0m[2m[[1m66.07ms[0m[2m][0m
+[0m[1m256 |[0m       commands: [{ argv: [[0m[32m"true"[0m] }],
+[0m[1m257 |[0m     }),
+[0m[1m258 |[0m   })
+[0m[1m259 |[0m   [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(req))
+[0m[1m260 |[0m   expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m261 |[0m   expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_SSH_TIMEOUT"[0m)
+                           [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_SSH_TIMEOUT"[0m
+Received: [0m[31m"TESTBED_PREPARE_FAILED"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-testbed-run.test.ts[0m[2m:[0m[33m261[0m[2m:[33m22[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-09-1: SSH unavailable -> TART_SSH_TIMEOUT (not TART_IP_TIMEOUT)[0m [0m[2m[[1m69.32ms[0m[2m][0m
+[0m[1m278 |[0m       keep_vm: [0m[33mtrue[0m,
+[0m[1m279 |[0m     }),
+[0m[1m280 |[0m   })
+[0m[1m281 |[0m   [0m[35mconst[0m resp = JSON[0m[3m[1m.parse[0m([0m[35mawait[0m send(req))
+[0m[1m282 |[0m   expect(resp.ok)[0m[3m[1m.toBe[0m([0m[33mfalse[0m)
+[0m[1m283 |[0m   expect(resp.error)[0m[3m[1m.toBe[0m([0m[32m"TART_SSH_TIMEOUT"[0m)
+                           [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: [0m[32m"TART_SSH_TIMEOUT"[0m
+Received: [0m[31m"TESTBED_PREPARE_FAILED"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-testbed-run.test.ts[0m[2m:[0m[33m283[0m[2m:[33m22[0m[2m)[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-09-2: keep_vm=true preserves primary failure (TART_SSH_TIMEOUT)[0m [0m[2m[[1m67.84ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m TBRUNNER-C-09-4: missing image field fails at parse layer (BAD_FIELD_TYPE)[0m [0m[2m[1.27ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m TBRUNNER-C-09-5: empty commands[] fails at parse layer (BAD_FIELD_TYPE)[0m [0m[2m[0.51ms[0m[2m][0m
+
+[0m[2m13 tests failed:[0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-01: SSH argv includes -o before every -o KEY=VAL option[0m [0m[2m[[1m390.77ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-02: staging dir contains id_ed25519 and known_hosts after tart.testbed.run[0m [0m[2m[[1m271.61ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-03: non-zero SSH command exit surfaces as TART_CMD_FAILED (not PASS)[0m [0m[2m[[1m480.44ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-04: tart stop failure surfaces as TART_STOP_FAILED[0m [0m[2m[[1m249.15ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-05: tart delete failure surfaces as TART_DELETE_FAILED[0m [0m[2m[[1m459.37ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-RL-06: WAIT_SSH timeout triggers VM delete (no orphan)[0m [0m[2m[[1m243.56ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m GS-14: descendant cleanup — specific sleep PID is reaped after TART_EXEC_TIMEOUT[0m [0m[2m[[1m666.82ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-01: dispatch reaches real lifecycle handler (TART_SSH_TIMEOUT with fake-tart)[0m [0m[2m[[1m262.00ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-04: dispatch path reaches real handler (TART_SSH_TIMEOUT with fake-tart)[0m [0m[2m[[1m73.79ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-09-1: SSH unavailable -> TART_SSH_TIMEOUT (not TART_IP_TIMEOUT)[0m [0m[2m[[1m63.90ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-09-2: keep_vm=true reaches KEEP_VM after SSH fails (NO delete after)[0m [0m[2m[[1m66.07ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-09-1: SSH unavailable -> TART_SSH_TIMEOUT (not TART_IP_TIMEOUT)[0m [0m[2m[[1m69.32ms[0m[2m][0m
+[0m[31m✗[0m[0m[1m TBRUNNER-C-09-2: keep_vm=true preserves primary failure (TART_SSH_TIMEOUT)[0m [0m[2m[[1m67.84ms[0m[2m][0m
+
+[0m[32m 122 pass[0m
+[0m[31m 13 fail[0m
+ 558 expect() calls
+Ran 135 tests across 6 files. [0m[2m[[1m89.37s[0m[2m][0m

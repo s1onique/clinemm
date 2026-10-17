@@ -65,23 +65,51 @@ const ABI_VERSION =
 // The expected Mach-O Identifier for the canonical build.
 const CANONICAL_IDENT = "helper"
 
-// Run a child process and capture stdout/stderr text.
+// Run a child process and capture stdout/stderr text. The
+// timeoutMs is a HARD ceiling: if the child does not exit
+// within timeoutMs, we kill it and return a synthetic
+// "timeout" exit code (-1) so the caller can fail-closed.
+// The previous implementation awaited Promise.all with
+// p.exited and only USED timeoutMs as a no-op comment; a hung
+// build could block indefinitely. ACT-CLINEMM-TART-P4.1-
+// C1-GO-NATIVE-HELPER-ATOMIC-BUILD01 (reviewer follow-up):
+// this is one of the two P1 harness corrections the reviewer
+// flagged.
 async function runChild(cmd: string[], cwd: string, timeoutMs: number) {
   const p = spawn({ cmd, cwd, stdio: ["ignore", "pipe", "pipe"] })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(p.stdout).text(),
-    new Response(p.stderr).text(),
-    p.exited,
-  ])
-  // Wait for the timeout-or-exit race. p.exited is already settled
-  // since the Promise.all resolved. We use a Promise.race only for
-  // early cancellation if the caller wants it.
-  if (typeof timeoutMs === "number") {
-    // No-op: Promise.all above already waits for exit. The
-    // timeoutMs parameter is reserved for future cancellation.
-    void timeoutMs
+  // Race: either the child exits naturally, or the timeout
+  // fires and we kill the child.
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<"__TIMEOUT__">((resolve) => {
+    timeoutHandle = setTimeout(() => resolve("__TIMEOUT__"), timeoutMs)
+  })
+  const exitPromise = p.exited.then((c) => c as number | "__TIMEOUT__")
+  const winner = await Promise.race([exitPromise, timeoutPromise])
+  if (timeoutHandle) clearTimeout(timeoutHandle)
+  if (winner === "__TIMEOUT__") {
+    try { p.kill() } catch { /* best-effort */ }
+    // Drain whatever stdout/stderr we can in a bounded window so
+    // the failure message has the child's last words.
+    const drainTimeout = new Promise<string>((r) => setTimeout(() => r(""), 500))
+    const stdout = await Promise.race([
+      new Response(p.stdout).text().catch(() => ""),
+      drainTimeout,
+    ])
+    const stderr = await Promise.race([
+      new Response(p.stderr).text().catch(() => ""),
+      drainTimeout,
+    ])
+    throw new Error(
+      `child ${cmd.join(" ")} timed out after ${timeoutMs}ms\n` +
+      `stdout-tail: ${stdout.slice(-2000)}\nstderr-tail: ${stderr.slice(-2000)}`,
+    )
   }
-  return { stdout, stderr, code }
+  // Child exited within the timeout. Drain stdout/stderr.
+  const [stdout, stderr] = await Promise.all([
+    new Response(p.stdout).text().catch(() => ""),
+    new Response(p.stderr).text().catch(() => ""),
+  ])
+  return { stdout, stderr, code: winner as number }
 }
 
 // Compute the expected build_id from the current source bytes using
@@ -181,7 +209,50 @@ export interface HelperBuildIdentity {
 // bounded C1 contract: the binary at HELPER_BIN is a fresh
 // build, atomically installed, Identifier=helper, strict-verify
 // passes, and the build_id matches the current source.
+//
+// ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01
+// (reviewer follow-up): "Concurrent build identity. All six
+// native test suites call ensureHelperBinary() and each rebuilds
+// the same ./helper path in beforeAll. Atomic rename protects
+// against in-place signature corruption, but not against another
+// suite replacing the binary between verification and spawn.
+// Prefer one build per test run, or distinct immutable binaries
+// per suite." The previous design rebuilt on every call. The fix:
+// a module-level cache key that is invalidated whenever the
+// source bytes OR the ABI_VERSION change, so the FIRST call in
+// the test run performs the build+verify and every subsequent
+// call in the same run gets the cached identity WITHOUT
+// rebuilding. The cache is invalidated at module-load time
+// (every bun:test run is a fresh module load), so cross-run
+// caching is not possible.
+let cachedIdentity: HelperBuildIdentity | null = null
+let cachedSourceKey: string | null = null
+
+function currentSourceKey(): string {
+  // sha256 of (ABI_VERSION || source bytes). If either changes,
+  // the cache is invalidated and the next call rebuilds.
+  const src = readFileSync(HELPER_SRC)
+  // Simple FNV-1a-like hash; we don't need crypto-grade here
+  // because the source file is a few hundred KB and we only
+  // need a fast, deterministic discriminator.
+  let h = 0x811c9dc5
+  for (let i = 0; i < src.length; i++) {
+    h ^= src[i]
+    h = (h * 0x01000193) >>> 0
+  }
+  return `${ABI_VERSION}:${src.length}:${h.toString(16)}`
+}
+
 export async function ensureHelperBinary(): Promise<HelperBuildIdentity> {
+  // 0. Cache check: if the source+ABI hasn't changed since the
+  //    last build in this process, return the cached identity
+  //    WITHOUT re-running build.sh. This is the "one build per
+  //    test run" property the reviewer asked for.
+  const key = currentSourceKey()
+  if (cachedIdentity && cachedSourceKey === key) {
+    return cachedIdentity
+  }
+
   // 1. Run build.sh. Even if HELPER_BIN exists, re-run it: the
   //    whole point of the bounded fix is that the destination
   //    file is the CURRENT build, not a stale leftover from a
@@ -278,6 +349,13 @@ export async function ensureHelperBinary(): Promise<HelperBuildIdentity> {
     // Best-effort: a non-writable IDENTITY_FILE is not a test
     // failure (e.g. read-only repo checkout).
   }
+
+  // 8. Cache the identity so subsequent ensureHelperBinary()
+  //    calls in this process do NOT re-run build.sh. The cache
+  //    is invalidated at module-load time and when the source
+  //    bytes or ABI_VERSION change.
+  cachedIdentity = identity
+  cachedSourceKey = key
 
   return identity
 }

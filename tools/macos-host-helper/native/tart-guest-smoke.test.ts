@@ -50,6 +50,15 @@ let fixtureRoot: string
 let proc: Subprocess | null = null
 let socketPath: string = ""
 let statusPath: string = ""
+// ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01
+// (reviewer follow-up): captures the helper's stderr and
+// stdout so GS-14 can read the [helper] smoke-timeout log
+// lines the production code emits. Captured text is exposed
+// via getHelperStderr() (below) and surfaced in the FAIL-DIAG.
+let helperStderrText: string = ""
+let helperStderrSeq: number = 0
+let helperStdoutText: string = ""
+let helperStdoutSeq: number = 0
 // ACT-CLINEMM-TART-P4.1-CORRECTION04 (C1 bounded fix): ownership
 // flag. Set to true ONLY when startHelper() successfully spawned
 // the helper with `detached: true` AND verification of the helper's
@@ -201,6 +210,19 @@ function parseResp(raw: string): { ok: boolean; [k: string]: unknown } {
   return JSON.parse(raw)
 }
 
+// ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01
+// (reviewer follow-up): return the helper's captured stderr
+// text. The text is updated asynchronously by the
+// startHelper() stderr drain. Callers that need the final
+// value should `await new Promise(r => setTimeout(r, 100))`
+// before calling this to let the drain catch up.
+function getHelperStderr(): string {
+  return helperStderrText
+}
+function getHelperStdout(): string {
+  return helperStdoutText
+}
+
 async function startHelper(envOverrides: Record<string, string>): Promise<void> {
   const stamp = Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36)
   socketPath = `/tmp/clinemm-smoke-p41-${stamp}.sock`
@@ -227,6 +249,71 @@ async function startHelper(envOverrides: Record<string, string>): Promise<void> 
     // ownership before signaling any group.
     detached: true,
   })
+  // ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01
+  // (reviewer follow-up): continuously capture the helper's
+  // stderr so the GS-14 (and any other) test can read the
+  // [helper] smoke-timeout log lines that the production code
+  // emits when it fires the pgrp kill. The captured text is
+  // exposed via getHelperStderr() (defined below) and
+  // surfaced in the GS-14 FAIL-DIAG.
+  //
+  // Important: each test gets a fresh startHelper() invocation,
+  // so we reset the captured text at the start of every
+  // startHelper() call. The async drain may complete AFTER
+  // a later startHelper() has reset the text, so we ALSO
+  // guard the assignment with a per-helper sequence number
+  // to ensure stale drains from previous helpers cannot
+  // overwrite the current helper's stderr.
+  helperStderrText = ""
+  helperStderrSeq++
+  const mySeq = helperStderrSeq
+  if (proc && proc.stderr) {
+    // proc.stderr in bun is a Response (not a raw stream) —
+    // it has a .text() method directly. The startup code
+    // path uses `proc.stderr.text()` so we follow the same
+    // pattern here. (Wrapping with `new Response(proc.stderr)`
+    // would produce an empty string because the inner
+    // Response is not a stream.)
+    const stderrAny = proc as unknown as { stderr?: { text?: () => Promise<string> } }
+    if (typeof stderrAny.stderr?.text === "function") {
+      stderrAny.stderr.text()
+        .then((t) => {
+          if (mySeq === helperStderrSeq) {
+            helperStderrText = t
+          }
+        })
+        .catch(() => {})
+    } else if (typeof (proc.stderr as any)?.getReader === "function") {
+      // Fall back to stream-style read.
+      ;(async () => {
+        const reader = (proc.stderr as any).getReader()
+        let acc = ""
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+          if (value) acc += new TextDecoder().decode(value)
+        }
+        if (mySeq === helperStderrSeq) {
+          helperStderrText = acc
+        }
+      })().catch(() => {})
+    }
+  }
+  helperStdoutText = ""
+  helperStdoutSeq++
+  const mySeqOut = helperStdoutSeq
+  if (proc && proc.stdout) {
+    const stdoutAny = proc as unknown as { stdout?: { text?: () => Promise<string> } }
+    if (typeof stdoutAny.stdout?.text === "function") {
+      stdoutAny.stdout.text()
+        .then((t) => {
+          if (mySeqOut === helperStdoutSeq) {
+            helperStdoutText = t
+          }
+        })
+        .catch(() => {})
+    }
+  }
   for (let i = 0; i < 100; i++) {
     if (existsSync(statusPath)) break
     await new Promise((r) => setTimeout(r, 100))
@@ -1316,9 +1403,143 @@ esac
     // observation; ps failures are thrown (not swallowed).
     const start = Date.now()
     let lastObs: "absent" | "zombie" | "alive" = "alive"
+    // ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01
+    // (reviewer follow-up): capture the pgrp state at every
+    // poll iteration so that, if the cleanup invariant fails,
+    // the diagnostic data is in the test log. The three
+    // capture points the reviewer requested:
+    //   1. helper's PGID
+    //   2. sleep's PGID
+    //   3. kill -0 -<sleepPgrp> rc + errno
+    // are emitted at every iteration. The FAIL diagnostic at
+    // the end of the test aggregates the last snapshot.
+    function capturePgrpSnapshot(label: string): {
+      helperPgid: string
+      sleepPgrp: string
+      kill0SleepPgrp: string
+      kill0HelperPgrp: string
+      shellStillAlive: string
+    } {
+      // execSync is required locally because the test file uses
+      // bun's `require` pattern (not ESM imports) for child_process.
+      // The require MUST happen inside the function body for
+      // bun:test's worker context.
+      const { execSync: execSyncLocal } = require("node:child_process") as typeof import("node:child_process")
+      let helperPgid = "?"
+      let sleepPgrp = "?"
+      let kill0SleepPgrp = "?"
+      let kill0HelperPgrp = "?"
+      let shellStillAlive = "?"
+      // ps -o pgid= emits the PGID on stdout (no header on macOS
+      // because the FIRST column's `=` suppresses the header).
+      // Capture stdout, then append a rc marker on the same line.
+      try {
+        const helperPsOut = execSyncLocal(
+          `ps -p ${helperPid} -o pgid= 2>&1; echo "__PRC=$?"`,
+          { encoding: "utf8", timeout: 2000 },
+        )
+        // The output looks like "46132\n__PRC=0\n". Parse both lines.
+        const lines = helperPsOut.trim().split("\n")
+        const pgidLine = lines.find((l) => /^\d+$/.test(l.trim()))
+        const prcLine = lines.find((l) => l.startsWith("__PRC="))
+        if (pgidLine && prcLine && prcLine.includes("=0")) {
+          helperPgid = pgidLine.trim()
+        }
+      } catch {}
+      try {
+        const sleepPsOut = execSyncLocal(
+          `ps -p ${sleepPid} -o pgid=,ppid= 2>&1; echo "__PRC=$?"`,
+          { encoding: "utf8", timeout: 2000 },
+        )
+        // For pgid=,ppid= macOS may emit a header for the non-`=`
+        // column. Strip the header line.
+        const lines = sleepPsOut.trim().split("\n")
+          .filter((l) => !l.startsWith("PPID"))
+          .filter((l) => !l.startsWith("__PRC"))
+        if (lines.length > 0) {
+          const parts = lines[0].trim().split(/\s+/)
+          if (parts.length >= 1 && /^\d+$/.test(parts[0])) {
+            sleepPgrp = parts[0]
+          }
+        }
+      } catch {}
+      // Find the fake-tart shell and capture its pgrp.
+      try {
+        const psAll = execSyncLocal(
+          `ps -axo pid=,ppid=,pgid=,command 2>&1`,
+          { encoding: "utf8", timeout: 2000 },
+        )
+        const matches = psAll.split("\n").filter((l) => l.includes("fake-tart"))
+        shellStillAlive = matches.length > 0
+          ? matches.join(" | ")
+          : "GONE"
+      } catch {}
+      // kill -0 -<pgid> tells us if the pgrp is still alive
+      // (and accessible to us for signaling).
+      function kill0pgid(pgid: string): string {
+        if (pgid === "?" || pgid === "") return "n/a"
+        try {
+          execSyncLocal(`kill -0 -${pgid}`, {
+            encoding: "utf8",
+            timeout: 2000,
+            stdio: ["ignore", "pipe", "pipe"],
+          })
+          return `rc=0 (pgrp ${pgid} still exists)`
+        } catch (e: any) {
+          return `rc=${e?.status ?? "?"} errno=${e?.code ?? "?"} stderr=${e?.stderr?.toString?.() ?? ""}`
+        }
+      }
+      kill0SleepPgrp = kill0pgid(sleepPgrp)
+      kill0HelperPgrp = kill0pgid(helperPgid)
+      console.log(
+        `[GS-14-DISC ${label}] helperPGID=${helperPgid} ` +
+        `sleepPGID=${sleepPgrp} ` +
+        `kill0(-sleepPgrp)=${kill0SleepPgrp} ` +
+        `kill0(-helperPgrp)=${kill0HelperPgrp} ` +
+        `shell=${shellStillAlive}`,
+      )
+      return { helperPgid, sleepPgrp, kill0SleepPgrp, kill0HelperPgrp, shellStillAlive }
+    }
+    // Capture the initial state immediately after the
+    // smoke response arrives (i.e. at the moment the helper's
+    // SIGKILL has just been issued).
+    // Sanity check: proc must be alive, otherwise the snapshot
+    // data is meaningless. This is defensive: the test's
+    // process state could be in any of several intermediate
+    // forms and we want the FAIL diagnostic to be specific.
+    let procState = "?"
+    let procStateErr = "?"
+    try {
+      if (proc?.pid) {
+        const { execSync: execSyncLocal } = require("node:child_process") as typeof import("node:child_process")
+        const psOut = execSyncLocal(
+          `ps -p ${proc.pid} -o pid=,stat= 2>&1; echo __PRC=$?`,
+          { encoding: "utf8", timeout: 2000 },
+        )
+        procState = psOut.trim()
+      } else {
+        procState = "proc.pid=undefined"
+      }
+    } catch (e: any) {
+      procStateErr = `${e?.message ?? e} stderr=${e?.stderr?.toString?.() ?? ""}`
+    }
+    const initialSnap = capturePgrpSnapshot(`AT-TIMEOUT (procState=${procState})`)
+    let lastSnap = initialSnap
+    // Collect every snapshot so the FAIL diagnostic can include
+    // the full trace, not just the last one. The trace is
+    // critical for distinguishing "kill never fired" from
+    // "kill fired but sleep reparented" from "kill fired on
+    // the wrong pgrp".
+    const snapTrace: string[] = [`AT-TIMEOUT (procState=${procState}): ${JSON.stringify(initialSnap)}`]
     while (Date.now() - start < 5000) {
       try {
         lastObs = observePid(sleepPid)
+        // Capture at every poll so the FAIL diagnostic has
+        // a full trace, not just the last snapshot.
+        lastSnap = capturePgrpSnapshot(
+          `poll-${((Date.now() - start) / 1000).toFixed(1)}s`,
+        )
+        snapTrace.push(`poll-${((Date.now() - start) / 1000).toFixed(1)}s: ${JSON.stringify(lastSnap)}`)
       } catch (e) {
         // Hard observation failure: rethrow with context.
         throw new Error(`[GS-14] observation failed for PID ${sleepPid}: ${(e as Error).message}`)
@@ -1334,6 +1555,69 @@ esac
     // removed (CORRECTION03): the test asserts the CLEANUP
     // INVARIANT (no sleep 60 grandchild outlives the request),
     // which is exactly the production pgrp-kill contract.
+    if (lastObs === "alive") {
+      // ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01
+      // (reviewer follow-up): to capture the helper's stderr
+      // (which is buffered until EOF), we kill the helper
+      // NOW and then race the .text() promise against a short
+      // timeout. The kill is the only way to drain the
+      // bun Subprocess stream without waiting forever.
+      try { if (proc) proc.kill() } catch {}
+      // Wait for the helper to actually die. proc.exited is
+      // resolved when the subprocess terminates, which closes
+      // the stderr stream.
+      if (proc) {
+        try {
+          await Promise.race([
+            proc.exited,
+            new Promise((r) => setTimeout(() => r(undefined), 2000)),
+          ])
+        } catch {}
+      }
+      let helperStderr = ""
+      let helperStdout = ""
+      try {
+        const stderrAny = proc as unknown as { stderr?: { text?: () => Promise<string> } }
+        if (typeof stderrAny.stderr?.text === "function") {
+          helperStderr = await Promise.race([
+            stderrAny.stderr.text(),
+            new Promise<string>((r) => setTimeout(() => r(""), 2000)),
+          ])
+        }
+      } catch {}
+      try {
+        const stdoutAny = proc as unknown as { stdout?: { text?: () => Promise<string> } }
+        if (typeof stdoutAny.stdout?.text === "function") {
+          helperStdout = await Promise.race([
+            stdoutAny.stdout.text(),
+            new Promise<string>((r) => setTimeout(() => r(""), 2000)),
+          ])
+        }
+      } catch {}
+      const smokeTimeoutLines = helperStderr
+        .split("\n")
+        .filter((l) => l.includes("smoke-timeout") || l.includes("pgrp-kill") || l.includes("pgrp-sweep") || l.includes("pgrp-still") || l.includes("pgrp-EPERM"))
+        .join(" | ")
+      const allStderrTail = helperStderr.slice(-2000)
+      const allStdoutTail = helperStdout.slice(-2000)
+      const diag = [
+        `[GS-14-FAIL-DIAG] helper=${helperPid} proc.pid=${proc?.pid} sleep=${sleepPid}`,
+        `procState=${procState}`,
+        `procStateErr=${procStateErr}`,
+        `helperPGID=${lastSnap.helperPgid}`,
+        `sleepPGID=${lastSnap.sleepPgrp}`,
+        `kill0(-sleepPgrp)=${lastSnap.kill0SleepPgrp}`,
+        `kill0(-helperPgrp)=${lastSnap.kill0HelperPgrp}`,
+        `shell=${lastSnap.shellStillAlive}`,
+        `lastObs=${lastObs} after 5s poll`,
+        `HELPER_smoke_timeout_lines=${smokeTimeoutLines || "(none)"}`,
+        `HELPER_stderr_tail=${JSON.stringify(allStderrTail)}`,
+        `HELPER_stdout_tail=${JSON.stringify(allStdoutTail)}`,
+        `SNAPSHOT_TRACE:`,
+        ...snapTrace,
+      ].join("\n  ")
+      throw new Error(`[GS-14] CLEANUP INVARIANT FAILED:\n  ${diag}`)
+    }
     expect(lastObs).not.toBe("alive")
   } finally {
     // ACT-CLINEMM-TART-P4.1-CORRECTION04 (C1 bounded fix):

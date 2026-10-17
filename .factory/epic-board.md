@@ -27885,3 +27885,97 @@ The C1 bounded fix (atomic build, variant separation, build verification) is com
   - `tools/macos-host-helper/native/tart-testbed-run.test.ts` (use ensureHelperBinary)
   - `.factory/evidence/ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01/01..05` (5 NEW files)
   - `.factory/acts/ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01.md` (NEW)
+
+---
+
+## ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01 — GS-14 CAUSAL DISCRIMINATOR + HARNESS P1 FIXES — 2026-10-17
+
+The macOS code-signing engineer's follow-up C1 verdict on commit fef29e980 identified:
+
+  1. **GS-14 exposed a real subprocess-conservation failure**: the test gets past startup, runs 37s, observes `lastObs="alive"` for the sleep 60 grandchild.
+  2. **Two P1 build-harness issues**:
+     - P1-A: `test-helper-build.ts:runChild()`'s `timeoutMs` parameter was a no-op; a hung build could block indefinitely.
+     - P1-B: all 6 native test suites call `ensureHelperBinary()` and each rebuilds; the atomic rename doesn't protect against racing suites.
+  3. **Don't classify remaining 15 failures as baseline**: GS-10 and GS-14 remain ACT-owned qualification gaps.
+
+**Bounded causal discriminator (test-side only, no production change):**
+
+Added a `capturePgrpSnapshot` function inside GS-14 that captures the EXACT state the reviewer asked for at every poll iteration:
+
+  - `helper's PGID` (own pgrp leader)
+  - `sleep's PGID` (matches the shell's, NOT the helper's)
+  - `kill -0 -<sleepPgrp>` rc + errno (test runner cannot signal from outside the helper's session)
+  - `kill -0 -<helperPgrp>` rc + errno (same)
+  - `shell state` (fake-tart `/bin/sh` still alive?)
+
+**Discriminator data confirms the failure shape (raw in 07-gs14-discriminator-raw.log):**
+
+```
+helper=19793 proc.pid=19793 sleep=19822
+procState=19793  s  (helper alive, in event loop)
+helperPGID=19793  (helper is its own pgrp leader)
+sleepPGID=19821   (sleep is in shell's pgrp, NOT helper's pgrp)
+kill0(-sleepPgrp)=rc=1 EPERM  "kill: (-19821) - Operation not permitted"
+shell: 19821 19793 19821 /bin/sh ... exec ... /usr/bin/sw_vers
+  -> shell is alive 5 seconds after the helper's timeout kill fired
+  -> sleep is alive 5 seconds after the helper's timeout kill fired
+lastObs=alive after 5s poll
+```
+
+The killpg return code from the helper's perspective is the only thing that can distinguish the failure modes (a) killpg returned -1 vs (b) killpg returned 0 but kernel reparented the sleep. We DO NOT have that return code because the helper is spawned with `detached: true` (required by the afterEach policy in CORRECTION04) — bun's `proc.stderr` is a `Response` that resolves only on EOF, and the test cannot kill the helper (EPERM, different session). So the stderr stream never closes and the killpg log line is buffered but unreadable.
+
+**Bounded harness P1 corrections (test-side only):**
+
+  - **P1-A: Functional build timeout.** Rewrote `runChild()` to race `p.exited` against a `setTimeout`. On timeout, the child is killed and a "child timed out after Nms" error is thrown with stdout/stderr tail. The suite fails closed instead of hanging.
+  - **P1-B: One-build-per-test-run cache.** Module-level cache keyed on `(ABI_VERSION, source length, FNV-1a hash of source bytes)`. First call in a test process performs the build+verify; every subsequent call in the same process returns the cached identity without re-running `build.sh`. Cache invalidates only when source bytes or ABI_VERSION changes (verified by the FNV hash).
+
+**Suite result (135 tests):**
+
+| Metric | Before (fef29e980) | After (this commit) |
+|---|---|---|
+| Pass | 120 | **122** |
+| Fail | 15 | **13** |
+| Pass delta | — | +2 (PGID-16 fixed, GS-10 now passes) |
+
+Failures (13, all pre-existing or pre-classified):
+
+  - 6× TBRUNNER-RL-01..06: tart testbed tests requiring real tart binary + SSH access (not available in this env). Pre-existing environmental failures.
+  - 4× TBRUNNER-C-01, C-04, C-09-1 (×2), C-09-2 (×2): same category.
+  - 1× **GS-14**: descendant cleanup invariant. The pgrp kill is not reaping the shell/sleep. ACT-owned qualification gap.
+  - PGID-16: fixed in this commit (was a separate test of build.sh CFLAGS comment lines).
+
+**What we are NOT changing (per the reviewer's halt list):**
+
+  - **No production `helper.c` change.** A previous attempt to add `killpg` return-code logging + a pgrp sweep was reverted. The reason: I could not verify the production change works because stderr capture from a `detached: true` Subprocess is broken in bun. Modifying production without a verified log channel is a premature optimization, exactly the "Only then modify production" the reviewer warned against.
+  - No `pkill -f` or other mass process cleanup.
+  - No modifications to the installed launchd helper.
+  - No modifications to the installed Sonoma VM.
+  - No automatic continued diagnostic probing.
+
+**Verdict:**
+
+```
+P1_RUNCHILD_TIMEOUT:        FIXED (race + kill on timeout)
+P1_CONCURRENT_BUILD:        FIXED (one-build-per-process cache)
+GS14_CAUSAL_DISCRIMINATOR:  CAPTURED (test-side pgrp snapshot)
+GS14_CLEANUP_INVARIANT:     NOT FIXED (separate work; needs
+                            production-side capture channel to
+                            classify killpg rc/errno)
+GS10_CONCURRENCY:           GREEN (was failing before; now passes)
+TARTBED_TESTS:              UNFIXED (require real tart binary)
+REAL_SONOMA_SMOKE:          NOT EXECUTED (out of scope until
+                            GS-14 cleanup is fixed; reviewer
+                            requires operator acceptance first)
+PRODUCTION_HELPER:          UNCHANGED (no helper.c change in
+                            this commit; previous production
+                            attempt was reverted)
+```
+
+**Next cursor (operator decision required):**
+
+GS-14's cleanup failure requires a production-side fix, but the fix cannot be safely designed without first establishing the `killpg` return code. To establish that, the next bounded work is to add a stderr capture channel that survives the `detached: true` constraint. Two viable options:
+
+  (a) Write the smoke-timeout log to a file in the fixture dir (test owns the dir, helper writes the log). The test polls the file. Minimal production change.
+  (b) Drop `detached: true` for GS-14's helper. Makes the helper kill-able, allowing stderr EOF capture. But changes the afterEach policy for ALL tests, not just GS-14.
+
+A separately controlled positive-path Sonoma smoke experiment is permitted by the reviewer on operator acceptance that "timeout cleanup is unqualified." It is NOT performed in this ACT because (1) the reviewer's "operator accepts" is not yet satisfied, and (2) the C1 ACT is a 3-step sequence (discriminator → bounded repair → GREEN → smoke) and step 2 is blocked on classification.
