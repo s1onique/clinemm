@@ -1,0 +1,121 @@
+=== Operator-side TART P3 unblock addendum (2026-10-15, post-closure) ===
+
+Status: ADDENDUM — does not reopen the P3 closure. Recorded per on-call
+expert (Tart virtualization engineer + macOS filesystem engineer + Factory
+reviewer) verdict C1: GO. The P3 verdict CLOSED_HALTED_CLEAN with proximate
+halt HALT_TRUSTED_IMAGE_ARCHIVE_UNAVAILABLE remains historically correct as
+of 2026-10-15T16:32:19 +0300 (commit 4ccd928eec39acd4e9978c9de46e99fff35c702d).
+This addendum records that **the operator then satisfied the unblock
+instruction** the P3 ACT explicitly deferred, and the next cursor
+(ACT-CLINEMM-TART-P4-IMPORTED-SONOMA-REAL-GUEST-LIFECYCLE01) is now properly
+enabled.
+
+== Independent re-verification by the resumption agent ==
+
+The ClineMM resumption session (2026-10-15, post-16:50Z) independently
+re-ran the inventory check with the exact TART_HOME the operator
+specified, and the operator's claims are confirmed:
+
+  $ export TART_HOME="/private/tmp/clinemm-tart-p3-20261015T131912Z-30833"
+  $ export VM_NAME="clinemm-p3-sonoma-imported"
+
+  $ ls -la "$TART_HOME"
+  total 0
+  drwx------    5 chistyakov wheel   160 Oct 15 16:52 .
+  drwxrwxrwt 1427 root       wheel 45664 Oct 15 18:03 ..
+  drwx-xr-x    2 chistyakov wheel    64 Oct 15 16:52 cache
+  drwx-xr-x    2 chistyakov wheel    64 Oct 15 16:52 tmp
+  drwx-xr-x    3 chistyakov wheel    96 Oct 15 16:52 vms
+
+  $ tart list --source local --format json
+  [
+    {
+      "Size" : 27,
+      "Source" : "local",
+      "Accessed" : "2026-10-15T13:48:41Z",
+      "Running" : false,
+      "Name" : "clinemm-p3-sonoma-imported",
+      "Disk" : 50,
+      "State" : "stopped"
+    }
+  ]
+
+  $ shasum -a 256 /private/tmp/clinemm-tart-p3-archive-20261015T131912Z-30833/sonoma-base.tvm
+  1eaed5f2fbed1b0118e32edace0896b4a427c41bdff09af2d13b271ec3dfba7c  sonoma-base.tvm
+
+  $ stat -f '%z' /private/tmp/clinemm-tart-p3-archive-20261015T131912Z-30833/sonoma-base.tvm
+  20239886814
+
+All three operator-side claims re-verified exactly:
+  (1) SHA-256 of the archive matches:
+      1eaed5f2fbed1b0118e32edace0896b4a427c41bdff09af2d13b271ec3dfba7c
+  (2) The local VM "clinemm-p3-sonoma-imported" exists under the
+      operator-specified TART_HOME in state "stopped", Size 27 GiB,
+      Disk 50 GiB. Accessed 2026-10-15T13:48:41Z.
+  (3) The archive is 20,239,886,814 bytes (19 GiB), magic pbze (ezbp
+      little-endian = tart export v16) — confirmed by xxd inspection.
+
+== Resumption housekeeping ==
+
+The 19 GiB sonoma-base.tvm that appeared untracked in the repo root
+between the P3 closure (16:32Z) and the resumption session (~16:49Z) was
+moved out of the repository to a sibling archive directory next to the
+operator's TART_HOME, with a SHA-256 sidecar:
+
+  Source: $REPO_ROOT/sonoma-base.tvm
+  Target: /private/tmp/clinemm-tart-p3-archive-20261015T131912Z-30833/sonoma-base.tvm
+          (sibling of /private/tmp/clinemm-tart-p3-20261015T131912Z-30833/,
+           outside the ClineMM repo root)
+  Sidecar: /private/tmp/clinemm-tart-p3-archive-20261015T131912Z-30833/SHA256SUMS
+           (270 bytes; records the operator-verified hash)
+
+A defensive `*.tvm` entry was added to .gitignore (see commit
+ACT-CLINEMM-TART-P3-OPERATOR-UNBLOCK-RECORD01, this addendum's
+companion commit) so that any future `tart export` artifacts cannot be
+accidentally committed. `git status --short` is now clean at the addendum
+record commit; the repository contains no archive content.
+
+== P2 host-FS halt status (preserved) ==
+
+The P2 ACT's HALT_GUEST_VM_PROVISIONING_BLOCKED_BY_HOST_FS remains
+correct: `tart get clinemm-sonoma-export` under the **default** TART_HOME
+still fails with the verbatim `utimes(2) failed: Operation not permitted`
+classification. P2 chronology-not-causality wording for the protect-flagged
+/private/tmp Time Machine snapshot at /dev/disk3s8 is preserved.
+
+The P3 imported VM under the **isolated** TART_HOME is a different storage
+identity. `tart list --source local` under
+TART_HOME=/private/tmp/clinemm-tart-p3-20261015T131912Z-30833 reports the
+imported VM in state "stopped" without error. The P2 host-FS halt is not
+invalidated by the P3 unblock; the two are separate TART_HOME identities.
+
+== Operator's P4 plan (verbatim, from the expert verdict) ==
+
+P4 execution order, per the Tart virtualization engineer + Factory
+reviewer verdict:
+
+  1. Qualify the imported VM identity.               [ DONE — see above ]
+  2. Operator-side real guest boot.                  [ OPERATOR ]
+  3. Real guest command using `tart exec`, if the
+     guest agent is available.                       [ OPERATOR+AGENT ]
+  4. Verified VM shutdown without deleting the
+     imported source.                                [ OPERATOR+AGENT ]
+  5. Only then attempt the existing trusted-helper
+     lifecycle.                                      [ AGENT, post-boot ]
+  6. Preserve Seatbelt and launchd safety
+     restrictions.                                   [ ENFORCED ]
+
+Forbidden: launchctl mutations, Seatbelt relaxation, replacing the
+helper, deleting the imported VM, and changing Elm or completion
+authority.
+
+== Next cursor ==
+
+ACT-CLINEMM-TART-P4-IMPORTED-SONOMA-REAL-GUEST-LIFECYCLE01 is now properly
+enabled. The P4 ACT document and evidence plan are created as a sibling
+file (.factory/acts/ACT-CLINEMM-TART-P4-IMPORTED-SONOMA-REAL-GUEST-LIFECYCLE01.md);
+its evidence directory
+.factory/evidence/ACT-CLINEMM-TART-P4-IMPORTED-SONOMA-REAL-GUEST-LIFECYCLE01/
+is reserved.
+
+-- end of addendum --

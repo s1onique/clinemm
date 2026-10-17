@@ -65,6 +65,16 @@ tools/macos-host-helper/native/containment-probe/43-oracle-composition-witness
 tools/macos-host-helper/native/containment-probe/44-oracle-miss-classifier-witness
 tools/macos-host-helper/native/containment-probe/45-oracle-disposition-witness
 
+# Tart VM export archives (*.tvm) — large binary artifacts produced by
+# `tart export`. Reproducible from the OCI source digest; never source of
+# truth. Added after ACT-CLINEMM-TART-P3-OFFLINE-IMAGE-IMPORT-QUALIFICATION01
+# (resumption, 2026-10-15) to prevent accidental `git add` of the operator's
+# 19 GiB sonoma-base.tvm. The P3 addendum record
+# (.factory/evidence/.../08-operator-tart-p3-unblock-addendum.txt) and the
+# archive-sidecar SHA-256 (in the operator's /private/tmp archive directory)
+# are the durable provenance; the archive itself stays out of the repo.
+*.tvm
+
 # E2E Tests
 test-results
 
