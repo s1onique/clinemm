@@ -27739,3 +27739,72 @@ After operator reap, the next session can run:
   - HALT_INVENT_SUCCESS: This ACT does not invent a successful test result. The environment-blocked classification is honest.
 
 **Next cursor:** Operator reaps the 2,676 leaked helpers per the protocol above, then the next session runs GS-14 ACTIVE GREEN + ABLATED RED, the 26-test suite, and the real Sonoma smoke in sequence. Factory advances only on full GREEN.
+
+---
+
+## ACT-CLINEMM-TART-P4.1-CORRECTION04 FOLLOW-UP — BOUNDED C1 FIX (PARTIAL_SPAWN_LEAK + P1 PS_PARSER) — 2026-10-17
+
+A fourth reviewer verdict (`HALT_PARTIAL_SPAWN_CLEANUP` + `P1_OWNERSHIP_PS_PARSER`) on the CORRECTION04 commit at `9cdf12fc2`. The reviewer found three concrete defects in the CORRECTION04 fix:
+
+  - **P0 (PARTIAL_SPAWN_LEAK)**: the discriminator's afterEach gated all cleanup on `freshSpawnVerified && proc`, but when `startHelperForDiscriminator()` threw because the status file never appeared, the test had a `proc` handle (spawn succeeded) but `freshSpawnVerified` was false. The OLD afterEach discarded the spawned helper PID. The fix is to split cleanup into two layers: Layer 1 (direct-PID kill of any test-spawned child, gated on `proc && proc.pid > 0`) and Layer 2 (pgrp signal, gated on `freshSpawnVerified`). Layer 1 always fires for the test's own children.
+  - **P1 (OWNERSHIP_PS_PARSER)**: `verifyHelperSessionOwnership()` used `ps -o pid=,pgid,sess` and hand-parsed `parts[0]/parts[1]/parts[2]`. On macOS only the first column's `=` suppresses its header, so the output included a header line `PGID  SESS` that was parsed as data, making verification always fail. The fix uses `ps -o pid=,pgid=,sess=` (suppresses all headers), validates with `Number.isFinite()`, and routes the discriminator's runner-PGID lookup through the existing `psFull`/`parsePsLine` machinery.
+  - **Premature ENVIRONMENT_BLOCKED**: my previous ACT attributed the helper's startup failure to operator cleanup needs without distinguishing "process never started" from "process started and died". The follow-up captures the full failure state: spawned PID, observed ps row, status-file existence, exit code, and stderr. The finding is **the helper starts and is killed by SIGKILL within 10s, regardless of detached:true**.
+
+**Bounded fix applied (test-side only):**
+
+  - `tools/macos-host-helper/native/tart-pg-id-discriminator.test.ts`: afterEach is now three-layer (Layer 1 direct-PID, Layer 2 pgrp signal gated on verification, Layer 3 never); the catch block captures the spawned PID, ps row, status file, exit code, and stderr; the inline `ps -o pgid=` block was replaced with `psFull`/`parsePsLine` reuse.
+  - `tools/macos-host-helper/native/tart-guest-smoke.test.ts`: `verifyHelperSessionOwnership()` rewritten with `pid=,pgid=,sess=`, `Number.isFinite()` validation, and first-numeric-token parse for the runner PGID; `startHelper()` throw path now captures the same diagnostic state.
+  - Production helper.c: byte-identical. SHA-256 `4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e` (unchanged).
+
+**Startup observations (4 probes total: 2 disc + 1 GS-14 + 1 comparison):**
+
+| Probe | spawn_pid | ps at 10s | status_file | exit_code | stderr |
+|---|---|---|---|---|---|
+| Disc run 1 | 31945 | rc=1 (gone) | false | 137 (SIGKILL) | empty |
+| Disc run 2 | 33067 | rc=1 (gone) | false | 137 (SIGKILL) | empty |
+| GS-14 | 33629 | rc=1 (gone) | false | 137 (SIGKILL) | empty |
+| No-detach probe | 34428 | (10s elapsed) | false | (killed) | empty |
+| Detach probe | 34823 | (10s elapsed) | false | (killed) | empty |
+
+The helper STARTS in every probe. It is then KILLED by SIGKILL within 10s. The kill is INDEPENDENT of `detached:true` (the no-detach probe also fails). The kill is INDEPENDENT of the test framework (the no-detach probe uses a bare bun script). The kill is NOT resource exhaustion at spawn time (spawn succeeds; the process is killed afterwards).
+
+**Possible causes (not yet causally proven):**
+
+  - (a) macOS Background-session reaper: orphaned processes that lose their controlling terminal are subject to a macOS-initiated SIGKILL. This is kernel-level and independent of the leaked-helper count.
+  - (b) process-table / file-descriptor pressure from the 2,306 leaked helpers. In this case the leaks ARE the proximate cause and operator cleanup is justified.
+  - (c) launchd / sandbox / Seatbelt policy terminating helpers started outside the install-managed LaunchAgent.
+
+**Halt-list preservation (follow-up):**
+
+  - Did NOT use `pkill -f`
+  - Did NOT kill PGID 99756
+  - Did NOT touch the launchd-managed helper at `~/.clinemm/bin/clinemm-host-helper` or its socket
+  - Did NOT touch the installed Sonoma VM
+  - Did NOT modify production helper.c
+  - Did NOT automatically continue diagnostic probing beyond 4 probes (per reviewer's halt list)
+  - Preserved the leaked helpers (still ~2,300 at session end; only test-spawned children were direct-PID-killed in Layer 1)
+
+**Verdict:**
+
+```
+P0_PARTIAL_SPAWN_CLEANUP:  FIXED (Layer 1 always fires for test-spawned children)
+P1_OWNERSHIP_PS_PARSER:    FIXED (pid=,pgid=,sess=; Number.isFinite; psFull reuse)
+FAILURE_DIAGNOSTIC:        CAPTURED (helper starts, dies by SIGKILL within 10s)
+ENVIRONMENT_BLOCKED:       CONFIRMED (helper cannot complete startup in this env)
+ENV_SATURATION_CAUSE:      NARROWED (killed by SIGKILL, not blocked at bind)
+OPERATOR_CLEANUP:          NOT YET JUSTIFIED (root cause not isolated; may be
+                            macOS Background reaper, not "2,300 orphaned helpers")
+```
+
+**Next cursor (operator decision required):**
+
+The next session should NOT continue diagnostic probing. The exact observed failure is recorded. The operator should review whether the cause is (a) macOS Background reaper (kernel-level; would require a different mitigation), (b) process-table pressure from the 2,300+ leaks (operator cleanup IS justified), or (c) launchd / sandbox policy (would require restoring the LaunchAgent or accepting the policy). The discriminator's P0 and P1 are fixed; the failure-state diagnostic is in place; the environment is preserved.
+
+**Files in this follow-up:**
+
+  - `tools/macos-host-helper/native/tart-pg-id-discriminator.test.ts` (modified: three-layer afterEach, diagnostic capture, psFull reuse)
+  - `tools/macos-host-helper/native/tart-guest-smoke.test.ts` (modified: P1 ps parser fix, diagnostic capture on throw)
+  - `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION04/04-followup-disc-run1.txt` (NEW)
+  - `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION04/05-followup-disc-run2.txt` (NEW)
+  - `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION04/06-followup-gs14-startup-failed.txt` (NEW)
+  - `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION04/07-followup-findings.md` (NEW)

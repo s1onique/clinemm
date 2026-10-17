@@ -236,7 +236,68 @@ async function startHelper(envOverrides: Record<string, string>): Promise<void> 
     await new Promise((r) => setTimeout(r, 100))
   }
   if (!existsSync(statusPath)) {
+    // ACT-CLINEMM-TART-P4.1-CORRECTION04 FOLLOW-UP (item 3):
+    // capture the full failure state of the spawned helper at
+    // the 10s timeout BEFORE the throw swallows it. The previous
+    // code only logged "helper did not produce status file in
+    // 10s"; the spawned helper's actual state (still alive?
+    // exited? what PGID? what stderr?) was lost. The reviewer
+    // correctly flagged this as premature ENVIRONMENT_BLOCKED
+    // attribution.
+    const errPid = proc?.pid ?? 0
+    let errPsRow: string = "(ps not run)"
+    let errPsError = ""
+    if (errPid > 0) {
+      try {
+        const { execSync: _e } = require("node:child_process") as typeof import("node:child_process")
+        const raw = _e(
+          `ps -p ${errPid} -o pid=,ppid=,pgid=,sess=,stat= 2>&1; echo "__PS_RC=$?"`,
+          { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] },
+        )
+        const m = raw.match(/__PS_RC=(\d+)/)
+        if (m && m[1] === "0") {
+          errPsRow = raw.replace(/__PS_RC=\d+\s*$/, "").trim()
+        } else {
+          errPsError = `ps rc=${m?.[1] ?? "?"}`
+        }
+      } catch (e2) {
+        errPsError = (e2 as Error).message
+      }
+    }
+    const errStatusFileExists = existsSync(statusPath)
+    let errExitCode: number | null | undefined = undefined
+    let errStderrTail = ""
+    if (proc) {
+      const exitedPromise = proc.exited
+      const timeoutPromise = new Promise<"timeout">((r) =>
+        setTimeout(() => r("timeout"), 1000),
+      )
+      const winner = await Promise.race([exitedPromise, timeoutPromise])
+      if (winner !== "timeout") {
+        errExitCode = winner as number
+      }
+      try {
+        const stderrStream = (proc as unknown as { stderr?: { text?: () => Promise<string> } }).stderr
+        if (stderrStream && typeof stderrStream.text === "function") {
+          const full = await Promise.race([
+            stderrStream.text(),
+            new Promise<string>((r) => setTimeout(() => r(""), 500)),
+          ])
+          errStderrTail = full.slice(-1024)
+        }
+      } catch { /* best-effort */ }
+    }
     try { proc.kill() } catch {}
+    // eslint-disable-next-line no-console
+    console.log(
+      `[GS14-STARTUP-FAILED] helper did not produce status file in 10s\n` +
+      `  spawn_pid=${errPid}\n` +
+      `  spawn_ps_row=${errPsRow}\n` +
+      `  spawn_ps_error=${errPsError}\n` +
+      `  status_file_exists=${errStatusFileExists}\n` +
+      `  spawn_exit_code=${errExitCode === undefined ? "(still running)" : errExitCode}\n` +
+      `  spawn_stderr_tail=${JSON.stringify(errStderrTail)}`,
+    )
     throw new Error("helper did not produce status file in 10s")
   }
   // Wait for the socket to be actually bound. The status file
@@ -273,12 +334,26 @@ async function startHelper(envOverrides: Record<string, string>): Promise<void> 
 // but do not throw — startHelper() returns a usable `proc` even
 // if verification cannot be confirmed; afterEach then takes the
 // conservative (direct-PID only) path.
+//
+// ACT-CLINEMM-TART-P4.1-CORRECTION04 FOLLOW-UP (P1 ownership ps
+// parser): the previous version used `ps -o pid=,pgid,sess` and
+// hand-parsed `parts[0]/parts[1]/parts[2]`. On macOS, only the
+// FIRST column's `=` suppresses its header, so the output of
+// that command is a header line ("PGID  SESS") followed by the
+// numeric row. The hand-parse then set `parts[0]` to "PGID"
+// (text, not a number), parseInt returned NaN, the
+// `pid !== helperPid` check returned false, and verification
+// failed even when setsid() had succeeded. The discriminator
+// already handles headers via `psFull`/`parsePsLine`; we use
+// `pid=,pgid=,sess=` (verified locally: suppresses ALL column
+// headers on macOS) and parse numerically. NaN is rejected
+// explicitly so a future macOS ps change cannot regress this.
 async function verifyHelperSessionOwnership(helperPid: number): Promise<boolean> {
   if (helperPid <= 0) return false
   try {
     const { execSync } = require("node:child_process") as typeof import("node:child_process")
     const raw = execSync(
-      `ps -p ${helperPid} -o pid=,pgid,sess 2>&1; echo "__PS_RC=$?"`,
+      `ps -p ${helperPid} -o pid=,pgid=,sess= 2>&1; echo "__PS_RC=$?"`,
       { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] },
     )
     const m = raw.match(/__PS_RC=(\d+)/)
@@ -289,19 +364,32 @@ async function verifyHelperSessionOwnership(helperPid: number): Promise<boolean>
     const pid = parseInt(parts[0], 10)
     const pgid = parseInt(parts[1], 10)
     const sess = parseInt(parts[2], 10)
+    // Fail closed on any non-numeric field (NaN). A future macOS
+    // ps change that adds a header back would cause the parseInt
+    // to return NaN, which we then treat as a verification
+    // failure. The test still runs; the afterEach takes Path B.
+    if (!Number.isFinite(pid) || !Number.isFinite(pgid) || !Number.isFinite(sess)) {
+      return false
+    }
     if (pid !== helperPid) return false
     let runnerPgid = 0
     try {
       const runnerRaw = execSync(
-        `ps -p ${process.pid} -o pgid= 2>&1; echo "__PS_RC=$?"`,
+        `ps -p ${process.pid} -o pgid=,pgid= 2>&1; echo "__PS_RC=$?"`,
         { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] },
       )
       const rm = runnerRaw.match(/__PS_RC=(\d+)/)
       if (rm && rm[1] === "0") {
-        runnerPgid = parseInt(
-          runnerRaw.replace(/__PS_RC=\d+\s*$/, "").trim().split(/\s+/)[0] ?? "0",
-          10,
-        )
+        const runnerBody = runnerRaw.replace(/__PS_RC=\d+\s*$/, "").trim()
+        // Use the first numeric token; ignore any header row.
+        const tokens = runnerBody.split(/\s+/)
+        for (const t of tokens) {
+          const n = parseInt(t, 10)
+          if (Number.isFinite(n) && n > 0) {
+            runnerPgid = n
+            break
+          }
+        }
       }
     } catch { /* best-effort */ }
     return pid === pgid && pid === sess && pgid !== runnerPgid

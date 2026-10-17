@@ -1,0 +1,26 @@
+[0m[1mbun test [0m[2mv1.3.13 (bf2e2cec)[0m
+[0m
+tart-guest-smoke.test.ts:
+[GS14-STARTUP-FAILED] helper did not produce status file in 10s
+  spawn_pid=33629
+  spawn_ps_row=(ps not run)
+  spawn_ps_error=ps rc=1
+  status_file_exists=false
+  spawn_exit_code=137
+  spawn_stderr_tail=""
+[0m[1m296 |[0m       [0m[32m`  spawn_ps_error=[0m${errPsError}[0m[32m\n`[0m +
+[0m[1m297 |[0m       [0m[32m`  status_file_exists=[0m${errStatusFileExists}[0m[32m\n`[0m +
+[0m[1m298 |[0m       [0m[32m`  spawn_exit_code=[0m${errExitCode === [0m[33mundefined[0m ? [0m[32m"(still running)"[0m : errExitCode}[0m[32m\n`[0m +
+[0m[1m299 |[0m       [0m[32m`  spawn_stderr_tail=[0m${JSON[0m[3m[1m.stringify[0m(errStderrTail)}[0m[32m`[0m,
+[0m[1m300 |[0m     )
+[0m[1m301 |[0m     [0m[35mthrow[0m [0m[35mnew[0m [0m[1mError[0m([0m[32m"helper did not produce status file in 10s"[0m)
+                    [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1mhelper did not produce status file in 10s[0m
+[0m      [2mat [0m[0m[1m[3mstartHelper[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-guest-smoke.test.ts[0m[2m:[0m[33m301[0m[2m:[33m15[0m[2m)[0m
+[0m      [2mat [0m[0m[2masync <anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-guest-smoke.test.ts[0m[2m:[0m[33m1198[0m[2m:[33m9[0m[2m)[0m
+[0m[31m✗[0m[0m[1m GS-14: descendant cleanup — specific sleep PID is reaped after TART_EXEC_TIMEOUT[0m [0m[2m[[0m[33m10465.04ms[0m[2m][0m
+
+ 0 pass[0m
+ [0m[2m25 filtered out[0m
+[0m[31m 1 fail[0m
+Ran 1 test across 1 file. [0m[2m[[1m10.48s[0m[2m][0m

@@ -106,79 +106,96 @@ afterAll(() => {
 })
 
 afterEach(async () => {
-  // CORRECTION04 (C1 bounded fix): cleanup is split into two paths.
+  // CORRECTION04 FOLLOW-UP (bounded C1 fix): cleanup is split into
+  // three layers, each gated on a STRICTLY different condition.
   //
-  // FRESH-SPAWN PATH (we spawned `proc` in this test):
-  //   - We OWN the helper PID. The helper was spawned with
-  //     `detached: true`, so its PID == its PGID == its SID, and
-  //     its group is distinct from the test runner's. The
-  //     ownership verification (`freshSpawnVerified === true`)
-  //     confirms the helper actually became its own session
-  //     leader; if verification failed, we fall back to direct-PID
-  //     kill of the helper only — never a group signal.
-  //   - We also own the fake-tart's `sleep 60` child PID
-  //     (witnessed via the run-owned pid file). The fake-tart's
-  //     `sleep` is in a SEPARATE process group (the fake-tart's
-  //     `exec` handler doesn't call setpgid; in production the
-  //     helper's `smoke_invoke_bounded` calls setpgid(0,0) in
-  //     the child at helper.c:4312, putting the child in its
-  //     own pgrp). The child pgrp is therefore independent of
-  //     the helper pgrp. We signal each owned direct child by
-  //     its specific PID, not by group.
-  //   - EPERM/ESRCH are classified explicitly. We NEVER signal a
-  //     group we have not verified is owned by this test.
+  // LAYER 1 — direct-PID kill of any test-spawned proc:
+  //   Gate: `proc && proc.pid > 0`. This applies whenever this
+  //   test actually called spawn() and got a handle, regardless
+  //   of whether the helper bound its status file or passed
+  //   ownership verification. The reviewer's PARTIAL_SPAWN_LEAK
+  //   verdict: a recorded `proc` is a test-created direct child,
+  //   even when PGID verification fails. We must always attempt
+  //   bounded direct-child termination. Group signaling is gated
+  //   separately (Layer 2) so a failed verification does NOT
+  //   cause us to leak the spawned helper.
   //
-  // LEAKED-HELPER PATH (fresh spawn failed; we observed an
-  // already-leaked helper for the discriminator's evidence):
-  //   - We do NOT own the leaked helper. We MUST NOT signal it
-  //     directly or by group. The leaked helper's lifecycle is
-  //     the operator's responsibility, not this test's. The
-  //     `if (freshSpawnVerified && proc)` guard below makes the
-  //     cleanup strictly conditional on the fresh-spawn path.
-  if (freshSpawnVerified && proc && proc.pid && proc.pid > 0) {
+  // LAYER 2 — pgrp signal of the helper's owned group:
+  //   Gate: `freshSpawnVerified === true`. This applies ONLY
+  //   when ps confirmed the helper is its own session/pgrp
+  //   leader (helper.PID==helper.PGID==helper.SID and
+  //   helper.PGID!=runner.PGID). Without that confirmation we
+  //   cannot tell whether kill(-helperPid) would target a
+  //   foreign group; the helper inherits the test runner's
+  //   pgrp when detached:true does not take effect, and
+  //   signaling that pgrp would kill the test runner.
+  //   ESRCH (no such pgrp) is acceptable; we fall back to
+  //   direct-PID (which Layer 1 already did).
+  //
+  // LAYER 3 — leaked-helper fallback cleanup:
+  //   Gate: NEVER. The leaked-helper branch in the test body
+  //   only OBSERVES a leaked helper; it never records that
+  //   helper as a `proc` we own. So Layer 1's gate
+  //   (`proc && proc.pid > 0`) is automatically false in
+  //   the leaked-helper branch, and the cleanup is a no-op.
+  //
+  // The interaction with the test body's failure handling: when
+  // `startHelperForDiscriminator()` throws because the status
+  // file never appeared, `proc` was already set by spawn() and
+  // is non-null when afterEach runs. The OLD code skipped all
+  // cleanup because `freshSpawnVerified` was false. The new
+  // Layer 1 catches this case: the spawned helper is
+  // direct-PID-killed even though we never got far enough to
+  // verify the session.
+  if (proc && proc.pid && proc.pid > 0) {
     const ownedHelperPid = proc.pid
-    // First: reap the child fork by its specific PID (if we
+    // Layer 1: direct-PID kill of the test's own child.
+    // ESRCH (already gone) is fine; EPERM (sandbox block) is
+    // surfaced but does not throw — we still proceed to Layer 2
+    // to attempt the pgrp signal where applicable.
+    try {
+      process.kill(ownedHelperPid, "SIGKILL")
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code ?? ""
+      if (code !== "ESRCH") {
+        // eslint-disable-next-line no-console
+        console.log(`[PGID-DISC] Layer1 direct-PID kill: code=${code} msg=${(e as Error).message}`)
+      }
+    }
+    // Reap the child fork by its specific PID (if we
     // witnessed one). The child pgrp is independent of the
-    // helper pgrp, so we don't use a group signal here either.
+    // helper pgrp, so we don't use a group signal here.
     if (observedChildPid > 0 && observedChildPid !== ownedHelperPid) {
       try {
         process.kill(observedChildPid, "SIGKILL")
       } catch (e) {
         const code = (e as NodeJS.ErrnoException).code ?? ""
-        // ESRCH = already gone. EPERM = sandbox block. Either is
-        // acceptable: we own the PID semantically but the kernel
-        // may have reaped it before us.
         if (code !== "ESRCH") {
           // eslint-disable-next-line no-console
-          console.log(`[PGID-DISC] child ${observedChildPid} kill: ${code} (acceptable)`)
+          console.log(`[PGID-DISC] child ${observedChildPid} kill: code=${code} (acceptable)`)
         }
       }
     }
-    // Then: signal the helper's verified-owned group. Because
-    // `detached: true` ran setsid(2), ownedHelperPid IS the
-    // helper's pgrp leader. We signal THAT group, which the
-    // test created and therefore owns. If `detached: true`
-    // didn't take effect (e.g. Bun platform quirk), the kill
-    // returns ESRCH (no such pgrp) — we don't fall back to a
-    // foreign group, we just leave the helper PID-killed below.
-    try {
-      process.kill(-ownedHelperPid, "SIGKILL")
-    } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code ?? ""
-      if (code === "ESRCH") {
-        // No pgrp of that name (e.g. detached didn't take
-        // effect, or the helper already exited). Fall back
-        // to direct-PID kill of the helper ONLY.
-        try { process.kill(ownedHelperPid, "SIGKILL") } catch {}
-      } else if (code === "EPERM") {
-        // Sandbox blocked the pgrp signal. We may still
-        // signal the helper directly because we own it.
-        try { process.kill(ownedHelperPid, "SIGKILL") } catch {}
-      } else {
-        // Unknown error: surface it (do not silently swallow).
-        // eslint-disable-next-line no-console
-        console.log(`[PGID-DISC] helper pgrp kill: code=${code} msg=${(e as Error).message}`)
+    // Layer 2: pgrp signal of the helper's owned group, ONLY
+    // when ownership was verified.
+    if (freshSpawnVerified) {
+      try {
+        process.kill(-ownedHelperPid, "SIGKILL")
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code ?? ""
+        if (code !== "ESRCH" && code !== "EPERM") {
+          // eslint-disable-next-line no-console
+          console.log(`[PGID-DISC] Layer2 pgrp kill: code=${code} msg=${(e as Error).message}`)
+        }
       }
+    } else {
+      // Layer 1 has already direct-PID-killed the helper.
+      // We deliberately do NOT signal any group identity here.
+      // eslint-disable-next-line no-console
+      console.log(
+        `[PGID-DISC] Layer2 skipped: freshSpawnVerified=false. ` +
+        `Helper ${ownedHelperPid} was direct-PID-killed in Layer 1.`,
+      )
     }
     // Bounded wait for kernel reaping.
     await new Promise((r) => setTimeout(r, 200))
@@ -450,27 +467,22 @@ esac
         const helperPs = psFull(helperPid)
         helperRow = parsePsLine(helperPs.lines[0] ?? "")
         if (helperRow && helperRow.pid === helperPid) {
-          // CORRECTION04 (C1 bounded fix): verify the helper is
-          // its own session leader. This is the ownership root.
-          // If `detached: true` worked, then helper PID == PGID == SID.
-          // If they don't match, the test does NOT own the helper
-          // for group-signaling purposes; the afterEach will
-          // refuse to signal any group from this observation.
-          //
-          // We also verify the helper's PGID differs from the test
-          // runner's PGID, because we must not signal a group the
-          // test runner is a member of.
+          // CORRECTION04 FOLLOW-UP (bounded C1 fix, P1 ownership
+          // parser): reuse the existing psFull()/parsePsLine()
+          // machinery to discover the test runner's PGID. The
+          // previous inline `ps -o pgid=` block on macOS emits a
+          // header line ("PGID  SESS") because only the first
+          // column's `=` suppresses its header, and the body is
+          // parsed by hand into `parts[0]`. That hand-parse is
+          // brittle and was the reviewer's P1 defect. psFull()
+          // already strips the header line; parsePsLine() handles
+          // the stat field; we just need the runner's PGID.
           let runnerPgid = 0
           try {
-            const runnerPs = execSync(
-              `ps -p ${process.pid} -o pgid= 2>&1; echo "__PS_RC=$?"`,
-              { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] },
+            const runnerRow = parsePsLine(
+              psFull(process.pid).lines[0] ?? "",
             )
-            const m = runnerPs.match(/__PS_RC=(\d+)/)
-            if (m && m[1] === "0") {
-              const cleaned = runnerPs.replace(/__PS_RC=\d+\s*$/, "").trim()
-              runnerPgid = parseInt(cleaned.split(/\s+/)[0] ?? "0", 10)
-            }
+            if (runnerRow) runnerPgid = runnerRow.pgid
           } catch { /* best-effort */ }
           const ownSession =
             helperRow.pid === helperRow.pgid &&
@@ -521,9 +533,82 @@ esac
         }
       }
     } catch (e) {
+      // CORRECTION04 FOLLOW-UP (bounded C1 fix, item 3): capture
+      // the full failure state of the spawned helper at the 10s
+      // timeout BEFORE the catch swallows the error. The previous
+      // code only logged the thrown message; the spawned helper's
+      // actual state (still alive? exited? what PGID? what stderr?)
+      // was lost. The reviewer correctly flagged this as
+      // premature ENVIRONMENT_BLOCKED attribution.
+      //
+      // Diagnostic fields captured:
+      //   - thrown error message (the trigger)
+      //   - spawned PID (from proc.pid; the Subprocess handle is
+      //     still set because spawn() succeeded before the wait
+      //     loop timed out)
+      //   - ps row at the timeout: PID, PGID, SESS, STAT, command
+      //     (using psFull which already strips macOS headers)
+      //   - status-file existence: did the helper ever bind?
+      //   - exit code: only meaningful if the Subprocess has
+      //     resolved its `exited` promise (will be 0 if it
+      //     completed cleanly, undefined if still running)
+      //   - stderr text if proc.stderr was captured and the proc
+      //     has exited (best-effort; stdio was set to "pipe" so
+      //     the text is buffered)
+      const errMsg = (e as Error).message
+      const spawnPid = proc?.pid ?? 0
+      let spawnPsRow: ReturnType<typeof parsePsLine> = null
+      let spawnPsError = "(ps not run)"
+      if (spawnPid > 0) {
+        try {
+          spawnPsRow = parsePsLine(psFull(spawnPid).lines[0] ?? "")
+        } catch (e2) {
+          spawnPsError = (e2 as Error).message
+        }
+      }
+      const statusFileExists = existsSync(statusPath)
+      let spawnExitCode: number | null | undefined = undefined
+      let spawnStderrTail = ""
+      if (proc) {
+        // proc.exited resolves when stdio streams close. If the
+        // helper is still alive at the 10s timeout, this would
+        // hang. Use a bounded 1s race to capture the exit code
+        // only when the proc has actually exited.
+        const exitedPromise = proc.exited
+        const timeoutPromise = new Promise<"timeout">((r) =>
+          setTimeout(() => r("timeout"), 1000),
+        )
+        const winner = await Promise.race([exitedPromise, timeoutPromise])
+        if (winner !== "timeout") {
+          spawnExitCode = winner as number
+        }
+        // Best-effort stderr capture. proc.stderr is null when
+        // stdio was "ignore"; the discriminator sets "pipe" so
+        // it is a ReadableStream | undefined.
+        try {
+          const stderrStream = (proc as unknown as { stderr?: { readable?: boolean; text?: () => Promise<string> } })
+            .stderr
+          if (stderrStream && typeof stderrStream.text === "function") {
+            const full = await Promise.race([
+              stderrStream.text(),
+              new Promise<string>((r) => setTimeout(() => r(""), 500)),
+            ])
+            // Last 1 KiB only.
+            spawnStderrTail = full.slice(-1024)
+          }
+        } catch { /* best-effort */ }
+      }
       // eslint-disable-next-line no-console
-      console.log(`[PGID-DISC] fresh-spawn failed: ${(e as Error).message}; ` +
-        `falling back to leaked-helper observation.`)
+      console.log(
+        `[PGID-DISC] fresh-spawn FAILED: ${errMsg}\n` +
+        `  spawn_pid=${spawnPid}\n` +
+        `  spawn_ps_row=${spawnPsRow ? `pid=${spawnPsRow.pid} pgid=${spawnPsRow.pgid} sess=${spawnPsRow.sess} stat="${spawnPsRow.stat}" cmd=${spawnPsRow.command}` : "(none)"}\n` +
+        `  spawn_ps_error=${spawnPsError}\n` +
+        `  status_file_exists=${statusFileExists}\n` +
+        `  spawn_exit_code=${spawnExitCode === undefined ? "(still running)" : spawnExitCode}\n` +
+        `  spawn_stderr_tail=${JSON.stringify(spawnStderrTail)}\n` +
+        `  -> falling back to leaked-helper observation; afterEach will direct-PID-kill ${spawnPid || "(no spawned handle)"}.`,
+      )
     }
 
     if (!freshSpawnSucceeded) {

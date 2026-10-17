@@ -1,0 +1,44 @@
+[0m[1mbun test [0m[2mv1.3.13 (bf2e2cec)[0m
+[0m
+tart-pg-id-discriminator.test.ts:
+[PGID-DISC] fresh-spawn FAILED: helper did not produce status file in 10s
+  spawn_pid=33067
+  spawn_ps_row=(none)
+  spawn_ps_error=ps rc=1 body=PPID  PGID   SESS STAT COMMAND
+  status_file_exists=false
+  spawn_exit_code=137
+  spawn_stderr_tail=""
+  -> falling back to leaked-helper observation; afterEach will direct-PID-kill 33067.
+
+PGID-DISC EVIDENCE — 2026-10-17T21:10:15.658Z
+source=leaked-helper (PPID=1, reparented to launchd)
+fresh_spawn_verified=false
+ownership_check=(n/a — leaked-helper mode)
+helper_pid=105
+helper_ppid=1
+helper_pgid=99756
+helper_sess=0
+helper_stat=
+helper_command=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+helper_pgid_equals_pid=false
+child_pid=(unobserved in leaked-helper mode)
+child_ppid=(n/a)
+child_pgid=(n/a)
+child_sess=(n/a)
+child_stat=(n/a)
+child_ppid_equals_helper_pid=(n/a)
+child_pgid_equals_child_pid=true
+assumed_pgrp_kill_target=kill(-105, 0)
+assumed_pgrp_kill_result=rc=-1 errno=ESRCH msg=kill() failed: ESRCH: No such process
+actual_pgrp_kill_target=kill(-99756, 0)
+actual_pgrp_kill_result=rc=-1 errno=EPERM msg=kill() failed: EPERM: Operation not permitted
+discriminator_verdict=MISMATCH
+
+[PGID-DISC] MISMATCH: helper_pid=105 but helper_pgid=99756. Existing test cleanup sent SIGKILL to non-existent pgrp 105; afterEach uses actual pgrp 99756 instead.
+[PGID-DISC] Layer2 skipped: freshSpawnVerified=false. Helper 33067 was direct-PID-killed in Layer 1.
+[0m[32m✓[0m[0m[1m PGID-DISC: real helper + child fork — observe pgrp identity, prove kill(-helperPid) target[0m [0m[2m[[0m[33m10506.57ms[0m[2m][0m
+
+[0m[32m 1 pass[0m
+[0m[2m 0 fail[0m
+ 2 expect() calls
+Ran 1 test across 1 file. [0m[2m[[1m10.52s[0m[2m][0m
