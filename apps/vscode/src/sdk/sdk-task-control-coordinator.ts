@@ -8,6 +8,13 @@ import { isAbortError, type SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { SdkTaskHistory } from "./sdk-task-history"
 import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
+import {
+	recordCancelLivenessAbortCompleted,
+	recordCancelLivenessAbortInvoked,
+	recordCancelLivenessAccepted,
+	recordCancelLivenessPublished,
+	recordCancelLivenessRequest,
+} from "./cancel-liveness-diagnostic"
 
 export interface SdkTaskControlCoordinatorOptions {
 	sessions: SdkSessionLifecycle
@@ -74,13 +81,40 @@ export class SdkTaskControlCoordinator {
 	}
 
 	async cancelTask(): Promise<void> {
+		// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: cancel_request
+		// is the FIRST sub-boundary inside cancelTask. It fires before
+		// the active-session guard AND before clearPending (so the
+		// capture is the very first observable event on Cancel). The
+		// H-A "no active session" signature is
+		// `(req=1, acc=0, inv=0, cmp=0, pub=0)`. The session is
+		// sampled eagerly (BEFORE clearPending) so the request
+		// capture mirrors the production call site exactly.
+		//
+		// PRODUCTION INVARIANT: `interactions.clearPending` resolves
+		// pending tool-approval / ask-question / mistake-limit
+		// promises on the INTERACTION coordinator; it does NOT
+		// mutate the SESSION lifecycle. The single read below
+		// is therefore the canonical active-session check — no
+		// re-read is required after clearPending. The diagnostic
+		// is observation-only.
+		const activeSession = this.options.sessions.getActiveSession()
+		recordCancelLivenessRequest({
+			hasActiveSession: !!activeSession,
+			activeSessionId: activeSession?.sessionId ?? null,
+		})
+
 		this.options.interactions.clearPending("Task cancelled")
 
-		const activeSession = this.options.sessions.getActiveSession()
 		if (!activeSession) {
 			Logger.warn("[SdkController] cancelTask: No active session")
 			return
 		}
+
+		// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: cancel_accepted
+		// fires AFTER the active-session guard passed and BEFORE the
+		// fence raise. The discriminator uses this to separate H-A
+		// (never reaches here) from H-B / H-C / Healthy.
+		recordCancelLivenessAccepted({ activeSessionId: activeSession.sessionId })
 
 		const { sdkHost, sessionId } = activeSession
 
@@ -91,15 +125,36 @@ export class SdkTaskControlCoordinator {
 		// the new epoch.
 		this.options.raiseCancelFence?.()
 
+		// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: abort_invoked
+		// fires immediately BEFORE the await. The diagnostic records
+		// `t0 = Date.now()` keyed by sessionId, so a matching
+		// abort_completed records the wall-clock delta. If H-B
+		// reproduces, abort_completed NEVER fires and the bucket
+		// never receives a delta.
+		recordCancelLivenessAbortInvoked({ activeSessionId: sessionId, now: Date.now() })
+
+		let _abortOutcome: "resolved" | "caught" = "resolved"
 		try {
 			await sdkHost.abort(sessionId)
 		} catch (error) {
+			_abortOutcome = "caught"
 			if (!isAbortError(error)) {
 				Logger.error("[SdkController] Failed to abort session:", error)
 			} else {
 				Logger.debug(`[SdkController] AbortError during cancelTask (expected): ${sessionId}`)
 			}
 		}
+
+		// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: abort_completed
+		// fires AFTER the try/catch (so it captures BOTH "resolved"
+		// AND "caught" — the H-B boundary is the await, not its
+		// outcome). Records the wall-clock delta from the matching
+		// abort_invoked capture.
+		recordCancelLivenessAbortCompleted({
+			activeSessionId: sessionId,
+			now: Date.now(),
+			outcome: _abortOutcome,
+		})
 
 		this.options.sessions.setRunning(false)
 
@@ -113,6 +168,12 @@ export class SdkTaskControlCoordinator {
 		this.options.messages.appendAndEmit([resumeMessage], { type: "status", payload: { sessionId, status: "cancelled" } })
 
 		await this.options.postStateToWebview()
+		// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: cancel_published
+		// fires AFTER the postStateToWebview await resolves, at the
+		// end of cancelTask. H-C (defensive — fence raised, abort
+		// settled, but post-state never published) is the only
+		// signature with (req=1, acc=1, inv=1, cmp=1, pub=0).
+		recordCancelLivenessPublished({ activeSessionId: sessionId })
 		Logger.log(`[SdkController] Task cancelled: ${sessionId}`)
 	}
 

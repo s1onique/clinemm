@@ -25,6 +25,7 @@ import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyBcbObservationUnavailableDiagnosticProfile,
+	applyCancelLivenessDiagnosticProfile,
 	applyCompletionContinuationDeliveryDiagnosticProfile,
 	applyCompletionContinuationUpstreamDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
@@ -46,6 +47,7 @@ import { installExtensionHostAllocationProfilerRuntime } from "@/sdk/extension-h
 import { getCpuProfilerState } from "@/sdk/extension-host-cpu-profiler"
 import { installExtensionHostCpuProfilerRuntime } from "@/sdk/extension-host-cpu-profiler-runtime"
 import { dumpExtensionSideExtensionHostHotloopDiagnostic } from "@/sdk/extension-host-hotloop-diagnostic-runtime"
+import { dumpExtensionSideCancelLivenessDiagnostic } from "@/sdk/cancel-liveness-diagnostic-runtime"
 import { getTerminationAuthorityState } from "@/sdk/extension-host-termination-authority"
 import { installExtensionHostTerminationAuthorityRuntime } from "@/sdk/extension-host-termination-authority-runtime"
 import {
@@ -451,6 +453,19 @@ export async function activate(context: vscode.ExtensionContext) {
 	// construction guarantees the seam is armed BEFORE the first
 	// handleSessionEvent / setTurnPhase / logQueueEvents call.
 	applyExtensionHostHotloopDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: arm the
+	// cancel-liveness counter diagnostic at the SAME EARLIEST
+	// initialization seam, BEFORE SdkController construction. The
+	// helper arms the module seam idempotently based STRICTLY on
+	// the dogfood identity bit (mirrors EHLOOP / BJLA / BOCOR /
+	// CCARD / TSWPD / THSICAP — no env var, no override matrix).
+	// The counters pin the load-bearing witnesses for the H-A vs
+	// H-B vs H-C vs Healthy discriminator inside
+	// SdkTaskControlCoordinator.cancelTask(). Running this BEFORE
+	// SdkController construction guarantees the seam is armed
+	// BEFORE the first cancelTask() call.
+	applyCancelLivenessDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01:
 	// arm the ALLOCAUTH01 (Extension Host Allocation Profiler) seam
@@ -1318,6 +1333,24 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[EHLOOP] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Extension host hotloop diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: dump command
+		// for the cancel-liveness counter diagnostic. Mirrors the
+		// EHLOOP / BJLA / BOCOR / CCARD / TSWPD / THSICAP dump
+		// pattern: unconditional (operator can always inspect
+		// captured counters), dump != clear (no counter mutation).
+		// REMOVAL_TRIGGER: discriminated boundary confirmed + fix
+		// GREEN on LIVE qualification, OR CAPTURE_INSUFFICIENT.
+		vscode.commands.registerCommand(commands.DumpCancelLivenessDiagnostic, async () => {
+			try {
+				const { file } = await dumpExtensionSideCancelLivenessDiagnostic(context)
+				void vscode.window.showInformationMessage(`Cancel liveness diagnostic counters dumped to ${file}.`)
+			} catch (err) {
+				Logger.error("[CANCELLIVENESS] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Cancel liveness diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

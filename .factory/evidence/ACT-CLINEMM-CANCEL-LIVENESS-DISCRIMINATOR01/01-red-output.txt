@@ -1,0 +1,6 @@
+ ✓ src/sdk/__tests__/cancel-liveness-diagnostic.red.test.ts > ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — cancelTask > RED-A1 (Healthy): active session present + abort resolves → req=1, acc=1, inv=1, cmp=1, pub=1 2ms
+ ✓ src/sdk/__tests__/cancel-liveness-diagnostic.red.test.ts > ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — cancelTask > RED-A2 (H-A): active session absent → req=1, acc=0, inv=0, cmp=0, pub=0; post-state NOT published 0ms
+ ✓ src/sdk/__tests__/cancel-liveness-diagnostic.red.test.ts > ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — cancelTask > RED-B (H-B): abort never settles → req=1, acc=1, inv=1, cmp=0, pub=0; post-state NOT published until the await drains 27ms
+ ✓ src/sdk/__tests__/cancel-liveness-diagnostic.red.test.ts > ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — cancelTask > discrimination matrix is exhaustive: each of {Healthy, H-A, H-B} matches its row 11ms
+ Test Files  1 passed (1)
+      Tests  4 passed (4)

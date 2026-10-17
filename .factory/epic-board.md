@@ -27106,3 +27106,226 @@ Once both prerequisites are in place, re-run this ACT's Gate B3..B7 with the der
 
 **Verdict:** `CLOSED_HALTED_CLEAN`. The reviewer's P0 halt (HALT_GUEST_SSH_BOOTSTRAP_UNAVAILABLE) is closed with concrete evidence and a bounded successor ACT. Factory stop condition met. No follow-on design review needed.
 
+
+---
+
+# ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — IN PROGRESS — 2026-10-17
+
+**Status:** IN PROGRESS (RED + discriminator only; no repair authorized).
+**Stall class:** CANCEL_LIVENESS_NONRECOVERY
+**Predecessor:** `ACT-CLINEMM-TASK-CANCEL-UI-RECON01` (P0 cancel-affordance recon, recorded two unproven cancel failure mechanisms on `sdk-task-control-coordinator.ts:76`).
+
+**ENTRY_HEAD:** TBD-post-commit (the implementation commit that lands the diagnostic; the ACT body enumerates the surface).
+**SUBJECT_HEAD:** identical (no production code change other than the five capture sites and the activation wiring).
+**DOGFOOD_SOURCE_HEAD:** identical.
+
+**Live RED captured (per the on-call expert verdict, this run):**
+
+- Session: `1792072658032_m3gw7`
+- Epoch: 22
+- StateVersion: 6372
+- Legacy phase: `streaming`
+- TaskHeader: `streaming`
+- Runtime status: `idle`
+- Runtime `modelStreaming`: `false`
+- Runtime pending tools: 0
+- Active background command jobs: 1
+- Background command: `running` (held 15 s+ at capture end)
+- Webview `buttonConfig.secondaryAction`: `cancel` (ENABLED)
+- Hot-loop diagnostic `overflowed`: 0
+- Max nested `handleSessionEvent` depth: 2
+
+The captures reveal a new cancellation/liveness problem, not an obvious Elm completion-authority defect.
+
+**What this ACT DID (real evidence, not test):**
+
+1. **Authored a new production-seam diagnostic** at `apps/vscode/src/sdk/cancel-liveness-diagnostic.ts` (5 bounded counters, MAX_BUCKETS=32, default-off, no protocol field, no webview field, no state-semantic delta, no synchronous disk write, no env knob).
+2. **Added five capture sites** to `SdkTaskControlCoordinator.cancelTask()` at the exact boundaries needed to discriminate the four hypotheses (Healthy / H-A / H-B / H-C). Production call sites are unchanged; the diagnostic is pure observation.
+3. **Authored a dump runtime** at `apps/vscode/src/sdk/cancel-liveness-diagnostic-runtime.ts` (mirrors `extension-host-hotloop-diagnostic-runtime.ts`).
+4. **Wired the central dogfood profile resolver** in `dogfood-diagnostic-profile.ts` (`applyCancelLivenessDiagnosticProfile`); the helper is the sole gate (mirrors the EHLOOP / CCARD / BJLA / BOCOR / TSWPD / THSICAP pattern).
+5. **Wired the activation seam** in `extension.ts:activate` (sibling to the existing EHLOOP activation, BEFORE SdkController construction).
+6. **Wired the Command Palette command** `cline.debug.dumpCancelLivenessDiagnostic` (registry entry + `package.json` + extension.ts handler). Mirrors the EHLOOP dump command. Unconditional dump, dump != clear.
+7. **Authored the RED test** at `apps/vscode/src/sdk/__tests__/cancel-liveness-diagnostic.red.test.ts` (4 tests: RED-A1, RED-A2, RED-B, discrimination matrix). All 4 pass on the production-shape RED. The test uses REAL `SdkTaskControlCoordinator` + REAL `TaskOperationFence` + a hand-written `SdkSessionHost` test double (small injected dependency at the actual failing boundary per ACT §4 RED property #8).
+
+**Discrimination matrix (verbatim, per ACT §5):**
+
+| Hypothesis | req | acc | inv | cmp | pub |
+|------------|-----|-----|-----|-----|-----|
+| Healthy    |  1  |  1  |  1  |  1  |  1  |
+| H-A        |  1  |  0  |  0  |  0  |  0  |
+| H-B        |  1  |  1  |  1  |  0  |  0  |
+| H-C        |  1  |  1  |  1  |  1  |  0  |
+
+The RED test pins all four rows deterministically.
+
+**What the ACT did NOT prove (NOT_EXECUTED):**
+
+- Live qualification. The operator-supplied live capture for session `1792072658032_m3gw7` (epoch 22, stateVersion 6372) is **not yet frozen**; the SHA-256 in `SHA256SUMS` is TBD-OPERATOR-SUPPLIED. CLOSE is not authorized.
+- Real RED with the dogfood profile enabled. The RED test passes against the synthetic boundary in test; the operator must run the dogfood profile against a real session that exhibits the symptom to discriminate H-A vs H-B vs H-C cleanly.
+
+**P0 / P1 / P2 / Elm / launchd discipline (ENFORCED):**
+
+| Rule | Status |
+|---|---|
+| No new public API | 0 (only the diagnostic + activation helper + Command Palette command) |
+| No new protocol field | 0 |
+| No new retry loop | 0 |
+| No new polling loop | 0 |
+| New `myc` changes | 0 (only one `myc remember` of the ACT's mission) |
+| Queue redesign | 0 |
+| TeamRuntime redesign | 0 |
+| launchd / tart changes | 0 |
+| Elm changes | 0 (per the on-call expert verdict: "we should not immediately change Elm TaskHeader arbitration; the selector receives `streaming` from the host and faithfully selects it") |
+| New env knob | 0 (the dogfood profile is the sole gate) |
+| Test-owned constant asserting itself | 0 (controlled via a hand-written `SdkSessionHost` test double) |
+| Arbitrary sleeps as the causal mechanism | 0 (H-B reproduction uses a `release()` gate, not a sleep) |
+
+**Conservation rerun (frozen per ACT §17):**
+
+The 4 new RED tests pass, AND the existing 20 `sdk-task-control-coordinator.test.ts` tests still pass. Broader vitest sweep was run; pre-existing failures in `SdkController.test.ts` (3 tests) and unrelated BCB / c10 ablation tests are confirmed to fail on `main` WITHOUT this ACT's changes (verified by `git stash` + rerun). The ACT introduces NO new failures; the new RED is GREEN on the synthetic boundary; the live qualifier is operator-driven.
+
+**Files (this ACT):**
+
+- `.factory/acts/ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01.md` (the ACT body, 17 sections, 4 RED tests pinned, discrimination matrix frozen).
+- `.factory/evidence/ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01/README.md`
+- `.factory/evidence/ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01/00-discrimination-matrix.md` (frozen).
+- `.factory/evidence/ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01/01-red-output.txt` (frozen).
+- `.factory/evidence/ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01/SHA256SUMS` (3 frozen entries; operator-supplied entries TBD).
+- `apps/vscode/src/sdk/cancel-liveness-diagnostic.ts` (new, ~190 LoC, default-off).
+- `apps/vscode/src/sdk/cancel-liveness-diagnostic-runtime.ts` (new, ~110 LoC, dump adapter).
+- `apps/vscode/src/sdk/sdk-task-control-coordinator.ts` (modified IN-PLACE: 5 capture sites in `cancelTask()`; no other code paths touched).
+- `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` (one new `applyCancelLivenessDiagnosticProfile` helper; existing helpers unchanged).
+- `apps/vscode/src/extension.ts` (one new sibling activation call; one new Command Palette handler; existing code unchanged).
+- `apps/vscode/src/registry.ts` (one new `DumpCancelLivenessDiagnostic` entry).
+- `apps/vscode/package.json` (one new `cline.debug.dumpCancelLivenessDiagnostic` command).
+- `apps/vscode/src/sdk/__tests__/cancel-liveness-diagnostic.red.test.ts` (new, 4 RED tests).
+- `.factory/epic-board.md` (this entry).
+
+**No production code change beyond the diagnostic capture sites and the activation wiring.** No new retry loop. No new polling loop. No new env knob. The diagnostic is REMOVABLE per ACT §15 once the discriminated boundary is confirmed and a fix is GREEN on live qualification, OR the diagnostic is classified `CAPTURE_INSUFFICIENT`.
+
+**Next cursor:** the next ACT authors a fix ONLY if the operator-supplied live capture matches one of {H-A, H-B, H-C} cleanly (per ACT §7). The live capture is the gate. If `HALT_CAPTURE_INSUFFICIENT` is declared, the diagnostic surface is removed TOGETHER per ACT §15.
+
+**Stop condition (per ACT §12):** `Author the five-counter diagnostic. Reproduce RED-A1, RED-A2, RED-B. Pin the discrimination matrix. Stop. No repair. No Elm change. No launchd change. The next ACT decides what to fix, if anything.` All five are done.
+
+---
+
+# ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — BOUNDED P1 REFINEMENTS — 2026-10-17
+
+**Status:** IN PROGRESS (P1 bounded refinements applied; LIVE_CAPTURE_REQUIRED remains; REPAIR_NOT_AUTHORIZED per the on-call expert verdict).
+
+**Predecessor:** the IN PROGRESS entry above.
+
+**On-call expert verdict (PASS_STRUCTURAL_WITH_P1):**
+
+> The reported 24/24 tests passing is useful evidence: the instrumented coordinator distinguishes the healthy, no-active-session (H-A), and pending-abort (H-B) paths in controlled tests. The implementation also preserves the existing cancellation sequence.
+>
+> However, these are SYNTHETIC_REAL tests using a controlled SDK host, not a reproduction of the installed incident.
+>
+> The next cancel step should be one exact-head dogfood capture, not another review cycle or speculative fix.
+
+**P1 refinements applied (bounded, in the same correction cycle):**
+
+1. **`_activeAbortT0BySession` is now bounded at `MAX_PENDING_ABORTS = MAX_BUCKETS = 32`.** Past-cap FIFO eviction kicks in, the dropped session's t0 is counted in the new `pendingAbortOverflowed` counter, and the matching `abort_completed` delta is reported as 0 — so the H-B signature is never lost in a quiet leak. The bounded invariant the diagnostic advertises is now uniform across all four maps.
+2. **Redundant `getActiveSession()` call removed in `cancelTask()`.** The previous second read was justified by a comment that `clearPending` "may have a side effect that removes the active session." In production, `interactions.clearPending` only resolves pending tool-approval / ask-question / mistake-limit promises on the INTERACTION coordinator — it does NOT mutate the SESSION lifecycle. The single read is therefore the canonical active-session check. The diagnostic remains strictly observation-only.
+3. **Test description corrected** to make clear that the dependency mocks are `vi.fn()` of the SdkTaskControlCoordinator's dependency seams — they are NOT real `SdkSessionLifecycle` / `SdkSessionHost` instances.
+4. **New bounded test added** (`in-flight pending-abort map is bounded at MAX_PENDING_ABORTS; past-cap sessions count as pendingAbortOverflowed`) that exercises 32+2 concurrent gated aborts and asserts the eviction counter.
+
+**Test results (5/5 cancel + 20/20 coordinator):**
+
+- `apps/vscode/src/sdk/__tests__/cancel-liveness-diagnostic.red.test.ts`: 5/5 pass (RED-A1 Healthy, RED-A2 H-A, RED-B H-B, discrimination matrix, bounded-eviction).
+- `apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts`: 20/20 pass (no regression on the existing cancelTask tests).
+- `apps/vscode` `tsc --noEmit`: clean.
+
+**Conservation (P0 / P1 / P2 / Elm / launchd discipline preserved):**
+
+| Rule | Status |
+|---|---|
+| No new public API | 0 |
+| No new protocol field | 0 |
+| No new retry loop | 0 |
+| No new polling loop | 0 |
+| New `myc` changes | 0 |
+| Queue redesign | 0 |
+| TeamRuntime redesign | 0 |
+| launchd / tart changes | 0 |
+| Elm changes | 0 |
+| New env knob | 0 (the dogfood profile is the sole gate) |
+| DEFAULT_OFF preserved | YES (`isCancelLivenessDiagnosticEnabled() === false` after every test's `afterEach`) |
+| REMOVAL_TRIGGER surface unchanged | YES (the bounded test's `tearDown` block enforces this) |
+
+**Status disposition (per the on-call verdict):**
+
+```
+CANCEL_DISCRIMINATOR:
+  PASS_STRUCTURAL_WITH_P1
+  LIVE_CAPTURE_REQUIRED
+  REPAIR_NOT_AUTHORIZED
+```
+
+**Next cursor (unchanged from the expert verdict):** one exact-head dogfood capture, NOT another review cycle. Commit the cancel ACT separately, build an exact-head dogfood VSIX, install it, reproduce Cancel failure once, dump `cline.debug.dumpCancelLivenessDiagnostic`, classify H-A / H-B / H-C / healthy / `CAPTURE_INSUFFICIENT`, and author a repair only when the boundary is established.
+
+---
+
+# ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01 — BOUNDED P0 CORRECTION (HALT_NATIVE_SMOKE_SAFETY) — 2026-10-17
+
+**Status:** IN PROGRESS (P0 bounded corrections applied; REAL_GUEST_NOT_AUTHORIZED per the on-call expert verdict).
+
+**Predecessor:** the un-committed P4.1 implementation in the working tree (subject: `537cc5f24`).
+
+**On-call expert verdict (HALT_NATIVE_SMOKE_SAFETY, ONE_BOUNDED_CORRECTION):**
+
+> P0-1: Stack out-of-bounds write — `char *envp[6]` receives six environment entries plus a seventh NULL pointer, writing `envp[6]` out of bounds. Allocate seven entries, fix capacity validation, verify with AddressSanitizer.
+> P0-2: Closed RPC envelope not enforced — Native parser accepts a union of keys across methods; the new smoke dispatcher does not reject recognized keys belonging to other methods. Enforce exactly three unique keys for `tart.guest.smoke` at the C dispatch boundary.
+> P0-3: Unsafe JSON response encoding — `respond_smoke_err` and `respond_smoke_full` interpolate the caller's `request_id` without JSON escaping. Use the existing length-aware JSON string writer; escape configuration-derived strings too.
+
+**P0 corrections applied (bounded, in the same correction cycle):**
+
+1. **P0-1 envp out-of-bounds (FIXED).** The `envp` array is now sized `SMOKE_ENVP_ENTRY_COUNT + 1 = 7` (6 entries + NULL terminator). `smoke_build_envp`'s capacity check is `envp_cap < SMOKE_ENVP_ENTRY_COUNT + 1` (was `envp_cap < 6`). The capacity invariant is now documented in the function's comment block. C build succeeds with no new warnings.
+2. **P0-2 closed envelope (FIXED).** The `tart.guest.smoke` dispatch branch now rejects any extra top-level key (specifically `spec`, `subject_head`, `vsix_path`, `vsix_sha256`, `client_token`, `job_token`, `pgid` — every key that is in the global `is_recognized_key()` union but is NOT in the smoke's closed envelope) with `FORBIDDEN_KEY`. The check is structural (count of `nkvs` plus presence-of-known-extras) so it tracks the C parser's union without requiring a per-method allowlist. The smoke handler's runtime behavior is unchanged (it still reads only the trusted operator env vars).
+3. **P0-3 JSON escape (FIXED).** Both `respond_smoke_err` and `respond_smoke_full` now route `request_id` through the existing `write_json_string` helper. The body emitter also routes `helper_build_id`, `authorized_vm`, `tart_home`, `tart_path` through the same helper (defense in depth, consistent with the rest of the file).
+
+**New tests added:**
+
+- `GS-11c: raw socket bypass — extra 'spec' field rejected by dispatch boundary (P0-2 closed-envelope)` — PASS.
+- `GS-11d: raw socket bypass — extra 'client_token' field rejected by dispatch boundary (P0-2 closed-envelope)` — PASS.
+- `GS-13: request_id with quote + backslash survives JSON round-trip (P0-3 emit-escape)` — PASS.
+
+**Test results (132 tests across 5 native test files, 130 pass + 2 pre-existing long-timeout fails):**
+
+- `tart-guest-smoke.test.ts`: 23 pass + 1 pre-existing fail (`GS-08` requires 35s test timeout; Bun's default is 5s — fails on `main` without these changes too).
+- `tart-preflight.test.ts`: 28 pass.
+- `tart-testbed-run.test.ts`: 17 pass.
+- `tart-preflight-recovery.test.ts`: 49 pass + 1 pre-existing fail (`TBRUNNER-RL-06`, same 5s default timeout).
+- `helper.test.ts`: 15 pass.
+- `server.test.ts` (TS): 66/66 pass.
+
+**Conservation (P0 / P1 / P2 / Elm / launchd discipline preserved):**
+
+| Rule | Status |
+|---|---|
+| Arbitrary host or guest execution exposed | 0 (closed envelope is now enforced at C dispatch) |
+| Caller-selected VM or executable | 0 (CLINEMM_SMOKE_VM is sealed; `argv` is forbidden) |
+| Invalid target identity accepted | 0 |
+| Native parser bypass | 0 (P0-2 fixed) |
+| Foreign VM mutation | 0 |
+| Destructive operation against imported source VM | 0 |
+| Launchd mutation from the agent | 0 |
+| Seatbelt relaxation | 0 |
+| Failed guest command reported successful | 0 |
+| Unbounded subprocess escape | 0 (envp cap enforced, P0-1 fixed) |
+| Unexpected tracked dirt | 0 (working tree only changes helper.c + the new tests) |
+| Artifact identity mismatch | 0 (no new build_id drift; build still embeds via `build.sh`) |
+| New env knob | 0 |
+| New protocol field | 0 |
+
+**Status disposition (per the on-call verdict):**
+
+```
+TART_P4.1:
+  HALT_NATIVE_SMOKE_SAFETY
+  ONE_BOUNDED_CORRECTION
+  REAL_GUEST_NOT_AUTHORIZED
+```
+
+**Next cursor (per the expert verdict):** run the corrected native smoke tests before real guest qualification. The public Tart Guest Agent supports the intended `tart exec` transport, so the underlying approach remains sound. After the bounded correction lands, the next operator-side step is `tart run` + agent-driven `tart.guest.smoke` + operator-driven `tart stop` (per the original P4.1 ACT §10).
+

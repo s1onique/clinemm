@@ -184,6 +184,20 @@ const ClineCommands = {
 	// CAPTURE_INSUFFICIENT, OR HALT_CAUSE_NOT_ESTABLISHED, OR
 	// successor evidence supersedes it.
 	DumpExtensionHostHotloopDiagnostic: prefix + ".debug.dumpExtensionHostHotloopDiagnostic",
+	// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: dump command for
+	// the cancel-liveness counter diagnostic (H-A vs H-B vs H-C vs
+	// Healthy discriminator). Mirrors the EHLOOP / CCARD / BJLA /
+	// BOCOR / TSWPD / THSICAP dump pattern: unconditional (operator
+	// can always inspect captured counters), dump != clear (no
+	// counter mutation). The dump serializes the bounded counter
+	// snapshot to
+	// <globalStorageUri>/cancel-liveness-diagnostic.json. No toggle
+	// command (enablement is owned by
+	// `applyCancelLivenessDiagnosticProfile` in
+	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER: discriminated
+	// boundary confirmed + fix GREEN on LIVE qualification, OR
+	// CAPTURE_INSUFFICIENT.
+	DumpCancelLivenessDiagnostic: prefix + ".debug.dumpCancelLivenessDiagnostic",
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01 — CALLER-REASON DISCRIMINATOR.
 	// Dump command for the lifecycle-clear recorder. Mirrors the
 	// CCARD / CCDO / CCDSO / CCNTUP / EHLOOP / ELM-SHADOW / ELM-AUTHORITY

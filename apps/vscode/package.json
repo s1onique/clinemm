@@ -287,6 +287,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpCancelLivenessDiagnostic",
+				"title": "Cline Debug: Dump Cancel Liveness Diagnostic",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.debug.dumpLifecycleClear",
 				"title": "Cline Debug: Dump Lifecycle Clear",
 				"category": "Cline"

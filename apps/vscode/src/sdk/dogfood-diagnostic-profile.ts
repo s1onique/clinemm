@@ -154,6 +154,10 @@ import {
 	isExtensionHostHotloopDiagnosticEnabled as _isExtensionHostHotloopDiagnosticEnabled,
 	setExtensionHostHotloopDiagnosticEnabled,
 } from "./extension-host-hotloop-diagnostic"
+import {
+	isCancelLivenessDiagnosticEnabled,
+	setCancelLivenessDiagnosticEnabled,
+} from "./cancel-liveness-diagnostic"
 import { applyExtensionHostQueueLogPolicy } from "./extension-host-queue-log-policy"
 import { applyExtensionHostTerminationAuthorityPolicy } from "./extension-host-termination-authority"
 import {
@@ -1848,4 +1852,71 @@ export function applyBcbObservationUnavailableDiagnosticProfile(
 		return { enabled: false, flipped: true, source }
 	}
 	return { enabled: should, flipped: false, source }
+}
+
+// ===========================================================================
+// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — central dogfood
+// profile resolver for the cancel-liveness counter diagnostic
+// (H-A vs H-B vs H-C vs Healthy discriminator).
+//
+// CONTRACT — frozen in this ACT (mirrors EHLOOP / CCARD / BJLA /
+// BOCOR / TSWPD / THSICAP; no env override layer):
+//
+//   - There is NO new env var. NO override matrix. NO parser.
+//     Per the Factory reviewer precedent, the diagnostic is
+//     enabled STRICTLY by the central dogfood profile:
+//       isDogfood === true  -> capture ON
+//       isDogfood === false -> capture OFF (public default)
+//   - The module seam is
+//     ./cancel-liveness-diagnostic.ts#isCancelLivenessDiagnosticEnabled
+//     and #setCancelLivenessDiagnosticEnabled. The resolver arms
+//     it via setCancelLivenessDiagnosticEnabled(enabled).
+//   - The activation helper is called from extension.ts:activate
+//     (sibling to the existing EHLOOP / BJLA / BOCOR / CCARD /
+//     TSWPD / THSICAP activations); there is exactly ONE
+//     production activation path.
+//
+// HONEST STOP RULE (mirrors EHLOOP / CCARD / BJLA / BOCOR):
+//   Once the discriminated boundary is confirmed and a fix is
+//   GREEN on LIVE qualification, OR the diagnostic is classified
+//   CAPTURE_INSUFFICIENT, this resolver + activation helper + the
+//   counter module + the host-side dump runtime + the Command
+//   Palette registration + the registry entry + the package.json
+//   command declaration MUST be removed TOGETHER.
+// ===========================================================================
+
+/**
+ * THE single production activation helper for the cancel-liveness
+ * counter diagnostic. Called from extension.ts:activate (sibling
+ * to the EHLOOP / CCARD / BJLA / BOCOR / TSWPD / THSICAP
+ * activations); there is exactly ONE production activation path,
+ * no copied orchestration in tests.
+ *
+ * Mirrors the EHLOOP / CCARD / BJLA / BOCOR / TSWPD / THSICAP
+ * pattern: enable/disable is strictly:
+ *
+ *   isDogfood === true  -> ON
+ *   isDogfood === false -> OFF
+ *
+ * No new env knob. No parser. No override matrix.
+ */
+export function applyCancelLivenessDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
+	const was = _isCancelLivenessDiagnosticEnabledForActivation()
+	const should = isDogfood
+	if (should && !was) {
+		setCancelLivenessDiagnosticEnabled(true)
+		return { enabled: true, flipped: true }
+	}
+	if (!should && was) {
+		setCancelLivenessDiagnosticEnabled(false)
+		return { enabled: false, flipped: true }
+	}
+	return { enabled: should, flipped: false }
+}
+
+function _isCancelLivenessDiagnosticEnabledForActivation(): boolean {
+	return isCancelLivenessDiagnosticEnabled()
 }

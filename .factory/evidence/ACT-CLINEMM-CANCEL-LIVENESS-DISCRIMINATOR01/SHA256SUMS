@@ -1,0 +1,13 @@
+# SHA-256 of frozen ACT evidence.
+# Files in this directory (current state):
+#   00-discrimination-matrix.md        — frozen, ACT body §5 mirror
+#   01-red-output.txt                  — RED test output, frozen
+#   README.md                          — directory navigation
+#
+# Operator-supplied files (TBD, see ACT §16):
+#   operator-live-capture.jsonl        — TBD (operator-supplied, dogfood)
+#   extension-host-hotloop-diagnostic.json.snapshot — TBD (operator-supplied)
+
+baa0a8e0fa2d11174a68e03ae072d662aed0fd856a22cf50f98477d0499e9213  01-red-output.txt
+30fc9543a273ba592c344851c83ce658e4338266b4cb9cffa30d3ef0442749ed  00-discrimination-matrix.md
+63920e67b7378cc6e5dba795cc1d8e2531a1bec411d047113a753d438e46d5ec  README.md
