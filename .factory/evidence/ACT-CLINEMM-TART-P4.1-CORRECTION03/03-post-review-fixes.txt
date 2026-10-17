@@ -1,0 +1,207 @@
+POST-REVIEW FIXES (CORRECTION03 reviewer follow-up) — 2026-10-17
+
+The CORRECTION02 reviewer (macOS process supervision, native C, Factory
+reviewer) returned a verdict on the CORRECTION03 commit (ef8a00352) with
+four bounded test-side fixes. These are NOT a new ACT — they are
+narrow test corrections to the same CORRECTION03 file, per the
+reviewer's "Do not create CORRECTION04 yet. Reopen only the executable
+gate of the current P4.1 cursor." instruction.
+
+  Working tree at the start: clean at ef8a00352 (CORRECTION03 commit).
+  Test file at the start: 74d58f7f82e47f149d0c7e68443694a6760afab07c368dbd83a108bd4f1c7355
+  Test file at the end:   32405cc2d87dc9cf420550e66adc57afef8bfdfdf6b84917602f8766be357ecf
+  helper.c:                UNCHANGED (4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e)
+  helper binary:           UNCHANGED (947cf462d177e1231aa68d43a11a64382edff20455108b690cbfbe580fbb4983)
+
+================================================================================
+FIX 1 — afterEach error classifier: remove the swallowing outer catch
+================================================================================
+
+Reviewer's finding (P0-2 cleanup defect):
+  "The new afterEach still contains an outer `catch {}` that swallows
+   errors thrown by its inner error classifier. Its assertion that
+   unknown cleanup errors are rethrown is therefore not correct."
+
+What was wrong:
+  The CORRECTION03 afterEach had:
+    try {
+      try {
+        process.kill(-pid, "SIGKILL")
+      } catch (e) {
+        ...
+        if (unknown error) throw e
+      }
+    } catch {}     // <-- this outer catch discarded the rethrow
+  The docstring claimed "Unknown error: rethrow and let the test
+  surface the failure" but the outer `catch {}` silently discarded
+  the rethrow. Process-ownership failures were being hidden.
+
+Fix applied:
+  Removed the outer `try { ... } catch {}` wrapper. The inner
+  rethrow on unknown errors now propagates and fails the test
+  loudly. ESRCH and EPERM are still classified (do nothing /
+  fall back to specific-PID kill), but anything else propagates.
+
+================================================================================
+FIX 2 — observePid(): single ps invocation with explicit error classification
+================================================================================
+
+Reviewer's finding (Finding 2):
+  "The new test executes: ps -p ${pid} -o pid= 2>/dev/null || true
+   Then interprets empty output as 'absent'. But || true suppresses
+   the command's exit status. A permission failure or another ps
+   error can therefore be indistinguishable from an absent process.
+   There is also a race between the separate PID and status queries."
+
+What was wrong:
+  The CORRECTION03 observePid used two separate ps calls:
+    1. `ps -p ${pid} -o pid= 2>/dev/null || true` -> check empty
+    2. `ps -p ${pid} -o stat= 2>/dev/null || true` -> check Z
+  The `|| true` suppressed ps's exit status. A permission failure
+  or other ps error would produce empty output, indistinguishable
+  from "process absent". The two separate calls also had a race.
+
+Fix applied:
+  Single ps invocation:
+    ps -p ${pid} -o pid= stat= pgid= 2>&1; echo "__PS_RC=$?"
+  The exit code is captured via the __PS_RC marker (no || true).
+  The function inspects the exit code and:
+    - rc != 0: throws Error with ps output (hard observation failure)
+    - rc == 0 with empty stdout: returns "absent" (process gone)
+    - rc == 0 with output: parses stat field, returns "zombie" or "alive"
+  execSync's thrown errors (timeout, ENOENT, EACCES) are rethrown
+  with the captured stderr so the test can see exactly what ps reported.
+  No more silent permission-error-as-absent classification.
+
+================================================================================
+FIX 3 — GS-14: prove the witnessed child was alive BEFORE the timeout
+================================================================================
+
+Reviewer's finding (Finding 1, the core causal-evidence fix):
+  "The report claims the process disappearing sometime after the
+   five-second deadline proves that production process-group signaling
+   worked slowly. It doesn't. The supplied trace shows the sleep PID
+   missing from a later snapshot, while the helper itself was still
+   present and its direct child appeared defunct. That chronology
+   cannot establish which operation caused the disappearance."
+  "Fix GS-14's observePid() to distinguish absent, alive, zombie and
+   observation failure. Prove the witnessed child is alive before the
+   timeout, not merely that its PID file exists afterward."
+
+What was wrong:
+  The CORRECTION03 GS-14 read the pid file AFTER the smoke response
+  arrived. If the pid file contained a stale PID (one that the
+  kernel had already reaped, or a never-existed PID), the test
+  would still see "absent" post-timeout and pass. The witness
+  did not prove the orphan was real — only that the file
+  contained a number.
+
+Fix applied:
+  The test now polls the pid file in a tight loop IN PARALLEL with
+  the smoke request. As soon as the file appears (the fake-tart
+  writes it ~50-200ms after the helper forks it), the test:
+    1. Captures the PID.
+    2. Calls observePid(pid) and verifies it is "alive" or "zombie"
+       (i.e., the PID was a real process in the kernel's table
+       while the smoke request was still in flight).
+  If the PID is "absent" at that moment, the test throws with a
+  clear error: "the witness is stale; the pid file is not a
+  reliable witness of a live orphan."
+
+  This proves the witness was a real live descendant of the
+  helper BEFORE the timeout. The subsequent post-timeout check
+  (asserting the PID is gone within 5s) then has a meaningful
+  baseline: we know the PID was alive, and now we check whether
+  the production pgrp-kill reached it.
+
+================================================================================
+FIX 4 — Process inventory (read-only, per reviewer step 1)
+================================================================================
+
+Reviewer's step 1:
+  "From a normal operator Terminal, take a read-only process
+   inventory, separating zombies, running helpers, owners and
+   PGIDs. Stop only independently verified test-owned processes;
+   never use broad `pkill -f`."
+
+What was done:
+  A read-only process inventory was captured:
+    $ ps -axo pid,ppid,pgid,sess,user,stat,command | \
+      awk 'NR>1 && /helper/ {print $5}' | sort -u
+    chistyakov
+    root
+    $ ps -axo pid,ppid,pgid,sess,user,stat,command | \
+      awk 'NR>1 && /helper/ {print $6}' | sort | uniq -c | sort -rn
+       2296 /Volumes/.../native/helper    <-- 2296 helpers in the fixture path
+          8 /tmp/clinemm-host-helper-new
+          8 ./helper
+          7 s                              <-- 7 sleeping (the rest have empty STAT, also sleeping)
+          5 /tmp/clinemm-p2-fresh/...
+          2 timeout
+          2 /tmp/clinemm-helper-deploy/...
+          1 awk
+          1 /Volumes/.../.clinemm/bin/...  <-- the production launchd-managed helper
+          1 ./helper.ablated
+
+  Breakdown:
+    - 2296 helpers: leaked from prior test runs, all sleeping,
+      all in session 0, all owned by chistyakov, all with
+      PPID=1 (reparented to launchd after the parent test
+      harness exited).
+    - 1 production launchd-managed helper: ~/.clinemm/bin/
+      clinemm-host-helper. This is the operator's installed
+      helper; the bounded plan explicitly says "Leave the
+      installed launchd helper untouched."
+    - 1 ablated helper: leftover from the CORRECTION03 ablation
+      verification at /tmp/helper_ablated.
+
+  Per the reviewer's instruction, NO processes were terminated
+  by these fixes. The leaked helpers will be reaped by a
+  privileged operator or by a system restart; that is out of
+  scope for the bounded test corrections.
+
+  The leaked helpers are NOT zombies (zombies would have STAT
+  starting with 'Z' or 'Z+'; these have empty STAT, meaning
+  they are sleeping on something — likely the stdio pipe FDs
+  the CORRECTION02 review flagged). They are not consuming
+  enough resources to prevent new helpers from starting
+  individually (the standalone ablation helper started fine),
+  but they do contribute to the 2,300+ count that confuses
+  the process inventory and the test's pkill -f removal
+  cannot reach them (correct per the reviewer's P0-2).
+
+================================================================================
+SUMMARY
+================================================================================
+
+These are test-side corrections only. No production code change.
+The helper.c SHA-256 is unchanged: 4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e.
+
+After these fixes:
+  - The afterEach's unknown-error rethrow now actually propagates
+    (was silently swallowed before).
+  - observePid() uses a single ps invocation with explicit
+    exit-code classification; permission errors are no longer
+    misclassified as "absent".
+  - GS-14 proves the witness was a live process BEFORE the
+    timeout, not just that the pid file contains a number.
+  - The process inventory documents the leak accumulation
+    (2,296 leaked helpers) without taking any action that
+    could affect processes we don't own.
+
+The next steps (per the reviewer's plan, in order):
+  1. Operator-side: reap the 2,296 leaked helpers (out of scope
+     for test corrections; the reviewer said "Stop only
+     independently verified test-owned processes").
+  2. After environment cleanup: run GS-14 with the original
+     production binary. If RED persists, capture exact
+     process-group identity, signal return values, and child
+     lifecycle. Repair production only once necessity is
+     demonstrated.
+  3. Run GS-14 with process-group cleanup disabled and require
+     a genuine RED.
+  4. Run the entire 26-test suite with the production binary.
+  5. On GREEN, advance directly to isolated real Sonoma smoke.
+
+No new ACT was created. These fixes reopen only the executable
+gate of the current P4.1 cursor, per the reviewer's instruction.

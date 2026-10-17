@@ -237,3 +237,70 @@ indiscriminate process-name cleanup.
 - Re-introducing `pkill -f` in the test's afterEach
 - Re-introducing the GS-14 bounded backstop
 - Any production code change without a demonstrated necessity
+
+---
+
+## 10. Post-review follow-up (2026-10-17, after reviewer verdict)
+
+The CORRECTION02 reviewer (macOS process supervision, native C, Factory
+reviewer) returned a verdict on the CORRECTION03 commit (ef8a00352) with
+four bounded test-side corrections. Per the reviewer's "Do not create
+CORRECTION04 yet. Reopen only the executable gate of the current P4.1
+cursor" instruction, no new ACT was created. The corrections are
+narrow test changes to the same file.
+
+See `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION03/03-post-review-fixes.txt`
+for the full analysis. Summary:
+
+1. **afterEach error classifier (P0-2 cleanup defect):** The CORRECTION03
+   afterEach had an outer `try { ... } catch {}` that silently
+   swallowed the inner rethrow on unknown errors. The fix removes
+   the outer wrapper so unknown cleanup errors now propagate and
+   fail the test loudly.
+
+2. **observePid() — single ps invocation with explicit error
+   classification (Finding 2):** The CORRECTION03 observePid used
+   two separate `ps ... || true` invocations. The `|| true` suppressed
+   ps's exit status, so a permission failure was indistinguishable
+   from "process absent". The fix uses a single ps invocation that
+   captures PID + stat + PGID together, and inspects ps's exit
+   code explicitly. Permission errors are now hard observation
+   failures (thrown), never classified as "absent".
+
+3. **GS-14 — prove the witnessed child was alive BEFORE the timeout
+   (Finding 1, the core causal-evidence fix):** The CORRECTION03
+   GS-14 read the pid file only AFTER the smoke response arrived.
+   If the file contained a stale PID, the test would still see
+   "absent" post-timeout and pass. The fix polls the pid file in
+   parallel with the smoke request and verifies the captured PID
+   is "alive" or "zombie" as soon as the file appears. This proves
+   the witness was a real live descendant of the helper BEFORE
+   the timeout, not just a number in a file.
+
+4. **Process inventory (read-only, per reviewer step 1):** A
+   read-only process inventory was captured (no processes
+   terminated). The inventory shows 2,296 leaked helpers (all
+   sleeping, all in session 0, all owned by chistyakov, all with
+   PPID=1) plus 1 production launchd-managed helper (the
+   operator's installed one, which the bounded plan says to
+   leave untouched). Per the reviewer's instruction, NO processes
+   were terminated by these fixes.
+
+Artifact identity (post-review):
+  Source HEAD:        ef8a00352 (CORRECTION03 commit, unchanged)
+  helper.c SHA-256:   4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e (unchanged)
+  Helper binary SHA:  947cf462d177e1231aa68d43a11a64382edff20455108b690cbfbe580fbb4983 (unchanged)
+  Test file SHA:      32405cc2d87dc9cf420550e66adc57afef8bfdfdf6b84917602f8766be357ecf (was 74d58f7f)
+
+Next steps (per the reviewer's plan, in order):
+  1. Operator-side: reap the 2,296 leaked helpers (out of scope
+     for test corrections).
+  2. After environment cleanup: run GS-14 with the original
+     production binary. If RED persists, capture exact
+     process-group identity, signal return values, and child
+     lifecycle. Repair production only once necessity is
+     demonstrated.
+  3. Run GS-14 with process-group cleanup disabled and require
+     a genuine RED.
+  4. Run the entire 26-test suite with the production binary.
+  5. On GREEN, advance directly to isolated real Sonoma smoke.

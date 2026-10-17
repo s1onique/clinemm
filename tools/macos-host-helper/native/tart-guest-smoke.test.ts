@@ -112,27 +112,35 @@ afterEach(async () => {
     //     we own). Any orphan that escaped the helper's pgrp is
     //     NOT touched by the test's cleanup path.
     //   - Other: rethrow and let the test surface the failure.
+    //
+    // CORRECTION03 post-review fix: the previous version of this
+    // block wrapped the classifier in an outer `try { ... } catch
+    // {}` that silently swallowed the rethrow on the "Other"
+    // branch. The docstring claimed unknown errors were surfaced,
+    // but in practice they were discarded. The fix removes the
+    // outer wrapper so the inner rethrow actually propagates. If
+    // afterEach sees an unknown cleanup error, the test fails
+    // loudly (process-ownership failures must not be hidden).
     const pid = proc.pid
     if (pid && pid > 0) {
       try {
-        try {
-          process.kill(-pid, "SIGKILL")
-        } catch (e) {
-          const msg = (e as Error).message
-          if (msg.includes("ESRCH") || msg.includes("No such process")) {
-            // Pgrp already gone; nothing to do.
-          } else if (msg.includes("EPERM") || msg.includes("operation not permitted")) {
-            // Sandbox blocks pgrp signaling; fall back to
-            // direct-PID kill of the helper we own only.
-            try { process.kill(pid, "SIGKILL") } catch {}
-          } else {
-            // Unknown error: surface it. We do NOT swallow
-            // unknown errors, because doing so would mask a
-            // real process-ownership failure.
-            throw e
-          }
+        process.kill(-pid, "SIGKILL")
+      } catch (e) {
+        const msg = (e as Error).message
+        if (msg.includes("ESRCH") || msg.includes("No such process")) {
+          // Pgrp already gone; nothing to do.
+        } else if (msg.includes("EPERM") || msg.includes("operation not permitted")) {
+          // Sandbox blocks pgrp signaling; fall back to
+          // direct-PID kill of the helper we own only.
+          try { process.kill(pid, "SIGKILL") } catch {}
+        } else {
+          // Unknown error: rethrow and let the test surface the
+          // failure. Do NOT wrap this in an outer catch — the
+          // previous outer `catch {}` silently swallowed this
+          // rethrow and hid process-ownership failures.
+          throw e
         }
-      } catch {}
+      }
     }
     // Bounded wait for the kernel to fully reap the killed pgrp.
     // We deliberately do NOT await proc.exited here: bun's
@@ -900,34 +908,68 @@ test("GS-12: tart.testbed.run dispatch unaffected by smoke (no false-PASS regres
 
 // Helper: observe whether a PID is still alive via ps. Returns
 // one of "absent", "zombie", "alive". Throws on observation
-// failure (ps itself errored).
+// failure (ps itself errored) — does NOT silently treat
+// permission errors as "process absent".
+//
+// CORRECTION03 post-review fix: the previous version used two
+// separate `ps -p ${pid} -o pid= ... || true` invocations. The
+// `|| true` suppressed the command's exit status, so a
+// permission failure or other ps error was indistinguishable
+// from an absent process. There was also a race between the
+// PID and the status query. The fix uses ONE `ps` invocation
+// that captures PID, state, and PGID together, and inspects
+// execSync's thrown error to classify observation failures
+// (ENOENT vs permission denied vs other) explicitly. The `2>&1`
+// preserves stderr so a real ps error surfaces in the output
+// for the caller to inspect.
 function observePid(pid: number): "absent" | "zombie" | "alive" {
   const { execSync } = require("node:child_process") as typeof import("node:child_process")
-  // ps -p <pid> -o pid= prints nothing if the process is
-  // gone. We use this as the primary "is it alive" check.
-  let psLine = ""
+  let combined = ""
+  let stderrText = ""
   try {
-    psLine = execSync(`ps -p ${pid} -o pid= 2>/dev/null || true`, {
-      encoding: "utf8", timeout: 2000,
-    }).trim()
+    // Single invocation: PID + stat + PGID, all space-separated,
+    // no headers. We do NOT use `|| true` — we want ps's exit
+    // status to be preserved so we can distinguish a real error
+    // from "process absent" (ps exits 0 with empty output when
+    // the PID is gone, but exits non-zero on a real failure such
+    // as permission denied or a missing -p flag).
+    const result = execSync(
+      `ps -p ${pid} -o pid= stat= pgid= 2>&1; echo "__PS_RC=$?"`,
+      { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] },
+    )
+    // Find the trailing PS_RC marker so we can classify.
+    const rcMatch = result.match(/__PS_RC=(\d+)/)
+    const rc = rcMatch ? parseInt(rcMatch[1], 10) : 0
+    // Strip the marker line; the remainder is ps output.
+    const psOutput = result.replace(/__PS_RC=\d+\s*$/, "").trim()
+    if (rc !== 0) {
+      // ps itself errored. This is a hard observation failure.
+      // We must NOT classify this as "absent".
+      throw new Error(`ps observation failed (rc=${rc}): ${psOutput}`)
+    }
+    combined = psOutput
   } catch (e) {
-    // ps itself failed. This is a hard observation failure.
-    throw new Error(`ps observation failed: ${(e as Error).message}`)
+    // execSync itself threw (timeout, ENOENT, EACCES, etc.).
+    // Re-throw with the captured stderr so the test can see
+    // exactly what ps reported.
+    const inner = (e as { stderr?: Buffer | string }).stderr
+    if (inner) {
+      stderrText = typeof inner === "string" ? inner : inner.toString()
+    }
+    throw new Error(`ps observation failed: ${(e as Error).message}; stderr=${stderrText || "<none>"}`)
   }
-  if (psLine === "") {
+  if (combined === "") {
+    // ps exited 0 with empty output — the process is absent.
     return "absent"
   }
-  // The PID is still in the process table. Distinguish a
-  // zombie (state starts with 'Z') from a live process.
-  try {
-    const stat = execSync(`ps -p ${pid} -o stat= 2>/dev/null || true`, {
-      encoding: "utf8", timeout: 2000,
-    }).trim()
-    if (stat.startsWith("Z")) return "zombie"
-    return "alive"
-  } catch (e) {
-    throw new Error(`ps stat observation failed: ${(e as Error).message}`)
-  }
+  // The PID is in the process table. Distinguish zombie (stat
+  // starts with 'Z') from alive by looking at the stat field.
+  // Output format: "<pid> <stat> <pgid>" (space-separated,
+  // no headers because of the `=` syntax).
+  const fields = combined.split(/\s+/)
+  const stat = fields.length >= 2 ? fields[1] : ""
+  if (stat.startsWith("Z")) return "zombie"
+  return "alive"
 }
 
 
@@ -963,18 +1005,67 @@ esac
   // deadline (28s) on the fake-tart's `sleep 60` and return
   // TART_EXEC_TIMEOUT. While the request is in flight, the fake-tart
   // will have written the actual sleep PID to the witness file.
+  //
+  // CORRECTION03 post-review fix: the previous version of this test
+  // read the pid file ONLY after the smoke response arrived, then
+  // asserted the PID was gone. The reviewer correctly pointed out
+  // that a stale pid file (one that points to a never-existed or
+  // long-dead PID) would not actually be a witness of a real
+  // orphan — only proof that the fake-tart wrote SOMETHING to the
+  // file. To prove the production cleanup invariant, the test must
+  // confirm the witnessed PID was a live descendant of the
+  // helper BEFORE the timeout, not just that the pid file contains
+  // a number.
+  //
+  // The fix: send the smoke request, but in parallel poll the pid
+  // file in a tight loop. As soon as the file appears (the fake-tart
+  // writes it ~50-200ms after the helper forks it), capture the PID
+  // and verify it is a live process. This proves the witness is
+  // real: the PID was alive in the kernel's process table while
+  // the smoke request was still in flight. The subsequent
+  // post-timeout check then has a meaningful baseline.
+  const witnessPidPromise = (async () => {
+    // Tight poll until the pid file appears. The fake-tart
+    // writes the file before waiting on the sleep, so this
+    // completes well before the 28s smoke deadline.
+    while (!existsSync(pidFile)) {
+      await new Promise((r) => setTimeout(r, 10))
+    }
+    const pidStr = readFileSync(pidFile, "utf8").trim()
+    const pid = parseInt(pidStr, 10)
+    if (!Number.isFinite(pid) || pid <= 0) {
+      throw new Error(`[GS-14] pid file contains invalid PID: "${pidStr}"`)
+    }
+    // Verify the captured PID is a live process RIGHT NOW,
+    // before the smoke request completes. This is the
+    // reviewer-requested pre-assertion: prove the witness
+    // child was alive, not just that the file exists.
+    const preObs = observePid(pid)
+    if (preObs !== "alive" && preObs !== "zombie") {
+      throw new Error(
+        `[GS-14] witness pre-assertion: captured PID ${pid} is "${preObs}" ` +
+        `immediately after the fake-tart wrote the pid file. The ` +
+        `witness is stale (the kernel reaped the process before ` +
+        `we could observe it). The pid file is not a reliable ` +
+        `witness of a live orphan.`
+      )
+    }
+    return { pid }
+  })()
   const r = parseResp(await send(JSON.stringify({
     version: 1, request_id: "gs-14", method: "tart.guest.smoke",
   }), 40_000))
+  // Now read the captured witness.
+  const witness = await witnessPidPromise
+  const sleepPid = witness.pid
   expect(r.ok).toBe(false)
   // @ts-expect-error result body
   expect(r.result.overall).toBe("TART_EXEC_TIMEOUT")
-  // Step 1: the witness file MUST exist. A missing file is a hard
-  // test failure — it means the fake-tart did not get far enough
-  // to write the PID, which means the test's observation is broken.
+  // Step 1: the witness PID was already validated as "alive" or
+  // "zombie" while the smoke request was in flight (the
+  // witnessPidPromise above). The pid file existence is therefore
+  // implied; we double-check it for diagnostic clarity.
   expect(existsSync(pidFile)).toBe(true)
-  const sleepPidStr = readFileSync(pidFile, "utf8").trim()
-  const sleepPid = parseInt(sleepPidStr, 10)
   expect(Number.isFinite(sleepPid) && sleepPid > 0).toBe(true)
   // Step 2: after the timeout + post-kill drain, the specific
   // PID MUST be gone. The test polls for up to 5s; if the

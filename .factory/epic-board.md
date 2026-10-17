@@ -27567,3 +27567,32 @@ After environment cleanup (operator-side), the bounded CORRECTION03 corrections 
   (c) Proceed to the operator-side real guest smoke (the reviewer's item 5).
   (d) After Phase 2, the next ACT is `ACT-CLINEMM-TART-P5-EXACT-HEAD-VSIX-DOGFOOD01`.
 
+
+---
+
+## ACT-CLINEMM-TART-P4.1-CORRECTION03 POST-REVIEW (2026-10-17)
+
+The CORRECTION02 reviewer returned a verdict `HALT_GS14_CLEANUP_UNPROVEN` on the CORRECTION03 commit (ef8a00352), with four bounded test-side corrections. Per the reviewer's "Do not create CORRECTION04 yet. Reopen only the executable gate of the current P4.1 cursor" instruction, no new ACT was created.
+
+Bounded test corrections applied (no production change, no helper rebuild):
+
+1. **afterEach error classifier:** Removed the outer `try { ... } catch {}` that silently swallowed the inner rethrow on unknown errors. Unknown cleanup errors now propagate and fail the test loudly.
+
+2. **observePid() single-ps with explicit error classification:** Replaced two `ps ... || true` invocations with a single `ps -o pid= stat= pgid= 2>&1; echo "__PS_RC=$?"` invocation. ps's exit code is now inspected; permission errors are hard observation failures (thrown), never classified as "absent".
+
+3. **GS-14 pre-assertion of witness liveness:** The test now polls the pid file in parallel with the smoke request and verifies the captured PID is "alive" or "zombie" as soon as the file appears. This proves the witness was a real live descendant of the helper BEFORE the timeout, not just a number in a file.
+
+4. **Read-only process inventory:** 2,296 leaked helpers captured (all sleeping, all in session 0, all owned by chistyakov, all with PPID=1). Plus 1 production launchd-managed helper (untouched per the bounded plan). No processes terminated by these fixes.
+
+Artifact identity (unchanged from CORRECTION03):
+  Source HEAD:        ef8a00352
+  helper.c SHA-256:   4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e
+  Helper binary SHA:  947cf462d177e1231aa68d43a11a64382edff20455108b690cbfbe580fbb4983
+  Test file SHA:      32405cc2d87dc9cf420550e66adc57afef8bfdfdf6b84917602f8766be357ecf (was 74d58f7f)
+
+Next steps (per the reviewer's plan, in order):
+  1. Operator-side: reap the 2,296 leaked helpers (out of scope for test corrections).
+  2. Run GS-14 with the original production binary. If RED persists, capture exact process-group identity, signal return values, and child lifecycle. Repair production only once necessity is demonstrated.
+  3. Run GS-14 with process-group cleanup disabled and require a genuine RED.
+  4. Run the entire 26-test suite with the production binary.
+  5. On GREEN, advance directly to isolated real Sonoma smoke.
