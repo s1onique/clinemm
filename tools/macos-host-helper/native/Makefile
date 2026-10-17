@@ -1,40 +1,34 @@
 # Build the clinemm-host-helper C binary.
-# Usage: make         -> build ./helper
-#        make clean   -> remove ./helper
+#
+# ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01:
+# The atomic-build + codesign re-sign + variant-separation logic
+# is implemented in build.sh. This Makefile is a thin convenience
+# wrapper that delegates to build.sh for both targets so the two
+# paths share one code path. Do not reimplement the build here —
+# the bash script is the source of truth.
+#
+# Usage:
+#   make            -> build ./helper
+#   make ablated    -> build ./helper.ablated (separate path;
+#                                       canonical ./helper is NEVER
+#                                       replaced)
+#   make clean      -> remove ./helper AND ./helper.ablated
 #
 # Review-correction01: -Wno-error=implicit-function-declaration +
-# -Wno-implicit-function-declaration are removed. The helper source now
-# uses proper forward declarations for every helper it calls. Implicit
-# declarations are a security-sensitive diagnostic for a sandbox-bound
-# native helper — they should be errors, not warnings.
-CC      ?= cc
-# Compute the embedded build_id (review-correction01). The same
-# algorithm is duplicated in build.sh; we keep them in sync because
-# Make recipes with $(shell) aren't trivially embedded into CC flags.
-ABI_VERSION ?= TART_TESTBED_RUN_P0_DOGFOOD01_CORRECTION01_REAL_LIFECYCLE_INTEGRITY
-BUILD_ID    ?= $(shell printf '%s' "$(ABI_VERSION)" | cat - helper.c | shasum -a 256 | awk '{print $$1}')
-CFLAGS      ?= -O2 -Wall -Wextra \
-               -DCLINEMM_HELPER_ABI_VERSION="\"$(ABI_VERSION)\"" \
-               -DCLINEMM_HELPER_BUILD_ID="\"$(BUILD_ID)\""
-SRC      = helper.c
-OUT      = helper
+# -Wno-implicit-function-declaration are removed. The helper source
+# uses proper forward declarations for every helper it calls.
+# Implicit declarations are a security-sensitive diagnostic for a
+# sandbox-bound native helper — they should be errors, not warnings.
 
-# Auto-detect SDK include path on macOS when <launch.h> is missing.
-SDK_INC :=
-ifeq ($(shell uname -s 2>/dev/null),Darwin)
-SDK_PATH := $(shell xcrun --show-sdk-path --sdk macosx 2>/dev/null)
-ifneq ($(SDK_PATH),)
-SDK_INC := -I$(SDK_PATH)/usr/include
-endif
-endif
+.PHONY: all canonical ablated clean
 
-all: $(OUT)
+all: canonical
 
-$(OUT): $(SRC)
-	@echo "[make] embedded build_id=$(BUILD_ID)"
-	$(CC) $(CFLAGS) $(SDK_INC) -o $(OUT) $(SRC)
+canonical:
+	./build.sh
+
+ablated:
+	CLINEMM_HELPER_BUILD_VARIANT=ablated ./build.sh
 
 clean:
-	rm -f $(OUT)
-
-.PHONY: all clean
+	rm -f helper helper.ablated .helper.unsigned.tmp.* .helper.ablated.unsigned.tmp.*

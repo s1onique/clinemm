@@ -1,0 +1,31 @@
+[0m[1mbun test [0m[2mv1.3.13 (bf2e2cec)[0m
+[PGID-DISC] helper identity: sha256=b607693ffa9c69b2... inode=258193844 build_id=f727e7029b14aace... ident=helper size=106896
+[PGID-DISC] OWNERSHIP-VERIFICATION-FAILED: pid==pgid==sid:false pid=3138 pgid=3138 sid=0 runner_pgid=97716 helper_pgid_neq_runner_pgid:true. Test will not signal any group from this spawn. The discriminator's evidence is still recorded, but afterEach will use direct-PID kill only.
+
+PGID-DISC EVIDENCE — 2026-10-17T22:18:14.748Z
+source=fresh-spawn
+fresh_spawn_verified=false
+ownership_check=pid==pgid==sid:false pid=3138 pgid=3138 sid=0 runner_pgid=97716 helper_pgid_neq_runner_pgid:true
+helper_pid=3138
+helper_ppid=97718
+helper_pgid=3138
+helper_sess=0
+helper_stat=s
+helper_command=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+helper_pgid_equals_pid=true
+child_pid=(unobserved in leaked-helper mode)
+child_ppid=(n/a)
+child_pgid=(n/a)
+child_sess=(n/a)
+child_stat=(n/a)
+child_ppid_equals_helper_pid=(n/a)
+child_pgid_equals_child_pid=true
+assumed_pgrp_kill_target=kill(-3138, 0)
+assumed_pgrp_kill_result=rc=-1 errno=EPERM msg=kill() failed: EPERM: Operation not permitted
+actual_pgrp_kill_target=kill(-3138, 0)
+actual_pgrp_kill_result=rc=-1 errno=EPERM msg=kill() failed: EPERM: Operation not permitted
+discriminator_verdict=MISMATCH
+
+[PGID-DISC] MATCH: helper_pgid==helper_pid==3138. Existing test cleanup assumption holds for this run.
+[PGID-DISC] Layer1 direct-PID kill: code=EPERM msg=kill() failed: EPERM: Operation not permitted
+[PGID-DISC] Layer2 skipped: freshSpawnVerified=false. Helper 3138 was direct-PID-killed in Layer 1.

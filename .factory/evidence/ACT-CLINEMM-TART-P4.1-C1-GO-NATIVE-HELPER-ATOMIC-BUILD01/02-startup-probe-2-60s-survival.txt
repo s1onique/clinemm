@@ -1,0 +1,4 @@
+IDENT: 78cbc8aae3990a4c ident: helper
+SPAWN pid=94932
+STARTED after 200ms
+HELPER STILL RUNNING after 60s (started 60004ms ago)

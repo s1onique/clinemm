@@ -1,0 +1,20 @@
+=== STARTUP PROBE ===
+Helper identity: {
+  "sha": "8ae634c064d8c6b63218ea0afdc0a9d5645086fc73bac9be3e437246a30a5428",
+  "inode": 258192821,
+  "build_id": "f727e7029b14aace5367e42252072d8010761462aff3cba6232f8ef43443a10b",
+  "ident": "helper",
+  "size": 106896
+}
+[PROBE] spawning helper with socket=/tmp/probe-mvcycaze.sock status=/tmp/probe-mvcycaze.status.json
+[PROBE] spawn_pid=87009
+[PROBE] helper started: true (after 1792275050985ms)
+[PROBE] status file: /tmp/probe-mvcycaze.status.json
+[PROBE] status: {
+  "activated": false,
+  "listen_fd": 3,
+  "pid": 87009,
+  "uid": 501,
+  "launchd_rc": 3
+}
+[PROBE] helper alive at probe end: false

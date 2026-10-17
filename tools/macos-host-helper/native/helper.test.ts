@@ -17,6 +17,7 @@ import { createConnection } from "node:net"
 import { existsSync, readFileSync, statSync, unlinkSync } from "node:fs"
 import { join } from "node:path"
 import { dlopen, FFIType, ptr } from "bun:ffi"
+import { ensureHelperBinary } from "./test-helper-build"
 
 const SCRIPT_DIR = import.meta.dir
 const HELPER_BIN = join(SCRIPT_DIR, "helper")
@@ -28,19 +29,13 @@ let statusPath: string
 let proc: Subprocess | null = null
 
 beforeAll(async () => {
-  // Build helper binary if not already built.
-  if (!existsSync(HELPER_BIN)) {
-    const build = spawn({
-      cmd: [join(SCRIPT_DIR, "build.sh")],
-      cwd: SCRIPT_DIR,
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-    const code = await build.exited
-    if (code !== 0) {
-      throw new Error(`build.sh exited ${code}: ${await new Response(build.stderr).text()}`)
-    }
-  }
-  expect(existsSync(HELPER_BIN)).toBe(true)
+  // ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01:
+  // ALWAYS invoke build.sh via the verification module. The module
+  // atomically replaces ./helper with a fresh canonical binary,
+  // then validates Identifier="helper" and codesign --verify
+  // --strict passes. A stale ablated binary at the canonical
+  // path is detected and rejected at suite-start.
+  await ensureHelperBinary()
 
   // Use /tmp/ for the AF_UNIX socket: macOS sandbox restrictions on
   // /private/var/folders/ prevent child processes from binding AF_UNIX
@@ -1762,18 +1757,44 @@ test("PGID-16 (review-correction01): Makefile/build.sh no longer suppress implic
   // implicit function declarations as errors, not warnings.
   // We check the actual cc / CFLAGS flags, not comments that
   // happen to mention the flag string.
+  //
+  // ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01:
+  // The Makefile is now a thin wrapper that delegates to
+  // build.sh. The CFLAGS line lives in build.sh, not in the
+  // Makefile. The test is updated to assert that NEITHER
+  // build file's CODE LINES (not comments) contain the
+  // suppression. Comments may mention the flag string for
+  // historical context.
   const makefile = readFileSync(
     join(SCRIPT_DIR, "Makefile"), "utf8")
   const buildsh = readFileSync(
     join(SCRIPT_DIR, "build.sh"), "utf8")
-  // Extract the CFLAGS line from the Makefile and the cc invocation
-  // from build.sh, then assert neither contains the suppression.
-  const cflagsLine = makefile.split("\n").find((l) => l.startsWith("CFLAGS"))
-  expect(cflagsLine).toBeDefined()
-  expect(cflagsLine).not.toContain("-Wno-error=implicit-function-declaration")
-  expect(cflagsLine).not.toContain("-Wno-implicit-function-declaration")
-  // In build.sh, look for the line that invokes $CC.
-  const ccLines = buildsh.split("\n").filter((l) =>
+  // Strip Makefile-style comments (lines starting with #) and
+  // shell comments (lines starting with # in non-shebang
+  // positions). Comments may mention the flag string; we are
+  // only concerned with CODE that would actually invoke the
+  // compiler with the suppression.
+  const stripComments = (text: string): string =>
+    text.split("\n")
+      .filter((l) => !l.trim().startsWith("#"))
+      .join("\n")
+  const makefileCode = stripComments(makefile)
+  const buildshCode = stripComments(buildsh)
+  // If the Makefile defines CFLAGS directly (legacy), it must
+  // not contain the suppression. The new wrapper Makefile
+  // delegates to build.sh, so this is a no-op for the wrapper.
+  const cflagsLine = makefileCode.split("\n").find((l) =>
+    l.trim().startsWith("CFLAGS"))
+  if (cflagsLine !== undefined) {
+    expect(cflagsLine).not.toContain("-Wno-error=implicit-function-declaration")
+    expect(cflagsLine).not.toContain("-Wno-implicit-function-declaration")
+  }
+  // The Makefile's code must NOT contain the suppression.
+  expect(makefileCode).not.toContain("-Wno-error=implicit-function-declaration")
+  expect(makefileCode).not.toContain("-Wno-implicit-function-declaration")
+  // build.sh is the source of truth: the $CC invocation line
+  // must not contain the suppression.
+  const ccLines = buildshCode.split("\n").filter((l) =>
     l.includes("$CC") || l.includes("\"$CC\""))
   expect(ccLines.length).toBeGreaterThan(0)
   for (const line of ccLines) {

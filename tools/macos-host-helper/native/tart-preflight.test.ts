@@ -28,6 +28,7 @@ import {
   rmSync,
 } from "node:fs"
 import { join } from "node:path"
+import { ensureHelperBinary } from "./test-helper-build"
 
 const SCRIPT_DIR = import.meta.dir
 const HELPER_BIN = join(SCRIPT_DIR, "helper")
@@ -40,18 +41,14 @@ let proc: Subprocess | null = null
 let fixtureRoot: string
 
 beforeAll(async () => {
-  if (!existsSync(HELPER_BIN)) {
-    const build = spawn({
-      cmd: [join(SCRIPT_DIR, "build.sh")],
-      cwd: SCRIPT_DIR,
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-    const code = await build.exited
-    if (code !== 0) {
-      throw new Error(`build.sh exited ${code}: ${await new Response(build.stderr).text()}`)
-    }
-  }
-  expect(existsSync(HELPER_BIN)).toBe(true)
+  // ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01:
+  // Always build-and-verify a fresh canonical helper. The old
+  // "existsSync and build if missing" pattern is unsafe because
+  // it accepts any pre-existing binary (including a stale
+  // ablation artifact); the new pattern atomically replaces
+  // the binary every suite start and validates Identifier +
+  // codesign --verify --strict.
+  await ensureHelperBinary()
 
   workDir = "/tmp"
   const stamp = Date.now().toString(36)

@@ -45,6 +45,7 @@ import {
   copyFileSync,
 } from "node:fs"
 import { join } from "node:path"
+import { ensureHelperBinary } from "./test-helper-build"
 
 const SCRIPT_DIR = import.meta.dir
 const HELPER_BIN = join(SCRIPT_DIR, "helper")
@@ -219,11 +220,13 @@ function send(ctx: HelperCtx, payload: string, timeoutMs = 25000): Promise<strin
   })
 }
 
-beforeAll(() => {
-  if (!existsSync(HELPER_BIN)) {
-    throw new Error("helper binary not built; run build.sh first")
-  }
-  expect(existsSync(HELPER_BIN)).toBe(true)
+beforeAll(async () => {
+  // ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01:
+  // Always build-and-verify a fresh canonical helper. The old
+  // pattern (require a pre-existing binary) is no longer safe —
+  // a stale ablated binary at the canonical path is exactly the
+  // failure mode the bounded fix prevents.
+  await ensureHelperBinary()
   fixtureRoot = `/tmp/clinemm-real-lifecycle-correction01-${Date.now().toString(36)}`
   mkdirSync(fixtureRoot, { recursive: true, mode: 0o755 })
 })

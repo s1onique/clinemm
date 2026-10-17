@@ -1,0 +1,21 @@
+[0m
+tart-guest-smoke.test.ts:
+[0m[1m1332 |[0m     [0m[2m// production defect. We DO NOT clean it up and soft-pass;[0m
+[0m[1m1333 |[0m     [0m[2m// we throw, and the test fails. The bounded backstop is[0m
+[0m[1m1334 |[0m     [0m[2m// removed (CORRECTION03): the test asserts the CLEANUP[0m
+[0m[1m1335 |[0m     [0m[2m// INVARIANT (no sleep 60 grandchild outlives the request),[0m
+[0m[1m1336 |[0m     [0m[2m// which is exactly the production pgrp-kill contract.[0m
+[0m[1m1337 |[0m     expect(lastObs).not[0m[3m[1m.toBe[0m([0m[32m"alive"[0m)
+                               [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1m[2mexpect([0m[31mreceived[0m[2m).[0mnot[2m.[0mtoBe[2m([0m[32mexpected[0m[2m)[0m
+
+Expected: not [32m"alive"[0m
+[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-guest-smoke.test.ts[0m[2m:[0m[33m1337[0m[2m:[33m25[0m[2m)[0m
+[0m[31m✗[0m[0m[1m GS-14: descendant cleanup — specific sleep PID is reaped after TART_EXEC_TIMEOUT[0m [0m[2m[[0m[33m37032.78ms[0m[2m][0m
+
+ 0 pass[0m
+ [0m[2m25 filtered out[0m
+[0m[31m 1 fail[0m
+ 5 expect() calls
+Ran 1 test across 1 file. [0m[2m[[1m37.54s[0m[2m][0m
