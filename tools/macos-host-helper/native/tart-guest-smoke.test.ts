@@ -49,6 +49,15 @@ let fixtureRoot: string
 let proc: Subprocess | null = null
 let socketPath: string = ""
 let statusPath: string = ""
+// ACT-CLINEMM-TART-P4.1-CORRECTION04 (C1 bounded fix): ownership
+// flag. Set to true ONLY when startHelper() successfully spawned
+// the helper with `detached: true` AND verification of the helper's
+// session/pgrp identity (PID == PGID == SID, helper PGID != test
+// runner PGID) succeeded. The afterEach refuses to issue any group
+// signal unless this flag is true — preventing the P0 hazard
+// flagged in the reviewer's C1 verdict (signaling a merely-observed
+// group from a leaked-helper fallback that the test never created).
+let helperSessionVerified = false
 
 beforeAll(async () => {
   if (!existsSync(HELPER_BIN)) {
@@ -84,62 +93,69 @@ afterAll(() => {
 
 afterEach(async () => {
   if (proc) {
-    // ACT-CLINEMM-TART-P4.1-CORRECTION03 (cleanup-safety correction):
+    // ACT-CLINEMM-TART-P4.1-CORRECTION04 (C1 bounded fix):
+    // Group signaling is now GATED on `helperSessionVerified`,
+    // which is set true by startHelper() ONLY when the spawned
+    // helper is its own session leader (PID == PGID == SID, and
+    // helper PGID != test runner PGID). Without `detached: true`,
+    // the helper inherited the bun-test runner's pgrp, and
+    // `process.kill(-helperPid)` signaled a non-existent pgrp
+    // (ESRCH) — silently leaking the helper.
     //
-    // The CORRECTION02 version of this block used pkill -9 -f with
-    // substring markers (e.g. "gs05-fake-tart", "clinemm-smoke-p41")
-    // to clean up after each test. The Factory reviewer correctly
-    // identified that those global command-line substring matches
-    // can terminate processes belonging to another test session,
-    // an operator-run smoke, or another ClineMM instance that
-    // happens to include the marker. That conflicts with the
-    // Factory's protected-process and containment rules.
+    // The reviewer's plan:
+    //   "Clean up only verified run-owned identities. Preserve
+    //    separate ownership of helper and fake-Tart child
+    //    process groups. Reap owned direct children where
+    //    possible; classify EPERM/ESRCH explicitly."
     //
-    // The bounded correction: signal ONLY the pgrp the test started
-    // (process.kill(-helperPid, "SIGKILL")). The helper calls
-    // setpgid(0,0) in its main() (helper.c:3541), so the helper's
-    // PID IS the pgrp leader, and any orphan descendant of the
-    // helper (e.g. a `sleep 60` grandchild) is in that pgrp.
-    // The pgrp signal reaches the helper AND its descendants,
-    // but does NOT reach any process outside the pgrp.
+    // Three cleanup paths now:
+    //   A. helperSessionVerified === true:
+    //      signal the helper's owned pgrp (which the test
+    //      created and therefore owns), and direct-PID kill
+    //      the helper as a backstop.
+    //   B. helperSessionVerified === false but proc exists:
+    //      direct-PID kill the helper ONLY (no group signal,
+    //      because the helper is not the pgrp leader).
+    //   C. No proc: nothing to do.
     //
-    // No pkill, no substring matches, no `|| true` swallowing.
-    // Error classification:
-    //   - ESRCH: pgrp already gone (helper exited cleanly).
-    //     Nothing to do.
-    //   - EPERM: sandbox blocks cross-session pgrp signaling.
-    //     Fall back to signaling the SPECIFIC helper PID (which
-    //     we own). Any orphan that escaped the helper's pgrp is
-    //     NOT touched by the test's cleanup path.
-    //   - Other: rethrow and let the test surface the failure.
-    //
-    // CORRECTION03 post-review fix: the previous version of this
-    // block wrapped the classifier in an outer `try { ... } catch
-    // {}` that silently swallowed the rethrow on the "Other"
-    // branch. The docstring claimed unknown errors were surfaced,
-    // but in practice they were discarded. The fix removes the
-    // outer wrapper so the inner rethrow actually propagates. If
-    // afterEach sees an unknown cleanup error, the test fails
-    // loudly (process-ownership failures must not be hidden).
+    // EPERM (sandbox) and ESRCH (already gone) are classified
+    // explicitly. We never signal a group identity we have not
+    // verified is owned by this test.
     const pid = proc.pid
     if (pid && pid > 0) {
-      try {
-        process.kill(-pid, "SIGKILL")
-      } catch (e) {
-        const msg = (e as Error).message
-        if (msg.includes("ESRCH") || msg.includes("No such process")) {
-          // Pgrp already gone; nothing to do.
-        } else if (msg.includes("EPERM") || msg.includes("operation not permitted")) {
-          // Sandbox blocks pgrp signaling; fall back to
-          // direct-PID kill of the helper we own only.
-          try { process.kill(pid, "SIGKILL") } catch {}
-        } else {
-          // Unknown error: rethrow and let the test surface the
-          // failure. Do NOT wrap this in an outer catch — the
-          // previous outer `catch {}` silently swallowed this
-          // rethrow and hid process-ownership failures.
-          throw e
+      if (helperSessionVerified) {
+        // Path A: pgrp signal of the helper's owned group
+        // (helper is its own session/pgrp leader because
+        // startHelper() spawned with `detached: true` and
+        // verification passed).
+        try {
+          process.kill(-pid, "SIGKILL")
+        } catch (e) {
+          const code = (e as NodeJS.ErrnoException).code ?? ""
+          if (code === "ESRCH") {
+            // Pgrp already gone (helper exited cleanly).
+            // Nothing to do.
+          } else if (code === "EPERM") {
+            // Sandbox blocked pgrp signaling. Fall back to
+            // direct-PID kill of the helper we own only.
+            try { process.kill(pid, "SIGKILL") } catch {}
+          } else {
+            // Unknown error: surface it (do not swallow).
+            throw e
+          }
         }
+        // Direct-PID backstop: even if the pgrp signal
+        // succeeded, the kernel may take a moment to deliver
+        // SIGKILL to a session leader on macOS Background
+        // sessions. The direct-PID signal is a same-group
+        // signal in this case and is always safe because
+        // we own the helper.
+        try { process.kill(pid, "SIGKILL") } catch {}
+      } else {
+        // Path B: ownership not verified (detached didn't
+        // take effect, or ps observation failed). Direct-PID
+        // kill only — we will NOT signal a foreign group.
+        try { process.kill(pid, "SIGKILL") } catch {}
       }
     }
     // Bounded wait for the kernel to fully reap the killed pgrp.
@@ -162,6 +178,7 @@ afterEach(async () => {
   proc = null
   socketPath = ""
   statusPath = ""
+  helperSessionVerified = false
 })
 
 function send(payload: string, timeoutMs = 10000): Promise<string> {
@@ -204,6 +221,15 @@ async function startHelper(envOverrides: Record<string, string>): Promise<void> 
       ...envOverrides,
     },
     stdio: ["ignore", "pipe", "pipe"],
+    // ACT-CLINEMM-TART-P4.1-CORRECTION04 (C1 bounded fix):
+    // Spawn the helper with `detached: true` so Bun calls setsid(2)
+    // on POSIX, making the helper its own session leader AND its
+    // own pgrp leader. Without this, the helper inherits the
+    // bun-test runner's pgrp, and `process.kill(-helperPid)` in
+    // afterEach signals a non-existent pgrp (ESRCH), silently
+    // leaving the helper alive. The afterEach now verifies
+    // ownership before signaling any group.
+    detached: true,
   })
   for (let i = 0; i < 100; i++) {
     if (existsSync(statusPath)) break
@@ -229,6 +255,58 @@ async function startHelper(envOverrides: Record<string, string>): Promise<void> 
     // path but the kernel hasn't released it). Wait a bit
     // and try again.
     await new Promise((r) => setTimeout(r, 500))
+  }
+  // ACT-CLINEMM-TART-P4.1-CORRECTION04 (C1 bounded fix): verify
+  // the helper became its own session leader. If
+  // `detached: true` worked, helper PID == PGID == SID, and the
+  // helper's PGID is distinct from the test runner's PGID. The
+  // afterEach uses this flag to decide whether group signaling
+  // is safe. If verification fails (e.g. Bun platform quirk,
+  // environment saturation), the afterEach falls back to a
+  // direct-PID kill of the helper only — never a group signal.
+  helperSessionVerified = await verifyHelperSessionOwnership(proc?.pid ?? 0)
+}
+
+// Verify the helper is its own session leader: PID == PGID == SID
+// and helper PGID != test runner PGID. Returns true only when
+// all three conditions hold. Best-effort: ps failures are logged
+// but do not throw — startHelper() returns a usable `proc` even
+// if verification cannot be confirmed; afterEach then takes the
+// conservative (direct-PID only) path.
+async function verifyHelperSessionOwnership(helperPid: number): Promise<boolean> {
+  if (helperPid <= 0) return false
+  try {
+    const { execSync } = require("node:child_process") as typeof import("node:child_process")
+    const raw = execSync(
+      `ps -p ${helperPid} -o pid=,pgid,sess 2>&1; echo "__PS_RC=$?"`,
+      { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] },
+    )
+    const m = raw.match(/__PS_RC=(\d+)/)
+    if (!m || m[1] !== "0") return false
+    const body = raw.replace(/__PS_RC=\d+\s*$/, "").trim()
+    const parts = body.split(/\s+/)
+    if (parts.length < 3) return false
+    const pid = parseInt(parts[0], 10)
+    const pgid = parseInt(parts[1], 10)
+    const sess = parseInt(parts[2], 10)
+    if (pid !== helperPid) return false
+    let runnerPgid = 0
+    try {
+      const runnerRaw = execSync(
+        `ps -p ${process.pid} -o pgid= 2>&1; echo "__PS_RC=$?"`,
+        { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] },
+      )
+      const rm = runnerRaw.match(/__PS_RC=(\d+)/)
+      if (rm && rm[1] === "0") {
+        runnerPgid = parseInt(
+          runnerRaw.replace(/__PS_RC=\d+\s*$/, "").trim().split(/\s+/)[0] ?? "0",
+          10,
+        )
+      }
+    } catch { /* best-effort */ }
+    return pid === pgid && pid === sess && pgid !== runnerPgid
+  } catch {
+    return false
   }
 }
 
@@ -927,27 +1005,52 @@ function observePid(pid: number): "absent" | "zombie" | "alive" {
   let combined = ""
   let stderrText = ""
   try {
-    // Single invocation: PID + stat + PGID, all space-separated,
-    // no headers. We do NOT use `|| true` — we want ps's exit
-    // status to be preserved so we can distinguish a real error
-    // from "process absent" (ps exits 0 with empty output when
-    // the PID is gone, but exits non-zero on a real failure such
-    // as permission denied or a missing -p flag).
+    // Single invocation: PID + stat + PGID, all space-separated.
+    // We do NOT use `|| true` — we want ps's exit status to be
+    // preserved so we can distinguish a real error from "process
+    // absent" (ps exits 0 with empty output when the PID is gone,
+    // but exits non-zero on a real failure such as permission
+    // denied or a missing -p flag).
+    //
+    // macOS ps quirk: only the FIRST column may use `=` to
+    // suppress its header. Subsequent columns must use `,`.
+    // The header line for the remaining columns is stripped
+    // manually below.
     const result = execSync(
-      `ps -p ${pid} -o pid= stat= pgid= 2>&1; echo "__PS_RC=$?"`,
+      `ps -p ${pid} -o pid=,stat,pgid 2>&1; echo "__PS_RC=$?"`,
       { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] },
     )
     // Find the trailing PS_RC marker so we can classify.
+    // Per the reviewer's bounded P1 fix: fail-closed when the
+    // marker is missing. The previous default-0 fallback
+    // silently classified infrastructure failures as "absent".
     const rcMatch = result.match(/__PS_RC=(\d+)/)
-    const rc = rcMatch ? parseInt(rcMatch[1], 10) : 0
+    if (!rcMatch) {
+      throw new Error(
+        `ps failed to emit __PS_RC marker (infrastructure failure): ` +
+        `${result.slice(0, 200)}`,
+      )
+    }
+    const rc = parseInt(rcMatch[1], 10)
     // Strip the marker line; the remainder is ps output.
-    const psOutput = result.replace(/__PS_RC=\d+\s*$/, "").trim()
+    const rawBody = result.replace(/__PS_RC=\d+\s*$/, "").trim()
     if (rc !== 0) {
       // ps itself errored. This is a hard observation failure.
       // We must NOT classify this as "absent".
-      throw new Error(`ps observation failed (rc=${rc}): ${psOutput}`)
+      throw new Error(`ps observation failed (rc=${rc}): ${rawBody}`)
     }
-    combined = psOutput
+    // Strip the header line for the non-`=` columns. With `pid=`
+    // only the first column is headerless, so a header line
+    // "STAT PGID" may appear at the top.
+    const bodyLines = rawBody === "" ? [] : rawBody.split("\n")
+    const filtered: string[] = []
+    for (const line of bodyLines) {
+      const t = line.trim()
+      if (t.startsWith("STAT")) continue
+      if (t === "") continue
+      filtered.push(line)
+    }
+    combined = filtered.join("\n").trim()
   } catch (e) {
     // execSync itself threw (timeout, ENOENT, EACCES, etc.).
     // Re-throw with the captured stderr so the test can see
@@ -964,11 +1067,15 @@ function observePid(pid: number): "absent" | "zombie" | "alive" {
   }
   // The PID is in the process table. Distinguish zombie (stat
   // starts with 'Z') from alive by looking at the stat field.
-  // Output format: "<pid> <stat> <pgid>" (space-separated,
-  // no headers because of the `=` syntax).
+  // Output format: "<pid> <stat> <pgid>" (space-separated).
+  // Note: stat may be empty (macOS quirk for some process
+  // states), in which case fields[1] is the pgid.
   const fields = combined.split(/\s+/)
   const stat = fields.length >= 2 ? fields[1] : ""
   if (stat.startsWith("Z")) return "zombie"
+  // Empty stat — process is alive but in a state macOS
+  // doesn't label (e.g. some launchd-reparented helpers).
+  if (stat === "" && fields.length >= 2) return "alive"
   return "alive"
 }
 
@@ -1025,10 +1132,23 @@ esac
   // the smoke request was still in flight. The subsequent
   // post-timeout check then has a meaningful baseline.
   const witnessPidPromise = (async () => {
-    // Tight poll until the pid file appears. The fake-tart
-    // writes the file before waiting on the sleep, so this
-    // completes well before the 28s smoke deadline.
+    // Tight poll until the pid file appears, with a bounded
+    // deadline. The fake-tart writes the file ~50-200ms after
+    // the helper forks it, well before the 28s smoke deadline.
+    // A 5s ceiling is a generous upper bound; without a
+    // deadline, a startup failure can leave this Promise waiting
+    // indefinitely until the test runner kills the test.
+    // Per the reviewer's bounded P1 fix.
+    const pidFileDeadline = Date.now() + 5000
     while (!existsSync(pidFile)) {
+      if (Date.now() > pidFileDeadline) {
+        throw new Error(
+          `[GS-14] pid file not written within 5s — fake-tart did ` +
+          `not reach the exec branch. The smoke request is in ` +
+          `flight but no grandchild was forked. The witness ` +
+          `contract is broken.`,
+        )
+      }
       await new Promise((r) => setTimeout(r, 10))
     }
     const pidStr = readFileSync(pidFile, "utf8").trim()
@@ -1040,14 +1160,24 @@ esac
     // before the smoke request completes. This is the
     // reviewer-requested pre-assertion: prove the witness
     // child was alive, not just that the file exists.
+    //
+    // Per the reviewer's bounded P1 fix: require "alive" —
+    // not "alive" OR "zombie". A zombie is not a live
+    // witness of orphan liveness. The whole point of GS-14
+    // is to prove the orphan was alive when the cleanup
+    // race window opened; if the process is already a
+    // zombie, the test was not actually exercising the
+    // orphan-reaping path.
     const preObs = observePid(pid)
-    if (preObs !== "alive" && preObs !== "zombie") {
+    if (preObs !== "alive") {
       throw new Error(
         `[GS-14] witness pre-assertion: captured PID ${pid} is "${preObs}" ` +
-        `immediately after the fake-tart wrote the pid file. The ` +
-        `witness is stale (the kernel reaped the process before ` +
-        `we could observe it). The pid file is not a reliable ` +
-        `witness of a live orphan.`
+        `immediately after the fake-tart wrote the pid file. ` +
+        `The witness must be "alive" to prove the orphan was ` +
+        `live when the cleanup race window opened; "absent" or ` +
+        `"zombie" indicates the fake-tart did not actually ` +
+        `exercise the orphan-reaping path. The pid file is not ` +
+        `a reliable witness of a live orphan.`
       )
     }
     return { pid }
@@ -1122,14 +1252,16 @@ esac
     // which is exactly the production pgrp-kill contract.
     expect(lastObs).not.toBe("alive")
   } finally {
-    // Cleanup: signal ONLY the helper pgrp we started. We do
-    // NOT signal the sleep PID directly; if the production
-    // pgrp kill failed, the orphan will leak past the test
-    // and afterEach will eventually reap it on the next test.
-    // That is the correct trade-off: we never signal processes
-    // we do not own.
+    // ACT-CLINEMM-TART-P4.1-CORRECTION04 (C1 bounded fix):
+    // The GS-14 finally block now mirrors the afterEach policy:
+    // group signaling is gated on `helperSessionVerified`. If
+    // verification failed, the cleanup falls back to a direct-PID
+    // kill of the helper ONLY. We do not signal any group identity
+    // we have not verified is owned by this test.
     if (helperPid && helperPid > 0) {
-      try { process.kill(-helperPid, "SIGKILL") } catch {}
+      if (helperSessionVerified) {
+        try { process.kill(-helperPid, "SIGKILL") } catch {}
+      }
       try { process.kill(helperPid, "SIGKILL") } catch {}
     }
   }

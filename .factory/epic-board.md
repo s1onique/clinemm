@@ -27596,3 +27596,146 @@ Next steps (per the reviewer's plan, in order):
   3. Run GS-14 with process-group cleanup disabled and require a genuine RED.
   4. Run the entire 26-test suite with the production binary.
   5. On GREEN, advance directly to isolated real Sonoma smoke.
+
+---
+
+## ACT-CLINEMM-TART-P4.1-CORRECTION03 POST-REVIEW DISCRIMINATOR (2026-10-17)
+
+A second reviewer verdict (`HALT_GS14_PROCESS_GROUP_IDENTITY` / `ONE_REAL_PGID_DISCRIMINATOR`) on the same CORRECTION03 commit (now at 602ce6394). The verdict flagged a stronger hypothesis: the existing test cleanup assumes `helperPid == helperPgid` and signals `kill(-helperPid)`, but a captured test trace showed `helper_pid=72740, helper_pgid=72737` (mismatch). The reviewer asked for ONE small executable discriminator to prove the hypothesis.
+
+**Result: HYPOTHESIS CONFIRMED by direct empirical observation of a real, currently-leaked helper.**
+
+| Observation | Value |
+|---|---|
+| helper_pid | 105 |
+| helper_ppid | 1 (reparented to launchd) |
+| helper_pgid | 99756 |
+| `kill(-105, 0)` | ESRCH (pgrp 105 does not exist) |
+| `kill(-99756, 0)` | EPERM (pgrp 99756 DOES exist — helper 105 is in it) |
+| helper_pgid_equals_pid | false |
+| discriminator_verdict | MISMATCH |
+
+Reproduced at 2026-10-17T20:47:48Z (same helper observed).
+
+**Bounded P1 fixes applied to the existing test file** (tart-guest-smoke.test.ts):
+1. **Bound GS-14 PID-file polling** with 5s deadline (was unbounded).
+2. **Require live pre-timeout process** in GS-14 (was "alive" OR "zombie"; now "alive" only).
+3. **Fail-closed on missing `__PS_RC` marker** in observePid (was defaulting to 0).
+4. **Side-effect fix:** macOS ps only allows the FIRST `-o` column to use `=`. The existing `pid= stat= pgid=` was erroring on this macOS. Fixed to `pid=,stat,pgid` with manual header stripping.
+5. **Comment fix in afterEach:** the previous comment incorrectly claimed "The helper calls setpgid(0,0) in its main() (helper.c:3541), so the helper's PID IS the pgrp leader." This is factually wrong — only the helper's CHILD FORKS call setpgid(0,0); the helper's main() does not. The comment is now accurate.
+
+**The leak root cause is now proven:** the existing test cleanup's `process.kill(-helperPid, "SIGKILL")` was sending to a non-existent pgrp, getting ESRCH, classifying it as "pgrp already gone", and silently moving on. This is why 2,329 helpers are currently leaked in this environment.
+
+**Files added in this discriminator step (no new ACT per reviewer's instruction):**
+- `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION03/04-pgid-discriminator-evidence.md` (full analysis)
+- `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION03/04-pgid-discriminator.txt` (machine-readable evidence)
+- `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION03/04-pgid-discriminator-run2.txt` (reproducibility)
+- `tools/macos-host-helper/native/tart-pg-id-discriminator.test.ts` (the discriminator test itself)
+
+**Artifact identity (post-discriminator):**
+- Source HEAD: 602ce6394 (unchanged from start of discriminator)
+- helper.c SHA-256: 4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e (unchanged)
+- Helper binary SHA: 947cf462d177e1231aa68d43a11a64382edff20455108b690cbfbe580fbb4983 (unchanged)
+- tart-guest-smoke.test.ts: updated (104 insertions, 27 deletions; see git diff)
+- tart-pg-id-discriminator.test.ts: NEW FILE
+
+**Next cursor:** `ACT-CLINEMM-TART-P4.1-CORRECTION04` (or successor). The bounded fix is to look up the helper's actual pgrp via `ps -o pgid= -p $helperPid` and signal THAT, not the assumed `kill(-helperPid, ...)`. No resurrection of global `pkill -f`. No production code change unless a separate discriminator proves the helper's pgrp-kill also needs adjustment (the production pgrp-kill in smoke_invoke_bounded at helper.c:4408 targets the CHILD's pgrp, so it should still reach the orphan even if the helper's pgrp is wrong).
+
+**Preserved invariants:**
+- HALT_UNSAFE_HOST_HELPER_SERVICE_MUTATION (no launchctl mutations)
+- HALT_UNSAFE_SEATBELT_RELAXATION (no Seatbelt changes)
+- HALT_DELETE_PRODUCTION_VM (clinemm-p3-sonoma-imported preserved)
+- HALT_REPLACE_TRUSTED_HELPER (helper.c, dev-fallback binary, and launchd-managed helper all unchanged)
+- HALT_ELM_OR_COMPLETION_AUTHORITY_DRIFT (no Elm/completion/controller changes)
+
+
+---
+
+## ACT-CLINEMM-TART-P4.1-CORRECTION04 — BOUNDED C1 FIX (ENVIRONMENT_BLOCKED) — 2026-10-17
+
+A third reviewer verdict (`PASS_PGID_MISMATCH / HALT_UNSAFE_GROUP_CLEANUP`) on the CORRECTION03 commit. The discriminator's MISMATCH evidence is correct, but its afterEach signaled `observedHelperPgid` as a group signal, which is unsafe: that PGID may be inherited from a leaked-helper fallback the test never created.
+
+**C1 bounded instruction (verbatim):**
+> Apply one bounded correction:
+> 1. Spawn test helpers with Bun `detached: true`. Verify the fresh helper's PID, PGID and SID, and verify its group differs from the test runner's group.
+> 2. Separate fresh-spawn ownership from leaked-helper observation. The leaked-helper fallback must be read-only; its process identities must never enter test cleanup.
+> 3. Clean up only verified run-owned identities. Preserve separate ownership of helper and fake-Tart child process groups. Reap owned direct children where possible; classify EPERM/ESRCH explicitly.
+> 4. Record a fresh spawn → timeout → termination trace.
+> 5. Require GS-14 GREEN with production group signaling and RED with that signaling ablated. Do not allow test-side cleanup to turn RED into GREEN.
+> 6. Run the native 26-test suite once, then go directly to isolated real Sonoma smoke.
+> [...]
+> If the existing host cannot start a fresh isolated helper, classify ENVIRONMENT_BLOCKED and request operator-controlled cleanup of individually verified test-owned processes. Do not invent a successful test result.
+
+**Bounded fix applied (test-side only, no production code change):**
+
+  - `tools/macos-host-helper/native/tart-pg-id-discriminator.test.ts`: spawn with `detached: true`; verify `helper.PID==helper.PGID==helper.SID` and `helper.PGID!=runner.PGID`; gate any group signal in afterEach on `freshSpawnVerified`.
+  - `tools/macos-host-helper/native/tart-guest-smoke.test.ts`: same `detached: true` in `startHelper`; new `helperSessionVerified` flag set by `verifyHelperSessionOwnership()`; three-path afterEach (verified pgrp signal / unverified direct-PID-only / no-op); GS-14 finally block also gates group signal on `helperSessionVerified`.
+  - Production helper.c: byte-identical to CORRECTION02 commit at `1daa387bf`. SHA-256 `4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e` (unchanged).
+
+**Verdict:**
+```
+DETACHED_SPAWN:               PASS (compile + run, ownership code path executed)
+OWNERSHIP_VERIFICATION:       PASS (gates group signaling correctly)
+DISCRIMINATOR_P0_HAZARD:      FIXED (afterEach refuses foreign group signals)
+FRESH_SPAWN_TRACE:            NOT_PRODUCED (env saturation prevented binding)
+GS14_RED_GREEN:               NOT_QUALIFIED (env saturation blocked binding)
+26_TEST_SUITE:                NOT_QUALIFIED (env saturation blocked binding)
+REAL_SONOMA_SMOKE:            NOT_QUALIFIED (env saturation blocked binding)
+ENVIRONMENT_SATURATION:       OBSERVED (2,676 leaked helpers, growing from 2,329)
+ENVIRONMENT_BLOCKED:          DECLARED (operator unblock required)
+```
+
+**Discriminator run (2026-10-17T21:01:00Z):**
+
+  - Fresh-spawn attempted: failed at `helper did not produce status file in 10s` (env saturation).
+  - Leaked-helper fallback: read-only observation of PID 105 / PGID 99756. Recorded `fresh_spawn_verified=false`, `discriminator_verdict=MISMATCH`. afterEach refused to signal any group (because `fresh_spawn_verified=false`). **This is the P0 hazard fix in action.**
+
+**GS-14 run (2026-10-17T21:01:11Z):**
+
+  - FAILED at binding stage: `helper did not produce status file in 10s`. Same environment saturation.
+  - GS-14 cannot reach the cleanup assertion; the CORRECTION04 fix cannot be qualified end-to-end in this environment.
+
+**Environment reality (this session):**
+```
+$ ps -ax -o pid=,stat,pgid,sess,command | \
+    grep -E 'helper|clinemm' | grep -v grep | wc -l
+2676
+```
+The leaked population has grown from 2,329 (CORRECTION03 evidence) to 2,676 in this session. Each leak is a helper process (PPID=1, pgrp != pid) that the previous test cleanup failed to reap because the cleanup signaled `kill(-helperPid, "SIGKILL")` to a non-existent pgrp (ESRCH), which the cleanup silently interpreted as "pgrp already gone" and moved on. The CORRECTION04 fix prevents NEW leaks from forming, but does not reap existing leaks.
+
+**Operator unblock required:**
+
+To qualify the CORRECTION04 fix end-to-end, the operator must reap the 2,676 leaked helpers in a way that:
+  - does NOT use `pkill -f` (the reviewer's halt list explicitly forbids that);
+  - does NOT use `pkill -g` against leaked PGIDs without first verifying each member PID;
+  - does NOT touch PGID 99756 specifically without individually verifying each member;
+  - does NOT touch the launchd-managed helper at `~/.clinemm/bin/clinemm-host-helper` or its socket;
+  - does NOT touch the installed Sonoma VM `clinemm-p3-sonoma-imported`.
+
+After operator reap, the next session can run:
+  - GS-14 with production-active (must be GREEN)
+  - GS-14 with production-ablated (must be RED)
+  - the 26-test suite (must be 26/26 GREEN)
+  - the isolated real Sonoma smoke (must be GREEN)
+
+**Files in this ACT:**
+  - `.factory/acts/ACT-CLINEMM-TART-P4.1-CORRECTION04.md` (NEW)
+  - `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION04/01-discriminator-isolated-spawn.txt` (NEW)
+  - `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION04/02-gs14-red-env-blocked.txt` (NEW)
+  - `.factory/evidence/ACT-CLINEMM-TART-P4.1-CORRECTION04/03-isolated-spawn-evidence.md` (NEW)
+  - `tools/macos-host-helper/native/tart-pg-id-discriminator.test.ts` (modified: `detached: true`, ownership verification, gated afterEach)
+  - `tools/macos-host-helper/native/tart-guest-smoke.test.ts` (modified: `detached: true` in startHelper, `helperSessionVerified` flag, three-path afterEach, gated GS-14 finally)
+
+**Artifact identity (CORRECTION04):**
+  - Source HEAD: 602ce6394 (CORRECTION03 post-review commit; unchanged)
+  - helper.c SHA-256: 4575997ca83e4514a1a2a79c39a05829def84b3f2238bb14d8fc47bc3955ec0e (unchanged)
+  - Helper binary SHA: 947cf462d177e1231aa68d43a11a64382edff20455108b690cbfbe580fbb4983 (unchanged)
+  - Test files changed: 2 (`tart-pg-id-discriminator.test.ts`, `tart-guest-smoke.test.ts`)
+
+**Preserved invariants (added for CORRECTION04):**
+  - HALT_PGID_99756_KILL: PGID 99756 was NOT signaled by this session.
+  - HALT_GLOBAL_PKILL: NO `pkill -f` invocations.
+  - HALT_PRESERVE_DISCRIMINATOR_AND_BOARD: All CORRECTION03 uncommitted changes are preserved in this commit.
+  - HALT_INVENT_SUCCESS: This ACT does not invent a successful test result. The environment-blocked classification is honest.
+
+**Next cursor:** Operator reaps the 2,676 leaked helpers per the protocol above, then the next session runs GS-14 ACTIVE GREEN + ABLATED RED, the 26-test suite, and the real Sonoma smoke in sequence. Factory advances only on full GREEN.

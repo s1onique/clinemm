@@ -1,0 +1,21 @@
+PGID-DISC EVIDENCE — 2026-10-17T20:47:48.112Z
+source=leaked-helper (PPID=1, reparented to launchd)
+helper_pid=105
+helper_ppid=1
+helper_pgid=99756
+helper_sess=0
+helper_stat=
+helper_command=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+helper_pgid_equals_pid=false
+child_pid=(unobserved in leaked-helper mode)
+child_ppid=(n/a)
+child_pgid=(n/a)
+child_sess=(n/a)
+child_stat=(n/a)
+child_ppid_equals_helper_pid=(n/a)
+child_pgid_equals_child_pid=true
+assumed_pgrp_kill_target=kill(-105, 0)
+assumed_pgrp_kill_result=rc=-1 errno=ESRCH msg=kill() failed: ESRCH: No such process
+actual_pgrp_kill_target=kill(-99756, 0)
+actual_pgrp_kill_result=rc=-1 errno=EPERM msg=kill() failed: EPERM: Operation not permitted
+discriminator_verdict=MISMATCH

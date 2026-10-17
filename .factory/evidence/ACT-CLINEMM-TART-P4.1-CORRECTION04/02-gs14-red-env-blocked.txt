@@ -1,0 +1,19 @@
+[0m[1mbun test [0m[2mv1.3.13 (bf2e2cec)[0m
+[0m
+tart-guest-smoke.test.ts:
+[0m[1m235 |[0m     [0m[35mif[0m (existsSync(statusPath)) [0m[35mbreak[0m
+[0m[1m236 |[0m     [0m[35mawait[0m [0m[35mnew[0m [0m[1mPromise[0m((r) => setTimeout(r, [0m[33m100[0m))
+[0m[1m237 |[0m   }
+[0m[1m238 |[0m   [0m[35mif[0m (!existsSync(statusPath)) {
+[0m[1m239 |[0m     [0m[35mtry[0m { proc[0m[3m[1m.kill[0m() } [0m[35mcatch[0m {}
+[0m[1m240 |[0m     [0m[35mthrow[0m [0m[35mnew[0m [0m[1mError[0m([0m[32m"helper did not produce status file in 10s"[0m)
+                    [31m[1m^[0m
+[0m[31merror[0m[2m:[0m [1mhelper did not produce status file in 10s[0m
+[0m      [2mat [0m[0m[1m[3mstartHelper[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-guest-smoke.test.ts[0m[2m:[0m[33m240[0m[2m:[33m15[0m[2m)[0m
+[0m      [2mat [0m[0m[2masync <anonymous>[0m[2m ([0m[0m[36m[2m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/[0m[36mtart-guest-smoke.test.ts[0m[2m:[0m[33m1110[0m[2m:[33m9[0m[2m)[0m
+[0m[31m✗[0m[0m[1m GS-14: descendant cleanup — specific sleep PID is reaped after TART_EXEC_TIMEOUT[0m [0m[2m[[0m[33m10451.68ms[0m[2m][0m
+
+ 0 pass[0m
+ [0m[2m25 filtered out[0m
+[0m[31m 1 fail[0m
+Ran 1 test across 1 file. [0m[2m[[1m10.47s[0m[2m][0m
