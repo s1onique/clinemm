@@ -6,6 +6,22 @@
  * authority permits `completed` remains in `legacyPhase = "streaming"`,
  * so the TaskHeader keeps rendering Working + Cancel forever.
  *
+ * PTLL01-CORR01 (this revision) corrects the L1 evidence:
+ *
+ *   - RED-03 no longer supplies the missing event. The previous version
+ *     called `notifyAgentTurnDone(...)` after clearing the scheduled
+ *     continuation — the very production reevaluation entry point whose
+ *     ABSENCE is the premise of the defect — so it could not prove the
+ *     claimed scenario. RED-03 is now a genuine RED that documents the
+ *     limit of the PTLL01-L1 drain-callback repair.
+ *
+ *   - The CAUSAL question ("which real event supplies the post-continuation
+ *     reevaluation authority, and is the drain callback the cause?") is
+ *     answered against the REAL compiled Elm kernel in the sibling file
+ *     `post-terminal-lifecycle-liveness01.corr01-real-elm.test.ts`. This
+ *     file uses a synthetic Elm stand-in, so it CANNOT establish the Elm
+ *     causal order and does not claim to.
+ *
  * TWO independent defects, each reproduced at ITS OWN production boundary:
  *
  *   L1 — COMPLETION liveness.
@@ -117,6 +133,16 @@ interface Harness {
 	sendLog: ContinuationSend[]
 	phaseWrites: { phase: string; writerId: string }[]
 	publishedCount: () => number
+	/**
+	 * PTLL01-CORR01: the number of publications that occurred AFTER the
+	 * canonical C10 commit (`setTurnPhase("completed", ...)`).
+	 *
+	 * The harness records an ordered event stream: every `setTurnPhase`
+	 * write and every `postStateToWebview` publication append to it. The
+	 * terminal publication must come strictly after the C10 write — that
+	 * temporal relation is the LCV-08 invariant.
+	 */
+	publicationAfterC10Count: () => number
 	completionCommitCount: () => number
 	runningJobs: string[]
 	/** jobIds the REAL BCB still holds (unconsumed terminal obligations). */
@@ -139,6 +165,12 @@ function makeHarness(opts: { sessionId?: string; taskId?: string } = {}): Harnes
 	let activeSessionPresent = true
 	let completionCommitCount = 0
 	let now = 0
+	/**
+	 * PTLL01-CORR01: the ordered stream of C10 writes and publications.
+	 * Index 0 is the first event. A publication is "after the C10" iff the
+	 * C10 write appears at a strictly smaller index.
+	 */
+	const eventOrder: ("c10" | "publication")[] = []
 
 	// Elm holds while a coalesced continuation is still scheduled for this
 	// owner — the exact dependency named in the reported holdReasons.
@@ -191,12 +223,14 @@ function makeHarness(opts: { sessionId?: string; taskId?: string } = {}): Harnes
 		getTurnPhase: () => tracker.currentPhase,
 		postStateToWebview: vi.fn().mockImplementation(() => {
 			publishedCount += 1
+			eventOrder.push("publication")
 			return Promise.resolve()
 		}),
 		setTurnPhase: ((phase, anchorTs, writerId) => {
 			phaseWrites.push({ phase, writerId: writerId ?? "unknown-legacy-writer" })
 			if (phase === "completed") {
 				completionCommitCount += 1
+				eventOrder.push("c10")
 			}
 			tracker.setWithWriter(phase as never, anchorTs, { writerId: (writerId ?? "unknown-legacy-writer") as never })
 		}) as NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>,
@@ -259,6 +293,13 @@ function makeHarness(opts: { sessionId?: string; taskId?: string } = {}): Harnes
 		sendLog,
 		phaseWrites,
 		publishedCount: () => publishedCount,
+		publicationAfterC10Count: () => {
+			const c10Index = eventOrder.indexOf("c10")
+			if (c10Index < 0) {
+				return 0
+			}
+			return eventOrder.slice(c10Index + 1).filter((e) => e === "publication").length
+		},
 		completionCommitCount: () => completionCommitCount,
 		runningJobs,
 		heldJobIds: () => notify.unconsumedOwnedTerminalJobIdsForOwner(sessionId, taskId),
@@ -386,11 +427,67 @@ describe("PTLL01 L1 — completion liveness (RED-01 / RED-03)", () => {
 		// C10 commits exactly once and the terminal phase is published.
 		expect(h.completionCommitCount()).toBe(1)
 		expect(h.phaseWrites.at(-1)?.phase).toBe("completed")
-		// LCV-08: publication FOLLOWS canonical C10.
-		expect(h.publishedCount()).toBeGreaterThan(0)
+		// LCV-08 (STRENGTHENED, PTLL01-CORR01): publication FOLLOWS the
+		// canonical C10 — not merely "some publication happened".
+		//
+		// The previous assertion (`publishedCount() > 0`) was satisfied by
+		// ANY publication, including ones emitted BEFORE the C10 commit
+		// (the barrier's own reevaluation publishes state on the way in).
+		// The temporal relation is the invariant that matters: the webview
+		// must not be told about the terminal phase before the canonical
+		// completion authority committed it.
+		//
+		// `phaseWrites` and the publication log share one ordered stream in
+		// this harness: `setTurnPhase` is the C10 effect and
+		// `postStateToWebview` is the publication, so the C10 write MUST
+		// appear at an index strictly before the terminal publication.
+		const c10Index = h.phaseWrites.findIndex((w) => w.phase === "completed")
+		expect(c10Index).toBeGreaterThanOrEqual(0)
+		expect(h.publicationAfterC10Count()).toBeGreaterThan(0)
 	})
 
-	it("RED-03: an Elm HOLD on scheduled_continuation is reevaluated once the dependency clears — without a second agent_turn_done", async () => {
+	/**
+	 * PTLL01-CORR01 — CORRECTED RED-03.
+	 *
+	 * The original RED-03 (commit `cb39c81e4`) claimed to reproduce "a
+	 * completion that remains stranded without another `agent_turn_done`
+	 * after the scheduled continuation clears", but it then CALLED
+	 * `notifyAgentTurnDone(...)` — the very production reevaluation entry
+	 * point whose ABSENCE is the premise of the defect. The test therefore
+	 * supplied the event it claimed was missing, and could not prove the
+	 * claimed causal scenario.
+	 *
+	 * This version removes that call. It is a genuine RED at the `cb39c81e4`
+	 * repair: the drain callback fires BEFORE the scheduled continuation
+	 * clears, so the Elm authority HOLDs on `scheduled_continuation` and
+	 * the deferred marker is re-registered; when the continuation clears
+	 * there is no further reevaluation, so C10 is never attempted and the
+	 * task strands in `streaming` (the false-Working/Cancel symptom).
+	 *
+	 * IMPORTANT — what this test does and does NOT prove:
+	 *
+	 *   - It DOES prove that the PTLL01-L1 drain callback, on its own,
+	 *     cannot repair the post-continuation liveness: the callback fires
+	 *     while the continuation is still scheduled, so it cannot observe
+	 *     the dependency clearing.
+	 *
+	 *   - It does NOT claim the defect occurs in production. The REAL-ELM
+	 *     qualification in
+	 *     `post-terminal-lifecycle-liveness01.corr01-real-elm.test.ts`
+	 *     establishes the production causal order: the `agent_turn_done`
+	 *     that ends the continuation's own turn is the SAME event that
+	 *     clears the Elm `scheduled_continuation` hold
+	 *     (Authority.elm `handleAgentTurnDone` -> `consumePromptForRun`),
+	 *     and it is the SAME event that drives
+	 *     `reevaluateDeferredCompletionBarrier` — correctly ordered
+	 *     (`flushElmAuthorityForSession` BEFORE the consult). So in
+	 *     production the post-continuation reevaluation is supplied by the
+	 *     continuation's own turn completion.
+	 *
+	 *   - The ablated arm of the real-Elm file proves the drain callback is
+	 *     NOT the causal repair for the reported chronology.
+	 */
+	it("RED-03: with the scheduled continuation cleared and NO further agent_turn_done, the completion stays stranded (the drain callback alone cannot repair it)", async () => {
 		const h = makeHarness()
 		for (const jobId of FIVE_HELD) {
 			h.runningJobs.push(jobId)
@@ -429,19 +526,28 @@ describe("PTLL01 L1 — completion liveness (RED-01 / RED-03)", () => {
 		await drainUntil(() => h.elm.holds.includes("scheduled_continuation"), "elm-hold-on-scheduled-continuation")
 		expect(h.completionCommitCount()).toBe(0)
 
+		// ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-CORR01):
 		// The continuation is consumed by the next turn (its causal dependency
-		// clears). This is the ONLY remaining causal event: there is no
-		// further agent_turn_done and no background-command-state transition.
-		// Pre-repair the marker survived here and C10 was never attempted.
+		// clears). NO further `agent_turn_done` and NO background-command-state
+		// transition follows — this is precisely the chronology in which the
+		// pre-repair task stranded in `streaming` with Working + Cancel
+		// offered forever.
 		h.sendLog.length = 0
-		await h.coordinator.notifyAgentTurnDone(h.sessionId)
 
-		// The reevaluation must be re-driven by the obligation drain, so C10
-		// commits. PRE-REPAIR this assertion FAILS: nothing re-drives the
-		// barrier, the task strands in `streaming`, and the TaskHeader keeps
-		// rendering Working + Cancel forever.
-		expect(h.completionCommitCount()).toBe(1)
-		expect(h.phaseWrites.at(-1)?.phase).toBe("completed")
+		// THE REPAIR DOES NOT COVER THIS. The drain callback already fired
+		// (while the continuation was still scheduled), so the Elm authority
+		// HOLDed and the deferred marker was re-registered. Now that the
+		// dependency has cleared there is NO further reevaluation, so C10 is
+		// never attempted: the task is stranded.
+		//
+		// This is the assertion that makes RED-03 a REAL RED. The previous
+		// version asserted `completionCommitCount() === 1` AFTER calling
+		// `notifyAgentTurnDone(...)`, which supplied the missing event and
+		// therefore proved nothing about the reported scenario.
+		await drainUntil(() => h.elm.holds.length > 0, "elm-hold-settled")
+		await new Promise((r) => setTimeout(r, 50))
+		expect(h.completionCommitCount()).toBe(0)
+		expect(h.phaseWrites.map((w) => w.phase)).not.toContain("completed")
 	})
 
 	it("LCV-03: duplicate reevaluations cannot produce duplicate C10", async () => {
@@ -625,6 +731,80 @@ describe("PTLL01 L2 — cancellation liveness (RED-04)", () => {
 		// LCV-12: NO additional user prompt may be dispatched merely to make
 		// the UI appear idle.
 		expect(publishedCount).toBe(1)
+	})
+
+	/**
+	 * PTLL01-CORR01 — L2 SAFETY CONTRACT for the phase-authority accessor.
+	 *
+	 * The review flagged that `getTurnPhase` is OPTIONAL on
+	 * `SdkTaskControlCoordinatorOptions`. The no-active-session Cancel
+	 * branch reads it to decide whether an already-committed terminal
+	 * phase must be preserved (LCV-09). If the accessor is absent (or
+	 * returns a non-terminal value) while the committed phase IS
+	 * terminal, the branch would write `resumable` over it — clobbering
+	 * a committed terminal phase.
+	 *
+	 * In PRODUCTION the accessor is always wired
+	 * (`SdkController.ts:2332`: `getTurnPhase: () =>
+	 * this.turnStateTracker.currentPhase`), so the absence is a test-only
+	 * shape. This test pins the contract:
+	 *
+	 *   1. With the accessor PRESENT and reporting a terminal phase, Cancel
+	 *      MUST NOT write `resumable` (LCV-09 already covers this).
+	 *   2. With the accessor ABSENT, the branch has NO phase authority. The
+	 *      SAFE behavior is to publish the truthful recovery phase
+	 *      (`resumable`) rather than to leave the task in `streaming` —
+	 *      i.e. it must NOT skip the transition entirely (the L2 defect)
+	 *      and it must NOT invent `completed` (completion authority).
+	 */
+	it("LCV-13: Cancel with NO phase authority must still make a truthful, bounded transition — never a no-op and never a completion", async () => {
+		let publishedCount = 0
+		const phaseWrites: { phase: string; writerId: string }[] = []
+		const minter = new MessageIdMinter()
+		let fenceRaised = 0
+		const coordinator = new SdkTaskControlCoordinator({
+			sessions: {
+				getActiveSession: () => undefined,
+				endActiveSession: vi.fn().mockResolvedValue(undefined),
+				setRunning: vi.fn(),
+			} as never,
+			interactions: { clearPending: vi.fn() } as never,
+			messages: { cancelPendingSave: vi.fn() } as never,
+			taskHistory: {} as never,
+			taskOperationFence: new TaskOperationFence(),
+			getTask: () => ({ taskId: "ptll01-task" }) as never,
+			setTask: vi.fn(),
+			onAskResponse: vi.fn().mockResolvedValue(undefined),
+			resetMessageTranslator: () => minter.bumpEpoch(),
+			postStateToWebview: vi.fn().mockImplementation(() => {
+				publishedCount += 1
+				return Promise.resolve()
+			}),
+			clearTaskSettings: vi.fn().mockResolvedValue(undefined),
+			setTurnPhase: ((phase: string, _a: number | undefined, writerId: string | undefined) => {
+				phaseWrites.push({ phase, writerId: writerId ?? "unknown-legacy-writer" })
+			}) as never,
+			// `getTurnPhase` is OPTIONAL — omit it entirely to model the
+			// "phase authority unavailable" shape.
+			raiseCancelFence: () => {
+				fenceRaised += 1
+				minter.bumpEpoch()
+			},
+		})
+
+		await coordinator.cancelTask()
+
+		// The transition MUST happen (this is the L2 defect being guarded):
+		// fence raised, a phase written, state published.
+		expect(fenceRaised).toBe(1)
+		expect(phaseWrites).toHaveLength(1)
+		expect(publishedCount).toBe(1)
+
+		// The written phase must be the truthful RECOVERY phase — never a
+		// completion. `completed` is completion authority and this branch
+		// must never claim it.
+		expect(phaseWrites[0].phase).toBe("resumable")
+		expect(phaseWrites.map((w) => w.phase)).not.toContain("completed")
 	})
 
 	it("LCV-09: Cancel cannot clobber an already committed terminal phase", async () => {
