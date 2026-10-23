@@ -170,11 +170,7 @@ export type AttachReservationResult =
  * Result of `releaseReservation`. The contract is idempotent
  * (a second release is a `not_found` no-op).
  */
-export type ReleaseReservationResult =
-	| { kind: "released" }
-	| { kind: "not_found" }
-	| { kind: "disposed" }
-
+export type ReleaseReservationResult = { kind: "released" } | { kind: "not_found" } | { kind: "disposed" }
 
 /**
  * ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION:
@@ -194,7 +190,6 @@ interface PendingReservationRecord {
 	/** Whether the permit has been attached to a jobId. */
 	attachedJobId: string | undefined
 }
-
 
 /**
  * Single-source-of-truth prefix for the terminal-wake prompt produced
@@ -1060,6 +1055,29 @@ export interface BackgroundNotifyCoordinatorOptions {
 	 */
 	resolveActiveOwner: () => { sessionId: string; taskId: string | undefined } | undefined
 	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L1):
+	 *
+	 * Causal drain notification. Fired ONCE, synchronously, at the moment
+	 * a drain makes an owner's held terminal set EMPTY — i.e. the exact
+	 * transition that can satisfy every predicate the deferred-completion
+	 * barrier consults.
+	 *
+	 * `SdkController` wires this to
+	 * `sessionEvents.reevaluateDeferredCompletionBarrier()` so a cleared
+	 * dependency actually causes the EXISTING authority check to run. The
+	 * callback re-enters the same public entry point that
+	 * `notifyAgentTurnDone` and the terminal-idle transition use; it does
+	 * NOT bypass any guard, does not bypass the Elm completion-authority
+	 * HOLD, and does not clear any obligation.
+	 *
+	 * The `(sessionId, taskId)` triple is the LAUNCH-TIME owner identity of
+	 * the drained obligation, never the caller's input, so a cross-owner
+	 * consume can never drive another owner's completion.
+	 *
+	 * Optional: when absent the coordinator behaves exactly as before.
+	 */
+	onOwnedTerminalSetDrained?: (owner: { sessionId: string; taskId: string | undefined }) => void
+	/**
 	 * Transport seam. The coordinator calls this with a bounded
 	 * prompt string; the host enqueues it via PendingPrompts.
 	 * MUST be safe to call with `sessionId` of a session that no
@@ -1511,12 +1529,16 @@ export class BackgroundNotifyCoordinator {
 	private readonly options: Required<
 		Omit<
 			BackgroundNotifyCoordinatorOptions,
-			"recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority" | "maxObservationCapacity"
+			| "recordNotifyDecision"
+			| "discardQueuedWake"
+			| "consumeTerminalAuthority"
+			| "maxObservationCapacity"
+			| "onOwnedTerminalSetDrained"
 		>
 	> &
 		Pick<
 			BackgroundNotifyCoordinatorOptions,
-			"recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority"
+			"recordNotifyDecision" | "discardQueuedWake" | "consumeTerminalAuthority" | "onOwnedTerminalSetDrained"
 		>
 	private disposed = false
 	/**
@@ -1536,6 +1558,7 @@ export class BackgroundNotifyCoordinator {
 			recordNotifyDecision: options.recordNotifyDecision,
 			discardQueuedWake: options.discardQueuedWake,
 			consumeTerminalAuthority: options.consumeTerminalAuthority,
+			onOwnedTerminalSetDrained: options.onOwnedTerminalSetDrained,
 		}
 		const cap = options.maxObservationCapacity ?? MAX_OBSERVATION_CAPACITY
 		if (!Number.isInteger(cap) || cap < 1) {
@@ -2000,6 +2023,75 @@ export class BackgroundNotifyCoordinator {
 		if (permitId !== undefined) {
 			this.pendingReservations.delete(permitId)
 			this.attachedJobIdByPermitId.delete(permitId)
+		}
+		// ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L1):
+		// CAUSAL DRAIN NOTIFICATION. Draining the LAST owned terminal
+		// obligation is the causal event that can satisfy every predicate
+		// the deferred-completion barrier consults. Before this hook, the
+		// barrier was re-evaluated from only two sites — `notifyAgentTurnDone`
+		// and the background-command-state terminal-idle transition — so if the
+		// final `agent_turn_done` landed while the Elm authority still held on
+		// `scheduled_continuation` / `pending_prompt`, the marker was
+		// re-registered (L1539) and C10 was NEVER attempted, even though every
+		// obligation predicate was already false. The task then stranded in
+		// `streaming` and the TaskHeader offered Working + Cancel forever.
+		//
+		// This notification does NOT bypass any guard: it re-enters the SAME
+		// `reevaluateDeferredCompletionBarrier` entry point, which re-runs the
+		// full TS conservation chain and still consults the Elm completion
+		// authority as its final gate. It is raised only when the drain made
+		// this owner's held set EMPTY, i.e. exactly the transition the barrier
+		// cares about. No polling, no timer, no retry loop.
+		//
+		// The owner triple is the LAUNCH-TIME identity captured above
+		// (`existing`), not the caller's input, so a cross-owner consume can
+		// never drive another owner's completion.
+		this.notifyOwnedTerminalSetDrained(existing.sessionId, existing.taskId)
+	}
+
+	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L1):
+	 * Fire the causal drain notification iff this owner's held set is now
+	 * EMPTY. Both the notify marker layer and the non-notify observation
+	 * layer are consulted, because the BCB barrier predicate is the union
+	 * (`unconsumedTerminalCountForOwner`), so the transition that matters is
+	 * "the owner's whole held set became empty", not "one map shrank".
+	 *
+	 * Observation-only w.r.t. the BCB's own state: it never mutates an
+	 * obligation, never manufactures an observation, and never clears one.
+	 */
+	private notifyOwnedTerminalSetDrained(sessionId: string, taskId: string | undefined): void {
+		const hook = this.options.onOwnedTerminalSetDrained
+		if (!hook) {
+			return
+		}
+		if (this.disposed) {
+			return
+		}
+		const owner = ownerKey(sessionId, taskId)
+		let stillHeld = 0
+		// A held entry owned by a DIFFERENT owner cannot mask this owner's
+		// held set, so only same-owner entries count.
+		for (const marker of this.notificationMarkers.values()) {
+			if (ownerKey(marker.sessionId, marker.taskId) === owner) {
+				stillHeld += 1
+			}
+		}
+		for (const observation of this.nonNotifyTerminalObservations.values()) {
+			if (ownerKey(observation.sessionId, observation.taskId) === owner) {
+				stillHeld += 1
+			}
+		}
+		if (stillHeld > 0) {
+			return
+		}
+		try {
+			hook({ sessionId, taskId })
+		} catch {
+			// The drain notification is a best-effort CAUSAL TRIGGER. A
+			// throwing listener must never convert a successful BCB drain
+			// into a failed `command_status` observation — swallow it, exactly
+			// like the other fire-and-forget seams in this coordinator.
 		}
 	}
 

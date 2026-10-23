@@ -1,0 +1,206 @@
+# 03 / 04 — RED, Ablation, GREEN (ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01)
+
+ENTRY_HEAD = bbb5c484d797dd5bc1e4b76246cc9b0d1ebc5672
+
+## 3.1 RED baseline (pre-repair production seam) — command + verbatim output
+
+```
+cd apps/vscode
+bunx vitest run --config vitest.config.ts src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts
+```
+
+```text
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+stderr | src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts > PTLL01 L1 — completion liveness (RED-01 / RED-03) > RED-01: five held terminal obligations gate C10; draining them via the production observation path eventually commits exactly one C10
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+stderr | src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts > PTLL01 L1 — completion liveness (RED-01 / RED-03) > RED-01: five held terminal obligations gate C10; draining them via the production observation path eventually commits exactly one C10
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+ ❯ src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts (10 tests | 3 failed) 39ms
+     ✓ RED-01: five held terminal obligations gate C10; draining them via the production observation path eventually commits exactly one C10 19ms
+     × RED-03: an Elm HOLD on scheduled_continuation is reevaluated once the dependency clears — without a second agent_turn_done 16ms
+     ✓ LCV-03: duplicate reevaluations cannot produce duplicate C10 0ms
+     ✓ LCV-07: Elm AUTHORIZE cannot commit while TS conservation predicates still block 0ms
+     ✓ LCV-06: Elm HOLD cannot be silently bypassed 0ms
+     ✓ LCV-04: a prior-epoch marker cannot commit a newer epoch 0ms
+     ✓ LCV-11: pending-prompt and scheduled-continuation cardinality is conserved 0ms
+     × RED-04: Cancel with NO active session must reach a supported, published recovery transition — never an indefinite no-op 0ms
+     × LCV-09: Cancel cannot clobber an already committed terminal phase 0ms
+     ✓ LCV-10: a Cancel request with an ACTIVE session still fences, aborts and publishes 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts. Error: kill EPERM
+}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts > PTLL01 L1 — completion liveness (RED-01 / RED-03) > RED-03: an Elm HOLD on scheduled_continuation is reevaluated once the dependency clears — without a second agent_turn_done
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts:415:37
+    413|   // barrier, the task strands in `streaming`, and the TaskHeader keeps
+    414|   // rendering Working + Cancel forever.
+    415|   expect(h.completionCommitCount()).toBe(1)
+       |                                     ^
+    416|   expect(h.phaseWrites.at(-1)?.phase).toBe("completed")
+    417|  })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts > PTLL01 L2 — cancellation liveness (RED-04) > RED-04: Cancel with NO active session must reach a supported, published recovery transition — never an indefinite no-op
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts:586:23
+    584|   // keeps rendering Working + Cancel, and clicking Cancel again re-en…
+    585|   // this exact branch. The task can never leave the false-Working sta…
+    586|   expect(fenceRaised).toBe(1)
+       |                       ^
+    587|   expect(phaseWrites.map((w) => w.phase)).toContain("resumable")
+    588|   expect(minter.epoch).toBeGreaterThan(epochBefore)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts > PTLL01 L2 — cancellation liveness (RED-04) > LCV-09: Cancel cannot clobber an already committed terminal phase
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts:634:26
+    632|   expect(phaseWrites.map((w) => w.phase)).not.toContain("streaming")
+    633|   // It still publishes, so the committed state is refreshed truthfull…
+    634|   expect(publishedCount).toBe(1)
+       |                          ^
+    635|  })
+    636|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 7 passed (10)
+   Start at  17:06:26
+   Duration  2.83s (transform 1.64s, setup 2.04s, import 636ms, tests 39ms, environment 0ms)
+
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts.
+
+```
+
+Result: **3 failed | 7 passed (10)** — RED_REPRODUCED against the PRE-REPAIR
+production seam. No production file was modified to obtain this.
+
+## 3.2 What each RED pins
+
+| Test | Boundary | RED meaning |
+|---|---|---|
+| **RED-03** | `SdkSessionEventCoordinator.reevaluateDeferredCompletionBarrier` | After the Elm authority HOLDs on `scheduled_continuation` and that dependency clears, C10 stays at 0. The task strands in `streaming`; TaskHeader keeps Working + Cancel. **This is L1.** |
+| **RED-04** | `SdkTaskControlCoordinator.cancelTask` (no-active-session branch) | `fenceRaised === 0`: Cancel performs NO lifecycle transition — no fence, no phase write, no publication. The committed webview state is unchanged, so the Cancel affordance persists and re-clicking re-enters the same no-op. **This is L2.** |
+| **LCV-09** | same branch, safety direction | `publishedCount === 0`: the committed terminal phase is never re-published, and a Cancel against an already-`completed` task has no defined outcome. |
+
+## 3.3 Witnesses that already pass PRE-repair (must stay green)
+
+RED-01, LCV-03, LCV-04, LCV-06, LCV-07, LCV-10, LCV-11.
+
+These are the **non-negotiable safety criterion**: C10 does not commit while
+owned terminal results remain unconsumed (RED-01), duplicate reevaluations do
+not double-commit (LCV-03), prior-epoch markers cannot commit a newer epoch
+(LCV-04), the Elm HOLD is not bypassed (LCV-06), Elm AUTHORIZE cannot commit
+while the TS conservation predicates still block (LCV-07), an active-session
+Cancel still fences/aborts/publishes (LCV-10), and continuation cardinality is
+conserved (LCV-11).
+
+## 3.4 R3 — causal necessity (minimal ablation at the real production boundary)
+
+### L1 necessity
+
+The barrier re-evaluation is driven from exactly TWO non-test call sites:
+
+```
+$ grep -n 'reevaluateDeferredCompletionBarrier()' src/sdk/*.ts | grep -v test
+sdk-session-event-coordinator.ts:1649   # inside notifyAgentTurnDone
+SdkController.ts:5458                   # inside maybeReevaluateDeferredContinuation
+```
+
+Neither is the BCB obligation **drain**. RED-03 constructs the exact
+production chronology — five held obligations drained through the production
+Path C observation seam (`consumeNonNotifyTerminalObservation`, the canonical
+`command_status` caller), Elm HOLD on `scheduled_continuation`, then that
+dependency cleared with **no** further `agent_turn_done` and **no**
+background-command-state transition — and C10 is never attempted.
+
+Ablation (bounded, at the real boundary): adding a single
+`reevaluateDeferredCompletionBarrier()` call at the moment the LAST held
+obligation drains turns RED-03 GREEN with **zero** change to any guard, to the
+Elm gate, or to the conservation predicates. That is the minimal demonstration
+that the missing causal re-evaluation — and nothing else — is responsible.
+
+**Guard-bypass explicitly NOT used as the repair:** forcing `completed` when
+the runtime goes idle, bypassing the Elm HOLD, clearing BCB obligations without
+observation, or adding a retry loop/timer would all violate the safety
+criterion. The repair adds a trigger on the real causal event only.
+
+### L2 necessity
+
+`sdk-task-control-coordinator.ts:100-111` early-returns on
+`!activeSession` at a point where `raiseCancelFence`, `setTurnPhase` and
+`postStateToWebview` are all downstream. Ablation: moving the
+no-active-session branch to the END of `cancelTask` (so it still skips the
+abort but runs the fence + phase + publish tail) turns RED-04 and LCV-09
+GREEN without touching the active-session path — proving the early return
+alone is responsible.
+
+Reachability is REAL, not method-call-only:
+`ActionButtons(secondaryAction === "cancel")` →
+`useMessageHandlers.ts:583` → `TaskServiceClient.cancelTask` (gRPC) →
+`src/core/controller/task/cancelTask.ts` → `controller.cancelTask()` →
+`SdkTaskControlCoordinator.cancelTask()`. The existing DEFAULT_OFF
+`cancel-liveness-diagnostic` already names this exact signature
+`H-A = (req=1, acc=0, inv=0, cmp=0, pub=0)`.
+
+
+## 3.5 FINAL GREEN (post-repair)
+
+```
+cd apps/vscode
+bunx tsc --noEmit
+  -> PASS (no diagnostics)
+
+bunx biome check <6 ACT-owned files>
+  -> PASS (0 errors; 3 "infos" are pre-existing suggestions in unrelated code)
+
+git diff --check
+  -> PASS
+
+bunx vitest run --config vitest.config.ts src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts
+  -> Tests  10 passed (10)
+
+bunx vitest run --config vitest.config.ts src/sdk/__tests__/cancel-liveness-diagnostic.red.test.ts
+  -> Tests  5 passed (5)
+```
+
+RED-03 flipped GREEN by exactly one line
+(`this.notifyOwnedTerminalSetDrained(existing.sessionId, existing.taskId)` in
+`background-notify-coordinator.ts`), proven by ablation: disabling that single
+call makes RED-03 fail again with `expected 0 to be 1`.
+
+RED-04 and LCV-09 flipped GREEN by moving the `!activeSession` branch in
+`sdk-task-control-coordinator.ts:cancelTask()` from a bare `return` to running
+the fence + guarded phase write + publish tail.
+
+ACT-owned failures at close: **0**.

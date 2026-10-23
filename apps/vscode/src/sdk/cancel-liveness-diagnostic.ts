@@ -35,9 +35,18 @@
  *   | Hypothesis | req | acc | inv | cmp | pub |
  *   |------------|-----|-----|-----|-----|-----|
  *   | Healthy    |  1  |  1  |  1  |  1  |  1  |
- *   | H-A        |  1  |  0  |  0  |  0  |  0  |
+ *   | H-A        |  1  |  0  |  0  |  0  |  1  |
  *   | H-B        |  1  |  1  |  1  |  0  |  0  |
  *   | H-C        |  1  |  1  |  1  |  1  |  0  |
+ *
+ * ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L2) CHANGED
+ * THE H-A ROW from `pub=0` to `pub=1`. There is still no abort target for
+ * H-A (`acc`/`inv`/`cmp` remain 0, so it stays distinguishable from Healthy and
+ * H-B), but `cancelTask` now raises the cancel fence and publishes a truthful
+ * `resumable` recovery phase instead of returning a no-op. Under the previous
+ * `pub=0` contract the committed webview state kept saying `streaming`, so the
+ * TaskHeader kept offering Working + Cancel and re-clicking re-entered the same
+ * no-op — the false-Working/Cancel defect PTLL01 repairs.
  *
  * DESIGN CONSTRAINTS (frozen in this ACT, mirrors EHLOOP / CCARD
  * / BJLA / BOCOR / TSWPD / THSICAP):
@@ -165,18 +174,13 @@ export function recordCancelLivenessRequest(opts: {
 	bucketFor(opts.activeSessionId)
 }
 
-export function recordCancelLivenessAccepted(opts: {
-	readonly activeSessionId: string
-}): void {
+export function recordCancelLivenessAccepted(opts: { readonly activeSessionId: string }): void {
 	if (!_enabled) return
 	_counters.cancelAcceptedCalls++
 	bucketFor(opts.activeSessionId)
 }
 
-export function recordCancelLivenessAbortInvoked(opts: {
-	readonly activeSessionId: string
-	readonly now: number
-}): void {
+export function recordCancelLivenessAbortInvoked(opts: { readonly activeSessionId: string; readonly now: number }): void {
 	if (!_enabled) return
 	_counters.abortInvokedCalls++
 	// Bounded cap matches the diagnostic's advertised invariant
@@ -212,9 +216,7 @@ export function recordCancelLivenessAbortCompleted(opts: {
 	bucketFor(opts.activeSessionId, delta)
 }
 
-export function recordCancelLivenessPublished(opts: {
-	readonly activeSessionId: string
-}): void {
+export function recordCancelLivenessPublished(opts: { readonly activeSessionId: string }): void {
 	if (!_enabled) return
 	_counters.cancelPublishedCalls++
 	bucketFor(opts.activeSessionId)

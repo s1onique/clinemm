@@ -11,8 +11,22 @@
 // REQUIRED RED (per ACT §4):
 //
 //   RED-A1 (Healthy):   req=1, acc=1, inv=1, cmp=1, pub=1
-//   RED-A2 (H-A):       req=1, acc=0, inv=0, cmp=0, pub=0
+//   RED-A2 (H-A):       req=1, acc=0, inv=0, cmp=0, pub=1
 //   RED-B  (H-B):       req=1, acc=1, inv=1, cmp=0, pub=0
+//
+// ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L2) CHANGED
+// THE H-A ROW. The predecessor RED asserted `pub=0` and
+// `raiseCancelFence` NOT called — i.e. it pinned the DEFECTIVE behavior in
+// place: a Cancel with no active session produced NO lifecycle transition, so
+// the committed webview state kept saying `streaming`, the TaskHeader kept
+// offering Working + Cancel, and re-clicking re-entered the same no-op
+// forever. That is the false-Working defect this ACT repairs.
+//
+// The repaired H-A row is `(req=1, acc=0, inv=0, cmp=0, pub=1)`: there is
+// still no abort target (`acc/inv/cmp` stay 0 — nothing was aborted), but the
+// fence IS raised and the state IS published, so the task reaches a truthful,
+// supported recovery phase. The discriminator still separates H-A from H-B:
+// H-A never invokes abort, H-B invokes it and stalls on the await.
 //
 // Each test uses the REAL `SdkTaskControlCoordinator` with the
 // REAL `TaskOperationFence`. The "active session" and
@@ -36,15 +50,15 @@
 // ============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { ActiveSession } from "../cline-session-factory"
 import {
 	getCancelLivenessDiagnosticSnapshot,
 	isCancelLivenessDiagnosticEnabled,
 	resetCancelLivenessDiagnostic,
 	setCancelLivenessDiagnosticEnabled,
 } from "../cancel-liveness-diagnostic"
-import type { SdkSessionHost } from "../session-host"
+import type { ActiveSession } from "../cline-session-factory"
 import { SdkTaskControlCoordinator, type SdkTaskControlCoordinatorOptions } from "../sdk-task-control-coordinator"
+import type { SdkSessionHost } from "../session-host"
 import { TaskOperationFence } from "../task-operation-fence"
 import { createTaskProxy } from "../task-proxy"
 
@@ -99,9 +113,7 @@ function makeControlledSession(opts: TestSessionOptions): {
 	return { session, release: () => release() }
 }
 
-function makeCoordinatorOptions(input: {
-	readonly activeSession: ActiveSession | undefined
-}): SdkTaskControlCoordinatorOptions {
+function makeCoordinatorOptions(input: { readonly activeSession: ActiveSession | undefined }): SdkTaskControlCoordinatorOptions {
 	const taskProxy = input.activeSession ? createTaskProxy(input.activeSession.sessionId, vi.fn(), vi.fn()) : undefined
 	return {
 		sessions: {
@@ -160,7 +172,7 @@ describe("ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — cancelTask", () => {
 		expect(session.sdkHost.abort).toHaveBeenCalledWith("session-1")
 	})
 
-	it("RED-A2 (H-A): active session absent → req=1, acc=0, inv=0, cmp=0, pub=0; post-state NOT published", async () => {
+	it("RED-A2 (H-A, REPAIRED by PTLL01-L2): active session absent → req=1, acc=0, inv=0, cmp=0, pub=1; recovery state IS published", async () => {
 		const options = makeCoordinatorOptions({ activeSession: undefined })
 		const coordinator = new SdkTaskControlCoordinator(options)
 
@@ -168,16 +180,28 @@ describe("ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — cancelTask", () => {
 
 		const counters = getCancelLivenessDiagnosticSnapshot()
 		expect(counters.cancelRequestCalls).toBe(1)
+		// No abort target exists, so these three stay 0 — this is still what
+		// distinguishes H-A from H-B and from Healthy.
 		expect(counters.cancelAcceptedCalls).toBe(0)
 		expect(counters.abortInvokedCalls).toBe(0)
 		expect(counters.abortCompletedCalls).toBe(0)
-		expect(counters.cancelPublishedCalls).toBe(0)
-		// The post-state publication MUST NOT have happened
-		// (this is the load-bearing H-A witness: the
-		// displayed "streaming" phase is not reconciled).
-		expect(options.postStateToWebview).not.toHaveBeenCalled()
-		// The fence MUST NOT have raised (no session to fence).
-		expect(options.raiseCancelFence).not.toHaveBeenCalled()
+		// PTLL01-L2: the recovery state IS now published. Before the repair
+		// this was 0 and the displayed "streaming" phase was never reconciled,
+		// which is the false-Working/Cancel defect.
+		expect(counters.cancelPublishedCalls).toBe(1)
+		expect(options.postStateToWebview).toHaveBeenCalledTimes(1)
+		// The cancel fence MUST still raise even with no abort target: bumping
+		// the epoch is what drops straggler SDK events.
+		expect(options.raiseCancelFence).toHaveBeenCalledTimes(1)
+		// A truthful recovery phase is published, and it is NOT a completion:
+		// Cancel must never grant completion authority.
+		expect(options.setTurnPhase).toHaveBeenCalledTimes(1)
+		const setTurnPhaseSpy = options.setTurnPhase as unknown as ReturnType<typeof vi.fn>
+		const [phase] = setTurnPhaseSpy.mock.calls[0] as [string]
+		expect(phase).toBe("resumable")
+		expect(phase).not.toBe("completed")
+		// LCV-12: no extra user prompt is dispatched to make the UI look idle.
+		expect(options.messages.appendAndEmit).not.toHaveBeenCalled()
 	})
 
 	it(
@@ -242,7 +266,8 @@ describe("ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — cancelTask", () => {
 		resetCancelLivenessDiagnostic()
 		setCancelLivenessDiagnosticEnabled(true)
 
-		// H-A row
+		// H-A row (REPAIRED by PTLL01-L2: pub is now 1 — no abort target, but
+		// the fence raises and the recovery state is published).
 		{
 			const options = makeCoordinatorOptions({ activeSession: undefined })
 			const coordinator = new SdkTaskControlCoordinator(options)
@@ -252,7 +277,7 @@ describe("ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01 — cancelTask", () => {
 			expect(c.cancelAcceptedCalls).toBe(0)
 			expect(c.abortInvokedCalls).toBe(0)
 			expect(c.abortCompletedCalls).toBe(0)
-			expect(c.cancelPublishedCalls).toBe(0)
+			expect(c.cancelPublishedCalls).toBe(1)
 		}
 		resetCancelLivenessDiagnostic()
 		setCancelLivenessDiagnosticEnabled(true)

@@ -88,6 +88,7 @@ export type TurnStateWriterId =
 	| "task-control-resume-ask"
 	| "task-control-resumable-ask"
 	| "task-control-idle-fallback"
+	| "task-control-cancel-no-active-session"
 	| "mode-coordinator-mode-switch-resumable"
 	| "compaction-enter"
 	| "compaction-restore-entry-preserve"

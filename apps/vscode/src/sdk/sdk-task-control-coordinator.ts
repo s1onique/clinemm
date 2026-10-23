@@ -2,12 +2,6 @@ import type { ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import { Logger } from "@/shared/services/Logger"
-import type { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
-import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
-import { isAbortError, type SdkSessionLifecycle } from "./sdk-session-lifecycle"
-import type { SdkTaskHistory } from "./sdk-task-history"
-import { TaskOperationFence } from "./task-operation-fence"
-import { createTaskProxy, type TaskProxy } from "./task-proxy"
 import {
 	recordCancelLivenessAbortCompleted,
 	recordCancelLivenessAbortInvoked,
@@ -15,6 +9,12 @@ import {
 	recordCancelLivenessPublished,
 	recordCancelLivenessRequest,
 } from "./cancel-liveness-diagnostic"
+import type { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
+import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
+import { isAbortError, type SdkSessionLifecycle } from "./sdk-session-lifecycle"
+import type { SdkTaskHistory } from "./sdk-task-history"
+import { TaskOperationFence } from "./task-operation-fence"
+import { createTaskProxy, type TaskProxy } from "./task-proxy"
 
 export interface SdkTaskControlCoordinatorOptions {
 	sessions: SdkSessionLifecycle
@@ -51,6 +51,19 @@ export interface SdkTaskControlCoordinatorOptions {
 	 * sessions opened from History (and can leak stale buttons in general).
 	 */
 	setTurnPhase: (phase: TurnPhase, anchorTs?: number, writerId?: TurnStateWriterId) => void
+	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L2):
+	 * Reads the CURRENT committed turn phase. Required by the Cancel
+	 * recovery transition so it can tell a truthful `resumable` recovery
+	 * apart from an ALREADY-committed terminal phase, which Cancel must
+	 * never clobber (LCV-09).
+	 *
+	 * Optional for backward compatibility: when absent the recovery
+	 * transition still runs, it just cannot distinguish the terminal case
+	 * and therefore always publishes `resumable` (the pre-existing
+	 * active-session behavior).
+	 */
+	getTurnPhase?: () => TurnPhase
 	/**
 	 * Raise the cancel fence SYNCHRONOUSLY before aborting the SDK session: bump the epoch so any
 	 * straggler events the SDK emits after the abort request carry the old epoch (and are dropped
@@ -105,8 +118,54 @@ export class SdkTaskControlCoordinator {
 
 		this.options.interactions.clearPending("Task cancelled")
 
+		// ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L2):
+		// NO-ACTIVE-SESSION RECOVERY. Previously this branch returned
+		// immediately, which meant a Cancel against a task view whose SDK
+		// session had already gone away performed NO lifecycle transition at
+		// all: the cancel fence was never raised (straggler SDK events kept
+		// the CURRENT epoch and were NOT dropped), no turn-phase write
+		// occurred, and `postStateToWebview` was never invoked. The committed
+		// webview state therefore still said `streaming`, so the TaskHeader
+		// kept rendering Working + Cancel — and because the Cancel affordance
+		// dispatches `TaskServiceClient.cancelTask` again, every further click
+		// re-entered this same branch. The task could never leave the false
+		// Working state: an indefinite, self-perpetuating no-op.
+		//
+		// The fix is to keep the transition, not to skip it. We deliberately
+		// DO NOT skip to a "just hide the button" shortcut:
+		//   - we do NOT force `completed` (that would be completion authority);
+		//   - we do NOT invent a `resumable` phase when the canonical
+		//     completion already committed a terminal phase (see the guard
+		//     below — LCV-09);
+		//   - we do NOT dispatch an extra user prompt to make the UI look
+		//     idle (LCV-12).
+		// `resumable` is the truthful recovery affordance here: the run was
+		// abandoned before it produced a terminal response, so Resume is the
+		// honest next action.
 		if (!activeSession) {
-			Logger.warn("[SdkController] cancelTask: No active session")
+			Logger.warn(
+				"[SdkController] cancelTask: No active session — raising the cancel fence and publishing a resumable recovery phase instead of returning a no-op",
+			)
+			// Fence FIRST, exactly as in the active-session path: bump the
+			// epoch so any straggler SDK event is dropped by the webview.
+			this.options.raiseCancelFence?.()
+			// LCV-09: never clobber an ALREADY-committed terminal phase. If
+			// canonical completion already ran, `completed` stands and Cancel
+			// only refreshes the published state. The terminal phase set is
+			// the closed set of phase values that mean "this turn already
+			// reached an authoritative outcome".
+			const phaseBefore = this.options.getTurnPhase?.()
+			const alreadyTerminal = phaseBefore === "completed" || phaseBefore === "error" || phaseBefore === "resumable"
+			if (!alreadyTerminal) {
+				this.options.setTurnPhase?.("resumable", undefined, "task-control-cancel-no-active-session")
+			}
+			await this.options.postStateToWebview()
+			// Mirror the active-session diagnostic tail so the published
+			// sub-boundary is observable for the no-session path too. The
+			// existing H-A signature `(req=1, acc=0, inv=0, cmp=0, pub=0)`
+			// now becomes `(req=1, acc=0, inv=0, cmp=0, pub=1)`.
+			recordCancelLivenessPublished({ activeSessionId: "<no-active-session>" })
+			Logger.log("[SdkController] Task cancelled (no active session): published resumable recovery phase")
 			return
 		}
 

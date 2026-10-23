@@ -1,0 +1,164 @@
+# 05 — Conservation & Adversarial Gates (R5/R6)
+
+All gates are implemented in ONE focused suite against the REAL production seam
+(the real `SdkSessionEventCoordinator`, the real `BackgroundNotifyCoordinator`
+obligation store, and the real `SdkTaskControlCoordinator.cancelTask`) — no new
+diagnostic framework was built.
+
+```
+apps/vscode/src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts
+```
+
+## 5.1 Gate coverage
+
+| ID | Invariant | Test | Result |
+|---|---|---|---|
+| LCV-01 | C10 never commits while owned terminal results remain unconsumed | RED-01 (first half) | GREEN |
+| LCV-02 | All held results consumed + settled authority eventually allows exactly one C10 | RED-01 (second half) | GREEN |
+| LCV-03 | Duplicate reevaluations cannot produce duplicate C10 | `LCV-03` | GREEN |
+| LCV-04 | Prior-epoch callbacks cannot commit a newer epoch | `LCV-04` | GREEN |
+| LCV-05 | Session/task replacement cannot change another owner's phase | `LCV-05` — covered structurally by `LCV-04` (epoch advance) AND by the drain trigger's launch-time owner triple; see §5.3 | GREEN (structural) |
+| LCV-06 | Elm HOLD cannot be silently bypassed | `LCV-06` | GREEN |
+| LCV-07 | Elm AUTHORIZE cannot commit while TS conservation predicates still block | `LCV-07` | GREEN |
+| LCV-08 | Completed publication follows, never precedes, canonical C10 | RED-01 (`publishedCount > 0` asserted AFTER the C10 assertions) | GREEN |
+| LCV-09 | Cancel cannot clobber an already committed terminal phase | `LCV-09` | GREEN |
+| LCV-10 | Cancel request with no active session has a deterministic supported outcome | `RED-04` | GREEN |
+| LCV-11 | Pending-prompt and scheduled-continuation cardinality is conserved | `LCV-11` | GREEN |
+| LCV-12 | No additional user prompt is dispatched merely to make the UI appear idle | `RED-04` (asserts a SINGLE publication, and the repair dispatches no prompt) | GREEN |
+
+`LCV-05` is labelled `STRUCTURAL`: it is enforced by two mechanisms rather than
+one assertion — (a) the drain trigger carries the LAUNCH-TIME owner triple
+(`existing.sessionId` / `existing.taskId` captured before the map delete, never
+the caller's input), so a cross-owner consume cannot drive another owner's
+completion; and (b) `reevaluateDeferredCompletionBarrier` re-validates
+session/task/epoch identity at L1248-L1264 before any effect. Asserting (a)
+directly would require a second coordinator instance; the mechanism is recorded
+here rather than over-claimed.
+
+## 5.2 Executable gates (R6)
+
+```text
+cd apps/vscode
+bunx tsc --noEmit
+  -> PASS (no output)
+
+bunx biome check <5 ACT-owned files>
+  -> PASS ("Found 3 infos" = pre-existing suggestions in UNRELATED code;
+           0 errors)
+
+git diff --check
+  -> PASS
+
+bunx vitest run --config vitest.config.ts \
+  src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts
+  -> Tests  10 passed (10)
+```
+
+Elm build/tests: **NOT APPLICABLE — no `.elm` source was modified.** The repair
+touches only TypeScript. No new Elm kernel, no kernel behaviour change.
+
+## 5.3 Regression check against related suites
+
+Each suite run individually (the vitest forks pool intermittently hits a
+`kill EPERM` on this host when several files run in one process; running them
+serially produces clean, comparable output).
+
+| Suite | PRE-repair baseline | POST-repair | Verdict |
+|---|---|---|---|
+| `post-terminal-lifecycle-liveness01` (ACT-owned) | 3 failed / 7 passed | **10 passed** | GREEN |
+| `cancel-liveness-diagnostic.red` | 5 passed | **5 passed** (contract updated, see below) | GREEN |
+| `background-completion-barrier01-correction04.bcb01-c4` | 3 failed / 2 passed | 3 failed / 2 passed | **PRE-EXISTING baseline failure — unchanged** |
+| `background-completion-barrier01.bcb01` | 13 failed / 1 passed | 13 failed / 1 passed | **PRE-EXISTING baseline failure — unchanged** |
+| `completion-authority-elm-first-seam01.case01` | ALL-PASS | ALL-PASS | GREEN |
+| `completion-continuation-control-authority01.ccca01` | ALL-PASS | ALL-PASS | GREEN |
+| `completion-authority-elm-authority-counter-dump01` | ALL-PASS | ALL-PASS | GREEN |
+| `completion-authority-effect-discriminator01.cae01` | ALL-PASS | ALL-PASS | GREEN |
+| `task-control-liveness.tcl-parent` | ALL-PASS | ALL-PASS | GREEN |
+| `task-control-liveness.tcl-parent.adversarial` | ALL-PASS | ALL-PASS | GREEN |
+| `task-control-liveness.tcl-reach01` | ALL-PASS | ALL-PASS | GREEN |
+| `task-control-liveness.tcl-reach02` | ALL-PASS | ALL-PASS | GREEN |
+| `task-control-liveness.tcl09` | ALL-PASS | ALL-PASS | GREEN |
+
+### The ONE baseline test this ACT DID change — and why it was required
+
+`cancel-liveness-diagnostic.red` went 5 passed -> 2 failed -> 5 passed.
+
+This is NOT "changing a baseline test to inflate the pass count" (forbidden by
+§9). It is the opposite: that suite's `RED-A2` and its discrimination-matrix
+H-A row ASSERTED THE DEFECTIVE BEHAVIOUR IN PLACE:
+
+```text
+expect(counters.cancelPublishedCalls).toBe(0)          // RED-A2 + matrix H-A row
+expect(options.postStateToWebview).not.toHaveBeenCalled()
+expect(options.raiseCancelFence).not.toHaveBeenCalled()
+```
+
+i.e. the predecessor ACT deliberately pinned "with no active session, Cancel
+publishes nothing and fences nothing" as the expected contract — which IS the
+false-Working/Cancel defect. PTLL01's L2 repair necessarily changes that
+contract, so leaving the suite untouched would have left 2 ACT-attributable
+failures.
+
+Both tests were updated to assert the REPAIRED contract, and they were made
+STRONGER, not weaker — they now additionally assert that the fence raises, that
+exactly one publication occurs, that the published phase is `resumable` and
+explicitly NOT `completed` (Cancel must never grant completion authority), and
+that no extra user prompt is dispatched (LCV-12). The `cancel-liveness-diagnostic.ts`
+header matrix was updated in lockstep (`H-A` row `pub=0` -> `pub=1`) so the
+documented discriminator matches the shipped behavior. `H-A` remains
+distinguishable from `Healthy` and `H-B` via `acc`/`inv`/`cmp`, which all stay 0.
+
+Verified pre-repair baseline for this suite by stashing all four production
+files and re-running: **5 passed** before the repair, so the two intermediate
+failures were genuinely attributable to the repair and not pre-existing.
+
+### Classification of the pre-existing failures
+
+`background-completion-barrier01-correction04.bcb01-c4` and
+`background-completion-barrier01.bcb01` fail IDENTICALLY before and after this
+ACT. They were verified failing on a pristine stash of all four production
+files (`git stash push` of the repair, re-run, `git stash pop`), so they are
+**not** caused by this repair.
+
+Their root cause is recorded for the successor cursor: the `liveTools`
+capability gate (`sdk-session-event-coordinator.ts:1819-1821`) was introduced
+by ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01 and
+defaults to `false` when the accessor is absent. Those two suites do not wire
+`liveTools`, so the Continuation Control Elm kernel returns
+`fail_closed(retry_unavailable / observation_unavailable)` and the continuation
+is suppressed. Wiring `liveTools: () => ["command_status", "submit_and_exit"]`
+into those two harnesses was TRIED and did NOT repair them (the E3.1 deferred
+barrier kernel is a separate gate), so this ACT deliberately did NOT modify
+them: repairing them is a different ACT, and §9 forbids changing baseline
+tests merely to improve the reported pass count.
+
+## 5.4 Ablation (R3 necessity, executed)
+
+L1: with the single line
+`this.notifyOwnedTerminalSetDrained(existing.sessionId, existing.taskId)`
+disabled in `background-notify-coordinator.ts`, RED-03 FAILS
+(`expected 0 to be 1`); with it restored, RED-03 PASSES. Zero guards changed,
+zero Elm decisions changed. That is the minimal necessity demonstration.
+
+L2: the no-active-session branch previously returned before
+`raiseCancelFence` / `setTurnPhase` / `postStateToWebview`. RED-04 and LCV-09
+fail on the pre-repair file (`fenceRaised === 0`, `publishedCount === 0`) and
+pass once the branch runs the fence + phase + publish tail. The active-session
+path (LCV-10) is untouched and still passes.
+
+## 5.5 Forbidden-action audit
+
+| Forbidden action | Present? |
+|---|---|
+| Force `completed` when runtime becomes idle | NO |
+| Force `resumable` solely to hide Cancel | NO — `resumable` is written only when the committed phase is NOT already terminal, and it is the truthful recovery affordance for an abandoned run |
+| Change TaskHeader to trust an unbound shadow | NO — no webview file touched |
+| Bypass the Elm completion-authority HOLD | NO — the repair re-enters the same gate |
+| Clear outstanding BCB obligations without observation | NO — the trigger fires only from an actual consumption |
+| Manufacture terminal observations | NO |
+| Reuse completion identities across epochs | NO — the coordinator's monotonic `nextCompletionCommitEventId` is untouched |
+| Add a second completion authority | NO |
+| Add retry loops / periodic polling / arbitrary timers | NO — one synchronous causal notification on the empty-transition |
+| Diagnostic writes or mutations inside functional state updaters | NO — none added; `onOwnedTerminalSetDrained` is a plain method call from a command handler |
+| New diagnostic framework | NO — reused the existing CCU / Elm / cancel-liveness diagnostics |
+| Modify Tart, launchd, Seatbelt, host helpers, or the imported VM | NO |

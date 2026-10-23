@@ -1488,6 +1488,32 @@ export class Controller {
 			discardQueuedWake: ({ sessionId, jobId }) => {
 				return this.discardQueuedWakeForJobId(sessionId, jobId)
 			},
+			// ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L1):
+			// Causal drain trigger. Draining the LAST owned terminal
+			// obligation is the event that can satisfy every predicate the
+			// deferred-completion barrier consults. Before this wiring the
+			// barrier was re-evaluated from only two sites (`notifyAgentTurnDone`
+			// and the background-command-state terminal-idle transition), so a
+			// final `agent_turn_done` that landed while the Elm authority still
+			// held on `scheduled_continuation` / `pending_prompt` re-registered
+			// the marker and C10 was never attempted — the task stranded in
+			// `streaming` with Working + Cancel offered indefinitely.
+			//
+			// This re-enters the SAME public reevaluation entry point, so the
+			// full TS conservation chain still runs and the Elm completion
+			// authority is still the FINAL gate. No guard is bypassed, no
+			// obligation is manufactured or cleared, and there is no polling or
+			// timer. Fire-and-forget: the reevaluation is async and must not
+			// convert a successful `command_status` drain into an error.
+			onOwnedTerminalSetDrained: () => {
+				void this.sessionEvents?.reevaluateDeferredCompletionBarrier().catch((error) => {
+					Logger.warn(
+						`[SdkController] BCB drain-triggered completion re-evaluation failed: ${
+							error instanceof Error ? error.message : String(error)
+						}`,
+					)
+				})
+			},
 		})
 		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: debug-only hook
 		// for the live-ext-host qualification harness. Mirrors the
@@ -2300,6 +2326,10 @@ export class Controller {
 			},
 			setTurnPhase: (phase, anchorTs, writerId) =>
 				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
+			// ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 (PTLL01-L2): read the
+			// committed phase so the Cancel recovery transition can tell a truthful
+			// `resumable` recovery apart from an ALREADY-committed terminal phase.
+			getTurnPhase: () => this.turnStateTracker.currentPhase,
 			postStateToWebview: () => this.postStateToWebview(),
 			clearTaskSettings: () => this.stateManager.clearTaskSettings(),
 		})
