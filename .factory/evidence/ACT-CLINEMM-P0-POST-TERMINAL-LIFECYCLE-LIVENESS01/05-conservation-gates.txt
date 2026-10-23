@@ -76,7 +76,7 @@ serially produces clean, comparable output).
 | `task-control-liveness.tcl-parent` | ALL-PASS | ALL-PASS | GREEN |
 | `task-control-liveness.tcl-parent.adversarial` | ALL-PASS | ALL-PASS | GREEN |
 | `task-control-liveness.tcl-reach01` | ALL-PASS | ALL-PASS | GREEN |
-| `task-control-liveness.tcl-reach02` | ALL-PASS | ALL-PASS | GREEN |
+| `task-control-liveness.tcl-reach02` | **7 failed (ENTRY_HEAD verified)** | **7 failed** | **PRE-EXISTING baseline failure — unchanged** |
 | `task-control-liveness.tcl09` | ALL-PASS | ALL-PASS | GREEN |
 
 ### The ONE baseline test this ACT DID change — and why it was required
@@ -114,11 +114,17 @@ failures were genuinely attributable to the repair and not pre-existing.
 
 ### Classification of the pre-existing failures
 
-`background-completion-barrier01-correction04.bcb01-c4` and
-`background-completion-barrier01.bcb01` fail IDENTICALLY before and after this
-ACT. They were verified failing on a pristine stash of all four production
-files (`git stash push` of the repair, re-run, `git stash pop`), so they are
-**not** caused by this repair.
+Three suites fail IDENTICALLY before and after this ACT and are therefore
+**not** caused by the repair:
+
+- `background-completion-barrier01-correction04.bcb01-c4` — 3 failed / 2 passed
+- `background-completion-barrier01.bcb01` — 13 failed / 1 passed
+- `task-control-liveness.tcl-reach02` — 7 failed / 7 failed
+
+Verified two independent ways: (a) `git stash push` of the repair, re-run,
+`git stash pop`; and (b) `git checkout bbb5c484d -- <the 6 ACT-owned files>`
+(pristine ENTRY_HEAD), re-run, `git checkout HEAD --` to restore. Both methods
+produced identical pre-repair counts, and both left the repair intact.
 
 Their root cause is recorded for the successor cursor: the `liveTools`
 capability gate (`sdk-session-event-coordinator.ts:1819-1821`) was introduced

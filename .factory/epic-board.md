@@ -27484,6 +27484,129 @@ DECISION: PASS_HERMETIC_FIX_PENDING_REAL_GUEST
 
 ---
 
+# ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01 — PASS_STRUCTURAL_PENDING_LIVE — 2026-10-23
+
+```text
+ENTRY_HEAD:                  bbb5c484d797dd5bc1e4b76246cc9b0d1ebc5672
+SUBJECT_HEAD:                bbb5c484d797dd5bc1e4b76246cc9b0d1ebc5672
+FINAL_HEAD:                  cb39c81e415859ea634783fd817030b9d2e9b9d0
+COMMIT:                      cb39c81e4 (gitleaks clean)
+VERDICT:                     PASS_STRUCTURAL_PENDING_LIVE
+RED_REPRODUCED:              YES — 3 failing at the pre-repair real seam
+ABLATION_NECESSITY:          PROVEN — one line, both directions
+ACT_OWNED_FAILURES:          0
+TYPECHECK:                   PASS (tsc --noEmit, 0 diagnostics)
+LINT:                        PASS (biome, 0 errors)
+DIFF_CHECK:                  PASS
+ELM:                         N/A — no .elm source modified
+DOGFOOD_SOURCE_HEAD:         UNAVAILABLE
+VSIX_IDENTITY:               UNAVAILABLE
+LIVE_QUALIFICATION:          NOT EXECUTED — toolchain not on PATH
+```
+
+## Causal classification
+
+TWO INDEPENDENT defects, deliberately not attributed to one cause.
+
+**L1 — completion liveness = Case B (continuation stranded).**
+`reevaluateDeferredCompletionBarrier` was reachable from only two sites
+(`notifyAgentTurnDone`; the background-command-state terminal-idle
+transition). Neither is the BCB obligation DRAIN. A final `agent_turn_done`
+landing while the Elm authority still held on `scheduled_continuation`
+re-registered the marker; with no further trigger, C10 was never attempted
+and the task stranded in `streaming`. The Elm HOLD itself was honoured — the
+defect is a MISSING RE-EVALUATION, not a bypass.
+
+**L2 — cancellation liveness = Case F.** `cancelTask()` early-returned on
+`!activeSession` BEFORE the fence, the phase write and the publication, so a
+Cancel against a task view whose SDK session had gone away performed no
+lifecycle transition at all — an indefinite, self-perpetuating no-op that
+re-entered itself on every further click.
+
+Excluded: Case C (Elm hold was respected), Case D (no C10 existed to publish;
+publication failure requires actual C10 evidence), Case E (no obligation or
+active run remained once the continuation was consumed).
+
+## Repair (bounded, 3 production modules)
+
+- `background-notify-coordinator.ts`: causal drain notification
+  `onOwnedTerminalSetDrained`, fired ONLY on the empty-transition, carrying the
+  launch-time owner triple.
+- `SdkController.ts`: wires it to the SAME public reevaluation entry point.
+- `sdk-task-control-coordinator.ts`: the no-active-session branch now raises the
+  fence, publishes a guarded `resumable` recovery phase, and publishes state.
+
+Neither repair forces `completed`, bypasses the Elm HOLD, clears an obligation
+without observation, manufactures an observation, reuses a completion identity,
+adds a second completion authority, or adds a retry loop / timer.
+
+## Evidence
+
+- `.factory/evidence/ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01/`
+  (01 ownership map, 02 exact-epoch classification, 03 RED/GREEN/ablation,
+  05 conservation gates, 06 live qualification, SHA256SUMS)
+- `apps/vscode/src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts`
+  — 10/10 PASS. RED-01, RED-03 (L1), RED-04 (L2), LCV-03/04/06/07/09/10/11.
+
+## Historical-epoch evidence: DECLARED INSUFFICIENT
+
+The ACT-supplied `2026-10-23` captures are NOT PRESENT in the repository or in
+the known ClineMM `globalStorage` directory (which holds no ClineMM extension
+directory at all). Only differently-dated earlier captures exist
+(2026-10-12 / 2026-08-29, describing different incidents). Consequently every
+§4.1 exact-epoch identity field — `FINAL_C9_IDENTITY`,
+`ELM_DECISION_FOR_FINAL_ATTEMPT`, `BCB_JOB_IDS_AFTER_OBSERVATION`,
+`PENDING_PROMPT_AUTHORITY`, `FINAL_PHASE_WRITER`, etc. — is
+`UNAVAILABLE_FROM_TRACE`, and the §1.4 "all five were observed" claim was
+deliberately NOT promoted. This ACT asserts no exact-epoch historical cause; it
+establishes the defect class at the real production seam.
+
+## One baseline test updated (and made STRONGER)
+
+`cancel-liveness-diagnostic.red`'s `RED-A2` and its matrix H-A row had pinned
+the DEFECTIVE contract in place (`pub=0`, `postStateToWebview` NOT called,
+`raiseCancelFence` NOT called). The L2 repair necessarily changes that
+contract. Both were updated to the repaired contract AND strengthened (fence
+raises; exactly one publication; phase is `resumable` and explicitly NOT
+`completed`; no extra user prompt). `cancel-liveness-diagnostic.ts`'s header
+matrix was updated in lockstep. `H-A` stays distinguishable from `Healthy` and
+`H-B` via `acc`/`inv`/`cmp`, which all remain 0. Pre-repair baseline verified
+at 5 passed by stashing the repair, so the two intermediate failures were
+genuinely attributable to this repair.
+
+## Pre-existing baseline failures (NOT caused by this repair)
+
+Three suites fail IDENTICALLY before and after and are NOT caused by this
+repair: `background-completion-barrier01-correction04.bcb01-c4` (3 failed),
+`background-completion-barrier01.bcb01` (13 failed) and
+`task-control-liveness.tcl-reach02` (7 failed). Verified twice — by stashing
+the repair, and by `git checkout bbb5c484d --` of the six ACT-owned files
+(pristine ENTRY_HEAD) — with identical counts both times. The two BCB suites'
+root cause is the `liveTools` capability gate
+(`sdk-session-event-coordinator.ts:1819-1821`) introduced by
+ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01, which
+defaults to `false` when the accessor is absent; those harnesses do not wire
+it. Wiring it was TRIED and did NOT repair them (the E3.1 deferred-barrier
+kernel is a separate gate), so they were left untouched.
+
+## Residual blocker / next cursor
+
+1. **Qualify the LIVE half** on the repaired build (`cb39c81e4`). Unblock: put
+   `node`/`bun`/`bunx` on PATH (`/opt/homebrew/bin`), `mkdir -p
+   apps/vscode/dist`, then `cd apps/vscode && bun run package`. Confirm the LIVE
+   H-A signature is `(req=1, acc=0, inv=0, cmp=0, pub=1)` and not the old
+   `pub=0`. Full checklist in evidence `06-live-qualification.md`.
+2. **Separate ACT for the two BCB baseline failures** — the `liveTools`
+   capability-gate/E3.1 interaction above. NOT in scope here (§9 forbids
+   editing baseline tests to raise the pass count).
+3. **Follow-up hazard recorded, deliberately NOT repaired:**
+   `SdkController.ts:2649-2673` — `getUnconsumedOwnedTerminalResultCount` and
+   `getUnconsumedOwnedTerminalJobIds` return `0`/`[]` when
+   `getActiveSession()` is absent, reading an UNAVAILABLE authority as "no
+   obligations". This is fail-toward-completion, the OPPOSITE of the reported
+   false-Working symptom, so it was out of this ACT's repair scope. It should
+   adopt the `pendingPromptAuthorityUnknown` fail-closed idiom.
+
 # ACT-CLINEMM-TART-P4.1-CORRECTION03 — BOUNDED TEST-PROOF AND CLEANUP-SAFETY CORRECTION — 2026-10-17
 
 **Status:** CLOSED_HALTED_CLEAN with proximate halt classifier `HALT_TEST_ENVIRONMENT_PROCESS_LEAK_ACCUMULATION`. The CORRECTION03 bounded corrections are SOUND and COMPLETE per the reviewer's plan; the halt is on the test environment (2,300+ leaked helper processes from prior test runs), not on the corrections themselves.
