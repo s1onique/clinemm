@@ -28102,3 +28102,143 @@ GS-14's cleanup failure requires a production-side fix, but the fix cannot be sa
   (b) Drop `detached: true` for GS-14's helper. Makes the helper kill-able, allowing stderr EOF capture. But changes the afterEach policy for ALL tests, not just GS-14.
 
 A separately controlled positive-path Sonoma smoke experiment is permitted by the reviewer on operator acceptance that "timeout cleanup is unqualified." It is NOT performed in this ACT because (1) the reviewer's "operator accepts" is not yet satisfied, and (2) the C1 ACT is a 3-step sequence (discriminator → bounded repair → GREEN → smoke) and step 2 is blocked on classification.
+
+---
+
+# ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01-CORR01 — L1_CAUSAL_PROOF_CORRECTED_LIVE_BLOCKED — 2026-10-23
+
+```text
+ENTRY_HEAD:                  a19d1f8c7 (the ACT closure under review)
+SUBJECT_HEAD:                a19d1f8c7
+FINAL_HEAD:                  16d23afd5
+COMMIT:                      16d23afd5 (gitleaks clean)
+VERDICT:                     L1_CAUSAL_PROOF_CORRECTED_LIVE_BLOCKED
+ACT_OWNED_FAILURES:          0
+TYPECHECK:                   PASS (tsc --noEmit, 0 diagnostics)
+LINT:                        PASS (biome, 0 errors)
+ACT_SUITE:                   PASS 16/16 (11 synthetic + 5 REAL-ELM)
+VSIX_BUILT:                  YES — dist/clinemm-ptll01-corr01-16d23afd5.vsix (542 files, 56.95 MB)
+VSIX_INSTALLED:              YES — s1onique.clinemm-4.1.16-5a1c485cb
+ELM_KERNEL_IN_VSIX:          YES — sha256 15c61e20…d4f4c, MATCHES the recorded checksum
+LIVE_QUALIFICATION:          NOT EXECUTED — Electron GUI SIGSEGVs in this sandbox (ENVIRONMENT, not the build)
+```
+
+## Why this ACT exists
+
+The review of `a19d1f8c7` raised a P0: the load-bearing RED-03 test did not prove
+its claimed missing-trigger scenario. It called `notifyAgentTurnDone(...)` after
+clearing the scheduled-continuation dependency — the very production reevaluation
+entry point whose ABSENCE is the premise of the defect. The test supplied the
+event it claimed was missing.
+
+This ACT corrects the causal proof. It keeps the production changes, opens no new
+Factory review, and adds no diagnostic framework.
+
+## The corrected RED-03 is a genuine RED
+
+`post-terminal-lifecycle-liveness01.test.ts` RED-03 now removes that call and
+asserts the STRAND (C10=0, no `completed` phase write). Measured at the
+`cb39c81e4` repair: the test FAILS with
+`drainUntil(c10-commit-after-continuation-clear) did not settle within the
+bounded ceiling` — i.e. the completion is never even attempted.
+
+The drain callback fires BEFORE the continuation clears, so it cannot observe
+the dependency clearing. The test header now states plainly what it does and
+does not prove, and points at the real-Elm file for the causal question.
+
+## The causal question, answered against the REAL Elm kernel
+
+The synthetic `ElmAuthorityHarness` cannot establish the Elm causal order, so
+the question was re-asked against the REAL compiled kernel the extension ships
+(`elm/completion-authority/vendor/completion-authority.js`) through the SAME
+production DI seam `SdkController` wires (`SdkController.ts:2784`).
+
+**REAL-ELM-CAUSAL-ORDER — the `scheduled_continuation` hold is cleared BY the
+`agent_turn_done` that drives the reevaluation.** Elm's `handleAgentTurnDone`
+(`Authority.elm:185`) transitions `PromptRunning runRef` -> `PromptConsumed` via
+`consumePromptForRun` (`L692`). Production order is correct: `recordAgentTurnDone`
+emits the CCARD `agent_turn_done` record FIRST, then fires the semantic trigger
+-> `SdkController` (`SdkController.ts:2830`) -> `notifyAgentTurnDone` ->
+`flushElmAuthorityForSession` THEN `reevaluateDeferredCompletionBarrier`
+(`sdk-session-event-coordinator.ts:1641,1649`). The hold-clear and the
+reevaluation are the SAME event, correctly ordered.
+
+**REAL-ELM-L1-CHRONOLOGY — the reported chronology commits exactly one C10.**
+
+**REAL-ELM-DRAIN-CALLBACK-NOT-CAUSE — ablating the drain callback leaves the C10
+outcome IDENTICAL (1 == 1).** The callback is not the cause.
+
+**REAL-ELM-NO-TURN-DONE — with the callback present but no post-continuation
+`agent_turn_done`, the task strands (C10=0).** That is the defect shape.
+
+## Production-level ablation (measured, then reverted)
+
+The real `SdkController.ts:1509` drain-callback body was replaced with an empty
+function and BOTH files re-run: **all 16 tests still passed**, including the
+real-Elm chronology that commits one C10. The drain callback is therefore NOT a
+necessary cause of the reported chronology's completion. Production code was
+restored; `git diff --stat HEAD -- src/sdk/SdkController.ts` is clean.
+
+## Production fact discovered while qualifying
+
+The Elm adapter rejects `terminal_committed` as INSUFFICIENT_IDENTITY because
+production omits `terminalKind` (`command-job-manager.ts:2711`), and
+`notify_consume_enter` carries no `sessionId`
+(`background-notify-coordinator.ts:2863`). The Elm kernel therefore NEVER
+registers BCB-owned terminal jobs, and the Elm hold reasons for this chronology
+are exactly `active_run` / `pending_prompt` / `scheduled_continuation`.
+`unconsumed_terminal_observation` is unreachable in production for BCB-owned jobs.
+
+## Other review items closed
+
+- **P1 `getTurnPhase` optional** — production ALWAYS wires it
+  (`SdkController.ts:2332`). New `LCV-13` pins the contract: with the accessor
+  ABSENT the no-active-session Cancel branch must still make a truthful bounded
+  transition (fence raised, `resumable` written, published) — never a no-op,
+  never a completion.
+- **P1 LCV-08 temporal assertion** — STRENGTHENED. `publishedCount() > 0` was
+  satisfied by ANY publication; it now asserts a publication strictly AFTER the
+  canonical C10 write.
+- **P2 `helper.ablated`** — RESOLVED. It is a leftover artifact with a distinct
+  sha256 (`624411b1…`); the live production helper is `84e65836…` and matches
+  `.helper.identity`. The shipped bundle references the ablated file ZERO times.
+- **VSIX not blocked by the toolchain** — the toolchain was present at
+  `/opt/homebrew/bin` (only PATH was unset). `bun run package` + `vsce package`
+  both succeeded.
+
+## Live qualification: BLOCKED BY THE ENVIRONMENT (not by the build)
+
+The exact-head VSIX was built and INSTALLED successfully. The live Working/Cancel
+check could not run because Electron GUI processes segfault in this sandbox:
+
+- `/Applications/Visual Studio Code.app/Contents/MacOS/Electron` exits **139
+  (SIGSEGV)** with NO Cline code involved — the STOCK binary fails identically.
+- The non-GUI CLI path works fine (`code --version` -> 1.117.0,
+  `code --list-extensions` -> `s1onique.clinemm`), so the installed artifact is
+  intact and loadable; only the WINDOW cannot be hosted.
+- The debug harness's Playwright Electron launch fails the same way (SIGSEGV).
+- `bun run test:integration` cannot serve as the substitute: its
+  `compile-tests` step fails at PRISTINE `bbb5c484d` with the identical 12
+  diagnostics (6x TS1343, 6x TS2307) — pre-existing, unrelated to this ACT.
+
+No live claim is made. The live Working/Cancel verification remains the open
+item for a host with a working GUI session.
+
+## Baselines (verified IDENTICAL at pristine ENTRY_HEAD `bbb5c484d`)
+
+- `background-completion-barrier01-correction04.bcb01-c4` — 3 failed
+- `background-completion-barrier01.bcb01` — 13 failed
+- `task-control-liveness.tcl-reach02` — 7 failed
+- `host-blocked-outcome-consumer-probe01.hbocp01` — 1 failed
+
+## Evidence
+
+- `apps/vscode/src/sdk/__tests__/post-terminal-lifecycle-liveness01.test.ts` — 11/11
+- `apps/vscode/src/sdk/__tests__/post-terminal-lifecycle-liveness01.corr01-real-elm.test.ts` — 5/5
+- `apps/vscode/dist/clinemm-ptll01-corr01-16d23afd5.vsix` — built from `16d23afd5`
+
+## Next cursor
+
+Live Working/Cancel verification on a host with a working GUI session, against
+the already-built `dist/clinemm-ptll01-corr01-16d23afd5.vsix`. No further ACT
+or review round for the L1 causal proof.
