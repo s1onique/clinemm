@@ -28226,10 +28226,33 @@ item for a host with a working GUI session.
 
 ## Baselines (verified IDENTICAL at pristine ENTRY_HEAD `bbb5c484d`)
 
-- `background-completion-barrier01-correction04.bcb01-c4` — 3 failed
-- `background-completion-barrier01.bcb01` — 13 failed
-- `task-control-liveness.tcl-reach02` — 7 failed
-- `host-blocked-outcome-consumer-probe01.hbocp01` — 1 failed
+Full-suite comparison (vitest JSON reporter, `--pool=threads --maxWorkers=1`),
+current HEAD `16d23afd5` vs pristine `bbb5c484d`:
+
+```text
+CURRENT  (16d23afd5): suites=1663  tests=4749  passed=4450  failed=244
+BASELINE (bbb5c484d): suites=1657  tests=4733  passed=4434  failed=244
+
+NEW FAILURES (in current, not in baseline):   0
+FIXED (in baseline, not in current):          0
+PER-FILE COUNT DELTAS:                       0
+TOTAL FAILED DELTA: base=244 cur=244  delta=0
+```
+
+The +16 tests / +6 suites are exactly this ACT's additions (11 synthetic +
+5 real-Elm, and the corrected file's new LCV-13 case). The 244 failures are
+IDENTICAL, file-for-file and count-for-count — ZERO REGRESSION.
+
+Per-file pre-existing failure clusters (all confirmed identical at pristine
+ENTRY_HEAD):
+
+- `background-completion-barrier01-correction04.bcb01-c4` — 3
+- `background-completion-barrier01.bcb01` — 13
+- `task-control-liveness.tcl-reach02` — 7
+- `host-blocked-outcome-consumer-probe01.hbocp01` — 1
+- `post-run-completion-authority-reevaluation01-correction01-precheck-liveness.pcrl01` — 3
+- `completion-authority-elm-real-provider01` / `-source-stage-vocabulary01` — 0 (PASS)
+
 
 ## Evidence
 
