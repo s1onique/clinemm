@@ -1,0 +1,61 @@
+ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01
+================================================
+
+PHASE 0 — RUNTIME AND REPOSITORY IDENTITY
+------------------------------------------
+
+Source HEAD (at ACT start):
+  5705e305b09edeae3d1b40a1b573fa2f17fe828f
+  feat(clinemm): automatic myc evaluation capture in dogfood
+
+Worktree status at ACT start:
+  (clean for tracked files; two new untracked files added by this ACT)
+
+Protected stash (PRESERVED, untouched):
+  stash@{0}: WIP on main: 026a64d1b PTLL01-CORR01: board — L1 causal proof
+              corrected, VSIX built+installed, live blocked by environment
+
+No worktrees were created.
+
+Toolchain observed in this environment:
+  bun 1.3.13 (macOS arm64)  — at $HOME/.bun/bin/bun
+  node >=22                  — runtime
+  Note: `bunx` is present but NOT executable in this shell; `bun x <bin>`
+  is the working invocation. `bun`/`node` are not on the default PATH.
+
+Dogfood / VSIX identity:
+  The installed dogfood VSIX for the incident session is NOT present in
+  this repository. The closest durable artifacts are:
+    - .factory/evidence/ACT-CLINEMM-BCB-CAPTURE01/live-captures/
+        clinemm-4.1.16-bcb-capture01.vsix
+        SHA-256 591ee8e3b6319462a50ab817a93b91627298d98c0eb6d7904f66c98c534ee302
+      (that ACT's live qualification was BLOCKED_BY_ENV: the extension
+       directory was on a read-only mount)
+    - The prior ACT's HEAD-pinned VSIX is recorded in that directory's
+      SHA256SUMS as source HEAD 1513ce7043b4ecebc830606345f6d0cb741f8fb7
+
+Existing completion / BCB / Elm / background-job / presentation tests
+(163 relevant files; see 05-regression-suite.txt for the full list):
+  - completion: completion-presentation-authority01.cpa01,
+    completion-authority-elm-*, completion-continuation-*,
+    task-completion-continuation-coherence.tccc01
+  - BCB: background-completion-barrier01.bcb01 (+ c1..c4),
+    background-completion-consumer-availability01.bcca,
+    held-terminal-eviction-conservation01/02
+  - Elm: completion-authority-elm-authority-runtime,
+    deferred-completion-barrier-elm-*, background-notify-authority-elm-
+  - background job: background-command-*, background-notify-*,
+    background-job-liveness-authority.bclas01..06
+  - presentation: terminal-report-*, terminal-report-framing,
+    CompletionOutputRow, messageReducer
+
+Existing diagnostic capture paths (reused; NO new instrumentation added):
+  - apps/vscode/src/sdk/continuation-cardinality-authority.ts
+      -> <globalStorageUri>/continuation-cardinality-authority.jsonl
+      (the CCARD capture; the C1..C10 stage vocabulary)
+  - apps/vscode/src/sdk/bcb-observation-unavailable-capture.ts
+      (the BCB writer capture)
+  - apps/vscode/src/sdk/post-terminal-authority-diagnostic*.ts
+      (the post-terminal authority diagnostic)
+  - apps/vscode/src/shared/turn-state-writer-provenance.ts
+      (the phase-writer provenance)

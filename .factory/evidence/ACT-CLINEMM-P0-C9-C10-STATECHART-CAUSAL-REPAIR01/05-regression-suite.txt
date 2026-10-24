@@ -1,0 +1,63 @@
+ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 — REGRESSION SUITE
+====================================================
+
+Scope: the 163 completion / BCB / Elm / C10 / terminal / background-job /
+phase / presentation test files under apps/vscode/src/sdk.
+
+Method: run the SAME file list before and after the repair; diff the
+failing-test NAME sets. A new failure = a regression introduced by
+this ACT.
+
+BASELINE (repair stashed):  32 unique failing tests
+AFTER   (repair applied):   30 unique failing tests
+
+NEW FAILURES INTRODUCED BY THE REPAIR:
+  (none)
+
+FIXED BY THE REPAIR (were failing, now pass):
+  - Elm HOLD: no C10 commit, phase streaming, yet the row is framed as
+    authoritative completion
+  - Elm FAILURE: no C10 commit, phase streaming, yet the row is framed as
+    authoritative completion
+
+  (those two are this ACT's own RED witnesses)
+
+The 30 remaining failures are PRE-EXISTING and UNRELATED to this ACT.
+Their common cause: those harnesses do not inject the REQUIRED
+getElmCompletionAuthorityDecision option. The Elm authority has NO silent
+TS fallback (completion-authority-elm-authority.ts), so the provider throws,
+checkElmCompletionAuthority fails closed, and the C10 commit is
+suppressed. That behaviour is unchanged by this ACT — it was verified by
+running the identical file list with the repair stashed.
+
+Failing test names (30, pre-existing):
+  -  FAIL  src/sdk/__tests__/completion-authority-commit-while-run-active-discriminator01.c24-c-bridge.test.ts [ src/sdk/__tests__/completion-authority-commit-while-run-active-discriminator01.c24-c-bridge.test.ts ]
+  - BNCA-RED-01: pre-repair — Path A enqueue races ahead of Path B discard; wake survives
+  - C10-ABLATION-02-NON-NOTIFY: SEAM A OFF does not alter ordinary non-notify completion behavior
+  - C10-ABLATION-04-FAST-EXIT: SEAM A OFF preserves <=1 framework completion and exactly 1 visible completion box
+  - SWCM04-P12: NOT_APPLICABLE in current production source (no plan->act synthetic continuation seam)
+  - TCE-P05.RED: source presence — sdk-session-event-coordinator.ts C9 capture threads submitId
+  - TCE-P06.RED: source presence — sdk-session-event-coordinator.ts C10 capture threads completionId
+  - WPROV07.1: writerId union fully reconciles with production call sites
+  - coalesced continuation is allowed (LIVE has no recovery path)
+  - completion allowed (lost-wake protocol)
+  - completion commits normally
+  - completion commits normally (queue-empty control)
+  - completion held (deferred marker), wake-driven turn commits exactly once
+  - completion held until both wake acks resolve
+  - completion held, drain clears in steer order
+  - completion held, no user-attention projection
+  - completion_result row VISIBLE
+  - deterministic ordering, no duplicate continuation
+  - first submit held; second submit commits → 1 visible row
+  - marker resolution returns session_gone path
+  - no owned jobs + submit_and_exit → 1 row, 1 commit (predecessor ordinary-task contract preserved)
+  - non-recoverable error earlier in the same turn as submit_and_exit content_end: finalPhase = completed; 1 visible completion row
+  - ordinary completion commits phase to completed (green-box; Cancel/Working gone)
+  - originating completion ALLOWED with SEAM A OFF (zero completion / duplicate / stuck barrier)
+  - queue length drops, barrier releases
+  - reproduces the dogfood transcript chronology with zero premature markers
+  - same chronology as TDD-01.A; final state must be 'completed' (RED today)
+  - session A held, session B free → session A 0 rows, session B 1 row
+  - submit_and_exit with no background jobs / no held observations → 1 visible row; 1 commit
+  - the visible completion row is the SAME on live and reopen paths — both reads must agree on isAuthoritativelyCompletedResult

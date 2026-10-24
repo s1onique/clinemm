@@ -1,0 +1,3742 @@
+{
+  "tool": "tools/lifecycle-replay/replay.ts",
+  "act": "ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01",
+  "trace": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01/sources/continuation-cardinality-authority.jsonl",
+  "traceSha256": "93ba6815872487dbecf793bc596b4f3a4caea4de3dc8337652c2ec60a33f7d68",
+  "recordsRead": 206,
+  "malformedLinesSkipped": 0,
+  "sessionsProjected": [
+    "1792045691672_s0nzn"
+  ],
+  "projections": [
+    {
+      "sessionId": "1792045691672_s0nzn",
+      "taskIds": [
+        "1792045691672_s0nzn"
+      ],
+      "facts": [
+        {
+          "seq": 1,
+          "at": 1792045692306,
+          "stage": "execute_turn_prelude_enter",
+          "origin": "explicit_user",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 2,
+          "at": 1792045692306,
+          "stage": "task_started",
+          "origin": "explicit_user",
+          "sessionId": "1792045691672_s0nzn",
+          "taskId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "taskId"
+          ],
+          "identityMissing": [
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 3,
+          "at": 1792045692328,
+          "stage": "run_turn_started",
+          "origin": "unknown",
+          "sessionId": "1792045691672_s0nzn",
+          "runId": "run_4i1kXA-1",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "runId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 4,
+          "at": 1792045695550,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qk9pheky3mp8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 5,
+          "at": 1792045695550,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qk9pallmrvz7",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 6,
+          "at": 1792045695619,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qk9pe5a1lxil",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 7,
+          "at": 1792045698769,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qmqpm8e7xvyy",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 8,
+          "at": 1792045698773,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qmqpvugpevnk",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 9,
+          "at": 1792045699135,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qmqp8wywq70b",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 10,
+          "at": 1792045702804,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qpvaaqf84oum",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 11,
+          "at": 1792045702805,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qpva9fpdasvx",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 12,
+          "at": 1792045702806,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qpvasc4wlgcf",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 13,
+          "at": 1792045702806,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qpvar36fdtwg",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 14,
+          "at": 1792045707423,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qtfm1bk35fzf",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 15,
+          "at": 1792045707424,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qtfmt7z44h2f",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 16,
+          "at": 1792045710377,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qvpq9pni0kpz",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 17,
+          "at": 1792045710378,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qvpqfog6wrz8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 18,
+          "at": 1792045710390,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qvpqrggjzntd",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 19,
+          "at": 1792045710390,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qvpqebwnjgfm",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 20,
+          "at": 1792045713149,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qxudlq8ehlnq",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 21,
+          "at": 1792045713150,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qxudzfkbq4nd",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 22,
+          "at": 1792045713151,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qxudefjsi4dd",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 23,
+          "at": 1792045713151,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qxudbut14uc7",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 24,
+          "at": 1792045715150,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95qxudlqspin7i",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 25,
+          "at": 1792045717180,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r0yrq3eog8t4",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 26,
+          "at": 1792045717196,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r0yrb5i085j4",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 27,
+          "at": 1792045717197,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r0yrmjxkabqj",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 28,
+          "at": 1792045717213,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r0yr9wy8g3jj",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 29,
+          "at": 1792045720132,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r38y8jki4mgr",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 30,
+          "at": 1792045720132,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r38yeqdhkn3t",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 31,
+          "at": 1792045720135,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r38ym2fes6b7",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 32,
+          "at": 1792045728840,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r9yrlhq9l865",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 33,
+          "at": 1792045728841,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r9yruyg0otn5",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 34,
+          "at": 1792045728841,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r9yraftvksle",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 35,
+          "at": 1792045728852,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r9yro85f7br5",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 36,
+          "at": 1792045728852,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95r9yry97rmaog",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 37,
+          "at": 1792045828069,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tej4u48cf0mn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 38,
+          "at": 1792045828071,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tej458aggd6f",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 39,
+          "at": 1792045828078,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tej42uvr35va",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 40,
+          "at": 1792045828088,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tej4ndjj7x4y",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 41,
+          "at": 1792045832394,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95thvailb6jqrg",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 42,
+          "at": 1792045832395,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95thva4iglhszh",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 43,
+          "at": 1792045832401,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95thva89lphzbu",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 44,
+          "at": 1792045832414,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95thvanbqdet9t",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 45,
+          "at": 1792045834625,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tjlde6xrsn2t",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 46,
+          "at": 1792045834627,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tjldmmbngnt8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 47,
+          "at": 1792045834637,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tjld8uph0p4t",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 48,
+          "at": 1792045835519,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tjld5r17is10",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 49,
+          "at": 1792045839286,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tn6rk1z6j4y2",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 50,
+          "at": 1792045839300,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tn6r1ytpvdts",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 51,
+          "at": 1792045839703,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95tn6rwnkezubc",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 52,
+          "at": 1792045841576,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95toy6n5r7vd81",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 53,
+          "at": 1792045841585,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95toy6p5vo8w4y",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 54,
+          "at": 1792045852589,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95txg2kt93z8v0",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 55,
+          "at": 1792045852593,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95txg28acqh0id",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 56,
+          "at": 1792045852640,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95txg29intyp7e",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 57,
+          "at": 1792045853794,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95txg2ta6e44fk",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 58,
+          "at": 1792045857668,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95u1d8rsthr4tl",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 59,
+          "at": 1792045858288,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95u1d8yevoruvw",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 60,
+          "at": 1792045858708,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95u1d827jnb8op",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 61,
+          "at": 1792045861444,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95u4ac1z41oh4f",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 62,
+          "at": 1792045861445,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95u4accjgom66i",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 63,
+          "at": 1792045861449,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95u4ac58357en0",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 64,
+          "at": 1792045861452,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95u4ac08gfjdii",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 65,
+          "at": 1792045867534,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95u8z8fw8e49wl",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 66,
+          "at": 1792045869184,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ua9dar3oisia",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 67,
+          "at": 1792045869187,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ua9dz08q1uar",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 68,
+          "at": 1792045871730,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ubol8sr0gozn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 69,
+          "at": 1792045874541,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uedv3thtuo7u",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 70,
+          "at": 1792045874544,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uedv6rhey9lw",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 71,
+          "at": 1792045874546,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uedv15kp08k9",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 72,
+          "at": 1792045877532,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ugp5ky6lfto2",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 73,
+          "at": 1792045877538,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ugp5zoxyr8gr",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 74,
+          "at": 1792045880212,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uirhfoincfvt",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 75,
+          "at": 1792045880213,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uirhmfd5qpkb",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 76,
+          "at": 1792045880214,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uirh888qgi7f",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 77,
+          "at": 1792045880215,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uirh047aonvu",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 78,
+          "at": 1792045883242,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ul3s53rau6ki",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 79,
+          "at": 1792045883243,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ul3sdof2omfe",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 80,
+          "at": 1792045883243,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ul3st8r1sax0",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 81,
+          "at": 1792045883244,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ul3s2djahkm8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 82,
+          "at": 1792045887026,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uo0ohoyhiy46",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 83,
+          "at": 1792045887026,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uo0obt53e3ob",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 84,
+          "at": 1792045887030,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uo0o1u2hdp0g",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 85,
+          "at": 1792045887047,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uo0oml78ggj3",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 86,
+          "at": 1792045893602,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ut3hgondmce6",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 87,
+          "at": 1792045893611,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95ut3h0rzcj2x8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 88,
+          "at": 1792045901591,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95uyhur5zyvyfj",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 89,
+          "at": 1792045904770,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v1og3fknjuw2",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 90,
+          "at": 1792045908069,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v48p7951k8z3",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 91,
+          "at": 1792045908072,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v48psjp45vfg",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 92,
+          "at": 1792045908082,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v48p6lmbwlhe",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 93,
+          "at": 1792045908095,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v48p74elwn1w",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 94,
+          "at": 1792045912390,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v7lh17rn3vne",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 95,
+          "at": 1792045912393,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v7lhuo6ii1cd",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 96,
+          "at": 1792045912397,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v7lh7laanfce",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 97,
+          "at": 1792045912499,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95v7lhhj7s4nxv",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 98,
+          "at": 1792045919677,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vd7s1oy477uk",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 99,
+          "at": 1792045919803,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vd7sbc7bmcid",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 100,
+          "at": 1792045920691,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vd7snup5sj8e",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 101,
+          "at": 1792045931923,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vmny6nri96qv",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 102,
+          "at": 1792045931924,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vmny8de507ug",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 103,
+          "at": 1792045931924,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vmnygsdsr9bg",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 104,
+          "at": 1792045931929,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vmnygvjgww0z",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 105,
+          "at": 1792045931976,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vmnyrq1i96fu",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 106,
+          "at": 1792045936498,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vq75tjzthd1u",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 107,
+          "at": 1792045936500,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vq75rl0wnpw8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 108,
+          "at": 1792045936500,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vq75pi2u037e",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 109,
+          "at": 1792045936503,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vq751cxnjfml",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 110,
+          "at": 1792045945317,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vwzv4x1soy1e",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 111,
+          "at": 1792045945330,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vwzvzv19ot1i",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 112,
+          "at": 1792045945488,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vwzvdqd00wed",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 113,
+          "at": 1792045948208,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vz8eplj7qs4v",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 114,
+          "at": 1792045948209,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vz8ehq3aan26",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 115,
+          "at": 1792045948209,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95vz8e7zqs7726",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 116,
+          "at": 1792046007781,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv95x93vc0dsm72r",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 117,
+          "at": 1792046405831,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv965sc35sddo6ml",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 118,
+          "at": 1792046405839,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv965sc3dgx6ufqe",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 119,
+          "at": 1792046419390,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv9662smni74lmhb",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 120,
+          "at": 1792046419390,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv9662smd5pnuvvm",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 121,
+          "at": 1792046424063,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv9666eb2pjjbtcn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 122,
+          "at": 1792046445849,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv966n7pwl3k67d5",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 123,
+          "at": 1792046445905,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv966n7phqscf92b",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 124,
+          "at": 1792046463533,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv966n7pi00vkila",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 125,
+          "at": 1792046463629,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv9670xjjt68d6zs",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 126,
+          "at": 1792046463674,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv9670xjd6tbiziz",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 127,
+          "at": 1792046469189,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv9670xial6wbeh9",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 128,
+          "at": 1792046481421,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv967ensw2gvem0p",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 129,
+          "at": 1792046481433,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv967ens97o1gd50",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 130,
+          "at": 1792046481468,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv967ens6d9bne1b",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 131,
+          "at": 1792046495869,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv967pt68w2xer0v",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 132,
+          "at": 1792046495870,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv967pt6ntezb2ni",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 133,
+          "at": 1792046495871,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv967pt6i8i8g7b6",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 134,
+          "at": 1792046524803,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv968c4mqdd12i0k",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 135,
+          "at": 1792046524803,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv968c4m1g1mlk72",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 136,
+          "at": 1792046543303,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv968qeb9rp3axdt",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 137,
+          "at": 1792046543311,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv968qebm3c2ulzd",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 138,
+          "at": 1792046545993,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv968shda26b7sy8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 139,
+          "at": 1792046545997,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv968shd01cw5p6c",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 140,
+          "at": 1792046548872,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv968uoth3bs30vs",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 141,
+          "at": 1792046566677,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv9698g0yocmmdcr",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 142,
+          "at": 1792046566685,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv9698g0ty6vv2wb",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 143,
+          "at": 1792046569866,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969awickp68rl9",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 144,
+          "at": 1792046569866,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969awivptmezcf",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 145,
+          "at": 1792046569869,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969awiowza3isf",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 146,
+          "at": 1792046573182,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969dgkf321emp9",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 147,
+          "at": 1792046573183,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969dgkpfokh9mc",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 148,
+          "at": 1792046575888,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969fjvpb5qlp8b",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 149,
+          "at": 1792046575892,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969fjvm02ygrdh",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 150,
+          "at": 1792046575896,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969fjvyt2uopp7",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 151,
+          "at": 1792046580813,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969jcpve4upcbp",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 152,
+          "at": 1792046580817,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969jcpkuxq32hi",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 153,
+          "at": 1792046601669,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969zg3rvsau1u2",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 154,
+          "at": 1792046603260,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv969zg3cpaclfhu",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 155,
+          "at": 1792046606252,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96a2xxu7f9u9mb",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 156,
+          "at": 1792046606404,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96a2xxszh9mycr",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 157,
+          "at": 1792046606499,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96a2xx4nah91fy",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 158,
+          "at": 1792046641200,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96atxq04bc6x2f",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 159,
+          "at": 1792046641200,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96atxqzwjxtkh4",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 160,
+          "at": 1792046641855,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96atxqpdk0mntd",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 161,
+          "at": 1792046657415,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96b6gijjyq0y4x",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 162,
+          "at": 1792046747829,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96d47fh0eh5ohb",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 163,
+          "at": 1792046796377,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96e4v3101sho1t",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 164,
+          "at": 1792046823404,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96eqjc5z1uthzw",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 165,
+          "at": 1792046823405,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96eqjc5kcqght6",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 166,
+          "at": 1792046823417,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96eqjcdhrt0oug",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 167,
+          "at": 1792046838219,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96f1yjfxg9jt0i",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 168,
+          "at": 1792046838287,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96f1yjtu4bse0u",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 169,
+          "at": 1792046861687,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96fk298hrfe8v2",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 170,
+          "at": 1792046887166,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96g3qgipb0gy43",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 171,
+          "at": 1792046912786,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gnhqtfk0rewb",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 172,
+          "at": 1792046915269,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gpdxogi9tit3",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 173,
+          "at": 1792046915510,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gpdxp29hfebv",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 174,
+          "at": 1792046918828,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gs56l8h3neor",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 175,
+          "at": 1792046918846,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gs564sldsnfu",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 176,
+          "at": 1792046922040,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gun4bkphyobl",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 177,
+          "at": 1792046922040,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gun4t467nwp1",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 178,
+          "at": 1792046922083,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gun48swbdlcp",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 179,
+          "at": 1792046924927,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96gwvdkvngvg5u",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 180,
+          "at": 1792046948236,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96heuuuaed1j59",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 181,
+          "at": 1792046951343,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96hh960j78bb53",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 182,
+          "at": 1792046951373,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96hh96y88ekf1w",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 183,
+          "at": 1792046951456,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96hh96qihssvcl",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 184,
+          "at": 1792046954860,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96hjyijyvk8rq7",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 185,
+          "at": 1792046954956,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96hjyizqex0n6k",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 186,
+          "at": 1792046960790,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96ho9jpaiq8spb",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 187,
+          "at": 1792046963185,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96hqdwjkrpaxpz",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 188,
+          "at": 1792046963261,
+          "stage": "terminal_committed",
+          "origin": "background_terminal",
+          "sessionId": "1792045691672_s0nzn",
+          "jobId": "cmd_mv96hqdwlylub9u1",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "jobId",
+            "ownerId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId"
+          ]
+        },
+        {
+          "seq": 189,
+          "at": 1792046983110,
+          "stage": "submit_and_exit_seen",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "taskId": "1792045691672_s0nzn",
+          "submitId": "submit-1792045691672_s0nzn-1",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "taskId"
+          ],
+          "identityMissing": [
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 190,
+          "at": 1792046983132,
+          "stage": "pending_prompt_enqueued",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 191,
+          "at": 1792046983132,
+          "stage": "pending_prompt_dequeued",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 192,
+          "at": 1792046983132,
+          "stage": "continuation_scheduled",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 193,
+          "at": 1792046983132,
+          "stage": "execute_turn_prelude_enter",
+          "origin": "explicit_user",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 194,
+          "at": 1792046983145,
+          "stage": "agent_turn_done",
+          "origin": "explicit_user",
+          "sessionId": "1792045691672_s0nzn",
+          "runId": "run_4i1kXA-1",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "runId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 195,
+          "at": 1792046983177,
+          "stage": "run_turn_started",
+          "origin": "unknown",
+          "sessionId": "1792045691672_s0nzn",
+          "runId": "run_pVHqrCRH",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "runId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 196,
+          "at": 1792046983177,
+          "stage": "continuation_started",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "runId": "run_pVHqrCRH",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "runId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 197,
+          "at": 1792047004784,
+          "stage": "submit_and_exit_seen",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "taskId": "1792045691672_s0nzn",
+          "submitId": "submit-1792045691672_s0nzn-2",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "taskId"
+          ],
+          "identityMissing": [
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 198,
+          "at": 1792047004796,
+          "stage": "pending_prompt_enqueued",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 199,
+          "at": 1792047004863,
+          "stage": "agent_turn_done",
+          "origin": "explicit_user",
+          "sessionId": "1792045691672_s0nzn",
+          "runId": "run_pVHqrCRH",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "runId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 200,
+          "at": 1792047004864,
+          "stage": "pending_prompt_dequeued",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 201,
+          "at": 1792047004864,
+          "stage": "continuation_scheduled",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 202,
+          "at": 1792047004864,
+          "stage": "execute_turn_prelude_enter",
+          "origin": "explicit_user",
+          "sessionId": "1792045691672_s0nzn",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 203,
+          "at": 1792047004880,
+          "stage": "run_turn_started",
+          "origin": "unknown",
+          "sessionId": "1792045691672_s0nzn",
+          "runId": "run_9xr4icR8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "runId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 204,
+          "at": 1792047004880,
+          "stage": "continuation_started",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "runId": "run_9xr4icR8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "runId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 205,
+          "at": 1792047020680,
+          "stage": "submit_and_exit_seen",
+          "origin": "pending_prompt_drain",
+          "sessionId": "1792045691672_s0nzn",
+          "taskId": "1792045691672_s0nzn",
+          "submitId": "submit-1792045691672_s0nzn-3",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "taskId"
+          ],
+          "identityMissing": [
+            "runId",
+            "jobId",
+            "ownerId"
+          ]
+        },
+        {
+          "seq": 206,
+          "at": 1792047020714,
+          "stage": "agent_turn_done",
+          "origin": "explicit_user",
+          "sessionId": "1792045691672_s0nzn",
+          "runId": "run_9xr4icR8",
+          "correlation": "partial",
+          "identityPresent": [
+            "sessionId",
+            "runId"
+          ],
+          "identityMissing": [
+            "taskId",
+            "jobId",
+            "ownerId"
+          ]
+        }
+      ],
+      "counters": {
+        "execute_turn_prelude_enter": 3,
+        "task_started": 1,
+        "run_turn_started": 3,
+        "terminal_committed": 185,
+        "submit_and_exit_seen": 3,
+        "pending_prompt_enqueued": 2,
+        "pending_prompt_dequeued": 2,
+        "continuation_scheduled": 2,
+        "agent_turn_done": 3,
+        "continuation_started": 2
+      },
+      "c9Attempts": 3,
+      "c10Commits": 0,
+      "c9c10Relation": "unknown",
+      "notes": [
+        "C10_ABSENT: 3 C9 attempt(s) observed and 0 C10 commit(s). Every C9 attempt is therefore UNCOMMITTED.",
+        "EPOCH_UNKNOWN: the continuation-cardinality-authority record does not carry an epoch field; the epoch-scoped identity of any C9/C10 pair cannot be established from this trace alone."
+      ]
+    }
+  ]
+}

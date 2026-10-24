@@ -1,0 +1,25 @@
+{
+  "tool": "tools/lifecycle-replay/replay.ts",
+  "act": "ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01",
+  "trace": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01/sources/continuation-cardinality-authority.jsonl",
+  "traceSha256": "93ba6815872487dbecf793bc596b4f3a4caea4de3dc8337652c2ec60a33f7d68",
+  "recordsRead": 206,
+  "malformedLinesSkipped": 0,
+  "sessionsProjected": [
+    "1792824738628_cw4og"
+  ],
+  "projections": [
+    {
+      "sessionId": "1792824738628_cw4og",
+      "taskIds": [],
+      "facts": [],
+      "counters": {},
+      "c9Attempts": 0,
+      "c10Commits": 0,
+      "c9c10Relation": "unknown",
+      "notes": [
+        "NO_RECORD_FOR_SESSION: the trace contains no record with sessionId=1792824738628_cw4og."
+      ]
+    }
+  ]
+}
