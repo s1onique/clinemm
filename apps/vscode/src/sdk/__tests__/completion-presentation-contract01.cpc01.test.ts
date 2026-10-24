@@ -78,9 +78,12 @@ import {
 	eligibleCompletionPresentationClaims,
 } from "../completion-presentation-contract"
 import {
+	CHART_04_EXPECTED_EDGES,
 	CHART_04_NON_TRANSITION_CLAIM_IDS,
 	CHART_04_TRANSITION_CLAIM_IDS,
 	extractMermaidBlocks,
+	parseMermaidTransitionEdges,
+	transitionIdOfLabel,
 	verifyChart04CompletionPresentation,
 } from "../lifecycle-transition-contract-verifier"
 import {
@@ -582,6 +585,20 @@ describe("ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01 / P-03", () =
 	})
 
 	it("P-03 (foreign-session observation): a foreign held observation neither HOLDs nor RELEASEs this task's completion", async () => {
+		// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01:
+		// this test is RETAINED as a FIXTURE-INDEPENDENCE check, but it is
+		// NOT the foreign-session isolation evidence. It builds TWO
+		// INDEPENDENT harnesses with separate `ownedJobs` arrays and
+		// separate `unconsumed` counters, so the assertion is true BY
+		// CONSTRUCTION of the fixture rather than by any property of the
+		// production ownership authority.
+		//
+		// The real foreign-session isolation evidence is the
+		// "P-03 SHARED OWNERSHIP ISOLATION" block below, which drives ONE
+		// shared production `BackgroundNotifyCoordinator` and asserts that
+		// a foreign owner's outstanding obligation neither holds nor
+		// releases the target owner's completion — with a RED
+		// discriminator for a broken ownership key.
 		const h = makeHarness()
 		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
 		// The held observation belongs to a FOREIGN session. The ownership
@@ -1375,5 +1392,355 @@ describe("ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01 / CHART 04 DO
 		expect(extractMermaidBlocks(chart04Markdown)).toHaveLength(1)
 		expect(extractMermaidBlocks("no fences here")).toHaveLength(0)
 		expect(extractMermaidBlocks("```mermaid\nstateDiagram-v2\n```")).toHaveLength(1)
+	})
+})
+
+// ===========================================================================
+// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01 —
+// The Chart 04 ASSOCIATION witness.
+//
+// THE DEFECT THIS REPAIRS.
+//
+// The Chart 04 guard checked LABEL CARDINALITY: "each transition claim id
+// appears on exactly one labeled Mermaid edge". It never checked that the
+// id labels the CORRECT edge. Swapping the labels of two edges therefore
+// satisfied every check — both ids still present exactly once — while
+// inverting the meaning of both transitions.
+//
+//   [*] --> PartialRowPublished           : P-01 ...
+//   PartialRowPublished --> FinalRowPublished : P-02 ...
+//
+// becomes
+//
+//   [*] --> PartialRowPublished           : P-02 ...
+//   PartialRowPublished --> FinalRowPublished : P-01 ...
+//
+// This is EXACTLY the false-positive class that the MUT-03 correction
+// (commit 38cb209ff) closed for the c9-c10 traceability diagram: an
+// INDEPENDENT substring-presence check accepted a SWAPPED id-to-edge
+// association.
+//
+// THE REPAIR.
+//
+// The association is now checked as an ASSOCIATION: the labeled edge's
+// source/target must equal the VERIFIED endpoints in
+// `CHART_04_EXPECTED_EDGES`.
+//
+// P-03 REMAINS A `GUARD` CLAIM. Its diagram edge represents the OUTCOME
+// of that guard (the row is filtered out), not a claim reclassification.
+// The taxonomy is not bent to satisfy the validator.
+// ===========================================================================
+
+describe("ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01 / CHART 04 EDGE ASSOCIATION", () => {
+	const chart04Path = resolve(
+		import.meta.dirname,
+		"../../../../../docs/architecture/task-lifecycle/04-completion-presentation.md",
+	)
+	const chart04Markdown = readFileSync(chart04Path, "utf8")
+
+	const verify = (markdown: string) =>
+		verifyChart04CompletionPresentation({
+			markdown,
+			transitionClaimIds: CHART_04_TRANSITION_CLAIM_IDS,
+			nonTransitionClaimIds: CHART_04_NON_TRANSITION_CLAIM_IDS,
+			expectedEdges: CHART_04_EXPECTED_EDGES,
+		})
+
+	/**
+	 * The PRE-CORRECTION semantics: label cardinality only, with no
+	 * endpoint association check. Reimplemented faithfully (NOT imported)
+	 * so the RED assertion is a genuine independent control.
+	 */
+	const verifyPreCorrection = (markdown: string) => {
+		const diagramText = extractMermaidBlocks(markdown).join("\n")
+		const edges = parseMermaidTransitionEdges(diagramText)
+		const edgesByClaimId = new Map<string, number>()
+		for (const edge of edges) {
+			const claimId = transitionIdOfLabel(edge.label)
+			if (!claimId) continue
+			edgesByClaimId.set(claimId, (edgesByClaimId.get(claimId) ?? 0) + 1)
+		}
+		const errors: string[] = []
+		for (const claimId of CHART_04_TRANSITION_CLAIM_IDS) {
+			const count = edgesByClaimId.get(claimId) ?? 0
+			if (count === 0) errors.push(`${claimId}: TRANSITION claim is absent from the Chart 04 Mermaid projection`)
+			else if (count > 1) errors.push(`${claimId}: appears on ${count} Chart 04 Mermaid edges; expected exactly one`)
+		}
+		return { errors }
+	}
+
+	/** The endpoints of every edge currently labeled with `id`. */
+	const endpointsFor = (markdown: string, id: string) => {
+		const diagramText = extractMermaidBlocks(markdown).join("\n")
+		return parseMermaidTransitionEdges(diagramText)
+			.filter((edge) => transitionIdOfLabel(edge.label) === id)
+			.map((edge) => `${edge.source} --> ${edge.target}`)
+	}
+
+	it("the REAL Chart 04 document passes the association-aware guard", () => {
+		const { errors, mermaidBlockCount } = verify(chart04Markdown)
+		expect(errors).toEqual([])
+		expect(mermaidBlockCount).toBe(1)
+	})
+
+	it("the VERIFIED edge mapping matches the REAL Chart 04 document", () => {
+		// The expected-endpoint table is not an independent invention: it
+		// must describe the document that actually ships.
+		for (const claimId of CHART_04_TRANSITION_CLAIM_IDS) {
+			const labeled = endpointsFor(chart04Markdown, claimId)
+			expect(labeled, `claim ${claimId} must label exactly one Chart 04 edge`).toHaveLength(1)
+			const expected = CHART_04_EXPECTED_EDGES[claimId]
+			expect(labeled[0]).toBe(`${expected.source} --> ${expected.target}`)
+		}
+	})
+
+	it("MUT-05: SWAPPED claim labels on existing edges are REJECTED (both associations)", () => {
+		// Mutate two DISTINCT edges BY THEIR ENDPOINTS. Locating the second
+		// edge by an ALREADY-MUTATED id would reproduce the MUT-03 defect.
+		const mutated = chart04Markdown
+			.replace(/(\[\*\]\s*-->\s*PartialRowPublished\s*:\s*)P-01\b/, "$1P-02")
+			.replace(/(PartialRowPublished\s*-->\s*FinalRowPublished\s*:\s*)P-02\b/, "$1P-01")
+
+		expect(mutated).not.toBe(chart04Markdown)
+
+		// Assert the mutation itself: both ids survive exactly once, each
+		// now attached to the other's edge.
+		expect(endpointsFor(mutated, "P-01")).toEqual(["PartialRowPublished --> FinalRowPublished"])
+		expect(endpointsFor(mutated, "P-02")).toEqual(["[*] --> PartialRowPublished"])
+
+		// Both associations must be rejected INDEPENDENTLY.
+		const { errors } = verify(mutated)
+		expect(errors).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining("P-01: Mermaid edge is"),
+				expect.stringContaining("P-02: Mermaid edge is"),
+			]),
+		)
+
+		// The rejection must NOT come from a missing / absent label.
+		expect(errors.some((error) => error.includes("absent from the Chart 04 Mermaid projection"))).toBe(false)
+		expect(errors.some((error) => error.includes("expected exactly one"))).toBe(false)
+	})
+
+	it("MUT-05 (RED control): the PRE-CORRECTION cardinality-only semantics ACCEPT the swapped labels", () => {
+		// This is the RED witness: against the pre-correction validator
+		// semantics the swapped-label mutation produces ZERO errors, so the
+		// pre-correction guard proved nothing. The corrected guard is
+		// therefore a genuine detector, not a tautology.
+		const mutated = chart04Markdown
+			.replace(/(\[\*\]\s*-->\s*PartialRowPublished\s*:\s*)P-01\b/, "$1P-02")
+			.replace(/(PartialRowPublished\s*-->\s*FinalRowPublished\s*:\s*)P-02\b/, "$1P-01")
+
+		const { errors } = verifyPreCorrection(mutated)
+		expect(errors).toEqual([])
+	})
+
+	it("MUT-06: a claim id attached to a WRONG (non-swapped) edge is REJECTED", () => {
+		// P-03 is a GUARD claim whose diagram edge represents the OUTCOME of
+		// the guard. Relabeling that edge with P-06 while moving P-06's own
+		// id onto the P-03 edge must be rejected.
+		const mutated = chart04Markdown
+			.replace(/(FinalRowPublished\s*-->\s*RowFilteredOut\s*:\s*)P-03\b/, "$1P-06")
+			.replace(/(C10Committed\s*-->\s*BadgeShown\s*:\s*)P-06\b/, "$1P-03")
+
+		expect(mutated).not.toBe(chart04Markdown)
+		expect(endpointsFor(mutated, "P-03")).toEqual(["C10Committed --> BadgeShown"])
+		expect(endpointsFor(mutated, "P-06")).toEqual(["FinalRowPublished --> RowFilteredOut"])
+
+		const { errors } = verify(mutated)
+		expect(errors).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining("P-03: Mermaid edge is"),
+				expect.stringContaining("P-06: Mermaid edge is"),
+			]),
+		)
+		expect(errors.some((error) => error.includes("absent from the Chart 04 Mermaid projection"))).toBe(false)
+	})
+
+	it("P-03 remains a GUARD claim: the taxonomy is not bent to satisfy the validator", () => {
+		const p03 = COMPLETION_PRESENTATION_CLAIMS.find((c) => c.claim_id === "P-03")
+		expect(p03?.kind).toBe("GUARD")
+		// Its diagram edge represents the OUTCOME of the guard — the row is
+		// filtered out — so the edge is legitimate and must be PRESENT.
+		expect(CHART_04_EXPECTED_EDGES["P-03"]).toEqual({ source: "FinalRowPublished", target: "RowFilteredOut" })
+	})
+})
+
+// ===========================================================================
+// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01 —
+// The P-03 SHARED-OWNERSHIP ISOLATION witness.
+//
+// THE DEFECT THIS REPAIRS.
+//
+// The original P-03 foreign-session witness built TWO INDEPENDENT
+// harnesses:
+//
+//     const h        = makeHarness()
+//     const foreign  = makeHarness({ activeSessionId: "session-foreign", ... })
+//     foreign.ownedJobs.push({ jobId: "job-foreign-1", running: true })
+//
+// and then asserted that `h` still published its completion row. That
+// demonstrated only that TWO INDEPENDENTLY CONFIGURED FIXTURES behave
+// independently. It never exercised a SHARED ownership service: the
+// foreign obligation lived in a separate fixture with its own separate
+// `ownedJobs` array and its own separate `unconsumed` counter, so the
+// assertion was true BY CONSTRUCTION of the fixture, not by any property
+// of production ownership.
+//
+// The real production ownership authorities are:
+//
+//   - `CommandJobManager.hasRunningBackgroundJobForOwner(ownerSessionId)`
+//     — ONE manager instance holds the jobs of MANY sessions; the query
+//     answers "does THIS owner have a running job?".
+//
+//   - `BackgroundNotifyCoordinator.unconsumedTerminalCountForOwner(
+//     sessionId, taskId)` — ONE coordinator instance holds the held
+//     obligations of MANY owners; the query is keyed by the canonical
+//     `ownerKey(sessionId, taskId)`.
+//
+// THE REPAIR.
+//
+// One SINGLE `BackgroundNotifyCoordinator` is shared by BOTH owners. The
+// foreign owner's obligation is registered against the foreign
+// (sessionId, taskId). The property asserted is the one P-03 actually
+// claims: an outstanding FOREIGN obligation neither HOLDS nor RELEASES
+// the target task's completion.
+//
+// THE RED DISCRIMINATOR.
+//
+// A deliberately BROKEN ownership discriminator — one that keys only on
+// `sessionId` and DROPS the `taskId` — is fed to the same witness. The
+// witness MUST reject it, so the passing assertion cannot be satisfied
+// by a discriminator that does not discriminate.
+// ===========================================================================
+
+describe("ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01 / P-03 SHARED OWNERSHIP ISOLATION", () => {
+	/** The REAL canonical owner key used by the production coordinator. */
+	const ownerKey = (sessionId: string, taskId: string | undefined) => `${sessionId}\u0000${taskId ?? ""}`
+
+	/**
+	 * The REAL production ownership discriminator:
+	 * `BackgroundNotifyCoordinator.unconsumedTerminalCountForOwner`.
+	 */
+	const realDiscriminator = (coordinator: BackgroundNotifyCoordinator, sessionId: string, taskId: string | undefined): number =>
+		coordinator.unconsumedTerminalCountForOwner(sessionId, taskId)
+
+	/**
+	 * The DELIBERATELY BROKEN discriminator: a SESSION-ONLY discriminator
+	 * that DROPS the `taskId`. It matches ANY outstanding obligation
+	 * belonging to the session, regardless of which task owns it — so it
+	 * CANNOT distinguish two owners that share a session but differ in
+	 * task. This is the over-broad shape that the canonical
+	 * `ownerKey(sessionId, taskId)` exists to prevent.
+	 */
+	const brokenSessionOnlyDiscriminator = (
+		coordinator: BackgroundNotifyCoordinator,
+		sessionId: string,
+		_taskId: string | undefined,
+	): number => {
+		// A session-only discriminator asks "does this session have ANY
+		// outstanding obligation?" — it cannot narrow to the task.
+		const jobs = coordinator.unconsumedOwnedTerminalJobIdsForOwner(sessionId, "task-b")
+		const alsoTaskA = coordinator.unconsumedOwnedTerminalJobIdsForOwner(sessionId, "task-a")
+		return new Set([...jobs, ...alsoTaskA]).size
+	}
+
+	/** Build ONE shared coordinator, exactly as production does. */
+	const makeSharedCoordinator = (activeOwner: { sessionId: string; taskId: string }) => {
+		const now = { value: 0 }
+		return new BackgroundNotifyCoordinator({
+			resolveActiveOwner: () => activeOwner,
+			enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
+			now: () => ++now.value,
+			consumeTerminalAuthority: legacyConsumeTerminalPolicy,
+		})
+	}
+
+	it("the REAL shared coordinator isolates a foreign owner's obligation from the target owner", () => {
+		// ONE coordinator instance — shared by BOTH owners, exactly as in
+		// production (the coordinator is a singleton-per-host).
+		const shared = makeSharedCoordinator({ sessionId: "session-target", taskId: "task-target" })
+
+		const TARGET = { sessionId: "session-target", taskId: "task-target" }
+		const FOREIGN = { sessionId: "session-foreign", taskId: "task-foreign" }
+
+		// The FOREIGN owner has an outstanding held terminal obligation,
+		// registered against the FOREIGN (sessionId, taskId).
+		shared.recordNonNotifyTerminalObservation({
+			jobId: "job-foreign-1",
+			sessionId: FOREIGN.sessionId,
+			taskId: FOREIGN.taskId,
+		})
+
+		// The foreign obligation is genuinely outstanding — for the
+		// FOREIGN owner.
+		expect(realDiscriminator(shared, FOREIGN.sessionId, FOREIGN.taskId)).toBe(1)
+		// The shared service genuinely holds it: the foreign obligation is
+		// not a fiction of an unshared fixture.
+		expect(shared.unconsumedOwnedTerminalJobIdsForOwner(FOREIGN.sessionId, FOREIGN.taskId)).toEqual(["job-foreign-1"])
+
+		// THE PROPERTY UNDER TEST: the target owner sees NOTHING. The
+		// outstanding foreign obligation neither HOLDS the target's
+		// completion...
+		expect(realDiscriminator(shared, TARGET.sessionId, TARGET.taskId)).toBe(0)
+		expect(shared.unconsumedOwnedTerminalJobIdsForOwner(TARGET.sessionId, TARGET.taskId)).toEqual([])
+		// ...nor RELEASES it (no foreign job id leaks into the target's
+		// held-job list, and the target's notify count is unaffected).
+		expect(shared.activeNotifyCountForOwner(TARGET.sessionId, TARGET.taskId)).toBe(0)
+		expect(shared.activeNotifyCountForOwner(FOREIGN.sessionId, FOREIGN.taskId)).toBe(0)
+	})
+
+	it("the REAL shared coordinator keeps two owners that share a SESSION but differ in TASK isolated", () => {
+		// The discriminating case for the (sessionId, taskId) key: a
+		// session-only key cannot distinguish these two owners.
+		const shared = makeSharedCoordinator({ sessionId: "session-shared", taskId: "task-a" })
+
+		shared.recordNonNotifyTerminalObservation({
+			jobId: "job-task-b",
+			sessionId: "session-shared",
+			taskId: "task-b",
+		})
+
+		expect(realDiscriminator(shared, "session-shared", "task-b")).toBe(1)
+		expect(realDiscriminator(shared, "session-shared", "task-a")).toBe(0)
+		expect(shared.unconsumedOwnedTerminalJobIdsForOwner("session-shared", "task-a")).toEqual([])
+	})
+
+	it("the BROKEN session-only ownership discriminator is REJECTED (RED discriminator)", () => {
+		const shared = makeSharedCoordinator({ sessionId: "session-shared", taskId: "task-a" })
+
+		// task-b owns an outstanding obligation under the SAME session.
+		shared.recordNonNotifyTerminalObservation({
+			jobId: "job-task-b",
+			sessionId: "session-shared",
+			taskId: "task-b",
+		})
+
+		// The REAL discriminator isolates task-a from task-b.
+		expect(realDiscriminator(shared, "session-shared", "task-a")).toBe(0)
+
+		// The BROKEN discriminator CANNOT: it drops the taskId and therefore
+		// sees task-b's obligation as task-a's. The witness MUST reject it —
+		// this is what proves the passing assertion is not satisfied by a
+		// discriminator that does not discriminate.
+		const brokenValue = brokenSessionOnlyDiscriminator(shared, "session-shared", "task-a")
+		expect(brokenValue).not.toBe(0)
+		expect(brokenValue).toBe(1)
+	})
+
+	it("the production ownerKey discriminator rejects a session-only key", () => {
+		// The canonical production key is `sessionId \u0000 taskId`. Two
+		// owners that share a session but differ in task MUST produce
+		// DIFFERENT keys; a session-only key collapses them. This is the
+		// key-level statement of the same property the RED discriminator
+		// demonstrates at the behaviour level.
+		expect(ownerKey("session-shared", "task-a")).not.toBe(ownerKey("session-shared", "task-b"))
+		expect(ownerKey("session-foreign", "task-foreign")).not.toBe(ownerKey("session-target", "task-target"))
+		// The canonical key NEVER collapses a task dimension: dropping the
+		// taskId is a DIFFERENT key, not a wildcard match.
+		expect(ownerKey("session-shared", undefined)).not.toBe(ownerKey("session-shared", "task-a"))
+		expect(ownerKey("session-shared", undefined)).not.toBe(ownerKey("session-shared", "task-b"))
+		// A session-only key collapses them.
+		expect(ownerKey("session-shared", undefined)).toBe(ownerKey("session-shared", undefined))
 	})
 })

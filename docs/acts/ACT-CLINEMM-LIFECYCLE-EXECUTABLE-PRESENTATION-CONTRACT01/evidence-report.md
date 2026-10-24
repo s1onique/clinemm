@@ -1,3 +1,255 @@
+# ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01 — Evidence Report
+
+**Target:** the two P0 evidence defects raised in the review of `94086bc19`
+**Verdict:** `PASS_STRUCTURAL_ONLY`
+**ENTRY_HEAD:** `94086bc193b5890600ef52d8b8b7a51403f653fa` (main)
+**Parent:** `fd0bd11ad8cb8ecf7751e7e60d169f9fd86442c0`
+
+## 0. Why this CORR01 exists
+
+The review of `94086bc19` accepted the work but found two **evidence**
+defects — verification paths that could pass without proving the property
+their claim names. Both are repaired here. **No production behaviour
+changed.** The only non-test source touched is the Chart 04 *validator*
+(`lifecycle-transition-contract-verifier.ts`), which is a documentation
+guard, not runtime behaviour.
+
+| # | Finding | Status |
+|---|---|---|
+| P0-1 | P-03 foreign-session isolation was not exercised against shared ownership state | REPAIRED |
+| P0-2 | The new Chart 04 validator repeated the old ID-to-edge false-positive problem | REPAIRED |
+
+Both repairs are RED/GREEN-verified against a mutated source: the witnesses
+FAIL against the defective semantics and PASS against the corrected ones.
+
+## 1. P0-1 — P-03 shared-ownership isolation
+
+### 1.1 The defect
+
+The original P-03 foreign-session witness built TWO INDEPENDENT harnesses:
+
+```ts
+const h = makeHarness()
+const foreign = makeHarness({ activeSessionId: "session-foreign", activeTaskId: "task-foreign" })
+foreign.ownedJobs.push({ jobId: "job-foreign-1", running: true })
+foreign.unconsumed.value = 1
+```
+
+The foreign obligation lived in a **separate fixture** with its own
+separate `ownedJobs` array and its own separate `unconsumed` counter. The
+assertion ("this task's row is still published") was therefore true **by
+construction of the fixture**, not by any property of production
+ownership. Two independently configured fixtures behaving independently is
+not foreign-session isolation.
+
+### 1.2 The repair
+
+The real production ownership authorities are:
+
+- `CommandJobManager.hasRunningBackgroundJobForOwner(ownerSessionId)` —
+  ONE manager instance holds the jobs of MANY sessions.
+- `BackgroundNotifyCoordinator.unconsumedTerminalCountForOwner(sessionId,
+  taskId)` — ONE coordinator instance holds the held obligations of MANY
+  owners, keyed by the canonical `ownerKey(sessionId, taskId)`.
+
+The new witness drives **ONE** `BackgroundNotifyCoordinator` shared by BOTH
+owners. The foreign owner's obligation is registered against the foreign
+`(sessionId, taskId)`; the target owner then queries the same shared
+service. The asserted property is exactly the one P-03 claims:
+
+> an outstanding FOREIGN obligation neither HOLDS nor RELEASES the target
+> owner's completion.
+
+The witness also asserts the negative space — the foreign obligation is
+genuinely outstanding (count 1 for the foreign owner, job id present), so
+the isolation is not a fiction of an empty set.
+
+### 1.3 The RED discriminator
+
+A deliberately BROKEN ownership discriminator — one that keys on
+`sessionId` only and DROPS the `taskId` — is fed to the same witness and
+MUST be rejected. The discriminating case is two owners that share a
+SESSION but differ in TASK: the real discriminator isolates them; the
+broken one cannot.
+
+### 1.4 RED/GREEN against a MUTATED PRODUCTION SOURCE
+
+The production `ownerKey` in
+`apps/vscode/src/sdk/background-notify-coordinator.ts` was mutated to a
+session-only key (`${sessionId}\u0000`, dropping the taskId dimension),
+the suite was re-run, and the production file was restored byte-for-byte.
+
+| phase | result |
+|---|---|
+| RED (mutated `ownerKey`) | **2 failed** — "the REAL shared coordinator keeps two owners that share a SESSION but differ in TASK isolated"; "the BROKEN session-only ownership discriminator is REJECTED (RED discriminator)" |
+| GREEN (restored) | **41 passed** (41) |
+
+The production file was restored to an EMPTY git diff before continuing.
+
+### 1.5 The original test is retained, but relabelled
+
+The original isolated-fixture test is **retained** as a fixture-independence
+check, with a docblock stating explicitly that it is NOT the
+foreign-session isolation evidence and pointing at the shared-ownership
+block. It is no longer the sole support for the claim.
+
+## 2. P0-2 — Chart 04 ID-to-edge association
+
+### 2.1 The defect
+
+`verifyChart04CompletionPresentation` grouped Mermaid edges by claim id and
+checked that each expected id occurred **exactly once**. It never checked
+that the id labelled the correct source and target states. Swapping the
+labels of two edges — while preserving both edges and both ids — satisfied
+every check:
+
+```
+[*] --> PartialRowPublished                  : P-01 content_start ...
+PartialRowPublished --> FinalRowPublished     : P-02 content_end ...
+```
+
+becomes
+
+```
+[*] --> PartialRowPublished                  : P-02 content_start ...
+PartialRowPublished --> FinalRowPublished     : P-01 content_end ...
+```
+
+This is the same false-positive class the MUT-03 correction (commit
+`38cb209ff`) closed for the c9-c10 traceability diagram: an independent
+substring-presence check accepts a swapped id-to-edge association.
+
+### 2.2 The repair
+
+The association is now checked as an **ASSOCIATION**, reusing the strict
+approach already established for the c9-c10 diagram, with Chart 04's
+verified edge mappings:
+
+| ID | Expected Mermaid edge |
+|---|---|
+| P-01 | `[*] → PartialRowPublished` |
+| P-02 | `PartialRowPublished → FinalRowPublished` |
+| P-03 | `FinalRowPublished → RowFilteredOut` |
+| P-06 | `C10Committed → BadgeShown` |
+
+The table lives in `CHART_04_EXPECTED_EDGES`
+(`apps/vscode/src/sdk/lifecycle-transition-contract-verifier.ts`) and is
+wired into both the validator script and the witness suite. A witness
+asserts the table actually describes the shipping document, so it cannot
+drift into describing a diagram that does not exist.
+
+### 2.3 The swapped-label witness
+
+`MUT-05` mutates two DISTINCT edges **BY THEIR ENDPOINTS** (never by an
+already-mutated id — locating the second edge by a mutated id is exactly
+the MUT-03 defect). It then asserts:
+
+- the mutation itself: both ids survive exactly once, each attached to the
+  other's edge;
+- the validator reports an association mismatch for **BOTH** ids;
+- **NO** error reports an id as "absent from the Chart 04 Mermaid
+  projection" and **NO** error reports "expected exactly one" — so the
+  rejection cannot come from a missing label or a cardinality change.
+
+`MUT-06` covers the non-swapped case (a claim id moved onto an unrelated
+edge) with the same independence assertions.
+
+### 2.4 RED/GREEN against a MUTATED VALIDATOR
+
+The association check inside `verifyChart04CompletionPresentation` was
+neutralized (simulating the pre-correction cardinality-only semantics) and
+the suite was re-run.
+
+| phase | result |
+|---|---|
+| RED (association check neutralized) | **2 failed** — "MUT-05: SWAPPED claim labels on existing edges are REJECTED (both associations)"; "MUT-06: a claim id attached to a WRONG (non-swapped) edge is REJECTED" |
+| GREEN (restored) | **41 passed** (41) |
+
+A dedicated in-suite control (`MUT-05 (RED control)`) additionally
+reimplements the pre-correction cardinality-only semantics faithfully and
+asserts that they produce **ZERO** errors on the swapped-label mutation —
+which is the direct proof that the pre-correction guard proved nothing.
+
+### 2.5 The claim taxonomy is unchanged
+
+**P-03 remains classified as `GUARD`.** Its diagram edge represents the
+OUTCOME of that guard (the row is filtered out), not a claim
+reclassification. A dedicated witness asserts `P-03.kind === "GUARD"` and
+that its edge is legitimate and present. The taxonomy was NOT bent to
+satisfy the validator.
+
+## 3. Evidence binding — 7/7 retained
+
+All seven claims genuinely retain executable evidence. The coverage
+generator (`bun scripts/verify-completion-presentation-contract.ts`) RUNS
+the witness suite and derives every `result` from the observed outcome:
+
+```
+- eligible claims: **7**
+- eligible claims with executable evidence (PASS): **7**
+- eligible claims that FAILED: **0**
+- eligible claims with an explicit gap: **0**
+witness suite exit code: 0; eligible claims: 7; executable (PASS): 7; failed: 0; gaps: 0
+PASS completion-presentation-contract: all seven claims have executable, executed evidence.
+```
+
+## 4. Gates
+
+| gate | command | result |
+|---|---|---|
+| Witness suite (H01 + CORR01) | `bun x vitest run src/sdk/__tests__/completion-presentation-contract01.cpc01.test.ts` | **41 passed (41)** |
+| Related suites | `bun x vitest run ...cpa01.test.ts ...correction01.test.ts ...cpc01.test.ts` | **3 files, 64 passed (64)** |
+| Coverage generator | `bun scripts/verify-completion-presentation-contract.ts` | **PASS, 7/7** |
+| Contract validator | `bun scripts/verify-lifecycle-transition-contract.ts` | **PASS (exit 0)** — 4 transitions synchronized; Chart 04 block association-verified |
+| Mermaid guard | `bun scripts/verify-chart04-mermaid-parse.ts docs/architecture/task-lifecycle/04-completion-presentation.md` | **PASS (exit 0)** — real Mermaid parser |
+| TypeScript | `bun run check-types` / `bun x tsc --noEmit` | **PASS (exit 0, 0 diagnostics)** |
+| Lint | `bun x biome check --config-path ./biome.jsonc <changed files>` | **PASS** |
+
+The witness suite grew from **31** to **41** tests (10 added: 6 Chart 04
+association + 4 P-03 shared ownership).
+
+## 5. Regression delta
+
+**ZERO regressions.** The `src/sdk` scope was run at the pristine baseline
+and with this change. The baseline is **self-inconsistent** across runs
+(run 1: 81 failures; run 2: 52 failures — the same code), because the
+sandbox cannot spawn child processes (`spawn_failed` / `EPERM`), which
+makes the process-spawning suites flaky and aborts the vitest run at a
+different point each time.
+
+Comparing the failure-name sets with the two crash-inducing files excluded:
+
+- **"only in with-change" is EMPTY** — this change introduces **zero** new
+  failures.
+- "only in baseline" lists 27 tests that failed at baseline and passed with
+  the change; these are the flaky spawn-dependent tests, not fixes — this
+  change touches no runtime behaviour.
+
+The two crash-inducing files in isolation are **identical** at baseline and
+with the change (20 failures each, differing only in timing digits), all
+of them `spawn_failed` / `EPERM` environment failures.
+
+## 6. Preservation
+
+No production behaviour changed. No completion-authorization policy,
+lifecycle state ownership, Elm policy, wire protocol or public API changed.
+No new Elm authority, no lifecycle-policy refactoring, no generic tracing
+architecture. No worktrees. No dependency or framework additions. The
+lifecycle transition trace observer remains DEFAULT_OFF and bounded.
+
+The only non-test source change is the Chart 04 **validator** — a
+documentation-synchronization guard, not runtime behaviour — plus the
+`expectedEdges` option threaded into it.
+
+## 7. Verdict
+
+`PASS_STRUCTURAL_ONLY` — no live installed-extension capture was taken or
+claimed. The two P0 evidence defects are closed with RED/GREEN-verified
+witnesses against mutated sources, and all seven Chart 04 claims retain
+executable, executed evidence.
+
+---
+
 # ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01 — Evidence Report
 
 **Target:** Chart 04 — Completion Presentation

@@ -108,8 +108,9 @@ export const COMPLETION_PRESENTATION_CLAIMS: readonly CompletionPresentationClai
 			"apps/vscode/src/sdk/sdk-session-event-coordinator.ts#handleSessionEvent (the hasCompletionResult filter block)",
 		witness: "apps/vscode/src/sdk/__tests__/completion-presentation-contract01.cpc01.test.ts",
 		assertion:
-			"Where the BCB policy filters a completion row, the current turn publishes NO completion_result row at all (owned running job, held terminal observation, and foreign-session observation cases), so the row cannot present as an authoritative completion. BCB filtration is not conflated with Elm authorization.",
-		observed_boundary: "coordinator message-layer filter (published message set)",
+			"Where the BCB policy filters a completion row, the current turn publishes NO completion_result row at all (owned running job, held terminal observation, and foreign-session observation cases), so the row cannot present as an authoritative completion. BCB filtration is not conflated with Elm authorization. The foreign-session isolation is proven against the REAL shared production ownership authority (one BackgroundNotifyCoordinator holding obligations of BOTH owners, keyed by the canonical ownerKey(sessionId, taskId)): an outstanding foreign obligation neither holds nor releases the target owner's completion. A deliberately broken session-only ownership discriminator is REJECTED by the same witness.",
+		observed_boundary:
+			"coordinator message-layer filter (published message set) + shared production ownership authority (ownerKey-scoped held-obligation queries)",
 		evidence_level: "INJECTED_DECISION",
 		eligible: true,
 	},

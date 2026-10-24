@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+	CHART_04_EXPECTED_EDGES,
 	CHART_04_NON_TRANSITION_CLAIM_IDS,
 	CHART_04_TRANSITION_CLAIM_IDS,
 	verifyChart04CompletionPresentation,
@@ -74,6 +75,9 @@ const chart04 = verifyChart04CompletionPresentation({
 	markdown: chart04Markdown,
 	transitionClaimIds: CHART_04_TRANSITION_CLAIM_IDS,
 	nonTransitionClaimIds: CHART_04_NON_TRANSITION_CLAIM_IDS,
+	// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01:
+	// the claim id must label the CORRECT edge, not merely SOME edge.
+	expectedEdges: CHART_04_EXPECTED_EDGES,
 });
 if (chart04.errors.length > 0) {
 	console.error(chart04.errors.join("\n"));

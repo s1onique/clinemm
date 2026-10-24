@@ -1,3 +1,35 @@
+# ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01 — PASS_STRUCTURAL_ONLY — 2026-10-24
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (bounded repair of two P0 evidence defects; no production behaviour changed).
+
+**ENTRY_HEAD:** `94086bc19` (main).
+
+**Why this ACT exists:** the review of `94086bc19` accepted the Chart 04 executable-conformance work but found two **evidence** defects — verification paths that could pass WITHOUT proving the property their claim names. Both are repaired here with RED/GREEN-verified witnesses against mutated sources. No production behaviour changed; the only non-test source touched is the Chart 04 **validator** (a documentation guard, not runtime behaviour).
+
+**P0-1 — P-03 foreign-session isolation was NOT exercised against shared ownership state.** The original witness built TWO INDEPENDENT harnesses with separate `ownedJobs` arrays and separate `unconsumed` counters, so the assertion was true BY CONSTRUCTION of the fixture rather than by any property of production ownership. The repair drives ONE shared production `BackgroundNotifyCoordinator` (the real authority, keyed by the canonical `ownerKey(sessionId, taskId)`) holding obligations of BOTH owners, and asserts the property P-03 actually claims: an outstanding FOREIGN obligation neither HOLDS nor RELEASES the target owner's completion. A deliberately BROKEN session-only ownership discriminator is REJECTED by the same witness. **RED/GREEN:** mutating the production `ownerKey` to a session-only key → **2 failed**; restored byte-for-byte → **41 passed**. The original isolated-fixture test is RETAINED but relabelled as a fixture-independence check that is explicitly NOT the isolation evidence.
+
+**P0-2 — the new Chart 04 validator repeated the old ID-to-edge false-positive problem.** `verifyChart04CompletionPresentation` checked label CARDINALITY only, so swapping two labels kept every id present exactly once while inverting the meaning of both transitions — the same class the MUT-03 correction (`38cb209ff`) closed for the c9-c10 diagram. The repair reuses the strict ASSOCIATION approach with Chart 04's verified edge mappings (`CHART_04_EXPECTED_EDGES`): P-01 `[*] → PartialRowPublished`, P-02 `PartialRowPublished → FinalRowPublished`, P-03 `FinalRowPublished → RowFilteredOut`, P-06 `C10Committed → BadgeShown`. `MUT-05` mutates two DISTINCT edges BY THEIR ENDPOINTS (never by an already-mutated id) and asserts BOTH associations are rejected with NO "absent"/"expected exactly one" error; `MUT-06` covers the non-swapped case; an in-suite RED control reimplements the pre-correction semantics faithfully and asserts they accept the swap (ZERO errors) — the direct proof the old guard proved nothing. **RED/GREEN:** neutralizing the association check → **2 failed**; restored → **41 passed**.
+
+**The claim taxonomy is NOT bent to satisfy the validator.** P-03 remains classified as `GUARD`; its diagram edge represents the OUTCOME of that guard. A dedicated witness asserts `P-03.kind === "GUARD"` and that its edge is legitimate and present.
+
+**Evidence binding — 7/7 retained.** All seven claims genuinely retain executable evidence: **eligible claims 7 / executable (PASS) 7 / failed 0 / gaps 0**; `witness suite exit code: 0`; `PASS completion-presentation-contract: all seven claims have executable, executed evidence.`
+
+**Gates.** Witness suite **41 passed (41)** (31 → 41; 10 added: 6 Chart 04 association + 4 P-03 shared ownership). Related suites **3 files, 64 passed (64)**. Coverage generator **PASS (7/7)**. Contract validator **PASS (exit 0)**. Mermaid guard **PASS (exit 0)**. TypeScript **PASS (exit 0, 0 diagnostics)**. Biome lint **PASS**.
+
+**REGRESSION DELTA: ZERO.** The `src/sdk` scope was compared against the pristine baseline with the failure-name sets diffed. The baseline is SELF-INCONSISTENT across runs (81 failures then 52 failures on the SAME code) because this environment cannot spawn child processes (`spawn_failed` / `EPERM`), which makes the process-spawning suites flaky and aborts vitest at a different point each time. With the two crash-inducing files excluded, **"only in with-change" is EMPTY** — zero new failures. Those two files in isolation are identical at baseline and with the change (20 failures each, differing only in timing digits), all `spawn_failed` / `EPERM` environment failures.
+
+**PRESERVATION.** No production behaviour changed. No completion-authorization policy, lifecycle state ownership, Elm policy, wire protocol or public API changed. No new Elm authority, no lifecycle-policy refactoring, no generic tracing architecture. The lifecycle transition trace observer remains DEFAULT_OFF and bounded. No worktrees. No dependency or framework additions. No live installed-extension capture was taken or claimed.
+
+**Verdict:** `PASS_STRUCTURAL_ONLY` — the two P0 evidence defects are closed with RED/GREEN-verified witnesses against mutated sources, and all seven Chart 04 claims retain executable, executed evidence.
+
+**Evidence:**
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/evidence-report.md` — the full evidence report (CORR01 section at the top).
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/coverage-report.tsv` / `.md` — the regenerated seven-row coverage report.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/assertion-inventory.tsv` — the source-bound assertion inventory.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/artifact-manifest.tsv` — the refreshed artifact manifest (SHA-256 + byte counts).
+- `.factory/evidence/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/02-corr01-evidence-repair.md` — the CORR01 evidence note.
+
+---
 # ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01 — PASS_STRUCTURAL_ONLY — 2026-10-24
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (executable conformance contract for Chart 04; no production code changed).

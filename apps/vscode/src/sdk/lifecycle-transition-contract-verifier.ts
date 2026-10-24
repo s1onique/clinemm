@@ -192,6 +192,16 @@ export function verifyLifecycleTransitionContract(options: {
  *      stamped at the `content_end` publication seam (the historical
  *      defect).
  *
+ * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01 adds:
+ *
+ *   4. Every Chart 04 TRANSITION claim labels the CORRECT edge: the labeled
+ *      edge's source/target must equal the VERIFIED endpoints in
+ *      `CHART_04_EXPECTED_EDGES`. Cardinality alone is insufficient — a
+ *      SWAPPED pair of labels keeps every id present exactly once while
+ *      inverting the meaning of both transitions. This is the same
+ *      false-positive class that the MUT-03 correction closed for the
+ *      c9-c10 traceability diagram.
+ *
  * This is a DOCUMENTATION-SYNCHRONIZATION guard. It never asserts
  * behaviour: the behaviour is proven by the executable witness suite.
  */
@@ -201,6 +211,28 @@ export const CHART_04_TRANSITION_CLAIM_IDS: readonly string[] = ["P-01", "P-02",
 
 /** The Chart 04 claims that are NOT transitions and therefore carry NO Mermaid edge. */
 export const CHART_04_NON_TRANSITION_CLAIM_IDS: readonly string[] = ["P-04", "P-05", "P-07"]
+
+/**
+ * The VERIFIED claim-id -> Mermaid-edge association for Chart 04.
+ *
+ * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01: the
+ * cardinality-only check ("each transition claim id appears on exactly one
+ * labeled edge") is INSUFFICIENT. Swapping the LABELS of two edges keeps
+ * every id present exactly once while inverting the meaning of both
+ * transitions — the same false-positive class that the MUT-03 correction
+ * closed for the c9-c10 traceability diagram.
+ *
+ * The association must therefore be checked as an ASSOCIATION between
+ * (claim id -> labeled edge) and (claim id -> expected edge endpoints),
+ * exactly like `verifyLifecycleTransitionContract` does for the c9-c10
+ * diagram. The endpoints below are the VERIFIED Chart 04 edge mappings.
+ */
+export const CHART_04_EXPECTED_EDGES: Readonly<Record<string, { readonly source: string; readonly target: string }>> = {
+	"P-01": { source: "[*]", target: "PartialRowPublished" },
+	"P-02": { source: "PartialRowPublished", target: "FinalRowPublished" },
+	"P-03": { source: "FinalRowPublished", target: "RowFilteredOut" },
+	"P-06": { source: "C10Committed", target: "BadgeShown" },
+}
 
 /**
  * Extract the mermaid fence(s) from a Markdown document.
@@ -237,8 +269,18 @@ export function verifyChart04CompletionPresentation(options: {
 	readonly markdown: string
 	readonly transitionClaimIds: readonly string[]
 	readonly nonTransitionClaimIds: readonly string[]
+	/**
+	 * The VERIFIED claim-id -> expected-edge-endpoints association.
+	 *
+	 * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01: when
+	 * supplied, each transition claim's labeled edge must have EXACTLY these
+	 * endpoints. This closes the cardinality-only false positive: a swapped
+	 * label (both ids present exactly once, each on the other's edge) is
+	 * REJECTED as an association mismatch.
+	 */
+	readonly expectedEdges?: Readonly<Record<string, { readonly source: string; readonly target: string }>>
 }): { readonly errors: string[]; readonly mermaidBlockCount: number } {
-	const { markdown, transitionClaimIds, nonTransitionClaimIds } = options
+	const { markdown, transitionClaimIds, nonTransitionClaimIds, expectedEdges } = options
 	const errors: string[] = []
 	const blocks = extractMermaidBlocks(markdown)
 	if (blocks.length === 0) {
@@ -264,6 +306,17 @@ export function verifyChart04CompletionPresentation(options: {
 		}
 		if (labeled.length > 1) {
 			errors.push(`${claimId}: appears on ${labeled.length} Chart 04 Mermaid edges; expected exactly one`)
+			continue
+		}
+		// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01:
+		// the id must label the CORRECT edge, not merely SOME edge.
+		const expected = expectedEdges?.[claimId]
+		if (!expected) continue
+		const edge = labeled[0]
+		if (edge.source !== expected.source || edge.target !== expected.target) {
+			errors.push(
+				`${claimId}: Mermaid edge is ${edge.source} --> ${edge.target}, but Chart 04 requires ${expected.source} --> ${expected.target}`,
+			)
 		}
 	}
 	for (const claimId of nonTransitionClaimIds) {
