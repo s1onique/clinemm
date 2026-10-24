@@ -28699,3 +28699,127 @@ extension.
    transition, the "Resume Task" affordance, and the clean-terminal handoff.
 2. The ORIGINAL ABORT stays open and separate — arm a stop-reason capture on the
    SDK `done` dispatch path to identify the actor and reason.
+
+## ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01 (2026-10-24) — HALT_P0_REPRODUCED (incident: CAPTURE_INSUFFICIENT)
+
+**Verdict: `HALT_P0_REPRODUCED`.** A real safety-contract gap is reproduced at the
+C10 completion-commit barrier, and the leading hypothesis for the named incident is
+DISPROVED by the capture. No production repair is made in this ACT; one successor
+repair ACT is specified. The incident's own containment event and final C10 decision
+are `UNAVAILABLE_FROM_TRACE`, so the incident is closed `CAPTURE_INSUFFICIENT`.
+
+**ENTRY_HEAD verified locally:** `e915c785bd1dcdbbed87a3cc1215e589422709a6`
+(matches the ACT's stated source baseline).
+
+### The incident (identity-bound)
+
+    TASK_ID = SESSION_ID = 1792850126157_b9u7x   EPOCH = 6
+    JOB_ID  = cmd_mvmh3u69j62aclho                MANAGER = M2
+
+### The three conditions, kept separate
+
+| Condition | Incident answer |
+|---|---|
+| Manager retention | a `job_status_lookup` MISS at 1792854767771 — the ONLY record for this jobId in the 256-record liveness ring |
+| Observation consumption | **NOT consumed** — both BCB captures (1792854752430, 1792854831983) report `unconsumedOwnedTerminalResultsForC10: 1`, `ownedTerminalJobIdsForC10: ["cmd_mvmh3u69j62aclho"]` |
+| Containment safety | **UNAVAILABLE_FROM_TRACE** — no `command_job_primary_group_cleanup` / `command_job_containment_failed` / `job_active_removed` record exists for this jobId |
+| C10 authorized | **NO** — `submit_and_exit_seen = 2`, `task_completion_committed = 0`; no `session-event-turn-complete-completed` write in the turn-state provenance; final phase `streaming` |
+
+### The reproduced gap
+
+The C10 completion-commit barrier
+(`apps/vscode/src/sdk/sdk-session-event-coordinator.ts` L3494-3525, and
+`reevaluateDeferredCompletionBarrier` L1736-1805) consults FOUR conjuncts —
+`outstandingAutonomousWork`, `ownerStillRunningForC10`, `heldObligationForC10`,
+`suppressOriginatingCompletion` — and NONE consults the per-job containment
+classification. `ownerStillRunningForC10` is an ACTIVE-MAP CARDINALITY question, and
+`CommandJobManager.finalize()` removes the job from the active map on BOTH the clean
+path AND the containment-failure path (`command-job-manager.ts:2636`).
+
+    C10_AUTHORIZED  ==  OBSERVATION_DISAPPEARED
+    C10_AUTHORIZED  !=  CONTAINMENT_PROVEN_GONE
+
+The sibling **Q5** path (`reevaluateDeferredContinuation` L1087-1139) DOES consult the
+same fact and DOES fail closed — its own docstring states that the `>0 -> 0` cardinal
+transition "does NOT prove that the process group was reaped". The data is already
+wired (`SdkController.ts:2664` / `:2683`); the C10 path simply never asks. The Elm
+completion-authority kernel has NO containment axis at all
+(`apps/vscode/elm/completion-authority/src/Authority.elm` L520-597). This is an
+**unintended omission**, not a deliberately different contract.
+
+### The causal discriminator (ablation, not chronology)
+
+| # | postcondition | observation consumed | retained class | BCB count | C10 commits |
+|---|---|---|---|---|---|
+| 1 | `alive` (FAILED) | no | `containment_failed` | 1 | **0** |
+| 2 | `alive` (FAILED) | **yes** | `containment_failed` | 0 | **1** |
+| 3 | `gone` (PROVEN) | no | `cancelled` | 1 | **0** |
+| 4 | `gone` (PROVEN) | **yes** | `cancelled` | 0 | **1** |
+
+Rows 1->2 and 3->4 differ ONLY in observation consumption and the C10 outcome flips in
+BOTH. Rows 2 and 4 have IDENTICAL C10 outcomes despite DIFFERENT containment truth.
+The receipt's PRESENCE does not move the outcome — only the DRAIN does.
+
+### Two structural facts that constrain any repair
+
+1. The compact-receipt channel is `gone`-gated: `recordTerminalReceiptFromLifecycle`
+   ignores anything but `command_job_terminal_committed`
+   (`background-notify-coordinator.ts:3548`), and the manager emits that event only on
+   the `postcondition === "gone"` path (`command-job-manager.ts:2677`). A
+   containment-failed job can NEVER leave a compact receipt.
+2. The C1 `terminal_committed` cardinality capture is likewise `gone`-gated, so the Elm
+   kernel never receives a terminal fact for a containment-failed job.
+
+### Executable evidence
+
+- `apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts`
+  — NEW, 984 lines, **18/18 PASS**, sha256
+  `be58d6fd72ca97eab7c000592a81b93a63d78e1e1a2404a417eb45a997c3e5b8`
+  (RED-01 unknown-is-not-clean, RED-02 observation-vs-containment, RED-03 C10
+  authority discriminator + clean control + Elm control, RED-04 foreign owner + stale
+  epoch, RED-05 receipt-channel gating, RED-06 causal ablation matrix)
+- Evidence class: **SYNTHETIC_REAL** (real manager / BCB / coordinator / status-tool
+  seams; only the supervisor and the manager's documented `terminalPostconditionProbe`
+  are injected). NO live process-group claim.
+- `.factory/evidence/ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01/`
+  (`00-entry.txt`, `01-ownership-map.md`, `02-chronology.md`, `03-red-results.md`,
+  `04-discriminator-matrix.md`, `05-evidence-report.md`, `06-verdict.md`,
+  `result.json`)
+- Typecheck: `bun x tsc --noEmit -p tsconfig.json` exit 0. Lint: biome clean.
+  **PRODUCTION CODE CHANGED: NONE.**
+
+### Pre-existing baseline failures (NOT caused by this ACT)
+
+At PRISTINE ENTRY_HEAD (the new suite stashed away), `bcb01 / bcb01-c / bcb01-c2 /
+bcb01-c3 / bcb01-c4 / pcca01` are **30 failed | 12 passed (6/6 files failed)**. Cause:
+`getElmCompletionAuthorityDecision` became a REQUIRED option
+(`sdk-session-event-coordinator.ts:633`) under
+ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY; those
+harnesses do not inject it, so the call throws inside `checkElmCompletionAuthority`'s
+try/catch and fails closed. Suites that DO inject it are green. This is orthogonal to
+the containment question and is recorded so it is not mis-attributed.
+
+### Successor ACT (bounded repair contract)
+
+`ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01` — add ONE owner-scoped
+fail-closed containment conjunct to the C10 barrier predicate in BOTH the
+`handleSessionEvent` barrier block and `reevaluateDeferredCompletionBarrier`,
+reusing the already-wired `getBackgroundCommandJobStates` /
+`getBackgroundCommandJobOwners`, and factor the Q5 computation (L1087-1132) into ONE
+shared private helper so the two paths cannot drift again. Non-goals: no Elm kernel
+change and no new Elm authority; no React updater semantics change; no change to the
+completion-continuation machinery; no change to the `gone`-gating of the receipt
+channel; no descendant-safety claim. Required controls: clean-terminal conservation,
+foreign-owner conservation, unknown-owner fail-closed, the Elm boundary preserved,
+the RED-03-B witness flipping from `c10_commits = 1` to `0`, and BCB re-evaluation
+parity.
+
+### Next cursor
+
+1. Run the successor repair ACT above.
+2. Repair (or explicitly baseline) the pre-existing BCB/PPCA harness RED
+   (`getElmCompletionAuthorityDecision` not injected) before any conservation claim
+   that relies on those suites.
+3. Re-adjudicate the incident only after the minimal next capture: a per-job
+   lifecycle-event record for `cmd_mvmh3u69j62aclho` (the 256-record liveness ring had
+   already rolled past that job's finalization) plus a per-session Elm decision trace.

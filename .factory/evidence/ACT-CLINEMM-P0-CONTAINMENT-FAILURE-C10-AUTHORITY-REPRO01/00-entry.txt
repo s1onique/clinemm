@@ -1,0 +1,27 @@
+ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01
+=========================================================
+
+ENTRY HEAD (verified locally, matches the ACT's stated source baseline):
+  e915c785bd1dcdbbed87a3cc1215e589422709a6
+  ("feat(clinemm): ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01 ...")
+
+PRODUCTION CODE CHANGED: NONE.
+  The only repository change is the NEW characterization/RED suite:
+    apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts
+    sha256 = be58d6fd72ca97eab7c000592a81b93a63d78e1e1a2404a417eb45a997c3e5b8
+    (984 lines, 18 tests)
+
+VERDICT: HALT_P0_REPRODUCED — a safety-contract gap IS reproduced at the
+C10 completion-commit barrier, BUT the SPECIFIC INCIDENT is
+CAPTURE_INSUFFICIENT on the containment side. See 06-verdict.md.
+
+EVIDENCE CLASSIFICATION: SYNTHETIC_REAL (structured reproduction against the
+REAL production manager / BCB / coordinator / status-tool seams, with the
+terminal-postcondition probe and the supervisor injected). NO live
+process-group claim is made. The known EPERM-constrained sandbox was used
+for controlled structural reproduction only, per the ACT's §7 instruction.
+
+TOOLING NOTE: `bunx` is not executable in this environment
+(`Permission denied`). Use `bun x <bin>` (equivalently
+`PATH="$HOME/.bun/bin:$PATH"` plus `bun x ...`). `bun` itself is at
+~/.bun/bin/bun (v1.3.13) and is NOT on the default PATH.

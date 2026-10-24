@@ -1,0 +1,97 @@
+{
+  "act": "ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01",
+  "verdict": "HALT_P0_REPRODUCED",
+  "incident_verdict": "CAPTURE_INSUFFICIENT",
+  "entry_head": "e915c785bd1dcdbbed87a3cc1215e589422709a6",
+  "entry_head_verified_locally": true,
+  "production_code_changed": false,
+  "new_test_file": "apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts",
+  "new_test_file_sha256": "be58d6fd72ca97eab7c000592a81b93a63d78e1e1a2404a417eb45a997c3e5b8",
+  "new_test_file_lines": 984,
+  "new_test_file_tests": 18,
+  "evidence_class": "SYNTHETIC_REAL",
+  "live_process_group_claim": false,
+
+  "incident_identity": {
+    "session_id": "1792850126157_b9u7x",
+    "task_id": "1792850126157_b9u7x",
+    "epoch": 6,
+    "job_id": "cmd_mvmh3u69j62aclho",
+    "manager_instance": "M2"
+  },
+
+  "incident_boundary_answers": {
+    "process_group_proven_gone": "UNAVAILABLE_FROM_TRACE",
+    "process_group_proven_not_gone": "UNAVAILABLE_FROM_TRACE",
+    "terminal_observation_consumed": false,
+    "bcb_unconsumed_count_before": 1,
+    "bcb_unconsumed_count_after": 1,
+    "c10_authorized": false,
+    "c9_attempts": 2,
+    "c10_commits": 0,
+    "authoritative_row_promoted": false,
+    "webview_received_completed_phase": false,
+    "final_legacy_phase": "streaming"
+  },
+
+  "root_cause_reproduced": "The C10 completion-commit barrier (sdk-session-event-coordinator.ts L3494-3525 and L1736-1805) consults four conjuncts (outstandingAutonomousWork, ownerStillRunningForC10, heldObligationForC10, suppressOriginatingCompletion) and NONE consults the per-job containment classification. C10 authorization therefore depends on OBSERVATION DISAPPEARANCE, not on proven containment (postcondition === 'gone'). The sibling Q5 path (reevaluateDeferredContinuation, L1087-1139) DOES consult it and fails closed. The Elm completion-authority kernel has no containment axis at all (Authority.elm L520-597). The data is already wired (SdkController.ts L2664 / L2683) and simply never asked for on the C10 path.",
+  "leading_hypothesis_disproved_for_incident": "The hypothesis 'the terminal observation was consumed and the C10 was authorized over an unresolved containment failure' did NOT occur in this incident: the observation was never consumed (both BCB captures report unconsumedOwnedTerminalResultsForC10 = 1 for the same jobId) and the C10 never committed (submit_and_exit_seen = 2, task_completion_committed = 0; no session-event-turn-complete-completed write in the turn-state provenance). The incident is a HOLD-shaped stall (lastStopReason = stalled_no_progress), not an over-commit.",
+
+  "ablation_matrix": [
+    {"row": 1, "postcondition": "alive", "consumed": false, "receipt": false, "class": "containment_failed", "bcb_count": 1, "c10_commits": 0},
+    {"row": 2, "postcondition": "alive", "consumed": true,  "receipt": false, "class": "containment_failed", "bcb_count": 0, "c10_commits": 1},
+    {"row": 3, "postcondition": "gone",  "consumed": false, "receipt": false, "class": "cancelled",         "bcb_count": 1, "c10_commits": 0},
+    {"row": 4, "postcondition": "gone",  "consumed": true,  "receipt": false, "class": "cancelled",         "bcb_count": 0, "c10_commits": 1}
+  ],
+  "ablation_conclusion": "Rows 1->2 and 3->4 differ ONLY in observation consumption and the C10 outcome flips in both. Rows 2 and 4 have identical C10 outcomes despite different containment truth. C10 authorization depends on observation disappearance, NOT on proven containment. This is an ablation, not a chronological association.",
+
+  "additional_structural_facts": [
+    "The compact-receipt channel is 'gone'-gated: recordTerminalReceiptFromLifecycle (background-notify-coordinator.ts L3548) ignores anything but 'command_job_terminal_committed', and the manager emits that only on the postcondition === 'gone' path (command-job-manager.ts L2677). A containment-failed job can NEVER leave a compact receipt.",
+    "The C1 'terminal_committed' cardinality capture is likewise 'gone'-gated, so the Elm kernel never receives a terminal_committed fact for a containment-failed job.",
+    "The BCB drain (consumeNonNotifyTerminalObservation, L2004-2050) validates the owner triple and carries NO containment judgement; a foreign owner can read the terminal fact but cannot drain the obligation."
+  ],
+
+  "ui_truth_surface": {
+    "per_job_pill": "CommandStatusMap.containment_failed === 'Run failed' (webview-ui/src/components/chat/CommandOutputRow.tsx L364) — truthful",
+    "header_label": "stateLabel('completed') -> 'Complete' (webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts L174-175) — derived from the TASK phase, asserts no process-safety claim",
+    "no_overclaim_found": true
+  },
+
+  "gates": {
+    "real_production_seam_red": "PASS — 18/18 in the new suite against the real manager / BCB / coordinator / status-tool seams",
+    "causal_discriminator_plus_clean_control": "PASS — RED-06 rows 1-4 with the 'gone' clean control (RED-03-C)",
+    "foreign_owner_isolation": "PASS — RED-04-A/B/C",
+    "no_synthetic_to_live_promotion": "PASS — every case classified SYNTHETIC_REAL; no live process-group claim",
+    "no_additional_elm_authority": "PASS — the Elm kernel is untouched; no new Elm input or hold reason",
+    "no_react_updater_semantics_change": "PASS — no webview file touched",
+    "existing_focused_tests_pass": "PARTIAL — the BCB/PPCA conservation suites are ALREADY RED at pristine ENTRY_HEAD (30 failed | 12 passed) due to a harness defect (the now-required getElmCompletionAuthorityDecision is not injected). NOT caused by this ACT; no production code was changed. Suites that inject the Elm decision are green.",
+    "typecheck": "PASS — bun x tsc --noEmit -p tsconfig.json exit 0",
+    "lint": "PASS — bun x biome check on the new file: clean",
+    "exact_source_and_artifact_identity_recorded": "PASS — see 00-entry.txt"
+  },
+
+  "successor_act": {
+    "act": "ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01",
+    "target_seam": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts — add ONE owner-scoped fail-closed containment conjunct to the C10 barrier predicate in BOTH the handleSessionEvent barrier block (L3494-3525) and reevaluateDeferredCompletionBarrier (L1736-1805), reusing the already-wired getBackgroundCommandJobStates / getBackgroundCommandJobOwners; factor the Q5 computation (L1087-1132) into one shared private helper so the paths cannot drift",
+    "non_goals": [
+      "no Elm kernel change and no new Elm authority",
+      "no React updater semantics change",
+      "no change to the completion-continuation machinery",
+      "no change to the 'gone'-gating of the receipt channel",
+      "no descendant-safety claim (containment stays scoped to the owned primary PGID)"
+    ],
+    "required_controls": [
+      "clean-terminal conservation (RED-03-C stays green)",
+      "foreign-owner conservation (RED-04-A stays green)",
+      "unknown-owner fail-closed (Q5 rule)",
+      "Elm boundary preserved (RED-03-D stays green)",
+      "RED-03-B flips from c10_commits = 1 to c10_commits = 0",
+      "BCB re-evaluation parity (same conjunct in both paths)"
+    ]
+  },
+
+  "unresolved_obligations": [
+    "CAPTURE_INSUFFICIENT on the incident: missing records are (1) command_job_primary_group_cleanup / command_job_residual_detected / command_job_containment_failed for cmd_mvmh3u69j62aclho, (2) the command_job_terminal_committed / command_job_containment_failed lifecycle event for that jobId, (3) a per-session Elm decision record. Minimal next capture: a per-job lifecycle-event capture (the 256-record liveness ring had already rolled past this job's finalization) plus a per-session Elm decision trace.",
+    "The pre-existing baseline RED in bcb01 / bcb01-c / bcb01-c2 / bcb01-c3 / bcb01-c4 / pcca01 (harness does not inject the required getElmCompletionAuthorityDecision) must be repaired or explicitly baselined before any conservation claim relying on those suites."
+  ]
+}
