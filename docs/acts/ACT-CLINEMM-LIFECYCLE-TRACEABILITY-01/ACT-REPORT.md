@@ -2,6 +2,94 @@
 
 **Verdict:** `PASS_STRUCTURAL_ONLY`
 
+## CORRECTION01 — bounded traceability-proof correction
+
+A review of `cbf7c6a3` returned `HALT_TRACEABILITY_PROOF_FALSE_POSITIVES`: the
+implementation was directionally sound, but the two VERIFICATION MACHINERY
+components could report PASS without proving the intended contract. This
+section records the bounded correction. No architecture, Elm kernel, diagram
+expansion, or documentation cleanup was performed.
+
+### P0 — the causal trace validator could accept a completion that never committed
+
+`validateLifecycleTransitionTrace()` required only three records
+(`authority_decision`, `effect_executed`, `marker_promoted`) and ignored
+`effect_requested`, `phase_commit_observed`, `task_id`, `turn_seq`, and the
+expected transition identities. A trace with NO observed phase commit
+returned `{ valid: true }`.
+
+Correction: the validator now requires the complete successful C9/C10 chain
+
+    authority_decision (A-03)
+      -> effect_requested (A-04)
+      -> phase_commit_observed (A-04)
+      -> effect_executed (P-06)
+      -> marker_promoted (P-06)
+
+with one shared execution context (decision id, task id, turn sequence) and
+strict stage ordering. Failure reasons distinguish an absent stage
+(`missing_<stage>`) from a wrong transition identity
+(`transition_identity_mismatch:<stage>`), a task/turn drift
+(`task_identity_mismatch` / `turn_identity_mismatch`), and an ordering
+violation (`stage_order_violation`).
+
+RED witnesses: `RED-06` … `RED-11` in
+`apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts`.
+All six FAIL against the pre-correction validator and PASS after it, which
+was verified by re-running the suite against the stashed pre-correction
+module (6 failed / 14 passed, then 20 passed).
+
+### P0 — the contract validator did not verify contract-to-diagram synchronization
+
+`scripts/verify-lifecycle-transition-contract.ts` used a hardcoded
+`requiredStatePairs` map and separately asserted that each transition id
+appeared *somewhere* in the Mermaid text. The two checks were INDEPENDENT,
+so a contract state could be altered, or a transition id could be attached
+to the WRONG edge, and verification still passed. This was reproduced: a
+swapped-label mutation returned `PASS` (exit 0) under the old validator.
+
+Correction: the validation core was extracted to
+`apps/vscode/src/sdk/lifecycle-transition-contract-verifier.ts` as pure,
+importable functions. It now
+
+1. maps each contract `source_state`/`target_state` to an explicit Mermaid
+   state id (`STATE_ID_BY_CONTRACT_STATE`),
+2. parses the ACTUAL labeled Mermaid edges (the text after `:` is
+   associated with the edge that precedes it, per Mermaid's own semantics),
+3. asserts, per transition id, that exactly one labeled edge exists and that
+   its source/target are the ones the contract requires.
+
+The contract TSV's A-03 `source_state` was corrected from `C9 captured` to
+`Elm consulted` so it names the edge it carries — A-03 is the Elm consult
+whose authorize branch is `ElmConsulted --> ElmAuthorized`, consistent with
+the canonical ledger (`transitions.tsv`) and the architecture doc
+(`A-03 — the Elm consult`).
+
+MUT witnesses: `MUT-01` … `MUT-06` in
+`apps/vscode/src/sdk/__tests__/lifecycle-transition-contract-verifier.correction01.test.ts`,
+covering an altered `source_state`, an altered `target_state`, a transition id
+attached to the wrong edge, a duplicated transition id, a removed label id, and
+a non-`stateDiagram-v2` diagram.
+
+### P1 — coordinator diff inspection (evidence limitation, no defect)
+
+The `sdk-session-event-coordinator.ts` body was suppressed as
+`LARGE_FILE_EVIDENCE_BOUNDARY` in the review digest. The focused diff for
+`e6b8eb9ff` was inspected directly. Every change is additive
+instrumentation: the trace-module import, one new private field
+(`pendingLifecycleDecisionId`), one new private helper
+(`lifecycleTraceContext()`), and `recordLifecycleTransitionTrace(...)` calls
+at the authority, request, phase-commit, and marker-effect boundaries.
+
+The single control-flow rewrite is
+`if (decision.kind === "authorize") return true` becoming
+`if (decision.kind === "authorize") { <record trace>; return true }` — the
+condition, the return value, and the fall-through to the `hold` branch are
+unchanged. `recordLifecycleTransitionTrace()` returns immediately when
+`traceEnabled` is false, `traceEnabled` defaults to false, and no
+production code path enables tracing. The state-semantic delta is therefore
+zero, now independently confirmed rather than merely asserted.
+
 ## Source identity
 
 - `ENTRY_HEAD`: `4a66459e9d6ee94d2947e82f30f5ce39793ccb6f`
@@ -28,8 +116,8 @@ does not alter the phase, marker, message, or Elm paths.
 | Command | Result |
 |---|---|
 | `node scripts/verify-lifecycle-transition-contract.ts` | PASS — 4 transitions, Mermaid synchronized |
-| `cd apps/vscode && ./node_modules/.bin/vitest run --config vitest.config.ts src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts src/sdk/__tests__/c9-c10-statechart-causal-repair01.c9c10scr01.test.ts src/sdk/__tests__/completion-authority-elm-first-seam01.case01.test.ts src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts` | PASS — 4 files, 36 tests |
-| `cd apps/vscode && ./node_modules/.bin/tsc --noEmit --pretty false` | PASS |
+| `cd apps/vscode && ./node_modules/.bin/vitest run --config vitest.config.ts src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts src/sdk/__tests__/c9-c10-statechart-causal-repair01.c9c10scr01.test.ts src/sdk/__tests__/completion-authority-elm-first-seam01.case01.test.ts src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts src/sdk/__tests__/lifecycle-transition-contract-verifier.correction01.test.ts` | PASS — 5 files, 52 tests (36 pre-existing + 16 correction witnesses) |
+| `cd apps/vscode && ./node_modules/.bin/tsc --noEmit --pretty false` | PASS — 0 diagnostics |
 
 Vitest reported a non-fatal fork-pool `kill EPERM` teardown warning after
 all selected tests passed. The shell did not expose Bun/Bunx on PATH, so the

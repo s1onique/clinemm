@@ -1,3 +1,34 @@
+# ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-24
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (bounded correction of the predecessor ACT; live installed-extension qualification remains out of scope and is NOT claimed).
+
+**ENTRY_HEAD:** `cbf7c6a3d` (main).
+**PREDECESSOR:** `ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01` (verdict `PASS_STRUCTURAL_ONLY`, closeout commit `cbf7c6a3d`).
+
+**Why this ACT exists:** a review of `cbf7c6a3` returned `HALT_TRACEABILITY_PROOF_FALSE_POSITIVES`. The implementation was directionally sound and the 36 reported passing tests were useful evidence, but two VERIFICATION MACHINERY components could report PASS without proving the intended contract. One bounded correction was authorized: no architecture change, no new Elm kernel, no diagram expansion, no documentation cleanup.
+
+**P0-1 — the causal trace validator accepted a completion that never committed.** `validateLifecycleTransitionTrace()` required only `authority_decision`, `effect_executed`, and `marker_promoted`, and ignored `effect_requested`, `phase_commit_observed`, `task_id`, `turn_seq`, and the expected transition identities. A trace with NO observed phase commit returned `{ valid: true }`. All five counterexamples were reproduced against the pre-correction code. The validator now requires the complete successful chain (`authority_decision` A-03 → `effect_requested` A-04 → `phase_commit_observed` A-04 → `effect_executed` P-06 → `marker_promoted` P-06) with one shared execution context and strict ordering, and distinguishes an absent stage from a wrong transition identity, a task/turn drift, and an ordering violation.
+
+**P0-2 — the contract validator did not verify contract-to-diagram synchronization.** It used a hardcoded `requiredStatePairs` map and SEPARATELY checked that each transition id appeared *somewhere* in the Mermaid text, so an altered contract state and a transition id attached to the WRONG edge both escaped detection. Reproduced: a swapped-label Mermaid mutation returned `PASS` with exit 0 under the pre-correction validator. The validation core was extracted to `apps/vscode/src/sdk/lifecycle-transition-contract-verifier.ts` as pure functions; it now maps each contract `source_state`/`target_state` to an explicit Mermaid state id, parses the ACTUAL labeled edges (Mermaid associates the text after `:` with the edge that precedes it), and asserts the per-transition association. The contract TSV's A-03 `source_state` was reconciled from `C9 captured` to `Elm consulted` so it names the edge it carries — consistent with the canonical ledger and the `A-03 — the Elm consult` architecture entry. A-04, A-05, and P-06 already agreed with their labeled edges.
+
+**P1 — coordinator diff inspected (evidence limitation, no production defect).** The focused diff for `e6b8eb9ff` was inspected directly. Every change is additive instrumentation (the trace import, one private field, one private helper, and trace-recording calls). The single control-flow rewrite — `if (decision.kind === "authorize") return true` becoming `if (decision.kind === "authorize") { <record trace>; return true }` — preserves the condition, the return value, and the fall-through to the `hold` branch. Zero state-semantic delta is independently confirmed: `traceEnabled` defaults to false, `recordLifecycleTransitionTrace()` returns immediately when disabled, and no production code path enables tracing.
+
+**RED/GREEN witnesses:** `RED-06` … `RED-11` (causal chain) and `MUT-01` … `MUT-06` (contract/diagram association). The six RED witnesses were confirmed to FAIL against the pre-correction validator (6 failed / 14 passed) and PASS after the correction; the pre-correction contract validator was confirmed to PASS a swapped-label mutation that the corrected one rejects with exit 1.
+
+**Gates:** contract/Mermaid validator PASS (exit 0); focused + correction test selection PASS — 5 files, **52 tests** (36 pre-existing + 16 correction witnesses); `tsc --noEmit` PASS — exit 0, 0 diagnostics. Vitest emitted the known non-fatal fork-pool `kill EPERM` teardown warning after all selected tests passed.
+
+**Evidence:**
+- `apps/vscode/src/sdk/lifecycle-transition-trace.ts` — the strengthened causal validator.
+- `apps/vscode/src/sdk/lifecycle-transition-contract-verifier.ts` — the pure contract/diagram association core.
+- `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` — `RED-06` … `RED-11`.
+- `apps/vscode/src/sdk/__tests__/lifecycle-transition-contract-verifier.correction01.test.ts` — `MUT-01` … `MUT-06`.
+- `.factory/evidence/ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01/01-bounded-correction.md`
+
+**Preservation:** no completion-authorization policy, lifecycle state ownership, Elm policy, wire protocol, or public API changed; the trace observer remains DEFAULT_OFF and bounded; the contract and Mermaid projection remain semantically identical except for the A-03 source-state reconciliation described above.
+
+**Verdict:** `PASS_STRUCTURAL_ONLY` — both verification-machinery false positives are closed with witnesses that demonstrably fail against the pre-correction code, and the coordinator instrumentation is independently confirmed to carry zero state-semantic delta. No live installed-extension evidence was captured or is claimed.
+
+---
 # ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01 — PASS_STRUCTURAL_PENDING_LIVE — 2026-10-24
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_PENDING_LIVE`** (bounded correction of the predecessor ACT; live dogfood still PENDING).

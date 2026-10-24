@@ -97,9 +97,39 @@ export function lifecycleTransitionTraceRecord(
 }
 
 /**
- * Validate one causal chain. A chain is valid only when its decision and
- * effect records share the same decision id and the effect follows the
- * decision. Chronology alone is deliberately insufficient.
+ * The successful C9/C10 causal chain, in the order the production seam
+ * observes it. Every stage is REQUIRED: a chain that authorizes, executes,
+ * and promotes a marker without ever observing the phase commit is NOT a
+ * causal proof of "the authorized decision caused a committed completion".
+ *
+ * The transition id of each stage is part of the contract: the authority
+ * decision is A-03, the phase request and the observed phase commit are
+ * A-04, and the marker execution and promotion are P-06.
+ */
+const SUCCESSFUL_CHAIN: readonly {
+	readonly stage: LifecycleTransitionStage
+	readonly transition_id: LifecycleTransitionTraceRecord["transition_id"]
+}[] = [
+	{ stage: "authority_decision", transition_id: "A-03" },
+	{ stage: "effect_requested", transition_id: "A-04" },
+	{ stage: "phase_commit_observed", transition_id: "A-04" },
+	{ stage: "effect_executed", transition_id: "P-06" },
+	{ stage: "marker_promoted", transition_id: "P-06" },
+] as const
+
+/**
+ * Validate one causal chain.
+ *
+ * A chain is valid only when ALL of the following hold:
+ *   1. Every required stage of the successful chain is present.
+ *   2. Every required stage carries the expected transition id.
+ *   3. Every required stage shares the decision id, the task id, and the
+ *      turn sequence of the authority decision (one execution context).
+ *   4. The stages appear in the required order.
+ *
+ * Chronology alone is deliberately insufficient, and so is the mere
+ * presence of the three headline stages: without the observed phase
+ * commit the chain does not prove that a commit ever happened.
  */
 export function validateLifecycleTransitionTrace(
 	records: readonly LifecycleTransitionTraceRecord[],
@@ -112,19 +142,50 @@ export function validateLifecycleTransitionTrace(
 	if (decision.outcome !== "authorized") {
 		return { valid: false, reason: "authority_not_authorized" }
 	}
-	const effect = records.find((record) => record.decision_id === decisionId && record.stage === "marker_promoted")
-	if (!effect) {
-		return { valid: false, reason: "missing_marker_promoted" }
+
+	// Resolve each required stage in chain order. The first record that
+	// matches the decision id AND the expected transition id wins; a
+	// mismatch is reported rather than silently skipped.
+	const chain: LifecycleTransitionTraceRecord[] = []
+	for (const required of SUCCESSFUL_CHAIN) {
+		const match = records.find(
+			(record) =>
+				record.decision_id === decisionId &&
+				record.stage === required.stage &&
+				record.transition_id === required.transition_id,
+		)
+		if (!match) {
+			// Distinguish "the stage is absent" from "the stage is present
+			// but carries the wrong transition id" so the failure reason
+			// names the actual defect.
+			const wrongIdentity = records.some((record) => record.decision_id === decisionId && record.stage === required.stage)
+			return {
+				valid: false,
+				reason: wrongIdentity ? `transition_identity_mismatch:${required.stage}` : `missing_${required.stage}`,
+			}
+		}
+		chain.push(match)
 	}
-	const execution = records.find((record) => record.decision_id === decisionId && record.stage === "effect_executed")
-	if (!execution) {
-		return { valid: false, reason: "missing_effect_executed" }
+
+	// One execution context: the task id and the turn sequence must not
+	// drift across the chain, otherwise the records belong to different
+	// executions that merely share a decision id.
+	for (const record of chain) {
+		if (record.task_id !== decision.task_id) {
+			return { valid: false, reason: "task_identity_mismatch" }
+		}
+		if (record.turn_seq !== decision.turn_seq) {
+			return { valid: false, reason: "turn_identity_mismatch" }
+		}
 	}
-	const decisionIndex = records.indexOf(decision)
-	const executionIndex = records.indexOf(execution)
-	const effectIndex = records.indexOf(effect)
-	if (executionIndex <= decisionIndex || effectIndex <= executionIndex) {
-		return { valid: false, reason: "effect_not_after_decision" }
+
+	// Strict ordering: each stage must come after the previous one in
+	// the observed record sequence.
+	for (let index = 1; index < chain.length; index++) {
+		if (records.indexOf(chain[index]) <= records.indexOf(chain[index - 1])) {
+			return { valid: false, reason: "stage_order_violation" }
+		}
 	}
+
 	return { valid: true }
 }

@@ -49,10 +49,37 @@ Not claimed:
 
 ## Counterexample
 
-The conformance suite rewrites a same-turn marker-promotion record to a
-foreign decision id while preserving task identity, turn sequence, and
-chronological order. The validator rejects it (`missing_marker_promoted`),
-proving that chronology/shared identity alone is insufficient.
+ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01 strengthened the causal
+validator; the pre-correction validator accepted a chain carrying only the
+authority decision, the effect execution, and the marker promotion, and
+ignored the task id, the turn sequence, the transition identities, and the
+ordering of the commit relative to the promotion.
+
+The validator now requires the complete successful chain
+(`authority_decision` → `effect_requested` → `phase_commit_observed` →
+`effect_executed` → `marker_promoted`) with one shared execution context and
+strict ordering. Witnesses `RED-06` … `RED-11` cover: a chain whose phase
+commit was never observed, a chain whose phase request was never observed, a
+foreign task id, a foreign turn sequence, a wrong transition identity on the
+commit, and a commit observed after the marker promotion. Each witness was
+confirmed to FAIL against the pre-correction validator and PASS against the
+corrected one.
+
+## Contract-to-diagram synchronization
+
+ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01 replaced the pre-correction
+contract validator, which used a hardcoded `requiredStatePairs` map and
+separately checked that each transition id appeared somewhere in the Mermaid
+text. Those independent checks admitted a PASS for an altered contract state
+and for a transition id attached to the wrong edge (both reproduced: the old
+validator returned exit 0 on a swapped-label mutation).
+
+The validator now maps each contract `source_state`/`target_state` to an
+explicit Mermaid state id, parses the actual labeled edges, and asserts the
+association per transition id. Witnesses `MUT-01` … `MUT-06` cover an altered
+`source_state`, an altered `target_state`, a transition id on the wrong edge, a
+duplicated transition id, a removed label id, and a non-`stateDiagram-v2`
+diagram.
 
 ## Effect failure
 

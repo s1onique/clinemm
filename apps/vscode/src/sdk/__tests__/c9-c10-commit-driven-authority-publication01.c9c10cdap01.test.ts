@@ -82,6 +82,8 @@ import {
 	clearLifecycleTransitionTrace,
 	enableLifecycleTransitionTrace,
 	getLifecycleTransitionTraceRecords,
+	type LifecycleTransitionStage,
+	type LifecycleTransitionTraceRecord,
 	setLifecycleTransitionTraceEnabled,
 	validateLifecycleTransitionTrace,
 } from "../lifecycle-transition-trace"
@@ -635,6 +637,123 @@ describe("ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01 / C9C10C
 				valid: false,
 				reason: "missing_marker_promoted",
 			})
+		})
+
+		// ------------------------------------------------------------------
+		// ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01
+		//
+		// RED witnesses for the verification-machinery false positives.
+		//
+		// The previous validator accepted a chain that carried only the
+		// authority decision, the effect execution, and the marker
+		// promotion. That chain proves NOTHING about a commit: the phase
+		// commit was never observed. It also ignored the task id, the turn
+		// sequence, the expected transition identities, and the ordering of
+		// the commit relative to the promotion.
+		//
+		// Each case below is a hand-built trace (not a production capture)
+		// so the defect is isolated from the harness.
+		// ------------------------------------------------------------------
+
+		/** Build a synthetic trace record with a fully specified identity. */
+		function syntheticRecord(
+			stage: LifecycleTransitionStage,
+			transitionId: LifecycleTransitionTraceRecord["transition_id"],
+			overrides: Partial<LifecycleTransitionTraceRecord> = {},
+		): LifecycleTransitionTraceRecord {
+			return {
+				schema_version: 1,
+				transition_id: transitionId,
+				task_id: "task-1",
+				turn_seq: 7,
+				decision_id: "decision-1",
+				stage,
+				outcome: stage === "authority_decision" ? "authorized" : "observed",
+				source: "synthetic",
+				...overrides,
+			}
+		}
+
+		/** The complete, valid successful chain. */
+		function completeChain(): LifecycleTransitionTraceRecord[] {
+			return [
+				syntheticRecord("authority_decision", "A-03"),
+				syntheticRecord("effect_requested", "A-04"),
+				syntheticRecord("phase_commit_observed", "A-04"),
+				syntheticRecord("effect_executed", "P-06"),
+				syntheticRecord("marker_promoted", "P-06"),
+			]
+		}
+
+		it("RED-06: rejects a chain whose phase commit was never observed", () => {
+			// The exact counterexample from the review: authority, execution
+			// and promotion exist, share the decision id, and are ordered —
+			// but no phase commit was observed. The old validator returned
+			// { valid: true }.
+			const withoutCommit = completeChain().filter((record) => record.stage !== "phase_commit_observed")
+			expect(validateLifecycleTransitionTrace(withoutCommit, "decision-1")).toEqual({
+				valid: false,
+				reason: "missing_phase_commit_observed",
+			})
+		})
+
+		it("RED-07: rejects a chain whose phase request was never observed", () => {
+			const withoutRequest = completeChain().filter((record) => record.stage !== "effect_requested")
+			expect(validateLifecycleTransitionTrace(withoutRequest, "decision-1")).toEqual({
+				valid: false,
+				reason: "missing_effect_requested",
+			})
+		})
+
+		it("RED-08: rejects a chain whose records carry a different task id", () => {
+			const foreignTask = completeChain().map((record) =>
+				record.stage === "phase_commit_observed" ? { ...record, task_id: "task-2" } : record,
+			)
+			expect(validateLifecycleTransitionTrace(foreignTask, "decision-1")).toEqual({
+				valid: false,
+				reason: "task_identity_mismatch",
+			})
+		})
+
+		it("RED-09: rejects a chain whose records carry a different turn sequence", () => {
+			const foreignTurn = completeChain().map((record) =>
+				record.stage === "phase_commit_observed" ? { ...record, turn_seq: 8 } : record,
+			)
+			expect(validateLifecycleTransitionTrace(foreignTurn, "decision-1")).toEqual({
+				valid: false,
+				reason: "turn_identity_mismatch",
+			})
+		})
+
+		it("RED-10: rejects a phase commit that carries the wrong transition identity", () => {
+			const wrongIdentity = completeChain().map((record) =>
+				record.stage === "phase_commit_observed" ? { ...record, transition_id: "P-06" as const } : record,
+			)
+			expect(validateLifecycleTransitionTrace(wrongIdentity, "decision-1")).toEqual({
+				valid: false,
+				reason: "transition_identity_mismatch:phase_commit_observed",
+			})
+		})
+
+		it("RED-11: rejects a chain whose phase commit is observed after the marker promotion", () => {
+			// Ordering violation: the commit is the causal precondition of
+			// the promotion, so a commit observed after the promotion cannot
+			// be the cause of it.
+			const reordered = [
+				completeChain()[0], // authority_decision
+				completeChain()[1], // effect_requested
+				completeChain()[3], // effect_executed
+				completeChain()[4], // marker_promoted
+				completeChain()[2], // phase_commit_observed (TOO LATE)
+			]
+			expect(validateLifecycleTransitionTrace(reordered, "decision-1")).toEqual({
+				valid: false,
+				reason: "stage_order_violation",
+			})
+		})
+
+		it("GREEN: accepts the complete successful chain", () => {
+			expect(validateLifecycleTransitionTrace(completeChain(), "decision-1")).toEqual({ valid: true })
 		})
 
 		it("trace disabled leaves production behavior unchanged and emits no records", async () => {
