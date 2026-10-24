@@ -180,10 +180,20 @@ The LIVE row evidence discriminates between them:
 | Path | What happens to the completion row |
 |---|---|
 | BCB (TS-predicate) hold | The **message-layer completion filter** REMOVES the row from the published set. The row is never visible to the user, so it cannot present as authoritative completion. |
-| Elm HOLD / FAILURE | The row is **NOT filtered** — it stays published WITH the `isAuthoritativelyCompletedResult` marker, and the webview renders the green "Completed" badge. |
+| Elm HOLD / FAILURE | The row is **NOT filtered** — it stays published WITHOUT the `isAuthoritativelyCompletedResult` marker (the LIVE `content_end` never stamps it), so the webview renders no green "Completed" badge. |
 
 **A finalized `completion_result` row that the user can SEE therefore
 excludes the pure-BCB path and implicates the Elm path.**
+
+> **HISTORICAL NOTE.** This section describes the LIVE incident as it was
+> OBSERVED at the time. Under the PRE-repair design the marker was stamped
+> at publication time, so an Elm HOLD left the row visible WITH the badge
+> (the retraction design corrected the final projection but not the temporal
+> invariant). Current HEAD does not stamp the marker at publication at all:
+> the Elm HOLD leaves the row visible WITHOUT the badge, and only a
+> successful C10 commit publishes the marker (P-06). The paragraph above
+> states the CURRENT behaviour; the causal chain below states the historical
+> defect.
 
 ### The causal chain (confirmed by the RED witness)
 

@@ -172,3 +172,125 @@ export function verifyLifecycleTransitionContract(options: {
 
 	return { errors, transitionIds: [...ids] }
 }
+
+/**
+ * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01.
+ *
+ * The EXISTING strict contract-to-Mermaid verifier above covers the SEPARATE
+ * `c9-c10-traceability.mmd` file (A-03, A-04, A-05, P-06) — it does NOT
+ * cover the full Chart 04 document. This extension checks the Mermaid block
+ * that is EMBEDDED in `docs/architecture/task-lifecycle/04-completion-presentation.md`.
+ *
+ * WHAT IT ASSERTS.
+ *
+ *   1. Every Chart 04 TRANSITION claim (P-01, P-02, P-03, P-06) appears on
+ *      EXACTLY ONE labeled Mermaid edge in the embedded block.
+ *   2. Every GUARD / PROJECTION / INVARIANT claim (P-04, P-05, P-07) does
+ *      NOT appear as a Mermaid edge — those claims are proven by a contract
+ *      entry plus an executable assertion, not by a graph-state transition.
+ *   3. The embedded block does not claim that the authority marker is
+ *      stamped at the `content_end` publication seam (the historical
+ *      defect).
+ *
+ * This is a DOCUMENTATION-SYNCHRONIZATION guard. It never asserts
+ * behaviour: the behaviour is proven by the executable witness suite.
+ */
+
+/** The Chart 04 claims that ARE genuine transitions and therefore carry a Mermaid edge. */
+export const CHART_04_TRANSITION_CLAIM_IDS: readonly string[] = ["P-01", "P-02", "P-03", "P-06"]
+
+/** The Chart 04 claims that are NOT transitions and therefore carry NO Mermaid edge. */
+export const CHART_04_NON_TRANSITION_CLAIM_IDS: readonly string[] = ["P-04", "P-05", "P-07"]
+
+/**
+ * Extract the mermaid fence(s) from a Markdown document.
+ *
+ * The extraction is deliberately simple and strict: a fence opens with
+ * ```mermaid and closes with the next ``` line.
+ */
+export function extractMermaidBlocks(markdown: string): string[] {
+	const blocks: string[] = []
+	const lines = markdown.split("\n")
+	let current: string[] | undefined
+	for (const line of lines) {
+		if (current === undefined) {
+			if (line.trim() === "```mermaid") {
+				current = []
+			}
+			continue
+		}
+		if (line.trim() === "```") {
+			blocks.push(current.join("\n"))
+			current = undefined
+			continue
+		}
+		current.push(line)
+	}
+	return blocks
+}
+
+/**
+ * Verify the Chart 04 document's embedded Mermaid block against the claim
+ * taxonomy and the marker-stamping reconciliation.
+ */
+export function verifyChart04CompletionPresentation(options: {
+	readonly markdown: string
+	readonly transitionClaimIds: readonly string[]
+	readonly nonTransitionClaimIds: readonly string[]
+}): { readonly errors: string[]; readonly mermaidBlockCount: number } {
+	const { markdown, transitionClaimIds, nonTransitionClaimIds } = options
+	const errors: string[] = []
+	const blocks = extractMermaidBlocks(markdown)
+	if (blocks.length === 0) {
+		return { errors: ["Chart 04 document has no embedded mermaid block"], mermaidBlockCount: 0 }
+	}
+	const diagramText = blocks.join("\n")
+	const edges = parseMermaidTransitionEdges(diagramText)
+
+	const edgesByClaimId = new Map<string, MermaidEdge[]>()
+	for (const edge of edges) {
+		const claimId = transitionIdOfLabel(edge.label)
+		if (!claimId) continue
+		const existing = edgesByClaimId.get(claimId) ?? []
+		existing.push(edge)
+		edgesByClaimId.set(claimId, existing)
+	}
+
+	for (const claimId of transitionClaimIds) {
+		const labeled = edgesByClaimId.get(claimId) ?? []
+		if (labeled.length === 0) {
+			errors.push(`${claimId}: TRANSITION claim is absent from the Chart 04 Mermaid projection`)
+			continue
+		}
+		if (labeled.length > 1) {
+			errors.push(`${claimId}: appears on ${labeled.length} Chart 04 Mermaid edges; expected exactly one`)
+		}
+	}
+	for (const claimId of nonTransitionClaimIds) {
+		const labeled = edgesByClaimId.get(claimId) ?? []
+		if (labeled.length > 0) {
+			errors.push(
+				`${claimId}: is a PROJECTION / INVARIANT / GUARD claim and must NOT carry a Chart 04 Mermaid edge (found ${labeled.length})`,
+			)
+		}
+	}
+
+	// The historical defect must not be re-asserted as current behaviour:
+	// the `content_end` publication seam must never be labelled as the
+	// place where the authority marker is stamped.
+	const finalRowNote = /note right of FinalRowPublished[\s\S]*?end note/.exec(diagramText)?.[0] ?? ""
+	if (!finalRowNote) {
+		errors.push("Chart 04 Mermaid projection is missing the FinalRowPublished note")
+	} else {
+		if (/isAuthoritativelyCompletedResult\s*:\s*true/i.test(finalRowNote)) {
+			errors.push(
+				"Chart 04 Mermaid FinalRowPublished note still asserts the authority marker is stamped at content_end (the historical defect)",
+			)
+		}
+		if (!/NO authority marker/i.test(finalRowNote)) {
+			errors.push("Chart 04 Mermaid FinalRowPublished note does not state that the row carries NO authority marker")
+		}
+	}
+
+	return { errors, mermaidBlockCount: blocks.length }
+}

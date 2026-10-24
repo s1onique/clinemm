@@ -1,3 +1,48 @@
+# ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01 — PASS_STRUCTURAL_ONLY — 2026-10-24
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (executable conformance contract for Chart 04; no production code changed).
+
+**ENTRY_HEAD:** `fd0bd11ad` (main).
+
+**Why this ACT exists:** Chart 04's seven completion-presentation claims (`P-01` … `P-07`) were asserted in prose and in a Mermaid diagram, but nothing bound them to an executable proof. Mermaid rendering and prose agreement were the only "evidence". The ACT turns each claim into a source-bound executable conformance contract: one stable id, one production symbol, one executable witness, one observed assertion, one evidence status.
+
+**What it adds (no production behaviour changed):**
+- `apps/vscode/src/sdk/completion-presentation-contract.ts` — the PURE claim registry (`TRANSITION` / `GUARD` / `PROJECTION` / `INVARIANT` taxonomy, evidence levels, and the deterministic TSV/Markdown coverage-report renderers).
+- `apps/vscode/src/sdk/__tests__/completion-presentation-contract01.cpc01.test.ts` — the witness suite (**31 tests**). It drives the REAL `MessageTranslatorState`, `SdkSessionEventCoordinator`, `TurnStateTracker`, the REAL host store (`MessageStateHandler.addMessages`), the REAL webview reducer (`applyMessage`), the REAL framing projection (`resolveTerminalReportFraming`) and the REAL persistence/reopen translation (`sdkMessagesToClineMessages`).
+- `scripts/verify-completion-presentation-contract.ts` — the deterministic coverage-report generator. It runs the witness suite and derives every `result` from the OBSERVED test outcome, so the report cannot overstate coverage. It also emits the source-bound assertion inventory.
+- `scripts/verify-chart04-mermaid-parse.ts` — parses the embedded Chart 04 Mermaid block with the INSTALLED REAL Mermaid parser (`mermaid@11.16.1` + a headless `jsdom` window).
+- `apps/vscode/src/sdk/lifecycle-transition-contract-verifier.ts` — extended with `verifyChart04CompletionPresentation`, closing the gap where the embedded Chart 04 diagram had NO guard (the existing strict verifier covers only the separate `c9-c10-traceability.mmd`).
+
+**The seven-claim coverage report** (`docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/coverage-report.tsv`, generated): **eligible claims 7 / executable (PASS) 7 / failed 0 / gaps 0.** P-01 TRANSITION, P-02 TRANSITION, P-03 GUARD, P-04 PROJECTION, P-05 INVARIANT, P-06 TRANSITION, P-07 INVARIANT. P-03 and P-06 are `INJECTED_DECISION` (the Elm decision is injected at the existing provider boundary); every other seam in those claims is production code. No live Elm execution and no installed-extension live capture is claimed.
+
+**The three negative witnesses:** **NEG-01** premature marker (a finalized row that receives the marker BEFORE the C10 commit is rejected by the conformance detector `rejectsPrematureAuthority`); **NEG-02** stale promotion (an older turn's promotion arriving in a newer epoch is dropped by the REAL reducer's epoch fence — the historical/current-turn distinction is by EPOCH / TURN identity, NOT by timestamp ordering, so a stale promotion with a much HIGHER `ts` is dropped for the same reason); **NEG-03** failed publication (the C10 commits but the marker publication throws → the trace records `phase_commit_observed` but NOT `marker_promoted` / `effect_executed`, the causal chain does not validate, and the webview carries no authoritative badge).
+
+**RED/GREEN against a MUTATED PRODUCTION SOURCE.** NEG-01 is not only an injected mutant: the historical defect was mutated into the REAL `message-translator.ts` (the LIVE `content_end` always stamping the marker) and the whole witness suite was re-run — **RED: 11 failed | 13 passed (24)** (NEG-01/02/03, P-02 LIVE, P-02 RESTORATION, P-03 Elm-HOLD, P-06 deferred/HOLD/FAILURE, P-07 held/historical-identity). The production file was then restored byte-for-byte (`git diff --stat` → empty) and the suite returned to **GREEN: 24 passed (24)**. This is the ACT's core success criterion: a future regression of an asserted completion-presentation invariant produces a concrete failing test.
+
+**Documentary reconciliation (documentary discrepancies, NOT runtime defects):**
+1. Chart 04's `FinalRowPublished` note still said the marker was "STAMPED HERE" at `content_end` → it now states "NO authority marker. The marker is published by the C10 COMMIT (P-06), never at this seam." The new Chart 04 documentation guard REJECTS any re-introduction (MUT-01).
+2. Chart 04's authority table attributed marker stamping to the translator → it now attributes the marker to the C10 commit (`promoteCompletionAuthorityMarker`), the RESTORATION path (verified persisted identity), and states the LIVE `content_end` never stamps it.
+3. Chart 02's Elm HOLD row described the historical "visible WITH the badge" behaviour → it now states the CURRENT behaviour (visible WITHOUT the badge) and preserves the historical incident under an explicit **HISTORICAL NOTE**.
+4. Chart 01's reconciliation paragraph said the marker is "stamped at the publication seam and RETRACTED" → it now states the marker is published by the COMPLETION COMMIT and NOT at the translation seam, with the pre-correction design preserved as history.
+5. The claim taxonomy is a DIFFERENT axis from the ledger's existing `kind` column (evidence maturity). They are NOT conflated: the ledger gained three NEW columns (`claim_kind`, `evidence_witness`, `evidence_status`), and a conformance test asserts the ledger and the registry agree for all seven claims.
+
+**Gates:** coverage-report generator PASS (7 eligible / 7 executable / 0 gaps); transition-contract verifier PASS ("4 transitions, Mermaid synchronized" + "Chart 04 completion-presentation projection: 1 embedded block(s), 4 transition claims labeled, 3 projection/invariant claims correctly edge-free"); Markdown-Mermaid guard PASS (4 docs); REAL Mermaid parser PASS on all 4 lifecycle documents (and it REJECTS a deliberately invalid diagram with a precise parse error, exit 1 — the check has teeth); witness suite PASS — 1 file, **31 tests**; existing relevant conformance suites PASS — 8 files, **88 tests**; webview `terminalReportFraming` (40) + `messageReducer` (16) PASS; `tsc --noEmit` PASS (exit 0, 0 diagnostics); Biome PASS.
+
+**Regression delta: ZERO.** The full `apps/vscode` vitest suite has 4 PRE-EXISTING failing files (23 failing tests, all in the BCB `notify=true` per-job barrier suites). This was verified by stashing the entire change set and re-running the same four files at the pristine ENTRY_HEAD `fd0bd11ad`: the identical 23 failures. They are recorded, not repaired — they are out of scope for this ACT.
+
+**Preservation:** no production code changed; no completion-authorization policy, lifecycle state ownership, Elm policy, wire protocol or public API changed; no new Elm authority, no lifecycle-policy refactoring, no generic tracing architecture; no diagnostic side effect inside a React functional updater; the lifecycle transition trace observer remains DEFAULT_OFF and bounded; no worktrees; no dependency or framework additions (the existing `mermaid@11.16.1` and `jsdom@26.1.0` workspace-store copies are used; no manifest changed); the pre-existing `stash@{0}` was preserved.
+
+**Verdict:** `PASS_STRUCTURAL_ONLY` — all seven claims have executed, source-bound evidence; the three negative witnesses are demonstrated; the documentary contradictions are reconciled and guarded against re-introduction. No live installed-extension evidence was captured or is claimed, which does not invalidate this properly scoped structural result.
+
+**Evidence:**
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/coverage-report.tsv` — the machine-readable seven-row coverage report.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/coverage-report.md` — its Markdown rendering.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/assertion-inventory.tsv` — the source-bound assertion inventory (20 claim cases + 3 negative witnesses).
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/evidence-report.md` — the full evidence report.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/artifact-manifest.tsv` — the exact-head artifact manifest (SHA-256 + byte counts).
+- `.factory/evidence/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01/01-executable-conformance.md` — the evidence note.
+
+---
 # ACT-CLINEMM-C9C10-MERMAID-RENDER-FIX01 — CLOSED_CLEAN — 2026-10-24
 
 **Status:** CLOSED with verdict **`CLOSED_CLEAN`** (bounded DOC + GUARD correction of one architecture document; no production code changed).

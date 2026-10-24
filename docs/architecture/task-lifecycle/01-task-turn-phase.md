@@ -156,5 +156,11 @@ the per-row marker exists — see [chart 04](04-completion-presentation.md).
 The converse also holds: a row that was published while the phase was
 `streaming` and was NEVER committed must NOT keep a badge.
 
-The two facts are reconciled by the marker being stamped at the
-publication seam and RETRACTED when the commit does not happen.
+The two facts are reconciled by the marker being published by the
+COMPLETION COMMIT (the C10 commit, `promoteCompletionAuthorityMarker`) and
+NOT at the translation seam. The LIVE `content_end` publishes the finalized
+row WITHOUT the marker; the marker is added only when the C10 commit
+succeeds, and it is RECOVERED on reopen from a verified persisted
+completion identity. (Before the C9C10CDAP01 correction the marker was
+stamped at the publication seam and RETRACTED when the commit did not
+happen — that was retrospective and violated the temporal invariant.)

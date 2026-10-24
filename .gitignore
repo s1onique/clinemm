@@ -158,3 +158,6 @@ scripts/__pycache__/
 apps/vscode/~/
 .myc/
 tools/macos-host-helper/native/helper
+
+# ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01 — vitest JSON reporter scratch file
+.tmp-completion-presentation-contract-vitest.json
