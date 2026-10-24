@@ -45,7 +45,7 @@ stateDiagram-v2
         Suppressed --> [*]
     }
 
-    C10Blocked --> C10Committed : obligations resolve (reevaluateDeferredCompletionBarrier)
+    C10Blocked --> ElmConsulted : obligations resolve (reevaluateDeferredCompletionBarrier)
 
     ElmConsulted --> ElmHold : Elm decision = hold
     ElmConsulted --> ElmFailure : Elm decision = failure
@@ -53,6 +53,10 @@ stateDiagram-v2
 
     ElmHold --> C10Withheld : C10 commit SUPPRESSED
     ElmFailure --> C10Withheld : C10 commit SUPPRESSED
+
+    C10Committed --> [*]
+    C10Withheld --> [*]
+```
 
 ## Load-bearing transitions
 
@@ -246,8 +250,3 @@ ever restoring the removed marker, leaving a legitimate, committed
 completion with NO badge.
 
 | kind | observed |
-
-
-    C10Committed --> [*]
-    C10Withheld --> [*]
-```
