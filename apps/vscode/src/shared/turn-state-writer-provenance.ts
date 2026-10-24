@@ -69,6 +69,16 @@ export type TurnStateWriterId =
 	| "session-event-turn-complete-awaiting-followup"
 	| "session-event-turn-complete-awaiting-followup-liveness"
 	| "session-event-turn-complete-resumable-straggler-preserve"
+	// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+	// (PHCF01): host authority for the RECOVERY phase published when
+	// an owned background command's process-group containment FAILED
+	// (`containment_failed`): the deferred `awaiting_followup` handoff
+	// is withheld (the containment obligation is unresolved) and the
+	// run is published as `resumable` -- the existing, actionable
+	// "the run was abandoned before it produced a terminal response"
+	// affordance, matching the cancel-path precedent
+	// (`task-control-cancel-no-active-session`).
+	| "session-event-turn-complete-containment-failed-resumable"
 	// ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01
 	// (PTBPC01): host authority for the blocked-but-incomplete
 	// verdict when the BCB has stamped `observation_unavailable`

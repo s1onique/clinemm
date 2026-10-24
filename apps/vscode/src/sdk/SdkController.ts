@@ -2580,6 +2580,27 @@ export class Controller {
 				}
 				return host.hasRunningBackgroundJobForOwner(ownerSessionId)
 			},
+			// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+			// (PHCF01): thread the host-owned PER-JOB background-command
+			// terminal projection into the coordinator so the
+			// deferred-handoff decision can distinguish a clean
+			// terminal from a FAILED CONTAINMENT.
+			//
+			// The `hasRunningBackgroundJobForOwner` query is an
+			// ACTIVE-MAP CARDINALITY question: it answers "is the
+			// active map empty?" but CANNOT answer "was the process
+			// group reaped?" -- the `CommandJobManager` removes a
+			// job from the active map on BOTH the clean path AND
+			// the containment-failure path. This adapter returns the
+			// EXISTING per-job projection map (already maintained by
+			// `updateBackgroundCommandState` and already published to
+			// the webview), so the coordinator can read the exact
+			// terminal reason (`containment_failed` vs the clean
+			// classes) at the decision boundary.
+			//
+			// NO new state and NO new protocol field: this is the
+			// same map the host already owns.
+			getBackgroundCommandJobStates: () => this.backgroundCommandJobStates,
 			// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 			// thread the INTERNAL read-only ownership-snapshot accessor
 			// into the coordinator so the Q5 BOCOR diagnostic can

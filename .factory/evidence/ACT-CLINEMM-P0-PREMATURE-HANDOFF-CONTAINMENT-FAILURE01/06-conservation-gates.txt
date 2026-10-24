@@ -1,0 +1,123 @@
+# 06 — Conservation Gates (PHCF01)
+
+All assertions live in ONE new file:
+  apps/vscode/src/sdk/__tests__/premature-handoff-containment-failure01.phcf01.test.ts
+It REUSES the BTCONT01 harness shape (real `CommandJobManager`, real
+`SdkSessionEventCoordinator`, real `TurnStateTracker`, real
+`Controller.maybeReevaluateDeferredContinuation` bridge) and adds NO second
+CommandJobManager test framework.
+
+REPRODUCTION CLASS: SYNTHETIC_REAL. The ONLY injected seam is the manager's
+`terminalPostconditionProbe` (an existing, documented test-only production
+option) so the fail-closed set (alive / unknown) is driven deterministically
+WITHOUT creating uncontrolled real orphan processes on the host. Every other
+seam is the real production code path.
+
+## Matrix
+
+| ID | Invariant | Where asserted | Result |
+|---|---|---|---|
+| PHCF-01 | Clean terminality permits existing deferred handoff | RED-01 | PASS |
+| PHCF-02 | Failed containment cannot be reported as successful cleanup | RED-02 (`alive`) | PASS (was FAIL pre-repair) |
+| PHCF-03 | Unknown containment postcondition fails closed | RED-03 (`unknown`) | PASS (was FAIL pre-repair) |
+| PHCF-04 | Another running owned job prevents premature handoff | RED-04 (J1 terminal, J2 running) | PASS (already correct; conserved) |
+| PHCF-05 | Foreign-session terminality cannot mutate the active session | RED-05 (S1 -> S2 replacement) | PASS (already correct; conserved) |
+| PHCF-06 | Older-epoch terminality cannot mutate the current epoch | RED-05 (the coordinator's epoch check at `sdk-session-event-coordinator.ts:917-921` is unchanged) | PASS |
+| PHCF-07 | Duplicate lifecycle callbacks do not duplicate phase commits | PHCF-07 | PASS |
+| PHCF-08 | Existing canceled/resumable state cannot be clobbered | RED-06 | PASS (was FAIL pre-repair) |
+| PHCF-09 | Existing error authority is preserved | RED-07 asserts the phase is never `completed`; the `command_containment_failed` runtime-error incident path (`command-job-manager.ts:2779-2786`) is NOT touched by the repair | PASS — see note below |
+| PHCF-10 | C10 is never manufactured without completion authority | RED-07 (all three postconditions) | PASS |
+| PHCF-11 | No synthetic `completion_result` appears | RED-07 | PASS |
+| PHCF-12 | Webview publication matches the canonical phase | PHCF-12 | PASS |
+| PHCF-13 | Active-map removal does not itself prove OS containment | RED-02 asserts `hasRunningBackgroundJobForOwner === false` WHILE the terminal reason is `containment_failed` | PASS |
+| PHCF-14 | No unintended background wake is generated after containment failure | The repair does NOT touch `enqueueCompletionContinuationIfHeld` / `reevaluateDeferredCompletionBarrier` / `BackgroundNotifyCoordinator`. The existing production contract `containment_failed -> containment_no_wake` (`background-notify-coordinator.ts:3474-3481`) is unchanged. The repair's containment branch RETURNS before any wake-capable path. | PASS — see note below |
+| PHCF-15 | No stale deferred marker survives successful finalization | RED-01: the clean path clears the marker AND commits `awaiting_followup` exactly once (`phaseCommits() === 1`). The containment path also clears the marker (it is superseded by the `resumable` recovery commit) — `sdk-session-event-coordinator.ts:1003`. | PASS |
+| PHCF-16 | No ACT-owned regression in BTCONT01, BCB, or CommandJobManager lifecycle coverage | See "Regression" below | PASS (zero delta vs baseline) |
+
+## Notes on rules that are conserved rather than newly asserted
+
+- PHCF-04 and PHCF-05 were already correct in the pre-repair code and REMAIN correct.
+  The tests assert them so the repair cannot regress them. They were NOT reported
+  as defects.
+- PHCF-09 / PHCF-14: the repair introduces NO new error state and NO new wake
+  mechanism. The containment failure is already represented by the EXISTING
+  canonical task/runtime error authority (the `command_containment_failed`
+  runtime-error incident -> `TaskTelemetryTracker.recordRuntimeError` -> the
+  task-telemetry WARNING counter) and by the EXISTING per-job
+  `backgroundCommandJobStates[jobId] = "containment_failed"` pill, which is
+  already published to the webview and already rendered by `ChatRow.tsx:280-289`.
+  The repair's only NEW publication is the phase itself.
+
+## The truthful state after a failed containment
+
+The repair does NOT commit `awaiting_followup` (that would misrepresent the
+failed containment as a clean handoff) and does NOT leave the phase at
+`streaming` (that would leave the UI in a permanent Working state after the
+model run genuinely ended).
+
+It commits `resumable` — the EXISTING, established production affordance for
+"the run was abandoned before it produced a terminal response, so Resume is the
+honest next action" (cancel-path precedent:
+`sdk-task-control-coordinator.ts:142-144`, writer
+`task-control-cancel-no-active-session`; webview button map
+`resumable -> BUTTON_CONFIGS.resume_task` = "Resume Task", in
+`webview-ui/src/components/chat/chat-view/shared/buttonConfig.ts:425-426`).
+
+No NEW phase value and no NEW public protocol field were introduced.
+
+
+## Executed regression comparison (exact, with vs without the repair)
+
+Set A — BTCONT01 + BCAFG01 + BHTD01 + BJLA(01,05) + BOCOR:
+```
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed | 5 passed (6)
+      Tests  1 failed | 32 passed (33)
+```
+(BHTD01.1 fails at BASELINE too — see the baseline comparison below.)
+
+Set B — BCB01-C4 + owner-session-id + BHTD01 (isolated baseline comparison):
+```
+BASELINE (repair stashed):
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  3 failed (3)
+      Tests  11 failed | 9 passed (20)
+WITH REPAIR:
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  3 failed (3)
+      Tests  11 failed | 9 passed (20)
+```
+
+Exact per-test outcome diff (baseline vs with-repair):
+```
+IDENTICAL — zero delta
+```
+
+Set C — BCB01 + BCB01-C1..C4 + BCNT01 + BCTCP01-controller:
+```
+BASELINE (repair stashed):
+7f372bb19620370f83316f870cdda792
+WITH REPAIR:
+7f372bb19620370f83316f870cdda792
+```
+```
+IDENTICAL — zero delta
+```
+
+The failures in sets B and C are PRE-EXISTING BASELINE FAILURES (identical with and
+without the repair). They are an environment artifact of this sandbox: the
+vitest pool cannot terminate its forks worker (`EPERM: operation not permitted,
+kill`), which truncates the run. They are NOT ACT-owned.
+
+## Gate summary
+
+```
+RED_PRE_REPAIR:       REPRODUCED
+CAUSAL_DISCRIMINATOR: PASS
+ABLATION_NECESSITY:   PASS
+FOCUSED_GREEN:        PASS (9/9)
+ACT_OWNED_FAILURES:   0
+TYPECHECK:            PASS (tsc --noEmit -p tsconfig.json -> exit 0)
+BIOME_LINT:           PASS (4 files checked, no findings)
+GIT_DIFF_CHECK:       PASS (see 07-live-qualification.md)
+```

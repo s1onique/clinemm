@@ -162,6 +162,46 @@ export interface SdkSessionEventCoordinatorOptions {
 	 */
 	hasRunningBackgroundJobForOwner?: (ownerSessionId: string | undefined) => boolean
 	/**
+	 * ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01 (PHCF01):
+	 *
+	 * Authority input: the host-owned PER-JOB background-command
+	 * terminal projection (`Controller.backgroundCommandJobStates`).
+	 *
+	 * The `hasRunningBackgroundJobForOwner` query answers "does the
+	 * active session still own a RUNNING managed job?" -- i.e. it is
+	 * an ACTIVE-MAP CARDINALITY question. It CANNOT distinguish
+	 * `MANAGED_JOB_REMOVED` from `PROCESS_CONTAINMENT_VERIFIED`:
+	 * the `CommandJobManager` removes a job from the active map on
+	 * BOTH the clean path AND the containment-failure path.
+	 *
+	 * This option carries the per-job terminal REASON so the
+	 * deferred-handoff decision can enforce the existing
+	 * production contract
+	 *
+	 *     containment_failed -> containment_no_wake
+	 *
+	 * that `BackgroundNotifyCoordinator` already applies to the
+	 * notify/wake path (see `legacyConsumeTerminalPolicy`). A
+	 * containment failure is an UNRESOLVED SUBPROCESS-SAFETY
+	 * OBLIGATION: the process group was NOT proven reaped, so the
+	 * host must not release a deferred user handoff that would
+	 * misrepresent the failed containment as a clean, safe
+	 * terminal state.
+	 *
+	 * Wired by `SdkController` to a thin adapter that returns the
+	 * existing `this.backgroundCommandJobStates` map (already
+	 * maintained by `updateBackgroundCommandState` and already
+	 * published to the webview). NO new state and NO new protocol
+	 * field is introduced.
+	 *
+	 * Optional: when absent, the coordinator falls back to the
+	 * pre-PHCF01 behavior (active-map cardinality only), so
+	 * existing tests that do not pass this option are unaffected.
+	 * Production MUST wire this to maintain the PHCF02/PHCF03
+	 * fail-closed invariants.
+	 */
+	getBackgroundCommandJobStates?: () => Record<string, string>
+	/**
 	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
 	 *
 	 * Synchronous accessor for the count of UNCONSUMED terminal
@@ -825,7 +865,23 @@ export class SdkSessionEventCoordinator {
 	 *   3. the live `hasRunningBackgroundJobForOwner(activeSession.sessionId)`
 	 *      lookup MUST return false; otherwise another matching job
 	 *      is still alive and the continuation stays deferred
-	 *   4. on success, the canonical writer
+	 *   4. ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+	 *      (PHCF01): NO owned job may have an UNRESOLVED containment
+	 *      failure. The `>0 -> 0` cardinal transition proves only that
+	 *      the ACTIVE MAP is empty -- it does NOT prove that the
+	 *      process group was reaped, because the `CommandJobManager`
+	 *      removes a job from the active map on BOTH the clean path
+	 *      AND the containment-failure path. A job whose terminal
+	 *      reason is `containment_failed` carries an unresolved
+	 *      subprocess-safety obligation, so the handoff stays
+	 *      DEFERRED (the marker is PRESERVED, not cleared).
+	 *   5. ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+	 *      (PHCF01 / PHCF08): an existing authoritative terminal phase
+	 *      (`resumable` / `error` / `completed`) MUST NOT be
+	 *      clobbered by a late background terminal event. This
+	 *      mirrors the upstream straggler guard applied by the
+	 *      `done` handler.
+	 *   6. on success, the canonical writer
 	 *      `session-event-turn-complete-resumable-straggler-preserve`
 	 *      commits `awaiting_followup` exactly once and the
 	 *      marker is cleared
@@ -863,6 +919,29 @@ export class SdkSessionEventCoordinator {
 			this.deferredContinuation = undefined
 			return
 		}
+		// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+		// (PHCF01 / PHCF08): an existing AUTHORITATIVE terminal phase
+		// must not be clobbered by a late background terminal event.
+		//
+		// The upstream `done` handler already applies the same
+		// straggler guard: a turn-complete from a turn that was
+		// cancelled (cancelTask set phase "resumable") is a straggler,
+		// and overwriting it would clobber the cancel-set phase and
+		// lose the footer "Resume Task" affordance. The deferred
+		// re-evaluation path is the SAME kind of late terminal event
+		// and MUST preserve the same authority.
+		//
+		// The marker is CLEARED here (not preserved): the deferral was
+		// superseded by a newer authoritative phase, so keeping it
+		// would let a still-later event re-drive a stale decision.
+		const currentPhase = this.options.getTurnPhase?.()
+		if (currentPhase === "resumable" || currentPhase === "error" || currentPhase === "completed") {
+			Logger.warn(
+				`[SdkController] background job terminal idle NOT releasing deferred Q5 completion for session ${activeSession.sessionId}: authoritative phase=${currentPhase} (PHCF01/straggler guard)`,
+			)
+			this.deferredContinuation = undefined
+			return
+		}
 		// The third conservation: another matching job may STILL be
 		// running (BTCONT-CTL-04 multi-job case). The terminal event
 		// for job J1 just settled; if J2 is still alive, the lookup
@@ -871,6 +950,61 @@ export class SdkSessionEventCoordinator {
 		// can re-drive the same continuation.
 		const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
 		if (ownerStillRunning) return
+		// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+		// (PHCF01 / PHCF02 / PHCF03 / PHCF13): the ACTIVE-MAP
+		// emptiness proven by the `>0 -> 0` cardinal transition is
+		// NOT proof of PROCESS CONTAINMENT. The `CommandJobManager`
+		// removes a job from the active map on BOTH the clean path
+		// and the containment-failure path, so an empty active map
+		// cannot distinguish `MANAGED_JOB_REMOVED` from
+		// `PROCESS_CONTAINMENT_VERIFIED`.
+		//
+		// A job whose terminal reason is `containment_failed` carries
+		// an UNRESOLVED SUBPROCESS-SAFETY OBLIGATION: the process
+		// group was NOT proven reaped (the postcondition was
+		// `alive` / `eperm` / `unknown` / `pgid_unset`). Releasing
+		// the deferred user handoff would silently represent that
+		// failed containment as a clean, safe terminal state.
+		//
+		// This enforces the SAME production contract the
+		// `BackgroundNotifyCoordinator` already applies to the
+		// notify/wake path (`containment_failed ->
+		// containment_no_wake`): a failed containment must not
+		// release autonomous work.
+		//
+		// The deferred marker is PRESERVED (not cleared) so a LATER
+		// clean resolution of the same job can re-drive the same
+		// continuation.
+		//
+		// The RECOVERY PHASE is published here so the UI is not left
+		// in a permanent `streaming` state after the model run has
+		// genuinely ended. `resumable` is the EXISTING, established
+		// production affordance for "the run was abandoned before it
+		// produced a terminal response, so Resume is the honest next
+		// action" -- see the cancel-path precedent in
+		// `SdkTaskControlCoordinator.cancelTask`
+		// (`task-control-cancel-no-active-session`), and the webview
+		// button map `resumable -> BUTTON_CONFIGS.resume_task`
+		// ("Resume Task"). NO new phase is introduced and NO duplicate
+		// error state is created: the `command_containment_failed`
+		// runtime-error incident (the task telemetry WARNING counter)
+		// remains the error authority, and the per-job
+		// `backgroundCommandJobStates[jobId] = "containment_failed"`
+		// pill remains the user-visible containment truth.
+		const jobStates = this.options.getBackgroundCommandJobStates?.()
+		if (jobStates) {
+			const failedContainmentJobIds = Object.entries(jobStates)
+				.filter(([, reason]) => reason === "containment_failed")
+				.map(([jobId]) => jobId)
+			if (failedContainmentJobIds.length > 0) {
+				Logger.warn(
+					`[SdkController] background job terminal idle NOT releasing deferred Q5 completion for session ${activeSession.sessionId}: unresolved containment failure (jobs=${failedContainmentJobIds.join(",")}) (PHCF01)`,
+				)
+				this.deferredContinuation = undefined
+				this.options.setTurnPhase?.("resumable", undefined, "session-event-turn-complete-containment-failed-resumable")
+				return
+			}
+		}
 
 		// All four conservation checks pass: commit the canonical
 		// awaiting_followup transition exactly once.

@@ -1,0 +1,41 @@
+# 04 — RED / GREEN (PHCF01)
+
+Command:
+  cd apps/vscode && bun x vitest run --config vitest.config.ts \
+    src/sdk/__tests__/premature-handoff-containment-failure01.phcf01.test.ts
+
+## PRE-REPAIR (RED) — containment-verdict condition absent
+```
+     ✓ PHCF-01 (RED-01): clean terminality releases the deferred handoff exactly once 16ms
+     × PHCF-02 (RED-02): containment_failed with postcondition=alive must NOT release the deferred handoff 16ms
+     × PHCF-03 (RED-03): containment_failed with postcondition=unknown must fail closed 14ms
+     ✓ PHCF-04 (RED-04): a clean terminal for J1 must not release the handoff while J2 is still running 24ms
+     ✓ PHCF-05 (RED-05): late terminality for a replaced session must not mutate the active session 13ms
+     × PHCF-06 (RED-06): a late terminal event must not clobber an existing resumable phase 14ms
+     ✓ PHCF-10/11 (RED-07): neither clean cleanup nor containment failure synthesizes completion 38ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  3 failed | 4 passed (7)
+```
+
+```
+      at loadAssertionError (node:assert:28:96)
+AssertionError: expected 'awaiting_followup' to be 'resumable' // Object.is equality
+AssertionError: expected 1 to be +0 // Object.is equality
+```
+
+RED_PRE_REPAIR: REPRODUCED (3 failing tests)
+
+The load-bearing assertion: the committed lifecycle state versus the
+authoritative containment postcondition. RED-02/RED-03 both observed
+`expected 1 to be +0` — i.e. ONE `awaiting_followup` commit was made
+despite `terminalState=containment_failed`.
+
+## POST-REPAIR (GREEN)
+```
+ ✓ src/sdk/__tests__/premature-handoff-containment-failure01.phcf01.test.ts (9 tests) 165ms
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+```
+
+FOCUSED_GREEN: PASS (9/9)

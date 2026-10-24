@@ -28265,3 +28265,136 @@ ENTRY_HEAD):
 Live Working/Cancel verification on a host with a working GUI session, against
 the already-built `dist/clinemm-ptll01-corr01-16d23afd5.vsix`. No further ACT
 or review round for the L1 causal proof.
+
+---
+
+## ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01 (2026-10-24) — PASS_STRUCTURAL_PENDING_LIVE
+
+**Verdict: `PASS_STRUCTURAL_PENDING_LIVE`.** The unsafe containment-to-handoff
+promotion is REPRODUCED against the real production seam, ISOLATED to one
+load-bearing condition, ABLATED for necessity, and REPAIRED. The live
+qualification of the installed extension was NOT performed (the dogfood
+extensions directory is not writable in this environment), so `CLOSED_CLEAN` is
+NOT claimed.
+
+### Live incident
+
+    TASK_ID = 1792821549321_bwq2x   SESSION_ID = 1792821549321_bwq2x   EPOCH = 4
+    JOB_ID  = cmd_mvm0o260jip25i0b   MANAGER = M4   HOST = H4
+    PID/PGID = 40777
+
+### The defect
+
+The host released a deferred user handoff (`awaiting_followup` / "Your turn") on a
+managed background-job `running=true -> running=false` transition. That transition
+proves only that the manager's ACTIVE MAP is empty — it does NOT prove the
+subprocess process group was reaped, because `CommandJobManager.finalize()`
+removes the job from the active map on BOTH the clean and the containment-failure
+path.
+
+    MANAGED_JOB_REMOVED  !=  PROCESS_CONTAINMENT_VERIFIED
+
+The exact terminal reason (`containment_failed`) WAS available at the publication
+boundary and was dropped one frame before the decision
+(`Controller.maybeReevaluateDeferredContinuation` forwards only
+`previousRunning/running/taskId`), so the decision could not distinguish a clean
+terminal from a failed containment. The live capture corroborates this exactly:
+`job_active_removed` carries `terminalState=containment_failed` at the SAME
+millisecond the active map was emptied (09:29:30.468).
+
+### The bounded repair (one primary file + one integration file + one closed-union entry)
+
+1. `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (+140)
+   - NEW option `getBackgroundCommandJobStates?: () => Record<string, string>` —
+     the host's EXISTING per-job terminal projection (NO new state, NO new
+     protocol field).
+   - NEW conservation rule in `reevaluateDeferredContinuation()`: an owned job
+     whose terminal reason is `containment_failed` means the deferred handoff is
+     NOT released. The marker is cleared and the phase is committed as
+     `resumable` — the existing "the run was abandoned before it produced a
+     terminal response" affordance (cancel-path precedent), with the new writer
+     `session-event-turn-complete-containment-failed-resumable`.
+   - NEW straggler guard: an existing authoritative terminal phase
+     (`resumable`/`error`/`completed`) is not clobbered by a late background
+     terminal event.
+2. `apps/vscode/src/sdk/SdkController.ts` (+1 ACT-owned line) — wires the option
+   to `this.backgroundCommandJobStates`.
+3. `apps/vscode/src/shared/turn-state-writer-provenance.ts` (+10) — the new
+   writerId in the closed `TurnStateWriterId` union.
+
+This enforces the contract the codebase ALREADY applies on the notify/wake path
+(`background-notify-coordinator.ts:3474-3481`): `containment_failed ->
+containment_no_wake`. A failed containment must not release autonomous work.
+
+The repair introduces NO new phase value, NO new public protocol field, and NO
+duplicate error state: the existing `command_containment_failed` runtime-error
+incident (task-telemetry WARNING counter) and the existing
+`backgroundCommandJobStates[jobId]="containment_failed"` pill (already published
+and already rendered by `ChatRow.tsx:280-289`) remain the error/containment
+authorities.
+
+### Original abort: NOT fixed by this ACT
+
+    ORIGINAL_ABORT_CAUSE = UNAVAILABLE_FROM_TRACE
+
+No enabled capture records a stop reason. The decisive fact is the ORDERING: the
+`runtimeStatus` `running -> aborted` transition is first observed at
+09:28:47.640, while the containment failure is at 09:29:30.468 — the abort
+PRECEDES the containment failure by 42.8 s. The containment failure therefore did
+NOT cause the abort. The abort remains an OPEN, SEPARATE question; a successor ACT
+should arm a stop-reason capture on the SDK's `done` dispatch path.
+
+### Executable evidence
+
+    RED_PRE_REPAIR:       REPRODUCED (RED-02 `expected 1 to be +0`; RED-03 same;
+                          RED-06 `expected 'awaiting_followup' to be 'resumable'`)
+    CAUSAL_DISCRIMINATOR: PASS
+    ABLATION_NECESSITY:   PASS (removing ONLY the containment-verdict condition
+                          reproduces `awaiting_followup` exactly; RED-06 still
+                          passes, proving the two conditions are INDEPENDENT)
+    FOCUSED_GREEN:        PASS (9/9)
+    ACT_OWNED_FAILURES:   0 (exact per-test outcome diff vs a stashed baseline:
+                          IDENTICAL, zero delta, on two regression sets)
+    TYPECHECK:            PASS (tsc --noEmit -p tsconfig.json -> exit 0)
+    BIOME_LINT:           PASS (4 files, no findings)
+    GIT_DIFF_CHECK:       PASS
+
+REPRODUCTION CLASS: `SYNTHETIC_REAL` — the ONLY injected seam is the manager's
+existing documented test-only `terminalPostconditionProbe`; the real
+`CommandJobManager.finalize()` state machine, the active-map mutation, the
+`terminalTransitionResolve` payload, the `SdkSessionEventCoordinator` and the
+`Controller.maybeReevaluateDeferredContinuation` bridge are ALL the real
+production path. No uncontrolled real orphan processes were created.
+
+### Live qualification: BLOCKED BY THE ENVIRONMENT (not by the build)
+
+    VSIX_PATH  = dist/clinemm-phcf01.vsix
+    VSIX_BYTES = 60513509
+    VSIX_SHA256= bf518abdd328b6a25bb1036a471204a2239b82ba8d3a7e7601af3ae6c02f495e
+    EXTENSION_VERSION = 4.1.16-5a1c485cb
+
+The VSIX builds cleanly from the repaired tree. The dogfood install FAILED with
+`EPERM: operation not permitted, mkdir` on the dogfood extensions directory
+(directly reproduced with a `touch` probe) — an environment restriction, not a
+code fault. The install/run was NOT pursued further per operator instruction.
+Consequently NO live claim is made: the `containment_failed -> resumable`
+transition, the "Resume Task" affordance, the absence of a false `completed`
+badge, and the clean-terminal live handoff are all UNOBSERVED on the installed
+extension.
+
+### Evidence
+
+- `apps/vscode/src/sdk/__tests__/premature-handoff-containment-failure01.phcf01.test.ts` — 9/9
+- `.factory/evidence/ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01/`
+  (`01-source-authority.md`, `02-live-incident-correlation.md`,
+  `03-abort-classification.md`, `04-red-green.txt`, `05-ablation.txt`,
+  `06-conservation-gates.txt`, `07-live-qualification.md`, `SHA256SUMS`)
+- `.factory/acts/ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01.md`
+
+### Next cursor
+
+1. Live qualification of `dist/clinemm-phcf01.vsix` on a host with a writable
+   dogfood extensions directory: observe the `containment_failed -> resumable`
+   transition, the "Resume Task" affordance, and the clean-terminal handoff.
+2. The ORIGINAL ABORT stays open and separate — arm a stop-reason capture on the
+   SDK `done` dispatch path to identify the actor and reason.

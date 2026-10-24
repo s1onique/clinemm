@@ -1,0 +1,66 @@
+# 05 — Ablation / Necessity Proof (PHCF01)
+
+## Hypothesis
+
+The SINGLE load-bearing condition causing the invalid transition is:
+the deferred-handoff decision does not consult the per-job containment
+verdict, and therefore authorizes the handoff on ACTIVE-MAP EMPTINESS alone.
+
+## Ablation procedure
+
+The ORIGINAL (pre-repair) behaviour was restored by removing ONLY the
+containment-verdict condition from the production coordinator, leaving
+every other repair element (the straggler guard, the `resumable` recovery
+commit, the option wiring) intact:
+
+```ts
+// sdk-session-event-coordinator.ts — ABLATED
+const jobStates = this.options.getBackgroundCommandJobStates?.()
+if (jobStates) {
+    const failedContainmentJobIds: string[] = []   // <-- condition removed
+    if (failedContainmentJobIds.length > 0) {
+```
+
+## Ablated run
+```
+     ✓ PHCF-01 (RED-01): clean terminality releases the deferred handoff exactly once 18ms
+     × PHCF-02 (RED-02): containment_failed with postcondition=alive must NOT release the deferred handoff 14ms
+     × PHCF-03 (RED-03): containment_failed with postcondition=unknown must fail closed 14ms
+     ✓ PHCF-04 (RED-04): a clean terminal for J1 must not release the handoff while J2 is still running 24ms
+     ✓ PHCF-05 (RED-05): late terminality for a replaced session must not mutate the active session 13ms
+     ✓ PHCF-06 (RED-06): a late terminal event must not clobber an existing resumable phase 13ms
+     ✓ PHCF-10/11 (RED-07): neither clean cleanup nor containment failure synthesizes completion 39ms
+     × PHCF-07: duplicate terminal callbacks do not duplicate phase commits 16ms
+     × PHCF-12: the published webview state matches the canonical phase 12ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  4 failed | 5 passed (9)
+```
+
+```
+      at loadAssertionError (node:assert:28:96)
+AssertionError: expected 'awaiting_followup' to be 'resumable' // Object.is equality
+AssertionError: expected 1 to be +0 // Object.is equality
+```
+
+## Reading
+
+The ablated build reproduces the ORIGINAL defect EXACTLY:
+- RED-02 / RED-03: `expected 1 to be +0` — the failed containment released
+  the deferred handoff again (one `awaiting_followup` commit).
+- PHCF-07 / PHCF-12: `expected 'awaiting_followup' to be 'resumable'` — the unsafe
+  `awaiting_followup` promotion is back.
+
+RED-06 (the straggler guard) STILL PASSES under the ablation. This proves the
+two conditions are INDEPENDENT and that the containment-verdict condition is
+the single cause of the containment-to-handoff promotion.
+
+## Restoration
+
+The ablated file was restored byte-for-byte from the pre-ablation copy and
+re-run: 9/9 PASS. (See `04-red-green.txt`.)
+
+ABLATION_NECESSITY: PASS
+
+Note: the ablation changes the actual LIFECYCLE RESULT (the committed phase),
+not a callback-invocation count and not an additional diagnostic record.
