@@ -109,6 +109,14 @@ harnesses were never updated to inject it, so the call throws inside
 (fail-closed) and suppresses the C10 commit. Newer suites (e.g.
 `c9c10cdap01`, `c9c10scr01`, `bcapt01`) DO inject it.
 
+The same harness defect also accounts for 2 failures in
+`background-notify-completion-authority-c10-framework01.bnca-framework01.test.ts`
+(`BNCA-FRAMEWORK-01b`, `BNCA-FRAMEWORK-01c`), verified identically RED at
+the parent commit with the new suite removed. That file also does not
+inject `getElmCompletionAuthorityDecision` (grep count = 0). The suites
+that DO inject it are green — `c9c10cdap01` (13/13), `c9c10scr01`
+(11/11), and the new `cfc10a01` (18/18) all pass.
+
 Consequence for this ACT: these suites are NOT usable as a conservation
 gate until their harness is repaired. They are NOT evidence for or
 against the containment question. The NEW CFC10A01 suite injects the Elm
