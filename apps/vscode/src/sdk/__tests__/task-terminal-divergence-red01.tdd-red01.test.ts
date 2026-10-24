@@ -153,6 +153,19 @@ interface Harness {
 	activeSessionId: string
 	activeTaskId: string
 	appendAndEmit: ReturnType<typeof vi.fn>
+	/**
+	 * ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+	 * (C9C10CDAP01): the PRODUCTION "update a message" channel
+	 * (`SdkMessageCoordinator.emitHookMessage`) — the channel the C10
+	 * commit publishes the completion authority marker through.
+	 */
+	emitHookMessage: ReturnType<typeof vi.fn>
+	/**
+	 * The MESSAGE STORE as the user sees it: the rows that survived the
+	 * message-layer completion filter, with the production
+	 * upsert-by-`ts` semantics applied.
+	 */
+	storedRows: ClineMessage[]
 	completionCommitCount: () => number
 	errorPhaseCommitCount: () => number
 	allCommittedPhases: () => string[]
@@ -194,6 +207,18 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 	const activeTaskId = opts.activeTaskId ?? "task-tdd-01"
 
 	const appendAndEmit = vi.fn()
+	// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+	// (C9C10CDAP01): the PRODUCTION "update a message" channel
+	// (`SdkMessageCoordinator.emitHookMessage`). The completion
+	// authority marker is published BY THE C10 COMMIT through this
+	// channel (the row is re-published with the SAME `ts` and the
+	// marker ADDED), so the harness MUST model it for the visible row
+	// to carry the marker.
+	const emitHookMessage = vi.fn()
+	// The MESSAGE STORE, with the production upsert-by-`ts` semantics
+	// (`MessageStateHandler.addMessages`): a message with the same `ts`
+	// REPLACES the stored row in place.
+	const storedRows: ClineMessage[] = []
 	let completionCommitCount = 0
 	let errorPhaseCommitCount = 0
 	const allCommittedPhases: string[] = []
@@ -234,8 +259,33 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 		},
 		messages: {
 			appendAndEmit: ((msgs: unknown[]) => {
+				for (const m of msgs as ClineMessage[]) {
+					const idx = storedRows.findIndex((r) => r.ts === m.ts)
+					if (idx >= 0) {
+						storedRows[idx] = m
+					} else {
+						storedRows.push(m)
+					}
+				}
 				appendAndEmit(msgs as never)
 			}) as never,
+			// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+			// (C9C10CDAP01): the PRODUCTION "update a message" channel
+			// (`SdkMessageCoordinator.emitHookMessage`). The completion
+			// authority marker is published BY THE C10 COMMIT through this
+			// channel (the row is re-published with the SAME `ts` and the
+			// marker ADDED), so the harness MUST model it for the visible
+			// row to carry the marker. The production store upserts by
+			// `ts`, so an update REPLACES the row in place.
+			emitHookMessage: (m: ClineMessage) => {
+				const idx = storedRows.findIndex((r) => r.ts === m.ts)
+				if (idx >= 0) {
+					storedRows[idx] = m
+				} else {
+					storedRows.push(m)
+				}
+				emitHookMessage(m)
+			},
 		},
 		taskHistory: { updateTaskUsage: vi.fn() },
 		getTask: () => ({ taskId: activeTaskId }) as never,
@@ -296,6 +346,8 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 		activeSessionId,
 		activeTaskId,
 		appendAndEmit,
+		emitHookMessage,
+		storedRows,
 		completionCommitCount: () => completionCommitCount,
 		errorPhaseCommitCount: () => errorPhaseCommitCount,
 		allCommittedPhases: () => allCommittedPhases,
@@ -317,16 +369,21 @@ const agentEvent = (sessionId: string, event: Record<string, unknown>): CoreSess
 	({ type: "agent_event", payload: { sessionId, event: event as never } }) as CoreSessionEvent
 
 function visibleCompletionRows(h: Harness): ClineMessage[] {
-	const calls = h.appendAndEmit.mock.calls as Array<[ClineMessage[]]>
+	// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+	// (C9C10CDAP01): read the MESSAGE STORE — what the user actually
+	// sees — not the raw publish calls. The completion authority marker
+	// is published BY THE C10 COMMIT through the "update a message"
+	// channel, so a store read is the faithful projection. The store
+	// applies the production upsert-by-`ts` semantics, so the promotion
+	// (same `ts`, marker ADDED) replaces the row IN PLACE — the visible
+	// row cardinality is unchanged.
 	const rows: ClineMessage[] = []
-	for (const call of calls) {
-		for (const m of call[0]) {
-			// Skip the partial streaming row that content_start emits;
-			// only the non-partial `isAuthoritativelyCompletedResult: true`
-			// row at content_end is the canonical terminal surface.
-			if (m.say === "completion_result" && !m.partial) {
-				rows.push(m)
-			}
+	for (const m of h.storedRows) {
+		// Skip the partial streaming row that content_start emits;
+		// only the non-partial finalized row is the canonical terminal
+		// surface.
+		if (m.say === "completion_result" && !m.partial) {
+			rows.push(m)
 		}
 	}
 	return rows

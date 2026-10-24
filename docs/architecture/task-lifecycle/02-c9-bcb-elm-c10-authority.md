@@ -201,17 +201,36 @@ is decided LATER — and may never be granted.
 ### The repair
 
 `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`:
-`retractCompletionAuthorityMarker(event)`.
+`promoteCompletionAuthorityMarker(event)`.
 
-When the Elm authority says HOLD or FAILURE (i.e. the C10 commit is
-suppressed), the coordinator re-publishes the current turn's completion
-row with the SAME `ts` and the marker DROPPED. The message store
-upserts by `ts` and the webview's `applyMessage` reducer merges by
-`ts`, so the row is replaced in place: the summary TEXT stays visible,
-the false "Completed" badge does not.
+The invariant is TEMPORAL: an authoritative completion must never be
+PUBLISHED before its C10 commit. So the LIVE `content_end` publishes the
+finalized `completion_result` row WITHOUT the
+`isAuthoritativelyCompletedResult` marker, and the C10 COMMIT publishes
+the marker: the coordinator re-publishes the current turn's completion
+row with the SAME `ts` and the marker ADDED. The message store upserts by
+`ts` and the webview's `applyMessage` reducer merges by `ts`, so the row
+is replaced in place: the summary TEXT stays visible, and the
+"Completed" badge appears exactly when — and only when — the C10
+committed.
 
-The retraction is a PRESENTATION correction, not a second completion
-authority: it can only REMOVE the authority claim, never add one.
+Both C10 paths promote the row: the immediate turn-complete path and the
+deferred `reevaluateDeferredCompletionBarrier` path.
+
+The promotion is a PUBLICATION of the C10 authority, not a second
+completion authority: the C10 commit IS the authority, and the seam is
+only ever called from a successful commit.
+
+**Why the earlier retraction design was insufficient.** The first
+repair stamped the marker at publication time and retracted it later
+when the Elm authority rejected the completion. That is retrospective:
+the webview receives the publication and the retraction as SEPARATE
+messages over an event-based channel, so it can render the first one
+before the second arrives — the final projection was correct, but the
+temporal invariant was violated. The retraction also had a second
+defect: the DEFERRED C10 path could later AUTHORIZE and COMMIT without
+ever restoring the removed marker, leaving a legitimate, committed
+completion with NO badge.
 
 | kind | observed |
 

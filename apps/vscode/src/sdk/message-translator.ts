@@ -1762,18 +1762,47 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						const storedInput = state.getStreamingToolInput()
 						const ts = state.clearStreamingTool()
 						const resultText = getCompletionResultText(storedInput)
-						// ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01 (TRCR01):
-						// read the held-vs-committed bit the restoration caller
-						// (`finalizePersistedToolUse`) threaded onto the event.
-						// The live streaming path never sets this field, so
-						// `isAuthoritativeCompletion` is `undefined` and the
-						// `!== false` check below preserves the existing live
-						// "always stamp the marker" behavior. The restoration
-						// path passes `false` for HELD completion attempts so
-						// the marker is omitted on those rows.
+						// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+						// (C9C10CDAP01) — COMMIT-DRIVEN authority publication.
+						//
+						// The `isAuthoritativelyCompletedResult` marker is the
+						// webview's PRIMARY authority for "this row IS a terminal
+						// completion" (see
+						// `webview-ui/src/components/chat/terminalReportFraming.ts`).
+						//
+						// It used to be stamped HERE — at publication time — and
+						// C9C10SCR01 retracted it later when the Elm authority
+						// rejected the completion. That was retrospective: the
+						// marker was PUBLISHED before the turn-end C10
+						// completion-commit barrier decided whether the task may
+						// actually commit. The invariant is TEMPORAL — an
+						// authoritative completion must never be PUBLISHED before
+						// its C10 commit — and a later corrective update cannot
+						// establish it, because the webview receives the
+						// publication and the retraction as separate messages
+						// over an event-based channel and can render the first
+						// one before the second arrives.
+						//
+						// So the LIVE path no longer stamps the marker. The
+						// marker is published by the C10 COMMIT itself (the
+						// coordinator's `promoteCompletionAuthorityMarker` seam),
+						// which re-publishes THIS row with the same `ts` and the
+						// marker ADDED. Both C10 paths (immediate and deferred)
+						// promote the row.
+						//
+						// The RESTORATION path is unchanged: it passes an
+						// explicit `isAuthoritativeCompletion` bit, so a persisted
+						// COMMITTED completion keeps its marker (reopening a
+						// finished task still shows the "Completed" badge) and a
+						// persisted HELD attempt still omits it. That distinction
+						// is read from the persisted runtime-control marker, not
+						// from message ordering.
 						const eventAuthority = (event as AgentEvent & { isAuthoritativeCompletion?: boolean })
 							.isAuthoritativeCompletion
-						const isAuthoritativeCompletion = eventAuthority !== false
+						// LIVE (no explicit bit): no marker — the C10 commit
+						// publishes it. RESTORATION (explicit bit): the persisted
+						// held-vs-committed distinction is honoured as before.
+						const isAuthoritativeCompletion = eventAuthority === true
 						// Finalize the say:"completion_result" (non-partial)
 						// This renders the green completion box.
 						messages.push({
@@ -1801,6 +1830,10 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 							// activity, ACT §1.4). The held-vs-committed distinction
 							// is read from the persisted runtime-control marker, not
 							// from message ordering.
+							//
+							// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+							// (C9C10CDAP01): on the LIVE path this is always
+							// omitted — the C10 commit publishes the authority.
 							...(isAuthoritativeCompletion ? { isAuthoritativelyCompletedResult: true } : {}),
 						})
 						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a

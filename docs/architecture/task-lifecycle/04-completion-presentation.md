@@ -83,12 +83,12 @@ stateDiagram-v2
 | Field | Value |
 |---|---|
 | source | `apps/vscode/src/sdk/message-translator.ts` (the completion-tool branch of the `content_end` case) |
-| predicate | `isCompletionTool(toolName)`; `event.isAuthoritativeCompletion !== false` |
-| effect | `say:"completion_result"`, `partial: false`, `isAuthoritativelyCompletedResult: true`; `setTerminalResponseCommittedThisTurn()` |
+| predicate | `isCompletionTool(toolName)`; LIVE path: the marker is NEVER stamped at publication (the C10 commit publishes it). RESTORATION path: `event.isAuthoritativeCompletion === true` stamps it. |
+| effect | `say:"completion_result"`, `partial: false`, `setTerminalResponseCommittedThisTurn()`; the `isAuthoritativelyCompletedResult: true` marker is added by the C10 COMMIT (see P-06) on the LIVE path, or stamped directly on the RESTORATION path. |
 | test | `apps/vscode/src/sdk/__tests__/message-translator.test.ts`, `terminal-report-cardinality-repair01.trcr01.test.ts` |
 | kind | observed |
 
-**The `event.isAuthoritativeCompletion === false` escape hatch** is the
+**The `event.isAuthoritativeCompletion` escape hatch** is the
 PERSISTED-TRANSCRIPT restoration path
 (`finalizePersistedToolUse`): when a completion attempt was HELD (a
 runtime-control `completion_continuation_control` user message follows
@@ -98,7 +98,12 @@ distinction is read from the persisted runtime-control marker, NOT from
 message ordering.
 
 **Before this ACT** the LIVE path always stamped the marker
-(`eventAuthority !== false` with `eventAuthority === undefined`).
+(`eventAuthority !== false` with `eventAuthority === undefined`), i.e.
+the marker was PUBLISHED at `content_end` — BEFORE the C10 commit
+decision — and a later retraction corrected it. The LIVE path now
+stamps NOTHING (`eventAuthority === true` is required, and only the
+restoration path passes an explicit bit), so the marker is published
+BY the C10 commit (P-06).
 
 ### P-03 — the message-layer completion filter (the BCB projection)
 
@@ -142,33 +147,53 @@ message tail, or from the mutable task phase alone.
 | test | `apps/vscode/webview-ui/src/components/chat/chat-view/messageReducer.test.ts` |
 | kind | observed |
 
-### P-06 — the marker retraction (THIS ACT's repair)
+### P-06 — the commit-driven authority publication (THIS ACT's repair)
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1266` (`retractCompletionAuthorityMarker`), invoked at `:3765`; the tracking field is set at `:3219` and cleared at `:2995` |
-| predicate | The C10 commit was SUPPRESSED (the Elm authority returned `hold` or `failure`) AND the coordinator published a completion row carrying the marker for THIS turn |
-| effect | The row is re-published with the SAME `ts` and the marker DROPPED, via `emitHookMessage` (the established "update a message" channel — store-append + direct webview push, NO session-event emission). The summary TEXT survives; the false badge does not. |
-| test | `apps/vscode/src/sdk/__tests__/c9-c10-statechart-causal-repair01.c9c10scr01.test.ts` (RED-03) |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1232` (`promoteCompletionAuthorityMarker`), invoked at the C10 commit on BOTH paths — the immediate turn-complete path (`:3761`) and the deferred `reevaluateDeferredCompletionBarrier` path (`:1898`); the tracking field is set at `:3192` and cleared at `:2967` |
+| predicate | The C10 commit SUCCEEDED (the Elm authority returned `authorize` AND every conservation check passed) AND the coordinator published a completion row for THIS turn |
+| effect | The row is re-published with the SAME `ts` and the marker ADDED, via `emitHookMessage` (the established "update a message" channel — store-append + direct webview push, NO session-event emission). The summary TEXT survives; the badge appears exactly when — and only when — the C10 committed. |
+| test | `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` (RED-04, RED-05) |
 | kind | observed |
+
+**The invariant is TEMPORAL.** An authoritative completion must never be
+PUBLISHED before its C10 commit. The live `content_end` therefore
+publishes the finalized `completion_result` row WITHOUT the
+`isAuthoritativelyCompletedResult` marker; the C10 COMMIT publishes the
+marker.
+
+**Why the earlier retraction design was insufficient.** The C9C10SCR01
+repair stamped the marker at publication time and retracted it later
+when the Elm authority rejected the completion. That is
+*retrospective*: the webview receives the publication and the retraction
+as SEPARATE messages over an event-based channel, so it can render the
+first one before the second arrives. The final projection was correct,
+but the temporal invariant was violated. The retraction also had a
+second defect: the DEFERRED C10 path could later AUTHORIZE and COMMIT
+without ever restoring the removed marker, leaving a legitimate,
+committed completion with NO badge.
 
 **Why `emitHookMessage` and not `appendAndEmit`:** `appendAndEmit` is
 the "publish NEW rows" channel and it EMITS a session event. The
-retraction is an UPDATE to an existing row, so it uses the update
+promotion is an UPDATE to an existing row, so it uses the update
 channel. This keeps the published-row cardinality unchanged (the
 existing `CPA-09` / `CPA-04` / `C10-BASELINE-02` contracts count
 published rows).
 
-**Bounded scope.** The retraction target is turn-scoped: the
+**Bounded scope.** The promotion target is turn-scoped: the
 coordinator tracks the row it published for the CURRENT turn
-(`publishedAuthoritativeCompletionRow`) and clears that tracking at
+(`pendingCompletionAuthorityRow`) and clears that tracking at
 the turn boundary (`pending_prompt_submitted`). A historical
 completion row from a previous epoch is never touched — so
 "Preserve historical completion summaries when a newer epoch is
 running" holds.
 
-**It can only REMOVE the authority claim, never add one.** It is a
-presentation correction, not a second completion authority.
+**It is NOT a second completion authority.** The C10 commit IS the
+authority; this seam merely publishes that authority to the
+presentation layer. The seam is only ever called from a successful C10
+commit, and it can only ADD the marker to the row the coordinator
+itself published for the current turn.
 
 ### P-07 — the reopen path
 

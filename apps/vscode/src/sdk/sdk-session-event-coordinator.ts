@@ -871,28 +871,35 @@ export class SdkSessionEventCoordinator {
 	private nextCompletionCommitEventId = 0
 
 	/**
-	 * ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 / C9C10SCR01:
+	 * ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+	 * (C9C10CDAP01):
 	 *
 	 * The completion row the coordinator ACTUALLY PUBLISHED for the
-	 * current turn WITH the `isAuthoritativelyCompletedResult` marker.
+	 * current turn, PENDING its C10 completion-commit.
+	 *
+	 * The row is published at the completion tool's `content_end`
+	 * WITHOUT the `isAuthoritativelyCompletedResult` marker: the
+	 * authority to commit the task's completion is decided LATER, at
+	 * turn end, by the Elm completion authority. The C10 COMMIT then
+	 * promotes this row (same `ts`) by adding the marker.
 	 *
 	 * The coordinator is the only component that knows whether the row
 	 * survived the message-layer completion filter:
 	 *   - The BCB (TS-predicate) hold path REMOVES the row from the
 	 *     published set, so nothing is tracked here and there is
-	 *     nothing to retract.
-	 *   - The Elm HOLD / FAILURE path KEEPS the row (with its marker)
-	 *     in the published set, so it IS tracked here and the
-	 *     retraction seam can strip the marker.
+	 *     nothing to promote.
+	 *   - The Elm HOLD / FAILURE path KEEPS the row in the published
+	 *     set, so it IS tracked here — and the C10 commit is
+	 *     suppressed, so the marker is never published.
 	 *
 	 * Tracking the PUBLISHED row (rather than reading it back from the
-	 * message store) keeps the retraction exact: it can never resurrect
+	 * message store) keeps the promotion exact: it can never resurrect
 	 * a row the filter deliberately suppressed.
 	 *
-	 * Cleared when the turn outcome is cleared, so a retraction can
+	 * Cleared when the turn outcome is cleared, so a promotion can
 	 * never reach back into a previous turn's row.
 	 */
-	private publishedAuthoritativeCompletionRow: ClineMessage | undefined
+	private pendingCompletionAuthorityRow: ClineMessage | undefined
 
 	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
@@ -1165,133 +1172,98 @@ export class SdkSessionEventCoordinator {
 	 * `failure` decision and this helper suppresses the commit effect.
 	 */
 	/**
-	 * ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 / C9C10SCR01:
+	 * ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+	 * (C9C10CDAP01):
 	 *
-	 * RETRACT the per-row completion-authority marker on the CURRENT
-	 * turn's finalized `completion_result` row.
+	 * PUBLISH the per-row completion-authority marker on the CURRENT
+	 * turn's finalized `completion_result` row — at the C10 COMMIT.
 	 *
-	 * WHY. The completion row is published at the completion tool's
-	 * `content_end` — BEFORE the turn-end C10 completion-commit
-	 * barrier decides whether the task may actually commit its
-	 * completion. The row is published with the
-	 * `isAuthoritativelyCompletedResult` marker, which the webview
-	 * reads as "this row IS a terminal completion" and renders as the
-	 * green "Completed" badge.
+	 * WHY (the temporal invariant). The completion row is published at
+	 * the completion tool's `content_end` — BEFORE the turn-end C10
+	 * completion-commit barrier decides whether the task may actually
+	 * commit its completion. The `isAuthoritativelyCompletedResult`
+	 * marker is the webview's PRIMARY authority for "this row IS a
+	 * terminal completion"; it renders as the green "Completed" badge.
 	 *
-	 * When the authority then says NO — an Elm HOLD or FAILURE — the
-	 * C10 commit is suppressed, so the task phase stays `streaming`
-	 * and the TaskHeader keeps saying "Working". But the published
-	 * row keeps its marker, so the user sees a green "Completed" badge
-	 * on a task that is demonstrably NOT complete. That is the LIVE
-	 * divergence.
+	 * The invariant is TEMPORAL:
 	 *
-	 * (The TS-predicate BCB hold does NOT need this seam: the
-	 * message-layer completion filter removes the row from the store
-	 * entirely, so no marker survives. The Elm path is the only one
-	 * that leaves the row in place.)
+	 *     an authoritative completion must never be PUBLISHED before
+	 *     its C10 commit.
 	 *
-	 * WHAT IT DOES. Reads the stored row by `ts`, drops the marker,
-	 * and re-publishes it with the SAME `ts`. The message store
-	 * upserts by `ts`, so the row is replaced in place; the summary
-	 * TEXT is preserved (the ACT's "Held-attempt summary => content
-	 * may remain visible without a false Completed badge" invariant),
-	 * and only the false authority claim is removed.
+	 * C9C10SCR01 attempted to establish it RETROSPECTIVELY: it stamped
+	 * the marker at publication time and retracted it later when the Elm
+	 * authority returned HOLD / FAILURE. That cannot establish the
+	 * invariant — the webview receives the publication and the retraction
+	 * as SEPARATE messages over an event-based channel and can render the
+	 * first one before the second arrives.
 	 *
-	 * BOUNDED SCOPE. The retraction targets ONLY the current turn's
-	 * row (the `ts` recorded by the translator at the canonical
-	 * completion seam, cleared at the turn boundary). A historical
-	 * completion row from a previous epoch is never touched, so
-	 * "Preserve historical completion summaries when a newer epoch is
-	 * running" holds.
-	 *
-	 * The retraction is a PRESENTATION correction, not a second
-	 * completion authority: it can only REMOVE the authority claim,
-	 * never add one. The single authority for "the task completed"
-	 * remains the C10 commit.
-	 *
-	 * @param event the session event whose delivery carries the
-	 *   retraction to the webview (the same event that published the
-	 *   original row, so the transport semantics are unchanged).
-	 */
-	/**
-	 * ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 / C9C10SCR01:
-	 *
-	 * RETRACT the per-row completion-authority marker on the CURRENT
-	 * turn's finalized `completion_result` row.
-	 *
-	 * WHY. The completion row is published at the completion tool's
-	 * `content_end` — BEFORE the turn-end C10 completion-commit
-	 * barrier decides whether the task may actually commit its
-	 * completion. The row is published with the
-	 * `isAuthoritativelyCompletedResult` marker, which the webview
-	 * reads as "this row IS a terminal completion" and renders as the
-	 * green "Completed" badge.
-	 *
-	 * When the authority then says NO — an Elm HOLD or FAILURE — the
-	 * C10 commit is suppressed, so the task phase stays `streaming`
-	 * and the TaskHeader keeps saying "Working". But the published
-	 * row keeps its marker, so the user sees a green "Completed" badge
-	 * on a task that is demonstrably NOT complete. That is the LIVE
-	 * divergence.
+	 * So the marker is now published BY the commit itself. The live
+	 * `content_end` publishes the row WITHOUT the marker; the C10 commit
+	 * promotes it.
 	 *
 	 * (The TS-predicate BCB hold does NOT need this seam: the
 	 * message-layer completion filter removes the row from the store
-	 * entirely, so no marker survives. The Elm path is the only one
-	 * that leaves the row in place.)
+	 * entirely, so there is no row to promote. The Elm path is the only
+	 * one that leaves the row in place.)
 	 *
-	 * WHAT IT DOES. Re-publishes the row with the SAME `ts` and the
-	 * marker dropped. The message store upserts by `ts`, so the row is
-	 * replaced in place; the summary TEXT is preserved (the ACT's
-	 * "Held-attempt summary => content may remain visible without a
-	 * false Completed badge" invariant), and only the false authority
-	 * claim is removed.
+	 * WHAT IT DOES. Re-publishes the tracked row with the SAME `ts` and
+	 * the marker ADDED. The message store upserts by `ts` and the
+	 * webview's `applyMessage` reducer merges by `ts`, so the row is
+	 * replaced IN PLACE: the summary TEXT is preserved, the visible-row
+	 * cardinality is unchanged, and the authority claim appears exactly
+	 * when — and only when — the C10 commit happened.
 	 *
-	 * BOUNDED SCOPE. The retraction targets ONLY the current turn's
-	 * row (the row the coordinator itself published and tracked in
-	 * `publishedAuthoritativeCompletionRow`). A historical completion
-	 * row from a previous epoch is never touched, so "Preserve
-	 * historical completion summaries when a newer epoch is running"
-	 * holds.
+	 * BOUNDED SCOPE. The promotion targets ONLY the current turn's row
+	 * (the row the coordinator itself published and tracked in
+	 * `pendingCompletionAuthorityRow`). A historical completion row from
+	 * a previous epoch is never touched, so "Preserve historical
+	 * completion summaries when a newer epoch is running" holds.
 	 *
-	 * The retraction is a PRESENTATION correction, not a second
-	 * completion authority: it can only REMOVE the authority claim,
-	 * never add one. The single authority for "the task completed"
-	 * remains the C10 commit.
+	 * The promotion is NOT a second completion authority: the C10 commit
+	 * IS the authority, and this seam merely publishes that authority to
+	 * the presentation layer. The seam is only ever called from a
+	 * successful C10 commit.
 	 *
 	 * @param event the session event whose delivery carries the
-	 *   retraction context. The retraction itself travels on the
+	 *   promotion context. The promotion itself travels on the
 	 *   "update a message" channel (see below), so the event is used
 	 *   for LOGGING CONTEXT only.
 	 */
-	private retractCompletionAuthorityMarker(event: CoreSessionEvent): void {
-		const published = this.publishedAuthoritativeCompletionRow
+	private promoteCompletionAuthorityMarker(event: CoreSessionEvent): void {
+		const published = this.pendingCompletionAuthorityRow
 		if (!published) {
-			// No completion row with an authority marker was published
-			// for this turn. Either the message-layer completion filter
-			// removed the row (the BCB path) or the row never carried
-			// the marker. Nothing to retract.
+			// No completion row was published for this turn. Either the
+			// message-layer completion filter removed the row (the BCB
+			// path) or the turn never produced a completion tool
+			// invocation. Nothing to promote.
 			return
 		}
-		this.publishedAuthoritativeCompletionRow = undefined
-		const retracted: ClineMessage = { ...published }
-		delete retracted.isAuthoritativelyCompletedResult
+		this.pendingCompletionAuthorityRow = undefined
+		// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+		// (C9C10CDAP01): the row identity is UNCHANGED — the SAME `ts`,
+		// the SAME text, the SAME `say`. Only the authority marker is
+		// ADDED. The webview's `applyMessage` reducer merges by `ts` and
+		// keeps the higher `seq`, so the row is replaced IN PLACE: no new
+		// visible row, no change to the published-row cardinality, and the
+		// summary text is untouched.
+		const promoted: ClineMessage = {
+			...published,
+			isAuthoritativelyCompletedResult: true,
+		}
 		try {
-			// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01: the
-			// retraction is an UPDATE to an EXISTING row, not a new
-			// publication. It therefore uses the established
-			// "update a message" channel (`emitHookMessage`:
-			// store-append + direct webview push) rather than
-			// `appendAndEmit` (the "publish new rows" channel). The
-			// message store upserts by `ts` and the webview's
-			// `applyMessage` reducer merges by `ts`, so the row is
-			// replaced in place with no new visible row and no change
-			// to the published-row cardinality.
-			this.options.messages.emitHookMessage?.(retracted)
+			// The established "update a message" channel
+			// (`emitHookMessage`: store-append + direct webview push),
+			// NOT `appendAndEmit` (the "publish new rows" channel) —
+			// because this is an UPDATE to an EXISTING row, not a new
+			// publication. The message store upserts by `ts` and the
+			// webview's `applyMessage` reducer merges by `ts`, so the row
+			// is replaced in place.
+			this.options.messages.emitHookMessage?.(promoted)
 			Logger.warn(
-				`[SdkController] Retracted the completion-authority marker on ts=${retracted.ts} (event=${event.type}): the completion commit was NOT authorized, so the row must not present as authoritative completion.`,
+				`[SdkController] Published the completion-authority marker on ts=${promoted.ts} (event=${event.type}): the completion commit WAS authorized, so the row now presents as authoritative completion.`,
 			)
 		} catch (err) {
-			Logger.error("[SdkController] Failed to retract the completion-authority marker:", err)
+			Logger.error("[SdkController] Failed to publish the completion-authority marker:", err)
 		}
 	}
 
@@ -1914,6 +1886,18 @@ export class SdkSessionEventCoordinator {
 			return
 		}
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+		// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+		// (C9C10CDAP01): the DEFERRED C10 COMMIT happened — publish
+		// the completion authority NOW, exactly as the immediate path
+		// does. The row published at the completion tool's `content_end`
+		// is promoted in place (same `ts`), so a legitimate deferred
+		// completion DOES carry the "Completed" badge. This is the
+		// P1 repair: the old retraction-only design removed the marker
+		// and never restored it, so a deferred completion that later
+		// AUTHORIZEd ended up badge-less.
+		this.promoteCompletionAuthorityMarker({
+			type: "agent_turn_done",
+		} as unknown as CoreSessionEvent)
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01:
 		// mirror the Site-B C10 capture (line ~1872) so the deferred
 		// reevaluation path emits the factual `task_completion_committed`
@@ -2985,14 +2969,14 @@ export class SdkSessionEventCoordinator {
 			if (event.type === "pending_prompt_submitted") {
 				this.options.beginProviderFailureTelemetryTurn?.()
 				this.options.messageTranslatorState.clearTurnOutcome()
-				// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 /
-				// C9C10SCR01: the completion-authority retraction target is
+				// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+				// (C9C10CDAP01): the completion-authority promotion target is
 				// turn-scoped. Clearing it at the turn boundary
-				// guarantees a retraction can never reach back into a
+				// guarantees a promotion can never reach back into a
 				// PREVIOUS turn's row (the ACT's "Preserve historical
 				// completion summaries when a newer epoch is running"
 				// invariant).
-				this.publishedAuthoritativeCompletionRow = undefined
+				this.pendingCompletionAuthorityRow = undefined
 				this.options.sessions.setRunning(true)
 				this.options.setTurnPhase?.(PROVIDER_FAILURE_PHASE.STREAMING, undefined, "session-event-pending-prompt-submitted")
 			}
@@ -3204,19 +3188,22 @@ export class SdkSessionEventCoordinator {
 			}
 
 			if (result.messages.length > 0) {
-				// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 /
-				// C9C10SCR01: track the completion row that is ACTUALLY
-				// published with the authority marker. The message-layer
+				// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+				// (C9C10CDAP01): track the completion row that is ACTUALLY
+				// published, PENDING its C10 commit. The message-layer
 				// completion filter above has already removed the row
 				// when the BCB (TS-predicate) hold applies, so a row
-				// present here survived the filter. The turn-end
-				// authority seam uses this to retract the marker when
-				// the Elm authority says HOLD / FAILURE.
-				const publishedAuthoritative = result.messages.find(
-					(m) => m.say === "completion_result" && m.isAuthoritativelyCompletedResult === true,
-				)
-				if (publishedAuthoritative) {
-					this.publishedAuthoritativeCompletionRow = publishedAuthoritative
+				// present here survived the filter. The C10 commit seam
+				// promotes this row by adding the
+				// `isAuthoritativelyCompletedResult` marker.
+				//
+				// The FINALIZED (non-partial) row is the one to track: the
+				// PARTIAL row published at `content_start` is replaced in
+				// place by the finalized row (same `ts`), so tracking the
+				// finalized row keeps the promotion exact.
+				const publishedCompletion = result.messages.find((m) => m.say === "completion_result" && m.partial !== true)
+				if (publishedCompletion) {
+					this.pendingCompletionAuthorityRow = publishedCompletion
 				}
 				this.options.messages.appendAndEmit(result.messages, event)
 			}
@@ -3750,22 +3737,36 @@ export class SdkSessionEventCoordinator {
 										epoch: this.options.messageTranslatorState.getMinter().epoch,
 										deferredAt: Date.now(),
 									}
-									// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 /
-									// C9C10SCR01: the completion commit was NOT
+									// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+									// (C9C10CDAP01): the completion commit was NOT
 									// authorized. The completion row was
 									// already published at the completion
-									// tool's `content_end` with the
+									// tool's `content_end` — WITHOUT the
 									// `isAuthoritativelyCompletedResult`
-									// marker, so the webview is currently
+									// marker — so the webview is NOT
 									// presenting it as authoritative
 									// completion while the task phase
-									// stays `streaming`. RETRACT the marker
-									// so the row keeps its summary text but
-									// loses the false "Completed" badge.
-									this.retractCompletionAuthorityMarker(event)
+									// stays `streaming`. NOTHING to do
+									// here: the row keeps its summary text
+									// and carries no false "Completed"
+									// badge. The authority marker is
+									// published by the C10 COMMIT itself
+									// (the `promoteCompletionAuthorityMarker`
+									// seam), so a deferred re-evaluation
+									// that later AUTHORIZEs promotes the
+									// SAME row.
 									return
 								}
 								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+								// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+								// (C9C10CDAP01): the C10 COMMIT happened —
+								// publish the completion authority NOW.
+								// The temporal invariant ("an authoritative
+								// completion is never PUBLISHED before
+								// its C10 commit") is established here,
+								// at the commit, rather than
+								// retrospectively at publication time.
+								this.promoteCompletionAuthorityMarker(event)
 								captureContinuationCardinalityAuthorityRecord({
 									stage: "task_completion_committed",
 									origin: "pending_prompt_drain",

@@ -1,4 +1,39 @@
+# ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01 — PASS_STRUCTURAL_PENDING_LIVE — 2026-10-24
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_PENDING_LIVE`** (bounded correction of the predecessor ACT; live dogfood still PENDING).
+
+**ENTRY_HEAD:** `5f6a27caf968fce88adb5b33576ab5487a993cba` (main).
+**PREDECESSOR:** `ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01` (verdict `PASS_STRUCTURAL_PENDING_LIVE`, repair commit `a05488988ec1664fd126298ab14e739d5b0b5f45`).
+
+**Why this ACT exists:** the predecessor repair was reviewed with the verdict `HALT_PREMATURE_COMPLETION_AUTHORITY_PUBLICATION` — two findings.
+
+- **P0 — the completion authority was PUBLISHED before the C10 commit.** The predecessor stamped `isAuthoritativelyCompletedResult: true` at the completion tool's `content_end` (PUBLICATION time) and retracted it LATER when the Elm authority rejected the completion. The invariant is TEMPORAL — an authoritative completion must never be PUBLISHED before its C10 commit — and a later corrective update cannot establish it: the webview receives the publication and the retraction as SEPARATE messages over an event-based channel and can render the first one before the second arrives. The 19 existing tests drove `content_start → content_end → done` and inspected only the FINAL projection, so they could not see the premature publication.
+- **P1 — the deferred C10 path left a legitimate completion badge-less.** `reevaluateDeferredCompletionBarrier()` can later AUTHORIZE and COMMIT the C10 after the Elm decision flipped HOLD → AUTHORIZE; the retraction removed the marker and nothing restored it.
+
+**The bounded correction (commit-driven authority publication), no new framework / no new Elm kernel / no new diagnostic infrastructure / no new ACT:**
+- `apps/vscode/src/sdk/message-translator.ts` — the LIVE completion `content_end` no longer stamps the authority marker (it requires an explicit `isAuthoritativeCompletion === true` bit, which only the RESTORATION path passes). The RESTORATION path is UNCHANGED: a persisted COMMITTED completion keeps its marker, a persisted HELD attempt still omits it.
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — the retraction seam is REPLACED by `promoteCompletionAuthorityMarker(event)`: at a SUCCESSFUL C10 commit the coordinator re-publishes the row it published for the CURRENT turn with the SAME `ts` and the marker ADDED, via the established update channel (`emitHookMessage`). Invoked on BOTH C10 paths — the immediate turn-complete path AND the deferred `reevaluateDeferredCompletionBarrier` path (the P1 repair). The tracked row is the one the coordinator itself published (set AFTER the message-layer completion filter ran), so a BCB-filtered row is never resurrected; it is cleared at the turn boundary, so a historical row is never touched.
+- `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` — the NEW suite (7 tests) driving the REAL translator + coordinator + Elm decision provider + phase writer and projecting through the REAL webview `applyMessage` reducer (with the production `SdkMessageCoordinator.stamp()` seq/epoch stamping modelled exactly).
+
+**RED evidence (new suite, BEFORE the production fix): 5 of 7 fail.** RED-04 (`expected { kind: 'completed', … } to be undefined`) is the P0 witness — the badge WAS rendered immediately after `content_end`, before any C10 commit. RED-05 (`expected undefined to be 'completed'`) is the P1 witness — after the deferred C10 committed, the row had NO badge.
+
+**GREEN evidence (after the fix): 7/7 pass.** The 19 predecessor C9C10SCR01 tests (5 + 14) still pass unchanged.
+
+**Regression delta:** the whole `src/sdk/__tests__` scope went from 34 failures (BASE) to 34 failures (FINAL) — the **identical** failure set. **Zero regressions, zero new failures.** Focused suite: 229 passed, 3 failed — the 3 are the EXACT pre-existing `tdd-red01` baseline failures (verified identical by name).
+
+**Harness-fidelity repairs (test-only, and they FIXED pre-existing failures):** two harness files did not model the production UPDATE channel (`emitHookMessage`) and read visible rows from the raw publish-call list instead of the MESSAGE STORE; they now model both production channels and read the store (production upsert-by-`ts`). Separately, `completion-presentation-authority01.cpa01.test.ts` was MISSING the required Elm completion-authority provider, so EVERY turn in that file had its C10 commit suppressed — injecting it (AUTHORIZE, as the suite's own assertions already required) FIXED 7 pre-existing failures in that file (that file is now 14/14 green).
+
+**Preservation:** the persisted-transcript held-vs-committed restoration path (committed rows keep the marker, held rows omit it); the message-layer completion filter; the BCB barrier predicates; the Elm authority gate and its fail-closed semantics; the deferred-completion-barrier liveness repair; the message store's upsert-by-`ts` semantics; the webview's `applyMessage` merge-by-`ts` and seq/epoch fencing semantics; session/epoch isolation; the historical completion-summary preservation; the `CPA-09` / `CPA-04` / `C10-BASELINE-02` published-row cardinality contracts; the protected stash `stash@{0}` (untouched).
+
+**Gates:** extension typecheck PASS; webview typecheck PASS; lint PASS (2292 files); webview `terminalReportFraming.test.ts` 40 passed, `messageReducer.test.ts` 16 passed, `CompletionOutputRow.test.tsx` 19 passed.
+
+**Live qualification:** NOT EXECUTED — unchanged from the predecessor ACT (no LLM provider credential in this sandbox, so the run cannot reach the completion-tool `content_end` seam; the canonical `~/.vscodium-clinemm` profile is READ-ONLY). Live evidence is explicitly PENDING and is NOT claimed. See `.factory/evidence/ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01/01-bounded-correction.md`.
+
+**Verdict:** `PASS_STRUCTURAL_PENDING_LIVE` — the P0 (premature publication) and P1 (deferred badge loss) are repaired at the publication boundary, with both missing cases proven by RED-then-GREEN tests. Live dogfood qualification remains the only outstanding gate.
+
+---
 # ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 — PASS_STRUCTURAL_PENDING_LIVE — 2026-10-24
+
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_PENDING_LIVE`**.
 

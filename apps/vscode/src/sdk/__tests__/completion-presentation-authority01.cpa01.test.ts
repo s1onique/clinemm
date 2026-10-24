@@ -95,6 +95,19 @@ interface Harness {
 	activeSessionId: string
 	activeTaskId: string
 	appendAndEmit: ReturnType<typeof vi.fn>
+	/**
+	 * ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+	 * (C9C10CDAP01): the PRODUCTION "update a message" channel
+	 * (`SdkMessageCoordinator.emitHookMessage`) — the channel the C10
+	 * commit publishes the completion authority marker through.
+	 */
+	emitHookMessage: ReturnType<typeof vi.fn>
+	/**
+	 * The MESSAGE STORE as the user sees it: the rows that survived the
+	 * message-layer completion filter, with the production
+	 * upsert-by-`ts` semantics applied.
+	 */
+	storedRows: ClineMessage[]
 	completionCommitCount: () => number
 	ownedJobs: { jobId: string; notify: boolean; running: boolean }[]
 	unconsumedOverride: { value: number }
@@ -127,6 +140,18 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 	const activeTaskId = opts.activeTaskId ?? "task-cpa01"
 
 	const appendAndEmit = vi.fn()
+	// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+	// (C9C10CDAP01): the PRODUCTION "update a message" channel
+	// (`SdkMessageCoordinator.emitHookMessage`). The completion
+	// authority marker is published BY THE C10 COMMIT through this
+	// channel (the row is re-published with the SAME `ts` and the
+	// marker ADDED), so the harness MUST model it for the visible row
+	// to carry the marker.
+	const emitHookMessage = vi.fn()
+	// The MESSAGE STORE, with the production upsert-by-`ts` semantics
+	// (`MessageStateHandler.addMessages`): a message with the same `ts`
+	// REPLACES the stored row in place.
+	const storedRows: ClineMessage[] = []
 	let completionCommitCount = 0
 	const ownedJobs: { jobId: string; notify: boolean; running: boolean }[] = []
 	const unconsumedOverride = { value: 0 }
@@ -163,8 +188,33 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 		},
 		messages: {
 			appendAndEmit: ((msgs: unknown[]) => {
+				for (const m of msgs as ClineMessage[]) {
+					const idx = storedRows.findIndex((r) => r.ts === m.ts)
+					if (idx >= 0) {
+						storedRows[idx] = m
+					} else {
+						storedRows.push(m)
+					}
+				}
 				appendAndEmit(msgs as never)
 			}) as never,
+			// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+			// (C9C10CDAP01): the PRODUCTION "update a message" channel
+			// (`SdkMessageCoordinator.emitHookMessage`). The completion
+			// authority marker is published BY THE C10 COMMIT through this
+			// channel (the row is re-published with the SAME `ts` and the
+			// marker ADDED), so the harness MUST model it for the visible
+			// row to carry the marker. The production store upserts by
+			// `ts`, so an update REPLACES the row in place.
+			emitHookMessage: (m: ClineMessage) => {
+				const idx = storedRows.findIndex((r) => r.ts === m.ts)
+				if (idx >= 0) {
+					storedRows[idx] = m
+				} else {
+					storedRows.push(m)
+				}
+				emitHookMessage(m)
+			},
 		},
 		taskHistory: { updateTaskUsage: vi.fn() },
 		getTask: () => ({ taskId: activeTaskId }) as never,
@@ -179,6 +229,21 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 		}) as NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>,
 		getTurnPhase: () => tracker.currentPhase,
 		translateSessionEvent,
+		// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+		// (C9C10CDAP01): the Elm completion-authority decision provider.
+		// The provider is REQUIRED (no silent default-Authorize
+		// fallback) and this harness was missing it, so the C10 commit
+		// was suppressed for EVERY turn in this file. The suite's own
+		// assertions (`completionCommitCount() === 1` for an ordinary
+		// completion) show the intended behaviour is AUTHORIZE, so the
+		// provider is injected explicitly here. The C9C10CDAP01 change
+		// made this VISIBLE: the completion-authority marker is now
+		// published BY the C10 commit, so a suppressed commit means no
+		// marker — which is exactly the invariant under test.
+		getElmCompletionAuthorityDecision: () => ({
+			kind: "authorize",
+			reason: "cpa01-test-authorize",
+		}),
 		hasRunningBackgroundJobForOwner: (sid: string | undefined) => {
 			if (sid !== activeSessionId) return false
 			return ownedJobs.some((j) => j.running)
@@ -203,6 +268,8 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 		activeSessionId,
 		activeTaskId,
 		appendAndEmit,
+		emitHookMessage,
+		storedRows,
 		completionCommitCount: () => completionCommitCount,
 		ownedJobs: ownedJobs as { jobId: string; notify: boolean; running: boolean }[],
 		unconsumedOverride,
@@ -251,16 +318,15 @@ async function driveSubmitAndExit(h: Harness, opts: { resultText?: string; turnI
 }
 
 function visibleCompletionRows(h: Harness): ClineMessage[] {
-	const calls = h.appendAndEmit.mock.calls as Array<[ClineMessage[]]>
-	const rows: ClineMessage[] = []
-	for (const call of calls) {
-		for (const m of call[0]) {
-			if (m.say === "completion_result") {
-				rows.push(m)
-			}
-		}
-	}
-	return rows
+	// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
+	// (C9C10CDAP01): read the MESSAGE STORE — what the user actually
+	// sees — not the raw publish calls. The completion authority marker
+	// is published BY THE C10 COMMIT through the "update a message"
+	// channel, so a store read is the faithful projection. The store
+	// applies the production upsert-by-`ts` semantics, so the promotion
+	// (same `ts`, marker ADDED) replaces the row IN PLACE — the visible
+	// row cardinality is unchanged.
+	return h.storedRows.filter((m) => m.say === "completion_result")
 }
 
 const originalSandbox = process.env.CLINEMM_EXPERIMENTAL_SANDBOX
