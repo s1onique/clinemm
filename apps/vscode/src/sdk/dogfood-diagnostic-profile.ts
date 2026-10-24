@@ -135,6 +135,7 @@ import {
 	isBackgroundOwnerCorrelationCaptureEnabled as _isBackgroundOwnerCorrelationCaptureEnabled,
 	setBackgroundOwnerCorrelationCaptureEnabled,
 } from "./background-owner-correlation"
+import { isCancelLivenessDiagnosticEnabled, setCancelLivenessDiagnosticEnabled } from "./cancel-liveness-diagnostic"
 import * as ElmAuthorityModule from "./completion-authority-elm-authority-runtime"
 import {
 	isCompletionContinuationDeliveryEnabled,
@@ -154,10 +155,6 @@ import {
 	isExtensionHostHotloopDiagnosticEnabled as _isExtensionHostHotloopDiagnosticEnabled,
 	setExtensionHostHotloopDiagnosticEnabled,
 } from "./extension-host-hotloop-diagnostic"
-import {
-	isCancelLivenessDiagnosticEnabled,
-	setCancelLivenessDiagnosticEnabled,
-} from "./cancel-liveness-diagnostic"
 import { applyExtensionHostQueueLogPolicy } from "./extension-host-queue-log-policy"
 import { applyExtensionHostTerminationAuthorityPolicy } from "./extension-host-termination-authority"
 import {
@@ -1336,6 +1333,7 @@ export function applyExtensionHostTerminationAuthorityProfile(
 // instrumentation permanent.
 // ===========================================================================
 
+import { isMycEvaluationCaptureEnabled, setMycEvaluationCaptureEnabled } from "./myc-evaluation-capture"
 import { __resetMycPrimeLiveDiagForTests, isMycPrimeLiveDiagEnabled, setMycPrimeLiveDiagEnabled } from "./myc-prime-live-diag"
 
 /**
@@ -1427,6 +1425,53 @@ export function applyMycPrimeLiveDiagDiagnosticProfile(
  */
 export function __resetMycPrimeLiveDiagDiagnosticProfileForTests(): void {
 	__resetMycPrimeLiveDiagForTests()
+}
+
+// ---------------------------------------------------------------------------
+// E knob — myc evaluation capture (ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01)
+//
+// The automatic real-workflow evidence acquisition for the myc evaluation.
+//
+// Precedence (top wins, deterministic, fail-closed):
+//
+//   1. Profile identity:
+//        isDogfood === true  -> ON  (automatic; no operator intervention)
+//        isDogfood === false -> OFF (public/release builds ALWAYS OFF)
+//
+// There is NO env override for this knob, NO workspace setting, NO
+// additional runtime profile, and NO Command Palette prerequisite. The
+// effective contract is exactly:
+//
+//     mycEvaluationCaptureEnabled = isDogfoodRuntime()
+//
+// The knob is resolved ONCE at extension-host activation and pushed into
+// the module-level boolean seam in `./myc-evaluation-capture.ts`, so the
+// recorder hot path reads a single boolean (never `process.env`).
+//
+// The disabled path is a ZERO state-semantic delta: no writes, no logs,
+// no state mutations, no async work.
+// ---------------------------------------------------------------------------
+
+export function resolveEffectiveMycEvaluationCapture(isDogfood: boolean): { readonly enabled: boolean } {
+	return { enabled: isDogfood }
+}
+
+/**
+ * THE single production activation helper for the myc evaluation capture
+ * seam. Mirrors the BJLA / BOCOR / CCARD / M pattern.
+ *
+ * Idempotent. Sets the module-level seam in
+ * `./myc-evaluation-capture.ts` (NOT process.env) so the recorder hot
+ * path reads a single boolean.
+ */
+export function applyMycEvaluationCaptureProfile(isDogfood: boolean): { readonly enabled: boolean; readonly flipped: boolean } {
+	const resolved = resolveEffectiveMycEvaluationCapture(isDogfood)
+	const was = isMycEvaluationCaptureEnabled()
+	if (was === resolved.enabled) {
+		return { enabled: resolved.enabled, flipped: false }
+	}
+	setMycEvaluationCaptureEnabled(resolved.enabled)
+	return { enabled: resolved.enabled, flipped: true }
 }
 
 // ---------------------------------------------------------------------------

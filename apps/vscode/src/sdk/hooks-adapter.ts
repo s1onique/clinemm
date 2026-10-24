@@ -25,6 +25,7 @@ import { Logger } from "@shared/services/Logger"
 import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
+import { recordMycEvaluation } from "./myc-evaluation-recorder"
 import { getMycPrimeResult } from "./myc-prime-automation"
 import {
 	isMycPrimeLiveDiagEnabled,
@@ -230,8 +231,7 @@ export function buildAgentHooks(
 				// calls already use, so a post-capture join finds
 				// every observation under the same key.
 				if (isMycPrimeLiveDiagEnabled()) {
-					const enterKey =
-						ctx.snapshot.sessionId ?? ctx.snapshot.conversationId ?? "__no_session__"
+					const enterKey = ctx.snapshot.sessionId ?? ctx.snapshot.conversationId ?? "__no_session__"
 					recordMycPrimeLiveEnter(enterKey, ctx.snapshot.sessionId, ctx.snapshot.iteration)
 				}
 				// Iteration gate: only inject on the very first model
@@ -325,6 +325,20 @@ export function buildAgentHooks(
 						// against `bind.sessionId` to detect a key
 						// mismatch (Case B).
 						lookupKey: sessionId,
+					})
+					// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record
+					// the prime LOOKUP at the existing production
+					// boundary (the prime diagnostic lookup site).
+					// The recorder is dogfood-only (a strict no-op when
+					// disabled) and records bounded metadata only. The
+					// lookup is recorded against the SAME session id
+					// the lookup used, so the injection event
+					// correlates with its real session.
+					recordMycEvaluation(sessionId, "prime_lookup", {
+						toolName: "myc_prime",
+						resultClass: primeFoundForLookup ? "success" : "empty",
+						resultCount: primeFoundForLookup ? 1 : 0,
+						detail: primeFoundForLookup ? "recorded_prime_found" : "recorded_prime_missing",
 					})
 				}
 				// Per-session dedupe: even if iteration=1 fires twice
@@ -436,6 +450,32 @@ export function buildAgentHooks(
 						aiSdkPromptObserved: true,
 					})
 				}
+				// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the
+				// prime INJECTION (and the SEPARATE model-context
+				// delivery observation) at the existing production
+				// boundary. The two observations are kept DISTINCT:
+				//
+				//   - `prime_injection`             — the packet was built
+				//     and handed to the runtime.
+				//   - `prime_model_context_delivery` — the packet reached
+				//     the MODEL request context.
+				//
+				// Only the measurable byte size is recorded — NEVER the
+				// packet text, never the prime text.
+				recordMycEvaluation(sessionId, "prime_injection", {
+					toolName: "myc_prime",
+					resultClass: "success",
+					resultCount: 1,
+					outputBytes: Buffer.byteLength(packetText, "utf8"),
+					detail: "ok",
+				})
+				recordMycEvaluation(sessionId, "prime_model_context_delivery", {
+					toolName: "myc_prime",
+					resultClass: "success",
+					resultCount: 1,
+					outputBytes: Buffer.byteLength(packetText, "utf8"),
+					detail: "ok",
+				})
 				return result
 			} catch (error) {
 				// Never throw — DEGRADED_WITH_DIAGNOSTIC.

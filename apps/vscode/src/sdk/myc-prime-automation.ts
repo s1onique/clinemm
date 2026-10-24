@@ -26,6 +26,7 @@
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
+import { recordMycEvaluation } from "./myc-evaluation-recorder"
 import { recordMycPrimeLiveAcquisition, startMycPrimeLiveDiag } from "./myc-prime-live-diag"
 
 /**
@@ -232,6 +233,19 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			sessionConnectionStatus: "not_attempted",
 			toolFound: false,
 		})
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the prime
+		// ACQUISITION at its production owner (this module). The
+		// recorder is dogfood-only (a strict no-op when disabled) and
+		// records bounded metadata only — NEVER the prime text. The
+		// acquisition is counted exactly ONCE per attempt, so the
+		// automatic prime cannot double-count.
+		recordMycEvaluation(sessionId, "prime_acquisition", {
+			toolName: "myc_prime",
+			resultClass: "empty",
+			resultCount: 0,
+			outputBytes: 0,
+			detail: "skipped",
+		})
 		// Not an error — silent skip when myc is not configured.
 		return result
 	}
@@ -289,6 +303,16 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 				toolFound: false,
 			})
 			Logger.warn("[MycPrimeAutomation] prime returned isError=true response:", response)
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the failed
+			// acquisition is recorded at its production owner. Bounded
+			// metadata only — the response body is never recorded.
+			recordMycEvaluation(sessionId, "prime_acquisition", {
+				toolName: "myc_prime",
+				resultClass: "error",
+				resultCount: 0,
+				outputBytes: 0,
+				detail: "tool_returned_error",
+			})
 			return result
 		}
 		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01:
@@ -350,6 +374,16 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 				toolFound: true,
 			})
 			Logger.warn("[MycPrimeAutomation] prime returned empty response:", response)
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the failed
+			// acquisition is recorded at its production owner. Bounded
+			// metadata only — the response body is never recorded.
+			recordMycEvaluation(sessionId, "prime_acquisition", {
+				toolName: "myc_prime",
+				resultClass: "error",
+				resultCount: 0,
+				outputBytes: 0,
+				detail: parseErrorCode,
+			})
 			return result
 		}
 		// The closure above classified `parseErrorCode` as undefined for
@@ -411,6 +445,17 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			sessionConnectionStatus: "spawned",
 			toolFound: true,
 		})
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the successful
+		// acquisition is recorded at its production owner. ONLY the
+		// measurable byte size is recorded — NEVER the prime text
+		// itself, never the memory bodies.
+		recordMycEvaluation(sessionId, "prime_acquisition", {
+			toolName: "myc_prime",
+			resultClass: "success",
+			resultCount: 1,
+			outputBytes: Buffer.byteLength(text, "utf8"),
+			detail: "ok",
+		})
 		return result
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error)
@@ -460,6 +505,17 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			toolFound: false,
 		})
 		Logger.warn(`[MycPrimeAutomation] prime failed for session=${sessionId}:`, error)
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the failed
+		// acquisition is recorded at its production owner. Bounded
+		// metadata only — the error message body is NOT recorded (only
+		// the bounded phase / failureClass discriminators).
+		recordMycEvaluation(sessionId, "prime_acquisition", {
+			toolName: "myc_prime",
+			resultClass: "error",
+			resultCount: 0,
+			outputBytes: 0,
+			detail: failureClass,
+		})
 		return result
 	}
 }

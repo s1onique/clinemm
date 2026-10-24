@@ -74,6 +74,29 @@ const LIST_CHANGED_MAX_WAIT_MS = 2000
 const LIST_CHANGED_MAX_RETRIES = 3
 const LIST_CHANGED_RETRY_BASE_DELAY_MS = 1000
 
+/**
+ * ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: measure the byte size of
+ * an MCP tool result WITHOUT exposing its content.
+ *
+ * The measurement is the LENGTH of the serialized result (utf-8 byte
+ * count), never the result body itself. The returned number is what the
+ * myc evaluation capture records as `OUTPUT_BYTES`; the payload is
+ * discarded immediately.
+ *
+ * Returns `undefined` when the result cannot be measured (e.g. a
+ * circular structure), so the recorder simply omits the field rather
+ * than recording a fabricated number.
+ */
+function measureMcpResultBytes(result: unknown): number | undefined {
+	try {
+		const serialized = JSON.stringify(result)
+		if (typeof serialized !== "string") return undefined
+		return Buffer.byteLength(serialized, "utf8")
+	} catch {
+		return undefined
+	}
+}
+
 export class McpHub {
 	getMcpServersPath: () => Promise<string>
 	private getSettingsDirectoryPath: () => Promise<string>
@@ -166,6 +189,27 @@ export class McpHub {
 		toolName: string
 		outcome: "success" | "empty" | "error"
 		hasNonEmptyContent: boolean
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the observer
+		// payload is EXTENDED (not replaced) with the bounded metadata
+		// the myc evaluation capture needs. The existing fields keep
+		// their exact meaning and the existing single-slot cardinality
+		// is preserved: ONE `callTool()` resolution => ONE observer
+		// event => ONE completion observation. The new fields are
+		// OPTIONAL so existing observer consumers (the per-task
+		// telemetry tracker) are bit-identical.
+		//
+		// The per-call identity (`callId`) is the `ulid` the caller
+		// already supplies — it is a caller-owned task/call identity,
+		// NOT a payload digest, and never carries argument values.
+		callId?: string
+		/** The measured wall-clock duration of the call in milliseconds. */
+		durationMs?: number
+		/** The session id the call was bound to, when the caller supplied one. */
+		sessionId?: string
+		/** The observable count of result content blocks, when measurable. */
+		resultCount?: number
+		/** The measurable byte size of the result payload, when observable. */
+		outputBytes?: number
 	}) => void
 	// Fingerprint of the last tool list snapshot, used to detect actual tool list changes
 	// vs. mere status updates (e.g., error messages appended).
@@ -2190,6 +2234,15 @@ export class McpHub {
 		// effect on the next request.
 		const timeout = resolveMcpServerTimeoutMs(connection.server.config) // sdk expects ms
 
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the call start
+		// timestamp is captured at the PRODUCTION boundary (immediately
+		// before the transport request) so the measured duration is the
+		// real transport latency. The timestamp is used ONLY for the
+		// duration measurement; it never reaches the observer payload.
+		// It is declared OUTSIDE the try so the catch branch can measure
+		// the failed-call duration too.
+		const callStartedAtMs = Date.now()
+
 		this.telemetryService.captureMcpToolCall(
 			ulid,
 			serverName,
@@ -2235,6 +2288,16 @@ export class McpHub {
 					Object.keys(result.structuredContent).length > 0)
 			const outcome: "success" | "empty" | "error" = isError ? "error" : hasNonEmptyContent ? "success" : "empty"
 
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the
+			// observable result count and the measurable payload byte
+			// size are computed at the PRODUCTION boundary from the
+			// result shape ALREADY in hand. Both are bounded NUMBERS
+			// (never the payload itself); the byte size is a length,
+			// not content, so no prompt/response/memory body is
+			// exposed.
+			const resultCount = Array.isArray(result.content) ? result.content.length : 0
+			const outputBytes = measureMcpResultBytes(result)
+
 			this.telemetryService.captureMcpToolCall(
 				ulid,
 				serverName,
@@ -2252,7 +2315,21 @@ export class McpHub {
 			// tool response. McpHub is the single cardinality
 			// owner: ONE `callTool()` resolution ⇒ exactly ONE
 			// observer event (CORRECTION02).
-			this.fireMcpToolObserver(serverName, toolName, outcome, hasNonEmptyContent)
+			//
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the SAME
+			// single observer event additionally carries the bounded
+			// measurement metadata (call identity, measured duration,
+			// bound session id, observable result count). The capture
+			// recorder is COMPOSED into this existing observer at the
+			// existing production owner — there is NO competing
+			// observer and NO second completion event.
+			this.fireMcpToolObserver(serverName, toolName, outcome, hasNonEmptyContent, {
+				callId: ulid,
+				durationMs: Date.now() - callStartedAtMs,
+				...(sessionId !== undefined ? { sessionId } : {}),
+				...(typeof resultCount === "number" ? { resultCount } : {}),
+				...(typeof outputBytes === "number" ? { outputBytes } : {}),
+			})
 
 			return {
 				...result,
@@ -2273,7 +2350,17 @@ export class McpHub {
 			// outcome="error" with hasNonEmptyContent=false (no
 			// result body was ever received). McpHub is the single
 			// cardinality owner.
-			this.fireMcpToolObserver(serverName, toolName, "error", false)
+			//
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the SAME
+			// single observer event additionally carries the measured
+			// duration and the call identity. The cardinality invariant
+			// is unchanged: ONE `callTool()` resolution ⇒ ONE observer
+			// event ⇒ ONE completion observation.
+			this.fireMcpToolObserver(serverName, toolName, "error", false, {
+				callId: ulid,
+				durationMs: Date.now() - callStartedAtMs,
+				...(sessionId !== undefined ? { sessionId } : {}),
+			})
 			throw augmentMcpTimeoutError(error, serverName, timeout)
 		}
 	}
@@ -2574,13 +2661,20 @@ export class McpHub {
 		toolName: string,
 		outcome: "success" | "empty" | "error",
 		hasNonEmptyContent: boolean,
+		extra?: {
+			callId?: string
+			durationMs?: number
+			sessionId?: string
+			resultCount?: number
+			outputBytes?: number
+		},
 	): void {
 		const observer = this.mcpToolObserver
 		if (!observer) {
 			return
 		}
 		try {
-			observer({ serverName, toolName, outcome, hasNonEmptyContent })
+			observer({ serverName, toolName, outcome, hasNonEmptyContent, ...extra })
 		} catch (error) {
 			Logger.error(
 				`mcpToolObserver threw during callTool(${serverName}, ${toolName}) outcome=${outcome}:`,
@@ -2603,6 +2697,11 @@ export class McpHub {
 					toolName: string
 					outcome: "success" | "empty" | "error"
 					hasNonEmptyContent: boolean
+					callId?: string
+					durationMs?: number
+					sessionId?: string
+					resultCount?: number
+					outputBytes?: number
 			  }) => void)
 			| undefined,
 	): void {

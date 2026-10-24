@@ -15,6 +15,7 @@ import {
 	dumpExtensionSideBcbObservationUnavailableCapture,
 	toggleBcbObservationUnavailableCaptureWorkspaceEnabled,
 } from "@/sdk/bcb-observation-unavailable-capture-runtime"
+import { dumpExtensionSideCancelLivenessDiagnostic } from "@/sdk/cancel-liveness-diagnostic-runtime"
 import { dumpExtensionSideElmAuthorityCounters } from "@/sdk/completion-authority-elm-authority-runtime-host"
 import { setCompletionContinuationControlElmProductionKernelPath } from "@/sdk/completion-continuation-control-elm"
 import { dumpExtensionSideCompletionContinuationDeliveryCounters } from "@/sdk/completion-continuation-delivery-runtime-host"
@@ -33,6 +34,7 @@ import {
 	applyExtensionHostCpuProfilerProfile,
 	applyExtensionHostHotloopDiagnosticProfile,
 	applyExtensionHostTerminationAuthorityProfile,
+	applyMycEvaluationCaptureProfile,
 	applyMycPrimeLiveDiagDiagnosticProfile,
 	applyProviderRequestCaptureDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
@@ -47,7 +49,6 @@ import { installExtensionHostAllocationProfilerRuntime } from "@/sdk/extension-h
 import { getCpuProfilerState } from "@/sdk/extension-host-cpu-profiler"
 import { installExtensionHostCpuProfilerRuntime } from "@/sdk/extension-host-cpu-profiler-runtime"
 import { dumpExtensionSideExtensionHostHotloopDiagnostic } from "@/sdk/extension-host-hotloop-diagnostic-runtime"
-import { dumpExtensionSideCancelLivenessDiagnostic } from "@/sdk/cancel-liveness-diagnostic-runtime"
 import { getTerminationAuthorityState } from "@/sdk/extension-host-termination-authority"
 import { installExtensionHostTerminationAuthorityRuntime } from "@/sdk/extension-host-termination-authority-runtime"
 import {
@@ -55,6 +56,7 @@ import {
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
 } from "@/sdk/host-ownership-diagnostic-runtime"
 import { dumpExtensionSideLifecycleClearSnapshot } from "@/sdk/lifecycle-clear-recorder-runtime-host"
+import { installMycEvaluationCaptureRuntime } from "@/sdk/myc-evaluation-capture-runtime"
 import { installMycPrimeLiveDiagReadoutRuntime } from "@/sdk/myc-prime-live-diag-runtime"
 import { dumpExtensionSideMycPrimeLiveDiag } from "@/sdk/myc-prime-live-diag-runtime-host"
 import {
@@ -180,6 +182,35 @@ export async function activate(context: vscode.ExtensionContext) {
 	// sibling. No new env flag; no gRPC; no Command Palette; no MCP
 	// tool; no protocol change.
 	installMycPrimeLiveDiagReadoutRuntime()
+
+	// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: arm the
+	// automatic myc evaluation capture (E knob) at the SAME EARLIEST
+	// initialization seam, AFTER the M knob is armed. The EXISTING
+	// ClineMM dogfood runtime profile is the SOLE activation
+	// authority:
+	//
+	//     mycEvaluationCaptureEnabled = isDogfoodRuntime()
+	//
+	// There is NO new environment variable, NO new workspace setting,
+	// NO additional runtime profile, and NO Command Palette
+	// prerequisite. In public/release builds the capture is ALWAYS
+	// OFF and the disabled path is a ZERO state-semantic delta (the
+	// recorder short-circuits on the module boolean before any IO).
+	//
+	// When the capture is ON in dogfood, the recorder writes bounded
+	// metadata only to
+	// `<dataRoot>/diagnostics/myc-evaluation/<session-id>/` with
+	// `events.jsonl`, `summary.json`, and `evaluation.md`. The bundle
+	// is produced AUTOMATICALLY — no manual Dump, no session ids, no
+	// timestamps to transcribe, no transcripts to copy.
+	applyMycEvaluationCaptureProfile(isDogfoodRuntime(process.env))
+
+	// Bind the evaluation capture filesystem seams (data-root
+	// resolver + append-only JSONL writer + whole-file writer +
+	// retention pruner) at the SAME seam, AFTER the E knob is armed.
+	// Mirrors the `installMycPrimeLiveDiagReadoutRuntime` activation
+	// sibling.
+	installMycEvaluationCaptureRuntime()
 
 	// ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01: arm the
 	// provider-request AI-SDK prompt capture (R knob) at the SAME

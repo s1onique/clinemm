@@ -31,6 +31,7 @@ import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { buildCompactionMessage, parseCompactionNoticeMetadata } from "./message-translator"
+import { recordMycEvaluation } from "./myc-evaluation-recorder"
 import { compactSessionMessages } from "./sdk-compaction"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
@@ -391,6 +392,14 @@ export class SdkCompactionCoordinator {
 		//                  it, do NOT mask the original error.
 		let compactionError: unknown
 		try {
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the
+			// compaction START at the existing production boundary. The
+			// recorder is dogfood-only (a strict no-op when disabled), so
+			// the compaction flow is unaffected.
+			recordMycEvaluation(sessionId, "compaction_started", {
+				detail: "manual",
+				resultCount: messagesBefore,
+			})
 			this.emitCompactionRow({ status: "started", mode: "manual" }, compactionTs, sessionId)
 			await this.options.postStateToWebview()
 			try {
@@ -604,12 +613,30 @@ export class SdkCompactionCoordinator {
 			await this.options.postStateToWebview()
 
 			Logger.log(`[SdkController] Compacted session ${sessionId}: ${messagesBefore} -> ${result.messages.length} messages`)
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the
+			// compaction COMPLETION at the existing production boundary.
+			// Only bounded counts are recorded — never the message
+			// bodies.
+			recordMycEvaluation(sessionId, "compaction_completed", {
+				detail: "manual",
+				resultClass: "success",
+				resultCount: result.messages.length,
+			})
 		} catch (error) {
 			// Manual-mode counterpart of the translator's finalizeDanglingCompaction
 			// (message-translator.ts), which handles auto compaction from turn
 			// events — keep the terminal-state rules of the two in sync.
 			this.emitCompactionRow({ status: "failed", mode: "manual" }, compactionTs, sessionId)
 			await this.options.postStateToWebview()
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the
+			// FAILED compaction at the existing production boundary. The
+			// error message body is NOT recorded (only the bounded
+			// discriminator).
+			recordMycEvaluation(sessionId, "compaction_completed", {
+				detail: "failed",
+				resultClass: "error",
+				resultCount: 0,
+			})
 			throw error
 		}
 	}
