@@ -202,6 +202,40 @@ export interface SdkSessionEventCoordinatorOptions {
 	 */
 	getBackgroundCommandJobStates?: () => Record<string, string>
 	/**
+	 * ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+	 * (PHCF01 / PHCF17 -- OWNER ISOLATION):
+	 *
+	 * Authority input: the OWNER SESSION ID of each per-job
+	 * background-command terminal projection entry.
+	 *
+	 * `getBackgroundCommandJobStates` is a CONTROLLER-LEVEL map
+	 * keyed by jobId. It carries NO session identity and the host
+	 * does NOT reset it on task/session replacement, so a job that
+	 * failed containment in session S1 leaves a PERMANENT
+	 * `containment_failed` entry behind. Consulting that map
+	 * UNSCOPED lets a PREVIOUS session's failure poison a LATER,
+	 * unrelated session's deferred handoff: a perfectly clean
+	 * terminal in S2 is misreported as `resumable` and the user's
+	 * legitimate handoff is denied.
+	 *
+	 * This option supplies the MISSING DISCRIMINATOR: the real
+	 * job-owner identity (`CommandJob.ownerSessionId`, captured at
+	 * job construction from `AgentToolContext.sessionId`). The
+	 * deferred-handoff decision MUST then consider only the
+	 * containment failures of jobs OWNED BY THE ACTIVE SESSION.
+	 *
+	 * Wired by `SdkController` to a thin adapter that returns the
+	 * existing per-job owner map. NO new global map of job STATES
+	 * and NO new protocol field is introduced -- this is the owner
+	 * identity of the SAME jobs the state map already describes.
+	 *
+	 * Optional: when absent, the coordinator preserves the
+	 * pre-PHCF17 UNSCOPED behavior so existing tests that do not
+	 * pass this option are unaffected. Production MUST wire this
+	 * to maintain the PHCF17 owner-isolation invariant.
+	 */
+	getBackgroundCommandJobOwners?: () => Record<string, string | undefined>
+	/**
 	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
 	 *
 	 * Synchronous accessor for the count of UNCONSUMED terminal
@@ -993,8 +1027,48 @@ export class SdkSessionEventCoordinator {
 		// pill remains the user-visible containment truth.
 		const jobStates = this.options.getBackgroundCommandJobStates?.()
 		if (jobStates) {
+			// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+			// (PHCF01 / PHCF17 -- OWNER ISOLATION):
+			//
+			// The state map is CONTROLLER-LEVEL and session-LESS: a
+			// job that failed containment in session S1 leaves a
+			// PERMANENT `containment_failed` entry behind (the host
+			// does not reset the map on task/session replacement).
+			// Consulting it UNSCOPED lets S1's failure poison S2:
+			// a perfectly clean terminal in S2 would be misreported
+			// as `resumable` and the user's legitimate handoff
+			// denied.
+			//
+			// The MISSING DISCRIMINATOR is the real job-owner
+			// identity (`CommandJob.ownerSessionId`). When the
+			// owner map is available, ONLY the containment failures
+			// of jobs OWNED BY THE ACTIVE SESSION count.
+			//
+			// OWNER-SCOPE FAIL-CLOSED: a `containment_failed` entry
+			// whose owner is UNKNOWN (no owner recorded) cannot be
+			// proven to belong to another session, so it is
+			// RETAINED (fail closed) -- the same conservative
+			// posture as the unscoped check. A job explicitly owned
+			// by a DIFFERENT session is EXCLUDED.
+			const jobOwners = this.options.getBackgroundCommandJobOwners?.()
 			const failedContainmentJobIds = Object.entries(jobStates)
-				.filter(([, reason]) => reason === "containment_failed")
+				.filter(([jobId, reason]) => {
+					if (reason !== "containment_failed") {
+						return false
+					}
+					if (!jobOwners) {
+						// The owner map is not wired: preserve the
+						// pre-PHCF17 unscoped behavior.
+						return true
+					}
+					const ownerSessionId = jobOwners[jobId]
+					if (ownerSessionId === undefined) {
+						// UNKNOWN owner: fail closed, retain the
+						// obligation (cannot prove it is foreign).
+						return true
+					}
+					return ownerSessionId === activeSession.sessionId
+				})
 				.map(([jobId]) => jobId)
 			if (failedContainmentJobIds.length > 0) {
 				Logger.warn(

@@ -16,6 +16,7 @@ import type { ActiveSession } from "./cline-session-factory"
 import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
 import { clearPrimeInjectionStateForSession } from "./hooks-adapter"
 import { recordLifecycleClear } from "./lifecycle-clear-recorder"
+import { checkpointMycEvaluation, recordMycEvaluation } from "./myc-evaluation-recorder"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { buildToolPolicies } from "./sdk-tool-policies"
 import type { SdkSessionHost } from "./session-host"
@@ -139,6 +140,14 @@ export interface SdkSessionLifecycleOptions {
 		 * for the contract. Pass-through only.
 		 */
 		evidence?: { isLiveInManager?: boolean },
+		/**
+		 * ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+		 * (PHCF01 / PHCF17 -- OWNER ISOLATION): the LAUNCH-TIME
+		 * OWNER SESSION ID of the job (`CommandJob.ownerSessionId`).
+		 * Pass-through only -- see
+		 * `vscode-session-host.ts:onBackgroundStateChange`.
+		 */
+		ownerSessionId?: string,
 	) => void
 	/**
 	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: the originating
@@ -300,6 +309,18 @@ export class SdkSessionLifecycle {
 		if (!activeSession) {
 			return undefined
 		}
+
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the
+		// session END at the canonical lifecycle boundary. The
+		// recorder is dogfood-only (a strict no-op when disabled),
+		// so the lifecycle ordering, host disposal, and the awaited
+		// stop are unaffected. The checkpoint is EVENT-DRIVEN: it
+		// happens here, INDEPENDENT of whether the C10 completion
+		// flow succeeded.
+		recordMycEvaluation(activeSession.sessionId, "session_end", {
+			detail: reason,
+		})
+		checkpointMycEvaluation(activeSession.sessionId)
 
 		// ACT-MYC-CLINEMM02-C-CORRECTION02 (P1 bounded map): drop the
 		// per-session prime-injection flag when the host session ends
@@ -480,6 +501,13 @@ export class SdkSessionLifecycle {
 			isRunning: true,
 		}
 
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the
+		// session START at the canonical lifecycle boundary (the
+		// moment the fresh active session is installed). The recorder
+		// is dogfood-only (a strict no-op when disabled), so the
+		// lifecycle ordering is unaffected.
+		recordMycEvaluation(startResult.sessionId, "session_start")
+
 		// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION02:
 		// consume any user-armed pre-arm intent and bind it to this
 		// brand-new session id. This is the authoritative consumption
@@ -535,6 +563,19 @@ export class SdkSessionLifecycle {
 		}
 
 		const { sessionId: oldSessionId } = oldSession
+
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the
+		// session REPLACEMENT at the canonical lifecycle boundary,
+		// BEFORE the old session is torn down. The recorder is
+		// dogfood-only (a strict no-op when disabled), so the
+		// replacement ordering is unaffected. The replacement is
+		// recorded on the OLD session bundle (the one being
+		// replaced) so the evidence chain for that bundle shows the
+		// continuation into a new session id.
+		recordMycEvaluation(oldSessionId, "session_replace", {
+			detail: options.disposeReason,
+		})
+		checkpointMycEvaluation(oldSessionId)
 
 		// No need to await the stop here: callers reuse oldSessionId in the
 		// startInput, and startNewSession waits on the pending stop for it.

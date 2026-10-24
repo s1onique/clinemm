@@ -252,6 +252,24 @@ export interface VscodeRunCommandsToolOptions {
 		 * `running` write) and the guard below does not fire.
 		 */
 		evidence?: { isLiveInManager?: boolean },
+		/**
+		 * ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+		 * (PHCF01 / PHCF17 -- OWNER ISOLATION): the LAUNCH-TIME
+		 * OWNER SESSION ID of the job
+		 * (`CommandJob.ownerSessionId`).
+		 *
+		 * The host's per-job terminal projection is
+		 * CONTROLLER-LEVEL and session-LESS, so a containment
+		 * failure recorded for a job owned by a PREVIOUS session
+		 * would otherwise be indistinguishable from one owned by
+		 * the active session. The owner id is the real job-owner
+		 * identity and lets the host scope the projection by owner.
+		 *
+		 * Captured at LAUNCH time (not terminal time) so the owner
+		 * reflects the session that launched the job even if the
+		 * active session has since changed.
+		 */
+		ownerSessionId?: string,
 	) => void
 	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
@@ -828,6 +846,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				running: boolean,
 				jobId: string | undefined,
 				terminalState?: Exclude<CommandJobState, "running">,
+				ownerSessionId?: string,
 			): void => {
 				// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
 				// BJLA diagnostic — capture `background_state_change_published`
@@ -845,7 +864,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					jobId: jobId ?? null,
 				})
 				try {
-					options.onBackgroundStateChange?.(running, jobId, terminalState)
+					options.onBackgroundStateChange?.(running, jobId, terminalState, undefined, ownerSessionId)
 				} catch (error) {
 					Logger.warn(
 						`[VscodeRunCommands] onBackgroundStateChange callback threw (running=${running}, jobId=${jobId}, terminalState=${terminalState ?? "n/a"}): ${
@@ -1728,7 +1747,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					//   status:"running" emits exactly one
 					//   (true, thatJobId) BEFORE any terminal tuple for
 					//   that job.
-					notifyBackgroundStateChange(true, start.jobId)
+					notifyBackgroundStateChange(true, start.jobId, undefined, ownerResolution?.sessionId)
 					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 					// attach an async listener so the projection flips
 					// back to false when the process completes
@@ -1752,7 +1771,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					// (Cancelled / Deadline exceeded / etc.) instead of
 					// collapsing every terminal into "Completed".
 					start.terminalPromise.then(({ jobId, terminalState }) => {
-						notifyBackgroundStateChange(false, jobId, terminalState)
+						notifyBackgroundStateChange(false, jobId, terminalState, ownerResolution?.sessionId)
 						// ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION
 						// (CORR-NONNOTIFY-HANDOFF-01): the non-notify
 						// observation obligation is now established at the
@@ -1821,7 +1840,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// corresponding start signal.)
 				if (start.becameActive) {
 					start.terminalPromise.then(({ jobId, terminalState }) => {
-						notifyBackgroundStateChange(false, jobId, terminalState)
+						notifyBackgroundStateChange(false, jobId, terminalState, ownerResolution?.sessionId)
 					})
 				}
 				// Terminal path. Preserve existing CommandExitError so the
@@ -1911,7 +1930,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// corresponding start signal.
 				if (start?.terminalPromise && start.becameActive) {
 					start.terminalPromise.then(({ jobId, terminalState }) => {
-						notifyBackgroundStateChange(false, jobId, terminalState)
+						notifyBackgroundStateChange(false, jobId, terminalState, ownerResolution?.sessionId)
 					})
 				}
 				telemetryService.captureTerminalExecution(false, "vscode", "child_process", {

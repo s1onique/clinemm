@@ -153,6 +153,25 @@ export interface VscodeSessionHostOptions {
 		 * for the contract. Pass-through only.
 		 */
 		evidence?: { isLiveInManager?: boolean },
+		/**
+		 * ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+		 * (PHCF01 / PHCF17 -- OWNER ISOLATION): the LAUNCH-TIME
+		 * OWNER SESSION ID of the job (`CommandJob.ownerSessionId`).
+		 *
+		 * The per-job terminal projection the host maintains is
+		 * CONTROLLER-LEVEL and session-LESS, so a containment
+		 * failure recorded for a job owned by a PREVIOUS session
+		 * would otherwise be indistinguishable from one owned by
+		 * the active session. The owner id is the real
+		 * job-owner identity and lets the host scope the
+		 * projection by owner.
+		 *
+		 * Captured at LAUNCH time (not terminal time) so the
+		 * owner reflects the session that launched the job even
+		 * if the active session has since changed. Pass-through
+		 * only.
+		 */
+		ownerSessionId?: string,
 	) => void
 	/**
 	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: optional

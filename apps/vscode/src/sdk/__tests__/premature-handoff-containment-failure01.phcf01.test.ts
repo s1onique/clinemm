@@ -272,6 +272,35 @@ interface ProductionHarness {
 	 */
 	markJobRunning: (jobId: string) => void
 	/**
+	 * Seed a STALE terminal entry directly into the per-job
+	 * projection map WITHOUT touching the derived running scalar.
+	 *
+	 * This is the production mirror of the host's
+	 * `backgroundCommandJobStates` map semantics: it is a
+	 * controller-level, session-LESS map. A job that failed
+	 * containment in session S1 leaves a permanent
+	 * `containment_failed` entry behind; the host does NOT reset
+	 * the map on task/session replacement. PHCF-17 uses this to
+	 * prove that such a stale entry cannot poison a LATER,
+	 * unrelated session's deferred handoff.
+	 */
+	seedStaleJobState: (jobId: string, terminalState: string) => void
+	/**
+	 * Seed the OWNER SESSION ID of a job in the per-job owner map --
+	 * the production mirror of
+	 * `Controller.backgroundCommandJobOwners` (PHCF17). The owner
+	 * is the real job-owner identity
+	 * (`CommandJob.ownerSessionId`).
+	 */
+	seedJobOwner: (jobId: string, ownerSessionId: string) => void
+	/**
+	 * Change the containment postcondition the manager's injected
+	 * probe reports for SUBSEQUENT terminations. Used by PHCF-17 to
+	 * drive a FAILING containment in session S1 and a CLEAN
+	 * containment in session S2 from the same manager.
+	 */
+	setPostcondition: (postcondition: Postcondition) => void
+	/**
 	 * Swap the active session and task the coordinator sees.
 	 * Used by RED-05 (session/epoch replacement).
 	 */
@@ -313,7 +342,7 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 	const translatorState = new MessageTranslatorState(minter)
 	const activeSessionId = opts.activeSessionId ?? "session-phcf01"
 	const activeTaskId = opts.activeTaskId ?? "1792821549321_bwq2x"
-	const postcondition = opts.postcondition ?? "gone"
+	let postcondition = opts.postcondition ?? "gone"
 
 	const manager = new CommandJobManager({
 		maxWaitBudgetMs: 50,
@@ -343,6 +372,12 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 	// The production derivation is: the scalar is DERIVED from the
 	// per-job projection map, and the `>0 -> 0` flip is the trigger.
 	const jobProjection = new Map<string, string>()
+	// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+	// (PHCF17 -- OWNER ISOLATION): the per-job OWNER SESSION ID map
+	// (the production mirror of
+	// `Controller.backgroundCommandJobOwners`). The owner is the
+	// real job-owner identity (`CommandJob.ownerSessionId`).
+	const jobOwners = new Map<string, string>()
 	const backgroundCommandRunning = { value: false }
 	const coordinator = new SdkSessionEventCoordinator({
 		messageTranslatorState: translatorState,
@@ -381,6 +416,11 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		// `updateBackgroundCommandState` maintains; the harness
 		// mirrors it with the identical derivation.
 		getBackgroundCommandJobStates: () => Object.fromEntries(jobProjection),
+		// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+		// (PHCF17 -- OWNER ISOLATION): the per-job owner session id
+		// map. The coordinator scopes the containment check to the
+		// jobs OWNED BY THE ACTIVE SESSION.
+		getBackgroundCommandJobOwners: () => Object.fromEntries(jobOwners),
 		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
 		// availability-aware pending-prompt authority (Shape F: no
 		// queued autonomous work).
@@ -425,6 +465,19 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		markJobRunning: (jobId: string) => {
 			jobProjection.set(jobId, "running")
 			backgroundCommandRunning.value = [...jobProjection.values()].some((s) => s === "running")
+		},
+		seedStaleJobState: (jobId: string, terminalState: string) => {
+			// The production map is session-LESS: a terminal entry
+			// written for a job owned by a PREVIOUS session stays in
+			// the map forever (no reset on task/session replacement).
+			// Seeding it directly mirrors that host behavior.
+			jobProjection.set(jobId, terminalState)
+		},
+		setPostcondition: (next: Postcondition) => {
+			postcondition = next
+		},
+		seedJobOwner: (jobId: string, ownerSessionId: string) => {
+			jobOwners.set(jobId, ownerSessionId)
 		},
 		getBackgroundCommandRunning: () => backgroundCommandRunning.value,
 		setBackgroundCommandRunning: (running: boolean) => {
@@ -792,6 +845,91 @@ describe("ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01 / PHCF01", () =
 		expect(h.tracker.currentPhase).toBe("resumable")
 		expect(h.postedPhases()).toContain("resumable")
 		expect(h.postedPhases()).not.toContain("awaiting_followup")
+
+		await h.manager.dispose()
+	}, 15_000)
+
+	//
+	// PHCF-17 -- OWNER ISOLATION: A STALE CONTAINMENT FAILURE FROM A
+	// PREVIOUS SESSION MUST NOT POISON A LATER SESSION'S HANDOFF
+	//
+	// PHCF-05 covers a LATE terminal event arriving after the session
+	// was replaced. It does NOT create a NEW, LEGITIMATE deferred
+	// handoff in the replacement session, so it cannot discriminate
+	// this case.
+	//
+	// The host's `backgroundCommandJobStates` projection is a
+	// controller-level map keyed by jobId with NO session identity
+	// and NO reset on task/session replacement. A job that failed
+	// containment in session S1 therefore leaves a PERMANENT
+	// `containment_failed` entry in the map.
+	//
+	// If the deferred-handoff decision consults that map
+	// UNSCOPED, the stale S1 entry poisons S2: a perfectly clean
+	// terminal in S2 is misreported as `resumable` (a false
+	// "unresolved containment failure") and the user's legitimate
+	// handoff is denied.
+	//
+	it("PHCF-17: a stale containment_failed from a previous session must not poison a later session's handoff", async () => {
+		const h = makeHarness({ postcondition: "alive" })
+		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+
+		// ---- SESSION S1: a job fails containment ----
+		const s1 = await startBackgroundJob(h.manager, h.activeSessionId, h)
+		// Production captures the LAUNCH-TIME owner of the job
+		// (`CommandJob.ownerSessionId`) at the start-side
+		// publication.
+		h.seedJobOwner(s1.jobId, h.activeSessionId)
+		// The S1 agent turn ends while the job is still RUNNING: the
+		// Q5 guard suppresses `awaiting_followup` and records the
+		// deferred continuation marker.
+		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.phaseCommits()).toBe(0)
+
+		const s1Terminal = await terminateJobAndAwait(h.manager, s1)
+		expect(s1Terminal.terminalState).toBe("containment_failed")
+		h.publishTerminal(s1.jobId, s1Terminal.terminalState)
+
+		// S1 is honestly reported as `resumable` (its own unresolved
+		// containment failure) -- NOT as a clean handoff.
+		expect(h.tracker.currentPhase).toBe("resumable")
+		expect(h.phaseCommits()).toBe(0)
+
+		// ---- SESSION S2: a NEW, LEGITIMATE deferred handoff ----
+		// The active session/task are replaced (S1 -> S2). The host's
+		// projection map is NOT reset: S1's `containment_failed`
+		// entry is still present. This is the production reality.
+		h.setActiveSessionAndTask("session-phcf01-s2", "1792821549321_bwq2x-v2")
+		// The S2 job's containment is VERIFIED clean.
+		h.setPostcondition("gone")
+		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+
+		const s2 = await startBackgroundJob(h.manager, "session-phcf01-s2", h)
+		// The S2 job is owned by S2 (a DIFFERENT owner than S1's job).
+		h.seedJobOwner(s2.jobId, "session-phcf01-s2")
+		// S2's own deferred handoff is legitimately established: the
+		// agent turn ends while the S2 job is still RUNNING, so the
+		// Q5 guard records a deferred continuation marker.
+		await emitDoneWithoutCompletion(h.coordinator, "session-phcf01-s2")
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.phaseCommits()).toBe(0)
+
+		// The S2 job reaches VERIFIED clean terminality.
+		const s2Terminal = await terminateJobAndAwait(h.manager, s2)
+		expect(s2Terminal.terminalState).toBe("cancelled")
+		expect(s2Terminal.becameIdle).toBe(true)
+
+		// Now the S2 job's clean terminal drives the re-evaluation.
+		h.publishTerminal(s2.jobId, s2Terminal.terminalState)
+
+		// THE LOAD-BEARING ASSERTION: S2's containment obligation was
+		// RESOLVED (postcondition `gone`), so the handoff MUST be
+		// released. S1's stale `containment_failed` entry belongs to a
+		// DIFFERENT owner and must NOT deny S2 its handoff.
+		expect(h.tracker.currentPhase).toBe("awaiting_followup")
+		expect(h.phaseCommits()).toBe(1)
+		expect(h.tracker.currentPhase).not.toBe("resumable")
 
 		await h.manager.dispose()
 	}, 15_000)

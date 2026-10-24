@@ -123,6 +123,7 @@ import { createProviderCatalog, toSdkProviderConfig } from "./model-catalog/cata
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
+import { recordMycEvaluation, recordMycEvaluationMcpCompletion } from "./myc-evaluation-recorder"
 import { getMycPrimeResult, resolveMycServerName, runMycPrimeOnSessionStart } from "./myc-prime-automation"
 import { observeMcpToolCompletion, observeMycPrimeResult } from "./myc-task-observation"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
@@ -1215,6 +1216,20 @@ export class Controller {
 		}
 	}
 
+	/**
+	 * ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: resolve the session
+	 * id used as the myc evaluation capture bundle key.
+	 *
+	 * The capture bundle is keyed by the ClineMM host session id so
+	 * sequential sessions produce DISTINCT bundles. When the active
+	 * session is not yet installed (e.g. a very early MCP call during
+	 * activation), the empty string is returned; the recorder treats an
+	 * empty session id as a no-op (no bundle is created for it).
+	 */
+	private getEvaluationSessionId(): string {
+		return this.sessions?.getActiveSession()?.sessionId ?? ""
+	}
+
 	// Bridges SDK events to the webview's gRPC streams.
 	private grpcBridge: WebviewGrpcBridge
 
@@ -1271,6 +1286,30 @@ export class Controller {
 		string,
 		"running" | "exited" | "cancelled" | "deadline_exceeded" | "spawn_failed" | "containment_failed" | "terminal"
 	> = {}
+	/**
+	 * ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+	 * (PHCF01 / PHCF17 -- OWNER ISOLATION):
+	 *
+	 * The LAUNCH-TIME OWNER SESSION ID of each job described by
+	 * `backgroundCommandJobStates`.
+	 *
+	 * `backgroundCommandJobStates` is CONTROLLER-LEVEL and
+	 * session-LESS, and it is NOT reset on task/session
+	 * replacement. A job that failed containment in session S1
+	 * therefore leaves a PERMANENT `containment_failed` entry
+	 * behind. Consulting that map UNSCOPED lets S1's failure
+	 * poison S2: a perfectly clean terminal in S2 would be
+	 * misreported as `resumable` and the user's legitimate
+	 * handoff denied.
+	 *
+	 * This map supplies the MISSING DISCRIMINATOR: the real
+	 * job-owner identity (`CommandJob.ownerSessionId`, captured at
+	 * job construction from the launching session). It is NOT a
+	 * new global map of job STATES -- it is the owner identity of
+	 * the SAME jobs the state map already describes -- and it is
+	 * NOT published to the webview (no protocol field added).
+	 */
+	private backgroundCommandJobOwners: Record<string, string | undefined> = {}
 	private pendingClineAuthRetryPrompt?: string
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
 
@@ -1380,6 +1419,15 @@ export class Controller {
 		// `callTool()` resolution ⇒ ONE completion event ⇒ ONE
 		// potential `recordMycToolCall` (filtered by toolName
 		// prefix inside `observeMcpToolCompletion`).
+		//
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: the myc
+		// evaluation capture is COMPOSED into this SAME observer at
+		// this SAME production owner. There is NO competing observer
+		// and NO second completion event — the cardinality invariant
+		// (ONE `callTool()` resolution ⇒ ONE completion observation)
+		// is preserved for BOTH consumers. The capture side is a
+		// strict no-op when the capture is disabled (public builds),
+		// so the existing task telemetry is bit-identical.
 		this.mcpHub.setMcpToolObserver((event) => {
 			observeMcpToolCompletion(this.taskTelemetry, {
 				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01
@@ -1396,6 +1444,19 @@ export class Controller {
 				toolName: event.toolName,
 				outcome: event.outcome,
 				hasNonEmptyContent: event.hasNonEmptyContent,
+			})
+			// The evaluation capture observes the SAME event. The
+			// session id used for the bundle key is the bound
+			// session when the call was session-scoped; otherwise
+			// the currently active session. The capture recorder
+			// never throws and never blocks the caller's response.
+			recordMycEvaluationMcpCompletion(event.sessionId ?? this.getEvaluationSessionId(), {
+				...(event.callId !== undefined ? { callId: event.callId } : {}),
+				toolName: event.toolName,
+				...(event.durationMs !== undefined ? { durationMs: event.durationMs } : {}),
+				...(event.resultCount !== undefined ? { resultCount: event.resultCount } : {}),
+				...(event.outputBytes !== undefined ? { outputBytes: event.outputBytes } : {}),
+				resultClass: event.outcome,
 			})
 		})
 
@@ -1907,8 +1968,8 @@ export class Controller {
 			// terminal reason on the terminal callback. Both signatures
 			// are forwarded as-is so the controller can keep its
 			// per-job projection map and reason-pill rendering in sync.
-			onBackgroundStateChange: (running, jobId, terminalState) =>
-				this.updateBackgroundCommandState(running, jobId, terminalState),
+			onBackgroundStateChange: (running, jobId, terminalState, _evidence, ownerSessionId) =>
+				this.updateBackgroundCommandState(running, jobId, terminalState, undefined, ownerSessionId),
 			// ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01:
 			// forward the CommandJob lifecycle sink to the shared host. The
 			// shared host is the live primary-session host; without this
@@ -2601,6 +2662,25 @@ export class Controller {
 			// NO new state and NO new protocol field: this is the
 			// same map the host already owns.
 			getBackgroundCommandJobStates: () => this.backgroundCommandJobStates,
+			// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+			// (PHCF01 / PHCF17 -- OWNER ISOLATION): thread the
+			// OWNER SESSION ID of each job so the deferred-handoff
+			// decision can scope the containment check to the jobs
+			// OWNED BY THE ACTIVE SESSION.
+			//
+			// `backgroundCommandJobStates` is CONTROLLER-LEVEL and
+			// session-LESS and is NOT reset on task/session
+			// replacement, so a `containment_failed` entry left
+			// behind by a PREVIOUS session would otherwise poison
+			// the NEXT session's deferred handoff (a clean terminal
+			// misreported as `resumable`, denying the user their
+			// legitimate handoff).
+			//
+			// This is the real job-owner identity
+			// (`CommandJob.ownerSessionId`) captured at launch time.
+			// NO new global map of job STATES and NO new protocol
+			// field is introduced.
+			getBackgroundCommandJobOwners: () => this.backgroundCommandJobOwners,
 			// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 			// thread the INTERNAL read-only ownership-snapshot accessor
 			// into the coordinator so the Q5 BOCOR diagnostic can
@@ -3963,6 +4043,16 @@ export class Controller {
 				sessionId,
 				taskId: sessionId,
 			})
+			// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the
+			// TASK START at the canonical task owner. The recorder is
+			// dogfood-only (a strict no-op when disabled), so the task
+			// lifecycle is unaffected. The task id IS the session id
+			// (the canonical task identity pipeline), so the event
+			// correlates with its real session.
+			recordMycEvaluation(sessionId, "task_started", {
+				taskId: sessionId,
+				detail: "explicit_user",
+			})
 		}
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: start (or re-start) the
 		// host-owned task-telemetry window for the new task identity, and
@@ -4411,6 +4501,19 @@ export class Controller {
 
 	async clearTask(): Promise<void> {
 		this.pendingClineAuthRetryPrompt = undefined
+		// ACT-CLINEMM-MYC-REAL-WORKFLOW-AUTOCAPTURE01: record the TASK
+		// END at the canonical task owner (`clearTask` is the universal
+		// choke-point for every task-terminating path). The recorder is
+		// dogfood-only (a strict no-op when disabled), so the task
+		// lifecycle is unaffected. The active session id is captured
+		// BEFORE the task is torn down.
+		const clearedSessionId = this.sessions.getActiveSession()?.sessionId
+		if (clearedSessionId) {
+			recordMycEvaluation(clearedSessionId, "task_ended", {
+				taskId: clearedSessionId,
+				detail: "clear_task",
+			})
+		}
 		// No active task — UI returns to idle (input enabled, no buttons/thinking).
 		this.turnStateTracker.setWithWriter("idle", undefined, this.writerIdentity("controller-clear-task"))
 		// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION02: clearTask is the
@@ -5325,6 +5428,24 @@ export class Controller {
 		 * runner's calls are unaffected).
 		 */
 		evidence?: { isLiveInManager?: boolean },
+		/**
+		 * ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+		 * (PHCF01 / PHCF17 -- OWNER ISOLATION): the LAUNCH-TIME
+		 * OWNER SESSION ID of the job
+		 * (`CommandJob.ownerSessionId`).
+		 *
+		 * Recorded in `backgroundCommandJobOwners` so the
+		 * deferred-handoff decision can scope the containment
+		 * check to the jobs OWNED BY THE ACTIVE SESSION. Without
+		 * it, a previous session's containment failure poisons a
+		 * later session's handoff.
+		 *
+		 * When undefined (legacy callers), the owner is recorded
+		 * as UNKNOWN, and the coordinator treats an unknown owner
+		 * as fail-closed (the obligation is retained) -- the same
+		 * conservative posture as the unscoped check.
+		 */
+		ownerSessionId?: string,
 	): Promise<void> {
 		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
 		// (correction01): the scalar `backgroundCommandRunning` is
@@ -5389,6 +5510,15 @@ export class Controller {
 				return
 			}
 			this.backgroundCommandJobStates[taskId] = "running"
+			// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+			// (PHCF17): record the launch-time owner of the job.
+			// The start-side publication is the EARLIEST point at
+			// which the owner is known, so the owner is captured
+			// here and PRESERVED across the terminal publication
+			// (the terminal publication carries the same owner).
+			if (ownerSessionId !== undefined) {
+				this.backgroundCommandJobOwners[taskId] = ownerSessionId
+			}
 		} else if (!running && taskId !== undefined) {
 			// Per-job terminal — the runner's load-bearing signal
 			// for multi-job sessions. The value of
@@ -5396,6 +5526,14 @@ export class Controller {
 			// (legacy caller), fall back to "terminal" (the
 			// pre-correction01 projection value).
 			this.backgroundCommandJobStates[taskId] = terminalState ?? "terminal"
+			// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
+			// (PHCF17): the terminal publication carries the same
+			// launch-time owner as the start publication. A job
+			// whose owner was never recorded stays UNKNOWN, which
+			// the coordinator treats fail-closed.
+			if (ownerSessionId !== undefined) {
+				this.backgroundCommandJobOwners[taskId] = ownerSessionId
+			}
 		} else if (!running && taskId === undefined) {
 			for (const k of Object.keys(this.backgroundCommandJobStates)) {
 				if (this.backgroundCommandJobStates[k] === "running") {
