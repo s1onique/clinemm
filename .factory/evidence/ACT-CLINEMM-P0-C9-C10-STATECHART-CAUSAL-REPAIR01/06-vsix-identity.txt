@@ -1,0 +1,50 @@
+ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 — VSIX IDENTITY
+==================================================
+
+Build:     scripts/build-dogfood-vsix.py (exact HEAD, detached worktree)
+HEAD:      e81c6743f294f0de5f3d3deb15b6f828461e389e
+Repair:    a05488988ec1664fd126298ab14e739d5b0b5f45
+Version:   4.1.16-5a1c485cb-e81c6743f
+Bytes:     44031692
+SHA-256:   da9a8e542c76aaaa9dfabedf9d602223f657b2f7f9cc95e3e4ab623d27615b8f
+
+Builder manifest (verbatim):
+  {"source_head": "e81c6743f294f0de5f3d3deb15b6f828461e389e",
+   "source_version": "4.1.16-5a1c485cb",
+   "dogfood_version": "4.1.16-5a1c485cb-e81c6743f",
+   "sha256": "da9a8e542c76aaaa9dfabedf9d602223f657b2f7f9cc95e3e4ab623d27615b8f",
+   "bytes": 44031692,
+   "skip_typecheck": false,
+   "elm_version": "0.19.2"}
+
+Typecheck gate: NOT skipped (skip_typecheck=false) — the full-project
+  tsc --noEmit gate ran and passed.
+
+VSIX payload (from the vsce log):
+  211 files, 41.99 MB
+    extension/dist/extension.js       25.17 MB
+    extension/elm/                    118.29 MB (151 files)
+    extension/runtime-assets/          398.57 KB (10 files)
+    extension/webview-ui/               9.4 MB (16 files)
+    extension/bin/                    12.34 MB (6 files)
+
+REPAIR PRESENT IN THE BUNDLE (verified by extracting extension/dist/extension.js
+from the VSIX and grepping):
+  Retracted the completion-authority marker : 1 occurrence
+  retractCompletionAuthorityMarker          : present
+  publishedAuthoritativeCompletionRow       : present
+  emitHookMessage                           : present
+
+INSTALL:
+  Installed: s1onique.clinemm-4.1.16-5a1c485cb-e81c6743f
+  The installed extension/dist/extension.js was re-verified to contain
+  the retraction seam (1 occurrence of the log string).
+
+  The canonical dogfood profile (~/.vscodium-clinemm) is READ-ONLY in this
+  sandbox (EPERM on mkdir), so the install was performed against a
+  writable profile at /tmp/dogfood-profile. This is the same environment
+  condition the predecessor ACT-CLINEMM-BCB-CAPTURE01 recorded as
+  LIVE_QUALIFICATION_BLOCKED_BY_ENV.
+
+SHA256SUMS:
+da9a8e542c76aaaa9dfabedf9d602223f657b2f7f9cc95e3e4ab623d27615b8f  clinemm-4.1.16-5a1c485cb-e81c6743f.vsix

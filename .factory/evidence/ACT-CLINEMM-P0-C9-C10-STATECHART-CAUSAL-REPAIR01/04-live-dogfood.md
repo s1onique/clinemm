@@ -46,7 +46,49 @@ repository's own.
 
 ### The artifact
 
-(Filled in by the build run — see `06-vsix-identity.txt`.)
+The build SUCCEEDED (`EXIT=0`) and produced:
+
+```
+clinemm-4.1.16-5a1c485cb-e81c6743f.vsix
+  source_head  : e81c6743f294f0de5f3d3deb15b6f828461e389e
+  bytes        : 44031692
+  sha256       : da9a8e542c76aaaa9dfabedf9d602223f657b2f7f9cc95e3e4ab623d27615b8f
+  skip_typecheck : false   (the full-project tsc --noEmit gate RAN and PASSED)
+  elm_version  : 0.19.2
+```
+
+Full identity in `06-vsix-identity.txt`. The artifact is committed under
+this evidence directory.
+
+### The repair is IN the artifact (verified)
+
+`extension/dist/extension.js` was extracted from the built VSIX and
+grepped. All three repair symbols are present in the SHIPPED bundle:
+
+```
+Retracted the completion-authority marker : 1 occurrence
+retractCompletionAuthorityMarker          : present
+publishedAuthoritativeCompletionRow       : present
+emitHookMessage                           : present
+```
+
+### The install (verified)
+
+```
+Extension 'clinemm-4.1.16-5a1c485cb-e81c6743f.vsix' was successfully installed.
+```
+
+Installed as `s1onique.clinemm-4.1.16-5a1c485cb-e81c6743f`, and the
+INSTALLED `extension/dist/extension.js` was re-verified to contain the
+retraction seam.
+
+The canonical dogfood profile (`~/.vscodium-clinemm`) is READ-ONLY in
+this sandbox (`EPERM: operation not permitted, mkdir
+'/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/User'`), so the
+install was performed against a writable profile at
+`/tmp/dogfood-profile`. This is the same environment condition the
+predecessor `ACT-CLINEMM-BCB-CAPTURE01` recorded as
+`LIVE_QUALIFICATION_BLOCKED_BY_ENV`.
 
 ## LIVE EVIDENCE (pending)
 

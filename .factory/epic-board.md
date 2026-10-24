@@ -1,3 +1,47 @@
+# ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 — PASS_STRUCTURAL_PENDING_LIVE — 2026-10-24
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_PENDING_LIVE`**.
+
+**ENTRY_HEAD:** `e81c6743f294f0de5f3d3deb15b6f828461e389e` (main, clean working tree).
+**REPAIR_COMMIT:** `a05488988ec1664fd126298ab14e739d5b0b5f45` (the single production change).
+**SUBJECT_HEAD:** identical.
+**DOGFOOD_SOURCE_HEAD:** identical (the VSIX was built at exact HEAD by `scripts/build-dogfood-vsix.py`).
+
+**Reported incident:** SESSION `1792824738628_cw4og`, EPOCH 8, C9 = 2 observed attempts, C10 = 0 observed commits, LEGACY = `streaming`, UI = Working / Cancel, ROW = finalized `completion_result`.
+
+**Key finding (load-bearing):** The leak is NOT the BCB hold. Two mechanisms produce the `C9 > 0 / C10 = 0` signature, and the VISIBLE completion row discriminates between them:
+- The **TS-predicate BCB hold** REMOVES the completion row from the published set via the message-layer completion filter, so the user never sees it. Verified empirically (`publishedRows === []`).
+- The **Elm authority HOLD / FAILURE** leaves the row published WITH `isAuthoritativelyCompletedResult: true`, so the webview renders the green "Completed" badge.
+
+The confirmed causal chain: the completion tool's `content_end` stamps the authority marker UNCONDITIONALLY at PUBLICATION time (`message-translator.ts`), but the authority to COMMIT the task's completion is decided LATER at turn end. When `checkElmCompletionAuthority` returns `false` (Elm hold OR failure — there is no silent TS fallback), the C10 commit is SUPPRESSED (phase stays `streaming`, the TaskHeader keeps saying "Working", the C10 record never fires) while the already-published row KEEPS its marker. **Step 1 versus step 3 is the defect.**
+
+**Bounded repair (ONE production file, `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`):**
+- New seam `retractCompletionAuthorityMarker(event)`: when the C10 commit is suppressed, re-publish the CURRENT turn's completion row with the SAME `ts` and the authority marker DROPPED, via the existing UPDATE channel (`emitHookMessage`). The summary TEXT survives; the false badge does not.
+- The retraction target is the row the coordinator ITSELF published (`publishedAuthoritativeCompletionRow`, set AFTER the message-layer completion filter ran), so a BCB-filtered row is never resurrected.
+- The tracking is turn-scoped and cleared at the turn boundary, so a historical completion row from a previous epoch is never touched.
+- It can only REMOVE the authority claim, never add one: a presentation correction, not a second completion authority.
+
+**Files deliberately left pristine:** `apps/vscode/src/sdk/message-translator.ts` and `apps/vscode/src/sdk/sdk-message-coordinator.ts` (both were part of earlier repair drafts and were reverted once proved unnecessary). No new wire field, no new Elm kernel, no new state owner, no unrelated UI redesign.
+
+**Necessity ablation (executed, on the VISIBLE STATE — not a diagnostic counter):** disabling ONLY the retraction seam fails 7 of 19 tests — exactly the assertions that depend on the false badge being absent. Disabling the translator's marker stamp instead fails the GREEN control (a genuine completion loses its badge), proving the stamp itself is CORRECT and only its CONSUMER was missing.
+
+**RED reproduction (real production seam):** `apps/vscode/src/sdk/__tests__/c9-c10-statechart-causal-repair01.c9c10scr01.test.ts` (5 tests) — RED-03 (Elm HOLD and Elm FAILURE) reproduced the false badge against the REAL translator + coordinator + BCB owner + phase writer, asserting the REAL webview authority projection (`resolveTerminalReportFraming`), not merely that a `completion_result` message existed. RED-01/RED-02 (the BCB paths) passed throughout, confirming the BCB path was never the leak.
+
+**Conservation:** `apps/vscode/src/sdk/__tests__/c9-c10-statechart-causal-repair01.c9c10scr01-cons.test.ts` (14 tests) covers every case the ACT requires: held terminal result; all terminal observations consumed; one missing/evicted terminal observation; Elm HOLD then later AUTHORIZE; duplicate C9; exactly-once C10; late previous-epoch completion; background job from a foreign session; cancellation and resume; historical completed row during a subsequent active turn; normal successful completion; no premature Completed badge and no incorrect TaskHeader phase; held-attempt summary keeps its content without a false badge. 19/19 GREEN.
+
+**Regression:** 163 relevant completion / BCB / Elm / C10 / terminal / background-job / phase / presentation test files, run before and after the repair with the IDENTICAL file list. BASELINE (repair stashed) 32 unique failing tests; AFTER 30. **NEW FAILURES INTRODUCED BY THE REPAIR: none.** The 30 remaining failures are PRE-EXISTING: those harnesses do not inject the required `getElmCompletionAuthorityDecision` option, so the Elm authority fails closed and the C10 commit is suppressed — unchanged by this ACT (verified by the stashed baseline). Typecheck clean; lint clean.
+
+**Statecharts (new, source-bound):** `docs/architecture/task-lifecycle/` — four charts (task/turn phase; C9/BCB/Elm/C10 authority; background command/containment/terminal observation; completion message/presentation) plus `transitions.tsv` (the machine-readable transition index: 32 transitions, each with source / predicate / effect / test / kind). All transitions are `observed`; the diagrams are a READ-ONLY AUDIT MODEL, never an execution authority.
+
+**Incident replay (new, offline):** `tools/lifecycle-replay/` — the smallest offline trace-to-Mermaid projection over the EXISTING JSONL evidence, with strict correlation on session/task/epoch/available identities. Unknown joins REMAIN unknown. The replay of the incident session returns `NO_RECORD_FOR_SESSION` (no capture was dumped for it — recorded as a capture gap, NOT as evidence either way). The reference capture (session `1792045691672_s0nzn`) reproduces the SAME structural shape (`C9 = 3`, `C10 = 0`) and is projected into `incident-timeline.json` + `incident-path.mmd`. NO new live instrumentation was added, because the replay showed the gap is a DUMP gap, not a missing OBSERVABLE.
+
+**Live qualification:** the exact-head VSIX was BUILT at `e81c6743` by `scripts/build-dogfood-vsix.py` (`clinemm-4.1.16-5a1c485cb-e81c6743f.vsix`, 44,031,692 bytes, SHA-256 `da9a8e542c76aaaa9dfabedf9d602223f657b2f7f9cc95e3e4ab623d27615b8f`, `skip_typecheck=false` so the full-project typecheck gate RAN and PASSED) and INSTALLED (`Extension 'clinemm-4.1.16-5a1c485cb-e81c6743f.vsix' was successfully installed`). The repair was verified to be present in BOTH the built VSIX's `extension/dist/extension.js` AND the installed artifact. The LIVE TASK was NOT run in this session (no LLM provider credential is configured in this sandbox, so the run cannot reach the completion-tool `content_end` seam where the defect lives; and the canonical `~/.vscodium-clinemm` profile is READ-ONLY — `EPERM: operation not permitted, mkdir '~/.vscodium-clinemm/User'` — the same `LIVE_QUALIFICATION_BLOCKED_BY_ENV` condition the predecessor `ACT-CLINEMM-BCB-CAPTURE01` recorded). Live evidence is explicitly PENDING and is NOT claimed. See `.factory/evidence/ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01/04-live-dogfood.md` and `06-vsix-identity.txt`.
+
+**Preservation:** the translator's completion-row marker stamp; the message-layer completion filter; the BCB barrier predicates; the Elm authority gate and its fail-closed semantics; the deferred-completion-barrier liveness repair; the persisted-transcript held-vs-committed restoration path; the message store's upsert-by-`ts` semantics; the webview's `applyMessage` merge-by-`ts` semantics; session/epoch isolation; cancellation and resume; the historical completion-summary preservation; the existing `CPA-09` / `CPA-04` / `C10-BASELINE-02` published-row cardinality contracts; the Elm completion / continuation / deferred-barrier / task-header authorities; the protected stash `stash@{0}` (untouched).
+
+**Verdict:** `PASS_STRUCTURAL_PENDING_LIVE`.
+
+---
 # ACT-CLINEMM-TART-P4-IMPORTED-SONOMA-REAL-GUEST-LIFECYCLE01 — IN PROGRESS — 2026-10-15
 
 **Status:** IN PROGRESS. Phase 1 (imported-VM identity qualification) PASS; Phases 2-6 DEFERRED to operator-driven guest boot per the on-call expert verdict.
