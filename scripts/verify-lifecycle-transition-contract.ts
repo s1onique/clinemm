@@ -20,9 +20,13 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+	CHART_01_TRANSITION_CLAIM_IDS,
+	CHART_01_NON_TRANSITION_CLAIM_IDS,
+	CHART_01_VERIFIED_EDGES,
 	CHART_04_EXPECTED_EDGES,
 	CHART_04_NON_TRANSITION_CLAIM_IDS,
 	CHART_04_TRANSITION_CLAIM_IDS,
+	verifyChart01TurnPhase,
 	verifyChart04CompletionPresentation,
 	verifyLifecycleTransitionContract,
 } from "../apps/vscode/src/sdk/lifecycle-transition-contract-verifier";
@@ -85,4 +89,27 @@ if (chart04.errors.length > 0) {
 }
 console.log(
 	`PASS Chart 04 completion-presentation projection: ${chart04.mermaidBlockCount} embedded block(s), ${CHART_04_TRANSITION_CLAIM_IDS.length} transition claims labeled, ${CHART_04_NON_TRANSITION_CLAIM_IDS.length} projection/invariant claims correctly edge-free`,
+);
+
+// --- ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01 ---------------
+// The embedded Chart 01 Mermaid block, checked against the Chart 01 claim
+// taxonomy AND the verified claim-id -> edge ASSOCIATION.
+//
+// This REUSES the existing strict association checker (the same core the
+// c9-c10 diagram and Chart 04 use) — it is NOT a second, independent,
+// cardinality-only checker.
+const chart01Path = resolve(root, "docs/architecture/task-lifecycle/01-task-turn-phase.md");
+const chart01Markdown = readFileSync(chart01Path, "utf8");
+const chart01 = verifyChart01TurnPhase({
+	markdown: chart01Markdown,
+	transitionClaimIds: CHART_01_TRANSITION_CLAIM_IDS,
+	nonTransitionClaimIds: CHART_01_NON_TRANSITION_CLAIM_IDS,
+	expectedEdges: CHART_01_VERIFIED_EDGES,
+});
+if (chart01.errors.length > 0) {
+	console.error(chart01.errors.join("\n"));
+	process.exit(1);
+}
+console.log(
+	`PASS Chart 01 turn-phase projection: ${chart01.mermaidBlockCount} embedded block(s), ${CHART_01_TRANSITION_CLAIM_IDS.length} transition claims labeled, ${CHART_01_NON_TRANSITION_CLAIM_IDS.length} guard/projection claims correctly edge-free, 8 canonical phase states present`,
 );

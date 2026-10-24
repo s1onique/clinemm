@@ -63,9 +63,17 @@ export function parseMermaidTransitionEdges(diagramText: string): MermaidEdge[] 
 	return edges
 }
 
-/** The transition id is the leading token of the Mermaid edge label. */
+/**
+ * The transition id is the leading token of the Mermaid edge label.
+ *
+ * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01: the grouped
+ * T-08 fan-in edges carry the disambiguated ids `T-08a` / `T-08b` /
+ * `T-08c`. The optional single lowercase suffix distinguishes them from
+ * the base `T-08` id WITHOUT matching the existing `A-03` / `P-06` /
+ * `P-01` ids (those carry no suffix).
+ */
 export function transitionIdOfLabel(label: string): string | undefined {
-	const match = /^([A-Z]-\d{2})\b/.exec(label)
+	const match = /^([A-Z]-\d{2}[a-z]?)\b/.exec(label)
 	return match?.[1]
 }
 
@@ -342,6 +350,201 @@ export function verifyChart04CompletionPresentation(options: {
 		}
 		if (!/NO authority marker/i.test(finalRowNote)) {
 			errors.push("Chart 04 Mermaid FinalRowPublished note does not state that the row carries NO authority marker")
+		}
+	}
+
+	return { errors, mermaidBlockCount: blocks.length }
+}
+
+/**
+ * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01.
+ *
+ * Verify the Mermaid block that is EMBEDDED in
+ * `docs/architecture/task-lifecycle/01-task-turn-phase.md` against the
+ * Chart 01 claim taxonomy AND the VERIFIED claim-id -> edge association.
+ *
+ * WHAT IT ASSERTS.
+ *
+ *   1. Every Chart 01 TRANSITION claim appears on EXACTLY ONE labeled
+ *      Mermaid edge in the embedded block.
+ *   2. Every GUARD / PROJECTION claim (T-06, T-09) does NOT appear as a
+ *      Mermaid edge — those claims are proven by a contract entry plus an
+ *      executable assertion, not by a graph-state transition.
+ *   3. Every TRANSITION claim labels the CORRECT edge: the labeled edge's
+ *      source/target must equal the VERIFIED endpoints. Cardinality alone
+ *      is insufficient — a SWAPPED pair of labels keeps every id present
+ *      exactly once while inverting the meaning of both transitions.
+ *   4. The grouped T-08 fan-in is represented as FOUR separate edges
+ *      (T-08, T-08a, T-08b, T-08c), one per genuinely distinct source
+ *      state. A slash-delimited source string is NOT a runtime phase.
+ *   5. The embedded block does not contain an UNAUTHORIZED path into
+ *      `completed`: every edge whose target is `completed` must be the
+ *      T-02 C10 edge. There is NO other way to reach `completed`.
+ *   6. The embedded block declares all EIGHT canonical phase states, so
+ *      the diagram's vocabulary cannot silently drift from the
+ *      `TurnPhase` union.
+ *
+ * This is a DOCUMENTATION-SYNCHRONIZATION guard. It never asserts
+ * behaviour: the behaviour is proven by the executable witness suite
+ * (`apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts`).
+ */
+
+/**
+ * The Chart 01 claims that ARE genuine transitions and therefore carry a
+ * Mermaid edge.
+ */
+export const CHART_01_TRANSITION_CLAIM_IDS: readonly string[] = [
+	"T-01",
+	"T-02",
+	"T-03",
+	"T-04",
+	"T-05",
+	"T-07",
+	"T-08",
+	"T-10",
+	"T-11",
+	"T-12",
+	"T-13",
+	"T-14",
+]
+
+/**
+ * The Chart 01 claims that are NOT transitions and therefore carry NO
+ * Mermaid edge.
+ *
+ * T-06 is the turn-complete straggler GUARD — it SUPPRESSES a phase
+ * write; it performs no transition of its own.
+ * T-09 is the TaskHeader PROJECTION — the label is a function of the
+ * committed phase, not a lifecycle state.
+ */
+export const CHART_01_NON_TRANSITION_CLAIM_IDS: readonly string[] = ["T-06", "T-09"]
+
+/**
+ * The VERIFIED claim-id -> Mermaid-edge association for Chart 01,
+ * including the three disambiguated T-08 fan-in edges.
+ *
+ * The endpoints are the REAL production source/target phases, bound to
+ * the production writer by the executable witness suite. They are
+ * declared here (rather than imported from the claim registry) so this
+ * pure verifier keeps NO dependency on the registry module and can be
+ * imported by the mutation tests without a cycle.
+ */
+export const CHART_01_VERIFIED_EDGES: Readonly<Record<string, { readonly source: string; readonly target: string }>> = {
+	"T-01": { source: "idle", target: "streaming" },
+	"T-02": { source: "streaming", target: "completed" },
+	"T-03": { source: "streaming", target: "awaiting_followup" },
+	"T-04": { source: "streaming", target: "error" },
+	"T-05": { source: "streaming", target: "resumable" },
+	"T-07": { source: "streaming", target: "error" },
+	"T-08": { source: "awaiting_followup", target: "streaming" },
+	"T-08a": { source: "completed", target: "streaming" },
+	"T-08b": { source: "error", target: "streaming" },
+	"T-08c": { source: "resumable", target: "streaming" },
+	"T-10": { source: "streaming", target: "compacting" },
+	"T-11": { source: "compacting", target: "awaiting_followup" },
+	"T-12": { source: "streaming", target: "awaiting_approval" },
+	"T-13": { source: "streaming", target: "awaiting_followup" },
+	"T-14": { source: "awaiting_approval", target: "streaming" },
+}
+
+/** The eight canonical `TurnPhase` values (the G2 vocabulary gate). */
+export const CHART_01_PHASE_STATES: readonly string[] = [
+	"idle",
+	"streaming",
+	"awaiting_approval",
+	"awaiting_followup",
+	"compacting",
+	"completed",
+	"error",
+	"resumable",
+]
+
+/**
+ * Verify the Chart 01 document's embedded Mermaid block.
+ *
+ * Returns the list of errors; an empty list means the embedded diagram
+ * is synchronized with the Chart 01 claim taxonomy.
+ */
+export function verifyChart01TurnPhase(options: {
+	readonly markdown: string
+	readonly transitionClaimIds?: readonly string[]
+	readonly nonTransitionClaimIds?: readonly string[]
+	readonly expectedEdges?: Readonly<Record<string, { readonly source: string; readonly target: string }>>
+}): { readonly errors: string[]; readonly mermaidBlockCount: number } {
+	const {
+		markdown,
+		transitionClaimIds = CHART_01_TRANSITION_CLAIM_IDS,
+		nonTransitionClaimIds = CHART_01_NON_TRANSITION_CLAIM_IDS,
+		expectedEdges = CHART_01_VERIFIED_EDGES,
+	} = options
+	const errors: string[] = []
+	const blocks = extractMermaidBlocks(markdown)
+	if (blocks.length === 0) {
+		return { errors: ["Chart 01 document has no embedded mermaid block"], mermaidBlockCount: 0 }
+	}
+	const diagramText = blocks.join("\n")
+	const edges = parseMermaidTransitionEdges(diagramText)
+
+	const edgesByClaimId = new Map<string, MermaidEdge[]>()
+	for (const edge of edges) {
+		const claimId = transitionIdOfLabel(edge.label)
+		if (!claimId) continue
+		const existing = edgesByClaimId.get(claimId) ?? []
+		existing.push(edge)
+		edgesByClaimId.set(claimId, existing)
+	}
+
+	for (const claimId of transitionClaimIds) {
+		const labeled = edgesByClaimId.get(claimId) ?? []
+		if (labeled.length === 0) {
+			errors.push(`${claimId}: TRANSITION claim is absent from the Chart 01 Mermaid projection`)
+			continue
+		}
+		if (labeled.length > 1) {
+			errors.push(`${claimId}: appears on ${labeled.length} Chart 01 Mermaid edges; expected exactly one`)
+			continue
+		}
+		// The id must label the CORRECT edge, not merely SOME edge.
+		const expected = expectedEdges[claimId]
+		if (!expected) continue
+		const edge = labeled[0]
+		if (edge.source !== expected.source || edge.target !== expected.target) {
+			errors.push(
+				`${claimId}: Mermaid edge is ${edge.source} --> ${edge.target}, but Chart 01 requires ${expected.source} --> ${expected.target}`,
+			)
+		}
+	}
+	for (const claimId of nonTransitionClaimIds) {
+		const labeled = edgesByClaimId.get(claimId) ?? []
+		if (labeled.length > 0) {
+			errors.push(
+				`${claimId}: is a GUARD / PROJECTION claim and must NOT carry a Chart 01 Mermaid edge (found ${labeled.length})`,
+			)
+		}
+	}
+
+	// NO UNAUTHORIZED PATH INTO `completed`.
+	//
+	// The C10 commit (T-02) is the ONLY edge that may target
+	// `completed`. Any other labeled edge whose target is `completed` is
+	// an unauthorized completion path and MUST be rejected.
+	for (const edge of edges) {
+		const claimId = transitionIdOfLabel(edge.label)
+		if (!claimId) continue
+		if (edge.target !== "completed") continue
+		const expected = expectedEdges[claimId]
+		if (!expected || expected.target !== "completed") {
+			errors.push(
+				`${claimId}: edge ${edge.source} --> completed is an UNAUTHORIZED path into the completed phase; only the C10 commit (T-02) may target completed`,
+			)
+		}
+	}
+
+	// The eight-phase vocabulary must be fully represented.
+	for (const state of CHART_01_PHASE_STATES) {
+		const statePattern = new RegExp(`(^|\\s|-->)${state}(\\s|$|:)`, "m")
+		if (!statePattern.test(diagramText)) {
+			errors.push(`Chart 01 Mermaid projection does not contain the canonical phase state "${state}"`)
 		}
 	}
 

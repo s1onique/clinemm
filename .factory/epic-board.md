@@ -1,3 +1,52 @@
+# ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01 — PASS_STRUCTURAL_ONLY — 2026-10-24
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (Chart 01 turned into source-bound executable contracts; no production behaviour changed).
+
+**ENTRY_HEAD:** `27e82ca3fef79fd48dc2ee59240167114349c7bc` (main). The baseline stated by the ACT was VERIFIED as the actual ENTRY_HEAD.
+
+**What this ACT does.** Chart 01's nine pre-existing claims (`T-01` … `T-09`) are turned into executable contracts against the REAL production seams, plus the five MINIMAL source-bound additions (`T-10` … `T-14`) that describe pre-existing production writers the old diagram omitted. **No production behaviour changed** — the only non-test, non-documentation source touched is the Mermaid **validator** (a documentation-synchronization guard).
+
+**Evidence binding — 14/14.** eligible claims **14** / executable (PASS) **14** / failed **0** / gaps **0**; `witness suite exit code: 0`; `PASS turn-phase-contract: every Chart 01 claim has executable, executed evidence.` Witness suite **60 passed (60)**; negative witnesses **11/11 PASS**; invariant witnesses **8/8 PASS**. `T-02` is `INJECTED_DECISION` (the Elm decision is injected at the existing provider boundary); every other claim is `REAL_PRODUCTION_SEAM`. No live Elm execution and no installed-extension live capture is claimed.
+
+**The classification was CONFIRMED, not assumed.** `T-06` is a **GUARD** (the straggler guard at `sdk-session-event-coordinator.ts:3338` SUPPRESSES a write — it performs no transition of its own) and `T-09` is a **PROJECTION** (the label is a function of the committed phase). Neither carries a Mermaid edge. `T-08` is a GROUPED contract over FOUR genuinely distinct runtime source states (`awaiting_followup` / `completed` / `error` / `resumable`), drawn as four separate edges (`T-08`, `T-08a`, `T-08b`, `T-08c`) — a slash-delimited source string is NOT a runtime phase.
+
+**The phase-writer ownership map (G0) is verified and TOTAL.** The map is machine-checkable (`TURN_PHASE_WRITER_MAP` / `TURN_PHASE_RESTORE_WRITERS`) and the witness proves it is a total, disjoint map over the closed `TurnStateWriterId` union. Recon confirmed the real writers are NOT confined to the session-event coordinator: they also live in `sdk-interaction-coordinator.ts`, `sdk-compaction-coordinator.ts`, `sdk-task-control-coordinator.ts`, `sdk-task-start-coordinator.ts`, `sdk-mode-coordinator.ts` and `SdkController.ts`. The three compaction RESTORE writers commit the phase that was current on ENTRY, so they are listed separately rather than mis-attributed to `compacting`.
+
+**TWO DOCUMENTED DISCREPANCIES were corrected (not papered over).** The old Chart 01 diagram contained two edges with NO backing phase write in the current production source: `streaming --> streaming : content_start / content_update / content_end` (the coordinator performs no phase write for those events) and `awaiting_approval --> error : approval denied` (`resolvePendingToolApproval` commits `streaming` for BOTH approve AND deny). Both were REMOVED. No production behaviour was created to preserve an old diagram.
+
+**RED/GREEN against MUTATED PRODUCTION SOURCES — 5/5 detected the targeted defect.** Each mutation was applied to the REAL production file, the whole suite re-run, and the file restored byte-for-byte (`git diff --stat` → empty):
+1. the turn-complete straggler guard disabled → **3 failed** (T-06 ×2, NEG-T02);
+2. an Elm HOLD returns `true` (the historical silent-TS-fallback defect) → **2 failed** (T-02 Elm HOLD, NEG-T01);
+3. the observer isolation removed from the tracker → **2 failed** (INV-T09, NEG-T04);
+4. the compaction path does not enter `compacting` → **3 failed** (T-10 ×2, NEG-T06);
+5. the host compaction override removed from the projection selector → **2 failed** (T-09 host authority, NEG-T06).
+
+Twelve distinct targeted assertions failed across the five mutations, and every one names the property it protects. This is the ACT's primary success criterion: a regression in completion authority, cancellation preservation, phase writer behaviour, compaction authority or TaskHeader projection is now detected by an executable witness rather than surviving behind a well-rendered diagram.
+
+**The strict association checker was REUSED, not duplicated.** `verifyChart01TurnPhase` was added to the EXISTING `lifecycle-transition-contract-verifier.ts` core — the same core the c9-c10 diagram and Chart 04 use. It enforces: one labeled edge per TRANSITION claim; NO edge for the GUARD/PROJECTION claims; the CORRECT edge for every claim (the verified source/target association); NO UNAUTHORIZED path into `completed`; and all EIGHT canonical phase states present. `transitionIdOfLabel` was extended for the grouped `T-08a`/`T-08b`/`T-08c` ids WITHOUT matching the pre-existing `A-03`/`P-06`/`P-01` ids. NEG-T05 swaps two edge labels BY THEIR ENDPOINTS (never by an already-mutated id), asserts BOTH ids still survive exactly once, asserts BOTH associations are rejected, and asserts the rejection is NOT a "missing id" artifact.
+
+**Gates.** Coverage generator **PASS (14/14)**. Contract + diagram validator **PASS (exit 0)** (c9-c10 + Chart 04 + Chart 01). Real Mermaid parser **PASS (exit 0)**. Markdown fence guard **PASS (exit 0)**. TypeScript **PASS (0 diagnostics)**. Biome lint + format **PASS**. Focused related suites: `turn-state-tracker`, `lifecycle-transition-contract-verifier.correction01`, `completion-presentation-contract01.cpc01` (H01/Chart 04), `markdown-mermaid-block-verifier`, `sdk-compaction-coordinator.turn-phase-authority`, `sdk-task-control-coordinator`, `sdk-interaction-coordinator`, `bcb-observation-unavailable-capture` — all PASS.
+
+**REGRESSION DELTA: ZERO.** Six failures in the related suites were verified PRE-EXISTING by stashing the entire change set and re-running the identical files at the pristine `ENTRY_HEAD` `27e82ca3f`: **the identical six failures, with identical names.** All six are **assertion** failures, not worker-startup failures: `sdk-session-event-coordinator.test.ts` (CPL02, OWN01 RED), `task-terminal-divergence-red01.tdd-red01.test.ts` (TDD-01 ×2, TDD-07), `turn-state-writer-provenance.wprov.test.ts` (WPROV07.1 — a production writer id `completed` absent from the closed union; **this ACT added no writer and did not change the union**). Recorded, not repaired — no unrelated repair is authorized.
+
+**The environment limitation is recorded, not masked.** The macOS sandbox cannot spawn child processes (`spawn_failed` / `EPERM`), so the FULL `apps/vscode` vitest suite does NOT produce a stable count on this machine. The usable gate is an isolated, bounded selection (every suite named, every result recorded) plus an exact failing-IDENTITY comparison against the pristine ENTRY_HEAD. Vitest worker-thread mode was NOT used to silently replace the project's established gate.
+
+**PRESERVATION.** No production behaviour changed — the mutated production files were restored byte-for-byte, and `git diff --stat` over `apps/vscode/src/sdk/` shows only `lifecycle-transition-contract-verifier.ts`. No lifecycle-policy refactor, no new Elm kernel or authority, no public protocol change, no new tracing framework, no unrelated diagram rewritten, no synthetic-to-live evidence promotion. No worktrees. No dependency additions (the existing `mermaid@11.16.1` and `jsdom@26.1.0` copies in the workspace store are used). No diagnostic side effect inside a React functional updater. Unrelated Git state preserved.
+
+**Verdict:** `PASS_STRUCTURAL_ONLY` — all required executable source-bound gates pass. `PASS_LIVE` is NOT claimed: no installed-extension live capture was taken.
+
+**Evidence:**
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01/evidence-report.md` — the full evidence report.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01/coverage-report.md` / `.tsv` — the generated 14-row coverage report.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01/assertion-inventory.tsv` — the source-bound assertion inventory.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01/artifact-manifest.tsv` — the artifact manifest (SHA-256 + byte counts + the ENTRY_HEAD blob).
+- `docs/architecture/task-lifecycle/01-task-turn-phase.md` — the corrected Chart 01 document and diagram.
+- `docs/architecture/task-lifecycle/transitions.tsv` — the canonical ledger (T-01 … T-14).
+- `apps/vscode/src/sdk/turn-phase-contract.ts` — the pure claim registry.
+- `apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts` — the witness suite (60 tests).
+- `scripts/verify-turn-phase-contract.ts` — the deterministic coverage-report generator.
+- `scripts/verify-lifecycle-transition-contract.ts` — extended with the Chart 01 association check.
+
 # ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01 — PASS_STRUCTURAL_ONLY — 2026-10-24
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (bounded repair of two P0 evidence defects; no production behaviour changed).

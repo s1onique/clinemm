@@ -1,0 +1,20 @@
+claim_id	kind	production_symbol	witness	observed_boundary	evidence_level	result
+T-01	TRANSITION	apps/vscode/src/sdk/sdk-session-event-coordinator.ts#handleSessionEvent (pending_prompt_submitted) | apps/vscode/src/sdk/turn-state-tracker.ts#setWithWriter	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (phase + seq + anchor)	REAL_PRODUCTION_SEAM	PASS
+T-02	TRANSITION	apps/vscode/src/sdk/sdk-session-event-coordinator.ts#handleSessionEvent (turn_complete) | apps/vscode/src/sdk/sdk-session-event-coordinator.ts#checkElmCompletionAuthority | apps/vscode/src/sdk/turn-state-tracker.ts#setWithWriter	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot + Elm authority decision	INJECTED_DECISION	PASS
+T-03	TRANSITION	apps/vscode/src/sdk/sdk-session-event-coordinator.ts#handleSessionEvent (turn_complete, no attempt completion)	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot + webview follow-up selector	REAL_PRODUCTION_SEAM	PASS
+T-04	TRANSITION	apps/vscode/src/sdk/sdk-session-event-coordinator.ts#handleSessionEvent (turn_complete, wasErrorSeen) | apps/vscode/src/sdk/SdkController.ts#onSendError	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot + writer provenance	REAL_PRODUCTION_SEAM	PASS
+T-05	TRANSITION	apps/vscode/src/sdk/SdkController.ts#cancelTask | apps/vscode/src/sdk/sdk-task-control-coordinator.ts#cancelTask	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (phase + seq)	REAL_PRODUCTION_SEAM	PASS
+T-06	GUARD	apps/vscode/src/sdk/sdk-session-event-coordinator.ts#handleSessionEvent (turn-complete straggler guard)	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (unchanged phase AND unchanged seq)	REAL_PRODUCTION_SEAM	PASS
+T-07	TRANSITION	apps/vscode/src/sdk/sdk-session-event-coordinator.ts#handleSessionEvent (BCB observation-unavailable writer)	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot + BCB capture record	REAL_PRODUCTION_SEAM	PASS
+T-08	TRANSITION	apps/vscode/src/sdk/sdk-session-event-coordinator.ts#handleSessionEvent (pending_prompt_submitted) | apps/vscode/src/sdk/sdk-task-start-coordinator.ts#initTask	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (phase + seq)	REAL_PRODUCTION_SEAM	PASS
+T-09	PROJECTION	apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts#stateLabel | apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts#taskHeaderPresentationStateLabel	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	webview projection helper + host projection selector	REAL_PRODUCTION_SEAM	PASS
+T-10	TRANSITION	apps/vscode/src/sdk/sdk-compaction-coordinator.ts#enterCompactingPhase	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (phase + seq + anchor)	REAL_PRODUCTION_SEAM	PASS
+T-11	TRANSITION	apps/vscode/src/sdk/sdk-compaction-coordinator.ts#enterCompactingPhase (returned restore closure)	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (phase + seq + anchor)	REAL_PRODUCTION_SEAM	PASS
+T-12	TRANSITION	apps/vscode/src/sdk/sdk-interaction-coordinator.ts#handleRequestToolApproval	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (phase + seq + anchor)	REAL_PRODUCTION_SEAM	PASS
+T-13	TRANSITION	apps/vscode/src/sdk/sdk-interaction-coordinator.ts#handleAskQuestion	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (phase + seq + anchor)	REAL_PRODUCTION_SEAM	PASS
+T-14	TRANSITION	apps/vscode/src/sdk/sdk-interaction-coordinator.ts#resolvePendingToolApproval	apps/vscode/src/sdk/__tests__/turn-phase-contract01.tpc01.test.ts	tracker committed snapshot (phase + seq + anchor)	REAL_PRODUCTION_SEAM	PASS
+
+# eligible_claims	14
+# executable_claims	14
+# failed_claims	0
+# gap_claims	0
