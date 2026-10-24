@@ -1,0 +1,9 @@
+path	bytes	sha256
+apps/vscode/src/sdk/lifecycle-transition-trace.ts	4249	231bd6ec85b82ae634406a98e4cc0e3160054e6a2b8c58199448b0aee172e333
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts	212223	373a6b43fccc4e629e30907c0c9adb222afa90acd456b006384f9967463c7184
+apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts	29607	871985eb0ab1b35efe40060b62a490ce816ba64318e70de27eec43d3a0b4df64
+docs/acts/ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01/transition-contract.tsv	2027	e2b6456200da2f38c64428e89dad86f2b3b0acb89f666e75bc1cc24e546ecad9
+docs/acts/ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01/c9-c10-traceability.mmd	460	e96a4b70983edf9c5d8c14fc1979e85a2a2f34852b434ca039a7a2ddce75b7a9
+docs/acts/ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01/ownership-map.md	2244	c6b11f09c88054d0dd5cb357cc98dc119d9c8288a8b97535ee020e3b2d3c33df
+docs/acts/ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01/evidence-report.md	3976	1863b03d507ada4dfc5c7eab6cf3e712352c549fa153310e0820b753b41c7af2
+scripts/verify-lifecycle-transition-contract.ts	2334	7ccf98939c79a5c7462b2cfadc2a3e7953c29a80ff6f5cc81bec25b5d2057403
