@@ -51,7 +51,7 @@ stateDiagram-v2
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:2991` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:2997` |
 | predicate | `event.type === "pending_prompt_submitted"` |
 | effect | `setTurnPhase("streaming", undefined, "session-event-pending-prompt-submitted")`; `sessions.setRunning(true)`; `messageTranslatorState.clearTurnOutcome()` |
 | test | `apps/vscode/src/sdk/__tests__/sdk-session-event-coordinator.test.ts` |
@@ -61,7 +61,7 @@ stateDiagram-v2
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3762` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3768` |
 | predicate | `result.turnComplete` AND `wasAttemptCompletionSeen()` AND `wasTerminalResponseCommittedThisTurn()` AND `!wasErrorSeen()` AND NOT (BCB hold) AND `checkElmCompletionAuthority(...) === true` |
 | effect | `setTurnPhase("completed", undefined, "session-event-turn-complete-completed")` then `captureContinuationCardinalityAuthorityRecord({stage: "task_completion_committed", completionId})` — the C10 record |
 | test | `apps/vscode/src/sdk/__tests__/c9-c10-statechart-causal-repair01.c9c10scr01.test.ts` (GREEN control) |
@@ -77,7 +77,7 @@ return suppresses the C10 commit entirely.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3806` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3815` |
 | predicate | `result.turnComplete` AND NOT `wasAttemptCompletionSeen()` (no completion tool was declared) |
 | effect | `setTurnPhase("awaiting_followup", …)` — the turn yields to the user; the composer stays enabled |
 | test | `apps/vscode/src/sdk/__tests__/task-terminal-divergence-red01.tdd-red01.test.ts` |
@@ -87,7 +87,7 @@ return suppresses the C10 commit entirely.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3240` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3246` |
 | predicate | `wasErrorSeen()` — a non-recoverable provider/agent error surfaced this turn |
 | effect | `setTurnPhase("error", undefined, "session-event-turn-complete-error")`; an `ask:"api_req_failed"` row offers Retry / Start New Task |
 | test | `apps/vscode/src/sdk/__tests__/task-terminal-divergence-red01.tdd-red01.test.ts` (TDD-01) |
@@ -98,7 +98,7 @@ return suppresses the C10 commit entirely.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1102` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1108` |
 | predicate | `cancelTask` — the user cancelled the turn |
 | effect | `setTurnPhase("resumable", undefined, "session-event-turn-complete-containment-failed-resumable")`; the footer shows Resume Task |
 | test | `apps/vscode/src/sdk/__tests__/task-terminal-divergence-red01.tdd-red01.test.ts` (TDD-10a) |
@@ -108,7 +108,7 @@ return suppresses the C10 commit entirely.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3234` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3242` |
 | predicate | `!activeSession.isRunning && getTurnPhase() === "resumable"` |
 | effect | The turn-complete phase write is SKIPPED, preserving the cancel-set `resumable` phase |
 | test | `apps/vscode/src/sdk/__tests__/task-terminal-divergence-red01.tdd-red01.test.ts` (TDD-10a) |
@@ -118,7 +118,7 @@ return suppresses the C10 commit entirely.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3601` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3610` |
 | predicate | The BCB barrier held AND `canObserveHeldResults === false` (the resumed turn's tool registry has no `command_status`) AND the same obligation was not already marked `observation_unavailable` |
 | effect | `setTurnPhase("error", …)` with the BCB writer id; a bounded `observation_unavailable` outcome is published instead of a useless continuation |
 | test | `apps/vscode/src/sdk/__tests__/bcb-observation-unavailable-capture.bcapt01.test.ts` |
@@ -128,7 +128,7 @@ return suppresses the C10 commit entirely.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:2968-2991` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:2968-2997` |
 | predicate | `event.type === "pending_prompt_submitted"` |
 | effect | The turn outcome is cleared; the phase returns to `streaming` |
 | test | `apps/vscode/src/sdk/__tests__/sdk-session-event-coordinator.test.ts` |
