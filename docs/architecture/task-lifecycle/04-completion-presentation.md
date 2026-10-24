@@ -48,18 +48,16 @@ stateDiagram-v2
 
     FinalRowPublished --> RowVisible : filter did not hold
 
-    RowVisible --> BadgeShown : resolveTerminalReportFraming() PRIMARY marker path
-    RowVisible --> MarkerRetracted : Elm HOLD / FAILURE at turn end (C10 suppressed)
-    note right of MarkerRetracted
-        The row is re-published with the SAME ts
-        and the marker DROPPED.
+    RowVisible --> NoBadge : Elm HOLD / FAILURE at turn end (C10 suppressed)
+    note right of NoBadge
+        No authoritative marker was published.
+        The live row was published WITHOUT the marker;
+        commit-driven promotion is the only publisher.
         The summary TEXT stays visible.
-        => no false badge. CORRECT.
     end note
 
-    MarkerRetracted --> NoBadge : resolveTerminalReportFraming() -> undefined
     RowVisible --> C10Committed : Elm authorizes + TS conservation passes
-    C10Committed --> BadgeShown : (the marker is correct)
+    C10Committed --> BadgeShown : same-ts row promoted with authoritative marker
 
     BadgeShown --> [*]
     NoBadge --> [*]
@@ -143,7 +141,7 @@ message tail, or from the mutable task phase alone.
 |---|---|
 | source | `apps/vscode/src/sdk/task-proxy.ts` (`MessageStateHandler.addMessages`) and `apps/vscode/webview-ui/src/components/chat/chat-view/messageReducer.ts` (`applyMessage`) |
 | predicate | A message with the same `ts` REPLACES the stored row in place (host) / merges by `ts` (webview) |
-| effect | This is what makes the retraction seam possible: re-publishing a row with the same `ts` updates it in place without creating a new visible row. |
+| effect | This is what makes commit-driven promotion possible: re-publishing a row with the same `ts` updates it in place without creating a new visible row. |
 | test | `apps/vscode/webview-ui/src/components/chat/chat-view/messageReducer.test.ts` |
 | kind | observed |
 
@@ -151,7 +149,7 @@ message tail, or from the mutable task phase alone.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1232` (`promoteCompletionAuthorityMarker`), invoked at the C10 commit on BOTH paths — the immediate turn-complete path (`:3761`) and the deferred `reevaluateDeferredCompletionBarrier` path (`:1898`); the tracking field is set at `:3192` and cleared at `:2967` |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`promoteCompletionAuthorityMarker`), invoked at the C10 commit on BOTH paths — the immediate turn-complete path (`handleSessionEvent`) and the deferred `reevaluateDeferredCompletionBarrier` path |
 | predicate | The C10 commit SUCCEEDED (the Elm authority returned `authorize` AND every conservation check passed) AND the coordinator published a completion row for THIS turn |
 | effect | The row is re-published with the SAME `ts` and the marker ADDED, via `emitHookMessage` (the established "update a message" channel — store-append + direct webview push, NO session-event emission). The summary TEXT survives; the badge appears exactly when — and only when — the C10 committed. |
 | test | `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` (RED-04, RED-05) |

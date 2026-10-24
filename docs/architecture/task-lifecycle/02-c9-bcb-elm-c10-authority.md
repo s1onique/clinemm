@@ -114,13 +114,24 @@ the outcome before it decides.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (the `setTurnPhase("completed", …)` call) |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`handleSessionEvent` / `reevaluateDeferredCompletionBarrier` → `setTurnPhase("completed", …)`) |
 | predicate | ALL of: turn complete; a completion tool was seen; a terminal response was committed this turn; no error was seen; NOT (BCB hold); Elm authorized |
-| effect | `setTurnPhase("completed", undefined, "session-event-turn-complete-completed")` AND `captureContinuationCardinalityAuthorityRecord({stage: "task_completion_committed", completionId})` — the C10 record, minted AFTER the effect |
-| test | `apps/vscode/src/sdk/__tests__/c9-c10-statechart-causal-repair01.c9c10scr01.test.ts` (GREEN control) |
+| effect | Request `setTurnPhase("completed", undefined, "session-event-turn-complete-completed")`; `TurnStateTracker.setWithWriter` is the actual phase commit boundary; then `captureContinuationCardinalityAuthorityRecord({stage: "task_completion_committed", completionId})` — the C10 record, minted AFTER the effect |
+| test | `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` |
 | kind | observed |
 
-### A-05 — the C10 commit is EXACTLY ONCE
+### A-05 — the C10 commit is withheld (Elm HOLD / FAILURE)
+
+| Field | Value |
+|---|---|
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`checkElmCompletionAuthority` false branch) |
+| predicate | `checkElmCompletionAuthority(...) === false` |
+| effect | The C10 commit is suppressed; a `DeferredCompletionBarrier` marker is registered; no authoritative marker is published or retracted. The live completion row was published without the marker, and commit-driven promotion is the only publisher. |
+| test | `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` |
+
+### A-06 — the C10 commit is EXACTLY ONCE
+
+The transition ledger's A-06 remains the exactly-once completion identity contract.
 
 | Field | Value |
 |---|---|
@@ -175,8 +186,8 @@ excludes the pure-BCB path and implicates the Elm path.**
 ```
 1. content_end (submit_and_exit)
    -> message-translator.ts publishes say:"completion_result",
-      partial=false, isAuthoritativelyCompletedResult: true
-      (STAMPED UNCONDITIONALLY at this seam)
+      partial=false, WITHOUT isAuthoritativelyCompletedResult
+      (the marker is promoted only by the C10 commit)
 
 2. done event
    -> coordinator turn-end promotion branch
@@ -189,14 +200,16 @@ excludes the pure-BCB path and implicates the Elm path.**
    -> TaskHeader says "Working"
    -> C10 capture never fires
 
-4. The published row KEEPS isAuthoritativelyCompletedResult: true
-   -> webview resolveTerminalReportFraming() PRIMARY marker path
-   -> green "Completed" badge
+4. The published row carries NO isAuthoritativelyCompletedResult marker
+   -> webview resolveTerminalReportFraming() has no PRIMARY marker
+   -> no green "Completed" badge
 ```
 
-**Step 1 vs step 3 is the defect.** The marker asserts "this row IS a
-terminal completion" at PUBLICATION time, but the authority to commit
-is decided LATER — and may never be granted.
+This is the historical defect description. Current HEAD repairs it by
+publishing the live row without the authority marker and promoting that
+same row only from the successful C10 commit (P-06). The transition A-05
+therefore means "C10 withheld / no authoritative marker published", not
+"an already-published marker was retracted".
 
 ### The repair
 

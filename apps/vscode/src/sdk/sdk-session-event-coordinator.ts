@@ -92,6 +92,11 @@ import {
 	recordExtensionHostHotloopSessionEvent,
 } from "./extension-host-hotloop-diagnostic"
 import { shouldEmitExtensionHostQueueLog } from "./extension-host-queue-log-policy"
+import {
+	type LifecycleTransitionTraceContext,
+	lifecycleTransitionTraceRecord,
+	recordLifecycleTransitionTrace,
+} from "./lifecycle-transition-trace"
 import type { MessageTranslatorState, TranslationResult } from "./message-translator"
 import { translateSessionEvent } from "./message-translator"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
@@ -902,6 +907,23 @@ export class SdkSessionEventCoordinator {
 	private pendingCompletionAuthorityRow: ClineMessage | undefined
 
 	/**
+	 * ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01: the decision id is created
+	 * only after the authority provider returns a closed decision. It is
+	 * carried through the request/commit/promotion stages by the actual
+	 * execution path, so the trace does not reconstruct causality from
+	 * timestamps or shared task identity.
+	 */
+	private pendingLifecycleDecisionId: string | undefined
+
+	private lifecycleTraceContext(): LifecycleTransitionTraceContext {
+		return {
+			taskId: this.options.getTask?.()?.taskId ?? "",
+			turnSeq: this.options.messageTranslatorState.getMinter().epoch,
+			decisionId: this.pendingLifecycleDecisionId ?? "unobserved",
+		}
+	}
+
+	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
 	 * The Elm-authority decision provider, captured at construction.
 	 * REQUIRED (no fallback). The provider is the real Elm runtime
@@ -1259,6 +1281,24 @@ export class SdkSessionEventCoordinator {
 			// webview's `applyMessage` reducer merges by `ts`, so the row
 			// is replaced in place.
 			this.options.messages.emitHookMessage?.(promoted)
+			recordLifecycleTransitionTrace(
+				lifecycleTransitionTraceRecord(
+					this.lifecycleTraceContext(),
+					"effect_executed",
+					"authoritative_marker_executed",
+					"SdkSessionEventCoordinator.promoteCompletionAuthorityMarker",
+					"P-06",
+				),
+			)
+			recordLifecycleTransitionTrace(
+				lifecycleTransitionTraceRecord(
+					this.lifecycleTraceContext(),
+					"marker_promoted",
+					"authoritative_marker_published",
+					"SdkSessionEventCoordinator.promoteCompletionAuthorityMarker",
+					"P-06",
+				),
+			)
 			Logger.warn(
 				`[SdkController] Published the completion-authority marker on ts=${promoted.ts} (event=${event.type}): the completion commit WAS authorized, so the row now presents as authoritative completion.`,
 			)
@@ -1270,6 +1310,8 @@ export class SdkSessionEventCoordinator {
 	private async checkElmCompletionAuthority(writerId: TurnStateWriterId): Promise<boolean> {
 		const activeSession = this.options.sessions.getActiveSession()
 		const sessionId = activeSession?.sessionId
+		const taskId = this.options.getTask?.()?.taskId ?? sessionId ?? ""
+		const turnSeq = this.options.messageTranslatorState.getMinter().epoch
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
 		// flush the per-session authority queue before reading the decision so
 		// the Elm kernel has processed all records delivered up to the
@@ -1295,8 +1337,39 @@ export class SdkSessionEventCoordinator {
 			)
 			return false
 		}
-		if (decision.kind === "authorize") return true
+		const decisionId = `lifecycle-${taskId}-${turnSeq}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+		this.pendingLifecycleDecisionId = decisionId
+		if (decision.kind === "authorize") {
+			recordLifecycleTransitionTrace(
+				lifecycleTransitionTraceRecord(
+					this.lifecycleTraceContext(),
+					"authority_decision",
+					"authorized",
+					"SdkSessionEventCoordinator.checkElmCompletionAuthority",
+					"A-03",
+				),
+			)
+			return true
+		}
 		if (decision.kind === "hold") {
+			recordLifecycleTransitionTrace(
+				lifecycleTransitionTraceRecord(
+					this.lifecycleTraceContext(),
+					"authority_decision",
+					"held",
+					"SdkSessionEventCoordinator.checkElmCompletionAuthority",
+					"A-05",
+				),
+			)
+			recordLifecycleTransitionTrace(
+				lifecycleTransitionTraceRecord(
+					this.lifecycleTraceContext(),
+					"marker_suppressed",
+					"no_authoritative_marker",
+					"SdkSessionEventCoordinator.checkElmCompletionAuthority",
+					"A-05",
+				),
+			)
 			Logger.warn(
 				`[SdkController] Elm completion-authority returned HOLD at writerId=${writerId} (reason=${decision.reason}); suppressing commit effect`,
 			)
@@ -1304,6 +1377,24 @@ export class SdkSessionEventCoordinator {
 		}
 		// failure: per ACT §3, no silent TS fallback. Suppress the
 		// commit effect and surface the bounded classification.
+		recordLifecycleTransitionTrace(
+			lifecycleTransitionTraceRecord(
+				this.lifecycleTraceContext(),
+				"authority_decision",
+				"failure",
+				"SdkSessionEventCoordinator.checkElmCompletionAuthority",
+				"A-05",
+			),
+		)
+		recordLifecycleTransitionTrace(
+			lifecycleTransitionTraceRecord(
+				this.lifecycleTraceContext(),
+				"marker_suppressed",
+				"no_authoritative_marker",
+				"SdkSessionEventCoordinator.checkElmCompletionAuthority",
+				"A-05",
+			),
+		)
 		Logger.warn(
 			`[SdkController] Elm completion-authority returned FAILURE at writerId=${writerId} (classification=${decision.classification}); suppressing commit effect (no silent TS fallback)`,
 		)
@@ -1885,7 +1976,25 @@ export class SdkSessionEventCoordinator {
 			}
 			return
 		}
+		recordLifecycleTransitionTrace(
+			lifecycleTransitionTraceRecord(
+				this.lifecycleTraceContext(),
+				"effect_requested",
+				"completed_phase_requested",
+				"SdkSessionEventCoordinator.reevaluateDeferredCompletionBarrier",
+				"A-04",
+			),
+		)
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+		recordLifecycleTransitionTrace(
+			lifecycleTransitionTraceRecord(
+				this.lifecycleTraceContext(),
+				"phase_commit_observed",
+				"completed_phase_committed",
+				"SdkSessionEventCoordinator.reevaluateDeferredCompletionBarrier",
+				"A-04",
+			),
+		)
 		// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
 		// (C9C10CDAP01): the DEFERRED C10 COMMIT happened — publish
 		// the completion authority NOW, exactly as the immediate path
@@ -2977,6 +3086,7 @@ export class SdkSessionEventCoordinator {
 				// completion summaries when a newer epoch is running"
 				// invariant).
 				this.pendingCompletionAuthorityRow = undefined
+				this.pendingLifecycleDecisionId = undefined
 				this.options.sessions.setRunning(true)
 				this.options.setTurnPhase?.(PROVIDER_FAILURE_PHASE.STREAMING, undefined, "session-event-pending-prompt-submitted")
 			}
@@ -3757,7 +3867,26 @@ export class SdkSessionEventCoordinator {
 									// SAME row.
 									return
 								}
+								recordLifecycleTransitionTrace(
+									lifecycleTransitionTraceRecord(
+										this.lifecycleTraceContext(),
+										"effect_requested",
+										"completed_phase_requested",
+										"SdkSessionEventCoordinator.handleSessionEvent",
+										"A-04",
+									),
+								)
 								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+								recordLifecycleTransitionTrace(
+									lifecycleTransitionTraceRecord(
+										this.lifecycleTraceContext(),
+										"phase_commit_observed",
+										"completed_phase_committed",
+										"SdkSessionEventCoordinator.handleSessionEvent",
+										"A-04",
+									),
+								)
+
 								// ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01
 								// (C9C10CDAP01): the C10 COMMIT happened —
 								// publish the completion authority NOW.

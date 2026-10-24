@@ -1,0 +1,10 @@
+stateDiagram-v2
+    direction TB
+    [*] --> C9Captured : completion tool content_end
+    C9Captured --> ElmConsulted : BCB hold false
+    ElmConsulted --> ElmAuthorized : A-03 authorize
+    ElmConsulted --> C10Withheld : A-05 hold or failure
+    ElmAuthorized --> PhaseCommitted : A-04 completed phase committed
+    PhaseCommitted --> MarkerPromoted : P-06 same-ts marker promotion
+    C10Withheld --> [*] : no authoritative marker
+    MarkerPromoted --> [*]

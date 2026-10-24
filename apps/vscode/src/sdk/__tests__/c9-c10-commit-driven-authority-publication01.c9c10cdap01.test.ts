@@ -63,7 +63,7 @@
  */
 
 import { type CoreSessionEvent, type SupervisableShellProcess } from "@cline/core"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 // ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01: the REAL
 // webview replica reducer. The temporal invariant is about what the WEBVIEW
 // can observe, so the assertion must be on the webview's own convergent
@@ -78,6 +78,13 @@ import {
 import { resolveTerminalReportFraming } from "../../../webview-ui/src/components/chat/terminalReportFraming"
 import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import type { ElmCompletionAuthorityDecision } from "../completion-authority-elm-authority"
+import {
+	clearLifecycleTransitionTrace,
+	enableLifecycleTransitionTrace,
+	getLifecycleTransitionTraceRecords,
+	setLifecycleTransitionTraceEnabled,
+	validateLifecycleTransitionTrace,
+} from "../lifecycle-transition-trace"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
@@ -133,6 +140,8 @@ interface Harness {
 	webview: ReplicaState
 	/** Push a message into the webview replica (the production partial-stream push). */
 	pushToWebview: (message: ClineMessage) => void
+	/** Test-only failure injection at the production marker update channel. */
+	failMarkerPublication: boolean
 }
 
 function fakeSupervisor(): SupervisableShellProcess {
@@ -162,6 +171,7 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 	const activeTaskId = opts.activeTaskId ?? "task-c9c10cdap01"
 
 	let completionCommitCount = 0
+	let failMarkerPublication = false
 	const ownedJobIds: string[] = []
 	const activeNotifyJobIds = new Set<string>()
 	const runningJobIds = new Set<string>()
@@ -231,6 +241,9 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 			// exactly, so the webview reducer's sequence/epoch fencing is
 			// genuinely exercised.
 			emitHookMessage: (m: ClineMessage) => {
+				if (failMarkerPublication) {
+					throw new Error("trace-test-marker-publication-failure")
+				}
 				stamp(m)
 				pushToWebview(m)
 			},
@@ -283,6 +296,12 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 			return webview
 		},
 		pushToWebview,
+		get failMarkerPublication() {
+			return failMarkerPublication
+		},
+		set failMarkerPublication(value: boolean) {
+			failMarkerPublication = value
+		},
 	}
 }
 
@@ -371,6 +390,15 @@ function webviewAuthoritativeFraming(h: Harness): { kind: string; label: string 
 // ---------------------------------------------------------------------------
 
 describe("ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01 / C9C10CDAP01", () => {
+	beforeEach(() => {
+		clearLifecycleTransitionTrace()
+		enableLifecycleTransitionTrace()
+	})
+	afterEach(() => {
+		setLifecycleTransitionTraceEnabled(false)
+		clearLifecycleTransitionTrace()
+	})
+
 	describe("RED-04: the completion authority must NOT be published before the C10 commit", () => {
 		it("immediately after content_end (before done) the row carries NO authoritative badge", async () => {
 			const h = makeHarness()
@@ -544,6 +572,117 @@ describe("ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01 / C9C10C
 			expect(fenced.messages.find((m) => m.ts === publishedTs)?.isAuthoritativelyCompletedResult).toBeUndefined()
 			// (b) The fence did not regress.
 			expect(fenced.epoch).toBe(newerEpoch)
+		})
+	})
+
+	describe("ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01 causal trace", () => {
+		it("correlates the authorized decision with the committed phase and promoted marker", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+			await driveContentStart(h, { resultText: "Traceable verdict." })
+			await driveContentEnd(h, { resultText: "Traceable verdict." })
+			await driveDone(h, { resultText: "Traceable verdict." })
+
+			const records = getLifecycleTransitionTraceRecords()
+			const decision = records.find((record) => record.stage === "authority_decision")
+			expect(decision?.transition_id).toBe("A-03")
+			expect(decision?.outcome).toBe("authorized")
+			expect(records.some((record) => record.stage === "effect_requested")).toBe(true)
+			expect(records.some((record) => record.stage === "phase_commit_observed")).toBe(true)
+			expect(records.some((record) => record.stage === "effect_executed")).toBe(true)
+			expect(records.some((record) => record.stage === "marker_promoted")).toBe(true)
+			expect(validateLifecycleTransitionTrace(records, decision?.decision_id ?? "")).toEqual({ valid: true })
+		})
+
+		it("rejects a chronology-only false pairing across overlapping decisions", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+			await driveContentStart(h, { resultText: "First verdict." })
+			await driveContentEnd(h, { resultText: "First verdict." })
+			await driveDone(h, { resultText: "First verdict." })
+
+			const records = [...getLifecycleTransitionTraceRecords()]
+			const firstDecision = records.find((record) => record.stage === "authority_decision")
+			expect(firstDecision).toBeDefined()
+			const falsePair = records.map((record) =>
+				record.decision_id === firstDecision?.decision_id
+					? { ...record, decision_id: "decision-from-another-turn" }
+					: record,
+			)
+			expect(validateLifecycleTransitionTrace(falsePair, firstDecision?.decision_id ?? "")).toEqual({
+				valid: false,
+				reason: "missing_authority_decision",
+			})
+		})
+
+		it("rejects a same-turn effect paired to a different decision id", async () => {
+			// This counterexample has the same task and turn sequence, and
+			// the same chronological ordering as the real effect. Only the
+			// decision id differs, so chronology-only validation must fail.
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+			await driveContentStart(h, { resultText: "First verdict." })
+			await driveContentEnd(h, { resultText: "First verdict." })
+			await driveDone(h, { resultText: "First verdict." })
+
+			const records = [...getLifecycleTransitionTraceRecords()]
+			const firstDecision = records.find((record) => record.stage === "authority_decision")
+			expect(firstDecision).toBeDefined()
+			const falsePair = records.map((record) =>
+				record.stage === "marker_promoted" ? { ...record, decision_id: "decision-from-another-turn" } : record,
+			)
+			expect(validateLifecycleTransitionTrace(falsePair, firstDecision?.decision_id ?? "")).toEqual({
+				valid: false,
+				reason: "missing_marker_promoted",
+			})
+		})
+
+		it("trace disabled leaves production behavior unchanged and emits no records", async () => {
+			setLifecycleTransitionTraceEnabled(false)
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+			await driveContentStart(h, { resultText: "Disabled trace verdict." })
+			await driveContentEnd(h, { resultText: "Disabled trace verdict." })
+			await driveDone(h, { resultText: "Disabled trace verdict." })
+
+			expect(h.completionCommitCount()).toBe(1)
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(webviewAuthoritativeFraming(h)?.kind).toBe("completed")
+			expect(getLifecycleTransitionTraceRecords()).toHaveLength(0)
+		})
+
+		it("records HOLD as suppression and does not claim a committed effect", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+			h.setElmDecision(() => ({ kind: "hold", reason: "trace-test-hold", holdReasons: ["active_run"] }))
+			await driveContentStart(h, { resultText: "Held verdict." })
+			await driveContentEnd(h, { resultText: "Held verdict." })
+			await driveDone(h, { resultText: "Held verdict." })
+
+			const records = getLifecycleTransitionTraceRecords()
+			expect(
+				records.some(
+					(record) =>
+						record.transition_id === "A-05" && record.stage === "authority_decision" && record.outcome === "held",
+				),
+			).toBe(true)
+			expect(records.some((record) => record.stage === "marker_suppressed")).toBe(true)
+			expect(records.some((record) => record.stage === "marker_promoted")).toBe(false)
+			expect(records.some((record) => record.stage === "phase_commit_observed")).toBe(false)
+		})
+
+		it("does not claim effect execution when marker publication fails", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+			h.failMarkerPublication = true
+			await driveContentStart(h, { resultText: "Failure verdict." })
+			await driveContentEnd(h, { resultText: "Failure verdict." })
+			await driveDone(h, { resultText: "Failure verdict." })
+
+			const records = getLifecycleTransitionTraceRecords()
+			expect(records.some((record) => record.stage === "effect_executed")).toBe(false)
+			expect(records.some((record) => record.stage === "marker_promoted")).toBe(false)
+			expect(records.some((record) => record.stage === "phase_commit_observed")).toBe(true)
 		})
 	})
 
