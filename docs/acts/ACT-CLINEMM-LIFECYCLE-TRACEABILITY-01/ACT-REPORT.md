@@ -2,6 +2,70 @@
 
 **Verdict:** `PASS_STRUCTURAL_ONLY`
 
+## CORRECTION02 — MUT-03 test correction (TEST-ONLY)
+
+The CORRECTION01 closeout was reviewed and its `MUT-03` witness was found to
+be DEFECTIVE: it did not exercise the property it claimed to exercise. This
+section records the bounded correction. No production code, contract TSV,
+Mermaid projection, architecture document, or new infrastructure changed.
+
+### The defect
+
+The CORRECTION01 `MUT-03` built its mutation with two sequential
+`mutateEdgeLabel(...)` calls, and the SECOND call located its target edge by
+the transition id `A-04`. `mutateEdgeLabel` matches the FIRST labeled edge
+carrying that id, and the first call had already relabeled the `A-03` edge
+(`ElmConsulted --> ElmAuthorized`) to carry `A-04`. The second call therefore
+matched the ALREADY-MUTATED edge: the real `A-04` edge
+(`ElmAuthorized --> PhaseCommitted`) was never touched, and `A-03` had become
+`A-99`.
+
+The resulting mutation produced exactly one error —
+
+    A-03: absent from Mermaid projection (no labeled edge carries this transition id)
+
+— and `A-04` never appeared in the errors at all. Because the witness asserted
+only `errors.length > 0`, it was satisfied by a MISSING transition id. It
+proved that removing an id is detected; it did NOT prove that a SWAPPED
+id-to-edge association is detected — precisely the false-positive class
+CORRECTION01 was raised to close.
+
+### The correction
+
+`MUT-03` now mutates two distinct edges BY THEIR ENDPOINTS, so the second
+substitution can never match an already-mutated edge:
+
+    ElmConsulted --> ElmAuthorized : A-03   ->   ... : A-04
+    ElmAuthorized --> PhaseCommitted : A-04 ->   ... : A-03
+
+Mermaid associates the text after `:` with the edge that PRECEDES it, so this
+is a genuine association swap in which both ids survive exactly once and each
+is attached to the other's edge. The witness now asserts the mutation
+itself, that the validator reports an association mismatch for BOTH `A-03`
+and `A-04`, and that NO error reports a transition as `absent from Mermaid
+projection` — so the rejection cannot come from a missing id.
+
+### RED/GREEN
+
+Against a faithful reimplementation of the PRE-correction validator semantics
+(independent `diagram.includes(id)` substring presence plus
+`diagram.includes("A --> B")` edge EXISTENCE, with no association check), the
+corrected swap yields ZERO errors — the pre-correction validator ACCEPTED it.
+The corrected `MUT-03` assertion therefore FAILS against the pre-correction
+behaviour (RED) and PASSES against the corrected validator (GREEN: 2
+association errors, 0 absent). The defective witness was already green
+against the pre-correction semantics, which is exactly why it proved nothing.
+
+### Gates
+
+- `cd apps/vscode && ./node_modules/.bin/vitest run --config vitest.config.ts src/sdk/__tests__/lifecycle-transition-contract-verifier.correction01.test.ts` — PASS, 1 file, 9 tests.
+- The 5-file / 52-test focused selection — PASS.
+- `cd apps/vscode && ./node_modules/.bin/tsc --noEmit --pretty false` — PASS, exit 0, 0 diagnostics.
+- `bun scripts/verify-lifecycle-transition-contract.ts` — PASS, exit 0.
+
+See `.factory/evidence/ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION02/01-mut-03-test-correction.md`.
+
+## CORRECTION01 — bounded traceability-proof correction
 ## CORRECTION01 — bounded traceability-proof correction
 
 A review of `cbf7c6a3` returned `HALT_TRACEABILITY_PROOF_FALSE_POSITIVES`: the

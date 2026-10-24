@@ -131,17 +131,35 @@ describe("ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01 contract/Mermaid as
 		expect(result.errors.join("\n")).toContain("A-04")
 	})
 
-	it("MUT-03: rejects a transition id attached to the WRONG Mermaid edge", () => {
-		// Move A-03's label onto A-04's edge and relabel A-04's edge.
-		// Every id is still PRESENT in the Mermaid text, so the previous
-		// substring check stayed green.
-		const mutatedDiagram = mutateEdgeLabel(
-			mutateEdgeLabel(diagramText, "A-03", "A-04 authorize"),
-			"A-04",
-			"A-99 completed phase committed",
+	it("MUT-03: rejects swapped transition IDs on existing Mermaid edges", () => {
+		// Mutate two distinct edges by their endpoints.
+		// Do NOT locate the second edge by an already-mutated ID.
+		const mutatedDiagram = diagramText
+			.replace(/(ElmConsulted\s*-->\s*ElmAuthorized\s*:\s*)A-03\b/, "$1A-04")
+			.replace(/(ElmAuthorized\s*-->\s*PhaseCommitted\s*:\s*)A-04\b/, "$1A-03")
+
+		const edges = parseMermaidTransitionEdges(mutatedDiagram)
+
+		const endpointsFor = (id: string) =>
+			edges.filter((edge) => transitionIdOfLabel(edge.label) === id).map((edge) => `${edge.source} --> ${edge.target}`)
+
+		// Verify the mutation itself: both IDs survive exactly once,
+		// but each is now attached to the other's edge.
+		expect(endpointsFor("A-03")).toEqual(["ElmAuthorized --> PhaseCommitted"])
+		expect(endpointsFor("A-04")).toEqual(["ElmConsulted --> ElmAuthorized"])
+
+		// Both associations must be rejected independently.
+		const { errors } = verify({ diagramText: mutatedDiagram })
+
+		expect(errors).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining("A-03: Mermaid edge is"),
+				expect.stringContaining("A-04: Mermaid edge is"),
+			]),
 		)
-		const result = verify({ diagramText: mutatedDiagram })
-		expect(result.errors.length).toBeGreaterThan(0)
+
+		// Rejection must NOT result from missing transition IDs.
+		expect(errors.some((error) => error.includes("absent from Mermaid projection"))).toBe(false)
 	})
 
 	it("MUT-04: rejects two Mermaid edges carrying the same transition id", () => {

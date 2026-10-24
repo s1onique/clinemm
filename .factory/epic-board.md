@@ -1,3 +1,35 @@
+# ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION02 — CLOSED_CLEAN — 2026-10-24
+
+**Status:** CLOSED with verdict **`CLOSED_CLEAN`** (bounded TEST-ONLY correction of the predecessor ACT; no live installed-extension qualification is claimed).
+
+**ENTRY_HEAD:** `72691cbeb` (main).
+**PREDECESSOR:** `ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01` (verdict `PASS_STRUCTURAL_ONLY`, closeout commit `72691cbeb`).
+
+**Why this ACT exists:** the CORRECTION01 closeout was reviewed and its `MUT-03` witness was found to be DEFECTIVE — it did not exercise the property it claimed to exercise. This is a bounded TEST-ONLY correction: no production code, contract TSV, Mermaid projection, or architecture document changed, and no new infrastructure was introduced.
+
+**The defect.** The CORRECTION01 `MUT-03` built its mutation with two sequential `mutateEdgeLabel(...)` calls, and the SECOND call located its target edge by the transition id `A-04`. Because `mutateEdgeLabel` matches the FIRST labeled edge carrying that id, and the FIRST call had already relabeled the `A-03` edge to carry `A-04`, the second call matched the ALREADY-MUTATED edge. The real `A-04` edge (`ElmAuthorized --> PhaseCommitted`) was never touched, and `A-03` had become `A-99`.
+
+**Measured result of the defective mutation:** the only error was `A-03: absent from Mermaid projection (no labeled edge carries this transition id)`; `A-04` never appeared in the errors at all. The witness asserted only `errors.length > 0`, so it was satisfied by a MISSING transition id. It proved that removing an id is detected — it did NOT prove that a SWAPPED id-to-edge association is detected, which is exactly the false-positive class CORRECTION01 was raised to close.
+
+**The correction.** `MUT-03` now mutates two distinct edges BY THEIR ENDPOINTS (`ElmConsulted --> ElmAuthorized : A-03` and `ElmAuthorized --> PhaseCommitted : A-04`), so the second substitution can never match an already-mutated edge. The witness now asserts (a) the mutation itself — both ids survive exactly once and each is attached to the other's edge; (b) the validator reports an association mismatch for BOTH `A-03` and `A-04`; and (c) NO error reports a transition as `absent from Mermaid projection`, so the rejection cannot come from a missing id.
+
+**RED/GREEN — the corrected witness is load-bearing.** Against a faithful reimplementation of the PRE-correction validator semantics (independent `diagram.includes(id)` substring presence plus `diagram.includes("A --> B")` edge EXISTENCE, with no association check) the corrected swap yields ZERO errors — the pre-correction validator ACCEPTED it. The corrected `MUT-03` assertion therefore FAILS against the pre-correction behaviour (RED) and PASSES against the corrected validator (GREEN, 2 association errors, 0 absent). The defective witness was already green against the pre-correction semantics, which is precisely why it proved nothing.
+
+**Acceptance contract (measured):** (1) both IDs exist exactly once on the wrong edges — `A-03 -> ElmAuthorized --> PhaseCommitted`, `A-04 -> ElmConsulted --> ElmAuthorized`; (2) the validator reports association mismatches for BOTH ids; (3) neither transition is reported missing; (4) the existing 52-test selection is retained with `MUT-03` corrected; (5) scope is limited to the test file, this evidence, the board, and the refreshed manifest hash row.
+
+**Gates:** contract/Mermaid validator PASS (exit 0, "4 transitions, Mermaid synchronized"); focused test file PASS — 1 file, 9 tests; focused + correction test selection PASS — 5 files, **52 tests**; `tsc --noEmit` PASS — exit 0, 0 diagnostics. Vitest emitted the known non-fatal fork-pool `kill EPERM` teardown warning after all selected tests passed. The contract validator was run with Bun (plain Node cannot resolve the extensionless TypeScript import); no repository script or dependency was changed.
+
+**Evidence:**
+- `apps/vscode/src/sdk/__tests__/lifecycle-transition-contract-verifier.correction01.test.ts` — the corrected `MUT-03`.
+- `docs/acts/ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01/artifact-manifest.tsv` — the SHA-256/byte-count row for the corrected test file was refreshed so the G8 exact-source evidence stays truthful.
+- `.factory/evidence/ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION02/01-mut-03-test-correction.md`
+
+**Preservation:** no production code, contract TSV, Mermaid projection, architecture document, completion-authorization policy, lifecycle state ownership, Elm policy, wire protocol, or public API changed. The CORRECTION01 causal-trace validator and contract/diagram association core are untouched; only the defective test case was rewritten.
+
+**Verdict:** `CLOSED_CLEAN` — `MUT-03` now genuinely exercises the swapped id-to-edge association property, is demonstrably RED against the pre-correction validator semantics, and no longer passes for the wrong reason.
+
+---
+# ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-24
 # ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-24
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (bounded correction of the predecessor ACT; live installed-extension qualification remains out of scope and is NOT claimed).
