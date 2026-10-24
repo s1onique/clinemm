@@ -1,3 +1,36 @@
+# ACT-CLINEMM-C9C10-MERMAID-RENDER-FIX01 — CLOSED_CLEAN — 2026-10-24
+
+**Status:** CLOSED with verdict **`CLOSED_CLEAN`** (bounded DOC + GUARD correction of one architecture document; no production code changed).
+
+**ENTRY_HEAD:** `38cb209ff` (main).
+**CLOSE_HEAD:** `b5fac85da` (main).
+
+**Why this ACT exists:** the C9 → C10 diagram in `docs/architecture/task-lifecycle/02-c9-bcb-elm-c10-authority.md` did not render on GitHub. The `mermaid` fence opened at line 18 but closed at the VERY BOTTOM of the document, so GitHub forwarded the intervening Markdown (headings and all seven tables) to its Mermaid renderer, which rejected the document at line 44 on `| Field | Value |`.
+
+**The defect, measured from GitHub's own side.** The pre-fix document submitted to `POST https://api.github.com/markdown` (`mode: gfm`) produced a Mermaid payload containing `| Field | Value |` and `## Load-bearing transitions` — GitHub literally shipped the Markdown to the Mermaid renderer. The post-fix payload contains the diagram and nothing else.
+
+**The correction.** (1) The closing fence and the two terminal transitions (`C10Committed --> [*]`, `C10Withheld --> [*]`) moved from the bottom of the document to immediately after the last diagram edge; the `mermaid` block is now exactly lines 18..59 and every Markdown table and heading lives outside it. (2) The BCB recovery edge `C10Blocked --> C10Committed` became `C10Blocked --> ElmConsulted` — the old edge visually bypassed the mandatory Elm authority gate, which `reevaluateDeferredCompletionBarrier` contradicts (it calls `checkElmCompletionAuthority` BEFORE `setTurnPhase("completed", …)`) and which the canonical ledger's A-04 requires ("all of T-02's conjuncts, including the Elm authorize").
+
+**Why the existing gate did not protect against this.** `scripts/verify-lifecycle-transition-contract.ts` validates the SEPARATE `c9-c10-traceability.mmd` file, not the diagram embedded in the Markdown, so its green status gave false assurance about the embedded diagram. This ACT adds a bounded structural guard for Markdown-embedded Mermaid blocks (`apps/vscode/src/sdk/markdown-mermaid-block-verifier.ts` + `scripts/verify-markdown-mermaid-blocks.ts` + 13 tests): every fence closed, no Markdown table rows or headings inside a `mermaid` fence, a recognised diagram type, and table rows present outside the fence. It rejects the pre-fix document and accepts the corrected one.
+
+**Gates:** real Mermaid parser (mermaid 11.16.1, the pinned version) PASS on the corrected document (`stateDiagram`) and on all 4 lifecycle documents; the SAME parser FAILS on the pre-fix document with the reported line-44 error (`| Field | Value |`); `bun run verify:markdown-mermaid-blocks` PASS (4 docs, 0 errors); `bun run verify:lifecycle-transition-contract` PASS ("4 transitions, Mermaid synchronized"); new guard unit tests PASS — 1 file, **13 tests**; `tsc --noEmit` PASS — exit 0, 0 diagnostics; Biome PASS; `git diff --check` PASS. Vitest emitted the known non-fatal fork-pool `kill EPERM` teardown warning after all selected tests passed.
+
+**GitHub rendering:** confirmed on the pushed commit `b5fac85da` — the diagram renders, the Markdown tables and headings render as Markdown, and no Mermaid syntax error appears on the page.
+
+**Evidence:**
+- `docs/architecture/task-lifecycle/02-c9-bcb-elm-c10-authority.md` — the corrected document.
+- `apps/vscode/src/sdk/markdown-mermaid-block-verifier.ts` — the pure guard core.
+- `scripts/verify-markdown-mermaid-blocks.ts` — the CLI wrapper.
+- `apps/vscode/src/sdk/__tests__/markdown-mermaid-block-verifier.c9c10mm01.test.ts` — 13 tests.
+- `.factory/evidence/ACT-CLINEMM-C9C10-MERMAID-RENDER-FIX01/01-mermaid-render-fix.md`
+- `.factory/evidence/ACT-CLINEMM-C9C10-MERMAID-RENDER-FIX01/02-github-rendering.md`
+
+**Preservation:** no production code changed; no completion-authorization policy, lifecycle state ownership, Elm policy, wire protocol, or public API changed; `transitions.tsv` and the standalone `c9-c10-traceability.mmd` projection are untouched. The only semantic change is in the DOCUMENTED DIAGRAM, where the BCB recovery edge is corrected to match the source truth it claims to describe.
+
+**Verdict:** `CLOSED_CLEAN` — the diagram renders on GitHub, the Markdown is outside the Mermaid block, and the defect class is now guarded by an executable check.
+
+---
+
 # ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION02 — CLOSED_CLEAN — 2026-10-24
 
 **Status:** CLOSED with verdict **`CLOSED_CLEAN`** (bounded TEST-ONLY correction of the predecessor ACT; no live installed-extension qualification is claimed).
