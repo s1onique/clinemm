@@ -13,3 +13,7 @@ apps/vscode/src/sdk/__tests__/completion-authority-contract01.chart02.h03.test.t
 apps/vscode/src/sdk/__tests__/completion-authority-elm-test-provider.h03.ts	528357a1f35b6d45adea3839f3540168b98bd459b737a083c6dec935ac0acfc3	3816
 scripts/verify-lifecycle-transition-contract.ts	ccd91e2215f44f413c0de02019e60e9301ba7a31033a5c512ea0dd5c783b1a64	6206
 ENTRY_HEAD	8dd3954ff32db68419897dbe3bc781eedbef5b73	c67cb7595759fdbc685653e09a9810c64555407a
+# ENTRY_HEAD is the COMMIT THAT PRODUCES THE ARTIFACTS above (the source-bound subject).
+# It is NOT the commit that carries this manifest: a manifest cannot contain its own
+# commit hash. The manifest commit is the child of ENTRY_HEAD.
+ARTIFACT_COMMIT_PARENT	8dd3954ff32db68419897dbe3bc781eedbef5b73	manifest is committed on top of ENTRY_HEAD
