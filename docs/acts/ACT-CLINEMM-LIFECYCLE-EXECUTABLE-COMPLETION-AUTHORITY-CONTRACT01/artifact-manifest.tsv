@@ -5,7 +5,7 @@ docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01/asser
 docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01/evidence-report.md	b6d1df658ef13682bd6e66ded98a741ac62d13e50e60023646aa1ea24c01b4c1	26870
 docs/acts/ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01/baseline-comparison.md	cfbb30391c0b8775d6a89f52480025328ca9ed757226cd0c18c9b3bca9f7ddcf	6157
 docs/architecture/task-lifecycle/02-c9-bcb-elm-c10-authority.md	fbef969832752fa693e516311005bd916a6f3a381eb7894d1e6236e339222d21	22602
-docs/architecture/task-lifecycle/transitions.tsv	baf4d912c4ceac8496f8370123ef657a5ab5a0136f6d08bcc42701554e05332a	20128
+docs/architecture/task-lifecycle/transitions.tsv	8636b2c3bc20eeb8b0973dade4648739869ab4f50941f4f3ff443a896aeef411	20118
 apps/vscode/src/sdk/lifecycle-transition-contract-verifier.ts	5b66a5702bf551b18b650321c42d3c1f633e8eb20eb7bddf90585dedd68c1d53	30862
 apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts	8f8afda8bd2e26842a331384337e373bee9cd43fc19c98645cc838d690f7a2ea	37119
 apps/vscode/src/sdk/__tests__/completion-authority-contract01.neg.h03.test.ts	1c46647422f7547c557152b0c6e64e3e559de73e332bcd881743851a97e490ff	20669
