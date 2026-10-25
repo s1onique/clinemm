@@ -29159,3 +29159,112 @@ reflog, and this board entry. `HEAD` is unmoved.
 2. **H04** — background containment contract (after H03).
 3. The original live incident stays **CAPTURE_INSUFFICIENT** until a new capture.
 
+
+# ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01 — PASS_P0_RED_REPRODUCED — 2026-10-26
+
+```text
+ENTRY_HEAD:                  2754314dbe2e9bcd1053019daf9c744d12c7ce97
+SUBJECT_HEAD:                2754314dbe2e9bcd1053019daf9c744d12c7ce97
+INCIDENT:                    1792958891945_k2wrd / epoch 12
+VERDICT:                     PASS_P0_RED_REPRODUCED
+RED_REPRODUCED:              YES — 15/15 at the REAL coordinator + REAL TurnStateTracker
+DISPOSITION:                 NOT HALT_RED_NOT_REPRODUCED / NOT CAPTURE_INSUFFICIENT
+PRODUCTION_CHANGES:          NONE (reproduction only — not authorized)
+ACT_OWNED_FAILURES:          0
+TYPECHECK:                   PASS (tsc --noEmit, 0 diagnostics)
+LINT:                        PASS (biome, 0 errors)
+REGRESSION:                  NONE — 181/181 in 4 adjacent suites; 2 pre-existing BCB-INT failures
+                              verified IDENTICAL with the ACT file removed
+ELM:                         N/A — no .elm source modified
+```
+
+## Verdict
+
+**The production-seam RED REPRODUCES.** The exact reason the last `streaming` phase
+survives after runtime termination is now established at the REAL production seam, and
+the minimal corrective boundary is proved.
+
+## The causal answer (one sentence)
+
+**The BCB hold path writes NO phase.** When the completion is legitimately HELD (four
+real unconsumed terminal observations), `sdk-session-event-coordinator.ts:3781-3787`
+registers the deferred-completion-barrier marker and RETURNS without publishing any
+terminal phase — leaving the host phase at its last ACTIVE value (`streaming`). The
+runtime is already dead (`done(reason:"aborted")`), so no later event can ever supply
+the missing terminal transition. The final `pending_prompt_submitted` event then
+re-asserts `streaming` unconditionally (`sdk-session-event-coordinator.ts:3279`) and is
+the last writer (seq 132499).
+
+## The two load-bearing conditions (proved by ablation, one varied at a time)
+
+1. **The BCB hold path writes no terminal phase** (R3-02). With the hold present, the
+   phase-write log contains NO member of `{completed, error, resumable,
+   awaiting_followup}` — ever.
+2. **The `pending_prompt_submitted` writer is unguarded** (R3-01). With the hold REMOVED
+   and the phase correctly `completed` (C10 committed), the same writer STILL clobbers
+   the phase back to `streaming`.
+
+Condition 2 alone would be transient. Condition 1 removes the repair; the runtime being
+dead means no repair can arrive. The two compose into a PERMANENT false-`Working`.
+
+## What is NOT the cause (proved, so the successor ACT does not chase them)
+
+- **NOT the Elm authority.** LIVE `authorize: 0` / `hold: 5` / `failure: 4`. The gate
+  did its job; R1-05 proves `completed` is unreachable under ANY Elm verdict while the
+  hold is present.
+- **NOT the projection seams.** R2-01 reproduces the LIVE `legacy/streaming` selection
+  byte-identically; R2-02 reproduces the LIVE `Cancel` button byte-identically;
+  R2-03/R2-04 prove the selector is correct for a terminal host phase and for a BOUND
+  shadow stamp. The projection faithfully renders a host state that is itself wrong.
+- **NOT the webview reducer.** The LIVE extension push and webview commit MATCH at
+  state version 132749.
+- **NOT a stale epoch/session notification.** R3-05.
+- **NOT the BCB HOLD itself.** The hold is CORRECT — the obligation is real and named
+  (four jobIds). The defect is the ABSENCE of a truthful projection alongside the hold.
+
+## The legitimate-pending-work escape was explicitly NOT taken
+
+The brief permits classifying the case as "not yet a liveness failure" when the only
+issue is legitimate pending work WITH A TRUTHFUL HELD PROJECTION. It does not apply:
+the LIVE projection (`legacy/streaming` → `Working` + `Cancel`) claims ACTIVE work
+while the runtime is `aborted` with zero model streaming and zero pending tools.
+
+## `aborted` vs explicit user cancellation
+
+RESOLVED by proxy: the LIVE provenance contains NO `controller-cancel-task` writer for
+task `1792958891945_k2wrd`, and `cancelTask()` writes `resumable` BEFORE aborting
+(`SdkController.ts:4297`). The run was FRAMEWORK-terminated, not user-cancelled.
+R1-06 proves the coordinator has an `error`-reason branch but NO `aborted`-reason
+branch.
+
+## The proposed bounded repair (NOT implemented — production changes not authorized)
+
+**Successor ACT:** `ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01`.
+
+1. **Hold path publishes a truthful non-running phase.** At the BCB hold site, publish
+   the EXISTING `resumable` phase (the established "the run was abandoned" affordance
+   already used by the containment-failure hold at `:1259` and by the cancel path).
+   NO new phase. NO `completed`. The BCB HOLD, the Elm authority, the containment
+   guards and the epoch identity triple are all untouched.
+2. **The pending-prompt writer does not re-assert `streaming` over a terminal phase.**
+   NO automatic `completed`. NO new protocol field. NO React side effect.
+
+**Negative witness for premature `completed` (already in the suite, must stay GREEN):**
+R1-02 / R1-05 (no C10 and no `completed` under ANY Elm verdict while the hold is
+present) and R3-04 (the release path commits exactly one C10 only after the obligation
+is consumed, through the Elm authority).
+
+## Evidence
+
+- `.factory/evidence/ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01/`
+  (`01-r0-ownership-map.md`, `02-r1-controlled-red.md`, `03-r1-red-and-ablation.txt`,
+  `04-r3-necessity-ablation.md`, `05-r4-disposition.md`,
+  `06-live-evidence-index.md`, `SHA256SUMS`)
+- `apps/vscode/src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts`
+  — 15/15 PASS. R1-01..R1-06, R2-01..R2-04, R3-01..R3-05.
+
+## The ONLY repository change in this ACT
+
+The reproduction suite (one new untracked test file), the evidence directory, and this
+board entry. No production file, no Elm kernel, no protocol, no webview reducer, no
+baseline test was modified.

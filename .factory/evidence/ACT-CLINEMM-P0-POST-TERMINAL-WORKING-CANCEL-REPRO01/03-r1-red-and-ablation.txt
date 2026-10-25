@@ -1,0 +1,26 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+stderr | src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R2/R3 — the projection seams faithfully render the reproduced (wrong) host state > PTWCR01-R2-01: the Elm TaskHeader selector returns `legacy/streaming` for the LIVE fact tuple (shadow=completed, legacy=streaming, UNBOUND)
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R1 — post-terminal Working/Cancel after runtime termination > PTWCR01-R1-01 (RED): an inactive runtime is left at `streaming` with no terminal phase — the presentation claims active work 5ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R1 — post-terminal Working/Cancel after runtime termination > PTWCR01-R1-02: the conservation violation is presentation, NOT completion — no C10 was fabricated and `completed` was never reached 1ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R1 — post-terminal Working/Cancel after runtime termination > PTWCR01-R1-03: the held obligation is REAL and independently observable (the BCB marker + the four named jobIds) 0ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R1 — post-terminal Working/Cancel after runtime termination > PTWCR01-R1-04 (ABLATION): with the BCB obligation REMOVED the same terminal event DOES reach a terminal projection 1ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R1 — post-terminal Working/Cancel after runtime termination > PTWCR01-R1-05 (NEGATIVE WITNESS): `completed` is never reached while the BCB holds, whatever the Elm verdict 1ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R1 — post-terminal Working/Cancel after runtime termination > PTWCR01-R1-06: an ABORTED runtime is distinguishable from a FAILED one — only `error` reaches the `error` phase 0ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R2/R3 — the projection seams faithfully render the reproduced (wrong) host state > PTWCR01-R2-01: the Elm TaskHeader selector returns `legacy/streaming` for the LIVE fact tuple (shadow=completed, legacy=streaming, UNBOUND) 6ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R2/R3 — the projection seams faithfully render the reproduced (wrong) host state > PTWCR01-R2-02: the webview action-button selector returns `Cancel` for the reproduced `streaming` phase 0ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R2/R3 — the projection seams faithfully render the reproduced (wrong) host state > PTWCR01-R2-03: ABLATION — the projection seams are NOT the defect: a terminal host phase produces the truthful projection 2ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R2/R3 — the projection seams faithfully render the reproduced (wrong) host state > PTWCR01-R2-04: ABLATION — with a BOUND shadow observation stamp the shadow wins (so the fix must NOT rely on the shadow) 2ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R3 — necessity: which condition preserves the stale `streaming` phase > PTWCR01-R3-01 (ABLATION A): REMOVE the BCB obligation -> the stale `streaming` phase does NOT survive 0ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R3 — necessity: which condition preserves the stale `streaming` phase > PTWCR01-R3-02 (ABLATION B): with the BCB obligation PRESENT the terminal phase is NEVER produced — the hold suppresses every terminal write 0ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R3 — necessity: which condition preserves the stale `streaming` phase > PTWCR01-R3-03 (ABLATION C): the deferred marker EXISTS but a re-evaluation cannot release it while the obligation remains 1ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R3 — necessity: which condition preserves the stale `streaming` phase > PTWCR01-R3-04 (ABLATION D): once the obligation is CONSUMED the re-evaluation commits through the Elm/C10 authority 1ms
+ ✓ src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts > PTWCR01 R3 — necessity: which condition preserves the stale `streaming` phase > PTWCR01-R3-05 (ABLATION E): a STALE epoch/session notification cannot alter the current task 0ms
+}
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  00:25:15
+   Duration  2.22s (transform 1.31s, setup 1.92s, import 218ms, tests 21ms, environment 0ms)
