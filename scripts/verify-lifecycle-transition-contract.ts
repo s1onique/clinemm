@@ -23,10 +23,14 @@ import {
 	CHART_01_TRANSITION_CLAIM_IDS,
 	CHART_01_NON_TRANSITION_CLAIM_IDS,
 	CHART_01_VERIFIED_EDGES,
+	CHART_02_TRANSITION_CLAIM_IDS,
+	CHART_02_NON_TRANSITION_CLAIM_IDS,
+	CHART_02_VERIFIED_EDGES,
 	CHART_04_EXPECTED_EDGES,
 	CHART_04_NON_TRANSITION_CLAIM_IDS,
 	CHART_04_TRANSITION_CLAIM_IDS,
 	verifyChart01TurnPhase,
+	verifyChart02CompletionAuthority,
 	verifyChart04CompletionPresentation,
 	verifyLifecycleTransitionContract,
 } from "../apps/vscode/src/sdk/lifecycle-transition-contract-verifier";
@@ -112,4 +116,29 @@ if (chart01.errors.length > 0) {
 }
 console.log(
 	`PASS Chart 01 turn-phase projection: ${chart01.mermaidBlockCount} embedded block(s), ${CHART_01_TRANSITION_CLAIM_IDS.length} transition claims labeled, ${CHART_01_NON_TRANSITION_CLAIM_IDS.length} guard/projection claims correctly edge-free, 8 canonical phase states present`,
+);
+
+// --- ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01 -----
+// The embedded Chart 02 Mermaid block, checked against the Chart 02 claim
+// taxonomy AND the verified claim-id -> edge ASSOCIATION.
+//
+// Chart 02's eight claims are a MIX of transition / guard / decision /
+// safety-veto / invariant / input-rule kinds. The BCB is modelled as a
+// PREDICATE over INDEPENDENT obligations (not an ordered chain), and the
+// final containment revalidation is VISIBLE between the Elm authorization
+// and the C10 effect.
+const chart02Path = resolve(root, "docs/architecture/task-lifecycle/02-c9-bcb-elm-c10-authority.md");
+const chart02Markdown = readFileSync(chart02Path, "utf8");
+const chart02 = verifyChart02CompletionAuthority({
+	markdown: chart02Markdown,
+	transitionClaimIds: CHART_02_TRANSITION_CLAIM_IDS,
+	nonTransitionClaimIds: CHART_02_NON_TRANSITION_CLAIM_IDS,
+	expectedEdges: CHART_02_VERIFIED_EDGES,
+});
+if (chart02.errors.length > 0) {
+	console.error(chart02.errors.join("\n"));
+	process.exit(1);
+}
+console.log(
+	`PASS Chart 02 completion-authority projection: ${chart02.mermaidBlockCount} embedded block(s), ${CHART_02_TRANSITION_CLAIM_IDS.length} transition claims labeled, ${CHART_02_NON_TRANSITION_CLAIM_IDS.length} guard/decision/veto/invariant/input-rule claims correctly edge-free, BCB modelled as a predicate over independent obligations, containment revalidation visible`,
 );

@@ -33,6 +33,7 @@ import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
+import { legacyHarnessElmProvider } from "./completion-authority-elm-test-provider.h03"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -157,6 +158,23 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string } =
 		wasWakeDispatchRequested: () => false,
 		wasWakeDispatchFailed: () => false,
 		isWakeAuthoritySettled: () => false,
+		// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+		// (H03 -- R4): the legacy harness omitted the now-MANDATORY Elm
+		// completion-authority provider, so the consult threw and the
+		// fail-closed gate suppressed EVERY C10 commit. The BCB policy
+		// scenario is orthogonal to the Elm verdict.
+		getElmCompletionAuthorityDecision: legacyHarnessElmProvider(),
+		// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+		// (H03 -- R4): the legacy harness ALSO omitted the mandatory
+		// `liveTools` capability projection. The production continuation
+		// trigger projects the TRUTHFUL capability into the Continuation
+		// Control Elm kernel; with the projection absent the kernel
+		// fail-closes (`observation_unavailable`) and the bounded
+		// continuation is never enqueued — masking the very trigger this
+		// suite was written to prove. The sibling BCB01 harness wires the
+		// same projection (see its CRCD01 note); this restores the same
+		// truthful capability.
+		liveTools: () => ["command_status", "submit_and_exit"],
 		getLaunchedBackgroundJobIds: () => ownedJobs.map((j) => j.jobId),
 		enqueueCompletionContinuation: (input: {
 			sessionId: string
@@ -199,6 +217,33 @@ const agentEvent = (sessionId: string, event: Record<string, unknown>): CoreSess
 			event: event as never,
 		},
 	}) as CoreSessionEvent
+
+/**
+ * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+ * (H03 -- R4): await the FIRE-AND-FORGET continuation trigger.
+ *
+ * The production trigger is `void this.enqueueCompletionContinuationIfHeld(...)`
+ * — deliberately non-blocking. But that helper AWAITS the E3.1 deferred-
+ * completion-barrier Elm consult (and, before it, the Continuation Control
+ * Elm consult), so the callback is invoked several microtask/timeout turns
+ * LATER than the `await reevaluateDeferredCompletionBarrier()` returns.
+ *
+ * The legacy harness drained with a SINGLE `setImmediate` turn, which was
+ * sufficient when the trigger was synchronous and is NOT sufficient now
+ * that it consults two Elm kernels. The assertion therefore observed an
+ * EMPTY send log and reported a false failure.
+ *
+ * This helper drains the trigger deterministically (a bounded number of
+ * macrotask turns). It changes no production behaviour and asserts
+ * nothing — it only lets the ASYNC production trigger finish before the
+ * suite inspects the outcome.
+ */
+async function drainContinuationTrigger(): Promise<void> {
+	for (let i = 0; i < 20; i += 1) {
+		await new Promise((r) => setImmediate(r))
+	}
+	await new Promise((r) => setTimeout(r, 25))
+}
 
 async function emitSubmitAndExit(
 	coordinator: SdkSessionEventCoordinator,
@@ -259,13 +304,13 @@ describe("BCB01-C4 — HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION closure", (
 			// CORRECTION04, this fires the bounded coalesced
 			// continuation trigger now.
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
-			await new Promise((r) => setImmediate(r))
+			await drainContinuationTrigger()
 			// ONE continuation fired, listing J1.
 			expect(h.sendLog.length).toBe(1)
 			expect(h.sendLog[0].prompt).toContain("J1")
 			// Step 6: second reevaluation. Deduped.
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
-			await new Promise((r) => setImmediate(r))
+			await drainContinuationTrigger()
 			expect(h.sendLog.length).toBe(1)
 		})
 	})
@@ -300,7 +345,7 @@ describe("BCB01-C4 — HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION closure", (
 			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(3)
 			// Single reevaluation fires ONE continuation (NOT 3).
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
-			await new Promise((r) => setImmediate(r))
+			await drainContinuationTrigger()
 			expect(h.sendLog.length).toBe(1)
 			expect(h.sendLog[0].prompt).toContain("J1")
 			expect(h.sendLog[0].prompt).toContain("J2")
@@ -343,14 +388,14 @@ describe("BCB01-C4 — HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION closure", (
 			h.ownedJobs.length = 0
 			const epochBefore = h.translatorState.getMinter().epoch
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
-			await new Promise((r) => setImmediate(r))
+			await drainContinuationTrigger()
 			expect(h.sendLog.length).toBe(1)
 			expect(h.coordinator.wasCompletionContinuationSentForTesting(h.activeSessionId, h.activeTaskId, epochBefore)).toBe(
 				true,
 			)
 			// Second reevaluation in the same epoch: deduped.
 			await h.coordinator.reevaluateDeferredCompletionBarrier()
-			await new Promise((r) => setImmediate(r))
+			await drainContinuationTrigger()
 			expect(h.sendLog.length).toBe(1)
 		})
 	})

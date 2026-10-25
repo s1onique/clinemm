@@ -85,12 +85,23 @@ describe("ACT-CLINEMM-C9C10-MERMAID-RENDER-FIX01 — embedded Mermaid block guar
 		it("routes the BCB recovery edge through the Elm consult", () => {
 			// The BCB recovery path MUST re-consult Elm: `reevaluateDeferredCompletionBarrier`
 			// calls `checkElmCompletionAuthority` BEFORE `setTurnPhase("completed", ...)`.
-			// An edge straight from C10Blocked to C10Committed would bypass the
-			// mandatory Elm authority gate and contradict A-03/A-04.
+			// An edge straight from the BCB evaluation to the committed completion would
+			// bypass the mandatory Elm authority gate and contradict A-03/A-04.
+			//
+			// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01 (H03):
+			// the reconciled Chart 02 diagram models the BCB as ONE evaluation
+			// (`BcbEvaluated`) over INDEPENDENT obligations — NOT as the
+			// predecessor's ordered chain of obligation states — and the
+			// recovery edge goes from that evaluation to the Elm consult.
 			const fences = parseMarkdownFences(chart02)
 			const mermaid = fences.find((fence) => fence.language === "mermaid")
-			expect(mermaid?.body).toContain("C10Blocked --> ElmConsulted : obligations resolve")
-			expect(mermaid?.body).not.toContain("C10Blocked --> C10Committed")
+			expect(mermaid?.body).toContain("BcbEvaluated --> ElmConsulted : BCB predicate false")
+			expect(mermaid?.body).not.toContain("BcbEvaluated --> C10Committed")
+			// The final containment revalidation is VISIBLE between the Elm
+			// authorization and the C10 effect: an Elm authorization alone
+			// must not be drawn as a direct path into the committed state.
+			expect(mermaid?.body).toContain("ElmAuthorized --> ContainmentRevalidated")
+			expect(mermaid?.body).not.toContain("ElmConsulted --> C10Committed")
 		})
 
 		it("keeps the terminal transitions inside the mermaid block", () => {

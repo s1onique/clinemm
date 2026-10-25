@@ -46,6 +46,7 @@ import { MessageTranslatorState, translateSessionEvent } from "../message-transl
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 import { createVscodeRunCommandsTool } from "../vscode-run-commands-tool"
+import { legacyHarnessElmProvider } from "./completion-authority-elm-test-provider.h03"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -198,6 +199,14 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		}) as NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>,
 		getTurnPhase: () => tracker.currentPhase,
 		translateSessionEvent,
+		// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+		// (H03 -- R4): the legacy harness omitted the now-MANDATORY
+		// Elm completion-authority provider, so the provider was
+		// `undefined`, the consult threw, and the fail-closed gate
+		// suppressed EVERY C10 commit. The BCB policy scenario under
+		// test is orthogonal to the Elm verdict, so the explicit ALLOW
+		// is injected here to restore the scenario's intent.
+		getElmCompletionAuthorityDecision: legacyHarnessElmProvider(),
 		// BCB01: the load-bearing predicate. The barrier MUST
 		// consult this on every C10 evaluation and re-evaluation.
 		// The harness reports true iff ANY owned job (notify=true
@@ -940,6 +949,22 @@ describe("BCB01 — background-completion barrier over task-owned jobs", () => {
 			for (let i = 0; i < 100; i += 1) {
 				if (manager.activeCount === 0) break
 				await new Promise((r) => setTimeout(r, 50))
+			}
+
+			// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+			// (H03 -- R4): the Path A wake ENQUEUE is a separate async
+			// continuation from the terminal commit. `manager.status(...)`
+			// returns when the JOB is terminal, but the wake lands in the
+			// pending-prompt queue one or more microtask turns later. The
+			// legacy harness proceeded immediately, so the wake had not
+			// yet landed when the barrier was evaluated and the barrier
+			// (correctly) did NOT hold — a race in the harness, not a
+			// production defect. This bounded wait lets the ASYNC wake
+			// land so the barrier sees the obligation it is supposed to
+			// see. It asserts nothing and changes no production behaviour.
+			for (let i = 0; i < 100; i += 1) {
+				if (h.wakeSink.queued.length > 0) break
+				await new Promise((r) => setTimeout(r, 10))
 			}
 
 			// Path A drains most likely; defensively call

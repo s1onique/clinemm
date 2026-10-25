@@ -21,7 +21,7 @@ stateDiagram-v2
 
     [*] --> TurnRunning : turn starts
 
-    TurnRunning --> C9Captured : completion tool content_end
+    TurnRunning --> C9Captured : A-01 completion tool content_end
     note right of C9Captured
         C9 = submit_and_exit_seen
         Fires ONLY when:
@@ -31,28 +31,65 @@ stateDiagram-v2
         It does NOT mean the task completed.
     end note
 
-    C9Captured --> C10Blocked : BCB hold predicate true
-    C9Captured --> ElmConsulted : BCB hold predicate false
+    C9Captured --> BcbEvaluated : BCB predicate evaluated
+    note right of BcbEvaluated
+        A-02 is a GUARD: the BCB is a
+        PREDICATE over INDEPENDENT
+        obligations, NOT a sequence.
+        Any ONE obligation holds the
+        C10 commit:
+          - pending-prompt authority unavailable
+          - pending prompts present
+          - active notify-owned work
+          - per-job wake authority outstanding
+          - owned running background job
+          - unconsumed terminal count positive
+          - held terminal IDs non-empty
+          - originating completion suppressed
+          - owner-scoped containment failure
+        A-02 SUPPRESSES the commit, so it
+        carries NO edge.
+    end note
 
-    state C10Blocked {
-        direction TB
-        [*] --> PendingPromptUnknown
-        PendingPromptUnknown --> PendingPromptKnown : getPendingPromptCount().available === true
-        PendingPromptKnown --> OutstandingAutonomousWork : pendingPrompts > 0 OR activeNotifyCount > 0 OR perJobOutstandingNotifyWork
-        OutstandingAutonomousWork --> OwnerStillRunning : hasRunningBackgroundJobForOwner
-        OwnerStillRunning --> HeldObligation : unconsumedOwnedTerminalResults > 0 OR unconsumedOwnedTerminalJobIds.length > 0
-        HeldObligation --> Suppressed : wake was delivered (per-job)
-        Suppressed --> [*]
-    }
+    BcbEvaluated --> ElmConsulted : BCB predicate false
+    BcbEvaluated --> C10Withheld : BCB predicate true (hold)
 
-    C10Blocked --> ElmConsulted : obligations resolve (reevaluateDeferredCompletionBarrier)
+    ElmConsulted --> ElmAuthorized : decision = authorize
+    ElmConsulted --> ElmHold : decision = hold
+    ElmConsulted --> ElmFailure : decision = failure
+    note right of ElmConsulted
+        A-03 is a DECISION: the Elm
+        completion authority returns a
+        closed three-valued verdict
+        (authorize / hold / failure).
+        A-03 carries NO edge of its own;
+        the outcomes are drawn as the
+        decision's branches.
+    end note
 
-    ElmConsulted --> ElmHold : Elm decision = hold
-    ElmConsulted --> ElmFailure : Elm decision = failure
-    ElmConsulted --> C10Committed : Elm decision = authorize
+    ElmHold --> C10Withheld : commit suppressed
+    ElmFailure --> C10Withheld : commit suppressed
+    note right of C10Withheld
+        A-05 is a GUARD: neither hold nor
+        failure may publish an
+        authoritative completion marker.
+        A-05 carries NO edge.
+    end note
 
-    ElmHold --> C10Withheld : C10 commit SUPPRESSED
-    ElmFailure --> C10Withheld : C10 commit SUPPRESSED
+    ElmAuthorized --> ContainmentRevalidated : awaited Elm flush completed
+    note right of ContainmentRevalidated
+        A-04b is a SAFETY VETO, not a
+        successful completion transition.
+        The owner-scoped containment
+        classifier is RE-READ at the
+        commit boundary, AFTER the
+        awaited Elm flush. A failure
+        known NOW is not admissible.
+        A-04b carries NO edge.
+    end note
+
+    ContainmentRevalidated --> C10Committed : A-04 no unresolved containment failure
+    ContainmentRevalidated --> C10Withheld : unresolved containment failure
 
     C10Committed --> [*]
     C10Withheld --> [*]
@@ -66,9 +103,10 @@ stateDiagram-v2
 |---|---|
 | source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (the `captureContinuationCardinalityAuthorityRecord({stage: "submit_and_exit_seen", …})` call inside the turn-end promotion branch) |
 | predicate | `wasAttemptCompletionSeen() && wasTerminalResponseCommittedThisTurn()` — evaluated in the turn-end path |
-| effect | One bounded cardinality record with a coordinator-local monotonic `submitId`. **No phase write. No completion commit.** |
-| test | `apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts` |
+| effect | One bounded cardinality record with a coordinator-local monotonic `submitId`. **No phase write. No completion commit. No completionId.** |
+| test | `apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts`, `apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts` |
 | kind | observed |
+| claim kind | **TRANSITION** — an observable state change (a new C9 record). It is the ONLY transition into the captured-attempt state. |
 
 **A C9 is an ATTEMPT.** The LIVE incident recorded `C9 = 2 observed
 attempts` and `C10 = 0 observed commits` — two attempts, no completion.
@@ -79,10 +117,22 @@ That is the correct shape for a held task.
 | Field | Value |
 |---|---|
 | source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (the barrier block) |
-| predicate | `outstandingAutonomousWork \|\| ownerStillRunningForC10 \|\| heldObligationForC10 \|\| suppressOriginatingCompletion \|\| unresolvedContainmentFailuresForC10.length > 0` |
-| effect | The C10 commit is NOT taken; a `DeferredCompletionBarrier` marker is registered with the `(sessionId, taskId, epoch)` triple; a bounded completion-continuation may be enqueued |
-| test | `apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts`, `background-completion-barrier01.bcb01.test.ts`, `containment-failure-c10-authority-repair01.cfc10ar01.test.ts` |
+| predicate | `pendingPromptAuthorityUnknown \|\| pendingPromptsKnown > 0 \|\| activeNotifyCount > 0 \|\| perJobOutstandingNotifyWork \|\| ownerStillRunningForC10 \|\| heldObligationForC10 \|\| suppressOriginatingCompletion \|\| unresolvedContainmentFailuresForC10.length > 0` |
+| effect | The C10 commit is NOT taken; a `DeferredCompletionBarrier` marker is registered with the `(sessionId, taskId, epoch)` triple; a bounded completion-continuation may be enqueued; the obligation can later be discharged and the held completion then commits exactly once |
+| test | `apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts` (the independent-obligation matrix), `long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts`, `background-completion-barrier01.bcb01.test.ts`, `containment-failure-c10-authority-repair01.cfc10ar01.test.ts` |
 | kind | observed |
+| claim kind | **GUARD** — a predicate that SUPPRESSES a write. It carries NO Mermaid edge. |
+
+**The BCB is a PREDICATE over INDEPENDENT obligations, NOT an ordered
+sequence.** Any ONE obligation holds the C10 commit; they are not
+visited in order and none of them implies another. The predecessor
+diagram drew them as a linear chain of five states
+(`PendingPromptUnknown -> PendingPromptKnown -> OutstandingAutonomousWork
+-> OwnerStillRunning -> HeldObligation -> Suppressed`), which asserted a
+sequencing the production code does not implement. The reconciled diagram
+models the BCB as ONE evaluation with a note listing the independent
+obligations, and the executable matrix drives each obligation in
+isolation with all the others controlled to false.
 
 The conjuncts:
 
@@ -112,6 +162,12 @@ into two DIFFERENT facts, and only the last one is about process safety:
   group was never proven gone. It is OWNER-SCOPED (a foreign owner's
   failure does not block; an unknown owner fails closed).
 
+**Consuming a terminal observation is NOT resolving a containment
+failure.** The two are independent facts; the executable witness drives
+the case where the observation is fully drained (count 0, no held IDs)
+while the containment failure is still unresolved, and asserts that the
+completion STAYS held.
+
 `unresolvedContainmentFailuresForOwner` is the SINGLE shared classifier for
 that fact. It is consulted by the immediate C10 barrier (this table),
 by the deferred C10 re-evaluation (`reevaluateDeferredCompletionBarrier`),
@@ -126,8 +182,9 @@ flush (`unresolvedContainmentFailuresAtCommitBoundary`).
 | source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`checkElmCompletionAuthority`) |
 | predicate | `getElmCompletionAuthorityDecision(sessionId)` returns `{kind: "authorize"}`. `hold` and `failure` both return `false` — **there is NO silent TS fallback** (`completion-authority-elm-authority.ts`). |
 | effect | `true` → the C10 commit proceeds. `false` → the C10 commit is SUPPRESSED and a `DeferredCompletionBarrier` marker is registered (the liveness repair from `ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01`). |
-| test | `apps/vscode/src/sdk/__tests__/completion-authority-elm-first-seam01.case01.test.ts`, `completion-authority-elm-real-provider01.test.ts` |
+| test | `apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts`, `apps/vscode/src/sdk/__tests__/completion-authority-elm-first-seam01.case01.test.ts`, `completion-authority-elm-real-provider01.test.ts` |
 | kind | observed |
+| claim kind | **DECISION** — a closed three-valued verdict. It carries NO edge of its own; the outcomes are drawn as the decision's branches. |
 
 **The Elm kernel is fed the factual CCARD stages** through
 `captureContinuationCardinalityAuthorityRecord` →
@@ -141,11 +198,17 @@ the outcome before it decides.
 
 | Field | Value |
 |---|---|
-| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`handleSessionEvent` / `reevaluateDeferredCompletionBarrier` → `setTurnPhase("completed", …)`) |
-| predicate | ALL of: turn complete; a completion tool was seen; a terminal response was committed this turn; no error was seen; NOT (BCB hold); Elm authorized |
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`handleSessionEvent` / `reevaluateDeferredCompletionBarrier` → `setTurnPhase("completed", …)`) \| `apps/vscode/src/sdk/turn-state-tracker.ts` (`setWithWriter`) |
+| predicate | ALL of: turn complete; a completion tool was seen; a terminal response was committed this turn; no error was seen; NOT (BCB hold); Elm authorized; no unresolved owner-scoped containment failure at the commit boundary |
 | effect | Request `setTurnPhase("completed", undefined, "session-event-turn-complete-completed")`; `TurnStateTracker.setWithWriter` is the actual phase commit boundary; then `captureContinuationCardinalityAuthorityRecord({stage: "task_completion_committed", completionId})` — the C10 record, minted AFTER the effect |
-| test | `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` |
+| test | `apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts`, `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` |
 | kind | observed |
+| claim kind | **TRANSITION** — an observable state change. It is the ONLY edge into the committed-completion state. |
+
+**Elm AUTHORIZE is NECESSARY but NOT SUFFICIENT.** The final containment
+revalidation (A-04b) sits between the awaited Elm flush and the commit
+effect, so an authorization alone does not commit. The diagram shows the
+revalidation explicitly as its own state.
 
 ### A-05 — the C10 commit is withheld (Elm HOLD / FAILURE)
 
@@ -154,18 +217,56 @@ the outcome before it decides.
 | source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`checkElmCompletionAuthority` false branch) |
 | predicate | `checkElmCompletionAuthority(...) === false` |
 | effect | The C10 commit is suppressed; a `DeferredCompletionBarrier` marker is registered; no authoritative marker is published or retracted. The live completion row was published without the marker, and commit-driven promotion is the only publisher. |
-| test | `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` |
+| test | `apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts`, `apps/vscode/src/sdk/__tests__/c9-c10-commit-driven-authority-publication01.c9c10cdap01.test.ts` |
+| claim kind | **GUARD** — it SUPPRESSES a publication. It carries NO Mermaid edge. |
 
-### A-06 — the C10 commit is EXACTLY ONCE
+### A-04b — the containment safety veto
 
-The transition ledger's A-06 remains the exactly-once completion identity contract.
+| Field | Value |
+|---|---|
+| source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`unresolvedContainmentFailuresForOwner` at the immediate barrier, at `reevaluateDeferredCompletionBarrier`, and at the commit boundary via `unresolvedContainmentFailuresAtCommitBoundary`) |
+| predicate | An OWNED background job's terminal classification is `containment_failed` (its process group was never proven reaped) — the observation may have been consumed and the manager's active map may be empty; neither proves process safety |
+| effect | The C10 commit is suppressed at BOTH the immediate barrier and the deferred re-evaluation; the `DeferredCompletionBarrier` marker is preserved (not cleared); at the commit boundary the marker is re-registered; NO completed phase write, NO `task_completion_committed` capture and NO authoritative marker promotion occur |
+| test | `apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts`, `apps/vscode/src/sdk/__tests__/containment-failure-c10-authority-repair01.cfc10ar01.test.ts` |
+| claim kind | **SAFETY VETO** — it SUPPRESSES the commit. It is NOT a successful completion transition and carries NO Mermaid edge. |
+
+**The veto has THREE sites.** The immediate barrier, the deferred
+re-evaluation, and the commit boundary AFTER the awaited Elm flush. The
+third site is the load-bearing one: `checkElmCompletionAuthority` awaits
+the Elm flush before it reads the decision, and that await is a real
+time-of-check / time-of-use interval in which a containment failure can
+be published. The commit-boundary revalidation re-reads the SAME
+owner-scoped classifier — no second Elm consult, no second BCB read — so
+a failure known NOW is not admissible.
+
+### A-06 — the completion identity
+
+The transition ledger's A-06 is the completion-identity contract.
 
 | Field | Value |
 |---|---|
 | source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (`this.nextCompletionCommitEventId`) |
 | predicate | The C10 capture is the ONLY event-creating seam for `completionId`; the increment is monotonic per coordinator instance |
-| effect | One C10 ⇒ one `completionId`; two real C10 commits ⇒ two distinct `completionId`s. Presentation, reopen, and BCB do NOT mint `completionId`s. |
-| test | `apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts` |
+| effect | One OBSERVED C10 event ⇒ one distinct `completionId`; two real C10 commits ⇒ two distinct `completionId`s. Presentation, reopen, and BCB do NOT mint `completionId`s. |
+| test | `apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts`, `apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts` |
+| claim kind | **INVARIANT** — a cardinality / identity property. It carries NO Mermaid edge. |
+
+**A-06 IS NOT BROADENED.** The proven claim is "one observed C10 event
+mints one distinct completionId, and presentation / reopen do not mint
+one". The stronger claim — "there can only ever be one C10 event per
+task" — is NOT separately proven and is therefore NOT asserted. The
+executable witness deliberately produces TWO real C10 commits and asserts
+TWO distinct completionIds, so the invariant cannot silently widen.
+
+### A-07 — the Elm input filter
+
+| Field | Value |
+|---|---|
+| source | `apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts` (`AUTHORITY_STAGES`) \| `apps/vscode/src/sdk/continuation-cardinality-authority.ts` (`captureContinuationCardinalityAuthorityRecord` → `enqueueElmAuthorityRecord`) |
+| predicate | The stage is in `AUTHORITY_STAGES` (the post-decision stages are EXCLUDED) |
+| effect | The Elm kernel receives only the factual pre-decision stages; a post-decision C10 outcome can never become an authority input — no outcome-to-input feedback loop |
+| test | `apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts`, `apps/vscode/src/sdk/__tests__/completion-authority-elm-real-provider01.test.ts` |
+| claim kind | **INPUT RULE** — a filter on what the authority may observe. It carries NO Mermaid edge. |
 
 ## The LIVE incident, traced
 

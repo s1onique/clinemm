@@ -43,6 +43,7 @@ import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
+import { legacyHarnessElmProvider } from "./completion-authority-elm-test-provider.h03"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -164,6 +165,12 @@ function makeHarness(opts: { activeSessionId?: string; activeTaskId?: string; wi
 		wasWakeDispatchRequested: () => false,
 		wasWakeDispatchFailed: () => false,
 		isWakeAuthoritySettled: () => false,
+		// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+		// (H03 -- R4): the legacy harness omitted the now-MANDATORY Elm
+		// completion-authority provider, so the consult threw and the
+		// fail-closed gate suppressed EVERY C10 commit. The BCB policy
+		// scenario is orthogonal to the Elm verdict.
+		getElmCompletionAuthorityDecision: legacyHarnessElmProvider(),
 		getLaunchedBackgroundJobIds: () => ownedJobs.map((j) => j.jobId),
 		enqueueCompletionContinuation: opts.wireCallback
 			? (input: { sessionId: string; taskId: string | undefined; heldJobIds: readonly string[] }) => {
@@ -292,13 +299,29 @@ describe("BCB01-C3 — HALT_FINALIZATION_AUTHORITY_NOT_PROVEN closure", () => {
 			// We verify the structural seam exists by reading the source
 			// for the guard. This test pins the invariant in addition to
 			// the runtime checks.
+			// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+			// (H03 -- R4): the INVARIANT is unchanged — the trigger site
+			// still requires `unconsumedOwnedTerminalResultsForC10 > 0`
+			// AND `!suppressOriginatingCompletion`. What changed is only
+			// the SURFACE SYNTAX: the production site now binds the
+			// predicate to a named `const` (`eligibleForCoalescedContinuation`)
+			// instead of inlining it in the `if (...)` header, so the
+			// predecessor regex (which required the `if (` form) no
+			// longer matched even though the guard is present.
+			//
+			// The corrected regex accepts BOTH surface forms and still
+			// requires the two conjuncts to appear TOGETHER, so the
+			// invariant — not the formatting — remains what is pinned.
 			const fs = require("node:fs")
 			const path = require("node:path")
 			const filePath = path.resolve(__dirname, "../sdk-session-event-coordinator.ts")
 			const src = fs.readFileSync(filePath, "utf8")
-			const guardRegex =
-				/if \(\s*\n?\s*unconsumedOwnedTerminalResultsForC10 > 0 &&\s*\n?\s*!suppressOriginatingCompletion\s*\n?\s*\)/
+			const guardRegex = /unconsumedOwnedTerminalResultsForC10 > 0\s*&&\s*!suppressOriginatingCompletion/
 			expect(src).toMatch(guardRegex)
+			// The guard is the trigger site's ELIGIBILITY predicate: the
+			// named `const` it feeds must gate the trigger call.
+			expect(src).toMatch(/eligibleForCoalescedContinuation/)
+			expect(src).toMatch(/if \(eligibleForCoalescedContinuation\) \{/)
 		})
 	})
 })

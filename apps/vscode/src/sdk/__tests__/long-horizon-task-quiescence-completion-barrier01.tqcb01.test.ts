@@ -27,6 +27,7 @@ import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
+import { legacyHarnessElmProvider } from "./completion-authority-elm-test-provider.h03"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -231,6 +232,12 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		}) as NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>,
 		getTurnPhase: () => tracker.currentPhase,
 		translateSessionEvent,
+		// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+		// (H03 -- R4): the legacy harness omitted the now-MANDATORY Elm
+		// completion-authority provider, so the consult threw and the
+		// fail-closed gate suppressed EVERY C10 commit. The BCB policy
+		// scenario is orthogonal to the Elm verdict.
+		getElmCompletionAuthorityDecision: legacyHarnessElmProvider(),
 		// TQCB01 P1-2: when simulating a notify=false sibling
 		// RUNNING job, return true so we can prove the
 		// completion-barrier re-evaluation does NOT consult

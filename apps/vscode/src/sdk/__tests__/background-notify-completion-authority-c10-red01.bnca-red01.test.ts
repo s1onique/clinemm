@@ -43,6 +43,7 @@ import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
+import { legacyHarnessElmProvider } from "./completion-authority-elm-test-provider.h03"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: { error: vi.fn(), log: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() },
@@ -131,6 +132,12 @@ function makeHarness(): ProductionHarness {
 		getActiveNotifyCount: (sessionId: string | undefined, taskId: string | undefined) =>
 			notifyCoordinator.activeNotifyCountForOwner(sessionId ?? activeSessionId, taskId ?? activeTaskId),
 		hasActiveNotify: (jobId: string) => notifyCoordinator.hasActiveNotify(jobId),
+		// ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01
+		// (H03 -- R4): the legacy harness omitted the now-MANDATORY Elm
+		// completion-authority provider, so the consult threw and the
+		// fail-closed gate suppressed EVERY C10 commit. The wake-authority
+		// policy scenario is orthogonal to the Elm verdict.
+		getElmCompletionAuthorityDecision: legacyHarnessElmProvider(),
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	const manager = new CommandJobManager()

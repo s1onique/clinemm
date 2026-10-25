@@ -357,6 +357,218 @@ export function verifyChart04CompletionPresentation(options: {
 }
 
 /**
+ * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01 (H03).
+ *
+ * Verify the Chart 02 document's embedded Mermaid block against the
+ * COMPLETION-AUTHORITY claim taxonomy AND the verified claim-id -> edge
+ * ASSOCIATION.
+ *
+ * WHY CHART 02 NEEDS ITS OWN CHECK.
+ *
+ * Chart 01 (turn phase) and Chart 04 (completion presentation) each had a
+ * small number of claims, most of which were genuine transitions. Chart 02
+ * is different: its eight claims are a MIX of four different kinds of
+ * thing, and the predecessor diagram drew ALL of them as a linear state
+ * sequence. That was WRONG in two specific ways:
+ *
+ *   1. The BCB was drawn as an ORDERED CHAIN of five states
+ *      (`PendingPromptUnknown -> PendingPromptKnown -> OutstandingAutonomousWork
+ *      -> OwnerStillRunning -> HeldObligation -> Suppressed`). The BCB is
+ *      NOT a chain: it is a PREDICATE over INDEPENDENT obligations. Any
+ *      one of them holds the completion; they are not visited in order.
+ *      The predecessor diagram therefore asserted a sequencing that the
+ *      production code does not implement.
+ *
+ *   2. The final CONTAINMENT revalidation (A-04b's commit-boundary veto)
+ *      was INVISIBLE: the diagram went straight from "Elm authorized" to
+ *      "C10 committed", hiding the safety veto that sits between the
+ *      awaited Elm flush and the commit effect.
+ *
+ * WHAT IT ASSERTS.
+ *
+ *   1. Every Chart 02 TRANSITION claim appears on EXACTLY ONE labeled
+ *      Mermaid edge in the embedded block.
+ *   2. Every GUARD / DECISION / SAFETY-VETO / INVARIANT / INPUT-RULE claim
+ *      does NOT appear as a Mermaid edge — those claims are proven by a
+ *      contract entry plus an executable assertion, not by a graph-state
+ *      transition.
+ *   3. Every TRANSITION claim labels the CORRECT edge: the labeled edge's
+ *      source/target must equal the VERIFIED endpoints. Cardinality alone
+ *      is insufficient — a SWAPPED pair of labels keeps every id present
+ *      exactly once while inverting the meaning of both transitions.
+ *   4. The BCB is NOT drawn as an ordered chain.
+ *   5. The FINAL CONTAINMENT revalidation is VISIBLE between the Elm
+ *      authorization and the C10 effect.
+ *   6. No edge may enter the committed-completion state except the C10
+ *      commit edge.
+ *
+ * This is a DOCUMENTATION-SYNCHRONIZATION guard. It never asserts
+ * behaviour: the behaviour is proven by the executable witness suite
+ * (`apps/vscode/src/sdk/__tests__/completion-authority-contract01.h03.test.ts`).
+ */
+
+/**
+ * The Chart 02 claims that ARE genuine transitions and therefore carry a
+ * Mermaid edge.
+ *
+ * A-01 (the C9 capture) and A-04 (the C10 commit) are the only two
+ * OBSERVABLE state changes in the completion-authority chain.
+ */
+export const CHART_02_TRANSITION_CLAIM_IDS: readonly string[] = ["A-01", "A-04"]
+
+/**
+ * The Chart 02 claims that are NOT transitions and therefore carry NO
+ * Mermaid edge.
+ *
+ *   A-02  GUARD       — the BCB predicate SUPPRESSES the C10 commit.
+ *   A-03  DECISION    — the Elm consult is a closed three-valued verdict.
+ *   A-04b SAFETY VETO — the containment veto SUPPRESSES the commit; it is
+ *                        not a successful completion transition.
+ *   A-05  GUARD       — the Elm refusal SUPPRESSES the marker publication.
+ *   A-06  INVARIANT   — a completion-identity cardinality property.
+ *   A-07  INPUT RULE  — a filter on what the authority may observe.
+ */
+export const CHART_02_NON_TRANSITION_CLAIM_IDS: readonly string[] = ["A-02", "A-03", "A-04b", "A-05", "A-06", "A-07"]
+
+/**
+ * The VERIFIED claim-id -> Mermaid-edge association for Chart 02.
+ *
+ * The endpoints are the REAL production source/target states, bound to the
+ * production writer by the executable witness suite.
+ *
+ * A-04 is the C10 COMMIT edge. Its SOURCE is `ContainmentRevalidated`
+ * because the final containment revalidation is the LAST admission check
+ * before the commit effect: the diagram shows the veto as its OWN edge OUT
+ * of the revalidation state (`ContainmentRevalidated --> C10Withheld`), so
+ * the veto is visible WITHOUT introducing a second, unauthorized path into
+ * `C10Committed`.
+ */
+export const CHART_02_VERIFIED_EDGES: Readonly<Record<string, { readonly source: string; readonly target: string }>> = {
+	"A-01": { source: "TurnRunning", target: "C9Captured" },
+	"A-04": { source: "ContainmentRevalidated", target: "C10Committed" },
+}
+
+/**
+ * The BCB obligation states that MUST NOT be drawn as an ordered chain.
+ *
+ * The BCB is a predicate over INDEPENDENT obligations. Drawing them as a
+ * linear sequence asserts a temporal order the production code does not
+ * implement.
+ */
+export const CHART_02_FORBIDDEN_BCB_CHAIN_STATES: readonly string[] = [
+	"PendingPromptUnknown",
+	"PendingPromptKnown",
+	"OutstandingAutonomousWork",
+	"OwnerStillRunning",
+	"HeldObligation",
+	"Suppressed",
+]
+
+/**
+ * Verify the Chart 02 document's embedded Mermaid block.
+ */
+export function verifyChart02CompletionAuthority(options: {
+	readonly markdown: string
+	readonly transitionClaimIds?: readonly string[]
+	readonly nonTransitionClaimIds?: readonly string[]
+	readonly expectedEdges?: Readonly<Record<string, { readonly source: string; readonly target: string }>>
+}): { readonly errors: string[]; readonly mermaidBlockCount: number } {
+	const {
+		markdown,
+		transitionClaimIds = CHART_02_TRANSITION_CLAIM_IDS,
+		nonTransitionClaimIds = CHART_02_NON_TRANSITION_CLAIM_IDS,
+		expectedEdges = CHART_02_VERIFIED_EDGES,
+	} = options
+	const errors: string[] = []
+	const blocks = extractMermaidBlocks(markdown)
+	if (blocks.length === 0) {
+		return { errors: ["Chart 02 document has no embedded mermaid block"], mermaidBlockCount: 0 }
+	}
+	const diagramText = blocks.join("\n")
+	const edges = parseMermaidTransitionEdges(diagramText)
+
+	const edgesByClaimId = new Map<string, MermaidEdge[]>()
+	for (const edge of edges) {
+		const claimId = transitionIdOfLabel(edge.label)
+		if (!claimId) continue
+		const existing = edgesByClaimId.get(claimId) ?? []
+		existing.push(edge)
+		edgesByClaimId.set(claimId, existing)
+	}
+
+	for (const claimId of transitionClaimIds) {
+		const labeled = edgesByClaimId.get(claimId) ?? []
+		if (labeled.length === 0) {
+			errors.push(`${claimId}: TRANSITION claim is absent from the Chart 02 Mermaid projection`)
+			continue
+		}
+		if (labeled.length > 1) {
+			errors.push(`${claimId}: appears on ${labeled.length} Chart 02 Mermaid edges; expected exactly one`)
+			continue
+		}
+		// The id must label the CORRECT edge, not merely SOME edge.
+		const expected = expectedEdges[claimId]
+		if (!expected) continue
+		const edge = labeled[0]
+		if (edge.source !== expected.source || edge.target !== expected.target) {
+			errors.push(
+				`${claimId}: Mermaid edge is ${edge.source} --> ${edge.target}, but Chart 02 requires ${expected.source} --> ${expected.target}`,
+			)
+		}
+	}
+	for (const claimId of nonTransitionClaimIds) {
+		const labeled = edgesByClaimId.get(claimId) ?? []
+		if (labeled.length > 0) {
+			errors.push(
+				`${claimId}: is a GUARD / DECISION / SAFETY-VETO / INVARIANT / INPUT-RULE claim and must NOT carry a Chart 02 Mermaid edge (found ${labeled.length})`,
+			)
+		}
+	}
+
+	// (4) The BCB must NOT be drawn as an ordered chain of obligation
+	//     states. The BCB is a PREDICATE over INDEPENDENT obligations.
+	for (const state of CHART_02_FORBIDDEN_BCB_CHAIN_STATES) {
+		const statePattern = new RegExp(`(^|\\s|-->)${state}(\\s|$|:)`, "m")
+		if (statePattern.test(diagramText)) {
+			errors.push(
+				`Chart 02 Mermaid projection draws the BCB obligation state "${state}" as a graph state; the BCB is a PREDICATE over INDEPENDENT obligations, not an ordered chain`,
+			)
+		}
+	}
+
+	// (5) The FINAL CONTAINMENT revalidation must be VISIBLE between the
+	//     Elm authorization and the C10 effect. The A-04 edge may not go
+	//     straight from the Elm-authorized state to the committed state:
+	//     the safety veto (A-04b) sits between them.
+	const a04Edge = (edgesByClaimId.get("A-04") ?? [])[0]
+	if (a04Edge) {
+		const expected = expectedEdges["A-04"]
+		const a04EndpointsMatch = !expected || (a04Edge.source === expected.source && a04Edge.target === expected.target)
+		if (a04EndpointsMatch && !/ContainmentRevalidat/i.test(diagramText)) {
+			errors.push(
+				"Chart 02 Mermaid projection does not show the FINAL containment revalidation between the Elm authorization and the C10 effect; the A-04b safety veto must be visible",
+			)
+		}
+	}
+
+	// (6) No edge may enter the committed-completion state except the C10
+	//     commit edge.
+	for (const edge of edges) {
+		const claimId = transitionIdOfLabel(edge.label)
+		if (!claimId) continue
+		if (edge.target !== "C10Committed") continue
+		const expected = expectedEdges[claimId]
+		if (!expected || expected.target !== "C10Committed") {
+			errors.push(
+				`${claimId}: edge ${edge.source} --> C10Committed is an UNAUTHORIZED path into the committed completion; only the C10 commit (A-04) may target it`,
+			)
+		}
+	}
+
+	return { errors, mermaidBlockCount: blocks.length }
+}
+
+/**
  * ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01.
  *
  * Verify the Mermaid block that is EMBEDDED in
