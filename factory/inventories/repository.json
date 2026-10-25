@@ -32,10 +32,27 @@
 			}
 		],
 		"lfs_pointer_count": 1,
-		"protected_stashes": 0,
-		"stashes_at_closure": [],
-		"protected_stash_branches": [],
-		"comment": "Integration ACT CLOSED_CLEAN after post-review qualification. Mandatory F27 SHARED_HOST_SAFE_YOLO_SOURCE_BINDING test GREEN (2/2). Real regressions found and corrected in sdk-tool-policies.ts (parseMcpToolName lost during conflict resolution) + auto-approve-overlay-regression.test.ts (taskOperationFence not supplied). Pre-existing failures in check-types (rootDir) and command-job-manager.test.ts (ClineMM SECURE-BY-DEFAULT Seatbelt) are BASELINE_ONLY. F10 stash-preservation ceremony RETIRED per reviewer."
+		"protected_stashes": 5,
+		"stashes_at_closure": [
+			{
+				"index": 0,
+				"oid": "392bd89f459aed8fb377140c46c17453a8cdaf89",
+				"subject": "WIP on main: 026a64d1b PTLL01-CORR01: board — L1 causal proof corrected, VSIX built+installed, live blocked by environment"
+			},
+			{
+				"index": 1,
+				"oid": "6c9f5493e8406caf3f11f729504f6fdfadf115c8",
+				"subject": "WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration"
+			}
+		],
+		"protected_stash_branches": [
+			"refs/heads/protected-stash-ptll01-corr01-wip",
+			"refs/heads/protected-stash-ptll01-corr01-wip-earlier",
+			"refs/heads/protected-stash-tart-d46223b51",
+			"refs/heads/protected-stash-seatbelt-wip",
+			"refs/heads/protected-stash-c2-green"
+		],
+		"comment": "Integration ACT CLOSED_CLEAN after post-review qualification. Mandatory F27 SHARED_HOST_SAFE_YOLO_SOURCE_BINDING test GREEN (2/2). Real regressions found and corrected in sdk-tool-policies.ts (parseMcpToolName lost during conflict resolution) + auto-approve-overlay-regression.test.ts (taskOperationFence not supplied). Pre-existing failures in check-types (rootDir) and command-job-manager.test.ts (ClineMM SECURE-BY-DEFAULT Seatbelt) are BASELINE_ONLY. F10 stash-preservation ceremony RETIRED per reviewer. | UPDATED 2026-10-25 by ACT-CLINEMM-P0-REPOSITORY-INTEGRITY-PROTECTED-STASH-RECOVERY01: 5 protected stash commits recovered from git fsck --unreachable after refs/stash was de-referenced (its reflog file was absent, so a successful stash pop/drop removed the only durable pointer). Each now has a durable protected-stash-* branch; refs/stash and its reflog were restored with the original subjects and byte-identical commit OIDs. protected_stashes=5."
 	},
 	"upstream_sync_recon": {
 		"act_id": "ACT-CLINEMM-UPSTREAM-SYNC-RECON01",
@@ -137,7 +154,10 @@
 		],
 		"f10_status": "RETIRED",
 		"f10_retirement_rationale": "Reviewer HALT_INTEGRATION_QUALIFICATION_INCOMPLETE + 'Drop the stashes now, retire F10, and stop the protected-stash ceremony' plan. F10's stash-preservation invariant is replaced by NO_UNEXPECTED_DIRT (asserted by git status --short + git stash list both empty at closure).",
-		"protected_stash_branches": [],
+		"protected_stash_branches": [
+			"refs/heads/protected-stash-seatbelt-wip",
+			"refs/heads/protected-stash-c2-green"
+		],
 		"stashes_at_closure": [],
 		"comment": "ACT CLOSED_CLEAN. Mandatory F27 SHARED_HOST_SAFE_YOLO_SOURCE_BINDING test GREEN (2/2). 11/13 attempted executable gates PASS; 2 pre-existing failures BASELINE_ONLY (documented). F10 ceremony RETIRED. No downstream blockers."
 	},

@@ -28968,3 +28968,150 @@ deferred re-evaluation and the commit boundary all HOLD — and the clean-termin
 path **CONTINUES TO WORK** (it still commits exactly once).
 
    already rolled past that job's finalization) plus a per-session Elm decision trace.
+
+## ACT-CLINEMM-P0-REPOSITORY-INTEGRITY-PROTECTED-STASH-RECOVERY01 (2026-10-25) — PASS_STASH_IDENTITY_RECOVERED
+
+**Status:** CLOSED with verdict **`PASS_STASH_IDENTITY_RECOVERED`**. The
+`HALT_PROTECTED_STASH_IDENTITY_UNRESOLVED` blocker is **LIFTED**.
+
+**Predecessor:** `ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01`
+(verdict `PASS_STRUCTURAL_ONLY`, commit
+`c0965132789b75c96d440fd04da617db55fcb708`). This ACT is **repository-integrity
+only**: no production code, no test, no evidence-substrate rewrite, no commit
+against `main`'s source tree.
+
+### The finding
+
+The REPAIR01 report recorded `=== stash === (empty above = no stash residue)` and
+acknowledged an unintended `git stash` push/pop, but did not establish the
+identity of the previously protected stash. A reviewer correctly refused to
+accept "no stash residue" as evidence that the protected stash was preserved.
+
+**The protected stash was NOT destroyed. It was de-referenced.**
+
+`refs/stash` had **no reflog file at all** (`.git/logs/refs/stash` absent, no
+`packed-refs` entry). A successful `git stash pop`/`drop` removes the ref and
+with it the only durable pointer; the objects survive as unreachable Git
+objects, which `git fsck --full --unreachable` can still enumerate. That is
+exactly the mechanism that destroyed the earlier F10 protected stash — the
+repo's own `.factory/evidence/ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01/f10-stash-recovery.md`
+records the SAME failure mode and the SAME `git fsck --unreachable` recovery
+for the Seatbelt stash.
+
+### Timeline — REPAIR01 did not cause the loss
+
+The stash base commits prove REPAIR01's own push/pop was a **separate, later**
+operation with a **different base**:
+
+| Stash commit | Created | Base | Subject |
+|---|---|---|---|
+| `d8fe7402e32391673f8340759d46f63956045be1` | 2026-10-23 21:06:18 | `026a64d1b` | `WIP on main: 026a64d1b PTLL01-CORR01: board — L1 causal proof corrected, VSIX built+installed, live blocked by environment` |
+| `392bd89f459aed8fb377140c46c17453a8cdaf89` | 2026-10-23 21:23:02 | `026a64d1b` | same subject (the later of the two) |
+| `0b131e212324330b29bd87654800a3047ddcf90a` | 2026-10-24 19:48:05 | `8bfc9c21f` | `On main: cfc10ar01-wip` (REPAIR01's own) |
+| `b18132a50b425f75ad497bfc7c8373c3160833f5` | 2026-10-25 04:33:55 | `8bfc9c21f` | `WIP on main: 8bfc9c21f docs(clinemm): …REPRO01…` (REPAIR01's own) |
+
+REPAIR01's stashes are based on `8bfc9c21f` (its ENTRY_HEAD) and are ~2.5 days
+LATER than the `026a64d1b`-based stashes. REPAIR01 therefore did not destroy
+the protected stash; it merely reported an empty `stash list` because the ref
+had already been gone.
+
+### All five protected stashes located
+
+`git fsck --full --unreachable` enumerated them, and every one was confirmed by
+hand against its own subject, base parent and diff (no blind `pop`):
+
+| Ref | OID | Base | Subject |
+|---|---|---|---|
+| `protected-stash-ptll01-corr01-wip` | `392bd89f4` | `026a64d1b` | `WIP on main: 026a64d1b PTLL01-CORR01: board — L1 causal proof corrected, VSIX built+installed, live blocked by environment` |
+| `protected-stash-ptll01-corr01-wip-earlier` | `d8fe7402e` | `026a64d1b` | same subject (earlier of the two) |
+| `protected-stash-tart-d46223b51` | `6c9f5493e` | `d46223b51` | `WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration` (the board's named "protected Tart stash `stash@{0}` on `d46223b51`") |
+| `protected-stash-seatbelt-wip` | `fdb1a5b95` | `056b354a1` | `WIP on main: 056b354a1 fix(sandbox): harden Seatbelt diagnostic observer` (the F10 stash) |
+| `protected-stash-c2-green` | `dd73419d2` | `7f3fa782a` | `On main: c2-green-and-c2-p1-delta` (the F10 stash) |
+
+The two F10 stashes were **also** de-referenced (their `protected-stash-*`
+branches no longer exist), so this is a **repeated** loss pattern, not a
+one-off.
+
+
+### Content disposition (verified, not assumed)
+
+- The `026a64d1b` stashes' **tracked** change is a single generated-timestamp-only
+  edit to `.factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md`
+  (`Generated: 2026-10-23T18:19:21.531Z` vs main's `2026-09-21T21:19:09.585Z`) —
+  test-generated evidence residue from
+  `darwin-seatbelt-yolo-approval-friction-recon01.c1-inventory.test.ts`, not
+  load-bearing work.
+- Their **untracked** third parent holds `.helper.identity` + `helper.ablated`
+  (the ablated native helper binary and its identity file) plus 6
+  `clinemm-outside-*/victim.ts` scratch files — all reproducible build/test
+  artifacts. The stashed `.helper.identity` sha256
+  `84e658369dcbee0bac8a9241e2877549d41137f555bc291aa9dc7cdd356ccbc2` **exactly
+  matches** the on-disk canonical `tools/macos-host-helper/native/helper`, so the
+  build artifact it references is present.
+- The **Tart** stash `6c9f5493` content (`helper.c` +1437, `build.sh`,
+  `helper.test.ts`, `tart-testbed-run.test.ts`) does **NOT** reverse-apply against
+  `main` — it is genuinely un-incorporated work and must be preserved by ref.
+- The **F10** stash `fdb1a5b95` touches `seatbelt-backend.ts`, which `af1bfb7a7`
+  (the commit the F10 doc claims incorporated it) does **not** touch — so the F10
+  doc's "already incorporated" claim is **incomplete**. Both F10 stashes are
+  preserved by ref for the same reason.
+
+### Recovery performed (refs only; no working-tree mutation)
+
+1. **`git branch` for all five**, following the repo's own F10 precedent — a
+   branch is a ref `git fsck` will never reclaim, and unlike `refs/stash` it
+   carries a reflog. **All five were then PUSHED to `origin`** (`git push
+   origin 'refs/heads/protected-stash-*:refs/heads/protected-stash-*'`), because
+   the F10 precedent's **local-only** branches were themselves later deleted
+   from this checkout — a local branch was not durable enough. The remote now
+   holds all five at the exact original OIDs (verified with
+   `git ls-remote --heads origin 'protected-stash-*'`).
+2. **`refs/stash` restored** with `git update-ref --create-reflog` and the
+   ORIGINAL subject lines, so `git stash list` once again shows the protected
+   stash by identity (`stash@{0}` = the `026a64d1b` stash, `stash@{1}` = the
+   Tart `d46223b51` stash) and `.git/logs/refs/stash` **exists again**. The
+   stash commit OIDs are byte-identical to the originals; only the reflog
+   entries are new.
+3. **No `git stash pop`, `drop`, `clear`, `gc` or `prune` was run.** Nothing was
+   applied to the working tree; `git status --short` stayed empty throughout.
+
+**Verification:** `git fsck --full --unreachable` now reports **none** of the
+five as unreachable; `git for-each-ref --contains <oid>` shows each reachable
+from a named ref; `git stash show --stat refs/stash@{0}` and `refs/stash@{1}`
+both render the expected diffs; `git status --short` is empty; `HEAD` is
+unchanged at `c0965132789b75c96d440fd04da617db55fcb708` and matches
+`origin/main`.
+
+### Prevention (the invariant that was actually broken)
+
+The invariant is not "the stash list is non-empty" — it is **"every protected
+stash commit is reachable from a named ref."** `refs/stash` alone is not
+sufficient: it has no reflog by default, so a single `pop` silently
+de-references the whole protected chain, and `git fsck --unreachable` is then
+the only recovery path (exactly what happened here, twice). Going forward:
+- protected stashes MUST have a `protected-stash-*` branch **pushed to
+  `origin`** (not local-only — the F10 branches were deleted locally), verified
+  with `git ls-remote --heads origin 'protected-stash-*'` and
+  `git for-each-ref --contains <oid>`, NOT with `git stash list`;
+- `git stash pop` on a protected stash is forbidden; `git stash store <oid>`
+  / `git update-ref --create-reflog refs/stash <oid>` preserves the exact OID
+  and subject and is the sanctioned replacement — this is the repo's own
+  documented precedent (`docs/architecture/elm/task-state-e2f-runtime-seam-recon.md`
+  §10, which recovered the dropped `ACT-ELM-02C2` forensic stash
+  `141372c52` with `git stash store -m '…RECOVERED from dropped commit'`);
+- `factory/inventories/repository.json`'s `/working_copy/protected_stashes`
+  and `/upstream_sync_integration/protected_stash_branches` are the
+  machine-readable slots for this and are now backfilled with the five
+  recovered refs.
+
+**Scope compliance:** no production code, no test, no protocol, no Elm kernel,
+no webview reducer, no evidence-substrate rewrite. The only repository changes
+are five new `protected-stash-*` branch refs, the restored `refs/stash` ref +
+reflog, and this board entry. `HEAD` is unmoved.
+
+### Next cursor
+
+1. **H03** — executable C9/BCB/Elm/C10 contract (the next verification epic ACT).
+2. **H04** — background containment contract (after H03).
+3. The original live incident stays **CAPTURE_INSUFFICIENT** until a new capture.
+
