@@ -924,6 +924,134 @@ export class SdkSessionEventCoordinator {
 	}
 
 	/**
+	 * ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+	 * (CFC10AR01 -- R4): the FINAL-ADMISSION containment revalidation.
+	 *
+	 * WHY a revalidation is needed: `checkElmCompletionAuthority`
+	 * AWAITS `flushElmAuthorityForSession` before it reads the Elm
+	 * decision. That await is a real time-of-check/time-of-use
+	 * interval between the barrier's containment read and the final
+	 * `setTurnPhase("completed", …)` effect: a containment failure
+	 * published DURING the flush would be invisible to the earlier
+	 * read and the commit would proceed over an unresolved
+	 * containment failure.
+	 *
+	 * The safety property is narrow and does NOT redesign the Elm gate
+	 * or the lifecycle scheduler:
+	 *
+	 *   an unresolved containment failure KNOWN AT THE ACTUAL COMMIT
+	 *   BOUNDARY cannot be ignored merely because an EARLIER read was
+	 *   clean.
+	 *
+	 * This helper re-reads the SAME owner-scoped classifier at the
+	 * commit boundary. It performs NO provider call (no second Elm
+	 * consult, no second BCB read): it re-reads the already-wired
+	 * per-job projection maps, which the host mutates synchronously
+	 * when a job terminalizes. The existing session/task/epoch
+	 * identity checks are UNCHANGED — this helper does not replace
+	 * them, it only adds the containment fact to the set of facts that
+	 * must hold at the commit boundary.
+	 *
+	 * @param sessionId the session whose jobs are in scope.
+	 * @returns the jobIds whose containment failure is unresolved and
+	 *   owned by `sessionId` (empty when the commit is admissible).
+	 */
+	private unresolvedContainmentFailuresAtCommitBoundary(sessionId: string): string[] {
+		return this.unresolvedContainmentFailuresForOwner(
+			this.options.getBackgroundCommandJobStates?.(),
+			this.options.getBackgroundCommandJobOwners?.(),
+			sessionId,
+		)
+	}
+
+	/**
+	 * ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+	 * (CFC10AR01): the shared, owner-scoped containment classifier.
+	 *
+	 * FACT: a background job whose terminal postcondition was NOT
+	 * `gone` is classified `containment_failed`. Its process group was
+	 * NEVER proven reaped. The `CommandJobManager` removes the job from
+	 * its ACTIVE map on BOTH the clean path and the containment-failure
+	 * path, so "the active map is empty" proves NOTHING about process
+	 * safety — and neither does "the terminal observation was
+	 * consumed". Observation accounting is a DIFFERENT fact from
+	 * process-containment safety.
+	 *
+	 * This helper is the SINGLE computation of that fact. It is PURE
+	 * (no state mutation, no diagnostic side effects) and it PRESERVES
+	 * the Q5 (PHCF01 / PHCF17) semantics exactly:
+	 *
+	 * | input                                          | classification |
+	 * |------------------------------------------------|----------------|
+	 * | clean terminal job                              | does not block |
+	 * | `containment_failed`, matching session          | BLOCKS         |
+	 * | `containment_failed`, foreign session           | does not block |
+	 * | `containment_failed`, unknown owner             | BLOCKS (fail closed) |
+	 * | `containment_failed`, owner map unavailable      | BLOCKS (fail closed) |
+	 * | multiple jobs, at least one matching failure    | BLOCKS         |
+	 * | no failure entries                              | does not block |
+	 *
+	 * The distinction between an ABSENT authority input and a KNOWN
+	 * failed-containment entry is preserved:
+	 *   - an ABSENT state map (`jobStates === undefined`) means the
+	 *     authority input is not wired at all — there is no entry to
+	 *     classify, so nothing blocks (this is the pre-PHCF01
+	 *     behavior, and it is NOT the same as "the owner map is
+	 *     absent while a `containment_failed` entry exists").
+	 *   - an ABSENT owner map (`jobOwners === undefined`) while a
+	 *     `containment_failed` entry DOES exist means the owner
+	 *     discriminator is unavailable — the entry cannot be proven
+	 *     foreign, so it is RETAINED (fail closed). This is the
+	 *     pre-PHCF17 UNSCOPED behavior and it is deliberately kept.
+	 *
+	 * OWNERSHIP IS NEVER DERIVED from whichever task/session happens to
+	 * be selected after the job has terminalized: the owner identity
+	 * comes from the job's OWN recorded owner session id
+	 * (`CommandJob.ownerSessionId`), captured at job construction.
+	 *
+	 * @param jobStates the per-job terminal projection map (the
+	 *   `getBackgroundCommandJobStates` authority input).
+	 * @param jobOwners the per-job owner session id map (the
+	 *   `getBackgroundCommandJobOwners` authority input).
+	 * @param activeSessionId the session whose jobs are in scope.
+	 * @returns the jobIds whose containment failure is UNRESOLVED and
+	 *   OWNED BY `activeSessionId` (possibly empty). An empty result
+	 *   means the completion is NOT blocked by containment.
+	 */
+	private unresolvedContainmentFailuresForOwner(
+		jobStates: Record<string, string> | undefined,
+		jobOwners: Record<string, string | undefined> | undefined,
+		activeSessionId: string,
+	): string[] {
+		// The authority input is ABSENT: there is no per-job
+		// classification to consult, so nothing blocks. This is
+		// distinct from "the classification exists but its owner is
+		// unknown" (handled below).
+		if (!jobStates) {
+			return []
+		}
+		return Object.entries(jobStates)
+			.filter(([jobId, reason]) => {
+				if (reason !== "containment_failed") {
+					return false
+				}
+				if (!jobOwners) {
+					// The owner map is not wired: preserve the
+					// pre-PHCF17 UNSCOPED fail-closed behavior.
+					return true
+				}
+				const ownerSessionId = jobOwners[jobId]
+				if (ownerSessionId === undefined) {
+					// UNKNOWN owner: fail closed, retain the
+					// obligation (it cannot be proven foreign).
+					return true
+				}
+				return ownerSessionId === activeSessionId
+			})
+			.map(([jobId]) => jobId)
+	}
+
+	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
 	 * The Elm-authority decision provider, captured at construction.
 	 * REQUIRED (no fallback). The provider is the real Elm runtime
@@ -1109,26 +1237,20 @@ export class SdkSessionEventCoordinator {
 			// RETAINED (fail closed) -- the same conservative
 			// posture as the unscoped check. A job explicitly owned
 			// by a DIFFERENT session is EXCLUDED.
+			//
+			// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+			// (CFC10AR01): the computation is now the SHARED
+			// `unresolvedContainmentFailuresForOwner` classifier — the
+			// SAME helper the C10 barrier (Site A), the deferred C10
+			// re-evaluation (Site B) and the final-admission
+			// revalidation (R4) consult, so the Q5 and C10 paths can
+			// no longer drift apart. The semantics are UNCHANGED.
 			const jobOwners = this.options.getBackgroundCommandJobOwners?.()
-			const failedContainmentJobIds = Object.entries(jobStates)
-				.filter(([jobId, reason]) => {
-					if (reason !== "containment_failed") {
-						return false
-					}
-					if (!jobOwners) {
-						// The owner map is not wired: preserve the
-						// pre-PHCF17 unscoped behavior.
-						return true
-					}
-					const ownerSessionId = jobOwners[jobId]
-					if (ownerSessionId === undefined) {
-						// UNKNOWN owner: fail closed, retain the
-						// obligation (cannot prove it is foreign).
-						return true
-					}
-					return ownerSessionId === activeSession.sessionId
-				})
-				.map(([jobId]) => jobId)
+			const failedContainmentJobIds = this.unresolvedContainmentFailuresForOwner(
+				jobStates,
+				jobOwners,
+				activeSession.sessionId,
+			)
 			if (failedContainmentJobIds.length > 0) {
 				Logger.warn(
 					`[SdkController] background job terminal idle NOT releasing deferred Q5 completion for session ${activeSession.sessionId}: unresolved containment failure (jobs=${failedContainmentJobIds.join(",")}) (PHCF01)`,
@@ -1936,7 +2058,42 @@ export class SdkSessionEventCoordinator {
 			return
 		}
 
-		// All four conservation checks pass: commit the held
+		// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+		// (CFC10AR01 -- SITE B): the CONTAINMENT conjunct on the
+		// DEFERRED C10 release.
+		//
+		// The checks above are OBSERVATION / LIVENESS accounting: the
+		// held-obligation count drains when the agent OBSERVES the
+		// terminal fact, and the manager's active map is empty on BOTH
+		// the clean path and the containment-failure path. A drained
+		// observation therefore proves NOTHING about process safety.
+		//
+		// A job whose terminal postcondition was not `gone` carries an
+		// UNRESOLVED subprocess-safety obligation. The completion stays
+		// HELD: the deferred marker is PRESERVED (exactly like the
+		// `heldObligation` / `outstandingAutonomousWork` holds above),
+		// so a later re-evaluation can release it if the containment
+		// failure is ever resolved. NO `completed` phase write, NO
+		// `task_completion_committed` capture and NO authoritative
+		// marker promotion occur on this path.
+		//
+		// The classification is OWNER-SCOPED and uses the SAME shared
+		// helper as the immediate C10 barrier (Site A) and the Q5 path
+		// (Site C): a FOREIGN owner's failure does not block, an
+		// UNKNOWN owner fails closed.
+		const unresolvedContainmentFailuresForDeferredC10 = this.unresolvedContainmentFailuresForOwner(
+			this.options.getBackgroundCommandJobStates?.(),
+			this.options.getBackgroundCommandJobOwners?.(),
+			activeSession.sessionId,
+		)
+		if (unresolvedContainmentFailuresForDeferredC10.length > 0) {
+			Logger.warn(
+				`[SdkController] outstanding obligations resolved for session ${activeSession.sessionId} but an unresolved containment failure remains (jobs=${unresolvedContainmentFailuresForDeferredC10.join(",")}); holding the deferred completion (CFC10AR01 barrier)`,
+			)
+			return
+		}
+
+		// All conservation checks pass: commit the held
 		// completion transition exactly once.
 		Logger.warn(
 			`[SdkController] outstanding obligations resolved; releasing held completion for session ${activeSession.sessionId} (epoch=${marker.epoch})`,
@@ -1968,6 +2125,37 @@ export class SdkSessionEventCoordinator {
 			// trigger (e.g. the upcoming `agent_turn_done`) will
 			// re-evaluate. Reuses the existing marker shape so the
 			// existing reevaluation path covers Elm holds too.
+			this.deferredCompletionBarrier = {
+				sessionId: activeSession.sessionId,
+				taskId: this.options.getTask?.()?.taskId,
+				epoch: this.options.messageTranslatorState.getMinter().epoch,
+				deferredAt: Date.now(),
+			}
+			return
+		}
+		// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+		// (CFC10AR01 -- R4): the FINAL-ADMISSION containment
+		// revalidation on the DEFERRED commit boundary.
+		//
+		// `checkElmCompletionAuthority` AWAITS the Elm-authority flush
+		// before it reads the Elm decision. A containment failure
+		// published DURING that await is invisible to the earlier
+		// barrier read. Re-read the SAME owner-scoped classifier at the
+		// actual commit boundary; if a failure is known NOW, the commit
+		// is not admissible. NO second Elm consult is performed — only
+		// the already-wired per-job projection maps are re-read.
+		//
+		// On a hit the deferred marker is RE-REGISTERED (exactly like
+		// the Elm-HOLD branch above), so a later re-evaluation can
+		// release the completion if the containment failure is ever
+		// resolved. NO `completed` phase write, NO
+		// `task_completion_committed` capture and NO authoritative
+		// marker promotion occur.
+		const unresolvedContainmentFailuresAtCommit = this.unresolvedContainmentFailuresAtCommitBoundary(activeSession.sessionId)
+		if (unresolvedContainmentFailuresAtCommit.length > 0) {
+			Logger.warn(
+				`[SdkController] Elm completion-authority authorized the deferred C10 commit for session ${activeSession.sessionId} but an unresolved containment failure is known at the commit boundary (jobs=${unresolvedContainmentFailuresAtCommit.join(",")}); holding the deferred completion (CFC10AR01 revalidation)`,
+			)
 			this.deferredCompletionBarrier = {
 				sessionId: activeSession.sessionId,
 				taskId: this.options.getTask?.()?.taskId,
@@ -3516,12 +3704,47 @@ export class SdkSessionEventCoordinator {
 							const heldObligationForC10 =
 								unconsumedOwnedTerminalResultsForC10 > 0 || unconsumedOwnedTerminalJobIdsForC10.length > 0
 							const suppressOriginatingCompletion = perJobSuppressOriginatingCompletion
+							// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+							// (CFC10AR01 -- SITE A): the CONTAINMENT conjunct.
+							//
+							// The four conjuncts above are all OBSERVATION /
+							// LIVENESS accounting:
+							//   - `ownerStillRunningForC10` is the manager's
+							//     ACTIVE-MAP CARDINALITY question, and the
+							//     manager removes a job from the active map
+							//     on BOTH the clean path and the
+							//     containment-failure path;
+							//   - `heldObligationForC10` is the BCB's
+							//     UNCONSUMED-TERMINAL-OBSERVATION count,
+							//     which drains when the agent OBSERVES the
+							//     terminal fact.
+							// Neither proves the process group was REAPED.
+							//
+							// A job whose terminal postcondition was not
+							// `gone` is classified `containment_failed`:
+							// its process group was NEVER proven gone. That
+							// is a SEPARATE fact from observation
+							// accounting, and it MUST hold the C10 commit
+							// on its own.
+							//
+							// The classification is OWNER-SCOPED (the SAME
+							// shared helper the Q5 path and the deferred
+							// C10 path use): only the failures of jobs
+							// OWNED BY THE ACTIVE SESSION block, a
+							// FOREIGN owner's failure does not, and an
+							// UNKNOWN owner fails closed.
+							const unresolvedContainmentFailuresForC10 = this.unresolvedContainmentFailuresForOwner(
+								this.options.getBackgroundCommandJobStates?.(),
+								this.options.getBackgroundCommandJobOwners?.(),
+								activeSession.sessionId,
+							)
 
 							if (
 								outstandingAutonomousWork ||
 								ownerStillRunningForC10 ||
 								heldObligationForC10 ||
-								suppressOriginatingCompletion
+								suppressOriginatingCompletion ||
+								unresolvedContainmentFailuresForC10.length > 0
 							) {
 								// Register the deferred-completion-barrier marker.
 								// Same epoch + task + session identity triple as
@@ -3530,7 +3753,9 @@ export class SdkSessionEventCoordinator {
 								Logger.warn(
 									suppressOriginatingCompletion
 										? `[SdkController] submit_and_exit suppressed for session ${activeSession.sessionId}: wake-driven turn owns terminal completion for one or more notify-owned jobs launched by this turn (BNCA barrier)`
-										: `[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has outstanding autonomous work (pendingPrompts=${pendingPromptsKnown}, activeNotify=${activeNotifyCount}); holding completion (TQCB01 barrier)`,
+										: unresolvedContainmentFailuresForC10.length > 0
+											? `[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has an unresolved containment failure (jobs=${unresolvedContainmentFailuresForC10.join(",")}); holding completion (CFC10AR01 barrier)`
+											: `[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has outstanding autonomous work (pendingPrompts=${pendingPromptsKnown}, activeNotify=${activeNotifyCount}); holding completion (TQCB01 barrier)`,
 								)
 								// ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01-CORRECTION01-ELIGIBILITY-AND-IDENTITY:
 								// Preserve the existing marker's `reason` field
@@ -3865,6 +4090,43 @@ export class SdkSessionEventCoordinator {
 									// seam), so a deferred re-evaluation
 									// that later AUTHORIZEs promotes the
 									// SAME row.
+									return
+								}
+								// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+								// (CFC10AR01 -- R4): the FINAL-ADMISSION containment
+								// revalidation on the IMMEDIATE commit boundary.
+								//
+								// `checkElmCompletionAuthority` AWAITS the
+								// Elm-authority flush before it reads the Elm
+								// decision. A containment failure published
+								// DURING that await is invisible to the
+								// earlier barrier read. Re-read the SAME
+								// owner-scoped classifier at the actual commit
+								// boundary; if a failure is known NOW, the
+								// commit is not admissible. NO second Elm
+								// consult is performed — only the already-wired
+								// per-job projection maps are re-read.
+								//
+								// On a hit the deferred-completion-barrier marker
+								// is registered (exactly like the Elm-HOLD
+								// branch above), so a later re-evaluation can
+								// release the completion if the containment
+								// failure is ever resolved. NO `completed` phase
+								// write, NO `task_completion_committed` capture
+								// and NO authoritative marker promotion occur.
+								const unresolvedContainmentFailuresAtCommit = this.unresolvedContainmentFailuresAtCommitBoundary(
+									activeSession.sessionId,
+								)
+								if (unresolvedContainmentFailuresAtCommit.length > 0) {
+									Logger.warn(
+										`[SdkController] Elm completion-authority authorized the C10 commit for session ${activeSession.sessionId} but an unresolved containment failure is known at the commit boundary (jobs=${unresolvedContainmentFailuresAtCommit.join(",")}); holding the completion (CFC10AR01 revalidation)`,
+									)
+									this.deferredCompletionBarrier = {
+										sessionId: activeSession.sessionId,
+										taskId: this.options.getTask?.()?.taskId,
+										epoch: this.options.messageTranslatorState.getMinter().epoch,
+										deferredAt: Date.now(),
+									}
 									return
 								}
 								recordLifecycleTransitionTrace(

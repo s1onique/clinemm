@@ -608,7 +608,7 @@ describe("ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01 / RED-03 C10 
 		}
 	})
 
-	it("CFC10A01-RED-03-B (RED WITNESS): after the observation is CONSUMED, the C10 commit IS AUTHORIZED while the containment failure is STILL UNRESOLVED", async () => {
+	it("CFC10A01-RED-03-B (RED WITNESS): after the observation is CONSUMED, the C10 commit MUST STAY BLOCKED while the containment failure is STILL UNRESOLVED", async () => {
 		const h = makeHarness()
 		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
 		const started = await startJobAndRunToTerminal(h, { postcondition: "alive", pid: 91021 })
@@ -631,12 +631,64 @@ describe("ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01 / RED-03 C10 
 			expect(h.jobStates[started.jobId]).toBe("containment_failed")
 
 			await emitCompletionTurn(h)
-			// THE WITNESS: the C10 commit PROCEEDS. Elm authorized
-			// (`authorize`), the active map is empty, and the only
-			// remaining BCB conjunct (the observation) was satisfied by
-			// CONSUMPTION — not by proven containment.
-			expect(h.completionCommitCount()).toBe(1)
-			expect(h.tracker.currentPhase).toBe("completed")
+			// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+			// (CFC10AR01): the REPAIRED expectation. The C10 commit
+			// MUST NOT proceed: the observation was consumed, but the
+			// owner's containment failure is UNRESOLVED, so the
+			// process group is still not proven reaped.
+			expect(h.completionCommitCount()).toBe(0)
+			expect(h.tracker.currentPhase).not.toBe("completed")
+		} finally {
+			await started.manager.dispose()
+			h.notifyCoordinator.dispose()
+			await h.manager.dispose()
+		}
+	})
+
+	it("CFC10A01-RED-03-B-DEFERRED (RED WITNESS): the DEFERRED C10 re-evaluation MUST NOT release the held completion while the owner's containment failure is UNRESOLVED", async () => {
+		const h = makeHarness()
+		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+		const started = await startJobAndRunToTerminal(h, { postcondition: "alive", pid: 91024 })
+		try {
+			registerNonNotifyObservation(h, started.jobId)
+			expect(h.jobStates[started.jobId]).toBe("containment_failed")
+
+			// STEP 1: REGISTER the actual deferred completion barrier.
+			// The BCB's second conjunct (the held observation) holds the
+			// C10 commit, so the REAL production barrier registration in
+			// `handleSessionEvent` runs and the marker is created.
+			await emitCompletionTurn(h)
+			expect(h.completionCommitCount()).toBe(0)
+			expect(h.coordinator.isDeferredCompletionBarrierOutstandingForTesting()).toBe(true)
+
+			// STEP 2: HOLD the barrier while the terminal observation is
+			// outstanding, then consume the observation. The manager's
+			// active map is already empty and the BCB count drains to 0.
+			const statusTool = createCommandStatusTool(started.manager, {
+				backgroundNotifyCoordinator: h.notifyCoordinator,
+				resolveActiveOwner: () => ({ sessionId: h.sessionId, taskId: h.taskId }),
+			})
+			await statusTool.execute(
+				{ jobId: started.jobId, waitMs: 0 },
+				{ sessionId: h.sessionId, agentId: "test-agent", iteration: 1 },
+			)
+			expect(h.notifyCoordinator.unconsumedTerminalCountForOwner(h.sessionId, h.taskId)).toBe(0)
+
+			// STEP 3: the owner's `containment_failed` classification is
+			// UNCHANGED by the observation consumption.
+			expect(h.jobStates[started.jobId]).toBe("containment_failed")
+
+			// STEP 4: exercise the ACTUAL deferred completion barrier
+			// re-evaluation method.
+			await h.coordinator.reevaluateDeferredCompletionBarrier()
+
+			// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+			// (CFC10AR01): the REPAIRED expectation. A drained
+			// terminal observation MUST NOT release a completion while
+			// the corresponding unresolved containment classification
+			// remains.
+			expect(h.completionCommitCount()).toBe(0)
+			expect(h.tracker.currentPhase).not.toBe("completed")
 		} finally {
 			await started.manager.dispose()
 			h.notifyCoordinator.dispose()
@@ -708,25 +760,40 @@ describe("ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01 / RED-03 C10 
 		}
 	})
 
-	it("CFC10A01-RED-03-E: the Q5 deferred-handoff path DOES fail closed on the SAME unresolved containment failure (the structural asymmetry)", async () => {
+	it("CFC10A01-RED-03-E: the Q5 deferred-handoff path DOES fail closed on the SAME unresolved containment failure, and (after the repair) so do BOTH C10 paths", async () => {
 		const fs = await import("node:fs/promises")
 		const coordinatorSource = await fs.readFile(new URL("../sdk-session-event-coordinator.ts", import.meta.url), "utf8")
-		// The C10 barrier block does NOT consult the containment
-		// authority input.
+		// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+		// (CFC10AR01): the C10 barrier block NOW consults the
+		// containment authority input — through the SHARED
+		// `unresolvedContainmentFailuresForOwner` classifier. The
+		// predecessor asserted the ABSENCE of that consult; the
+		// repaired contract requires its PRESENCE.
 		const barrierIdx = coordinatorSource.indexOf("const heldObligationForC10 =")
 		expect(barrierIdx).toBeGreaterThan(-1)
-		const barrierBlock = coordinatorSource.slice(barrierIdx, barrierIdx + 1200)
-		expect(barrierBlock).not.toContain("getBackgroundCommandJobStates")
-		expect(barrierBlock).not.toContain("getBackgroundCommandJobOwners")
+		const barrierBlock = coordinatorSource.slice(barrierIdx, barrierIdx + 2400)
+		expect(barrierBlock).toContain("unresolvedContainmentFailuresForOwner")
+		expect(barrierBlock).toContain("unresolvedContainmentFailuresForC10.length > 0")
 		// The Q5 path DOES consult it, and FAILS CLOSED.
 		expect(coordinatorSource).toContain("getBackgroundCommandJobStates")
 		expect(coordinatorSource).toContain("unresolved containment failure (jobs=")
-		// The BCB re-evaluation path (the deferred C10 release) also
-		// does NOT consult the containment authority input.
+		// The BCB re-evaluation path (the deferred C10 release) ALSO
+		// consults the containment authority input now. The source
+		// slice runs from the method declaration to the NEXT method
+		// declaration, so the assertion is anchored on the method
+		// boundary rather than on an arbitrary character width.
 		const reevalIdx = coordinatorSource.indexOf("async reevaluateDeferredCompletionBarrier()")
 		expect(reevalIdx).toBeGreaterThan(-1)
-		const reevalBlock = coordinatorSource.slice(reevalIdx, reevalIdx + 9000)
-		expect(reevalBlock).not.toContain("getBackgroundCommandJobStates")
+		const nextMethodIdx = coordinatorSource.indexOf("\n\t/**", reevalIdx)
+		const reevalBlock = coordinatorSource.slice(reevalIdx, nextMethodIdx > reevalIdx ? nextMethodIdx : undefined)
+		expect(reevalBlock).toContain("unresolvedContainmentFailuresForOwner")
+		// The predicate is NOT duplicated: there is exactly ONE shared
+		// classifier definition, and it is the only place that compares
+		// a job state against `containment_failed`.
+		const classifierDefinitions = coordinatorSource.match(/private unresolvedContainmentFailuresForOwner\(/g) ?? []
+		expect(classifierDefinitions.length).toBe(1)
+		const containmentFailedComparisons = coordinatorSource.match(/!== "containment_failed"/g) ?? []
+		expect(containmentFailedComparisons.length).toBe(1)
 	})
 })
 
@@ -930,7 +997,7 @@ describe("ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01 / RED-06 caus
 		}
 	}
 
-	it("CFC10A01-RED-06-A: ABLATION MATRIX — only OBSERVATION CONSUMPTION moves the C10 outcome; the postcondition never does", async () => {
+	it("CFC10A01-RED-06-A: ABLATION MATRIX — after the repair, PROVEN CONTAINMENT (not observation consumption alone) moves the C10 outcome", async () => {
 		// ROW 1: containment FAILED, observation NOT consumed.
 		const row1 = await runAblationRow({ postcondition: "alive", consume: false, receiptPresent: false })
 		expect(row1.containmentClass).toBe("containment_failed")
@@ -941,7 +1008,12 @@ describe("ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01 / RED-06 caus
 		const row2 = await runAblationRow({ postcondition: "alive", consume: true, receiptPresent: false })
 		expect(row2.containmentClass).toBe("containment_failed")
 		expect(row2.observationCount).toBe(0)
-		expect(row2.committed).toBe(1)
+		// ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01
+		// (CFC10AR01): the CORRECTED expectation. The observation was
+		// consumed, but the containment failure is UNRESOLVED, so the
+		// C10 commit is STILL blocked. This is the assertion the
+		// predecessor's characterization suite encoded as `1`.
+		expect(row2.committed).toBe(0)
 
 		// ROW 3: containment PROVEN GONE, observation NOT consumed.
 		const row3 = await runAblationRow({ postcondition: "gone", consume: false, receiptPresent: false })
@@ -955,18 +1027,19 @@ describe("ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01 / RED-06 caus
 		expect(row4.observationCount).toBe(0)
 		expect(row4.committed).toBe(1)
 
-		// THE DISCRIMINATOR: rows 1->2 and 3->4 differ ONLY in whether
-		// the observation was consumed, and the C10 outcome FLIPS in
-		// BOTH pairs. Rows 2 and 4 have IDENTICAL C10 outcomes
-		// (committed=1) despite DIFFERENT containment truth
-		// (`containment_failed` vs `cancelled`). Therefore:
+		// THE POST-REPAIR DISCRIMINATOR: rows 1->2 differ ONLY in
+		// whether the observation was consumed, and the C10 outcome does
+		// NOT flip any more (both held) — because the containment
+		// failure still blocks. Rows 3->4 differ ONLY in observation
+		// consumption and the C10 outcome DOES flip (held -> committed)
+		// — because the containment was PROVEN gone.
 		//
-		//   C10 authorization depends on OBSERVATION CONSUMPTION,
-		//   NOT on proven containment.
-		expect(row2.committed).toBe(row4.committed)
+		//   C10 authorization now depends on PROVEN CONTAINMENT,
+		//   NOT on observation consumption alone.
+		expect(row2.committed).toBe(row1.committed)
 		expect(row1.committed).toBe(row3.committed)
-		expect(row2.committed).not.toBe(row1.committed)
 		expect(row4.committed).not.toBe(row3.committed)
+		expect(row2.committed).not.toBe(row4.committed)
 	})
 
 	it("CFC10A01-RED-06-B: the receipt's PRESENCE does not move the C10 outcome — only the DRAIN does", async () => {

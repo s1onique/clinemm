@@ -79,9 +79,9 @@ That is the correct shape for a held task.
 | Field | Value |
 |---|---|
 | source | `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (the barrier block) |
-| predicate | `outstandingAutonomousWork \|\| ownerStillRunningForC10 \|\| heldObligationForC10 \|\| suppressOriginatingCompletion` |
+| predicate | `outstandingAutonomousWork \|\| ownerStillRunningForC10 \|\| heldObligationForC10 \|\| suppressOriginatingCompletion \|\| unresolvedContainmentFailuresForC10.length > 0` |
 | effect | The C10 commit is NOT taken; a `DeferredCompletionBarrier` marker is registered with the `(sessionId, taskId, epoch)` triple; a bounded completion-continuation may be enqueued |
-| test | `apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts`, `background-completion-barrier01.bcb01.test.ts` |
+| test | `apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts`, `background-completion-barrier01.bcb01.test.ts`, `containment-failure-c10-authority-repair01.cfc10ar01.test.ts` |
 | kind | observed |
 
 The conjuncts:
@@ -95,6 +95,29 @@ The conjuncts:
 | `ownerStillRunningForC10` | `hasRunningBackgroundJobForOwner(sessionId)` | The owner still owns a RUNNING background job |
 | `heldObligationForC10` | `getUnconsumedOwnedTerminalResultCount(sessionId)` / `getUnconsumedOwnedTerminalJobIds(sessionId, taskId)` | Terminal observations are held, not yet observed |
 | `suppressOriginatingCompletion` | `wasWakeDelivered(jid)` | The wake-driven turn owns the terminal completion |
+| `unresolvedContainmentFailuresForC10` | `unresolvedContainmentFailuresForOwner(getBackgroundCommandJobStates(), getBackgroundCommandJobOwners(), sessionId)` | An OWNED background job failed process containment: its process group was never proven reaped |
+
+**The observation / containment distinction.** The conjuncts above split
+into two DIFFERENT facts, and only the last one is about process safety:
+
+- `ownerStillRunningForC10` is the manager's **active-map cardinality**
+  question. `CommandJobManager.finalize()` removes a job from the active
+  map on BOTH the clean path and the containment-failure path, so an
+  empty active map proves nothing about the process group.
+- `heldObligationForC10` is the BCB's **unconsumed terminal observation**
+  count. It drains when the agent *observes* the terminal fact — which
+  says nothing about whether the process group was reaped.
+- `unresolvedContainmentFailuresForC10` is the **process-containment**
+  fact: the job's terminal postcondition was not `gone`, so its process
+  group was never proven gone. It is OWNER-SCOPED (a foreign owner's
+  failure does not block; an unknown owner fails closed).
+
+`unresolvedContainmentFailuresForOwner` is the SINGLE shared classifier for
+that fact. It is consulted by the immediate C10 barrier (this table),
+by the deferred C10 re-evaluation (`reevaluateDeferredCompletionBarrier`),
+by the Q5 deferred-handoff path (`reevaluateDeferredContinuation`), and
+re-validated at the actual commit boundary after the awaited Elm-authority
+flush (`unresolvedContainmentFailuresAtCommitBoundary`).
 
 ### A-03 — the Elm consult
 

@@ -28822,4 +28822,149 @@ parity.
    that relies on those suites.
 3. Re-adjudicate the incident only after the minimal next capture: a per-job
    lifecycle-event record for `cmd_mvmh3u69j62aclho` (the 256-record liveness ring had
+
+---
+
+## ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01 (2026-10-25) — PASS_STRUCTURAL_ONLY
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**.
+
+**ENTRY_HEAD:** `8bfc9c21f2bf96625a77c7fc6bea4bf5c8dfd840` (main). The ACT's stated
+baseline was VERIFIED as the actual ENTRY_HEAD; the branch was `main` and the working
+tree was clean.
+
+**What this ACT does.** The predecessor proved (SYNTHETIC_REAL) that the C10
+completion-commit barrier consulted FOUR conjuncts and NONE was the per-job
+containment classification, so `containment_failed + observation_consumed +
+Elm_AUTHORIZE → C10_completed` was reachable. This ACT closes that path with ONE
+shared, pure, owner-scoped classifier applied at every C10 admission gate and
+re-validated at the actual commit boundary. **The successor contract the predecessor
+recorded was followed exactly** (one owner-scoped fail-closed conjunct at both C10
+sites, the Q5 computation factored into one shared helper, no Elm kernel change, no
+React change, no receipt-channel change).
+
+### The defect was reproduced on BOTH paths (the original failing evidence)
+
+| Path | Witness | Failing assertion against the UNMODIFIED production code |
+|---|---|---|
+| Immediate | `CFC10A01-RED-03-B` | `AssertionError: expected 1 to be +0 // Object.is equality` |
+| Deferred | `CFC10A01-RED-03-B-DEFERRED` | `AssertionError: expected 1 to be +0 // Object.is equality` |
+
+The deferred witness exercises the ACTUAL `reevaluateDeferredCompletionBarrier()`
+method against the ACTUAL production barrier registration — not a re-implementation.
+Full RED run: `Tests 2 failed | 17 passed (19)`. **RED — C10 committed despite
+unresolved containment.** Neither path diverged from the predecessor's frozen causal
+evidence, so no re-diagnosis was required.
+
+### The repair — ONE predicate, FOUR gates
+
+`unresolvedContainmentFailuresForOwner(jobStates, jobOwners, activeSessionId)` is a
+private, PURE helper (no state mutation, no diagnostic side effect). It is the only
+place in the file that compares a job state against `containment_failed` (pinned by
+an executable source-identity assertion: exactly 1 definition, exactly 1 comparison,
+5 call sites). The Q5 inline copy was **DELETED** and replaced by a call, so the
+predicate is no longer triplicated and cannot drift again.
+
+| Site | Where | Effect |
+|---|---|---|
+| A | the immediate C10 barrier in `handleSessionEvent` | a fifth conjunct; the hold routes into the EXISTING BCB HOLD branch (marker identity, `reason` preservation and the BNCA suppression are all unchanged) |
+| B | `reevaluateDeferredCompletionBarrier()` | a hold BEFORE the marker clear and the Elm consult; the deferred marker is **PRESERVED** so a later re-evaluation can release it |
+| C | `reevaluateDeferredContinuation()` (Q5) | the inline copy replaced by the shared helper; the message text, the writer identity `session-event-turn-complete-containment-failed-resumable`, the `resumable` recovery phase and the foreign-owner exclusion are all UNCHANGED |
+| R4 | both commit boundaries | the SAME classifier re-read AFTER the awaited Elm-authority flush and BEFORE the phase write; on a hit the deferred marker is re-registered |
+
+### The R4 finding — the async admission interval WAS exploitable
+
+`checkElmCompletionAuthority()` awaits `flushElmAuthorityForSession` before it reads
+the Elm decision. The adversarial test CONFIRMED that a containment failure published
+DURING that await was ignored and the `completed` phase committed. The repair
+re-reads the SAME owner-scoped classifier at the ACTUAL commit boundary on both
+paths, with **NO additional provider call** (the witness pins exactly ONE Elm
+consult). The Elm gate and the lifecycle scheduler were NOT redesigned.
+
+### The success criterion now holds
+
+`containment_failed + observation_consumed + Elm_AUTHORIZE → C10_completed` is
+**IMPOSSIBLE** through the tested production paths — the immediate barrier, the
+
+### Executable evidence
+
+- `apps/vscode/src/sdk/__tests__/containment-failure-c10-authority-repair01.cfc10ar01.test.ts`
+  — **NEW**, 895 lines, **25/25 PASS** (the 12-row required conservation matrix, the
+  3-row R4 matrix, and the 5 additional verifications: no marker promotion, no
+  `task_completion_committed`, no new false HOLD, the classification survives
+  observation consumption, tracing-disabled behavior, and the no-triplication
+  source identity).
+- `apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts`
+  — the predecessor's suite, **RETAINED** (manager lookup, observation consumption,
+  receipt gating, foreign ownership and ablation) with the RED-03-B witness converted
+  to the repaired expectation and a NEW deferred witness added: **19/19 PASS**.
+- `apps/vscode/src/sdk/__tests__/premature-handoff-containment-failure01.phcf01.test.ts`
+  — the Q5 owner-scoping gate (proves the Site C refactor preserved Q5 semantics):
+  **10/10 PASS**.
+- Focused total: **142/142 PASS**. Evidence class: **SYNTHETIC_REAL** (the REAL
+  manager / BCB / coordinator / status-tool seams; only the supervisor and the
+  manager's documented `terminalPostconditionProbe` are injected). NO live
+  process-group claim.
+- `.factory/evidence/ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01/`
+  (`00-entry.txt`, `01-red-results.md`, `02-conservation-matrix.md`,
+  `03-baseline-classification.md`, `04-source-diff.md`, `05-evidence-report.md`,
+  `06-artifact-manifest.md`, `07-verdict.md`, `result.json`).
+- TypeScript **PASS** (exit 0). Biome lint **PASS** (0 diagnostics). The contract /
+  Mermaid / Markdown-fence validators **PASS** (3/3, 3/3 charts, 4/4 charts). The
+  real Mermaid parser **PASS** (charts 01, 02, 04).
+
+### REGRESSION DELTA: ZERO NEW FAILURES
+
+The full `apps/vscode` vitest suite was run TWICE with the IDENTICAL command — once
+with the pristine coordinator swapped in place, once with the repaired one:
+
+| | failing `FAIL` lines |
+|---|---|
+| PRISTINE ENTRY_HEAD | 278 |
+| WITH THE REPAIR | 257 |
+| **NEW failures introduced by the repair** | **0** |
+
+The 21 removed failures are this ACT's OWN RED witnesses (which are GREEN after the
+repair) plus 3 known environment-timing cases that flipped between the two runs.
+
+### Pre-existing baseline failures (NOT disguised as a clean baseline)
+
+The 8 suites the ACT named as already failing keep **byte-identical** failure counts
+before and after the repair (31 total): `bcb01` 13/13, `bcb01-c` 6/6, `bcb01-c2`
+2/2, `bcb01-c3` 1/1, `bcb01-c4` 3/3, `pcca01` 2/2, `bnca-framework01` 2/2 and
+`bnca-framework-dispatch-failed01` 2/2. Their cause is the missing
+`getElmCompletionAuthorityDecision` injection (pre-existing, from
+`ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY`).
+**NO harness-only correction was made**, because none of them is load-bearing for
+any conservation claim in this ACT — the ACT-owned suites discharge every required
+gate. The wider pre-existing population (POSIX process-group / sandbox behaviour on
+this macOS host, provider-bootstrap and remote-config suites, MCP bootstrap-stall
+timing bounds) is recorded, not repaired.
+
+### Scope compliance
+
+No Elm kernel change. No React/webview reducer change. No new public API or protocol
+field. No change to the compact terminal receipts. No change to the background-job
+termination machinery. No new continuation-control design. No new generalized
+lifecycle instrumentation. No descendant-safety claim beyond the existing
+owned-primary-PGID contract. No worktrees; direct commit and push on `main`.
+
+### The original live incident is NOT re-adjudicated
+
+`1792850126157_b9u7x` / epoch 6 / `cmd_mvmh3u69j62aclho` remains separately
+classified **CAPTURE_INSUFFICIENT**, exactly as the predecessor recorded it. This ACT
+does not claim the repair resolves it and does not claim `PASS_LIVE`.
+
+### Next cursor
+
+1. **Optional live qualification (a separate ACT).** The minimum next capture is a
+   per-job lifecycle-event record for a job that actually fails containment, plus a
+   per-session Elm decision trace. The structural proof does not substitute for it.
+2. **Repair (or explicitly baseline) the pre-existing BCB/PPCA harness RED** before
+   any future conservation claim relies on those suites.
+3. **Re-adjudicate the original incident** only after (1).
+
+deferred re-evaluation and the commit boundary all HOLD — and the clean-terminal
+path **CONTINUES TO WORK** (it still commits exactly once).
+
    already rolled past that job's finalization) plus a per-session Elm decision trace.

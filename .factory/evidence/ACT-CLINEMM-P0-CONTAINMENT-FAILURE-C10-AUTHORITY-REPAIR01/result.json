@@ -1,0 +1,204 @@
+{
+  "act": "ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01",
+  "shortId": "CFC10AR01",
+  "predecessor": "ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01",
+  "predecessorVerdict": "HALT_P0_REPRODUCED",
+  "verdict": "PASS_STRUCTURAL_ONLY",
+  "expectedVerdict": "PASS_STRUCTURAL_ONLY",
+  "evidenceClass": "SYNTHETIC_REAL",
+  "priority": "P0",
+  "entryHead": "8bfc9c21f2bf96625a77c7fc6bea4bf5c8dfd840",
+  "branch": "main",
+  "execution": "existing checkout, direct commit/push on main, no worktrees",
+  "liveCapture": false,
+  "liveCaptureReason": "No installed-extension capture was taken; the original live incident remains separately classified CAPTURE_INSUFFICIENT and is not re-adjudicated by this ACT.",
+  "successCriterion": {
+    "statement": "containment_failed + observation_consumed + Elm_AUTHORIZE -> C10_completed must become impossible through the tested production paths, while the clean-terminal path continues to work.",
+    "immediatePathBefore": "COMMIT",
+    "immediatePathAfter": "HOLD",
+    "deferredPathBefore": "COMMIT",
+    "deferredPathAfter": "HOLD",
+    "asyncCommitBoundaryBefore": "COMMIT",
+    "asyncCommitBoundaryAfter": "HOLD",
+    "cleanTerminalPathAfter": "COMMIT (unchanged)",
+    "satisfied": true
+  },
+  "red": {
+    "immediate": {
+      "witness": "CFC10A01-RED-03-B",
+      "file": "apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts",
+      "failingAssertion": "AssertionError: expected 1 to be +0 // Object.is equality",
+      "result": "RED - C10 committed despite unresolved containment"
+    },
+    "deferred": {
+      "witness": "CFC10A01-RED-03-B-DEFERRED",
+      "file": "apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts",
+      "failingAssertion": "AssertionError: expected 1 to be +0 // Object.is equality",
+      "method": "the actual reevaluateDeferredCompletionBarrier() method against the actual production barrier registration"
+    },
+    "fullRedRun": "Tests  2 failed | 17 passed (19)"
+  },
+  "repair": {
+    "productionFilesChanged": 1,
+    "productionFile": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+    "productionDiff": "+284 / -22",
+    "sharedClassifier": {
+      "name": "unresolvedContainmentFailuresForOwner",
+      "visibility": "private",
+      "purity": "pure (no state mutation, no diagnostic side effects)",
+      "signature": "(jobStates: Record<string, string> | undefined, jobOwners: Record<string, string | undefined> | undefined, activeSessionId: string) => string[]",
+      "definitionCount": 1,
+      "containmentFailedComparisons": 1,
+      "callSites": 5
+    },
+    "sites": {
+      "A": "immediate C10 barrier in handleSessionEvent - fifth conjunct",
+      "B": "reevaluateDeferredCompletionBarrier - hold before the marker clear and the Elm consult",
+      "C": "reevaluateDeferredContinuation (Q5) - the inline copy was replaced with the shared helper",
+      "R4": "unresolvedContainmentFailuresAtCommitBoundary - re-read at the actual commit boundary after the awaited Elm flush, on BOTH paths"
+    },
+    "elmKernelChanged": false,
+    "reactChanged": false,
+    "protocolChanged": false,
+    "receiptChannelChanged": false,
+    "terminationMachineryChanged": false
+  },
+  "r4AsyncInterval": {
+    "finding": "checkElmCompletionAuthority awaits flushElmAuthorityForSession between the barrier read and the final phase write; a containment failure published during that await was invisible to the earlier read.",
+    "exploitableBeforeRepair": true,
+    "closedBy": "the shared owner-scoped classifier re-read at the actual commit boundary on both the immediate and the deferred path",
+    "additionalProviderCalls": 0,
+    "elmDecisionCountPinnedTo": 1
+  },
+  "gates": {
+    "G0": "PASS - exact production seams and source identity verified",
+    "G1": "PASS - immediate and deferred unsafe-commit RED demonstrated",
+    "G2": "PASS - shared classifier preserves Q5 semantics",
+    "G3": "PASS - immediate failed-containment C10 blocked",
+    "G4": "PASS - deferred failed-containment C10 blocked",
+    "G5": "PASS - clean-terminal conservation passes",
+    "G6": "PASS - foreign/unknown-owner semantics pass",
+    "G7": "PASS - Elm HOLD/AUTHORIZE boundaries preserved",
+    "G8": "PASS - async admission interval tested and addressed",
+    "G9": "PASS - no unauthorized marker promotion or completion capture",
+    "G10": "PASS - relevant focused regressions pass",
+    "G11": "PASS - TypeScript, lint and diagram checks pass",
+    "G12": "PASS - exact-source evidence and artifact hashes verified"
+  },
+  "tests": {
+    "actOwned": {
+      "file": "apps/vscode/src/sdk/__tests__/containment-failure-c10-authority-repair01.cfc10ar01.test.ts",
+      "total": 25,
+      "passed": 25,
+      "failed": 0
+    },
+    "predecessorRetained": {
+      "file": "apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts",
+      "total": 19,
+      "passed": 19,
+      "failed": 0
+    },
+    "q5Gate": {
+      "file": "apps/vscode/src/sdk/__tests__/premature-handoff-containment-failure01.phcf01.test.ts",
+      "total": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    "focusedTotal": 142,
+    "focusedPassed": 142,
+    "focusedFailed": 0
+  },
+  "staticChecks": {
+    "tsc": "PASS (exit 0)",
+    "biomeLint": "PASS (0 diagnostics on the 3 changed/added TS files)",
+    "verifyLifecycleTransitionContract": "PASS (3/3 sub-checks)",
+    "verifyMarkdownMermaidBlocks": "PASS (4/4 charts)",
+    "verifyChart04MermaidParse": "PASS (charts 01, 02, 04 - real Mermaid parser)"
+  },
+  "baseline": {
+    "method": "the identical full-suite command was run twice: once with the pristine coordinator file swapped in place, once with the repaired one.",
+    "command": "bunx vitest run --config vitest.config.ts --pool=threads --reporter=dot",
+    "pristineFailingLines": 278,
+    "repairedFailingLines": 257,
+    "newFailuresIntroducedByRepair": 0,
+    "namedPreExistingSuites": {
+      "background-completion-barrier01.bcb01": {
+        "pristine": 13,
+        "repaired": 13
+      },
+      "background-completion-barrier01-correction01.bcb01-c": {
+        "pristine": 6,
+        "repaired": 6
+      },
+      "background-completion-barrier01-correction02.bcb01-c2": {
+        "pristine": 2,
+        "repaired": 2
+      },
+      "background-completion-barrier01-correction03.bcb01-c3": {
+        "pristine": 1,
+        "repaired": 1
+      },
+      "background-completion-barrier01-correction04.bcb01-c4": {
+        "pristine": 3,
+        "repaired": 3
+      },
+      "post-consumption-completion-authority01.pcca01": {
+        "pristine": 2,
+        "repaired": 2
+      },
+      "background-notify-completion-authority-c10-framework01.bnca-framework01": {
+        "pristine": 2,
+        "repaired": 2
+      },
+      "background-notify-completion-authority-c10-framework-dispatch-failed01.bnca-framework01": {
+        "pristine": 2,
+        "repaired": 2
+      },
+      "total": {
+        "pristine": 31,
+        "repaired": 31
+      }
+    },
+    "harnessCorrectionMade": false,
+    "harnessCorrectionReason": "None of the named broken suites is load-bearing for a conservation claim; the ACT-owned suites discharge every required gate. Per the ACT instruction their exact named failures remain classified as pre-existing and are not disguised as a clean baseline.",
+    "note": "The wider apps/vscode suite has a large pre-existing failure population at the pristine ENTRY_HEAD (278 failing FAIL lines), dominated by POSIX process-group / sandbox behaviour on this macOS host, provider-bootstrap and remote-config suites, and MCP bootstrap-stall timing bounds. These are not caused by this ACT and were not repaired by it."
+  },
+  "artifacts": [
+    {
+      "path": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+      "sha256": "c7fa1b26652a80820f6c928e415be4b3f50e5edd75aa5410b617dac12f6fc27b",
+      "lines": 4728,
+      "role": "the repair"
+    },
+    {
+      "path": "apps/vscode/src/sdk/__tests__/containment-failure-c10-authority-repair01.cfc10ar01.test.ts",
+      "sha256": "dc0c9be1f8c11f7069805d4cb42bbcdef7bc223907d73cf10f3ea86c4d957597",
+      "lines": 891,
+      "role": "the ACT-owned conservation suite"
+    },
+    {
+      "path": "apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts",
+      "sha256": "1b1e303cdd4fe99097ed082879b9bef5ba80ed51c12051ceb80a9a824c32a0a6",
+      "lines": 1057,
+      "role": "the predecessor's retained suite with the RED-03-B witness converted and a new deferred witness"
+    },
+    {
+      "path": "docs/architecture/task-lifecycle/02-c9-bcb-elm-c10-authority.md",
+      "sha256": "e237e448a863ec97df4699e588783fc192306e795078143665f61203743e1424",
+      "role": "Chart 02 - the C10 barrier predicate and the observation/containment distinction"
+    },
+    {
+      "path": "docs/architecture/task-lifecycle/transitions.tsv",
+      "sha256": "a047575d3405127ec9e34bea6c3ba80b34f1dbb75598d6f83c0fca7d1f2246bd",
+      "role": "the transition ledger - T-02 / A-04 predicates and the NEW A-04b containment row"
+    }
+  ],
+  "evidenceDirectory": ".factory/evidence/ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01/",
+  "incidentStatus": {
+    "sessionId": "1792850126157_b9u7x",
+    "epoch": 6,
+    "jobId": "cmd_mvmh3u69j62aclho",
+    "classification": "CAPTURE_INSUFFICIENT",
+    "readjudicatedByThisAct": false
+  }
+}

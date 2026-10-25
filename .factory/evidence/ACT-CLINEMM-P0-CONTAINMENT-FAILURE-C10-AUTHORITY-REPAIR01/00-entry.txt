@@ -1,0 +1,60 @@
+ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPAIR01 (CFC10AR01)
+ENTRY STATE (R0)
+
+ENTRY_HEAD            : 8bfc9c21f2bf96625a77c7fc6bea4bf5c8dfd840
+BRANCH                : main (up to date with origin/main)
+WORKING TREE AT ENTRY : clean (git status --short empty)
+NO worktree / stash manipulation was used. (A stash push/pop was performed
+once during baseline capture and was immediately popped; the stash list is
+EMPTY at closure and the working tree is verified clean of stash residue.
+The baseline comparison was re-done by SWAPPING THE PRISTINE COORDINATOR
+FILE IN PLACE and restoring the repaired one, which is the method actually
+used for every baseline number recorded below.)
+
+PREVIOUS ACT          : ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01
+PREVIOUS VERDICT      : HALT_P0_REPRODUCED
+PREVIOUS EVIDENCE     : SYNTHETIC_REAL
+PREDECESSOR COMMIT    : 948cf2d07 (the reproduction), 8bfc9c21f (the baseline
+                        RED record)
+
+EXISTING REPRODUCTION SUITE
+  apps/vscode/src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts
+  At ENTRY_HEAD: 18 tests, 18/18 PASS.
+
+EXISTING Q5 CONTAINMENT CLASSIFIER
+  apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+  `reevaluateDeferredContinuation()` — the PHCF01 / PHCF17 owner-scoped,
+  fail-closed containment computation, at ENTRY_HEAD L1087-L1140.
+  Semantics: a `containment_failed` entry whose owner session matches the
+  active session BLOCKS; a foreign owner is EXCLUDED; an unknown owner is
+  RETAINED (fail closed); an absent owner map keeps the pre-PHCF17
+  UNSCOPED fail-closed behavior; an absent state map means no entry to
+  classify.
+
+IMMEDIATE C10 ADMISSION SEAM
+  `SdkSessionEventCoordinator.handleSessionEvent()` — the BCB barrier block
+  at ENTRY_HEAD L3479-L3525. Four conjuncts:
+    outstandingAutonomousWork || ownerStillRunningForC10 ||
+    heldObligationForC10 || suppressOriginatingCompletion
+  NONE consults the containment classification.
+
+DEFERRED BCB RE-EVALUATION SEAM
+  `SdkSessionEventCoordinator.reevaluateDeferredCompletionBarrier()` — public
+  method, at ENTRY_HEAD L1637-L2054. The release path had NO containment
+  conjunct.
+
+EXISTING TEST INJECTION PATHS
+  - `CommandJobManager({ terminalPostconditionProbe })` — the manager's own
+    documented postcondition test seam (the ONLY injected manager seam).
+  - `BackgroundNotifyCoordinator({ consumeTerminalAuthority })` — the legacy
+    consume policy, so the coordinator's effect interpreter runs without the
+    Elm kernel.
+  - `getElmCompletionAuthorityDecision` — the now-REQUIRED Elm authority
+    provider (injected).
+  - `flushElmAuthorityForSession` — the optional async Elm-authority flush
+    (injected for the R4 TOCTOU witness).
+
+AUTHORITY INPUTS ALREADY WIRED INTO THE SDK COORDINATOR
+  - `getBackgroundCommandJobStates`  -> SdkController.ts:2664
+  - `getBackgroundCommandJobOwners`  -> SdkController.ts:2683
+  No new state, no new protocol field, no new public API was introduced.
