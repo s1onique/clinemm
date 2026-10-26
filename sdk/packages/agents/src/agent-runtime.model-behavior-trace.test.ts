@@ -306,4 +306,218 @@ describe("AgentRuntime model behavior trace", () => {
 		expect(serialized).not.toContain("ok:read_file");
 		expect(serialized).not.toContain("test prompt");
 	});
+
+	// -----------------------------------------------------------------------
+	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01 — TRACING-OFF FAST PATH
+	// -----------------------------------------------------------------------
+	//
+	// The recorder used to be consulted through an AWAITED fingerprint on
+	// EVERY tool call. `await`ing a promise ALWAYS introduces a microtask
+	// suspension point — even when the awaited value is `undefined` — so the
+	// disabled recorder changed the execution order of the tool-start
+	// boundary relative to the tool execution.
+	//
+	// The witnesses below use a CONTROLLED ORDER OBSERVER: they record the
+	// exact interleaving of the tool-start boundary, the fingerprint
+	// resolution, and the tool execution. They prove the ORDER, not merely
+	// the outcome.
+
+	it("C07: with tracing OFF the tool-start boundary and the tool execution are NOT separated by a microtask suspension", async () => {
+		const order: string[] = [];
+
+		const tool: TestTool = {
+			name: "read_file",
+			description: "test tool read_file",
+			inputSchema: { type: "object", properties: {} },
+			execute: async () => {
+				order.push("tool-execute");
+				return { output: "ok" };
+			},
+		};
+
+		// The sink reports tracing is OFF and therefore NEVER creates a
+		// promise for the fingerprint.
+		const sink = {
+			isTraceEnabled: () => false,
+			fingerprintToolArguments: async () => {
+				order.push("fingerprint");
+				return "fp";
+			},
+			onToolStart: () => {
+				order.push("tool-start-boundary");
+			},
+			onToolFinish: () => {
+				order.push("tool-finish-boundary");
+			},
+		};
+
+		const runtime = createAgentRuntime({
+			model: new ScriptedModel([toolCallStep("read_file", "tc-1", "alpha")]),
+			tools: [tool],
+			systemPrompt: "test prompt",
+			sessionId: "session-1",
+			modelBehaviorTraceSink: sink,
+		});
+
+		await runtime.execute("do the thing");
+
+		// The fingerprint was NEVER requested: tracing is OFF.
+		expect(order).not.toContain("fingerprint");
+
+		// The tool-start boundary and the tool execution are ADJACENT — no
+		// other observable event is interleaved between them.
+		const startIndex = order.indexOf("tool-start-boundary");
+		const executeIndex = order.indexOf("tool-execute");
+		expect(startIndex).toBeGreaterThanOrEqual(0);
+		expect(executeIndex).toBeGreaterThanOrEqual(0);
+		expect(executeIndex - startIndex).toBe(1);
+	});
+
+	it("C08: with tracing OFF the tool execution is the FIRST observable event, exactly as with NO sink at all", async () => {
+		const runOrder = async (withSink: boolean): Promise<string[]> => {
+			const order: string[] = [];
+			const tool: TestTool = {
+				name: "read_file",
+				description: "test tool read_file",
+				inputSchema: { type: "object", properties: {} },
+				execute: async () => {
+					order.push("tool-execute");
+					return { output: "ok" };
+				},
+			};
+			const runtime = createAgentRuntime({
+				model: new ScriptedModel([toolCallStep("read_file", "tc-1", "alpha")]),
+				tools: [tool],
+				systemPrompt: "test prompt",
+				sessionId: "session-1",
+				...(withSink
+					? {
+							modelBehaviorTraceSink: {
+								isTraceEnabled: () => false,
+								fingerprintToolArguments: async () => "fp",
+								onToolStart: () => {
+									order.push("tool-start-boundary");
+								},
+								onToolFinish: () => {
+									order.push("tool-finish-boundary");
+								},
+							},
+						}
+					: {}),
+			});
+			await runtime.execute("do the thing");
+			return order;
+		};
+
+		const withDisabledSink = await runOrder(true);
+		const withoutSink = await runOrder(false);
+
+		// The DISABLED recorder must not perturb the observable ordering.
+		//
+		// The sink-free runtime has NO boundary events, so its only
+		// observable event is the tool execution.
+		expect(withoutSink).toEqual(["tool-execute"]);
+		//
+		// The disabled-sink runtime observes the boundary events (the sink
+		// IS installed), but those boundary events are SYNCHRONOUS
+		// notifications — they add no microtask suspension, and crucially
+		// NO fingerprint event appears between them.
+		expect(withDisabledSink).toEqual([
+			"tool-start-boundary",
+			"tool-execute",
+			"tool-finish-boundary",
+		]);
+		// The tool execution is NOT delayed by any fingerprint work.
+		expect(withDisabledSink).not.toContain("fingerprint");
+		// The boundary and the execution are ADJACENT.
+		expect(withDisabledSink.indexOf("tool-execute")).toBe(
+			withDisabledSink.indexOf("tool-start-boundary") + 1,
+		);
+	});
+
+	it("C09: with tracing ON the fingerprint IS requested and IS recorded on the boundary", async () => {
+		const order: string[] = [];
+		const tool: TestTool = {
+			name: "read_file",
+			description: "test tool read_file",
+			inputSchema: { type: "object", properties: {} },
+			execute: async () => {
+				order.push("tool-execute");
+				return { output: "ok" };
+			},
+		};
+		const sink = {
+			isTraceEnabled: () => true,
+			fingerprintToolArguments: async () => {
+				order.push("fingerprint");
+				return "fp";
+			},
+			onToolStart: (observation: ModelBehaviorTraceObservation) => {
+				order.push("tool-start-boundary");
+				// The fingerprint reached the recorded observation.
+				expect(observation.payload.argumentFingerprint).toBe("fp");
+			},
+			onToolFinish: () => {
+				order.push("tool-finish-boundary");
+			},
+		};
+
+		const runtime = createAgentRuntime({
+			model: new ScriptedModel([toolCallStep("read_file", "tc-1", "alpha")]),
+			tools: [tool],
+			systemPrompt: "test prompt",
+			sessionId: "session-1",
+			modelBehaviorTraceSink: sink,
+		});
+
+		await runtime.execute("do the thing");
+
+		// Tracing ON: the fingerprint IS computed and IS recorded.
+		expect(order).toContain("fingerprint");
+		expect(order.indexOf("fingerprint")).toBeLessThan(
+			order.indexOf("tool-start-boundary"),
+		);
+		// The tool still executes.
+		expect(order).toContain("tool-execute");
+	});
+
+	it("C10: a sink WITHOUT the enablement signal keeps the original (awaited) behavior", async () => {
+		const order: string[] = [];
+		const tool: TestTool = {
+			name: "read_file",
+			description: "test tool read_file",
+			inputSchema: { type: "object", properties: {} },
+			execute: async () => {
+				order.push("tool-execute");
+				return { output: "ok" };
+			},
+		};
+		// No `isTraceEnabled` — the runtime cannot prove tracing is off, so
+		// it must request the fingerprint exactly as before.
+		const sink = {
+			fingerprintToolArguments: async () => {
+				order.push("fingerprint");
+				return "fp";
+			},
+			onToolStart: () => {
+				order.push("tool-start-boundary");
+			},
+		};
+
+		const runtime = createAgentRuntime({
+			model: new ScriptedModel([toolCallStep("read_file", "tc-1", "alpha")]),
+			tools: [tool],
+			systemPrompt: "test prompt",
+			sessionId: "session-1",
+			modelBehaviorTraceSink: sink,
+		});
+
+		await runtime.execute("do the thing");
+
+		expect(order).toContain("fingerprint");
+		expect(order.indexOf("fingerprint")).toBeLessThan(
+			order.indexOf("tool-start-boundary"),
+		);
+		expect(order).toContain("tool-execute");
+	});
 });

@@ -21,6 +21,7 @@ import {
 	getModelBehaviorTraceRecords,
 	isModelBehaviorTraceEnabled,
 	isModelBehaviorTraceWorkspaceEnabled,
+	modelBehaviorTraceSink,
 	recordModelBehaviorTrace,
 	recordModelBehaviorTraceConfig,
 	setModelBehaviorTraceEnabled,
@@ -208,5 +209,33 @@ describe("model behavior trace runtime", () => {
 		expect(serialized).not.toContain("sk-test-1234")
 		expect(serialized).not.toContain("/etc/shadow")
 		expect(serialized).not.toContain("raw output")
+	})
+
+	// -----------------------------------------------------------------------
+	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01 — TRACING-OFF FAST PATH
+	// -----------------------------------------------------------------------
+
+	it("C11: the sink exposes the live enablement signal", async () => {
+		_resetModelBehaviorTrace()
+		// The signal must reflect the LIVE enable bit, so the SDK runtime can
+		// take the synchronous fast path while the recorder is OFF.
+		expect(modelBehaviorTraceSink.isTraceEnabled?.()).toBe(false)
+		setModelBehaviorTraceEnabled(true)
+		expect(modelBehaviorTraceSink.isTraceEnabled?.()).toBe(true)
+		setModelBehaviorTraceEnabled(false)
+		expect(modelBehaviorTraceSink.isTraceEnabled?.()).toBe(false)
+	})
+
+	it("C12: the fingerprint is UNAVAILABLE while the recorder is OFF and available when ON", async () => {
+		_resetModelBehaviorTrace()
+		// OFF: no fingerprint is produced.
+		expect(await modelBehaviorTraceSink.fingerprintToolArguments?.("read_file", { path: "a.ts" })).toBeUndefined()
+
+		setModelBehaviorTraceEnabled(true)
+		const fingerprint = await modelBehaviorTraceSink.fingerprintToolArguments?.("read_file", { path: "a.ts" })
+		expect(fingerprint).toBeTypeOf("string")
+		expect(fingerprint).toBeTruthy()
+		// The fingerprint is privacy-preserving: it is NOT the argument.
+		expect(fingerprint).not.toContain("a.ts")
 	})
 })

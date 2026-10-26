@@ -16,6 +16,7 @@ import type {
 	AgentModelToolActivity,
 	AgentRunResult,
 	AgentRuntimeEvent,
+	AgentRuntimeExecutionState,
 	AgentRuntimeHooks,
 	AgentRuntimeRecoverySnapshot,
 	AgentRuntimeStateSnapshot,
@@ -26,7 +27,6 @@ import type {
 	AgentToolResult,
 	AgentUsage,
 	AgentRuntimeConfig as BaseAgentRuntimeConfig,
-	AgentRuntimeExecutionState,
 	CaptureTaskLifecycleEventInput,
 	CommandExecutionPlan,
 	ControlPlaneOutcome,
@@ -2566,18 +2566,54 @@ export class AgentRuntime {
 	 * The SINK owns the ephemeral key, so the raw arguments are handed to it
 	 * and only the fingerprint comes back. Returns `undefined` when no sink
 	 * is attached or the fingerprint could not be computed. Never throws.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01 — TRACING-OFF FAST PATH
+	 * ------------------------------------------------------------------
+	 * `await`ing a promise ALWAYS introduces a microtask suspension point,
+	 * even when the awaited value is `undefined`. Awaiting the fingerprint
+	 * unconditionally therefore changed the execution order of the
+	 * tool-start boundary relative to the tool execution EVEN WHEN THE
+	 * RECORDER WAS DISABLED.
+	 *
+	 * This helper is therefore NOT `async`. It returns either:
+	 *   - `undefined`          — no sink, or tracing is provably OFF,
+	 *   - `string | undefined` — the sink answered synchronously,
+	 *   - `Promise<...>`       — the sink answered asynchronously.
+	 *
+	 * The caller awaits ONLY when it actually received a promise, so the
+	 * trace-OFF path introduces NO suspension point at all and the
+	 * execution order is identical to the pre-instrumentation order.
+	 *
+	 * When the `isTraceEnabled()` signal is ABSENT the runtime cannot prove
+	 * tracing is off, so it requests the fingerprint exactly as before. That
+	 * keeps the behavior of every sink that does not implement the signal
+	 * unchanged.
 	 */
-	private async fingerprintToolArguments(
+	private fingerprintToolArguments(
 		toolName: string,
 		input: unknown,
-	): Promise<string | undefined> {
-		const handler =
-			this.config.modelBehaviorTraceSink?.fingerprintToolArguments;
+	): string | undefined | Promise<string | undefined> {
+		const sink = this.config.modelBehaviorTraceSink;
+		const handler = sink?.fingerprintToolArguments;
 		if (!handler) {
 			return undefined;
 		}
 		try {
-			return await handler(toolName, input);
+			const enabled = sink?.isTraceEnabled?.();
+			if (enabled === false) {
+				// Tracing is OFF: take the SYNCHRONOUS fast path. No promise
+				// is created, so the caller never awaits and no suspension
+				// point is introduced.
+				return undefined;
+			}
+			const result = handler(toolName, input);
+			if (result instanceof Promise) {
+				return result.catch(() => {
+					// Failure isolation.
+					return undefined;
+				});
+			}
+			return result;
 		} catch {
 			// Failure isolation.
 			return undefined;
@@ -3366,10 +3402,22 @@ export class AgentRuntime {
 		// The argument fingerprint is computed by the SINK (which owns the
 		// ephemeral key); the raw arguments are handed to the sink and never
 		// retained by it.
-		const argumentFingerprint = await this.fingerprintToolArguments(
+		//
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01 — the fingerprint is
+		// awaited ONLY when the sink actually produced a promise. When the
+		// recorder is disabled the helper returns `undefined`
+		// synchronously, so there is NO `await` here and therefore NO extra
+		// microtask suspension point between this boundary and the tool
+		// execution. The trace-OFF execution order is identical to the
+		// pre-instrumentation order.
+		const fingerprintResult = this.fingerprintToolArguments(
 			prepared.toolCall.toolName,
 			prepared.input,
 		);
+		const argumentFingerprint =
+			fingerprintResult instanceof Promise
+				? await fingerprintResult
+				: fingerprintResult;
 		this.observeToolBoundary("start", {
 			toolCallId: prepared.toolCall.toolCallId,
 			toolName: prepared.toolCall.toolName,

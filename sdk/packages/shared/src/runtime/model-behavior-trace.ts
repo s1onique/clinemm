@@ -962,6 +962,22 @@ function hex(bytes: Uint8Array): string {
  */
 export interface ModelBehaviorTraceSink {
 	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01: report whether tracing is
+	 * currently ARMED.
+	 *
+	 * This is a pure, synchronous, side-effect-free read of the recorder's
+	 * enable bit. It exists so the runtime can take a SYNCHRONOUS fast path
+	 * when tracing is OFF: without it, the runtime would have to `await` the
+	 * fingerprint promise on every tool call, and that `await` introduces an
+	 * extra microtask suspension point between the tool-start boundary and
+	 * the tool execution even when the recorder is inert.
+	 *
+	 * When this is ABSENT the runtime conservatively awaits the fingerprint
+	 * (it cannot prove tracing is off), so behavior is unchanged for sinks
+	 * that do not implement the signal.
+	 */
+	isTraceEnabled?: () => boolean;
+	/**
 	 * Compute a privacy-preserving fingerprint of a tool call's arguments.
 	 *
 	 * The SDK passes the RAW arguments here and the implementation returns
@@ -973,7 +989,7 @@ export interface ModelBehaviorTraceSink {
 	fingerprintToolArguments?: (
 		toolName: string,
 		input: unknown,
-	) => Promise<string | undefined>;
+	) => Promise<string | undefined> | string | undefined;
 	/** A model request is about to be issued. */
 	onModelRequestStart?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request completed (successfully or with a finish reason). */

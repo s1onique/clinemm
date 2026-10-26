@@ -162,6 +162,15 @@ export function recordModelBehaviorTrace(
  */
 export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
 	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01: the live enablement signal.
+	 *
+	 * A pure, synchronous read of the recorder's enable bit. The SDK runtime
+	 * uses it to take a SYNCHRONOUS fast path when tracing is OFF, so the
+	 * disabled recorder introduces NO extra `await` (and therefore NO extra
+	 * microtask suspension point) before tool execution.
+	 */
+	isTraceEnabled: () => recorder.isEnabled(),
+	/**
 	 * Compute the privacy-preserving argument fingerprint.
 	 *
 	 * The raw arguments are handed to the recorder, which owns the

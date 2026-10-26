@@ -355,3 +355,180 @@ classify it explicitly" requirement.
   attach the sink; record the model config snapshot at session creation.
 * `apps/vscode/biome.jsonc` — exclude the new diagnostic runtime from the
   `use-cache-service` grit rule (matching the sibling diagnostic runtimes).
+
+---
+
+# ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01 — Comparator & Fast-Path Correction
+
+**Status:** `PASS_STRUCTURAL_ONLY` (unchanged closure level)
+**Baseline reviewed:** `1006751a6819c19d63a6b1b73cfd7c9ccd4cca5e`
+**Priority:** P0 — evidence correctness
+**Scope:** one bounded correction. The recorder architecture is NOT reopened.
+
+---
+
+## 1. Why this correction exists
+
+The structural review accepted the recorder but found two source-confirmed
+evidence defects in the A/B comparator:
+
+1. `extractConfig()` returned `{}` when a trace contained no `model_config`
+   event, and the comparator then substituted `UNAVAILABLE_FROM_TRACE` for
+   every missing field. Two equally-missing configurations therefore compared
+   EQUAL and produced `compatible: true` — a false positive on exactly the
+   case that is easiest to reach (configuration is recorded only during
+   `buildSessionConfig()`, and the toggle arms the recorder on an
+   already-running session).
+
+2. `acceptedGateCount` was inferred from successful tools whose NAMES
+   contained `test`/`vitest`/`build`/`lint`. ClineMM runs shell verification
+   through `run_commands`, whose command and results are deliberately NOT
+   recorded. A successful `run_commands` could therefore count as zero
+   gates, while a tool merely named `run_tests` could count as an accepted
+   gate without independent proof of its assertions.
+
+A third issue was found in the production seam: the awaited fingerprint call
+inside `AgentRuntime.executePreparedTool()` introduced an extra microtask
+suspension point even when the recorder was disabled.
+
+---
+
+## 2. Comparability is now FAIL-CLOSED
+
+`scripts/compare-model-behavior-traces.ts` now computes a three-state result
+for every configuration dimension:
+
+| State | Meaning |
+|---|---|
+| `equal` | Both sides KNOWN and identical. The only state that proves the dimension cannot confound the comparison. |
+| `different` | Both sides KNOWN and different. Material. |
+| `unverified` | At least one side UNKNOWN. **Two equally-unknown values are NOT a match** — they are equally unknown. |
+
+The comparison is refused (`compatible: false`) when any of these hold:
+
+| Refusal | Code | Why |
+|---|---|---|
+| No `model_config` snapshot | `missing_model_config` | The configuration is UNKNOWN. |
+| More than one DISTINCT snapshot | `ambiguous_model_config` | The trace spans multiple sessions/models. |
+| Recorded model does not match the label | `model_attribution_mismatch` | An "M3" trace containing M3.1 events is mislabelled. |
+| Multiple runs/sessions, none selected | `multi_run_unscoped` | Activity from several runs must not be aggregated against one snapshot. |
+| The selected run is absent | `selected_run_absent` | The scope does not exist. |
+| Truncated capture | `truncated_capture` | The counts are LOWER BOUNDS, not exhaustive. |
+| A material dimension is `different` | (dimension) | The dimension demonstrably differs. |
+| A material dimension is `unverified` | (dimension) | Source/build parity is UNPROVEN. |
+
+The overall verdict is one of:
+
+* `compatible`   — every material dimension is KNOWN and EQUAL, both traces
+  are correctly labelled, unambiguous, and complete.
+* `incompatible` — a determinate mismatch (different known values, a
+  mislabelled trace, an ambiguous trace).
+* `inconclusive` — the evidence was insufficient (missing configuration, an
+  unverified dimension, a truncated capture).
+
+`compatible: true` is now reachable ONLY from `status === "compatible"`.
+
+### Explicit run scoping
+
+`--m3-run <runId>` / `--m3.1-run <runId>` scope a comparison to one run.
+The selected run's configuration snapshot is used, the other runs' records
+are excluded from the statistics, and the ambiguity check is evaluated over
+the selected run only.
+
+---
+
+## 3. Executable-gate evidence is no longer implied
+
+The `acceptedGateCount` metric has been REMOVED. In its place:
+
+| Metric | Meaning |
+|---|---|
+| `verificationToolCallCount` | How many tool calls were NAMED like a verification. A **tool-name heuristic**. |
+| `verificationToolNameHeuristic` | Always `true` — the metric is explicitly labelled as a heuristic. |
+| `acceptedExecutableGates` | Always `UNAVAILABLE_FROM_TRACE`. |
+| `toolCallsPerAcceptedGate` | Always `UNAVAILABLE_FROM_TRACE`. |
+| `timeToFirstVerificationNamedToolMs` | Time to the first verification-NAMED tool call — NOT a time-to-accepted-gate. |
+
+No raw command arguments are parsed and no test output is collected. A
+generic successful `run_commands` event is NOT automatically a successful
+test gate, and a tool named `run_tests` is not evidence either.
+
+---
+
+## 4. Tracing-OFF preserves the execution order
+
+`await`ing a promise ALWAYS introduces a microtask suspension point, even
+when the awaited value is `undefined`. The fingerprint was awaited on EVERY
+tool call, so the disabled recorder changed the execution order between the
+tool-start boundary and the tool execution.
+
+The fix:
+
+* `ModelBehaviorTraceSink` gains an optional, synchronous
+  `isTraceEnabled?: () => boolean` — a pure read of the recorder's enable
+  bit.
+* `AgentRuntime.fingerprintToolArguments()` is no longer `async`. It returns
+  `undefined` synchronously when tracing is provably OFF, so the call site
+  awaits NOTHING and NO suspension point is introduced.
+* When `isTraceEnabled()` is ABSENT, the runtime cannot prove tracing is
+  off, so it requests the fingerprint exactly as before — the behaviour of
+  every pre-existing sink is unchanged.
+* The VS Code sink exposes `isTraceEnabled: () => recorder.isEnabled()`.
+
+The recorder remains default-OFF, and the privacy-safe fingerprint is
+preserved when tracing is ON.
+
+---
+
+## 5. Witnesses
+
+### Comparator (apps/vscode/src/sdk/__tests__/compare-model-behavior-traces.test.ts)
+
+| ID | Witness |
+|---|---|
+| C01 | Two traces with NO `model_config` → NOT compatible (the old comparator said `compatible: true`). |
+| C02 | An M3-labelled trace containing M3.1 events → model attribution REJECTED. |
+| C03 | Two runs with different context ceilings → rejected (unscoped). |
+| C03b | The same trace with `--m3-run` → scoped, compatible, and the other run's activity excluded. |
+| C04 | Different KNOWN source identities → incompatible (material). |
+| C05 | Two fully identified, compatible configurations → compatible. |
+| C06 | Accepted executable gates → `UNAVAILABLE_FROM_TRACE`; the old `acceptedGateCount` metric is GONE. |
+
+### Tracing-OFF fast path (sdk/packages/agents/src/agent-runtime.model-behavior-trace.test.ts)
+
+| ID | Witness |
+|---|---|
+| C07 | Tracing OFF: the fingerprint is NEVER requested, and the tool-start boundary and the tool execution are ADJACENT. |
+| C08 | Tracing OFF: the observable order matches a runtime with NO sink at all. |
+| C09 | Tracing ON: the fingerprint IS requested and IS recorded on the boundary. |
+| C10 | A sink WITHOUT the enablement signal keeps the original (awaited) behavior. |
+
+### Extension-host runtime (apps/vscode/src/sdk/model-behavior-trace-runtime.test.ts)
+
+| ID | Witness |
+|---|---|
+| C11 | The sink exposes the LIVE enablement signal. |
+| C12 | The fingerprint is unavailable while OFF and privacy-safe while ON. |
+
+**Mutation witness:** removing the `isTraceEnabled` fast path from
+`AgentRuntime.fingerprintToolArguments` makes C07 FAIL
+(`expected [ 'fingerprint', … ] to not include 'fingerprint'`), proving the
+witness is load-bearing.
+
+---
+
+## 6. Explicitly NOT established
+
+* The historical 119k MiniMax session is STILL NOT proven to have used the
+  `fallback_128k` budget. The fallback-provenance tests establish HOW a
+  128k effective budget can arise; the causal claim requires a real trace
+  containing `inputBudgetSource: "fallback_128k"`.
+* `PASS_LIVE` is NOT claimed. It requires the installed VSIX to capture real
+  M3 and M3.1 runs.
+
+## 7. Unchanged
+
+No change to model requests, prompts, compaction policy, loop detection, or
+lifecycle authority. The recorder's public schema was NOT expanded — the
+only schema change is the OPTIONAL `isTraceEnabled` signal on the sink,
+which is a host-side capability probe, not a recorded field.
