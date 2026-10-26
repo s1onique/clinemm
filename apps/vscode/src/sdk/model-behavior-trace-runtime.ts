@@ -181,6 +181,31 @@ export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
 		const fingerprint = await recorder.fingerprintArguments(toolName, input)
 		return fingerprint?.fingerprint
 	},
+	onEffectiveModelConfig: (observation) => {
+		// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4).
+		// The effective snapshot carries the REAL session/run identity, so it
+		// is recorded as its own event kind rather than merged into the
+		// build-time `model_config` snapshot.
+		recordModelBehaviorTraceEffectiveConfig(
+			{
+				...(observation.sessionId !== undefined ? { sessionId: observation.sessionId } : {}),
+				...(observation.taskId !== undefined ? { taskId: observation.taskId } : {}),
+				...(observation.runId !== undefined ? { runId: observation.runId } : {}),
+				...(observation.iteration !== undefined ? { iteration: observation.iteration } : {}),
+				...(observation.providerId !== undefined ? { providerId: observation.providerId } : {}),
+				...(observation.modelId !== undefined ? { modelId: observation.modelId } : {}),
+			},
+			{
+				toolCount: asFiniteNumber(observation.payload.toolCount),
+				toolNames: asStringArray(observation.payload.toolNames),
+				thinkingEnabled:
+					typeof observation.payload.thinkingEnabled === "boolean" ? observation.payload.thinkingEnabled : undefined,
+				reasoningEffort:
+					typeof observation.payload.reasoningEffort === "string" ? observation.payload.reasoningEffort : undefined,
+				maxOutputTokens: asFiniteNumber(observation.payload.maxOutputTokens),
+			},
+		)
+	},
 	onModelRequestStart: (observation) => {
 		recordModelBehaviorTrace("model_request_start", observation)
 	},
@@ -214,6 +239,76 @@ export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
 }
 
 /**
+ * Narrow an unknown payload value to a finite number.
+ *
+ * The observation payload is `Readonly<Record<string, unknown>>`, so every
+ * value must be narrowed before it can be used as a typed fact. A
+ * non-numeric or non-finite value is treated as UNKNOWN, never coerced.
+ */
+function asFiniteNumber(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+/**
+ * Narrow an unknown payload value to a string array.
+ *
+ * A non-array value is treated as UNKNOWN (the caller records the
+ * `UNAVAILABLE_FROM_TRACE` sentinel), never as an empty toolset — an empty
+ * toolset is a materially DIFFERENT fact from an unknown one.
+ */
+function asStringArray(value: unknown): string[] | undefined {
+	if (!Array.isArray(value)) {
+		return undefined
+	}
+	return value.filter((item): item is string => typeof item === "string")
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4):
+ * bind a previously-recorded, session-less configuration snapshot to the
+ * session that actually owns it.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The build-time configuration is constructed BEFORE the session id is
+ * allocated (the session id is assigned by the task-start coordinator after
+ * `buildSessionConfig()` returns). The snapshot therefore carries no session
+ * identity at record time.
+ *
+ * The ACT requires that such a snapshot be associated "using an actual
+ * session identity carried by subsequent events" — NEVER by timestamp
+ * proximity. The production flow satisfies that exactly: the coordinator
+ * that ALLOCATED the session id is the same authority that binds the
+ * snapshot to it, so the binding is an identity assertion, not a guess.
+ *
+ * The rebinding is a RECORD-LOCAL correction: the recorder's records are
+ * immutable, so the bound snapshot is appended as an ADDITIONAL
+ * `model_config` record carrying the session identity. The comparator
+ * treats a session-bound snapshot as authoritative for that session and
+ * ignores the session-less one when the session can be resolved.
+ *
+ * This is deliberately NOT a new provenance subsystem: it is a single
+ * function on the existing recorder.
+ */
+export function bindModelBehaviorTraceConfigToSession(
+	sessionId: string,
+	config: ModelBehaviorTraceConfigSnapshot,
+	identity?: { providerId?: string; modelId?: string },
+): ModelBehaviorTraceRecord | undefined {
+	if (!sessionId.trim()) {
+		return undefined
+	}
+	return recordModelBehaviorTraceConfig(
+		{
+			sessionId,
+			...(identity?.providerId !== undefined ? { providerId: identity.providerId } : {}),
+			...(identity?.modelId !== undefined ? { modelId: identity.modelId } : {}),
+		},
+		config,
+	)
+}
+
+/**
  * The model configuration snapshot recorded at session creation and when
  * the relevant configuration changes.
  */
@@ -235,6 +330,20 @@ export interface ModelBehaviorTraceConfigSnapshot {
 	toolNames?: readonly string[]
 	sourceHead?: string
 	extensionVersion?: string
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2).
+	 *
+	 * The SHA-256 of the ACTUAL installed `dist/extension.js` bytes.
+	 */
+	extensionBundleSha256?: string
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3).
+	 *
+	 * The EFFECTIVE context input budget and its provenance.
+	 */
+	effectiveMaxInputTokens?: number
+	inputBudgetSource?: string
+	userContextCeilingMode?: "auto" | "explicit"
 }
 
 /**
@@ -275,8 +384,60 @@ export function recordModelBehaviorTraceConfig(
 			toolNames: config.toolNames ?? [],
 			sourceHead: config.sourceHead ?? "UNAVAILABLE_FROM_TRACE",
 			extensionVersion: config.extensionVersion ?? "UNAVAILABLE_FROM_TRACE",
+			// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2/R3).
+			extensionBundleSha256: config.extensionBundleSha256 ?? "UNAVAILABLE_FROM_TRACE",
+			effectiveMaxInputTokens: config.effectiveMaxInputTokens ?? "UNAVAILABLE_FROM_TRACE",
+			inputBudgetSource: config.inputBudgetSource ?? "UNAVAILABLE_FROM_TRACE",
+			userContextCeilingMode: config.userContextCeilingMode ?? "UNAVAILABLE_FROM_TRACE",
 		},
 		{ evidenceBoundary: "synthesized" },
+	)
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4).
+ *
+ * Record the EFFECTIVE model configuration observed at the model-request
+ * boundary, carrying the REAL session/run identity.
+ *
+ * The effective snapshot is a DISTINCT event from the build-time
+ * `model_config` snapshot: it describes what the runtime actually sends,
+ * and it is bound to an execution by identity rather than by timestamp.
+ */
+export function recordModelBehaviorTraceEffectiveConfig(
+	identity: {
+		sessionId?: string
+		taskId?: string
+		runId?: string
+		iteration?: number
+		providerId?: string
+		modelId?: string
+	},
+	payload: {
+		toolCount?: number
+		toolNames?: readonly string[]
+		thinkingEnabled?: boolean
+		reasoningEffort?: string
+		maxOutputTokens?: number
+	},
+): ModelBehaviorTraceRecord | undefined {
+	return recorder.record(
+		"effective_model_config",
+		{
+			...(identity.sessionId !== undefined ? { sessionId: identity.sessionId } : {}),
+			...(identity.taskId !== undefined ? { taskId: identity.taskId } : {}),
+			...(identity.runId !== undefined ? { runId: identity.runId } : {}),
+			...(identity.iteration !== undefined ? { iteration: identity.iteration } : {}),
+			...(identity.providerId !== undefined ? { providerId: identity.providerId } : {}),
+			...(identity.modelId !== undefined ? { modelId: identity.modelId } : {}),
+		},
+		{
+			toolCount: payload.toolCount ?? "UNAVAILABLE_FROM_TRACE",
+			toolNames: payload.toolNames ?? [],
+			thinkingEnabled: payload.thinkingEnabled ?? "UNAVAILABLE_FROM_TRACE",
+			reasoningEffort: payload.reasoningEffort ?? "UNAVAILABLE_FROM_TRACE",
+			maxOutputTokens: payload.maxOutputTokens ?? "UNAVAILABLE_FROM_TRACE",
+		},
 	)
 }
 

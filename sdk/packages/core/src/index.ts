@@ -995,6 +995,11 @@ export {
 	createCompactionStateAwarePrepareTurn,
 	createContextCompactionPrepareTurn,
 } from "./extensions/context/compaction";
+// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3): export
+// the production budget resolver + ceiling sanitizer so the host can resolve
+// the SAME effective input budget the compaction policy applies.
+export { normalizeUserContextCeiling } from "./extensions/context/compaction-shared";
+export { resolveModelBehaviorTraceBudget } from "./runtime/observability/model-behavior-trace";
 export {
 	ALL_DEFAULT_TOOL_NAMES,
 	type ApplyPatchExecutor,

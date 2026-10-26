@@ -14,8 +14,10 @@ import {
 	type CoreSessionConfig,
 	getProviderAuthHandler,
 	getSandboxBackend,
+	normalizeUserContextCeiling,
 	type ProviderSettings,
 	readCompactionStrategyGlobally,
+	resolveModelBehaviorTraceBudget,
 	resolveProviderApiKeyFromSettings,
 	type StartSessionResult,
 } from "@cline/core"
@@ -44,9 +46,13 @@ import { ExtensionRegistryInfo } from "@/registry"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { fetch } from "@/shared/net"
 import { type BedrockProviderConfig, buildBedrockProviderConfig } from "./bedrock-config"
+// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2): the
+// canonical installed-bundle identity resolver. Reused as-is so the trace
+// records the SAME artifact identity the allocation profiler records.
+import { resolveInstalledBundleIdentity } from "./extension-host-allocation-profiler-runtime"
 import { buildAgentHooks } from "./hooks-adapter"
 import { readTaskHistory, resolveDataDir } from "./legacy-state-reader"
-import { recordModelBehaviorTraceConfig } from "./model-behavior-trace-runtime"
+import { type ModelBehaviorTraceConfigSnapshot, recordModelBehaviorTraceConfig } from "./model-behavior-trace-runtime"
 import type { ResolvedModelSelection } from "./model-catalog/contracts"
 import { nonNegativeFiniteNumber, positiveFiniteNumber, toSdkApiFormat } from "./model-catalog/model-values"
 import { parseProviderId } from "./model-catalog/provider-id"
@@ -140,6 +146,19 @@ export interface SessionConfigInput {
 	 * tests (which exercise the legacy OPENAI_ONLY_PROBE) intact.
 	 */
 	providerConfigurationInstanceTyped?: import("@/sdk/instance-store/contracts").ProviderConfigurationInstance
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4).
+	 *
+	 * An OUT-PARAMETER that receives the model-behavior configuration
+	 * snapshot that was computed for this session.
+	 *
+	 * The snapshot is computed at BUILD time, but the session id is allocated
+	 * LATER (by the task-start coordinator). The caller therefore receives the
+	 * snapshot and binds it to the allocated session id — an identity
+	 * assertion made by the authority that allocated the id, never a
+	 * timestamp-proximity guess.
+	 */
+	onModelBehaviorConfigSnapshot?: (snapshot: ModelBehaviorTraceConfigSnapshot) => void
 }
 
 /** Active session state tracked by the factory */
@@ -1058,6 +1077,11 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	// (positive integer), so we pass the raw stored value through and let
 	// `applyUserContextCeiling` handle invalid input (it normalizes to Auto).
 	const userContextCeiling = input.taskSettings?.userContextCeiling ?? stateManager.getGlobalSettingsKey("userContextCeiling")
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3): the
+	// SANITIZED ceiling is the value the production policy actually applies.
+	// A malformed / absent stored value normalizes to `undefined`, which the
+	// production policy treats as the Auto operating mode.
+	const sanitizedUserContextCeiling = normalizeUserContextCeiling(userContextCeiling)
 
 	// Core resolves providers against the SDK registry, which uses the SDK's
 	// own provider id spelling (e.g. "openai-compatible" rather than the
@@ -1218,6 +1242,42 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		hooks: buildAgentHooks(StateManager.get()),
 	}
 
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2):
+	// resolve the INSTALLED BUNDLE identity.
+	//
+	// `resolveInstalledBundleIdentity()` is the canonical resolver already
+	// used by the allocation profiler runtime. It reads the ACTUAL bytes of
+	// the installed `<extension-root>/dist/extension.js` and hashes them.
+	//
+	// The `sourceHead` it returns is the SOURCE provenance read from the
+	// working tree. In an installed VSIX there is no `.git`, so it is
+	// "unknown" — and "unknown" source provenance is NOT the same fact as a
+	// verified source identity. The two are recorded separately so the
+	// comparator can tell "same source" apart from "same artifact bytes".
+	const bundleIdentity = resolveInstalledBundleIdentity(__dirname)
+	// The extension version is the OTHER half of the build binding: a bundle
+	// digest alone does not say WHICH release produced it.
+	const extensionVersion = ExtensionRegistryInfo.version
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3):
+	// resolve the EFFECTIVE context input budget and its provenance using
+	// the SAME production resolver the compaction policy uses.
+	//
+	// The production resolver (`resolveModelBehaviorTraceBudget`) mirrors the
+	// exact precedence of
+	// `applyUserContextCeiling(resolveEffectiveMaxInputTokens(...))` and is
+	// checked against it by the budget provenance witness.
+	//
+	// `undefined` configured ceiling legitimately means AUTO — but only when
+	// the policy resolver confirms that operating mode, which is why the
+	// ceiling MODE is recorded alongside the number.
+	const effectiveBudget = resolveModelBehaviorTraceBudget({
+		modelMaxInputTokens: knownModels?.[modelId]?.maxInputTokens,
+		contextWindow: knownModels?.[modelId]?.contextWindow,
+		userContextCeiling: sanitizedUserContextCeiling,
+	})
+	const userContextCeilingMode = sanitizedUserContextCeiling === undefined ? "auto" : "explicit"
+
 	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: record the model configuration
 	// snapshot at session creation.
 	//
@@ -1229,33 +1289,67 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	//
 	// The recorder is inert while the trace is OFF, so this call is a no-op
 	// in the default build.
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4): this
+	// snapshot is a BUILD-TIME snapshot. At this seam the session id does not
+	// exist yet (it is allocated later, in the task-start coordinator), so
+	// the snapshot carries NO session identity and is NEVER attached to a
+	// run by timestamp proximity. The EFFECTIVE configuration — observed at
+	// the model-request boundary — carries the real session/run identity.
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4):
+	// the build-time snapshot. It is recorded WITHOUT a session identity
+	// (the session id does not exist yet), and the caller binds it to the
+	// allocated session id through the out-parameter below.
+	const modelBehaviorConfigSnapshot: ModelBehaviorTraceConfigSnapshot = {
+		// The SELECTED identity is what the persisted API configuration
+		// names; the RUNTIME identity is what the SDK actually resolved
+		// for this session.
+		selectedProviderId: providerId ?? sdkProviderId,
+		selectedModelId: modelId,
+		runtimeProviderId: sdkProviderId,
+		runtimeModelId: modelId,
+		// The provider did not expose a confirmed model identity at
+		// configuration time; the recorder marks it UNAVAILABLE.
+		providerConfirmedModelId: undefined,
+		thinkingEnabled: reasoningConfig.thinking,
+		reasoningEffort: reasoningConfig.reasoningEffort,
+		temperature,
+		maxOutputTokens: maxTokensPerTurn,
+		contextWindow: knownModels?.[modelId]?.contextWindow,
+		maxInputTokens: knownModels?.[modelId]?.maxInputTokens,
+		userContextCeiling: sanitizedUserContextCeiling,
+		// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01:
+		// the toolset is NOT known at build time — it is established by
+		// the effective model request. Leaving it UNAVAILABLE here is
+		// correct; the effective snapshot carries the real value.
+		toolCount: undefined,
+		// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01
+		// (R2): the SOURCE provenance and the ARTIFACT identity are
+		// separate facts. An installed VSIX commonly has no source
+		// provenance, and an unknown source identity must never be
+		// presented as a verified source match.
+		sourceHead: bundleIdentity.sourceHead === "unknown" ? undefined : bundleIdentity.sourceHead,
+		extensionVersion,
+		extensionBundleSha256:
+			bundleIdentity.extensionBundleSha256 === "unknown" ? undefined : bundleIdentity.extensionBundleSha256,
+		// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01
+		// (R3): the effective budget and the verified ceiling mode.
+		effectiveMaxInputTokens: effectiveBudget.effectiveMaxInputTokens,
+		inputBudgetSource: effectiveBudget.source,
+		userContextCeilingMode,
+	}
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4):
+	// hand the snapshot to the caller so it can be bound to the session id
+	// that is allocated immediately after this build returns.
+	input.onModelBehaviorConfigSnapshot?.(modelBehaviorConfigSnapshot)
+
 	recordModelBehaviorTraceConfig(
 		{
 			providerId: sdkProviderId,
 			modelId,
 		},
-		{
-			// The SELECTED identity is what the persisted API configuration
-			// names; the RUNTIME identity is what the SDK actually resolved
-			// for this session.
-			selectedProviderId: providerId ?? sdkProviderId,
-			selectedModelId: modelId,
-			runtimeProviderId: sdkProviderId,
-			runtimeModelId: modelId,
-			// The provider did not expose a confirmed model identity at
-			// configuration time; the recorder marks it UNAVAILABLE.
-			providerConfirmedModelId: undefined,
-			thinkingEnabled: reasoningConfig.thinking,
-			reasoningEffort: reasoningConfig.reasoningEffort,
-			temperature,
-			maxOutputTokens: maxTokensPerTurn,
-			contextWindow: knownModels?.[modelId]?.contextWindow,
-			maxInputTokens: knownModels?.[modelId]?.maxInputTokens,
-			userContextCeiling,
-			toolCount: undefined,
-			sourceHead: undefined,
-			extensionVersion: ExtensionRegistryInfo.version,
-		},
+		modelBehaviorConfigSnapshot,
 	)
 
 	return config

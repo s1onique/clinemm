@@ -9,6 +9,9 @@ import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { isDirectory } from "@/utils/fs"
+// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4): bind
+// the build-time configuration snapshot to the allocated session id.
+import { bindModelBehaviorTraceConfigToSession, type ModelBehaviorTraceConfigSnapshot } from "./model-behavior-trace-runtime"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
@@ -206,9 +209,13 @@ export class SdkTaskStartCoordinator {
 				return undefined
 			}
 			const providerInstanceTyped =
-				providerInstanceResult && providerInstanceResult.kind === "RESOLVED"
-					? providerInstanceResult.instance
-					: undefined
+				providerInstanceResult && providerInstanceResult.kind === "RESOLVED" ? providerInstanceResult.instance : undefined
+			// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01
+			// (R4): capture the build-time model-behavior configuration
+			// snapshot. The session id does not exist yet, so the snapshot is
+			// bound to it AFTER the id is allocated below — by the same
+			// authority that allocated it, never by timestamp proximity.
+			let modelBehaviorConfigSnapshot: ModelBehaviorTraceConfigSnapshot | undefined
 			const config = await this.options.sessionConfigBuilder.build({
 				prompt,
 				images,
@@ -225,6 +232,9 @@ export class SdkTaskStartCoordinator {
 				// which happens later in `startNewSession`.
 				sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(),
 				...(providerInstanceTyped ? { providerConfigurationInstanceTyped: providerInstanceTyped } : {}),
+				onModelBehaviorConfigSnapshot: (snapshot: ModelBehaviorTraceConfigSnapshot) => {
+					modelBehaviorConfigSnapshot = snapshot
+				},
 			})
 			providerId = config.providerId
 			modelId = config.modelId
@@ -244,6 +254,19 @@ export class SdkTaskStartCoordinator {
 			}
 
 			taskSessionId = config.sessionId?.trim() || createSessionId()
+			// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4):
+			// bind the build-time configuration snapshot to the session id that
+			// was JUST allocated.
+			//
+			// This is the identity assertion the ACT requires: the authority
+			// that allocated the session id is the same authority that binds
+			// the configuration to it. No timestamp proximity is involved.
+			if (modelBehaviorConfigSnapshot !== undefined) {
+				bindModelBehaviorTraceConfigToSession(taskSessionId, modelBehaviorConfigSnapshot, {
+					providerId: config.providerId,
+					modelId: config.modelId,
+				})
+			}
 			const configWithSessionId = {
 				...config,
 				sessionId: taskSessionId,
@@ -420,9 +443,7 @@ export class SdkTaskStartCoordinator {
 				return
 			}
 			const providerInstanceTyped =
-				providerInstanceResult && providerInstanceResult.kind === "RESOLVED"
-					? providerInstanceResult.instance
-					: undefined
+				providerInstanceResult && providerInstanceResult.kind === "RESOLVED" ? providerInstanceResult.instance : undefined
 			const config = await this.options.sessionConfigBuilder.build({
 				cwd,
 				mode: "act",

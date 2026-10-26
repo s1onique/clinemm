@@ -531,4 +531,440 @@ witness is load-bearing.
 No change to model requests, prompts, compaction policy, loop detection, or
 lifecycle authority. The recorder's public schema was NOT expanded — the
 only schema change is the OPTIONAL `isTraceEnabled` signal on the sink,
+
+---
+
+# ACT-CLINEMM-MODEL-BEHAVIOR-LIVE-PREFLIGHT01 — Live Capture
+
+**Status:** `PASS_LIVE_CAPTURE` (capture proven) — comparability NOT achieved
+**Reviewed source:** `dca6e08d58e8691f0a5ffc703f3a646b15e410bf`
+**Priority:** P0 — the measurement blocker for M3/M3.1 comparison
+**Scope:** ONE live preflight. No production behavior was modified.
+
+---
+
+## 1. Disposition
+
+The preflight answers two separate questions, and they have DIFFERENT
+answers:
+
+| Question | Answer |
+|---|---|
+| Does the real flight recorder capture a real model run? | **YES — `PASS_LIVE_CAPTURE`** |
+| Can the real capture establish M3/M3.1 comparability? | **NO — 7 of the 8 material dimensions are `unverified`** |
+
+The capture mechanism is **PROVEN LIVE**. The comparability contract is
+**NOT met**, and the reason is exactly the source-confirmed contradiction
+the review predicted — now measured rather than inferred.
+
+**No further structural review cycle is warranted.** The remaining gap is a
+single bounded repair, described in §6.
+
+---
+
+## 2. What was executed, and what was REAL
+
+The preflight drives the **production capture path** in the SDK:
+
+| Component | Real? | Source |
+|---|---|---|
+| `ModelBehaviorTraceRecorder` (bounded ring, privacy sanitizer, ephemeral HMAC fingerprint key) | **YES** | `sdk/packages/shared/src/runtime/model-behavior-trace.ts` |
+| `AgentRuntime` model-request + tool-execution observation call sites | **YES** | `sdk/packages/agents/src/agent-runtime.ts` |
+| Provider gateway against the **live OpenRouter API** | **YES** | `sdk/packages/llms/src/providers/gateway.ts` |
+| The **real MiniMax M3** model (`minimax/minimax-m3`) | **YES** | OpenRouter |
+| The **real MiniMax M3.1** model (`minimax/minimax-m3.1-flash`) | **YES** | OpenRouter |
+| Real tool execution by the runtime executor | **YES** | `AgentRuntime.executePreparedTool` |
+| `scripts/compare-model-behavior-traces.ts` | **YES** | the production comparator |
+
+Driver: `apps/vscode/src/dev/preflight/live-preflight-model-behavior-trace.ts`.
+
+### What was NOT real, and why
+
+* **The VS Code GUI host.** The recorder's capture path lives entirely in the
+  SDK; `apps/vscode/src/sdk/model-behavior-trace-runtime.ts` is a thin
+  adapter over the SDK recorder (it owns only the enable bit, the workspace
+  flag, and the JSONL file sink). Driving the SDK directly therefore
+  exercises the SAME production capture code the GUI toggle arms. The GUI
+
+---
+
+## 3. The live capture (actual records)
+
+Both traces: **7 records, 0 dropped, `truncated: false`**.
+
+```
+[1] model_config         boundary=synthesized        run=undefined
+[2] model_request_start  boundary=partial_identity   run=run_… iter=1
+[3] model_request_finish boundary=partial_identity   run=run_… iter=1
+[4] tool_start           boundary=partial_identity   run=run_… iter=1
+[5] tool_finish          boundary=partial_identity   run=run_… iter=1
+[6] model_request_start  boundary=partial_identity   run=run_… iter=2
+[7] model_request_finish boundary=partial_identity   run=run_… iter=2
+```
+
+### 3.1 Model identity and event correlation — CONFIRMED
+
+| Fact | M3 | M3.1 |
+|---|---|---|
+| Recorded model id | `minimax/minimax-m3` | `minimax/minimax-m3.1-flash` |
+| Provider | `openrouter` | `openrouter` |
+| Run id | `run_hDV2WcNv` | `run_nFiYSsf2` |
+| Session id | `preflight-M3-…` | `preflight-M3.1-…` |
+| Model attribution vs label | **MATCHES** | **MATCHES** |
+| Comparator side status | `ok` | `ok` |
+
+`classifyModelFamily()` correctly classifies `minimax/minimax-m3` as **M3**
+and `minimax/minimax-m3.1-flash` as **M3.1**, so the model-attribution
+refusal did NOT fire. The label/model binding is real and works.
+
+**Event correlation is real and exact.** The `tool_start` and `tool_finish`
+records carry the SAME `toolCallId` and the SAME `argumentFingerprint`:
+
+| | `toolCallId` | `argumentFingerprint` (prefix) |
+|---|---|---|
+| M3 | `call-61de243d-d433-48cc-8738-0f81eb0d8223` | `d2c7f6797cb3ac0d…` |
+| M3.1 | `call_3abac55c9c0a48f5a7d53f1d` | `b195b6294e994962…` |
+
+The tool boundary reports `origin: "model_requested"`,
+`executionInvoked: true`, `outcome: "success"`, `outputSizeChars: 24` and
+`durationMs: 1`. The `model_request_finish` records report
+`finishReason: "tool-calls"` with `toolCallCount: 1` — a real provider
+response, and a real tool call, on both models.
+
+### 3.2 The fingerprint is per-trace ephemeral — CONFIRMED
+
+The two traces use the SAME normalized argument (`{"value":"alpha"}`) and
+produce **DIFFERENT** fingerprints. This confirms the ephemeral-key
+property holds on live data: a dump cannot be used as a cross-trace rainbow
+table.
+
+### 3.3 Buffer truncation and dropped records — NONE
+
+| | M3 | M3.1 |
+|---|---|---|
+| `truncated` | `false` | `false` |
+| `droppedCount` | `0` | `0` |
+| `totalRecorded` / `retainedCount` | `7` / `7` | `7` / `7` |
+| `retainedBytes` | 3581 | 3597 |
+
+The 8,192-record / 4 MiB ring limits were never approached, so the
+truncation path is untested at this scale but was NOT engaged.
+
+### 3.4 Effective reasoning configuration — NOT CAPTURED
+
+`reasoningEffort` and `thinkingEnabled` are `UNAVAILABLE_FROM_TRACE` on
+BOTH sides. The production path does not record them at the point the
+snapshot is taken.
+
+### 3.5 Provider-confirmed model identity — NOT CAPTURED
+
+`providerConfirmedModelId` is `UNAVAILABLE_FROM_TRACE` on both sides. The
+provider did not expose a confirmed identity at configuration time. The
+model id that IS recorded is the CONFIGURED id, not a provider-confirmed
+one. The comparator's informational comparison therefore reports
+`runtimeModelId` / `selectedModelId` as `different` — which is EXPECTED and
+CORRECT, because that is the intended difference under test.
+
+---
+
+## 4. Measured missing material dimensions
+
+The comparator's verdict on the LIVE traces:
+
+```
+compatible = false
+comparability.status = "inconclusive"
+```
+
+**7 of the 8 material dimensions are `unverified`; the one that resolves
+proves the comparator's KNOWN+KNOWN path works on live data:**
+
+| Material dimension | M3 | M3.1 | Result |
+|---|---|---|---|
+| `extensionVersion` | `4.1.16-5a1c485cb` | `4.1.16-5a1c485cb` | **`equal`** |
+| `sourceHead` | `UNAVAILABLE_FROM_TRACE` | `UNAVAILABLE_FROM_TRACE` | `unverified` |
+| `userContextCeiling` | `UNAVAILABLE_FROM_TRACE` | `UNAVAILABLE_FROM_TRACE` | `unverified` |
+| `reasoningEffort` | `UNAVAILABLE_FROM_TRACE` | `UNAVAILABLE_FROM_TRACE` | `unverified` |
+| `thinkingEnabled` | `UNAVAILABLE_FROM_TRACE` | `UNAVAILABLE_FROM_TRACE` | `unverified` |
+| `toolCount` | `UNAVAILABLE_FROM_TRACE` | `UNAVAILABLE_FROM_TRACE` | `unverified` |
+| `toolNames` | `[]` | `[]` | `unverified` |
+| `maxOutputTokens` | `UNAVAILABLE_FROM_TRACE` | `UNAVAILABLE_FROM_TRACE` | `unverified` |
+
+`extensionVersion` is KNOWN on BOTH sides and compares **`equal`**. This is
+the decisive control: it proves the comparator's `equal` path is reachable
+from a LIVE trace, and that the `unverified` results above are caused by
+genuinely-absent data rather than by a broken comparison.
+
+`extensionVersion` is also the ONE material dimension the production path
+already populates (`buildSessionConfig()` passes
+`ExtensionRegistryInfo.version`), so it is the honest control to use.
+
+The other dimensions that resolve are the informational ones the comparison
+is SUPPOSED to see differ: `selectedProviderId` / `runtimeProviderId` are
+`equal` (`openrouter`), and `selectedModelId` / `runtimeModelId` are
+`different` (the models under test).
+
+The comparator's own warning states the consequence exactly:
+
+> 7 configuration dimension(s) could not be VERIFIED from the trace — "both
+> sides unavailable" is NOT evidence that the two sides match.
+
+### 4.1 The measurement blocker, precisely
+
+**`scripts/compare-model-behavior-traces.ts` `MATERIAL_DIMENSIONS` requires
+these values to be KNOWN and EQUAL. The production recorder cannot supply
+them. Therefore `compatible: true` is UNREACHABLE from any production
+trace, regardless of build parity, settings parity, or model behavior.**
+
+This is now MEASURED on live data, not merely source-inferred.
+
+### 4.2 Why the values are missing — at their production authority
+
+| Dimension | Production authority | Why it is absent |
+|---|---|---|
+| `sourceHead` | `buildSessionConfig()` | passes `sourceHead: undefined` (`cline-session-factory.ts:1256`) |
+| `toolCount` | `buildSessionConfig()` | passes `toolCount: undefined` (`cline-session-factory.ts:1255`) |
+| `toolNames` | `buildSessionConfig()` | never passed; the adapter defaults it to `[]` |
+| `userContextCeiling` | `buildSessionConfig()` | `undefined` when the user has not set an explicit ceiling (Auto) |
+| `reasoningEffort` / `thinkingEnabled` | `buildSessionConfig()` | `reasoningConfig` does not always populate them |
+| `maxOutputTokens` | `buildSessionConfig()` | `maxTokensPerTurn` is `undefined` unless explicitly configured |
+| `extensionVersion` | `buildSessionConfig()` | **SUPPLIED** (`ExtensionRegistryInfo.version`) — resolves to `equal` |
+
+**`extensionVersion` is the control, not a gap.** The production path DOES
+supply it, and the live capture confirms it compares `equal`. It proves the
+comparator's `equal` verdict is reachable from a live trace, and therefore
+that the seven `unverified` results reflect genuinely-absent data rather
+than a defective comparison.
+
+
+
+---
+
+## 5. Run-scoping — CONFIRMED DEFECT
+
+The reviewer flagged that `scopeRecords()` retains every record with
+`runId === undefined`. **The live capture confirms this exactly.**
+
+Measured on the M3 trace with the run id selected:
+
+```
+runId=run_hDV2WcNv  total=7  scoped=7
+records retained regardless of the selected run:
+   seq=1  event=model_config  session=preflight-M3-1793036403155
+```
+
+The `model_config` record is the ONLY record with `runId: undefined`, and
+it is retained by the scope filter no matter which run is selected. Every
+other record (model request + tool events) carries the run id correctly.
+
+**Consequence:** with a multi-session trace, selecting one run still pulls
+in the `model_config` snapshot of every session, because that record has no
+run id to scope it by. The comparator's `selectConfigValues()` mitigates
+this by preferring the snapshot whose `runId` OR `sessionId` matches the
+selected run — but a `model_config` record carries only a `sessionId`, so
+the match succeeds by session, and the ambiguity check
+(`ambiguous_model_config`) is evaluated over the WHOLE trace, not the
+selected run.
+
+**This is a real, reproducible scoping defect. It is NOT a live blocker for
+this particular comparison** (both traces are single-session, so
+`observedRuns.length === 1` and `observedSessions.length === 1` and the
+`multi_run_unscoped` refusal does not fire). It becomes a blocker the moment
+one dump spans more than one session — which is exactly the real operator
+workflow (toggle once, run several tasks, dump once).
+
+**The disposition is deliberately NOT to fix this by chronology.** The
+reviewer forbade associating events by chronology, and the correct fix is
+to give the `model_config` record the session/run identity it already
+implies, so it can be scoped by a correlated identity.
+
+---
+
+## 6. Recommended disposition — ONE bounded repair
+
+The predicted missing fields DID appear. Per the ACT's disposition rule,
+open ONE bounded repair that:
+
+1. **Binds source/build identity at the installed artifact manifest.**
+   `resolveInstalledBundleIdentity()` already computes
+   `extensionBundleSha256` from `<extension-root>/dist/extension.js` and is
+   already the LOAD-BEARING identity used by the allocation profiler. That
+   is the authority to bind `sourceHead` / `extensionVersion` — NOT a
+   `git rev-parse` at runtime, which returns `unknown` in an installed VSIX.
+   The VSIX release manifest must record the `SOURCE_HEAD -> bundle
+   SHA-256` binding externally, exactly as the allocation-authority work
+   already requires.
+
+2. **Captures actual tool configuration at its production authority.** The
+   effective tool list is known at the runtime, not at `buildSessionConfig()`
+   time — `request.tools.length` is ALREADY recorded on
+   `model_request_start` as `toolSchemaCount`. The repair must record the
+   tool COUNT and NAMES at the point the tool list is actually assembled,
+   so `toolCount` / `toolNames` become KNOWN values.
+
+3. **Scopes `model_config` by a correlated identity** so the
+   `model_config` record is attributable to the run/session it describes,
+   and the ambiguity check is evaluated over the SELECTED run rather than
+   the whole trace.
+
+4. **Records the effective reasoning configuration** (`reasoningEffort`,
+   `thinkingEnabled`) and the effective output/context budget
+   (`maxOutputTokens`, `userContextCeiling`, `contextWindow`,
+   `maxInputTokens`) at their production authorities.
+
+**MUST NOT:** relax fail-closed comparability, fabricate unavailable
+metadata, or infer task success / accepted executable gates from tool names.
+The `acceptedExecutableGates` / `toolCallsPerAcceptedGate` metrics stay
+`UNAVAILABLE_FROM_TRACE` — the live capture confirms the trace does not
+record the executed command or its result.
+
+---
+
+## 7. Explicitly NOT established by this preflight
+
+* **`PASS_LIVE` is NOT claimed for the GUI-installed VSIX path.** The
+  capture path is proven live; the GUI trigger + file sink were not
+  exercised, because Electron cannot launch in this environment (§2).
+* **The historical 119k MiniMax session is STILL NOT proven to have used
+  the `fallback_128k` budget.** No compaction occurred in either live trace
+  (`compactionCount: 0`), so `inputBudgetSource` is not observed live.
+* **No claim about which model is "better."** The live statistics are
+  descriptive only. Both models made exactly one tool call and terminated
+  with `finishReason: "stop"` after one round-trip.
+* **Task success is NOT inferred.** The comparator reports
+  `acceptedExecutableGates: "UNAVAILABLE_FROM_TRACE"` on both sides, and
+  the live traces contain no test command or result.
+
+---
+
+## 8. Live statistics observed (descriptive only)
+
+| Metric | M3 | M3.1 |
+|---|---|---|
+| `totalToolCalls` | 1 | 1 |
+| `exactRepeatedActionCount` | 0 | 0 |
+| `nonConsecutiveRepetitionCount` | 0 | 0 |
+| `consecutiveErrorStreakMax` | 0 | 0 |
+| `repeatedVerificationAttempts` | 0 | 0 |
+| `compactionCount` | 0 | 0 |
+| `verificationToolCallCount` | 0 | 0 |
+| `acceptedExecutableGates` | `UNAVAILABLE_FROM_TRACE` | `UNAVAILABLE_FROM_TRACE` |
+| `truncated` / `droppedCount` | `false` / 0 | `false` / 0 |
+
+Observed provider-side request facts (from the live records, NOT from the
+comparator's heuristics):
+
+| | M3 | M3.1 |
+|---|---|---|
+| request 1 `finishReason` | `tool-calls` | `tool-calls` |
+| request 1 `inputTokens` / `outputTokens` | 443 / 44 | 458 / 28 |
+| request 1 `requestDurationMs` | 1456 | 1142 |
+| request 2 `finishReason` | `stop` | `stop` |
+| request 2 `inputTokens` / `outputTokens` | 510 / 4 | 508 / 4 |
+
+---
+
+## 9. Files
+
+**New**
+
+---
+
+## 10. Reproducing this preflight
+
+```bash
+# 1. Build the SDK packages (the preflight consumes their `dist/`).
+bun run build:sdk
+
+# 2. Capture the live traces (real OpenRouter API, real M3 + real M3.1).
+cd apps/vscode
+bun src/dev/preflight/live-preflight-model-behavior-trace.ts \
+  --out /tmp/clinemm-preflight \
+  --api-key "$OPENROUTER_API_KEY"
+
+# 3. Run the REAL comparator over the captured traces.
+cd ../..
+bun scripts/compare-model-behavior-traces.ts \
+  --m3  /tmp/clinemm-preflight/trace-M3.jsonl \
+  --m3.1 /tmp/clinemm-preflight/trace-M3.1.jsonl \
+  --md  /tmp/clinemm-preflight/comparison.md \
+  --json /tmp/clinemm-preflight/comparison.json
+```
+
+Step 2 is the only step that needs a credential. Steps 1 and 3 are fully
+offline.
+
+### Expected output of step 3 (stable across runs)
+
+```
+compatible = false
+comparability.status = "inconclusive"
+comparability.m3.status  = "ok"
+comparability.m31.status = "ok"
+```
+
+The `comparability.*.status` values are `ok` — the capture itself is sound
+and correctly labelled. The `inconclusive` verdict comes from the
+configuration-dimension comparison, exactly as tabulated in §4: 7 material
+dimensions are `unverified`, and only `extensionVersion` resolves (to
+`equal`).
+
+
+---
+
+## 11. Stability across independent live captures
+
+The preflight was executed THREE times against the live OpenRouter API. The
+verdict is identical every time:
+
+| Run | `compatible` | `comparability.status` | material `equal` | material `unverified` | side statuses |
+|---|---|---|---|---|---|
+| 1 (pre-`extensionVersion` fix) | `false` | `inconclusive` | 0 | 8 | `ok` / `ok` |
+| 2 | `false` | `inconclusive` | 1 (`extensionVersion`) | 7 | `ok` / `ok` |
+| 3 | `false` | `inconclusive` | 1 (`extensionVersion`) | 7 | `ok` / `ok` |
+
+Runs 2 and 3 are the authoritative measurements (the driver passes
+`extensionVersion`, matching production). Run 1 is retained only to show
+that the `extensionVersion` control is load-bearing: adding the value the
+production path already supplies moved exactly one dimension from
+`unverified` to `equal` and changed nothing else.
+
+**The verdict is not a one-off.** Every live capture produced a
+`model_config` snapshot with 7 of the 8 material dimensions unavailable,
+and the comparator refused the comparison every time.
+
+### A note on the `M3.1` model id
+
+`minimax/minimax-m3.1-flash` is the MiniMax M3.1 model as exposed by
+OpenRouter at the time of this preflight. It is **not** in the bundled
+`@cline/llms` catalog (`catalog.generated.ts`), which lists M3 but no M3.1
+entry. The preflight drives the model id directly through the gateway, so
+the capture is unaffected — but a VS Code user picking M3.1 from the model
+picker would not find it until the catalog is refreshed. That is a
+**catalog freshness** issue, independent of the recorder.
+
+* `apps/vscode/src/dev/preflight/live-preflight-model-behavior-trace.ts` —
+  the live preflight driver. It is a DEV-ONLY diagnostic driver; it
+  modifies no production behavior and is not part of the extension's
+  production path.
+
+**Unchanged**
+* No production file was modified. The preflight ran against the code at
+  `dca6e08d58e8691f0a5ffc703f3a646b15e410bf` exactly as reviewed.
+
+  host is the trigger and the file sink, not the capture.
+
+  The GUI could not be used in this environment for an INDEPENDENT reason:
+  the Electron binary segfaults on launch (`--version` exits 139) for BOTH
+  the bundled test VS Code and the system VS Code, while Chromium runs
+  normally. That is an environment-level Electron fault, unrelated to this
+  ACT, and it is recorded here only so the next reviewer does not re-attempt
+  it.
+
+* **The `model_config` snapshot VALUES.** These are written through the
+  SAME production adapter (`recordModelBehaviorTraceConfig`) with the SAME
+  values `buildSessionConfig()` passes — INCLUDING the values it passes as
+  `undefined`. The preflight deliberately does NOT enrich them, because
+  the whole point is to MEASURE the production gaps rather than mask them.
+
 which is a host-side capability probe, not a recorded field.

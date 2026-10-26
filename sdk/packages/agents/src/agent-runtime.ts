@@ -1965,6 +1965,18 @@ export class AgentRuntime {
 		});
 
 		this.throwIfAborted();
+		// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4):
+		// report the EFFECTIVE model configuration at the boundary where the
+		// values actually govern execution.
+		//
+		// This is deliberately AFTER `prepareTurnForModelRequest` and the
+		// `beforeModel` hooks, because those can rewrite `request.tools` and
+		// `request.options`. Observing the pre-hook request would report a
+		// toolset / reasoning policy that the provider never received.
+		//
+		// The observation is fire-and-forget and failure-isolated: it cannot
+		// influence the request, the provider call, or tool execution.
+		this.observeEffectiveModelConfig(request);
 		this.captureTaskLifecycle(TASK_PROVIDER_REQUEST_STARTED_EVENT, {
 			durationMs: getTaskLifecycleDurationMs(),
 			phase: "provider_request_started",
@@ -2495,6 +2507,57 @@ export class AgentRuntime {
 				? { modelId: this.getTelemetryModelId() }
 				: {}),
 		};
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4).
+	 *
+	 * Report the EFFECTIVE model configuration that governs this request.
+	 *
+	 * The values are read from the request that is ABOUT TO BE SENT:
+	 *   - `toolCount` / `toolNames` — the effective model-request tool
+	 *     schemas (the real action space the provider is offered),
+	 *   - `reasoningEffort` / `thinkingEnabled` — the effective provider
+	 *     request configuration,
+	 *   - `maxOutputTokens` — the resolved model/request output limit.
+	 *
+	 * An omitted provider reasoning setting is NOT proof of a particular
+	 * provider default: it is reported as "not specified by the runtime",
+	 * which the comparator treats as UNVERIFIED rather than equal.
+	 *
+	 * The identity is the REAL session id and run id — this is what binds an
+	 * effective configuration to an execution instead of to a timestamp.
+	 */
+	private observeEffectiveModelConfig(request: AgentModelRequest): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onEffectiveModelConfig) {
+			return;
+		}
+		try {
+			const options = request.options ?? {};
+			const thinking = options.thinking;
+			const reasoningEffort = options.reasoningEffort;
+			const maxOutputTokens = options.maxTokensPerTurn;
+			sink.onEffectiveModelConfig({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					toolCount: request.tools.length,
+					toolNames: request.tools.map((tool) => tool.name),
+					// `undefined` means the runtime did not specify it — NOT
+					// "the provider default".
+					...(typeof thinking === "boolean"
+						? { thinkingEnabled: thinking }
+						: {}),
+					...(typeof reasoningEffort === "string" ? { reasoningEffort } : {}),
+					...(typeof maxOutputTokens === "number" &&
+					Number.isFinite(maxOutputTokens)
+						? { maxOutputTokens }
+						: {}),
+				},
+			});
+		} catch {
+			// Failure isolation.
+		}
 	}
 
 	private observeModelRequestStart(

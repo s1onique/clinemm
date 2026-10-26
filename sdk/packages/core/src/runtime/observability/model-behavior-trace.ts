@@ -171,6 +171,7 @@ export function createIsolatedModelBehaviorTraceSink(
 		}
 	};
 	return {
+		onEffectiveModelConfig: safe,
 		onModelRequestStart: safe,
 		onModelRequestFinish: safe,
 		onModelRequestError: safe,
@@ -209,7 +210,8 @@ export function isModelBehaviorTraceSinkActive(
 		return false;
 	}
 	return Boolean(
-		sink.onModelRequestStart ||
+		sink.onEffectiveModelConfig ||
+			sink.onModelRequestStart ||
 			sink.onModelRequestFinish ||
 			sink.onModelRequestError ||
 			sink.onModelRequestAbort ||

@@ -477,6 +477,22 @@ interface TraceConfigAnalysis {
 		modelId?: string;
 		providerId?: string;
 	}>;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4):
+	 * the EFFECTIVE configuration snapshots observed at the model-request
+	 * boundary, in observation order.
+	 *
+	 * These carry the REAL session/run identity, so they are the
+	 * authoritative source for the effective toolset, reasoning policy and
+	 * output limit.
+	 */
+	effectiveSnapshots: Array<{
+		values: Record<string, string>;
+		sessionId?: string;
+		runId?: string;
+		modelId?: string;
+		providerId?: string;
+	}>;
 	/** Every distinct run id observed anywhere in the trace. */
 	observedRuns: string[];
 	/** Every distinct session id observed anywhere in the trace. */
@@ -496,6 +512,7 @@ interface TraceConfigAnalysis {
  */
 function analyzeConfig(trace: ParsedTrace): TraceConfigAnalysis {
 	const snapshots: TraceConfigAnalysis["snapshots"] = [];
+	const effectiveSnapshots: TraceConfigAnalysis["effectiveSnapshots"] = [];
 	const runs = new Set<string>();
 	const sessions = new Set<string>();
 	const modelIds = new Set<string>();
@@ -514,14 +531,17 @@ function analyzeConfig(trace: ParsedTrace): TraceConfigAnalysis {
 		if (record.providerId !== undefined && record.providerId !== "") {
 			providerIds.add(record.providerId);
 		}
-		if (record.event !== "model_config") {
+		if (
+			record.event !== "model_config" &&
+			record.event !== "effective_model_config"
+		) {
 			continue;
 		}
 		const values: Record<string, string> = {};
 		for (const [key, value] of Object.entries(record.payload)) {
 			values[key] = typeof value === "string" ? value : JSON.stringify(value);
 		}
-		snapshots.push({
+		const snapshot = {
 			values,
 			...(record.sessionId !== undefined
 				? { sessionId: record.sessionId }
@@ -531,11 +551,17 @@ function analyzeConfig(trace: ParsedTrace): TraceConfigAnalysis {
 			...(record.providerId !== undefined
 				? { providerId: record.providerId }
 				: {}),
-		});
+		};
+		if (record.event === "effective_model_config") {
+			effectiveSnapshots.push(snapshot);
+		} else {
+			snapshots.push(snapshot);
+		}
 	}
 
 	return {
 		snapshots,
+		effectiveSnapshots,
 		observedRuns: [...runs].sort(),
 		observedSessions: [...sessions].sort(),
 		observedModelIds: [...modelIds].sort(),
@@ -567,12 +593,72 @@ function isKnownValue(value: string | undefined): boolean {
 }
 
 /**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4):
+ * the identity-verified scope of a run.
+ *
+ * A run belongs to exactly ONE session. The scope therefore resolves to:
+ *   - `runId` — the selected run,
+ *   - `sessionId` — the session that owns the selected run, derived from
+ *     the records that actually carry that run id.
+ *
+ * The session id is DERIVED FROM IDENTITY, never from timestamp proximity.
+ * When the selected run is never observed on a record, the session id stays
+ * `undefined` and the scope is run-id-only.
+ */
+interface RunScope {
+	readonly runId: string;
+	readonly sessionId?: string;
+}
+
+/**
+ * Resolve the identity-verified scope for a selected run.
+ *
+ * A record is INCLUDED when it is bound to the selected run, or when it is
+ * bound to the session that owns the selected run and carries NO run id of
+ * its own (a session-level record such as the build-time configuration
+ * snapshot, which legitimately precedes run creation).
+ *
+ * A record that carries a DIFFERENT run id is NEVER included, even when it
+ * belongs to the same session — that is what keeps two runs of one session
+ * from contaminating each other.
+ *
+ * A record whose identity is UNKNOWN (neither a run id nor a session id) is
+ * NEVER included: attaching it by timestamp proximity would silently attach
+ * another session's record.
+ */
+function resolveRunScope(
+	records: readonly TraceRecord[],
+	selectedRunId: string,
+): RunScope {
+	const owningSessions = new Set<string>();
+	for (const record of records) {
+		if (record.runId === selectedRunId && record.sessionId !== undefined) {
+			owningSessions.add(record.sessionId);
+		}
+	}
+	// A run belongs to exactly one session. If the trace somehow shows more,
+	// the scope cannot be identity-verified, so no session id is claimed.
+	const sessionId =
+		owningSessions.size === 1 ? [...owningSessions][0] : undefined;
+	return {
+		runId: selectedRunId,
+		...(sessionId !== undefined ? { sessionId } : {}),
+	};
+}
+
+/**
  * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01: the filter applied to a trace
  * before its statistics are computed.
  *
  * When a run is explicitly selected, every record that belongs to a
  * DIFFERENT run is dropped, so the statistics describe exactly the
  * selected run and not an aggregate across runs.
+ *
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4): the
+ * unconditional `runId === undefined` inclusion rule is REPLACED by an
+ * identity-verified rule. A record without a run id is included only when
+ * it carries the session id that owns the selected run. A record with no
+ * identity at all is never included.
  */
 function scopeRecords(
 	trace: ParsedTrace,
@@ -581,9 +667,17 @@ function scopeRecords(
 	if (!selectedRunId) {
 		return trace.records;
 	}
-	return trace.records.filter(
-		(record) => record.runId === undefined || record.runId === selectedRunId,
-	);
+	const scope = resolveRunScope(trace.records, selectedRunId);
+	return trace.records.filter((record) => {
+		if (record.runId !== undefined) {
+			return record.runId === scope.runId;
+		}
+		// No run id: include ONLY when the record is bound to the session
+		// that owns the selected run.
+		return (
+			scope.sessionId !== undefined && record.sessionId === scope.sessionId
+		);
+	});
 }
 
 function computeStatistics(
@@ -789,6 +883,11 @@ const MATERIAL_DIMENSIONS: Array<{ key: string; reason: string }> = [
 			"different source HEAD — behavior differences may come from the code, not the model",
 	},
 	{
+		key: "extensionBundleSha256",
+		reason:
+			"different installed bundle identity — the two traces ran DIFFERENT extension bytes, so behavior differences may come from the build, not the model",
+	},
+	{
 		key: "extensionVersion",
 		reason:
 			"different extension version — behavior differences may come from the build, not the model",
@@ -797,6 +896,21 @@ const MATERIAL_DIMENSIONS: Array<{ key: string; reason: string }> = [
 		key: "userContextCeiling",
 		reason:
 			"different user context ceiling — the compaction boundary differs, so the traces are not comparable",
+	},
+	{
+		key: "userContextCeilingMode",
+		reason:
+			"different user context ceiling operating mode — one side ran under an explicit ceiling and the other under Auto, so the compaction boundary differs",
+	},
+	{
+		key: "effectiveMaxInputTokens",
+		reason:
+			"different effective context input budget — the compaction boundary differs, so the traces are not comparable",
+	},
+	{
+		key: "inputBudgetSource",
+		reason:
+			"different input-budget provenance — the effective context budget was resolved from different inputs, so the compaction boundary differs",
 	},
 	{
 		key: "reasoningEffort",
@@ -882,6 +996,113 @@ function compareDimension(
 }
 
 /**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2/R5):
+ * the SOURCE/BUILD parity verdict.
+ *
+ * The source identity and the artifact identity are SEPARATE facts:
+ *
+ *   - `sourceHead` is the SOURCE provenance. It is "unknown" whenever the
+ *     build was not made from a git working tree (the normal case for an
+ *     installed VSIX).
+ *   - `extensionBundleSha256` is the ARTIFACT identity: the SHA-256 of the
+ *     ACTUAL installed `dist/extension.js` bytes that ran.
+ *
+ * The rules are:
+ *
+ *   1. Two KNOWN, DIFFERENT bundle digests are incompatible — the bytes
+ *      differed, regardless of what the source provenance says.
+ *   2. Two KNOWN, EQUAL source heads are equal.
+ *   3. Two KNOWN, DIFFERENT source heads are incompatible.
+ *   4. Two KNOWN, EQUAL bundle digests AND equal extension versions are a
+ *      VERIFIED EQUIVALENT ARTIFACT-IDENTITY PROOF: the two traces ran the
+ *      SAME bytes of the SAME release. That is sufficient to establish
+ *      source/build parity even when the source provenance is unknown.
+ *   5. Otherwise — most importantly when the source provenance is unknown
+ *      on either side and there is NO verified artifact-identity proof —
+ *      source/build parity is UNVERIFIED. Unknown source provenance is
+ *      NEVER turned into a match.
+ */
+interface SourceBuildParity {
+	readonly comparison: DimensionComparison;
+	readonly reason: string;
+	/** True when the artifact-identity proof established the parity. */
+	readonly artifactIdentityProof: boolean;
+}
+
+function assessSourceBuildParity(
+	m3Config: Record<string, string>,
+	m31Config: Record<string, string>,
+): SourceBuildParity {
+	const sourceEqual = compareDimension(
+		"sourceHead",
+		m3Config.sourceHead,
+		m31Config.sourceHead,
+	);
+	const bundleEqual = compareDimension(
+		"extensionBundleSha256",
+		m3Config.extensionBundleSha256,
+		m31Config.extensionBundleSha256,
+	);
+	const versionEqual = compareDimension(
+		"extensionVersion",
+		m3Config.extensionVersion,
+		m31Config.extensionVersion,
+	);
+
+	// (1) Different BYTES are always incompatible, whatever the source says.
+	if (bundleEqual.comparison === "different") {
+		return {
+			comparison: "different",
+			reason:
+				"the two traces ran DIFFERENT installed bundle bytes (different extensionBundleSha256) — behavior differences may come from the build, not the model",
+			artifactIdentityProof: false,
+		};
+	}
+
+	// (2) The same source head is a direct proof.
+	if (sourceEqual.comparison === "equal") {
+		return {
+			comparison: "equal",
+			reason: "both sides observed the same source HEAD",
+			artifactIdentityProof: false,
+		};
+	}
+
+	// (3) Two different, KNOWN source heads are incompatible.
+	if (sourceEqual.comparison === "different") {
+		return {
+			comparison: "different",
+			reason:
+				"the two traces were built from DIFFERENT source HEADs — behavior differences may come from the code, not the model",
+			artifactIdentityProof: false,
+		};
+	}
+
+	// (4) The source provenance is unknown on at least one side. A verified
+	// EQUIVALENT artifact-identity proof can still establish the parity.
+	if (
+		bundleEqual.comparison === "equal" &&
+		versionEqual.comparison === "equal"
+	) {
+		return {
+			comparison: "equal",
+			reason:
+				"the source provenance is unknown, but BOTH traces ran the SAME verified installed bundle bytes of the SAME extension version — that is a verified equivalent artifact-identity proof",
+			artifactIdentityProof: true,
+		};
+	}
+
+	// (5) Nothing proves the parity. Unknown source provenance is never
+	// turned into a match.
+	return {
+		comparison: "unverified",
+		reason:
+			"the source provenance is unknown and there is NO verified equivalent artifact-identity proof (equal installed bundle bytes AND equal extension version) — source/build parity is UNPROVEN",
+		artifactIdentityProof: false,
+	};
+}
+
+/**
  * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01: compare the two traces'
  * configurations using the three-state result.
  */
@@ -898,7 +1119,62 @@ function compareConfiguration(
 	const differences: MaterialDifference[] = [];
 	const fields: ComparisonSummary["configurationDifferences"] = {};
 
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2/R5):
+	// the source/build parity is assessed as ONE combined fact, because the
+	// source provenance and the artifact identity are two proofs of the same
+	// claim (and either one can settle it).
+	const sourceBuildParity = assessSourceBuildParity(m3Config, m31Config);
+	const sourceEqual = compareDimension(
+		"sourceHead",
+		m3Config.sourceHead,
+		m31Config.sourceHead,
+	);
+	const bundleEqual = compareDimension(
+		"extensionBundleSha256",
+		m3Config.extensionBundleSha256,
+		m31Config.extensionBundleSha256,
+	);
+	fields.sourceHead = {
+		m3: sourceEqual.m3,
+		m31: sourceEqual.m31,
+		comparison: sourceBuildParity.comparison,
+	};
+	fields.extensionBundleSha256 = {
+		m3: bundleEqual.m3,
+		m31: bundleEqual.m31,
+		comparison:
+			sourceBuildParity.comparison === "equal" &&
+			sourceBuildParity.artifactIdentityProof
+				? "equal"
+				: bundleEqual.comparison,
+	};
+	if (sourceBuildParity.comparison === "different") {
+		differences.push({
+			dimension: "sourceHead",
+			m3: sourceEqual.m3,
+			m31: sourceEqual.m31,
+			severity: "material",
+			reason: sourceBuildParity.reason,
+		});
+	} else if (sourceBuildParity.comparison === "unverified") {
+		differences.push({
+			dimension: "sourceHead",
+			m3: sourceEqual.m3,
+			m31: sourceEqual.m31,
+			severity: "unverified",
+			reason: `${sourceBuildParity.reason} — this dimension could not be VERIFIED from the trace, so source/build parity is UNPROVEN`,
+		});
+	}
+
 	for (const dimension of MATERIAL_DIMENSIONS) {
+		// The source/build dimensions were already assessed as one combined
+		// fact above.
+		if (
+			dimension.key === "sourceHead" ||
+			dimension.key === "extensionBundleSha256"
+		) {
+			continue;
+		}
 		const result = compareDimension(
 			dimension.key,
 			m3Config[dimension.key],
@@ -1019,14 +1295,20 @@ function assessTraceComparability(
 		);
 	}
 
-	// (1) Configuration presence. Configuration is recorded ONLY at session
-	// build time, so enabling the recorder on an ALREADY-RUNNING session
-	// produces a trace with NO configuration at all.
-	if (config.snapshots.length === 0) {
+	// (1) Configuration presence. Configuration is recorded at session build
+	// time AND at the effective model-request boundary. Enabling the
+	// recorder on an ALREADY-RUNNING session produces a trace with NO
+	// configuration at all.
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4):
+	// an EFFECTIVE snapshot also establishes that the configuration is
+	// known — it is the stronger evidence, because it carries the real
+	// session/run identity.
+	if (config.snapshots.length === 0 && config.effectiveSnapshots.length === 0) {
 		fail(
 			"missing_config",
 			"missing_model_config",
-			"the trace contains NO model_config snapshot — the model configuration is UNKNOWN, so comparability cannot be established (configuration is recorded only at session build time)",
+			"the trace contains NO model_config snapshot — the model configuration is UNKNOWN, so comparability cannot be established (configuration is recorded at session build time and at the effective model-request boundary)",
 		);
 	} else if (config.snapshots.length > 1) {
 		// (2) Ambiguous configuration: more than one snapshot means the
@@ -1117,26 +1399,87 @@ function assessTraceComparability(
  *
  * When a run was explicitly selected, the snapshot belonging to THAT run is
  * used; otherwise the (single, non-ambiguous) snapshot is used.
+ *
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4):
+ * the EFFECTIVE configuration is layered ON TOP of the build-time
+ * configuration.
+ *
+ * The effective snapshot is preferred because it describes what the runtime
+ * ACTUALLY sent. The build-time snapshot supplies the facts the runtime
+ * cannot observe (build identity, catalog context window, the configured
+ * ceiling mode).
+ *
+ * The layering is IDENTITY-VERIFIED: an effective snapshot is applied only
+ * when it belongs to the selected run, or — when no run was selected — only
+ * when the trace has exactly one effective snapshot. A build-time snapshot
+ * with NO session identity is applied only when the trace has exactly one
+ * session (so a shared recorder carrying two sessions cannot cross-bind
+ * them).
  */
 function selectConfigValues(
 	trace: ParsedTrace,
 	selectedRunId?: string,
 ): Record<string, string> {
 	const config = analyzeConfig(trace);
-	if (config.snapshots.length === 0) {
+	if (config.snapshots.length === 0 && config.effectiveSnapshots.length === 0) {
 		return {};
 	}
+
+	const scope = selectedRunId
+		? resolveRunScope(trace.records, selectedRunId)
+		: undefined;
+
+	// --- The build-time (session-level) configuration -----------------------
+	let buildTimeValues: Record<string, string> = {};
 	if (selectedRunId) {
+		// A build-time snapshot that precedes run creation is bound to the
+		// SESSION, so it applies when its session owns the selected run.
 		const scoped = config.snapshots.find(
 			(snapshot) =>
 				snapshot.runId === selectedRunId ||
-				snapshot.sessionId === selectedRunId,
+				(scope?.sessionId !== undefined &&
+					snapshot.sessionId === scope.sessionId),
 		);
 		if (scoped) {
-			return scoped.values;
+			buildTimeValues = scoped.values;
+		}
+	} else if (config.snapshots.length === 1) {
+		buildTimeValues = config.snapshots[0].values;
+	} else if (config.snapshots.length > 1) {
+		// Ambiguous build-time configuration: only use it when every
+		// snapshot belongs to the SAME session (a single session whose
+		// configuration was rebuilt), otherwise leave it unbound.
+		const sessions = new Set(
+			config.snapshots.map((snapshot) => snapshot.sessionId),
+		);
+		if (sessions.size === 1 && config.snapshots[0].sessionId !== undefined) {
+			buildTimeValues = config.snapshots[0].values;
 		}
 	}
-	return config.snapshots[0].values;
+
+	// --- The EFFECTIVE (run-level) configuration ---------------------------
+	let effectiveValues: Record<string, string> = {};
+	if (selectedRunId) {
+		const scoped = config.effectiveSnapshots.find(
+			(snapshot) => snapshot.runId === selectedRunId,
+		);
+		if (scoped) {
+			effectiveValues = scoped.values;
+		}
+	} else if (config.effectiveSnapshots.length === 1) {
+		effectiveValues = config.effectiveSnapshots[0].values;
+	}
+
+	// The effective values WIN where both sides observed them; otherwise the
+	// build-time value is retained. An UNKNOWN effective value never
+	// overwrites a KNOWN build-time value.
+	const merged: Record<string, string> = { ...buildTimeValues };
+	for (const [key, value] of Object.entries(effectiveValues)) {
+		if (isKnownValue(value)) {
+			merged[key] = value;
+		}
+	}
+	return merged;
 }
 
 // ============================================================================

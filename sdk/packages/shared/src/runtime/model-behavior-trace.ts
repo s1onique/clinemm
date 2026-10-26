@@ -104,6 +104,13 @@ export type ModelBehaviorTraceEvidenceBoundary =
 /** The event kinds the recorder understands. */
 export type ModelBehaviorTraceEvent =
 	| "model_config"
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4).
+	 *
+	 * The EFFECTIVE model configuration observed at the model-request
+	 * boundary, carrying the real session/run identity.
+	 */
+	| "effective_model_config"
 	| "model_request_start"
 	| "model_request_finish"
 	| "model_request_error"
@@ -176,6 +183,37 @@ export interface ModelBehaviorTraceModelConfig {
 	readonly toolNames?: readonly string[];
 	readonly sourceHead?: string;
 	readonly extensionVersion?: string;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2).
+	 *
+	 * The SHA-256 of the ACTUAL installed `dist/extension.js` bundle bytes.
+	 *
+	 * This is the artifact identity, NOT the source identity. It is read from
+	 * the installed bundle via `resolveInstalledBundleIdentity()`, so it
+	 * describes the bytes that actually ran. `sourceHead` remains a SEPARATE
+	 * fact: it is informational only, and "unknown" source provenance never
+	 * becomes a match on its own.
+	 */
+	readonly extensionBundleSha256?: string;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3).
+	 *
+	 * The EFFECTIVE context input budget the production compaction/model
+	 * resolver actually applies, together with the provenance of the value
+	 * that won.
+	 *
+	 * - `effectiveMaxInputTokens` — the number the production policy uses.
+	 * - `inputBudgetSource` — which input determined it
+	 *   (`modelMaxInputTokens` | `contextWindow` | `userCeiling` |
+	 *   `fallback_128k`).
+	 * - `userContextCeilingMode` — `auto` when the configured ceiling is
+	 *   undefined AND the operating mode is the verified Auto mode; `explicit`
+	 *   when a numeric ceiling governs. This distinguishes "no ceiling
+	 *   configured" (a known operating mode) from "ceiling unknown".
+	 */
+	readonly effectiveMaxInputTokens?: number;
+	readonly inputBudgetSource?: string;
+	readonly userContextCeilingMode?: "auto" | "explicit";
 }
 
 /**
@@ -990,6 +1028,24 @@ export interface ModelBehaviorTraceSink {
 		toolName: string,
 		input: unknown,
 	) => Promise<string | undefined> | string | undefined;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4).
+	 *
+	 * The EFFECTIVE model configuration observed at the boundary where the
+	 * values actually govern execution — the model request the runtime is
+	 * about to issue.
+	 *
+	 * This is deliberately a SEPARATE channel from the build-time
+	 * `model_config` snapshot: the build-time snapshot describes what the
+	 * host CONFIGURED (and may predate the session id), while this one
+	 * describes what the runtime EFFECTIVELY sends, carrying the real
+	 * session/run identity.
+	 *
+	 * The payload carries only privacy-safe scalars:
+	 * `toolCount`, `toolNames`, `reasoningEffort`, `thinkingEnabled`,
+	 * `maxOutputTokens`.
+	 */
+	onEffectiveModelConfig?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request is about to be issued. */
 	onModelRequestStart?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request completed (successfully or with a finish reason). */

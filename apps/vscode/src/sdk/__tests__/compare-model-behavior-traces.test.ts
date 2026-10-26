@@ -58,6 +58,15 @@ const BASE_CONFIG: Record<string, unknown> = {
 	toolNames: ["read_file", "write_file", "run_command", "run_tests", "search_codebase"],
 	sourceHead: "b22855b4a83a958904d9d87c31e4d6c298d355da",
 	extensionVersion: "1.0.0",
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2): the
+	// installed-bundle artifact identity. It is a SEPARATE fact from the
+	// source provenance.
+	extensionBundleSha256: "1111111111111111111111111111111111111111111111111111111111111111",
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3): the
+	// effective input budget and its provenance.
+	effectiveMaxInputTokens: "200000",
+	inputBudgetSource: "userCeiling",
+	userContextCeilingMode: "explicit",
 }
 
 /** One recorded event in a synthetic trace. */

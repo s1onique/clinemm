@@ -53,6 +53,13 @@ export function resolveModelsRegistryPath(): string {
 
 export function ensureCustomProvidersLoadedSync(): void {}
 
+// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3): the
+// REAL production budget resolver + ceiling sanitizer, re-exported from the
+// SDK source so the host records the SAME effective budget the compaction
+// policy applies. Re-exporting (rather than re-implementing) keeps the stub
+// and production in lockstep.
+export { normalizeUserContextCeiling } from "../../../../sdk/packages/core/src/extensions/context/compaction-shared"
+export { resolveModelBehaviorTraceBudget } from "../../../../sdk/packages/core/src/runtime/observability/model-behavior-trace"
 export { isPrivateModelCatalogProvider } from "../../../../sdk/packages/core/src/services/llms/provider-defaults"
 // Real implementation re-exported from the sdk source (same pattern as the
 // apply-patch executors below) so store writes are reflected in the live
