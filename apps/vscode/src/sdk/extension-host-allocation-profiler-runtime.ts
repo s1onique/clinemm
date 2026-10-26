@@ -184,6 +184,81 @@ export function resolveInstalledBundleIdentity(bundleDirname: string): {
 	}
 }
 
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C4): the CACHED
+ * installed-bundle identity.
+ *
+ * `resolveInstalledBundleIdentity()` performs SYNCHRONOUS work: it shells
+ * out to `git rev-parse HEAD` and it reads and SHA-256-hashes the whole
+ * installed `dist/extension.js`. That work is only ever needed to record
+ * the build identity into a model behavior trace, so paying it on the
+ * DISABLED path is pure overhead for every session the extension builds.
+ *
+ * This cache makes the resolver callable from a hot path:
+ *   - while the trace is DISABLED the resolver is never called at all,
+ *   - while the trace is ENABLED the identity is resolved at most ONCE and
+ *     then reused, so repeated session builds do not re-hash the bundle.
+ *
+ * The resolved value is EXACTLY what `resolveInstalledBundleIdentity()`
+ * returns — the cache changes only WHEN the work happens, never WHAT the
+ * recorder's source/build evidence says.
+ */
+let cachedInstalledBundleIdentity:
+	| {
+			sourceHead: string
+			extensionPath: string
+			extensionBundleSha256: string
+	  }
+	| undefined
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C4): resolve the
+ * installed bundle identity AT MOST ONCE and cache it.
+ *
+ * The cache is process-wide: the installed bundle does not change while the
+ * extension host is alive, so the digest and the source provenance are
+ * stable facts for the lifetime of the process.
+ */
+export function resolveInstalledBundleIdentityCached(bundleDirname: string): {
+	sourceHead: string
+	extensionPath: string
+	extensionBundleSha256: string
+} {
+	if (cachedInstalledBundleIdentity === undefined) {
+		installedBundleIdentityResolutionCount += 1
+		cachedInstalledBundleIdentity = resolveInstalledBundleIdentity(bundleDirname)
+	}
+	return cachedInstalledBundleIdentity
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C4): the observed
+ * number of underlying resolutions performed by the cached resolver.
+ *
+ * It is a counter, not a spy: the production code path calls the local
+ * `resolveInstalledBundleIdentity()` directly, so an exported-function spy
+ * would not observe it. The counter is incremented at the single place
+ * where the work actually happens, so it observes the REAL synchronous git
+ * discovery and bundle hashing.
+ */
+let installedBundleIdentityResolutionCount = 0
+
+/** The number of underlying bundle-identity resolutions performed so far. */
+export function getInstalledBundleIdentityResolutionCount(): number {
+	return installedBundleIdentityResolutionCount
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C4): test seam.
+ *
+ * Drops the cached identity so a test can observe the cache being
+ * populated. Production code never calls this.
+ */
+export function _resetInstalledBundleIdentityCache(): void {
+	cachedInstalledBundleIdentity = undefined
+	installedBundleIdentityResolutionCount = 0
+}
+
 function defaultIdentityResolver(): AllocationProfilerIdentityBinding {
 	const { sourceHead, extensionPath, extensionBundleSha256 } = resolveInstalledBundleIdentity(__dirname)
 	return {

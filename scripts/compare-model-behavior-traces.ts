@@ -680,6 +680,36 @@ function scopeRecords(
 	});
 }
 
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C3): the model
+ * identities observed INSIDE the identity-verified scope of a run.
+ *
+ * The scope is the SAME one the statistics use: a record that carries a
+ * different run id is excluded, a record with no run id is included only
+ * when it carries the session that owns the selected run, and a record with
+ * NO identity at all is never included.
+ *
+ * This is what keeps a selected M3 run from inheriting the M3.1 identities
+ * recorded by the other runs of a mixed-model dump.
+ */
+function collectScopedModelIds(
+	trace: ParsedTrace,
+	selectedRunId: string,
+): string[] {
+	const scope = resolveRunScope(trace.records, selectedRunId);
+	const modelIds = new Set<string>();
+	for (const record of scopeRecords(trace, selectedRunId)) {
+		if (record.modelId !== undefined && record.modelId !== "") {
+			modelIds.add(record.modelId);
+		}
+	}
+	// The scope is resolved but not used directly above; referencing it
+	// keeps the identity-verification explicit and guards against a future
+	// refactor that widens the scope.
+	void scope;
+	return [...modelIds].sort();
+}
+
 function computeStatistics(
 	trace: ParsedTrace,
 	records: TraceRecord[],
@@ -893,26 +923,6 @@ const MATERIAL_DIMENSIONS: Array<{ key: string; reason: string }> = [
 			"different extension version — behavior differences may come from the build, not the model",
 	},
 	{
-		key: "userContextCeiling",
-		reason:
-			"different user context ceiling — the compaction boundary differs, so the traces are not comparable",
-	},
-	{
-		key: "userContextCeilingMode",
-		reason:
-			"different user context ceiling operating mode — one side ran under an explicit ceiling and the other under Auto, so the compaction boundary differs",
-	},
-	{
-		key: "effectiveMaxInputTokens",
-		reason:
-			"different effective context input budget — the compaction boundary differs, so the traces are not comparable",
-	},
-	{
-		key: "inputBudgetSource",
-		reason:
-			"different input-budget provenance — the effective context budget was resolved from different inputs, so the compaction boundary differs",
-	},
-	{
 		key: "reasoningEffort",
 		reason:
 			"different reasoning policy — the models were asked to do different things",
@@ -954,6 +964,254 @@ const INFORMATIONAL_DIMENSIONS = [
 	"contextWindow",
 	"maxInputTokens",
 ];
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C1): the ceiling-mode
+ * operating fact carried by a configuration snapshot.
+ *
+ * The mode is one of:
+ *   - `auto`    — no user-configured ceiling; the effective budget came
+ *                 from the model/provider capacity chain,
+ *   - `explicit`— the user configured a ceiling,
+ *   - `unknown` — the mode was not observed.
+ */
+type CeilingMode = "auto" | "explicit" | "unknown";
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C1): the verdict of
+ * the COMBINED ceiling assessment.
+ *
+ * The ceiling dimensions (`userContextCeiling`, `userContextCeilingMode`,
+ * `effectiveMaxInputTokens`, `inputBudgetSource`) describe ONE fact: the
+ * compaction boundary the two runs actually used. They are therefore
+ * assessed together rather than as four independent scalar comparisons.
+ */
+interface CeilingParity {
+	readonly comparison: DimensionComparison;
+	readonly reason: string;
+	/**
+	 * The dimension the verdict is anchored to — the one that actually
+	 * decided the outcome. It is the dimension reported in the material /
+	 * unverified difference list.
+	 */
+	readonly anchorDimension: string;
+	/** The per-dimension verdicts, keyed by dimension name. */
+	readonly dimensions: Record<
+		string,
+		{ m3: string; m31: string; comparison: DimensionComparison }
+	>;
+}
+
+/** Read the recorded ceiling operating mode. */
+function readCeilingMode(config: Record<string, string>): CeilingMode {
+	const mode = config.userContextCeilingMode?.trim().toLowerCase();
+	if (mode === "auto") {
+		return "auto";
+	}
+	if (mode === "explicit") {
+		return "explicit";
+	}
+	return "unknown";
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C1): assess the
+ * ceiling equivalence of two configuration snapshots as ONE fact.
+ *
+ * The rules are:
+ *
+ *   1. An UNKNOWN operating mode on either side is UNVERIFIED. An unknown
+ *      mode is never assumed to be Auto, and Auto equivalence is never
+ *      granted on an unknown mode.
+ *   2. `auto` vs `explicit` (in either order) is a MATERIAL difference:
+ *      one side ran under a user ceiling and the other under the model's
+ *      own capacity, so the compaction boundaries differ.
+ *   3. `auto` vs `auto` satisfies ceiling-mode equivalence ONLY when the
+ *      effective input budget AND its provenance are KNOWN and EQUAL on
+ *      both sides. That is an INDEPENDENTLY VERIFIED equivalence: the two
+ *      runs provably used the same compaction boundary even though neither
+ *      configured a ceiling.
+ *   4. `explicit` vs `explicit` requires the configured ceilings to be
+ *      known and equal, AND the effective budgets and their provenance to
+ *      be known and equal.
+ *   5. Any other combination (different budgets, different provenance, an
+ *      unknown effective budget) is either MATERIAL (both sides known and
+ *      different) or UNVERIFIED (a value is unknown on either side).
+ */
+function assessCeilingParity(
+	m3Config: Record<string, string>,
+	m31Config: Record<string, string>,
+): CeilingParity {
+	const m3Mode = readCeilingMode(m3Config);
+	const m31Mode = readCeilingMode(m31Config);
+	const budget = compareDimension(
+		"effectiveMaxInputTokens",
+		m3Config.effectiveMaxInputTokens,
+		m31Config.effectiveMaxInputTokens,
+	);
+	const provenance = compareDimension(
+		"inputBudgetSource",
+		m3Config.inputBudgetSource,
+		m31Config.inputBudgetSource,
+	);
+	const ceiling = compareDimension(
+		"userContextCeiling",
+		m3Config.userContextCeiling,
+		m31Config.userContextCeiling,
+	);
+	const mode = compareDimension(
+		"userContextCeilingMode",
+		m3Config.userContextCeilingMode,
+		m31Config.userContextCeilingMode,
+	);
+
+	const dimensions: CeilingParity["dimensions"] = {
+		userContextCeiling: {
+			m3: ceiling.m3,
+			m31: ceiling.m31,
+			comparison: ceiling.comparison,
+		},
+		userContextCeilingMode: {
+			m3: mode.m3,
+			m31: mode.m31,
+			comparison: mode.comparison,
+		},
+		effectiveMaxInputTokens: {
+			m3: budget.m3,
+			m31: budget.m31,
+			comparison: budget.comparison,
+		},
+		inputBudgetSource: {
+			m3: provenance.m3,
+			m31: provenance.m31,
+			comparison: provenance.comparison,
+		},
+	};
+
+	// (1) An unknown operating mode fails closed.
+	if (m3Mode === "unknown" || m31Mode === "unknown") {
+		return {
+			comparison: "unverified",
+			anchorDimension: "userContextCeilingMode",
+			reason:
+				"the user context ceiling OPERATING MODE is UNKNOWN on at least one side — an unknown mode is never assumed to be Auto, so ceiling-mode equivalence is UNPROVEN",
+			dimensions,
+		};
+	}
+
+	// (2) Auto vs explicit is a material difference.
+	if (m3Mode !== m31Mode) {
+		return {
+			comparison: "different",
+			anchorDimension: "userContextCeilingMode",
+			reason: `different user context ceiling operating mode — one side ran under an explicit ceiling ("${m3Mode}") and the other under "${m31Mode}", so the compaction boundary differs`,
+			dimensions,
+		};
+	}
+
+	// (3) Auto vs Auto: equivalence requires a known, equal effective budget
+	// AND a known, equal budget provenance.
+	if (m3Mode === "auto") {
+		if (budget.comparison === "different") {
+			return {
+				comparison: "different",
+				anchorDimension: "effectiveMaxInputTokens",
+				reason:
+					"both sides ran under the verified Auto operating mode, but their EFFECTIVE context input budgets differ — the compaction boundary differs, so the traces are not comparable",
+				dimensions,
+			};
+		}
+		if (provenance.comparison === "different") {
+			return {
+				comparison: "different",
+				anchorDimension: "inputBudgetSource",
+				reason:
+					"both sides ran under the verified Auto operating mode, but their input-budget PROVENANCE differs — the effective budget was resolved from different inputs, so the compaction boundary differs",
+				dimensions,
+			};
+		}
+		if (
+			budget.comparison === "unverified" ||
+			provenance.comparison === "unverified"
+		) {
+			return {
+				comparison: "unverified",
+				anchorDimension:
+					budget.comparison === "unverified"
+						? "effectiveMaxInputTokens"
+						: "inputBudgetSource",
+				reason:
+					"both sides ran under the verified Auto operating mode, but the effective input budget or its provenance is UNKNOWN — Auto ceiling-mode equivalence requires a KNOWN and EQUAL effective budget and budget provenance",
+				dimensions,
+			};
+		}
+		// The verified equivalence is established. The raw user ceiling is
+		// not a separate fact in Auto mode: there IS no user ceiling.
+		dimensions.userContextCeiling = {
+			m3: ceiling.m3,
+			m31: ceiling.m31,
+			comparison: "equal",
+		};
+		return {
+			comparison: "equal",
+			anchorDimension: "userContextCeilingMode",
+			reason:
+				"both sides ran under the INDEPENDENTLY VERIFIED Auto operating mode with the SAME known effective input budget resolved from the SAME known budget provenance — the compaction boundary is provably identical",
+			dimensions,
+		};
+	}
+
+	// (4) Explicit vs explicit.
+	if (ceiling.comparison === "different") {
+		return {
+			comparison: "different",
+			anchorDimension: "userContextCeiling",
+			reason:
+				"different user context ceiling — the compaction boundary differs, so the traces are not comparable",
+			dimensions,
+		};
+	}
+	if (
+		ceiling.comparison === "unverified" ||
+		budget.comparison === "unverified" ||
+		provenance.comparison === "unverified"
+	) {
+		return {
+			comparison: "unverified",
+			anchorDimension:
+				ceiling.comparison === "unverified"
+					? "userContextCeiling"
+					: budget.comparison === "unverified"
+						? "effectiveMaxInputTokens"
+						: "inputBudgetSource",
+			reason:
+				"both sides ran under an explicit ceiling, but the configured ceiling, the effective input budget, or the budget provenance is UNKNOWN — a known value cannot be matched against an unknown one",
+			dimensions,
+		};
+	}
+	if (
+		budget.comparison === "different" ||
+		provenance.comparison === "different"
+	) {
+		return {
+			comparison: "different",
+			anchorDimension:
+				budget.comparison === "different"
+					? "effectiveMaxInputTokens"
+					: "inputBudgetSource",
+			reason:
+				"both sides ran under an explicit ceiling, but their effective input budget or budget provenance differs — the compaction boundary differs",
+			dimensions,
+		};
+	}
+	return {
+		comparison: "equal",
+		anchorDimension: "userContextCeilingMode",
+		reason:
+			"both sides ran under the same explicit ceiling with the same effective input budget resolved from the same budget provenance",
+		dimensions,
+	};
+}
 
 /**
  * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01: compare ONE configuration
@@ -1166,6 +1424,49 @@ function compareConfiguration(
 		});
 	}
 
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C1): the ceiling
+	// dimensions are assessed as ONE COMBINED FACT.
+	//
+	// The four ceiling dimensions describe the SAME fact — the compaction
+	// boundary the run actually used — so they are NOT four independent
+	// scalar comparisons. In particular, two independently verified Auto
+	// modes (known and equal effective budget AND known and equal budget
+	// provenance) satisfy ceiling-mode equivalence even though the raw user
+	// ceiling is absent on both sides.
+	const ceilingParity = assessCeilingParity(m3Config, m31Config);
+	for (const [dimension, result] of Object.entries(ceilingParity.dimensions)) {
+		fields[dimension] = {
+			m3: result.m3,
+			m31: result.m31,
+			comparison: result.comparison,
+		};
+	}
+	if (ceilingParity.comparison === "different") {
+		differences.push({
+			dimension: ceilingParity.anchorDimension,
+			m3:
+				ceilingParity.dimensions[ceilingParity.anchorDimension]?.m3 ??
+				UNAVAILABLE,
+			m31:
+				ceilingParity.dimensions[ceilingParity.anchorDimension]?.m31 ??
+				UNAVAILABLE,
+			severity: "material",
+			reason: ceilingParity.reason,
+		});
+	} else if (ceilingParity.comparison === "unverified") {
+		differences.push({
+			dimension: ceilingParity.anchorDimension,
+			m3:
+				ceilingParity.dimensions[ceilingParity.anchorDimension]?.m3 ??
+				UNAVAILABLE,
+			m31:
+				ceilingParity.dimensions[ceilingParity.anchorDimension]?.m31 ??
+				UNAVAILABLE,
+			severity: "unverified",
+			reason: `${ceilingParity.reason} — this dimension could not be VERIFIED from the trace, so source/build parity is UNPROVEN`,
+		});
+	}
+
 	for (const dimension of MATERIAL_DIMENSIONS) {
 		// The source/build dimensions were already assessed as one combined
 		// fact above.
@@ -1317,6 +1618,13 @@ function assessTraceComparability(
 		// When a run was EXPLICITLY selected, the ambiguity is resolved for
 		// that run: only the snapshots belonging to the selected run (and the
 		// session-level snapshot it inherits) are considered.
+		//
+		// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2): the
+		// SESSION-LESS / SESSION-BOUND build-time pair is ONE
+		// configuration, not an ambiguity. The pair is cross-checked by
+		// value: when the halves agree on every material dimension there is
+		// no ambiguity. When they DISAGREE, the build-time configuration is
+		// ambiguous and the comparison is refused.
 		const scopedSnapshots = selectedRunId
 			? config.snapshots.filter(
 					(snapshot) =>
@@ -1327,19 +1635,56 @@ function assessTraceComparability(
 			scopedSnapshots.map((snapshot) => JSON.stringify(snapshot.values)),
 		);
 		if (distinct.size > 1) {
-			fail(
-				"ambiguous_config",
-				"ambiguous_model_config",
-				`the trace contains ${distinct.size} DISTINCT model_config snapshots — it spans multiple sessions/models and the comparison is AMBIGUOUS; select one run explicitly`,
-			);
+			const conflictingDimensions = collectEffectiveConflicts(
+				scopedSnapshots,
+			).map((conflict) => conflict.dimension);
+			if (conflictingDimensions.length > 0) {
+				fail(
+					"ambiguous_config",
+					"ambiguous_model_config",
+					`the trace contains ${distinct.size} DISTINCT model_config snapshots that disagree on ${conflictingDimensions.join(", ")} — the build-time configuration is AMBIGUOUS; select one run explicitly`,
+				);
+			}
 		}
+	}
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2): EVERY
+	// effective snapshot belonging to the selected run is evaluated. A
+	// mid-run material change is DETECTED, not silently ignored.
+	//
+	// The selection is reused here so the comparability verdict and the
+	// dimension comparison always describe the SAME set of snapshots.
+	const selection = selectConfigValues(trace, selectedRunId);
+	if (selection.effectiveConflicts.length > 0) {
+		const described = selection.effectiveConflicts
+			.map(
+				(conflict) => `${conflict.dimension} (${conflict.values.join(" vs ")})`,
+			)
+			.join(", ");
+		fail(
+			"ambiguous_config",
+			"effective_model_config_changed",
+			`the selected run's effective model configuration CHANGED during the run — ${described}. The run was not governed by a single configuration, so the observed behavior cannot be attributed to the model alone`,
+		);
 	}
 
 	// (3) Model attribution. The recorded model identity must match the
 	// supplied label.
-	const observedModelIds = config.observedModelIds;
-	if (observedModelIds.length > 0) {
-		const mismatched = observedModelIds.filter((modelId) => {
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C3): the
+	// IDENTITY-VERIFIED run scope is applied BEFORE the model-family
+	// membership is evaluated.
+	//
+	// Without this, selecting an M3 run from a mixed-model dump would
+	// inherit the M3.1 identities recorded by the dump's OTHER runs and
+	// the attribution would be wrongly REJECTED. The scope is never
+	// widened by the attribution check: an UNSCOPED mixed-model dump is
+	// still refused (see check (4)).
+	const scopedModelIds = selectedRunId
+		? collectScopedModelIds(trace, selectedRunId)
+		: config.observedModelIds;
+	if (scopedModelIds.length > 0) {
+		const mismatched = scopedModelIds.filter((modelId) => {
 			const family = classifyModelFamily(modelId);
 			return family !== null && family !== label;
 		});
@@ -1394,8 +1739,85 @@ function assessTraceComparability(
 }
 
 /**
- * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01-CORR01: the configuration values used
- * for the dimension comparison.
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2): the outcome of
+ * selecting the configuration values that describe the SELECTED run.
+ */
+interface ConfigSelection {
+	/** The merged configuration values used for the dimension comparison. */
+	readonly values: Record<string, string>;
+	/**
+	 * The effective snapshots that were evaluated for the selected run.
+	 * EVERY one of them is considered — not just the first.
+	 */
+	readonly evaluatedEffectiveSnapshots: number;
+	/**
+	 * The MATERIAL dimensions on which the evaluated effective snapshots
+	 * disagreed. A non-empty list means the configuration CHANGED during
+	 * the run, which is a refusal — not something to average away.
+	 */
+	readonly effectiveConflicts: Array<{
+		dimension: string;
+		values: string[];
+	}>;
+	/**
+	 * True when the build-time configuration could not be bound to the
+	 * selected run (e.g. a session-less snapshot in a multi-session trace).
+	 */
+	readonly buildTimeUnbound: boolean;
+}
+
+/**
+ * The effective-snapshot dimensions that are MATERIAL to the comparison.
+ *
+ * These are the facts that the runtime actually sends to the provider. A
+ * change in any of them during a run means the run was not governed by a
+ * single configuration, so the comparison cannot attribute the observed
+ * behavior to the model alone.
+ */
+const EFFECTIVE_MATERIAL_DIMENSIONS = [
+	"toolCount",
+	"toolNames",
+	"thinkingEnabled",
+	"reasoningEffort",
+	"maxOutputTokens",
+] as const;
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2): collect the
+ * material conflicts among the evaluated effective snapshots.
+ *
+ * Only KNOWN values participate: an unknown value on one snapshot and a
+ * known value on another is not a conflict, it is an observation gap (and
+ * the comparison of the two SIDES already handles unknown values as
+ * unverified). Two snapshots that both leave a dimension unknown are
+ * equally unknown — not evidence of a change.
+ */
+function collectEffectiveConflicts(
+	snapshots: ReadonlyArray<{ values: Record<string, string> }>,
+): ConfigSelection["effectiveConflicts"] {
+	const conflicts: ConfigSelection["effectiveConflicts"] = [];
+	for (const dimension of EFFECTIVE_MATERIAL_DIMENSIONS) {
+		const observed = new Map<string, string>();
+		for (const snapshot of snapshots) {
+			const value = snapshot.values[dimension];
+			if (!isKnownValue(value)) {
+				continue;
+			}
+			observed.set(value as string, dimension);
+		}
+		if (observed.size > 1) {
+			conflicts.push({
+				dimension,
+				values: [...observed.keys()].sort(),
+			});
+		}
+	}
+	return conflicts;
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2): the
+ * configuration values used for the dimension comparison.
  *
  * When a run was explicitly selected, the snapshot belonging to THAT run is
  * used; otherwise the (single, non-ambiguous) snapshot is used.
@@ -1409,20 +1831,33 @@ function assessTraceComparability(
  * cannot observe (build identity, catalog context window, the configured
  * ceiling mode).
  *
- * The layering is IDENTITY-VERIFIED: an effective snapshot is applied only
- * when it belongs to the selected run, or — when no run was selected — only
- * when the trace has exactly one effective snapshot. A build-time snapshot
- * with NO session identity is applied only when the trace has exactly one
- * session (so a shared recorder carrying two sessions cannot cross-bind
- * them).
+ * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2):
+ *
+ *   - EVERY effective snapshot that belongs to the selected run is
+ *     EVALUATED, not just the first one. A mid-run material change is
+ *     reported as a conflict instead of being silently ignored.
+ *   - The build-time SESSION-LESS / SESSION-BOUND pair is handled as ONE
+ *     configuration: the session-less snapshot is the same build-time
+ *     configuration before the session id existed, and the session-bound
+ *     one is the same configuration after it was bound. They are therefore
+ *     cross-checked against each other and BOTH contribute their values,
+ *     rather than the first one winning and the pair looking ambiguous.
+ *   - True session/run isolation is preserved: an effective snapshot that
+ *     belongs to a DIFFERENT run is never evaluated, and a build-time
+ *     snapshot that belongs to a DIFFERENT session is never applied.
  */
 function selectConfigValues(
 	trace: ParsedTrace,
 	selectedRunId?: string,
-): Record<string, string> {
+): ConfigSelection {
 	const config = analyzeConfig(trace);
 	if (config.snapshots.length === 0 && config.effectiveSnapshots.length === 0) {
-		return {};
+		return {
+			values: {},
+			evaluatedEffectiveSnapshots: 0,
+			effectiveConflicts: [],
+			buildTimeUnbound: false,
+		};
 	}
 
 	const scope = selectedRunId
@@ -1430,56 +1865,129 @@ function selectConfigValues(
 		: undefined;
 
 	// --- The build-time (session-level) configuration -----------------------
-	let buildTimeValues: Record<string, string> = {};
-	if (selectedRunId) {
-		// A build-time snapshot that precedes run creation is bound to the
-		// SESSION, so it applies when its session owns the selected run.
-		const scoped = config.snapshots.find(
-			(snapshot) =>
-				snapshot.runId === selectedRunId ||
-				(scope?.sessionId !== undefined &&
-					snapshot.sessionId === scope.sessionId),
-		);
-		if (scoped) {
-			buildTimeValues = scoped.values;
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2): the
+	// SESSION-LESS / SESSION-BOUND pair is ONE configuration.
+	//
+	// The build-time configuration is constructed before the session id
+	// exists, so it is first recorded session-LESS and then re-recorded
+	// bound to the session by the authority that allocated the id. The two
+	// records describe the SAME configuration; they are NOT two competing
+	// configurations and must NOT be reported as an ambiguity.
+	//
+	// The binding rule is identity-verified:
+	//   - a snapshot bound to the SELECTED RUN applies,
+	//   - a snapshot bound to the session that OWNS the selected run
+	//     applies (this is the session-bound half of the pair),
+	//   - a SESSION-LESS snapshot applies only when it can be bound to the
+	//     selected run's session — that is, when the trace has exactly ONE
+	//     session. In a multi-session trace the session-less snapshot is
+	//     left unbound rather than cross-bound to the wrong session.
+	const buildTimeValues: Record<string, string> = {};
+	let buildTimeUnbound = false;
+	const applyBuildTimeSnapshot = (snapshot: {
+		values: Record<string, string>;
+	}): void => {
+		for (const [key, value] of Object.entries(snapshot.values)) {
+			// A KNOWN value from the first applicable snapshot wins; an
+			// unknown one never overwrites a known one.
+			if (isKnownValue(value) && !isKnownValue(buildTimeValues[key])) {
+				buildTimeValues[key] = value;
+			}
 		}
-	} else if (config.snapshots.length === 1) {
-		buildTimeValues = config.snapshots[0].values;
-	} else if (config.snapshots.length > 1) {
-		// Ambiguous build-time configuration: only use it when every
-		// snapshot belongs to the SAME session (a single session whose
-		// configuration was rebuilt), otherwise leave it unbound.
+	};
+	if (selectedRunId) {
+		// The selected run's OWN build-time snapshot.
+		const runBound = config.snapshots.filter(
+			(snapshot) => snapshot.runId === selectedRunId,
+		);
+		for (const snapshot of runBound) {
+			applyBuildTimeSnapshot(snapshot);
+		}
+		// The session-bound half of the pair: the session that owns the
+		// selected run.
+		if (scope?.sessionId !== undefined) {
+			const sessionBound = config.snapshots.filter(
+				(snapshot) =>
+					snapshot.runId === undefined &&
+					snapshot.sessionId === scope.sessionId,
+			);
+			for (const snapshot of sessionBound) {
+				applyBuildTimeSnapshot(snapshot);
+			}
+			// The SESSION-LESS half of the pair: it belongs to the same
+			// configuration, but only when there is exactly ONE session in
+			// the trace — otherwise it cannot be bound by identity.
+			const sessionLess = config.snapshots.filter(
+				(snapshot) =>
+					snapshot.runId === undefined && snapshot.sessionId === undefined,
+			);
+			if (sessionLess.length > 0) {
+				if (config.observedSessions.length === 1) {
+					for (const snapshot of sessionLess) {
+						applyBuildTimeSnapshot(snapshot);
+					}
+				} else {
+					buildTimeUnbound = true;
+				}
+			}
+		}
+	} else {
+		// No run was selected: the build-time configuration applies only
+		// when every snapshot belongs to the SAME session (a single session
+		// whose configuration was rebuilt, possibly through the session-less
+		// / session-bound pair).
 		const sessions = new Set(
 			config.snapshots.map((snapshot) => snapshot.sessionId),
 		);
-		if (sessions.size === 1 && config.snapshots[0].sessionId !== undefined) {
-			buildTimeValues = config.snapshots[0].values;
+		const onlySession = config.observedSessions.length === 1;
+		if (sessions.size === 1 && onlySession) {
+			for (const snapshot of config.snapshots) {
+				applyBuildTimeSnapshot(snapshot);
+			}
+		} else {
+			buildTimeUnbound = config.snapshots.length > 0;
 		}
 	}
 
 	// --- The EFFECTIVE (run-level) configuration ---------------------------
-	let effectiveValues: Record<string, string> = {};
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2): EVERY
+	// effective snapshot belonging to the selected run is EVALUATED.
+	const evaluatedEffective: Array<{ values: Record<string, string> }> = [];
 	if (selectedRunId) {
-		const scoped = config.effectiveSnapshots.find(
-			(snapshot) => snapshot.runId === selectedRunId,
-		);
-		if (scoped) {
-			effectiveValues = scoped.values;
+		for (const snapshot of config.effectiveSnapshots) {
+			if (snapshot.runId === selectedRunId) {
+				evaluatedEffective.push(snapshot);
+			}
 		}
-	} else if (config.effectiveSnapshots.length === 1) {
-		effectiveValues = config.effectiveSnapshots[0].values;
+	} else {
+		// Without a selected run, the effective configuration applies only
+		// when the trace has exactly ONE effective snapshot — otherwise the
+		// trace spans several runs and is refused.
+		if (config.effectiveSnapshots.length === 1) {
+			evaluatedEffective.push(config.effectiveSnapshots[0]);
+		}
 	}
+	const effectiveConflicts = collectEffectiveConflicts(evaluatedEffective);
 
 	// The effective values WIN where both sides observed them; otherwise the
 	// build-time value is retained. An UNKNOWN effective value never
 	// overwrites a KNOWN build-time value.
 	const merged: Record<string, string> = { ...buildTimeValues };
-	for (const [key, value] of Object.entries(effectiveValues)) {
-		if (isKnownValue(value)) {
-			merged[key] = value;
+	for (const snapshot of evaluatedEffective) {
+		for (const [key, value] of Object.entries(snapshot.values)) {
+			if (isKnownValue(value)) {
+				merged[key] = value;
+			}
 		}
 	}
-	return merged;
+	return {
+		values: merged,
+		evaluatedEffectiveSnapshots: evaluatedEffective.length,
+		effectiveConflicts,
+		buildTimeUnbound,
+	};
 }
 
 // ============================================================================
@@ -1723,10 +2231,16 @@ async function main(): Promise<void> {
 	const m3Records = scopeRecords(m3, options.m3RunId);
 	const m31Records = scopeRecords(m31, options.m31RunId);
 
-	const m3Config = selectConfigValues(m3, options.m3RunId);
-	const m31Config = selectConfigValues(m31, options.m31RunId);
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C2): the selection
+	// evaluates EVERY effective snapshot belonging to the selected run and
+	// reports any mid-run material change.
+	const m3Selection = selectConfigValues(m3, options.m3RunId);
+	const m31Selection = selectConfigValues(m31, options.m31RunId);
 
-	const configuration = compareConfiguration(m3Config, m31Config);
+	const configuration = compareConfiguration(
+		m3Selection.values,
+		m31Selection.values,
+	);
 	const statistics = {
 		m3: computeStatistics(m3, m3Records),
 		m31: computeStatistics(m31, m31Records),

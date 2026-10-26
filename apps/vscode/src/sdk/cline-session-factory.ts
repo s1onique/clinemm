@@ -49,10 +49,17 @@ import { type BedrockProviderConfig, buildBedrockProviderConfig } from "./bedroc
 // ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2): the
 // canonical installed-bundle identity resolver. Reused as-is so the trace
 // records the SAME artifact identity the allocation profiler records.
-import { resolveInstalledBundleIdentity } from "./extension-host-allocation-profiler-runtime"
+// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C4): the CACHED
+// variant resolves it at most once per process, so the synchronous git
+// discovery and bundle hashing are not repeated for every session.
+import { resolveInstalledBundleIdentityCached } from "./extension-host-allocation-profiler-runtime"
 import { buildAgentHooks } from "./hooks-adapter"
 import { readTaskHistory, resolveDataDir } from "./legacy-state-reader"
-import { type ModelBehaviorTraceConfigSnapshot, recordModelBehaviorTraceConfig } from "./model-behavior-trace-runtime"
+import {
+	isModelBehaviorTraceEnabled,
+	type ModelBehaviorTraceConfigSnapshot,
+	recordModelBehaviorTraceConfig,
+} from "./model-behavior-trace-runtime"
 import type { ResolvedModelSelection } from "./model-catalog/contracts"
 import { nonNegativeFiniteNumber, positiveFiniteNumber, toSdkApiFormat } from "./model-catalog/model-values"
 import { parseProviderId } from "./model-catalog/provider-id"
@@ -1254,7 +1261,21 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	// "unknown" — and "unknown" source provenance is NOT the same fact as a
 	// verified source identity. The two are recorded separately so the
 	// comparator can tell "same source" apart from "same artifact bytes".
-	const bundleIdentity = resolveInstalledBundleIdentity(__dirname)
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARATOR-CORRECTION01 (C4): the resolver
+	// performs SYNCHRONOUS git discovery and a SYNCHRONOUS hash of the whole
+	// installed bundle. That work is ONLY ever needed to record the build
+	// identity into a model behavior trace, so it is NOT paid while the
+	// trace is DISABLED — the default state of the extension.
+	//
+	// The cached resolver resolves the identity AT MOST ONCE per process, so
+	// an enabled trace does not re-hash the bundle for every session. The
+	// recorded source/build evidence is EXACTLY what the uncached resolver
+	// produced — only WHEN the work happens changes.
+	const traceEnabled = isModelBehaviorTraceEnabled()
+	const bundleIdentity = traceEnabled
+		? resolveInstalledBundleIdentityCached(__dirname)
+		: { sourceHead: "unknown", extensionPath: "", extensionBundleSha256: "unknown" }
 	// The extension version is the OTHER half of the build binding: a bundle
 	// digest alone does not say WHICH release produced it.
 	const extensionVersion = ExtensionRegistryInfo.version
