@@ -2596,6 +2596,19 @@ export class Controller {
 			setTurnPhase: (phase, anchorTs, writerId) =>
 				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			getTurnPhase: () => this.turnStateTracker.currentPhase,
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+			// / B2PO01: the writer identity of the CURRENTLY COMMITTED phase.
+			//
+			// The turn-complete straggler guard must distinguish a CANCEL's
+			// `resumable` (which it preserves) from a BCB-hold `resumable`
+			// (which it yields to). The predecessor carried that distinction
+			// in a coordinator-private boolean, which the production CANCEL
+			// path — which writes the tracker DIRECTLY, never through the
+			// coordinator — left stale. Reading the fact from the committed
+			// writer identity makes the classification self-consistent: the
+			// cancel's write replaces the identity in the SAME mutation as
+			// the phase, so the guard reactivates immediately.
+			getTurnPhaseWriterId: () => this.turnStateTracker.currentWriterId,
 			// ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01:
 			// CTQC01 bounded host correlation accessor. The same
 			// `liveTools` projection that the

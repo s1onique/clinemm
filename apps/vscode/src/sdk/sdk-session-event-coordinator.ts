@@ -142,6 +142,37 @@ export interface SdkSessionEventCoordinatorOptions {
 	setTurnPhase?: (phase: TurnPhase, anchorTs?: number, writerId?: TurnStateWriterId) => void
 	/** Current authoritative UI turn phase, from the controller's TurnStateTracker. */
 	getTurnPhase?: () => TurnPhase
+	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+	 * / B2PO01: the writer identity of the CURRENTLY COMMITTED phase.
+	 *
+	 * WHY THIS OPTION EXISTS:
+	 *   The turn-complete straggler guard must distinguish a CANCEL's
+	 *   `resumable` (which it PRESERVES) from a BCB-hold `resumable`
+	 *   (which it yields to, so the held obligation's own release path
+	 *   can commit the terminal phase).
+	 *
+	 *   The predecessor carried that distinction in a coordinator-private
+	 *   boolean (`bcbHoldResumablePublished`). That is UNSOUND in
+	 *   production: the CANCEL path writes the phase DIRECTLY to the
+	 *   `TurnStateTracker` (`SdkController.cancelTask` ->
+	 *   `turnStateTracker.setWithWriter(..., "controller-cancel-task")`),
+	 *   never through the coordinator, so the coordinator's boolean
+	 *   survives the cancel and then describes a `resumable` the
+	 *   coordinator did NOT publish. With the boolean stale-true, the
+	 *   straggler guard is DISABLED and a late completion BYPASSES the
+	 *   cancellation guard (it re-publishes the BCB hold, or commits
+	 *   `completed` outright once the hold no longer re-registers).
+	 *
+	 *   This option supplies the fact from the AUTHORITATIVE committed
+	 *   state instead: the committed writer identity is replaced in the
+	 *   SAME mutation as the committed phase, so the classification can
+	 *   never go stale.
+	 *
+	 *   When the option is ABSENT the coordinator falls back to its
+	 *   private flag, so existing test harnesses keep their behaviour.
+	 */
+	getTurnPhaseWriterId?: () => TurnStateWriterId | undefined
 	captureProviderApiError?: (event: ProviderFailureTelemetry) => void
 	beginProviderFailureTelemetryTurn?: () => void
 	/**
@@ -3397,17 +3428,80 @@ export class SdkSessionEventCoordinator {
 				//     `pending_prompt_submitted` with NO live barrier (the
 				//     ordinary user follow-up / T-08 case) still writes
 				//     `streaming` exactly as before.
+				// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+				// / B2PO01: THE ORIGIN DISCRIMINATOR.
+				//
+				// The predecessor (PTWCR01C01) treated "a matching
+				// deferred-completion barrier is live" as sufficient
+				// evidence that the incoming `pending_prompt_submitted`
+				// IS the BCB's OWN continuation. That inference is
+				// WRONG, and the correction is REQUIRED for correctness:
+				//
+				//   The SAME runtime queue carries BOTH kinds of prompt
+				//   with `delivery: "queue"`:
+				//
+				//     - the host-owned BCB continuation
+				//       (`SdkController.buildSdkControllerEnqueueCompletionContinuation`
+				//       -> `sdkHost.send({ ..., runtimeControlKind:
+				//       "completion_continuation_control" })`), and
+				//     - an INDEPENDENT USER-TYPED follow-up
+				//       (`SdkFollowupCoordinator.queueToActiveSession`
+				//       -> `sessions.fireAndForgetSend(..., "queue")`,
+				//       which carries NO `runtimeControlKind`).
+				//
+				//   The barrier identity triple answers "is the held
+				//   completion still outstanding?", NOT "whose prompt is
+				//   this?". Suppressing `streaming` for an independent
+				//   user prompt left the runtime GENUINELY RUNNING while
+				//   the committed phase stayed `resumable` — the exact
+				//   opposite of the false-Working defect this guard was
+				//   added to repair, and with no later event to correct
+				//   it (verified by the B2PO01 probe).
+				//
+				//   The `runtimeControlKind` discriminator is the
+				//   STRUCTURAL origin bit the trusted host already
+				//   stamps on the BCB continuation and NEVER on a user
+				//   prompt. It now survives the queue round-trip AND
+				//   the event boundary (see
+				//   `SessionPendingPromptSubmittedEvent.runtimeControlKind`).
+				//
+				//   The guard therefore requires BOTH:
+				//     (a) the barrier still holds THIS turn's
+				//         completion (the identity triple), AND
+				//     (b) the drained prompt IS the host-owned
+				//         continuation (the origin discriminator).
+				//
+				//   (a) alone is NOT sufficient (the defect this fixes).
+				//   (b) alone is NOT sufficient (an out-of-band
+				//   continuation with no live barrier must still
+				//   activate `streaming` — the pinned T-08 contract).
+				//
+				//   The BCB HOLD, the Elm completion authority, the
+				//   containment guards and the epoch identity triple are
+				//   all UNTOUCHED.
 				const barrierHoldsThisTurn = this.isDeferredCompletionBarrierLiveFor(activeSession.sessionId)
-				if (barrierHoldsThisTurn) {
-					// The held obligation is still outstanding. Publishing
-					// `streaming` here would assert ACTIVE work that the
-					// barrier says is HELD — the exact LIVE false-Working
-					// symptom. Preserve the committed phase so the
-					// authoritative projection stays truthful.
+				const promptIsHostOwnedContinuation = event.payload.runtimeControlKind === "completion_continuation_control"
+				if (barrierHoldsThisTurn && promptIsHostOwnedContinuation) {
+					// The held obligation is still outstanding AND the
+					// drained prompt is the BCB's OWN continuation.
+					// Publishing `streaming` here would assert ACTIVE
+					// work that the barrier says is HELD — the exact
+					// LIVE false-Working symptom. Preserve the
+					// committed phase so the authoritative projection
+					// stays truthful.
 					Logger.warn(
 						`[SdkController] pending_prompt_submitted for session ${activeSession.sessionId} arrived while the deferred-completion barrier still holds this turn's completion; NOT re-asserting 'streaming' (PTWCR01C01 BCB-hold guard)`,
 					)
 				} else {
+					// EITHER the barrier does not hold this turn's
+					// completion, OR the drained prompt is NOT the
+					// host-owned continuation (an INDEPENDENT user
+					// prompt). In both cases this is a LEGITIMATE
+					// activation and `streaming` MUST be re-asserted —
+					// the pinned T-08 contract
+					// (`awaiting_followup` / `completed` / `error` /
+					// `resumable` -> `streaming`) applies, and the UI
+					// must show the run that is genuinely ACTIVE.
 					this.options.setTurnPhase?.(
 						PROVIDER_FAILURE_PHASE.STREAMING,
 						undefined,
@@ -3684,11 +3778,52 @@ export class SdkSessionEventCoordinator {
 					// held obligation's OWN release path
 					// (`reevaluateDeferredCompletionBarrier`) remains the
 					// authority that commits `completed`.
-					if (
-						!activeSession.isRunning &&
-						this.options.getTurnPhase?.() === "resumable" &&
-						!this.bcbHoldResumablePublished
-					) {
+					//
+					// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+					// / B2PO01: THE STALE-FLAG REPAIR.
+					//
+					// The paragraph above is TRUE ONLY for phase writes that
+					// go THROUGH this coordinator. It is FALSE for the
+					// production CANCEL path, which writes the phase
+					// DIRECTLY to the `TurnStateTracker`
+					// (`SdkController.cancelTask` ->
+					// `turnStateTracker.setWithWriter(..., "controller-cancel-task")`).
+					// The coordinator is never consulted for that write, so
+					// `bcbHoldResumablePublished` survives the cancel and
+					// then describes the CANCEL's `resumable` — a phase
+					// this coordinator did NOT publish.
+					//
+					// With the flag stale-true the guard is DISABLED: a
+					// late completion BYPASSES the cancellation straggler
+					// guard and falls into the normal completion path. It
+					// then either re-publishes the BCB hold (re-registering
+					// a held obligation the user already cancelled) or, once
+					// the hold no longer re-registers, COMMITS `completed`
+					// and a C10 `task_completion_committed` for a turn the
+					// user explicitly cancelled.
+					//
+					// THE REPAIR: the "is the committed `resumable` a BCB
+					// hold?" fact is read from the AUTHORITATIVE committed
+					// WRITER IDENTITY (`getTurnPhaseWriterId`), which the
+					// tracker replaces in the SAME mutation as the
+					// committed phase. The classification is therefore
+					// self-consistent BY CONSTRUCTION: the cancel's write
+					// replaces the identity, the guard reactivates, and the
+					// cancellation authority is preserved.
+					//
+					// The private flag remains a NECESSARY conjunct (it
+					// records that THIS coordinator published the BCB hold)
+					// but is no longer SUFFICIENT on its own. When the
+					// `getTurnPhaseWriterId` option is absent the
+					// coordinator falls back to the flag alone, so existing
+					// harnesses that do not supply the option keep their
+					// behaviour.
+					const committedWriterId = this.options.getTurnPhaseWriterId?.()
+					const committedPhaseIsBcbHold =
+						committedWriterId === undefined
+							? this.bcbHoldResumablePublished
+							: committedWriterId === "session-event-bcb-hold-resumable"
+					if (!activeSession.isRunning && this.options.getTurnPhase?.() === "resumable" && !committedPhaseIsBcbHold) {
 						Logger.debug("[SdkController] turn-complete straggler after cancel; preserving resumable phase")
 					} else if (this.options.messageTranslatorState.wasErrorSeen()) {
 						// The turn surfaced a provider error (ask:"api_req_failed" was emitted) —

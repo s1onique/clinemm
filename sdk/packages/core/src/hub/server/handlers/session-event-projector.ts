@@ -84,6 +84,14 @@ export async function projectSessionEvent(
 				attachmentCount: event.payload.attachmentCount,
 				userImages: event.payload.userImages,
 				userFiles: event.payload.userFiles,
+				// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+				// / B2PO01: forward the STRUCTURAL ORIGIN discriminator so
+				// the extension host can tell the host-owned BCB
+				// continuation apart from an INDEPENDENT user prompt.
+				// See `SessionPendingPromptSubmittedEvent.runtimeControlKind`.
+				...(event.payload.runtimeControlKind !== undefined
+					? { runtimeControlKind: event.payload.runtimeControlKind }
+					: {}),
 			};
 			ctx.publish(
 				ctx.buildEvent(

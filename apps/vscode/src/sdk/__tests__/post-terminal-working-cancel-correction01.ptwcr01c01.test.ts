@@ -286,6 +286,23 @@ async function emitAbortedTurnDone(h: Harness): Promise<void> {
  * The PENDING-PROMPT CONTINUATION RE-ENTRY. This is the exact LIVE
  * event shape delivered by `PendingPromptService` after the drain
  * (`sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts:658`).
+ *
+ * ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+ * / B2PO01: the event now carries the STRUCTURAL ORIGIN discriminator.
+ *
+ *   This helper models the BCB's OWN continuation — the production
+ *   `SdkController.buildSdkControllerEnqueueCompletionContinuation`
+ *   sends it with `runtimeControlKind:
+ *   "completion_continuation_control"`, and the runtime now forwards
+ *   that bit on the `pending_prompt_submitted` event. The B2 BCB-hold
+ *   guard requires BOTH the live barrier AND this origin bit, so an
+ *   INDEPENDENT user prompt (which carries NO such bit) can no longer
+ *   be mistaken for the continuation.
+ *
+ *   Without the bit, this helper would model a USER prompt — a
+ *   DIFFERENT scenario with a DIFFERENT required outcome (the
+ *   legitimate activation MUST be preserved). The independent-user
+ *   scenario is covered by the B2PO01 probe.
  */
 async function emitPendingPromptSubmitted(h: Harness): Promise<void> {
 	await h.coordinator.handleSessionEvent({
@@ -296,6 +313,7 @@ async function emitPendingPromptSubmitted(h: Harness): Promise<void> {
 			prompt: "continue",
 			delivery: "queue",
 			attachmentCount: 0,
+			runtimeControlKind: "completion_continuation_control",
 		},
 	} as unknown as CoreSessionEvent)
 }

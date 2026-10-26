@@ -476,7 +476,7 @@
 		"format": "biome format --config-path ./biome.jsonc --changed --since main --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error --semicolons=as-needed",
 		"format:fix": "biome check --config-path ./biome.jsonc --changed --since main --no-errors-on-unmatched --files-ignore-unknown=true --write --semicolons=as-needed",
 		"fix:all": "biome check --config-path ./biome.jsonc --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe --semicolons=as-needed",
-		"ci:check-all": "bun run --parallel check-types check-types:c2-4-c-bridge check-types:c2-4-d-hub check-types:c2-5-c4 test:vitest test:vitest:c2-4-c-bridge test:vitest:c2-4-d-hub lint format",
+		"ci:check-all": "bun run --parallel check-types check-types:c2-4-c-bridge check-types:c2-4-d-hub check-types:c2-5-c4 check-types:b2po01 test:vitest test:vitest:c2-4-c-bridge test:vitest:c2-4-d-hub test:vitest:b2po01 lint format",
 		"ci:build": "bun run protos && bun run build:webview && bun esbuild.mjs && bun run compile-tests",
 		"pretest": "bun run compile && bun run compile-tests && bun run compile-standalone && bun run lint",
 		"test": "bun run test:unit && bun run test:integration",
@@ -523,7 +523,9 @@
 		"check-types:c2-5-c4": "bun scripts/check-types-c2-5-c4-with-baseline.ts",
 		"check-types:c2-5-c4:refresh-baseline": "C2_5_C4_BASELINE_UPDATE=1 bun scripts/check-types-c2-5-c4-with-baseline.ts",
 		"test:vitest:twqc01": "vitest run --config vitest.config.twqc01.ts",
-		"test:vitest:crcd01": "vitest run --config vitest.config.crcd01.ts"
+		"test:vitest:crcd01": "vitest run --config vitest.config.crcd01.ts",
+		"test:vitest:b2po01": "vitest run --config vitest.config.b2po01.ts",
+		"check-types:b2po01": "tsc -p tsconfig.b2po01.json --noEmit"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [

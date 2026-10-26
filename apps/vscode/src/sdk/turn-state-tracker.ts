@@ -25,6 +25,32 @@ export class TurnStateTracker {
 	private anchorTs: number | undefined
 	private seq: number
 	private listeners: TurnPhaseListener[] = []
+	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+	 * / B2PO01: the writer identity of the CURRENTLY COMMITTED phase.
+	 *
+	 * WHY THIS EXISTS:
+	 *   A consumer that needs to know "WHICH writer published the phase
+	 *   that is committed right now" cannot infer it from the phase VALUE
+	 *   alone: several distinct writers legitimately publish `resumable`
+	 *   (the BCB hold, the cancel path, the containment-failure hold).
+	 *
+	 *   The predecessor's `bcbHoldResumablePublished` coordinator flag
+	 *   tried to carry that fact in coordinator-private state. That is
+	 *   UNSOUND: the production CANCEL path writes the phase DIRECTLY to
+	 *   this tracker (`SdkController.cancelTask` ->
+	 *   `turnStateTracker.setWithWriter(..., "controller-cancel-task")`),
+	 *   bypassing the coordinator entirely, so the coordinator's flag
+	 *   survives the cancel and then describes a `resumable` this
+	 *   coordinator did NOT publish.
+	 *
+	 *   Deriving the fact from the COMMITTED WRITER makes it
+	 *   self-consistent by construction: the moment ANY writer (the
+	 *   cancel path included) replaces the committed phase, the
+	 *   committed writer identity changes with it and no stale
+	 *   classification can survive.
+	 */
+	private writerId: TurnStateWriterIdentity["writerId"] = "unknown-legacy-writer"
 
 	constructor(private readonly minter: MessageIdMinter) {
 		this.seq = minter.nextSeq()
@@ -102,6 +128,13 @@ export class TurnStateTracker {
 		this.phase = phase
 		this.anchorTs = anchorTs
 		this.seq = this.minter.nextSeq()
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+		// / B2PO01: the committed writer identity travels WITH the
+		// committed phase. Any writer that replaces the phase (including
+		// the production CANCEL path, which writes this tracker directly)
+		// replaces the identity in the same mutation, so a consumer can
+		// never observe a phase paired with a STALE writer.
+		this.writerId = identity.writerId
 
 		// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
 		// Record the EH2 discriminator witness BEFORE the diagnostic
@@ -188,5 +221,18 @@ export class TurnStateTracker {
 
 	get currentPhase(): TurnPhase {
 		return this.phase
+	}
+
+	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+	 * / B2PO01: the writer identity of the CURRENTLY COMMITTED phase.
+	 *
+	 * This is the SELF-CONSISTENT replacement for a coordinator-private
+	 * "who published the committed phase" flag: because the identity is
+	 * replaced in the SAME mutation as the phase, a consumer that reads
+	 * it can never see a stale classification.
+	 */
+	get currentWriterId(): TurnStateWriterIdentity["writerId"] {
+		return this.writerId
 	}
 }

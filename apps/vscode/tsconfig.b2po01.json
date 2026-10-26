@@ -1,0 +1,79 @@
+{
+	// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+	// / B2PO01 — dedicated typecheck project for the B2 prompt-origin probe.
+	//
+	// Mirrors the TWQC01 / CRCD01 bridge pattern: the probe imports the REAL
+	// `PendingPromptService` / `PendingPromptsController` and the REAL event
+	// types from `sdk/packages/core/src/...` via `@cline-internal/core/...`
+	// aliases, which the BASE `tsconfig.json` does not declare (and whose
+	// resolved sources live OUTSIDE the base project `rootDir`).
+	//
+	// The base `tsconfig.json` EXCLUDES the probe file (see its `exclude`
+	// array); THIS project owns its typecheck.
+	//
+	// NOTE: TypeScript `paths` do NOT merge across `extends`, so ALL the
+	// base path entries are redeclared below, plus the new
+	// `@cline-internal/core/...` aliases.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"rootDir": "../..",
+		"baseUrl": ".",
+		"paths": {
+			"@/*": [
+				"./src/*"
+			],
+			"@api/*": [
+				"./src/core/api/*"
+			],
+			"@core/*": [
+				"./src/core/*"
+			],
+			"@generated/*": [
+				"./src/generated/*"
+			],
+			"@hosts/*": [
+				"./src/hosts/*"
+			],
+			"@integrations/*": [
+				"./src/integrations/*"
+			],
+			"@packages/*": [
+				"./src/packages/*"
+			],
+			"@services/*": [
+				"./src/services/*"
+			],
+			"@shared/*": [
+				"./src/shared/*"
+			],
+			"@utils/*": [
+				"./src/utils/*"
+			],
+			"@cline-internal/core/runtime/turn-queue/pending-prompt-service": [
+				"../../sdk/packages/core/src/runtime/turn-queue/pending-prompt-service"
+			],
+			"@cline-internal/core/types/events": [
+				"../../sdk/packages/core/src/types/events"
+			],
+			"@cline-internal/core/runtime/host/runtime-host": [
+				"../../sdk/packages/core/src/runtime/host/runtime-host"
+			]
+		}
+	},
+	"include": [
+		"src/sdk/__tests__/post-terminal-working-cancel-b2-prompt-origin01.b2po01.test.ts",
+		"src/sdk/__tests__/post-terminal-working-cancel-b2po01-s4-cancel-fence.test.ts"
+	],
+	// The base `exclude` (inherited) lists the probe file itself, so it
+	// MUST be overridden here for this project to own the probe's typecheck.
+	"exclude": [
+		"node_modules",
+		"webview-ui",
+		"src/test/e2e/**/*",
+		"src/test/scenarios/**/*",
+		"src/test/cline-core-vitest-stub.ts",
+		"src/test/bun-test-preload.ts",
+		"src/generated/**/*"
+	]
+}

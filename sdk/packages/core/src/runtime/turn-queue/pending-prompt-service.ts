@@ -4,7 +4,7 @@ import type {
 	CoreSessionEvent,
 	SessionPendingPrompt,
 } from "../../types/events";
-import type { ActiveSession, PendingPrompt } from "../../types/session";
+import type { ActiveSession } from "../../types/session";
 import type {
 	PendingPromptMutationResult,
 	PendingPromptsDeleteInput,
@@ -288,7 +288,15 @@ export class PendingPromptService {
 		state: PendingPromptQueueState,
 		input: PendingPromptEnqueueInput,
 	): SessionPendingPrompt[] {
-		const { prompt, mode, delivery, userImages, userFiles, jobId, runtimeControlKind } = input;
+		const {
+			prompt,
+			mode,
+			delivery,
+			userImages,
+			userFiles,
+			jobId,
+			runtimeControlKind,
+		} = input;
 		const existingIndex = state.pendingPrompts.findIndex(
 			(queued) => queued.prompt === prompt,
 		);
@@ -652,7 +660,18 @@ export class PendingPromptsController {
 		}
 	}
 
-	private emitSubmitted(session: ActiveSession, entry: PendingPrompt): void {
+	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+	 * / B2PO01: the parameter type is `PendingPromptEntry` (NOT the narrower
+	 * `PendingPrompt`) because the QUEUE stores `PendingPromptEntry` values
+	 * and ONLY that type carries the `runtimeControlKind` origin
+	 * discriminator this method must forward. Both call sites
+	 * (`consumeSteer` and `shiftNext`) already pass a `PendingPromptEntry`.
+	 */
+	private emitSubmitted(
+		session: ActiveSession,
+		entry: PendingPromptEntry,
+	): void {
 		const prompt = snapshotPrompt(entry);
 		this.deps.emit({
 			type: "pending_prompt_submitted",
@@ -664,6 +683,27 @@ export class PendingPromptsController {
 				attachmentCount: prompt.attachmentCount,
 				userImages: prompt.userImages,
 				userFiles: prompt.userFiles,
+				// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+				// / B2PO01: forward the STRUCTURAL ORIGIN discriminator.
+				//
+				// WITHOUT THIS FIELD the extension host cannot tell the
+				// host-owned BCB continuation apart from an INDEPENDENT
+				// user-typed follow-up: BOTH travel through this SAME
+				// queue with `delivery: "queue"`, and the entry's
+				// `runtimeControlKind` (which the trusted host already
+				// stamps on the BCB continuation and NEVER on a user
+				// prompt) was dropped here — exactly at the boundary the
+				// host reads. The B2 BCB-hold guard then suppressed the
+				// `streaming` phase re-assertion for an independent user
+				// prompt as well, leaving the runtime genuinely running
+				// while the committed phase stayed `resumable`.
+				//
+				// The field is OPTIONAL and is present ONLY for the
+				// host-runtime-control continuation; an ordinary user
+				// prompt leaves it undefined.
+				...(entry.runtimeControlKind !== undefined
+					? { runtimeControlKind: entry.runtimeControlKind }
+					: {}),
 			},
 		});
 	}
@@ -687,6 +727,14 @@ function snapshotPrompt(entry: PendingPromptEntry): SessionPendingPrompt {
 			(entry.userImages?.length ?? 0) + (entry.userFiles?.length ?? 0),
 		userImages: entry.userImages,
 		userFiles: entry.userFiles,
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+		// / B2PO01: preserve the STRUCTURAL ORIGIN discriminator through
+		// the snapshot so the hub transport can forward it to the extension
+		// host. The trusted host stamps this ONLY on the host-owned
+		// continuation; an ordinary user prompt leaves it undefined.
+		...(entry.runtimeControlKind !== undefined
+			? { runtimeControlKind: entry.runtimeControlKind }
+			: {}),
 	};
 }
 

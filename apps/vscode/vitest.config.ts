@@ -255,6 +255,25 @@ export default defineConfig({
 			// Excluded here to keep the base config's @cline/core stub
 			// alias in scope (the bridge config owns this test).
 			"src/sdk/__tests__/terminal-wake-queue-consumer-probe01.twqc01.test.ts",
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// -PROMPT-ORIGIN01 / B2PO01: the B2 prompt-origin verification
+			// probe. Drives the REAL `PendingPromptsController` (the real
+			// queue consumer) against the REAL coordinator + tracker, to
+			// settle whether the BCB-hold guard can distinguish a BCB
+			// continuation from an INDEPENDENT user prompt. Runs under
+			// `vitest.config.b2po01.ts` which adds the
+			// `@cline-internal/core/.../pending-prompt-service` alias.
+			// Excluded here to keep the base config's @cline/core stub
+			// alias in scope (the dedicated config owns this test).
+			"src/sdk/__tests__/post-terminal-working-cancel-b2-prompt-origin01.b2po01.test.ts",
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// -PROMPT-ORIGIN01 / B2PO01: the S4 cancellation-writer / fence
+			// witness. Proves that a BCB-owned `resumable` cannot remain
+			// classified as BCB-owned after an explicit user cancellation,
+			// so a late completion cannot bypass the cancellation straggler
+			// guard. Same alias surface as the B2 prompt-origin probe
+			// above; the dedicated config owns it.
+			"src/sdk/__tests__/post-terminal-working-cancel-b2po01-s4-cancel-fence.test.ts",
 			// ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01
 			// / CRCD01: the reevaluation-trigger capability discriminator.
 			// Real LocalRuntimeHost + real PendingPromptsController +

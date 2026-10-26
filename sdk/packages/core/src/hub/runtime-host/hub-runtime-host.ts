@@ -853,14 +853,14 @@ export class HubRuntimeHost implements RuntimeHost {
 			// PROVISIONAL_FAIL_OPEN_RISK that LHOWA01's `Map.get(...) ?? 0`
 			// semantics would otherwise recreate for the Hub transport.
 			count: (sessionId) => {
-				if (!sessionId) return { available: false }
+				if (!sessionId) return { available: false };
 				if (!this.pendingPromptCountInitializedBySession.has(sessionId)) {
-					return { available: false }
+					return { available: false };
 				}
 				return {
 					available: true,
 					count: this.pendingPromptCountBySession.get(sessionId) ?? 0,
-				}
+				};
 			},
 		};
 		this.client = this.createClient(options.url);
@@ -2100,6 +2100,14 @@ export class HubRuntimeHost implements RuntimeHost {
 						attachmentCount: prompt.attachmentCount,
 						userImages: prompt.userImages,
 						userFiles: prompt.userFiles,
+						// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01
+						// / B2PO01: forward the STRUCTURAL ORIGIN discriminator
+						// so the extension host can tell the host-owned BCB
+						// continuation apart from an INDEPENDENT user prompt.
+						// See `SessionPendingPromptSubmittedEvent.runtimeControlKind`.
+						...(prompt.runtimeControlKind !== undefined
+							? { runtimeControlKind: prompt.runtimeControlKind }
+							: {}),
 					},
 				});
 				return;

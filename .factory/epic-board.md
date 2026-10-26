@@ -29410,3 +29410,169 @@ the incident scenario, which this ACT did not perform.
   `resumable` in the ownership map.
 
 No Elm kernel, no protocol, no webview reducer, no schema.
+
+# ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01 — PASS_STRUCTURAL_ONLY — 2026-10-26
+
+```text
+ENTRY_HEAD:                  86adc504b8f609a3f62d478750e55dcf5038cc34
+SUBJECT_HEAD:                86adc504b8f609a3f62d478750e55dcf5038cc34
+PREDECESSOR:                 ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+                             (PASS_STRUCTURAL_ONLY; the prompt-origin fix is ACCEPTED)
+VERDICT:                     PASS_STRUCTURAL_ONLY
+S2:                          RESOLVED — control-only execution IS intentionally non-active;
+                             the Resume affordance provably cannot cause unsafe concurrent dispatch
+S4:                          RESOLVED — a REAL P0 was FOUND and REPAIRED (the stale BCB-ownership
+                             classification); a late completion could fabricate `completed` + a C10
+                             for an explicitly cancelled turn
+WITNESSES:                   8/8 PASS (S1, S2, S2c, S2d, S3, S4, S4a, S4b)
+LOAD_BEARING_ABLATIONS:      2 recorded (S4 repair reverted -> S4a+S4b RED; the runtime
+                             `canStartRun()` gate disabled -> S2d RED)
+ACT_OWNED_FAILURES:          0
+TYPECHECK:                   PASS (base tsc --noEmit + tsc -p tsconfig.b2po01.json, 0 diagnostics)
+LINT:                        PASS (biome lint, 0 errors)
+FORMAT:                      PASS (biome format, 0 files needing changes)
+REGRESSION:                  NONE — full suite 5,073 tests / 4,825 passed / 193 failed;
+                             failing test-id sets IDENTICAL to the measured baseline
+                             (193 = 193, ADDED=0, REMOVED=0)
+FOCUSED_SWEEP:               IDENTICAL — 184 total / 181 passed / 3 failed, before AND after
+                             (the 3 are pre-existing and reproduce with this ACT's paths stashed)
+```
+
+## Verdict
+
+**Both review items are resolved, and the S4 item was a genuine P0 that is now
+repaired.** The prompt-origin fix is retained unchanged in substance; the
+straggler-guard classification is now derived from the AUTHORITATIVE
+committed state instead of coordinator-private state that the CANCEL path
+cannot reach.
+
+## S2 — the queued BCB continuation vs. the `resumable` phase
+
+The continuation reaches the REAL model-run dispatch seam while the committed
+phase stays `resumable`. The review's conditional was: establish whether
+control-only execution is intentionally non-active; if so, prove the Resume
+affordance cannot cause unsafe concurrent dispatch.
+
+**ESTABLISHED: control-only execution IS intentionally non-active.** The
+continuation prompt is stamped `runtimeControlKind:
+"completion_continuation_control"`, which the runtime turns into a
+BRAND-GATED envelope that the orchestrator promotes onto the model's
+PRIVILEGED `instructions` channel
+(`session-runtime-orchestrator.ts:1014`) — it is never a visible user turn.
+And the BCB-hold `resumable` is the EXISTING non-running affordance that the
+containment-failure hold and the cancel path also publish, already mapped by
+the webview to `BUTTON_CONFIGS.resume_task`.
+
+**PROVEN: the Resume affordance cannot cause unsafe concurrent dispatch.**
+The Resume is not a direct dispatch — `SdkFollowupCoordinator.askResponse`
+sees `activeSession.isRunning === true` and takes the `queueToActiveSession`
+branch, which sends with `delivery: "queue"`. The runtime then refuses to
+drain a queued prompt while a run is in flight, via TWO independent real
+mechanisms: the queue's `drainingPendingPrompts` latch and the runtime's own
+`SessionRuntimeOrchestrator.canStartRun()` (`!running && !shutdownCalled`).
+
+The phase transition was therefore NOT changed and the terminal BCB
+convergence is preserved.
+
+The `B2PO01-S2d` witness isolates the runtime gate on its own and is
+load-bearing: with `canStartRun()` disabled it goes RED.
+
+## S4 — the actual cancellation writer / fence semantics
+
+**A REAL P0 WAS FOUND.** The predecessor's `bcbHoldResumablePublished` flag
+was documented as "cleared by EVERY other phase write". That documentation
+is FALSE in production: the CANCEL path writes the phase DIRECTLY to the
+`TurnStateTracker` (`SdkController.cancelTask` ->
+`turnStateTracker.setWithWriter("resumable", ..., "controller-cancel-task")`),
+never through the coordinator, so the coordinator's flag survived the cancel
+and then described the CANCEL's `resumable`.
+
+With the flag stale-true the turn-complete straggler guard was DISABLED. A
+late completion could:
+
+- re-publish the BCB hold after an explicit cancellation, and
+- once the held obligation drained, **COMMIT `completed` and a C10
+  `task_completion_committed` for a turn the user explicitly cancelled.**
+
+Both shapes were reproduced at the REAL production seam (the REAL
+coordinator, the REAL tracker, the REAL epoch fence, the REAL BCB hold path,
+and the REAL `SdkTaskControlCoordinator` cancellation sequence) and are now
+fixed.
+
+**THE REPAIR.** "Who published the committed phase" is no longer carried in
+coordinator-private state. `TurnStateTracker` now records the committed
+WRITER IDENTITY and replaces it in the SAME mutation as the committed phase,
+so the classification is self-consistent by construction. The coordinator
+reads it through the new `getTurnPhaseWriterId` option, wired in
+`SdkController`.
+
+The epoch fence alone was NOT sufficient: it secures the B2 BCB-hold guard
+(the barrier's identity triple stops matching) but NOT the turn-complete
+straggler guard, which reads only the committed phase and the
+coordinator-private flag. The two guards are independent.
+
+Both S4a and S4b are load-bearing: with the repair reverted they go RED
+(S4a re-publishes the BCB hold; S4b fabricates `completed`).
+
+## The full suite was REQUIRED — production semantics changed
+
+The straggler guard's classification changed, so the full-suite comparison
+was re-measured rather than reused. The baseline was captured by stashing
+ONLY this ACT's paths, running the SAME command, and comparing the two
+Vitest JSON reports BY TEST ID — never by grep, never from a truncated log.
+
+| | total | passed | failed | suites |
+| --- | --- | --- | --- | --- |
+| baseline | 5,073 | 4,825 | 193 | 1,790 |
+| after | 5,073 | 4,825 | 193 | 1,790 |
+
+```text
+ADDED failures (regressions): 0
+REMOVED failures (fixed):     0
+IDENTICAL SETS:                True
+```
+
+The DIRECTLY AFFECTED conservation sweep was measured against its own
+stashed baseline: 184 total / 181 passed / 3 failed, IDENTICAL before and
+after. The 3 failures are pre-existing and reproduce with this ACT's
+production paths stashed.
+
+**The sandbox artifact is recorded, not masked.** The default forks pool
+aborts with `kill EPERM` here, and the Bun runtime SEGFAULTS before the JSON
+report is written, so the measurements were taken with the nix-store Node
+runtime (v24.19.0) and `--pool=threads`.
+
+## The environment limitation is recorded, not masked
+
+No VSIX was built or installed and no LIVE re-run of the incident was
+performed, so the closure is `PASS_STRUCTURAL_ONLY`, NOT `PASS_LIVE`.
+
+## Evidence
+
+- `.factory/evidence/ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01/`
+  (`01-s2-resume-concurrency.md`, `02-s4-cancellation-writer-fence.md`,
+  `03-disposition.md`, `SHA256SUMS`)
+- `apps/vscode/src/sdk/__tests__/post-terminal-working-cancel-b2-prompt-origin01.b2po01.test.ts`
+  — NEW, 6/6 PASS (S1, S2, S2c, S2d, S3, S4).
+- `apps/vscode/src/sdk/__tests__/post-terminal-working-cancel-b2po01-s4-cancel-fence.test.ts`
+  — NEW, 2/2 PASS (S4a, S4b).
+
+## Production changes
+
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — the prompt-origin
+  discriminator (the `runtimeControlKind` guard) and the S4 stale-flag
+  repair.
+- `apps/vscode/src/sdk/turn-state-tracker.ts` — the committed writer
+  identity (`currentWriterId`).
+- `apps/vscode/src/sdk/SdkController.ts` — the `getTurnPhaseWriterId`
+  wiring.
+- `sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts` — the
+  `runtimeControlKind` origin discriminator preserved across the queue
+  round-trip.
+- `sdk/packages/core/src/types/events.ts` — the
+  `SessionPendingPromptSubmittedEvent.runtimeControlKind` field.
+- `sdk/packages/core/src/hub/runtime-host/hub-runtime-host.ts` and
+  `sdk/packages/core/src/hub/server/handlers/session-event-projector.ts` —
+  the hub transport forwards the discriminator.
+
+No Elm kernel, no protocol, no webview reducer, no schema.

@@ -207,6 +207,22 @@
 		// Excluded here to keep the base config's @cline/core stub
 		// alias in scope (mirror entry in `vitest.config.ts`).
 		"src/sdk/__tests__/terminal-wake-queue-consumer-probe01.twqc01.test.ts",
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+		// -PROMPT-ORIGIN01 / B2PO01: the B2 prompt-origin probe. Real
+		// `PendingPromptsController` (the real queue consumer) + real
+		// coordinator + real tracker. Runs under
+		// `vitest.config.b2po01.ts` which adds the
+		// `@cline-internal/core/.../pending-prompt-service` alias.
+		// Excluded here to keep the base config's @cline/core stub
+		// alias in scope (mirror entry in `vitest.config.ts`).
+		"src/sdk/__tests__/post-terminal-working-cancel-b2-prompt-origin01.b2po01.test.ts",
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+		// -PROMPT-ORIGIN01 / B2PO01: the S4 cancellation-writer / fence
+		// witness. Same alias surface as the B2 prompt-origin probe
+		// above (`@cline-internal/core/types/events`). Runs under
+		// `vitest.config.b2po01.ts`; typechecked by
+		// `tsconfig.b2po01.json`.
+		"src/sdk/__tests__/post-terminal-working-cancel-b2po01-s4-cancel-fence.test.ts",
 		// ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01
 		// / CRCD01: the reevaluation capability discriminator. Real
 		// `LocalRuntimeHost` + real `PendingPromptsController` + real
