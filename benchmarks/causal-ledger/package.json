@@ -1,0 +1,26 @@
+{
+	"name": "@clinemm/causal-ledger",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Deterministic terminal-observation causal ledger for background-command completion authorization (BENCHMARK-M3-M31-CAUSAL-LEDGER-01).",
+	"main": "./src/terminal-ledger.ts",
+	"module": "./src/terminal-ledger.ts",
+	"exports": {
+		".": "./src/terminal-ledger.ts"
+	},
+	"bin": {
+		"causal-ledger": "./src/cli.ts"
+	},
+	"scripts": {
+		"test": "bun test tests/",
+		"test:mutation": "bun scripts/mutation-check.ts",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"lint": "biome check src/ tests/ scripts/"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.5",
+		"@types/bun": "^1.3.13",
+		"typescript": "^5.9.3"
+	}
+}

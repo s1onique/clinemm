@@ -1,0 +1,66 @@
+[
+	{
+		"type": "job_registered",
+		"seq": 1,
+		"eventId": "e1",
+		"jobId": "j1",
+		"owner": { "sessionId": "s1", "taskId": "t1", "epoch": 7 }
+	},
+	{
+		"type": "completion_requested",
+		"seq": 2,
+		"eventId": "e2",
+		"decisionId": "d1",
+		"owner": { "sessionId": "s1", "taskId": "t1", "epoch": 7 }
+	},
+	{
+		"type": "job_terminal",
+		"seq": 3,
+		"eventId": "e3",
+		"jobId": "j1",
+		"containment": "gone",
+		"owner": { "sessionId": "s1", "taskId": "t1", "epoch": 7 }
+	},
+	{
+		"type": "completion_requested",
+		"seq": 4,
+		"eventId": "e4",
+		"decisionId": "d2",
+		"owner": { "sessionId": "s1", "taskId": "t1", "epoch": 7 }
+	},
+	{
+		"type": "terminal_observed",
+		"seq": 5,
+		"eventId": "e5",
+		"jobId": "j1",
+		"owner": { "sessionId": "s1", "taskId": "t1", "epoch": 7 }
+	},
+	{
+		"type": "completion_requested",
+		"seq": 6,
+		"eventId": "e6",
+		"decisionId": "d3",
+		"owner": { "sessionId": "s1", "taskId": "t1", "epoch": 7 }
+	},
+	{
+		"type": "job_registered",
+		"seq": 7,
+		"eventId": "e7",
+		"jobId": "j1",
+		"owner": { "sessionId": "s2", "taskId": "t1", "epoch": 7 }
+	},
+	{
+		"type": "terminal_observed",
+		"seq": 8,
+		"eventId": "e8",
+		"jobId": "j1",
+		"owner": { "sessionId": "s2", "taskId": "t1", "epoch": 7 }
+	},
+	{
+		"type": "completion_requested",
+		"seq": 9,
+		"eventId": "e9",
+		"decisionId": "d4",
+		"owner": { "sessionId": "s2", "taskId": "t1", "epoch": 7 }
+	}
+]
