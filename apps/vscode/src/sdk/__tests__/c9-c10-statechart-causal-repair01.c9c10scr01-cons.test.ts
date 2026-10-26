@@ -356,7 +356,7 @@ function authoritativeCompletionFraming(h: Harness): { label: string; kind: stri
 
 describe("ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 / C9C10SCR01-CONS", () => {
 	describe("CONS-01: a held terminal result produces NO authoritative completion display", () => {
-		it("BCB hold on unconsumed terminal results: no badge, no C10, phase streaming", async () => {
+		it("BCB hold on unconsumed terminal results: no badge, no C10, phase resumable", async () => {
 			const h = makeHarness()
 			h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
 			h.ownedJobIds.push("J1")
@@ -365,7 +365,14 @@ describe("ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 / C9C10SCR01-CONS", (
 			await driveSubmitAndExit(h, { resultText: "Held." })
 
 			expect(h.completionCommitCount()).toBe(0)
-			expect(h.tracker.currentPhase).toBe("streaming")
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// (PTWCR01C01): the held completion is published as the
+			// TRUTHFUL non-running `resumable` phase (the BCB hold), not
+			// as the stale ACTIVE `streaming` (which the webview rendered
+			// as `Working` + `Cancel`). The CONSERVATION invariants — no
+			// C10 commit, no authoritative completion display, no
+			// published completion row — are UNCHANGED.
+			expect(h.tracker.currentPhase).toBe("resumable")
 			expect(authoritativeCompletionFraming(h)).toBeUndefined()
 			// The BCB path removes the row from the published set
 			// entirely — the user never sees it.
@@ -407,7 +414,13 @@ describe("ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 / C9C10SCR01-CONS", (
 			await driveSubmitAndExit(h, { resultText: "Still held." })
 
 			expect(h.completionCommitCount()).toBe(0)
-			expect(h.tracker.currentPhase).toBe("streaming")
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// (PTWCR01C01): the still-held completion is published as the
+			// TRUTHFUL non-running `resumable` phase (the BCB hold), not
+			// as the stale ACTIVE `streaming`. The CONSERVATION
+			// invariants — no C10 commit, no authoritative completion
+			// display — are UNCHANGED.
+			expect(h.tracker.currentPhase).toBe("resumable")
 			expect(authoritativeCompletionFraming(h)).toBeUndefined()
 		})
 	})

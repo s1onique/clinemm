@@ -771,6 +771,34 @@ export class SdkSessionEventCoordinator {
 	private deferredCompletionBarrier: DeferredCompletionBarrier | undefined
 
 	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+	 * (PTWCR01C01): TRUE iff the CURRENTLY COMMITTED phase is the
+	 * `resumable` that THIS coordinator published on the BCB hold path
+	 * (the `session-event-bcb-hold-resumable` writer).
+	 *
+	 * WHY THIS EXISTS — the straggler-guard collision:
+	 *   The turn-complete straggler guard preserves a committed
+	 *   `resumable` when the session is not running, because the
+	 *   CANCEL path sets `resumable` before aborting and a straggling
+	 *   turn-complete must not clobber it.
+	 *
+	 *   The BCB-hold `resumable` has a DIFFERENT cause (the completion
+	 *   is HELD, not the run cancelled), but the SAME phase value. If
+	 *   the guard cannot tell them apart, a LATER legitimate
+	 *   completion attempt (the held obligation is consumed, the agent
+	 *   re-issues `submit_and_exit`) is suppressed as a "cancel
+	 *   straggler" — the C10 `task_completion_committed` never
+	 *   happens, and the task strands in `resumable` forever. That is
+	 *   the EXACT regression this flag prevents.
+	 *
+	 *   The flag is set ONLY by the BCB-hold write and is CLEARED by
+	 *   ANY other phase write, so it can never outlive the `resumable`
+	 *   it describes. It is cleared on the same epoch/session
+	 *   supersession boundary as the deferred marker.
+	 */
+	private bcbHoldResumablePublished = false
+
+	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION:
 	 *
 	 * Test-only accessor exposing the marker state. Production wiring in
@@ -1257,6 +1285,7 @@ export class SdkSessionEventCoordinator {
 				)
 				this.deferredContinuation = undefined
 				this.options.setTurnPhase?.("resumable", undefined, "session-event-turn-complete-containment-failed-resumable")
+				this.bcbHoldResumablePublished = false
 				return
 			}
 		}
@@ -1268,6 +1297,7 @@ export class SdkSessionEventCoordinator {
 		)
 		this.deferredContinuation = undefined
 		this.options.setTurnPhase?.("awaiting_followup", undefined, "session-event-turn-complete-resumable-straggler-preserve")
+		this.bcbHoldResumablePublished = false
 	}
 
 	/**
@@ -1796,24 +1826,28 @@ export class SdkSessionEventCoordinator {
 			// and sets `lastStopReason = "active_session_missing"`.
 			recordActiveSessionMissing()
 			this.deferredCompletionBarrier = undefined
+			this.bcbHoldResumablePublished = false
 			return
 		}
 		recordActiveSessionPresent()
 		if (marker.sessionId !== activeSession.sessionId) {
 			recordSessionMismatch()
 			this.deferredCompletionBarrier = undefined
+			this.bcbHoldResumablePublished = false
 			return
 		}
 		const taskId = this.options.getTask?.()?.taskId
 		if (marker.taskId !== taskId) {
 			recordTaskMismatch()
 			this.deferredCompletionBarrier = undefined
+			this.bcbHoldResumablePublished = false
 			return
 		}
 		const currentEpoch = this.options.messageTranslatorState.getMinter().epoch
 		if (marker.epoch !== currentEpoch) {
 			recordEpochMismatch()
 			this.deferredCompletionBarrier = undefined
+			this.bcbHoldResumablePublished = false
 			return
 		}
 		// Same predicate as the admission guard. Fail-closed on
@@ -2099,6 +2133,7 @@ export class SdkSessionEventCoordinator {
 			`[SdkController] outstanding obligations resolved; releasing held completion for session ${activeSession.sessionId} (epoch=${marker.epoch})`,
 		)
 		this.deferredCompletionBarrier = undefined
+		this.bcbHoldResumablePublished = false
 		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 		// lastStopReason="authority_check_reached" marks that
 		// the reevaluation reached the Elm authority consult.
@@ -2174,6 +2209,7 @@ export class SdkSessionEventCoordinator {
 			),
 		)
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+		this.bcbHoldResumablePublished = false
 		recordLifecycleTransitionTrace(
 			lifecycleTransitionTraceRecord(
 				this.lifecycleTraceContext(),
@@ -3195,6 +3231,38 @@ export class SdkSessionEventCoordinator {
 	}
 
 	/**
+	 * ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+	 * (PTWCR01C01): is the deferred-completion barrier LIVE and does it
+	 * hold the ACTIVE turn's obligation?
+	 *
+	 * This is the EXISTING BCB authority, consulted with the SAME
+	 * identity triple (`sessionId`, `taskId`, `epoch`) the barrier's
+	 * own re-evaluation path uses (`reevaluateDeferredCompletionBarrier`).
+	 * A marker for a different session, a different task, or a
+	 * superseded epoch does NOT hold the active turn — so the guard
+	 * stays narrow and cannot leak across a task/session/epoch
+	 * replacement.
+	 *
+	 * The marker is NOT cleared by `pending_prompt_submitted`, so this
+	 * is checkable AT that seam with no new state.
+	 */
+	private isDeferredCompletionBarrierLiveFor(sessionId: string): boolean {
+		const marker = this.deferredCompletionBarrier
+		if (!marker) {
+			return false
+		}
+		if (marker.sessionId !== sessionId) {
+			return false
+		}
+		const taskId = this.options.getTask?.()?.taskId
+		if (marker.taskId !== taskId) {
+			return false
+		}
+		const currentEpoch = this.options.messageTranslatorState.getMinter().epoch
+		return marker.epoch === currentEpoch
+	}
+
+	/**
 	 * ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 	 * test-only backdoor to set / clear the deferred-completion-barrier
 	 * marker so the UPSTREAM-DIAG-02..05 suites can drive the
@@ -3276,7 +3344,77 @@ export class SdkSessionEventCoordinator {
 				this.pendingCompletionAuthorityRow = undefined
 				this.pendingLifecycleDecisionId = undefined
 				this.options.sessions.setRunning(true)
-				this.options.setTurnPhase?.(PROVIDER_FAILURE_PHASE.STREAMING, undefined, "session-event-pending-prompt-submitted")
+				// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+				// (PTWCR01C01 — the BCB-HOLD TERMINAL-PHASE CONVERGENCE):
+				//
+				// The `streaming` write below is the LOAD-BEARING writer of
+				// the LIVE false-Working/Cancel defect: it was the LAST
+				// writer in the LIVE run (`turn-state-writer-provenance.jsonl`,
+				// seq 132499), landing ~58 ms AFTER the BCB registered its
+				// deferred-completion-barrier marker (LIVE
+				// `bcb-observation-unavailable-capture.jsonl`, 1792961423170).
+				// The runtime was ALREADY `aborted` (no model streaming, no
+				// pending tool), so `streaming` claimed ACTIVE work for a
+				// DEAD turn and the webview rendered `Working` + `Cancel`.
+				//
+				// THE DISCRIMINATOR IS THE EXISTING BCB BARRIER AUTHORITY —
+				// NOT THE PHASE, and NOT the runtime status:
+				//
+				//   - PHASE alone cannot discriminate: the pinned T-08
+				//     contract REQUIRES `pending_prompt_submitted` to
+				//     activate `streaming` from FOUR distinct terminal
+				//     source states (`awaiting_followup`, `completed`,
+				//     `error`, `resumable`). Suppressing by phase would
+				//     break that contract.
+				//   - RUNTIME STATUS alone cannot discriminate: the LIVE
+				//     carrier trace shows a NEW runtime iteration beginning
+				//     ~53 ms after the harmful write, so a stale
+				//     `aborted` reading is not a reliable discriminator.
+				//
+				// The BCB barrier marker IS the authority that already
+				// answers the question this writer needs to ask: "is the
+				// completion for this (sessionId, taskId, epoch) still
+				// HELD?" While that marker is live and identity-matched,
+				// the pending prompt being drained is the BCB's OWN
+				// coalesced continuation (`enqueueCompletionContinuationIfHeld`
+				// enqueues precisely while the marker is live), NOT an
+				// independent user-initiated turn. Re-asserting `streaming`
+				// for it publishes a phase that contradicts the barrier.
+				//
+				// The marker is deliberately NOT cleared by this event (the
+				// existing `clearTurnOutcome()` / `setRunning(true)` /
+				// barrier-lifetime semantics are untouched), so the guard
+				// is checkable AT the seam with no new state.
+				//
+				// WHAT THIS GUARD DOES NOT DO:
+				//   - It does NOT write any terminal phase. The C10 stays
+				//     HELD; the Elm authority is never consulted here.
+				//   - It does NOT fabricate `completed`. The barrier's own
+				//     release path (`reevaluateDeferredCompletionBarrier`)
+				//     remains the ONLY writer of a terminal phase for the
+				//     held obligation.
+				//   - It does NOT suppress a LEGITIMATE activation: a
+				//     `pending_prompt_submitted` with NO live barrier (the
+				//     ordinary user follow-up / T-08 case) still writes
+				//     `streaming` exactly as before.
+				const barrierHoldsThisTurn = this.isDeferredCompletionBarrierLiveFor(activeSession.sessionId)
+				if (barrierHoldsThisTurn) {
+					// The held obligation is still outstanding. Publishing
+					// `streaming` here would assert ACTIVE work that the
+					// barrier says is HELD — the exact LIVE false-Working
+					// symptom. Preserve the committed phase so the
+					// authoritative projection stays truthful.
+					Logger.warn(
+						`[SdkController] pending_prompt_submitted for session ${activeSession.sessionId} arrived while the deferred-completion barrier still holds this turn's completion; NOT re-asserting 'streaming' (PTWCR01C01 BCB-hold guard)`,
+					)
+				} else {
+					this.options.setTurnPhase?.(
+						PROVIDER_FAILURE_PHASE.STREAMING,
+						undefined,
+						"session-event-pending-prompt-submitted",
+					)
+					this.bcbHoldResumablePublished = false
+				}
 			}
 			const zeroCostPromise = this.zeroCostForFreeClineModel(result)
 			if (zeroCostPromise) {
@@ -3523,12 +3661,40 @@ export class SdkSessionEventCoordinator {
 					// isRunning back to false mid-turn (see fireAndForgetSend). Keying on isRunning
 					// alone made the queued turn's real completion look like this straggler, leaving
 					// the phase stuck on "streaming" (endless Thinking).
-					if (!activeSession.isRunning && this.options.getTurnPhase?.() === "resumable") {
+					// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+					// (PTWCR01C01): the guard must NOT swallow a LEGITIMATE
+					// completion attempt that arrives after a BCB hold.
+					//
+					// The CANCEL path sets `resumable` before aborting, and
+					// a straggling turn-complete must not clobber it. The
+					// BCB-hold `resumable` has a DIFFERENT cause (the
+					// completion is HELD, not the run cancelled) but the
+					// SAME phase value. Treating it as a cancel straggler
+					// suppressed the whole completion-commit path, so the
+					// C10 `task_completion_committed` never happened once
+					// the held obligation was consumed and the agent
+					// re-issued `submit_and_exit` (CPA-04, CONS-02,
+					// CONS-05, CONS-06).
+					//
+					// The `bcbHoldResumablePublished` flag is set ONLY by the
+					// BCB-hold write and cleared by every other phase
+					// write, so it can never describe a `resumable` this
+					// coordinator did not publish. When it is set, the
+					// guard yields to the normal completion path — the
+					// held obligation's OWN release path
+					// (`reevaluateDeferredCompletionBarrier`) remains the
+					// authority that commits `completed`.
+					if (
+						!activeSession.isRunning &&
+						this.options.getTurnPhase?.() === "resumable" &&
+						!this.bcbHoldResumablePublished
+					) {
 						Logger.debug("[SdkController] turn-complete straggler after cancel; preserving resumable phase")
 					} else if (this.options.messageTranslatorState.wasErrorSeen()) {
 						// The turn surfaced a provider error (ask:"api_req_failed" was emitted) —
 						// offer error recovery (Retry / Start New Task), not the followup state.
 						this.options.setTurnPhase?.("error", undefined, "session-event-turn-complete-error")
+						this.bcbHoldResumablePublished = false
 					} else if (this.options.messageTranslatorState.wasAttemptCompletionSeen()) {
 						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a completion tool
 						// was declared but we still need to confirm a terminal response was
@@ -3785,6 +3951,78 @@ export class SdkSessionEventCoordinator {
 									deferredAt: Date.now(),
 									...(preservedReason ? { reason: preservedReason } : {}),
 								}
+								// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+								// (PTWCR01C01 -- B1: the BCB-HOLD TERMINAL-PHASE
+								// CONVERGENCE).
+								//
+								// The BCB hold path used to register the deferred-
+								// completion-barrier marker and then CONTINUE
+								// WITHOUT publishing ANY phase. The host phase
+								// therefore stayed at its last ACTIVE value
+								// (`streaming`, written by `task-start-init-task`),
+								// so the webview rendered `Working` + `Cancel` for a
+								// runtime that was already `aborted` with zero model
+								// streaming and zero pending tools -- the LIVE
+								// false-Working defect (session `1792958891945_k2wrd`,
+								// epoch 12).
+								//
+								// WHY `resumable`:
+								//   - It is the EXISTING, established production
+								//     affordance for "the run was abandoned before it
+								//     produced a terminal response, so Resume is the
+								//     honest next action". The containment-failure
+								//     hold publishes the same phase
+								//     (`session-event-turn-complete-containment-failed-resumable`),
+								//     as does the cancel path
+								//     (`task-control-cancel-no-active-session`).
+								//   - NO new phase is introduced; the webview button
+								//     map `resumable -> BUTTON_CONFIGS.resume_task`
+								//     and the Elm TaskHeader projection already know it.
+								//   - NO `completed` is fabricated. The Elm
+								//     completion authority is NOT consulted here and
+								//     the C10 `task_completion_committed` record is NOT
+								//     emitted: the barrier's own release path
+								//     (`reevaluateDeferredCompletionBarrier`) remains the
+								//     ONLY writer of a terminal phase for the held
+								//     obligation.
+								//   - The BCB HOLD itself, the Elm authority, the
+								//     containment guards and the epoch identity triple
+								//     are all UNTOUCHED.
+								//
+								// WHY IT IS SAFE TO PUBLISH HERE:
+								//   This block is reached ONLY when the completion is
+								//   HELD, i.e. the run genuinely did NOT produce a
+								//   terminal response the user can rely on. Leaving the
+								//   phase at `streaming` is the false-Working claim;
+								//   `resumable` is the truthful non-running claim. The
+								//   write is IDEMPOTENT with respect to the barrier
+								//   lifetime: a later
+								//   `reevaluateDeferredCompletionBarrier` that AUTHORIZEs
+								//   the held completion overwrites this with `completed`
+								//   (the release path owns the terminal transition), and
+								//   an epoch supersession replaces the task wholesale.
+								//
+								// B1 MUST NOT OVERRIDE A TYPED BLOCKED VERDICT. When the
+								// host has already published a typed blocked outcome for THIS
+								// same obligation (the `observation_unavailable` reason), the
+								// blocked path owns the terminal phase (`error`, written by
+								// the `session-event-bcb-blocked-observation-unavailable`
+								// writer) and the BCB re-registration does NOT re-publish it
+								// (the bounded `sameObligationAlreadyObservationUnavailable`
+								// guard short-circuits the second write). Publishing `resumable`
+								// here would CLOBBER that typed `error` verdict with a phase
+								// that says "the run was abandoned" — which is a DIFFERENT and
+								// LESS specific claim than "the model could not observe the
+								// held results".
+								//
+								// The `preservedReason` computed at the marker registration is
+								// exactly this discriminator: it is carried over ONLY when the
+								// previous marker had the SAME identity triple (sessionId /
+								// taskId / epoch), i.e. the SAME obligation.
+								if (preservedReason !== "observation_unavailable") {
+									this.bcbHoldResumablePublished = true
+									this.options.setTurnPhase?.("resumable", undefined, "session-event-bcb-hold-resumable")
+								}
 								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01:
 								// Clear the completion-continuation-dedupe marker
 								// so this very trigger call (the FIRST trigger of
@@ -3931,6 +4169,7 @@ export class SdkSessionEventCoordinator {
 												undefined,
 												"session-event-bcb-blocked-observation-unavailable",
 											)
+											this.bcbHoldResumablePublished = false
 											// ACT-CLINEMM-BCB-CAPTURE01: stamp the
 											// committed phase after the setTurnPhase effect.
 											bcbCapturedCommittedPhase = "error"
@@ -4139,6 +4378,7 @@ export class SdkSessionEventCoordinator {
 									),
 								)
 								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+								this.bcbHoldResumablePublished = false
 								recordLifecycleTransitionTrace(
 									lifecycleTransitionTraceRecord(
 										this.lifecycleTraceContext(),
@@ -4206,6 +4446,7 @@ export class SdkSessionEventCoordinator {
 								undefined,
 								"session-event-turn-complete-awaiting-followup-liveness",
 							)
+							this.bcbHoldResumablePublished = false
 						}
 					} else {
 						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the
@@ -4244,6 +4485,7 @@ export class SdkSessionEventCoordinator {
 								undefined,
 								"session-event-turn-complete-awaiting-followup",
 							)
+							this.bcbHoldResumablePublished = false
 						} else {
 							// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: explicit
 							// user-owned incomplete yield for the done-without-
@@ -4440,6 +4682,7 @@ export class SdkSessionEventCoordinator {
 									undefined,
 									"session-event-turn-complete-resumable-straggler-preserve",
 								)
+								this.bcbHoldResumablePublished = false
 							}
 						}
 					}

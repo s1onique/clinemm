@@ -86,6 +86,29 @@ export type TurnStateWriterId =
 	// other session-event-* writerIds that record the BCB's
 	// transition with full provenance.
 	| "session-event-bcb-blocked-observation-unavailable"
+	// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+	// (PTWCR01C01): host authority for the TRUTHFUL non-running phase
+	// published when the Background-Completion-Barrier HOLDS a
+	// completion that the runtime will never deliver. The BCB hold
+	// path used to register the deferred-completion-barrier marker
+	// and RETURN without publishing ANY phase, so the host phase
+	// stayed at its last ACTIVE value (`streaming`) while the runtime
+	// was already `aborted` -- the LIVE false "Working" / "Cancel"
+	// projection.
+	//
+	// `resumable` is the EXISTING, established production affordance
+	// for "the run was abandoned before it produced a terminal
+	// response, so Resume is the honest next action" -- the same
+	// phase the containment-failure hold publishes
+	// (`session-event-turn-complete-containment-failed-resumable`)
+	// and the cancel path publishes
+	// (`task-control-cancel-no-active-session`). NO new phase is
+	// introduced, and NO `completed` is fabricated: the BCB HOLD,
+	// the Elm completion authority, the containment guards and the
+	// epoch identity triple are all UNTOUCHED. The barrier's own
+	// release path (`reevaluateDeferredCompletionBarrier`) remains
+	// the ONLY writer of a terminal phase for the held obligation.
+	| "session-event-bcb-hold-resumable"
 	| "interaction-handle-mistake-limit"
 	| "interaction-handle-tool-approval"
 	| "interaction-resolve-tool-approval-message-response"

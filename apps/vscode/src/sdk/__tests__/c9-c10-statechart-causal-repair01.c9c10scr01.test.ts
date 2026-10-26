@@ -385,8 +385,14 @@ describe("ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 / C9C10SCR01", () => 
 
 			// (a) NO C10 completion commit.
 			expect(h.completionCommitCount()).toBe(0)
-			// (b) The legacy phase is still `streaming`.
-			expect(h.tracker.currentPhase).toBe("streaming")
+			// (b) The legacy phase is the TRUTHFUL non-running `resumable`
+			// (the BCB hold), NOT the stale ACTIVE `streaming`.
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// (PTWCR01C01): a held completion used to leave the phase at
+			// `streaming`, which the webview rendered as `Working` +
+			// `Cancel` for a runtime that was not running. The
+			// conservation invariants (a) and (c) are UNCHANGED.
+			expect(h.tracker.currentPhase).toBe("resumable")
 			// (c) NO authoritative completion display.
 			expect(authoritativeCompletionFraming(h)).toBeUndefined()
 		})
@@ -402,7 +408,13 @@ describe("ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01 / C9C10SCR01", () => 
 			await driveSubmitAndExit(h, { resultText: "Verdict while a job is running." })
 
 			expect(h.completionCommitCount()).toBe(0)
-			expect(h.tracker.currentPhase).toBe("streaming")
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// (PTWCR01C01): the held completion is published as the
+			// TRUTHFUL non-running `resumable` phase (the BCB hold), not
+			// as the stale ACTIVE `streaming`. The conservation
+			// invariants — no C10 commit, no authoritative completion
+			// display — are UNCHANGED.
+			expect(h.tracker.currentPhase).toBe("resumable")
 			expect(authoritativeCompletionFraming(h)).toBeUndefined()
 		})
 	})

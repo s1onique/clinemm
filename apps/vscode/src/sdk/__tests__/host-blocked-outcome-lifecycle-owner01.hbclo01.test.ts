@@ -420,7 +420,17 @@ describe("ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01 — HBCLO01", () =
 
 			const phase = h.coordinator["options"].getTurnPhase?.()
 			expect(phase).not.toBe("completed")
-			expect(phase).toBe("idle")
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// (PTWCR01C01): the held completion is now published as the
+			// TRUTHFUL non-running `resumable` phase (the BCB hold), not
+			// as the stale ACTIVE `streaming` (which the webview rendered
+			// as `Working` + `Cancel`) and not as the no-phase `idle`
+			// (which the hold path used to leave behind).
+			//
+			// THE LOAD-BEARING C11 INVARIANT IS UNCHANGED: the phase is
+			// NOT `completed` — the blocked verdict does NOT fabricate
+			// task completion.
+			expect(phase).toBe("resumable")
 		})
 	})
 

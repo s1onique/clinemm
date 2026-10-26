@@ -321,7 +321,16 @@ describe("ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01", () => {
 
 			const phase = h.coordinator["options"].getTurnPhase?.()
 			expect(phase).not.toBe("completed")
-			expect(phase).toBe("idle")
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// (PTWCR01C01): the held completion is now published as the
+			// TRUTHFUL non-running `resumable` phase (the BCB hold), not
+			// as the stale ACTIVE `streaming` (which the webview rendered
+			// as `Working` + `Cancel`) and not as the no-phase `idle`
+			// (which the hold path used to leave behind).
+			//
+			// THE LOAD-BEARING INVARIANT IS UNCHANGED: completion is NOT
+			// fabricated while the held set is non-empty.
+			expect(phase).toBe("resumable")
 		})
 	})
 

@@ -29268,3 +29268,145 @@ is consumed, through the Elm authority).
 The reproduction suite (one new untracked test file), the evidence directory, and this
 board entry. No production file, no Elm kernel, no protocol, no webview reducer, no
 baseline test was modified.
+
+# ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-26
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the LIVE false-Working/Cancel P0 is repaired at the REAL production seam; no live re-run of the incident was performed).
+
+**ENTRY_HEAD:** `674bdd43bdb391f36f069c75476ce491d370cf79` (main). The predecessor's stated ENTRY_HEAD was VERIFIED as the actual ENTRY_HEAD.
+
+**PREDECESSOR:** `ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01` — `PASS_P0_RED_REPRODUCED` (the 15-test production-seam RED suite; the defect reproduces at the REAL coordinator + REAL `TurnStateTracker`).
+
+```text
+INCIDENT:                    1792958891945_k2wrd / epoch 12
+VERDICT:                     PASS_STRUCTURAL_ONLY
+REPAIR_GREEN:                9/9 (CORRECTION01 suite) + 15/15 (predecessor suite)
+TYPECHECK:                   PASS (bun run check-types; 0 diagnostics)
+LINT:                        PASS (biome, 2400 files, 0 errors)
+FORMAT:                      PASS (biome, 0 errors)
+GIT_DIFF_CHECK:              PASS (0 whitespace errors)
+FULL_SUITE (after):          5,073 tests — 4,825 passed, 193 failed
+FULL_SUITE (baseline):       5,064 tests — 4,816 passed, 193 failed
+REGRESSIONS:                 ZERO — the failing test-id sets are IDENTICAL (248 = 248)
+ACT_OWNED_FAILURES:          0
+LIVE_CLAIM:                  NONE (no VSIX built / installed; no live re-run)
+```
+
+## The repair (BOTH load-bearing boundaries closed)
+
+The LIVE defect had TWO load-bearing boundaries, re-verified in this ACT's R0
+against the frozen LIVE capture: the BCB hold path published NO phase, and the
+`pending_prompt_submitted` writer re-asserted `streaming` unconditionally
+(committed seq 132499, ~58 ms AFTER the BCB registered its marker at
+1792961423170). The runtime was already `aborted` with zero model streaming and
+zero pending tools, so no later event could ever supply the missing terminal
+transition.
+
+**B1 — the BCB hold path publishes the EXISTING truthful non-running
+`resumable` phase.** This is the established "the run was abandoned, Resume is
+the honest next action" affordance, already published by the containment-failure
+hold (`session-event-turn-complete-containment-failed-resumable`) and by the
+cancel path. A NEW writer identity `session-event-bcb-hold-resumable` was added
+to the closed `TurnStateWriterId` union and mapped to `resumable` in the
+writer-identity -> phase ownership map (the TPC01 G0 completeness gate). NO new
+phase is introduced. NO `completed` is fabricated: the Elm completion authority
+is NOT consulted on the hold path, no C10 `task_completion_committed` record is
+emitted, and the barrier's own release path (`reevaluateDeferredCompletionBarrier`)
+remains the ONLY writer of a terminal phase for the held obligation. The BCB
+HOLD, the containment guards and the epoch identity triple are all UNTOUCHED.
+
+**B2 — the `pending_prompt_submitted` writer does not re-assert `streaming`
+while the deferred-completion BARRIER holds the active turn's completion.** The
+discriminator is the EXISTING BCB barrier authority (the `sessionId` / `taskId` /
+`epoch` identity triple the barrier's own re-evaluation path uses) — NOT the
+phase and NOT the runtime status. The marker is not cleared by this event, so
+the guard is checkable AT the seam with no new state.
+
+## TWO REQUIRED deviations from the predecessor's proposal (both recorded)
+
+**1. The proposal's boundary 2 was NOT implemented literally.** The proposal
+wrote the pending-prompt guard as "does not re-assert `streaming` over a
+terminal phase". Implemented literally, that BREAKS the PINNED T-08a contract
+(`completed -> streaming` on `pending_prompt_submitted`), verified by
+`turn-phase-contract01.tpc01.test.ts` (60 tests). The correction's own
+first-draft RED suite carried that literal reading; **the TEST was corrected,
+not the production code**, and the corrected pair (R1-06 + R1-06b) is STRICTLY
+STRONGER than the original: it asserts BOTH that the BCB-hold guard does not
+clobber `completed` AND that the T-08a activation still happens without a
+barrier.
+
+**2. The turn-complete straggler guard had to learn the CAUSE of a
+`resumable`, not just its value.** The guard keys on the phase value to preserve
+a CANCEL-set `resumable`. B1's `resumable` has a different cause, and the
+guard could not tell them apart — so it swallowed the ENTIRE completion-commit
+path and the C10 `task_completion_committed` never happened once the held
+obligation was consumed and the agent re-issued `submit_and_exit`. The
+coordinator now tracks WHICH writer published the committed `resumable`
+(`bcbHoldResumablePublished`: SET by the BCB-hold write, CLEARED by every other
+phase write and at every barrier-clearing site). A `resumable` published by any
+OTHER writer (the cancel path, the containment-failure hold) is never mistaken
+for a BCB hold.
+
+## The full suite was REQUIRED — the focused suite was not sufficient
+
+The correction's own 9-test suite and the directly adjacent conservation suites
+were **195/195 GREEN** after the first implementation pass. The FULL
+`apps/vscode` vitest suite still had **22 NEW failures** that no focused sweep
+could see — 12 from the straggler-guard collision above and 10 from B1
+clobbering a typed blocked verdict (the `observation_unavailable` reason owns the
+terminal `error` phase and must not be overwritten by the less specific
+"abandoned" claim; B1 is now guarded by the `preservedReason` discriminator,
+which is carried over ONLY for the SAME identity triple, i.e. the SAME
+obligation).
+
+The baseline was measured by stashing ONLY this ACT's files, re-running the
+SAME command, and comparing the two Vitest JSON reports **by test id** — never
+by grep, never by truncated console output. The final comparison is
+byte-identical on the failing sets.
+
+## The RED suite inversion (reconciled in place, precedent followed)
+
+The predecessor committed its RED REPRODUCTION suite as a SEPARATE commit, so
+the repair inverted its assertions. The suite was **reconciled in place**: the
+test IDs and their causal roles are PRESERVED, and only the asserted OUTCOME
+changes, from "the defect is present" to "the defect is absent". The precedent
+is the sibling ACT `ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01`
+(`cb39c81e4`), whose RED suite was written to flip green with its repair.
+
+In EVERY inverted test the load-bearing conservation invariant is preserved
+verbatim: no `completed` is fabricated, ZERO C10 `task_completion_committed`
+records, no authoritative completion display, and the deferred marker is
+PRESERVED. Eleven assertions were inverted across six suites; the full ledger
+is in the evidence. The `R3-02` inversion is STRONGER than the original (the
+original forbade ALL terminal phases; the repaired form forbids every COMPLETION
+phase and REQUIRES the truthful `resumable`).
+
+## The environment limitation is recorded, not masked
+
+No VSIX was built or installed and no LIVE re-run of the incident was
+performed, so the closure is `PASS_STRUCTURAL_ONLY`, NOT `PASS_LIVE`. The
+predecessor's frozen LIVE capture was READ and re-verified, but no new LIVE
+capture was produced. Claiming a LIVE verdict would require a LIVE re-run of
+the incident scenario, which this ACT did not perform.
+
+## Evidence
+
+- `.factory/evidence/ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01/`
+  (`01-r0-ownership-map.md`, `02-r1-repair-contract-and-red.md`,
+  `03-r2-blast-radius-and-the-straggler-guard.md`, `04-r3-inversion-ledger.md`,
+  `05-r4-disposition.md`, `SHA256SUMS`)
+- `apps/vscode/src/sdk/__tests__/post-terminal-working-cancel-correction01.ptwcr01c01.test.ts`
+  — NEW, 9/9 PASS.
+- `apps/vscode/src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts`
+  — the predecessor's suite, reconciled in place, 15/15 PASS.
+
+## Production changes
+
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — B1, B2, and the
+  straggler-guard cause-discrimination.
+- `apps/vscode/src/shared/turn-state-writer-provenance.ts` — the NEW writer
+  identity `session-event-bcb-hold-resumable`.
+- `apps/vscode/src/sdk/turn-phase-contract.ts` — the new writer mapped to
+  `resumable` in the ownership map.
+
+No Elm kernel, no protocol, no webview reducer, no schema.

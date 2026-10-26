@@ -4,7 +4,38 @@
  * R1 — CONTROLLED PRODUCTION-SEAM RED for the LIVE incident
  * `1792958891945_k2wrd` / epoch 12.
  *
- * THE LIVE SYMPTOM
+ * ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+ * (PTWCR01C01) — THE REPAIRED (GREEN) FORM OF THIS SUITE
+ *
+ *   This file was committed by the predecessor ACT as a RED
+ *   REPRODUCTION: its assertions stated that the LIVE defect was
+ *   PRESENT (the phase stayed `streaming`, no terminal phase was ever
+ *   produced). The successor ACT repaired the defect, so those
+ *   assertions are now INVERTED IN PLACE — the test IDs and their
+ *   causal roles are PRESERVED, and only the asserted OUTCOME changes,
+ *   from "the defect is present" to "the defect is absent". The suite
+ *   therefore remains the regression guard for this exact LIVE
+ *   sequence, and the repository is not left with a permanently-red
+ *   suite.
+ *
+ *   The repair (see the successor ACT for the full contract):
+ *     B1 — the BCB hold path publishes the EXISTING truthful
+ *          non-running `resumable` phase (the "the run was abandoned"
+ *          affordance) instead of publishing NO phase at all. NO new
+ *          phase; NO `completed` fabricated; the Elm completion
+ *          authority is NOT consulted; the barrier's own release path
+ *          (`reevaluateDeferredCompletionBarrier`) remains the ONLY
+ *          writer of a terminal phase for the held obligation.
+ *     B2 — the `pending_prompt_submitted` writer does NOT re-assert
+ *          `streaming` while the deferred-completion BARRIER holds the
+ *          active turn's completion (the discriminator is the EXISTING
+ *          BCB barrier authority, not the phase and not the runtime
+ *          status). The PINNED T-08a/T-08b/T-08c contract (a
+ *          `pending_prompt_submitted` from a terminal phase activates
+ *          `streaming`) is PRESERVED when no barrier holds.
+ *
+ * THE LIVE SYMPTOM (as captured — the defect this suite now guards
+ * against REGRESSION)
  *
  *   Final host phase    : `streaming` (seq 132499), last writer
  *                          `session-event-pending-prompt-submitted`.
@@ -20,7 +51,8 @@
  *                          shadow binding `UNBOUND`; the action
  *                          selector returns `Cancel`.
  *
- * THE CAUSAL CHAIN UNDER TEST
+ * THE CAUSAL CHAIN UNDER TEST (as CAPTURED — the defect the successor
+ * ACT repaired)
  *
  *   runtime termination (`done(reason:"aborted")`)
  *     -> the turn-end handler sees `attemptCompletionSeen` +
@@ -341,7 +373,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("PTWCR01 R1 — post-terminal Working/Cancel after runtime termination", () => {
-	it("PTWCR01-R1-01 (RED): an inactive runtime is left at `streaming` with no terminal phase — the presentation claims active work", async () => {
+	it("PTWCR01-R1-01 (REPAIRED): an inactive runtime is published as a TRUTHFUL non-running phase — the presentation no longer claims active work", async () => {
 		const h = makeHarness()
 		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
 
@@ -358,21 +390,33 @@ describe("PTWCR01 R1 — post-terminal Working/Cancel after runtime termination"
 		// (b) A pending-prompt continuation re-enters.
 		await emitPendingPromptSubmitted(h)
 
-		// THE RED ASSERTION: the authoritative host phase is
-		// `streaming` — an ACTIVE phase — even though the runtime is
-		// dead and the BCB still holds a real obligation.
-		expect(h.tracker.currentPhase).toBe("streaming")
+		// THE REPAIRED ASSERTION: the authoritative host phase is
+		// `resumable` — a TRUTHFUL non-running phase — even though the
+		// BCB still holds a real obligation.
+		//
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+		// (PTWCR01C01): the predecessor ACT's RED assertion was
+		// `expect(...).toBe("streaming")` — i.e. the defect REPRODUCED.
+		// The repair (B1: the BCB hold publishes `resumable`; B2: the
+		// pending-prompt writer does not re-assert `streaming` while
+		// the barrier holds) INVERTS that assertion. The test ID and
+		// its causal role are PRESERVED; only the asserted outcome
+		// changes, from "the defect is present" to "the defect is
+		// absent". The suite remains the regression guard for this
+		// exact LIVE sequence.
+		expect(h.tracker.currentPhase).toBe("resumable")
 
-		// No terminal phase was EVER produced.
+		// The `streaming` re-assertion is GONE: the pending-prompt
+		// writer did not commit a phase over the held turn.
+		expect(h.phaseWrites.some((w) => w.writerId === "session-event-pending-prompt-submitted")).toBe(false)
+
+		// The TRUTHFUL terminal phase was produced by the BCB hold
+		// path (NOT by the pending-prompt writer).
 		const terminalPhases = h.phaseWrites.filter((w) =>
 			["completed", "error", "resumable", "awaiting_followup"].includes(w.phase),
 		)
-		expect(terminalPhases).toEqual([])
-
-		// The last writer is the pending-prompt writer — exactly the
-		// LIVE `turn-state-writer-provenance.jsonl` signature
-		// (`session-event-pending-prompt-submitted` -> `streaming`).
-		expect(h.phaseWrites.at(-1)?.writerId).toBe("session-event-pending-prompt-submitted")
+		expect(terminalPhases.map((w) => w.phase)).toEqual(["resumable"])
+		expect(h.phaseWrites.at(-1)?.writerId).toBe("session-event-bcb-hold-resumable")
 	})
 
 	it("PTWCR01-R1-02: the conservation violation is presentation, NOT completion — no C10 was fabricated and `completed` was never reached", async () => {
@@ -482,7 +526,14 @@ describe("PTWCR01 R1 — post-terminal Working/Cancel after runtime termination"
 		})
 		await emitAbortedTurnDone(aborted)
 		await emitPendingPromptSubmitted(aborted)
-		expect(aborted.tracker.currentPhase).toBe("streaming")
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+		// (PTWCR01C01): the abort path now publishes the TRUTHFUL
+		// non-running `resumable` phase (the BCB hold), NOT the false
+		// ACTIVE `streaming`. The abort reason is STILL distinguishable
+		// from a failure — see the CONTROL below, which still reaches
+		// `error`.
+		expect(aborted.tracker.currentPhase).toBe("resumable")
+		expect(aborted.tracker.currentPhase).not.toBe("error")
 
 		// CONTROL: a `done(reason: "error")` (a genuine provider
 		// failure) DOES produce the `error` phase. The `error` branch
@@ -636,7 +687,7 @@ describe("PTWCR01 R3 — necessity: which condition preserves the stale `streami
 		expect(h.phaseWrites.some((w) => w.phase === "completed")).toBe(true)
 	})
 
-	it("PTWCR01-R3-02 (ABLATION B): with the BCB obligation PRESENT the terminal phase is NEVER produced — the hold suppresses every terminal write", async () => {
+	it("PTWCR01-R3-02 (ABLATION B): with the BCB obligation PRESENT the hold publishes ONLY a truthful non-running phase — never `completed`", async () => {
 		const h = makeHarness()
 		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
 		h.setObligations({
@@ -648,9 +699,20 @@ describe("PTWCR01 R3 — necessity: which condition preserves the stale `streami
 		await emitPendingPromptSubmitted(h)
 
 		// The BCB HOLD is what removes the terminal phase. The hold
-		// registers the deferred marker and returns WITHOUT writing
-		// any terminal phase.
-		expect(h.phaseWrites.some((w) => ["completed", "error", "resumable", "awaiting_followup"].includes(w.phase))).toBe(false)
+		// registers the deferred marker and publishes ONLY the truthful
+		// non-running `resumable` phase — it NEVER publishes `completed`
+		// (the Elm/C10 authority is not consulted on the hold path).
+		//
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+		// (PTWCR01C01): the predecessor's assertion was
+		// `expect(no terminal phase at all).toBe(true)`. The repair
+		// (B1) publishes `resumable` — a TRUTHFUL non-running phase —
+		// so the assertion is INVERTED to the load-bearing invariant:
+		// the hold never publishes a COMPLETION phase.
+		expect(h.phaseWrites.some((w) => w.phase === "completed")).toBe(false)
+		expect(h.phaseWrites.some((w) => w.phase === "error")).toBe(false)
+		expect(h.phaseWrites.some((w) => w.phase === "awaiting_followup")).toBe(false)
+		expect(h.phaseWrites.some((w) => w.phase === "resumable")).toBe(true)
 		expect(h.deferredMarker()).toBeDefined()
 	})
 
@@ -669,12 +731,20 @@ describe("PTWCR01 R3 — necessity: which condition preserves the stale `streami
 		// correctly HOLDS — the obligation is still there.
 		await h.coordinator.reevaluateDeferredCompletionBarrier()
 
-		// The phase is STILL `streaming`: the re-evaluation is
-		// correctly conservative, and there is NO phase write on the
-		// hold path. This is the load-bearing fact: the deferred
-		// marker alone does not produce a truthful projection.
-		expect(h.tracker.currentPhase).toBe("streaming")
-		expect(h.phaseWrites.some((w) => ["completed", "error", "resumable"].includes(w.phase))).toBe(false)
+		// The phase is STILL the truthful non-running `resumable`: the
+		// re-evaluation is correctly conservative, and it publishes NO
+		// completion phase while the obligation remains.
+		//
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+		// (PTWCR01C01): the predecessor's assertion was
+		// `expect(...).toBe("streaming")` — the load-bearing fact was
+		// "the deferred marker alone does not produce a truthful
+		// projection". The repair (B1) makes the projection TRUTHFUL,
+		// so the assertion is INVERTED: the phase is `resumable`, and
+		// the re-evaluation still publishes NO completion phase.
+		expect(h.tracker.currentPhase).toBe("resumable")
+		expect(h.phaseWrites.some((w) => w.phase === "completed")).toBe(false)
+		expect(h.phaseWrites.some((w) => w.phase === "error")).toBe(false)
 		// The marker is PRESERVED (the hold is not a release).
 		expect(h.deferredMarker()).toBeDefined()
 	})

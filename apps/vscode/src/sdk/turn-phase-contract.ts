@@ -415,6 +415,21 @@ export const TURN_PHASE_WRITER_MAP: Readonly<Record<TurnPhaseValue, readonly str
 		"task-control-resumable-ask",
 		"mode-coordinator-mode-switch-resumable",
 		"session-event-turn-complete-containment-failed-resumable",
+		// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+		// (PTWCR01C01): host authority for the TRUTHFUL non-running phase
+		// published when the BCB HOLDS a completion the runtime will
+		// never deliver. The BCB hold path used to register the
+		// deferred-completion-barrier marker and publish NO phase, so
+		// the host phase stayed at its last ACTIVE value (`streaming`)
+		// while the runtime was already `aborted` -- the LIVE false
+		// "Working" / "Cancel" projection. `resumable` is the EXISTING
+		// "the run was abandoned" affordance (same phase as the
+		// containment-failure hold and the cancel path). NO `completed`
+		// is fabricated and the Elm completion authority is NOT
+		// consulted: the barrier's own release path
+		// (`reevaluateDeferredCompletionBarrier`) remains the ONLY
+		// writer of a terminal phase for the held obligation.
+		"session-event-bcb-hold-resumable",
 	],
 }
 

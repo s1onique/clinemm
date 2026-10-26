@@ -347,7 +347,7 @@ afterEach(() => {
 
 describe("ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01 / CPA01 — held completion must not show authoritative completion marker", () => {
 	describe("CPA-10: TaskHeader phase remains NOT-completed while authority is held", () => {
-		it("ownerStillRunning during submit → tracker.currentPhase stays streaming", async () => {
+		it("ownerStillRunning during submit → tracker.currentPhase stays NOT-completed", async () => {
 			const h = makeHarness()
 			h.tracker.setWithWriter("streaming", undefined, {
 				writerId: "task-start-init-task",
@@ -357,7 +357,14 @@ describe("ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01 / CPA01 — held compl
 			await driveSubmitAndExit(h, { resultText: "mid-flight", turnId: "t1" })
 
 			expect(h.tracker.currentPhase).not.toBe("completed")
-			expect(h.tracker.currentPhase).toBe("streaming")
+			// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
+			// (PTWCR01C01): the held completion is now published as the
+			// TRUTHFUL non-running `resumable` phase (the BCB hold), NOT
+			// as the stale ACTIVE `streaming` — a `streaming` phase
+			// claims work that is not running, and the webview rendered
+			// it as `Working` + `Cancel`. The load-bearing invariant
+			// (NOT `completed`) is unchanged.
+			expect(h.tracker.currentPhase).toBe("resumable")
 		})
 	})
 
