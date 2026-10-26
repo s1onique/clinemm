@@ -1,0 +1,335 @@
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01
+ *
+ * Extension-host runtime for the model behavior flight recorder.
+ *
+ * This module owns:
+ *   - the SINGLE, centralized bounded recorder instance,
+ *   - the live enable/disable toggle (default OFF),
+ *   - the dump to JSONL under `context.globalStorageUri`, and
+ *   - the bridge that turns SDK observations into trace records.
+ *
+ * TRUST BINDING
+ * -------------
+ *   - Default OFF: the recorder is inert until the operator invokes
+ *     `cline.debug.toggleModelBehaviorTrace`.
+ *   - One user action: the toggle flips the recorder's enable bit. The
+ *     recorder is consulted at OBSERVATION time, so the toggle affects
+ *     already-running sessions for subsequent events — no extension reload
+ *     and no task restart.
+ *   - The dump is UNCONDITIONAL: it works after tracing has been disabled
+ *     and NEVER clears the evidence.
+ *   - No disk writes until the operator dumps.
+ *
+ * WHY ONE CENTRAL RECORDER
+ * -------------------------
+ * The ACT explicitly asks for one centralized bounded recorder rather than
+ * separate diagnostic rings per subsystem: the value of the evidence is the
+ * INTERLEAVED timeline (model request ↔ tool execution ↔ compaction
+ * boundary), which separate rings cannot provide.
+ */
+
+import { mkdir, writeFile } from "node:fs/promises"
+import { join } from "node:path"
+import {
+	type ModelBehaviorTraceEvent,
+	type ModelBehaviorTraceObservation,
+	type ModelBehaviorTraceRecord,
+	ModelBehaviorTraceRecorder,
+	type ModelBehaviorTraceSink,
+} from "@cline/shared"
+
+/**
+ * The dump filename under `context.globalStorageUri`.
+ */
+export const MODEL_BEHAVIOR_TRACE_DUMP_FILE = "model-behavior-trace.jsonl"
+
+/**
+ * The minimal `vscode.ExtensionContext` shape this module needs.
+ *
+ * Structural typing keeps the module testable without the VS Code host.
+ */
+export interface ModelBehaviorTraceContext {
+	readonly globalStorageUri: { readonly fsPath: string }
+	readonly workspaceState: {
+		get<T>(key: string): T | undefined
+		update(key: string, value: unknown): Thenable<void> | Promise<void>
+	}
+}
+
+/**
+ * The single workspace-state key the diagnostic owns.
+ */
+const WORKSPACE_STATE_KEY = "modelBehaviorTraceEnabled"
+
+/**
+ * The ONE recorder instance.
+ *
+ * Module-level so the SDK observer and the operator commands share the same
+ * buffer — this is what makes the timeline coherent.
+ */
+const recorder = new ModelBehaviorTraceRecorder()
+
+/**
+ * The recorder instance. Exposed for tests and for the host adapter.
+ */
+export function getModelBehaviorTraceRecorder(): ModelBehaviorTraceRecorder {
+	return recorder
+}
+
+/**
+ * True when the recorder is armed.
+ *
+ * A pure read of the in-memory enable bit — no I/O, so it is safe to call
+ * on hot paths.
+ */
+export function isModelBehaviorTraceEnabled(): boolean {
+	return recorder.isEnabled()
+}
+
+/**
+ * Flip the recorder's enable bit.
+ *
+ * Disabling does NOT clear the buffer: the operator must still be able to
+ * dump evidence captured before the toggle.
+ */
+export function setModelBehaviorTraceEnabled(enabled: boolean): void {
+	recorder.setEnabled(enabled)
+}
+
+/**
+ * Read the persisted workspace toggle.
+ *
+ * `undefined` (never toggled) means OFF.
+ */
+export function isModelBehaviorTraceWorkspaceEnabled(context: ModelBehaviorTraceContext): boolean {
+	return context.workspaceState.get<boolean>(WORKSPACE_STATE_KEY) === true
+}
+
+/**
+ * Flip the persisted workspace toggle and apply it to the live recorder.
+ *
+ * Returns the new value. The live recorder is updated immediately so the
+ * toggle affects already-running sessions for subsequent events.
+ */
+export async function toggleModelBehaviorTraceWorkspaceEnabled(context: ModelBehaviorTraceContext): Promise<boolean> {
+	const next = !isModelBehaviorTraceWorkspaceEnabled(context)
+	await context.workspaceState.update(WORKSPACE_STATE_KEY, next)
+	recorder.setEnabled(next)
+	return next
+}
+
+/**
+ * Restore the persisted toggle into the live recorder.
+ *
+ * Called at extension activation so a toggle survives an extension reload.
+ */
+export async function syncModelBehaviorTraceEnabled(context: ModelBehaviorTraceContext): Promise<boolean> {
+	const persisted = isModelBehaviorTraceWorkspaceEnabled(context)
+	recorder.setEnabled(persisted)
+	return persisted
+}
+
+/**
+ * Record one observation into the centralized recorder.
+ *
+ * Never throws — a recorder failure must never affect a model call, a tool
+ * execution, or a lifecycle commit.
+ */
+export function recordModelBehaviorTrace(
+	event: ModelBehaviorTraceEvent,
+	observation: ModelBehaviorTraceObservation,
+): ModelBehaviorTraceRecord | undefined {
+	return recorder.record(
+		event,
+		{
+			...(observation.sessionId !== undefined ? { sessionId: observation.sessionId } : {}),
+			...(observation.taskId !== undefined ? { taskId: observation.taskId } : {}),
+			...(observation.runId !== undefined ? { runId: observation.runId } : {}),
+			...(observation.iteration !== undefined ? { iteration: observation.iteration } : {}),
+			...(observation.providerId !== undefined ? { providerId: observation.providerId } : {}),
+			...(observation.modelId !== undefined ? { modelId: observation.modelId } : {}),
+		},
+		observation.payload as Record<string, unknown>,
+	)
+}
+
+/**
+ * The SDK observation sink backed by the centralized recorder.
+ *
+ * Every channel maps to exactly one trace event kind. The sink is created
+ * once and reused so the SDK can hold a stable reference.
+ */
+export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
+	/**
+	 * Compute the privacy-preserving argument fingerprint.
+	 *
+	 * The raw arguments are handed to the recorder, which owns the
+	 * ephemeral key, and ONLY the fingerprint comes back. The recorder never
+	 * retains the raw arguments.
+	 */
+	fingerprintToolArguments: async (toolName: string, input: unknown) => {
+		const fingerprint = await recorder.fingerprintArguments(toolName, input)
+		return fingerprint?.fingerprint
+	},
+	onModelRequestStart: (observation) => {
+		recordModelBehaviorTrace("model_request_start", observation)
+	},
+	onModelRequestFinish: (observation) => {
+		recordModelBehaviorTrace("model_request_finish", observation)
+	},
+	onModelRequestError: (observation) => {
+		recordModelBehaviorTrace("model_request_error", observation)
+	},
+	onModelRequestAbort: (observation) => {
+		recordModelBehaviorTrace("model_request_abort", observation)
+	},
+	onToolStart: (observation) => {
+		recordModelBehaviorTrace("tool_start", observation)
+	},
+	onToolFinish: (observation) => {
+		recordModelBehaviorTrace("tool_finish", observation)
+	},
+	onLoopVerdict: (observation) => {
+		recordModelBehaviorTrace("loop_verdict", observation)
+	},
+	onCompactionDiagnostics: (observation) => {
+		recordModelBehaviorTrace("compaction_diagnostics", observation)
+	},
+	onCompactionCompleted: (observation) => {
+		recordModelBehaviorTrace("compaction_completed", observation)
+	},
+	onRunTerminated: (observation) => {
+		recordModelBehaviorTrace("run_terminated", observation)
+	},
+}
+
+/**
+ * The model configuration snapshot recorded at session creation and when
+ * the relevant configuration changes.
+ */
+export interface ModelBehaviorTraceConfigSnapshot {
+	selectedProviderId?: string
+	selectedModelId?: string
+	runtimeProviderId?: string
+	runtimeModelId?: string
+	providerConfirmedModelId?: string
+	thinkingEnabled?: boolean
+	reasoningEffort?: string
+	temperature?: number
+	topP?: number
+	maxOutputTokens?: number
+	contextWindow?: number
+	maxInputTokens?: number
+	userContextCeiling?: number
+	toolCount?: number
+	toolNames?: readonly string[]
+	sourceHead?: string
+	extensionVersion?: string
+}
+
+/**
+ * Record the model configuration snapshot.
+ *
+ * Omitted/default provider settings are explicitly marked as
+ * `UNAVAILABLE_FROM_TRACE` rather than guessed, so an analyst can tell
+ * "the provider did not expose this" apart from "it was the default".
+ */
+export function recordModelBehaviorTraceConfig(
+	identity: {
+		sessionId?: string
+		taskId?: string
+		runId?: string
+		providerId?: string
+		modelId?: string
+	},
+	config: ModelBehaviorTraceConfigSnapshot,
+): ModelBehaviorTraceRecord | undefined {
+	return recorder.record(
+		"model_config",
+		identity,
+		{
+			selectedProviderId: config.selectedProviderId ?? "UNAVAILABLE_FROM_TRACE",
+			selectedModelId: config.selectedModelId ?? "UNAVAILABLE_FROM_TRACE",
+			runtimeProviderId: config.runtimeProviderId ?? "UNAVAILABLE_FROM_TRACE",
+			runtimeModelId: config.runtimeModelId ?? "UNAVAILABLE_FROM_TRACE",
+			providerConfirmedModelId: config.providerConfirmedModelId ?? "UNAVAILABLE_FROM_TRACE",
+			thinkingEnabled: config.thinkingEnabled ?? "UNAVAILABLE_FROM_TRACE",
+			reasoningEffort: config.reasoningEffort ?? "UNAVAILABLE_FROM_TRACE",
+			temperature: config.temperature ?? "UNAVAILABLE_FROM_TRACE",
+			topP: config.topP ?? "UNAVAILABLE_FROM_TRACE",
+			maxOutputTokens: config.maxOutputTokens ?? "UNAVAILABLE_FROM_TRACE",
+			contextWindow: config.contextWindow ?? "UNAVAILABLE_FROM_TRACE",
+			maxInputTokens: config.maxInputTokens ?? "UNAVAILABLE_FROM_TRACE",
+			userContextCeiling: config.userContextCeiling ?? "UNAVAILABLE_FROM_TRACE",
+			toolCount: config.toolCount ?? "UNAVAILABLE_FROM_TRACE",
+			toolNames: config.toolNames ?? [],
+			sourceHead: config.sourceHead ?? "UNAVAILABLE_FROM_TRACE",
+			extensionVersion: config.extensionVersion ?? "UNAVAILABLE_FROM_TRACE",
+		},
+		{ evidenceBoundary: "synthesized" },
+	)
+}
+
+/**
+ * The result of a dump operation.
+ */
+export interface ModelBehaviorTraceDumpResult {
+	/** Absolute path of the JSONL file. */
+	readonly filePath: string
+	/** How many records were written. */
+	readonly recordCount: number
+	/** True when records were dropped from the ring. */
+	readonly truncated: boolean
+	/** How many records were dropped. */
+	readonly droppedCount: number
+}
+
+/**
+ * Dump the recorded timeline to JSONL under `globalStorageUri`.
+ *
+ * The dump is UNCONDITIONAL — it works after tracing has been disabled, and
+ * it NEVER clears the evidence.
+ *
+ * The JSONL file contains ONE record per line (the timeline) followed by a
+ * final SUMMARY line carrying the truncation metadata, so the dump is
+ * self-describing: an incomplete trace is never presented as exhaustive.
+ */
+export async function dumpModelBehaviorTrace(context: ModelBehaviorTraceContext): Promise<ModelBehaviorTraceDumpResult> {
+	const dump = recorder.dump()
+	const dir = context.globalStorageUri.fsPath
+	await mkdir(dir, { recursive: true })
+	const filePath = join(dir, MODEL_BEHAVIOR_TRACE_DUMP_FILE)
+	const lines: string[] = dump.records.map((record) => JSON.stringify(record))
+	lines.push(
+		JSON.stringify({
+			kind: "summary",
+			traceId: dump.traceId,
+			dumpedAt: dump.dumpedAt,
+			truncation: dump.truncation,
+		}),
+	)
+	await writeFile(filePath, `${lines.join("\n")}\n`, "utf8")
+	return {
+		filePath,
+		recordCount: dump.records.length,
+		truncated: dump.truncation.truncated,
+		droppedCount: dump.truncation.droppedCount,
+	}
+}
+
+/**
+ * The recorded records, oldest first. Exposed for tests and for the
+ * comparator's in-process use.
+ */
+export function getModelBehaviorTraceRecords(): readonly ModelBehaviorTraceRecord[] {
+	return recorder.getRecords()
+}
+
+/**
+ * Test seam: reset the recorder to a pristine state. Production code never
+ * calls this.
+ */
+export function _resetModelBehaviorTrace(): void {
+	recorder._reset()
+}

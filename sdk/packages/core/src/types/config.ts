@@ -275,6 +275,16 @@ export interface CoreSessionConfig
 	hookErrorMode?: HookErrorMode;
 	logger?: BasicLogger;
 	telemetry?: ITelemetryService;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: optional read-only observation
+	 * sink. The session REPORTS observable model behavior (request
+	 * boundaries, tool boundaries, loop-detector verdicts, compaction
+	 * boundaries) through it. No value is ever read back, so the sink cannot
+	 * influence execution.
+	 *
+	 * When absent (the default), the session is observationally inert.
+	 */
+	modelBehaviorTraceSink?: import("@cline/shared").ModelBehaviorTraceSink;
 	extensionContext?: ExtensionContext;
 	extraTools?: AgentTool[];
 	pluginPaths?: string[];

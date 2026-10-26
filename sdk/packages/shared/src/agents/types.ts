@@ -773,6 +773,15 @@ export interface AgentConfig {
 	 * model transcript managed by the agent runtime.
 	 */
 	sessionId?: string;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: optional read-only observation
+	 * sink used to report observable model behavior (request boundaries,
+	 * tool boundaries, loop-detector verdicts, compaction boundaries).
+	 *
+	 * The runtime never reads a decision back from the sink, so it cannot
+	 * influence execution. When absent the runtime is observationally inert.
+	 */
+	modelBehaviorTraceSink?: import("../runtime/model-behavior-trace").ModelBehaviorTraceSink;
 	// -------------------------------------------------------------------------
 	// Provider Settings
 	// -------------------------------------------------------------------------

@@ -964,6 +964,17 @@ export interface AgentRuntimeConfig {
 	plugins?: readonly AgentRuntimePlugin[];
 	logger?: BasicLogger;
 	telemetry?: ITelemetryService;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: optional read-only observation sink.
+	 *
+	 * The runtime REPORTS observable facts (model request boundaries, tool
+	 * boundaries, loop-detector verdicts) through this sink. The runtime never
+	 * reads a decision back, so the sink can never influence execution.
+	 *
+	 * When absent (the default), the runtime pays a single null check per
+	 * boundary and behaves bit-identically to a build without this feature.
+	 */
+	modelBehaviorTraceSink?: import("./runtime/model-behavior-trace").ModelBehaviorTraceSink;
 	initialMessages?: readonly AgentMessage[];
 	maxIterations?: number;
 	completionPolicy?: {

@@ -46,6 +46,7 @@ import { fetch } from "@/shared/net"
 import { type BedrockProviderConfig, buildBedrockProviderConfig } from "./bedrock-config"
 import { buildAgentHooks } from "./hooks-adapter"
 import { readTaskHistory, resolveDataDir } from "./legacy-state-reader"
+import { recordModelBehaviorTraceConfig } from "./model-behavior-trace-runtime"
 import type { ResolvedModelSelection } from "./model-catalog/contracts"
 import { nonNegativeFiniteNumber, positiveFiniteNumber, toSdkApiFormat } from "./model-catalog/model-values"
 import { parseProviderId } from "./model-catalog/provider-id"
@@ -1216,6 +1217,46 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		},
 		hooks: buildAgentHooks(StateManager.get()),
 	}
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: record the model configuration
+	// snapshot at session creation.
+	//
+	// Selected / SDK-resolved / provider-confirmed identities are kept
+	// DISTINCT. The provider-confirmed identity is only populated when the
+	// provider actually exposed one — it is never inferred from the
+	// request. Omitted/default settings are marked UNAVAILABLE rather than
+	// guessed.
+	//
+	// The recorder is inert while the trace is OFF, so this call is a no-op
+	// in the default build.
+	recordModelBehaviorTraceConfig(
+		{
+			providerId: sdkProviderId,
+			modelId,
+		},
+		{
+			// The SELECTED identity is what the persisted API configuration
+			// names; the RUNTIME identity is what the SDK actually resolved
+			// for this session.
+			selectedProviderId: providerId ?? sdkProviderId,
+			selectedModelId: modelId,
+			runtimeProviderId: sdkProviderId,
+			runtimeModelId: modelId,
+			// The provider did not expose a confirmed model identity at
+			// configuration time; the recorder marks it UNAVAILABLE.
+			providerConfirmedModelId: undefined,
+			thinkingEnabled: reasoningConfig.thinking,
+			reasoningEffort: reasoningConfig.reasoningEffort,
+			temperature,
+			maxOutputTokens: maxTokensPerTurn,
+			contextWindow: knownModels?.[modelId]?.contextWindow,
+			maxInputTokens: knownModels?.[modelId]?.maxInputTokens,
+			userContextCeiling,
+			toolCount: undefined,
+			sourceHead: undefined,
+			extensionVersion: ExtensionRegistryInfo.version,
+		},
+	)
 
 	return config
 }

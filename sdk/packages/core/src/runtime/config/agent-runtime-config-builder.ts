@@ -24,6 +24,7 @@ import type {
 	AgentTool,
 	BasicLogger,
 	ITelemetryService,
+	ModelBehaviorTraceSink,
 } from "@cline/shared";
 import { version as clineCoreVersion } from "../../../package.json";
 
@@ -53,6 +54,11 @@ export interface CreateAgentRuntimeConfigInput {
 	readonly model: AgentModel;
 	readonly logger?: BasicLogger;
 	readonly telemetry?: ITelemetryService;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: optional read-only observation
+	 * sink forwarded to the agent runtime.
+	 */
+	readonly modelBehaviorTraceSink?: ModelBehaviorTraceSink;
 	/** Pre-built tool array (builtins + plugin-contributed + session extras). */
 	readonly tools?: readonly AgentTool<unknown, unknown>[];
 	readonly toolContextMetadata?: Record<string, unknown>;
@@ -118,6 +124,12 @@ export function createAgentRuntimeConfig(
 		plugins: input.plugins,
 		logger: input.logger ?? agentConfig.logger,
 		telemetry: input.telemetry ?? agentConfig.telemetry,
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: forward the read-only
+		// observation sink so the agent runtime can report its real model
+		// request and tool boundaries. The sink is never consulted for a
+		// decision.
+		modelBehaviorTraceSink:
+			input.modelBehaviorTraceSink ?? agentConfig.modelBehaviorTraceSink,
 		initialMessages: input.initialMessages,
 		completionPolicy:
 			input.completionPolicy === null

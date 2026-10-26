@@ -497,6 +497,41 @@ export {
 	getClineEnvironmentConfig,
 	resolveClineEnvironment,
 } from "./runtime/cline-environment";
+// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: the centralized, bounded,
+// model-agnostic flight recorder and its SDK observation sink.
+export type {
+	ModelBehaviorTraceBudgetSource,
+	ModelBehaviorTraceDump,
+	ModelBehaviorTraceEvent,
+	ModelBehaviorTraceEvidenceBoundary,
+	ModelBehaviorTraceFingerprint,
+	ModelBehaviorTraceIdentity,
+	ModelBehaviorTraceModelConfig,
+	ModelBehaviorTraceObservation,
+	ModelBehaviorTraceRecord,
+	ModelBehaviorTraceRecorderOptions,
+	ModelBehaviorTraceSink,
+	ModelBehaviorTraceToolCategory,
+	ModelBehaviorTraceTruncation,
+} from "./runtime/model-behavior-trace";
+export {
+	categorizeTraceTool,
+	canonicalizeTraceValue,
+	classifyEvidenceBoundary,
+	estimateRecordBytes,
+	hmacSha256,
+	mintFingerprintKey,
+	mintKeyId,
+	mintTraceId,
+	MODEL_BEHAVIOR_TRACE_MAX_BYTES,
+	MODEL_BEHAVIOR_TRACE_MAX_RECORDS,
+	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
+	ModelBehaviorTraceRecorder,
+	NOOP_MODEL_BEHAVIOR_TRACE_SINK,
+	normalizeTraceArguments,
+	normalizeTraceArgumentsAsync,
+	sanitizePayload,
+} from "./runtime/model-behavior-trace";
 export type {
 	ConnectorCliLaunchSpec,
 	ConnectorInstanceRef,

@@ -72,10 +72,7 @@ import {
 	serializeStableFailureCode,
 	type ToolAttemptIdentity,
 } from "./runtime/recovery";
-import {
-	buildExecutionState,
-	isSameExecutionState,
-} from "./runtime/state";
+import { buildExecutionState, isSameExecutionState } from "./runtime/state";
 
 const MAX_TOKENS_INCOMPLETE_TURN_MESSAGE =
 	"Model reached the maximum output token limit before completing the turn";
@@ -1073,8 +1070,7 @@ export class AgentRuntime {
 			// TaskHeader's compaction working-context bar.
 			// See `prepareTurnForModelRequest` (~line 2329)
 			// for the capture site.
-			currentWorkingContextEstimate:
-				this.state.currentWorkingContextEstimate,
+			currentWorkingContextEstimate: this.state.currentWorkingContextEstimate,
 		};
 	}
 
@@ -1973,6 +1969,12 @@ export class AgentRuntime {
 			durationMs: getTaskLifecycleDurationMs(),
 			phase: "provider_request_started",
 		});
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the model request START
+		// boundary to the read-only observation sink. This is the real
+		// runtime request boundary (immediately before the provider stream is
+		// opened). The observation is fire-and-forget: no return value is
+		// read, so the sink cannot influence execution.
+		this.observeModelRequestStart(request, summarizeModelRequest(request));
 		const stream = this.openTaskLifecycleStream(
 			request,
 			getTaskLifecycleDurationMs,
@@ -2007,194 +2009,193 @@ export class AgentRuntime {
 		this.state.executionModelStreaming = true;
 		await this.emitExecutionStateChangeIfChanged(streamBefore);
 		try {
-		for await (const event of stream) {
-			this.throwIfAborted();
-			switch (event.type) {
-				case "text-delta": {
-					accumulatedText += event.text;
-					const last = sequence.at(-1);
-					if (last?.type === "part" && last.part.type === "text") {
-						last.part.text += event.text;
-					} else {
-						sequence.push({
-							type: "part",
-							part: { type: "text", text: event.text },
-						});
-					}
-					await this.emit({
-						type: "assistant-text-delta",
-						snapshot: this.snapshot(),
-						iteration: this.state.iteration,
-						text: event.text,
-						accumulatedText,
-					});
-					break;
-				}
-				case "media": {
-					sequence.push({
-						type: "part",
-						part: {
-							type: "media",
-							media: event.media,
-						},
-					});
-					await this.emit({
-						type: "assistant-media",
-						snapshot: this.snapshot(),
-						iteration: this.state.iteration,
-						media: event.media,
-					});
-					break;
-				}
-				case "reasoning-delta": {
-					accumulatedReasoning += event.text;
-					const last = sequence.at(-1);
-					if (last?.type === "part" && last.part.type === "reasoning") {
-						last.part.text += event.text;
-						last.part.redacted = event.redacted ?? last.part.redacted;
-						last.part.metadata = event.metadata ?? last.part.metadata;
-					} else {
-						sequence.push({
-							type: "part",
-							part: {
-								type: "reasoning",
-								text: event.text,
-								redacted: event.redacted,
-								metadata: event.metadata,
-							},
-						});
-					}
-					await this.emit({
-						type: "assistant-reasoning-delta",
-						snapshot: this.snapshot(),
-						iteration: this.state.iteration,
-						text: event.text,
-						accumulatedText: accumulatedReasoning,
-						redacted: event.redacted,
-						metadata: event.metadata,
-					});
-					break;
-				}
-				case "tool-call-delta": {
-					if (event.execution) {
-						const toolCall: AgentToolCallPart = {
-							type: "tool-call",
-							toolCallId: event.toolCallId ?? createUID("model_tool"),
-							toolName: event.toolName ?? "tool",
-							input: event.input,
-							metadata: event.metadata,
-							execution: event.execution,
-						};
-						modelToolActivities.set(toolCall.toolCallId, {
-							toolCallId: toolCall.toolCallId,
-							toolName: toolCall.toolName,
-							execution: event.execution,
-							input: toolCall.input,
-						});
+			for await (const event of stream) {
+				this.throwIfAborted();
+				switch (event.type) {
+					case "text-delta": {
+						accumulatedText += event.text;
+						const last = sequence.at(-1);
+						if (last?.type === "part" && last.part.type === "text") {
+							last.part.text += event.text;
+						} else {
+							sequence.push({
+								type: "part",
+								part: { type: "text", text: event.text },
+							});
+						}
 						await this.emit({
-							type: "tool-started",
+							type: "assistant-text-delta",
 							snapshot: this.snapshot(),
 							iteration: this.state.iteration,
-							toolCall,
+							text: event.text,
+							accumulatedText,
 						});
 						break;
 					}
-					const key =
-						event.toolCallId ?? `tool_${event.index ?? nextToolIndex}`;
-					if (event.index == null && event.toolCallId == null) {
-						nextToolIndex += 1;
-					}
-					let assembly = toolAssemblies.get(key);
-					if (!assembly) {
-						assembly = {
-							toolCallId: event.toolCallId ?? createUID("tool"),
-							inputText: "",
-						};
-						toolAssemblies.set(key, assembly);
-						sequence.push({ type: "tool", key });
-					}
-					if (event.toolCallId) {
-						assembly.toolCallId = event.toolCallId;
-					}
-					if (event.toolName) {
-						assembly.toolName = event.toolName;
-					}
-					if (event.input !== undefined) {
-						assembly.inputValue = event.input;
-					}
-					if (event.metadata !== undefined) {
-						assembly.metadata = mergeToolMetadata(
-							assembly.metadata,
-							event.metadata,
-						);
-					}
-					if (event.inputText) {
-						assembly.inputText = mergeToolInputText(
-							assembly.inputText,
-							event.inputText,
-						);
-					}
-					break;
-				}
-				case "tool-result": {
-					const existing = modelToolActivities.get(event.toolCallId);
-					const activity = {
-						...existing,
-						toolCallId: event.toolCallId,
-						toolName: event.toolName,
-						execution: event.execution,
-						input: event.input === undefined ? existing?.input : event.input,
-						output: event.output,
-						isError: event.isError,
-					};
-					modelToolActivities.set(event.toolCallId, activity);
-					const toolCall: AgentToolCallPart = {
-						type: "tool-call",
-						toolCallId: event.toolCallId,
-						toolName: event.toolName,
-						input: activity.input,
-						execution: event.execution,
-					};
-					await this.emit({
-						type: "tool-finished",
-						snapshot: this.snapshot(),
-						iteration: this.state.iteration,
-						toolCall,
-						message: createMessage("tool", [
-							{
-								type: "tool-result",
-								toolCallId: event.toolCallId,
-								toolName: event.toolName,
-								output: event.output,
-								isError: event.isError,
-								execution: event.execution,
+					case "media": {
+						sequence.push({
+							type: "part",
+							part: {
+								type: "media",
+								media: event.media,
 							},
-						]),
-					});
-					break;
-				}
-				case "usage": {
-					await this.updateUsage(event.usage);
-					break;
-				}
-				case "finish": {
-					finishReason = event.reason;
-					if (event.error) {
-						this.state.lastError = event.error;
-						// Models that classify at their own error boundary (where the
-						// raw provider error is still structured) win. Anything else —
-						// custom `AgentModel` implementations, adapters that carry only
-						// a flattened message — is classified from the message so it
-						// stays eligible for overflow recovery.
-						this.state.lastErrorClass =
-							event.errorClass ?? classifyProviderError(event.error);
-						this.state.lastErrorReported = event.errorReported === true;
+						});
+						await this.emit({
+							type: "assistant-media",
+							snapshot: this.snapshot(),
+							iteration: this.state.iteration,
+							media: event.media,
+						});
+						break;
 					}
-					break;
+					case "reasoning-delta": {
+						accumulatedReasoning += event.text;
+						const last = sequence.at(-1);
+						if (last?.type === "part" && last.part.type === "reasoning") {
+							last.part.text += event.text;
+							last.part.redacted = event.redacted ?? last.part.redacted;
+							last.part.metadata = event.metadata ?? last.part.metadata;
+						} else {
+							sequence.push({
+								type: "part",
+								part: {
+									type: "reasoning",
+									text: event.text,
+									redacted: event.redacted,
+									metadata: event.metadata,
+								},
+							});
+						}
+						await this.emit({
+							type: "assistant-reasoning-delta",
+							snapshot: this.snapshot(),
+							iteration: this.state.iteration,
+							text: event.text,
+							accumulatedText: accumulatedReasoning,
+							redacted: event.redacted,
+							metadata: event.metadata,
+						});
+						break;
+					}
+					case "tool-call-delta": {
+						if (event.execution) {
+							const toolCall: AgentToolCallPart = {
+								type: "tool-call",
+								toolCallId: event.toolCallId ?? createUID("model_tool"),
+								toolName: event.toolName ?? "tool",
+								input: event.input,
+								metadata: event.metadata,
+								execution: event.execution,
+							};
+							modelToolActivities.set(toolCall.toolCallId, {
+								toolCallId: toolCall.toolCallId,
+								toolName: toolCall.toolName,
+								execution: event.execution,
+								input: toolCall.input,
+							});
+							await this.emit({
+								type: "tool-started",
+								snapshot: this.snapshot(),
+								iteration: this.state.iteration,
+								toolCall,
+							});
+							break;
+						}
+						const key =
+							event.toolCallId ?? `tool_${event.index ?? nextToolIndex}`;
+						if (event.index == null && event.toolCallId == null) {
+							nextToolIndex += 1;
+						}
+						let assembly = toolAssemblies.get(key);
+						if (!assembly) {
+							assembly = {
+								toolCallId: event.toolCallId ?? createUID("tool"),
+								inputText: "",
+							};
+							toolAssemblies.set(key, assembly);
+							sequence.push({ type: "tool", key });
+						}
+						if (event.toolCallId) {
+							assembly.toolCallId = event.toolCallId;
+						}
+						if (event.toolName) {
+							assembly.toolName = event.toolName;
+						}
+						if (event.input !== undefined) {
+							assembly.inputValue = event.input;
+						}
+						if (event.metadata !== undefined) {
+							assembly.metadata = mergeToolMetadata(
+								assembly.metadata,
+								event.metadata,
+							);
+						}
+						if (event.inputText) {
+							assembly.inputText = mergeToolInputText(
+								assembly.inputText,
+								event.inputText,
+							);
+						}
+						break;
+					}
+					case "tool-result": {
+						const existing = modelToolActivities.get(event.toolCallId);
+						const activity = {
+							...existing,
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							execution: event.execution,
+							input: event.input === undefined ? existing?.input : event.input,
+							output: event.output,
+							isError: event.isError,
+						};
+						modelToolActivities.set(event.toolCallId, activity);
+						const toolCall: AgentToolCallPart = {
+							type: "tool-call",
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							input: activity.input,
+							execution: event.execution,
+						};
+						await this.emit({
+							type: "tool-finished",
+							snapshot: this.snapshot(),
+							iteration: this.state.iteration,
+							toolCall,
+							message: createMessage("tool", [
+								{
+									type: "tool-result",
+									toolCallId: event.toolCallId,
+									toolName: event.toolName,
+									output: event.output,
+									isError: event.isError,
+									execution: event.execution,
+								},
+							]),
+						});
+						break;
+					}
+					case "usage": {
+						await this.updateUsage(event.usage);
+						break;
+					}
+					case "finish": {
+						finishReason = event.reason;
+						if (event.error) {
+							this.state.lastError = event.error;
+							// Models that classify at their own error boundary (where the
+							// raw provider error is still structured) win. Anything else —
+							// custom `AgentModel` implementations, adapters that carry only
+							// a flattened message — is classified from the message so it
+							// stays eligible for overflow recovery.
+							this.state.lastErrorClass =
+								event.errorClass ?? classifyProviderError(event.error);
+							this.state.lastErrorReported = event.errorReported === true;
+						}
+						break;
+					}
 				}
 			}
-		}
-
 		} finally {
 			// RSMT01: clear modelStreaming on every exit path
 			// (normal completion, abort, throw). Restores
@@ -2276,6 +2277,24 @@ export class AgentRuntime {
 			this.applyStopControl(control);
 		}
 
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the model request FINISH
+		// boundary (real runtime boundary — the provider stream has ended and
+		// the usage delta for this request is known).
+		this.observeModelRequestFinish({
+			finishReason,
+			requestDurationMs: Date.now() - taskLifecycleStartedAt,
+			...(metrics
+				? {
+						inputTokens: metrics.inputTokens,
+						outputTokens: metrics.outputTokens,
+						cacheReadTokens: metrics.cacheReadTokens,
+						cacheWriteTokens: metrics.cacheWriteTokens,
+					}
+				: {}),
+			toolCallCount: content.filter((part) => part.type === "tool-call").length,
+			invalidToolCallCount: invalidToolCalls.length,
+		});
+
 		return { message, finishReason };
 	}
 
@@ -2342,6 +2361,19 @@ export class AgentRuntime {
 					getTaskLifecycleDurationMs(),
 				);
 			}
+			// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the provider failure
+			// at the REAL request boundary. An abort is reported as an abort
+			// (not an error) so the offline analysis can distinguish "the
+			// model failed" from "the operator cancelled".
+			this.observeModelRequestFailure(
+				this.isAbortError(error) ? "abort" : "error",
+				{
+					phase,
+					requestDurationMs: getTaskLifecycleDurationMs(),
+					errorClass: classifyProviderError(error),
+					...(this.isAbortError(error) ? { aborted: true } : {}),
+				},
+			);
 			throw error;
 		}
 
@@ -2367,6 +2399,18 @@ export class AgentRuntime {
 					getTaskLifecycleDurationMs(),
 				);
 			}
+			// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: same boundary as above, for
+			// a failure that occurred DURING the stream.
+			this.observeModelRequestFailure(
+				this.isAbortError(error) ? "abort" : "error",
+				{
+					phase,
+					requestDurationMs: getTaskLifecycleDurationMs(),
+					errorClass: classifyProviderError(error),
+					firstChunkObserved: receivedFirstChunk,
+					...(this.isAbortError(error) ? { aborted: true } : {}),
+				},
+			);
 			throw error;
 		}
 	}
@@ -2414,6 +2458,155 @@ export class AgentRuntime {
 		return (
 			trimNonEmpty(this.config.messageModelInfo?.id) ?? this.telemetryModelId
 		);
+	}
+
+	// -----------------------------------------------------------------------
+	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01 — read-only observation helpers.
+	//
+	// Every method below is FIRE-AND-FORGET: the sink's return value is
+	// never read, and every sink call is wrapped so a throwing sink can
+	// never affect a model call, a tool execution, or a lifecycle commit.
+	// -----------------------------------------------------------------------
+
+	/**
+	 * The correlation identity for an observation produced by this runtime.
+	 *
+	 * Session id comes from the host-owned config, run id from the live run
+	 * state, and the iteration from the live counter. A missing identity is
+	 * OMITTED (never guessed).
+	 */
+	private modelBehaviorTraceIdentity(): {
+		sessionId?: string;
+		runId?: string;
+		iteration?: number;
+		providerId?: string;
+		modelId?: string;
+	} {
+		return {
+			...(trimNonEmpty(this.config.sessionId)
+				? { sessionId: trimNonEmpty(this.config.sessionId) }
+				: {}),
+			...(this.state.runId ? { runId: this.state.runId } : {}),
+			...(this.state.iteration > 0 ? { iteration: this.state.iteration } : {}),
+			...(this.getTelemetryProviderId()
+				? { providerId: this.getTelemetryProviderId() }
+				: {}),
+			...(this.getTelemetryModelId()
+				? { modelId: this.getTelemetryModelId() }
+				: {}),
+		};
+	}
+
+	private observeModelRequestStart(
+		request: AgentModelRequest,
+		summary: Record<string, unknown>,
+	): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onModelRequestStart) {
+			return;
+		}
+		try {
+			sink.onModelRequestStart({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					// The request summary is ALREADY a privacy-safe aggregate
+					// (counts and character lengths) produced by the
+					// production `summarizeModelRequest` helper.
+					...summary,
+					toolSchemaCount: request.tools.length,
+				},
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	private observeModelRequestFinish(payload: Record<string, unknown>): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onModelRequestFinish) {
+			return;
+		}
+		try {
+			sink.onModelRequestFinish({
+				...this.modelBehaviorTraceIdentity(),
+				payload,
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * Report a provider failure / abort observed at the model stream
+	 * boundary.
+	 */
+	observeModelRequestFailure(
+		kind: "error" | "abort",
+		payload: Record<string, unknown>,
+	): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		const handler =
+			kind === "error" ? sink?.onModelRequestError : sink?.onModelRequestAbort;
+		if (!handler) {
+			return;
+		}
+		try {
+			handler({
+				...this.modelBehaviorTraceIdentity(),
+				payload,
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * Compute the privacy-preserving argument fingerprint for a tool call.
+	 *
+	 * The SINK owns the ephemeral key, so the raw arguments are handed to it
+	 * and only the fingerprint comes back. Returns `undefined` when no sink
+	 * is attached or the fingerprint could not be computed. Never throws.
+	 */
+	private async fingerprintToolArguments(
+		toolName: string,
+		input: unknown,
+	): Promise<string | undefined> {
+		const handler =
+			this.config.modelBehaviorTraceSink?.fingerprintToolArguments;
+		if (!handler) {
+			return undefined;
+		}
+		try {
+			return await handler(toolName, input);
+		} catch {
+			// Failure isolation.
+			return undefined;
+		}
+	}
+
+	/**
+	 * Report a tool execution boundary observed by the runtime.
+	 *
+	 * `origin` distinguishes a MODEL-REQUESTED tool call from a runtime
+	 * generated or host-control call.
+	 */
+	observeToolBoundary(
+		kind: "start" | "finish",
+		payload: Record<string, unknown>,
+	): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		const handler = kind === "start" ? sink?.onToolStart : sink?.onToolFinish;
+		if (!handler) {
+			return;
+		}
+		try {
+			handler({
+				...this.modelBehaviorTraceIdentity(),
+				payload,
+			});
+		} catch {
+			// Failure isolation.
+		}
 	}
 
 	private isAbortError(error: unknown): boolean {
@@ -2865,34 +3058,34 @@ export class AgentRuntime {
 		 * via Priority 4.
 		 */
 		let controlPlaneOutcome: ControlPlaneOutcome | undefined;
-	/**
-	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
-	 * C2 plumbing: closed runtime-owned authority slot. Captured
-	 * from the host's policy callback result (the trusted channel);
-	 * NEVER read from `toolCall.metadata` (partially untrusted).
-	 */
-	let executionCapability: ToolCallExecutionCapability | undefined;
-	/**
-	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
-	 *
-	 * Closed runtime-owned per-command plan slot. Captured from
-	 * the host's policy callback result (`ToolApprovalResult.executionPlan`);
-	 * NEVER read from `toolCall.metadata`. The plan carries
-	 * per-entry authority (`CommandExecutionPlanEntry.executionCapability`)
-	 * that the executor consumes by `commandIndex` (positional).
-	 */
-	let commandExecutionPlan: CommandExecutionPlan | undefined;
-	/**
-	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
-	 *
-	 * Closed runtime-owned conditional authority flag. Captured
-	 * from the host's policy callback result
-	 * (`ToolApprovalResult.mandatorySeatbeltExecution`). Set ONLY
-	 * when approval was approved AND the host chain produced the
-	 * conditional source (`host_mode_all_seatbelt_required`).
-	 * NEVER read from `toolCall.metadata` (partially untrusted).
-	 */
-	let mandatorySeatbeltExecution: boolean | undefined;
+		/**
+		 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+		 * C2 plumbing: closed runtime-owned authority slot. Captured
+		 * from the host's policy callback result (the trusted channel);
+		 * NEVER read from `toolCall.metadata` (partially untrusted).
+		 */
+		let executionCapability: ToolCallExecutionCapability | undefined;
+		/**
+		 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+		 *
+		 * Closed runtime-owned per-command plan slot. Captured from
+		 * the host's policy callback result (`ToolApprovalResult.executionPlan`);
+		 * NEVER read from `toolCall.metadata`. The plan carries
+		 * per-entry authority (`CommandExecutionPlanEntry.executionCapability`)
+		 * that the executor consumes by `commandIndex` (positional).
+		 */
+		let commandExecutionPlan: CommandExecutionPlan | undefined;
+		/**
+		 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+		 *
+		 * Closed runtime-owned conditional authority flag. Captured
+		 * from the host's policy callback result
+		 * (`ToolApprovalResult.mandatorySeatbeltExecution`). Set ONLY
+		 * when approval was approved AND the host chain produced the
+		 * conditional source (`host_mode_all_seatbelt_required`).
+		 * NEVER read from `toolCall.metadata` (partially untrusted).
+		 */
+		let mandatorySeatbeltExecution: boolean | undefined;
 		const metadata =
 			toolCall.metadata &&
 			typeof toolCall.metadata === "object" &&
@@ -3166,6 +3359,26 @@ export class AgentRuntime {
 			iteration: this.state.iteration,
 			toolCall: prepared.toolCall,
 		});
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the tool START boundary.
+		// The correlated tool-call identity is the runtime's own
+		// `toolCallId`, so a start and its finish pair by construction.
+		//
+		// The argument fingerprint is computed by the SINK (which owns the
+		// ephemeral key); the raw arguments are handed to the sink and never
+		// retained by it.
+		const argumentFingerprint = await this.fingerprintToolArguments(
+			prepared.toolCall.toolName,
+			prepared.input,
+		);
+		this.observeToolBoundary("start", {
+			toolCallId: prepared.toolCall.toolCallId,
+			toolName: prepared.toolCall.toolName,
+			origin: "model_requested",
+			...(argumentFingerprint ? { argumentFingerprint } : {}),
+			...(prepared.toolCall.execution
+				? { execution: prepared.toolCall.execution }
+				: {}),
+		});
 
 		let result: AgentToolResult;
 		/**
@@ -3436,6 +3649,26 @@ export class AgentRuntime {
 			iteration: this.state.iteration,
 			toolCall: prepared.toolCall,
 			message,
+		});
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the tool FINISH boundary.
+		// Only the OUTCOME CLASS and the SIZE are recorded — never the raw
+		// output. `toolExecutionInvoked` is the production C1.2 authority
+		// for "did the executor actually run?".
+		this.observeToolBoundary("finish", {
+			toolCallId: prepared.toolCall.toolCallId,
+			toolName: prepared.toolCall.toolName,
+			origin: "model_requested",
+			// The SAME fingerprint the start boundary recorded, so the
+			// offline analysis can pair the two by action identity.
+			...(argumentFingerprint ? { argumentFingerprint } : {}),
+			durationMs,
+			outcome: result.isError ? "error" : "success",
+			executionInvoked: toolExecutionInvoked,
+			...(prepared.skipReason ? { skipReason: prepared.skipReason } : {}),
+			...(prepared.toolCall.execution
+				? { execution: prepared.toolCall.execution }
+				: {}),
+			outputSizeChars: getOutputSize(result.output),
 		});
 
 		// ---------------------------------------------------------------
@@ -4362,6 +4595,6 @@ import type {
 // @internal
 //   NOT a public SDK API. The Symbol is module-internal and
 //   its key is intentionally not exported.
-const W_TRACE_OBSERVER_SLOT = Symbol.for("@cline/agents__wTraceObserver")
+const W_TRACE_OBSERVER_SLOT = Symbol.for("@cline/agents__wTraceObserver");
 
 // ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01

@@ -61,6 +61,15 @@ const ClineCommands = {
 	// module + the production recorder call MUST be removed TOGETHER.
 	ToggleBcbObservationUnavailableCapture: prefix + ".debug.toggleBcbObservationUnavailableCapture",
 	DumpBcbObservationUnavailableCapture: prefix + ".debug.dumpBcbObservationUnavailableCapture",
+	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
+	// Debug commands for the bounded, model-agnostic model behavior flight
+	// recorder. Default OFF in every build. The toggle flips a
+	// workspace-state flag and updates the LIVE recorder immediately (so
+	// already-running sessions are affected for subsequent events); the
+	// dump serializes the centralized ring to
+	// <globalStorageUri>/model-behavior-trace.jsonl and never clears it.
+	ToggleModelBehaviorTrace: prefix + ".debug.toggleModelBehaviorTrace",
+	DumpModelBehaviorTrace: prefix + ".debug.dumpModelBehaviorTrace",
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// (twenty-ninth-pass) — debug dump command for the temporary
 	// Q1..Q4 W-carrier trace observer. The dump is unconditional

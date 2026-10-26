@@ -1,6 +1,21 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
+	// `sdk/packages/shared/src/agents/types.ts` calls `z.object(...)` at
+	// module scope, and the shared package barrel re-exports it. Without an
+	// explicit zod pre-bundle, Vite resolves zod's CJS entry and the
+	// namespace import (`import { z } from "zod"`) yields `undefined` under
+	// ESM. Pre-bundling zod and forcing it to stay external for SSR makes
+	// the named ESM export resolve, exactly as `apps/vscode/vitest.config.ts`
+	// already does for the same reason.
+	optimizeDeps: {
+		include: ["zod"],
+		force: true,
+	},
+	ssr: {
+		noExternal: ["zod"],
+	},
 	test: {
 		environment: "node",
 		include: ["src/**/*.test.ts"],

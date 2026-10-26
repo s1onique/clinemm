@@ -56,6 +56,11 @@ import {
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
 } from "@/sdk/host-ownership-diagnostic-runtime"
 import { dumpExtensionSideLifecycleClearSnapshot } from "@/sdk/lifecycle-clear-recorder-runtime-host"
+import {
+	dumpModelBehaviorTrace,
+	syncModelBehaviorTraceEnabled,
+	toggleModelBehaviorTraceWorkspaceEnabled,
+} from "@/sdk/model-behavior-trace-runtime"
 import { installMycEvaluationCaptureRuntime } from "@/sdk/myc-evaluation-capture-runtime"
 import { installMycPrimeLiveDiagReadoutRuntime } from "@/sdk/myc-prime-live-diag-runtime"
 import { dumpExtensionSideMycPrimeLiveDiag } from "@/sdk/myc-prime-live-diag-runtime-host"
@@ -297,6 +302,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	// armed BEFORE the first observer / producer call. See
 	// `dogfood-diagnostic-profile-w-carrier-activation.test.ts`.
 	applyWCarrierTraceDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
+	// Restore the persisted model-behavior-trace toggle into the live
+	// recorder. The recorder is DEFAULT OFF in every build (public and
+	// dogfood) — the persisted flag is the ONLY thing that can arm it, and
+	// only an explicit operator toggle ever writes that flag. The recorder
+	// is consulted at observation time, so the toggle affects
+	// already-running sessions for subsequent events without a reload.
+	await syncModelBehaviorTraceEnabled(context)
 
 	// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 	// arm the BOCOR (Background Owner Correlation) capture seam at
@@ -1030,6 +1044,41 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[PTAD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Post-terminal diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
+		// Debug commands for the bounded, model-agnostic model behavior
+		// flight recorder. Default OFF in every build (public and dogfood).
+		// The toggle flips the workspace-state flag AND updates the live
+		// recorder immediately, so already-running sessions are affected for
+		// subsequent events — no extension reload and no task restart. The
+		// dump writes the centralized ring to
+		// <globalStorageUri>/model-behavior-trace.jsonl, never clears the
+		// evidence, and works after tracing has been disabled.
+		vscode.commands.registerCommand(commands.ToggleModelBehaviorTrace, async () => {
+			const next = await toggleModelBehaviorTraceWorkspaceEnabled(context)
+			const status = next ? "ENABLED" : "DISABLED"
+			Logger.log(`[MBT] Model behavior trace \u2192 ${status}`)
+			void vscode.window.showInformationMessage(
+				`Model behavior trace: ${status}. Already-running sessions are affected for subsequent events.`,
+			)
+		}),
+		vscode.commands.registerCommand(commands.DumpModelBehaviorTrace, async () => {
+			try {
+				const result = await dumpModelBehaviorTrace(context)
+				if (result.recordCount === 0) {
+					void vscode.window.showInformationMessage(`Model behavior trace: NO_CAPTURE \u2192 ${result.filePath}`)
+					return
+				}
+				const truncation = result.truncated ? ` (TRUNCATED: ${result.droppedCount} record(s) dropped from the ring)` : ""
+				void vscode.window.showInformationMessage(
+					`Model behavior trace: ${result.recordCount} record(s)${truncation} \u2192 ${result.filePath}`,
+				)
+			} catch (err) {
+				Logger.error("[MBT] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Model behavior trace dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

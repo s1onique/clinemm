@@ -202,6 +202,16 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.toggleModelBehaviorTrace",
+				"title": "Cline Debug: Toggle Model Behavior Trace",
+				"category": "Cline"
+			},
+			{
+				"command": "cline.debug.dumpModelBehaviorTrace",
+				"title": "Cline Debug: Dump Model Behavior Trace",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.debug.dumpPostTerminalAuthorityDiagnostic",
 				"title": "Cline Debug: Dump Post-Terminal Authority Diagnostic",
 				"category": "Cline"

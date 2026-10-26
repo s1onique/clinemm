@@ -57,6 +57,7 @@ import {
 import { type CommandJobLifecycleEvent, CommandJobManager, type CommandJobState } from "./command-job-manager"
 import { createProductionPendingPromptCapture } from "./continuation-cardinality-authority.session-host-capture"
 import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
+import { modelBehaviorTraceSink } from "./model-behavior-trace-runtime"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
@@ -456,6 +457,13 @@ export class VscodeSessionHost implements SdkSessionHost {
 					...inputWithRemoteConfig.config,
 					telemetry: inputWithRemoteConfig.config.telemetry ?? options.telemetry,
 					extraTools: [...(inputWithRemoteConfig.config.extraTools ?? []), ...extraTools],
+					// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: attach the read-only
+					// model behavior observation sink. The SDK reports its
+					// real model-request / tool / loop / compaction boundaries
+					// through it. The sink is consulted at observation time
+					// and is inert while the recorder is OFF, so this line
+					// changes nothing about execution.
+					modelBehaviorTraceSink: modelBehaviorTraceSink,
 				},
 			}
 		}

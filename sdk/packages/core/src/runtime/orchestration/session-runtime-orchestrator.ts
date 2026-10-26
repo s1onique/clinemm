@@ -47,6 +47,7 @@ import {
 	type Message,
 	type MessageWithMetadata,
 	type ModelInfo,
+	type ModelBehaviorTraceSink,
 	mergeModelOptions,
 	modelSupportsToolCalling,
 	type ToolCallRecord,
@@ -76,7 +77,10 @@ import {
 	type ConnectionUpdate,
 	normalizeConnectionUpdate,
 } from "../config/connection-update";
-import { LoopDetectionTracker } from "../safety/loop-detection";
+import {
+	type LoopDetectionVerdict,
+	LoopDetectionTracker,
+} from "../safety/loop-detection";
 import { MistakeTracker } from "../safety/mistake-tracker";
 import { isHostRuntimeControlMessage } from "../turn-queue/host-runtime-control-brand";
 import { RuntimeEventAdapter } from "./runtime-event-adapter";
@@ -316,6 +320,11 @@ export interface SessionRuntimeOrchestratorDeps {
 	readonly logger?: BasicLogger;
 	readonly telemetry?: ITelemetryService;
 	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: optional read-only observation
+	 * sink. When absent the orchestrator is observationally inert.
+	 */
+	readonly modelBehaviorTraceSink?: ModelBehaviorTraceSink;
+	/**
 	 * Test hook: override the `AgentRuntime` factory. Production
 	 * callers leave this undefined and get the real `createAgentRuntime`.
 	 */
@@ -341,6 +350,11 @@ export class SessionRuntime {
 	private readonly agentId: string;
 	private readonly parentAgentId?: string;
 	private readonly logger?: BasicLogger;
+	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: read-only observation sink. The
+	// orchestrator REPORTS the production loop-detector verdict and the
+	// production compaction boundaries through it. No value is ever read
+	// back, so the sink cannot influence execution.
+	private readonly modelBehaviorTraceSink?: ModelBehaviorTraceSink;
 	// §3.4.4 telemetry parity. Currently consumed by the MistakeTracker's
 	// `onLimitTelemetry` hook (task.mistake_limit_reached); most other
 	// runtime telemetry is emitted host-side from the agent event stream
@@ -408,7 +422,9 @@ export class SessionRuntime {
 	 * forwarded here verbatim. The orchestrator does NOT mutate them;
 	 * subscribers receive a frozen snapshot.
 	 */
-	private readonly recoveryListeners = new Set<(sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void>();
+	private readonly recoveryListeners = new Set<
+		(sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void
+	>();
 	/**
 	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
 	 * canonical `AgentRuntimeEvent` listener registry. Every event the
@@ -424,7 +440,9 @@ export class SessionRuntime {
 	 *   - per-listener try/catch isolation;
 	 *   - idempotent unsubscribe.
 	 */
-	private readonly runtimeEventListeners = new Set<(event: AgentRuntimeEvent) => void>();
+	private readonly runtimeEventListeners = new Set<
+		(event: AgentRuntimeEvent) => void
+	>();
 	private readonly createAgentRuntimeImpl: (
 		config: Parameters<typeof createAgentRuntime>[0],
 	) => AgentRuntime;
@@ -485,6 +503,11 @@ export class SessionRuntime {
 		this.parentAgentId = config.parentAgentId;
 		this.logger = deps.logger ?? config.logger;
 		this.telemetry = deps.telemetry ?? config.telemetry;
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: the observation sink is
+		// resolved from the deps first, then the config. Both are optional;
+		// when neither supplies one the runtime is observationally inert.
+		this.modelBehaviorTraceSink =
+			deps.modelBehaviorTraceSink ?? config.modelBehaviorTraceSink;
 		this.createAgentRuntimeImpl =
 			deps.createAgentRuntimeImpl ?? createAgentRuntime;
 
@@ -693,7 +716,12 @@ export class SessionRuntime {
 	 *
 	 * Returns an unsubscribe function.
 	 */
-	subscribeRecoveryStateChange(listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void): () => void {
+	subscribeRecoveryStateChange(
+		listener: (
+			sessionId: string,
+			recovery: AgentRuntimeRecoverySnapshot,
+		) => void,
+	): () => void {
 		this.recoveryListeners.add(listener);
 		return () => {
 			this.recoveryListeners.delete(listener);
@@ -718,7 +746,9 @@ export class SessionRuntime {
 	 * Returns an unsubscribe function. Calling unsubscribe more than
 	 * once is harmless (idempotent — Set.delete returns false on miss).
 	 */
-	subscribeRuntimeEvents(listener: (event: AgentRuntimeEvent) => void): () => void {
+	subscribeRuntimeEvents(
+		listener: (event: AgentRuntimeEvent) => void,
+	): () => void {
 		this.runtimeEventListeners.add(listener);
 		return () => {
 			this.runtimeEventListeners.delete(listener);
@@ -747,7 +777,7 @@ export class SessionRuntime {
 	 * but no agent instance) collapse to the same legacy fallback.
 	 */
 	snapshot(): LiveAgentRuntimeStateSnapshot | undefined {
-		return this.activeRuntime?.snapshot()
+		return this.activeRuntime?.snapshot();
 	}
 
 	abort(reason?: unknown): void {
@@ -860,7 +890,7 @@ export class SessionRuntime {
 		// A new brand-gated envelope reaching the trusted seam on the
 		// next turn will repopulate the field; no envelope reaches
 		// `continue()` from the trusted host seam today.
-		this.runtimeTrustedContinuationInstruction = undefined
+		this.runtimeTrustedContinuationInstruction = undefined;
 		return this.executeRun({
 			userMessage,
 			userImages,
@@ -906,7 +936,7 @@ export class SessionRuntime {
 			this.config.systemPrompt,
 			rules,
 		);
-		const continuation = this.runtimeTrustedContinuationInstruction
+		const continuation = this.runtimeTrustedContinuationInstruction;
 		if (continuation) {
 			return mergeSystemPromptRules(baseWithRules, [continuation]);
 		}
@@ -1033,10 +1063,9 @@ export class SessionRuntime {
 			// no string key, no exported Symbol, no reconstructable
 			// credential. The verification is `privateBrands.has(message)`.
 			if (typeof effectiveUserMessage === "object") {
-				const rawMessage = effectiveUserMessage
+				const rawMessage = effectiveUserMessage;
 				// Brand is authoritative. No fallback to metadata.
-				const isHostRuntimeControl =
-					isHostRuntimeControlMessage(rawMessage)
+				const isHostRuntimeControl = isHostRuntimeControlMessage(rawMessage);
 				// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
 				// The brand-gated envelope is persisted with
 				// `role: "user"` (NOT `"system"`). Privileged routing
@@ -1064,19 +1093,20 @@ export class SessionRuntime {
 				const persistedAgentMessage: MessageWithMetadata = {
 					id: rawMessage.id,
 					role: "user",
-					content: typeof rawMessage.content === "string"
-						? await buildUserTurnContent(
-								rawMessage.content,
-								input.userImages,
-								input.userFiles,
-								this.config.userFileContentLoader,
-							)
-						: (rawMessage.content as Message["content"]),
+					content:
+						typeof rawMessage.content === "string"
+							? await buildUserTurnContent(
+									rawMessage.content,
+									input.userImages,
+									input.userFiles,
+									this.config.userFileContentLoader,
+								)
+							: (rawMessage.content as Message["content"]),
 					ts: rawMessage.createdAt,
 					metadata: rawMessage.metadata,
 					modelInfo: rawMessage.modelInfo,
-				}
-				this.conversation.appendMessage(persistedAgentMessage)
+				};
+				this.conversation.appendMessage(persistedAgentMessage);
 				// Extract the runtime-control text into the transient
 				// per-run field. Only the brand-gated producer can set
 				// this; user / tool / forged-metadata input cannot.
@@ -1084,9 +1114,9 @@ export class SessionRuntime {
 				// invocation, to compose `systemPrompt` before the
 				// runtime config is built (below).
 				if (isHostRuntimeControl) {
-					const continuationText = extractAgentMessageText(rawMessage.content)
+					const continuationText = extractAgentMessageText(rawMessage.content);
 					if (continuationText) {
-						this.runtimeTrustedContinuationInstruction = continuationText
+						this.runtimeTrustedContinuationInstruction = continuationText;
 					}
 				}
 			} else {
@@ -1397,7 +1427,10 @@ export class SessionRuntime {
 				// reads this field; stripping it (as the previous
 				// return literal did) caused the live defect.
 				...(result.currentWorkingContextEstimate !== undefined
-					? { currentWorkingContextEstimate: result.currentWorkingContextEstimate }
+					? {
+							currentWorkingContextEstimate:
+								result.currentWorkingContextEstimate,
+						}
 					: {}),
 			};
 		};
@@ -1568,7 +1601,7 @@ export class SessionRuntime {
 		// event, and cannot break the legacy translation below.
 		for (const listener of this.runtimeEventListeners) {
 			try {
-				listener(event)
+				listener(event);
 			} catch (error) {
 				this.logger?.error?.(
 					"SessionRuntime canonical runtime-event listener threw",
@@ -1577,7 +1610,7 @@ export class SessionRuntime {
 						eventType: event.type,
 						error,
 					},
-				)
+				);
 			}
 		}
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: forward
@@ -1587,16 +1620,16 @@ export class SessionRuntime {
 		// cumulative recovery counter via the host-owned
 		// `TaskTelemetryTracker`.
 		if (event.type === "recovery-state-changed" && event.snapshot.recovery) {
-			const recovery = event.snapshot.recovery
-			const sessionId = this.config.sessionId ?? ""
+			const recovery = event.snapshot.recovery;
+			const sessionId = this.config.sessionId ?? "";
 			for (const listener of this.recoveryListeners) {
 				try {
-					listener(sessionId, recovery)
+					listener(sessionId, recovery);
 				} catch (error) {
 					this.logger?.error?.("SessionRuntime recovery listener threw", {
 						agentId: this.agentId,
 						error,
-					})
+					});
 				}
 			}
 		}
@@ -1661,37 +1694,117 @@ export class SessionRuntime {
 	 *                 a stuck-loop condition, not a model-quality verdict
 	 *                 — it must remain terminal so the user can intervene.
 	 */
-	private inspectLoopForToolCall(
-		toolName: string,
-		input: unknown,
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the RUN TERMINATION
+	 * boundary to the read-only observation sink.
+	 */
+	private observeRunTerminated(
+		finishReason: AgentFinishReason,
+		durationMs: number,
+		iterations: number,
 	): void {
-		if (this.trackerAbortInFlight || this.loopDetectionDisabled) {
-			return
+		const handler = this.modelBehaviorTraceSink?.onRunTerminated;
+		if (!handler) {
+			return;
 		}
-		const verdict = this.loopTracker.inspect({ name: toolName, input })
+		try {
+			handler({
+				...(this.config.sessionId ? { sessionId: this.config.sessionId } : {}),
+				...(this.conversation.getConversationId()
+					? { taskId: this.conversation.getConversationId() }
+					: {}),
+				...(this.activeRunId ? { runId: this.activeRunId } : {}),
+				...(this.config.providerId
+					? { providerId: this.config.providerId }
+					: {}),
+				...(this.config.modelId ? { modelId: this.config.modelId } : {}),
+				payload: {
+					finishReason,
+					durationMs,
+					iterations,
+				},
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	private inspectLoopForToolCall(toolName: string, input: unknown): void {
+		if (this.trackerAbortInFlight || this.loopDetectionDisabled) {
+			return;
+		}
+		const verdict = this.loopTracker.inspect({ name: toolName, input });
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the PRODUCTION loop
+		// detector's verdict to the read-only observation sink. The verdict
+		// itself is computed by the unchanged `LoopDetectionTracker`; this
+		// call only OBSERVES it and cannot influence it.
+		this.observeLoopVerdict(verdict, toolName);
 		if (verdict.kind === "ok") {
-			return
+			return;
 		}
 		if (verdict.kind === "soft") {
 			if (verdict.message) {
 				this.conversation.appendMessage({
 					role: "user",
 					content: [{ type: "text", text: verdict.message }],
-				})
+				});
 			}
-			return
+			return;
 		}
 		// Hard escalation — genuine terminal condition (stuck loop). Bypass
 		// the MistakeTracker (which is now advisory-by-default) and abort
 		// the runtime directly so the user can intervene.
-		this.trackerAbortInFlight = true
+		this.trackerAbortInFlight = true;
 		const message =
-			verdict.message ?? `Detected repeated tool calls to \`${toolName}\`; stopping to avoid a loop.`
+			verdict.message ??
+			`Detected repeated tool calls to \`${toolName}\`; stopping to avoid a loop.`;
 		this.conversation.appendMessage({
 			role: "user",
 			content: [{ type: "text", text: message }],
-		})
-		this.activeRuntime?.abort(message)
+		});
+		this.activeRuntime?.abort(message);
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the production loop
+	 * detector's verdict to the read-only observation sink.
+	 *
+	 * The verdict is produced by the UNCHANGED `LoopDetectionTracker`. This
+	 * method only observes it — it never computes, re-derives, or alters a
+	 * verdict, and it never gates execution.
+	 */
+	private observeLoopVerdict(
+		verdict: LoopDetectionVerdict,
+		toolName: string,
+	): void {
+		const handler = this.modelBehaviorTraceSink?.onLoopVerdict;
+		if (!handler) {
+			return;
+		}
+		try {
+			handler({
+				...(this.config.sessionId ? { sessionId: this.config.sessionId } : {}),
+				...(this.conversation.getConversationId()
+					? { taskId: this.conversation.getConversationId() }
+					: {}),
+				...(this.activeRunId ? { runId: this.activeRunId } : {}),
+				...(this.config.providerId
+					? { providerId: this.config.providerId }
+					: {}),
+				...(this.config.modelId ? { modelId: this.config.modelId } : {}),
+				payload: {
+					verdict: verdict.kind,
+					toolName,
+					// The verdict MESSAGE is production-authored prose that
+					// names the tool. It is not recorded: the tool name and
+					// the verdict class are the machine-readable facts the
+					// offline analysis needs.
+					hasMessage: verdict.message !== undefined,
+				},
+			});
+		} catch {
+			// Failure isolation: the recorder must never affect the runtime.
+		}
 	}
 
 	/**
@@ -1764,6 +1877,15 @@ export class SessionRuntime {
 			? agentMessagesToMessagesWithMetadata(runResult.messages)
 			: this.conversation.getMessages();
 		const modelInfo = tryGetModelInfo(this.config);
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the RUN TERMINATION
+		// boundary — the production finish reason plus the run's active
+		// duration. This is what lets the offline analysis answer "did the
+		// task actually converge, and how long did it take?".
+		this.observeRunTerminated(
+			finishReason,
+			durationMs,
+			runResult?.iterations ?? 0,
+		);
 		if (thrownError) {
 			throw thrownError;
 		}

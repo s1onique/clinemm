@@ -19,6 +19,7 @@ import type {
 	CoreSessionConfig,
 } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
+import { resolveModelBehaviorTraceBudget } from "../../runtime/observability/model-behavior-trace";
 import { runAgenticCompaction } from "./agentic-compaction";
 import { runBasicCompaction } from "./basic-compaction";
 import {
@@ -313,6 +314,7 @@ export function createContextCompactionPrepareTurn(
 		| "logger"
 		| "telemetry"
 		| "sessionId"
+		| "modelBehaviorTraceSink"
 	>,
 	options: ContextCompactionPrepareTurnOptions = {},
 ):
@@ -404,6 +406,43 @@ export function createContextCompactionPrepareTurn(
 			apiMessagesJsonChars: safeJsonSize(context.apiMessages),
 			...summarizeToolResults(context.apiMessages),
 		});
+		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the compaction
+		// boundary into the model behavior timeline, alongside the effective
+		// input-budget PROVENANCE.
+		//
+		// The provenance is resolved from the EXACT inputs the production
+		// resolver above just consumed, so an operator can tell a genuine
+		// model limit apart from the 128k fallback. The production policy
+		// math is NOT re-implemented here — `resolveModelBehaviorTraceBudget`
+		// mirrors it and is checked against it by the budget provenance
+		// witness.
+		const budgetResolution = resolveModelBehaviorTraceBudget({
+			modelMaxInputTokens: context.model.info?.maxInputTokens,
+			contextWindow: context.model.info?.contextWindow,
+			userContextCeiling: sanitizedUserContextCeiling,
+		});
+		observeCompactionTrace(
+			config.modelBehaviorTraceSink?.onCompactionDiagnostics,
+			{
+				sessionId: config.sessionId,
+				iteration: context.iteration,
+				providerId: config.providerId,
+				modelId: config.modelId,
+			},
+			{
+				mode: effectiveMode,
+				strategy,
+				requestInputTokens,
+				maxInputTokens,
+				requestTriggerTokens,
+				userContextCeiling: sanitizedUserContextCeiling,
+				shouldCompact,
+				// The ACT's required provenance field.
+				inputBudgetSource: budgetResolution.source,
+				effectiveMaxInputTokens: budgetResolution.effectiveMaxInputTokens,
+				usedFallbackBudget: budgetResolution.usedFallback,
+			},
+		);
 		if (effectiveMode === "auto" && !shouldCompact) {
 			return undefined;
 		}
@@ -619,6 +658,32 @@ export function createContextCompactionPrepareTurn(
 				messagesAfter: result.messages.length,
 				messagesRemoved: beforeMessageCount - result.messages.length,
 			} as Record<string, unknown>);
+			// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the compaction COMPLETION
+			// boundary so the timeline carries the before/after token boundary in
+			// the same sequence as the model requests and tool executions.
+			observeCompactionTrace(
+				config.modelBehaviorTraceSink?.onCompactionCompleted,
+				{
+					sessionId: config.sessionId,
+					iteration: context.iteration,
+					providerId: config.providerId,
+					modelId: config.modelId,
+				},
+				{
+					mode: effectiveMode,
+					strategy: executedStrategy,
+					requestInputTokens,
+					maxInputTokens,
+					requestTriggerTokens,
+					userContextCeiling: sanitizedUserContextCeiling,
+					inputBudgetSource: budgetResolution.source,
+					tokensBefore: requestInputTokens,
+					tokensAfter: afterRequestTokens,
+					tokensSaved: requestInputTokens - afterRequestTokens,
+					messagesBefore: beforeMessageCount,
+					messagesAfter: result.messages.length,
+				},
+			);
 			context.emitStatusNotice?.(`${noticePrefix}compacted`, {
 				kind: statusReason,
 				reason: statusReason,
@@ -744,10 +809,19 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					systemPrompt,
 				});
 				await input.saveState?.(nextState, context.messages);
-				return publishWorkingContextEstimate(result.messages, systemPrompt ?? context.systemPrompt, context.tools);
+				return publishWorkingContextEstimate(
+					result.messages,
+					systemPrompt ?? context.systemPrompt,
+					context.tools,
+				);
 			}
-			const projectedSystemPrompt = result?.systemPrompt ?? existingState.system_prompt;
-			return publishWorkingContextEstimate(projectedMessages, projectedSystemPrompt ?? context.systemPrompt, context.tools);
+			const projectedSystemPrompt =
+				result?.systemPrompt ?? existingState.system_prompt;
+			return publishWorkingContextEstimate(
+				projectedMessages,
+				projectedSystemPrompt ?? context.systemPrompt,
+				context.tools,
+			);
 		}
 		const result = input.compact ? await input.compact(context) : undefined;
 		if (result?.messages) {
@@ -758,7 +832,11 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				systemPrompt: result.systemPrompt,
 			});
 			await input.saveState?.(nextState, context.messages);
-			return publishWorkingContextEstimate(result.messages, result.systemPrompt ?? context.systemPrompt, context.tools);
+			return publishWorkingContextEstimate(
+				result.messages,
+				result.systemPrompt ?? context.systemPrompt,
+				context.tools,
+			);
 		}
 		// No-compaction branch (producer-cadence GREEN;
 		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
@@ -913,4 +991,51 @@ function publishWorkingContextEstimateMetadataOnly(
 			tools,
 		}),
 	};
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report one compaction observation to
+ * the read-only model behavior trace sink.
+ *
+ * Failure isolation: a throwing sink can never affect the compaction
+ * policy, the compaction strategy, or the model request that follows.
+ */
+function observeCompactionTrace(
+	handler:
+		| ((observation: {
+				sessionId?: string;
+				iteration?: number;
+				providerId?: string;
+				modelId?: string;
+				payload: Record<string, unknown>;
+		  }) => void)
+		| undefined,
+	identity: {
+		sessionId?: string;
+		iteration?: number;
+		providerId?: string;
+		modelId?: string;
+	},
+	payload: Record<string, unknown>,
+): void {
+	if (!handler) {
+		return;
+	}
+	try {
+		handler({
+			...(identity.sessionId !== undefined
+				? { sessionId: identity.sessionId }
+				: {}),
+			...(identity.iteration !== undefined
+				? { iteration: identity.iteration }
+				: {}),
+			...(identity.providerId !== undefined
+				? { providerId: identity.providerId }
+				: {}),
+			...(identity.modelId !== undefined ? { modelId: identity.modelId } : {}),
+			payload,
+		});
+	} catch {
+		// Failure isolation: the recorder must never affect compaction.
+	}
 }
