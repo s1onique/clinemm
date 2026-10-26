@@ -249,6 +249,7 @@ in those cases a difference cannot be attributed to the model.
 | Adjacent compaction / safety tests | `compaction.test.ts` 94/94, `compaction.real-producer-seam-red.test.ts` 1/1, `mistake-tracker.test.ts` 11/11 |
 | `@cline/agents` full suite | **203/203 passed** |
 | `@cline/shared` full suite | 240 passed / 10 failed — **all 10 pre-existing** (`createTool` zod-schema tests; verified identical failure with this ACT's changes stashed) |
+| `apps/vscode` `src/sdk/__tests__` (60 of 372 files, per-file) | 10 failures in `background-command-notify-on-terminal01.bcnt01` + related background-command notification files — **all pre-existing**: with this ACT's source files reverted to `b22855b4a` (keeping `node_modules`/`dist` intact) the same file fails the **same 10 of 24** tests with the **same names** |
 | TypeScript | `bun run build:sdk` clean; `apps/vscode` `tsc --noEmit` clean |
 | Biome lint | clean (root `sdk/` + `apps/vscode` full tree: 2436 files) |
 | Biome format | clean on every changed file |
@@ -257,10 +258,20 @@ in those cases a difference cannot be attributed to the model.
 
 **Environment note:** the sandbox denies `kill(2)` on vitest worker
 processes (`EPERM`), so a single large parallel vitest invocation crashes
-at teardown before its JSON report flushes. Every suite was therefore run
-per-file (or in small batches) with `--reporter=json --outputFile=…`, which
-produces the counts quoted above. This is a harness limitation, not a test
-failure.
+at teardown before its JSON report flushes — and even a 20-file invocation
+is affected. Every suite was therefore run **per-file** with
+`--reporter=json --outputFile=…`, which produces the counts quoted above.
+This is a harness limitation, not a test failure: the affected logs contain
+**zero** `×`/`FAIL` test lines, only teardown `EPERM` errors.
+
+**Baseline methodology.** Pre-existing failures were established by
+reverting this ACT's source files to `b22855b4a` **in place** (keeping the
+installed `node_modules` and the built `dist`, so the SDK packages resolve
+identically) and re-running the same test files. A separate baseline
+`git worktree` was tried first and rejected: without the built `dist` it
+reports 0 tests, which would silently turn a comparison into a false pass.
+The in-place revert is the method that actually exercises the same
+resolution path.
 
 ---
 
