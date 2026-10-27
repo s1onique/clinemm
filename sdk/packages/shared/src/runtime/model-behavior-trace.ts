@@ -159,6 +159,23 @@ export type ModelBehaviorTraceEvent =
 	 * write are actually the bytes on disk.
 	 */
 	| "edit_write_verification"
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
+	 *
+	 * A CHECKPOINT observation of the previously observed edit targets.
+	 *
+	 * The `edit_write_verification` event records what an INDEPENDENT
+	 * read-back observed IMMEDIATELY AFTER an individual write. It says
+	 * nothing about whether that state SURVIVED subsequent commands: a
+	 * shell command that restores the original content produces no native
+	 * editor event, so the last read-back still describes the file as
+	 * changed when the trace is dumped.
+	 *
+	 * This event is the ACTUAL filesystem observation taken at an explicit
+	 * checkpoint (an operator checkpoint or a trace dump). It is the ONLY
+	 * authority for a retained-change classification.
+	 */
+	| "edit_checkpoint_observation"
 	| "loop_verdict"
 	| "compaction_diagnostics"
 	| "compaction_completed"
@@ -806,6 +823,16 @@ export interface ModelBehaviorTraceEditTargetResolution {
 	 * definitions default `cwd` to `process.cwd()`, which in the VS Code
 	 * extension host is frequently NOT the workspace root. Recording the
 	 * two identities separately is what makes the difference visible.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: this is the
+	 * fingerprint of the EXECUTOR'S OWN working directory — the `cwd` the
+	 * tool execution boundary was given — and NEVER of the edit
+	 * destination. Two destinations written from the SAME cwd therefore
+	 * carry the SAME `executorCwdIdentity`.
+	 *
+	 * ABSENT when the executor had no working directory to report; the
+	 * identity is then unavailable rather than substituted by a
+	 * destination fingerprint.
 	 */
 	readonly executorCwdIdentity?: string;
 	/**
@@ -917,10 +944,123 @@ export interface ModelBehaviorTraceEditWriteVerification {
 		| "READBACK_UNAVAILABLE"
 		| "READBACK_NOT_ATTEMPTED";
 	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the number
+	 * of bytes the read-back asked the operating system for.
+	 *
+	 * This is the RESOURCE observation of the read-back. A bounded read
+	 * never asks for more than `EDIT_OBSERVATION_MAX_FILE_BYTES + 1`,
+	 * whatever the destination's size; a whole-file read would report the
+	 * whole file's size here.
+	 */
+	readonly readBytesRequested?: number;
+	/**
 	 * The provenance of the verification.
 	 *
 	 * `REAL_PRODUCTION_SEAM` means the read-back was a real filesystem
 	 * read performed by the write layer.
+	 */
+	readonly provenance: ModelBehaviorTraceEvidenceProvenance;
+}
+
+// =============================================================================
+// Edit checkpoint observation schema
+// =============================================================================
+//
+// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01
+//
+// WHY THIS EXISTS
+// ---------------
+// The `edit_write_verification` event records what an INDEPENDENT read-back
+// observed IMMEDIATELY AFTER an individual write. It is real evidence about
+// the disk state at that instant — but it says NOTHING about whether that
+// state SURVIVED the commands that ran afterwards.
+//
+// The failure mode is concrete:
+//
+//   T1  native editor writes B        → read-back confirms B on disk
+//   T2  a shell command restores A     → NO native editor event is emitted
+//   T3  the trace is dumped            → the last read-back still says "B"
+//
+// A comparator that derives "retained change" from the last read-back
+// therefore reports RETAINED_CHANGED for a workspace that is demonstrably
+// back at A. The classification is unsound.
+//
+// The fix is a SEPARATE, EXPLICIT filesystem observation taken at a
+// checkpoint — an operator checkpoint or a trace dump. The write layer
+// keeps an EPHEMERAL, IN-MEMORY registry of the destinations it has
+// observed, and at checkpoint time re-observes each of them. The registry
+// holds RAW PATHS ONLY in memory; nothing is ever serialized, and only
+// ephemeral fingerprints leave it.
+//
+// A retained-change classification REQUIRES this observation. When no
+// checkpoint was captured, the honest answer is UNAVAILABLE_FROM_TRACE.
+
+/**
+ * The state of ONE previously observed target at a checkpoint.
+ *
+ * - `present` — the target exists at the checkpoint and its content was
+ *   measured.
+ * - `absent` — the target does NOT exist at the checkpoint. It was deleted
+ *   (or never created) after the last observed write.
+ * - `unreadable` — the target exists but could not be read (a permission
+ *   error, an I/O error). The state is genuinely UNKNOWN — it is never
+ *   reported as "unchanged".
+ */
+export type ModelBehaviorTraceEditCheckpointTargetState =
+	| "present"
+	| "absent"
+	| "unreadable";
+
+/**
+ * The CHECKPOINT observation of ONE previously observed edit target.
+ *
+ * Every field is privacy-safe: the target is identified by an EPHEMERAL
+ * keyed fingerprint and described only by its OBSERVED STATE.
+ */
+export interface ModelBehaviorTraceEditCheckpointTarget {
+	/** The ephemeral fingerprint of the observed target. */
+	readonly fileIdentity?: string;
+	/**
+	 * The state of the target at the checkpoint.
+	 */
+	readonly state: ModelBehaviorTraceEditCheckpointTargetState;
+	/**
+	 * The fingerprint of the content observed at the checkpoint.
+	 *
+	 * ABSENT when the target was absent or unreadable.
+	 */
+	readonly contentFingerprint?: string;
+	/**
+	 * Why the content was not measured, when it was not.
+	 *
+	 * - `MEASUREMENT_SKIPPED_SIZE_LIMIT` — the target exceeded the
+	 *   instrumentation's size budget.
+	 * - `READBACK_UNAVAILABLE` — the target could not be read.
+	 */
+	readonly measurementSkippedReason?:
+		| "MEASUREMENT_SKIPPED_SIZE_LIMIT"
+		| "READBACK_UNAVAILABLE";
+}
+
+/**
+ * The checkpoint observation of the previously observed edit targets.
+ *
+ * This is the ONLY authority for a retained-change classification.
+ */
+export interface ModelBehaviorTraceEditCheckpointObservation {
+	/**
+	 * The number of previously observed targets the checkpoint re-observed.
+	 */
+	readonly observedTargetCount: number;
+	/**
+	 * The per-target checkpoint observations.
+	 */
+	readonly targets: readonly ModelBehaviorTraceEditCheckpointTarget[];
+	/**
+	 * The provenance of the checkpoint observation.
+	 *
+	 * `REAL_PRODUCTION_SEAM` means the checkpoint was a real filesystem
+	 * observation performed by the write layer.
 	 */
 	readonly provenance: ModelBehaviorTraceEvidenceProvenance;
 }
@@ -1889,6 +2029,20 @@ export interface ModelBehaviorTraceSink {
 	 * measurement was skipped.
 	 */
 	onEditWriteVerification?: (
+		observation: ModelBehaviorTraceObservation,
+	) => void;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
+	 *
+	 * The write layer took a CHECKPOINT observation of the previously
+	 * observed edit targets.
+	 *
+	 * The payload carries the per-target checkpoint states
+	 * (`present` / `absent` / `unreadable`), the ephemeral target
+	 * fingerprints and the checkpointed content fingerprints. No raw path
+	 * is ever carried.
+	 */
+	onEditCheckpointObservation?: (
 		observation: ModelBehaviorTraceObservation,
 	) => void;
 	/** The production loop detector returned a verdict. */

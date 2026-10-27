@@ -380,6 +380,29 @@ interface EditingEfficiencyStatistics {
  *   designated benchmark root.
  * - `UNVERIFIED` — the outcome could not be established (no read-back, an
  *   ambiguous identity, or a missing checkpoint).
+ * - `UNAVAILABLE_FROM_TRACE` — the trace carries NO CHECKPOINT observation,
+ *   so the CURRENT state of the target is not knowable from the trace at
+ *   all.
+ *
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01
+ * ------------------------------------------------------
+ * The retained-change classifications REQUIRE the checkpoint observation.
+ *
+ * The previous implementation derived them from the LAST post-write
+ * read-back, which is unsound:
+ *
+ *   T1  native editor writes B     → read-back confirms B on disk
+ *   T2  a shell command restores A  → NO native editor event is emitted
+ *   T3  the trace is dumped         → the last read-back still says "B"
+ *
+ * That produced a false RETAINED_CHANGED for a workspace that was
+ * demonstrably back at A. The post-write read-back is now reported
+ * separately as the LAST_OBSERVED_POST_WRITE_STATE, and the retained-change
+ * classification is derived ONLY from the `edit_checkpoint_observation`
+ * record — a real filesystem observation taken at the checkpoint.
+ *
+ * When the trace carries no checkpoint, the honest answer is
+ * `UNAVAILABLE_FROM_TRACE`, never a guess.
  */
 export type EditRetentionClassification =
 	| "RETAINED_CHANGED"
@@ -387,7 +410,8 @@ export type EditRetentionClassification =
 	| "DELETED"
 	| "UNCHANGED"
 	| "OUTSIDE_SCOPE"
-	| "UNVERIFIED";
+	| "UNVERIFIED"
+	| "UNAVAILABLE_FROM_TRACE";
 
 /**
  * The workspace-progress summary of ONE trace.
@@ -1720,19 +1744,28 @@ function computeWorkspaceProgress(
 	// RETENTION CLASSIFICATION
 	// ------------------------------------------------------------------
 	//
-	// The classification is per OBSERVED TARGET, driven by the sequence of
-	// read-backs observed for that target's file identity:
+	// The classification is per OBSERVED TARGET, driven by the CHECKPOINT
+	// observation — a real filesystem observation taken at the operator
+	// checkpoint or the trace dump.
 	//
-	//   - the destination is absent at the last read-back → DELETED;
-	//   - the final observed content equals an EARLIER observed content
-	//     → REVERTED;
-	//   - the final observed content differs from the first observed
-	//     content → RETAINED_CHANGED;
-	//   - the final observed content equals the first observed content
-	//     → UNCHANGED;
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the
+	// previous implementation derived the classification from the LAST
+	// post-write read-back. That is unsound, because a command that later
+	// restores the file produces no native editor event: the read-back
+	// still describes the file as changed when the trace is dumped.
+	//
+	// The classification is now:
+	//
+	//   - the checkpoint observed the target as ABSENT → DELETED;
+	//   - the checkpoint observed content equal to the content the target
+	//     had BEFORE the first write → REVERTED (the change did not
+	//     survive) or UNCHANGED (it never changed);
+	//   - the checkpoint observed DIFFERENT content from the pre-write
+	//     content → RETAINED_CHANGED (the change survived);
 	//   - the target is outside the designated benchmark root →
 	//     OUTSIDE_SCOPE;
-	//   - no usable observation → UNVERIFIED.
+	//   - the checkpoint could not read the target → UNVERIFIED;
+	//   - the trace carries NO checkpoint → UNAVAILABLE_FROM_TRACE.
 	const retentionCounts: Record<EditRetentionClassification, number> = {
 		RETAINED_CHANGED: 0,
 		REVERTED: 0,
@@ -1740,11 +1773,16 @@ function computeWorkspaceProgress(
 		UNCHANGED: 0,
 		OUTSIDE_SCOPE: 0,
 		UNVERIFIED: 0,
+		UNAVAILABLE_FROM_TRACE: 0,
 	};
 
 	/**
 	 * The observed content sequence of each file identity, in record
 	 * order.
+	 *
+	 * This is the LAST_OBSERVED_POST_WRITE_STATE: what the post-write
+	 * read-backs saw. It is NOT the current state of the file, and it is
+	 * never used to classify a retained change.
 	 */
 	const observedContentByFile = new Map<string, string[]>();
 	/**
@@ -1792,6 +1830,115 @@ function computeWorkspaceProgress(
 		...absentAtLastReadback,
 	]);
 
+	// ------------------------------------------------------------------
+	// THE CHECKPOINT OBSERVATION
+	// ------------------------------------------------------------------
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the
+	// checkpoint is the ONLY authority for a retained-change
+	// classification. It is a real filesystem observation taken at the
+	// operator checkpoint or the trace dump.
+	const checkpoints = records.filter(
+		(record) => record.event === "edit_checkpoint_observation",
+	);
+
+	/**
+	 * The checkpointed state of each file identity.
+	 *
+	 * The LAST checkpoint wins: a later checkpoint is a later observation
+	 * of the same target.
+	 */
+	const checkpointStateByFile = new Map<
+		string,
+		{
+			readonly state: "present" | "absent" | "unreadable";
+			readonly contentFingerprint?: string;
+		}
+	>();
+	for (const record of checkpoints) {
+		const targets = record.payload.targets;
+		if (!Array.isArray(targets)) {
+			continue;
+		}
+		for (const target of targets) {
+			if (!target || typeof target !== "object") {
+				continue;
+			}
+			const entry = target as Record<string, unknown>;
+			const fileIdentity = entry.fileIdentity;
+			if (typeof fileIdentity !== "string" || fileIdentity === "") {
+				continue;
+			}
+			const state = entry.state;
+			if (state !== "present" && state !== "absent" && state !== "unreadable") {
+				continue;
+			}
+			const contentFingerprint = entry.contentFingerprint;
+			checkpointStateByFile.set(fileIdentity, {
+				state,
+				...(typeof contentFingerprint === "string" && contentFingerprint !== ""
+					? { contentFingerprint }
+					: {}),
+			});
+		}
+	}
+
+	/**
+	 * The content version each file identity had BEFORE its first write.
+	 *
+	 * It is the baseline a retained change is measured against: the
+	 * checkpoint's content equals the baseline when the change did NOT
+	 * survive.
+	 */
+	const preWriteVersionByFile = new Map<string, string>();
+	for (const record of applications) {
+		const mutations = record.payload.fileMutations;
+		if (!Array.isArray(mutations)) {
+			continue;
+		}
+		for (const mutation of mutations) {
+			if (!mutation || typeof mutation !== "object") {
+				continue;
+			}
+			const entry = mutation as Record<string, unknown>;
+			const fileIdentity = entry.fileIdentity;
+			const pre = entry.contentVersionPre;
+			if (
+				typeof fileIdentity !== "string" ||
+				fileIdentity === "" ||
+				typeof pre !== "string" ||
+				pre === ""
+			) {
+				continue;
+			}
+			// The FIRST observed pre-write version is the baseline.
+			if (!preWriteVersionByFile.has(fileIdentity)) {
+				preWriteVersionByFile.set(fileIdentity, pre);
+			}
+		}
+	}
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: when the
+	// trace carries no explicit pre-write content version, the baseline
+	// falls back to the FIRST observed post-write content version.
+	//
+	// That is the content the file held before the first observed write
+	// changed it, in the A → B → A shape: the first read-back observed A,
+	// the second observed B, and the checkpoint observed A again — so the
+	// change happened and was undone.
+	//
+	// The fallback is only used when the trace provides no explicit
+	// baseline; an explicit `contentVersionPre` always wins.
+	for (const [fileIdentity, versions] of observedContentByFile) {
+		if (preWriteVersionByFile.has(fileIdentity)) {
+			continue;
+		}
+		const first = versions[0];
+		if (typeof first === "string" && first !== "") {
+			preWriteVersionByFile.set(fileIdentity, first);
+		}
+	}
+
 	/**
 	 * The timestamp of the last retained change, for the progress figure.
 	 */
@@ -1807,57 +1954,95 @@ function computeWorkspaceProgress(
 			retentionCounts.OUTSIDE_SCOPE += 1;
 			continue;
 		}
-		const versions = observedContentByFile.get(fileIdentity) ?? [];
-		if (absentAtLastReadback.has(fileIdentity)) {
-			// The destination was ABSENT at the last read-back: it was
-			// deleted, so it is NOT a retained change.
+		const checkpoint = checkpointStateByFile.get(fileIdentity);
+		if (!checkpoint) {
+			// No checkpoint observation for this target. The CURRENT state
+			// of the file is NOT knowable from the trace, so the honest
+			// answer is UNAVAILABLE_FROM_TRACE — never a guess, and never
+			// a retained change derived from the last post-write read-back.
+			retentionCounts.UNAVAILABLE_FROM_TRACE += 1;
+			continue;
+		}
+		if (checkpoint.state === "absent") {
+			// The checkpoint observed the target as ABSENT: it was deleted
+			// (or never created) after the last observed write.
 			retentionCounts.DELETED += 1;
 			continue;
 		}
-		if (versions.length === 0) {
+		if (checkpoint.state === "unreadable") {
+			// The checkpoint could not read the target: the state is
+			// genuinely UNKNOWN, never "unchanged".
 			retentionCounts.UNVERIFIED += 1;
 			continue;
 		}
-		const final = versions[versions.length - 1];
-		const earlier = versions.slice(0, versions.length - 1);
-		if (earlier.includes(final)) {
-			retentionCounts.REVERTED += 1;
-			continue;
-		}
-		if (versions.length === 1) {
-			// A single observed write: whether it CHANGED anything is
-			// only knowable when the pre-write content was also observed.
+		const baseline = preWriteVersionByFile.get(fileIdentity);
+		if (baseline === undefined || checkpoint.contentFingerprint === undefined) {
+			// Without a pre-write baseline or a checkpointed content
+			// fingerprint, whether anything CHANGED is not knowable.
 			retentionCounts.UNVERIFIED += 1;
 			continue;
 		}
-		if (final !== versions[0]) {
-			retentionCounts.RETAINED_CHANGED += 1;
-		} else {
-			retentionCounts.UNCHANGED += 1;
+		if (checkpoint.contentFingerprint === baseline) {
+			// The checkpoint observed the ORIGINAL content: the write did
+			// not survive.
+			//
+			// The discriminator is whether the target was EVER observed
+			// with content other than its baseline. If it was, the change
+			// happened and was then undone → REVERTED. If it never was,
+			// nothing changed → UNCHANGED.
+			const versions = observedContentByFile.get(fileIdentity) ?? [];
+			const wasObservedChanged = versions.some(
+				(version) => version !== baseline,
+			);
+			if (wasObservedChanged) {
+				retentionCounts.REVERTED += 1;
+			} else {
+				retentionCounts.UNCHANGED += 1;
+			}
+			continue;
 		}
+		// The checkpoint observed content that differs from the pre-write
+		// baseline: the change SURVIVED to the checkpoint.
+		retentionCounts.RETAINED_CHANGED += 1;
 	}
 
 	// The timestamp of the last retained change, derived from the
-	// verification records whose file ended up RETAINED_CHANGED.
-	for (const record of verifications) {
-		const fileIdentity = record.payload.fileIdentity;
-		if (typeof fileIdentity !== "string" || fileIdentity === "") {
-			continue;
-		}
-		const versions = observedContentByFile.get(fileIdentity) ?? [];
-		if (versions.length < 2) {
-			continue;
-		}
-		const final = versions[versions.length - 1];
-		if (final === versions[0] || versions.slice(0, -1).includes(final)) {
+	// checkpoint that classified a target as RETAINED_CHANGED.
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: this is
+	// the checkpoint's timestamp, not a post-write read-back's — the
+	// retained change is the one that SURVIVED to the checkpoint.
+	for (const record of checkpoints) {
+		const targets = record.payload.targets;
+		if (!Array.isArray(targets)) {
 			continue;
 		}
 		const at = timestampMs(record);
-		if (
-			lastRetainedChangeTimestampMs === undefined ||
-			at > lastRetainedChangeTimestampMs
-		) {
-			lastRetainedChangeTimestampMs = at;
+		for (const target of targets) {
+			if (!target || typeof target !== "object") {
+				continue;
+			}
+			const entry = target as Record<string, unknown>;
+			const fileIdentity = entry.fileIdentity;
+			const contentFingerprint = entry.contentFingerprint;
+			if (
+				typeof fileIdentity !== "string" ||
+				fileIdentity === "" ||
+				typeof contentFingerprint !== "string" ||
+				contentFingerprint === ""
+			) {
+				continue;
+			}
+			const baseline = preWriteVersionByFile.get(fileIdentity);
+			if (baseline === undefined || contentFingerprint === baseline) {
+				continue;
+			}
+			if (
+				lastRetainedChangeTimestampMs === undefined ||
+				at > lastRetainedChangeTimestampMs
+			) {
+				lastRetainedChangeTimestampMs = at;
+			}
 		}
 	}
 

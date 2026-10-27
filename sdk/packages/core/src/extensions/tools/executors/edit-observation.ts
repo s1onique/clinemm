@@ -41,11 +41,11 @@
  *     point swallows its own errors.
  */
 
-import * as fs from "node:fs/promises";
 import type {
 	ModelBehaviorTraceEditApplication,
 	ModelBehaviorTraceEditApplicationOutcome,
 	ModelBehaviorTraceEditAttempt,
+	ModelBehaviorTraceEditCheckpointObservation,
 	ModelBehaviorTraceEditDestinationScope,
 	ModelBehaviorTraceEditFailureCategory,
 	ModelBehaviorTraceEditFileMutation,
@@ -66,7 +66,16 @@ import {
 	EDIT_OBSERVATION_WORKSPACE_METADATA_KEY,
 	type ModelBehaviorTraceEditApprovalOutcome,
 } from "@cline/shared";
+import {
+	EditCheckpointRegistry,
+	getEditCheckpointRegistry,
+	resetEditCheckpointRegistry,
+} from "./edit-checkpoint-registry";
 import type { EditTargetWorkspaceRoots } from "./edit-target-resolution";
+import {
+	EDIT_OBSERVATION_MAX_FILE_BYTES,
+	readBackBounded,
+} from "./edit-write-verification";
 
 /**
  * The maximum file size, in bytes, whose CONTENT the instrumentation will
@@ -74,7 +83,7 @@ import type { EditTargetWorkspaceRoots } from "./edit-target-resolution";
  *
  * Beyond this the write still happens; only the MEASUREMENT is skipped.
  */
-export const EDIT_OBSERVATION_MAX_FILE_BYTES = 512 * 1024;
+export { EDIT_OBSERVATION_MAX_FILE_BYTES };
 
 /**
  * The tool-context metadata key that carries the trace sink into the
@@ -344,6 +353,39 @@ export class EditObservation {
 	 * the actual content.
 	 */
 	private intendedContent: string | undefined;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
+	 *
+	 * The EPHEMERAL, IN-MEMORY registry of the destinations this
+	 * observation has observed.
+	 *
+	 * It holds RAW PATHS, but ONLY in memory: they are never serialized,
+	 * never reported to the sink, and never written to disk. Only
+	 * ephemeral fingerprints leave it.
+	 *
+	 * It exists so an explicit CHECKPOINT can re-observe the targets
+	 * rather than inferring the current filesystem state from the last
+	 * post-write read-back.
+	 *
+	 * The registry is shared across the WHOLE capture (it cannot live on
+	 * the per-tool-call observation), and is reset when the capture is
+	 * reset.
+	 */
+	private get checkpointRegistry(): EditCheckpointRegistry {
+		return getEditCheckpointRegistry();
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
+	 *
+	 * The total number of bytes the read-backs asked the operating system
+	 * for.
+	 *
+	 * It is the RESOURCE observation of the read-back: it stays within
+	 * `EDIT_OBSERVATION_MAX_FILE_BYTES + 1` per read no matter how large
+	 * the destination is.
+	 */
+	private readBytesRequested = 0;
 
 	constructor(
 		private readonly toolName: string,
@@ -409,7 +451,8 @@ export class EditObservation {
 			this.sink?.onEditApplication !== undefined ||
 			this.sink?.onEditFailure !== undefined ||
 			this.sink?.onEditTargetResolved !== undefined ||
-			this.sink?.onEditWriteVerification !== undefined
+			this.sink?.onEditWriteVerification !== undefined ||
+			this.sink?.onEditCheckpointObservation !== undefined
 		);
 	}
 
@@ -527,6 +570,20 @@ export class EditObservation {
 		readonly canonicalized: boolean;
 		readonly existedBefore: boolean;
 		readonly underBenchmarkRoot?: boolean;
+		/**
+		 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the
+		 * EXECUTOR'S OWN working directory — the `cwd` the tool execution
+		 * boundary was given.
+		 *
+		 * This is NEVER the edit destination. The previous implementation
+		 * fingerprinted `resolved.absolutePath` and labelled it the
+		 * executor's cwd identity, which made two destinations written
+		 * from the SAME cwd look like two different cwds.
+		 *
+		 * ABSENT when the boundary supplied no working directory; the
+		 * identity is then unavailable rather than substituted.
+		 */
+		readonly executorCwd?: string;
 	}): Promise<void> {
 		const handler = this.sink?.onEditTargetResolved;
 		if (!handler) {
@@ -538,7 +595,14 @@ export class EditObservation {
 					this.workspace?.workspaceRoot
 						? this.fingerprintPath(this.workspace.workspaceRoot)
 						: undefined,
-					this.fingerprintPath(resolved.absolutePath),
+					// The executor's cwd — NEVER the destination.
+					//
+					// An EMPTY cwd is not a working directory: the identity
+					// is then unavailable rather than a fingerprint of "".
+					resolved.executorCwd !== undefined &&
+					resolved.executorCwd.trim() !== ""
+						? this.fingerprintPath(resolved.executorCwd)
+						: undefined,
 					this.workspace?.benchmarkRoot
 						? this.fingerprintPath(this.workspace.benchmarkRoot)
 						: undefined,
@@ -605,24 +669,38 @@ export class EditObservation {
 				| "READBACK_NOT_ATTEMPTED"
 				| undefined;
 
-			try {
-				const actualContent = await fs.readFile(options.absolutePath, "utf-8");
-				fileExistsAfterWrite = true;
-				if (
-					Buffer.byteLength(actualContent, "utf8") >
-					EDIT_OBSERVATION_MAX_FILE_BYTES
-				) {
-					measurementSkippedReason = "MEASUREMENT_SKIPPED_SIZE_LIMIT";
-				} else {
-					actualContentFingerprint =
-						await this.fingerprintContent(actualContent);
-				}
-			} catch {
-				// The destination could not be read back. This is NOT
-				// evidence that the write failed, and it is NOT evidence
-				// that it succeeded: it is UNVERIFIED.
-				readbackAttempted = true;
+			// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the
+			// read-back is BOUNDED. The previous implementation used
+			// `fs.readFile()`, which buffers the ENTIRE file into memory
+			// before the size limit was checked — so a multi-gigabyte
+			// destination made a diagnostic allocate far more than its
+			// 512 KiB budget allows. The bounded read requests at most
+			// `limit + 1` bytes and never loads the whole file.
+			const readBack = await readBackBounded(
+				options.absolutePath,
+				EDIT_OBSERVATION_MAX_FILE_BYTES,
+				(bytes) => this.reportReadBytesRequested(bytes),
+			);
+			if (readBack.kind === "absent") {
+				// The destination does not exist. That is a REAL
+				// observation, not a failed measurement.
+				fileExistsAfterWrite = false;
 				measurementSkippedReason = "READBACK_UNAVAILABLE";
+			} else if (readBack.kind === "too_large") {
+				// The destination exists but exceeds the size budget:
+				// the CONTENT is not measured, the write still happened.
+				fileExistsAfterWrite = true;
+				measurementSkippedReason = "MEASUREMENT_SKIPPED_SIZE_LIMIT";
+			} else if (readBack.kind === "unreadable") {
+				// The destination exists but could not be read. The
+				// write's outcome is UNVERIFIED — never "succeeded".
+				fileExistsAfterWrite = true;
+				measurementSkippedReason = "READBACK_UNAVAILABLE";
+			} else {
+				fileExistsAfterWrite = true;
+				actualContentFingerprint = await this.fingerprintContent(
+					readBack.content,
+				);
 			}
 
 			const readbackMatched =
@@ -630,6 +708,12 @@ export class EditObservation {
 				intendedFingerprint !== undefined
 					? actualContentFingerprint === intendedFingerprint
 					: undefined;
+
+			// The RESOURCE observation of this read-back: how many bytes the
+			// read actually asked the operating system for. A bounded read
+			// never asks for more than the ceiling, whatever the
+			// destination's size.
+			const readBytesRequested = this.readBytesRequested;
 
 			const verification: ModelBehaviorTraceEditWriteVerification = {
 				...(this.identity?.toolCallId !== undefined
@@ -650,12 +734,35 @@ export class EditObservation {
 				...(measurementSkippedReason !== undefined
 					? { measurementSkippedReason }
 					: {}),
+				...(readBytesRequested !== undefined ? { readBytesRequested } : {}),
 				provenance: "REAL_PRODUCTION_SEAM",
 			};
 			handler(this.observation({ ...verification }));
+			// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the
+			// destination is registered so an explicit CHECKPOINT can
+			// re-observe it. The registry holds the raw path in memory
+			// only; nothing about it is ever serialized.
+			this.checkpointRegistry.register(
+				options.absolutePath,
+				actualContentFingerprint,
+			);
 		} catch {
 			// Failure isolation: instrumentation NEVER affects an edit.
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
+	 *
+	 * Report how many bytes the read-back asked the operating system for.
+	 *
+	 * This is a RESOURCE observation, not a content observation: it
+	 * exists so the boundedness of the read can be witnessed directly,
+	 * rather than inferred from a fingerprint. A whole-file read would
+	 * report the whole file's size here.
+	 */
+	private reportReadBytesRequested(bytes: number): void {
+		this.readBytesRequested += bytes;
 	}
 
 	/**
@@ -936,3 +1043,73 @@ function readWorkspaceIdentity(
 		...(benchmarkRoot !== undefined ? { benchmarkRoot } : {}),
 	};
 }
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
+ *
+ * Take a CHECKPOINT observation of the previously observed edit targets.
+ *
+ * This is the CAPTURE-SCOPED entry point: the host calls it at an explicit
+ * operator checkpoint or immediately before a trace dump, and the
+ * observation is emitted through the SAME sink the writes were reported
+ * through.
+ *
+ * WHY IT IS NOT AN INLINE POST-WRITE EVENT
+ * -----------------------------------------
+ * A post-write read-back observes the disk state at the instant of that
+ * write. It cannot observe what a LATER command did to the file. The
+ * checkpoint is the observation that closes that gap, so it must happen
+ * where the current state is actually known — at the checkpoint.
+ *
+ * The registry it consults holds raw paths IN MEMORY ONLY; only ephemeral
+ * fingerprints are reported. The repository is NEVER scanned: only the
+ * destinations the write layer actually observed are re-observed.
+ *
+ * Never throws: a failed checkpoint is a no-op, and the trace then has no
+ * checkpoint — which the comparator reports as UNAVAILABLE_FROM_TRACE.
+ */
+export async function captureEditCheckpoint(
+	sink: ModelBehaviorTraceSink | undefined,
+): Promise<void> {
+	const handler = sink?.onEditCheckpointObservation;
+	if (!handler) {
+		return;
+	}
+	try {
+		const registry = getEditCheckpointRegistry();
+		if (registry.size === 0) {
+			// Nothing was observed, so there is nothing to re-observe.
+			// An empty checkpoint would be indistinguishable from a
+			// missing one, so it is not emitted.
+			return;
+		}
+		const targets = await registry.observe({
+			fingerprintFilePath: async (resolvedPath) => {
+				const result = sink?.fingerprintFilePath?.(resolvedPath);
+				return result instanceof Promise ? await result : result;
+			},
+			fingerprintFileContent: async (content) => {
+				const result = sink?.fingerprintFileContent?.(content);
+				return result instanceof Promise ? await result : result;
+			},
+		});
+		const observation: ModelBehaviorTraceEditCheckpointObservation = {
+			observedTargetCount: targets.length,
+			targets,
+			provenance: "REAL_PRODUCTION_SEAM",
+		};
+		handler({ payload: { ...observation } });
+	} catch {
+		// Failure isolation: a failed checkpoint never breaks a dump.
+	}
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
+ *
+ * Drop every registered checkpoint target.
+ *
+ * The registry holds RAW PATHS in memory, so it is dropped with the
+ * capture it belongs to.
+ */
+export { getEditCheckpointRegistry, resetEditCheckpointRegistry };

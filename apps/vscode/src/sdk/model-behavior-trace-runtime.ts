@@ -31,6 +31,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import { captureEditCheckpoint, resetEditCheckpointRegistry } from "@cline/core"
 import {
 	type ModelBehaviorTraceEvent,
 	type ModelBehaviorTraceObservation,
@@ -293,6 +294,19 @@ export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
 	onEditWriteVerification: (observation) => {
 		recordModelBehaviorTrace("edit_write_verification", observation)
 	},
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
+	 *
+	 * The write layer took a CHECKPOINT observation of the previously
+	 * observed edit targets.
+	 *
+	 * This is the ONLY authority for a retained-change classification:
+	 * the post-write read-back says what the disk held immediately after
+	 * one write, not what it holds now.
+	 */
+	onEditCheckpointObservation: (observation) => {
+		recordModelBehaviorTrace("edit_checkpoint_observation", observation)
+	},
 	onLoopVerdict: (observation) => {
 		recordModelBehaviorTrace("loop_verdict", observation)
 	},
@@ -535,6 +549,20 @@ export interface ModelBehaviorTraceDumpResult {
  * self-describing: an incomplete trace is never presented as exhaustive.
  */
 export async function dumpModelBehaviorTrace(context: ModelBehaviorTraceContext): Promise<ModelBehaviorTraceDumpResult> {
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the dump
+	// takes a CHECKPOINT of the previously observed edit targets BEFORE it
+	// serializes the timeline.
+	//
+	// The post-write read-back says what the disk held immediately after
+	// one write. A command that later restored the file produces no native
+	// editor event, so without this checkpoint the trace would still
+	// describe the file as changed. The checkpoint is the ACTUAL
+	// filesystem observation at dump time, and it is the only authority
+	// for a retained-change classification.
+	//
+	// It is taken through the SAME sink the writes were reported through,
+	// so the checkpoint record lands in the dumped timeline.
+	await captureEditCheckpoint(modelBehaviorTraceSink)
 	const dump = recorder.dump()
 	const dir = context.globalStorageUri.fsPath
 	await mkdir(dir, { recursive: true })
@@ -571,4 +599,8 @@ export function getModelBehaviorTraceRecords(): readonly ModelBehaviorTraceRecor
  */
 export function _resetModelBehaviorTrace(): void {
 	recorder._reset()
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the
+	// checkpoint registry holds RAW PATHS in memory, so it is dropped with
+	// the capture it belongs to.
+	resetEditCheckpointRegistry()
 }

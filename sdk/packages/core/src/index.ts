@@ -563,6 +563,16 @@ export {
 	createTeamName,
 	DefaultRuntimeBuilder,
 } from "./runtime/orchestration/runtime-builder";
+// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the edit
+// CHECKPOINT seam. The host calls `captureEditCheckpoint` at an operator
+// checkpoint or immediately before a trace dump, so the retained-change
+// classification rests on an ACTUAL filesystem observation rather than on
+// the last post-write read-back.
+export {
+	captureEditCheckpoint,
+	getEditCheckpointRegistry,
+	resetEditCheckpointRegistry,
+} from "./extensions/tools/executors/edit-observation";
 export {
 	OAuthReauthRequiredError,
 	type RuntimeOAuthResolution,

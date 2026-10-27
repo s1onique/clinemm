@@ -220,23 +220,49 @@ function evaluateTraceOffFastPathContract(source: string): {
 	if (callIndex < 0) {
 		return { scanCallFound: false, scanInsideObservationGuard: false };
 	}
-	// The guard is the `if (observation) {` block that opens the
-	// instrumentation section. Its closing brace is the first `}` at the
-	// same indentation as the `if`.
-	const guardIndex = source.indexOf("if (observation) {");
-	if (guardIndex < 0 || guardIndex > callIndex) {
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the guard
+	// is the `if (observation) {` block that CONTAINS the scan call.
+	//
+	// The previous evaluation took the FIRST `if (observation) {` in the
+	// file. That was correct while the executor had exactly ONE
+	// observation guard, but the workspace-effect trace added a SECOND
+	// one (the target-resolution block), so the heuristic latched onto
+	// the wrong guard and reported the production source as violating a
+	// contract it actually satisfies.
+	//
+	// The guard is now found by SCANNING every `if (observation) {` block
+	// and asking which one encloses the call.
+	const guardStarts: number[] = [];
+	let searchFrom = 0;
+	for (;;) {
+		const index = source.indexOf("if (observation) {", searchFrom);
+		if (index < 0) {
+			break;
+		}
+		guardStarts.push(index);
+		searchFrom = index + 1;
+	}
+	if (guardStarts.length === 0) {
 		return { scanCallFound: true, scanInsideObservationGuard: false };
 	}
-	// Find the end of the guard block: the first `}` that follows the
-	// `if (observation) {` and is not nested inside it. The block is
-	// written with a single-tab body indent, so its closing brace is the
-	// one at the same indentation as the `if`.
-	const guardBody = source.slice(guardIndex);
-	const closingIndex = guardBody.indexOf("\n\t}");
-	return {
-		scanCallFound: true,
-		scanInsideObservationGuard: callIndex < guardIndex + closingIndex,
-	};
+	// For each candidate guard, find its closing brace: the first `}` that
+	// follows the `if` and is not nested inside it. The block is written
+	// with a single-tab body indent, so its closing brace is the one at
+	// the same indentation as the `if`.
+	for (const guardIndex of guardStarts) {
+		if (guardIndex > callIndex) {
+			continue;
+		}
+		const guardBody = source.slice(guardIndex);
+		const closingIndex = guardBody.indexOf("\n\t}");
+		if (closingIndex < 0) {
+			continue;
+		}
+		if (callIndex < guardIndex + closingIndex) {
+			return { scanCallFound: true, scanInsideObservationGuard: true };
+		}
+	}
+	return { scanCallFound: true, scanInsideObservationGuard: false };
 }
 
 /**

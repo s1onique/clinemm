@@ -11,7 +11,7 @@
  *
  * The comparator witness drives the REAL offline comparator script.
  */
-import { readFile } from "node:fs/promises"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -187,6 +187,48 @@ describe("model behavior trace runtime", () => {
 		// A SECOND dump still sees the evidence — the dump never clears it.
 		const second = await dumpModelBehaviorTrace(context)
 		expect(second.recordCount).toBe(1)
+	})
+
+	it("T11d: the dump takes a CHECKPOINT of the observed edit targets", async () => {
+		// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the
+		// dump is where the CURRENT state of the workspace is known, so it
+		// is where the checkpoint observation is taken.
+		//
+		// Without it, the retained-change classification would be derived
+		// from the last post-write read-back — which says nothing about
+		// what a later command did to the file.
+		_resetModelBehaviorTrace()
+		const context = makeContext()
+		setModelBehaviorTraceEnabled(true)
+
+		// A real file is observed by the write layer, and then a command
+		// restores it — exactly the sequence the correction is about.
+		const dir = await mkdtemp(join(tmpdir(), "trace-checkpoint-"))
+		const filePath = join(dir, "restored.txt")
+		await writeFile(filePath, "original\n", "utf8")
+		await writeFile(filePath, "changed\n", "utf8")
+
+		// Register the target through the REAL checkpoint registry, which
+		// is what the write layer populates.
+		const { getEditCheckpointRegistry } = await import("@cline/core")
+		getEditCheckpointRegistry().register(filePath)
+
+		const result = await dumpModelBehaviorTrace(context)
+		const contents = await readFile(result.filePath, "utf8")
+		const lines = contents.trim().split("\n")
+		const records = lines.slice(0, -1).map((line) => JSON.parse(line) as Record<string, unknown>)
+		const checkpoint = records.find((record) => record.event === "edit_checkpoint_observation")
+		expect(checkpoint).toBeDefined()
+		const payload = checkpoint?.payload as Record<string, unknown>
+		expect(payload.observedTargetCount).toBe(1)
+		const targets = payload.targets as Array<Record<string, unknown>>
+		expect(targets).toHaveLength(1)
+		expect(targets[0]?.state).toBe("present")
+		// The checkpoint NEVER exposes a raw path.
+		expect(contents).not.toContain(filePath)
+		expect(contents).not.toContain(dir)
+
+		await rm(dir, { recursive: true, force: true })
 	})
 
 	it("T12: sensitive content is not recorded", async () => {

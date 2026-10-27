@@ -400,6 +400,19 @@ describe("CW06/CW07/CW08 — the retention classification", () => {
 				applicationEvent({ toolCallId: "tc-1" }),
 				applicationEvent({ toolCallId: "tc-2" }),
 				applicationEvent({ toolCallId: "tc-3" }),
+				// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01:
+				// the retained-change classification requires a CHECKPOINT
+				// observation — a real filesystem observation taken at the
+				// operator checkpoint or the trace dump. The checkpoint
+				// observes the file back at A.
+				{
+					event: "edit_checkpoint_observation",
+					payload: {
+						observedTargetCount: 1,
+						targets: [{ fileIdentity: "file-1", state: "present", contentFingerprint: "A" }],
+						provenance: "REAL_PRODUCTION_SEAM",
+					},
+				},
 			],
 		})
 		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1", events: [] })
@@ -437,6 +450,17 @@ describe("CW06/CW07/CW08 — the retention classification", () => {
 				},
 				applicationEvent({ toolCallId: "tc-1" }),
 				applicationEvent({ toolCallId: "tc-2" }),
+				// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01:
+				// the deletion is established by the CHECKPOINT, which
+				// observes the target as absent.
+				{
+					event: "edit_checkpoint_observation",
+					payload: {
+						observedTargetCount: 1,
+						targets: [{ fileIdentity: "file-1", state: "absent" }],
+						provenance: "REAL_PRODUCTION_SEAM",
+					},
+				},
 			],
 		})
 		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1", events: [] })

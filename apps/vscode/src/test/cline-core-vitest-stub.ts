@@ -59,6 +59,17 @@ export function ensureCustomProvidersLoadedSync(): void {}
 // policy applies. Re-exporting (rather than re-implementing) keeps the stub
 // and production in lockstep.
 export { normalizeUserContextCeiling } from "../../../../sdk/packages/core/src/extensions/context/compaction-shared"
+// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the edit
+// CHECKPOINT seam. The stub re-exports the REAL implementation from the
+// SDK source (same pattern as the compaction/budget helpers above) so the
+// host's dump path takes a REAL filesystem checkpoint in tests too — the
+// checkpoint is the only authority for a retained-change classification,
+// and a stubbed no-op would make the tests vacuous.
+export {
+	captureEditCheckpoint,
+	getEditCheckpointRegistry,
+	resetEditCheckpointRegistry,
+} from "../../../../sdk/packages/core/src/extensions/tools/executors/edit-observation"
 export { resolveModelBehaviorTraceBudget } from "../../../../sdk/packages/core/src/runtime/observability/model-behavior-trace"
 export { isPrivateModelCatalogProvider } from "../../../../sdk/packages/core/src/services/llms/provider-defaults"
 // Real implementation re-exported from the sdk source (same pattern as the

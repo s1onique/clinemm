@@ -336,6 +336,10 @@ async function applyChanges(
 				destinationScope: resolution.destinationScope,
 				canonicalized: resolution.canonicalized,
 				existedBefore: resolution.existedBefore,
+				// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01:
+				// the EXECUTOR'S OWN working directory, carried from the
+				// tool execution boundary. It is NEVER the destination.
+				executorCwd: cwd,
 				...(resolution.underBenchmarkRoot !== undefined
 					? { underBenchmarkRoot: resolution.underBenchmarkRoot }
 					: {}),
