@@ -8,6 +8,8 @@ tasks — see §9).
 **ENTRY_HEAD:** `6cb09708f9f87780292b391d046bb7c4c7b644f0` (main).
 **CORRECTION:** `ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01`
 applied on top of `f65b722e5` — see §5.1–§5.3, §6.1.1 and §8.1.
+**CORRECTION 2:** `ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR02`
+applied on top of `0bf693409` — see §5.3.1 and §8.2.
 **Scope:** the EXISTING Model Behavior Trace, extended — not a second
 recorder.
 
@@ -26,6 +28,33 @@ issues. All four are corrected here:
 | **P0-3** | The applied-mutation accounting counted one per successful operation, not per mutated file | The accounting is layered: operations, files written, verified content changes, unverified changes, no-ops and partial mutations (§5.2) |
 | **P1-1** | The M2 mutation witness did not discriminate the defect | The witness evaluates the ACTUAL reversion invariant against the mutated executor and demonstrates RED, with a GREEN control (§6.1.1) |
 | **P1-2** | `apply_patch` computed the patch-target count outside the observation guard | The count is computed inside the guard, restoring the trace-OFF fast path (§3.3, M3) |
+
+---
+
+## 0.1 CORR02 — what this correction fixed
+
+The review of `0bf693409` confirmed all five CORR01 findings as corrected and
+raised **one new P0**: the comparator still accepted an INCOMPLETE identity.
+
+`readCorrelationIdentity()` validated only the tool-call id and COERCED a
+missing `sessionId`/`runId` to the empty string:
+
+```ts
+const sessionId = typeof record.sessionId === "string" ? record.sessionId : "";
+const runId = typeof record.runId === "string" ? record.runId : "";
+return { key: `${sessionId} ${runId} ${toolCallId}` };
+```
+
+Two records that both carried only `toolCallId: "tc-1"` therefore produced the
+SAME key `"  tc-1"` and could be paired as an "exact" causal identity — the
+exact fail-closed requirement was violated by the join itself.
+
+| ID | Defect | Correction |
+|---|---|---|
+| **P0-4** | An INCOMPLETE identity (missing session or run) was coerced into a colliding key and could be paired as an exact identity | All THREE components must be present and nonempty before a key is built; an incomplete identity is no identity at all (§5.3.1) |
+
+The correction is confined to the comparator's identity reader and its
+witnesses. The recorder and the executor are untouched.
 
 ---
 
@@ -219,6 +248,37 @@ wrong request.
 The summary exposes `correlatedEditApplications`, `uncorrelatedEditApplications`
 and `unfulfilledEditAttempts`, with `correlationProvenance: "EXACT_IDENTITY"`.
 
+### 5.3.1 The identity triple is fail-closed (CORR02)
+
+The identity is the **COMPLETE** triple — session + run + tool-call id. All
+three components must be present and nonempty before a key is built:
+
+```ts
+const sessionId = record.sessionId
+if (typeof sessionId !== "string" || sessionId === "") return undefined
+const runId = record.runId
+if (typeof runId !== "string" || runId === "") return undefined
+return { key: `${sessionId} ${runId} ${toolCallId}` }
+```
+
+Coercing a missing component to the empty string would let two DIFFERENT
+incomplete identities collapse onto the SAME key — both `"  tc-1"` — and the
+join would then pair events that are not provably the same edit. Failing
+closed is the only safe reading: **an incomplete identity is no identity at
+all**.
+
+The consequences are the required ones, and they are witnessed end to end
+(CE14, CE14b):
+
+| Event | `correlatedEditApplications` | `uncorrelatedEditApplications` | `unfulfilledEditAttempts` |
+|---|---|---|---|
+| Complete triple, unique match | 1 | 0 | 0 |
+| Incomplete triple (empty or absent session/run) | **0** | **1** | **1** |
+
+The write itself is still counted (`filesWritten`, `filesWithVerifiedContentChange`
+etc.) — only the CAUSAL ATTRIBUTION is withheld. An unverified write is a
+write; it is not evidence of which request caused it.
+
 ---
 
 ## 6. Executable witnesses
@@ -308,6 +368,9 @@ drives the REAL comparator CLI as a subprocess:
 | CE11 | ambiguous identity (CORR01) | the pair is REJECTED, not guessed |
 | CE12 | two-file patch / partial patch (CORR01) | 1 operation ↔ 2 files; a failed-after-first-write patch is a PARTIAL mutation |
 | CE13 | skipped content measurement (CORR01) | UNVERIFIED, never counted as "unchanged" |
+| CE14 | INCOMPLETE identity, both events missing the same session/run (CORR02) | `correlatedEditApplications: 0`, `uncorrelatedEditApplications: 1`, `unfulfilledEditAttempts: 1` — the colliding incomplete keys are NOT paired |
+| CE14b | session/run fields entirely ABSENT (CORR02) | likewise UNVERIFIED and unfulfilled |
+| CE15 | COMPLETE identity triple (CORR02 control) | still correlated exactly (`1`/`0`/`0`) — the correction does not break the accepted join |
 
 ### 6.3 Test totals
 
@@ -317,7 +380,7 @@ drives the REAL comparator CLI as a subprocess:
 | `sdk/packages/core` — edit-efficiency mutation witnesses | 5 passed |
 | `sdk/packages/agents` — agent-runtime witnesses | 7 passed |
 | `sdk/packages/shared` — recorder witnesses | 18 passed |
-| `apps/vscode` — comparator witnesses | 11 passed |
+| `apps/vscode` — comparator witnesses | 14 passed (11 + CE14, CE14b, CE15) |
 
 ---
 
@@ -352,6 +415,8 @@ models.
 | Native and shell-origin evidence distinct | PASS (E11, CE06/CE07) |
 | The tool-call identity reaches the write layer | PASS (E18, E19) |
 | The application-to-attempt join is exact-identity only | PASS (CE09, CE10, CE11) |
+| An INCOMPLETE identity is never paired (CORR02) | PASS (CE14, CE14b) |
+| The complete-triple join is unaffected (CORR02 control) | PASS (CE15) |
 | The edit-origin marker never fabricates a file change | PASS (CE06/CE07) |
 | The accounting layers are separated | PASS (CE12, CE13) |
 | No sensitive source data leaked | PASS (E14, E14b) |
@@ -372,6 +437,29 @@ GREEN after it:
 | P0-2 tool-call identity | the `toolCallId` forwarding removed from all three executor sites | E18: `expected undefined to be 'call-42'` / `'call-99'` — 2 failed |
 | P0-1 edit-origin marker | the fabricated `FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE` restored | CE06/CE07: `expected 'FILE_CHANGES_OBSERVED / EDIT_ORIGIN_U…' to be 'EDIT_ORIGIN_UNOBSERVED'` — 1 failed |
 | P0-3 + correlation | the one-per-operation counter restored, and the join relaxed to adjacency / ambiguity-tolerant | CE10, CE11, CE12 — 3 failed (`expected 1 to be +0`, `expected 1 to be 3`) |
+
+### 8.2 Targeted RED/GREEN (CORR02)
+
+The P0-4 correction was demonstrated RED against the pre-CORR02 comparator and
+GREEN after it. The RED run reverted **only** the comparator's identity reader
+(the witnesses stayed in place):
+
+| Correction | Reverted | RED observed |
+|---|---|---|
+| P0-4 incomplete identity | the `sessionId`/`runId` empty-string coercion restored in `readCorrelationIdentity()` | CE14, CE14b: `expected 1 to be +0` — 2 failed (the two incomplete identities were paired as one exact identity) |
+
+**CE15 passed in BOTH states**, which is the point of the control: it proves
+the accepted complete-triple join is untouched by the correction and that the
+RED above is attributable to the identity reader alone.
+
+The defect was additionally reproduced **outside** the test harness, by
+running the pre-CORR02 comparator CLI directly against a hand-built trace
+whose two edit events both omitted the session/run fields:
+
+| Comparator | `correlated` | `uncorrelated` | `unfulfilled` |
+|---|---|---|---|
+| pre-CORR02 | **1** (false pairing) | 0 | 0 |
+| CORR02 | 0 | 1 | 1 |
 
 **Closure: `PASS_STRUCTURAL_ONLY`.**
 
@@ -394,3 +482,9 @@ semantics, the recorder's ring/sanitizer/toggle/dump, the public protocol
 surface, the React/webview layer, the comparator's fail-closed comparability
 decision, and the existing Model Behavior Trace event kinds. No new recorder,
 no generic observability framework, no unrelated refactor.
+
+CORR02 narrows this further: it changes ONLY the comparator's identity reader
+(`readCorrelationIdentity()` in `scripts/compare-model-behavior-traces.ts`)
+and its witnesses. The recorder, the executor, the shared trace schema and the
+public protocol surface are all untouched — the correction adds no schema
+migration and no documentary cleanup.

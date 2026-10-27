@@ -31,6 +31,14 @@
  *         ONE partial-mutation operation (CORR01).
  *   CE13  A write whose content measurement was skipped is UNVERIFIED,
  *         never counted as an unchanged file (CORR01).
+ *   CE14  An INCOMPLETE identity (missing session or run) stays
+ *         UNVERIFIED — it is never paired, even when the incomplete
+ *         identities of two different events COLLIDE (CORR02).
+ *   CE14b An identity whose session/run fields are ENTIRELY ABSENT is
+ *         likewise UNVERIFIED (CORR02).
+ *   CE15  A COMPLETE identity triple is still correlated exactly as
+ *         before — the CORR02 correction does not break the accepted
+ *         join (CORR02 control).
  */
 import { execFile } from "node:child_process"
 import { mkdtemp, readFile, writeFile } from "node:fs/promises"
@@ -75,9 +83,14 @@ interface EditEvent {
 	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: the
 	 * correlation identity of THIS event. When it is omitted the event
 	 * inherits the trace's default session/run.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR02: an EXPLICIT
+	 * `null` means "the event carries NO session/run at all", which is
+	 * different from `undefined` ("inherit the default"). The distinction
+	 * exists so an INCOMPLETE identity can be witnessed end to end.
 	 */
-	sessionId?: string
-	runId?: string
+	sessionId?: string | null
+	runId?: string | null
 }
 
 async function writeTrace(
@@ -133,10 +146,16 @@ async function writeTrace(
 	}
 
 	for (const edit of options.editEvents ?? []) {
+		// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR02: an
+		// EXPLICIT `null` omits the field from the record entirely (the event
+		// carries NO session/run); `undefined` inherits the trace default and
+		// `""` emits an empty string.
+		const sessionId = edit.sessionId === null ? undefined : (edit.sessionId ?? "s1")
+		const runId = edit.runId === null ? undefined : (edit.runId ?? "r1")
 		push({
 			event: edit.event,
-			sessionId: edit.sessionId ?? "s1",
-			runId: edit.runId ?? "r1",
+			...(sessionId === undefined ? {} : { sessionId }),
+			...(runId === undefined ? {} : { runId }),
 			iteration: 1,
 			payload: edit.payload,
 		})
@@ -676,5 +695,152 @@ describe("Model Behavior Trace comparator — Editing Efficiency", () => {
 		// ...but its content change was NOT verified.
 		expect(m3Stats.filesWithVerifiedContentChange).toBe(0)
 		expect(m3Stats.filesWithUnverifiedContentChange).toBe(1)
+	})
+
+	it("CE14: an INCOMPLETE identity stays UNVERIFIED — even when two incomplete identities COLLIDE", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce14-"))
+		const m3 = await writeTrace(dir, "m3", {
+			editEvents: [
+				{
+					// The attempt carries NO session id and NO run id. Its
+					// identity triple is INCOMPLETE.
+					event: "edit_attempt",
+					sessionId: "",
+					runId: "",
+					payload: {
+						toolCallId: "tc-1",
+						toolName: "editor",
+						operation: "replace",
+						fileIdentity: "file-a",
+						targetCount: 1,
+						requestedChars: 10,
+						approvalOutcome: "approved",
+						executionInvoked: true,
+					},
+				},
+				{
+					// The application is missing the SAME components. If the
+					// missing components were coerced to the empty string,
+					// BOTH events would key to "  tc-1" and the join would
+					// pair them — which is exactly the defect under test.
+					event: "edit_application",
+					sessionId: "",
+					runId: "",
+					payload: {
+						toolCallId: "tc-1",
+						outcome: "applied",
+						requestedFileCount: 1,
+						mutatedFileCount: 1,
+						unmutatedFileCount: 0,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [{ fileIdentity: "file-a", contentVersionPre: "v0", contentVersionPost: "v1" }],
+					},
+				},
+			],
+		})
+		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
+		const { summary } = await runComparator(m3, m31)
+		const m3Stats = summary.editingEfficiency.m3
+		// The write really happened, so it is counted...
+		expect(m3Stats.filesWritten).toBe(1)
+		// ...but an INCOMPLETE identity is no identity at all: the
+		// application is NOT correlated...
+		expect(m3Stats.correlatedEditApplications).toBe(0)
+		expect(m3Stats.uncorrelatedEditApplications).toBe(1)
+		// ...and the attempt stays UNFULFILLED.
+		expect(m3Stats.unfulfilledEditAttempts).toBe(1)
+	})
+
+	it("CE14b: an identity with the session/run fields ENTIRELY ABSENT stays UNVERIFIED", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce14b-"))
+		const m3 = await writeTrace(dir, "m3", {
+			editEvents: [
+				{
+					// The record carries NO sessionId and NO runId field at all.
+					event: "edit_attempt",
+					sessionId: null,
+					runId: null,
+					payload: {
+						toolCallId: "tc-1",
+						toolName: "editor",
+						operation: "replace",
+						fileIdentity: "file-a",
+						targetCount: 1,
+						requestedChars: 10,
+						approvalOutcome: "approved",
+						executionInvoked: true,
+					},
+				},
+				{
+					event: "edit_application",
+					sessionId: null,
+					runId: null,
+					payload: {
+						toolCallId: "tc-1",
+						outcome: "applied",
+						requestedFileCount: 1,
+						mutatedFileCount: 1,
+						unmutatedFileCount: 0,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [{ fileIdentity: "file-a", contentVersionPre: "v0", contentVersionPost: "v1" }],
+					},
+				},
+			],
+		})
+		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
+		const { summary } = await runComparator(m3, m31)
+		const m3Stats = summary.editingEfficiency.m3
+		expect(m3Stats.filesWritten).toBe(1)
+		expect(m3Stats.correlatedEditApplications).toBe(0)
+		expect(m3Stats.uncorrelatedEditApplications).toBe(1)
+		expect(m3Stats.unfulfilledEditAttempts).toBe(1)
+	})
+
+	it("CE15: a COMPLETE identity triple is still correlated exactly (CORR02 control)", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce15-"))
+		const m3 = await writeTrace(dir, "m3", {
+			editEvents: [
+				{
+					event: "edit_attempt",
+					sessionId: "s1",
+					runId: "r1",
+					payload: {
+						toolCallId: "tc-1",
+						toolName: "editor",
+						operation: "replace",
+						fileIdentity: "file-a",
+						targetCount: 1,
+						requestedChars: 10,
+						approvalOutcome: "approved",
+						executionInvoked: true,
+					},
+				},
+				{
+					event: "edit_application",
+					sessionId: "s1",
+					runId: "r1",
+					payload: {
+						toolCallId: "tc-1",
+						outcome: "applied",
+						requestedFileCount: 1,
+						mutatedFileCount: 1,
+						unmutatedFileCount: 0,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [{ fileIdentity: "file-a", contentVersionPre: "v0", contentVersionPost: "v1" }],
+					},
+				},
+			],
+		})
+		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
+		const { summary } = await runComparator(m3, m31)
+		const m3Stats = summary.editingEfficiency.m3
+		// The accepted join is unaffected by the CORR02 correction.
+		expect(m3Stats.correlationProvenance).toBe("EXACT_IDENTITY")
+		expect(m3Stats.correlatedEditApplications).toBe(1)
+		expect(m3Stats.uncorrelatedEditApplications).toBe(0)
+		expect(m3Stats.unfulfilledEditAttempts).toBe(0)
 	})
 })

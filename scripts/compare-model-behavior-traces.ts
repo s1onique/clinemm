@@ -1359,8 +1359,16 @@ interface CorrelationIdentity {
 /**
  * Read the exact correlation identity of an edit event.
  *
- * Returns `undefined` when the event carries NO tool-call identity: such
- * an event is UNVERIFIED and is never paired with an attempt.
+ * The identity is the COMPLETE triple: session + run + tool-call id. All
+ * three components must be present and nonempty, otherwise the event
+ * carries an INCOMPLETE identity and stays UNVERIFIED — it is never
+ * paired with an attempt.
+ *
+ * Coercing a missing component to the empty string would let two
+ * different incomplete identities collapse onto the SAME key (for
+ * example both "  tc-1"), which would let the join pair events that are
+ * not provably the same edit. Failing closed is the only safe reading:
+ * an incomplete identity is no identity at all.
  */
 function readCorrelationIdentity(
 	record: TraceRecord,
@@ -1369,9 +1377,14 @@ function readCorrelationIdentity(
 	if (typeof toolCallId !== "string" || toolCallId === "") {
 		return undefined;
 	}
-	const sessionId =
-		typeof record.sessionId === "string" ? record.sessionId : "";
-	const runId = typeof record.runId === "string" ? record.runId : "";
+	const sessionId = record.sessionId;
+	if (typeof sessionId !== "string" || sessionId === "") {
+		return undefined;
+	}
+	const runId = record.runId;
+	if (typeof runId !== "string" || runId === "") {
+		return undefined;
+	}
 	return { key: `${sessionId} ${runId} ${toolCallId}` };
 }
 

@@ -1,3 +1,35 @@
+# ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR02 — PASS_STRUCTURAL_ONLY — 2026-10-27
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (one bounded correction of the comparator's incomplete-identity acceptance; the comparative M3/M3.1 editing report is now fit to be used).
+
+**ENTRY_HEAD:** `0bf693409cc05e9a78a0d9530a9cd38d911d1fd3` (main), parent `f65b722e5`.
+
+**Why this ACT exists.** The review of `0bf693409` confirmed **all five** CORR01 findings as corrected (fabricated file-change evidence, missing edit `toolCallId`, incorrect mutation accounting, the vacuous M2 witness, the trace-OFF patch-target scan) and raised **one new P0**: the comparator still accepted an INCOMPLETE identity. No architecture change; no second recorder; no new protocol surface; **no schema migration and no documentary cleanup**.
+
+**P0-4 — AN INCOMPLETE IDENTITY WAS STILL ACCEPTED.** `readCorrelationIdentity()` in `scripts/compare-model-behavior-traces.ts` validated **only** the tool-call id and COERCED a missing session/run to the empty string:
+
+```ts
+const sessionId = typeof record.sessionId === "string" ? record.sessionId : "";
+const runId = typeof record.runId === "string" ? record.runId : "";
+return { key: `${sessionId} ${runId} ${toolCallId}` };
+```
+
+Two records carrying only `toolCallId: "tc-1"` therefore produced the **SAME** key `"  tc-1"` and could be paired as an "exact" causal identity — violating the explicit fail-closed requirement at the join itself. **Correction:** all **three** components must be present and nonempty before a key is built; an incomplete identity is **no identity at all**. The recorder and the executor are untouched.
+
+**R3 — TARGETED RED/GREEN.** The RED run reverted **only** the identity reader (the new witnesses stayed in place): CE14 and CE14b failed with **`expected 1 to be +0`** — 2 failed — because the two incomplete identities were paired as one exact identity. **CE15 passed in BOTH states**, which is the point of the control: the accepted complete-triple join is unaffected and the RED is attributable to the identity reader alone. All green after the correction.
+
+**R3b — THE DEFECT REPRODUCED OUTSIDE THE HARNESS.** The pre-CORR02 comparator CLI was run directly against a hand-built trace whose two edit events both omitted the session/run fields: pre-CORR02 reported `correlated: 1, uncorrelated: 0, unfulfilled: 0` (**false pairing**); CORR02 reports `correlated: 0, uncorrelated: 1, unfulfilled: 1` — exactly the required acceptance.
+
+**R4 — FOCUSED GATES.** `apps/vscode` — comparator witnesses **14 passed** (11 + CE14, CE14b, CE15); comparator/comparability suites **59 passed** across 4 files; trace-runtime witnesses **12 passed**. **SDK build** PASS (`bun run build:sdk`). **`apps/vscode` typecheck** PASS (`tsc --noEmit`, exit 0, zero diagnostics). **Biome** PASS on both touched files (the one `any` info is pre-existing).
+
+**PRESERVATION.** No edit behaviour, approval policy, tool routing, model configuration, lifecycle semantics, recorder ring/sanitizer/toggle/dump, public protocol surface, shared trace schema, React/webview layer, or the comparator's fail-closed comparability decision changed. The change is confined to the comparator's identity reader and its witnesses. The pre-existing `stash@{0}` and `stash@{1}` were **preserved**.
+
+**Verdict:** `PASS_STRUCTURAL_ONLY` — the one review finding is corrected with source-bound, executed evidence; the comparative editing report no longer pairs events it cannot prove are the same edit. The live M3/M3.1 edit-heavy benchmark remains the next step and was not performed here.
+
+**Evidence:** `docs/architecture/elm/model-behavior-edit-efficiency-trace01-evidence.md` — §0.1 what this correction fixed, §5.3.1 the fail-closed identity triple, §6.2 the CE14/CE14b/CE15 witnesses, §8.2 the targeted RED/GREEN table and the out-of-harness reproduction.
+
+---
+
 # ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01 — PASS_STRUCTURAL_ONLY — 2026-10-27
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (one bounded correction of the Edit Efficiency Trace's evidence defects; the comparative M3/M3.1 editing report is now fit to be used).
