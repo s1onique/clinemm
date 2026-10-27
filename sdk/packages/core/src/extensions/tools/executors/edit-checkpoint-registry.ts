@@ -45,8 +45,8 @@ import type {
 	ModelBehaviorTraceEditCheckpointTargetState,
 } from "@cline/shared";
 import {
-	readBackBounded,
 	type BoundedReadBack,
+	readBackBounded,
 } from "./edit-write-verification";
 
 /**
@@ -61,6 +61,50 @@ export interface EditCheckpointFingerprinting {
 	fingerprintFilePath: (resolvedPath: string) => Promise<string | undefined>;
 	/** The ephemeral fingerprint of file content. */
 	fingerprintFileContent: (content: string) => Promise<string | undefined>;
+}
+
+/**
+ * The OWNERSHIP of a registered target.
+ *
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The registry used to be keyed by the raw absolute path ALONE. That made
+ * the registry CAPTURE-global in a way that silently merged unrelated runs:
+ * two runs of one capture that touched the same destination collapsed into
+ * ONE target, and the checkpoint that re-observed it could not be attributed
+ * to either run.
+ *
+ * The ownership is the identity that binds a target to the run that wrote
+ * it: the same `sessionId`/`runId` the write observations carry. A target
+ * written by two different runs is TWO targets, each observed by its own
+ * checkpoint.
+ */
+export interface EditCheckpointOwner {
+	/** The session that owns the write. */
+	readonly sessionId?: string;
+	/** The run that owns the write. */
+	readonly runId?: string;
+}
+
+/**
+ * The identity KEY of an owner.
+ *
+ * Two owners with the same key are the SAME owner. An owner with NO
+ * identity at all is its own, distinct key — it is never merged with an
+ * identified owner, and never merged with another unidentified owner.
+ */
+function ownerKey(owner: EditCheckpointOwner | undefined): string {
+	if (owner === undefined) {
+		return "unidentified";
+	}
+	const sessionId = owner.sessionId ?? "";
+	const runId = owner.runId ?? "";
+	if (sessionId === "" && runId === "") {
+		return "unidentified";
+	}
+	return `${sessionId}${runId}`;
 }
 
 /**
@@ -81,16 +125,35 @@ interface RegisteredTarget {
 }
 
 /**
- * The registry of previously observed edit targets.
+ * One run's registered targets, keyed by the raw absolute path.
+ *
+ * A `Map` keeps the registration order, so the checkpoint observation
+ * is deterministic.
+ */
+type OwnerTargets = Map<string, RegisteredTarget>;
+
+/**
+ * The registry of previously observed edit targets, partitioned by the run
+ * that wrote them.
  */
 export class EditCheckpointRegistry {
 	/**
-	 * The registered targets, keyed by their raw absolute path.
+	 * The registered targets, keyed FIRST by the owner's identity key and
+	 * THEN by the raw absolute path.
 	 *
-	 * A `Map` keeps the registration order, so the checkpoint observation
-	 * is deterministic.
+	 * The outer map keeps the registration order of the owners, so the
+	 * checkpoint observations are deterministic.
 	 */
-	private readonly targets = new Map<string, RegisteredTarget>();
+	private readonly owners = new Map<string, OwnerTargets>();
+
+	/**
+	 * The identity of the owner a registered target belongs to.
+	 *
+	 * Needed so the checkpoint can be emitted WITH the identity of the run
+	 * it observed — the comparator's identity-verified scope keeps a
+	 * checkpoint that carries it and drops one that does not.
+	 */
+	private readonly ownerIdentities = new Map<string, EditCheckpointOwner>();
 
 	/**
 	 * Register a destination the write layer has observed.
@@ -98,12 +161,25 @@ export class EditCheckpointRegistry {
 	 * Registering the same destination again UPDATES the last observed
 	 * content fingerprint — the most recent read-back is the one that
 	 * matters for a later comparison.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+	 * destination is registered under the OWNING RUN. Two runs that wrote
+	 * the same destination therefore own SEPARATE targets, and each is
+	 * re-observed by its own checkpoint.
 	 */
 	register(
 		absolutePath: string,
 		lastObservedContentFingerprint?: string,
+		owner?: EditCheckpointOwner,
 	): void {
-		this.targets.set(absolutePath, {
+		const key = ownerKey(owner);
+		let targets = this.owners.get(key);
+		if (!targets) {
+			targets = new Map<string, RegisteredTarget>();
+			this.owners.set(key, targets);
+			this.ownerIdentities.set(key, owner ?? {});
+		}
+		targets.set(absolutePath, {
 			absolutePath,
 			...(lastObservedContentFingerprint !== undefined
 				? { lastObservedContentFingerprint }
@@ -113,11 +189,39 @@ export class EditCheckpointRegistry {
 
 	/** How many distinct destinations have been observed. */
 	get size(): number {
-		return this.targets.size;
+		let total = 0;
+		for (const targets of this.owners.values()) {
+			total += targets.size;
+		}
+		return total;
 	}
 
 	/**
-	 * Re-observe every registered target and report the result.
+	 * The registered targets of EVERY owner, in registration order.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+	 * checkpoint is taken PER OWNING RUN, so one run's evidence is never
+	 * aggregated with another run's.
+	 */
+	ownedTargets(): readonly {
+		readonly owner: EditCheckpointOwner;
+		readonly targets: readonly RegisteredTarget[];
+	}[] {
+		const result: {
+			owner: EditCheckpointOwner;
+			targets: RegisteredTarget[];
+		}[] = [];
+		for (const [key, targets] of this.owners) {
+			result.push({
+				owner: this.ownerIdentities.get(key) ?? {},
+				targets: [...targets.values()],
+			});
+		}
+		return result;
+	}
+
+	/**
+	 * Re-observe the given registered targets and report the result.
 	 *
 	 * The observation is BOUNDED in the same way the post-write read-back
 	 * is: at most `limit + 1` bytes are read per target, and a target
@@ -126,12 +230,25 @@ export class EditCheckpointRegistry {
 	 */
 	async observe(
 		fingerprinting: EditCheckpointFingerprinting,
+		targets?: readonly RegisteredTarget[],
 	): Promise<readonly ModelBehaviorTraceEditCheckpointTarget[]> {
 		const observed: ModelBehaviorTraceEditCheckpointTarget[] = [];
-		for (const target of this.targets.values()) {
+		const selected = targets ?? this.allTargets();
+		for (const target of selected) {
 			observed.push(await observeTarget(target, fingerprinting));
 		}
 		return observed;
+	}
+
+	/**
+	 * Every registered target, across all owners.
+	 */
+	private allTargets(): readonly RegisteredTarget[] {
+		const all: RegisteredTarget[] = [];
+		for (const targets of this.owners.values()) {
+			all.push(...targets.values());
+		}
+		return all;
 	}
 
 	/**
@@ -140,7 +257,8 @@ export class EditCheckpointRegistry {
 	 * Used when a capture ends, so the raw paths do not outlive it.
 	 */
 	clear(): void {
-		this.targets.clear();
+		this.owners.clear();
+		this.ownerIdentities.clear();
 	}
 }
 

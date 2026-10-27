@@ -1,3 +1,53 @@
+# ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02 — PASS_STRUCTURAL_ONLY — 2026-10-27
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the three causal-identity defects the review of WORKSPACE-EFFECT-TRACE01-CORR01 found are corrected, witnessed RED→GREEN and reconciled; the live installed-VSIX M3.1 dogfood remains the next bounded step and was **not** performed here).
+
+**ENTRY_HEAD:** `8a0994171` (main).
+
+**Why this ACT exists.** The review of `ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01` returned **`HALT_CHECKPOINT_CAUSAL_IDENTITY`** with **two P0** causal-identity defects and **one P1** measurement-accounting defect. CORR01's three corrections (actual executor cwd, checkpoint-based retention, bounded read-back) remain **closed** — they are **not** reopened here. This ACT corrects the *causal identity* of the evidence CORR01 introduced. No new recorder, no filesystem-authorization change, no comparator-architecture rewrite, no path-policy change, no model-policy change, no worktrees, no protected-stash operations.
+
+**P0-1 — CHECKPOINTS HAD NO SESSION/RUN IDENTITY.** `captureEditCheckpoint()` emitted **one** checkpoint for the whole capture and carried **no** `sessionId`/`runId`. That is not merely missing metadata: the comparator's `scopeRecords()` intentionally excludes a record that carries neither the selected run id nor the owning session id, so `--m3-run` / `--m3.1-run` **DROPPED** the checkpoint — the retained-change authority of a selected run was simply **absent**. The second dimension was the registry itself: `EditCheckpointRegistry` was global to the capture and keyed by **absolute path alone**, so two runs that touched the same destination were **merged** into one target and the checkpoint could not be attributed to either run. **Correction:** the registry is now **partitioned by owning run** (`EditCheckpointOwner` = the same `sessionId`/`runId` the write observations carry; targets are keyed owner-first, then path), and `captureEditCheckpoint()` emits **one checkpoint per owner**, carrying that owner's identity **both** in the payload **and** on the observation **envelope** — the envelope is what the recorder stamps onto the trace *record*, and the record's identity is what the comparator's identity-verified scope reads. Selecting a run now keeps that run's checkpoint and drops the other runs'.
+
+**P0-2 — MULTI-FILE PATCH ATTRIBUTION WAS NOT SOURCE-BOUND.** `reportTargetResolution()` emitted `toolCallId` and `destinationScope` but **not** `fileIdentity`, while `reportWriteVerification()` **did** emit `fileIdentity`. The comparator therefore joined a destination scope to an independently verified write by **tool-call id alone** — but several destinations of ONE `apply_patch` share ONE tool-call id, so the join was **ambiguous** and the write was attributed to whichever destination happened to be resolved last. **Correction:** the production producer now carries the **same trusted per-file identity** through **both** events — the ephemeral fingerprint of the resolved destination path, computed by the sink from the same path in both cases — and the comparator's per-file attribution joins on that identity. The tool-call-id join survives **only** where it is **unambiguous** (the tool call resolved exactly ONE destination). An ambiguous or identity-less join is **unattributed** and reported as `unattributedAppliedWrites` — never inferred.
+
+**P1 — READ-BYTE ACCOUNTING WAS CUMULATIVE.** `EditObservation.readBytesRequested` accumulated across reads, but each `edit_write_verification` published the accumulated total, so for a patch modifying several files the field stopped describing ONE read operation. **Correction:** the count is **replaced**, not accumulated — each read-back reports **its own** requested-byte count. The reader remains bounded (`limit + 1` bytes per read); only the reported measurement was misleading.
+
+**R — RED AGAINST THE CURRENT SOURCE, THEN GREEN.** The production source was reverted to `8a0994171` by `git stash` and the two new witness suites re-run.
+
+- `sdk/packages/core/.../edit-workspace-effect-trace01-corr02.test.ts` — **7 failed | 5 passed**:
+  - C1-1 — 1 checkpoint (the two runs **merged**) instead of 2.
+  - C1-2 — the checkpoint's `sessionId` was **undefined**.
+  - C1-3 — the owning-session count was **0** instead of 1: the selected run's checkpoint was **dropped** — the exact P0.
+  - C1-4 — the same destination written by two runs collapsed into **one** checkpoint.
+  - C2-1 / C2-2 — the resolution's `fileIdentity` was **undefined**.
+  - C4-1 — `readBytesRequested` was **1048578** = 2 × 524289: the **cumulative** sum — the exact P1.
+- `apps/vscode/src/sdk/__tests__/model-behavior-workspace-progress-comparator01-corr02.test.ts` — **4 failed | 0 passed**:
+  - CWC07 — the checkpoint's `sessionId` was **undefined**.
+  - CWC08 — `appliedWritesInsideWorkspace` was **0**: both writes of the two-file patch were attributed to the last-resolved destination.
+  - CWC09 — `appliedWritesInsideWorkspace` was **1**: the **ambiguous** write was **inferred**.
+  - CWC10 — `unattributedAppliedWrites` did not exist.
+
+After the bounded correction: **12 passed** and **4 passed** respectively — **16 new witnesses, all GREEN**.
+
+**W — THE CORRELATION IS DRIVEN BY REAL PRODUCTION EVENTS.** The comparator witnesses do **not** hand-write synthetic records: they run the **real** `createEditorExecutor` / `createApplyPatchExecutor` against **real** temporary files, capture the **real** production observations through the **real** sink, take the **real** checkpoint through the **real** `captureEditCheckpoint()` seam, and feed those events to the **real** comparator **script as a subprocess** — so the shipped CLI is what is exercised, and the identity that correlates the events is the identity the production code emits.
+
+**R — FOCUSED GATES.**
+
+- `sdk/packages/core` — **89 passed** across 7 files (the CORR01/CORR02/workspace-effect/efficiency/editor/apply-patch suites).
+- `apps/vscode` — **48 passed** across 5 files (the three workspace-progress comparator suites, the comparator script suite, and the trace-runtime suite).
+- SDK build — **PASS** (`bun run build:sdk`).
+- `apps/vscode` typecheck — **PASS** (`bun run check-types`, exit 0, zero diagnostics).
+- `sdk/packages/core` typecheck — **31 diagnostics before, 31 after**: zero added, zero removed, and **none** in any touched file.
+- Biome lint + format — **PASS** on every touched file (zero findings).
+
+**PRE-EXISTING FAILURES, VERIFIED AS SUCH (NOT REOPENED).**
+
+- `editor.realpath-authority.test.ts` C/D/E remain RED against production (the path-policy defect is out of scope; the destination classification makes it visible without changing it).
+- `sdk/packages/core` — `subprocess-runner` / `seatbelt-availability` / `sandbox-backend` fail **identically with and without** this change (3 failed | 33 passed | 1 skipped), verified by `git stash`.
+- `apps/vscode` — **identical** failure markers at the baseline and after (15 files / 69 failures, zero added, zero removed).
+
+**WHAT IS STILL NOT CLAIMED.** The historical **13 applied edits / zero retained benchmark changes** remain **UNEXPLAINED** until the live capture. The live installed-VSIX M3.1 qualification was **NOT EXECUTED** here, so `PASS_LIVE_WORKSPACE_EFFECTS` is not claimed. The next bounded step is to build/install the corrected VSIX and capture one real M3.1 editing attempt with destination **and** checkpoint evidence. With C1–C5 passing and real production events driving the correlation witnesses, the review's reopen condition is met: **C1: GO for installed-VSIX M3.1 dogfood.**
+
 # ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01 — PASS_STRUCTURAL_ONLY — 2026-10-27
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the three evidence-authority defects the review of WORKSPACE-EFFECT-TRACE01 found are corrected, witnessed RED→GREEN and reconciled; the live installed-VSIX qualification is the next bounded step and was not performed here).

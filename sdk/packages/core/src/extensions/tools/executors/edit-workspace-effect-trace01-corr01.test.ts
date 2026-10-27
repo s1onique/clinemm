@@ -60,8 +60,8 @@ import {
 	EDIT_OBSERVATION_WORKSPACE_METADATA_KEY,
 	resetEditCheckpointRegistry,
 } from "./edit-observation";
-import { createEditorExecutor } from "./editor";
 import { EDIT_OBSERVATION_MAX_FILE_BYTES } from "./edit-write-verification";
+import { createEditorExecutor } from "./editor";
 
 // =============================================================================
 // Test harness
@@ -600,8 +600,17 @@ describe("C3 — the read-back is bounded and distinguishes its failure modes", 
 		// Now observe the DIRECTORY through the checkpoint: it exists but
 		// its CONTENT cannot be read as a file. That is NOT ENOENT, so it
 		// must be reported as UNREADABLE rather than ABSENT.
+		//
+		// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+		// directory is registered under the SAME OWNING RUN as the write
+		// above. The checkpoint is taken PER RUN, so a target registered
+		// under a different (or absent) owner would be a SEPARATE
+		// checkpoint rather than another target of this one.
 		const registry = await import("./edit-checkpoint-registry");
-		registry.getEditCheckpointRegistry().register(directoryPath);
+		registry.getEditCheckpointRegistry().register(directoryPath, undefined, {
+			sessionId: "session-1",
+			runId: "run-1",
+		});
 		await captureEditCheckpoint(sink);
 
 		const observed = checkpoints(observations);

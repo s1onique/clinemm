@@ -460,6 +460,17 @@ export interface WorkspaceProgressStatistics {
 	 */
 	appliedWritesInsideWorkspace: number;
 	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+	 * number of applied writes whose destination could NOT be attributed.
+	 *
+	 * A write is unattributed when its per-target identity is missing, or
+	 * when the tool call resolved SEVERAL destinations and the trace
+	 * therefore cannot say which destination the write belongs to. Such a
+	 * write is never counted as inside or outside — it is reported as
+	 * unavailable rather than guessed.
+	 */
+	unattributedAppliedWrites: number;
+	/**
 	 * The number of writes that were INDEPENDENTLY verified by a
 	 * read-back from disk.
 	 */
@@ -1681,23 +1692,71 @@ function computeWorkspaceProgress(
 	// APPLIED WRITES — INSIDE vs OUTSIDE
 	// ------------------------------------------------------------------
 	//
-	// A write is attributed to a destination ONLY when the resolution and
-	// the application share the SAME tool-call identity. Without that
-	// identity the write's destination is UNKNOWN — it is never counted
-	// as inside or outside.
-	const scopeByToolCallId = new Map<
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+	// attribution is SOURCE-BOUND.
+	//
+	// The previous implementation joined an application to its destination
+	// by TOOL-CALL ID alone. That is ambiguous for a multi-file patch: the
+	// several destinations of ONE `apply_patch` share ONE tool-call id, so
+	// the map kept only the LAST destination's scope and the write was
+	// attributed to whichever destination happened to be resolved last.
+	//
+	// The attribution now joins on the SHARED, TRUSTED per-target identity
+	// (`fileIdentity`), which the production producer emits on BOTH the
+	// target resolution and the write verification:
+	//
+	//   - a resolution contributes its scope under its OWN file identity;
+	//   - an application contributes the scope of each MUTATED file,
+	//     joined by that file's identity.
+	//
+	// A tool-call-id join is used ONLY when it is UNAMBIGUOUS — that is,
+	// when the tool call resolved exactly ONE destination. When the join is
+	// ambiguous or the identity is missing, the write is UNATTRIBUTED: it
+	// is counted as UNAVAILABLE_FROM_TRACE and never guessed.
+	const scopeByFileIdentity = new Map<
 		string,
 		"active_workspace" | "other_workspace" | "outside_workspace" | "unknown"
+	>();
+	for (const record of resolutions) {
+		const fileIdentity = record.payload.fileIdentity;
+		if (typeof fileIdentity !== "string" || fileIdentity === "") {
+			continue;
+		}
+		scopeByFileIdentity.set(fileIdentity, readScope(record.payload));
+	}
+
+	/**
+	 * The destinations resolved by ONE tool call.
+	 *
+	 * A tool call that resolved exactly ONE destination can be joined by
+	 * its tool-call id alone — there is nothing to confuse it with. A tool
+	 * call that resolved SEVERAL destinations cannot: the join would be
+	 * ambiguous, so the per-target identity is required.
+	 */
+	const destinationsByToolCallId = new Map<
+		string,
+		{
+			readonly scopes: Set<
+				"active_workspace" | "other_workspace" | "outside_workspace" | "unknown"
+			>;
+		}
 	>();
 	for (const record of resolutions) {
 		const toolCallId = record.payload.toolCallId;
 		if (typeof toolCallId !== "string" || toolCallId === "") {
 			continue;
 		}
-		scopeByToolCallId.set(toolCallId, readScope(record.payload));
+		let entry = destinationsByToolCallId.get(toolCallId);
+		if (!entry) {
+			entry = { scopes: new Set() };
+			destinationsByToolCallId.set(toolCallId, entry);
+		}
+		entry.scopes.add(readScope(record.payload));
 	}
+
 	let appliedWritesInsideWorkspace = 0;
 	let appliedWritesOutsideWorkspace = 0;
+	let unattributedAppliedWrites = 0;
 	for (const record of applications) {
 		if (record.payload.outcome !== "applied") {
 			continue;
@@ -1706,7 +1765,47 @@ function computeWorkspaceProgress(
 		if (typeof toolCallId !== "string" || toolCallId === "") {
 			continue;
 		}
-		const scope = scopeByToolCallId.get(toolCallId);
+		// The MUTATED FILES of this application, each joined to its own
+		// destination by the shared per-target identity.
+		const mutations = record.payload.fileMutations;
+		const mutatedFileIdentities: string[] = [];
+		if (Array.isArray(mutations)) {
+			for (const mutation of mutations) {
+				if (!mutation || typeof mutation !== "object") {
+					continue;
+				}
+				const fileIdentity = (mutation as Record<string, unknown>).fileIdentity;
+				if (typeof fileIdentity === "string" && fileIdentity !== "") {
+					mutatedFileIdentities.push(fileIdentity);
+				}
+			}
+		}
+		if (mutatedFileIdentities.length > 0) {
+			// The SOURCE-BOUND join: every mutated file is attributed to
+			// the destination resolved for THAT file.
+			for (const fileIdentity of mutatedFileIdentities) {
+				const scope = scopeByFileIdentity.get(fileIdentity);
+				if (scope === "active_workspace") {
+					appliedWritesInsideWorkspace += 1;
+				} else if (
+					scope === "outside_workspace" ||
+					scope === "other_workspace"
+				) {
+					appliedWritesOutsideWorkspace += 1;
+				}
+			}
+			continue;
+		}
+		// No per-file identity: the tool-call-id join is used ONLY when it
+		// is unambiguous.
+		const destinations = destinationsByToolCallId.get(toolCallId);
+		if (!destinations || destinations.scopes.size !== 1) {
+			// AMBIGUOUS (several destinations) or UNKNOWN (none): the
+			// destination of this write is not knowable from the trace.
+			unattributedAppliedWrites += 1;
+			continue;
+		}
+		const scope = [...destinations.scopes][0];
 		if (scope === "active_workspace") {
 			appliedWritesInsideWorkspace += 1;
 		} else if (scope === "outside_workspace" || scope === "other_workspace") {
@@ -2047,6 +2146,10 @@ function computeWorkspaceProgress(
 	}
 
 	// The first write whose destination was inside the active workspace.
+	//
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the SAME
+	// source-bound attribution is used here: the write is inside the
+	// workspace when at least ONE of its MUTATED files resolved inside it.
 	for (const record of applications) {
 		if (record.payload.outcome !== "applied") {
 			continue;
@@ -2055,7 +2158,33 @@ function computeWorkspaceProgress(
 		if (typeof toolCallId !== "string" || toolCallId === "") {
 			continue;
 		}
-		if (scopeByToolCallId.get(toolCallId) !== "active_workspace") {
+		const mutations = record.payload.fileMutations;
+		const mutatedFileIdentities: string[] = [];
+		if (Array.isArray(mutations)) {
+			for (const mutation of mutations) {
+				if (!mutation || typeof mutation !== "object") {
+					continue;
+				}
+				const fileIdentity = (mutation as Record<string, unknown>).fileIdentity;
+				if (typeof fileIdentity === "string" && fileIdentity !== "") {
+					mutatedFileIdentities.push(fileIdentity);
+				}
+			}
+		}
+		let wroteInsideWorkspace = false;
+		if (mutatedFileIdentities.length > 0) {
+			wroteInsideWorkspace = mutatedFileIdentities.some(
+				(fileIdentity) =>
+					scopeByFileIdentity.get(fileIdentity) === "active_workspace",
+			);
+		} else {
+			const destinations = destinationsByToolCallId.get(toolCallId);
+			wroteInsideWorkspace =
+				destinations !== undefined &&
+				destinations.scopes.size === 1 &&
+				[...destinations.scopes][0] === "active_workspace";
+		}
+		if (!wroteInsideWorkspace) {
 			continue;
 		}
 		const at = timestampMs(record);
@@ -2137,6 +2266,7 @@ function computeWorkspaceProgress(
 		targetsScopeUnverified,
 		appliedWritesOutsideWorkspace,
 		appliedWritesInsideWorkspace,
+		unattributedAppliedWrites,
 		independentlyVerifiedWrites,
 		verifiedWritesMatchingIntended,
 		verifiedWritesDivergingFromIntended,

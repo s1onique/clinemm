@@ -67,7 +67,7 @@ import {
 	type ModelBehaviorTraceEditApprovalOutcome,
 } from "@cline/shared";
 import {
-	EditCheckpointRegistry,
+	type EditCheckpointRegistry,
 	getEditCheckpointRegistry,
 	resetEditCheckpointRegistry,
 } from "./edit-checkpoint-registry";
@@ -378,12 +378,18 @@ export class EditObservation {
 	/**
 	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01.
 	 *
-	 * The total number of bytes the read-backs asked the operating system
-	 * for.
+	 * The number of bytes the MOST RECENT read-back asked the operating
+	 * system for.
 	 *
 	 * It is the RESOURCE observation of the read-back: it stays within
 	 * `EDIT_OBSERVATION_MAX_FILE_BYTES + 1` per read no matter how large
 	 * the destination is.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: this is
+	 * the count of ONE read, never the accumulated total of the tool call.
+	 * The previous implementation added to a running total, so the second
+	 * read-back of a multi-file patch reported the SUM of both reads and the
+	 * field no longer described a single read operation.
 	 */
 	private readBytesRequested = 0;
 
@@ -590,23 +596,40 @@ export class EditObservation {
 			return;
 		}
 		try {
-			const [workspaceIdentity, executorCwdIdentity, benchmarkIdentity] =
-				await Promise.all([
-					this.workspace?.workspaceRoot
-						? this.fingerprintPath(this.workspace.workspaceRoot)
-						: undefined,
-					// The executor's cwd — NEVER the destination.
-					//
-					// An EMPTY cwd is not a working directory: the identity
-					// is then unavailable rather than a fingerprint of "".
-					resolved.executorCwd !== undefined &&
-					resolved.executorCwd.trim() !== ""
-						? this.fingerprintPath(resolved.executorCwd)
-						: undefined,
-					this.workspace?.benchmarkRoot
-						? this.fingerprintPath(this.workspace.benchmarkRoot)
-						: undefined,
-				]);
+			const [
+				workspaceIdentity,
+				executorCwdIdentity,
+				benchmarkIdentity,
+				fileIdentity,
+			] = await Promise.all([
+				this.workspace?.workspaceRoot
+					? this.fingerprintPath(this.workspace.workspaceRoot)
+					: undefined,
+				// The executor's cwd — NEVER the destination.
+				//
+				// An EMPTY cwd is not a working directory: the identity
+				// is then unavailable rather than a fingerprint of "".
+				resolved.executorCwd !== undefined && resolved.executorCwd.trim() !== ""
+					? this.fingerprintPath(resolved.executorCwd)
+					: undefined,
+				this.workspace?.benchmarkRoot
+					? this.fingerprintPath(this.workspace.benchmarkRoot)
+					: undefined,
+				// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02:
+				// the SHARED, TRUSTED per-target identity.
+				//
+				// It is the fingerprint of the RESOLVED DESTINATION PATH,
+				// computed by the sink from the SAME path the write
+				// verification fingerprints — so the destination scope
+				// and the independent verification join by EXACT
+				// per-target identity.
+				//
+				// Without it, a multi-file `apply_patch` produced several
+				// destinations sharing ONE tool-call id, and the
+				// comparator could not say which scope belonged to which
+				// verified write.
+				this.fingerprintPath(resolved.absolutePath),
+			]);
 			const resolution: ModelBehaviorTraceEditTargetResolution = {
 				...(this.identity?.toolCallId !== undefined
 					? { toolCallId: this.identity.toolCallId }
@@ -615,6 +638,7 @@ export class EditObservation {
 				inputPathKind: resolved.inputPathKind,
 				...(workspaceIdentity !== undefined ? { workspaceIdentity } : {}),
 				...(executorCwdIdentity !== undefined ? { executorCwdIdentity } : {}),
+				...(fileIdentity !== undefined ? { fileIdentity } : {}),
 				destinationScope: resolved.destinationScope,
 				canonicalized: resolved.canonicalized,
 				destinationExistedBefore: resolved.existedBefore,
@@ -660,7 +684,7 @@ export class EditObservation {
 					? await this.fingerprintContent(options.intendedContent)
 					: undefined;
 
-			let readbackAttempted = true;
+			const readbackAttempted = true;
 			let fileExistsAfterWrite = false;
 			let actualContentFingerprint: string | undefined;
 			let measurementSkippedReason:
@@ -742,9 +766,22 @@ export class EditObservation {
 			// destination is registered so an explicit CHECKPOINT can
 			// re-observe it. The registry holds the raw path in memory
 			// only; nothing about it is ever serialized.
+			//
+			// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+			// destination is registered under the OWNING RUN, so a checkpoint
+			// can be attributed to the run that wrote it and two runs that
+			// touched the same destination are never merged.
 			this.checkpointRegistry.register(
 				options.absolutePath,
 				actualContentFingerprint,
+				{
+					...(this.identity?.sessionId !== undefined
+						? { sessionId: this.identity.sessionId }
+						: {}),
+					...(this.identity?.runId !== undefined
+						? { runId: this.identity.runId }
+						: {}),
+				},
 			);
 		} catch {
 			// Failure isolation: instrumentation NEVER affects an edit.
@@ -760,9 +797,14 @@ export class EditObservation {
 	 * exists so the boundedness of the read can be witnessed directly,
 	 * rather than inferred from a fingerprint. A whole-file read would
 	 * report the whole file's size here.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the count
+	 * is REPLACED, not accumulated. Each read-back reports its OWN
+	 * requested-byte count; the second read-back of a multi-file patch no
+	 * longer reports the SUM of both reads.
 	 */
 	private reportReadBytesRequested(bytes: number): void {
-		this.readBytesRequested += bytes;
+		this.readBytesRequested = bytes;
 	}
 
 	/**
@@ -1083,22 +1125,58 @@ export async function captureEditCheckpoint(
 			// missing one, so it is not emitted.
 			return;
 		}
-		const targets = await registry.observe({
-			fingerprintFilePath: async (resolvedPath) => {
+		const fingerprinting = {
+			fingerprintFilePath: async (resolvedPath: string) => {
 				const result = sink?.fingerprintFilePath?.(resolvedPath);
 				return result instanceof Promise ? await result : result;
 			},
-			fingerprintFileContent: async (content) => {
+			fingerprintFileContent: async (content: string) => {
 				const result = sink?.fingerprintFileContent?.(content);
 				return result instanceof Promise ? await result : result;
 			},
-		});
-		const observation: ModelBehaviorTraceEditCheckpointObservation = {
-			observedTargetCount: targets.length,
-			targets,
-			provenance: "REAL_PRODUCTION_SEAM",
 		};
-		handler({ payload: { ...observation } });
+		// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+		// checkpoint is taken PER OWNING RUN.
+		//
+		// The previous implementation emitted ONE checkpoint for the whole
+		// capture and carried NO identity. The comparator's identity-verified
+		// scope therefore DROPPED the checkpoint whenever a run was selected
+		// (`--m3-run`): the retained-change authority of a selected run was
+		// simply absent. Worse, the registry was keyed by path alone, so two
+		// runs that wrote the same destination were merged into one target
+		// and the checkpoint could not be attributed to either.
+		//
+		// Now every owner gets its OWN checkpoint, carrying the session and
+		// run that own it. Selecting a run keeps that run's checkpoint and
+		// drops the other runs'.
+		for (const { owner, targets } of registry.ownedTargets()) {
+			if (targets.length === 0) {
+				continue;
+			}
+			const observed = await registry.observe(fingerprinting, targets);
+			const observation: ModelBehaviorTraceEditCheckpointObservation = {
+				...(owner.sessionId !== undefined
+					? { sessionId: owner.sessionId }
+					: {}),
+				...(owner.runId !== undefined ? { runId: owner.runId } : {}),
+				observedTargetCount: observed.length,
+				targets: observed,
+				provenance: "REAL_PRODUCTION_SEAM",
+			};
+			// The owner identity is carried BOTH in the payload and on the
+			// observation ENVELOPE. The envelope is what the recorder stamps
+			// onto the trace RECORD, and the record's identity is what the
+			// comparator's identity-verified scope reads. Carrying it only
+			// in the payload would leave the record unidentified — and an
+			// unidentified record is dropped whenever a run is selected.
+			handler({
+				...(owner.sessionId !== undefined
+					? { sessionId: owner.sessionId }
+					: {}),
+				...(owner.runId !== undefined ? { runId: owner.runId } : {}),
+				payload: { ...observation },
+			});
+		}
 	} catch {
 		// Failure isolation: a failed checkpoint never breaks a dump.
 	}

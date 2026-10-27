@@ -836,6 +836,30 @@ export interface ModelBehaviorTraceEditTargetResolution {
 	 */
 	readonly executorCwdIdentity?: string;
 	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+	 * ephemeral fingerprint of the RESOLVED DESTINATION PATH.
+	 *
+	 * This is the SHARED, TRUSTED per-target identity. It is the SAME
+	 * fingerprint the `edit_write_verification` event carries for the same
+	 * destination, because both are computed by the sink from the same
+	 * resolved path.
+	 *
+	 * WHY IT EXISTS
+	 * -------------
+	 * The destination scope and the independent verification describe two
+	 * views of the SAME write, but a single tool call can write MANY
+	 * destinations. `toolCallId` alone therefore cannot say WHICH scope
+	 * belongs to WHICH verified write: several destinations share one
+	 * tool-call id. With this identity the two views join by EXACT
+	 * per-target identity, and an ambiguous join is rejected rather than
+	 * guessed.
+	 *
+	 * ABSENT when the fingerprint could not be computed. The destination is
+	 * then reported as UNATTRIBUTED — never attributed by tool-call id
+	 * alone.
+	 */
+	readonly fileIdentity?: string;
+	/**
 	 * The canonical scope of the resolved destination.
 	 */
 	readonly destinationScope: ModelBehaviorTraceEditDestinationScope;
@@ -1048,6 +1072,22 @@ export interface ModelBehaviorTraceEditCheckpointTarget {
  * This is the ONLY authority for a retained-change classification.
  */
 export interface ModelBehaviorTraceEditCheckpointObservation {
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the
+	 * session that owns the runs this checkpoint observed.
+	 *
+	 * The checkpoint is a CAPTURE-scoped observation, but the evidence it
+	 * carries belongs to a SPECIFIC run. Without this identity the
+	 * comparator's identity-verified scope drops the checkpoint entirely
+	 * when a run is selected, and a checkpoint that aggregates two runs
+	 * cannot be attributed to either.
+	 */
+	readonly sessionId?: string;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02: the run
+	 * that owns the targets this checkpoint observed.
+	 */
+	readonly runId?: string;
 	/**
 	 * The number of previously observed targets the checkpoint re-observed.
 	 */
