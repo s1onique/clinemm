@@ -456,6 +456,14 @@ export class EditObservation {
 		);
 		const application: ModelBehaviorTraceEditApplication = {
 			outcome,
+			// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: the
+			// tool-call identity is carried on the typed application as well as
+			// in the emitted payload, so a consumer that reads the typed
+			// object can join the application to its `edit_attempt` by exact
+			// identity — never by ordering or timestamp proximity.
+			...(this.identity?.toolCallId !== undefined
+				? { toolCallId: this.identity.toolCallId }
+				: {}),
 			...(options.failureCategory !== undefined
 				? { failureCategory: options.failureCategory }
 				: {}),
@@ -496,6 +504,13 @@ export class EditObservation {
 			handler(
 				this.observation({
 					failureCategory: category,
+					// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01:
+					// the failure carries the SAME tool-call identity as the
+					// attempt and the application, so all three links of one
+					// edit can be joined by exact identity.
+					...(application?.toolCallId !== undefined
+						? { toolCallId: application.toolCallId }
+						: {}),
 					...(application !== undefined
 						? {
 								mutatedFileCount: application.mutatedFileCount,
@@ -587,7 +602,24 @@ export class EditObservation {
 				? { providerId: identity.providerId }
 				: {}),
 			...(identity?.modelId !== undefined ? { modelId: identity.modelId } : {}),
-			payload: { toolName: this.toolName, ...payload },
+			// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: the
+			// tool-call identity is forwarded VERBATIM from the trusted
+			// tool-context metadata the runtime stamped. It is the ONLY
+			// authority that joins an application/failure to its originating
+			// `edit_attempt`, so it is never synthesized, inferred, or
+			// reconstructed from ordering.
+			//
+			// When the identity is absent the observation is still emitted —
+			// the write really happened — but it carries NO tool-call identity,
+			// so the comparator keeps it UNVERIFIED instead of pairing it by
+			// timestamp or array adjacency.
+			payload: {
+				toolName: this.toolName,
+				...payload,
+				...(identity?.toolCallId !== undefined
+					? { toolCallId: identity.toolCallId }
+					: {}),
+			},
 		};
 	}
 }

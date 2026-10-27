@@ -26,6 +26,12 @@
  *   E14  Sensitive file/path/content     → never exposed in JSONL
  *   E15  Tool-level success, inner failure → failure not mislabeled applied
  *   E16  Final snapshot after several edits → retained vs reverted distinguished
+ *   E18  Tool-call identity               → the application and the failure
+ *                                             carry the SAME tool-call id as
+ *                                             the attempt (CORR01)
+ *   E19  No trusted identity              → the observation carries NO
+ *                                             tool-call id, so it stays
+ *                                             unverified (CORR01)
  */
 
 import * as fs from "node:fs/promises";
@@ -702,5 +708,92 @@ describe("E16 — final snapshot after several edits", () => {
 		// The workspace really reflects the distinction.
 		await expect(fs.readFile(retainedPath, "utf-8")).resolves.toBe("kept\n");
 		await expect(fs.readFile(revertedPath, "utf-8")).resolves.toBe("orig\n");
+	});
+});
+
+// =============================================================================
+// E18 — The tool-call identity survives the executor boundary (CORR01)
+// =============================================================================
+
+describe("E18 — the tool-call identity reaches the application and failure", () => {
+	it("forwards the runtime's tool-call id verbatim", async () => {
+		const filePath = path.join(tempDir, "a.txt");
+		await fs.writeFile(filePath, "alpha\n", "utf-8");
+		const { sink, observations } = createCaptureSink();
+		const editor = createEditorExecutor();
+
+		await editor(
+			{ path: filePath, old_text: "alpha", new_text: "beta" },
+			tempDir,
+			toolContext(sink, { toolCallId: "call-42" }) as never,
+		);
+
+		const applied = applications(observations);
+		expect(applied).toHaveLength(1);
+		// The application carries the identity the runtime stamped into the
+		// trusted tool-context metadata.
+		expect(applied[0].toolCallId).toBe("call-42");
+		// The raw payload carries it too, so the recorder sees it on disk.
+		const rawApplication = observations.find(
+			(observation) => observation.kind === "edit_application",
+		);
+		expect(rawApplication?.payload.toolCallId).toBe("call-42");
+	});
+
+	it("forwards the identity on a FAILURE as well", async () => {
+		const filePath = path.join(tempDir, "a.txt");
+		await fs.writeFile(filePath, "alpha\n", "utf-8");
+		const { sink, observations } = createCaptureSink();
+		const editor = createEditorExecutor();
+
+		await expect(
+			editor(
+				{ path: filePath, old_text: "not-there", new_text: "x" },
+				tempDir,
+				toolContext(sink, { toolCallId: "call-99" }) as never,
+			),
+		).rejects.toThrow();
+
+		const applied = applications(observations);
+		expect(applied).toHaveLength(1);
+		expect(applied[0].outcome).not.toBe("applied");
+		expect(applied[0].toolCallId).toBe("call-99");
+		const failure = observations.find(
+			(observation) => observation.kind === "edit_failure",
+		);
+		expect(failure).toBeDefined();
+		expect(failure?.payload.toolCallId).toBe("call-99");
+	});
+});
+
+// =============================================================================
+// E19 — No trusted identity means no invented identity (CORR01)
+// =============================================================================
+
+describe("E19 — no trusted identity means no invented identity", () => {
+	it("omits the tool-call id when the runtime supplied none", async () => {
+		const filePath = path.join(tempDir, "a.txt");
+		await fs.writeFile(filePath, "alpha\n", "utf-8");
+		const { sink, observations } = createCaptureSink();
+		const editor = createEditorExecutor();
+
+		await editor(
+			{ path: filePath, old_text: "alpha", new_text: "beta" },
+			tempDir,
+			toolContext(sink, { toolCallId: undefined }) as never,
+		);
+
+		const applied = applications(observations);
+		expect(applied).toHaveLength(1);
+		// The write really happened and is reported...
+		expect(applied[0].outcome).toBe("applied");
+		expect(applied[0].mutatedFileCount).toBe(1);
+		// ...but it carries NO identity, so a consumer must keep it
+		// unverified rather than pairing it with some attempt.
+		expect(applied[0].toolCallId).toBeUndefined();
+		const rawApplication = observations.find(
+			(observation) => observation.kind === "edit_application",
+		);
+		expect(rawApplication?.payload.toolCallId).toBeUndefined();
 	});
 });

@@ -457,8 +457,6 @@ export function createApplyPatchExecutor(
 		// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the
 		// observation channel is OPTIONAL and inert when the trace is OFF.
 		const observation = readEditObservation(context.metadata, "apply_patch");
-		const patchText = input.input;
-		const targetCount = countPatchTargets(patchText);
 
 		if (observation) {
 			// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the RUNTIME
@@ -466,7 +464,13 @@ export function createApplyPatchExecutor(
 			// link, because only it knows the authorization state. The
 			// executor reports the "mutation applied" link — the only layer
 			// that can say what the write actually did.
-			observation.setRequestedFileCount(targetCount);
+			//
+			// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: the
+			// patch target count is computed INSIDE this guard. It is an
+			// instrumentation-only value, so the tracing-OFF fast path must
+			// not scan the patch body at all — the disabled path performs no
+			// extra work over the pre-instrumentation behaviour.
+			observation.setRequestedFileCount(countPatchTargets(input.input));
 		}
 
 		try {

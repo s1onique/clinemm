@@ -7,8 +7,8 @@
  * exercised — not a re-implementation of it.
  *
  * Gates covered here:
- *   CE01  Native edit attempts, applied mutations and failures are
- *         reported from the OBSERVED edit events.
+ *   CE01  Native edit attempts, successful operations, written files and
+ *         failures are reported from the OBSERVED edit events.
  *   CE02  Distinct files modified and edits per file are derived from
  *         the correlated file revisions.
  *   CE03  A no-op edit is counted as a no-op, not as a mutation.
@@ -17,10 +17,20 @@
  *         reversion.
  *   CE06  Shell calls are reported as SEPARATE activity and never
  *         contribute to the native-edit counters.
- *   CE07  A run with source changes but no native edit observations
- *         reports `FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE`.
+ *   CE07  A run with shell activity but no native edit telemetry reports
+ *         `EDIT_ORIGIN_UNOBSERVED` — NEVER an observed file change.
  *   CE08  Accepted executable gates stay UNAVAILABLE — a successful
  *         `run_commands` is never converted into an accepted test.
+ *   CE09  An application is joined to its attempt ONLY by exact
+ *         tool-call identity (CORR01).
+ *   CE10  An application WITHOUT a tool-call identity stays UNVERIFIED
+ *         and is never paired by adjacency or timestamp (CORR01).
+ *   CE11  An AMBIGUOUS identity is rejected rather than paired (CORR01).
+ *   CE12  A successful two-file patch counts TWO written files; a patch
+ *         that failed after its first write counts ONE written file and
+ *         ONE partial-mutation operation (CORR01).
+ *   CE13  A write whose content measurement was skipped is UNVERIFIED,
+ *         never counted as an unchanged file (CORR01).
  */
 import { execFile } from "node:child_process"
 import { mkdtemp, readFile, writeFile } from "node:fs/promises"
@@ -61,6 +71,13 @@ const BASE_CONFIG: Record<string, unknown> = {
 interface EditEvent {
 	event: string
 	payload: Record<string, unknown>
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: the
+	 * correlation identity of THIS event. When it is omitted the event
+	 * inherits the trace's default session/run.
+	 */
+	sessionId?: string
+	runId?: string
 }
 
 async function writeTrace(
@@ -118,8 +135,8 @@ async function writeTrace(
 	for (const edit of options.editEvents ?? []) {
 		push({
 			event: edit.event,
-			sessionId: "s1",
-			runId: "r1",
+			sessionId: edit.sessionId ?? "s1",
+			runId: edit.runId ?? "r1",
 			iteration: 1,
 			payload: edit.payload,
 		})
@@ -316,7 +333,11 @@ describe("Model Behavior Trace comparator — Editing Efficiency", () => {
 		const { summary, markdown } = await runComparator(m3, m31)
 		const m3Stats = summary.editingEfficiency.m3
 		expect(m3Stats.nativeEditAttempts).toBe(2)
-		expect(m3Stats.appliedMutations).toBe(1)
+		// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: the
+		// operation count and the written-file count are SEPARATE facts.
+		expect(m3Stats.successfulEditOperations).toBe(1)
+		expect(m3Stats.filesWritten).toBe(1)
+		expect(m3Stats.filesWithVerifiedContentChange).toBe(1)
 		expect(m3Stats.failedEdits).toBe(1)
 		expect(m3Stats.distinctFilesModified).toBe(1)
 		expect(m3Stats.editsPerFile).toBe(1)
@@ -326,7 +347,7 @@ describe("Model Behavior Trace comparator — Editing Efficiency", () => {
 
 		// The M3.1 side observed NO native edit at all.
 		expect(summary.editingEfficiency.m31.nativeEditAttempts).toBe(0)
-		expect(summary.editingEfficiency.m31.appliedMutations).toBe(0)
+		expect(summary.editingEfficiency.m31.filesWritten).toBe(0)
 
 		// The Markdown report carries the section.
 		expect(markdown).toContain("## Editing Efficiency")
@@ -356,7 +377,12 @@ describe("Model Behavior Trace comparator — Editing Efficiency", () => {
 		})
 		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
 		const { summary } = await runComparator(m3, m31)
-		expect(summary.editingEfficiency.m3.noOpEdits).toBe(1)
+		const m3Stats = summary.editingEfficiency.m3
+		expect(m3Stats.noOpEditOperations).toBe(1)
+		// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: a no-op
+		// write is still a WRITE — it is not counted as a content change.
+		expect(m3Stats.filesWritten).toBe(1)
+		expect(m3Stats.filesWithVerifiedContentChange).toBe(0)
 	})
 
 	it("CE04: an A → B → A reversion is recognized", async () => {
@@ -386,7 +412,7 @@ describe("Model Behavior Trace comparator — Editing Efficiency", () => {
 		expect(m3Stats.revertedMutations).toBe(0)
 	})
 
-	it("CE06/CE07: shell activity is separate, and an unattributed change is reported as such", async () => {
+	it("CE06/CE07: shell activity is separate, and its origin is reported as UNOBSERVED", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce06-"))
 		const m3 = await writeTrace(dir, "m3", {
 			toolEvents: [{ name: "run_commands" }, { name: "run_commands", outcome: "error" }],
@@ -399,11 +425,17 @@ describe("Model Behavior Trace comparator — Editing Efficiency", () => {
 		expect(m3Stats.shellCallSuccessCount).toBe(1)
 		// ...and they never contribute to the native-edit counters.
 		expect(m3Stats.nativeEditAttempts).toBe(0)
-		expect(m3Stats.appliedMutations).toBe(0)
-		// The origin of the change is explicitly unavailable.
-		expect(m3Stats.editOriginUnavailable).toBe(true)
-		expect(m3Stats.editOriginMarker).toBe("FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE")
-		expect(markdown).toContain("FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE")
+		expect(m3Stats.filesWritten).toBe(0)
+		// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: a
+		// read-only shell call establishes NOTHING about file changes. The
+		// origin is UNOBSERVED — the report must never claim that a file
+		// change was observed.
+		expect(m3Stats.editOriginUnobserved).toBe(true)
+		expect(m3Stats.workspaceDeltaObserved).toBe(false)
+		expect(m3Stats.editOriginMarker).toBe("EDIT_ORIGIN_UNOBSERVED")
+		expect(m3Stats.editOriginMarker).not.toContain("FILE_CHANGES_OBSERVED")
+		expect(markdown).toContain("EDIT_ORIGIN_UNOBSERVED")
+		expect(markdown).not.toContain("FILE_CHANGES_OBSERVED")
 	})
 
 	it("CE08: accepted executable gates stay UNAVAILABLE", async () => {
@@ -416,5 +448,233 @@ describe("Model Behavior Trace comparator — Editing Efficiency", () => {
 		expect(summary.editingEfficiency.m3.acceptedExecutableGates).toBe("UNAVAILABLE_FROM_TRACE")
 		expect(summary.editingEfficiency.m31.acceptedExecutableGates).toBe("UNAVAILABLE_FROM_TRACE")
 		expect(markdown).toContain("UNAVAILABLE_FROM_TRACE")
+	})
+
+	it("CE09: an application is joined to its attempt ONLY by exact tool-call identity", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce09-"))
+		const m3 = await writeTrace(dir, "m3", {
+			editEvents: [
+				{
+					event: "edit_attempt",
+					payload: {
+						toolCallId: "tc-1",
+						toolName: "editor",
+						operation: "replace",
+						fileIdentity: "file-a",
+						targetCount: 1,
+						requestedChars: 10,
+						approvalOutcome: "approved",
+						executionInvoked: true,
+					},
+				},
+				{
+					event: "edit_application",
+					payload: {
+						toolCallId: "tc-1",
+						outcome: "applied",
+						requestedFileCount: 1,
+						mutatedFileCount: 1,
+						unmutatedFileCount: 0,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [{ fileIdentity: "file-a", contentVersionPre: "v0", contentVersionPost: "v1" }],
+					},
+				},
+			],
+		})
+		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
+		const { summary } = await runComparator(m3, m31)
+		const m3Stats = summary.editingEfficiency.m3
+		expect(m3Stats.correlationProvenance).toBe("EXACT_IDENTITY")
+		expect(m3Stats.correlatedEditApplications).toBe(1)
+		expect(m3Stats.uncorrelatedEditApplications).toBe(0)
+		expect(m3Stats.unfulfilledEditAttempts).toBe(0)
+	})
+
+	it("CE10: an application WITHOUT a tool-call identity stays UNVERIFIED", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce10-"))
+		const m3 = await writeTrace(dir, "m3", {
+			editEvents: [
+				{
+					event: "edit_attempt",
+					payload: {
+						toolCallId: "tc-1",
+						toolName: "editor",
+						operation: "replace",
+						fileIdentity: "file-a",
+						targetCount: 1,
+						requestedChars: 10,
+						approvalOutcome: "approved",
+						executionInvoked: true,
+					},
+				},
+				{
+					// The application carries NO tool-call id. It is NEXT to the
+					// attempt in the record stream, but adjacency is NOT an
+					// identity — the pair must be rejected.
+					event: "edit_application",
+					payload: {
+						outcome: "applied",
+						requestedFileCount: 1,
+						mutatedFileCount: 1,
+						unmutatedFileCount: 0,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [{ fileIdentity: "file-a", contentVersionPre: "v0", contentVersionPost: "v1" }],
+					},
+				},
+			],
+		})
+		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
+		const { summary } = await runComparator(m3, m31)
+		const m3Stats = summary.editingEfficiency.m3
+		// The write really happened, so it is counted...
+		expect(m3Stats.filesWritten).toBe(1)
+		// ...but it is NOT attributed to the attempt.
+		expect(m3Stats.correlatedEditApplications).toBe(0)
+		expect(m3Stats.uncorrelatedEditApplications).toBe(1)
+		expect(m3Stats.unfulfilledEditAttempts).toBe(1)
+	})
+
+	it("CE11: an AMBIGUOUS identity is rejected rather than paired", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce11-"))
+		const m3 = await writeTrace(dir, "m3", {
+			editEvents: [
+				{
+					event: "edit_attempt",
+					payload: {
+						toolCallId: "tc-dup",
+						toolName: "editor",
+						operation: "replace",
+						fileIdentity: "file-a",
+						targetCount: 1,
+						requestedChars: 10,
+						approvalOutcome: "approved",
+						executionInvoked: true,
+					},
+				},
+				{
+					event: "edit_attempt",
+					payload: {
+						toolCallId: "tc-dup",
+						toolName: "editor",
+						operation: "replace",
+						fileIdentity: "file-b",
+						targetCount: 1,
+						requestedChars: 10,
+						approvalOutcome: "approved",
+						executionInvoked: true,
+					},
+				},
+				{
+					event: "edit_application",
+					payload: {
+						toolCallId: "tc-dup",
+						outcome: "applied",
+						requestedFileCount: 1,
+						mutatedFileCount: 1,
+						unmutatedFileCount: 0,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [{ fileIdentity: "file-a", contentVersionPre: "v0", contentVersionPost: "v1" }],
+					},
+				},
+			],
+		})
+		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
+		const { summary } = await runComparator(m3, m31)
+		const m3Stats = summary.editingEfficiency.m3
+		// Two attempts share the identity, so the application cannot be
+		// attributed to either of them.
+		expect(m3Stats.correlatedEditApplications).toBe(0)
+		expect(m3Stats.uncorrelatedEditApplications).toBe(1)
+		expect(m3Stats.unfulfilledEditAttempts).toBe(2)
+	})
+
+	it("CE12: written files and partial mutations are counted separately from operations", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce12-"))
+		const m3 = await writeTrace(dir, "m3", {
+			editEvents: [
+				{
+					// A successful TWO-file patch: ONE operation, TWO files.
+					event: "edit_application",
+					payload: {
+						toolCallId: "tc-ok",
+						outcome: "applied",
+						requestedFileCount: 2,
+						mutatedFileCount: 2,
+						unmutatedFileCount: 0,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [
+							{ fileIdentity: "file-a", contentVersionPre: "v0", contentVersionPost: "v1" },
+							{ fileIdentity: "file-b", contentVersionPre: "w0", contentVersionPost: "w1" },
+						],
+					},
+				},
+				{
+					// A patch that failed AFTER its first write: ONE operation,
+					// ONE written file, ONE partial mutation.
+					event: "edit_application",
+					payload: {
+						toolCallId: "tc-partial",
+						outcome: "failed",
+						failureCategory: "invalid_patch",
+						requestedFileCount: 2,
+						mutatedFileCount: 1,
+						unmutatedFileCount: 1,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [{ fileIdentity: "file-c", contentVersionPre: "x0", contentVersionPost: "x1" }],
+					},
+				},
+			],
+		})
+		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
+		const { summary } = await runComparator(m3, m31)
+		const m3Stats = summary.editingEfficiency.m3
+		// ONE successful operation, THREE files written in total.
+		expect(m3Stats.successfulEditOperations).toBe(1)
+		expect(m3Stats.filesWritten).toBe(3)
+		expect(m3Stats.filesWithVerifiedContentChange).toBe(3)
+		// The failed operation wrote a file, so it is a PARTIAL application.
+		expect(m3Stats.failedEdits).toBe(1)
+		expect(m3Stats.partialMutationOperations).toBe(1)
+		// The three written files are distinct.
+		expect(m3Stats.distinctFilesModified).toBe(3)
+	})
+
+	it("CE13: a skipped content measurement is UNVERIFIED, never 'unchanged'", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "edit-efficiency-ce13-"))
+		const m3 = await writeTrace(dir, "m3", {
+			editEvents: [
+				{
+					event: "edit_application",
+					payload: {
+						toolCallId: "tc-skipped",
+						outcome: "applied",
+						requestedFileCount: 1,
+						mutatedFileCount: 1,
+						unmutatedFileCount: 0,
+						noOp: false,
+						provenance: "REAL_PRODUCTION_SEAM",
+						fileMutations: [
+							{
+								fileIdentity: "file-big",
+								measurementSkipped: "MEASUREMENT_SKIPPED_SIZE_LIMIT",
+							},
+						],
+					},
+				},
+			],
+		})
+		const m31 = await writeTrace(dir, "m31", { modelId: "minimax-m3.1" })
+		const { summary } = await runComparator(m3, m31)
+		const m3Stats = summary.editingEfficiency.m3
+		// The write happened...
+		expect(m3Stats.filesWritten).toBe(1)
+		// ...but its content change was NOT verified.
+		expect(m3Stats.filesWithVerifiedContentChange).toBe(0)
+		expect(m3Stats.filesWithUnverifiedContentChange).toBe(1)
 	})
 })

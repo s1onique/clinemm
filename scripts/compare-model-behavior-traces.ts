@@ -229,7 +229,7 @@ interface TraceStatistics {
 }
 
 /**
- * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+ * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01.
  *
  * The editing-efficiency statistics computed for ONE trace.
  *
@@ -237,20 +237,70 @@ interface TraceStatistics {
  * a generic tool success. A run that changed source files through
  * `run_commands` contributes NO native-edit observations, and the trace
  * says so explicitly rather than presenting zero edits as a clean run.
+ *
+ * THE ACCOUNTING IS LAYERED (CORR01)
+ * ----------------------------------
+ * The previous implementation collapsed four DIFFERENT facts into one
+ * counter. The corrected model keeps them apart, because they answer
+ * different questions:
+ *
+ *   - `successfulEditOperations` — how many edit operations completed
+ *     without an error. This is an OPERATION count.
+ *   - `filesWritten` — how many files the write layer actually wrote.
+ *     This is the MUTATED-FILE count the metric always claimed to be.
+ *   - `filesWithVerifiedContentChange` — how many of those writes were
+ *     observed to change the file's CONTENT. A write whose measurement
+ *     was skipped is NOT counted here: it is UNVERIFIED, not unchanged.
+ *   - `noOpEditOperations` — how many successful operations left every
+ *     written file byte-identical.
+ *   - `partialMutationOperations` — how many operations wrote at least
+ *     one file AND failed, i.e. a multi-file patch that partially applied.
  */
 interface EditingEfficiencyStatistics {
 	/** Native edit attempts (requested native editing operations). */
 	nativeEditAttempts: number;
-	/** Attempts that produced the intended write. */
-	appliedMutations: number;
+	/**
+	 * Edit operations that completed WITHOUT an error.
+	 *
+	 * This is an OPERATION count, not a file count.
+	 */
+	successfulEditOperations: number;
+	/**
+	 * The number of files the write layer ACTUALLY wrote.
+	 *
+	 * This is the mutated-file count: a successful two-file patch
+	 * contributes 2, and a patch that failed after its first write
+	 * contributes 1.
+	 */
+	filesWritten: number;
+	/**
+	 * The number of written files whose CONTENT was observed to change.
+	 *
+	 * A write whose content measurement was skipped is NOT counted here:
+	 * it is unverified, not unchanged.
+	 */
+	filesWithVerifiedContentChange: number;
+	/**
+	 * The number of written files whose content could NOT be verified
+	 * (the measurement was skipped, e.g. the size limit).
+	 */
+	filesWithUnverifiedContentChange: number;
+	/**
+	 * Successful operations that left the content of every written file
+	 * unchanged (a genuine no-op).
+	 */
+	noOpEditOperations: number;
+	/**
+	 * Operations that wrote at least one file AND failed — a PARTIAL
+	 * application of a multi-file patch.
+	 */
+	partialMutationOperations: number;
 	/** Rejected or failed operations. */
 	failedEdits: number;
 	/** Distinct files observed as mutated. */
 	distinctFilesModified: number;
 	/** Observed mutations per modified file. */
 	editsPerFile: number;
-	/** Successful operations that left the content unchanged. */
-	noOpEdits: number;
 	/** Files whose version sequence returned to an earlier version. */
 	revertedMutations: number;
 	/** Intermediate mutations that a later revision superseded. */
@@ -264,11 +314,48 @@ interface EditingEfficiencyStatistics {
 	/** Shell calls that executed without an error. */
 	shellCallSuccessCount: number;
 	/**
-	 * True when the run observed source changes but produced NO native
-	 * edit observations — so the origin of the change is unknown.
+	 * The number of edit applications joined to their originating
+	 * `edit_attempt` by EXACT session/run/tool-call identity.
 	 */
-	editOriginUnavailable: boolean;
-	/** The explicit marker reported in that case. */
+	correlatedEditApplications: number;
+	/**
+	 * The number of edit applications that could NOT be joined to an
+	 * attempt — the identity was missing, or the identity was ambiguous.
+	 *
+	 * These are counted on their own (the write really happened) but they
+	 * are never paired with an attempt by timestamp or array adjacency.
+	 */
+	uncorrelatedEditApplications: number;
+	/**
+	 * The number of `edit_attempt` records that have NO application joined
+	 * to them (the request never produced a write observation).
+	 */
+	unfulfilledEditAttempts: number;
+	/**
+	 * The provenance of the application-to-attempt join.
+	 *
+	 * `EXACT_IDENTITY` — the join was made by exact tool-call identity.
+	 */
+	correlationProvenance: "EXACT_IDENTITY";
+	/**
+	 * True when shell activity was observed WITHOUT any native edit
+	 * telemetry.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: the trace
+	 * has NO independent workspace-delta source, so the origin of anything
+	 * a shell call may have changed is UNOBSERVED. It is never reported as
+	 * an observed file change.
+	 */
+	editOriginUnobserved: boolean;
+	/**
+	 * True when an independent real workspace-delta source established an
+	 * actual file change.
+	 *
+	 * No such source exists today, so this is always `false`; the field
+	 * exists so the distinction cannot be re-collapsed into a guess.
+	 */
+	workspaceDeltaObserved: boolean;
+	/** The explicit marker reported for the edit origin. */
 	editOriginMarker: string;
 	/** Accepted executable gates — NOT observable in the trace. */
 	acceptedExecutableGates: string;
@@ -988,13 +1075,46 @@ function computeEditingEfficiency(
 		(record) => record.event === "edit_application",
 	);
 
+	// ------------------------------------------------------------------
+	// CORRELATION (CORR01)
+	// ------------------------------------------------------------------
+	// An application is joined to its attempt ONLY by EXACT identity:
+	// the same session, the same run and the same tool-call id.
+	//
+	// The join is deliberately NOT made by timestamp proximity and NOT by
+	// array adjacency: with several edits in one run, adjacency would
+	// happily pair a write with the wrong request, and a timestamp is not
+	// an identity at all. An application whose identity is missing — or
+	// whose identity matches more than one attempt — stays UNVERIFIED and
+	// is counted on its own, never paired.
+	const attemptByIdentity = new Map<string, TraceRecord[]>();
+	for (const attempt of attempts) {
+		const identity = readCorrelationIdentity(attempt);
+		if (!identity) {
+			continue;
+		}
+		const bucket = attemptByIdentity.get(identity.key);
+		if (bucket) {
+			bucket.push(attempt);
+		} else {
+			attemptByIdentity.set(identity.key, [attempt]);
+		}
+	}
+	const fulfilledAttemptKeys = new Set<string>();
+	let correlatedEditApplications = 0;
+	let uncorrelatedEditApplications = 0;
+
 	// Per-file observed revision sequences, keyed by the ephemeral file
 	// identity. The sequence holds the INITIAL version followed by each
 	// observed post-write version.
 	const revisionsByFile = new Map<string, string[]>();
-	let appliedMutations = 0;
+	let successfulEditOperations = 0;
+	let filesWritten = 0;
+	let filesWithVerifiedContentChange = 0;
+	let filesWithUnverifiedContentChange = 0;
+	let noOpEditOperations = 0;
+	let partialMutationOperations = 0;
 	let failedEdits = 0;
-	let noOpEdits = 0;
 	let totalWriteDurationMs = 0;
 	let sawWriteDuration = false;
 	let timeToFirstAppliedEditMs: number | undefined;
@@ -1002,14 +1122,37 @@ function computeEditingEfficiency(
 
 	for (const record of applications) {
 		const outcome = record.payload.outcome;
+		const applicationIdentity = readCorrelationIdentity(record);
+		if (applicationIdentity) {
+			const bucket = attemptByIdentity.get(applicationIdentity.key);
+			// An EXACT identity match that is NOT ambiguous (exactly one
+			// attempt carries this identity) is the only accepted join.
+			if (bucket && bucket.length === 1) {
+				correlatedEditApplications += 1;
+				fulfilledAttemptKeys.add(applicationIdentity.key);
+			} else {
+				uncorrelatedEditApplications += 1;
+			}
+		} else {
+			// No identity at all: the write is still real, but it cannot be
+			// attributed to a request.
+			uncorrelatedEditApplications += 1;
+		}
+		const mutatedFileCount = readNonNegativeInteger(
+			record.payload.mutatedFileCount,
+		);
+		const writtenFiles = mutatedFileCount ?? 0;
 		if (outcome === "applied") {
-			appliedMutations += 1;
+			successfulEditOperations += 1;
 		} else {
 			failedEdits += 1;
+			if (writtenFiles > 0) {
+				// A failure AFTER at least one file was written is a PARTIAL
+				// application, not a clean failure.
+				partialMutationOperations += 1;
+			}
 		}
-		if (record.payload.noOp === true) {
-			noOpEdits += 1;
-		}
+		filesWritten += writtenFiles;
 		const duration = record.payload.durationMs;
 		if (typeof duration === "number" && Number.isFinite(duration)) {
 			totalWriteDurationMs += duration;
@@ -1018,6 +1161,7 @@ function computeEditingEfficiency(
 		if (
 			timeToFirstAppliedEditMs === undefined &&
 			outcome === "applied" &&
+			writtenFiles > 0 &&
 			firstRecord
 		) {
 			timeToFirstAppliedEditMs = timestampMs(record) - timestampMs(firstRecord);
@@ -1031,22 +1175,51 @@ function computeEditingEfficiency(
 				continue;
 			}
 			const record0 = mutation as Record<string, unknown>;
+			const pre = record0.contentVersionPre;
+			const post = record0.contentVersionPost;
+			if (typeof pre === "string" && typeof post === "string") {
+				if (pre !== post) {
+					filesWithVerifiedContentChange += 1;
+				}
+			} else if (record0.measurementSkipped !== undefined) {
+				// The write happened but its CONTENT was not measured, so the
+				// change is UNVERIFIED — not "unchanged".
+				filesWithUnverifiedContentChange += 1;
+			}
 			const fileIdentity = record0.fileIdentity;
 			if (typeof fileIdentity !== "string" || fileIdentity === "") {
 				continue;
 			}
 			const versions = revisionsByFile.get(fileIdentity) ?? [];
 			if (versions.length === 0) {
-				const pre = record0.contentVersionPre;
 				if (typeof pre === "string") {
 					versions.push(pre);
 				}
 			}
-			const post = record0.contentVersionPost;
 			if (typeof post === "string") {
 				versions.push(post);
 			}
 			revisionsByFile.set(fileIdentity, versions);
+		}
+	}
+
+	// A successful operation that wrote files but changed NO content is a
+	// genuine no-op. The executor already reports this as `noOp`, and the
+	// per-file measurement independently confirms it, so both are accepted
+	// — but ONLY when at least one file was actually written (otherwise
+	// the operation was not a no-op write, it was a no-write).
+	for (const record of applications) {
+		if (record.payload.outcome !== "applied") {
+			continue;
+		}
+		const writtenFiles = readNonNegativeInteger(
+			record.payload.mutatedFileCount,
+		);
+		if (!writtenFiles || writtenFiles === 0) {
+			continue;
+		}
+		if (record.payload.noOp === true) {
+			noOpEditOperations += 1;
 		}
 	}
 
@@ -1104,21 +1277,47 @@ function computeEditingEfficiency(
 		}
 	}
 
-	// EDIT_ORIGIN_UNAVAILABLE: the run shows source changes but no native
-	// edit observation explains them. The trace cannot attribute the
-	// change, so it says so rather than reporting "zero edits".
-	const shellCallsWithSourceChanges =
-		shellCallCount > 0 && appliedMutations === 0 && attempts.length === 0;
-	const editOriginUnavailable = shellCallsWithSourceChanges;
+	// ------------------------------------------------------------------
+	// EDIT ORIGIN (CORR01)
+	// ------------------------------------------------------------------
+	// There is NO independent workspace-delta source in this trace. The
+	// recorder observes the WRITE LAYER, not the workspace, so a shell
+	// call that happened to rewrite a file leaves NO evidence of that in
+	// the trace.
+	//
+	// The previous implementation inferred "FILE_CHANGES_OBSERVED" from
+	// the mere PRESENCE of a shell call. That fabricated an observation:
+	// a read-only `run_commands` satisfied the predicate, and the report
+	// then claimed a file change that nothing had measured.
+	//
+	// The corrected rule: shell activity without native edit telemetry is
+	// reported as `EDIT_ORIGIN_UNOBSERVED` — the origin of anything the
+	// shell may have changed is not observed. An actual observed file
+	// change is reported only when an independent real workspace delta
+	// establishes it, and no such source exists yet.
+	const workspaceDeltaObserved = false;
+	const editOriginUnobserved =
+		!workspaceDeltaObserved &&
+		shellCallCount > 0 &&
+		applications.length === 0 &&
+		attempts.length === 0;
+	const unfulfilledEditAttempts = Math.max(
+		0,
+		attempts.length - fulfilledAttemptKeys.size,
+	);
 	void trace;
 
 	return {
 		nativeEditAttempts: attempts.length,
-		appliedMutations,
+		successfulEditOperations,
+		filesWritten,
+		filesWithVerifiedContentChange,
+		filesWithUnverifiedContentChange,
+		noOpEditOperations,
+		partialMutationOperations,
 		failedEdits,
 		distinctFilesModified,
 		editsPerFile,
-		noOpEdits,
 		revertedMutations,
 		revisionChurn,
 		...(timeToFirstAppliedEditMs !== undefined
@@ -1127,14 +1326,68 @@ function computeEditingEfficiency(
 		...(sawWriteDuration ? { fileWriteDurationMs: totalWriteDurationMs } : {}),
 		shellCallCount,
 		shellCallSuccessCount,
-		editOriginUnavailable,
-		editOriginMarker: editOriginUnavailable
-			? "FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE"
-			: "NATIVE_EDIT_ORIGIN_OBSERVED",
+		correlatedEditApplications,
+		uncorrelatedEditApplications,
+		unfulfilledEditAttempts,
+		correlationProvenance: "EXACT_IDENTITY",
+		editOriginUnobserved,
+		workspaceDeltaObserved,
+		editOriginMarker: editOriginUnobserved
+			? "EDIT_ORIGIN_UNOBSERVED"
+			: workspaceDeltaObserved
+				? "FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE"
+				: "NATIVE_EDIT_ORIGIN_OBSERVED",
 		acceptedExecutableGates: UNAVAILABLE,
 		churnProvenance: "INFERRED",
 		mutationProvenance: "REAL_PRODUCTION_SEAM",
 	};
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01.
+ *
+ * The exact correlation identity of an edit event.
+ *
+ * The identity is the session + run + tool-call id. It is read from the
+ * EVENT itself, never inferred from its position in the record stream.
+ */
+interface CorrelationIdentity {
+	/** The composite key used for the join. */
+	readonly key: string;
+}
+
+/**
+ * Read the exact correlation identity of an edit event.
+ *
+ * Returns `undefined` when the event carries NO tool-call identity: such
+ * an event is UNVERIFIED and is never paired with an attempt.
+ */
+function readCorrelationIdentity(
+	record: TraceRecord,
+): CorrelationIdentity | undefined {
+	const toolCallId = record.payload.toolCallId;
+	if (typeof toolCallId !== "string" || toolCallId === "") {
+		return undefined;
+	}
+	const sessionId =
+		typeof record.sessionId === "string" ? record.sessionId : "";
+	const runId = typeof record.runId === "string" ? record.runId : "";
+	return { key: `${sessionId} ${runId} ${toolCallId}` };
+}
+
+/**
+ * Read a non-negative integer from an unknown payload value.
+ *
+ * A non-integer or negative value is UNKNOWN, never coerced to zero.
+ */
+function readNonNegativeInteger(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return undefined;
+	}
+	if (!Number.isInteger(value) || value < 0) {
+		return undefined;
+	}
+	return value;
 }
 
 /**
@@ -2345,17 +2598,34 @@ function renderMarkdown(summary: ComparisonSummary): string {
 		"> Shell activity is reported SEPARATELY: a successful `run_commands` does not establish which files changed, so it never contributes to the native-edit counters.",
 	);
 	lines.push("");
+	lines.push(
+		"> Edit operations and written files are counted SEPARATELY: one operation may write several files, and a patch that failed after its first write is a PARTIAL application, not a clean failure.",
+	);
+	lines.push(
+		"> An application is joined to its request only by EXACT tool-call identity. An observation without that identity stays UNVERIFIED — it is never paired by timestamp or by position.",
+	);
+	lines.push("");
 	lines.push("| Metric | M3 | M3.1 |");
 	lines.push("| --- | --- | --- |");
 	const editRows: Array<[string, keyof EditingEfficiencyStatistics]> = [
 		["Native edit attempts", "nativeEditAttempts"],
-		["Applied mutations", "appliedMutations"],
+		["Successful edit operations", "successfulEditOperations"],
+		["Files written", "filesWritten"],
+		["Files with verified content change", "filesWithVerifiedContentChange"],
+		[
+			"Files with unverified content change",
+			"filesWithUnverifiedContentChange",
+		],
+		["No-op edit operations", "noOpEditOperations"],
+		["Partial-mutation operations", "partialMutationOperations"],
 		["Failed / rejected edits", "failedEdits"],
 		["Distinct files modified", "distinctFilesModified"],
 		["Edits per file", "editsPerFile"],
-		["No-op edits", "noOpEdits"],
 		["Reverted mutations (INFERRED)", "revertedMutations"],
 		["Revision churn (INFERRED)", "revisionChurn"],
+		["Correlated edit applications", "correlatedEditApplications"],
+		["Uncorrelated edit applications", "uncorrelatedEditApplications"],
+		["Unfulfilled edit attempts", "unfulfilledEditAttempts"],
 		["Shell calls (separate activity)", "shellCallCount"],
 		["Shell calls without error", "shellCallSuccessCount"],
 		["Accepted executable gates", "acceptedExecutableGates"],
@@ -2376,11 +2646,11 @@ function renderMarkdown(summary: ComparisonSummary): string {
 	);
 	lines.push("");
 	if (
-		summary.editingEfficiency.m3.editOriginUnavailable ||
-		summary.editingEfficiency.m31.editOriginUnavailable
+		summary.editingEfficiency.m3.editOriginUnobserved ||
+		summary.editingEfficiency.m31.editOriginUnobserved
 	) {
 		lines.push(
-			"> A run with source changes but no native edit observations is reported as `FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE`: the trace cannot attribute the change, so it does not report zero edits as if the run made no changes.",
+			"> A run with shell activity but no native edit telemetry is reported as `EDIT_ORIGIN_UNOBSERVED`: the trace observes the WRITE LAYER, not the workspace, so it cannot establish that any file changed. The origin is UNOBSERVED — never reported as an observed file change.",
 		);
 		lines.push("");
 	}

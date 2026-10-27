@@ -633,6 +633,22 @@ export interface ModelBehaviorTraceEditFileMutation {
  */
 export interface ModelBehaviorTraceEditApplication {
 	/**
+	 * The runtime tool-call identity that produced this observation.
+	 *
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01: this is the
+	 * ONLY authority that joins an application/failure to its originating
+	 * `edit_attempt`. The runtime stamps the identity into the trusted
+	 * tool-context metadata and the executor forwards it verbatim, so the
+	 * join is an exact identity match — never a timestamp proximity or an
+	 * array adjacency.
+	 *
+	 * ABSENT when the executor was invoked without a trusted identity (a
+	 * sink attached outside the runtime's tool context). Such an observation
+	 * stays UNVERIFIED: it is counted on its own, but it is never paired
+	 * with an attempt.
+	 */
+	readonly toolCallId?: string;
+	/**
 	 * The native editing tool that performed the write: `editor` or
 	 * `apply_patch`.
 	 *
