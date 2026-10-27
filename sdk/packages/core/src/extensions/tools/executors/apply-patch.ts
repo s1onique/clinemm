@@ -21,6 +21,12 @@ import {
 	type PatchWarning,
 } from "./apply-patch-parser";
 import {
+	classifyEditFailure,
+	countPatchTargets,
+	type EditObservation,
+	readEditObservation,
+} from "./edit-observation";
+import {
 	detectLineEnding,
 	type LineEnding,
 	normalizeLineEndings,
@@ -304,24 +310,51 @@ async function applyChanges(
 	cwd: string,
 	encoding: BufferEncoding,
 	restrictToCwd: boolean,
+	observation?: EditObservation,
 ): Promise<string[]> {
 	const touched: string[] = [];
 
 	for (const [filePath, change] of Object.entries(changes)) {
 		const sourceAbsPath = resolveFilePath(cwd, filePath, restrictToCwd);
 		switch (change.type) {
-			case PatchActionType.DELETE:
+			case PatchActionType.DELETE: {
+				const pre = observation
+					? await observation.measurePreWrite(sourceAbsPath, change.oldContent)
+					: undefined;
 				await fs.rm(sourceAbsPath, { force: true });
+				if (observation && pre) {
+					const post = await observation.measurePostWrite(
+						sourceAbsPath,
+						undefined,
+					);
+					observation.recordMutation(pre, post, {
+						removed: (change.oldContent ?? "").split("\n").length,
+					});
+				}
 				touched.push(`${filePath}: [deleted]`);
 				break;
-			case PatchActionType.ADD:
+			}
+			case PatchActionType.ADD: {
 				if (change.newContent === undefined) {
 					throw new DiffError(`Cannot create ${filePath} with no content`);
 				}
+				const pre = observation
+					? await observation.measurePreWrite(sourceAbsPath, undefined)
+					: undefined;
 				await fs.mkdir(path.dirname(sourceAbsPath), { recursive: true });
 				await fs.writeFile(sourceAbsPath, change.newContent, { encoding });
+				if (observation && pre) {
+					const post = await observation.measurePostWrite(
+						sourceAbsPath,
+						change.newContent,
+					);
+					observation.recordMutation(pre, post, {
+						added: change.newContent.split("\n").length,
+					});
+				}
 				touched.push(filePath);
 				break;
+			}
 			case PatchActionType.UPDATE: {
 				if (change.newContent === undefined) {
 					throw new DiffError(
@@ -335,12 +368,41 @@ async function applyChanges(
 						change.movePath,
 						restrictToCwd,
 					);
+					const pre = observation
+						? await observation.measurePreWrite(moveAbsPath, undefined)
+						: undefined;
 					await fs.mkdir(path.dirname(moveAbsPath), { recursive: true });
 					await fs.writeFile(moveAbsPath, change.newContent, { encoding });
 					await fs.rm(sourceAbsPath, { force: true });
+					if (observation && pre) {
+						const post = await observation.measurePostWrite(
+							moveAbsPath,
+							change.newContent,
+						);
+						observation.recordMutation(pre, post, {
+							added: change.newContent.split("\n").length,
+							removed: (change.oldContent ?? "").split("\n").length,
+						});
+					}
 					touched.push(`${filePath} -> ${change.movePath}`);
 				} else {
+					const pre = observation
+						? await observation.measurePreWrite(
+								sourceAbsPath,
+								change.oldContent,
+							)
+						: undefined;
 					await fs.writeFile(sourceAbsPath, change.newContent, { encoding });
+					if (observation && pre) {
+						const post = await observation.measurePostWrite(
+							sourceAbsPath,
+							change.newContent,
+						);
+						observation.recordMutation(pre, post, {
+							added: change.newContent.split("\n").length,
+							removed: (change.oldContent ?? "").split("\n").length,
+						});
+					}
 					touched.push(filePath);
 				}
 				break;
@@ -390,23 +452,77 @@ export function createApplyPatchExecutor(
 	return async (
 		input: ApplyPatchInput,
 		cwd: string,
-		_context: AgentToolContext,
+		context: AgentToolContext,
 	): Promise<string> => {
-		const { changes, fuzz } = await computePatchChanges(input.input, cwd, {
-			encoding,
-			restrictToCwd,
-		});
-		const touched = await applyChanges(changes, cwd, encoding, restrictToCwd);
+		// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the
+		// observation channel is OPTIONAL and inert when the trace is OFF.
+		const observation = readEditObservation(context.metadata, "apply_patch");
+		const patchText = input.input;
+		const targetCount = countPatchTargets(patchText);
 
-		const responseLines = [
-			"Successfully applied patch to the following files:",
-		];
-		for (const file of touched) {
-			responseLines.push(file);
+		if (observation) {
+			// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the RUNTIME
+			// is the sole reporter of the "edit requested → authorized"
+			// link, because only it knows the authorization state. The
+			// executor reports the "mutation applied" link — the only layer
+			// that can say what the write actually did.
+			observation.setRequestedFileCount(targetCount);
 		}
-		if (fuzz > 0) {
-			responseLines.push(`Note: Patch applied with fuzz factor ${fuzz}`);
+
+		try {
+			const { changes, fuzz } = await computePatchChanges(input.input, cwd, {
+				encoding,
+				restrictToCwd,
+			});
+			const touched = await applyChanges(
+				changes,
+				cwd,
+				encoding,
+				restrictToCwd,
+				observation,
+			);
+
+			observation?.reportApplication("applied", {
+				noOp: observation.fileMutations.every(
+					(mutation) =>
+						mutation.contentVersionPre !== undefined &&
+						mutation.contentVersionPre === mutation.contentVersionPost,
+				),
+				durationMs: observation.elapsedMs(),
+			});
+
+			const responseLines = [
+				"Successfully applied patch to the following files:",
+			];
+			for (const file of touched) {
+				responseLines.push(file);
+			}
+			if (fuzz > 0) {
+				responseLines.push(`Note: Patch applied with fuzz factor ${fuzz}`);
+			}
+			return responseLines.join("\n");
+		} catch (error) {
+			// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: a failure
+			// AFTER one or more files were written is a PARTIAL application.
+			// The observation already counted the files that were mutated, so
+			// the report says "1 of 2 files mutated" rather than "nothing
+			// changed".
+			const category = classifyEditFailure(error);
+			const outcome =
+				category === "timeout"
+					? "timed_out"
+					: category === "invalid_patch" ||
+							category === "hunk_mismatch" ||
+							category === "path_rejected" ||
+							category === "text_not_found" ||
+							category === "multiple_matches"
+						? "rejected"
+						: "failed";
+			observation?.reportApplication(outcome, {
+				failureCategory: category,
+				durationMs: observation.elapsedMs(),
+			});
+			throw error;
 		}
-		return responseLines.join("\n");
 	};
 }

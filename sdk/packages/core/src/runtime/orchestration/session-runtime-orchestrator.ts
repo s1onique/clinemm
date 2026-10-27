@@ -39,6 +39,7 @@ import {
 	type BasicLogger,
 	type ContributionRegistry,
 	createContributionRegistry,
+	EDIT_OBSERVATION_SINK_METADATA_KEY,
 	type ITelemetryService,
 	isLikelyAuthError,
 	type LegacyAgentUsage,
@@ -46,8 +47,8 @@ import {
 	type LoopDetectionConfig,
 	type Message,
 	type MessageWithMetadata,
-	type ModelInfo,
 	type ModelBehaviorTraceSink,
+	type ModelInfo,
 	mergeModelOptions,
 	modelSupportsToolCalling,
 	type ToolCallRecord,
@@ -78,8 +79,8 @@ import {
 	normalizeConnectionUpdate,
 } from "../config/connection-update";
 import {
-	type LoopDetectionVerdict,
 	LoopDetectionTracker,
+	type LoopDetectionVerdict,
 } from "../safety/loop-detection";
 import { MistakeTracker } from "../safety/mistake-tracker";
 import { isHostRuntimeControlMessage } from "../turn-queue/host-runtime-control-brand";
@@ -1198,6 +1199,20 @@ export class SessionRuntime {
 				modelSupportsImages:
 					modelInfo?.capabilities?.includes("images") ?? true,
 				...this.config.toolContextMetadata,
+				// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the
+				// edit-observation channel reaches the executor through the
+				// tool context metadata.
+				//
+				// The sink is added ONLY when the recorder is provably ON
+				// (`isTraceEnabled()` returns true), so the tracing-OFF path
+				// produces exactly the metadata it produced before this
+				// feature existed: no sink key, no extra allocation.
+				...(this.modelBehaviorTraceSink?.isTraceEnabled?.() === true &&
+				this.modelBehaviorTraceSink
+					? {
+							[EDIT_OBSERVATION_SINK_METADATA_KEY]: this.modelBehaviorTraceSink,
+						}
+					: {}),
 			},
 			hooks: this.createRuntimeHooks(),
 			prepareTurn: this.createRuntimePrepareTurn(modelInfo, tools),

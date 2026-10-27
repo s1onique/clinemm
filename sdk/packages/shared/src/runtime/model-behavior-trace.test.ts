@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
 	categorizeTraceTool,
 	classifyEvidenceBoundary,
-	ModelBehaviorTraceRecorder,
+	describeEditRequest,
 	MODEL_BEHAVIOR_TRACE_MAX_BYTES,
 	MODEL_BEHAVIOR_TRACE_MAX_RECORDS,
+	ModelBehaviorTraceRecorder,
 	normalizeTraceArguments,
 	sanitizePayload,
 } from "./model-behavior-trace";
@@ -318,5 +319,149 @@ describe("ModelBehaviorTraceRecorder", () => {
 	it("exposes the documented default bounds", () => {
 		expect(MODEL_BEHAVIOR_TRACE_MAX_RECORDS).toBe(8_192);
 		expect(MODEL_BEHAVIOR_TRACE_MAX_BYTES).toBe(4 * 1024 * 1024);
+	});
+});
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01 — recorder-level
+ * witnesses for the edit observation channel.
+ *
+ * Gates covered here:
+ *   EE01  The edit event kinds are recordable and DEFAULT OFF.
+ *   EE02  The file/path fingerprints are stable within one capture and
+ *         differ across captures.
+ *   EE03  The file/content fingerprints are OFF by default.
+ *   EE04  A recorded edit attempt never carries a raw path.
+ *   EE05  The edit request description is structural, not textual.
+ */
+describe("ModelBehaviorTraceRecorder — edit observation", () => {
+	it("EE01: the edit event kinds are recordable and default OFF", () => {
+		const recorder = makeRecorder();
+		// OFF: nothing is recorded, not even the edit events.
+		expect(
+			recorder.record("edit_attempt", {}, { toolName: "editor" }),
+		).toBeUndefined();
+		expect(
+			recorder.record("edit_application", {}, { outcome: "applied" }),
+		).toBeUndefined();
+		expect(
+			recorder.record(
+				"edit_failure",
+				{},
+				{ failureCategory: "text_not_found" },
+			),
+		).toBeUndefined();
+		expect(recorder.getRecordCount()).toBe(0);
+
+		// ON: the events are recorded with the normal correlation identity.
+		recorder.setEnabled(true);
+		const record = recorder.record(
+			"edit_application",
+			{ sessionId: "s1", runId: "r1" },
+			{
+				toolName: "editor",
+				outcome: "applied",
+				mutatedFileCount: 1,
+				unmutatedFileCount: 0,
+				noOp: false,
+				provenance: "REAL_PRODUCTION_SEAM",
+			},
+		);
+		expect(record).toBeDefined();
+		expect(record?.event).toBe("edit_application");
+		expect(record?.payload.mutatedFileCount).toBe(1);
+		expect(record?.payload.provenance).toBe("REAL_PRODUCTION_SEAM");
+	});
+
+	it("EE02: the file fingerprint is stable within a capture and differs across captures", async () => {
+		const first = makeRecorder({ fingerprintKey: "key-one" });
+		const second = makeRecorder({ fingerprintKey: "key-two" });
+		first.setEnabled(true);
+		second.setEnabled(true);
+
+		const a1 = await first.fingerprintFilePath("/workspace/src/a.ts");
+		const a2 = await first.fingerprintFilePath("/workspace/src/a.ts");
+		const b1 = await second.fingerprintFilePath("/workspace/src/a.ts");
+
+		expect(a1).toBeDefined();
+		expect(a1).toBe(a2);
+		// A different ephemeral key yields a different fingerprint, so a dump
+		// is not a cross-session rainbow table.
+		expect(a1).not.toBe(b1);
+		// The raw path NEVER appears in the fingerprint.
+		expect(a1).not.toContain("a.ts");
+		expect(a1).not.toContain("/workspace");
+	});
+
+	it("EE03: the file fingerprints are OFF by default", async () => {
+		const recorder = makeRecorder();
+		expect(await recorder.fingerprintFilePath("/a.ts")).toBeUndefined();
+		expect(await recorder.fingerprintFileContent("secret")).toBeUndefined();
+	});
+
+	it("EE04: a recorded edit attempt never carries a raw path", () => {
+		const recorder = makeRecorder();
+		recorder.setEnabled(true);
+		const record = recorder.record(
+			"edit_attempt",
+			{ sessionId: "s1" },
+			{
+				toolName: "editor",
+				toolCallId: "tc-1",
+				operation: "replace",
+				// The file identity is an opaque fingerprint.
+				fileIdentity: "0123456789abcdef0123456789abcdef",
+				targetCount: 1,
+				requestedChars: 12,
+				approvalOutcome: "approved",
+				executionInvoked: true,
+			},
+		);
+		expect(record).toBeDefined();
+		const serialized = JSON.stringify(record);
+		expect(serialized).not.toContain("/workspace");
+		expect(serialized).not.toContain(".ts");
+		expect(record?.payload.fileIdentity).toBe(
+			"0123456789abcdef0123456789abcdef",
+		);
+	});
+
+	it("EE05: the edit request description is structural, not textual", () => {
+		const editorShape = describeEditRequest("editor", {
+			path: "/workspace/src/a.ts",
+			old_text: "old",
+			new_text: "new",
+		});
+		expect(editorShape.operation).toBe("replace");
+		expect(editorShape.targetCount).toBe(1);
+		expect(editorShape.requestedChars).toBe(6);
+		expect(editorShape.resolvedPath).toBe("/workspace/src/a.ts");
+
+		const insertShape = describeEditRequest("editor", {
+			path: "/a.ts",
+			insert_line: 3,
+			new_text: "x",
+		});
+		expect(insertShape.operation).toBe("insert");
+
+		const createShape = describeEditRequest("editor", {
+			path: "/a.ts",
+			new_text: "x",
+		});
+		expect(createShape.operation).toBe("create");
+
+		const patchShape = describeEditRequest("apply_patch", {
+			input: [
+				"*** Update File: a.ts",
+				"@@",
+				" a",
+				"+b",
+				"*** Add File: b.ts",
+				"+c",
+			].join("\n"),
+		});
+		expect(patchShape.operation).toBe("update");
+		expect(patchShape.targetCount).toBe(2);
+		expect(patchShape.requestedChars).toBeGreaterThan(0);
 	});
 });

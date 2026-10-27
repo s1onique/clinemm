@@ -32,6 +32,7 @@ import type {
 	ControlPlaneOutcome,
 	LiveAgentRuntimeEvent,
 	LiveAgentRuntimeStateSnapshot,
+	ModelBehaviorTraceEditApprovalOutcome,
 	ProviderErrorClass,
 	TelemetryProperties,
 	ToolApprovalResult,
@@ -43,7 +44,12 @@ import {
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,
+	describeEditRequest,
+	EDIT_OBSERVATION_APPROVAL_METADATA_KEY,
+	EDIT_OBSERVATION_IDENTITY_METADATA_KEY,
+	EDIT_OBSERVATION_SINK_METADATA_KEY,
 	estimateTokens,
+	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
 	mergeModelOptions,
 	normalizeJsonLikeStringsForSchema,
 	omitUndefinedValues,
@@ -299,6 +305,20 @@ interface PreparedToolExecution {
 	tool?: AgentTool;
 	input: unknown;
 	skipReason?: string;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * The authorization state observed at the executor boundary, recorded
+	 * STRUCTURALLY (never inferred from a message string).
+	 *
+	 * - `approved` — the runtime authorized the call.
+	 * - `rejected` — the runtime DENIED the call.
+	 * - `skipped` — the call never reached the authorization step because
+	 *   it was structurally ineligible (unknown tool, schema-invalid input,
+	 *   policy-disabled tool, pre-execution recovery breaker).
+	 * - `unavailable` — the state could not be observed.
+	 */
+	approvalOutcome?: ModelBehaviorTraceEditApprovalOutcome;
 	/**
 	 * C1.2: typed control-plane signal observed at the boundary, if any.
 	 * Set by `prepareToolExecution` from STRUCTURAL evidence (host DENY
@@ -2684,6 +2704,134 @@ export class AgentRuntime {
 	}
 
 	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * Build the metadata bag handed to the tool executor.
+	 *
+	 * The host's own `toolContextMetadata` is passed through UNCHANGED.
+	 * The trace sink and the correlation identity are ADDED only when a
+	 * sink is attached, so the tracing-OFF path produces exactly the same
+	 * metadata object it produced before this feature existed.
+	 */
+	private buildToolContextMetadata(
+		toolCallId: string,
+		approvalOutcome: ModelBehaviorTraceEditApprovalOutcome,
+	): Record<string, unknown> | undefined {
+		const hostMetadata = this.config.toolContextMetadata;
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink) {
+			return hostMetadata;
+		}
+		const identity = this.modelBehaviorTraceIdentity();
+		return {
+			...(hostMetadata ?? {}),
+			[EDIT_OBSERVATION_SINK_METADATA_KEY]: sink,
+			[EDIT_OBSERVATION_IDENTITY_METADATA_KEY]: {
+				...identity,
+				toolCallId,
+			},
+			// The runtime is the authority for the authorization state; the
+			// executor cannot infer it, so it is handed down here.
+			[EDIT_OBSERVATION_APPROVAL_METADATA_KEY]: approvalOutcome,
+		};
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * Report the "edit requested → authorized" link for a native edit tool.
+	 *
+	 * Only `editor` and `apply_patch` are native editing tools, and they
+	 * are MUTUALLY EXCLUSIVE in the tool registry: when the `editor`
+	 * executor is present the `apply_patch` tool is not registered at all
+	 * (see `definitions.ts`). A run therefore uses exactly one of them,
+	 * and the trace records which one was actually available.
+	 *
+	 * The observation is STRUCTURAL:
+	 *   - the operation comes from the tool INPUT SHAPE,
+	 *   - the target count and requested size are COUNTS and LENGTHS,
+	 *   - the file identity is an ephemeral fingerprint of the resolved
+	 *     path computed by the sink (which owns the key).
+	 *
+	 * No path, no text, no patch body is ever handed to the sink.
+	 */
+	private async observeEditAttempt(
+		prepared: PreparedToolExecution,
+	): Promise<void> {
+		const sink = this.config.modelBehaviorTraceSink;
+		const handler = sink?.onEditAttempt;
+		if (!handler) {
+			return;
+		}
+		const toolName = prepared.toolCall.toolName;
+		if (toolName !== "editor" && toolName !== "apply_patch") {
+			return;
+		}
+		try {
+			const shape = describeEditRequest(toolName, prepared.input);
+			const fileIdentity = await this.fingerprintEditPath(shape.resolvedPath);
+			handler({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					toolCallId: prepared.toolCall.toolCallId,
+					toolName,
+					operation: shape.operation,
+					fileIdentity: fileIdentity ?? MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
+					targetCount: shape.targetCount,
+					requestedChars: shape.requestedChars,
+					approvalOutcome: prepared.approvalOutcome ?? "unavailable",
+					// The C1.2 authority: `toolExecutionInvoked` is set
+					// IMMEDIATELY before `tool.execute(...)`. At the tool-start
+					// boundary the executor has NOT run yet, so the attempt
+					// reports "not yet invoked"; the executor's own
+					// application event is the authority for what happened.
+					executionInvoked: false,
+				},
+			});
+		} catch {
+			// Failure isolation: instrumentation NEVER affects an edit.
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * Compute the ephemeral fingerprint of a resolved path.
+	 *
+	 * Returns `undefined` when tracing is provably OFF, so the disabled
+	 * path performs NO fingerprint computation and NO extra file read.
+	 */
+	private async fingerprintEditPath(
+		resolvedPath: string | undefined,
+	): Promise<string | undefined> {
+		if (resolvedPath === undefined) {
+			return undefined;
+		}
+		const sink = this.config.modelBehaviorTraceSink;
+		const handler = sink?.fingerprintFilePath;
+		if (!handler) {
+			return undefined;
+		}
+		try {
+			const result = handler(resolvedPath);
+			const fingerprint = result instanceof Promise ? await result : result;
+			if (fingerprint === undefined) {
+				return undefined;
+			}
+			// DEFENCE IN DEPTH: the sink's contract is to return ONLY a
+			// keyed digest. A sink that echoed the path back would leak the
+			// filesystem layout into the trace, so such a value is discarded
+			// and the identity is reported as unavailable instead.
+			if (fingerprint.includes(resolvedPath)) {
+				return undefined;
+			}
+			return fingerprint;
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
 	 * Report a tool execution boundary observed by the runtime.
 	 *
 	 * `origin` distinguishes a MODEL-REQUESTED tool call from a runtime
@@ -3185,6 +3333,11 @@ export class AgentRuntime {
 		 * NEVER read from `toolCall.metadata` (partially untrusted).
 		 */
 		let mandatorySeatbeltExecution: boolean | undefined;
+		// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the
+		// authorization state is tracked STRUCTURALLY so the edit trace can
+		// distinguish "authorized then executed" from "denied" from
+		// "never reached authorization".
+		let approvalOutcome: ModelBehaviorTraceEditApprovalOutcome = "unavailable";
 		const metadata =
 			toolCall.metadata &&
 			typeof toolCall.metadata === "object" &&
@@ -3302,6 +3455,7 @@ export class AgentRuntime {
 				// generic skip path; classifier falls through to
 				// `runtime_skipped` via Priority 4.
 				skipReason = `Tool "${toolCall.toolName}" is disabled by policy`;
+				approvalOutcome = "skipped";
 			} else if (policy.autoApprove === false) {
 				const approval = await this.requestToolApproval(
 					toolCall,
@@ -3311,6 +3465,7 @@ export class AgentRuntime {
 				if (!approval.approved) {
 					// C1.2: classify the reason structurally. Host DENY
 					// wins over user reject per CORRECTION04 invariant.
+					approvalOutcome = "rejected";
 					controlPlaneOutcome = selectControlPlaneOutcome({
 						hostDenied: approval.decision?.kind === "deny",
 						userRejected: true,
@@ -3341,6 +3496,9 @@ export class AgentRuntime {
 				// denied invocations never carry authority forward. When
 				// approval was denied (above branch), we deliberately skip
 				// this capture so no authority crosses the seam.
+				if (approval.approved) {
+					approvalOutcome = "approved";
+				}
 				if (approval.approved && approval.executionCapability) {
 					executionCapability = approval.executionCapability;
 				}
@@ -3365,13 +3523,26 @@ export class AgentRuntime {
 				if (approval.approved && approval.mandatorySeatbeltExecution === true) {
 					mandatorySeatbeltExecution = true;
 				}
+			} else {
+				// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: an
+				// auto-approved tool needs no explicit approval round-trip,
+				// but the runtime DID authorize the call. Reporting
+				// "unavailable" here would misdescribe an authorized edit.
+				approvalOutcome = "approved";
 			}
+		} else {
+			// The call never reached the authorization step: the tool was
+			// unknown, the input was invalid, the tool was blocked by a
+			// runtime hook, or the call was intercepted before the policy
+			// chain. It is STRUCTURALLY skipped, not merely unobserved.
+			approvalOutcome = "skipped";
 		}
 		return {
 			toolCall: { ...toolCall, input },
 			tool,
 			input,
 			skipReason,
+			approvalOutcome,
 			controlPlaneOutcome,
 			executionCapability,
 			commandExecutionPlan,
@@ -3490,6 +3661,22 @@ export class AgentRuntime {
 				? { execution: prepared.toolCall.execution }
 				: {}),
 		});
+		// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: report the
+		// "edit requested → authorized" link.
+		//
+		// The RUNTIME is the sole reporter of the attempt, because only it
+		// knows the authorization state: the executor cannot tell whether a
+		// call was approved, denied, policy-skipped or never reached
+		// authorization at all.
+		//
+		// The EXECUTOR reports the "mutation applied" link separately, and
+		// it is the only layer that can resolve the requested path into the
+		// identity the APPLICATION event records.
+		//
+		// The payload is STRUCTURE only: no path, no old/new text, no patch
+		// body. The file identity is an ephemeral fingerprint computed by the
+		// sink from the REQUESTED path.
+		await this.observeEditAttempt(prepared);
 
 		let result: AgentToolResult;
 		/**
@@ -3617,7 +3804,15 @@ export class AgentRuntime {
 					iteration: this.state.iteration,
 					toolCallId: prepared.toolCall.toolCallId,
 					signal: this.abortController?.signal,
-					metadata: this.config.toolContextMetadata,
+					// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the
+					// edit-observation channel reaches the executor through the
+					// tool context metadata. When the trace is OFF the sink is
+					// absent, so the executor's observation is inert and no extra
+					// read, fingerprint or allocation happens.
+					metadata: this.buildToolContextMetadata(
+						prepared.toolCall.toolCallId,
+						prepared.approvalOutcome ?? "unavailable",
+					),
 					// ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
 					// C2 plumbing: closed runtime-owned authority slot. Stamped
 					// from `prepared.executionCapability`, which is populated

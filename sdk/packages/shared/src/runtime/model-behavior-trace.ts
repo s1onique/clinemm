@@ -117,6 +117,25 @@ export type ModelBehaviorTraceEvent =
 	| "model_request_abort"
 	| "tool_start"
 	| "tool_finish"
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * A native edit was REQUESTED. This event says nothing about whether
+	 * the file was modified.
+	 */
+	| "edit_attempt"
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * The write layer reported the ACTUAL result of an edit attempt.
+	 */
+	| "edit_application"
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * An edit attempt failed, with a STRUCTURAL failure category.
+	 */
+	| "edit_failure"
 	| "loop_verdict"
 	| "compaction_diagnostics"
 	| "compaction_completed"
@@ -480,6 +499,383 @@ export type ModelBehaviorTraceToolCategory =
 	| "command"
 	| "other";
 
+// =============================================================================
+// Edit observation schema
+// =============================================================================
+//
+// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01
+//
+// The edit chain is:
+//
+//   edit requested → authorized → executor invoked → mutation applied
+//     → file revision observed → subsequent revision → verification
+//
+// Each link has a DIFFERENT authority, and the trace records them as
+// SEPARATE events so a generic "tool succeeded" can never be mistaken for
+// "a source file was actually modified".
+//
+// PRIVACY: nothing below carries a raw path, a raw content hash of user
+// data, old/new text, a patch body, or a command. File identity is an
+// EPHEMERAL keyed fingerprint that is stable within ONE capture and is not
+// comparable across captures.
+
+/**
+ * The structural kind of edit the model requested.
+ *
+ * Derived from the TOOL INPUT SHAPE (never from model prose), so the
+ * classification is reproducible.
+ */
+export type ModelBehaviorTraceEditOperation =
+	| "create"
+	| "replace"
+	| "insert"
+	| "update"
+	| "delete"
+	| "move";
+
+/**
+ * The authorization state of an edit at the moment the executor boundary
+ * was reached.
+ *
+ * - `approved` — the runtime authorized the tool call.
+ * - `rejected` — the runtime DENIED the tool call (user or host policy).
+ * - `skipped` — the runtime never asked for authorization because the call
+ *   was structurally ineligible (unknown tool, schema-invalid input,
+ *   policy-disabled tool, pre-execution recovery breaker).
+ * - `unavailable` — the authorization state could not be observed.
+ */
+export type ModelBehaviorTraceEditApprovalOutcome =
+	| "approved"
+	| "rejected"
+	| "skipped"
+	| "unavailable";
+
+/**
+ * The structural classification of an edit failure.
+ *
+ * These categories are produced from TYPED executor results (the SDK's
+ * `DiffError` for patch problems, the editor executor's own typed
+ * rejections) — NEVER by substring-searching model-generated error prose.
+ */
+export type ModelBehaviorTraceEditFailureCategory =
+	| "text_not_found"
+	| "multiple_matches"
+	| "invalid_patch"
+	| "hunk_mismatch"
+	| "path_rejected"
+	| "permission_denied"
+	| "approval_rejected"
+	| "timeout"
+	| "runtime_abort"
+	| "unknown";
+
+/**
+ * The outcome of the write attempt itself.
+ *
+ * - `applied` — at least one file was actually mutated.
+ * - `rejected` — the executor refused the edit (e.g. ambiguous match).
+ * - `failed` — the executor ran and the write did not complete.
+ * - `timed_out` — the executor exceeded its timeout.
+ */
+export type ModelBehaviorTraceEditApplicationOutcome =
+	| "applied"
+	| "rejected"
+	| "failed"
+	| "timed_out";
+
+/**
+ * The provenance of a recorded fact.
+ *
+ * - `REAL_PRODUCTION_SEAM` — observed at the layer that performs the write.
+ * - `INFERRED` — a heuristic derived from correlated observations.
+ */
+export type ModelBehaviorTraceEvidenceProvenance =
+	| "REAL_PRODUCTION_SEAM"
+	| "INFERRED";
+
+/**
+ * One observed file mutation, reported by the layer that performed the write.
+ *
+ * The `contentVersion` pair is an EPHEMERAL keyed fingerprint of the file's
+ * bytes: `pre` is the version observed before the write, `post` the version
+ * observed after it. Equal pre/post values mean the write was a NO-OP.
+ */
+export interface ModelBehaviorTraceEditFileMutation {
+	/**
+	 * Ephemeral HMAC of the resolved path. Never the path itself.
+	 *
+	 * ABSENT when the sink could not compute it; the record then says the
+	 * identity is unavailable rather than inventing one.
+	 */
+	readonly fileIdentity?: string;
+	/** Ephemeral fingerprint of the file content BEFORE the write. */
+	readonly contentVersionPre?: string;
+	/** Ephemeral fingerprint of the file content AFTER the write. */
+	readonly contentVersionPost?: string;
+	/** Approximate lines added, when safely computable. */
+	readonly linesAdded?: number;
+	/** Approximate lines removed, when safely computable. */
+	readonly linesRemoved?: number;
+	/**
+	 * True when the measurement was skipped because the file exceeded the
+	 * instrumentation's size limit. The write still happened; only the
+	 * measurement was skipped.
+	 */
+	readonly measurementSkipped?: "MEASUREMENT_SKIPPED_SIZE_LIMIT";
+}
+
+/**
+ * The observed result of ONE edit attempt.
+ *
+ * `mutatedFileCount` and `requestedFileCount` are kept separate so a
+ * PARTIALLY applied multi-file patch is reported accurately: a failure
+ * after the first file was written is NOT "zero applied changes".
+ */
+export interface ModelBehaviorTraceEditApplication {
+	/**
+	 * The native editing tool that performed the write: `editor` or
+	 * `apply_patch`.
+	 *
+	 * The two are MUTUALLY EXCLUSIVE in the tool registry, so this field
+	 * records WHICH native editing tool was actually available to the
+	 * model in this run.
+	 */
+	readonly toolName?: string;
+	/** The structural outcome of the write attempt. */
+	readonly outcome: ModelBehaviorTraceEditApplicationOutcome;
+	/** Failure category, when the outcome was not `applied`. */
+	readonly failureCategory?: ModelBehaviorTraceEditFailureCategory;
+	/** How many files the edit REQUESTED. */
+	readonly requestedFileCount: number;
+	/** How many files were ACTUALLY mutated. */
+	readonly mutatedFileCount: number;
+	/**
+	 * How many requested files were NOT mutated.
+	 *
+	 * Derived from the executor's own accounting, not from a diff.
+	 */
+	readonly unmutatedFileCount: number;
+	/**
+	 * True when every requested file was written but the content is
+	 * byte-identical to before (a no-op edit).
+	 */
+	readonly noOp: boolean;
+	/** Per-file pre/post content-version fingerprints. */
+	readonly fileMutations?: readonly ModelBehaviorTraceEditFileMutation[];
+	/** Elapsed executor duration, in milliseconds. */
+	readonly durationMs?: number;
+	/** The provenance of this observation. */
+	readonly provenance: ModelBehaviorTraceEvidenceProvenance;
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+ *
+ * The tool-context metadata key that carries the trace sink into the
+ * executor.
+ *
+ * The runtime stamps the sink onto every `AgentToolContext`'s metadata,
+ * so the executor can reach the observation channel WITHOUT changing the
+ * public `EditorExecutor` / `ApplyPatchExecutor` signatures and WITHOUT
+ * adding a public protocol field.
+ */
+export const EDIT_OBSERVATION_SINK_METADATA_KEY =
+	"__clineModelBehaviorTraceSink";
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+ *
+ * The tool-context metadata key that carries the correlation identity
+ * (session / run / tool call) into the executor.
+ */
+export const EDIT_OBSERVATION_IDENTITY_METADATA_KEY =
+	"__clineModelBehaviorTraceIdentity";
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+ *
+ * The tool-context metadata key that carries the AUTHORIZATION OUTCOME
+ * into the executor.
+ *
+ * The runtime is the authority for whether a tool call was authorized:
+ * only it knows whether the host denied the call, whether the tool was
+ * policy-disabled, and whether the approval round-trip happened at all.
+ * The executor cannot infer any of that, so the runtime hands the
+ * structural answer down through the tool context.
+ */
+export const EDIT_OBSERVATION_APPROVAL_METADATA_KEY =
+	"__clineModelBehaviorTraceApprovalOutcome";
+
+/**
+ * The structural description of a requested native edit.
+ *
+ * Produced from the tool INPUT SHAPE alone. No content is retained.
+ */
+export interface ModelBehaviorTraceEditRequestShape {
+	/** The structural kind of edit requested. */
+	readonly operation: ModelBehaviorTraceEditOperation;
+	/** How many files the edit targeted. */
+	readonly targetCount: number;
+	/** The SIZE of the requested edit, in characters. */
+	readonly requestedChars: number;
+	/**
+	 * The path to fingerprint, when the input carries a resolvable path.
+	 *
+	 * The path is handed to the SINK (which owns the key) and is never
+	 * retained by the caller.
+	 */
+	readonly resolvedPath?: string;
+}
+
+/**
+ * Describe a native edit request from its tool input.
+ *
+ * `editor` input carries a `path`, an optional `old_text`, an optional
+ * `new_text` and an optional `insert_line`. `apply_patch` input carries a
+ * freeform patch body.
+ *
+ * The description is purely structural: the patch body is scanned for
+ * MARKERS and for the count of targets, but neither the body nor any
+ * path is retained in the result beyond the single path the caller needs
+ * to hand to the sink for fingerprinting.
+ */
+export function describeEditRequest(
+	toolName: string,
+	input: unknown,
+): ModelBehaviorTraceEditRequestShape {
+	if (toolName === "apply_patch") {
+		const patchText =
+			typeof input === "string"
+				? input
+				: typeof (input as { input?: unknown } | undefined)?.input === "string"
+					? (input as { input: string }).input
+					: "";
+		return {
+			operation: classifyPatchOperationShape(patchText),
+			targetCount: countPatchTargetsShape(patchText),
+			requestedChars: patchText.length,
+		};
+	}
+	const record = (input ?? {}) as {
+		path?: unknown;
+		old_text?: unknown;
+		new_text?: unknown;
+		insert_line?: unknown;
+	};
+	let requestedChars = 0;
+	if (typeof record.old_text === "string") {
+		requestedChars += record.old_text.length;
+	}
+	if (typeof record.new_text === "string") {
+		requestedChars += record.new_text.length;
+	}
+	return {
+		operation:
+			record.insert_line != null
+				? "insert"
+				: record.old_text == null
+					? "create"
+					: "replace",
+		targetCount: 1,
+		requestedChars,
+		...(typeof record.path === "string" ? { resolvedPath: record.path } : {}),
+	};
+}
+
+/**
+ * The structural kind of an `apply_patch` request.
+ *
+ * A patch MAY target several files with different actions. The reported
+ * operation is the DOMINANT one — the action that covers the most
+ * targets — so a mixed patch is not mislabelled by whichever marker
+ * happens to appear first in the text. Ties are broken by the fixed
+ * order below, which is deterministic.
+ */
+export function classifyPatchOperationShape(
+	patchText: string,
+): ModelBehaviorTraceEditOperation {
+	const counts = {
+		create: countPatchTargetsShape(patchText, "*** Add File:"),
+		update: countPatchTargetsShape(patchText, "*** Update File:"),
+		delete: countPatchTargetsShape(patchText, "*** Delete File:"),
+	};
+	if (
+		counts.update > 0 &&
+		counts.update >= counts.create &&
+		counts.update >= counts.delete
+	) {
+		return "update";
+	}
+	if (counts.create > 0 && counts.create > counts.delete) {
+		return "create";
+	}
+	if (counts.delete > 0) {
+		return "delete";
+	}
+	if (patchText.includes("*** Move to:")) {
+		return "move";
+	}
+	return "update";
+}
+
+/**
+ * How many distinct files an `apply_patch` request targets.
+ *
+ * When a `marker` is supplied only that action's targets are counted.
+ */
+export function countPatchTargetsShape(
+	patchText: string,
+	marker?: string,
+): number {
+	const markers = marker
+		? [marker]
+		: ["*** Add File:", "*** Update File:", "*** Delete File:"];
+	const targets = new Set<string>();
+	for (const line of patchText.split("\n")) {
+		const trimmed = line.trim();
+		for (const candidate of markers) {
+			if (trimmed.startsWith(candidate)) {
+				targets.add(trimmed.slice(candidate.length).trim());
+			}
+		}
+	}
+	return targets.size;
+}
+
+/**
+ * The STRUCTURE of one requested native edit.
+ *
+ * This is the "edit requested" link of the chain. It deliberately does NOT
+ * say whether the edit was applied.
+ */
+export interface ModelBehaviorTraceEditAttempt {
+	/** The actual runtime tool-call identity. */
+	readonly toolCallId: string;
+	/** `editor` or `apply_patch`. */
+	readonly toolName: string;
+	/** The structural kind of edit requested. */
+	readonly operation: ModelBehaviorTraceEditOperation;
+	/**
+	 * Ephemeral HMAC of the resolved path.
+	 *
+	 * For a MULTI-file patch this is the identity of the FIRST targeted
+	 * file; the per-file identities are reported in the application event.
+	 */
+	readonly fileIdentity: string;
+	/** How many files the edit targeted. */
+	readonly targetCount: number;
+	/**
+	 * The SIZE of the requested edit, in characters.
+	 *
+	 * This is a LENGTH, never the text itself.
+	 */
+	readonly requestedChars: number;
+	/** The authorization state observed at the executor boundary. */
+	readonly approvalOutcome: ModelBehaviorTraceEditApprovalOutcome;
+	/** Whether the executor was actually invoked. */
+	readonly executionInvoked: boolean;
+}
+
 /**
  * Classify a tool by NAME only (never by its arguments).
  *
@@ -721,11 +1117,66 @@ export class ModelBehaviorTraceRecorder {
 		}
 	}
 
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * Compute a stable-within-capture fingerprint of a RESOLVED FILE PATH.
+	 *
+	 * The path is NEVER retained: only the keyed digest leaves this method.
+	 * The digest is stable within ONE capture (so a file's revisions can be
+	 * correlated) and is NOT comparable across captures, because the key is
+	 * minted per recorder and never persisted.
+	 *
+	 * Returns `undefined` when the recorder is OFF. Never throws.
+	 */
+	async fingerprintFilePath(resolvedPath: string): Promise<string | undefined> {
+		if (!this.enabled) {
+			return undefined;
+		}
+		try {
+			// The digest is TRUNCATED to 32 hex characters so it always
+			// survives the payload sanitizer's length ceiling (a 64-char
+			// SHA-256 digest would sit exactly on the boundary). The
+			// truncation is still collision-free for a single capture's
+			// file set.
+			return (
+				await hmacSha256(this.fingerprintKey, `path:${resolvedPath}`)
+			).slice(0, 32);
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * Compute a stable-within-capture fingerprint of FILE CONTENT.
+	 *
+	 * Used to detect a file REVISION (content version changed) and a NO-OP
+	 * write (pre and post versions identical). The content is NEVER
+	 * retained: only the keyed digest leaves this method.
+	 *
+	 * Returns `undefined` when the recorder is OFF. Never throws.
+	 */
+	async fingerprintFileContent(content: string): Promise<string | undefined> {
+		if (!this.enabled) {
+			return undefined;
+		}
+		try {
+			// See `fingerprintFilePath`: truncated to stay under the
+			// sanitizer's length ceiling.
+			return (
+				await hmacSha256(this.fingerprintKey, `content:${content}`)
+			).slice(0, 32);
+		} catch {
+			return undefined;
+		}
+	}
+
 	/** The retained records, oldest first. */
 	getRecords(): readonly ModelBehaviorTraceRecord[] {
 		return this.records;
 	}
-
 	/** How many records are currently retained. */
 	getRecordCount(): number {
 		return this.records.length;
@@ -1029,6 +1480,33 @@ export interface ModelBehaviorTraceSink {
 		input: unknown,
 	) => Promise<string | undefined> | string | undefined;
 	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * Compute a privacy-preserving fingerprint of a RESOLVED FILE PATH.
+	 *
+	 * The SDK passes the resolved absolute path and receives only the
+	 * fingerprint. The implementation MUST NOT retain the path. The
+	 * fingerprint is an EPHEMERAL keyed HMAC: it is stable within ONE
+	 * capture (so a file's revisions can be correlated) and is NOT
+	 * comparable across captures (the key is per-recorder and never
+	 * persisted).
+	 */
+	fingerprintFilePath?: (
+		resolvedPath: string,
+	) => Promise<string | undefined> | string | undefined;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * Compute a privacy-preserving fingerprint of FILE CONTENT.
+	 *
+	 * Used to detect a file revision (content version) and a no-op write
+	 * (identical pre/post versions). The implementation MUST NOT retain
+	 * the content.
+	 */
+	fingerprintFileContent?: (
+		content: string,
+	) => Promise<string | undefined> | string | undefined;
+	/**
 	 * ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4).
 	 *
 	 * The EFFECTIVE model configuration observed at the boundary where the
@@ -1058,6 +1536,30 @@ export interface ModelBehaviorTraceSink {
 	onToolStart?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A tool call finished. */
 	onToolFinish?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * A native edit was REQUESTED by the model.
+	 *
+	 * The payload carries the request's STRUCTURE only — never a path,
+	 * never old/new text, never a patch body:
+	 * `toolCallId`, `toolName`, `operation`, `fileIdentity`,
+	 * `targetCount`, `requestedChars`, `approvalOutcome`,
+	 * `executionInvoked`.
+	 */
+	onEditAttempt?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * The write layer reported the ACTUAL result of an edit attempt.
+	 */
+	onEditApplication?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * An edit attempt failed, with a STRUCTURAL failure category.
+	 */
+	onEditFailure?: (observation: ModelBehaviorTraceObservation) => void;
 	/** The production loop detector returned a verdict. */
 	onLoopVerdict?: (observation: ModelBehaviorTraceObservation) => void;
 	/** The production compaction resolver produced its diagnostics. */

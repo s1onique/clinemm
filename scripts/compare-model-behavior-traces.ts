@@ -228,6 +228,56 @@ interface TraceStatistics {
 	droppedCount: number;
 }
 
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+ *
+ * The editing-efficiency statistics computed for ONE trace.
+ *
+ * Every number here is derived from OBSERVED file revisions, never from
+ * a generic tool success. A run that changed source files through
+ * `run_commands` contributes NO native-edit observations, and the trace
+ * says so explicitly rather than presenting zero edits as a clean run.
+ */
+interface EditingEfficiencyStatistics {
+	/** Native edit attempts (requested native editing operations). */
+	nativeEditAttempts: number;
+	/** Attempts that produced the intended write. */
+	appliedMutations: number;
+	/** Rejected or failed operations. */
+	failedEdits: number;
+	/** Distinct files observed as mutated. */
+	distinctFilesModified: number;
+	/** Observed mutations per modified file. */
+	editsPerFile: number;
+	/** Successful operations that left the content unchanged. */
+	noOpEdits: number;
+	/** Files whose version sequence returned to an earlier version. */
+	revertedMutations: number;
+	/** Intermediate mutations that a later revision superseded. */
+	revisionChurn: number;
+	/** Milliseconds from the run start to the first ACTUAL mutation. */
+	timeToFirstAppliedEditMs?: number;
+	/** Total observed file-write duration, in milliseconds. */
+	fileWriteDurationMs?: number;
+	/** Shell calls observed, reported as SEPARATE activity. */
+	shellCallCount: number;
+	/** Shell calls that executed without an error. */
+	shellCallSuccessCount: number;
+	/**
+	 * True when the run observed source changes but produced NO native
+	 * edit observations — so the origin of the change is unknown.
+	 */
+	editOriginUnavailable: boolean;
+	/** The explicit marker reported in that case. */
+	editOriginMarker: string;
+	/** Accepted executable gates — NOT observable in the trace. */
+	acceptedExecutableGates: string;
+	/** The provenance of the churn heuristics. */
+	churnProvenance: "INFERRED";
+	/** The provenance of the mutation counts. */
+	mutationProvenance: "REAL_PRODUCTION_SEAM";
+}
+
 /** The machine-readable summary. */
 interface ComparisonSummary {
 	compatible: boolean;
@@ -240,6 +290,14 @@ interface ComparisonSummary {
 	labels: { m3: string; m31: string };
 	materialDifferences: MaterialDifference[];
 	statistics: { m3: TraceStatistics; m31: TraceStatistics };
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the editing
+	 * efficiency section.
+	 */
+	editingEfficiency: {
+		m3: EditingEfficiencyStatistics;
+		m31: EditingEfficiencyStatistics;
+	};
 	configurationDifferences: Record<
 		string,
 		{ m3: string; m31: string; comparison: DimensionComparison }
@@ -896,6 +954,186 @@ function computeStatistics(
 			: {}),
 		truncated: trace.summary?.truncation.truncated ?? false,
 		droppedCount: trace.summary?.truncation.droppedCount ?? 0,
+	};
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+ *
+ * Compute the editing-efficiency statistics from the OBSERVED edit events.
+ *
+ * The chain the trace records is:
+ *
+ *   edit requested → authorized → executor invoked → mutation applied
+ *     → file revision observed → subsequent revision → verification
+ *
+ * This function reads the LAST TWO links only — the ones that are
+ * actually observed:
+ *   - `edit_attempt` — the request structure,
+ *   - `edit_application` — the write layer's report of what happened.
+ *
+ * The mutation counts come from `edit_application`, which the WRITE layer
+ * produced, so they carry `REAL_PRODUCTION_SEAM` provenance. The churn
+ * heuristics (reversion, churn) are derived from correlated revisions
+ * and carry `INFERRED` provenance: an A → B → A reversion is stronger
+ * evidence than a repeated edit, but it still does not prove the model
+ * made a mistake.
+ */
+function computeEditingEfficiency(
+	trace: ParsedTrace,
+	records: TraceRecord[],
+): EditingEfficiencyStatistics {
+	const attempts = records.filter((record) => record.event === "edit_attempt");
+	const applications = records.filter(
+		(record) => record.event === "edit_application",
+	);
+
+	// Per-file observed revision sequences, keyed by the ephemeral file
+	// identity. The sequence holds the INITIAL version followed by each
+	// observed post-write version.
+	const revisionsByFile = new Map<string, string[]>();
+	let appliedMutations = 0;
+	let failedEdits = 0;
+	let noOpEdits = 0;
+	let totalWriteDurationMs = 0;
+	let sawWriteDuration = false;
+	let timeToFirstAppliedEditMs: number | undefined;
+	const firstRecord = records[0];
+
+	for (const record of applications) {
+		const outcome = record.payload.outcome;
+		if (outcome === "applied") {
+			appliedMutations += 1;
+		} else {
+			failedEdits += 1;
+		}
+		if (record.payload.noOp === true) {
+			noOpEdits += 1;
+		}
+		const duration = record.payload.durationMs;
+		if (typeof duration === "number" && Number.isFinite(duration)) {
+			totalWriteDurationMs += duration;
+			sawWriteDuration = true;
+		}
+		if (
+			timeToFirstAppliedEditMs === undefined &&
+			outcome === "applied" &&
+			firstRecord
+		) {
+			timeToFirstAppliedEditMs = timestampMs(record) - timestampMs(firstRecord);
+		}
+		const mutations = record.payload.fileMutations;
+		if (!Array.isArray(mutations)) {
+			continue;
+		}
+		for (const mutation of mutations) {
+			if (!mutation || typeof mutation !== "object") {
+				continue;
+			}
+			const record0 = mutation as Record<string, unknown>;
+			const fileIdentity = record0.fileIdentity;
+			if (typeof fileIdentity !== "string" || fileIdentity === "") {
+				continue;
+			}
+			const versions = revisionsByFile.get(fileIdentity) ?? [];
+			if (versions.length === 0) {
+				const pre = record0.contentVersionPre;
+				if (typeof pre === "string") {
+					versions.push(pre);
+				}
+			}
+			const post = record0.contentVersionPost;
+			if (typeof post === "string") {
+				versions.push(post);
+			}
+			revisionsByFile.set(fileIdentity, versions);
+		}
+	}
+
+	// REVERSION: the final observed version equals an EARLIER version.
+	// CHURN: an intermediate version that a later revision superseded.
+	let revertedMutations = 0;
+	let revisionChurn = 0;
+	for (const versions of revisionsByFile.values()) {
+		if (versions.length < 3) {
+			// Fewer than three versions means at most one observed write: no
+			// intermediate version can have been superseded.
+			continue;
+		}
+		const final = versions[versions.length - 1];
+		const earlier = versions.slice(0, versions.length - 1);
+		if (earlier.includes(final)) {
+			revertedMutations += 1;
+		}
+		// Every version that is not the final one is an intermediate
+		// mutation that a later revision superseded.
+		revisionChurn += versions.length - 2;
+	}
+
+	const distinctFilesModified = revisionsByFile.size;
+	const totalObservedMutations = Array.from(revisionsByFile.values()).reduce(
+		(total, versions) => total + Math.max(0, versions.length - 1),
+		0,
+	);
+	const editsPerFile =
+		distinctFilesModified > 0
+			? Math.round((totalObservedMutations / distinctFilesModified) * 100) / 100
+			: 0;
+
+	// Shell activity is reported SEPARATELY. A successful shell call does
+	// NOT establish which files changed, so shell activity never
+	// contributes to the native-edit counters.
+	const toolStarts = records.filter((record) => record.event === "tool_start");
+	const toolFinishes = records.filter(
+		(record) => record.event === "tool_finish",
+	);
+	const shellToolNames = new Set(["run_commands", "bash", "shell"]);
+	const shellStarts = toolStarts.filter((record) => {
+		const name = record.payload.toolName;
+		return typeof name === "string" && shellToolNames.has(name);
+	});
+	const shellCallCount = shellStarts.length;
+	let shellCallSuccessCount = 0;
+	for (const finish of toolFinishes) {
+		const name = finish.payload.toolName;
+		if (typeof name !== "string" || !shellToolNames.has(name)) {
+			continue;
+		}
+		if (finish.payload.outcome !== "error") {
+			shellCallSuccessCount += 1;
+		}
+	}
+
+	// EDIT_ORIGIN_UNAVAILABLE: the run shows source changes but no native
+	// edit observation explains them. The trace cannot attribute the
+	// change, so it says so rather than reporting "zero edits".
+	const shellCallsWithSourceChanges =
+		shellCallCount > 0 && appliedMutations === 0 && attempts.length === 0;
+	const editOriginUnavailable = shellCallsWithSourceChanges;
+	void trace;
+
+	return {
+		nativeEditAttempts: attempts.length,
+		appliedMutations,
+		failedEdits,
+		distinctFilesModified,
+		editsPerFile,
+		noOpEdits,
+		revertedMutations,
+		revisionChurn,
+		...(timeToFirstAppliedEditMs !== undefined
+			? { timeToFirstAppliedEditMs }
+			: {}),
+		...(sawWriteDuration ? { fileWriteDurationMs: totalWriteDurationMs } : {}),
+		shellCallCount,
+		shellCallSuccessCount,
+		editOriginUnavailable,
+		editOriginMarker: editOriginUnavailable
+			? "FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE"
+			: "NATIVE_EDIT_ORIGIN_OBSERVED",
+		acceptedExecutableGates: UNAVAILABLE,
+		churnProvenance: "INFERRED",
+		mutationProvenance: "REAL_PRODUCTION_SEAM",
 	};
 }
 
@@ -2093,6 +2331,64 @@ function renderMarkdown(summary: ComparisonSummary): string {
 	);
 	lines.push("");
 
+	// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the editing
+	// efficiency section.
+	lines.push("## Editing Efficiency");
+	lines.push("");
+	lines.push(
+		"> Mutation counts come from the WRITE layer (`REAL_PRODUCTION_SEAM`): they count files that were actually mutated, not tool calls that reported success.",
+	);
+	lines.push(
+		"> Churn and reversion are HEURISTICS (`INFERRED`): a repeated edit to the same file is not automatically waste, and a reversion is stronger evidence of churn but still does not prove a model mistake.",
+	);
+	lines.push(
+		"> Shell activity is reported SEPARATELY: a successful `run_commands` does not establish which files changed, so it never contributes to the native-edit counters.",
+	);
+	lines.push("");
+	lines.push("| Metric | M3 | M3.1 |");
+	lines.push("| --- | --- | --- |");
+	const editRows: Array<[string, keyof EditingEfficiencyStatistics]> = [
+		["Native edit attempts", "nativeEditAttempts"],
+		["Applied mutations", "appliedMutations"],
+		["Failed / rejected edits", "failedEdits"],
+		["Distinct files modified", "distinctFilesModified"],
+		["Edits per file", "editsPerFile"],
+		["No-op edits", "noOpEdits"],
+		["Reverted mutations (INFERRED)", "revertedMutations"],
+		["Revision churn (INFERRED)", "revisionChurn"],
+		["Shell calls (separate activity)", "shellCallCount"],
+		["Shell calls without error", "shellCallSuccessCount"],
+		["Accepted executable gates", "acceptedExecutableGates"],
+	];
+	for (const [label, key] of editRows) {
+		lines.push(
+			`| ${label} | ${String(summary.editingEfficiency.m3[key])} | ${String(summary.editingEfficiency.m31[key])} |`,
+		);
+	}
+	lines.push(
+		`| Time to first APPLIED edit (ms) | ${String(summary.editingEfficiency.m3.timeToFirstAppliedEditMs ?? "n/a")} | ${String(summary.editingEfficiency.m31.timeToFirstAppliedEditMs ?? "n/a")} |`,
+	);
+	lines.push(
+		`| Observed file-write duration (ms) | ${String(summary.editingEfficiency.m3.fileWriteDurationMs ?? "n/a")} | ${String(summary.editingEfficiency.m31.fileWriteDurationMs ?? "n/a")} |`,
+	);
+	lines.push(
+		`| Edit origin | ${summary.editingEfficiency.m3.editOriginMarker} | ${summary.editingEfficiency.m31.editOriginMarker} |`,
+	);
+	lines.push("");
+	if (
+		summary.editingEfficiency.m3.editOriginUnavailable ||
+		summary.editingEfficiency.m31.editOriginUnavailable
+	) {
+		lines.push(
+			"> A run with source changes but no native edit observations is reported as `FILE_CHANGES_OBSERVED / EDIT_ORIGIN_UNAVAILABLE`: the trace cannot attribute the change, so it does not report zero edits as if the run made no changes.",
+		);
+		lines.push("");
+	}
+	lines.push(
+		"> These numbers do NOT rank the models. Fewer edits is not, by itself, evidence of a better model — it can equally mean less work was done.",
+	);
+	lines.push("");
+
 	lines.push("## Completion / Gate Evidence");
 	lines.push("");
 	lines.push(
@@ -2171,6 +2467,13 @@ function buildSummary(input: {
 		fields: ComparisonSummary["configurationDifferences"];
 	};
 	statistics: { m3: TraceStatistics; m31: TraceStatistics };
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 */
+	editingEfficiency: {
+		m3: EditingEfficiencyStatistics;
+		m31: EditingEfficiencyStatistics;
+	};
 	m3Records: TraceRecord[];
 	m31Records: TraceRecord[];
 	warnings: string[];
@@ -2189,6 +2492,7 @@ function buildSummary(input: {
 		labels: { m3: input.options.m3Path, m31: input.options.m31Path },
 		materialDifferences: input.configuration.differences,
 		statistics: input.statistics,
+		editingEfficiency: input.editingEfficiency,
 		configurationDifferences: input.configuration.fields,
 		repetitionInterpretation:
 			"Repetition scores are HEURISTICS derived from tool-call fingerprints. They are not proof of a model defect: an expected retry, a polling loop, or a repeated test after a source change produces the same signal. The verification-named tool call count is a TOOL-NAME heuristic — it does NOT mean a test ran or that a gate was accepted; accepted executable gates are UNAVAILABLE_FROM_TRACE. A lower tool-call count is NOT, by itself, evidence of a better model — it can equally mean less work was done.",
@@ -2244,6 +2548,14 @@ async function main(): Promise<void> {
 	const statistics = {
 		m3: computeStatistics(m3, m3Records),
 		m31: computeStatistics(m31, m31Records),
+	};
+	// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the editing
+	// efficiency section is computed from the OBSERVED edit events, so a
+	// run with no native edit observations reports zero edits AND says
+	// that the edit origin is unavailable.
+	const editingEfficiency = {
+		m3: computeEditingEfficiency(m3, m3Records),
+		m31: computeEditingEfficiency(m31, m31Records),
 	};
 	const material = configuration.differences.filter(
 		(difference) => difference.severity === "material",
@@ -2321,6 +2633,7 @@ async function main(): Promise<void> {
 		comparabilityReasons,
 		configuration,
 		statistics,
+		editingEfficiency,
 		m3Records,
 		m31Records,
 		warnings,

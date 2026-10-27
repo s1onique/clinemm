@@ -238,4 +238,79 @@ describe("model behavior trace runtime", () => {
 		// The fingerprint is privacy-preserving: it is NOT the argument.
 		expect(fingerprint).not.toContain("a.ts")
 	})
+
+	// -----------------------------------------------------------------------
+	// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01
+	// -----------------------------------------------------------------------
+
+	it("EE01: the edit channels are recorded and dumped through the SAME trace", async () => {
+		_resetModelBehaviorTrace()
+		setModelBehaviorTraceEnabled(true)
+		const context = makeContext()
+
+		const fileIdentity = await modelBehaviorTraceSink.fingerprintFilePath?.("/workspace/src/secret.ts")
+		const contentVersion = await modelBehaviorTraceSink.fingerprintFileContent?.("TOP-SECRET")
+		expect(fileIdentity).toBeTypeOf("string")
+		expect(contentVersion).toBeTypeOf("string")
+
+		modelBehaviorTraceSink.onEditAttempt?.({
+			sessionId: "s1",
+			runId: "r1",
+			payload: {
+				toolCallId: "tc-1",
+				toolName: "editor",
+				operation: "replace",
+				fileIdentity: fileIdentity as string,
+				targetCount: 1,
+				requestedChars: 10,
+				approvalOutcome: "approved",
+				executionInvoked: true,
+			},
+		})
+		modelBehaviorTraceSink.onEditApplication?.({
+			sessionId: "s1",
+			runId: "r1",
+			payload: {
+				toolName: "editor",
+				outcome: "applied",
+				requestedFileCount: 1,
+				mutatedFileCount: 1,
+				unmutatedFileCount: 0,
+				noOp: false,
+				durationMs: 3,
+				provenance: "REAL_PRODUCTION_SEAM",
+				fileMutations: [
+					{
+						fileIdentity: fileIdentity as string,
+						contentVersionPre: contentVersion as string,
+						contentVersionPost: contentVersion as string,
+					},
+				],
+			},
+		})
+
+		const records = getModelBehaviorTraceRecords()
+		expect(records).toHaveLength(2)
+		expect(records[0].event).toBe("edit_attempt")
+		expect(records[1].event).toBe("edit_application")
+		expect(records[1].payload.mutatedFileCount).toBe(1)
+		expect(records[1].payload.provenance).toBe("REAL_PRODUCTION_SEAM")
+
+		// The dump carries the edit events.
+		const dump = await dumpModelBehaviorTrace(context)
+		expect(dump.recordCount).toBe(2)
+		const dumped = await readFile(dump.filePath, "utf8")
+		expect(dumped).toContain('"event":"edit_attempt"')
+		expect(dumped).toContain('"event":"edit_application"')
+		// The raw path and the content NEVER appear.
+		expect(dumped).not.toContain("secret.ts")
+		expect(dumped).not.toContain("/workspace")
+		expect(dumped).not.toContain("TOP-SECRET")
+	})
+
+	it("EE02: the file fingerprints are UNAVAILABLE while the recorder is OFF", async () => {
+		_resetModelBehaviorTrace()
+		expect(await modelBehaviorTraceSink.fingerprintFilePath?.("/a.ts")).toBeUndefined()
+		expect(await modelBehaviorTraceSink.fingerprintFileContent?.("x")).toBeUndefined()
+	})
 })

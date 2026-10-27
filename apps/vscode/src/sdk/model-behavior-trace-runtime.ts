@@ -224,6 +224,54 @@ export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
 	onToolFinish: (observation) => {
 		recordModelBehaviorTrace("tool_finish", observation)
 	},
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * The ephemeral fingerprint of a resolved file path.
+	 *
+	 * The path is handed to the recorder, which owns the ephemeral key, and
+	 * ONLY the fingerprint comes back. The recorder never retains the path,
+	 * so a dump can never expose a filesystem layout.
+	 */
+	fingerprintFilePath: async (resolvedPath: string) => {
+		return await recorder.fingerprintFilePath(resolvedPath)
+	},
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * The ephemeral fingerprint of file content.
+	 *
+	 * Used to detect a file REVISION and a NO-OP write. The content is
+	 * handed to the recorder, which owns the ephemeral key, and ONLY the
+	 * fingerprint comes back.
+	 */
+	fingerprintFileContent: async (content: string) => {
+		return await recorder.fingerprintFileContent(content)
+	},
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * A native edit was REQUESTED.
+	 */
+	onEditAttempt: (observation) => {
+		recordModelBehaviorTrace("edit_attempt", observation)
+	},
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * The write layer reported the ACTUAL result of an edit attempt.
+	 */
+	onEditApplication: (observation) => {
+		recordModelBehaviorTrace("edit_application", observation)
+	},
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
+	 *
+	 * An edit attempt failed with a structural failure category.
+	 */
+	onEditFailure: (observation) => {
+		recordModelBehaviorTrace("edit_failure", observation)
+	},
 	onLoopVerdict: (observation) => {
 		recordModelBehaviorTrace("loop_verdict", observation)
 	},
