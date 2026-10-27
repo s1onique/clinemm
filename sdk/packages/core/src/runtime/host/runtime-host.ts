@@ -234,6 +234,18 @@ export function splitCoreSessionConfig(config: ClineCoreStartConfig): {
 							strategy: compaction.strategy,
 							preserveRecentTokens: compaction.preserveRecentTokens,
 							summarizer: compaction.summarizer,
+							// ACT-CLINEMM-MODEL-BEHAVIOR-LIVE-EVENT-COVERAGE01:
+							// the user-controlled operating ceiling MUST
+							// survive this split.
+							//
+							// This function rebuilds the `compaction` object
+							// field-by-field, so any field not listed here is
+							// silently dropped. `userContextCeiling` was
+							// missing, which is why every production compaction
+							// decision used the model's own 1048576-token budget
+							// instead of the session's configured 512000-token
+							// ceiling.
+							userContextCeiling: compaction.userContextCeiling,
 						},
 					}
 				: {}),

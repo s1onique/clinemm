@@ -912,6 +912,22 @@ export class LocalRuntimeHost implements RuntimeHost {
 			onAuthError,
 			knownModels: providerConfig.knownModels,
 			providerConfig,
+			// ACT-CLINEMM-MODEL-BEHAVIOR-LIVE-EVENT-COVERAGE01: forward the
+			// read-only model-behavior observation sink into the session
+			// runtime's `AgentConfig`.
+			//
+			// The sink is attached to the SESSION CONFIG (CoreSessionConfig),
+			// so the compaction / loop-verdict / run-terminated channels
+			// already fired — but the `AgentConfig` literal below used to
+			// DROP it, so `AgentRuntime` never received it and no model
+			// request or tool boundary was ever observed. That is exactly the
+			// installed-VSIX trace shape: compaction diagnostics present,
+			// model/tool events absent.
+			//
+			// The sink is never consulted for a decision — it is read-only
+			// observation — and it is undefined when the operator has tracing
+			// OFF, so the default path is unchanged.
+			modelBehaviorTraceSink: configWithProvider.modelBehaviorTraceSink,
 			thinking: configWithProvider.thinking,
 			reasoningEffort:
 				configWithProvider.reasoningEffort ?? providerConfig.reasoningEffort,
