@@ -272,6 +272,27 @@ export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
 	onEditFailure: (observation) => {
 		recordModelBehaviorTrace("edit_failure", observation)
 	},
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+	 *
+	 * The write layer resolved the DESTINATION of an edit: where the write
+	 * lands relative to the active workspace.
+	 *
+	 * This is the ONLY event that distinguishes a write inside the
+	 * workspace from one that landed outside it.
+	 */
+	onEditTargetResolved: (observation) => {
+		recordModelBehaviorTrace("edit_target_resolved", observation)
+	},
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3).
+	 *
+	 * The write layer independently verified a write by reading the
+	 * destination back from disk.
+	 */
+	onEditWriteVerification: (observation) => {
+		recordModelBehaviorTrace("edit_write_verification", observation)
+	},
 	onLoopVerdict: (observation) => {
 		recordModelBehaviorTrace("loop_verdict", observation)
 	},

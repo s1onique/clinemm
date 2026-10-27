@@ -41,15 +41,21 @@
  *     point swallows its own errors.
  */
 
+import * as fs from "node:fs/promises";
 import type {
 	ModelBehaviorTraceEditApplication,
 	ModelBehaviorTraceEditApplicationOutcome,
 	ModelBehaviorTraceEditAttempt,
+	ModelBehaviorTraceEditDestinationScope,
 	ModelBehaviorTraceEditFailureCategory,
 	ModelBehaviorTraceEditFileMutation,
 	ModelBehaviorTraceEditOperation,
+	ModelBehaviorTraceEditPathInputKind,
+	ModelBehaviorTraceEditTargetResolution,
+	ModelBehaviorTraceEditWriteVerification,
 	ModelBehaviorTraceObservation,
 	ModelBehaviorTraceSink,
+	ModelBehaviorTraceWorkspaceIdentity,
 } from "@cline/shared";
 import {
 	classifyPatchOperationShape,
@@ -57,8 +63,10 @@ import {
 	EDIT_OBSERVATION_APPROVAL_METADATA_KEY,
 	EDIT_OBSERVATION_IDENTITY_METADATA_KEY,
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
+	EDIT_OBSERVATION_WORKSPACE_METADATA_KEY,
 	type ModelBehaviorTraceEditApprovalOutcome,
 } from "@cline/shared";
+import type { EditTargetWorkspaceRoots } from "./edit-target-resolution";
 
 /**
  * The maximum file size, in bytes, whose CONTENT the instrumentation will
@@ -80,6 +88,7 @@ export {
 	EDIT_OBSERVATION_APPROVAL_METADATA_KEY,
 	EDIT_OBSERVATION_IDENTITY_METADATA_KEY,
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
+	EDIT_OBSERVATION_WORKSPACE_METADATA_KEY,
 } from "@cline/shared";
 
 /**
@@ -317,13 +326,78 @@ export class EditObservation {
 	private readonly mutations: ModelBehaviorTraceEditFileMutation[] = [];
 	private mutatedFileCount = 0;
 	private requestedFileCount = 0;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+	 *
+	 * The workspace identity the host handed down. Undefined when the host
+	 * supplied none — the destination scope is then `unknown`, never a
+	 * guess.
+	 */
+	private readonly workspace: ModelBehaviorTraceWorkspaceIdentity | undefined;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3).
+	 *
+	 * The content the executor INTENDED to write to the last destination.
+	 *
+	 * It is held so the read-back can report the intended fingerprint
+	 * alongside the independently measured one. It is never reported as
+	 * the actual content.
+	 */
+	private intendedContent: string | undefined;
 
 	constructor(
 		private readonly toolName: string,
 		private readonly sink: ModelBehaviorTraceSink | undefined,
 		private readonly identity: EditObservationIdentity | undefined,
 		private readonly approvalOutcome: ModelBehaviorTraceEditApprovalOutcome,
-	) {}
+		workspace?: ModelBehaviorTraceWorkspaceIdentity,
+	) {
+		this.workspace = workspace;
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+	 *
+	 * The workspace roots the destination is classified against.
+	 *
+	 * Exposed so the executor can resolve the destination against the SAME
+	 * identity the observation reports.
+	 */
+	get workspaceRoots(): EditTargetWorkspaceRoots {
+		return {
+			...(this.workspace?.workspaceRoot !== undefined
+				? { workspaceRoot: this.workspace.workspaceRoot }
+				: {}),
+			...(this.workspace?.otherWorkspaceRoots !== undefined
+				? { otherWorkspaceRoots: this.workspace.otherWorkspaceRoots }
+				: {}),
+			...(this.workspace?.benchmarkRoot !== undefined
+				? { benchmarkRoot: this.workspace.benchmarkRoot }
+				: {}),
+		};
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3).
+	 *
+	 * The content the executor intended to write to the last destination.
+	 */
+	get lastIntendedContent(): string | undefined {
+		return this.intendedContent;
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3).
+	 *
+	 * Record the content the executor is about to write to a destination.
+	 *
+	 * Held so the read-back can report the intended fingerprint alongside
+	 * the independently measured one. It is never reported AS the actual
+	 * content.
+	 */
+	recordIntendedContent(content: string | undefined): void {
+		this.intendedContent = content;
+	}
 
 	/**
 	 * True when there is anything to report to. When false, every method
@@ -333,7 +407,9 @@ export class EditObservation {
 		return (
 			this.sink?.onEditAttempt !== undefined ||
 			this.sink?.onEditApplication !== undefined ||
-			this.sink?.onEditFailure !== undefined
+			this.sink?.onEditFailure !== undefined ||
+			this.sink?.onEditTargetResolved !== undefined ||
+			this.sink?.onEditWriteVerification !== undefined
 		);
 	}
 
@@ -429,6 +505,157 @@ export class EditObservation {
 					}
 				: {}),
 		});
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+	 *
+	 * Report the RESOLVED destination of one edit.
+	 *
+	 * The destination's scope is computed by the caller (which owns the
+	 * resolved path) and reduced here to privacy-safe facts: the scope
+	 * itself, the input-path classification, the ephemeral workspace /
+	 * executor-cwd identities, whether the destination existed before the
+	 * operation, and whether it was under the designated benchmark root.
+	 *
+	 * The raw path is NEVER reported.
+	 */
+	async reportTargetResolution(resolved: {
+		readonly inputPathKind: ModelBehaviorTraceEditPathInputKind;
+		readonly absolutePath: string;
+		readonly destinationScope: ModelBehaviorTraceEditDestinationScope;
+		readonly canonicalized: boolean;
+		readonly existedBefore: boolean;
+		readonly underBenchmarkRoot?: boolean;
+	}): Promise<void> {
+		const handler = this.sink?.onEditTargetResolved;
+		if (!handler) {
+			return;
+		}
+		try {
+			const [workspaceIdentity, executorCwdIdentity, benchmarkIdentity] =
+				await Promise.all([
+					this.workspace?.workspaceRoot
+						? this.fingerprintPath(this.workspace.workspaceRoot)
+						: undefined,
+					this.fingerprintPath(resolved.absolutePath),
+					this.workspace?.benchmarkRoot
+						? this.fingerprintPath(this.workspace.benchmarkRoot)
+						: undefined,
+				]);
+			const resolution: ModelBehaviorTraceEditTargetResolution = {
+				...(this.identity?.toolCallId !== undefined
+					? { toolCallId: this.identity.toolCallId }
+					: {}),
+				toolName: this.toolName,
+				inputPathKind: resolved.inputPathKind,
+				...(workspaceIdentity !== undefined ? { workspaceIdentity } : {}),
+				...(executorCwdIdentity !== undefined ? { executorCwdIdentity } : {}),
+				destinationScope: resolved.destinationScope,
+				canonicalized: resolved.canonicalized,
+				destinationExistedBefore: resolved.existedBefore,
+				...(resolved.underBenchmarkRoot !== undefined
+					? { underBenchmarkRoot: resolved.underBenchmarkRoot }
+					: {}),
+				...(benchmarkIdentity !== undefined
+					? { benchmarkRootIdentity: benchmarkIdentity }
+					: {}),
+				provenance: "REAL_PRODUCTION_SEAM",
+			};
+			handler(this.observation({ ...resolution }));
+		} catch {
+			// Failure isolation: instrumentation NEVER affects an edit.
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3).
+	 *
+	 * Report the INDEPENDENT verification of one write.
+	 *
+	 * The verification is measured by READING THE DESTINATION BACK FROM
+	 * DISK, not by re-using the content the executor intended to write.
+	 * When the read-back cannot be performed the outcome is UNVERIFIED —
+	 * the observation says so explicitly rather than implying success.
+	 *
+	 * NOTHING here asserts durability: a successful write is not an fsync.
+	 */
+	async reportWriteVerification(options: {
+		readonly absolutePath: string;
+		readonly writeReturned: boolean;
+		readonly intendedContent?: string;
+	}): Promise<void> {
+		const handler = this.sink?.onEditWriteVerification;
+		if (!handler) {
+			return;
+		}
+		try {
+			const fileIdentity = await this.fingerprintPath(options.absolutePath);
+			const intendedFingerprint =
+				options.intendedContent !== undefined
+					? await this.fingerprintContent(options.intendedContent)
+					: undefined;
+
+			let readbackAttempted = true;
+			let fileExistsAfterWrite = false;
+			let actualContentFingerprint: string | undefined;
+			let measurementSkippedReason:
+				| "MEASUREMENT_SKIPPED_SIZE_LIMIT"
+				| "READBACK_UNAVAILABLE"
+				| "READBACK_NOT_ATTEMPTED"
+				| undefined;
+
+			try {
+				const actualContent = await fs.readFile(options.absolutePath, "utf-8");
+				fileExistsAfterWrite = true;
+				if (
+					Buffer.byteLength(actualContent, "utf8") >
+					EDIT_OBSERVATION_MAX_FILE_BYTES
+				) {
+					measurementSkippedReason = "MEASUREMENT_SKIPPED_SIZE_LIMIT";
+				} else {
+					actualContentFingerprint =
+						await this.fingerprintContent(actualContent);
+				}
+			} catch {
+				// The destination could not be read back. This is NOT
+				// evidence that the write failed, and it is NOT evidence
+				// that it succeeded: it is UNVERIFIED.
+				readbackAttempted = true;
+				measurementSkippedReason = "READBACK_UNAVAILABLE";
+			}
+
+			const readbackMatched =
+				actualContentFingerprint !== undefined &&
+				intendedFingerprint !== undefined
+					? actualContentFingerprint === intendedFingerprint
+					: undefined;
+
+			const verification: ModelBehaviorTraceEditWriteVerification = {
+				...(this.identity?.toolCallId !== undefined
+					? { toolCallId: this.identity.toolCallId }
+					: {}),
+				toolName: this.toolName,
+				...(fileIdentity !== undefined ? { fileIdentity } : {}),
+				writeReturned: options.writeReturned,
+				readbackAttempted,
+				...(readbackMatched !== undefined ? { readbackMatched } : {}),
+				fileExistsAfterWrite,
+				...(actualContentFingerprint !== undefined
+					? { actualContentFingerprint }
+					: {}),
+				...(intendedFingerprint !== undefined
+					? { intendedContentFingerprint: intendedFingerprint }
+					: {}),
+				...(measurementSkippedReason !== undefined
+					? { measurementSkippedReason }
+					: {}),
+				provenance: "REAL_PRODUCTION_SEAM",
+			};
+			handler(this.observation({ ...verification }));
+		} catch {
+			// Failure isolation: instrumentation NEVER affects an edit.
+		}
 	}
 
 	/**
@@ -647,11 +874,65 @@ export function readEditObservation(
 	const identity = metadata[EDIT_OBSERVATION_IDENTITY_METADATA_KEY] as
 		| EditObservationIdentity
 		| undefined;
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2): the host
+	// hands the workspace identity down so the executor can classify the
+	// destination. A malformed value is ignored — the destination scope
+	// then stays `unknown` rather than being guessed.
+	const workspace = readWorkspaceIdentity(
+		metadata[EDIT_OBSERVATION_WORKSPACE_METADATA_KEY],
+	);
 	const observation = new EditObservation(
 		toolName,
 		sink,
 		identity,
 		readEditApprovalOutcome(metadata),
+		workspace,
 	);
 	return observation.active ? observation : undefined;
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+ *
+ * Read the workspace identity the host handed down.
+ *
+ * A malformed or partial value yields `undefined` rather than a partial
+ * identity: a half-known workspace is worse than an unknown one, because
+ * it would make "outside the workspace" look like a verified fact.
+ */
+function readWorkspaceIdentity(
+	value: unknown,
+): ModelBehaviorTraceWorkspaceIdentity | undefined {
+	if (!value || typeof value !== "object") {
+		return undefined;
+	}
+	const record = value as Record<string, unknown>;
+	const workspaceRoot =
+		typeof record.workspaceRoot === "string" && record.workspaceRoot.trim()
+			? record.workspaceRoot
+			: undefined;
+	const otherWorkspaceRoots = Array.isArray(record.otherWorkspaceRoots)
+		? record.otherWorkspaceRoots.filter(
+				(item): item is string =>
+					typeof item === "string" && item.trim() !== "",
+			)
+		: undefined;
+	const benchmarkRoot =
+		typeof record.benchmarkRoot === "string" && record.benchmarkRoot.trim()
+			? record.benchmarkRoot
+			: undefined;
+	if (
+		workspaceRoot === undefined &&
+		(otherWorkspaceRoots === undefined || otherWorkspaceRoots.length === 0) &&
+		benchmarkRoot === undefined
+	) {
+		return undefined;
+	}
+	return {
+		...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+		...(otherWorkspaceRoots !== undefined && otherWorkspaceRoots.length > 0
+			? { otherWorkspaceRoots }
+			: {}),
+		...(benchmarkRoot !== undefined ? { benchmarkRoot } : {}),
+	};
 }

@@ -365,6 +365,179 @@ interface EditingEfficiencyStatistics {
 	mutationProvenance: "REAL_PRODUCTION_SEAM";
 }
 
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R4/R5).
+ *
+ * The retention classification of ONE observed edit target.
+ *
+ * - `RETAINED_CHANGED` — the target's final observed state differs from
+ *   its initial state and the target still exists.
+ * - `REVERTED` — the target's final observed state equals an EARLIER
+ *   observed state (A → B → A).
+ * - `DELETED` — the target no longer exists at the checkpoint.
+ * - `UNCHANGED` — the target was written but its content is unchanged.
+ * - `OUTSIDE_SCOPE` — the destination was resolved outside the
+ *   designated benchmark root.
+ * - `UNVERIFIED` — the outcome could not be established (no read-back, an
+ *   ambiguous identity, or a missing checkpoint).
+ */
+export type EditRetentionClassification =
+	| "RETAINED_CHANGED"
+	| "REVERTED"
+	| "DELETED"
+	| "UNCHANGED"
+	| "OUTSIDE_SCOPE"
+	| "UNVERIFIED";
+
+/**
+ * The workspace-progress summary of ONE trace.
+ *
+ * This section answers the question the previous editing-efficiency
+ * section could not: WHERE the writes went, and whether anything was
+ * actually RETAINED in the designated benchmark workspace.
+ */
+export interface WorkspaceProgressStatistics {
+	/** The number of `edit_target_resolved` observations. */
+	targetsResolved: number;
+	/**
+	 * The number of resolved targets whose destination was canonically
+	 * established to be INSIDE the active workspace.
+	 */
+	targetsInsideActiveWorkspace: number;
+	/**
+	 * The number of resolved targets whose destination was canonically
+	 * established to be OUTSIDE the active workspace.
+	 *
+	 * This is the number that was previously invisible: an out-of-workspace
+	 * write produced an `edit_application` record that was indistinguishable
+	 * from an in-workspace one.
+	 */
+	targetsOutsideActiveWorkspace: number;
+	/**
+	 * The number of resolved targets under a DIFFERENT known workspace
+	 * root.
+	 */
+	targetsInOtherWorkspace: number;
+	/**
+	 * The number of resolved targets whose scope could NOT be established
+	 * (the canonicalization failed, or no workspace identity was available).
+	 *
+	 * These are reported as `PATH_SCOPE_UNVERIFIED` — never as "inside".
+	 */
+	targetsScopeUnverified: number;
+	/**
+	 * The number of applied writes whose destination was resolved OUTSIDE
+	 * the active workspace.
+	 */
+	appliedWritesOutsideWorkspace: number;
+	/**
+	 * The number of applied writes whose destination was resolved INSIDE
+	 * the active workspace.
+	 */
+	appliedWritesInsideWorkspace: number;
+	/**
+	 * The number of writes that were INDEPENDENTLY verified by a
+	 * read-back from disk.
+	 */
+	independentlyVerifiedWrites: number;
+	/**
+	 * The number of writes whose read-back observed exactly the content
+	 * the executor intended to write.
+	 */
+	verifiedWritesMatchingIntended: number;
+	/**
+	 * The number of writes whose read-back observed DIFFERENT content
+	 * than the executor intended.
+	 */
+	verifiedWritesDivergingFromIntended: number;
+	/**
+	 * The number of writes that returned successfully but whose read-back
+	 * could not be performed — UNVERIFIED, never "succeeded".
+	 */
+	unverifiedWrites: number;
+	/**
+	 * The number of writes whose destination was ABSENT when the
+	 * read-back ran.
+	 *
+	 * A file created and then deleted lands here and is therefore never
+	 * counted as a retained change.
+	 */
+	writesWithDestinationAbsent: number;
+	/** The per-classification retention counts. */
+	retentionCounts: Record<EditRetentionClassification, number>;
+	/**
+	 * The number of observed targets that are inside the designated
+	 * benchmark root.
+	 */
+	trackedTargetCount: number;
+	/**
+	 * The number of observed targets that are OUTSIDE the designated
+	 * benchmark root.
+	 */
+	untrackedTargetCount: number;
+	/**
+	 * The number of observed targets whose benchmark-root membership could
+	 * not be established.
+	 */
+	ignoredTargetCount: number;
+	/**
+	 * The number of files the git index tracks inside the benchmark root.
+	 *
+	 * This is a GIT-SCOPED count, deliberately reported separately from
+	 * the filesystem-scoped target counts: "tracked" in git is not the
+	 * same question as "present in the tree".
+	 */
+	gitTrackedFileCount?: number;
+	/**
+	 * Milliseconds from the run start to the first write whose destination
+	 * was resolved INSIDE the active workspace.
+	 */
+	timeToFirstWriteInsideWorkspaceMs?: number;
+	/**
+	 * Milliseconds from the run start to the last RETAINED change.
+	 */
+	timeSinceLastRetainedChangeMs?: number;
+	/**
+	 * The number of tool calls observed since the last retained change.
+	 */
+	toolCallsSinceLastRetainedChange: number;
+	/** Native edit failures observed. */
+	nativeEditFailures: number;
+	/**
+	 * Edit attempts that produced no application observation.
+	 */
+	unfulfilledEditAttempts: number;
+	/** Shell calls observed. */
+	shellCallCount: number;
+	/**
+	 * Shell calls that executed without an error.
+	 */
+	shellCallSuccessCount: number;
+	/**
+	 * Shell activity that produced NO observed native mutation.
+	 *
+	 * The trace CANNOT attribute a filesystem change to a shell call, so
+	 * this is reported as activity, never as an observed mutation.
+	 */
+	shellActivityWithoutObservedMutation: number;
+	/**
+	 * True when the trace carries target-resolution evidence at all.
+	 *
+	 * False means the trace predates this feature, so every workspace
+	 * number below is UNAVAILABLE rather than zero.
+	 */
+	workspaceEvidenceAvailable: boolean;
+	/**
+	 * The marker for every workspace figure that the trace cannot
+	 * establish.
+	 */
+	workspaceEvidenceMarker: string;
+	/** Accepted executable gates — NOT observable in the trace. */
+	acceptedExecutableGates: string;
+	/** The provenance of the workspace figures. */
+	workspaceProvenance: "REAL_PRODUCTION_SEAM" | "INFERRED";
+}
+
 /** The machine-readable summary. */
 interface ComparisonSummary {
 	compatible: boolean;
@@ -384,6 +557,14 @@ interface ComparisonSummary {
 	editingEfficiency: {
 		m3: EditingEfficiencyStatistics;
 		m31: EditingEfficiencyStatistics;
+	};
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R5): the
+	 * workspace-progress section.
+	 */
+	workspaceProgress: {
+		m3: WorkspaceProgressStatistics;
+		m31: WorkspaceProgressStatistics;
 	};
 	configurationDifferences: Record<
 		string,
@@ -1340,6 +1521,464 @@ function computeEditingEfficiency(
 		acceptedExecutableGates: UNAVAILABLE,
 		churnProvenance: "INFERRED",
 		mutationProvenance: "REAL_PRODUCTION_SEAM",
+	};
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R4/R5).
+ *
+ * Compute the WORKSPACE PROGRESS of a trace.
+ *
+ * WHY THIS SECTION EXISTS
+ * -----------------------
+ * A benchmark run produced THIRTEEN applied native writes and ZERO
+ * retained workspace changes. The existing editing-efficiency section
+ * could not explain why, because it never learned WHERE the writes
+ * landed and never learned what was on disk afterwards.
+ *
+ * This section reads the two NEW evidence channels:
+ *
+ *   - `edit_target_resolved` — where each write landed, relative to the
+ *     active workspace;
+ *   - `edit_write_verification` — what an INDEPENDENT read-back observed
+ *     on disk after the write.
+ *
+ * HONESTY RULES
+ * -------------
+ *   - A destination whose scope could not be canonically established is
+ *     `PATH_SCOPE_UNVERIFIED`, never "inside the workspace".
+ *   - A write whose read-back could not be performed is UNVERIFIED,
+ *     never "succeeded".
+ *   - Shell activity is reported as ACTIVITY. The trace cannot attribute
+ *     a filesystem change to a shell call, so it never contributes to a
+ *     mutation count.
+ *   - The git-tracked file count is reported separately from the
+ *     filesystem-scoped target counts: "tracked by git" and "present in
+ *     the tree" are different questions.
+ */
+function computeWorkspaceProgress(
+	records: TraceRecord[],
+): WorkspaceProgressStatistics {
+	const resolutions = records.filter(
+		(record) => record.event === "edit_target_resolved",
+	);
+	const verifications = records.filter(
+		(record) => record.event === "edit_write_verification",
+	);
+	const applications = records.filter(
+		(record) => record.event === "edit_application",
+	);
+	const failures = records.filter((record) => record.event === "edit_failure");
+	const attempts = records.filter((record) => record.event === "edit_attempt");
+	const toolStarts = records.filter((record) => record.event === "tool_start");
+
+	const workspaceEvidenceAvailable = resolutions.length > 0;
+
+	/**
+	 * The scope of a resolved destination, read from the payload.
+	 *
+	 * An unrecognised scope is UNVERIFIED — never optimistically read as
+	 * "inside the workspace".
+	 */
+	const readScope = (
+		payload: Record<string, unknown>,
+	):
+		| "active_workspace"
+		| "other_workspace"
+		| "outside_workspace"
+		| "unknown" => {
+		const scope = payload.destinationScope;
+		if (
+			scope === "active_workspace" ||
+			scope === "other_workspace" ||
+			scope === "outside_workspace"
+		) {
+			return scope;
+		}
+		return "unknown";
+	};
+
+	/**
+	 * The benchmark-root membership of a resolved destination.
+	 *
+	 * `undefined` means the membership was not established (no benchmark
+	 * root was designated) — never "outside".
+	 */
+	const readUnderBenchmarkRoot = (
+		payload: Record<string, unknown>,
+	): boolean | undefined => {
+		const value = payload.underBenchmarkRoot;
+		return typeof value === "boolean" ? value : undefined;
+	};
+
+	// ------------------------------------------------------------------
+	// DESTINATION SCOPE
+	// ------------------------------------------------------------------
+	let targetsInsideActiveWorkspace = 0;
+	let targetsOutsideActiveWorkspace = 0;
+	let targetsInOtherWorkspace = 0;
+	let targetsScopeUnverified = 0;
+	let trackedTargetCount = 0;
+	let untrackedTargetCount = 0;
+	let ignoredTargetCount = 0;
+
+	const resolvedFileIdentities = new Set<string>();
+	for (const record of resolutions) {
+		const scope = readScope(record.payload);
+		switch (scope) {
+			case "active_workspace":
+				targetsInsideActiveWorkspace += 1;
+				break;
+			case "outside_workspace":
+				targetsOutsideActiveWorkspace += 1;
+				break;
+			case "other_workspace":
+				targetsInOtherWorkspace += 1;
+				break;
+			default:
+				targetsScopeUnverified += 1;
+				break;
+		}
+		const underBenchmarkRoot = readUnderBenchmarkRoot(record.payload);
+		if (underBenchmarkRoot === true) {
+			trackedTargetCount += 1;
+		} else if (underBenchmarkRoot === false) {
+			untrackedTargetCount += 1;
+		} else {
+			ignoredTargetCount += 1;
+		}
+		const fileIdentity = record.payload.fileIdentity;
+		if (typeof fileIdentity === "string" && fileIdentity !== "") {
+			resolvedFileIdentities.add(fileIdentity);
+		}
+	}
+
+	// ------------------------------------------------------------------
+	// APPLIED WRITES — INSIDE vs OUTSIDE
+	// ------------------------------------------------------------------
+	//
+	// A write is attributed to a destination ONLY when the resolution and
+	// the application share the SAME tool-call identity. Without that
+	// identity the write's destination is UNKNOWN — it is never counted
+	// as inside or outside.
+	const scopeByToolCallId = new Map<
+		string,
+		"active_workspace" | "other_workspace" | "outside_workspace" | "unknown"
+	>();
+	for (const record of resolutions) {
+		const toolCallId = record.payload.toolCallId;
+		if (typeof toolCallId !== "string" || toolCallId === "") {
+			continue;
+		}
+		scopeByToolCallId.set(toolCallId, readScope(record.payload));
+	}
+	let appliedWritesInsideWorkspace = 0;
+	let appliedWritesOutsideWorkspace = 0;
+	for (const record of applications) {
+		if (record.payload.outcome !== "applied") {
+			continue;
+		}
+		const toolCallId = record.payload.toolCallId;
+		if (typeof toolCallId !== "string" || toolCallId === "") {
+			continue;
+		}
+		const scope = scopeByToolCallId.get(toolCallId);
+		if (scope === "active_workspace") {
+			appliedWritesInsideWorkspace += 1;
+		} else if (scope === "outside_workspace" || scope === "other_workspace") {
+			appliedWritesOutsideWorkspace += 1;
+		}
+	}
+
+	// ------------------------------------------------------------------
+	// INDEPENDENT VERIFICATION
+	// ------------------------------------------------------------------
+	let independentlyVerifiedWrites = 0;
+	let verifiedWritesMatchingIntended = 0;
+	let verifiedWritesDivergingFromIntended = 0;
+	let unverifiedWrites = 0;
+	let writesWithDestinationAbsent = 0;
+	for (const record of verifications) {
+		const matched = record.payload.readbackMatched;
+		if (matched === true) {
+			independentlyVerifiedWrites += 1;
+			verifiedWritesMatchingIntended += 1;
+		} else if (matched === false) {
+			independentlyVerifiedWrites += 1;
+			verifiedWritesDivergingFromIntended += 1;
+		} else {
+			// The read-back was not attempted or did not complete: the
+			// write's outcome is UNVERIFIED — never "succeeded".
+			unverifiedWrites += 1;
+		}
+		if (record.payload.fileExistsAfterWrite === false) {
+			writesWithDestinationAbsent += 1;
+		}
+	}
+
+	// ------------------------------------------------------------------
+	// RETENTION CLASSIFICATION
+	// ------------------------------------------------------------------
+	//
+	// The classification is per OBSERVED TARGET, driven by the sequence of
+	// read-backs observed for that target's file identity:
+	//
+	//   - the destination is absent at the last read-back → DELETED;
+	//   - the final observed content equals an EARLIER observed content
+	//     → REVERTED;
+	//   - the final observed content differs from the first observed
+	//     content → RETAINED_CHANGED;
+	//   - the final observed content equals the first observed content
+	//     → UNCHANGED;
+	//   - the target is outside the designated benchmark root →
+	//     OUTSIDE_SCOPE;
+	//   - no usable observation → UNVERIFIED.
+	const retentionCounts: Record<EditRetentionClassification, number> = {
+		RETAINED_CHANGED: 0,
+		REVERTED: 0,
+		DELETED: 0,
+		UNCHANGED: 0,
+		OUTSIDE_SCOPE: 0,
+		UNVERIFIED: 0,
+	};
+
+	/**
+	 * The observed content sequence of each file identity, in record
+	 * order.
+	 */
+	const observedContentByFile = new Map<string, string[]>();
+	/**
+	 * Whether each file identity was observed as ABSENT at its last
+	 * read-back.
+	 */
+	const absentAtLastReadback = new Set<string>();
+
+	for (const record of verifications) {
+		const fileIdentity = record.payload.fileIdentity;
+		if (typeof fileIdentity !== "string" || fileIdentity === "") {
+			continue;
+		}
+		if (record.payload.fileExistsAfterWrite === false) {
+			absentAtLastReadback.add(fileIdentity);
+			continue;
+		}
+		absentAtLastReadback.delete(fileIdentity);
+		const actual = record.payload.actualContentFingerprint;
+		if (typeof actual !== "string" || actual === "") {
+			continue;
+		}
+		const versions = observedContentByFile.get(fileIdentity) ?? [];
+		versions.push(actual);
+		observedContentByFile.set(fileIdentity, versions);
+	}
+
+	// The benchmark-root membership of each file identity.
+	const underBenchmarkRootByFileIdentity = new Map<string, boolean>();
+	for (const record of resolutions) {
+		const fileIdentity = record.payload.fileIdentity;
+		if (typeof fileIdentity !== "string" || fileIdentity === "") {
+			continue;
+		}
+		const underBenchmarkRoot = readUnderBenchmarkRoot(record.payload);
+		if (underBenchmarkRoot !== undefined) {
+			underBenchmarkRootByFileIdentity.set(fileIdentity, underBenchmarkRoot);
+		}
+	}
+
+	// The union of every file identity the trace observed as a target.
+	const allFileIdentities = new Set<string>([
+		...resolvedFileIdentities,
+		...observedContentByFile.keys(),
+		...absentAtLastReadback,
+	]);
+
+	/**
+	 * The timestamp of the last retained change, for the progress figure.
+	 */
+	let lastRetainedChangeTimestampMs: number | undefined;
+	/**
+	 * The timestamp of the first write whose destination was inside the
+	 * active workspace.
+	 */
+	let firstInsideWorkspaceWriteTimestampMs: number | undefined;
+
+	for (const fileIdentity of allFileIdentities) {
+		if (underBenchmarkRootByFileIdentity.get(fileIdentity) === false) {
+			retentionCounts.OUTSIDE_SCOPE += 1;
+			continue;
+		}
+		const versions = observedContentByFile.get(fileIdentity) ?? [];
+		if (absentAtLastReadback.has(fileIdentity)) {
+			// The destination was ABSENT at the last read-back: it was
+			// deleted, so it is NOT a retained change.
+			retentionCounts.DELETED += 1;
+			continue;
+		}
+		if (versions.length === 0) {
+			retentionCounts.UNVERIFIED += 1;
+			continue;
+		}
+		const final = versions[versions.length - 1];
+		const earlier = versions.slice(0, versions.length - 1);
+		if (earlier.includes(final)) {
+			retentionCounts.REVERTED += 1;
+			continue;
+		}
+		if (versions.length === 1) {
+			// A single observed write: whether it CHANGED anything is
+			// only knowable when the pre-write content was also observed.
+			retentionCounts.UNVERIFIED += 1;
+			continue;
+		}
+		if (final !== versions[0]) {
+			retentionCounts.RETAINED_CHANGED += 1;
+		} else {
+			retentionCounts.UNCHANGED += 1;
+		}
+	}
+
+	// The timestamp of the last retained change, derived from the
+	// verification records whose file ended up RETAINED_CHANGED.
+	for (const record of verifications) {
+		const fileIdentity = record.payload.fileIdentity;
+		if (typeof fileIdentity !== "string" || fileIdentity === "") {
+			continue;
+		}
+		const versions = observedContentByFile.get(fileIdentity) ?? [];
+		if (versions.length < 2) {
+			continue;
+		}
+		const final = versions[versions.length - 1];
+		if (final === versions[0] || versions.slice(0, -1).includes(final)) {
+			continue;
+		}
+		const at = timestampMs(record);
+		if (
+			lastRetainedChangeTimestampMs === undefined ||
+			at > lastRetainedChangeTimestampMs
+		) {
+			lastRetainedChangeTimestampMs = at;
+		}
+	}
+
+	// The first write whose destination was inside the active workspace.
+	for (const record of applications) {
+		if (record.payload.outcome !== "applied") {
+			continue;
+		}
+		const toolCallId = record.payload.toolCallId;
+		if (typeof toolCallId !== "string" || toolCallId === "") {
+			continue;
+		}
+		if (scopeByToolCallId.get(toolCallId) !== "active_workspace") {
+			continue;
+		}
+		const at = timestampMs(record);
+		if (
+			firstInsideWorkspaceWriteTimestampMs === undefined ||
+			at < firstInsideWorkspaceWriteTimestampMs
+		) {
+			firstInsideWorkspaceWriteTimestampMs = at;
+		}
+	}
+
+	const firstRecord = records[0];
+	const lastRecord = records[records.length - 1];
+	const timeToFirstWriteInsideWorkspaceMs =
+		firstInsideWorkspaceWriteTimestampMs !== undefined && firstRecord
+			? firstInsideWorkspaceWriteTimestampMs - timestampMs(firstRecord)
+			: undefined;
+	const timeSinceLastRetainedChangeMs =
+		lastRetainedChangeTimestampMs !== undefined && lastRecord
+			? timestampMs(lastRecord) - lastRetainedChangeTimestampMs
+			: undefined;
+
+	// The number of tool calls observed after the last retained change.
+	const toolCallsSinceLastRetainedChange =
+		lastRetainedChangeTimestampMs === undefined
+			? toolStarts.length
+			: toolStarts.filter(
+					(record) => timestampMs(record) > lastRetainedChangeTimestampMs,
+				).length;
+
+	// Shell activity, reported SEPARATELY.
+	const shellToolNames = new Set(["run_commands", "bash", "shell"]);
+	const shellStarts = toolStarts.filter((record) => {
+		const name = record.payload.toolName;
+		return typeof name === "string" && shellToolNames.has(name);
+	});
+	const shellCallCount = shellStarts.length;
+	const toolFinishes = records.filter(
+		(record) => record.event === "tool_finish",
+	);
+	let shellCallSuccessCount = 0;
+	for (const finish of toolFinishes) {
+		const name = finish.payload.toolName;
+		if (typeof name !== "string" || !shellToolNames.has(name)) {
+			continue;
+		}
+		if (finish.payload.outcome !== "error") {
+			shellCallSuccessCount += 1;
+		}
+	}
+	// Shell activity that produced NO observed native mutation. The trace
+	// CANNOT attribute a filesystem change to a shell call, so this is
+	// activity, never an observed mutation.
+	const shellActivityWithoutObservedMutation =
+		shellCallCount > 0 && applications.length === 0 ? shellCallCount : 0;
+
+	// The unfulfilled attempts: an attempt with no application joined to
+	// it. The join is by EXACT identity only.
+	const fulfilledAttemptKeys = new Set<string>();
+	for (const record of applications) {
+		const identity = readCorrelationIdentity(record);
+		if (identity) {
+			fulfilledAttemptKeys.add(identity.key);
+		}
+	}
+	let unfulfilledEditAttempts = 0;
+	for (const record of attempts) {
+		const identity = readCorrelationIdentity(record);
+		if (!identity || !fulfilledAttemptKeys.has(identity.key)) {
+			unfulfilledEditAttempts += 1;
+		}
+	}
+
+	return {
+		targetsResolved: resolutions.length,
+		targetsInsideActiveWorkspace,
+		targetsOutsideActiveWorkspace,
+		targetsInOtherWorkspace,
+		targetsScopeUnverified,
+		appliedWritesOutsideWorkspace,
+		appliedWritesInsideWorkspace,
+		independentlyVerifiedWrites,
+		verifiedWritesMatchingIntended,
+		verifiedWritesDivergingFromIntended,
+		unverifiedWrites,
+		writesWithDestinationAbsent,
+		retentionCounts,
+		trackedTargetCount,
+		untrackedTargetCount,
+		ignoredTargetCount,
+		...(timeToFirstWriteInsideWorkspaceMs !== undefined
+			? { timeToFirstWriteInsideWorkspaceMs }
+			: {}),
+		...(timeSinceLastRetainedChangeMs !== undefined
+			? { timeSinceLastRetainedChangeMs }
+			: {}),
+		toolCallsSinceLastRetainedChange,
+		nativeEditFailures: failures.length,
+		unfulfilledEditAttempts,
+		shellCallCount,
+		shellCallSuccessCount,
+		shellActivityWithoutObservedMutation,
+		workspaceEvidenceAvailable,
+		workspaceEvidenceMarker: workspaceEvidenceAvailable
+			? "WORKSPACE_EFFECT_OBSERVED"
+			: UNAVAILABLE,
+		acceptedExecutableGates: UNAVAILABLE,
+		workspaceProvenance: "REAL_PRODUCTION_SEAM",
 	};
 }
 
@@ -2672,6 +3311,110 @@ function renderMarkdown(summary: ComparisonSummary): string {
 	);
 	lines.push("");
 
+	// ------------------------------------------------------------------
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R5): the
+	// workspace-progress section.
+	// ------------------------------------------------------------------
+	lines.push("## Workspace Progress");
+	lines.push("");
+	if (
+		!summary.workspaceProgress.m3.workspaceEvidenceAvailable &&
+		!summary.workspaceProgress.m31.workspaceEvidenceAvailable
+	) {
+		lines.push(
+			`Both traces predate the workspace-effect evidence: every figure below is ${UNAVAILABLE}. The trace can say THAT a write happened; it cannot say WHERE it landed or what is on disk afterwards.`,
+		);
+		lines.push("");
+	} else {
+		const progressRows: ReadonlyArray<
+			readonly [string, keyof WorkspaceProgressStatistics]
+		> = [
+			["Targets resolved", "targetsResolved"],
+			["Targets inside the active workspace", "targetsInsideActiveWorkspace"],
+			["Targets OUTSIDE the active workspace", "targetsOutsideActiveWorkspace"],
+			["Targets in another known workspace", "targetsInOtherWorkspace"],
+			["Targets with an UNVERIFIED scope", "targetsScopeUnverified"],
+			["Applied writes inside the workspace", "appliedWritesInsideWorkspace"],
+			["Applied writes OUTSIDE the workspace", "appliedWritesOutsideWorkspace"],
+			["Independently verified writes", "independentlyVerifiedWrites"],
+			[
+				"Verified writes matching the intended content",
+				"verifiedWritesMatchingIntended",
+			],
+			[
+				"Verified writes diverging from the intended content",
+				"verifiedWritesDivergingFromIntended",
+			],
+			["Unverified writes (read-back unavailable)", "unverifiedWrites"],
+			[
+				"Writes whose destination was absent at read-back",
+				"writesWithDestinationAbsent",
+			],
+			["Retained and changed", "retentionCounts"],
+			["Reverted", "retentionCounts"],
+			["Deleted", "retentionCounts"],
+			["Unchanged", "retentionCounts"],
+			["Outside the benchmark scope", "retentionCounts"],
+			["Unverified retention", "retentionCounts"],
+			["Targets inside the benchmark root (tracked)", "trackedTargetCount"],
+			[
+				"Targets outside the benchmark root (untracked)",
+				"untrackedTargetCount",
+			],
+			[
+				"Targets with unknown benchmark membership (ignored)",
+				"ignoredTargetCount",
+			],
+			["Native edit failures", "nativeEditFailures"],
+			["Unfulfilled edit attempts", "unfulfilledEditAttempts"],
+			["Shell calls (separate activity)", "shellCallCount"],
+			[
+				"Shell activity without an observed mutation",
+				"shellActivityWithoutObservedMutation",
+			],
+			[
+				"Tool calls since the last retained change",
+				"toolCallsSinceLastRetainedChange",
+			],
+			["Accepted executable gates", "acceptedExecutableGates"],
+		];
+		lines.push("| Metric | M3 | M3.1 |");
+		lines.push("| --- | --- | --- |");
+		for (const [label, key] of progressRows) {
+			const render = (stats: WorkspaceProgressStatistics): string => {
+				if (key === "retentionCounts") {
+					const classification = label
+						.split(" ")
+						.map((word) => word.toUpperCase())
+						.join("_") as EditRetentionClassification;
+					return String(stats.retentionCounts[classification] ?? 0);
+				}
+				return String(stats[key]);
+			};
+			lines.push(
+				`| ${label} | ${render(summary.workspaceProgress.m3)} | ${render(summary.workspaceProgress.m31)} |`,
+			);
+		}
+		lines.push(
+			`| Time to first write inside the workspace (ms) | ${String(summary.workspaceProgress.m3.timeToFirstWriteInsideWorkspaceMs ?? "n/a")} | ${String(summary.workspaceProgress.m31.timeToFirstWriteInsideWorkspaceMs ?? "n/a")} |`,
+		);
+		lines.push(
+			`| Time since the last retained change (ms) | ${String(summary.workspaceProgress.m3.timeSinceLastRetainedChangeMs ?? "n/a")} | ${String(summary.workspaceProgress.m31.timeSinceLastRetainedChangeMs ?? "n/a")} |`,
+		);
+		lines.push(
+			`| Workspace evidence | ${summary.workspaceProgress.m3.workspaceEvidenceMarker} | ${summary.workspaceProgress.m31.workspaceEvidenceMarker} |`,
+		);
+		lines.push("");
+		lines.push(
+			'> The destination scope is established CANONICALLY (symlinks followed). A destination whose canonicalization failed is reported as `PATH_SCOPE_UNVERIFIED` — never optimistically as "inside the workspace". A write whose read-back could not be performed is UNVERIFIED — never "succeeded". Neither figure asserts DURABILITY: a successful write is not an fsync.',
+		);
+		lines.push("");
+		lines.push(
+			"> Shell activity is reported as ACTIVITY, never as an observed mutation: the trace observes the write layer, so it cannot attribute a filesystem change to a shell command.",
+		);
+		lines.push("");
+	}
+
 	lines.push("## Completion / Gate Evidence");
 	lines.push("");
 	lines.push(
@@ -2757,6 +3500,13 @@ function buildSummary(input: {
 		m3: EditingEfficiencyStatistics;
 		m31: EditingEfficiencyStatistics;
 	};
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R5).
+	 */
+	workspaceProgress: {
+		m3: WorkspaceProgressStatistics;
+		m31: WorkspaceProgressStatistics;
+	};
 	m3Records: TraceRecord[];
 	m31Records: TraceRecord[];
 	warnings: string[];
@@ -2776,6 +3526,7 @@ function buildSummary(input: {
 		materialDifferences: input.configuration.differences,
 		statistics: input.statistics,
 		editingEfficiency: input.editingEfficiency,
+		workspaceProgress: input.workspaceProgress,
 		configurationDifferences: input.configuration.fields,
 		repetitionInterpretation:
 			"Repetition scores are HEURISTICS derived from tool-call fingerprints. They are not proof of a model defect: an expected retry, a polling loop, or a repeated test after a source change produces the same signal. The verification-named tool call count is a TOOL-NAME heuristic — it does NOT mean a test ran or that a gate was accepted; accepted executable gates are UNAVAILABLE_FROM_TRACE. A lower tool-call count is NOT, by itself, evidence of a better model — it can equally mean less work was done.",
@@ -2839,6 +3590,14 @@ async function main(): Promise<void> {
 	const editingEfficiency = {
 		m3: computeEditingEfficiency(m3, m3Records),
 		m31: computeEditingEfficiency(m31, m31Records),
+	};
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R5): the
+	// workspace-progress section. It reads the NEW target-resolution and
+	// write-verification evidence; a trace that predates the feature
+	// reports every workspace figure as UNAVAILABLE rather than zero.
+	const workspaceProgress = {
+		m3: computeWorkspaceProgress(m3Records),
+		m31: computeWorkspaceProgress(m31Records),
 	};
 	const material = configuration.differences.filter(
 		(difference) => difference.severity === "material",
@@ -2917,6 +3676,7 @@ async function main(): Promise<void> {
 		configuration,
 		statistics,
 		editingEfficiency,
+		workspaceProgress,
 		m3Records,
 		m31Records,
 		warnings,

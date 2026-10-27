@@ -16,6 +16,10 @@ import {
 	readEditObservation,
 } from "./edit-observation";
 import {
+	classifyEditInputPathKind,
+	resolveEditDestination,
+} from "./edit-target-resolution";
+import {
 	detectLineEnding,
 	normalizeLineEndings,
 	normalizeNewFileLineEndings,
@@ -158,6 +162,7 @@ async function createFile(
 	await fs.writeFile(filePath, normalized, {
 		encoding,
 	});
+	observation?.recordIntendedContent(normalized);
 	if (observation && pre) {
 		const post = await observation.measurePostWrite(filePath, normalized);
 		observation.recordMutation(pre, post, {
@@ -212,6 +217,7 @@ async function replaceInFile(
 		? await observation.measurePreWrite(filePath, content)
 		: undefined;
 	await fs.writeFile(filePath, updated, { encoding });
+	observation?.recordIntendedContent(updated);
 	if (observation && pre) {
 		const post = await observation.measurePostWrite(filePath, updated);
 		observation.recordMutation(pre, post, {
@@ -250,6 +256,7 @@ async function insertInFile(
 		? await observation.measurePreWrite(filePath, content)
 		: undefined;
 	await fs.writeFile(filePath, updated, { encoding });
+	observation?.recordIntendedContent(updated);
 	if (observation && pre) {
 		const post = await observation.measurePostWrite(filePath, updated);
 		observation.recordMutation(pre, post, {
@@ -295,6 +302,33 @@ export function createEditorExecutor(
 			observation.setRequestedFileCount(1);
 		}
 
+		// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2): the
+		// DESTINATION is resolved and classified BEFORE the write, so the
+		// trace records where the write would land even when the write
+		// itself later fails.
+		//
+		// This is INSIDE the `observation` guard: when the trace is OFF no
+		// canonicalization, no `stat` and no extra read happens at all.
+		const resolution = observation
+			? await resolveEditDestination(
+					filePath,
+					classifyEditInputPathKind(input.path),
+					observation.workspaceRoots,
+				)
+			: undefined;
+		if (observation && resolution) {
+			await observation.reportTargetResolution({
+				inputPathKind: resolution.inputPathKind,
+				absolutePath: resolution.absolutePath,
+				destinationScope: resolution.destinationScope,
+				canonicalized: resolution.canonicalized,
+				existedBefore: resolution.existedBefore,
+				...(resolution.underBenchmarkRoot !== undefined
+					? { underBenchmarkRoot: resolution.underBenchmarkRoot }
+					: {}),
+			});
+		}
+
 		try {
 			const result = await runEditorOperation(
 				input,
@@ -311,6 +345,20 @@ export function createEditorExecutor(
 				),
 				durationMs: observation.elapsedMs(),
 			});
+			// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3): the
+			// write is INDEPENDENTLY verified by reading the destination back
+			// from disk. The intended content is passed in so the consumer
+			// can compare the intended fingerprint against the actual one
+			// without re-deriving the intent.
+			if (observation) {
+				await observation.reportWriteVerification({
+					absolutePath: filePath,
+					writeReturned: true,
+					...(observation.lastIntendedContent !== undefined
+						? { intendedContent: observation.lastIntendedContent }
+						: {}),
+				});
+			}
 			return result;
 		} catch (error) {
 			const category = classifyEditFailure(error);

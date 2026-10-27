@@ -136,6 +136,29 @@ export type ModelBehaviorTraceEvent =
 	 * An edit attempt failed, with a STRUCTURAL failure category.
 	 */
 	| "edit_failure"
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+	 *
+	 * The write layer RESOLVED the destination of an edit: where the write
+	 * would land relative to the active workspace, whether the destination
+	 * already existed, and how the input path was classified.
+	 *
+	 * This event is the ONLY place the trace learns about a write that
+	 * landed OUTSIDE the intended workspace. Without it an absolute-path
+	 * write outside the workspace and a write inside it produce IDENTICAL
+	 * `edit_application` evidence.
+	 */
+	| "edit_target_resolved"
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3).
+	 *
+	 * The write layer INDEPENDENTLY verified one write by reading the
+	 * destination back from disk.
+	 *
+	 * This is the ONLY evidence that the bytes the executor INTENDED to
+	 * write are actually the bytes on disk.
+	 */
+	| "edit_write_verification"
 	| "loop_verdict"
 	| "compaction_diagnostics"
 	| "compaction_completed"
@@ -684,6 +707,224 @@ export interface ModelBehaviorTraceEditApplication {
 	readonly provenance: ModelBehaviorTraceEvidenceProvenance;
 }
 
+// =============================================================================
+// Edit target resolution schema
+// =============================================================================
+//
+// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2/R3)
+//
+// WHY THIS EXISTS
+// ---------------
+// The `edit_application` event answers "did the write call return without an
+// error?". It does NOT answer "WHERE did the write land?", and it does NOT
+// answer "what is actually on disk afterwards?".
+//
+// Those two gaps are exactly what makes a benchmark run that produced
+// THIRTEEN applied native writes and ZERO retained workspace changes
+// unexplainable from the trace alone:
+//
+//   - the production executor ACCEPTS an absolute input path without any
+//     containment check, so an out-of-workspace write is indistinguishable
+//     from an in-workspace write in the existing evidence;
+//   - the existing `contentVersionPost` is the fingerprint of the content
+//     the executor INTENDED to write, not of the bytes on disk, so it can
+//     never contradict a successful write.
+//
+// The types below close both gaps with BOUNDED, PRIVACY-SAFE facts. No raw
+// absolute path, no relative path, no file content and no source text is
+// ever carried: identities are EPHEMERAL keyed HMACs computed by the sink.
+
+/**
+ * How the executor's INPUT path was classified before resolution.
+ *
+ * - `relative` — the model supplied a path relative to the executor's
+ *   working directory.
+ * - `absolute` — the model supplied an absolute path. This is the
+ *   classification that MATTERS: the production executor accepts an
+ *   absolute path as-is, so an absolute path is the only way a native
+ *   write can land outside the workspace without an error.
+ */
+export type ModelBehaviorTraceEditPathInputKind = "relative" | "absolute";
+
+/**
+ * Where the resolved destination sits relative to the ACTIVE workspace.
+ *
+ * - `active_workspace` — the canonical destination is under the active
+ *   workspace root.
+ * - `other_workspace` — the canonical destination is under a DIFFERENT
+ *   known workspace root.
+ * - `outside_workspace` — the canonical destination is outside every known
+ *   workspace root.
+ * - `unknown` — the destination could not be classified (no workspace
+ *   identity was available to the executor).
+ */
+export type ModelBehaviorTraceEditDestinationScope =
+	| "active_workspace"
+	| "other_workspace"
+	| "outside_workspace"
+	| "unknown";
+
+/**
+ * The MARKER used when the destination scope could not be established.
+ *
+ * A missing canonicalization is NEVER silently reported as "inside the
+ * workspace": the trace records the failure to verify instead.
+ */
+export const MODEL_BEHAVIOR_TRACE_PATH_SCOPE_UNVERIFIED =
+	"PATH_SCOPE_UNVERIFIED" as const;
+
+/**
+ * The resolution of ONE edit destination.
+ *
+ * Every field is privacy-safe: the workspace identity and the file identity
+ * are EPHEMERAL keyed fingerprints, and the destination itself is described
+ * only by its SCOPE relative to the workspace.
+ */
+export interface ModelBehaviorTraceEditTargetResolution {
+	/**
+	 * The runtime tool-call identity that produced this observation.
+	 *
+	 * The SAME identity the `edit_attempt` / `edit_application` events
+	 * carry, so all three links of one edit join by EXACT identity.
+	 */
+	readonly toolCallId?: string;
+	/** The native editing tool that resolved the destination. */
+	readonly toolName?: string;
+	/** How the INPUT path was classified. */
+	readonly inputPathKind: ModelBehaviorTraceEditPathInputKind;
+	/**
+	 * The ephemeral fingerprint of the ACTIVE workspace root.
+	 *
+	 * ABSENT when the executor had no workspace identity. It is an
+	 * HMAC of the canonical workspace path — never the path itself.
+	 */
+	readonly workspaceIdentity?: string;
+	/**
+	 * The ephemeral fingerprint of the EXECUTOR's working directory.
+	 *
+	 * This is NOT necessarily the workspace: the production tool
+	 * definitions default `cwd` to `process.cwd()`, which in the VS Code
+	 * extension host is frequently NOT the workspace root. Recording the
+	 * two identities separately is what makes the difference visible.
+	 */
+	readonly executorCwdIdentity?: string;
+	/**
+	 * The canonical scope of the resolved destination.
+	 */
+	readonly destinationScope: ModelBehaviorTraceEditDestinationScope;
+	/**
+	 * True when the destination was canonically resolved (symlinks
+	 * followed) and the scope was therefore established from the REAL
+	 * target rather than from a lexical guess.
+	 */
+	readonly canonicalized: boolean;
+	/**
+	 * True when the destination file EXISTED before the operation.
+	 *
+	 * This is what separates a genuine NEW-file creation from an
+	 * OVERWRITE of an existing file. A `create` operation applied to an
+	 * already-existing file is an overwrite, and the trace must not
+	 * report it as a new file.
+	 */
+	readonly destinationExistedBefore: boolean;
+	/**
+	 * True when the resolved destination was under the DESIGNATED
+	 * benchmark root (the root the operator nominated for the run).
+	 *
+	 * When no benchmark root was designated this field is ABSENT, and the
+	 * `benchmarkRootIdentity` is absent too — "no benchmark root" is
+	 * never reported as "outside the benchmark root".
+	 */
+	readonly underBenchmarkRoot?: boolean;
+	/**
+	 * The ephemeral fingerprint of the designated benchmark root.
+	 */
+	readonly benchmarkRootIdentity?: string;
+	/** The provenance of this resolution. */
+	readonly provenance: ModelBehaviorTraceEvidenceProvenance;
+}
+
+/**
+ * The INDEPENDENT verification of one write, measured from disk.
+ *
+ * The distinction this type exists to preserve:
+ *
+ * - the INTENDED fingerprint is what the executor calculated from the
+ *   content it was about to write;
+ * - the ACTUAL fingerprint is what an INDEPENDENT read-back observed on
+ *   disk afterwards.
+ *
+ * When they differ, the write landed somewhere else (or was rewritten).
+ * When the read-back could not be performed, the outcome is UNVERIFIED —
+ * never "succeeded".
+ *
+ * NOTHING in this type asserts DURABILITY. A successful write is not an
+ * fsync, and a successful read-back is not a proof that the bytes survive a
+ * power loss. The type deliberately has no durability field.
+ */
+export interface ModelBehaviorTraceEditWriteVerification {
+	/** The runtime tool-call identity. */
+	readonly toolCallId?: string;
+	/** The native editing tool that performed the write. */
+	readonly toolName?: string;
+	/** The ephemeral fingerprint of the file the write targeted. */
+	readonly fileIdentity?: string;
+	/** True when the write call returned without throwing. */
+	readonly writeReturned: boolean;
+	/** True when an independent read-back was actually attempted. */
+	readonly readbackAttempted: boolean;
+	/**
+	 * True when the independent read-back observed the SAME bytes the
+	 * executor intended to write.
+	 *
+	 * False when the read-back observed DIFFERENT bytes. ABSENT when the
+	 * read-back was not attempted or did not complete.
+	 */
+	readonly readbackMatched?: boolean;
+	/**
+	 * True when the destination file EXISTED when the read-back ran.
+	 *
+	 * A file that was created and then deleted reports `false` here — it
+	 * is NOT evidence of a retained change.
+	 */
+	readonly fileExistsAfterWrite: boolean;
+	/**
+	 * The fingerprint of the content actually observed on disk.
+	 *
+	 * This is the INDEPENDENTLY MEASURED fingerprint, never the
+	 * intended one.
+	 */
+	readonly actualContentFingerprint?: string;
+	/**
+	 * The fingerprint of the content the executor INTENDED to write.
+	 *
+	 * Present so a consumer can compare it against the actual one
+	 * WITHOUT re-deriving the intent.
+	 */
+	readonly intendedContentFingerprint?: string;
+	/**
+	 * Why the measurement was skipped, when it was.
+	 *
+	 * - `MEASUREMENT_SKIPPED_SIZE_LIMIT` — the file exceeded the
+	 *   instrumentation's size budget.
+	 * - `READBACK_UNAVAILABLE` — the destination could not be read back
+	 *   (it was removed between the write and the read, or the read
+	 *   failed). The write's outcome is then UNVERIFIED.
+	 * - `READBACK_NOT_ATTEMPTED` — the read-back was not performed.
+	 */
+	readonly measurementSkippedReason?:
+		| "MEASUREMENT_SKIPPED_SIZE_LIMIT"
+		| "READBACK_UNAVAILABLE"
+		| "READBACK_NOT_ATTEMPTED";
+	/**
+	 * The provenance of the verification.
+	 *
+	 * `REAL_PRODUCTION_SEAM` means the read-back was a real filesystem
+	 * read performed by the write layer.
+	 */
+	readonly provenance: ModelBehaviorTraceEvidenceProvenance;
+}
+
 /**
  * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
  *
@@ -721,6 +962,53 @@ export const EDIT_OBSERVATION_IDENTITY_METADATA_KEY =
  */
 export const EDIT_OBSERVATION_APPROVAL_METADATA_KEY =
 	"__clineModelBehaviorTraceApprovalOutcome";
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+ *
+ * The tool-context metadata key that carries the WORKSPACE IDENTITY into the
+ * executor.
+ *
+ * The executor is the only layer that knows the RESOLVED destination, so it
+ * is the only layer that can classify a destination as inside or outside the
+ * workspace. It needs the workspace root to do that, and the host owns the
+ * workspace root — so the host hands it down here.
+ *
+ * The value is a plain object of ABSOLUTE PATHS. It is consumed INSIDE the
+ * executor to compute SCOPES and EPHEMERAL fingerprints; it is never
+ * forwarded to the sink and never recorded.
+ */
+export const EDIT_OBSERVATION_WORKSPACE_METADATA_KEY =
+	"__clineModelBehaviorTraceWorkspace";
+
+/**
+ * The workspace identity the host hands down to the executor.
+ *
+ * Only the paths are carried — the executor is responsible for reducing
+ * them to scopes and ephemeral fingerprints before anything is reported.
+ */
+export interface ModelBehaviorTraceWorkspaceIdentity {
+	/**
+	 * The ACTIVE workspace root — the root the operator is working in.
+	 */
+	readonly workspaceRoot?: string;
+	/**
+	 * Every OTHER known workspace root (a multi-root VS Code workspace).
+	 *
+	 * A destination under one of these is `other_workspace`, not
+	 * `outside_workspace`.
+	 */
+	readonly otherWorkspaceRoots?: readonly string[];
+	/**
+	 * The DESIGNATED benchmark root for the run.
+	 *
+	 * The root whose retained changes the benchmark actually measures. It
+	 * is frequently the same as `workspaceRoot`, but it is carried
+	 * separately because "the workspace the agent was given" and "the
+	 * workspace the benchmark measures" are different questions.
+	 */
+	readonly benchmarkRoot?: string;
+}
 
 /**
  * The structural description of a requested native edit.
@@ -1576,6 +1864,33 @@ export interface ModelBehaviorTraceSink {
 	 * An edit attempt failed, with a STRUCTURAL failure category.
 	 */
 	onEditFailure?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+	 *
+	 * The write layer RESOLVED the destination of an edit.
+	 *
+	 * The payload carries the destination's SCOPE relative to the active
+	 * workspace, the input-path classification, the ephemeral workspace /
+	 * executor-cwd identities, whether the destination existed before the
+	 * operation, and whether it was under the designated benchmark root.
+	 *
+	 * No raw path and no content is ever carried.
+	 */
+	onEditTargetResolved?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3).
+	 *
+	 * The write layer INDEPENDENTLY verified one write by reading the
+	 * destination back from disk.
+	 *
+	 * The payload carries `writeReturned`, `readbackAttempted`,
+	 * `readbackMatched`, `fileExistsAfterWrite`, the actual content
+	 * fingerprint, the intended content fingerprint and the reason the
+	 * measurement was skipped.
+	 */
+	onEditWriteVerification?: (
+		observation: ModelBehaviorTraceObservation,
+	) => void;
 	/** The production loop detector returned a verdict. */
 	onLoopVerdict?: (observation: ModelBehaviorTraceObservation) => void;
 	/** The production compaction resolver produced its diagnostics. */

@@ -1,3 +1,29 @@
+# ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 — PASS_STRUCTURAL_ONLY — 2026-10-27
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the destination and disk-state evidence the M3.1 no-delta question needed is now recorded, exercised and reconciled; the live installed-VSIX qualification is the next bounded step and was not performed here).
+
+**ENTRY_HEAD:** `51ef9e186` (main).
+
+**Why this ACT exists.** A benchmark run produced **13 applied native write operations** and **no observed retained benchmark changes**, and the existing Model Behavior Trace could not explain why. Two structural gaps caused it. **(1) DESTINATION:** the trace recorded THAT a write returned without throwing, but never WHERE it landed. **(2) DISK STATE:** `EditObservation.measure()` fingerprints the content the executor **INTENDED** to write — it never re-reads the file — so a successful write can never be contradicted by the existing evidence. For an in-workspace write and an out-of-workspace write the pre-existing evidence was **byte-identical**.
+
+**THE MECHANISM IS REPRODUCED, NOT GUESSED.** The production `editor.ts:48-71` accepts an **ABSOLUTE** input path with **no containment check**, and checks a **RELATIVE** path **lexically only** (no realpath), so a symlink redirects the write outside. `apply-patch.ts:65-83` has the identical shape. The repository's own RED matrix `editor.realpath-authority.test.ts` is **RED against production at the baseline** (cases C/D/E — 3 failed, 4 passed), verified by `git stash`. This ACT does **not** change path authorization or editing behaviour; it makes the effect **visible**.
+
+**THE CORRECTION.** Two new bounded event kinds in the EXISTING recorder: **`edit_target_resolved`** (the write layer resolves and canonically classifies each destination BEFORE the write — `active_workspace` / `other_workspace` / `outside_workspace` / `unknown`, the relative-vs-absolute input classification, the workspace and executor-cwd identities as ephemeral HMACs, whether the destination existed before, and whether it was under the designated benchmark root) and **`edit_write_verification`** (an **independent read-back** after the write — `writeReturned`, `readbackAttempted`, `readbackMatched`, `fileExistsAfterWrite`, the **actual** disk-content fingerprint beside the **intended** one, and the reason a measurement was skipped). A failed canonicalization is `PATH_SCOPE_UNVERIFIED` — never optimistically "inside". **No raw path, no content, no durability claim** (a successful write is not an fsync; the verification type has no durability field). The comparator gains a **`## Workspace Progress`** section with the retention classification `RETAINED_CHANGED | REVERTED | DELETED | UNCHANGED | OUTSIDE_SCOPE | UNVERIFIED`, separate tracked/untracked/ignored counts, and a git-scoped count that is never conflated with the filesystem. The accepted-test-gate result stays **`UNAVAILABLE_FROM_TRACE`**; no model-quality score and no automatic intervention were added.
+
+**R3 — TARGETED RED/GREEN.** The two sink handlers in `edit-observation.ts` were short-circuited **in place** and the W-suite re-run: **11 failed | 1 passed** — the one PASS is **W10, the trace-OFF control**, which passes in BOTH states, so the RED is attributable to the new observation layer alone. The file was restored byte-for-byte and the suite returned to 12/12.
+
+**R4 — FOCUSED GATES.** W-suite **12 passed**; CW-suite **11 passed**; orchestrator wiring **7 passed** (5 pre-existing + 2 new); `editor`/`apply-patch` **23 passed**; `edit-efficiency-trace01` **19 passed**; comparator/comparability suites **59 passed** across 4 files; agents suites **16 passed**. **SDK build** PASS. **`apps/vscode` typecheck** PASS (exit 0, zero diagnostics). `sdk/packages/core` build typecheck PASS. **Biome** PASS on every touched file (the one `any` info matches the pre-existing comparator-test pattern).
+
+**PRE-EXISTING FAILURES, VERIFIED AS SUCH.** `editor.realpath-authority.test.ts` C/D/E (**3 failed at the baseline too**); `sdk/packages/core bun run typecheck` (the script type-checks TEST files with known pre-existing diagnostics — **identical diagnostics at the baseline**); the 9 `apps/vscode` `c24-c-bridge` / background-continuation failures (**identical 9 at the baseline**, in isolation and in the full run).
+
+**PRESERVATION.** No path-authorization change, no editing-behaviour change, no new recorder, no model-policy change, no context change, no architecture work, no change to the comparator's fail-closed comparability decision, to the accepted-test-gate result, or to the existing editing-efficiency accounting. The pre-existing `stash@{0}` and `stash@{1}` were **preserved**.
+
+**Verdict:** `PASS_STRUCTURAL_ONLY` — the structural evidence is complete and executable: the destination of every native write and the actual on-disk state after it are now recorded, and the retention accounting is exact. **The live installed-VSIX qualification was NOT performed**, so `PASS_LIVE_WORKSPACE_EFFECTS` is not claimed; the M3.1 JSONL predates this feature and its workspace figures are reported as `UNAVAILABLE_FROM_TRACE` rather than invented.
+
+**Evidence:** `docs/architecture/elm/model-behavior-workspace-effect-trace01-evidence.md` — §0 the question, §1 the reconciled boundaries, §2 the RED reproduction, §3–§5 the R2/R3/R4 corrections, §6 the Workspace Progress section, §7 the witnesses and the targeted RED/GREEN, §8 the gates, §9 what the live qualification must still show.
+
+---
+
 # ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR02 — PASS_STRUCTURAL_ONLY — 2026-10-27
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (one bounded correction of the comparator's incomplete-identity acceptance; the comparative M3/M3.1 editing report is now fit to be used).

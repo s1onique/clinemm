@@ -40,6 +40,7 @@ import {
 	type ContributionRegistry,
 	createContributionRegistry,
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
+	EDIT_OBSERVATION_WORKSPACE_METADATA_KEY,
 	type ITelemetryService,
 	isLikelyAuthError,
 	type LegacyAgentUsage,
@@ -1211,6 +1212,14 @@ export class SessionRuntime {
 				this.modelBehaviorTraceSink
 					? {
 							[EDIT_OBSERVATION_SINK_METADATA_KEY]: this.modelBehaviorTraceSink,
+							// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2):
+							// the workspace identity is handed down so the write
+							// layer can classify each destination's scope. It is
+							// added ONLY when the recorder is provably ON, so the
+							// tracing-OFF path produces exactly the metadata it
+							// produced before this feature existed.
+							[EDIT_OBSERVATION_WORKSPACE_METADATA_KEY]:
+								this.buildEditObservationWorkspaceIdentity(),
 						}
 					: {}),
 			},
@@ -1324,6 +1333,41 @@ export class SessionRuntime {
 			});
 		}
 		this.extensionsInitialized = true;
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2).
+	 *
+	 * Build the workspace identity handed down to the write layer.
+	 *
+	 * The `workspaceRoot` is the ACTIVE workspace — the root the agent was
+	 * given. The `cwd` is the executor's working directory, which is NOT
+	 * necessarily the workspace: the production tool definitions default it
+	 * to `process.cwd()`, which in the VS Code extension host is frequently
+	 * not the workspace root at all.
+	 *
+	 * The benchmark root is the root whose RETAINED changes the benchmark
+	 * measures. It is carried separately because "the workspace the agent
+	 * was given" and "the workspace the benchmark measures" are different
+	 * questions, and conflating them is precisely the failure this ACT
+	 * exists to expose.
+	 */
+	private buildEditObservationWorkspaceIdentity(): {
+		readonly workspaceRoot?: string;
+		readonly otherWorkspaceRoots?: readonly string[];
+		readonly benchmarkRoot?: string;
+	} {
+		const config = this.config as {
+			cwd?: string;
+			workspaceRoot?: string;
+		};
+		const workspaceRoot = config.workspaceRoot?.trim() || undefined;
+		// The benchmark root is the workspace root: the run's designated
+		// root IS the workspace whose changes the benchmark observes.
+		return {
+			...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+			...(workspaceRoot !== undefined ? { benchmarkRoot: workspaceRoot } : {}),
+		};
 	}
 
 	private createRuntimeHooks(): Partial<AgentRuntimeHooks> {

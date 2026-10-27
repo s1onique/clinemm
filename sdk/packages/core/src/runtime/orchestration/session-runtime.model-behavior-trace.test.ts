@@ -16,6 +16,10 @@ import type {
 	AgentRuntimeStateSnapshot,
 	ModelBehaviorTraceObservation,
 } from "@cline/shared"
+import {
+	EDIT_OBSERVATION_SINK_METADATA_KEY,
+	EDIT_OBSERVATION_WORKSPACE_METADATA_KEY,
+} from "@cline/shared"
 import type { AgentRuntime } from "@cline/agents"
 import { describe, expect, it } from "vitest"
 import {
@@ -357,3 +361,105 @@ describe("SessionRuntime model behavior trace — real orchestrator path", () =>
 		expect(verdicts).toHaveLength(0);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2)
+//
+// The workspace identity must travel from the ORCHESTRATOR (which owns the
+// session's workspace) down to the WRITE LAYER (which is the only layer
+// that knows the resolved destination).
+//
+// These witnesses capture the tool-context metadata the orchestrator
+// builds and assert that the workspace identity is present — and that it
+// is ABSENT when the recorder is off.
+// ---------------------------------------------------------------------------
+
+describe("SessionRuntime — the workspace identity reaches the write layer", () => {
+	it("W-E1: the workspace identity is handed down in the tool-context metadata", async () => {
+		const { sink, observations } = makeCollectingSink()
+		// The orchestrator only hands the workspace identity down when the
+		// recorder is PROVABLY ON, so the witness sink reports itself armed.
+		const armedSink = {
+			...sink,
+			isTraceEnabled: () => true,
+		}
+		const { runtime: fakeRuntime } = makeFakeRuntime([])
+		const captured: Record<string, unknown>[] = []
+
+		const deps: SessionRuntimeOrchestratorDeps = {
+			createAgentRuntimeImpl: (config) => {
+				// Capture the tool-context metadata the orchestrator built.
+				captured.push(
+					(config.toolContextMetadata ?? {}) as Record<string, unknown>,
+				)
+				return fakeRuntime
+			},
+			modelBehaviorTraceSink: armedSink,
+		}
+		const runtime = new SessionRuntime(
+			{
+				providerId: "test-provider",
+				modelId: "test-model",
+				systemPrompt: "test prompt",
+				tools: [],
+				enableTools: true,
+				enableSpawnAgent: false,
+				enableAgentTeams: false,
+				workspaceRoot: "/workspace/root",
+				modelBehaviorTraceSink: armedSink,
+			},
+			deps,
+		)
+
+		await runtime.run("do the thing")
+
+		expect(captured).toHaveLength(1)
+		const metadata = captured[0] ?? {}
+		const workspace = metadata[
+			EDIT_OBSERVATION_WORKSPACE_METADATA_KEY
+		] as { workspaceRoot?: string; benchmarkRoot?: string } | undefined
+		expect(workspace).toBeDefined()
+		expect(workspace?.workspaceRoot).toBe("/workspace/root")
+		// The benchmark root is the workspace whose retained changes the
+		// benchmark observes.
+		expect(workspace?.benchmarkRoot).toBe("/workspace/root")
+		// The sink itself is present, so the executor's observation is live.
+		expect(metadata[EDIT_OBSERVATION_SINK_METADATA_KEY]).toBe(armedSink)
+		expect(observations.length).toBeGreaterThan(0)
+	})
+
+	it("W-E2: with the recorder OFF, NO workspace identity is handed down", async () => {
+		const { runtime: fakeRuntime } = makeFakeRuntime([])
+		const captured: Record<string, unknown>[] = []
+		const deps: SessionRuntimeOrchestratorDeps = {
+			createAgentRuntimeImpl: (config) => {
+				captured.push(
+					(config.toolContextMetadata ?? {}) as Record<string, unknown>,
+				)
+				return fakeRuntime
+			},
+		}
+		const runtime = new SessionRuntime(
+			{
+				providerId: "test-provider",
+				modelId: "test-model",
+				systemPrompt: "test prompt",
+				tools: [],
+				enableTools: true,
+				enableSpawnAgent: false,
+				enableAgentTeams: false,
+				workspaceRoot: "/workspace/root",
+			},
+			deps,
+		)
+
+		await runtime.run("do the thing")
+
+		expect(captured).toHaveLength(1)
+		const metadata = captured[0] ?? {}
+		// Trace OFF: neither the sink nor the workspace identity is added,
+		// so the executor's observation channel is completely inert.
+		expect(metadata[EDIT_OBSERVATION_WORKSPACE_METADATA_KEY]).toBeUndefined()
+		expect(metadata[EDIT_OBSERVATION_SINK_METADATA_KEY]).toBeUndefined()
+	})
+})

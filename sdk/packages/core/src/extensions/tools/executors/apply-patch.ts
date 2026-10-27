@@ -27,6 +27,10 @@ import {
 	readEditObservation,
 } from "./edit-observation";
 import {
+	classifyEditInputPathKind,
+	resolveEditDestination,
+} from "./edit-target-resolution";
+import {
 	detectLineEnding,
 	type LineEnding,
 	normalizeLineEndings,
@@ -316,6 +320,27 @@ async function applyChanges(
 
 	for (const [filePath, change] of Object.entries(changes)) {
 		const sourceAbsPath = resolveFilePath(cwd, filePath, restrictToCwd);
+		// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R2): the
+		// DESTINATION of EVERY patched file is resolved and classified
+		// BEFORE it is written, so the trace records where a patch landed
+		// even when a later file in the same patch fails.
+		if (observation) {
+			const resolution = await resolveEditDestination(
+				sourceAbsPath,
+				classifyEditInputPathKind(filePath),
+				observation.workspaceRoots,
+			);
+			await observation.reportTargetResolution({
+				inputPathKind: resolution.inputPathKind,
+				absolutePath: resolution.absolutePath,
+				destinationScope: resolution.destinationScope,
+				canonicalized: resolution.canonicalized,
+				existedBefore: resolution.existedBefore,
+				...(resolution.underBenchmarkRoot !== undefined
+					? { underBenchmarkRoot: resolution.underBenchmarkRoot }
+					: {}),
+			});
+		}
 		switch (change.type) {
 			case PatchActionType.DELETE: {
 				const pre = observation
@@ -407,6 +432,25 @@ async function applyChanges(
 				}
 				break;
 			}
+		}
+
+		// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01 (R3): every
+		// patched file is INDEPENDENTLY verified by reading it back from
+		// disk. A file that was created and then deleted reports
+		// `fileExistsAfterWrite: false` and is therefore never counted as a
+		// retained change.
+		if (observation) {
+			const verificationPath =
+				change.type === PatchActionType.UPDATE && change.movePath
+					? resolveFilePath(cwd, change.movePath, restrictToCwd)
+					: sourceAbsPath;
+			await observation.reportWriteVerification({
+				absolutePath: verificationPath,
+				writeReturned: true,
+				...(change.type === PatchActionType.DELETE
+					? {}
+					: { intendedContent: change.newContent ?? "" }),
+			});
 		}
 	}
 
