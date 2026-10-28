@@ -8,6 +8,7 @@ PRIOR_ACT        = ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01
 ORIG_VERDICT     = C1 — GO, with one bounded telemetry correction
                   (HALT_UNSUPPORTED_REASONING_OFF_CONTRACT = P0, OPEN)
 NEW_VERDICT      = PASS_STRUCTURAL_ONLY
+SUBJECT_HEAD     = 058b920d5  (the commit that owns this ACT's production fix)
 ```
 
 ## Mission

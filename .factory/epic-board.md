@@ -2,7 +2,7 @@
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the P0 `HALT_UNSUPPORTED_REASONING_OFF_CONTRACT` and the P1 byte-accounting defect the review of ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 found are corrected and witnessed RED→GREEN; the live wire probes were **not** re-run — the reviewer confirmed them as valid live descriptive evidence — and the exact-head VSIX packaging plus the deferred Step 6 editing fixture remain the next bounded step).
 
-**ENTRY_HEAD:** `bf5939c7e` (main) — the commit that owns this ACT's production fix.
+**ENTRY_HEAD:** `058b920d5` (main) — the commit that owns this ACT's production fix. The board entry and the ACT body are amended by a follow-up commit that changes **no** production code, so the production subject stays `058b920d5`.
 
 **Why this ACT exists.** The review of `ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01` returned **C1 — GO, with one bounded telemetry correction**. The reviewer independently confirmed the repair's root cause (uncatalogued M3.1 models lost their reasoning controls during model resolution, so the requested effort disappeared before transport) and the wire contract against MiniMax's official API documentation — M3.1-Flash always reasons, thinking cannot be disabled, the supported efforts are `low`/`medium`/`high`/`xhigh`/`max`, the Anthropic-compatible transport uses `output_config.effort`, and omitting effort defaults to `max`. The reviewer also confirmed the four reported live wire probes as valid live descriptive evidence and stated there is **no need to repeat them** merely because the unsupported-off contract needs correction. This ACT therefore re-ran **no** live probe.
 
