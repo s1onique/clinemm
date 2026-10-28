@@ -1,3 +1,43 @@
+# ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION02 — PASS_STRUCTURAL_ONLY — 2026-10-28
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the P0 `HALT_FALSE_EXPLICIT_NONE_PROVENANCE` the review of ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION01 found is corrected with a one-line change and witnessed RED→GREEN at the **real** persisted-settings → handler-factory → gateway boundary; the conservation contract is **unchanged**; the live wire probes were **not** re-run — the reviewer confirmed them as valid live descriptive evidence — and the exact-head VSIX packaging plus the deferred Step 6 editing fixture remain the next bounded step).
+
+**ENTRY_HEAD:** `c23de04ef` (main) — the reviewed HEAD this correction was measured against.
+
+**Why this ACT exists.** The review of `ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION01` returned **`HALT_FALSE_EXPLICIT_NONE_PROVENANCE`** — the correction closes the original P0 for genuinely explicit `None` selections and the UTF-8 byte-count repair is sound, but the committed diff revealed one **new P0** in the persisted-settings path. This is a correctness defect, not documentary residue, and it qualifies for the Factory exception to the one-cycle rule: **no broad redesign and no additional review round** are warranted.
+
+**P0 — `HALT_FALSE_EXPLICIT_NONE_PROVENANCE`: AN ABSENT EFFORT WAS MISCLASSIFIED AS AN EXPLICIT `None`.** In `sdk/packages/core/src/services/llms/provider-settings.ts` the explicit-`None` flag was derived from the **normalized** reasoning level:
+
+```ts
+const unifiedReasoningLevel = settings.reasoning?.effort || "none";
+const reasoningNoneSelected = unifiedReasoningLevel === "none";
+```
+
+`unifiedReasoningLevel` **defaults** to `"none"` when no effort is persisted, so the expression could not distinguish a user-selected `none` from a **missing** effort: `{ enabled: false }` and `{ enabled: false, effort: undefined }` both produced `reasoningNoneSelected === true` where `false` was required. The false identity propagated through `handler-factory.ts` (which assigns `disableReason: "none"` when `thinking === false`) into the gateway, which then rejected the request with `UnsupportedReasoningConfigurationError` even though the user **never** selected `None`. That violates the correction's **conservation contract**: an anonymous disable must preserve the model's default behavior. MiniMax confirms M3.1-Flash requires reasoning and does not support disabling it.
+
+**WHY THE EXISTING WITNESSES MISSED IT.** The D2c anonymous-disable witness constructs the model handle **directly** with `disableReason: "unknown"`, which **bypasses** the real `toProviderConfig()` mapping that introduces the false `none` identity. It therefore could not observe this defect.
+
+**CORRECTION — ONE LINE, DERIVED FROM THE PERSISTED EFFORT.**
+
+```diff
+- const reasoningNoneSelected = unifiedReasoningLevel === "none";
++ const reasoningNoneSelected = settings.reasoning?.effort === "none";
+```
+
+The flag is now derived from the **persisted** effort — the only evidence of an explicit user selection — rather than from a normalized default. The `unifiedReasoningLevel` default is **retained** for `reasoningEffort`, whose semantics are unchanged.
+
+**THE RED→GREEN WITNESS.** New file `sdk/packages/core/src/services/llms/minimax-persisted-reasoning-none-provenance01.test.ts` traverses the **real** chain with **no mocks** of `@cline/llms`: persisted settings → `toProviderConfig()` → `createAgentModelFromConfig()` → the **real** gateway `stream()` production boundary. It asserts **both** directions — the anonymous disable is **NOT** rejected (the model keeps its own default) and the explicit persisted `None` **IS** rejected with the typed `UnsupportedReasoningConfigurationError` — plus M3's valid disabled-thinking mode for both cases. At the reviewed HEAD `c23de04ef` it is **2 failed / 2 passed**, with the RED failure being the reviewer's false-positive provenance reproduced verbatim (`UnsupportedReasoningConfigurationError: Model "minimax-m3.1-flash" requires reasoning and does not support disabling it`); after the one-line correction it is **4/4 GREEN**. A mutation control that reverts **only** the corrected expression reproduces exactly the same 2 RED failures with the 2 controls green, so the witness is discriminating rather than vacuously passing.
+
+**GATES.** `sdk/packages/core` — `src/services/llms/` **6 files / 79 passed / 0 failed**. `sdk/packages/llms` — focused MiniMax + gateway suites **7 files / 222 passed / 0 failed** (including the **9 unchanged** D2c conservation witnesses); **full package 47 files / 778 passed / 4 skipped / 0 failed**, **identical** to the CORRECTION01 baseline (778 passed). `apps/vscode` — `cline-session-factory.test.ts` (the app stale-`None` witnesses) **78 passed / 0 failed**. `sdk/packages/core` typecheck — the diagnostic set is **IDENTICAL** to the stashed baseline (13 files / 29 pre-existing diagnostics, **0 added, 0 removed**, **0** in `services/llms`). `apps/vscode` typecheck — **PASS** (exit 0). SDK build (`bun run build:sdk`) — **PASS**. Biome lint + format — **PASS** on both touched files.
+
+**PRESERVATION.** The typed `UnsupportedReasoningConfigurationError` contract is unchanged: a genuinely explicit persisted `None` is still rejected on a model that mandates reasoning. M3's valid disabled-thinking mode is preserved for **both** anonymous and explicit disables. M3.1's low/max wire configurations, the UTF-8 byte accounting, the live wire probe, the H03–H06 lanes and the MYC lane are all **untouched**. The local sandbox `EPERM` forks-pool abort is recorded, not masked.
+
+**WHAT IS STILL NOT CLAIMED.** No VSIX was built or installed and **no live re-run of the wire probes was performed** (the reviewer confirmed the four reported probes as valid live descriptive evidence; this correction changes only the **persisted-settings provenance**, not the wire format), so the closure is `PASS_STRUCTURAL_ONLY`, NOT `PASS_LIVE`.
+
+**NEXT BOUNDED STEP.** (1) Exact-head VSIX packaging bound to a **committed** subject. (2) The previously deferred **full M3/M3.1 editing fixture (Step 6)** with request correlation and retained-workspace evidence. (3) H03–H06 and the MYC lane are unchanged. No additional review loop is needed after the exact-head packaging unless new P0 evidence emerges.
+
+**ACT body:** `.factory/ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION02.md`.
+
 # ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-28
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the P0 `HALT_UNSUPPORTED_REASONING_OFF_CONTRACT` and the P1 byte-accounting defect the review of ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 found are corrected and witnessed RED→GREEN; the live wire probes were **not** re-run — the reviewer confirmed them as valid live descriptive evidence — and the exact-head VSIX packaging plus the deferred Step 6 editing fixture remain the next bounded step).

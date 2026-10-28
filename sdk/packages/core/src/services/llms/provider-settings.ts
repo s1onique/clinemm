@@ -218,7 +218,18 @@ export function toProviderConfig(
 	// explicitly. Without it, a stale persisted `None` on a model that
 	// mandates reasoning would be silently replaced by the model's
 	// mandatory default at the production boundary.
-	const reasoningNoneSelected = unifiedReasoningLevel === "none";
+	//
+	// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION02.
+	//
+	// The flag is derived from the PERSISTED effort, NOT from the
+	// normalized reasoning level. `unifiedReasoningLevel` defaults to
+	// `"none"` when no effort is persisted, so comparing against it would
+	// classify an ABSENT effort as an explicit `None` selection and
+	// manufacture a user selection that was never made. Only a persisted
+	// `effort === "none"` is evidence of an explicit selection; an
+	// anonymous disable must stay anonymous so the model keeps its own
+	// default behavior.
+	const reasoningNoneSelected = settings.reasoning?.effort === "none";
 
 	const providerDefaults = OPENAI_COMPATIBLE_PROVIDERS[normalizedProviderId];
 	const generatedKnownModels = Object.assign(
