@@ -1,3 +1,57 @@
+# ACT-CLINEMM-M31-EXACT-MODEL-ID-WIRE-AUTHORITY01 — PASS_WIRE_AUTHORITY — 2026-10-28
+
+**Status:** CLOSED with verdict **`PASS_WIRE_AUTHORITY`** (the exact production model id `MiniMax-M3.1-Flash` was RED at the **registry** boundary — a case-sensitive provider-metadata lookup miss — and a **bounded, provider-local** metadata entry restores it; the requested `low` effort is now confirmed in a **real serialized Anthropic-compatible request accepted by the live MiniMax API**).
+
+**ENTRY_HEAD:** `3ba487d2b` (main). **SUBJECT_HEAD:** the commit carrying the bounded repair + the new witness (the commit that follows this board entry).
+
+**Why this ACT exists.** M3.1/low had completed the editing fixture, but the effective wire-level reasoning effort of the successful live task was never verified: the trace recorded **no** serialized `output_config.effort`. The successful task selected the model by its **exact** production identifier `MiniMax-M3.1-Flash`, while the previous MiniMax repair had declared provider metadata only for `minimax-m3.1-flash` and `minimax/minimax-m3.1-flash`.
+
+**C0 — SOURCE AND ARTIFACT IDENTITY.** Entry HEAD `3ba487d2b`; worktree clean apart from the ACT-owned files; protected stashes preserved (`stash@{0}`, `stash@{1}` untouched). The **installed** extension is `s1onique.clinemm-4.1.10-26f1e7bb6` (`dist/extension.js` SHA256 `697e5bdf8aad5c832b3a6a7f2560279907375f3cdf0cbf71819b0afc4f84a20a`); that HEAD is an **ancestor** of the entry HEAD and its bundle contains **no** `modelReasoningOptions` at all — i.e. the installed VSIX predates the entire MiniMax reasoning work. The installed artifact is therefore **NOT** the source under test, and the source-level result below is obtained **directly from the checked-out source**, not from an installed VSIX.
+
+**C1/C2 — RED REPRODUCTION (first failing boundary: REGISTRY).** New witness `sdk/packages/llms/src/providers/routing/minimax-m31-exact-id-wire01.test.ts` exercises the **real** registry, the **real** normalization and provider-option composition, and the **real** `@ai-sdk/anthropic` transport with a controlled fetch replacement **only at the external network boundary**.
+
+RED at the entry HEAD (5 failed / 3 passed):
+
+- **R1 (registry)** — the resolved model kept its id but had **no `reasoning` capability and no `reasoningOptions`**: `createUnregisteredModel()` looks the controls up by the **exact** model-id string (`provider.metadata?.modelReasoningOptions?.[modelId]`), and the metadata was keyed only by the lower-case spellings. → **H1 supported.**
+- **R2 (serialized wire)** — the captured body was `{"model":"MiniMax-M3.1-Flash","max_tokens":4096,"messages":[…],"stream":true}` — **no `output_config`, no effort at all**: the effort was dropped at normalization because the model advertised no controls.
+- **R3 (unsupported-off)** — an explicit `None` was **not** rejected (the model was not "mandating reasoning" because it advertised no controls), and the typed error therefore never fired.
+- **R4 (conservation)** — the lower-case `minimax-m3.1-flash` and `minimax/minimax-m3.1-flash` already produced `output_config.effort: "low"` on the wire, which localises the defect to the **exact-spelling lookup** and rules out H2/H3 as the root cause.
+
+**C3 — CAUSAL DISCRIMINATOR.** H1 (model-ID mismatch). The loss occurred at the **registry** boundary, before routing and before transport; the routing route table and the Anthropic-compatible encoder were shown by the lower-case conservation witnesses to be correct.
+
+**C4 — BOUNDED REPAIR.** One provider-local metadata entry in `sdk/packages/llms/src/providers/routing/minimax-thinking.ts` (`modelReasoningOptions["MiniMax-M3.1-Flash"]` → effort ladder `low|medium|high|xhigh|max`). No registry redesign, no case-insensitive lookup, no global lowercasing of outbound ids, no provider-name branching, no change to reasoning-effort semantics, and the typed unsupported-`None` contract is untouched. The **outbound** model id is preserved verbatim.
+
+**C5 — GREEN AND NECESSITY (controlled ablation).** After the repair the witness is **8/8 GREEN**, with the serialized body `{"model":"MiniMax-M3.1-Flash", …, "thinking":{"type":"adaptive"}, "output_config":{"effort":"low"}, …}`. The ablation — removing **only** the new metadata entry — returns exactly the **5 RED** failures while the lower-case conservation witnesses stay green; the repair was restored and the witness re-run GREEN. The repair is therefore **necessary**, not cosmetic.
+
+**C6 — GATES.** New exact-ID witness **8/8**; existing MiniMax witnesses (`minimax-m31-unregistered01` 4, `minimax-reasoning-wire01` 6, `minimax-unsupported-reasoning-off01` 9, `minimax-reasoning-wire-probe` 7, `vendors/minimax-thinking` 3) all green; `provider-options` **123** green; `gateway` **154** green. Combined focused run: **8 files / 314 passed / 0 failed**. Full `@cline/llms` package: **48 files passed / 4 skipped, 786 passed / 4 skipped / 0 failed**. `@cline/llms` typecheck — **PASS**; SDK build — **PASS**; Biome lint + format — **PASS** on both touched files. Baseline-only failures: the local sandbox's `bun`+`vitest` runner cannot load `zod@4.4.3`'s ESM namespace export (`z.enum` is `undefined`) — a **pre-existing** toolchain incompatibility affecting **every** `@cline/llms` test file under that runner; the suites above were therefore executed under the **Node** runtime with the same vitest binary, which resolves the interop correctly. This is a **baseline** condition, not an ACT-owned regression, and no workaround was added.
+
+**C7 — REAL PROVIDER QUALIFICATION (live wire).** One small real request through the **real** gateway and the **real** Anthropic-compatible transport against `https://api.minimax.io/anthropic/v1`, using the checked-out source:
+
+```
+providerId                     minimax
+requestedModelId               MiniMax-M3.1-Flash
+resolvedModelId                MiniMax-M3.1-Flash
+requestedEffort                low
+serialized.model               MiniMax-M3.1-Flash
+serialized.thinking.type       adaptive
+serialized.output_config.effort  low
+HTTP outcome                   success (no error)
+usage                          inputTokens 209, outputTokens 3
+duration                       1226 ms
+```
+
+No API key, prompt text, tool argument, message body or reasoning text was retained. The provider-reported token counts are descriptive telemetry only; the **proof** is the serialized `model` + `output_config.effort` pair in a request the real MiniMax API accepted.
+
+**C8 — CLOSURE.** The bounded repair and the witness are committed together; the board entry is part of the same bounded closure. No temporary probe file remains; the worktree carries no unrelated dirt.
+
+**WHAT IS STILL NOT CLAIMED.** No VSIX was built or installed in this ACT, so the installed artifact is **not** exact-head and the live wire authority above is **source-level**, not installed-VSIX. The deferred **M3.1/low editing-fixture requalification (Step 6)** and then **M3.1/max** remain outstanding.
+
+**NEXT BOUNDED STEP.** (1) Build and install an exact-head VSIX incorporating this repair. (2) Resume **M3.1/low editing-fixture requalification**, then M3.1/max, verifying the starting SHA-256 of both source files and the test file against the frozen benchmark fixture and keeping the original benchmark prompt unchanged.
+
+**ACT body:** this board entry.
+
+---
+
 # ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION02 — PASS_STRUCTURAL_ONLY — 2026-10-28
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the P0 `HALT_FALSE_EXPLICIT_NONE_PROVENANCE` the review of ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION01 found is corrected with a one-line change and witnessed RED→GREEN at the **real** persisted-settings → handler-factory → gateway boundary; the conservation contract is **unchanged**; the live wire probes were **not** re-run — the reviewer confirmed them as valid live descriptive evidence — and the exact-head VSIX packaging plus the deferred Step 6 editing fixture remain the next bounded step).

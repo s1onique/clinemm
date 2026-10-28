@@ -54,6 +54,22 @@ export const MINIMAX_THINKING_ROUTING_METADATA: GatewayProviderMetadata = {
 		"minimax/minimax-m3.1-flash": [
 			{ type: "effort", values: ["low", "medium", "high", "xhigh", "max"] },
 		],
+		// ACT-CLINEMM-M31-EXACT-MODEL-ID-WIRE-AUTHORITY01.
+		//
+		// MiniMax's own API model identifier for the M3.1 generation is the
+		// CAPITALIZED `MiniMax-M3.1-Flash`. The provider-declared controls are
+		// looked up by the EXACT model id string, so an uncatalogued model
+		// selected with the official spelling resolved WITHOUT any reasoning
+		// controls: no `reasoning` capability and no effort ladder. The
+		// normalization boundary then dropped the requested effort before
+		// transport, and the Anthropic-compatible body carried no
+		// `output_config.effort` at all.
+		//
+		// The entry is provider-local and additive: the lower-case aliases
+		// above keep working, and the OUTBOUND model id is untouched.
+		"MiniMax-M3.1-Flash": [
+			{ type: "effort", values: ["low", "medium", "high", "xhigh", "max"] },
+		],
 	},
 };
 
