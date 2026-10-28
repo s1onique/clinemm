@@ -97,6 +97,69 @@ export function isClineNotSubscribedError(
 	return error instanceof ClineNotSubscribedError;
 }
 
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+ *
+ * The reasoning controls a model advertises, in a form a user-facing message
+ * can name. `efforts` is the set of effort levels the model accepts; the
+ * presence of a `toggle` means the model also accepts a plain on/off.
+ */
+export interface UnsupportedReasoningConfigurationDetails {
+	providerId: string;
+	modelId: string;
+	/** The effort levels the model does support. */
+	efforts: readonly string[];
+	/** Whether the model supports a plain reasoning on/off toggle. */
+	supportsToggle: boolean;
+}
+
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+ *
+ * The request asked for reasoning to be DISABLED on a model that mandates
+ * reasoning.
+ *
+ * This is a user-configuration error, not a provider error: the request
+ * never reaches the provider. The model would happily run with its
+ * mandatory reasoning default, but that would silently replace the user's
+ * explicit `None` selection with a different reasoning policy than the one
+ * they chose — the exact silent substitution this error exists to prevent.
+ *
+ * The error is TYPED so the surface that owns the request can distinguish it
+ * from a provider failure and can offer the user the supported alternatives
+ * instead of a generic transport error.
+ */
+export class UnsupportedReasoningConfigurationError extends Error {
+	public readonly providerId: string;
+	public readonly modelId: string;
+	public readonly efforts: readonly string[];
+	public readonly supportsToggle: boolean;
+
+	constructor(details: UnsupportedReasoningConfigurationDetails) {
+		const alternatives = details.supportsToggle
+			? "turn reasoning on, or choose an effort level"
+			: details.efforts.length > 0
+				? `choose one of: ${details.efforts.join(", ")}`
+				: "choose a supported reasoning effort";
+		super(
+			`Model "${details.modelId}" requires reasoning and does not support disabling it. ` +
+				`Reasoning was left enabled with the model's own default because the requested "None" setting is not supported. ` +
+				`To use this model, ${alternatives}.`,
+		);
+		this.name = "UnsupportedReasoningConfigurationError";
+		this.providerId = details.providerId;
+		this.modelId = details.modelId;
+		this.efforts = details.efforts;
+		this.supportsToggle = details.supportsToggle;
+	}
+}
+
+export function isUnsupportedReasoningConfigurationError(
+	error: unknown,
+): error is UnsupportedReasoningConfigurationError {
+	return error instanceof UnsupportedReasoningConfigurationError;
+}
+
 export function isClineOrgIndividualInferenceSubscriptionError(
 	error: unknown,
 ): error is ClineOrgIndividualInferenceSubscriptionError {

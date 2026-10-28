@@ -127,6 +127,25 @@ export interface GatewayProviderMetadata {
 	routing?: GatewayProviderRouting;
 	stickySession?: GatewayStickySessionMetadata;
 	/**
+	 * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01.
+	 *
+	 * Reasoning controls for models the provider serves but the shared
+	 * catalog does not (yet) publish.
+	 *
+	 * A model that is absent from the catalog resolves to an unregistered
+	 * model definition, which advertises NO reasoning controls. The
+	 * normalization boundary then treats it as a model with no supported
+	 * reasoning configuration and DROPS the requested reasoning intent —
+	 * including an explicit effort. That silently discards a user's
+	 * selected reasoning policy.
+	 *
+	 * A provider that knows a model's controls can declare them here, keyed
+	 * by model id. The declared controls are used only for models the
+	 * catalog does not describe; a cataloged model always keeps its
+	 * catalogued controls.
+	 */
+	modelReasoningOptions?: Record<string, readonly ModelReasoningOption[]>;
+	/**
 	 * Provider-specific transport used for models whose output includes images.
 	 * OpenRouter-compatible image responses require a richer schema than the
 	 * generic OpenAI-compatible adapter exposes.
@@ -248,6 +267,26 @@ export interface GatewayStreamRequest {
 		enabled?: boolean;
 		effort?: ReasoningEffort;
 		budgetTokens?: number;
+		/**
+		 * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2
+		 * correction).
+		 *
+		 * Why reasoning was disabled, when it was.
+		 *
+		 * `"none"` — the user EXPLICITLY selected the `None` reasoning
+		 * effort. This is a user-visible selection, so it must not be
+		 * silently replaced by the model's own default when the model
+		 * mandates reasoning.
+		 *
+		 * `"unknown"` — reasoning was disabled without an explicit
+		 * user-visible selection (a derived or legacy disable). The model's
+		 * own default is the correct behavior here, exactly as before.
+		 *
+		 * `undefined` — reasoning was not disabled. A disable with no
+		 * recorded reason is treated as `"unknown"`, so the pre-existing
+		 * behavior is preserved for every caller that does not set it.
+		 */
+		disableReason?: "none" | "unknown";
 	};
 	signal?: AbortSignal;
 }
@@ -282,6 +321,19 @@ export interface GatewayModelHandleOptions {
 		enabled?: boolean;
 		effort?: ReasoningEffort;
 		budgetTokens?: number;
+		/**
+		 * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2
+		 * correction).
+		 *
+		 * Why reasoning was disabled, when it was. See
+		 * {@link GatewayStreamRequest.reasoning} for the semantics.
+		 *
+		 * This is the DEFAULT reason for a model handle: it carries the
+		 * provider-level persisted selection, so a stale persisted `None`
+		 * reaches the production boundary as an EXPLICIT user selection
+		 * rather than as an anonymous disable.
+		 */
+		disableReason?: "none" | "unknown";
 	};
 	signal?: AbortSignal;
 }

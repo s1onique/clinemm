@@ -210,6 +210,15 @@ export function toProviderConfig(
 	const unifiedReasoningLevel = settings.reasoning?.effort || "none";
 	const reasoningEffort =
 		unifiedReasoningLevel === "none" ? undefined : unifiedReasoningLevel;
+	// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+	//
+	// The persisted `None` selection is a user-visible choice. `thinking:
+	// false` alone cannot say whether the disable was an explicit `None`
+	// selection or a derived disable, so the distinction is carried
+	// explicitly. Without it, a stale persisted `None` on a model that
+	// mandates reasoning would be silently replaced by the model's
+	// mandatory default at the production boundary.
+	const reasoningNoneSelected = unifiedReasoningLevel === "none";
 
 	const providerDefaults = OPENAI_COMPATIBLE_PROVIDERS[normalizedProviderId];
 	const generatedKnownModels = Object.assign(
@@ -269,6 +278,7 @@ export function toProviderConfig(
 		maxInputTokens: settings.contextWindow,
 		thinking: settings.reasoning?.enabled,
 		reasoningEffort,
+		reasoningNoneSelected,
 		thinkingBudgetTokens: settings.reasoning?.budgetTokens,
 		region: settings.region ?? settings.aws?.region ?? settings.gcp?.region,
 		apiLine: settings.apiLine,

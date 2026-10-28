@@ -1,4 +1,5 @@
 import type {
+	GatewayModelDefinition,
 	GatewayModelRoute,
 	GatewayProviderContext,
 	GatewayReasoningFormat,
@@ -42,6 +43,57 @@ export function getModelReasoningControls(
 		supportsDefault: advertised.has("default"),
 	};
 }
+
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+ *
+ * Whether a model MANDATES reasoning — i.e. it advertises reasoning
+ * controls but offers no way to turn reasoning off.
+ *
+ * The distinction matters because "off" is a user-visible selection, not an
+ * internal detail. A model that mandates reasoning and receives an explicit
+ * "off" request must NOT have that request silently converted into the
+ * model's mandatory default: the request would then run with a reasoning
+ * policy the user did not select, and the user would have no signal that
+ * their selection was discarded.
+ *
+ * A model MANDATES reasoning when it advertises reasoning controls AND
+ * offers no "off" affordance:
+ *
+ *   - no `toggle` option, and
+ *   - no `"none"` value among its advertised effort values.
+ *
+ * A model whose controls are UNKNOWN (`options === undefined` — an
+ * uncatalogued model) or explicitly EMPTY (`options.length === 0` — a
+ * reasoning model with no advertised user-facing control) does NOT mandate
+ * reasoning. Treating an unknown model as mandatory would reject requests
+ * for every model the catalog has not published yet.
+ */
+export function modelMandatesReasoning(
+	model: Pick<GatewayModelDefinition, "reasoningOptions">,
+): boolean {
+	const options = model.reasoningOptions;
+	if (options === undefined || options.length === 0) {
+		return false;
+	}
+	const controls = getModelReasoningControls(options);
+	if (!controls) {
+		return false;
+	}
+	return !controls.supportsOff;
+}
+
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+ *
+ * The reason a request asked for reasoning to be disabled.
+ *
+ * `"none"` — the user explicitly selected the `None` effort.
+ * `"unknown"` — the request disabled reasoning without an explicit
+ * user-visible `None` selection (a legacy/derived disable). This is the
+ * pre-existing behavior that stays as it is: the model keeps its default.
+ */
+export type ReasoningDisableReason = "none" | "unknown";
 
 export function normalizeReasoningEffort(
 	effort: ReasoningEffort,
@@ -395,13 +447,32 @@ export function isGlmModel(
 	return family.includes("glm") || normalizedModelId(request).includes("glm");
 }
 
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01.
+ *
+ * The MiniMax M3 generation covers M3 and its M3.1 successors. They share the
+ * Anthropic-compatible native transport but differ in their reasoning
+ * controls: M3 exposes a thinking toggle (adaptive / disabled), while M3.1
+ * requires reasoning and selects an effort.
+ *
+ * M3.1 model ids observed in the wild:
+ *   - `minimax-m3.1-flash` (direct / OpenRouter style)
+ *   - `MiniMax-M3.1` (native direct style)
+ */
 export function isMiniMaxM3Model(
 	request: Pick<GatewayStreamRequest, "modelId">,
 	_context: GatewayProviderContext,
 ): boolean {
 	const modelId = normalizedModelId(request);
 
-	return modelId === "minimax-m3" || modelId === "minimax/minimax-m3";
+	return (
+		modelId === "minimax-m3" ||
+		modelId === "minimax/minimax-m3" ||
+		modelId === "minimax-m3.1-flash" ||
+		modelId === "minimax/minimax-m3.1-flash" ||
+		modelId === "minimax-m3.1" ||
+		modelId === "minimax/minimax-m3.1"
+	);
 }
 
 export function isKimiK26Family(context: GatewayProviderContext): boolean {

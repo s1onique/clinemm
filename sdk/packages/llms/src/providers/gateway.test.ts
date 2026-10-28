@@ -293,7 +293,21 @@ async function captureReasoningOptions({
 				providerOptions?: Record<string, { reasoning?: unknown }>;
 		  }
 		| undefined;
-	return call?.reasoning ?? call?.providerOptions?.[providerId]?.reasoning;
+	// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01:
+	// OpenRouter owns a native `reasoning` object, so the resolved effort
+	// arrives in `providerOptions.openrouter.reasoning` rather than in the
+	// AI SDK's portable top-level option (which that transport ignores).
+	// Normalize both shapes to the effort VALUE so the assertions below
+	// describe the resolved reasoning policy, not its transport encoding.
+	const providerReasoning = call?.providerOptions?.[providerId]?.reasoning;
+	if (
+		providerReasoning &&
+		typeof providerReasoning === "object" &&
+		"effort" in providerReasoning
+	) {
+		return (providerReasoning as { effort: unknown }).effort;
+	}
+	return call?.reasoning ?? providerReasoning;
 }
 
 const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
@@ -5082,12 +5096,18 @@ describe("sdk-gateway", () => {
 					}),
 					openrouter: expect.objectContaining({
 						cache_control: { type: "ephemeral" },
+						// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01:
+						// OpenRouter owns a native `reasoning` object, so the
+						// effort travels in
+						// `providerOptions.openrouter.reasoning.effort` rather
+						// than in the AI SDK's portable top-level option (which
+						// the OpenRouter transport ignores).
+						reasoning: expect.objectContaining({ effort: "high" }),
 					}),
 					anthropic: expect.objectContaining({
 						cache_control: { type: "ephemeral" },
 					}),
 				}),
-				reasoning: "high",
 			}),
 		);
 	});
@@ -6068,22 +6088,31 @@ describe("sdk-gateway", () => {
 			}),
 		);
 
-		// Explicit enablement rides the portable top-level reasoning option.
+		// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01:
+		// OpenRouter owns a native `reasoning` object, so explicit
+		// enablement is encoded in `providerOptions.openrouter.reasoning`
+		// instead of the AI SDK's portable top-level option (which the
+		// OpenRouter transport ignores).
 		expect(streamTextSpy).toHaveBeenNthCalledWith(
 			1,
 			expect.objectContaining({
-				reasoning: "medium",
+				providerOptions: expect.objectContaining({
+					openrouter: expect.objectContaining({
+						reasoning: expect.objectContaining({ enabled: true }),
+					}),
+				}),
 			}),
 		);
 		{
 			const call = streamTextSpy.mock.calls[0]?.[0] as {
 				providerOptions?: Record<string, Record<string, unknown> | undefined>;
 			};
-			expect(call.providerOptions?.openrouter).not.toEqual(
-				expect.objectContaining({ reasoning: expect.anything() }),
-			);
+			// The OpenRouter transport reads the `openrouter` bucket, so the
+			// compatible bucket's routed-GLM reasoning is a non-wire residual
+			// for this route (the routed GLM rule deliberately skips the
+			// provider buckets for OpenRouter).
 			expect(call.providerOptions?.openaiCompatible).not.toEqual(
-				expect.objectContaining({ reasoning: expect.anything() }),
+				expect.objectContaining({ reasoning: { exclude: true } }),
 			);
 		}
 		// The OpenRouter catalog advertises a reasoning toggle for z-ai/glm-4.7,

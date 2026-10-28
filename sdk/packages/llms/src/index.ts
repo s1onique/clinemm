@@ -91,12 +91,15 @@ export {
 	isClinePassLimitMessage,
 	isProviderApiLine,
 	isRegisteredHandlerAsync,
+	isUnsupportedReasoningConfigurationError,
 	normalizeProviderId,
 	OLLAMA_DEFAULT_CONTEXT_WINDOW,
 	type ProviderApiLine,
 	registerAsyncHandler,
 	registerHandler,
 	resolveProviderApiLineBaseUrl,
+	type UnsupportedReasoningConfigurationDetails,
+	UnsupportedReasoningConfigurationError,
 } from "./providers";
 export {
 	type ProviderUsageCostDisplay,

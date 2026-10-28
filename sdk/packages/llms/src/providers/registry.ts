@@ -131,10 +131,28 @@ function createUnregisteredModel(
 	provider: GatewayProviderManifest,
 	modelId: string,
 ): GatewayModelDefinition {
+	// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01.
+	//
+	// A model the catalog does not describe still has reasoning controls when
+	// the PROVIDER declares them. Without this, the model advertises no
+	// controls at all, and the normalization boundary drops the requested
+	// reasoning intent (including an explicit effort) — silently discarding
+	// the user's selected reasoning policy.
+	//
+	// Declaring reasoning controls also implies the reasoning CAPABILITY: the
+	// provider-option routes match on that capability, so a model without it
+	// would never reach its own reasoning encoding.
+	const declaredOptions = provider.metadata?.modelReasoningOptions?.[modelId];
 	return {
 		id: modelId,
 		name: modelId,
 		providerId: provider.id,
+		...(declaredOptions
+			? {
+					reasoningOptions: declaredOptions,
+					capabilities: ["reasoning"] as GatewayModelDefinition["capabilities"],
+				}
+			: {}),
 	};
 }
 

@@ -54,6 +54,9 @@ export {
 	isClineOrgIndividualInferenceSubscriptionMessage,
 	isClinePassLimitError,
 	isClinePassLimitMessage,
+	isUnsupportedReasoningConfigurationError,
+	type UnsupportedReasoningConfigurationDetails,
+	UnsupportedReasoningConfigurationError,
 } from "./providers/errors";
 export {
 	getRegisteredHandler,

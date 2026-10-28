@@ -216,6 +216,79 @@ function captureCorrelation(
 	};
 }
 
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1).
+ *
+ * The reasoning-relevant fields of a SERIALIZED provider request body.
+ *
+ * Only the reasoning CONTROL FIELDS are extracted — never the prompt, never
+ * the messages, never the tool arguments, never the credentials. The values
+ * are small enumerations and numbers.
+ *
+ * - `wireThinkingMode` — the serialized thinking mode ("adaptive",
+ *   "disabled", "enabled"), or absent when the body carries none.
+ * - `wireReasoningEffort` — the serialized effort, or absent.
+ * - `wireOutputConfigEffort` — the Anthropic-compatible
+ *   `output_config.effort`, or absent.
+ * - `wireReasoning` — the serialized `reasoning` object, reduced to its
+ *   control fields only.
+ * - `wireReasoningEffort` — the OpenAI-compatible `reasoning_effort`, or
+ *   absent.
+ * - `wireOutputTokenLimit` — the serialized output-token cap, when present.
+ */
+function summarizeWireReasoning(body: unknown): Record<string, unknown> {
+	const parsedBody = parseJsonString(body);
+	if (!parsedBody || typeof parsedBody !== "object") {
+		return {};
+	}
+	const bodyRecord = parsedBody as Record<string, unknown>;
+	const result: Record<string, unknown> = {};
+
+	const thinking = bodyRecord.thinking;
+	if (thinking && typeof thinking === "object") {
+		const thinkingRecord = thinking as Record<string, unknown>;
+		if (typeof thinkingRecord.type === "string") {
+			result.wireThinkingMode = thinkingRecord.type;
+		}
+	}
+
+	const reasoning = bodyRecord.reasoning;
+	if (reasoning && typeof reasoning === "object") {
+		const reasoningRecord = reasoning as Record<string, unknown>;
+		if (typeof reasoningRecord.effort === "string") {
+			result.wireReasoningEffort = reasoningRecord.effort;
+		}
+		if (typeof reasoningRecord.enabled === "boolean") {
+			result.wireReasoningEnabled = reasoningRecord.enabled;
+		}
+		if (typeof reasoningRecord.exclude === "boolean") {
+			result.wireReasoningExcluded = reasoningRecord.exclude;
+		}
+	}
+
+	if (typeof bodyRecord.reasoning_effort === "string") {
+		result.wireReasoningEffort = bodyRecord.reasoning_effort;
+	}
+
+	const outputConfig = bodyRecord.output_config;
+	if (outputConfig && typeof outputConfig === "object") {
+		const outputConfigRecord = outputConfig as Record<string, unknown>;
+		if (typeof outputConfigRecord.effort === "string") {
+			result.wireOutputConfigEffort = outputConfigRecord.effort;
+		}
+	}
+
+	const maxTokens =
+		bodyRecord.max_tokens ??
+		bodyRecord.max_output_tokens ??
+		bodyRecord.max_completion_tokens;
+	if (typeof maxTokens === "number") {
+		result.wireOutputTokenLimit = maxTokens;
+	}
+
+	return result;
+}
+
 function safeFilePart(value: unknown): string | undefined {
 	if (typeof value !== "string" && typeof value !== "number") return undefined;
 	const raw = String(value).trim();
@@ -303,6 +376,14 @@ export function recordProviderRequestCapture(input: {
 	stage: CaptureStage;
 	request: GatewayStreamRequest;
 	payload: unknown;
+	/**
+	 * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1).
+	 *
+	 * The reasoning-relevant view of the SERIALIZED request. Recorded
+	 * verbatim (it contains only enumerations and numbers), so the wire-level
+	 * reasoning policy is observable without retaining the raw body.
+	 */
+	wireReasoning?: Record<string, unknown>;
 }): void {
 	try {
 		const mode = readCaptureMode();
@@ -318,6 +399,9 @@ export function recordProviderRequestCapture(input: {
 			captureStage: input.stage,
 			mode,
 			correlation: captureCorrelation(input.request),
+			...(input.wireReasoning && Object.keys(input.wireReasoning).length > 0
+				? { wireReasoning: input.wireReasoning }
+				: {}),
 			summary: {
 				payloadBytes: byteLength(serializedPayload),
 				estimatedTokens: estimateTokens(byteLength(serializedPayload)),
@@ -386,6 +470,11 @@ export function wrapFetchForProviderRequestCapture(
 							"GET",
 						body,
 					},
+					// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1):
+					// the reasoning-relevant view of the SERIALIZED body. This
+					// is the wire-level authority for the reasoning policy; the
+					// raw body is never retained.
+					wireReasoning: summarizeWireReasoning(body),
 				});
 			})
 			.catch(() => {

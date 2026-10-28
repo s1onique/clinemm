@@ -445,12 +445,18 @@ describe("built-in provider metadata", () => {
 				routing: {
 					reasoning: {
 						format: "minimax-thinking",
-						routes: [
+						routes: expect.arrayContaining([
 							expect.objectContaining({
 								matcher: "model-id",
 								modelId: "MiniMax-M3",
 							}),
-						],
+							// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01:
+							// M3.1 shares the transport but requires reasoning.
+							expect.objectContaining({
+								matcher: "model-id",
+								modelId: "minimax-m3.1-flash",
+							}),
+						]),
 					},
 				},
 			},

@@ -242,6 +242,25 @@ function hasStaleDisabledReasoningFields(reasoning: ProviderReasoningSettings | 
 	return reasoning?.enabled === false && (reasoning.effort !== undefined || reasoning.budgetTokens !== undefined)
 }
 
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+ *
+ * The persisted reasoning settings after the stale-field cleanup.
+ *
+ * A disabled state must never carry an ACTIVE effort — an effort alongside
+ * `enabled: false` is incoherent, and the cleanup drops it. The `none`
+ * effort is different: it is not an active effort but the RECORD of an
+ * explicit user selection, and it is the only thing that distinguishes "the
+ * user chose None" from "reasoning was disabled for some other reason".
+ * Dropping it would turn an explicit user selection into an anonymous
+ * disable, which the production boundary can no longer reject on a model
+ * that mandates reasoning — the user's `None` would be silently replaced by
+ * the model's mandatory default.
+ */
+export function sanitizedDisabledReasoningSettings(reasoning: ProviderReasoningSettings): ProviderReasoningSettings {
+	return reasoning.effort === "none" ? { enabled: false, effort: "none" } : { enabled: false }
+}
+
 function providerSettingsProviderId(providerId: string): string {
 	return toSdkProviderId(providerId)
 }
@@ -293,9 +312,14 @@ function resolveProviderReasoningConfig(providerId: string): SessionReasoningCon
 		}
 
 		if (hasStaleDisabledReasoningFields(settings.reasoning)) {
+			// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2
+			// correction): the cleanup keeps an explicit `None` selection, so
+			// a stale persisted `None` stays a USER-VISIBLE selection all the
+			// way to the production boundary.
+			const staleReasoning = settings.reasoning as ProviderReasoningSettings
 			const sanitizedSettings: ProviderSettings = {
 				...settings,
-				reasoning: { enabled: false },
+				reasoning: sanitizedDisabledReasoningSettings(staleReasoning),
 			}
 			manager.saveProviderSettings(sanitizedSettings, { setLastUsed: false })
 			Logger.warn(`[SessionFactory] Cleared stale disabled reasoning fields for provider=${providerId}`)

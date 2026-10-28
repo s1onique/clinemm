@@ -18,6 +18,11 @@ import {
 } from "@cline/shared";
 import { toAsyncIterable } from "./async";
 import { BUILTIN_PROVIDER_REGISTRATIONS } from "./builtins-runtime";
+import { UnsupportedReasoningConfigurationError } from "./errors";
+import {
+	getModelReasoningControls,
+	modelMandatesReasoning,
+} from "./model-facts";
 import { providerManifestSupportsModelOperation } from "./model-operations";
 import { providerManifestSupportsModelTool } from "./model-tools";
 import { GatewayRegistry } from "./registry";
@@ -47,6 +52,26 @@ function normalizeReasoningBudgetTokens(value: unknown): number | undefined {
 		: undefined;
 }
 
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+ *
+ * The effort the caller requested, read from the raw model-request options.
+ *
+ * `options` is an untyped bag, so the value is read defensively: a
+ * non-object `reasoning` or a non-string `effort` yields `undefined` rather
+ * than throwing.
+ */
+function readRequestedReasoningEffort(
+	options: Record<string, unknown> | undefined,
+): string | undefined {
+	const reasoning = options?.reasoning;
+	if (!reasoning || typeof reasoning !== "object" || Array.isArray(reasoning)) {
+		return undefined;
+	}
+	const effort = (reasoning as Record<string, unknown>).effort;
+	return typeof effort === "string" ? effort : undefined;
+}
+
 function normalizeRequestedReasoning(
 	value: unknown,
 ): GatewayStreamRequest["reasoning"] {
@@ -56,15 +81,23 @@ function normalizeRequestedReasoning(
 
 	const input = value as Record<string, unknown>;
 	const parsedEffort = ReasoningEffortSchema.safeParse(input.effort);
+	const disableReason: "none" | "unknown" | undefined =
+		input.disableReason === "none" || input.disableReason === "unknown"
+			? input.disableReason
+			: undefined;
 	const normalized = {
 		enabled: typeof input.enabled === "boolean" ? input.enabled : undefined,
 		effort: parsedEffort.success ? parsedEffort.data : undefined,
 		budgetTokens: normalizeReasoningBudgetTokens(input.budgetTokens),
+		// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2
+		// correction): the recorded disable reason survives normalization.
+		disableReason,
 	};
 
 	return normalized.enabled !== undefined ||
 		normalized.effort !== undefined ||
-		normalized.budgetTokens !== undefined
+		normalized.budgetTokens !== undefined ||
+		normalized.disableReason !== undefined
 		? normalized
 		: undefined;
 }
@@ -83,6 +116,15 @@ function mergeReasoningOptions(
 		effort: requested?.effort ?? legacy?.effort ?? defaults?.effort,
 		budgetTokens:
 			requested?.budgetTokens ?? legacy?.budgetTokens ?? defaults?.budgetTokens,
+		// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2
+		// correction): the recorded disable reason is merged the same way
+		// the other reasoning fields are, so a PERSISTED explicit `None`
+		// (carried on the model handle's defaults) is not lost when the
+		// per-request options carry only `thinking: false`.
+		disableReason:
+			requested?.disableReason ??
+			legacy?.disableReason ??
+			defaults?.disableReason,
 	};
 	if (
 		merged.enabled === false &&
@@ -94,6 +136,26 @@ function mergeReasoningOptions(
 	return Object.values(merged).some((value) => value !== undefined)
 		? merged
 		: undefined;
+}
+
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+ *
+ * Attach the recorded disable reason to a merged reasoning request.
+ *
+ * The reason is attached ONLY when reasoning is actually disabled, so an
+ * enablement never carries a disable reason. A disable with no recorded
+ * reason keeps the pre-existing behavior: the model applies its own
+ * default, exactly as before this correction.
+ */
+function withDisableReason(
+	reasoning: GatewayStreamRequest["reasoning"],
+	disableReason: "none" | "unknown",
+): GatewayStreamRequest["reasoning"] {
+	if (!reasoning || reasoning.enabled !== false) {
+		return reasoning;
+	}
+	return { ...reasoning, disableReason };
 }
 
 export interface Gateway {
@@ -133,6 +195,35 @@ class GatewayModelAdapter implements AgentModel {
 		const legacyEffort: ReasoningEffort | undefined = parsedLegacyEffort.success
 			? parsedLegacyEffort.data
 			: undefined;
+		// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2
+		// correction).
+		//
+		// The merged reasoning options lose the distinction between "the
+		// user explicitly selected None" and "reasoning was disabled for some
+		// other reason". The distinction is recovered HERE, from the raw
+		// caller options, and carried on the request so the production
+		// boundary can tell an explicit user selection apart from a derived
+		// disable.
+		//
+		// An explicit `None` is either the structured `effort: "none"` (the
+		// modern shape) or the legacy `reasoningEffort: "none"`. A
+		// `thinking: false` on its own is NOT an explicit None selection: it
+		// is what a disable looks like after it has been resolved, and it is
+		// also what a caller sends when it wants the model's default.
+		//
+		// The MODEL HANDLE's default carries the PERSISTED provider-level
+		// selection. A stale persisted `None` arrives that way — the
+		// per-request options carry only `thinking: false` — so the handle
+		// default is consulted as well. Without it a stale persisted `None`
+		// would reach the production boundary as an anonymous disable and
+		// would be silently replaced by the model's mandatory default.
+		const explicitNoneSelected =
+			readRequestedReasoningEffort(request.options) === "none" ||
+			request.options?.reasoningEffort === "none" ||
+			this.defaults?.reasoning?.disableReason === "none";
+		const disableReason: "none" | "unknown" = explicitNoneSelected
+			? "none"
+			: "unknown";
 		const legacyBudgetTokens =
 			normalizeReasoningBudgetTokens(thinkingBudgetTokens);
 		const legacyReasoning:
@@ -168,10 +259,13 @@ class GatewayModelAdapter implements AgentModel {
 				this.defaults?.metadata,
 				request.options?.metadata as Record<string, unknown> | undefined,
 			),
-			reasoning: mergeReasoningOptions(
-				defaultReasoning,
-				legacyReasoning,
-				requestedReasoning,
+			reasoning: withDisableReason(
+				mergeReasoningOptions(
+					defaultReasoning,
+					legacyReasoning,
+					requestedReasoning,
+				),
+				disableReason,
 			),
 			signal: request.signal ?? this.defaults?.signal,
 		});
@@ -314,6 +408,40 @@ export class DefaultGateway implements Gateway {
 			throw new Error(
 				`Provider "${resolved.provider.id}" does not support model "${resolved.model.id}" operation "${resolved.model.operation ?? "language"}" with its declared modalities.`,
 			);
+		}
+		// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2
+		// correction).
+		//
+		// The PRODUCTION BOUNDARY for the unsupported-reasoning-off
+		// contract. It sits here, before the provider is created and before
+		// any transport happens, because this is the last point at which the
+		// resolved model's advertised controls and the caller's request are
+		// both known.
+		//
+		// A request that EXPLICITLY disabled reasoning (`disableReason ===
+		// "none"`, i.e. the user selected the `None` effort) on a model that
+		// MANDATES reasoning is rejected with a typed error. The alternative
+		// — silently dropping the reasoning intent and letting the model
+		// apply its mandatory default — would run the request with a
+		// reasoning policy the user did not select and give them no signal
+		// that their selection was discarded.
+		//
+		// A disable WITHOUT an explicit user selection keeps the
+		// pre-existing behavior: the model applies its own default.
+		if (
+			request.reasoning?.enabled === false &&
+			request.reasoning.disableReason === "none" &&
+			modelMandatesReasoning(resolved.model)
+		) {
+			const controls = getModelReasoningControls(
+				resolved.model.reasoningOptions,
+			);
+			throw new UnsupportedReasoningConfigurationError({
+				providerId: resolved.provider.id,
+				modelId: resolved.model.id,
+				efforts: controls?.efforts ?? [],
+				supportsToggle: controls?.toggle ?? false,
+			});
 		}
 		const unsupportedModelTools = [
 			...new Set(

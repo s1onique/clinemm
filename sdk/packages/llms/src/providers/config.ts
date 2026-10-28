@@ -138,6 +138,20 @@ export interface ReasoningConfig {
 	thinkingBudgetTokens?: number;
 	/** Enable thinking with provider/model defaults when supported */
 	thinking?: boolean;
+	/**
+	 * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
+	 *
+	 * The user EXPLICITLY selected the `None` reasoning effort.
+	 *
+	 * The `None` selection is a user-visible choice, but the effort itself
+	 * cannot be carried as a `reasoningEffort` (that type has no `none`
+	 * member) and `thinking: false` alone cannot say whether the disable was
+	 * an explicit `None` selection or a derived disable. This flag carries
+	 * that distinction so the production boundary can reject an unsupported
+	 * `None` on a model that mandates reasoning, instead of silently
+	 * replacing it with the model's mandatory default.
+	 */
+	reasoningNoneSelected?: boolean;
 }
 
 /**

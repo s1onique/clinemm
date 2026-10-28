@@ -425,9 +425,18 @@ describe("createGatewayApiHandler.createMessage", () => {
 			// Drain the stream so the provider request is executed.
 		}
 
+		// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01:
+		// OpenRouter owns a native `reasoning` object, so the conservatively
+		// normalized effort travels in `providerOptions.openrouter.reasoning`
+		// (which the OpenRouter transport serializes) instead of the AI SDK's
+		// portable top-level option (which that transport ignores).
 		expect(streamTextSpy).toHaveBeenCalledWith(
 			expect.objectContaining({
-				reasoning: "xhigh",
+				providerOptions: expect.objectContaining({
+					openrouter: expect.objectContaining({
+						reasoning: expect.objectContaining({ effort: "high" }),
+					}),
+				}),
 			}),
 		);
 	});

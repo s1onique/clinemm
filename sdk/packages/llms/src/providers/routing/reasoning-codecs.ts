@@ -17,6 +17,7 @@ export function hasReasoningControls(
 ): boolean {
 	return (
 		reasoning?.enabled !== undefined ||
+		reasoning?.effort !== undefined ||
 		typeof reasoning?.budgetTokens === "number"
 	);
 }
@@ -47,6 +48,16 @@ export function buildOpenRouterReasoningOptions(
 
 	if (reasoning?.enabled === false) {
 		return { effort: "none" };
+	}
+
+	// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01.
+	//
+	// An explicit effort is the user's selected reasoning policy and must
+	// reach OpenRouter as `reasoning.effort`. OpenRouter rejects
+	// `reasoning.max_tokens` alongside `reasoning.effort`, so the budget is
+	// only emitted when no effort was selected.
+	if (reasoning?.effort) {
+		return { effort: reasoning.effort };
 	}
 
 	// AI SDK `maxOutputTokens` still caps the whole response. This provider option

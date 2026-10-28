@@ -556,6 +556,79 @@ function reasoningWasRequestedOff(request: AgentModelRequest): boolean {
 	return request.options?.thinking === false;
 }
 
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1).
+ *
+ * A privacy-safe summary of the reasoning configuration a model request
+ * carries. The values are ENUMERATIONS and COUNTS only — never prompt text,
+ * never reasoning content, never tool arguments, never credentials.
+ *
+ * - `requestedThinking` — the persisted user selection ("on" / "off" /
+ *   "unset"). This is the SELECTION, not the effective wire policy.
+ * - `requestedReasoningEffort` — the persisted effort selection, if any.
+ * - `reasoningEffortAdvertised` — whether an effort was requested at all.
+ *
+ * The WIRE-level facts (what the provider actually received) are recorded by
+ * the provider-request capture, not here: the agent runtime does not own the
+ * provider wire encoding, and claiming it here would be an inference rather
+ * than an observation.
+ */
+function summarizeReasoningConfiguration(
+	request: AgentModelRequest,
+): Record<string, unknown> {
+	const options = request.options;
+	const thinking = options?.thinking;
+	const effort = options?.reasoningEffort;
+	return {
+		requestedThinking:
+			typeof thinking === "boolean" ? (thinking ? "on" : "off") : "unset",
+		...(typeof effort === "string" ? { requestedReasoningEffort: effort } : {}),
+		reasoningEffortAdvertised: typeof effort === "string",
+	};
+}
+
+/**
+ * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1).
+ *
+ * Whether the provider STREAMED reasoning content, and how many bytes of it
+ * there were. Only the byte COUNT is recorded: no reasoning text is retained,
+ * so the observation can establish that reasoning happened (or did not) and
+ * how much of it there was, without retaining any of its content.
+ *
+ * The byte count is an INFERRED size, not a token count. It is deliberately
+ * named `reasoningContentBytes` so it can never be confused with the
+ * provider-reported reasoning TOKEN count.
+ *
+ * The count is in UTF-8 BYTES, not UTF-16 code units. `String.length`
+ * counts UTF-16 code units, so it under-counts every non-ASCII character
+ * (a CJK character is one code unit but three UTF-8 bytes) and would make
+ * the recorded size disagree with the provider-request capture's
+ * `payloadBytes`, which is already UTF-8. `TextEncoder` is the
+ * platform-neutral way to measure UTF-8 bytes in both Node and the
+ * browser.
+ */
+function summarizeReasoningContent(
+	content: readonly AgentMessagePart[],
+): Record<string, unknown> {
+	const reasoningParts = content.filter(
+		(part): part is Extract<AgentMessagePart, { type: "reasoning" }> =>
+			part.type === "reasoning",
+	);
+	if (reasoningParts.length === 0) {
+		return { reasoningContentPresent: false, reasoningContentBytes: 0 };
+	}
+	const encoder = new TextEncoder();
+	const reasoningContentBytes = reasoningParts.reduce(
+		(total, part) => total + (part.text ? encoder.encode(part.text).length : 0),
+		0,
+	);
+	return {
+		reasoningContentPresent: true,
+		reasoningContentBytes,
+		reasoningContentParts: reasoningParts.length,
+	};
+}
+
 function textFromMessage(message: AgentMessage | undefined): string {
 	if (!message) {
 		return "";
@@ -2323,6 +2396,18 @@ export class AgentRuntime {
 						cacheWriteTokens: metrics.cacheWriteTokens,
 					}
 				: {}),
+			// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1).
+			//
+			// The PROVIDER-REPORTED reasoning token count. It is reported
+			// only when the provider supplied one, so an absent field means
+			// "the provider did not report it", never "zero reasoning".
+			...(metrics?.reasoningTokenCount !== undefined
+				? { providerReportedReasoningTokens: metrics.reasoningTokenCount }
+				: {}),
+			// The PRESENCE and SIZE of streamed reasoning content. Only the
+			// byte COUNT is recorded: no reasoning text is retained, so the
+			// observation cannot leak model-internal content.
+			...summarizeReasoningContent(content),
 			toolCallCount: content.filter((part) => part.type === "tool-call").length,
 			invalidToolCallCount: invalidToolCalls.length,
 		});
@@ -2596,6 +2681,7 @@ export class AgentRuntime {
 					// (counts and character lengths) produced by the
 					// production `summarizeModelRequest` helper.
 					...summary,
+					...summarizeReasoningConfiguration(request),
 					toolSchemaCount: request.tools.length,
 				},
 			});

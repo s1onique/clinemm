@@ -268,6 +268,27 @@ export function createAgentModelFromConfig(
 		{
 			maxTokens: normalizedProviderConfig.maxOutputTokens,
 			temperature: normalizedProviderConfig.temperature,
+			// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2
+			// correction).
+			//
+			// The PERSISTED provider-level reasoning selection is forwarded
+			// as the model handle's default reasoning. In particular, an
+			// explicit `None` selection is carried as
+			// `disableReason: "none"`, so a stale persisted `None` reaches
+			// the production boundary as an explicit user selection rather
+			// than as an anonymous disable — and can therefore be REJECTED
+			// with a typed error on a model that mandates reasoning, instead
+			// of being silently replaced by the model's mandatory default.
+			...(normalizedProviderConfig.thinking === false
+				? {
+						reasoning: {
+							enabled: false,
+							...(normalizedProviderConfig.reasoningNoneSelected
+								? { disableReason: "none" as const }
+								: { disableReason: "unknown" as const }),
+						},
+					}
+				: {}),
 		},
 	);
 }
