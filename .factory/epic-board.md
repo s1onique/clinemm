@@ -1,3 +1,35 @@
+# ACT-CLINEMM-M31-CATALOG-SNAPSHOT-REFRESH01 — PASS_STRUCTURAL_ONLY — 2026-10-29
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the bundled MiniMax catalog did not publish the exact production model id `MiniMax-M3.1-Flash`; a **bounded** refresh adds EXACTLY that one upstream-authoritative entry — derived by the REAL production normalizer — and changes **nothing else**, with the conservation of all other providers/models proven).
+
+**ENTRY_HEAD:** `62cfffea7b86d94657e0efcf8bb284857841e342` (main). **SUBJECT_HEAD:** the commit carrying the bounded refresh + the new witness (the commit that follows this board entry).
+
+**Why this ACT exists.** Upstream (models.dev) publishes `MiniMax-M3.1-Flash` for the `minimax` provider, but the bundled `catalog.generated.ts` snapshot did not. The entry is therefore missing from the shipped catalog even though the live MiniMax API accepts the model.
+
+**C1 — WHY A FULL REGENERATION WAS REFUSED.** `bun -F @cline/llms generate:models` rewrites the ENTIRE catalog from the live payload: ~6,271 changed model entries across ~204 providers, and it DROPS the MiniMax M2.x records that upstream has since marked `deprecated` while the checked-in snapshot still publishes them. `bun -F @cline/llms generate:models --providers=minimax` does NOT forward the flag as expected and triggers the same full regeneration. The refresh therefore had to be bounded, and the permanent generator is UNCHANGED.
+
+**C2 — HOW THE SINGLE ENTRY WAS DERIVED.** The one-off helper `.factory/evidence/ACT-CLINEMM-M31-CATALOG-SNAPSHOT-REFRESH01/refresh-minimax-m31-flash.ts` derives the entry with the REAL production normalizer (`catalog-live.ts :: normalizeModelsDevProviderModels`) and never re-implements the models.dev → `ModelInfo` mapping. It proves, before writing anything: (1) the normalizer run on the FULL payload and on a payload SCOPED to `minimax` yields IDENTICAL `minimax` results; (2) the checked-in providers JSON round-trips through the generator's own `JSON.stringify(value, null, 2)` shape; (3) the delta is exactly one model — zero other model ids added, zero removed, every other model byte-identical.
+
+**C3 — UPSTREAM PROVENANCE.** `https://models.dev/api.json`, retrieved `2026-10-29T11:43:24.088Z`, 5,940,980 bytes, payload SHA-256 `666dfc620821827f07c3ef274b14899691aec4d1e7a8da0d5db02d27a8d5613e`. The raw upstream record and the derived entry are recorded in `.factory/evidence/ACT-CLINEMM-M31-CATALOG-SNAPSHOT-REFRESH01/provenance.json`.
+
+**C4 — THE PUBLISHED ENTRY.** `id` `MiniMax-M3.1-Flash`; `contextWindow` **1,000,000** (NOT 1,048,576); `maxInputTokens` 1,000,000; `maxTokens` **524,288**; `releaseDate` `2026-10-19`; `family` `minimax`; pricing `input` 0.15 / `output` 0.6 / `cacheRead` 0.015 / `cacheWrite` 0; `reasoningOptions` `[{ type: "effort", values: [low, medium, high, xhigh, max] }]`; capabilities `[images, video, tools, reasoning, temperature, prompt-cache]`. No price was fabricated — every value is upstream's own.
+
+**C5 — CONSERVATION PROOF (independently re-measured).** Re-parsing the committed file against `HEAD`'s copy: providers **191 → 191** with identical key sets; models **5702 → 5703**; ADDED `[('minimax', 'MiniMax-M3.1-Flash')]`; REMOVED `[]`; models whose content changed `[]`; every NON-`minimax` provider byte-identical; the 7 pre-existing `minimax` entries unchanged. The generated-file diff is **36 insertions(+), 1 deletion(-)** — the 35-line entry plus the generation-timestamp line the generator always advances.
+
+**C6 — GATES.** New focused witness `sdk/packages/llms/src/catalog/catalog-m31-flash-snapshot01.test.ts` **4/4 PASS**; existing MiniMax witnesses (exact-ID 8, unregistered 4, unsupported-off 9, wire 6, probe 7) **34/34 PASS**; full `@cline/llms` package **49 files passed / 4 skipped, 790 passed / 4 skipped / 0 failed** (was 786; +4 = the new witness); `@cline/llms` typecheck **PASS**; `@cline/llms` build **PASS**; Biome check on the new witness **PASS**; `apps/vscode` model-catalog suites (excluding the pre-existing probe) **10 files / 156 PASS**; `apps/vscode` typecheck **PASS**.
+
+**THE PRE-EXISTING UNTRACKED PROBE IS NOT ADDRESSED HERE.** `apps/vscode/src/sdk/model-catalog/startup-model-metadata-authority.m31smma01.test.ts` is an UNTRACKED probe that existed before this ACT and is OUT OF SCOPE for it. It fails 8/9 — and it fails **IDENTICALLY with this ACT's catalog change reverted** (the catalog was temporarily restored to `HEAD` and the same 8 failures were observed). It is a **baseline** condition, not a regression introduced by this ACT. The probe is PRESERVED, unmodified, and uncommitted.
+
+**A `--pool=threads` ARTIFACT, NOT A REGRESSION.** `src/providers/gateway.test.ts` fails under `--pool=threads` with `TypeError: process.chdir() is not supported in workers`; under the default forks pool the same file passes **154/154**. The full suite above was measured with the default pool.
+
+**WHAT IS NOT CLAIMED.** No VSIX was built or installed, so the **installed artifact is not exact-head** — the result is source-level only. No live MiniMax API call was made by this ACT; the upstream provenance is the models.dev catalog, which is the authority this ACT binds to. The permanent generator was **not** changed: a future full regeneration will still rewrite the whole catalog, which remains an open, separate concern.
+
+**Evidence.** `.factory/evidence/ACT-CLINEMM-M31-CATALOG-SNAPSHOT-REFRESH01/` (`README.md`, `provenance.json`, `refresh-minimax-m31-flash.ts`, `SHA256SUMS`).
+
+**ACT body:** this board entry.
+
+---
+
 # ACT-CLINEMM-M31-EXACT-MODEL-ID-WIRE-AUTHORITY01 — PASS_WIRE_AUTHORITY — 2026-10-28
 
 **Status:** CLOSED with verdict **`PASS_WIRE_AUTHORITY`** (the exact production model id `MiniMax-M3.1-Flash` was RED at the **registry** boundary — a case-sensitive provider-metadata lookup miss — and a **bounded, provider-local** metadata entry restores it; the requested `low` effort is now confirmed in a **real serialized Anthropic-compatible request accepted by the live MiniMax API**).

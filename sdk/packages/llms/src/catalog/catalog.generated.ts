@@ -14,7 +14,7 @@ export const GENERATED_PROVIDER_MODELS: {
   version: number
   providers: Record<string, Record<string, ModelInfo>>
 } = {
-  version: 1787907289186,
+  version: 1793274225969,
   providers: {
   "302ai": {
     "claude-opus-4-7": {
@@ -85169,6 +85169,41 @@ export const GENERATED_PROVIDER_MODELS: {
     }
   },
   "minimax": {
+    "MiniMax-M3.1-Flash": {
+      "id": "MiniMax-M3.1-Flash",
+      "name": "MiniMax-M3.1-Flash",
+      "contextWindow": 1000000,
+      "maxInputTokens": 1000000,
+      "maxTokens": 524288,
+      "capabilities": [
+        "images",
+        "video",
+        "tools",
+        "reasoning",
+        "temperature",
+        "prompt-cache"
+      ],
+      "reasoningOptions": [
+        {
+          "type": "effort",
+          "values": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      ],
+      "pricing": {
+        "input": 0.15,
+        "output": 0.6,
+        "cacheRead": 0.015,
+        "cacheWrite": 0
+      },
+      "releaseDate": "2026-10-19",
+      "family": "minimax"
+    },
     "MiniMax-M3": {
       "id": "MiniMax-M3",
       "name": "MiniMax-M3",
