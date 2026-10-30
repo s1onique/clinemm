@@ -6,7 +6,7 @@
 - ACT-TYPE: bounded production implementation
 - VERDICT (final): `PASS_STRUCTURAL_ONLY`
 - ENTRY_HEAD: `38e726c45de0b9412e6d3822bfd104fd7cbe2cbf` (branch `tool-execution-semantics-m3`; `main` at the same SHA)
-- SUBJECT_HEAD: see §11 (recorded after the bounded commit)
+- SUBJECT_HEAD: `f09a1e25f8a1dfe767dd7e075da7b8f0c96b3689`
 - WORKTREE at closure: clean except the tracked delta of this ACT
 - STASHES: 2/2 protected (unchanged; verified before and after)
 
@@ -16,7 +16,7 @@
 
 ```text
 ENTRY_HEAD          = 38e726c45de0b9412e6d3822bfd104fd7cbe2cbf
-SUBJECT_HEAD        = <recorded in §11 after the bounded commit>
+SUBJECT_HEAD        = f09a1e25f8a1dfe767dd7e075da7b8f0c96b3689
 CHANGED_FILES       = 8 production + 3 test + 2 documentation
 RED_RESULT          = 12/12 failed (capability absent: recordToolStartedWithIdentity
                       / recordToolRuntimeOutcome undefined; outcome undefined on the wire)
@@ -371,5 +371,5 @@ projection is a plain object produced during render).
 ## 11. Commit record
 
 ```text
-SUBJECT_HEAD = <filled after the bounded commit>
+SUBJECT_HEAD = f09a1e25f8a1dfe767dd7e075da7b8f0c96b3689
 ```
