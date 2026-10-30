@@ -1073,6 +1073,17 @@ export function mergeAgentHooks(
 		afterModel: mergeHookFunction(activeLayers, "afterModel"),
 		beforeTool: mergeHookFunction(activeLayers, "beforeTool"),
 		afterTool: mergeHookFunction(activeLayers, "afterTool"),
+		// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01
+		// (TES-OUT-01): the typed runtime-outcome observation seam.
+		// It was previously dropped by this merge (and by the session
+		// orchestrator's `mergeRuntimeHooks`), so no host could ever
+		// subscribe to the runtime's authoritative `ToolRuntimeOutcome`.
+		// The hook is READ-ONLY: it has no return value the runtime
+		// consumes, so fanning it out cannot influence execution.
+		onToolRuntimeOutcome: mergeHookFunction(
+			activeLayers,
+			"onToolRuntimeOutcome",
+		),
 		onEvent: mergeHookFunction(activeLayers, "onEvent"),
 	};
 }

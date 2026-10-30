@@ -83,6 +83,7 @@ import type {
 	TaskHeaderPresentationProjection,
 	TaskHeaderTelemetryStrip,
 	ToolMechanismSummary,
+	ToolOutcomeSummary,
 	TurnState,
 } from "@shared/ExtensionMessage"
 import type { LucideIcon } from "lucide-react"
@@ -92,6 +93,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
 	formatElapsed,
 	isUsableMechanismProjection,
+	isUsableOutcomeProjection,
 	resolveElapsedDisplayMs,
 	taskHeaderPresentationStateLabel,
 } from "./taskHeaderTelemetryHelpers"
@@ -282,6 +284,53 @@ function MechanismChip({ descriptor, count }: { descriptor: MechanismDescriptor;
 	)
 }
 
+/**
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 (TES-OUT-01):
+ *
+ * Per-outcome visual / a11y descriptor table. The order is the canonical
+ * TaskHeader display order:
+ *
+ *   succeeded → failed → pending → unknown
+ *
+ * The `label` is the screen-reader / tooltip label fragment. The labels
+ * describe the RUNTIME TOOL OUTCOME and never claim that a shell command,
+ * a test suite, or a build passed — the runtime outcome of a `run_commands`
+ * invocation says nothing about the subprocess exit status.
+ */
+interface OutcomeDescriptor {
+	key: keyof ToolOutcomeSummary
+	label: string
+	glyph: string
+}
+
+const OUTCOME_DESCRIPTORS: readonly OutcomeDescriptor[] = [
+	{ key: "succeeded", label: "tool calls that completed successfully at runtime", glyph: "✓" },
+	{ key: "failed", label: "tool calls that failed at runtime", glyph: "✕" },
+	{ key: "pending", label: "tool calls still awaiting a runtime outcome", glyph: "…" },
+	{ key: "unknown", label: "tool calls with no classifiable runtime outcome", glyph: "?" },
+] as const
+
+/**
+ * Render one compact runtime-outcome chip. The glyph is decorative; the
+ * accessible name carries the meaning.
+ */
+function OutcomeChip({ descriptor, count }: { descriptor: OutcomeDescriptor; count: number }) {
+	const testId = `task-header-outcome-${descriptor.key}`
+	const ariaLabel = `${count} ${descriptor.label}`
+	return (
+		<span
+			aria-label={ariaLabel}
+			className="inline-flex items-center gap-0.5 font-mono"
+			data-testid={testId}
+			title={ariaLabel}>
+			<span aria-hidden className="text-[0.7rem]">
+				{descriptor.glyph}
+			</span>
+			<span>{count}</span>
+		</span>
+	)
+}
+
 const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	telemetry,
 	taskHeaderPresentation,
@@ -332,6 +381,20 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	// calls: 10` against `visible: 🔧9 ✏️3 >_3 ...`).
 	const mechanism = telemetry.mechanism
 	const hasMechanismProjection = isUsableMechanismProjection(mechanism, telemetry.toolCalls)
+	// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01:
+	// Bounded RUNTIME-OUTCOME projection. The webview trusts it ONLY
+	// when `isUsableOutcomeProjection` returns true — the validator
+	// enforces that the projection is present, that every field is a
+	// finite non-negative integer, and that the four buckets sum to
+	// the canonical `telemetry.toolCalls`. A malformed or
+	// non-conserving projection falls back to the existing V1 display;
+	// the webview NEVER silently repairs inconsistent counts.
+	//
+	// The outcome chips describe the RUNTIME tool outcome. They make no
+	// claim about shell-command exit status, test results, or build
+	// results — that authority is separate and out of scope here.
+	const outcome = telemetry.outcome
+	const hasOutcomeProjection = isUsableOutcomeProjection(outcome, telemetry.toolCalls)
 
 	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
 	// + ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
@@ -399,6 +462,30 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 					<span className="font-mono">{telemetry.toolCalls}</span>
 				</span>
 			)}
+			{/* ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01:
+			    Bounded runtime-outcome chips rendered NEXT TO the existing
+			    tool summary (never replacing it). Rendered ONLY when the
+			    host-supplied projection passes the wire validator; a
+			    missing / malformed / non-conserving projection leaves the
+			    V1 display untouched. The zero-valued buckets are hidden
+			    so a healthy task stays uncluttered, and the chips are
+			    skipped entirely when every bucket is zero (nothing to
+			    say). The accessible names describe the RUNTIME tool
+			    outcome only — they never claim a shell command, a test
+			    suite, or a build passed. */}
+			{hasOutcomeProjection &&
+			outcome &&
+			(outcome.succeeded > 0 || outcome.failed > 0 || outcome.pending > 0 || outcome.unknown > 0) ? (
+				<span
+					aria-label={`Tool runtime outcomes: ${outcome.succeeded} succeeded, ${outcome.failed} failed, ${outcome.pending} pending, ${outcome.unknown} unknown`}
+					className="inline-flex items-center gap-1"
+					data-testid="task-header-tool-outcome"
+					title="Runtime outcome of this task's tool invocations, as reported by the runtime. This describes the tool call itself — it does not report shell-command exit status, test results, or build results.">
+					{OUTCOME_DESCRIPTORS.filter((d) => outcome[d.key] > 0).map((d) => (
+						<OutcomeChip count={outcome[d.key]} descriptor={d} key={d.key} />
+					))}
+				</span>
+			) : null}
 			{showRecovery ? (
 				<span
 					aria-label={`Recovery budget failures: ${telemetry.recoveryBudgetFailures}`}

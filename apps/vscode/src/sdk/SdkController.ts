@@ -1604,6 +1604,14 @@ export class Controller {
 			stateManager: this.stateManager,
 			emitHookMessage: (msg) => this.messages.emitHookMessage(msg),
 			onConsecutiveMistakeLimitReached: (context) => this.interactions.handleConsecutiveMistakeLimitReached(context),
+			// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01
+			// (TES-OUT-01): the host's read-only observer of the runtime's
+			// authoritative typed tool outcome. The identity used for the
+			// join is the runtime's own `AgentToolCallPart.toolCallId` —
+			// the same id the host counts on `content_start(tool)`.
+			onToolRuntimeOutcome: (ctx) => {
+				this.taskTelemetry.recordToolRuntimeOutcome(ctx.outcome, ctx.toolCall.toolCallId)
+			},
 		})
 		this.diffEdits = new SdkDiffEditCoordinator({
 			getCwd: () => this.getWorkspaceRoot(),
@@ -2017,10 +2025,7 @@ export class Controller {
 			},
 			// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: feed canonical
 			// `tool-started` events (post chat-translation: `content_start(tool)`)
-			// into the cumulative tool-call counter. The runtime emits one
-			// `tool-started` per tool invocation that reached the executor;
-			// control-plane DENY/REJECT/UNKNOWN_TOOL never emit this event,
-			// so the counter naturally excludes them.
+			// into the cumulative tool-call counter.
 			//
 			// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01):
 			// forward the canonical `toolName` from the
@@ -2030,8 +2035,28 @@ export class Controller {
 			// `other`). The classification is mechanism-only — the
 			// command TEXT never reaches the classifier, by
 			// construction.
+			//
+			// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01
+			// (TES-OUT-01): ALSO forward the canonical `toolCallId`
+			// from the same event. That identity is the ONLY join key
+			// against the typed terminal `ToolRuntimeOutcome` produced
+			// by the runtime's `onToolRuntimeOutcome` hook — the tracker
+			// never joins chronologically.
+			//
+			// CORRECTION of a stale comment: the previous revision
+			// claimed that "control-plane DENY/REJECT/UNKNOWN_TOOL never
+			// emit this event". That was empirically FALSE — the real
+			// `AgentRuntime.executePreparedTool` emits `tool-started`
+			// for EVERY prepared tool call, including the
+			// pre-execution control-plane paths (policy-disabled, host
+			// DENY, user reject). The counted `toolCalls` therefore
+			// DOES include those calls. The V2 outcome projection
+			// handles them correctly by classifying a `control_plane`
+			// terminal as `unknown` (neither success nor failure) —
+			// it never counts a pre-execution denial as a successful or
+			// failed tool execution.
 			onToolStarted: (event) => {
-				this.taskTelemetry.recordToolStartedWithName(event.toolName)
+				this.taskTelemetry.recordToolStartedWithIdentity(event.toolName, event.toolCallId)
 				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01
 				// CORRECTION01: the previous
 				// `observeMycToolStart(this.taskTelemetry,
@@ -2043,10 +2068,11 @@ export class Controller {
 				// `successful` made the wire read `myc 1/1` for
 				// a `myc_recall` that later errored (reviewer P1
 				// wrong-capture-boundary defect). The
-				// `recordToolStartedWithName` call above is
+				// `recordToolStartedWithIdentity` call above is
 				// preserved — it feeds the existing
 				// `mechanism` projection (cumulative counter
-				// not tied to outcomes).
+				// not tied to outcomes) AND the V2 runtime-outcome
+				// projection (joinable by `toolCallId`).
 			},
 			onDidBecomeIdle: () => this.handleSessionBecameIdle(),
 			beforeStartSession: () => this.ensureRemoteConfigForSessionStart(),

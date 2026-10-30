@@ -941,6 +941,22 @@ export interface TaskHeaderTelemetryStrip {
 	recoveryBudgetFailures: number
 	mechanism?: ToolMechanismSummary
 	/**
+	 * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01
+	 * (TES-OUT-01): bounded tool-RUNTIME-OUTCOME projection. See
+	 * {@link ToolOutcomeSummary} for the exact bucket semantics and the
+	 * conservation invariant.
+	 *
+	 * OPTIONAL on the wire: Hub/Remote hosts and older builds omit the
+	 * field entirely; the webview then renders the existing V1 mechanism
+	 * display unchanged (legacy conservation preserved).
+	 *
+	 * The projection reports the RUNTIME tool outcome. It never claims
+	 * that a shell command, a test suite, or a build exited 0 — that is a
+	 * separate authority (subprocess-terminal) and is explicitly out of
+	 * scope for this slice.
+	 */
+	outcome?: ToolOutcomeSummary
+	/**
 	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: see the
 	 * type-level doc above. Bounded to `Number.MAX_SAFE_INTEGER`
 	 * (saturating) — see
@@ -1081,6 +1097,44 @@ export interface ToolMechanismSummary {
 	search: number
 	mcp: number
 	other: number
+}
+
+/**
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 (TES-OUT-01):
+ * Wire-shape for the bounded tool-RUNTIME-OUTCOME projection.
+ *
+ * This is the RUNTIME outcome of a counted tool invocation, NOT the
+ * outcome of the underlying subprocess. A `run_commands` invocation that
+ * the runtime executed successfully counts as `succeeded` here even when
+ * the shell process exited nonzero — subprocess-terminal authority is a
+ * separate, later slice and MUST NOT be inferred from this projection.
+ *
+ * Every bucket counts COUNTED TOOL STARTS (`TaskHeaderTelemetryStrip
+ * .toolCalls`), never model messages or tool-name occurrences:
+ *
+ *   - `succeeded` — a counted tool start whose matching authoritative
+ *                   terminal `ToolRuntimeOutcome.kind === "success"`.
+ *   - `failed`    — a counted tool start whose matching authoritative
+ *                   terminal `ToolRuntimeOutcome.kind === "failure"`.
+ *   - `pending`   — a counted tool start that has NOT yet reached a
+ *                   matching terminal outcome.
+ *   - `unknown`   — a counted tool whose terminal status is unavailable
+ *                   or cannot be safely classified as success/failure
+ *                   (e.g. a counted start with no stable identity, or a
+ *                   `control_plane` terminal outcome).
+ *
+ * Conservation invariant (checked host-side AND webview-side):
+ *
+ *   succeeded + failed + pending + unknown === toolCalls
+ *
+ * A malformed or non-conserving projection is NOT rendered; the webview
+ * falls back to the existing V1 mechanism display.
+ */
+export interface ToolOutcomeSummary {
+	succeeded: number
+	failed: number
+	pending: number
+	unknown: number
 }
 
 /**

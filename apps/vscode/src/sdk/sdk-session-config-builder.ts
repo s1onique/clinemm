@@ -1,4 +1,5 @@
 import type { CoreSessionConfig } from "@cline/core"
+import type { AgentRuntimeHooks } from "@cline/shared"
 import type { ApiConfiguration } from "@shared/api"
 import type { StateManager } from "@/core/storage/StateManager"
 import { buildSessionConfig, type SessionConfigInput } from "./cline-session-factory"
@@ -10,6 +11,17 @@ export interface SdkSessionConfigBuilderOptions {
 	stateManager: StateManager
 	emitHookMessage: HookMessageEmitter
 	onConsecutiveMistakeLimitReached?: CoreSessionConfig["onConsecutiveMistakeLimitReached"]
+	/**
+	 * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01
+	 * (TES-OUT-01): optional read-only observer of the runtime's
+	 * authoritative typed tool outcome (`ToolRuntimeOutcome`).
+	 *
+	 * The runtime fires this hook exactly once per tool invocation, AFTER
+	 * the runtime has produced the typed outcome and AFTER the recovery
+	 * authority has been applied. The observer's return value is ignored
+	 * by the runtime — it can never influence tool execution.
+	 */
+	onToolRuntimeOutcome?: NonNullable<AgentRuntimeHooks["onToolRuntimeOutcome"]>
 }
 
 /**
@@ -33,12 +45,26 @@ export class SdkSessionConfigBuilder {
 		// against the canonical `CoreSessionConfig.sessionId` (== the
 		// MYC_SESSION_ID the operator captured from the running myc
 		// MCP process). No-op when the live diagnostic is disabled.
-		config.hooks = buildAgentHooks(
-			this.options.stateManager,
-			this.options.emitHookMessage,
-			input.cwd,
-			config.sessionId,
-		)
+		config.hooks = buildAgentHooks(this.options.stateManager, this.options.emitHookMessage, input.cwd, config.sessionId)
+		// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01
+		// (TES-OUT-01): attach the host's read-only observer of the
+		// runtime's authoritative typed tool outcome.
+		//
+		// The hook is composed onto the SAME hooks bag (not replacing it)
+		// so the existing file-hook adapter keeps working. The observer's
+		// return value is ignored by the runtime — it can never influence
+		// tool execution, approval, or recovery.
+		if (this.options.onToolRuntimeOutcome) {
+			const observer = this.options.onToolRuntimeOutcome
+			const existing = config.hooks?.onToolRuntimeOutcome
+			config.hooks = {
+				...(config.hooks ?? {}),
+				onToolRuntimeOutcome: async (ctx) => {
+					await existing?.(ctx)
+					await observer(ctx)
+				},
+			}
+		}
 
 		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 (R5):
 		// When the caller passes the TYPED instance
@@ -68,10 +94,7 @@ export class SdkSessionConfigBuilder {
 			const instance = input.providerConfigurationInstanceTyped
 			const resolvedApiKey = this.options.stateManager.getInstanceSecret(instance.credentialRef.name)
 			if (resolvedApiKey === undefined || resolvedApiKey === "") {
-				throw new MissingProviderInstanceCredentialError(
-					instance.instanceId,
-					instance.credentialRef.name,
-				)
+				throw new MissingProviderInstanceCredentialError(instance.instanceId, instance.credentialRef.name)
 			}
 			applyTypedProviderInstanceToConfig(config, instance, resolvedApiKey)
 			return config

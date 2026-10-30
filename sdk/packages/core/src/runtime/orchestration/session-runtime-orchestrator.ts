@@ -303,6 +303,19 @@ function mergeRuntimeHooks(
 				await hook.onEvent?.(event);
 			}
 		},
+		// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01
+		// (TES-OUT-01): fan out the typed runtime-outcome observation
+		// seam. It was previously dropped here, so no host could ever
+		// subscribe to the runtime's authoritative `ToolRuntimeOutcome`.
+		//
+		// READ-ONLY OBSERVATION: the hook's return value is ignored by
+		// `AgentRuntime.notifyToolRuntimeOutcome`, so fanning it out
+		// cannot influence tool execution, approval, or recovery.
+		onToolRuntimeOutcome: async (ctx) => {
+			for (const hook of hooks) {
+				await hook.onToolRuntimeOutcome?.(ctx);
+			}
+		},
 	};
 }
 

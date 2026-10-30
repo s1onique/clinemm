@@ -1,3 +1,33 @@
+# ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-30
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. The V2 tool RUNTIME-OUTCOME projection is implemented, wired, and executable; the installed-UI demonstration is pending because the sandbox cannot launch the Electron host (the BASELINE code fails identically).
+
+**ENTRY_HEAD:** `38e726c45de0b9412e6d3822bfd104fd7cbe2cbf` (branch `tool-execution-semantics-m3`). **SUBJECT_HEAD:** the commit carrying this bounded implementation (recorded in the evidence file §11).
+
+**EPIC:** `EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01` (remains **OPEN** — subprocess-terminal exit statuses, tool duration aggregation, effect classification, and retry/recovery deduplication stay deferred under it). **Predecessor:** `ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01` (mechanism projection V1, unchanged).
+
+**C1 — THE TYPED OUTCOME WAS REAL BUT STRUCTURALLY UNREACHABLE.** `ToolRuntimeOutcome` (`sdk/packages/shared/src/agents/recovery/types.ts`) and the read-only `AgentRuntimeHooks.onToolRuntimeOutcome` seam (`sdk/packages/shared/src/agent.ts`) exist, and `AgentRuntime.notifyToolRuntimeOutcome` fires them. But BOTH hook-merge layers DROPPED the hook — `mergeAgentHooks` (`sdk/packages/core/src/hooks/hook-file-hooks.ts`) and `mergeRuntimeHooks` (`sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts`) — so **no host could ever subscribe**. The bounded fix is two one-line fan-outs plus one host option (`SdkSessionConfigBuilder.onToolRuntimeOutcome`); NOT a runtime redesign. `HALT_WRONG_PRODUCTION_SEAM` did not apply.
+
+**C2 — EMPIRICAL TRUTH (probe against the REAL `AgentRuntime`).** `tool-started` fires for EVERY prepared call INCLUDING the pre-execution control-plane paths (policy-disabled / host DENY / user reject); `onToolRuntimeOutcome` fires EXACTLY ONCE per invocation with the SAME `toolCallId`. Two consequences: (a) the pre-existing SdkController comment claiming "control-plane DENY/REJECT/UNKNOWN_TOOL never emit this event" was **factually wrong** and is corrected in place — the counted `toolCalls` DOES include those calls; (b) the join key is authoritative, never chronological. Hook cardinality was MEASURED, not inferred from tool-start cardinality.
+
+**C3 — FROZEN V2 WIRE CONTRACT.** `ToolOutcomeSummary { succeeded, failed, pending, unknown }` published as the additive optional `TaskHeaderTelemetryStrip.outcome?`. `succeeded` = matched counted start with a terminal `success`; `failed` = terminal `failure`; `pending` = counted start with no matching terminal outcome yet; `unknown` = terminal status unavailable or not safely classifiable as success/failure. A `control_plane` terminal is NEITHER success NOR failure; a counted start with no stable identity is `unknown`; foreign / duplicate / unmatched identities are DROPPED (never join chronologically, never invent a start); repeated starts reusing one id are tracked as a COUNT so per-invocation cardinality is preserved. Conservation: `succeeded + failed + pending + unknown === toolCalls` (checked host-side AND webview-side). `toolCalls` and the V1 `mechanism` strip are UNCHANGED.
+
+**C4 — RED → GREEN.** New host witness `apps/vscode/src/sdk/__tests__/tool-outcome-projection.tes02.test.ts` drives the REAL production `TaskTelemetryTracker` with REAL typed `ToolRuntimeOutcome` discriminants. RED **12/12** (`recordToolStartedWithIdentity` / `recordToolRuntimeOutcome` absent; `outcome` undefined on the wire). GREEN **15/15**. New webview witness **8/8** (rendering, wire validator, legacy fallback, malformed-projection fallback, no-shell-exit-0 claim). New SDK witness **3/3** (the typed outcome reaches the real runtime hook bag through `mergeAgentHooks` and `SessionRuntime.createRuntimeHooks()`).
+
+**C5 — ABLATION (necessity).** Neutering ONLY the producer fold inside `TaskTelemetryTracker.recordToolRuntimeOutcome` returns **6/12 RED** (the load-bearing TESOUT-01 fails with `expected { succeeded: +0, failed: +0, … } to deeply equal { succeeded: 1, failed: 1, … }`). The correction was restored and the witness re-run **12/12 GREEN**. The projection is load-bearing, not cosmetic.
+
+**C6 — CONSERVATION.** `toolCalls` unchanged; V1 mechanism strip unchanged (`mechanism.total === toolCalls`); a legacy host that omits `outcome` renders the V1 display unchanged; a malformed or non-conserving projection falls back to the V1 display with NO silent repair. The projection reports the RUNTIME tool outcome — it never claims a shell command, test suite, or build exited 0 (subprocess-terminal authority is a separate slice).
+
+**C7 — EXECUTION CONSERVATION.** Unchanged: which tools run and when, approval policy, tool arguments/results, cancellation and retry behavior, runtime completion authority, model calls and reasoning settings, ELM task-state ownership, MYC accounting, and the existing model-behavior recorder. The outcome hook is READ-ONLY by construction (`AgentRuntime.notifyToolRuntimeOutcome` ignores the hook's return value); no diagnostic write happens inside a React functional updater.
+
+**C8 — GATES.** `apps/vscode` `tsc --noEmit` clean; webview `tsc --noEmit` clean; `sdk/packages/core` typecheck byte-identical to the stashed baseline (56 pre-existing diagnostic lines, none in the changed files); webview `bun run build` exit 0 (built in 9.36s); Biome clean on all 11 changed source files. Existing suites unchanged: tracker 64, mechanism classifier 21, SdkController wiring 6, SDK hooks 22 + orchestrator 62 + routing-evals 12, webview TaskHeader 46 + 13 + 12 + 5 + 8 + helpers 45. The 10 failing files in the `apps/vscode/src/sdk/` sweep are PRE-EXISTING sandbox failures (identical before/after the change, verified by stash/pop).
+
+**C9 — LIVE UI.** UNAVAILABLE: the debug harness server started (sourcemap loaded, 8783 source files) but the Electron host died with `SIGSEGV` + `kill() failed: EPERM`. The BASELINE code fails identically → environment limitation, not a regression. The installed-UI demonstration is an explicit successor.
+
+**Artifacts:** `.factory/acts/ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01.md` (contract) and `docs/architecture/elm/task-state-tes02-tool-outcome-projection-evidence.md` (evidence, incl. the probe transcript, the RED/GREEN/ablation transcripts, the baseline diff, and the sandbox notes).
+
+---
+
 # ACT-CLINEMM-M31-CATALOG-SNAPSHOT-REFRESH01 — PASS_STRUCTURAL_ONLY — 2026-10-29
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`** (the bundled MiniMax catalog did not publish the exact production model id `MiniMax-M3.1-Flash`; a **bounded** refresh adds EXACTLY that one upstream-authoritative entry — derived by the REAL production normalizer — and changes **nothing else**, with the conservation of all other providers/models proven).
@@ -5496,6 +5526,7 @@ ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01
 ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01
 ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01
 ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS01
+ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01
 ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-SUBSTRATE01
 ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01
 ```

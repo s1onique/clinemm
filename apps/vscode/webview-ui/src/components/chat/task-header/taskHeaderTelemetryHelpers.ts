@@ -56,7 +56,13 @@
  *
  * No React. No DOM. No chat-derived inference.
  */
-import type { TaskHeaderPresentationProjection, ToolMechanismSummary, TurnPhase, TurnState } from "@shared/ExtensionMessage"
+import type {
+	TaskHeaderPresentationProjection,
+	ToolMechanismSummary,
+	ToolOutcomeSummary,
+	TurnPhase,
+	TurnState,
+} from "@shared/ExtensionMessage"
 
 const MS_PER_SECOND = 1_000
 const MS_PER_MINUTE = 60 * MS_PER_SECOND
@@ -269,6 +275,50 @@ export function isUsableMechanismProjection(mechanism: ToolMechanismSummary | un
 		return false
 	}
 	if (mechanism.total !== toolCalls) {
+		return false
+	}
+	return true
+}
+
+/**
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 / wire-boundary
+ * validator (webview mirror).
+ *
+ * Mirrors the host-side validator in
+ * `apps/vscode/src/sdk/task-telemetry-tracker.ts`. The webview bundle
+ * cannot import host-side modules, so the same check lives here too — both
+ * are pinned by their respective test suites. The wire shape
+ * `ToolOutcomeSummary` itself is the same canonical type on both sides
+ * (`apps/vscode/src/shared/ExtensionMessage.ts`).
+ *
+ * Returns `true` only when ALL of the following hold:
+ *
+ *   - `outcome` is not `undefined`;
+ *   - every field is a finite, non-negative integer (rejects `NaN`,
+ *     `Infinity`, negative values, fractional values, malformed values);
+ *   - `succeeded + failed + pending + unknown === toolCalls` (cross-field
+ *     conservation against the canonical flat counter).
+ *
+ * Returns `false` otherwise. The caller MUST fall back to the existing V1
+ * mechanism display rather than displaying a possibly-stale or
+ * contradictory projection. The webview NEVER silently repairs an
+ * inconsistent projection.
+ *
+ * Pure. No I/O. No DOM. No React.
+ */
+export function isUsableOutcomeProjection(outcome: ToolOutcomeSummary | undefined, toolCalls: number): boolean {
+	if (outcome === undefined) {
+		return false
+	}
+	const fields: Array<keyof ToolOutcomeSummary> = ["succeeded", "failed", "pending", "unknown"]
+	for (const key of fields) {
+		const value = outcome[key]
+		if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+			return false
+		}
+	}
+	const sum = outcome.succeeded + outcome.failed + outcome.pending + outcome.unknown
+	if (sum !== toolCalls) {
 		return false
 	}
 	return true

@@ -99,7 +99,7 @@
  *
  * Privacy: emits nothing more than bounded integers and timestamps.
  */
-import type { AgentRuntimeRecoverySnapshot } from "@cline/shared"
+import type { AgentRuntimeRecoverySnapshot, ToolRuntimeOutcome } from "@cline/shared"
 import type {
 	MycLastCall,
 	MycOperationWire,
@@ -109,6 +109,7 @@ import type {
 	RuntimeErrorIncident,
 	TaskHeaderTelemetryStrip,
 	ToolMechanismSummary,
+	ToolOutcomeSummary,
 } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import type { MycPrimeStatus } from "./myc-prime-automation"
@@ -234,6 +235,25 @@ export class TaskTelemetryTracker {
 	// runtime event. `total` in this summary is conserved against the
 	// `toolCalls` counter; see the TES-IMPL-01 contract.
 	private mechanism: ToolMechanismSummary = emptyMechanismSummary()
+	// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 (TES-OUT-01):
+	// bounded RUNTIME-OUTCOME projection (succeeded / failed / pending /
+	// unknown) joined against the counted tool starts.
+	//
+	// `pendingToolCallIds` maps a counted tool start's canonical
+	// `toolCallId` to the number of counted starts still awaiting a
+	// terminal outcome for that id. A COUNT (not a boolean) is
+	// deliberate: repeated starts that reuse one tool-call id MUST NOT
+	// be collapsed into a single execution, and each terminal outcome
+	// discharges exactly ONE pending start.
+	//
+	// A counted start WITHOUT a stable identity cannot be joined to any
+	// terminal outcome (joining chronologically is forbidden), so it is
+	// classified `unknown` at observation time and never joins the map.
+	private pendingToolCallIds = new Map<string, number>()
+	private outcomeSucceeded = 0
+	private outcomeFailed = 0
+	private outcomePending = 0
+	private outcomeUnknown = 0
 	// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: cumulative count of
 	// structured ClineMM runtime error incidents attributable to the
 	// current task. Saturates at `Number.MAX_SAFE_INTEGER` so a runaway
@@ -294,6 +314,11 @@ export class TaskTelemetryTracker {
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
 		this.mechanism = emptyMechanismSummary()
+		// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01:
+		// reset the V2 outcome projection on a new task identity. The
+		// same-task continuation path returns early above and therefore
+		// preserves the cumulative projection (TESOUT-08).
+		this.resetOutcomeProjection()
 		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: zero the
 		// runtime-error counter on a new task identity. Same-task
 		// continuation preserves it (the early-return above); only a
@@ -405,6 +430,9 @@ export class TaskTelemetryTracker {
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
 		this.mechanism = emptyMechanismSummary()
+		// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01: wipe
+		// the V2 outcome projection together with the rest of the strip.
+		this.resetOutcomeProjection()
 		this.runtimeErrorCount = 0
 		// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01: also wipe myc state on
 		// clear (host is the single authority; webview rebuilds from
@@ -459,13 +487,162 @@ export class TaskTelemetryTracker {
 	 * fabricate counts against an unowned task identity.
 	 */
 	recordToolStartedWithName(toolName: string | undefined): TaskHeaderTelemetryStrip | undefined {
+		return this.recordToolStartedWithIdentity(toolName, undefined)
+	}
+
+	/**
+	 * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 (TES-OUT-01):
+	 *
+	 * Production seam: record a canonical `tool-started` runtime event
+	 * WITH its authoritative tool-call identity.
+	 *
+	 * `toolCallId` is the canonical `AgentToolCallPart.toolCallId` carried
+	 * by the same runtime event the host already counts. It is the ONLY
+	 * join key against the typed terminal `ToolRuntimeOutcome` — the
+	 * tracker NEVER joins chronologically.
+	 *
+	 * Outcome classification at observation time:
+	 *
+	 *   - a start WITH a stable identity starts as `pending` (no terminal
+	 *     outcome observed yet);
+	 *   - a start WITHOUT a stable identity is classified `unknown`,
+	 *     because its terminal status can never be safely attributed.
+	 *
+	 * The legacy no-argument `recordToolStarted()` behavior is preserved:
+	 * it still increments `toolCalls` and the mechanism bucket, and its
+	 * outcome lands in `unknown` (TESOUT-10).
+	 */
+	recordToolStartedWithIdentity(
+		toolName: string | undefined,
+		toolCallId: string | undefined,
+	): TaskHeaderTelemetryStrip | undefined {
 		if (this.currentTaskId === undefined) {
-			Logger.debug("[TaskTelemetryTracker] recordToolStartedWithName called before startTask; ignored")
+			Logger.debug("[TaskTelemetryTracker] recordToolStartedWithIdentity called before startTask; ignored")
 			return this.get()
 		}
 		this.toolCalls += 1
 		this.mechanism = accumulateMechanism(this.mechanism, toolName)
+		if (typeof toolCallId === "string" && toolCallId.length > 0) {
+			const current = this.pendingToolCallIds.get(toolCallId)
+			this.pendingToolCallIds.set(toolCallId, (current ?? 0) + 1)
+			this.outcomePending += 1
+		} else {
+			// No stable identity ⇒ the terminal outcome (if any) can never
+			// be attributed to this start. Fail closed into `unknown`.
+			this.outcomeUnknown += 1
+		}
 		return this.get()
+	}
+
+	/**
+	 * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 (TES-OUT-01):
+	 *
+	 * Observe ONE authoritative terminal runtime outcome for a tool call.
+	 *
+	 * This is a READ-ONLY observer: it never influences tool execution and
+	 * its return value is ignored by the runtime. The runtime callback is
+	 * invoked by `AgentRuntime.notifyToolRuntimeOutcome` exactly once per
+	 * tool invocation.
+	 *
+	 * Classification rules:
+	 *
+	 *   - `success` → the matched counted start becomes `succeeded`.
+	 *   - `failure` → the matched counted start becomes `failed`.
+	 *   - `control_plane` → NEITHER success NOR failure. The runtime
+	 *     classifies control-plane terminals separately precisely so they
+	 *     never masquerade as runtime failures. The matched counted start
+	 *     becomes `unknown` (its terminal status cannot be safely
+	 *     classified as a runtime success/failure).
+	 *
+	 * Join rules (fail closed):
+	 *
+	 *   - An outcome whose identity matches NO counted start is DROPPED.
+	 *     It may belong to another session/task (foreign), or to a start
+	 *     the host never observed. In neither case may the tracker invent
+	 *     a start or discharge local pending work.
+	 *   - A DUPLICATE terminal outcome for an already-discharged identity
+	 *     finds no pending start and is therefore dropped (no double
+	 *     counting).
+	 *   - Repeated starts that reuse one identity are tracked as a COUNT,
+	 *     so each terminal outcome discharges exactly ONE pending start
+	 *     and per-invocation cardinality is preserved.
+	 *
+	 * The `outcome.toolCallId` is used when present; a `control_plane`
+	 * outcome may omit it, in which case the caller's identity (the
+	 * `AgentToolCallPart.toolCallId` carried by the hook context) is the
+	 * authoritative fallback.
+	 */
+	recordToolRuntimeOutcome(outcome: ToolRuntimeOutcome, toolCallId?: string): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId === undefined) {
+			Logger.debug("[TaskTelemetryTracker] recordToolRuntimeOutcome called before startTask; ignored")
+			return this.get()
+		}
+		const identity =
+			typeof toolCallId === "string" && toolCallId.length > 0
+				? toolCallId
+				: typeof outcome.toolCallId === "string" && outcome.toolCallId.length > 0
+					? outcome.toolCallId
+					: undefined
+		if (identity === undefined) {
+			// Fail closed: without an authoritative identity the outcome
+			// cannot be joined to any counted start. Never join
+			// chronologically and never fabricate a start.
+			Logger.debug("[TaskTelemetryTracker] recordToolRuntimeOutcome without an identity; ignored")
+			return this.get()
+		}
+		const pending = this.pendingToolCallIds.get(identity)
+		if (pending === undefined || pending <= 0) {
+			// Foreign / unmatched / duplicate terminal outcome. Drop it —
+			// local pending work must not be discharged by a foreign fact.
+			Logger.debug("[TaskTelemetryTracker] recordToolRuntimeOutcome for an unmatched identity; ignored")
+			return this.get()
+		}
+		if (pending > 1) {
+			this.pendingToolCallIds.set(identity, pending - 1)
+		} else {
+			this.pendingToolCallIds.delete(identity)
+		}
+		this.outcomePending -= 1
+		switch (outcome.kind) {
+			case "success":
+				this.outcomeSucceeded += 1
+				break
+			case "failure":
+				this.outcomeFailed += 1
+				break
+			case "control_plane":
+				this.outcomeUnknown += 1
+				break
+		}
+		return this.get()
+	}
+
+	/**
+	 * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01: reset the
+	 * V2 outcome projection. Called on a new task identity and on
+	 * `clear()`. Same-task continuation does NOT call this (the cumulative
+	 * projection is preserved).
+	 */
+	private resetOutcomeProjection(): void {
+		this.pendingToolCallIds.clear()
+		this.outcomeSucceeded = 0
+		this.outcomeFailed = 0
+		this.outcomePending = 0
+		this.outcomeUnknown = 0
+	}
+
+	/**
+	 * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01: bounded
+	 * wire projection of the outcome counters. Returns a fresh object on
+	 * every call so callers can mutate the result safely.
+	 */
+	private buildOutcomeSummary(): ToolOutcomeSummary {
+		return {
+			succeeded: this.outcomeSucceeded,
+			failed: this.outcomeFailed,
+			pending: this.outcomePending,
+			unknown: this.outcomeUnknown,
+		}
 	}
 
 	/**
@@ -818,6 +995,13 @@ export class TaskTelemetryTracker {
 			// strip when present; Hub/Remote hosts that have not yet
 			// received the new field simply omit it from the strip.
 			mechanism: this.mechanism,
+			// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01:
+			// the bounded RUNTIME-OUTCOME projection. Always present when
+			// a task is active (the four buckets sum to `toolCalls`).
+			// Optional on the wire so Hub/Remote hosts that have not yet
+			// projected the field simply omit it and the webview renders
+			// the existing V1 mechanism display unchanged.
+			outcome: this.buildOutcomeSummary(),
 			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: cumulative
 			// structured runtime error incidents. Emitted only when > 0
 			// so the wire strip stays minimal in the common (zero-error)
