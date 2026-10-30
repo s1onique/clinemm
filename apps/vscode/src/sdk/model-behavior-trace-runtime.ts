@@ -38,6 +38,7 @@ import {
 	type ModelBehaviorTraceRecord,
 	ModelBehaviorTraceRecorder,
 	type ModelBehaviorTraceSink,
+	registerModelBehaviorWireReasoningObserver,
 } from "@cline/shared"
 
 /**
@@ -520,6 +521,128 @@ export function recordModelBehaviorTraceEffectiveConfig(
 			thinkingEnabled: payload.thinkingEnabled ?? "UNAVAILABLE_FROM_TRACE",
 			reasoningEffort: payload.reasoningEffort ?? "UNAVAILABLE_FROM_TRACE",
 			maxOutputTokens: payload.maxOutputTokens ?? "UNAVAILABLE_FROM_TRACE",
+		},
+	)
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * Install the wire-reasoning observer that records the SERIALIZED provider
+ * wire controls into the centralized recorder.
+ *
+ * The observer is installed ONCE at activation and is IDEMPOTENT: calling
+ * it again is a no-op. It is NOT gated by the trace toggle — the recorder
+ * itself is consulted at observation time, so the observer may fire while
+ * the recorder is OFF, in which case the recorder records nothing. That
+ * keeps the toggle semantics identical to every other trace channel: the
+ * toggle decides whether evidence is RETAINED, and it can be flipped at any
+ * time without a reload.
+ *
+ * The observer is INDEPENDENT of the full provider-request capture: it
+ * never enables `CLINE_CAPTURE_PROVIDER_REQUEST` / `CLINE_CAPTURE_WIRE` and
+ * never causes a capture file to be written.
+ */
+let wireReasoningObserverInstalled = false
+
+/**
+ * Install the wire-reasoning observer. Idempotent.
+ */
+export function installModelBehaviorWireReasoningObserver(): void {
+	if (wireReasoningObserverInstalled) {
+		return
+	}
+	wireReasoningObserverInstalled = true
+	registerModelBehaviorWireReasoningObserver((observation) => {
+		recordModelBehaviorTraceWireReasoning(
+			{
+				...(observation.sessionId !== undefined ? { sessionId: observation.sessionId } : {}),
+				...(observation.taskId !== undefined ? { taskId: observation.taskId } : {}),
+				...(observation.runId !== undefined ? { runId: observation.runId } : {}),
+				...(observation.iteration !== undefined ? { iteration: observation.iteration } : {}),
+				...(observation.providerId !== undefined ? { providerId: observation.providerId } : {}),
+				...(observation.modelId !== undefined ? { modelId: observation.modelId } : {}),
+			},
+			{
+				...(observation.requestId !== undefined ? { requestId: observation.requestId } : {}),
+				...(observation.attempt !== undefined ? { attempt: observation.attempt } : {}),
+				...(observation.httpMethod !== undefined ? { httpMethod: observation.httpMethod } : {}),
+				...(observation.wireThinkingMode !== undefined ? { wireThinkingMode: observation.wireThinkingMode } : {}),
+				...(observation.wireReasoningEffort !== undefined
+					? { wireReasoningEffort: observation.wireReasoningEffort }
+					: {}),
+				...(observation.wireReasoningEnabled !== undefined
+					? { wireReasoningEnabled: observation.wireReasoningEnabled }
+					: {}),
+				...(observation.wireReasoningExcluded !== undefined
+					? { wireReasoningExcluded: observation.wireReasoningExcluded }
+					: {}),
+				...(observation.wireOutputConfigEffort !== undefined
+					? { wireOutputConfigEffort: observation.wireOutputConfigEffort }
+					: {}),
+				...(observation.wireOutputTokenLimit !== undefined
+					? { wireOutputTokenLimit: observation.wireOutputTokenLimit }
+					: {}),
+			},
+		)
+	})
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * Record the SERIALIZED provider wire controls observed for ONE model
+ * request HTTP attempt.
+ *
+ * This is the ONLY authority on what the provider ACTUALLY received. The
+ * `effective_model_config` event says what the runtime REQUESTED; this event
+ * says what was SERIALIZED onto the wire.
+ *
+ * The payload carries ONLY the reasoning-relevant control fields plus the
+ * correlation identity. The prompt, the messages, the tool arguments and
+ * the credentials are NEVER retained.
+ */
+export function recordModelBehaviorTraceWireReasoning(
+	identity: {
+		sessionId?: string
+		taskId?: string
+		runId?: string
+		iteration?: number
+		providerId?: string
+		modelId?: string
+	},
+	payload: {
+		requestId?: string
+		attempt?: number
+		httpMethod?: string
+		wireThinkingMode?: string
+		wireReasoningEffort?: string
+		wireReasoningEnabled?: boolean
+		wireReasoningExcluded?: boolean
+		wireOutputConfigEffort?: string
+		wireOutputTokenLimit?: number
+	},
+): ModelBehaviorTraceRecord | undefined {
+	return recorder.record(
+		"model_wire_reasoning",
+		{
+			...(identity.sessionId !== undefined ? { sessionId: identity.sessionId } : {}),
+			...(identity.taskId !== undefined ? { taskId: identity.taskId } : {}),
+			...(identity.runId !== undefined ? { runId: identity.runId } : {}),
+			...(identity.iteration !== undefined ? { iteration: identity.iteration } : {}),
+			...(identity.providerId !== undefined ? { providerId: identity.providerId } : {}),
+			...(identity.modelId !== undefined ? { modelId: identity.modelId } : {}),
+		},
+		{
+			...(payload.requestId !== undefined ? { requestId: payload.requestId } : {}),
+			...(payload.attempt !== undefined ? { attempt: payload.attempt } : {}),
+			...(payload.httpMethod !== undefined ? { httpMethod: payload.httpMethod } : {}),
+			...(payload.wireThinkingMode !== undefined ? { wireThinkingMode: payload.wireThinkingMode } : {}),
+			...(payload.wireReasoningEffort !== undefined ? { wireReasoningEffort: payload.wireReasoningEffort } : {}),
+			...(payload.wireReasoningEnabled !== undefined ? { wireReasoningEnabled: payload.wireReasoningEnabled } : {}),
+			...(payload.wireReasoningExcluded !== undefined ? { wireReasoningExcluded: payload.wireReasoningExcluded } : {}),
+			...(payload.wireOutputConfigEffort !== undefined ? { wireOutputConfigEffort: payload.wireOutputConfigEffort } : {}),
+			...(payload.wireOutputTokenLimit !== undefined ? { wireOutputTokenLimit: payload.wireOutputTokenLimit } : {}),
 		},
 	)
 }

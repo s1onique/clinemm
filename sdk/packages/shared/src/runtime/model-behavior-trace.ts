@@ -115,6 +115,26 @@ export type ModelBehaviorTraceEvent =
 	| "model_request_finish"
 	| "model_request_error"
 	| "model_request_abort"
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+	 *
+	 * The SERIALIZED provider wire controls observed for ONE model request.
+	 *
+	 * This is the ONLY authority on what the provider ACTUALLY received:
+	 * the `effective_model_config` event says what the runtime REQUESTED,
+	 * and this event says what was SERIALIZED onto the wire.
+	 *
+	 * The observation carries ONLY the reasoning-relevant control fields
+	 * (the serialized thinking mode, the serialized effort, the
+	 * Anthropic-compatible `output_config.effort`, the output-token cap)
+	 * plus the correlation identity. The prompt, the messages, the tool
+	 * arguments and the credentials are NEVER retained.
+	 *
+	 * The event is OPTIONAL: when no wire observer is registered, no such
+	 * record is produced, and the absence of wire evidence is reported as
+	 * UNVERIFIED — never as a reasoning mismatch.
+	 */
+	| "model_wire_reasoning"
 	| "tool_start"
 	| "tool_finish"
 	/**
@@ -2016,6 +2036,22 @@ export interface ModelBehaviorTraceSink {
 	onModelRequestError?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request was aborted / cancelled. */
 	onModelRequestAbort?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+	 *
+	 * The `model_wire_reasoning` event is NOT a sink channel, and there is
+	 * deliberately NO `onModelWireReasoning` member here.
+	 *
+	 * The SERIALIZED provider wire controls are observed at the TRANSPORT
+	 * seam, where the serialized body actually exists — not by the agent
+	 * runtime, which does not own the provider wire encoding. The transport
+	 * reaches the recorder through the process-wide wire-observer registry
+	 * (`registerModelBehaviorWireReasoningObserver`), not through this sink.
+	 *
+	 * Declaring an unused sink channel here would advertise an API that
+	 * nothing ever calls, so the only entry point for wire evidence is the
+	 * observer registry.
+	 */
 	/** A tool call started. */
 	onToolStart?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A tool call finished. */

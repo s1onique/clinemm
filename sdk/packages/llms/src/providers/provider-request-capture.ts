@@ -10,7 +10,12 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 import type { GatewayStreamRequest } from "@cline/shared";
-import { estimateTokens } from "@cline/shared";
+import {
+	estimateTokens,
+	hasModelBehaviorWireReasoningObserver,
+	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
+	notifyModelBehaviorWireReasoningObservers,
+} from "@cline/shared";
 
 type CaptureMode = "off" | "summary" | "full";
 type CaptureStage = "ai_sdk_prompt" | "wire_request";
@@ -235,8 +240,14 @@ function captureCorrelation(
  * - `wireReasoningEffort` — the OpenAI-compatible `reasoning_effort`, or
  *   absent.
  * - `wireOutputTokenLimit` — the serialized output-token cap, when present.
+ *
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01: exported so the
+ * light-weight wire observer reuses the EXACT same summarizer as the full
+ * provider-request capture. There is therefore ONE definition of "the
+ * reasoning-relevant view of a serialized body" — the two consumers can
+ * never disagree about what the wire carried.
  */
-function summarizeWireReasoning(body: unknown): Record<string, unknown> {
+export function summarizeWireReasoning(body: unknown): Record<string, unknown> {
 	const parsedBody = parseJsonString(body);
 	if (!parsedBody || typeof parsedBody !== "object") {
 		return {};
@@ -445,11 +456,206 @@ async function readRequestBody(
 	return undefined;
 }
 
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * The correlation identity carried from the request metadata to the wire
+ * observation.
+ *
+ * Every field is read DEFENSIVELY: the metadata bag is an untyped channel
+ * that other subsystems also write into, so a non-string / non-number value
+ * yields `undefined` rather than being coerced.
+ */
+function wireReasoningCorrelation(request: GatewayStreamRequest): {
+	requestId?: string;
+	sessionId?: string;
+	taskId?: string;
+	runId?: string;
+	iteration?: number;
+} {
+	const metadata =
+		request.metadata && typeof request.metadata === "object"
+			? request.metadata
+			: {};
+	const requestId =
+		metadata[MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY];
+	const sessionId = metadata.sessionId;
+	const taskId = metadata.taskId;
+	const runId = metadata.runId;
+	const iteration = metadata.iteration;
+	return {
+		...(typeof requestId === "string" && requestId.trim() !== ""
+			? { requestId }
+			: {}),
+		...(typeof sessionId === "string" && sessionId.trim() !== ""
+			? { sessionId }
+			: {}),
+		...(typeof taskId === "string" && taskId.trim() !== "" ? { taskId } : {}),
+		...(typeof runId === "string" && runId.trim() !== "" ? { runId } : {}),
+		...(typeof iteration === "number" && Number.isFinite(iteration)
+			? { iteration }
+			: {}),
+	};
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * The HTTP attempt counters, keyed by the logical request identity.
+ *
+ * ONE logical model request can produce SEVERAL serialized HTTP attempts:
+ * the transport retries an all-empty turn and a mid-stream network
+ * interruption (`retry-empty-response.ts`). All of those attempts carry the
+ * SAME `requestId`, so the attempt ordinal is what distinguishes them.
+ *
+ * The counter is keyed by the request id when one is available, and by the
+ * request object identity otherwise.
+ *
+ * BOUNDED: the observer is installed at extension activation, so this map
+ * would otherwise grow for the whole process lifetime — one entry per
+ * distinct model request. It is therefore capped, and the OLDEST entry is
+ * evicted when the cap is reached. `Map` preserves insertion order, so the
+ * first key is the oldest. The eviction only affects the ATTEMPT ORDINAL of
+ * a request that has been evicted (the ordinal restarts at 1); it never
+ * affects the correlation identity, which is the part the trace joins on.
+ */
+const wireAttemptCounters = new Map<string, number>();
+
+/**
+ * The maximum number of tracked logical requests.
+ *
+ * A long session can make thousands of model requests; 4096 entries is
+ * far beyond any realistic single-session count while keeping the map's
+ * memory footprint trivially small.
+ */
+const WIRE_ATTEMPT_COUNTER_MAX_ENTRIES = 4096;
+
+/**
+ * The counter key for ONE logical request.
+ *
+ * The request id is preferred: it is stable across every HTTP attempt of
+ * that request. The request object identity is the fallback for requests
+ * that carry no id (e.g. a direct gateway caller).
+ */
+function wireAttemptCounterKey(request: GatewayStreamRequest): string {
+	const metadata =
+		request.metadata && typeof request.metadata === "object"
+			? request.metadata
+			: {};
+	const requestId =
+		metadata[MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY];
+	if (typeof requestId === "string" && requestId.trim() !== "") {
+		return `id:${requestId}`;
+	}
+	return `obj:${requestIdOf(request)}`;
+}
+
+/**
+ * A stable-per-request fallback key.
+ *
+ * A `WeakMap` cannot be iterated, so the object identity is tracked with a
+ * monotonically increasing id held in a `WeakMap`. The `WeakMap` does not
+ * keep the request object alive.
+ */
+const requestObjectIds = new WeakMap<GatewayStreamRequest, number>();
+let nextRequestObjectId = 1;
+
+function requestIdOf(request: GatewayStreamRequest): number {
+	const existing = requestObjectIds.get(request);
+	if (existing !== undefined) {
+		return existing;
+	}
+	const assigned = nextRequestObjectId++;
+	requestObjectIds.set(request, assigned);
+	return assigned;
+}
+
+/**
+ * The 1-based HTTP attempt ordinal for ONE logical request.
+ */
+function nextWireAttempt(request: GatewayStreamRequest): number {
+	const key = wireAttemptCounterKey(request);
+	const next = (wireAttemptCounters.get(key) ?? 0) + 1;
+	// Evict the OLDEST entry once the cap is reached, so the map cannot
+	// grow without bound over a long-lived process.
+	if (
+		wireAttemptCounters.size >= WIRE_ATTEMPT_COUNTER_MAX_ENTRIES &&
+		!wireAttemptCounters.has(key)
+	) {
+		const oldest = wireAttemptCounters.keys().next();
+		if (!oldest.done) {
+			wireAttemptCounters.delete(oldest.value);
+		}
+	}
+	wireAttemptCounters.set(key, next);
+	return next;
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * Report the SERIALIZED wire controls of ONE provider HTTP attempt to the
+ * registered wire observers.
+ *
+ * This is INDEPENDENT of the full provider-request capture: it never writes
+ * a capture file and never retains the prompt, the messages, the tool
+ * arguments or the credentials. Only the reasoning-relevant control fields
+ * of the serialized body are reported.
+ */
+function notifyWireReasoningObservers(
+	request: GatewayStreamRequest,
+	body: unknown,
+	method: string,
+): void {
+	try {
+		if (!hasModelBehaviorWireReasoningObserver()) {
+			return;
+		}
+		const wire = summarizeWireReasoning(body);
+		notifyModelBehaviorWireReasoningObservers({
+			...wireReasoningCorrelation(request),
+			attempt: nextWireAttempt(request),
+			providerId: request.providerId,
+			modelId: request.modelId,
+			httpMethod: method,
+			...(typeof wire.wireThinkingMode === "string"
+				? { wireThinkingMode: wire.wireThinkingMode }
+				: {}),
+			...(typeof wire.wireReasoningEffort === "string"
+				? { wireReasoningEffort: wire.wireReasoningEffort }
+				: {}),
+			...(typeof wire.wireReasoningEnabled === "boolean"
+				? { wireReasoningEnabled: wire.wireReasoningEnabled }
+				: {}),
+			...(typeof wire.wireReasoningExcluded === "boolean"
+				? { wireReasoningExcluded: wire.wireReasoningExcluded }
+				: {}),
+			...(typeof wire.wireOutputConfigEffort === "string"
+				? { wireOutputConfigEffort: wire.wireOutputConfigEffort }
+				: {}),
+			...(typeof wire.wireOutputTokenLimit === "number"
+				? { wireOutputTokenLimit: wire.wireOutputTokenLimit }
+				: {}),
+		});
+	} catch {
+		// The wire observer must never affect model execution.
+	}
+}
+
 export function wrapFetchForProviderRequestCapture(
 	baseFetch: typeof fetch | undefined,
 	request: GatewayStreamRequest,
 ): typeof fetch | undefined {
-	if (!isWireCaptureEnabled()) {
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01: the light-weight
+	// wire observer is INDEPENDENT of the full provider-request capture.
+	//
+	// The full capture remains gated by `CLINE_CAPTURE_WIRE` exactly as
+	// before; the observer is gated by the presence of a registered
+	// observer. When NEITHER is active the fetch is returned UNWRAPPED, so
+	// the default path is byte-identical to a build without this feature.
+	const captureEnabled = isWireCaptureEnabled();
+	const observerEnabled = hasModelBehaviorWireReasoningObserver();
+	if (!captureEnabled && !observerEnabled) {
 		return baseFetch;
 	}
 	const delegate = baseFetch ?? globalThis.fetch;
@@ -457,17 +663,27 @@ export function wrapFetchForProviderRequestCapture(
 		return baseFetch;
 	}
 	const captureFetch = (async (input, init) => {
+		const method =
+			init?.method ??
+			(input instanceof Request ? input.method : undefined) ??
+			"GET";
 		void readRequestBody(input, init)
 			.then((body) => {
+				// The observer is checked at CALL time, not only at wrap
+				// time, so an observer registered between the wrap and the
+				// request is still honored.
+				if (hasModelBehaviorWireReasoningObserver()) {
+					notifyWireReasoningObservers(request, body, method);
+				}
+				if (!captureEnabled) {
+					return;
+				}
 				recordProviderRequestCapture({
 					stage: "wire_request",
 					request,
 					payload: {
 						url: input instanceof Request ? input.url : String(input),
-						method:
-							init?.method ??
-							(input instanceof Request ? input.method : undefined) ??
-							"GET",
+						method,
 						body,
 					},
 					// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1):

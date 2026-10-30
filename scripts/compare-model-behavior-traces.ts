@@ -601,6 +601,22 @@ interface ComparisonSummary {
 		m3: WorkspaceProgressStatistics;
 		m31: WorkspaceProgressStatistics;
 	};
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01: the serialized
+	 * wire-reasoning section.
+	 */
+	wireReasoning: {
+		evidence: { m3: WireReasoningEvidence; m31: WireReasoningEvidence };
+		parity: ReturnType<typeof assessWireReasoningParity>;
+	};
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-NATIVE-EDIT-DISPOSITION01: the native-edit
+	 * disposition section.
+	 */
+	nativeEditDispositions: {
+		m3: NativeEditDispositionStatistics;
+		m31: NativeEditDispositionStatistics;
+	};
 	configurationDifferences: Record<
 		string,
 		{ m3: string; m31: string; comparison: DimensionComparison }
@@ -2678,6 +2694,531 @@ function assessCeilingParity(
  * The critical rule: two equally-UNKNOWN values are NOT equal. They are
  * equally unknown, which proves nothing, so the result is `unverified`.
  */
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-NATIVE-EDIT-DISPOSITION01.
+ *
+ * The disposition of ONE native edit attempt.
+ *
+ * The disposition answers "what happened to this edit, and was the absence
+ * of an application LEGITIMATE?".
+ *
+ * The previous accounting treated EVERY `edit_attempt` without a joined
+ * `edit_application` as an "unfulfilled attempt" — one undifferentiated
+ * bucket. That conflated two very different facts:
+ *
+ *   - the edit was AUTHORIZED and the executor was INVOKED, but no write
+ *     observation arrived (a genuine gap in the evidence), and
+ *   - the edit was REJECTED by the user/host policy, or was SKIPPED
+ *     because it was structurally ineligible — in which case NO application
+ *     is the CORRECT and EXPECTED outcome, not a gap.
+ *
+ * The disposition is derived from the attempt's own `approvalOutcome` and
+ * from the executor-invocation authority (the matching `tool_finish`
+ * event), joined to the application by EXACT session/run/tool-call identity.
+ * It never infers a disposition from a timestamp.
+ */
+type NativeEditDisposition =
+	/** The edit was applied and changed the content of at least one file. */
+	| "applied_with_change"
+	/** The edit was applied but changed nothing (a genuine no-op write). */
+	| "applied_no_change"
+	/** The executor ran and the write did not complete. */
+	| "failed"
+	/** The authorization was denied — no application is EXPECTED. */
+	| "rejected"
+	/** The call was structurally ineligible — no application is EXPECTED. */
+	| "skipped"
+	/**
+	 * The authorization state could not be observed — the absence of an
+	 * application is UNEXPLAINED.
+	 */
+	| "authorization_unavailable"
+	/**
+	 * The edit was authorized but the executor was NEVER invoked — no
+	 * application is EXPECTED. This is a LEGITIMATE absence, not a gap.
+	 */
+	| "not_invoked"
+	/**
+	 * The edit was authorized and invoked, but no application observation
+	 * arrived. This is a genuine EVIDENCE GAP, not a legitimate absence.
+	 */
+	| "unfulfilled";
+
+interface NativeEditDispositionStatistics {
+	/** The number of native edit attempts observed. */
+	readonly totalAttempts: number;
+	/** Edits that were applied and changed content. */
+	readonly appliedWithChange: number;
+	/** Edits that were applied but changed nothing. */
+	readonly appliedNoChange: number;
+	/** Edits whose write did not complete. */
+	readonly failed: number;
+	/** Edits denied by the user or the host policy. */
+	readonly rejected: number;
+	/** Edits skipped because they were structurally ineligible. */
+	readonly skipped: number;
+	/** Edits whose authorization state could not be observed. */
+	readonly authorizationUnavailable: number;
+	/**
+	 * Authorized edits whose executor was NEVER INVOKED — a LEGITIMATE
+	 * absence, not an evidence gap.
+	 *
+	 * The invocation state comes from the matching `tool_finish` event, the
+	 * production C1.2 authority for "did the executor actually run?".
+	 */
+	readonly notInvoked: number;
+	/**
+	 * Authorized, invoked edits with NO application observation — a genuine
+	 * evidence gap.
+	 */
+	readonly unfulfilled: number;
+	/**
+	 * The number of attempts whose application could not be joined by EXACT
+	 * identity (ambiguous or missing identity).
+	 */
+	readonly uncorrelated: number;
+}
+
+/**
+ * Classify the disposition of every native edit attempt in ONE trace.
+ *
+ * The application join is the SAME exact-identity join the editing-efficiency
+ * statistics use: session + run + tool-call id. A join that is missing or
+ * ambiguous leaves the attempt UNCRELATED — it is never paired by timestamp
+ * or array adjacency.
+ */
+function computeNativeEditDispositions(
+	records: readonly TraceRecord[],
+): NativeEditDispositionStatistics {
+	const attempts = records.filter((record) => record.event === "edit_attempt");
+	const applications = records.filter(
+		(record) => record.event === "edit_application",
+	);
+
+	const applicationByIdentity = new Map<string, TraceRecord[]>();
+	for (const application of applications) {
+		const identity = readCorrelationIdentity(application);
+		if (!identity) {
+			continue;
+		}
+		const bucket = applicationByIdentity.get(identity.key);
+		if (bucket) {
+			bucket.push(application);
+		} else {
+			applicationByIdentity.set(identity.key, [application]);
+		}
+	}
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-NATIVE-EDIT-DISPOSITION01: the executor
+	// invocation authority.
+	//
+	// The `edit_attempt` event is recorded at the TOOL-START boundary, so
+	// its `executionInvoked` is ALWAYS `false` — at that point the executor
+	// has not run yet. The REAL authority is the matching `tool_finish`
+	// event, which carries the production C1.2 `toolExecutionInvoked`
+	// flag. It is joined here by the SAME exact identity.
+	//
+	// When no `tool_finish` exists for the attempt, the invocation state is
+	// UNKNOWN — it is never assumed.
+	const invocationByIdentity = new Map<string, boolean>();
+	for (const finish of records.filter(
+		(record) => record.event === "tool_finish",
+	)) {
+		const identity = readCorrelationIdentity(finish);
+		if (!identity) {
+			continue;
+		}
+		const invoked = finish.payload.executionInvoked;
+		if (typeof invoked === "boolean") {
+			invocationByIdentity.set(identity.key, invoked);
+		}
+	}
+
+	const dispositionsByAttempt = new Map<TraceRecord, NativeEditDisposition>();
+	let uncorrelated = 0;
+
+	for (const attempt of attempts) {
+		const identity = readCorrelationIdentity(attempt);
+		const approvalOutcome = attempt.payload.approvalOutcome;
+
+		// The application join is EXACT-identity only.
+		let application: TraceRecord | undefined;
+		if (identity) {
+			const bucket = applicationByIdentity.get(identity.key);
+			if (bucket && bucket.length === 1) {
+				application = bucket[0];
+			}
+		}
+
+		if (application) {
+			const outcome = application.payload.outcome;
+			if (outcome === "applied") {
+				// A no-op write is an applied operation that changed nothing.
+				dispositionsByAttempt.set(
+					attempt,
+					application.payload.noOp === true
+						? "applied_no_change"
+						: "applied_with_change",
+				);
+			} else {
+				dispositionsByAttempt.set(attempt, "failed");
+			}
+			continue;
+		}
+
+		// NO application joined. The ABSENCE is legitimate only when the
+		// attempt was never authorized or never invoked.
+		if (approvalOutcome === "rejected") {
+			dispositionsByAttempt.set(attempt, "rejected");
+			continue;
+		}
+		if (approvalOutcome === "skipped") {
+			dispositionsByAttempt.set(attempt, "skipped");
+			continue;
+		}
+		if (approvalOutcome === "unavailable") {
+			dispositionsByAttempt.set(attempt, "authorization_unavailable");
+			continue;
+		}
+		// `approved`: the call was authorized. The invocation state comes
+		// from the matching `tool_finish` event, which is the production
+		// authority for "did the executor actually run?".
+		//
+		//   - NOT invoked → no application is EXPECTED. The runtime never
+		//     called the executor, so there is nothing to apply. This is a
+		//     LEGITIMATE absence, not an evidence gap.
+		//   - invoked → the executor ran but no application observation
+		//     arrived. This IS a genuine evidence gap.
+		//   - unknown → the invocation state was not observed, so the
+		//     absence cannot be classified. It is reported as unfulfilled
+		//     (the conservative reading) and the attempt is counted as
+		//     uncorrelated.
+		const invoked = identity
+			? invocationByIdentity.get(identity.key)
+			: undefined;
+		if (invoked === false) {
+			dispositionsByAttempt.set(attempt, "not_invoked");
+			continue;
+		}
+		if (invoked === undefined) {
+			uncorrelated += 1;
+		}
+		dispositionsByAttempt.set(attempt, "unfulfilled");
+	}
+
+	let appliedWithChange = 0;
+	let appliedNoChange = 0;
+	let failed = 0;
+	let rejected = 0;
+	let skipped = 0;
+	let authorizationUnavailable = 0;
+	let notInvoked = 0;
+	let unfulfilled = 0;
+	for (const disposition of dispositionsByAttempt.values()) {
+		switch (disposition) {
+			case "applied_with_change":
+				appliedWithChange += 1;
+				break;
+			case "applied_no_change":
+				appliedNoChange += 1;
+				break;
+			case "failed":
+				failed += 1;
+				break;
+			case "rejected":
+				rejected += 1;
+				break;
+			case "skipped":
+				skipped += 1;
+				break;
+			case "authorization_unavailable":
+				authorizationUnavailable += 1;
+				break;
+			case "not_invoked":
+				notInvoked += 1;
+				break;
+			case "unfulfilled":
+				unfulfilled += 1;
+				break;
+		}
+	}
+
+	return {
+		totalAttempts: attempts.length,
+		appliedWithChange,
+		appliedNoChange,
+		failed,
+		rejected,
+		skipped,
+		authorizationUnavailable,
+		notInvoked,
+		unfulfilled,
+		uncorrelated,
+	};
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * The SERIALIZED wire-reasoning evidence observed in ONE trace.
+ *
+ * The wire evidence is OPTIONAL: a trace produced before the feature (or
+ * with the observer never installed) carries NO `model_wire_reasoning`
+ * records. The absence of wire evidence is reported as UNVERIFIED — it is
+ * NEVER reported as a reasoning mismatch.
+ */
+interface WireReasoningEvidence {
+	/** The number of `model_wire_reasoning` records observed. */
+	readonly recordCount: number;
+	/**
+	 * The DISTINCT `requestId`s observed. A request id is the EXACT join
+	 * key between the requested configuration and the serialized controls.
+	 */
+	readonly requestIds: string[];
+	/**
+	 * The DISTINCT serialized wire control values observed, one entry per
+	 * control name.
+	 *
+	 * A control with SEVERAL observed values is reported separately: the
+	 * wire controls CHANGED during the run, which is a different fact from
+	 * "the two sides differ".
+	 */
+	readonly controls: Record<string, string[]>;
+	/**
+	 * True when at least one wire record could be joined to an
+	 * `effective_model_config` record by EXACT `requestId`.
+	 */
+	readonly joinedToRequested: boolean;
+	/**
+	 * The number of wire records that could NOT be joined to an
+	 * effective-config record — the requested side is missing for them.
+	 */
+	readonly unjoinedToRequested: number;
+}
+
+/**
+ * The serialized wire control names the comparator reads.
+ *
+ * These are the reasoning-relevant control fields of the serialized body.
+ * The raw body is never present in a trace, so these are the ONLY wire
+ * facts available.
+ */
+const WIRE_REASONING_CONTROL_NAMES = [
+	"wireThinkingMode",
+	"wireReasoningEffort",
+	"wireReasoningEnabled",
+	"wireReasoningExcluded",
+	"wireOutputConfigEffort",
+	"wireOutputTokenLimit",
+] as const;
+
+/**
+ * Read a wire control value as a comparable string.
+ *
+ * A boolean is rendered as `"true"` / `"false"` so the value participates in
+ * the ordinary string comparison. A non-primitive is JSON-encoded so the
+ * comparison stays deterministic.
+ */
+function readWireControlValue(value: unknown): string | undefined {
+	if (typeof value === "string") {
+		return value;
+	}
+	if (typeof value === "boolean") {
+		return value ? "true" : "false";
+	}
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value);
+	}
+	if (value === undefined || value === null) {
+		return undefined;
+	}
+	try {
+		return JSON.stringify(value) ?? undefined;
+	} catch {
+		return undefined;
+	}
+}
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * Collect the serialized wire-reasoning evidence of ONE trace and join it
+ * to the REQUESTED configuration by EXACT `requestId`.
+ *
+ * The join is by identity only — never by timestamp proximity and never by
+ * array adjacency. A wire record whose `requestId` has no matching
+ * effective-config record is counted as unjoined, not attached to a
+ * neighbour.
+ */
+function collectWireReasoningEvidence(
+	records: readonly TraceRecord[],
+): WireReasoningEvidence {
+	const wireRecords = records.filter(
+		(record) => record.event === "model_wire_reasoning",
+	);
+	const requestedRequestIds = new Set<string>();
+	for (const record of records) {
+		if (record.event !== "effective_model_config") {
+			continue;
+		}
+		const requestId = record.payload.requestId;
+		if (typeof requestId === "string" && requestId !== "") {
+			requestedRequestIds.add(requestId);
+		}
+	}
+
+	const requestIds = new Set<string>();
+	const controls: Record<string, Set<string>> = {};
+	let joinedToRequested = false;
+	let unjoinedToRequested = 0;
+
+	for (const record of wireRecords) {
+		const requestId = record.payload.requestId;
+		if (typeof requestId === "string" && requestId !== "") {
+			requestIds.add(requestId);
+			if (requestedRequestIds.has(requestId)) {
+				joinedToRequested = true;
+			} else {
+				unjoinedToRequested += 1;
+			}
+		} else {
+			unjoinedToRequested += 1;
+		}
+		for (const control of WIRE_REASONING_CONTROL_NAMES) {
+			const value = readWireControlValue(record.payload[control]);
+			if (value === undefined) {
+				continue;
+			}
+			let bucket = controls[control];
+			if (!bucket) {
+				bucket = new Set<string>();
+				controls[control] = bucket;
+			}
+			bucket.add(value);
+		}
+	}
+
+	return {
+		recordCount: wireRecords.length,
+		requestIds: [...requestIds].sort(),
+		controls: Object.fromEntries(
+			Object.entries(controls).map(([key, values]) => [
+				key,
+				[...values].sort(),
+			]),
+		),
+		joinedToRequested,
+		unjoinedToRequested,
+	};
+}
+
+/**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * Assess the parity of the SERIALIZED wire reasoning controls between the
+ * two sides.
+ *
+ * The rules are:
+ *
+ *   1. NO wire evidence on EITHER side → UNVERIFIED. The feature may
+ *      simply not have been active; that is not a mismatch.
+ *   2. Wire evidence on ONE side only → UNVERIFIED. A known value cannot
+ *      be matched against an unknown one.
+ *   3. A control observed with SEVERAL values on either side → UNVERIFIED
+ *      for that control. The wire controls changed during the run, so a
+ *      single scalar comparison would be a lie.
+ *   4. Otherwise, each control present on BOTH sides is compared. A
+ *      control present on only one side is UNVERIFIED for that control.
+ */
+function assessWireReasoningParity(
+	m3: WireReasoningEvidence,
+	m31: WireReasoningEvidence,
+): {
+	comparison: DimensionComparison;
+	reason: string;
+	dimensions: Record<
+		string,
+		{ m3: string; m31: string; comparison: DimensionComparison }
+	>;
+} {
+	const dimensions: Record<
+		string,
+		{ m3: string; m31: string; comparison: DimensionComparison }
+	> = {};
+
+	if (m3.recordCount === 0 || m31.recordCount === 0) {
+		return {
+			comparison: "unverified",
+			reason:
+				m3.recordCount === 0 && m31.recordCount === 0
+					? "NO serialized wire-reasoning evidence was observed on EITHER side — the wire controls could not be compared, and their absence is NOT a mismatch"
+					: "serialized wire-reasoning evidence was observed on ONE side only — a known value cannot be matched against an unknown one",
+			dimensions,
+		};
+	}
+
+	const controlNames = new Set([
+		...Object.keys(m3.controls),
+		...Object.keys(m31.controls),
+	]);
+	let different = false;
+	let unverified = false;
+	for (const control of controlNames) {
+		const left = m3.controls[control] ?? [];
+		const right = m31.controls[control] ?? [];
+		if (left.length > 1 || right.length > 1) {
+			// The wire controls CHANGED during the run on at least one side.
+			dimensions[control] = {
+				m3: left.join(" | ") || UNAVAILABLE,
+				m31: right.join(" | ") || UNAVAILABLE,
+				comparison: "unverified",
+			};
+			unverified = true;
+			continue;
+		}
+		if (left.length === 0 || right.length === 0) {
+			dimensions[control] = {
+				m3: left[0] ?? UNAVAILABLE,
+				m31: right[0] ?? UNAVAILABLE,
+				comparison: "unverified",
+			};
+			unverified = true;
+			continue;
+		}
+		const equal = left[0] === right[0];
+		dimensions[control] = {
+			m3: left[0],
+			m31: right[0],
+			comparison: equal ? "equal" : "different",
+		};
+		if (!equal) {
+			different = true;
+		}
+	}
+
+	if (different) {
+		return {
+			comparison: "different",
+			reason:
+				"the SERIALIZED wire reasoning controls differ between the two sides — the models were asked to reason differently ON THE WIRE, so the traces are not comparable",
+			dimensions,
+		};
+	}
+	if (unverified) {
+		return {
+			comparison: "unverified",
+			reason:
+				"some serialized wire reasoning controls could not be VERIFIED (absent on one side, or changed during the run) — the wire controls are UNPROVEN",
+			dimensions,
+		};
+	}
+	return {
+		comparison: "equal",
+		reason:
+			"both sides serialized the SAME reasoning controls onto the wire — the requested reasoning policy reached the provider identically",
+		dimensions,
+	};
+}
+
 function compareDimension(
 	dimension: string,
 	left: string | undefined,
@@ -3730,6 +4271,84 @@ function renderMarkdown(summary: ComparisonSummary): string {
 		lines.push("");
 	}
 
+	// ------------------------------------------------------------------
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01: the serialized
+	// wire-reasoning section.
+	// ------------------------------------------------------------------
+	lines.push("## Wire Reasoning (Serialized Provider Controls)");
+	lines.push("");
+	lines.push(`| Metric | M3 | M3.1 |`);
+	lines.push(`| --- | --- | --- |`);
+	lines.push(
+		`| Serialized wire observations | ${String(summary.wireReasoning.evidence.m3.recordCount)} | ${String(summary.wireReasoning.evidence.m31.recordCount)} |`,
+	);
+	lines.push(
+		`| Distinct request ids | ${String(summary.wireReasoning.evidence.m3.requestIds.length)} | ${String(summary.wireReasoning.evidence.m31.requestIds.length)} |`,
+	);
+	lines.push(
+		`| Joined to the requested config by exact request id | ${summary.wireReasoning.evidence.m3.joinedToRequested ? "yes" : "no"} | ${summary.wireReasoning.evidence.m31.joinedToRequested ? "yes" : "no"} |`,
+	);
+	lines.push(
+		`| Wire records with no requested-config counterpart | ${String(summary.wireReasoning.evidence.m3.unjoinedToRequested)} | ${String(summary.wireReasoning.evidence.m31.unjoinedToRequested)} |`,
+	);
+	lines.push("");
+	lines.push(`**Wire parity: ${summary.wireReasoning.parity.comparison}**`);
+	lines.push("");
+	lines.push(summary.wireReasoning.parity.reason);
+	lines.push("");
+	if (Object.keys(summary.wireReasoning.parity.dimensions).length > 0) {
+		lines.push("| Serialized control | M3 | M3.1 | Comparison |");
+		lines.push("| --- | --- | --- | --- |");
+		for (const [control, result] of Object.entries(
+			summary.wireReasoning.parity.dimensions,
+		)) {
+			lines.push(
+				`| ${control} | ${result.m3} | ${result.m31} | ${result.comparison} |`,
+			);
+		}
+		lines.push("");
+	}
+	lines.push(
+		"> The requested reasoning policy says what the runtime ASKED for; the serialized wire controls say what the provider ACTUALLY RECEIVED. A missing wire observation is UNVERIFIED — it is never a reasoning mismatch, and it never turns a compatible comparison into an incompatible one.",
+	);
+	lines.push("");
+
+	// ------------------------------------------------------------------
+	// ACT-CLINEMM-MODEL-BEHAVIOR-NATIVE-EDIT-DISPOSITION01: the native-edit
+	// disposition section.
+	// ------------------------------------------------------------------
+	lines.push("## Native Edit Dispositions");
+	lines.push("");
+	const dispositionRows: ReadonlyArray<
+		readonly [string, keyof NativeEditDispositionStatistics]
+	> = [
+		["Native edit attempts", "totalAttempts"],
+		["Applied with a content change", "appliedWithChange"],
+		["Applied with NO content change (no-op write)", "appliedNoChange"],
+		["Executor ran, write did not complete", "failed"],
+		["Rejected by the user or host policy", "rejected"],
+		["Skipped (structurally ineligible)", "skipped"],
+		["Authorization state unobservable", "authorizationUnavailable"],
+		[
+			"Authorized, executor never invoked (no application expected)",
+			"notInvoked",
+		],
+		["Authorized and invoked, no application observed", "unfulfilled"],
+		["Applications not joinable by exact identity", "uncorrelated"],
+	];
+	lines.push("| Disposition | M3 | M3.1 |");
+	lines.push("| --- | --- | --- |");
+	for (const [label, key] of dispositionRows) {
+		lines.push(
+			`| ${label} | ${String(summary.nativeEditDispositions.m3[key])} | ${String(summary.nativeEditDispositions.m31[key])} |`,
+		);
+	}
+	lines.push("");
+	lines.push(
+		"> A MISSING `edit_application` is legitimate when the attempt was REJECTED or SKIPPED — the runtime never ran the executor, so no write observation is expected. A missing application for an AUTHORIZED, INVOKED attempt is a genuine EVIDENCE GAP, and is counted separately.",
+	);
+	lines.push("");
+
 	lines.push("## Completion / Gate Evidence");
 	lines.push("");
 	lines.push(
@@ -3822,6 +4441,20 @@ function buildSummary(input: {
 		m3: WorkspaceProgressStatistics;
 		m31: WorkspaceProgressStatistics;
 	};
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+	 */
+	wireReasoning: {
+		evidence: { m3: WireReasoningEvidence; m31: WireReasoningEvidence };
+		parity: ReturnType<typeof assessWireReasoningParity>;
+	};
+	/**
+	 * ACT-CLINEMM-MODEL-BEHAVIOR-NATIVE-EDIT-DISPOSITION01.
+	 */
+	nativeEditDispositions: {
+		m3: NativeEditDispositionStatistics;
+		m31: NativeEditDispositionStatistics;
+	};
 	m3Records: TraceRecord[];
 	m31Records: TraceRecord[];
 	warnings: string[];
@@ -3842,6 +4475,8 @@ function buildSummary(input: {
 		statistics: input.statistics,
 		editingEfficiency: input.editingEfficiency,
 		workspaceProgress: input.workspaceProgress,
+		wireReasoning: input.wireReasoning,
+		nativeEditDispositions: input.nativeEditDispositions,
 		configurationDifferences: input.configuration.fields,
 		repetitionInterpretation:
 			"Repetition scores are HEURISTICS derived from tool-call fingerprints. They are not proof of a model defect: an expected retry, a polling loop, or a repeated test after a source change produces the same signal. The verification-named tool call count is a TOOL-NAME heuristic — it does NOT mean a test ran or that a gate was accepted; accepted executable gates are UNAVAILABLE_FROM_TRACE. A lower tool-call count is NOT, by itself, evidence of a better model — it can equally mean less work was done.",
@@ -3894,6 +4529,49 @@ async function main(): Promise<void> {
 		m3Selection.values,
 		m31Selection.values,
 	);
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01: the SERIALIZED wire
+	// controls are a MATERIAL dimension when they are known to differ.
+	//
+	// The requested reasoning policy is what the runtime ASKED for; the
+	// serialized wire controls are what the provider ACTUALLY RECEIVED. When
+	// the two sides serialized DIFFERENT reasoning controls, the models were
+	// asked to reason differently on the wire, and the comparison is
+	// confounded — exactly like a differing requested effort.
+	//
+	// Missing wire evidence is NOT a mismatch: it is UNVERIFIED, and it
+	// never turns a compatible comparison into an incompatible one.
+	const m3WireEvidence = collectWireReasoningEvidence(m3Records);
+	const m31WireEvidence = collectWireReasoningEvidence(m31Records);
+	const wireParity = assessWireReasoningParity(m3WireEvidence, m31WireEvidence);
+	// The wire evidence is OPTIONAL, so its ABSENCE ON BOTH SIDES is a KNOWN
+	// fact ("these traces predate the feature"), not an unknown value to be
+	// compared. Pushing an unverified dimension there would downgrade every
+	// legacy comparison to inconclusive, which would be a false refusal.
+	//
+	// An ASYMMETRIC absence (evidence on one side only) IS reported as
+	// unverified: one side's wire controls are proven and the other side's
+	// are not, so the two cannot be matched.
+	if (wireParity.comparison === "different") {
+		configuration.differences.push({
+			dimension: "wireReasoningControls",
+			m3: "DIFFERENT",
+			m31: "DIFFERENT",
+			severity: "material",
+			reason: wireParity.reason,
+		});
+	} else if (
+		wireParity.comparison === "unverified" &&
+		(m3WireEvidence.recordCount > 0 || m31WireEvidence.recordCount > 0)
+	) {
+		configuration.differences.push({
+			dimension: "wireReasoningControls",
+			m3: m3WireEvidence.recordCount > 0 ? "OBSERVED" : UNAVAILABLE,
+			m31: m31WireEvidence.recordCount > 0 ? "OBSERVED" : UNAVAILABLE,
+			severity: "unverified",
+			reason: `${wireParity.reason} — the serialized wire reasoning controls are UNPROVEN`,
+		});
+	}
 	const statistics = {
 		m3: computeStatistics(m3, m3Records),
 		m31: computeStatistics(m31, m31Records),
@@ -3992,6 +4670,14 @@ async function main(): Promise<void> {
 		statistics,
 		editingEfficiency,
 		workspaceProgress,
+		wireReasoning: {
+			evidence: { m3: m3WireEvidence, m31: m31WireEvidence },
+			parity: wireParity,
+		},
+		nativeEditDispositions: {
+			m3: computeNativeEditDispositions(m3Records),
+			m31: computeNativeEditDispositions(m31Records),
+		},
 		m3Records,
 		m31Records,
 		warnings,

@@ -50,6 +50,7 @@ import {
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
 	estimateTokens,
 	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
+	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 	mergeModelOptions,
 	normalizeJsonLikeStringsForSchema,
 	omitUndefinedValues,
@@ -557,6 +558,30 @@ function reasoningWasRequestedOff(request: AgentModelRequest): boolean {
 }
 
 /**
+ * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+ *
+ * Read the per-request correlation id out of the request options metadata.
+ *
+ * The options bag is an untyped `Record<string, unknown>`, so the metadata
+ * sub-bag must be narrowed before it can be indexed. A non-object metadata
+ * bag yields `undefined` — the id is never guessed.
+ */
+function readModelBehaviorRequestId(
+	request: AgentModelRequest,
+): string | undefined {
+	const metadata = request.options?.metadata;
+	if (!metadata || typeof metadata !== "object") {
+		return undefined;
+	}
+	const requestId = (metadata as Record<string, unknown>)[
+		MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY
+	];
+	return typeof requestId === "string" && requestId.trim() !== ""
+		? requestId
+		: undefined;
+}
+
+/**
  * ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1).
  *
  * A privacy-safe summary of the reasoning configuration a model request
@@ -569,9 +594,9 @@ function reasoningWasRequestedOff(request: AgentModelRequest): boolean {
  * - `reasoningEffortAdvertised` — whether an effort was requested at all.
  *
  * The WIRE-level facts (what the provider actually received) are recorded by
- * the provider-request capture, not here: the agent runtime does not own the
- * provider wire encoding, and claiming it here would be an inference rather
- * than an observation.
+ * the wire-reasoning observer in the provider transport, not here: the agent
+ * runtime does not own the provider wire encoding, and claiming it here
+ * would be an inference rather than an observation.
  */
 function summarizeReasoningConfiguration(
 	request: AgentModelRequest,
@@ -1976,6 +2001,18 @@ export class AgentRuntime {
 		finishReason: AgentModelFinishReason;
 	}> {
 		const usageBeforeModel = cloneUsage(this.state.usage);
+		// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
+		//
+		// The per-request correlation id. It is minted ONCE per model
+		// request and placed in the EXISTING request metadata bag, which
+		// already flows agent -> gateway -> provider. It is NEVER
+		// serialized into the provider body: the metadata is a
+		// transport-side correlation channel, not a payload field.
+		//
+		// The id is what lets the trace join the REQUESTED reasoning
+		// policy to the SERIALIZED wire controls with an EXACT identity
+		// join — never by timestamp proximity.
+		const modelRequestId = createUID("req");
 		const modelRequestMetadata = omitUndefinedValues({
 			distinctId: trimNonEmpty(this.config.distinctId),
 			clientName: trimNonEmpty(this.config.clientName),
@@ -1986,6 +2023,7 @@ export class AgentRuntime {
 			conversationId: trimNonEmpty(this.config.conversationId),
 			runId: this.state.runId,
 			iteration: this.state.iteration,
+			[MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY]: modelRequestId,
 		});
 		let request: AgentModelRequest = {
 			systemPrompt: this.config.systemPrompt,
@@ -2643,11 +2681,17 @@ export class AgentRuntime {
 			const thinking = options.thinking;
 			const reasoningEffort = options.reasoningEffort;
 			const maxOutputTokens = options.maxTokensPerTurn;
+			const requestId = readModelBehaviorRequestId(request);
 			sink.onEffectiveModelConfig({
 				...this.modelBehaviorTraceIdentity(),
 				payload: {
 					toolCount: request.tools.length,
 					toolNames: request.tools.map((tool) => tool.name),
+					// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01: the
+					// per-request correlation id. It is what joins this
+					// REQUESTED configuration to the SERIALIZED wire controls
+					// with an exact identity join.
+					...(requestId !== undefined ? { requestId } : {}),
 					// `undefined` means the runtime did not specify it — NOT
 					// "the provider default".
 					...(typeof thinking === "boolean"

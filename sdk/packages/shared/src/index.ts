@@ -576,6 +576,17 @@ export {
 	sanitizePayload,
 } from "./runtime/model-behavior-trace";
 export type {
+	ModelBehaviorWireReasoningObservation,
+	ModelBehaviorWireReasoningObserver,
+} from "./runtime/model-wire-reasoning";
+export {
+	hasModelBehaviorWireReasoningObserver,
+	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
+	notifyModelBehaviorWireReasoningObservers,
+	registerModelBehaviorWireReasoningObserver,
+	unregisterModelBehaviorWireReasoningObserver,
+} from "./runtime/model-wire-reasoning";
+export type {
 	CaptureAgentUnexpectedReasoningTokensInput,
 	CaptureSdkErrorInput,
 	CaptureTaskLifecycleEventInput,

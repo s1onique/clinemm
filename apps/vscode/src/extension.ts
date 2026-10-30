@@ -58,6 +58,7 @@ import {
 import { dumpExtensionSideLifecycleClearSnapshot } from "@/sdk/lifecycle-clear-recorder-runtime-host"
 import {
 	dumpModelBehaviorTrace,
+	installModelBehaviorWireReasoningObserver,
 	syncModelBehaviorTraceEnabled,
 	toggleModelBehaviorTraceWorkspaceEnabled,
 } from "@/sdk/model-behavior-trace-runtime"
@@ -311,6 +312,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	// is consulted at observation time, so the toggle affects
 	// already-running sessions for subsequent events without a reload.
 	await syncModelBehaviorTraceEnabled(context)
+
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01:
+	// install the wire-reasoning observer that records the SERIALIZED
+	// provider wire controls. It is installed UNCONDITIONALLY and
+	// idempotently: the recorder itself decides whether the evidence is
+	// retained, so the persisted trace toggle remains the ONLY thing that
+	// arms evidence retention — and the observer must already be armed
+	// before the first model request so the FIRST request's wire controls
+	// are not missed. The observer never enables the full
+	// provider-request capture and never writes a capture file.
+	installModelBehaviorWireReasoningObserver()
 
 	// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 	// arm the BOCOR (Background Owner Correlation) capture seam at
