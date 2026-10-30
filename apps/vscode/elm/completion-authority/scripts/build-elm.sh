@@ -56,6 +56,26 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/elm_toolchain.sh
 source "${HERE}/../../../../scripts/elm_toolchain.sh"
 
+# Pin ELM_HOME so the build is hermetic against any host
+# elm version drift (matches the other kernels' convention).
+#
+# The Elm compiler needs a WRITABLE package cache: it locks
+# `${ELM_HOME}/0.19.2/packages/lock` while resolving dependencies.
+# On a host where `${HOME}/.elm` is readable but NOT writable (a
+# sandboxed CI agent, for example), the compiler aborts with
+# "openFdAt: permission denied" and never produces the kernel. The
+# `/tmp/elm-home` fallback is the same one the other two kernels
+# already use.
+if [[ -z "${ELM_HOME:-}" ]]; then
+    if [[ -d "${HOME}/.elm/0.19.2/packages" && -w "${HOME}/.elm/0.19.2/packages" ]]; then
+        export ELM_HOME="${HOME}/.elm"
+    elif [[ -d "/tmp/elm-home/0.19.2/packages" ]]; then
+        export ELM_HOME="/tmp/elm-home"
+    else
+        export ELM_HOME="${HOME}/.elm"
+    fi
+fi
+
 mkdir -p "${HERE}/vendor"
 
 # CORRECTION05: enter the Elm project root so `elm make` resolves
