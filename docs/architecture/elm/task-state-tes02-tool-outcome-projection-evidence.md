@@ -552,7 +552,7 @@ CAN be collected PASS.
 ## 13. CORRECTION01 commit record
 
 ```text
-CORRECTION01_HEAD = 6c40a2f0558f366f3796aff1e44b3d7258759ea0
+CORRECTION01_HEAD = ae85f3808aa327a6d7d5bb38c3237b1b713cbc74
 ```
 
 The correction commit carries EXACTLY FOUR files:

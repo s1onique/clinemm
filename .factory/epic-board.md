@@ -2,7 +2,7 @@
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. One bounded P0 correction (`HALT_OBSERVER_EXECUTION_COUPLING`) closed the execution-conservation gap in the typed runtime-outcome observer. The installed-UI demonstration remains pending because the sandbox cannot launch the Electron host (the BASELINE code fails identically).
 
-**ENTRY_HEAD:** `cd26da60d` (branch `tool-execution-semantics-m3`). **SUBJECT_HEAD:** `6c40a2f0558f366f3796aff1e44b3d7258759ea0` (the commit carrying this bounded correction; the board entry itself is recorded in the evidence file §13).
+**ENTRY_HEAD:** `cd26da60d` (branch `tool-execution-semantics-m3`). **SUBJECT_HEAD:** `ae85f3808aa327a6d7d5bb38c3237b1b713cbc74` (the commit carrying this bounded correction; the board entry itself is recorded in the evidence file §13).
 
 **P0 — THE OBSERVER WAS AWAITED, SO A TELEMETRY CALLBACK COULD COUPLE TOOL EXECUTION.** The original ACT's execution-conservation claim rested on "the observer's return value is ignored". That was true of the RETURN VALUE only: `AgentRuntime.notifyToolRuntimeOutcome` (`sdk/packages/agents/src/agent-runtime.ts`) AWAITS every registered `onToolRuntimeOutcome` hook, and the host composed its telemetry observer as `await existing?.(ctx); await observer(ctx)` (`apps/vscode/src/sdk/sdk-session-config-builder.ts`) with NO exception isolation. A throwing/rejecting observer therefore rejected `executePreparedTool` AFTER the tool had already produced its outcome (the tool result was LOST and the run ABORTED), and a slow observer DELAYED the tool-execution path (measured: the runtime waited 52ms). Both contradict the ACT's read-only conservation claim.
 
