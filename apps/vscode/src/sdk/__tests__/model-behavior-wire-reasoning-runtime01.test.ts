@@ -15,7 +15,13 @@
  *   WR12  The observer is installed IDEMPOTENTLY and is INDEPENDENT of the
  *         full provider-request capture: installing it never arms
  *         `CLINE_CAPTURE_WIRE` / `CLINE_CAPTURE_PROVIDER_REQUEST`.
+ *   WR13  The observer registers with a LIVE `isActive` predicate, so the
+ *         provider seam can skip the request-body read entirely while the
+ *         trace is OFF — and an ON/OFF toggle takes effect for the NEXT
+ *         provider request without a re-registration or a new gateway.
  */
+
+import { isModelBehaviorWireReasoningObserverActive } from "@cline/shared"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	_resetModelBehaviorTrace,
@@ -98,5 +104,32 @@ describe("model behavior wire-reasoning runtime", () => {
 		// Installing the observer does not enable the disk-level capture.
 		expect(process.env.CLINE_CAPTURE_WIRE).toBeUndefined()
 		expect(process.env.CLINE_CAPTURE_PROVIDER_REQUEST).toBeUndefined()
+	})
+
+	it("WR13: the observer registers a LIVE isActive predicate that follows the recorder toggle", () => {
+		// The recorder is DISARMED. The observer is not installed yet, so
+		// there is nothing that could want an observation.
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(false)
+
+		// Installing the observer registers it for the whole process
+		// lifetime, but it declares itself INACTIVE while the recorder is
+		// disarmed. This is the signal the provider seam uses to skip the
+		// request-body read entirely.
+		installModelBehaviorWireReasoningObserver()
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(false)
+
+		// Arming the recorder flips the LIVE predicate — no
+		// re-registration, no new gateway, no reload.
+		setModelBehaviorTraceEnabled(true)
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(true)
+
+		// Disarming it flips the predicate back, so the NEXT provider
+		// request skips the body read again.
+		setModelBehaviorTraceEnabled(false)
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(false)
+
+		// The predicate is read LIVE, so re-arming is observed too.
+		setModelBehaviorTraceEnabled(true)
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(true)
 	})
 })

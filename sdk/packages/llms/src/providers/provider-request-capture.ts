@@ -13,6 +13,7 @@ import type { GatewayStreamRequest } from "@cline/shared";
 import {
 	estimateTokens,
 	hasModelBehaviorWireReasoningObserver,
+	isModelBehaviorWireReasoningObserverActive,
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 	notifyModelBehaviorWireReasoningObservers,
 } from "@cline/shared";
@@ -653,16 +654,54 @@ export function wrapFetchForProviderRequestCapture(
 	// before; the observer is gated by the presence of a registered
 	// observer. When NEITHER is active the fetch is returned UNWRAPPED, so
 	// the default path is byte-identical to a build without this feature.
-	const captureEnabled = isWireCaptureEnabled();
-	const observerEnabled = hasModelBehaviorWireReasoningObserver();
-	if (!captureEnabled && !observerEnabled) {
+	//
+	// The wrap decision is REGISTRATION-based (and env-based for the full
+	// capture) so an ALREADY-wrapped gateway keeps working across an ON/OFF
+	// toggle of the trace. The per-CALL decision — whether to read the body
+	// at all — is made inside the wrapper, against the LIVE observer state.
+	const captureEnabledAtWrap = isWireCaptureEnabled();
+	const observerRegisteredAtWrap = hasModelBehaviorWireReasoningObserver();
+	if (!captureEnabledAtWrap && !observerRegisteredAtWrap) {
 		return baseFetch;
 	}
 	const delegate = baseFetch ?? globalThis.fetch;
 	if (!delegate) {
 		return baseFetch;
 	}
-	const captureFetch = (async (input, init) => {
+	// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01 (OFF fast path).
+	//
+	// The wrapper is DELIBERATELY NOT `async`.
+	//
+	// An `async` function ASSIMILATES the value it returns: returning the
+	// delegate's promise from an `async` function produces a NEW promise
+	// that settles one microtask later than the delegate's own. On the
+	// default-OFF path that is pure overhead added to EVERY provider
+	// request. A plain (non-async) function returns the delegate's promise
+	// BY REFERENCE, so the caller's observable behavior is byte-identical to
+	// an unwrapped fetch.
+	//
+	// The OFF decision is made at FETCH-INVOCATION time, not at wrap time.
+	// The wrap itself stays REGISTRATION-based so an already-wrapped gateway
+	// keeps working across an ON/OFF toggle of the trace: the seam consults
+	// the LIVE observer liveness on every call.
+	const captureFetch = ((
+		input: Parameters<typeof fetch>[0],
+		init?: Parameters<typeof fetch>[1],
+	) => {
+		// The full provider-request capture is INDEPENDENT of the wire
+		// observer. It is read at CALL time so that a capture that was
+		// enabled when the gateway was wrapped can still be turned OFF
+		// without rebuilding the gateway.
+		const captureEnabled = isWireCaptureEnabled();
+		// The observer's liveness is read at CALL time so an ON/OFF toggle of
+		// the model-behavior recorder takes effect for the NEXT request.
+		const observerEnabled = isModelBehaviorWireReasoningObserverActive();
+		if (!captureEnabled && !observerEnabled) {
+			// OFF fast path: delegate IMMEDIATELY. No body read, no clone,
+			// no parsing, no asynchronous diagnostic work — and the
+			// delegate's own promise is returned unchanged.
+			return delegate(input, init);
+		}
 		const method =
 			init?.method ??
 			(input instanceof Request ? input.method : undefined) ??
@@ -672,7 +711,7 @@ export function wrapFetchForProviderRequestCapture(
 				// The observer is checked at CALL time, not only at wrap
 				// time, so an observer registered between the wrap and the
 				// request is still honored.
-				if (hasModelBehaviorWireReasoningObserver()) {
+				if (isModelBehaviorWireReasoningObserverActive()) {
 					notifyWireReasoningObservers(request, body, method);
 				}
 				if (!captureEnabled) {

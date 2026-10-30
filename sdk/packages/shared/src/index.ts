@@ -581,6 +581,7 @@ export type {
 } from "./runtime/model-wire-reasoning";
 export {
 	hasModelBehaviorWireReasoningObserver,
+	isModelBehaviorWireReasoningObserverActive,
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 	notifyModelBehaviorWireReasoningObservers,
 	registerModelBehaviorWireReasoningObserver,

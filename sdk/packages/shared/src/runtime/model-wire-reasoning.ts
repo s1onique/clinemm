@@ -171,11 +171,55 @@ const REGISTRY_CAPABILITY = Symbol.for(
 	"cline.modelBehaviorWireReasoningRegistry",
 );
 
+/**
+ * The optional LIVENESS contract of a registered observer.
+ *
+ * WHY LIVENESS EXISTS
+ * -------------------
+ * The extension host installs its observer UNCONDITIONALLY at activation, so
+ * the registry is populated for the whole process lifetime — including while
+ * the model-behavior recorder is DISARMED (the default). Treating
+ * "REGISTERED" as "ACTIVE" would make EVERY provider request pay for a
+ * request-body read and a serialization that nobody asked for.
+ *
+ * An observer MAY therefore declare HOW to tell whether it currently wants
+ * the data. The predicate is consulted on the provider's request hot path,
+ * BEFORE the request body is read.
+ *
+ * An observer WITHOUT a predicate is ALWAYS active: it has no way to signal
+ * inactivity, so the conservative reading is "this observer wants everything".
+ */
+export interface ModelBehaviorWireReasoningObserverOptions {
+	/**
+	 * A SYNCHRONOUS liveness predicate.
+	 *
+	 * `true` ⇒ the observer currently wants the observation.
+	 * `false` ⇒ the observer is registered but currently wants NOTHING, so
+	 * the caller may skip the (expensive) request-body inspection entirely.
+	 *
+	 * It MUST be synchronous and cheap — it runs on the provider's request
+	 * hot path, before the request body is read. A predicate that THROWS is
+	 * treated as `true` (conservative: a broken predicate must never
+	 * silently drop evidence).
+	 */
+	readonly isActive?: () => boolean;
+}
+
 interface WireReasoningRegistry {
 	/** The private capability. Never exposed outside this module. */
 	readonly capability: symbol;
 	/** The registered observers, in registration order. */
 	readonly observers: Set<ModelBehaviorWireReasoningObserver>;
+	/**
+	 * The LIVENESS predicates, keyed by observer.
+	 *
+	 * Kept SEPARATE from the observer set so the set keeps its original
+	 * shape: a registry created by an older bundled copy of this module
+	 * stays fully usable, and an older copy's notification loop (which
+	 * iterates plain observer functions) keeps working against a newer
+	 * registry.
+	 */
+	activity?: Map<ModelBehaviorWireReasoningObserver, () => boolean>;
 }
 
 /**
@@ -218,6 +262,7 @@ function resolveRegistry(): WireReasoningRegistry {
 	const created: WireReasoningRegistry = {
 		capability: REGISTRY_CAPABILITY,
 		observers: new Set<ModelBehaviorWireReasoningObserver>(),
+		activity: new Map<ModelBehaviorWireReasoningObserver, () => boolean>(),
 	};
 	Object.defineProperty(holder, REGISTRY_SLOT, {
 		value: created,
@@ -240,6 +285,7 @@ function resolveRegistry(): WireReasoningRegistry {
  */
 export function registerModelBehaviorWireReasoningObserver(
 	observer: ModelBehaviorWireReasoningObserver,
+	options?: ModelBehaviorWireReasoningObserverOptions,
 ): () => void {
 	if (typeof observer !== "function") {
 		return () => {
@@ -248,8 +294,26 @@ export function registerModelBehaviorWireReasoningObserver(
 	}
 	const registry = resolveRegistry();
 	registry.observers.add(observer);
+	// A registry written by an OLDER bundled copy has no activity map at
+	// all. Create one lazily so the liveness contract works against a
+	// registry this module did not create.
+	let activity = registry.activity;
+	if (!activity) {
+		activity = new Map();
+		registry.activity = activity;
+	}
+	const isActive = options?.isActive;
+	if (typeof isActive === "function") {
+		activity.set(observer, isActive);
+	} else {
+		// No predicate ⇒ conservatively active. Explicitly record the
+		// absence so a stale predicate from a previous registration of the
+		// SAME function object can never leak into this one.
+		activity.delete(observer);
+	}
 	return () => {
 		registry.observers.delete(observer);
+		registry.activity?.delete(observer);
 	};
 }
 
@@ -261,7 +325,9 @@ export function registerModelBehaviorWireReasoningObserver(
  * {@link registerModelBehaviorWireReasoningObserver}.
  */
 export function unregisterModelBehaviorWireReasoningObserver(): void {
-	resolveRegistry().observers.clear();
+	const registry = resolveRegistry();
+	registry.observers.clear();
+	registry.activity?.clear();
 }
 
 /**
@@ -272,6 +338,65 @@ export function unregisterModelBehaviorWireReasoningObserver(): void {
  */
 export function hasModelBehaviorWireReasoningObserver(): boolean {
 	return resolveRegistry().observers.size > 0;
+}
+
+/**
+ * True when at least one registered observer is CURRENTLY ACTIVE.
+ *
+ * This is the gate the provider seam MUST use before it reads (and
+ * therefore CLONES) a request body:
+ *
+ *   - NO observer registered ⇒ `false` — nothing to notify.
+ *   - Every registered observer declares itself inactive ⇒ `false` — the
+ *     observer is installed but currently wants NOTHING, so the body read
+ *     and the serialization can be skipped ENTIRELY.
+ *   - At least one observer is active (or declares no liveness predicate)
+ *     ⇒ `true`.
+ *
+ * An observer WITHOUT a liveness predicate is conservatively ACTIVE: it
+ * has no way to signal inactivity, so dropping its observations would
+ * silently lose evidence.
+ *
+ * A liveness predicate that THROWS is treated as ACTIVE, for the same
+ * reason: a broken predicate must never silently drop evidence.
+ */
+export function isModelBehaviorWireReasoningObserverActive(): boolean {
+	const registry = resolveRegistry();
+	if (registry.observers.size === 0) {
+		return false;
+	}
+	const activity = registry.activity;
+	if (!activity || activity.size === 0) {
+		// Either an older registry without the activity map, or observers
+		// that declared no predicate: conservatively active.
+		return true;
+	}
+	for (const observer of registry.observers) {
+		const isActive = activity.get(observer);
+		if (!isActive) {
+			// No predicate ⇒ conservatively active.
+			return true;
+		}
+		if (readObserverActivity(isActive)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Read one liveness predicate, failure-isolated.
+ *
+ * A THROWING predicate is reported as ACTIVE: the predicate is the
+ * observer's own signal, and a broken signal must never cause the
+ * provider to skip the observation.
+ */
+function readObserverActivity(isActive: () => boolean): boolean {
+	try {
+		return isActive() === true;
+	} catch {
+		return true;
+	}
 }
 
 /**
@@ -295,6 +420,13 @@ export function notifyModelBehaviorWireReasoningObservers(
 	}
 	// Copy first: an observer may unregister itself during the notification.
 	for (const observer of [...registry.observers]) {
+		// An observer that declares itself inactive receives NOTHING: the
+		// liveness predicate is the observer's own statement that it does
+		// not currently want the observation.
+		const isActive = registry.activity?.get(observer);
+		if (isActive && !readObserverActivity(isActive)) {
+			continue;
+		}
 		try {
 			observer({ ...observation });
 		} catch {

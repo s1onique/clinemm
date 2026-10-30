@@ -22,6 +22,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	hasModelBehaviorWireReasoningObserver,
+	isModelBehaviorWireReasoningObserverActive,
 	notifyModelBehaviorWireReasoningObservers,
 	registerModelBehaviorWireReasoningObserver,
 	unregisterModelBehaviorWireReasoningObserver,
@@ -199,5 +200,101 @@ describe("the process-wide wire-reasoning registry", () => {
 
 		unregisterThrower();
 		unregisterGood();
+	});
+
+	it("REG09: the liveness gate reports ACTIVE conservatively", () => {
+		// No observer at all ⇒ nothing wants an observation.
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(false);
+
+		// An observer WITHOUT a liveness predicate has no way to signal
+		// inactivity, so it is conservatively ACTIVE.
+		const unregister = registerModelBehaviorWireReasoningObserver(() => {
+			// The observer body is irrelevant here.
+		});
+		expect(hasModelBehaviorWireReasoningObserver()).toBe(true);
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(true);
+		unregister();
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(false);
+	});
+
+	it("REG10: a liveness predicate is read LIVE, never snapshotted", () => {
+		let active = false;
+		const unregister = registerModelBehaviorWireReasoningObserver(
+			() => {
+				// The observer body is irrelevant here.
+			},
+			{ isActive: () => active },
+		);
+
+		// The observer is REGISTERED but currently wants nothing.
+		expect(hasModelBehaviorWireReasoningObserver()).toBe(true);
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(false);
+
+		// Flipping the predicate is observed IMMEDIATELY — no
+		// re-registration, no new registry.
+		active = true;
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(true);
+		active = false;
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(false);
+
+		unregister();
+	});
+
+	it("REG11: a THROWING liveness predicate is treated as ACTIVE", () => {
+		const unregister = registerModelBehaviorWireReasoningObserver(
+			() => {
+				// The observer body is irrelevant here.
+			},
+			{
+				isActive: () => {
+					throw new Error("predicate failure");
+				},
+			},
+		);
+		// A broken signal must never silently drop evidence.
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(true);
+		unregister();
+	});
+
+	it("REG12: an INACTIVE observer receives NO observation", () => {
+		const received: unknown[] = [];
+		const unregister = registerModelBehaviorWireReasoningObserver(
+			(observation) => {
+				received.push(observation);
+			},
+			{ isActive: () => false },
+		);
+
+		notifyModelBehaviorWireReasoningObservers({
+			requestId: "req-inactive",
+			attempt: 1,
+			wireOutputConfigEffort: "low",
+		});
+		expect(received).toHaveLength(0);
+
+		unregister();
+	});
+
+	it("REG13: ONE ACTIVE observer is enough to make the registry ACTIVE", () => {
+		const unregisterInactive = registerModelBehaviorWireReasoningObserver(
+			() => {
+				// The observer body is irrelevant here.
+			},
+			{ isActive: () => false },
+		);
+		const unregisterActive = registerModelBehaviorWireReasoningObserver(
+			() => {
+				// The observer body is irrelevant here.
+			},
+			{ isActive: () => true },
+		);
+
+		// The gate is an OR across observers: an active observer needs
+		// the observation, so the body read may not be skipped.
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(true);
+
+		unregisterActive();
+		expect(isModelBehaviorWireReasoningObserverActive()).toBe(false);
+		unregisterInactive();
 	});
 });

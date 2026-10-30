@@ -553,39 +553,55 @@ export function installModelBehaviorWireReasoningObserver(): void {
 		return
 	}
 	wireReasoningObserverInstalled = true
-	registerModelBehaviorWireReasoningObserver((observation) => {
-		recordModelBehaviorTraceWireReasoning(
-			{
-				...(observation.sessionId !== undefined ? { sessionId: observation.sessionId } : {}),
-				...(observation.taskId !== undefined ? { taskId: observation.taskId } : {}),
-				...(observation.runId !== undefined ? { runId: observation.runId } : {}),
-				...(observation.iteration !== undefined ? { iteration: observation.iteration } : {}),
-				...(observation.providerId !== undefined ? { providerId: observation.providerId } : {}),
-				...(observation.modelId !== undefined ? { modelId: observation.modelId } : {}),
-			},
-			{
-				...(observation.requestId !== undefined ? { requestId: observation.requestId } : {}),
-				...(observation.attempt !== undefined ? { attempt: observation.attempt } : {}),
-				...(observation.httpMethod !== undefined ? { httpMethod: observation.httpMethod } : {}),
-				...(observation.wireThinkingMode !== undefined ? { wireThinkingMode: observation.wireThinkingMode } : {}),
-				...(observation.wireReasoningEffort !== undefined
-					? { wireReasoningEffort: observation.wireReasoningEffort }
-					: {}),
-				...(observation.wireReasoningEnabled !== undefined
-					? { wireReasoningEnabled: observation.wireReasoningEnabled }
-					: {}),
-				...(observation.wireReasoningExcluded !== undefined
-					? { wireReasoningExcluded: observation.wireReasoningExcluded }
-					: {}),
-				...(observation.wireOutputConfigEffort !== undefined
-					? { wireOutputConfigEffort: observation.wireOutputConfigEffort }
-					: {}),
-				...(observation.wireOutputTokenLimit !== undefined
-					? { wireOutputTokenLimit: observation.wireOutputTokenLimit }
-					: {}),
-			},
-		)
-	})
+	registerModelBehaviorWireReasoningObserver(
+		(observation) => {
+			recordModelBehaviorTraceWireReasoning(
+				{
+					...(observation.sessionId !== undefined ? { sessionId: observation.sessionId } : {}),
+					...(observation.taskId !== undefined ? { taskId: observation.taskId } : {}),
+					...(observation.runId !== undefined ? { runId: observation.runId } : {}),
+					...(observation.iteration !== undefined ? { iteration: observation.iteration } : {}),
+					...(observation.providerId !== undefined ? { providerId: observation.providerId } : {}),
+					...(observation.modelId !== undefined ? { modelId: observation.modelId } : {}),
+				},
+				{
+					...(observation.requestId !== undefined ? { requestId: observation.requestId } : {}),
+					...(observation.attempt !== undefined ? { attempt: observation.attempt } : {}),
+					...(observation.httpMethod !== undefined ? { httpMethod: observation.httpMethod } : {}),
+					...(observation.wireThinkingMode !== undefined ? { wireThinkingMode: observation.wireThinkingMode } : {}),
+					...(observation.wireReasoningEffort !== undefined
+						? { wireReasoningEffort: observation.wireReasoningEffort }
+						: {}),
+					...(observation.wireReasoningEnabled !== undefined
+						? { wireReasoningEnabled: observation.wireReasoningEnabled }
+						: {}),
+					...(observation.wireReasoningExcluded !== undefined
+						? { wireReasoningExcluded: observation.wireReasoningExcluded }
+						: {}),
+					...(observation.wireOutputConfigEffort !== undefined
+						? { wireOutputConfigEffort: observation.wireOutputConfigEffort }
+						: {}),
+					...(observation.wireOutputTokenLimit !== undefined
+						? { wireOutputTokenLimit: observation.wireOutputTokenLimit }
+						: {}),
+				},
+			)
+		},
+		{
+			// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01 (OFF fast path).
+			//
+			// The observer is REGISTERED for the whole process lifetime, but it
+			// only wants observations while the recorder is ARMED. The
+			// predicate is read LIVE at every observation — the recorder's
+			// state is NEVER snapshotted at registration time, so toggling
+			// the trace ON or OFF takes effect for the NEXT provider request
+			// without a reload, a re-registration, or a new gateway.
+			//
+			// This is what lets the provider seam skip the request-body read
+			// entirely while the trace is OFF.
+			isActive: () => isModelBehaviorTraceEnabled(),
+		},
+	)
 }
 
 /**
