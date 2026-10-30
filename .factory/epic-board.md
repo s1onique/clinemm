@@ -1,3 +1,27 @@
+# ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-31
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. One bounded P0 correction (`HALT_OBSERVER_EXECUTION_COUPLING`) closed the execution-conservation gap in the typed runtime-outcome observer. The installed-UI demonstration remains pending because the sandbox cannot launch the Electron host (the BASELINE code fails identically).
+
+**ENTRY_HEAD:** `cd26da60d` (branch `tool-execution-semantics-m3`). **SUBJECT_HEAD:** `6c40a2f0558f366f3796aff1e44b3d7258759ea0` (the commit carrying this bounded correction; the board entry itself is recorded in the evidence file §13).
+
+**P0 — THE OBSERVER WAS AWAITED, SO A TELEMETRY CALLBACK COULD COUPLE TOOL EXECUTION.** The original ACT's execution-conservation claim rested on "the observer's return value is ignored". That was true of the RETURN VALUE only: `AgentRuntime.notifyToolRuntimeOutcome` (`sdk/packages/agents/src/agent-runtime.ts`) AWAITS every registered `onToolRuntimeOutcome` hook, and the host composed its telemetry observer as `await existing?.(ctx); await observer(ctx)` (`apps/vscode/src/sdk/sdk-session-config-builder.ts`) with NO exception isolation. A throwing/rejecting observer therefore rejected `executePreparedTool` AFTER the tool had already produced its outcome (the tool result was LOST and the run ABORTED), and a slow observer DELAYED the tool-execution path (measured: the runtime waited 52ms). Both contradict the ACT's read-only conservation claim.
+
+**RED — THE REAL `AgentRuntime` SEAM.** New witness `apps/vscode/src/sdk/__tests__/tool-outcome-observer-execution-neutrality.tes-out-01-corr01.test.ts` drives the REAL `AgentRuntime` with the REAL composed hook produced by the REAL `SdkSessionConfigBuilder` (the exact production composition boundary). RED **4/6**: the throwing observer rejected the run and the tool's own result was LOST (0 tool results instead of 1); the rejecting observer behaved identically; the slow observer extended the tool call by 52ms.
+
+**THE BOUNDED CORRECTION.** ONLY the newly attached host telemetry observer changed, at the host observer composition boundary: it is now invoked SYNCHRONOUSLY, its exceptions are ISOLATED (`try/catch`), and it is NEVER awaited (a returned promise is detached with `.catch(() => {})` so a later rejection cannot surface as an unhandled rejection). The PRE-EXISTING hook keeps its EXACT semantics — still awaited, still able to reject. No telemetry redesign, no broad recon, no change to the typed projection, the SDK merge layers, or the runtime.
+
+**GREEN + ABLATION.** GREEN **7/7** on the correction witness (throwing observer, rejecting observer, runtime failure, existing-hook preservation, non-blocking, typed outcome preserved, legacy TaskHeader conservation). Ablation (reverting ONLY the correction) returns RED **4 failed | 3 passed**; the correction is restored and the witness re-run GREEN — it is load-bearing, not cosmetic.
+
+**PRESERVED SUITES (GREEN).** apps/vscode 25/25 (correction witness 7/7 + host tracker 15/15 + config-builder 3/3); sdk/core SDK hook fan-out 3/3; sdk/agents typed outcome + recovery 56/56; webview legacy V1 + V2 conservation 99/99. Gates: `apps/vscode` `tsc --noEmit` exit 0 (0 errors); Biome lint + format clean.
+
+**PRE-EXISTING FAILURE (NOT A REGRESSION).** `webview-ui/src/components/chat/task-header/TaskHeader.test.tsx` fails at MODULE COLLECTION with `Cannot find module '@react-aria/toggle/.../useToggle'` — verified IDENTICAL at the clean HEAD via stash/pop. All 161 collectable task-header tests PASS.
+
+**REMAINS OUTSTANDING (unchanged, not in scope for this bounded correction).** (a) The installed V2 TaskHeader display is still `NOT_EXECUTED` — the sandbox cannot launch the Electron host; the exact-head VSIX installation + GUI qualification is the explicit successor. (b) The new V2 behavior is still `UNAVAILABLE_FROM_TRACE` — the uploaded trace came from the installed bundle `a0b8f263…`, which predates the outcome implementation. (c) The P1 test gap (the foreign-task witness uses different tool-call IDs and does not exercise two task lifetimes reusing the SAME id) remains a P1 — worth covering while testing ownership, but no demonstrated failure, so it did NOT open a second review cycle.
+
+**Artifacts:** `.factory/acts/ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01.md` (contract) and `docs/architecture/elm/task-state-tes02-tool-outcome-projection-evidence.md` (evidence; §12 carries the full CORRECTION01 RED/GREEN/ablation transcripts, the corrected composition, and the preserved-suite matrix).
+
+---
+
 # ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-30
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. The V2 tool RUNTIME-OUTCOME projection is implemented, wired, and executable; the installed-UI demonstration is pending because the sandbox cannot launch the Electron host (the BASELINE code fails identically).

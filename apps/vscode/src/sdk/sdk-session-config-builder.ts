@@ -51,17 +51,53 @@ export class SdkSessionConfigBuilder {
 		// runtime's authoritative typed tool outcome.
 		//
 		// The hook is composed onto the SAME hooks bag (not replacing it)
-		// so the existing file-hook adapter keeps working. The observer's
-		// return value is ignored by the runtime — it can never influence
-		// tool execution, approval, or recovery.
+		// so the existing file-hook adapter keeps working.
+		//
+		// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01-CORRECTION01
+		// (P0 — HALT_OBSERVER_EXECUTION_COUPLING): the observer's RETURN
+		// VALUE was always ignored by the runtime, but the runtime AWAITS
+		// every registered `onToolRuntimeOutcome` hook
+		// (`AgentRuntime.notifyToolRuntimeOutcome`). Awaiting an
+		// unbounded observer therefore coupled a read-only TELEMETRY
+		// callback to tool execution:
+		//
+		//   - a throwing/rejecting observer REJECTED `executePreparedTool`
+		//     AFTER the tool had already produced its outcome, so the tool
+		//     result was lost and the run aborted;
+		//   - a slow observer DELAYED the tool-execution path.
+		//
+		// Both contradict the ACT's execution-conservation claim.
+		//
+		// The correction is deliberately BOUNDED to the newly attached host
+		// telemetry observer:
+		//   - the PRE-EXISTING hook (`existing`) keeps its exact semantics
+		//     (still awaited, still able to reject) — the correction must
+		//     not change any pre-existing behavior;
+		//   - the host telemetry observer is invoked SYNCHRONOUSLY, its
+		//     exceptions are ISOLATED, and it is NEVER awaited, so it can
+		//     neither throw into, nor delay, the tool-execution path.
 		if (this.options.onToolRuntimeOutcome) {
 			const observer = this.options.onToolRuntimeOutcome
 			const existing = config.hooks?.onToolRuntimeOutcome
 			config.hooks = {
 				...(config.hooks ?? {}),
 				onToolRuntimeOutcome: async (ctx) => {
+					// Preserve the pre-existing hook semantics exactly.
 					await existing?.(ctx)
-					await observer(ctx)
+					// Best-effort, non-blocking, exception-isolated
+					// telemetry observation.
+					try {
+						const observed = observer(ctx)
+						if (observed && typeof (observed as Promise<void>).catch === "function") {
+							// The observer returned a promise: detach it so
+							// a later rejection can never surface as an
+							// unhandled rejection in the host process.
+							void (observed as Promise<void>).catch(() => {})
+						}
+					} catch {
+						// A throwing telemetry observer must never influence
+						// tool execution, approval, or recovery.
+					}
 				},
 			}
 		}
