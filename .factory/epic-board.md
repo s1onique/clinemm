@@ -30165,3 +30165,79 @@ Focused ablations independently restore only P0-A or only P0-B to RED. The exist
 4. **Only if needed**, add in-session subprocess outcomes for time-to-RED/GREEN and command-level failures the external evaluator cannot reconstruct.
 
 The predecessor's proposal to instrument subprocess outcomes FIRST is withdrawn: the recon's own gap table shows an independent evaluator can supply authoritative test exit codes, so a ClineMM production change is **not** a prerequisite for the first meaningful comparison.
+
+# ACT-CLINEMM-INDEPENDENT-ACCEPTANCE-EVALUATOR01 — PASS_INDEPENDENT_ACCEPTANCE — 2026-10-31
+
+**Status:** CLOSED. `PASS_INDEPENDENT_ACCEPTANCE`. **ENTRY_HEAD:** `269d8703864f2cd67d68060814dabb527de6d44b`.
+**Scope:** one external, offline, harness-independent evaluator plus its focused witnesses and the bounded ACT evidence. **No harness change, no production recorder change, no normalizer or comparator change, no benchmark candidate workspace modification.**
+
+## What was built
+
+An external evaluator (`scripts/evaluate-agent-fixture.ts`) that answers one question from independently observed facts only: did the agent actually complete the required repair without violating the fixture's constraints? The verdict consumes the frozen fixture identity (commit + tree, read from an operator-owned git repository — never the candidate's `.git` pointer), the complete final workspace delta, protected-file and allowed-scope conservation, the trusted tests executed in an independently reconstructed workspace, the **actual** subprocess exit status, structured JUnit outcomes, and deterministic digests bound to the evaluated source.
+
+The agent's final message, trace, claimed test results and own test commands are **not** acceptance authorities. The evaluator contains no provider-specific or harness-name branch. `AgentRuntime`, the command executor, the native editor, model providers, reasoning controls, model-behavior trace production and the existing portable trace semantics are untouched.
+
+## Two new versioned contracts
+
+- **`agent-fixture/0.1`** — the operator-owned frozen-fixture manifest: source commit + tree, prompt digest, allowed scope, protected paths, the explicit trusted-test argv, and the acceptance threshold and baseline.
+- **`agent-acceptance/0.1`** — the portable verdict record, with **per-field provenance** (`OBSERVED_BY_EVALUATOR` / `OPERATOR_SUPPLIED` / `DERIVED_FROM_VERIFIED_INPUT` / `UNAVAILABLE`). An operator-supplied prompt digest is **not** promoted to proof that a harness received that prompt.
+
+Specification: `docs/acts/ACT-CLINEMM-INDEPENDENT-ACCEPTANCE-EVALUATOR01/CONTRACT.md`.
+
+## Real fixture qualification (the three-defect TypeScript fixture)
+
+The frozen fixture was materialized from the operator's immutable ZIP and **byte-verified** before freezing: commit `14bcdc8874978d44acf4d08c5c2bccceb462bacc`, tree `b626c98912dbcce39ac5cf8f37a535961d69723d`.
+
+The evaluator's **own** baseline run reproduced the expected RED: **14 pass / 4 fail**, exit **1**, 18 total — not a re-recorded historical value. Then, from the same frozen fixture:
+
+| Candidate | Verdict | Exit | Structured results |
+|---|---|---|---|
+| **A** — known broken baseline | **`FAIL`** (`TEST_FAILURE`) | 1 | 14 pass / 4 fail |
+| **B** — known repaired source | **`PASS`** | 0 | **18 pass / 0 fail** |
+| **B** — rerun with **no** model-behavior trace | **`PASS`** | 0 | **18 pass / 0 fail** |
+
+The verdict and every deterministic digest are identical with and without the optional trace — the **harness-neutrality invariant**, pinned executably.
+
+## Adversarial witnesses and the necessity ablation
+
+28 / 28 focused witnesses pass (`vitest` exit 0), covering `BASE-01`, `PASS-01`, `FAIL-01`..`FAIL-08`, `INCOMPLETE-01`/`02`, `IDENTITY-01`/`02`, `PRIV-01` and `DET-01`. Real witnesses are labelled REAL; synthetic controls are labelled SYNTHETIC.
+
+**Necessity ablation (protected-file conservation):** with the gate enabled a tampered candidate is `FAIL` / `PROTECTED_FILE_CHANGED`; with the gate ablated the violation is no longer reported; with the gate restored the rejection returns. The gate is load-bearing.
+
+## One real defect found and fixed during qualification
+
+The JUnit report's **raw bytes** embed wall-clock `time` attributes, so a raw-byte digest was **not** reproducible across runs — `DET-01` caught it. The report digest now covers the report's **semantic content** (the counts and the test identities). Time-dependent fields (`evaluatedAt`, durations) vary by design and are excluded from deterministic comparison.
+
+## Privacy and `agent-trace/0.1` integration
+
+The portable export contains no prompt text, no reasoning content, no shell output, no secrets, no unredacted source and no absolute private workspace paths. The test process receives an environment built from an **empty** base plus the operator's allowlist, so provider credentials cannot leak into untrusted candidate code. Raw transcripts stay local in a separate file.
+
+The evaluator writes a **separate, evaluator-owned** `agent-trace/0.1` **acceptance** event stream. The composition rule is an explicit `trialId` / experiment manifest association — timestamp-proximity joins are forbidden, and evaluator event ids are never equated with a harness run id, step id or provider request id. **The `agent-trace/0.1` producer semantics are unchanged**: the native normalizer's `acceptance` allowlist stays intentionally empty and the native normalizer was not modified.
+
+## Gates
+
+- Focused evaluator tests: **28 / 28 PASS**, exit **0**.
+- Real fixture baseline RED: **14 pass / 4 fail**, exit **1**.
+- Real repaired fixture GREEN: **18 pass / 0 fail**, exit **0**, verdict `PASS`.
+- Adversarial protected-file + scope controls: **all detected**.
+- Necessity ablation: **gate demonstrated load-bearing**, GREEN restored.
+- Deterministic artifact verification: **identical digests across runs**.
+- Privacy check of the export: **0 violations**.
+- Affected typecheck: exit **0**, 0 diagnostics. Biome on touched code: exit **0**, 0 errors.
+- Existing relevant portable contract tests (`agent-trace-contract-recon01.test.ts`): **31 / 31 PASS**.
+- Diff hygiene: **3 new files, 0 tracked modifications** — the normalizer, comparator and portable contract are untouched.
+
+The whole SDK / webview suite was **not** run, by design. The 296 pre-existing epic-board validator issues and the invalid historical `gate-summary.json` are **NON-BLOCKING** and were deliberately not investigated (the count is identical at `ENTRY_HEAD`).
+
+## Honest scope
+
+The three-defect fixture has **already been exposed** to both models during previous investigations. This qualification proves the evaluator is externally authoritative and harness-neutral; it does **not** establish general harness parity. A **blind holdout fixture** remains a future benchmark requirement and did not block this ACT. The isolation is environment-based (empty-base environment, bounded lifetime, bounded output, evaluator-controlled workspace), not a general-purpose OS sandbox, and this ACT did not build one.
+
+**Stop after closure.** DeepSeek integration, subprocess telemetry and prompt-attestation instrumentation are **not** started by this ACT.
+
+## Evidence
+
+- `docs/acts/ACT-CLINEMM-INDEPENDENT-ACCEPTANCE-EVALUATOR01/REPORT.md`
+- `docs/acts/ACT-CLINEMM-INDEPENDENT-ACCEPTANCE-EVALUATOR01/CONTRACT.md`
+- `scripts/evaluate-agent-fixture.ts`
+- `scripts/__tests__/evaluate-agent-fixture.test.ts`
