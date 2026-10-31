@@ -30018,7 +30018,7 @@ AND the mechanism bucket exactly once AND registers the correlation anchor.
 | Suite | Result |
 | --- | --- |
 | Tracker + end-to-end wiring (`apps/vscode/src/sdk`) | **90/90 PASS** |
-| SDK hooks + orchestrator (`sdk/packages/core`) | **89 PASS / 3 FAIL — PRE-EXISTING** |
+| SDK hooks + orchestrator (`sdk/packages/core`) | **92 PASS / 1 skipped / 0 FAIL** on a clean re-run (an earlier run showed 3 FLAKY failures in the file-hook subprocess suites — temp-dir/subprocess race; they reproduce with this ACT's paths STASHED and the same file passes 27/27 on repeated runs, so they are NOT deterministic and NOT attributable to this ACT) |
 | Webview task-header family | **176/176 PASS** |
 | `bun run check-types` (apps/vscode) | **PASS** |
 | `bun run build:sdk` | **PASS** |

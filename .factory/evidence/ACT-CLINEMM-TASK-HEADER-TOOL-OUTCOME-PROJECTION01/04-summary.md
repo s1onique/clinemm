@@ -52,7 +52,7 @@ mutates the outcome and never influences execution.
 | Suite | Command | Result |
 | --- | --- | --- |
 | Tracker + wiring | `bunx vitest run src/sdk/task-telemetry-tracker.test.ts src/sdk/task-tool-outcome-projection.wiring.test.ts --pool=threads` | **90/90 PASS** (11 RED→GREEN + 7 adversarial tracker + 8 wiring) |
-| SDK hooks + orchestrator | `bunx vitest run src/hooks/hook-file-hooks.test.ts src/runtime/orchestration/session-runtime-orchestrator.test.ts --pool=threads` | **89 PASS / 3 FAIL** — the 3 failures are PRE-EXISTING (reproduced with this ACT's paths stashed; see `02-green-sdk-hooks-and-orchestrator.txt`) |
+| SDK hooks + orchestrator | `bunx vitest run src/hooks/hook-file-hooks.test.ts src/runtime/orchestration/session-runtime-orchestrator.test.ts --pool=threads` | **92 PASS / 1 skipped** on a clean re-run; an earlier run showed **3 FAIL** in the file-hook subprocess suites — those 3 are FLAKY (temp-dir / subprocess race), NOT deterministic: they reproduce with this ACT's paths STASHED, and the same file passes 27/27 (1 skipped) on repeated subsequent runs. See `02-green-sdk-hooks-and-orchestrator.txt` for the flaky run and the note below. |
 | Webview task-header family | `bunx vitest run src/components/chat/task-header/ --pool=threads` | **176/176 PASS** (53 helpers incl. 8 new outcome validators + 53 component incl. 7 new rendering tests) |
 | Typecheck | `bun run check-types` (apps/vscode) | **PASS** (exit 0) |
 | SDK build | `bun run build:sdk` | **PASS** |
@@ -76,7 +76,13 @@ IDENTICAL SETS:                True
   `TypeError: t.recordToolStartedWithId is not a function` while the 64
   pre-existing tests passed).
 - `01-green-tracker-and-wiring.txt` — 90/90 GREEN.
-- `02-green-sdk-hooks-and-orchestrator.txt` — 89 PASS / 3 pre-existing FAIL.
+- `02-green-sdk-hooks-and-orchestrator.txt` — the flaky run (89 PASS / 3 FAIL). A
+  subsequent clean re-run of the same command yielded **92 PASS / 1 skipped / 0
+  FAIL**, and `src/hooks/hook-file-hooks.test.ts` alone passed **27/27 (1
+  skipped)** on two consecutive runs. The 3 flaky failures are the
+  `createHookConfigFileHooks` subprocess suites (temp-dir / subprocess race);
+  they are NOT deterministic and they are NOT attributable to this ACT — the
+  stash experiment reproduced them with this ACT's production paths reverted.
 - `03-green-webview.txt` — 176/176 GREEN.
 
 ## Production changes
