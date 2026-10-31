@@ -219,31 +219,24 @@ predecessor's **deny-list** filter with a **schema-aware allowlist**.
 |---|---|
 | **family allowlist (primary)** | a key is exported only if it is **explicitly permitted** for the record's family. An **unfamiliar** key does **not** escape merely because the filter has never seen it. |
 | forbidden-key deny-list (defence in depth) | `arguments`, `params`, `input`, `prompt`, `system_prompt`, `message(s)`, `text`, `content`, `reasoning`, `thinking`, `raw`, `request(body)`, `response`, `result`, `output`, `stdout`, `stderr`, `value`, `token(s)`, `secret(s)`, `credential(s)`, `apiKey`, `password`, `passwd`, `command`, `cmd`, `script`, `code`, `diff`, `patch`, `authorization`, `cookie`, `bearer`, `privateKey`, `env`, `environment` — rejected at **every** depth |
-| nested allowlist | a nested object or array element may carry only the explicitly permitted nested keys (`fileIdentity`, `contentVersionPre/Post`, `linesAdded/Removed`, `measurementSkipped`, `state`, `contentFingerprint`, `measurementSkippedReason`, `toolCatalogCount`, `toolCatalogDigest`, and the `edit_target_resolved` scalars) |
+| nested allowlist | a nested object or array element may carry only the explicitly permitted nested keys (`fileIdentity`, `contentVersionPre/Post`, `linesAdded/Removed`, `measurementSkipped`, `state`, `contentFingerprint`, `measurementSkippedReason`, `toolCatalogCount`, and the `edit_target_resolved` scalars) |
 | depth cap | 4 levels; deeper content is **dropped**, not partially trusted |
 | absolute-path drop | any string matching `^/`, `^[A-Za-z]:[\\/]`, or `^\\\\` |
-| tool catalog | `toolNames` → `toolCatalogCount` + `toolCatalogDigest` (the names themselves are never exported) |
+| tool catalog | `toolNames` → `toolCatalogCount` only; names and catalog identity are never exported |
 | dropped-field accounting | every dropped key is counted **by path** in `coverage.privacyFilteredFields` |
 
-### 6.2 The catalog digest is keyed (CORR01 P1)
+### 6.2 Catalog identity is unavailable (CORR02 P0-A)
 
-The predecessor's digest was a plain SHA-256 seeded with a **fixed, public**
-prefix (`cline`). A tool catalog is a short, guessable vocabulary, so an
-unsalted digest of it is a **rainbow-table hazard**.
+The CORR01 digest was keyed by the capture's recorder trace id. That trace id
+is exported as `nativeTraceId`, so every export consumer could derive the same
+key and recompute the digest for any candidate catalog. The digest was stable,
+but it was not secret; capture-scoped public hashing did not establish catalog
+identity.
 
-The digest is now computed with an **ephemeral per-process HMAC key** that
-never leaves the adapter:
-
-- the same catalog produces the same digest **within one adapter process**
-  (so repetition is detectable), and
-- the digest is **not** reproducible across runs or by an outside party.
-
-This mirrors the recorder's own ephemeral-per-trace fingerprint property
-(`ModelBehaviorTraceRecorder.fingerprintArguments`), so the guarantee is the
-one the project already relies on.
-
-**Consequence:** the catalog digest is a **within-capture** comparator, not a
-cross-capture identity.
+The portable contract therefore exports **only `toolCatalogCount`** and reports
+`toolCatalogIdentity: UNAVAILABLE_FROM_TRACE`. Catalog identity remains
+unavailable until either an evaluator-managed secret key or an independent
+manifest authority exists. No catalog fingerprint or key label is published.
 
 The adapter introduces **no** content the recorder omitted. It removes.
 
@@ -270,7 +263,7 @@ The coverage report names every refused join. In the reference capture:
 |---|---|
 | `argumentFingerprint` | it is an **ephemeral per-trace HMAC**: stable within a trace, unrecoverable across traces. It is comparable **within** one capture only. The adapter carries it verbatim and labels it as such; it is not a cross-harness key. |
 | `fileIdentity`, `contentVersionPre/Post`, `executorCwdIdentity` | ephemeral per-trace HMACs of paths and bytes. Same limitation. |
-| `toolNames` | catalog content; replaced by a count + digest. |
+| `toolNames` | catalog content; replaced by a count only. Catalog identity is unavailable without an independent authority. |
 | `model_config.temperature` / `topP` / `maxOutputTokens` | `UNAVAILABLE_FROM_TRACE` in this capture — carried through verbatim as unknown. |
 
 ---

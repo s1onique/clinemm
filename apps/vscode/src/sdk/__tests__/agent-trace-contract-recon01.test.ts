@@ -47,7 +47,6 @@ import {
 	normalizeNativeTrace,
 	PORTABLE_TRACE_CONTRACT_VERSION,
 	parseNativeTrace,
-	toolCatalogDigest,
 } from "../normalize-agent-trace"
 
 // ============================================================================
@@ -502,14 +501,14 @@ describe("agent-trace/0.1 negative controls (SYNTHETIC)", () => {
 		// dropped even though it is not on the deny list.
 		expect(portable.payload.unknownKey).toBeUndefined()
 
-		// The tool CATALOG is not exported as names; only its SIZE and a
-		// digest are. (The catalog replacement applies to the `model`
-		// family, which is where the recorder emits the catalog.)
+		// The tool CATALOG is not exported as names; only its SIZE is.
+		// (The catalog replacement applies to the `model` family, which is
+		// where the recorder emits the catalog.)
 		expect(portable.payload.toolNames).toBeUndefined()
 		const catalog = filterPortablePayload({ toolNames: ["run_commands", "editor"] }, "model")
 		expect(catalog.payload.toolNames).toBeUndefined()
 		expect(catalog.payload.toolCatalogCount).toBe(2)
-		expect(typeof catalog.payload.toolCatalogDigest).toBe("string")
+		expect(catalog.payload.toolCatalogDigest).toBeUndefined()
 
 		// The safe facts survive.
 		expect(portable.payload.outcome).toBe("success")
@@ -646,32 +645,15 @@ describe("agent-trace/0.1 CORR01 witnesses", () => {
 		])
 	})
 
-	it("P0-1: the tool catalog is exported as a COUNT and a digest, never as names", () => {
+	it("P0-A: the tool catalog is exported as a COUNT only, never as names or a reproducible fingerprint", () => {
 		const { payload, dropped } = filterPortablePayload({ toolNames: ["run_commands", "editor", "read_files"] }, "model")
 		expect(payload.toolNames).toBeUndefined()
 		expect(payload.toolCatalogCount).toBe(3)
-		expect(typeof payload.toolCatalogDigest).toBe("string")
+		expect(payload.toolCatalogDigest).toBeUndefined()
 		expect(dropped).toContain("toolNames")
 	})
 
-	it("P0-1: the tool-catalog digest is keyed and SCOPED to the capture", () => {
-		// The predecessor used a FIXED, PUBLIC prefix ("cline") as the
-		// salt, which is a rainbow-table hazard for a short, guessable
-		// vocabulary. The digest is now keyed and scoped to the capture.
-		const names = ["run_commands", "editor"]
-		const withinCapture = toolCatalogDigest(names, "trace-A")
-		const sameCaptureAgain = toolCatalogDigest(names, "trace-A")
-		const otherCapture = toolCatalogDigest(names, "trace-B")
-
-		// STABLE within one capture — so the capture stays byte-reproducible.
-		expect(withinCapture).toBe(sameCaptureAgain)
-		// SCOPED across captures — one capture's digest cannot confirm a
-		// guessed catalog for a different capture.
-		expect(withinCapture).not.toBe(otherCapture)
-		expect(typeof withinCapture).toBe("string")
-	})
-
-	it("P1: the coverage report publishes the catalog-digest keyId", () => {
+	it("P0-A: the coverage report explicitly marks catalog identity unavailable", () => {
 		const parsed = parseNativeTrace(
 			[
 				JSON.stringify({
@@ -697,8 +679,8 @@ describe("agent-trace/0.1 CORR01 witnesses", () => {
 			].join("\n"),
 		)
 		const { coverage } = normalizeNativeTrace(parsed)
-		expect(typeof coverage.toolCatalogDigestKeyId).toBe("string")
-		expect(coverage.toolCatalogDigestKeyId).toMatch(/^k_[0-9a-f]{8}$/)
+		expect(coverage.toolCatalogIdentity).toBe("UNAVAILABLE_FROM_TRACE")
+		expect("toolCatalogDigestKeyId" in coverage).toBe(false)
 	})
 
 	it("P0-1: every dropped field is ACCOUNTED for", () => {
@@ -735,7 +717,70 @@ describe("agent-trace/0.1 CORR01 witnesses", () => {
 		expect(coverage.completeness.reasons.join(" ")).toContain("NO terminal summary")
 	})
 
-	it("P0-2: a capture whose summary CONTRADICTS its records is NOT complete", () => {
+	it("P0-B: a summary with a different trace id and contradictory counts is NOT complete", () => {
+		const parsed = parseNativeTrace(
+			[
+				JSON.stringify({
+					seq: 1,
+					timestamp: "2026-10-31T00:00:00.000Z",
+					traceId: "mbt_record",
+					event: "tool_start",
+					evidenceBoundary: "partial_identity",
+					payload: { toolCallId: "call_1", toolName: "run_commands" },
+				}),
+				JSON.stringify({
+					kind: "summary",
+					traceId: "mbt_summary",
+					dumpedAt: "2026-10-31T00:00:01.000Z",
+					truncation: {
+						truncated: false,
+						droppedCount: 39,
+						totalRecorded: 40,
+						retainedCount: 1,
+						retainedBytes: 10,
+					},
+				}),
+			].join("\n"),
+		)
+		const { coverage } = normalizeNativeTrace(parsed)
+		expect(coverage.traceComplete).toBe(false)
+		expect(coverage.completeness.completeness).toBe("INCOMPLETE")
+		expect(coverage.completeness.reasons.join(" ")).toContain("does not match")
+		expect(coverage.completeness.reasons.join(" ")).toContain("truncation state CONTRADICTS")
+	})
+
+	it("P0-B: summary counts that do not reconcile are NOT complete", () => {
+		const parsed = parseNativeTrace(
+			[
+				JSON.stringify({
+					seq: 1,
+					timestamp: "2026-10-31T00:00:00.000Z",
+					traceId: "mbt_count_mismatch",
+					event: "tool_start",
+					evidenceBoundary: "partial_identity",
+					payload: { toolCallId: "call_1", toolName: "run_commands" },
+				}),
+				JSON.stringify({
+					kind: "summary",
+					traceId: "mbt_count_mismatch",
+					dumpedAt: "2026-10-31T00:00:01.000Z",
+					truncation: {
+						truncated: false,
+						droppedCount: 39,
+						totalRecorded: 41,
+						retainedCount: 1,
+						retainedBytes: 10,
+					},
+				}),
+			].join("\n"),
+		)
+		const { coverage } = normalizeNativeTrace(parsed)
+		expect(coverage.traceComplete).toBe(false)
+		expect(coverage.completeness.completeness).toBe("INCOMPLETE")
+		expect(coverage.completeness.reasons.join(" ")).toContain("counts CONTRADICT")
+	})
+
+	it("P0-B: a capture whose summary CONTRADICTS its records is NOT complete", () => {
 		const parsed = parseNativeTrace(
 			[
 				JSON.stringify({
@@ -851,7 +896,7 @@ describe("agent-trace/0.1 CORR01 witnesses", () => {
 						droppedCount: 42,
 						droppedFromSeq: 1,
 						droppedToSeq: 42,
-						totalRecorded: 100,
+						totalRecorded: 43,
 						retainedCount: 1,
 						retainedBytes: 10,
 					},
@@ -918,6 +963,38 @@ describe("agent-trace/0.1 CORR01 witnesses", () => {
 		expect(coverage.traceComplete).toBe(true)
 		expect(coverage.completeness.completeness).toBe("COMPLETE")
 		expect(coverage.completeness.reasons).toEqual([])
+	})
+
+	it("P0-B: a legitimately truncated capture with consistent identity and counts remains PARTIAL", () => {
+		const parsed = parseNativeTrace(
+			[
+				JSON.stringify({
+					seq: 1,
+					timestamp: "2026-10-31T00:00:00.000Z",
+					traceId: "mbt_consistent_partial",
+					event: "tool_start",
+					evidenceBoundary: "partial_identity",
+					payload: { toolCallId: "call_1", toolName: "run_commands" },
+				}),
+				JSON.stringify({
+					kind: "summary",
+					traceId: "mbt_consistent_partial",
+					dumpedAt: "2026-10-31T00:00:01.000Z",
+					truncation: {
+						truncated: true,
+						droppedCount: 39,
+						totalRecorded: 40,
+						retainedCount: 1,
+						retainedBytes: 10,
+					},
+				}),
+			].join("\n"),
+		)
+		const { records, coverage } = normalizeNativeTrace(parsed)
+		expect(records).toHaveLength(1)
+		expect(records[0].traceTruncated).toBe(true)
+		expect(coverage.traceComplete).toBe(false)
+		expect(coverage.completeness.completeness).toBe("PARTIAL")
 	})
 
 	// ------------------------------------------------------------------------

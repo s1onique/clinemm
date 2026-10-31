@@ -467,7 +467,7 @@ capture with 1 malformed line → traceComplete: true (FALSE COMPLETENESS)
 
 | Class | Meaning |
 |---|---|
-| `COMPLETE` | validated terminal summary present, it **agrees** with the observed record count, the recorder declares no truncation, and every line was well formed |
+| `COMPLETE` | validated terminal summary present, its **identity and counts agree** with the observed records, its truncation state is internally consistent, the recorder declares no truncation, and every line was well formed |
 | `PARTIAL` | well formed but the recorder declares truncation — the records are **real evidence of what happened** and a **lower bound** on what did |
 | `INCOMPLETE` | summary missing, or contradictory, or lines unreadable / unrecognized |
 | `INVALID` | no usable records at all |
@@ -498,7 +498,7 @@ in the closure note. No SHA was invented.
 |---|---|
 | `privacyFilteredFields` initialised but never populated | **CLOSED** — every dropped key is counted by path |
 | Manifest declares 18 fields, the report said 17 | **CLOSED** — the contract lists **18**; the report now says **9 of 18** missing (the predecessor's "8 of 17" was wrong on both the total and the count) |
-| Tool-catalog digest described as "salted" but used a fixed public prefix | **CLOSED** — the digest is now an **HMAC keyed by the capture's own trace id**. It is **stable within a capture** (so the capture stays byte-reproducible) and **scoped across captures** (so one capture's digest cannot confirm a guessed catalog for another). The coverage report publishes a one-way `toolCatalogDigestKeyId`. The guarantee is restated accordingly in the mapping doc. |
+| Tool-catalog digest described as "salted" but used a fixed public prefix | **SUPERSEDED BY CORR02 P0-A** — the CORR01 digest key was derived from the exported capture trace id, so export consumers could recompute it. The portable contract now exports `toolCatalogCount` only and reports `toolCatalogIdentity: UNAVAILABLE_FROM_TRACE`; no digest or key label is published. |
 | The typecheck gate's `echo "typecheck clean"` ran regardless of the typecheck's exit code | **CLOSED** — the CORR01 gates capture **actual exit codes** (§10) |
 | Epic-board validator's 296 residual issues | **NON-BLOCKING**, untouched by instruction |
 | `.factory/gate-summary.json` invalid | **NON-BLOCKING**, untouched by instruction, and not used as a passing gate |
@@ -512,18 +512,32 @@ same 3891-record capture:
 ```
 LOST:  NONE
 GAINED: NONE
-VALUE DIFFS (excluding the now-keyed catalog digest): NONE
+VALUE DIFFS (excluding the catalog digest removed by CORR02): NONE
 ```
 
 Two intermediate regressions were caught by this comparison and fixed:
 
-1. `toolCatalogCount` / `toolCatalogDigest` were lost because the nested
-   allowlist did not admit them;
+1. `toolCatalogCount` was lost because the nested allowlist did not admit it;
 2. `measurementSkippedReason` was lost from
    `edit_checkpoint_observation.targets[]` for the same reason.
 
 Both are now allowlisted. The capture still normalizes **3891 / 3891** with
-**0** unnormalized records.
+**0** unnormalized records. CORR02 removes the catalog digest from the export;
+the preserved catalog fact is its count only.
+
+---
+
+## 9A.6 CORR02 — two newly demonstrated P0 corrections
+
+| P0 | Entry-head reproduction | Bounded correction |
+|---|---|---|
+| **P0-A — publicly derived catalog HMAC** | The exported `nativeTraceId` plus the published key-derivation rule reproduced the exported `toolCatalogDigest` exactly for a candidate tool catalog. The key was therefore public to export consumers. | The digest and key label are removed. The portable contract exports `toolCatalogCount` only and explicitly reports `toolCatalogIdentity: UNAVAILABLE_FROM_TRACE` until an evaluator-managed secret key or independent manifest authority exists. |
+| **P0-B — false completeness** | A summary with a different trace id, `truncated: false`, `retainedCount: 1`, `totalRecorded: 40`, and `droppedCount: 39` was classified `COMPLETE`. | The summary validator now requires matching trace identity, retained count, reconciled total/dropped counts, and internally consistent truncation state. Malformed or inconsistent captures are `INCOMPLETE`; a legitimately truncated, otherwise valid capture remains `PARTIAL`. |
+
+The focused witnesses independently pin both corrections. Focused ablations
+remove only the catalog-digest replacement and only the new summary
+consistency checks; each ablation returns the corresponding P0 to RED while
+the other witness remains GREEN.
 
 ---
 
@@ -534,12 +548,12 @@ Every gate below records the **actual process exit code**, not an
 
 | Gate | Command | Exit | Result |
 |---|---|---|---|
-| Focused witnesses | `vitest run … agent-trace-contract-recon01.test.ts` | **0** | 29 / 29 pass |
-| Blast-radius regression | `vitest run … (model-behavior \| compare-model \| agent-trace)` | **0** | 134 / 134 pass |
+| Focused witnesses | `vitest run … agent-trace-contract-recon01.test.ts` | **0** | 31 / 31 pass (CORR02) |
+| Blast-radius regression | `vitest run … (model-behavior \| compare-model \| agent-trace)` | **0** | 119 / 119 pass (CORR02 focused sweep) |
 | Typecheck | `bunx tsc --noEmit` (apps/vscode) | **0** | 0 diagnostic lines |
 | Lint | `biome lint …` (both new files) | **0** | clean |
 | Byte-determinism | two independent adapter processes over the real capture | **0** | normalized **and** coverage files byte-identical |
-| Privacy | adversarial scan of the full 3 891-record output | **0** | 0 violations |
+| Privacy | adversarial scan of the full 3 891-record output | **0** | 0 violations; 0 catalog digests; 471 catalog counts |
 | Recorder unchanged | `git diff HEAD -- <recorder seams>` | **0** | empty diff |
 | Trace parses without loss | the probe | **0** | 3 891 / 3 891, 0 unnormalized |
 | Values conserved exactly | `REAL-01` … `REAL-05` | **0** | — |
@@ -548,7 +562,7 @@ Every gate below records the **actual process exit code**, not an
 | Fail-closed privacy at every depth | `P0-1` witnesses | **0** | — |
 | Completeness is proven, not assumed | `P0-2` witnesses | **0** | — |
 | Dropped fields accounted for | `P1` witnesses | **0** | — |
-| Diff hygiene | staged set | — | exactly 8 paths; no production file modified |
+| Diff hygiene | staged set | — | exactly 5 paths; no production file modified |
 | No unexpected tracked dirt | `git status --porcelain=v1 -uall` | — | see §12 |
 | Final artifact hashes recorded | `shasum -a 256` | — | §12 |
 | **Subject committed** | `git commit` | **0** | §12.3 |
@@ -694,7 +708,11 @@ ENTRY_TREE                      e0391f7d07399d4c2e81adda113e3c878e974cc0
 CORR01_START_TREE               15d2e3f17a56e2ab6df97b88c65cf09aaa98efae (preserved)
 SUBJECT_HEAD                    (the actual commit; see §12.3)
 SUBJECT_TREE                    (the committed tree; see §12.3)
-CHANGED_FILES                   8 (7 new + 1 modified: .factory/epic-board.md)
+CORR02_P0_CLOSURES              P0-A catalog identity unavailable (RED→GREEN);
+                                 P0-B summary consistency (RED→GREEN)
+CORR02_FOCUSED_WITNESSES        31/31 PASS; P0-A and P0-B focused ablations RED
+CHANGED_FILES                   5 (adapter, focused witness, two ACT docs,
+                                 .factory/epic-board.md)
 REAL_TRACE_FILE                 ~/.vscodium-clinemm/user-data/User/globalStorage/
                                 s1onique.clinemm/model-behavior-trace.jsonl
 REAL_TRACE_SHA256               84f6bea329299bbb5af1a38ffef6ce4a87227c5c894c8947f32458043090a070

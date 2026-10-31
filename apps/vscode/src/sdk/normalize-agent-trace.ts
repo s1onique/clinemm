@@ -53,8 +53,9 @@
  *
  *   - absolute-looking path strings,
  *   - any key that looks like prompt / reasoning / argument / result content,
- *   - the raw `toolNames` array (replaced by a COUNT + a salted digest, so
- *     two harnesses can compare catalog SIZE without exchanging catalogs).
+ *   - the raw `toolNames` array (replaced by a COUNT only; catalog identity
+ *     is explicitly unavailable until an independent manifest authority or an
+ *     evaluator-managed secret key exists).
  *
  * USAGE
  * -----
@@ -66,7 +67,6 @@
  * Exit code 0 on success, 1 on a malformed capture.
  */
 
-import { createHash, createHmac } from "node:crypto"
 import { readFile, writeFile } from "node:fs/promises"
 
 // ============================================================================
@@ -339,13 +339,15 @@ export interface CoverageReport {
 	/** Records that were dropped by the privacy filter, by key path. */
 	privacyFilteredFields: Record<string, number>
 	/**
-	 * The short, one-way LABEL of the catalog-digest key.
+	 * Catalog identity is deliberately unavailable.
 	 *
-	 * Two digests produced from the SAME capture share a `keyId`, so an
-	 * analyst can tell "same capture" from "different capture" WITHOUT the
-	 * key itself being recoverable.
+	 * A digest keyed by the exported trace id is reproducible by every
+	 * export consumer, so it cannot establish a secret identity. Until an
+	 * evaluator-managed secret key or an independent manifest authority
+	 * exists, only `toolCatalogCount` is exported and no catalog fingerprint
+	 * or key label is published.
 	 */
-	toolCatalogDigestKeyId?: string
+	toolCatalogIdentity: "UNAVAILABLE_FROM_TRACE"
 	/**
 	 * Whether the capture was complete.
 	 *
@@ -430,96 +432,19 @@ const ABSOLUTE_PATH_PATTERN = /^(?:\/|[A-Za-z]:[\\/]|\\\\)/
 // Privacy filter — FAIL-CLOSED, SCHEMA-AWARE ALLOWLIST
 // ============================================================================
 
-/**
- * The keyed digest of a tool-name list, so catalog SIZE is comparable
- * across harnesses WITHOUT exchanging the catalog itself.
+/*
+ * ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01-CORR02 (P0-A):
+ * catalog IDENTITY is intentionally not exported.
  *
- * ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01-CORR01 (P1): the
- * previous implementation used a FIXED, PUBLIC prefix ("cline") as the
- * salt, so the digest was a plain unsalted hash of a known vocabulary.
- * That is a rainbow-table hazard: a tool catalog is a short, guessable
- * list, and an unsalted digest of it is reversible by enumeration.
+ * The predecessor's HMAC key was derived from the capture trace id, and
+ * that trace id is present in every portable record. An export consumer can
+ * therefore derive the same key and recompute the digest for any candidate
+ * catalog. Capture-scoped public hashing is reproducibility, not secrecy.
  *
- * The digest is now keyed with an EPHEMERAL random key that never leaves
- * the adapter. The key is:
- *
- *   - minted ONCE per adapter run, so the SAME capture normalized TWICE
- *     produces BYTE-IDENTICAL output (the capture is reproducible), and
- *   - published in the coverage report as a `keyId` (a short, one-way
- *     label) so two digests can be shown to belong to the same key without
- *     the key itself being recoverable.
- *
- * The consequence is stated plainly: a catalog digest is comparable WITHIN
- * one adapter run, and across runs ONLY when the operator carries the key
- * (or the keyId) alongside. It is NOT a global, cross-capture identity —
- * which is the point: a short, guessable vocabulary must not be
- * enumerable from a published digest.
+ * Until an evaluator-managed secret key or an independent manifest
+ * authority exists, the adapter exports `toolCatalogCount` only and marks
+ * catalog identity unavailable. No digest and no key label are published.
  */
-let toolCatalogDigestKey: string | undefined
-let toolCatalogDigestKeyScope: string | undefined
-
-/**
- * The key for the tool-catalog digest of ONE capture.
- *
- * ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01-CORR01 (P1): the
- * predecessor used a FIXED, PUBLIC prefix as the salt, so a short,
- * guessable vocabulary was enumerable from the published digest.
- *
- * The key is now DERIVED from the capture's own recorder trace id, so:
- *
- *   - the SAME capture normalized TWICE produces BYTE-IDENTICAL output
- *     (the capture is reproducible, and the digest is a stable
- *     within-capture comparator), and
- *   - a DIFFERENT capture yields a DIFFERENT digest, so the digest is not
- *     a global identity that an attacker could enumerate once and reuse
- *     across every capture ever taken.
- *
- * The trace id is not a secret, so this is NOT a secrecy guarantee — it is
- * a SCOPING guarantee: one capture's catalog digest cannot be used to
- * confirm a guessed catalog for a different capture without also guessing
- * that capture's trace id.
- */
-function getToolCatalogDigestKey(scope: string): string {
-	if (toolCatalogDigestKey === undefined || toolCatalogDigestKeyScope !== scope) {
-		toolCatalogDigestKey = createHash("sha256")
-			.update("cline/agent-trace/0.1/tool-catalog-digest")
-			.update("\u0000")
-			.update(scope)
-			.digest("hex")
-		toolCatalogDigestKeyScope = scope
-	}
-	return toolCatalogDigestKey
-}
-
-/**
- * The short, one-way LABEL of the ephemeral catalog-digest key.
- *
- * Two digests produced under the same key share a `keyId`, so an analyst
- * can tell "same run" from "different run" WITHOUT the key being
- * recoverable. This mirrors the recorder's own `mintKeyId` property.
- */
-export function toolCatalogDigestKeyId(scope: string): string {
-	const key = getToolCatalogDigestKey(scope)
-	let hash = 0x811c9dc5
-	for (let index = 0; index < key.length; index += 1) {
-		hash ^= key.charCodeAt(index)
-		hash = Math.imul(hash, 0x01000193) >>> 0
-	}
-	return `k_${hash.toString(16).padStart(8, "0")}`
-}
-
-/**
- * Compute the keyed digest of a tool-name list.
- *
- * The digest is stable WITHIN one adapter run and unguessable from
- * outside it. It is therefore a WITHIN-RUN comparator, not a global
- * cross-capture identity.
- */
-export function toolCatalogDigest(names: readonly string[], scope: string): string {
-	const digest = createHmac("sha256", getToolCatalogDigestKey(scope))
-	digest.update([...names].sort().join(" "))
-	return digest.digest("hex").slice(0, 16)
-}
 
 /**
  * The portable payload's ALLOWED keys, per family.
@@ -559,10 +484,9 @@ const FAMILY_ALLOWED_KEYS: Readonly<Record<PortableEventFamily, readonly string[
 		"userContextCeilingMode",
 		"toolCount",
 		// `toolNames` is permitted ONLY so the filter can REPLACE it with a
-		// count and a keyed digest. The names themselves are never exported.
+		// count. The names themselves are never exported.
 		"toolNames",
 		"toolCatalogCount",
-		"toolCatalogDigest",
 		"sourceHead",
 		"extensionVersion",
 		"extensionBundleSha256",
@@ -684,11 +608,10 @@ const FAMILY_ALLOWED_KEYS: Readonly<Record<PortableEventFamily, readonly string[
 const TOOL_CATALOG_REPLACEMENT = "__toolCatalogReplacement" as const
 
 const NESTED_ALLOWED_KEYS: ReadonlySet<string> = new Set([
-	// The tool-catalog replacement (count + keyed digest) produced when a
-	// `toolNames` array is filtered. Without these, the catalog SIZE would
-	// be silently lost by the nested allowlist.
+	// The tool-catalog replacement (count only) produced when a `toolNames`
+	// array is filtered. Without this, the catalog SIZE would be silently
+	// lost by the nested allowlist.
 	"toolCatalogCount",
-	"toolCatalogDigest",
 	// `edit_application.fileMutations[]` entries
 	"fileIdentity",
 	"contentVersionPre",
@@ -733,7 +656,6 @@ const MAX_PAYLOAD_DEPTH = 4
 export function filterPortablePayload(
 	payload: Record<string, unknown>,
 	family: PortableEventFamily = "model",
-	scope = "default",
 ): { payload: Record<string, unknown>; dropped: string[] } {
 	const allowed = FAMILY_ALLOWED_KEYS[family] ?? []
 	const dropped: string[] = []
@@ -752,7 +674,7 @@ export function filterPortablePayload(
 			continue
 		}
 		const value = payload[key]
-		const filtered = filterPortableValue(value, key, 1, dropped, scope)
+		const filtered = filterPortableValue(value, key, 1, dropped)
 		if (filtered === undefined) {
 			continue
 		}
@@ -779,7 +701,7 @@ export function filterPortablePayload(
  *
  * Returns `undefined` when the value must not be exported at all.
  */
-function filterPortableValue(value: unknown, key: string, depth: number, dropped: string[], scope: string): unknown {
+function filterPortableValue(value: unknown, key: string, depth: number, dropped: string[]): unknown {
 	if (depth > MAX_PAYLOAD_DEPTH) {
 		dropped.push(`${key} (nesting deeper than ${MAX_PAYLOAD_DEPTH})`)
 		return undefined
@@ -801,24 +723,23 @@ function filterPortableValue(value: unknown, key: string, depth: number, dropped
 		return value
 	}
 	if (Array.isArray(value)) {
-		// A tool-name array is catalog CONTENT. Replace it with a count and
-		// a keyed digest so two harnesses can compare catalog SIZE without
-		// exchanging catalogs.
+		// A tool-name array is catalog CONTENT. Replace it with a count only.
+		// Catalog identity is unavailable until a genuinely secret,
+		// evaluator-managed key or an independent manifest authority exists.
 		if (key === "toolNames" && value.every((item) => typeof item === "string")) {
 			dropped.push(key)
 			// The replacement is HOISTED into the parent object by the
-			// caller: the catalog is represented by a count and a keyed
-			// digest, never by its names.
+			// caller: the catalog is represented by its size, never by its
+			// names or a publicly reproducible fingerprint.
 			return {
 				[TOOL_CATALOG_REPLACEMENT]: {
 					toolCatalogCount: value.length,
-					toolCatalogDigest: toolCatalogDigest(value as string[], scope),
 				},
 			}
 		}
 		const items: unknown[] = []
 		for (const item of value) {
-			const filteredItem = filterPortableValue(item, key, depth + 1, dropped, scope)
+			const filteredItem = filterPortableValue(item, key, depth + 1, dropped)
 			if (filteredItem !== undefined) {
 				items.push(filteredItem)
 			}
@@ -835,7 +756,7 @@ function filterPortableValue(value: unknown, key: string, depth: number, dropped
 				dropped.push(`${key}.${nestedKey}`)
 				continue
 			}
-			const filteredNested = filterPortableValue(nested[nestedKey], nestedKey, depth + 1, dropped, scope)
+			const filteredNested = filterPortableValue(nested[nestedKey], nestedKey, depth + 1, dropped)
 			if (filteredNested !== undefined) {
 				flat[nestedKey] = filteredNested
 			}
@@ -938,8 +859,9 @@ export function parseNativeTrace(raw: string): ParsedNativeTrace {
  * The classification is now explicit and fail-closed:
  *
  *   - `COMPLETE`   — a validated terminal summary is present, the summary
- *                    agrees with the observed record count, and every line
- *                    in the capture was a well-formed record.
+ *                    agrees with the observed record identity and counts,
+ *                    its truncation state is internally consistent, and every
+ *                    line in the capture was a well-formed record.
  *   - `PARTIAL`    — the capture is well-formed but the recorder itself
  *                    declares it truncated. The retained records are real
  *                    evidence, but they are a LOWER BOUND.
@@ -981,11 +903,14 @@ export interface CompletenessAssessment {
  * COMPLETE requires ALL of:
  *
  *   1. a terminal summary is present,
- *   2. the summary's `retainedCount` agrees with the observed record
- *      count (a contradictory summary is NOT complete),
- *   3. `truncation.truncated` is false,
- *   4. no line failed to parse, and
- *   5. no line was unrecognized.
+ *   2. the summary is structurally a terminal summary and its trace id agrees
+ *      with every observed record,
+ *   3. the summary's `retainedCount` agrees with the observed record count,
+ *   4. `truncation.totalRecorded` agrees with the retained and dropped
+ *      counts,
+ *   5. `truncation.truncated` agrees with `droppedCount`,
+ *   6. `truncation.truncated` is false, and
+ *   7. no line failed to parse or was unrecognized.
  *
  * A truncated-but-otherwise-valid capture is `PARTIAL`: legitimately
  * truncated evidence is PRESERVED as partial, never discarded and never
@@ -996,22 +921,48 @@ export function assessCaptureCompleteness(parsed: ParsedNativeTrace): Completene
 	const observedRecords = parsed.records.length
 	const summaryPresent = parsed.summary !== undefined
 
-	if (!summaryPresent) {
+	if (parsed.summary === undefined) {
 		reasons.push(
 			"the capture has NO terminal summary record; a capture interrupted before its summary cannot be shown to be exhaustive",
 		)
 	} else {
-		const truncation = parsed.summary?.truncation
+		const summary = parsed.summary
+		const truncation = summary.truncation
 		if (truncation === undefined) {
 			reasons.push("the capture's terminal summary carries no truncation record")
-		} else if (truncation.retainedCount !== observedRecords) {
-			reasons.push(
-				`the terminal summary declares retainedCount=${truncation.retainedCount} but ${observedRecords} well-formed records were observed; the summary CONTRADICTS the capture`,
-			)
-		} else if (truncation.truncated) {
-			reasons.push(
-				`the recorder declares the capture truncated (droppedCount=${truncation.droppedCount}); the retained records are a LOWER BOUND, not a total`,
-			)
+		} else {
+			if (summary.traceId.length === 0) {
+				reasons.push("the capture's terminal summary carries no trace identity")
+			} else {
+				const distinctRecordTraceIds = new Set(parsed.records.map((record) => record.traceId))
+				if (distinctRecordTraceIds.size > 1) {
+					reasons.push("the capture's records carry more than one trace identity")
+				} else if (!distinctRecordTraceIds.has(summary.traceId)) {
+					reasons.push(
+						`the terminal summary trace id ${summary.traceId} does not match the observed record trace identity`,
+					)
+				}
+			}
+			if (truncation.retainedCount !== observedRecords) {
+				reasons.push(
+					`the terminal summary declares retainedCount=${truncation.retainedCount} but ${observedRecords} well-formed records were observed; the summary CONTRADICTS the capture`,
+				)
+			}
+			if (truncation.totalRecorded !== truncation.retainedCount + truncation.droppedCount) {
+				reasons.push(
+					`the terminal summary declares totalRecorded=${truncation.totalRecorded}, but retainedCount=${truncation.retainedCount} plus droppedCount=${truncation.droppedCount} is ${truncation.retainedCount + truncation.droppedCount}; the summary counts CONTRADICT each other`,
+				)
+			}
+			if (truncation.truncated !== (truncation.droppedCount > 0)) {
+				reasons.push(
+					`the terminal summary declares truncated=${truncation.truncated} but droppedCount=${truncation.droppedCount}; the truncation state CONTRADICTS the counts`,
+				)
+			}
+			if (truncation.truncated) {
+				reasons.push(
+					`the recorder declares the capture truncated (droppedCount=${truncation.droppedCount}); the retained records are a LOWER BOUND, not a total`,
+				)
+			}
 		}
 	}
 
@@ -1034,6 +985,11 @@ export function assessCaptureCompleteness(parsed: ParsedNativeTrace): Completene
 				? "COMPLETE"
 				: parsed.summary?.truncation.truncated === true &&
 						parsed.summary?.truncation.retainedCount === observedRecords &&
+						parsed.summary?.truncation.totalRecorded ===
+							parsed.summary.truncation.retainedCount + parsed.summary.truncation.droppedCount &&
+						parsed.summary?.traceId.length !== 0 &&
+						new Set(parsed.records.map((record) => record.traceId)).size === 1 &&
+						new Set(parsed.records.map((record) => record.traceId)).has(parsed.summary.traceId) &&
 						parsed.unparsedLines === 0 &&
 						parsed.unrecognizedLines === 0
 					? "PARTIAL"
@@ -1177,7 +1133,7 @@ export function normalizeNativeRecord(
 			},
 		}
 	}
-	const filtered = filterPortablePayload(record.payload ?? {}, family, record.traceId)
+	const filtered = filterPortablePayload(record.payload ?? {}, family)
 	const payload = filtered.payload
 
 	// Evidence quality: the per-payload `provenance` (producing layer) wins
@@ -1393,7 +1349,7 @@ export function normalizeNativeTrace(
 			},
 			unjoinableIdentities,
 			privacyFilteredFields,
-			toolCatalogDigestKeyId: toolCatalogDigestKeyId(parsed.summary?.traceId ?? parsed.records[0]?.traceId ?? "default"),
+			toolCatalogIdentity: UNAVAILABLE,
 			traceComplete: assessment.complete,
 			completeness: assessment,
 		},

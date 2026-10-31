@@ -30128,7 +30128,7 @@ returned `payload.metadata.password === "example-secret"` and `payload.entries[0
 
 - `privacyFilteredFields` is now **populated** — every dropped field is counted by key path.
 - The manifest count is reconciled: the contract lists **18** fields and the report now says **9 of 18** missing (the predecessor's "8 of 17" was wrong on both).
-- The tool-catalog digest is now an **HMAC keyed by the capture's own trace id** — **stable within a capture** (so the capture stays byte-reproducible) and **scoped across captures**. The coverage report publishes a one-way `toolCatalogDigestKeyId`.
+- The tool-catalog digest described above is **superseded by CORR02 P0-A**: its key was derived from the exported trace id and was therefore reproducible by export consumers. CORR02 exports the catalog **count only** and reports `toolCatalogIdentity: UNAVAILABLE_FROM_TRACE`; no digest or key label is published.
 - The gates now record **actual process exit codes**; the predecessor's `echo "typecheck clean"` ran regardless of the typecheck's result.
 
 ## Evidence
@@ -30144,6 +30144,18 @@ returned `payload.metadata.password === "example-secret"` and `payload.entries[0
 - **No production-recorder change** — `git diff HEAD -- <recorder seams>` is empty.
 
 The 296 residual epic-board validator issues and the invalid historical `gate-summary.json` are **NON-BLOCKING** and were deliberately NOT investigated, per the reviewer's instruction.
+
+# ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01-CORR02 — PASS_CORRECTED — 2026-10-31
+
+**Status:** CLOSED. `PASS_CORRECTED`. **ENTRY_HEAD:** `4a70bce6d53cc354e3c93d2df31189f143302ea8`.
+**Scope:** the portable export adapter, its focused witness, and the bounded ACT evidence only. No production recorder change.
+
+## The two P0 corrections
+
+- **P0-A — publicly derived catalog HMAC.** RED at the entry head: the exported `nativeTraceId` and the published key derivation reproduced the exported `toolCatalogDigest` exactly for a candidate catalog. The digest was stable but not secret. GREEN: the digest and key label are removed; only `toolCatalogCount` is exported and `toolCatalogIdentity` is explicitly `UNAVAILABLE_FROM_TRACE` until an evaluator-managed secret key or independent manifest authority exists.
+- **P0-B — false completeness.** RED at the entry head: a summary with a different trace id, `truncated: false`, `retainedCount: 1`, `totalRecorded: 40`, and `droppedCount: 39` was `COMPLETE`. GREEN: the summary validator requires consistent identity, retained/total/dropped counts, and truncation state. Contradictory captures are `INCOMPLETE`; legitimate truncation remains `PARTIAL`.
+
+Focused ablations independently restore only P0-A or only P0-B to RED. The existing real-capture conservation, privacy adversarial, focused trace, typecheck, and lint gates are rerun before closure.
 
 ## Successor priority (the reviewer's re-ordering, adopted)
 
