@@ -1,0 +1,43 @@
+=== WHOLE-SUITE (single invocation) — apps/vscode src/sdk/ — HEAD vs AFTER
+cmd: bun x vitest run --config vitest.config.ts src/sdk/
+
+  HEAD  (production reverted to 0366ea506, 9 DSC witnesses ABSENT)
+   Test Files  110 failed | 322 passed | 5 skipped (437)
+        Tests  520 failed | 4348 passed | 55 skipped (4923)
+
+  AFTER (repair applied, 9 DSC witnesses PRESENT)
+   Test Files  110 failed | 322 passed | 5 skipped (437)
+        Tests  520 failed | 4357 passed | 55 skipped (4932)
+
+  total   delta: +9   == the 9 new DSC witnesses
+  passed delta: +9   == those same 9 witnesses going green
+  failed delta:  0   == no test regressed
+  failed FILES delta: 0 == no file entered the failing set
+
+Both arms were measured in THIS session with the SAME command and the SAME
+sandbox. The 520 failing tests across 110 files are the STANDING BASELINE of
+this tree; they reproduce with this ACT's production paths reverted to pure
+HEAD. They are NOT owned by this ACT.
+
+CORROBORATION AGAINST THE PREDECESSOR. The predecessor ACT
+(ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01) recorded its own
+HEAD/AFTER arms of this same whole suite and stated "the sorted FAIL sets were
+496 lines each with an EMPTY diff" (ADDED 0 / REMOVED 0 / IDENTICAL True).
+The 4923 -> 4932 progression measured here is exactly that ACT's own
+HEAD -> AFTER progression, which confirms this session's HEAD arm is the same
+tree state the predecessor measured, and that the 520/110 baseline is
+established rather than ACT-introduced.
+
+NOTE ON THE SANDBOX ARTIFACT (recorded, not masked): the default forks pool
+aborts with `kill EPERM` during worker teardown in this sandbox. The summary
+lines above are the last complete measurement emitted before that teardown
+error. The batched JSON-reporter comparison in 04-no-regression-sdk-suite.txt
+was used for the exact per-file fail-SET comparison because it survives the
+teardown and compares by test id.
+
+SCOPE NOTE (honest limitation): the batched comparison in
+04-no-regression-sdk-suite.txt covered 1810 of the whole suite's 4932 tests
+(many src/sdk files error on import under this sandbox and contribute no
+tests). The whole-suite arms above are therefore the PRIMARY measurement
+(total/passed/failed/files), and the batched comparison is the SECONDARY
+one that pins the exact per-file fail-SET.

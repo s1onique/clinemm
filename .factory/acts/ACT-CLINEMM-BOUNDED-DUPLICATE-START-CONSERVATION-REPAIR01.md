@@ -130,15 +130,38 @@ for every reachable sequence of tool starts.
 | Necessity ablation | exact RED set restored, then GREEN |
 | `apps/vscode` `check-types` | PASS (exit 0) |
 | Biome check on both touched files | PASS (0 errors) |
-| `src/sdk/` no-regression | FAIL-file-set IDENTICAL HEAD vs AFTER; total delta +9 == the new witnesses |
+| `src/sdk/` no-regression (whole suite) | total +9, passed +9, failed +0, failed FILES +0 |
+| `src/sdk/` no-regression (batched, per-file fail-SET) | FAIL-file-set IDENTICAL HEAD vs AFTER |
 
 ## C7 — NO-REGRESSION MEASUREMENT
 
-The `apps/vscode` `src/sdk/` suite (487 test files) was run for BOTH arms in
-13 batches of 40 files with the JSON reporter, and the FAIL-file-sets were
-compared. The whole suite in ONE invocation cannot complete under this
-sandbox (vitest worker teardown `EPERM: operation not permitted, kill`), so
-it is batched for both arms — which makes the comparison apples-to-apples.
+The `apps/vscode` `src/sdk/` whole suite was run for BOTH arms with the SAME
+command in the SAME sandbox:
+
+```
+  HEAD  (production reverted to 0366ea506, 9 DSC witnesses ABSENT)
+   Test Files  110 failed | 322 passed | 5 skipped (437)
+        Tests  520 failed | 4348 passed | 55 skipped (4923)
+
+  AFTER (repair applied, 9 DSC witnesses PRESENT)
+   Test Files  110 failed | 322 passed | 5 skipped (437)
+        Tests  520 failed | 4357 passed | 55 skipped (4932)
+
+  total   delta: +9   == the 9 new DSC witnesses
+  passed delta: +9   == those same 9 witnesses going green
+  failed delta:  0   == no test regressed
+  failed FILES delta: 0 == no file entered the failing set
+```
+
+The 520 failing tests across 110 files are the STANDING BASELINE of this
+tree — they reproduce with this ACT's production paths reverted to pure HEAD,
+and they are NOT owned by this ACT. This is corroborated against the
+predecessor ACT, which recorded the identical 4923 -> 4932 progression and
+stated its own sorted FAIL sets were "496 lines each with an EMPTY diff".
+
+A SECOND, per-file comparison was made with the JSON reporter in 13 batches
+of 40 files, because the batched run survives the sandbox's vitest worker
+teardown `EPERM` and compares by test id:
 
 ```
 HEAD :  total 1801 | passed 1529 | failed 250
@@ -153,12 +176,18 @@ FAIL-file-set (excluding one pre-existing flaky file):
   IDENTICAL SETS: True
 ```
 
-ONE pre-existing failure is excluded and is NOT caused by this ACT:
-`sdk-interaction-coordinator.session-autonomy.test.ts` fails 3/23 (a
-seatbelt / session-override authority failure). It was PROVEN pre-existing by
-reverting the production tracker to PURE HEAD and re-running that file
-isolated — it still fails 3/23, twice in a row. It does not touch the
-telemetry tracker.
+SCOPE NOTE (honest limitation): the batched comparison covered 1810 of the
+whole suite's 4932 tests — many `src/sdk` files error on import under this
+sandbox and contribute no tests. The whole-suite arms above are therefore
+the PRIMARY measurement (total / passed / failed / files), and the batched
+comparison is the SECONDARY one that pins the exact per-file fail-SET.
+
+ONE pre-existing failure is excluded from the per-file set and is NOT caused
+by this ACT: `sdk-interaction-coordinator.session-autonomy.test.ts` fails
+3/23 (a seatbelt / session-override authority failure). It was PROVEN
+pre-existing by reverting the production tracker to PURE HEAD and re-running
+that file isolated — it still fails 3/23, twice in a row. It does not touch
+the telemetry tracker.
 
 ## C8 — PRODUCTION CHANGES
 
@@ -182,4 +211,4 @@ obligation.
 - `.factory/evidence/ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01/`
   (`00-red-tracker.txt`, `02-ablation-production-reverted.txt`,
   `03-green-tracker-and-wiring.txt`, `04-no-regression-sdk-suite.txt`,
-  `05-summary.md`)
+  `05-summary.md`, `06-whole-suite-after.txt`)

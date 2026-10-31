@@ -87,15 +87,18 @@ for every reachable sequence of tool starts.
 | Necessity ablation | removing ONLY the reorder returns exactly those 6 RED; the repair restores GREEN |
 | `apps/vscode` `check-types` | PASS (exit 0) |
 | Biome check on both touched files | PASS (0 errors) |
-| `src/sdk/` no-regression | FAIL-file-set IDENTICAL HEAD vs AFTER; total delta +9 == the new witnesses |
+| `src/sdk/` no-regression (whole suite) | total +9, passed +9, failed +0, failed FILES +0 |
+| `src/sdk/` no-regression (batched, per-file fail-SET) | FAIL-file-set IDENTICAL HEAD vs AFTER |
 
 ## Evidence files
 
 - `00-red-tracker.txt` — the RED run (production reverted to HEAD)
 - `02-ablation-production-reverted.txt` — the controlled necessity ablation
 - `03-green-tracker-and-wiring.txt` — the GREEN run
-- `04-no-regression-sdk-suite.txt` — the HEAD-vs-AFTER no-regression measurement
+- `04-no-regression-sdk-suite.txt` — the batched per-file fail-SET comparison
 - `05-summary.md` — this summary
+- `06-whole-suite-after.txt` — the whole-suite (single invocation) HEAD vs AFTER
+  arms
 
 ## Live qualification status
 
