@@ -30079,3 +30079,156 @@ live acceptance remains the outstanding obligation.
 
 No Elm kernel, no protocol, no webview reducer, no schema change to the
 mechanism projection.
+
+# ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 — PASS_STRUCTURAL_ONLY — 2026-10-31
+
+## Verdict
+
+`PASS_STRUCTURAL_ONLY`. The duplicate-start conservation defect in
+`TaskTelemetryTracker` is repaired, the repair is proven NECESSARY by a
+controlled ablation, and the `apps/vscode` `src/sdk/` suite shows no
+regression. **Live UI acceptance was NOT executed**, so this is NOT `PASS_LIVE`.
+
+**ENTRY_HEAD:** `0366ea5064cfc03fc6693914b6b4f365c49631fc`. **SUBJECT_HEAD:** the
+commit carrying this board entry.
+
+## Why this ACT exists
+
+`ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01` published the OPTIONAL
+`outcomes` projection on the TaskHeader telemetry strip. That projection's own
+documented invariant is `outcomes.total === toolCalls`, and the webview's
+`isUsableOutcomeProjection(outcomes, toolCalls)` validator REJECTS the whole
+projection when the two disagree — degrading the header back to the flat
+counter. The tracker, however, incremented `toolCalls` BEFORE its duplicate-id
+check, so a repeated tool start broke that invariant.
+
+## C1 — THE DEFECT
+
+`apps/vscode/src/sdk/task-telemetry-tracker.ts` →
+`TaskTelemetryTracker.recordToolStartedWithId(toolCallId, toolName)`. The
+cumulative `toolCalls` increment and the mechanism accumulation ran BEFORE the
+duplicate-id check:
+
+```ts
+this.toolCalls += 1
+this.mechanism = accumulateMechanism(this.mechanism, toolName)
+const id = toolCallId === undefined || toolCallId === "" ? undefined : toolCallId
+if (id !== undefined && this.toolOutcomeById.has(id)) {
+    return this.get()      // <- duplicate: the counter was ALREADY bumped
+}
+```
+
+`outcomes.total` counts DISTINCT observed starts; `toolCalls` counted start
+EVENTS. The two diverged and the webview rejected the projection.
+
+## C2 — THE CARDINALITY, ESTABLISHED FROM PRODUCTION EVIDENCE
+
+A repeated `toolCallId` is DUPLICATE DELIVERY of ONE tool call — never a
+separate invocation. READ FROM PRODUCTION CODE, not assumed:
+
+1. `sdk/packages/agents/src/runtime/state/task-state/update.ts` — the canonical
+   TaskState reducer increments its cumulative `toolCalls` ONLY on a
+   previously-unseen ID ("a re-emit of an already-active ID is a no-op for the
+   counter").
+2. `sdk/packages/agents/src/agent-runtime.ts` — two `tool-call-delta`s carrying
+   the same id collapse into ONE assembly (the `toolAssemblies` map is keyed by
+   the id), so the runtime emits exactly ONE `tool-started` per distinct call.
+3. The runtime emits exactly one `tool-started` and one `onToolRuntimeOutcome`
+   per execution, both carrying the same `toolCallId` — which is what makes
+   id-based correlation exact.
+4. The tracker's OWN documented contract already stated that a repeated start
+   for the same id "does NOT double-register".
+
+Therefore `toolCalls` must count DISTINCT tool-call identities, exactly like
+`outcomes.total`. Counting the duplicate EVENT was the defect.
+
+## C3 — THE BOUNDED REPAIR
+
+The duplicate-id check is performed FIRST, and a repeated start becomes a
+complete no-op (no counter, no mechanism bucket, no record). One statement
+moved. Unchanged, each pinned by a dedicated witness: an UNIDENTIFIED start is
+still counted once per event (DSC07); DISTINCT ids are still counted
+separately (DSC08); the mechanism projection (DSC03/DSC04), the outcome
+projection (DSC09), the wire schema, the webview validator and the runtime are
+untouched.
+
+The conserved invariant is now pinned as
+
+```
+outcomes.total === toolCalls === mechanism.total
+```
+
+for every reachable sequence of tool starts.
+
+## C4 — C5 — WITNESSES, RED → GREEN → ABLATION
+
+9 focused witnesses (DSC01–DSC09) in
+`apps/vscode/src/sdk/task-telemetry-tracker.test.ts`.
+
+- **RED:** production reverted to `HEAD` → `6 failed | 85 passed`
+  (DSC01, DSC02, DSC03, DSC06, DSC08, DSC09 RED).
+- **GREEN:** repair applied → `91 passed`; tracker + wiring → `99 passed`.
+- **ABLATION:** removing ONLY the reorder returns exactly those 6 RED; the
+  repair restores GREEN. The change is NECESSARY, not cosmetic.
+
+## C6 — GATES
+
+| Gate | Result |
+|---|---|
+| Focused tracker suite | `91 passed` |
+| Focused tracker + wiring suites | `99 passed` (2 files) |
+| RED (production reverted) | `6 failed \| 85 passed` |
+| Necessity ablation | exact RED set restored, then GREEN |
+| `apps/vscode` `check-types` | PASS (exit 0) |
+| Biome check on both touched files | PASS (0 errors) |
+| `src/sdk/` no-regression | FAIL-file-set IDENTICAL HEAD vs AFTER; total delta +9 == the new witnesses |
+
+## C7 — NO-REGRESSION MEASUREMENT
+
+The `apps/vscode` `src/sdk/` suite (487 test files) was run for BOTH arms in
+13 batches of 40 files with the JSON reporter, and the FAIL-file-sets were
+compared. The whole suite in ONE invocation cannot complete under this
+sandbox (vitest worker teardown `EPERM: operation not permitted, kill`), so
+it is batched for BOTH arms — making the comparison apples-to-apples.
+
+```
+HEAD :  total 1801 | passed 1529 | failed 250
+AFTER:  total 1810 | passed 1557 | failed 253
+total delta: +9  == the 9 new DSC witnesses
+
+FAIL-file-set (excluding one pre-existing flaky file):
+  HEAD  count: 48
+  AFTER count: 48
+  ADDED (regressions): []
+  REMOVED (fixed)     : []
+  IDENTICAL SETS: True
+```
+
+ONE pre-existing failure is excluded and is NOT caused by this ACT:
+`sdk-interaction-coordinator.session-autonomy.test.ts` fails 3/23 (a
+seatbelt / session-override authority failure). It was PROVEN pre-existing by
+reverting the production tracker to PURE HEAD and re-running that file
+isolated — it still fails 3/23, twice in a row.
+
+## C8 — PRODUCTION CHANGES
+
+- `apps/vscode/src/sdk/task-telemetry-tracker.ts` — the duplicate-id check
+  moved BEFORE the `toolCalls` increment and the mechanism accumulation in
+  `recordToolStartedWithId`; the method's contract comment now records the
+  cardinality and the TaskState-reducer citation.
+
+No Elm kernel, no protocol, no webview reducer, no schema change, no runtime
+change, no change to the mechanism or outcome projection semantics.
+
+## WHAT IS STILL NOT CLAIMED
+
+No VSIX was built or installed and no live Task Header was observed, so the
+installed artifact is NOT exact-head and the acceptance above is source-level
+and structural only. The live acceptance remains the outstanding obligation.
+
+## Evidence
+
+- `.factory/evidence/ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01/`
+  (`00-red-tracker.txt`, `02-ablation-production-reverted.txt`,
+  `03-green-tracker-and-wiring.txt`, `04-no-regression-sdk-suite.txt`,
+  `05-summary.md`)

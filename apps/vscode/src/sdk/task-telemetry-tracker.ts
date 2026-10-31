@@ -605,6 +605,28 @@ export class TaskTelemetryTracker {
 	 *    double-register: the existing entry is left in place so the
 	 *    per-call outcome cardinality stays exactly one.
 	 *
+	 * ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01:
+	 * the cumulative `toolCalls` increment and the mechanism
+	 * accumulation now happen ONLY for a DISTINCT tool-call identity.
+	 * Previously the increment ran BEFORE the duplicate-id check, so a
+	 * repeated start bumped `toolCalls` (and the mechanism bucket)
+	 * while deliberately NOT registering a second outcome record —
+	 * leaving `outcomes.total` and `toolCalls` in disagreement and
+	 * making the webview's strict `isUsableOutcomeProjection` validator
+	 * reject the whole projection.
+	 *
+	 * The duplicate-id check is therefore performed FIRST, and a
+	 * repeated start is a complete no-op (no counter, no mechanism
+	 * bucket, no record). This matches the canonical TaskState
+	 * reducer, which increments its cumulative `toolCalls` only on a
+	 * previously-unseen ID ("a re-emit of an already-active ID is a
+	 * no-op for the counter" —
+	 * `sdk/packages/agents/src/runtime/state/task-state/update.ts`).
+	 *
+	 * A start WITHOUT an authoritative identity has no id to dedupe
+	 * on, so it is still counted as its own observed start (and stays
+	 * `pending` forever) — conservation is unaffected.
+	 *
 	 * When the tracker has no active task the call is logged and
 	 * dropped — same defensive contract as the other recorders.
 	 */
@@ -613,16 +635,20 @@ export class TaskTelemetryTracker {
 			Logger.debug("[TaskTelemetryTracker] recordToolStartedWithId called before startTask; ignored")
 			return this.get()
 		}
-		this.toolCalls += 1
-		this.mechanism = accumulateMechanism(this.mechanism, toolName)
 		const id = toolCallId === undefined || toolCallId === "" ? undefined : toolCallId
 		if (id !== undefined && this.toolOutcomeById.has(id)) {
 			// A REPEATED start for the same authoritative id. The
 			// existing record stays in place so the per-call outcome
 			// cardinality stays exactly one — a duplicate delivery
-			// must not double-count.
+			// must not double-count. It is also a complete no-op for
+			// the cumulative counters: the duplicate is one tool call,
+			// so it contributes exactly ONE to `toolCalls` and to the
+			// mechanism bucket (conservation: `outcomes.total ===
+			// toolCalls === mechanism.total`).
 			return this.get()
 		}
+		this.toolCalls += 1
+		this.mechanism = accumulateMechanism(this.mechanism, toolName)
 		// One record per observed tool start. A start WITHOUT an
 		// authoritative identity still gets a record (it is a real
 		// tool start and is counted in `toolCalls`), but it can never

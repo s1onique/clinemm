@@ -1,0 +1,29 @@
+=== NO-REGRESSION: apps/vscode src/sdk/ suite, HEAD vs AFTER
+cmd: bun x vitest run --config vitest.config.ts <batch of 40 files>   (JSON reporter)
+     487 test files split into 13 batches; the whole suite in one
+     invocation cannot complete under this sandbox (vitest worker
+     teardown EPERM), so the suite is run batched for BOTH arms.
+
+HEAD :  total 1801 | passed 1529 | failed 250
+AFTER:  total 1810 | passed 1557 | failed 253
+total delta: +9  == the 9 new DSC witnesses
+
+FAIL-file-set, EXCLUDING the one pre-existing flaky file (see below):
+  HEAD  count: 48
+  AFTER count: 48
+  ADDED (regressions): []
+  REMOVED (fixed)     : []
+  IDENTICAL SETS: True
+
+PRE-EXISTING FAILURE, NOT caused by this ACT:
+  sdk-interaction-coordinator.session-autonomy.test.ts
+  3 failing tests (session-override / seatbelt authority).
+  PROVEN pre-existing: with the production tracker reverted to PURE
+  HEAD (git show HEAD:apps/vscode/src/sdk/task-telemetry-tracker.ts),
+  an isolated run of that file STILL fails 3/23 — twice in a row.
+  In the HEAD batch run it happened to pass (batch-order dependent),
+  which is exactly why the failure SET is not treated as a delta.
+  It does not touch the telemetry tracker at all.
+
+NET: no file entered the FAIL set and no file left it. The only
+     behavioural delta is the 9 added DSC witnesses, all GREEN.

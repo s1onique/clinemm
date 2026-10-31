@@ -7,6 +7,7 @@
 import type { AgentRuntimeRecoverySnapshot, RecoveryState } from "@cline/shared"
 import { describe, expect, it } from "vitest"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
+import { isUsableMechanismProjection } from "./tool-mechanism-classifier"
 
 function recoverySnapshot(partial: Partial<AgentRuntimeRecoverySnapshot> = {}): AgentRuntimeRecoverySnapshot {
 	const base: AgentRuntimeRecoverySnapshot = {
@@ -1131,5 +1132,164 @@ describe("ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTrack
 		expect(snap?.outcomes?.total).toBe(snap?.toolCalls)
 		expect(snap?.outcomes?.total).toBe(3)
 		expect(snap?.outcomes?.pending).toBe(1)
+	})
+})
+
+/**
+ * ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01
+ *
+ * DEFECT: `recordToolStartedWithId()` incremented the cumulative
+ * `toolCalls` counter BEFORE its duplicate-id check, so a REPEATED
+ * start for an already-seen authoritative `toolCallId` bumped
+ * `toolCalls` while deliberately NOT registering a second outcome
+ * record. The result: `outcomes.total` (the number of DISTINCT
+ * observed tool starts) disagreed with `toolCalls` (the number of
+ * start EVENTS), and the webview's strict
+ * `isUsableOutcomeProjection(outcomes, toolCalls)` validator rejected
+ * the whole projection, silently degrading the header back to the flat
+ * counter.
+ *
+ * CARDINALITY (established from production evidence, NOT assumed):
+ * a repeated `toolCallId` is DUPLICATE DELIVERY of one tool call —
+ * never a separate invocation:
+ *
+ *   1. `sdk/packages/agents/src/runtime/state/task-state/update.ts`
+ *      — the canonical TaskState reducer increments its cumulative
+ *      `toolCalls` ONLY on a previously-unseen ID; "a re-emit of an
+ *      already-active ID is a no-op for the counter".
+ *   2. `sdk/packages/agents/src/agent-runtime.ts` — two
+ *      `tool-call-delta`s carrying the same id collapse into ONE
+ *      assembly (the `toolAssemblies` map is keyed by the id), so the
+ *      runtime emits exactly ONE `tool-started` per distinct call.
+ *   3. The runtime emits exactly one `tool-started` and one
+ *      `onToolRuntimeOutcome` per execution, both carrying the same
+ *      `toolCallId` — which is what makes id-based correlation exact.
+ *   4. The tracker's own documented contract already states that a
+ *      repeated start for the same id "does NOT double-register: the
+ *      existing entry is left in place so the per-call outcome
+ *      cardinality stays exactly one".
+ *
+ * Therefore the CORRECT cardinality is: `toolCalls` counts DISTINCT
+ * tool-call identities, exactly like `outcomes.total`. Counting the
+ * duplicate EVENT was the defect.
+ *
+ * CONSERVATION INVARIANT pinned here:
+ *   outcomes.total === toolCalls === mechanism.total
+ * for every reachable sequence of tool starts.
+ */
+describe("ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation", () => {
+	it("DSC01: a DUPLICATE tool start does NOT inflate toolCalls (distinct-identity cardinality)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-1")
+		const snap = t.get()
+		expect(snap?.toolCalls).toBe(1)
+		expect(snap?.outcomes?.total).toBe(1)
+	})
+
+	it("DSC02: outcomes.total is CONSERVED against toolCalls after a duplicate start", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-2")
+		t.recordToolOutcome("call-1", "succeeded")
+		t.recordToolOutcome("call-2", "failed")
+		const snap = t.get()
+		expect(snap?.outcomes?.total).toBe(snap?.toolCalls)
+		expect(snap?.outcomes?.total).toBe(2)
+		expect(snap?.outcomes?.succeeded).toBe(1)
+		expect(snap?.outcomes?.failed).toBe(1)
+	})
+
+	it("DSC03: a duplicate start does NOT inflate the mechanism projection (one call, one mechanism bucket)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1", "read_files")
+		t.recordToolStartedWithId("call-1", "read_files")
+		const snap = t.get()
+		expect(snap?.mechanism?.total).toBe(1)
+		expect(snap?.mechanism?.read).toBe(1)
+		expect(snap?.mechanism?.total).toBe(snap?.toolCalls)
+	})
+
+	it("DSC04: the mechanism projection stays USABLE after a duplicate start (wire-boundary validator accepts it)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1", "read_files")
+		t.recordToolStartedWithId("call-1", "read_files")
+		const snap = t.get()
+		expect(isUsableMechanismProjection(snap?.mechanism, snap?.toolCalls ?? -1)).toBe(true)
+	})
+
+	it("DSC05: a duplicate start leaves the pending bucket at ONE (no phantom pending)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-1")
+		const snap = t.get()
+		expect(snap?.outcomes?.pending).toBe(1)
+		expect(snap?.outcomes?.total).toBe(1)
+	})
+
+	it("DSC06: a duplicate start does NOT disturb the outcome correlation (the outcome still lands once)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "succeeded")
+		const snap = t.get()
+		expect(snap?.outcomes?.succeeded).toBe(1)
+		expect(snap?.outcomes?.pending).toBe(0)
+		expect(snap?.outcomes?.total).toBe(snap?.toolCalls)
+	})
+
+	it("DSC07: an UNIDENTIFIED start is still counted once per event (no id to dedupe on)", () => {
+		// A start WITHOUT an authoritative identity can never be
+		// correlated, so it can never be recognised as a duplicate.
+		// It is therefore counted as its own observed start and stays
+		// `pending` forever — conservation still holds.
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId(undefined)
+		t.recordToolStartedWithId(undefined)
+		const snap = t.get()
+		expect(snap?.toolCalls).toBe(2)
+		expect(snap?.outcomes?.total).toBe(snap?.toolCalls)
+		expect(snap?.outcomes?.pending).toBe(2)
+	})
+
+	it("DSC08: DISTINCT ids are still counted separately (the repair does not under-count)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-2")
+		t.recordToolStartedWithId("call-1")
+		const snap = t.get()
+		expect(snap?.toolCalls).toBe(2)
+		expect(snap?.outcomes?.total).toBe(2)
+	})
+
+	it("DSC09: the outcome projection is USABLE after a duplicate start (host never publishes a divergent pair)", () => {
+		// The webview's strict validator (`isUsableOutcomeProjection`)
+		// rejects the whole projection when `outcomes.total !==
+		// toolCalls`. Before the repair, a duplicate start made the
+		// validator REJECT, silently degrading the header back to the
+		// flat counter. This pins the host-side precondition for that
+		// validator: the host must never publish a divergent pair.
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "succeeded")
+		const snap = t.get()
+		const outcomes = snap?.outcomes
+		expect(outcomes).toBeDefined()
+		if (outcomes !== undefined) {
+			const sum = outcomes.succeeded + outcomes.failed + outcomes.pending + outcomes.controlPlane + outcomes.unknown
+			expect(outcomes.total).toBe(sum)
+			expect(outcomes.total).toBe(snap?.toolCalls)
+		}
 	})
 })

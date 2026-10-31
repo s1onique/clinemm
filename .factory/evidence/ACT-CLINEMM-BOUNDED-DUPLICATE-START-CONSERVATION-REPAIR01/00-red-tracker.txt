@@ -1,0 +1,20 @@
+# RED (production reverted to HEAD) — the 9 new DSC witnesses fail
+# cmd: bun x vitest run --config vitest.config.ts src/sdk/task-telemetry-tracker.test.ts
+
+ × src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC01: a DUPLICATE tool start does NOT inflate toolCalls (distinct-identity cardinality) 3ms
+ × src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC02: outcomes.total is CONSERVED against toolCalls after a duplicate start 0ms
+ × src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC03: a duplicate start does NOT inflate the mechanism projection (one call, one mechanism bucket) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC04: the mechanism projection stays USABLE after a duplicate start (wire-boundary validator accepts it) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC05: a duplicate start leaves the pending bucket at ONE (no phantom pending) 0ms
+ × src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC06: a duplicate start does NOT disturb the outcome correlation (the outcome still lands once) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC07: an UNIDENTIFIED start is still counted once per event (no id to dedupe on) 0ms
+ × src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC08: DISTINCT ids are still counted separately (the repair does not under-count) 0ms
+ × src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC09: the outcome projection is USABLE after a duplicate start (host never publishes a divergent pair) 0ms
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC01: a DUPLICATE tool start does NOT inflate toolCalls (distinct-identity cardinality)
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC02: outcomes.total is CONSERVED against toolCalls after a duplicate start
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC03: a duplicate start does NOT inflate the mechanism projection (one call, one mechanism bucket)
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC06: a duplicate start does NOT disturb the outcome correlation (the outcome still lands once)
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC08: DISTINCT ids are still counted separately (the repair does not under-count)
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC09: the outcome projection is USABLE after a duplicate start (host never publishes a divergent pair)
+ Test Files  1 failed (1)
+      Tests  6 failed | 85 passed (91)

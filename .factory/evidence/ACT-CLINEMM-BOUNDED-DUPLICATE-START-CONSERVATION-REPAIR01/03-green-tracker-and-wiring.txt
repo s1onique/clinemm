@@ -1,0 +1,104 @@
+# GREEN (repair applied) — the focused tracker + wiring suites
+# cmd: bun x vitest run --config vitest.config.ts src/sdk/task-telemetry-tracker.test.ts src/sdk/task-tool-outcome-projection.wiring.test.ts
+
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / end-to-end wiring > WIRE-01: the tool START is recorded WITH its authoritative tool-call id 2ms
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / end-to-end wiring > WIRE-02: the authoritative runtime outcome correlates BY ID and conserves 0ms
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / end-to-end wiring > WIRE-03: the runtime and wire kind spellings never disagree 0ms
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / end-to-end wiring > WIRE-04: a control-plane denial is NEVER counted as a success or a failure 0ms
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / end-to-end wiring > WIRE-05: the projection is ABSENT (not zero-filled) before any tool start 0ms
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / end-to-end wiring > WIRE-06: SdkController records the tool start WITH its id (no double-count) 1ms
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / end-to-end wiring > WIRE-07: SdkController correlates the runtime outcome BY ID onto the tracker 0ms
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / end-to-end wiring > WIRE-08: SdkSessionConfigBuilder attaches the observation hook to the session hook bag 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA01: returns undefined before any task is started 1ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA02: stamps startedAt on the first startTask and exposes it through get() 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA02b: re-calling startTask with the SAME id does not reset the window 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA03: endTask freezes endedAt exactly once 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA04: startedAt survives a remount (same task identity, get() is the source of truth) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA13: recordToolStarted increments the counter by exactly one 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA14: tool-finished does NOT increment the counter (the API only has recordToolStarted) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA15: parallel siblings count as N tool-starts 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA16: denied/rejected/unknown-tool never increments (no recordToolStarted was called) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA29: only episodeFailures positive deltas increment recoveryBudgetFailures 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA30: a positive delta in currentRepairAttempts alone does NOT count 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA31: a positive delta in circuitNoticeCount alone does NOT count 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA32: episode reset (forward-decrease) does not subtract (monotone clamp) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA33: control-plane outcomes do NOT increment recoveryBudgetFailures (no snapshot change) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA34: multiple consecutive episodeFailures jumps accumulate 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA22: a new task identity resets all counters and startedAt 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA23: same task identity across turns preserves counters (startedAt, toolCalls, recoveryBudgetFailures) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA19: get() returns recoveryBudgetFailures at zero (zero-hiding is a UI concern) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA24: completed turn phase freezes the elapsed clock at the anchorTs 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA25: error turn phase freezes the elapsed clock 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA26: resumable turn phase freezes the elapsed clock 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA27: terminal freeze is idempotent — first terminal call wins 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA28: terminal remount does NOT advance the elapsed clock 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA28b: awaiting_followup does NOT freeze — same task continues 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA28c: idle and streaming and awaiting_approval are not terminal — no freeze 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA28d: observeTurnPhase with no started task is a no-op 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > clear() resets the tracker to the no-task state 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > endTask on a tracker with no started task is a no-op 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > observeRecovery on a tracker with no started task seeds the baseline without inflating 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > M1 killer: startTask(epoch) honours the supplied epoch 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > M3 killer: observeRecovery does not touch toolCalls 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > M4 killer: an unchanged snapshot does not bump the counter 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > M5 killer: same-task follow-up preserves startedAt 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > M6 killer (terminal remount): endedAt is the canonical timestamp, never remount-relative 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA35: completed → streaming on the same task reopens the elapsed clock 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA36: resumable → streaming (resume) reopens the elapsed clock 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA37: error → streaming (retry) reopens the elapsed clock 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA37b: awaiting_approval → streaming does NOT reopen (waiting on user) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA38: a later terminal on the same task refreezes at the new anchorTs 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA39: idle and awaiting_followup do NOT reopen (terminal freeze is per stopped interval) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA40: tool counters survive a terminal reopen (cumulative across continuation) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > THA41: recoveryBudgetFailures survives a terminal reopen 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker > M7 killer (terminal-then-continue): user-reply flow freezes, unfreezes, refreezes with preserved counters 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-01: `get()` returns a zero `mechanism` summary right after startTask 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-02: recordToolStartedWithName increments the right bucket AND toolCalls 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-03: legacy `recordToolStarted()` (no arg) increments total + `other` bucket 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-04: startTask with a NEW task identity resets mechanism summary 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-05: startTask with the SAME task identity preserves the mechanism summary 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-06: clear() resets mechanism summary along with the rest 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-07: mechanism summary survives a terminal reopen (cumulative across continuation) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-08: recordToolStartedWithName called before startTask is a no-op (defensive) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection > TES-TRK-09: `sed -i ...` via run_commands is recorded as `command`, never as `edit` 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-01: counter initializes to 0 after startTask and is omitted from the wire (zero-hiding) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-02: one structured EPERM increments by exactly 1 and projects runtimeErrorCount: 1 on the wire 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-03: independent incidents accumulate monotonically (0 → 1 → 2 → 3) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-04: helper-recovery success does NOT decrement (EPERM with successful fallback still counts) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-05: saturates at Number.MAX_SAFE_INTEGER (no wrap, no negative) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-06: new task identity resets the counter to 0 (task isolation) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-07: clear() resets the counter to 0 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-08: recordRuntimeError before startTask is a no-op (defensive, mirrors recordToolStarted) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-09: wire emits runtimeErrorCount only when > 0 (zero-hiding for Hub/Remote cleanliness) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-10: recordRuntimeError does NOT perturb the mechanism / toolCalls conservation invariant 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-11: counter survives endTask / observeTurnPhase (cumulative across the task lifetime) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter > REC-12: independent tasks do NOT share counts (TASK_ERROR_COUNTER_ISOLATION) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO01: three starts, one success, one failure, one pending — the projection is exact 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO02: a control_plane outcome is neither succeeded nor failed 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO03: an unknown outcome kind is counted as unknown, never as succeeded/failed 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO04: conservation — outcomes.total is conserved against toolCalls 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO05: the projection is ABSENT until at least one tool start is observed 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO06: an outcome for an UNKNOWN tool-call id is ignored (no fabrication) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO07: a repeated outcome for the same tool-call id does not double-count 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO08: a new task identity resets the outcome projection 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO09: the outcome projection does NOT perturb the mechanism conservation invariant 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO10: outcomes before startTask are dropped (no unowned-task fabrication) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO11: clear() wipes the outcome projection 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO12: a tool start WITHOUT an authoritative identity stays pending and is never fabricated 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO13: outcomes arriving OUT OF ORDER are correlated by id, never by position 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO14: a DUPLICATE tool start for the same id does not create a second record 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO15: the FIRST authoritative outcome wins when two conflicting outcomes arrive 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO16: the runtime spellings (success/failure) and the wire spellings agree 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO17: an EMPTY tool-call id is treated as no identity (pending, never fabricated) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO18: conservation holds with a MIX of identified and unidentified starts 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC01: a DUPLICATE tool start does NOT inflate toolCalls (distinct-identity cardinality) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC02: outcomes.total is CONSERVED against toolCalls after a duplicate start 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC03: a duplicate start does NOT inflate the mechanism projection (one call, one mechanism bucket) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC04: the mechanism projection stays USABLE after a duplicate start (wire-boundary validator accepts it) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC05: a duplicate start leaves the pending bucket at ONE (no phantom pending) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC06: a duplicate start does NOT disturb the outcome correlation (the outcome still lands once) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC07: an UNIDENTIFIED start is still counted once per event (no id to dedupe on) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC08: DISTINCT ids are still counted separately (the repair does not under-count) 0ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-BOUNDED-DUPLICATE-START-CONSERVATION-REPAIR01 / TaskTelemetryTracker duplicate-start conservation > DSC09: the outcome projection is USABLE after a duplicate start (host never publishes a divergent pair) 0ms
+ Test Files  2 passed (2)
+      Tests  99 passed (99)
