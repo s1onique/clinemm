@@ -1,3 +1,41 @@
+# ACT-CLINEMM-COMPOSER-REASONING-EFFORT-LABEL01 — PASS_STRUCTURAL_ONLY — 2026-10-31
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. The bounded composer label feature is implemented, focused tests are GREEN, the necessity ablation is demonstrated, and the webview/extension gates pass. Installed-UI qualification and installation remain explicit successors because the macOS debug harness cannot launch its VS Code Electron host in this environment (`SIGSEGV`; process signaling is denied with `EPERM`).
+
+```text
+ENTRY_HEAD: 0bfc178bb6db5e7aecd0f9ce7a5553384801ef3b (main)
+SUBJECT_HEAD: 0bfc178bb6db5e7aecd0f9ce7a5553384801ef3b (source HEAD carrying the bounded implementation tree; closure commit is recorded in the final report because a commit cannot contain its own hash)
+CHANGED_FILES: apps/vscode/webview-ui/src/components/chat/ChatTextArea.tsx; apps/vscode/webview-ui/src/components/chat/composer-reasoning-effort-label.ts; apps/vscode/webview-ui/src/components/chat/composer-reasoning-effort-label.test.ts; .factory/epic-board.md
+RED_RESULT: PASS — focused suite at the pre-wiring source was 1 failed | 8 passed; the display witness failed because ChatTextArea did not return formatComposerModelLabel(baseModelLabel, configuredEffort)
+GREEN_RESULT: PASS — focused suite 10/10 assertions passed; Vitest worker teardown then returned the environment-only EPERM kill error after the successful result
+ABLATION_RESULT: PASS — removing only the ChatTextArea projection made the display witness fail for the expected missing formatter return; restoring it returned the suite to 10/10 GREEN
+WEBVIEW_TYPECHECK: PASS — tsc -b + production webview build exit 0; extension `bun run check-types` exit 0 when run serially after proto generation
+WEBVIEW_BUILD: PASS — `bun run build` exit 0; 7,217 modules transformed
+PROFILE_PICKER_CONSERVATION: PASS — the existing ModelDisplayButton remains the sole model-profile trigger; no sibling picker, extra trigger, or duplicated label; existing profile/label suite failure is identical at ENTRY_HEAD (pre-existing state leakage)
+LIVE_UI_STATUS: NOT_QUALIFIED — debug harness VS Code Electron exits SIGSEGV and the environment denies kill with EPERM; installation remains the explicit successor
+VERDICT: PASS_STRUCTURAL_ONLY
+```
+
+## Bounded implementation
+
+The existing model label calculation is preserved and a read-only suffix is projected from the current mode's authoritative configured effort. Standard selector-backed providers use `planModeReasoningEffort` / `actModeReasoningEffort`; OCA uses its separate `planModeOcaReasoningEffort` / `actModeOcaReasoningEffort` authority and validates against the active model's `reasoningEffortOptions`. Explicit `none` remains distinct from unset. `max` is shown only when the active model explicitly exposes it. Unknown or unset effort leaves the original label unchanged.
+
+No reasoning persistence, request serialization, normalization, model capability, provider catalog, preference, profile persistence, session lifecycle, tracing, tool, or approval behavior changed. The existing ModelDisplayButton, triggerProps, keyboard/accessibility semantics, Plan/Act switching, and model-profile quick-switch behavior are unchanged.
+
+## Executable evidence
+
+- Focused RED → GREEN: `apps/vscode/webview-ui/src/components/chat/composer-reasoning-effort-label.test.ts` — 10 focused cases covering explicit None, M3.1 Low, Plan/Act authority, configuration updates, provider isolation, unavailable effort, conditional Max, unchanged base formatting, composer wiring, and picker conservation.
+- Existing `chat-existing-model-label-trigger.mpwc02.test.tsx`: the one failing open/closed assertion is identical in a detached clean `ENTRY_HEAD` worktree, therefore pre-existing and not a regression. The new focused picker-conservation witness passes.
+- Relevant provider reasoning tests: the OpenAI-compatible suite's toolkit-mock failure is pre-existing at entry HEAD; no reasoning persistence semantics changed.
+- Extension lint: `bun run lint` exit 0 (2,503 files checked).
+- Biome on the two new files: exit 0 at error threshold; formatted successfully.
+- Production extension bundle SHA-256: `fc8a003b912bbd98c845f9d85fb1746f41b1fc6d61467907a6b603a0ce8bcde9` (`apps/vscode/dist/extension.js`). Extension version: `4.1.16-5a1c485cb`.
+
+## Successor
+
+Build/install an exact-head VSIX and qualify the real installed UI for M3/None, M3/Low, M3.1/Low, Plan/Act switching, and model-profile switching when the macOS Electron host can launch. No further implementation scope is started by this ACT.
+
+
 # ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-31
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. One bounded P0 correction (`HALT_OBSERVER_EXECUTION_COUPLING`) closed the execution-conservation gap in the typed runtime-outcome observer. The installed-UI demonstration remains pending because the sandbox cannot launch the Electron host (the BASELINE code fails identically).

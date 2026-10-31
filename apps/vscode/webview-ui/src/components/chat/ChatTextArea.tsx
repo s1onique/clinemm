@@ -44,6 +44,11 @@ import {
 } from "@/utils/slash-commands"
 import ClineRulesToggleModal from "../cline-rules/ClineRulesToggleModal"
 import { getModeToggleDraftAction } from "./chat-textarea-mode-toggle"
+import {
+	formatComposerModelLabel,
+	getOcaSupportedReasoningEfforts,
+	resolveConfiguredReasoningEffort,
+} from "./composer-reasoning-effort-label"
 import { useModelProfileQuickSwitchHost } from "./ModelProfileQuickSwitchContainer"
 import ServersToggleModal from "./ServersToggleModal"
 
@@ -1152,36 +1157,57 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			if (!apiConfiguration) {
 				return unknownModel
 			}
+
+			let baseModelLabel: string
 			switch (selectedProvider) {
 				case "cline":
-					return `${selectedProvider}:${selectedModelId}`
+					baseModelLabel = `${selectedProvider}:${selectedModelId}`
+					break
 				case "cline-pass":
 					// Free models selected on ClinePass go through Cline usage billing,
 					// so label them the same way as the cline provider
-					return selectedModelId.startsWith("cline-pass/")
+					baseModelLabel = selectedModelId.startsWith("cline-pass/")
 						? `${selectedProvider}:${selectedModelId.replace(/^cline-pass\//, "")}`
 						: `cline:${selectedModelId}`
+					break
 				case "openai":
-					return `openai-compat:${selectedModelId}`
+					baseModelLabel = `openai-compat:${selectedModelId}`
+					break
 				case "vscode-lm":
-					return `vscode-lm:${vsCodeLmModelSelector ? `${vsCodeLmModelSelector.vendor ?? ""}/${vsCodeLmModelSelector.family ?? ""}` : unknownModel}`
+					baseModelLabel = `vscode-lm:${vsCodeLmModelSelector ? `${vsCodeLmModelSelector.vendor ?? ""}/${vsCodeLmModelSelector.family ?? ""}` : unknownModel}`
+					break
 				case "together":
-					return `${selectedProvider}:${togetherModelId}`
+					baseModelLabel = `${selectedProvider}:${togetherModelId}`
+					break
 				case "lmstudio":
-					return `${selectedProvider}:${lmStudioModelId}`
+					baseModelLabel = `${selectedProvider}:${lmStudioModelId}`
+					break
 				case "ollama":
-					return `${selectedProvider}:${ollamaModelId}`
+					baseModelLabel = `${selectedProvider}:${ollamaModelId}`
+					break
 				case "litellm":
-					return `${selectedProvider}:${liteLlmModelId}`
+					baseModelLabel = `${selectedProvider}:${liteLlmModelId}`
+					break
 				case "requesty":
-					return `${selectedProvider}:${requestyModelId}`
+					baseModelLabel = `${selectedProvider}:${requestyModelId}`
+					break
 				case "vercel-ai-gateway":
-					return `${selectedProvider}:${vercelAiGatewayModelId || selectedModelId}`
+					baseModelLabel = `${selectedProvider}:${vercelAiGatewayModelId || selectedModelId}`
+					break
 				case "anthropic":
 				case "openrouter":
 				default:
-					return `${selectedProvider}:${selectedModelId}`
+					baseModelLabel = `${selectedProvider}:${selectedModelId}`
+					break
 			}
+
+			const supportedEfforts =
+				selectedProvider === "oca" ? getOcaSupportedReasoningEfforts(apiConfiguration, mode) : undefined
+			const configuredEffort = resolveConfiguredReasoningEffort(apiConfiguration, mode, {
+				provider: selectedProvider,
+				supportedEfforts,
+			})
+			return formatComposerModelLabel(baseModelLabel, configuredEffort)
 		}, [apiConfiguration, mode, selectedProvider, selectedModelId])
 
 		// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
