@@ -303,6 +303,20 @@ function mergeRuntimeHooks(
 				await hook.onEvent?.(event);
 			}
 		},
+		// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+		// `onToolRuntimeOutcome` MUST survive the merge. It is the
+		// AUTHORITATIVE runtime-tool-execution outcome seam
+		// (`ToolRuntimeOutcome`). It is a READ-ONLY observation hook
+		// with no return value, so it is merged by FAN-OUT (every
+		// layer's observer is invoked) rather than by the
+		// result-aggregating pattern used for the control-plane hooks.
+		// Dropping it here silently severed every downstream outcome
+		// observer, including the TaskHeader outcome projection.
+		onToolRuntimeOutcome: async (ctx) => {
+			for (const hook of hooks) {
+				await hook.onToolRuntimeOutcome?.(ctx);
+			}
+		},
 	};
 }
 

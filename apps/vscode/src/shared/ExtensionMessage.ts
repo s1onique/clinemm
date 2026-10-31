@@ -941,6 +941,20 @@ export interface TaskHeaderTelemetryStrip {
 	recoveryBudgetFailures: number
 	mechanism?: ToolMechanismSummary
 	/**
+	 * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01: OPTIONAL
+	 * projection of AUTHORITATIVE runtime tool outcomes
+	 * (`succeeded` / `failed` / `pending` / `controlPlane` / `unknown`).
+	 *
+	 * Absence means "this host did not project outcomes" — the webview
+	 * then falls back to the existing V1 flat `toolCalls` display. The
+	 * projection is NEVER inferred by the webview from `mechanism` or
+	 * from any other field.
+	 *
+	 * See `ToolOutcomeSummary` for the full semantics and the
+	 * conservation invariants.
+	 */
+	outcomes?: ToolOutcomeSummary
+	/**
 	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: see the
 	 * type-level doc above. Bounded to `Number.MAX_SAFE_INTEGER`
 	 * (saturating) — see
@@ -1081,6 +1095,51 @@ export interface ToolMechanismSummary {
 	search: number
 	mcp: number
 	other: number
+}
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+ *
+ * Wire-shape for the OPTIONAL projection of AUTHORITATIVE runtime tool
+ * outcomes. Mirrors `apps/vscode/src/sdk/task-telemetry-tracker.ts` so
+ * the host serializes the exact same shape the webview decodes.
+ *
+ * Semantics — this describes RUNTIME TOOL EXECUTION, never shell
+ * subprocess exit status:
+ *
+ *  - `succeeded`     — the runtime classified the tool call as a
+ *                      successful execution.
+ *  - `failed`        — the runtime classified the tool call as a
+ *                      genuine execution failure.
+ *  - `pending`       — a tool start was observed but no authoritative
+ *                      outcome has arrived yet (still in flight).
+ *  - `controlPlane`  — the call never executed for a control-plane
+ *                      reason (host DENY, user rejection, runtime skip,
+ *                      runtime abort). These are NEITHER successes NOR
+ *                      failures; they get their own bucket so a
+ *                      pre-execution denial is never displayed as a
+ *                      succeeded or a failed tool call.
+ *  - `unknown`       — an outcome was observed whose kind the host
+ *                      could not classify. Counted conservatively; never
+ *                      folded into `succeeded` / `failed`.
+ *
+ * Conservation invariants (checked by the webview before rendering):
+ *
+ *   total === succeeded + failed + pending + controlPlane + unknown
+ *   total === telemetry.toolCalls
+ *
+ * The field is OPTIONAL on the wire. Absence means "this host did not
+ * project outcomes" (Hub/Remote hosts, pre-observation sessions) and
+ * the webview MUST fall back to the existing V1 flat `toolCalls`
+ * display rather than inventing zeros.
+ */
+export interface ToolOutcomeSummary {
+	total: number
+	succeeded: number
+	failed: number
+	pending: number
+	controlPlane: number
+	unknown: number
 }
 
 /**

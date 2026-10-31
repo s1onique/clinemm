@@ -1056,6 +1056,44 @@ function mergeHookFunction<K extends keyof AgentHooks>(
 	}) as AgentHooks[K];
 }
 
+/**
+ * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+ *
+ * Merge a READ-ONLY observation hook across layers.
+ *
+ * Unlike the control-plane hooks (`beforeTool` / `afterTool` / …), an
+ * observation hook has NO return value to aggregate. The correct merge
+ * is therefore a FAN-OUT: every layer's handler is invoked, in layer
+ * order, with the same context.
+ *
+ * `onToolRuntimeOutcome` is such a hook — it is the authoritative
+ * runtime-tool-execution outcome seam. Dropping it during a merge
+ * (as `mergeHookFunction` did, because it only knows how to aggregate
+ * result-bearing hooks) silently severed every downstream observer.
+ *
+ * Returns `undefined` when NO layer provides the hook, so the merged
+ * bag stays faithful to "nobody observes this".
+ */
+function mergeObservationHook<K extends "onToolRuntimeOutcome">(
+	layers: AgentHooks[],
+	name: K,
+): AgentHooks[K] | undefined {
+	const handlers = layers
+		.map((layer) => layer[name])
+		.filter(
+			(handler): handler is NonNullable<AgentHooks[K]> =>
+				typeof handler === "function",
+		);
+	if (handlers.length === 0) {
+		return undefined;
+	}
+	return (async (ctx: never) => {
+		for (const handler of handlers) {
+			await (handler as (arg: never) => unknown)(ctx);
+		}
+	}) as AgentHooks[K];
+}
+
 export function mergeAgentHooks(
 	layers: Array<AgentHooks | undefined>,
 ): AgentHooks | undefined {
@@ -1073,6 +1111,16 @@ export function mergeAgentHooks(
 		afterModel: mergeHookFunction(activeLayers, "afterModel"),
 		beforeTool: mergeHookFunction(activeLayers, "beforeTool"),
 		afterTool: mergeHookFunction(activeLayers, "afterTool"),
+		// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+		// `onToolRuntimeOutcome` MUST survive the merge. It is the
+		// AUTHORITATIVE runtime-tool-execution outcome seam
+		// (`ToolRuntimeOutcome`), and dropping it here silently severed
+		// every downstream outcome observer. It is a read-only
+		// observation hook with a void return, so it is merged by
+		// FANNING OUT to every layer rather than by the
+		// result-aggregating `mergeHookFunction` (which is built for
+		// control-plane hooks that RETURN a control value).
+		onToolRuntimeOutcome: mergeObservationHook(activeLayers, "onToolRuntimeOutcome"),
 		onEvent: mergeHookFunction(activeLayers, "onEvent"),
 	};
 }

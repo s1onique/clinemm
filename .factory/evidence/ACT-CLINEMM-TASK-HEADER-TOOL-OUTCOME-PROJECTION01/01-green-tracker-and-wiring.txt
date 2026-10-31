@@ -1,0 +1,20 @@
+(node:29705) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm.tmp1/apps/vscode
+
+(node:29705) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29705) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/task-tool-outcome-projection.wiring.test.ts (8 tests) 5ms
+ ✓ src/sdk/task-telemetry-tracker.test.ts (82 tests) 11ms
+
+ Test Files  2 passed (2)
+      Tests  90 passed (90)
+   Start at  03:07:16
+   Duration  2.89s (transform 3.05s, setup 5.50s, import 129ms, tests 16ms, environment 0ms)
+

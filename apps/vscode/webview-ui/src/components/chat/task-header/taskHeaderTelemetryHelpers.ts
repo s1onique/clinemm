@@ -56,7 +56,13 @@
  *
  * No React. No DOM. No chat-derived inference.
  */
-import type { TaskHeaderPresentationProjection, ToolMechanismSummary, TurnPhase, TurnState } from "@shared/ExtensionMessage"
+import type {
+	TaskHeaderPresentationProjection,
+	ToolMechanismSummary,
+	ToolOutcomeSummary,
+	TurnPhase,
+	TurnState,
+} from "@shared/ExtensionMessage"
 
 const MS_PER_SECOND = 1_000
 const MS_PER_MINUTE = 60 * MS_PER_SECOND
@@ -269,6 +275,56 @@ export function isUsableMechanismProjection(mechanism: ToolMechanismSummary | un
 		return false
 	}
 	if (mechanism.total !== toolCalls) {
+		return false
+	}
+	return true
+}
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / wire-boundary
+ * validator (webview mirror).
+ *
+ * The webview trusts the OPTIONAL tool-outcome projection ONLY when
+ * this returns `true`. Otherwise it falls back to the existing V1 flat
+ * `toolCalls` display — the outcome projection is NEVER inferred,
+ * partially rendered, or repaired on the webview side.
+ *
+ * Returns `true` only when ALL of the following hold:
+ *
+ *   - `outcomes` is not `undefined` (absence means "this host did not
+ *     project outcomes" — e.g. a Hub/Remote host, or a pre-observation
+ *     session);
+ *   - every field is a finite, non-negative integer (rejects `NaN`,
+ *     `Infinity`, negative values, fractional values, malformed
+ *     values);
+ *   - the bucket sum equals `outcomes.total` (in-process conservation:
+ *     `total === succeeded + failed + pending + controlPlane + unknown`);
+ *   - `outcomes.total === toolCalls` (cross-field conservation against
+ *     the older flat counter).
+ *
+ * The two conservation checks are deliberately STRICT. A projection
+ * that fails either one is treated as ABSENT — displaying a partially
+ * trustworthy breakdown would be worse than displaying the flat count,
+ * because the flat count is always correct.
+ *
+ * Pure. No I/O. No DOM. No React.
+ */
+export function isUsableOutcomeProjection(outcomes: ToolOutcomeSummary | undefined, toolCalls: number): boolean {
+	if (outcomes === undefined) {
+		return false
+	}
+	const fields: Array<keyof ToolOutcomeSummary> = ["total", "succeeded", "failed", "pending", "controlPlane", "unknown"]
+	for (const key of fields) {
+		const value = outcomes[key]
+		if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+			return false
+		}
+	}
+	const sum = outcomes.succeeded + outcomes.failed + outcomes.pending + outcomes.controlPlane + outcomes.unknown
+	if (outcomes.total !== sum) {
+		return false
+	}
+	if (outcomes.total !== toolCalls) {
 		return false
 	}
 	return true

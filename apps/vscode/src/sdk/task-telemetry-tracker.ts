@@ -109,6 +109,7 @@ import type {
 	RuntimeErrorIncident,
 	TaskHeaderTelemetryStrip,
 	ToolMechanismSummary,
+	ToolOutcomeSummary,
 } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import type { MycPrimeStatus } from "./myc-prime-automation"
@@ -211,6 +212,80 @@ function isRetrievalLikeOperation(op: MycOperationWire): boolean {
 }
 
 /**
+ * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+ *
+ * The bounded wire classification of one AUTHORITATIVE runtime tool
+ * outcome. This is the host-side normalization of the runtime's
+ * `ToolRuntimeOutcome.kind`:
+ *
+ *   runtime `success`      → "succeeded"
+ *   runtime `failure`      → "failed"
+ *   runtime `control_plane`→ "control_plane"
+ *   anything else          → "unknown"
+ *
+ * `control_plane` is deliberately its own bucket. A host DENY, a user
+ * rejection, a runtime skip and a runtime abort all mean "this call did
+ * not execute" — they are NOT successes and NOT failures, and folding
+ * them into either would misreport a pre-execution denial as a tool
+ * that ran and broke.
+ */
+export type ToolOutcomeKind = "succeeded" | "failed" | "control_plane" | "unknown"
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+ *
+ * One observed tool START and the AUTHORITATIVE outcome for it (if any).
+ *
+ * `toolCallId` is the runtime's own identity for the call — the same
+ * identity the runtime's `onToolRuntimeOutcome` hook reports — so a
+ * start and its outcome pair by construction, with NO chronological or
+ * positional fallback.
+ *
+ * `kind` is `undefined` while the outcome is still pending.
+ */
+interface ToolOutcomeRecord {
+	readonly toolCallId: string | undefined
+	kind: ToolOutcomeKind | undefined
+}
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+ *
+ * Normalize an outcome kind into the bounded wire classification.
+ * Unknown kinds degrade to `"unknown"` — they are counted conservatively
+ * and NEVER folded into `succeeded` / `failed`.
+ *
+ * The mapping is IDEMPOTENT and accepts BOTH spellings:
+ *
+ *   runtime `ToolRuntimeOutcome.kind`  →  wire bucket
+ *     "success"                          →  "succeeded"
+ *     "failure"                          →  "failed"
+ *     "control_plane"                    →  "control_plane"
+ *
+ *   already-normalized wire bucket      →  itself
+ *     "succeeded"                        →  "succeeded"
+ *     "failed"                           →  "failed"
+ *
+ * Accepting both means the production seam can hand us the runtime's
+ * raw kind OR an already-classified bucket without the two spellings
+ * ever disagreeing about the result.
+ */
+export function classifyToolOutcomeKind(kind: unknown): ToolOutcomeKind {
+	switch (kind) {
+		case "success":
+		case "succeeded":
+			return "succeeded"
+		case "failure":
+		case "failed":
+			return "failed"
+		case "control_plane":
+			return "control_plane"
+		default:
+			return "unknown"
+	}
+}
+
+/**
  * Canonical myc server names matched by the observer. Mirrors
  * `resolveMycServerName` from `apps/vscode/src/sdk/myc-prime-automation.ts`
  * so the tracker filter agrees with the prime helper. A recordMycToolCall
@@ -270,6 +345,32 @@ export class TaskTelemetryTracker {
 	private mycPrimeAttempted = false
 	private mycLast: MycLastCall | undefined
 
+	// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01: per-tool-call
+	// outcome state, keyed by the AUTHORITATIVE tool-call identity
+	// (`toolCallId`). The map is the correlation authority: an outcome
+	// is matched to a tool start BY ID, never by arrival order. A
+	// chronological/positional fallback is FORBIDDEN — parallel tool
+	// batches complete out of order, and a positional match would
+	// misattribute outcomes to the wrong call.
+	//
+	// There is exactly ONE record per observed tool START, so the
+	// projection's `total` is exactly `toolCalls` by construction —
+	// conservation is a real invariant, not a coincidence.
+	//
+	// Record semantics:
+	//   - `toolCallId` is the authoritative identity, or `undefined`
+	//     when the start arrived WITHOUT one. A start without an
+	//     identity can never be correlated, so it stays `pending`
+	//     forever and can never be turned into a fabricated outcome.
+	//   - `kind` is the OUTCOME observed for that call, or `undefined`
+	//     while the outcome is still pending.
+	private toolOutcomeRecords: ToolOutcomeRecord[] = []
+	// Correlation index: authoritative id → the record it belongs to.
+	// Ids are unique per record, so the first start for an id wins and
+	// a repeated start for the same id does NOT create a second
+	// record (a duplicate delivery must not double-count).
+	private toolOutcomeById = new Map<string, ToolOutcomeRecord>()
+
 	/**
 	 * Start (or re-start) a task's telemetry window.
 	 *
@@ -324,6 +425,13 @@ export class TaskTelemetryTracker {
 		this.mycPrimeStatus = "idle"
 		this.mycPrimeAttempted = false
 		this.mycLast = undefined
+		// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01: the
+		// outcome projection is scoped to the CURRENT visible task
+		// identity, so a new task identity wipes it. There is no
+		// per-id cache across tasks — the counters follow the same
+		// destructive-reset contract as every other tracker counter.
+		this.toolOutcomeRecords = []
+		this.toolOutcomeById.clear()
 		return this.get()
 	}
 
@@ -418,6 +526,11 @@ export class TaskTelemetryTracker {
 		this.mycPrimeStatus = "idle"
 		this.mycPrimeAttempted = false
 		this.mycLast = undefined
+		// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01: also wipe the
+		// per-tool-call outcome records on clear (the host is the single
+		// authority; the webview rebuilds from `get()`).
+		this.toolOutcomeRecords = []
+		this.toolOutcomeById.clear()
 		return this.get()
 	}
 
@@ -466,6 +579,163 @@ export class TaskTelemetryTracker {
 		this.toolCalls += 1
 		this.mechanism = accumulateMechanism(this.mechanism, toolName)
 		return this.get()
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+	 *
+	 * Production seam: record a canonical `tool-started` runtime event
+	 * TOGETHER WITH its authoritative tool-call identity.
+	 *
+	 * This is the correlation anchor for the outcome projection. The
+	 * `toolCallId` is the runtime's own identity for the call — the same
+	 * identity the runtime's `onToolRuntimeOutcome` hook reports — so a
+	 * start and its outcome pair by construction, with NO chronological
+	 * or positional fallback.
+	 *
+	 * Behavior:
+	 *  - Increments `toolCalls` AND the mechanism bucket (same as
+	 *    `recordToolStartedWithName`). This method is the COMBINED
+	 *    production seam: the host calls it INSTEAD OF
+	 *    `recordToolStartedWithName` for the same event, so a tool start
+	 *    is never counted twice. The mechanism classification is
+	 *    mechanism-only and stays untouched by the outcome projection.
+	 *  - Registers the call as `pending` (no outcome observed yet).
+	 *  - A REPEATED start for the same `toolCallId` does NOT
+	 *    double-register: the existing entry is left in place so the
+	 *    per-call outcome cardinality stays exactly one.
+	 *
+	 * When the tracker has no active task the call is logged and
+	 * dropped — same defensive contract as the other recorders.
+	 */
+	recordToolStartedWithId(toolCallId: string | undefined, toolName?: string): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId === undefined) {
+			Logger.debug("[TaskTelemetryTracker] recordToolStartedWithId called before startTask; ignored")
+			return this.get()
+		}
+		this.toolCalls += 1
+		this.mechanism = accumulateMechanism(this.mechanism, toolName)
+		const id = toolCallId === undefined || toolCallId === "" ? undefined : toolCallId
+		if (id !== undefined && this.toolOutcomeById.has(id)) {
+			// A REPEATED start for the same authoritative id. The
+			// existing record stays in place so the per-call outcome
+			// cardinality stays exactly one — a duplicate delivery
+			// must not double-count.
+			return this.get()
+		}
+		// One record per observed tool start. A start WITHOUT an
+		// authoritative identity still gets a record (it is a real
+		// tool start and is counted in `toolCalls`), but it can never
+		// be correlated, so it stays `pending` forever and can never
+		// become a fabricated outcome.
+		const record: ToolOutcomeRecord = { toolCallId: id, kind: undefined }
+		this.toolOutcomeRecords.push(record)
+		if (id !== undefined) {
+			this.toolOutcomeById.set(id, record)
+		}
+		return this.get()
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+	 *
+	 * Production seam: record the AUTHORITATIVE runtime outcome for one
+	 * tool call.
+	 *
+	 * Authority: the runtime's `onToolRuntimeOutcome` hook is the only
+	 * caller. The `kind` argument is the runtime's `ToolRuntimeOutcome.kind`
+	 * (`"success"` / `"failure"` / `"control_plane"`), normalized through
+	 * `classifyToolOutcomeKind`.
+	 *
+	 * Contract:
+	 *  - Correlation is BY `toolCallId`. An outcome for a tool-call id
+	 *    that was never started is DROPPED — we never fabricate an
+	 *    outcome against a call we did not observe.
+	 *  - A repeated outcome for the same id is idempotent: the FIRST
+	 *    authoritative outcome wins, so a duplicate delivery cannot
+	 *    double-count.
+	 *  - `control_plane` outcomes are recorded in their own bucket. They
+	 *    are NEVER counted as `succeeded` or `failed` — a pre-execution
+	 *    denial is not a tool that ran and broke.
+	 *  - When the tracker has no active task the call is dropped.
+	 */
+	recordToolOutcome(toolCallId: string, kind: unknown): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId === undefined) {
+			Logger.debug("[TaskTelemetryTracker] recordToolOutcome called before startTask; ignored")
+			return this.get()
+		}
+		if (!toolCallId) {
+			Logger.debug("[TaskTelemetryTracker] recordToolOutcome without a tool call id ignored")
+			return this.get()
+		}
+		const record = this.toolOutcomeById.get(toolCallId)
+		if (record === undefined) {
+			// The call was never started (unknown identity) — drop
+			// rather than fabricate an outcome against a call we did
+			// not observe.
+			Logger.debug(`[TaskTelemetryTracker] recordToolOutcome for unstarted tool call ignored (id=${toolCallId})`)
+			return this.get()
+		}
+		if (record.kind !== undefined) {
+			// First authoritative outcome wins — idempotent.
+			return this.get()
+		}
+		record.kind = classifyToolOutcomeKind(kind)
+		return this.get()
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+	 *
+	 * Build the OPTIONAL wire projection of authoritative tool outcomes.
+	 *
+	 * Returns `undefined` when NO tool start has been observed — the
+	 * projection is ABSENT rather than a zero-filled object, so the
+	 * webview can distinguish "the host did not project outcomes" from
+	 * "the host projected outcomes and there are none yet".
+	 *
+	 * Conservation invariants (also re-checked by the webview):
+	 *
+	 *   total === succeeded + failed + pending + controlPlane + unknown
+	 *   total === toolCalls
+	 */
+	private buildOutcomeSummary(): ToolOutcomeSummary | undefined {
+		if (this.toolOutcomeRecords.length === 0) {
+			return undefined
+		}
+		let succeeded = 0
+		let failed = 0
+		let pending = 0
+		let controlPlane = 0
+		let unknown = 0
+		for (const record of this.toolOutcomeRecords) {
+			switch (record.kind) {
+				case "succeeded":
+					succeeded += 1
+					break
+				case "failed":
+					failed += 1
+					break
+				case "control_plane":
+					controlPlane += 1
+					break
+				case "unknown":
+					unknown += 1
+					break
+				default:
+					// `undefined` → started, outcome not yet observed.
+					pending += 1
+					break
+			}
+		}
+		return {
+			total: this.toolOutcomeRecords.length,
+			succeeded,
+			failed,
+			pending,
+			controlPlane,
+			unknown,
+		}
 	}
 
 	/**
@@ -807,6 +1077,7 @@ export class TaskTelemetryTracker {
 		if (this.currentTaskId === undefined || this.startedAt === undefined) {
 			return undefined
 		}
+		const outcomes = this.buildOutcomeSummary()
 		return {
 			startedAt: this.startedAt,
 			...(this.endedAt !== undefined ? { endedAt: this.endedAt } : {}),
@@ -818,6 +1089,14 @@ export class TaskTelemetryTracker {
 			// strip when present; Hub/Remote hosts that have not yet
 			// received the new field simply omit it from the strip.
 			mechanism: this.mechanism,
+			// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01: the
+			// OPTIONAL projection of authoritative runtime tool outcomes.
+			// Emitted only when at least one tool start has been observed,
+			// so "host did not project outcomes" (absence) stays
+			// distinguishable from "host projected outcomes and there are
+			// none yet". The webview falls back to the existing V1 flat
+			// `toolCalls` display when this field is absent.
+			...(outcomes !== undefined ? { outcomes } : {}),
 			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: cumulative
 			// structured runtime error incidents. Emitted only when > 0
 			// so the wire strip stays minimal in the common (zero-error)

@@ -1,5 +1,7 @@
 import type { CoreSessionConfig } from "@cline/core"
+import type { AgentToolRuntimeOutcomeHookContext } from "@cline/shared"
 import type { ApiConfiguration } from "@shared/api"
+import { Logger } from "@shared/services/Logger"
 import type { StateManager } from "@/core/storage/StateManager"
 import { buildSessionConfig, type SessionConfigInput } from "./cline-session-factory"
 import { buildAgentHooks, type HookMessageEmitter } from "./hooks-adapter"
@@ -10,6 +12,24 @@ export interface SdkSessionConfigBuilderOptions {
 	stateManager: StateManager
 	emitHookMessage: HookMessageEmitter
 	onConsecutiveMistakeLimitReached?: CoreSessionConfig["onConsecutiveMistakeLimitReached"]
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+	 *
+	 * Observer for the AUTHORITATIVE runtime tool outcome.
+	 *
+	 * The runtime's `onToolRuntimeOutcome` hook fires once per tool call
+	 * after the runtime produced a `ToolRuntimeOutcome` for it. It is the
+	 * ONLY authority for "did this tool call succeed or fail at the
+	 * runtime boundary" — it is NOT shell subprocess exit status.
+	 *
+	 * The hook is READ-ONLY observation: it never mutates the outcome and
+	 * never influences execution. The host uses it to project the
+	 * optional TaskHeader tool-outcome summary.
+	 *
+	 * When absent, the session simply does not project outcomes and the
+	 * webview falls back to the existing V1 flat `toolCalls` display.
+	 */
+	onToolRuntimeOutcome?: (context: AgentToolRuntimeOutcomeHookContext) => void
 }
 
 /**
@@ -33,12 +53,32 @@ export class SdkSessionConfigBuilder {
 		// against the canonical `CoreSessionConfig.sessionId` (== the
 		// MYC_SESSION_ID the operator captured from the running myc
 		// MCP process). No-op when the live diagnostic is disabled.
-		config.hooks = buildAgentHooks(
-			this.options.stateManager,
-			this.options.emitHookMessage,
-			input.cwd,
-			config.sessionId,
-		)
+		config.hooks = buildAgentHooks(this.options.stateManager, this.options.emitHookMessage, input.cwd, config.sessionId)
+
+		// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+		// Attach the AUTHORITATIVE runtime tool-outcome observer.
+		//
+		// `onToolRuntimeOutcome` is a READ-ONLY observation hook: it never
+		// mutates the outcome and never influences execution. It is
+		// attached to the SAME hook bag as the file-hook adapter so the
+		// SDK's `mergeAgentHooks` fans it out to the runtime together
+		// with the control-plane hooks (the merge preserves observation
+		// hooks — dropping them would silently sever the seam).
+		const onToolRuntimeOutcome = this.options.onToolRuntimeOutcome
+		if (onToolRuntimeOutcome) {
+			config.hooks = {
+				...config.hooks,
+				onToolRuntimeOutcome: (context) => {
+					try {
+						onToolRuntimeOutcome(context)
+					} catch (error) {
+						// The observation hook must never break the tool
+						// execution path. Swallow and log.
+						Logger.error("[SdkSessionConfigBuilder] onToolRuntimeOutcome observer failed:", error)
+					}
+				},
+			}
+		}
 
 		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 (R5):
 		// When the caller passes the TYPED instance
@@ -68,10 +108,7 @@ export class SdkSessionConfigBuilder {
 			const instance = input.providerConfigurationInstanceTyped
 			const resolvedApiKey = this.options.stateManager.getInstanceSecret(instance.credentialRef.name)
 			if (resolvedApiKey === undefined || resolvedApiKey === "") {
-				throw new MissingProviderInstanceCredentialError(
-					instance.instanceId,
-					instance.credentialRef.name,
-				)
+				throw new MissingProviderInstanceCredentialError(instance.instanceId, instance.credentialRef.name)
 			}
 			applyTypedProviderInstanceToConfig(config, instance, resolvedApiKey)
 			return config

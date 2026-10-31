@@ -10,11 +10,17 @@
  * continues when user replies). Terminal-freeze tests cover the
  * error/resumable/completed set explicitly.
  */
-import type { TaskHeaderPresentationProjection, ToolMechanismSummary, TurnState } from "@shared/ExtensionMessage"
+import type {
+	TaskHeaderPresentationProjection,
+	ToolMechanismSummary,
+	ToolOutcomeSummary,
+	TurnState,
+} from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
 import {
 	formatElapsed,
 	isUsableMechanismProjection,
+	isUsableOutcomeProjection,
 	resolveElapsedDisplayMs,
 	stateLabel,
 	taskHeaderPresentationStateLabel,
@@ -373,5 +379,90 @@ describe("ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / wire-boundary 
 		}
 		expect(isUsableMechanismProjection(empty, 0)).toBe(true)
 		expect(isUsableMechanismProjection(empty, 1)).toBe(false)
+	})
+})
+
+// =========================================================================
+// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01
+//
+// The OPTIONAL tool-outcome projection must be validated at the wire
+// boundary BEFORE the webview renders it. Anything that fails
+// validation is treated as ABSENT — the webview falls back to the
+// existing V1 flat `toolCalls` display and NEVER renders a partially
+// trustworthy breakdown.
+// =========================================================================
+
+describe("ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / isUsableOutcomeProjection", () => {
+	const validProjection = (): ToolOutcomeSummary => ({
+		total: 10,
+		succeeded: 6,
+		failed: 2,
+		pending: 1,
+		controlPlane: 1,
+		unknown: 0,
+	})
+
+	it("TOO-WIRE-01: a well-formed, conserving projection is usable", () => {
+		expect(isUsableOutcomeProjection(validProjection(), 10)).toBe(true)
+	})
+
+	it("TOO-WIRE-02: an ABSENT projection triggers the V1 fallback (Hub/Remote absence)", () => {
+		expect(isUsableOutcomeProjection(undefined, 7)).toBe(false)
+	})
+
+	it("TOO-WIRE-03: `total !== toolCalls` triggers the fallback (cross-field conservation)", () => {
+		expect(isUsableOutcomeProjection({ ...validProjection(), total: 9 }, 10)).toBe(false)
+	})
+
+	it("TOO-WIRE-04: bucket sum !== `total` triggers the fallback (in-process conservation)", () => {
+		const projection = validProjection()
+		expect(isUsableOutcomeProjection({ ...projection, succeeded: 5 }, 10)).toBe(false)
+	})
+
+	it("TOO-WIRE-05: a malformed snapshot — NaN / Infinity / negative / non-integer — triggers the fallback", () => {
+		const base = validProjection()
+		expect(isUsableOutcomeProjection({ ...base, succeeded: Number.NaN }, 10)).toBe(false)
+		expect(isUsableOutcomeProjection({ ...base, total: Number.POSITIVE_INFINITY }, 10)).toBe(false)
+		expect(isUsableOutcomeProjection({ ...base, failed: -1, unknown: 3 }, 10)).toBe(false)
+		expect(isUsableOutcomeProjection({ ...base, pending: 0.5, unknown: 0.5 }, 10)).toBe(false)
+	})
+
+	it("TOO-WIRE-06: a control-plane-only projection is conserved and usable", () => {
+		const controlPlaneOnly: ToolOutcomeSummary = {
+			total: 3,
+			succeeded: 0,
+			failed: 0,
+			pending: 0,
+			controlPlane: 3,
+			unknown: 0,
+		}
+		expect(isUsableOutcomeProjection(controlPlaneOnly, 3)).toBe(true)
+	})
+
+	it("TOO-WIRE-07: a zero / all-zero projection is usable iff toolCalls is also zero", () => {
+		const empty: ToolOutcomeSummary = {
+			total: 0,
+			succeeded: 0,
+			failed: 0,
+			pending: 0,
+			controlPlane: 0,
+			unknown: 0,
+		}
+		expect(isUsableOutcomeProjection(empty, 0)).toBe(true)
+		expect(isUsableOutcomeProjection(empty, 1)).toBe(false)
+	})
+
+	it("TOO-WIRE-08: a projection whose total is not the sum of the buckets is rejected even when it equals toolCalls", () => {
+		// total === toolCalls (so the cross-field check passes) but the
+		// bucket sum disagrees — a projection that "lost" a call.
+		const lossy: ToolOutcomeSummary = {
+			total: 10,
+			succeeded: 6,
+			failed: 2,
+			pending: 1,
+			controlPlane: 0,
+			unknown: 0,
+		}
+		expect(isUsableOutcomeProjection(lossy, 10)).toBe(false)
 	})
 })

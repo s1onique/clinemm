@@ -881,3 +881,255 @@ describe("ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker
 		expect(t.currentRuntimeErrorCount).toBe(0)
 	})
 })
+
+// =========================================================================
+// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01
+//
+// Optional TaskHeader projection of AUTHORITATIVE runtime tool outcomes.
+//
+// Authority model:
+//   - The runtime's `onToolRuntimeOutcome` hook (`ToolRuntimeOutcome`) is
+//     the ONLY source of `succeeded` / `failed`. It describes RUNTIME TOOL
+//     EXECUTION, never shell subprocess exit status.
+//   - `control_plane` outcomes (host DENY, user rejection, runtime skip,
+//     runtime abort) are NOT successes and NOT failures. They are counted
+//     in their own bucket so a pre-execution denial is never displayed as
+//     a succeeded or a failed tool call.
+//   - `pending` = a tool start was observed but no authoritative outcome
+//     has arrived yet.
+//   - Correlation is by the AUTHORITATIVE tool-call identity
+//     (`toolCallId`). Chronological / positional fallback is FORBIDDEN.
+//
+// The projection is OPTIONAL on the wire: absent means "the host did not
+// project outcomes", and the webview falls back to the existing V1 flat
+// `toolCalls` display.
+// =========================================================================
+
+describe("ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes", () => {
+	it("TOO01: three starts, one success, one failure, one pending — the projection is exact", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-2")
+		t.recordToolStartedWithId("call-3")
+		t.recordToolOutcome("call-1", "succeeded")
+		t.recordToolOutcome("call-2", "failed")
+		const snap = t.get()
+		expect(snap?.toolCalls).toBe(3)
+		expect(snap?.outcomes).toEqual({
+			total: 3,
+			succeeded: 1,
+			failed: 1,
+			pending: 1,
+			controlPlane: 0,
+			unknown: 0,
+		})
+	})
+
+	it("TOO02: a control_plane outcome is neither succeeded nor failed", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "control_plane")
+		const snap = t.get()
+		expect(snap?.outcomes?.succeeded).toBe(0)
+		expect(snap?.outcomes?.failed).toBe(0)
+		expect(snap?.outcomes?.controlPlane).toBe(1)
+		expect(snap?.outcomes?.pending).toBe(0)
+		expect(snap?.outcomes?.total).toBe(1)
+	})
+
+	it("TOO03: an unknown outcome kind is counted as unknown, never as succeeded/failed", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "not_a_real_kind" as never)
+		const snap = t.get()
+		expect(snap?.outcomes?.succeeded).toBe(0)
+		expect(snap?.outcomes?.failed).toBe(0)
+		expect(snap?.outcomes?.unknown).toBe(1)
+		expect(snap?.outcomes?.pending).toBe(0)
+	})
+
+	it("TOO04: conservation — outcomes.total is conserved against toolCalls", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		for (const id of ["a", "b", "c", "d"]) {
+			t.recordToolStartedWithId(id)
+		}
+		t.recordToolOutcome("a", "succeeded")
+		t.recordToolOutcome("b", "failed")
+		t.recordToolOutcome("c", "control_plane")
+		const snap = t.get()
+		expect(snap?.outcomes?.total).toBe(snap?.toolCalls)
+		const bucketSum =
+			(snap?.outcomes?.succeeded ?? 0) +
+			(snap?.outcomes?.failed ?? 0) +
+			(snap?.outcomes?.pending ?? 0) +
+			(snap?.outcomes?.controlPlane ?? 0) +
+			(snap?.outcomes?.unknown ?? 0)
+		expect(bucketSum).toBe(snap?.outcomes?.total)
+	})
+
+	it("TOO05: the projection is ABSENT until at least one tool start is observed", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		expect(t.get()?.outcomes).toBeUndefined()
+		t.recordToolStartedWithId("call-1")
+		expect(t.get()?.outcomes).toBeDefined()
+	})
+
+	it("TOO06: an outcome for an UNKNOWN tool-call id is ignored (no fabrication)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-not-started", "succeeded")
+		const snap = t.get()
+		expect(snap?.outcomes?.succeeded).toBe(0)
+		expect(snap?.outcomes?.pending).toBe(1)
+		expect(snap?.outcomes?.total).toBe(1)
+	})
+
+	it("TOO07: a repeated outcome for the same tool-call id does not double-count", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "succeeded")
+		t.recordToolOutcome("call-1", "succeeded")
+		const snap = t.get()
+		expect(snap?.outcomes?.succeeded).toBe(1)
+		expect(snap?.outcomes?.total).toBe(1)
+	})
+
+	it("TOO08: a new task identity resets the outcome projection", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "succeeded")
+		expect(t.get()?.outcomes?.succeeded).toBe(1)
+		t.startTask("task-b")
+		expect(t.get()?.outcomes).toBeUndefined()
+		expect(t.get()?.toolCalls).toBe(0)
+	})
+
+	it("TOO09: the outcome projection does NOT perturb the mechanism conservation invariant", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithName("editor")
+		const before = t.get()
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "succeeded")
+		const after = t.get()
+		expect(after?.mechanism?.total).toBe(after?.toolCalls)
+		expect(after?.toolCalls).toBe((before?.toolCalls ?? 0) + 1)
+	})
+
+	it("TOO10: outcomes before startTask are dropped (no unowned-task fabrication)", () => {
+		const t = new TaskTelemetryTracker()
+		t.recordToolOutcome("call-1", "succeeded")
+		expect(t.get()).toBeUndefined()
+	})
+
+	it("TOO11: clear() wipes the outcome projection", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "succeeded")
+		t.clear()
+		expect(t.get()).toBeUndefined()
+	})
+
+	it("TOO12: a tool start WITHOUT an authoritative identity stays pending and is never fabricated", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId(undefined)
+		const snap = t.get()
+		expect(snap?.toolCalls).toBe(1)
+		expect(snap?.outcomes?.total).toBe(1)
+		expect(snap?.outcomes?.pending).toBe(1)
+		expect(snap?.outcomes?.succeeded).toBe(0)
+		expect(snap?.outcomes?.failed).toBe(0)
+	})
+
+	it("TOO13: outcomes arriving OUT OF ORDER are correlated by id, never by position", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-2")
+		t.recordToolStartedWithId("call-3")
+		// Deliberately reversed arrival order.
+		t.recordToolOutcome("call-3", "failed")
+		t.recordToolOutcome("call-1", "succeeded")
+		t.recordToolOutcome("call-2", "control_plane")
+		const snap = t.get()
+		expect(snap?.outcomes).toEqual({
+			total: 3,
+			succeeded: 1,
+			failed: 1,
+			pending: 0,
+			controlPlane: 1,
+			unknown: 0,
+		})
+	})
+
+	it("TOO14: a DUPLICATE tool start for the same id does not create a second record", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "succeeded")
+		const snap = t.get()
+		expect(snap?.outcomes?.total).toBe(1)
+		expect(snap?.outcomes?.succeeded).toBe(1)
+		expect(snap?.outcomes?.pending).toBe(0)
+	})
+
+	it("TOO15: the FIRST authoritative outcome wins when two conflicting outcomes arrive", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolOutcome("call-1", "failed")
+		t.recordToolOutcome("call-1", "succeeded")
+		const snap = t.get()
+		expect(snap?.outcomes?.failed).toBe(1)
+		expect(snap?.outcomes?.succeeded).toBe(0)
+		expect(snap?.outcomes?.total).toBe(1)
+	})
+
+	it("TOO16: the runtime spellings (success/failure) and the wire spellings agree", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId("call-2")
+		t.recordToolOutcome("call-1", "success")
+		t.recordToolOutcome("call-2", "failure")
+		const snap = t.get()
+		expect(snap?.outcomes?.succeeded).toBe(1)
+		expect(snap?.outcomes?.failed).toBe(1)
+	})
+
+	it("TOO17: an EMPTY tool-call id is treated as no identity (pending, never fabricated)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("")
+		t.recordToolOutcome("", "succeeded")
+		const snap = t.get()
+		expect(snap?.outcomes?.total).toBe(1)
+		expect(snap?.outcomes?.pending).toBe(1)
+		expect(snap?.outcomes?.succeeded).toBe(0)
+	})
+
+	it("TOO18: conservation holds with a MIX of identified and unidentified starts", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithId("call-1")
+		t.recordToolStartedWithId(undefined)
+		t.recordToolStartedWithId("call-3")
+		t.recordToolOutcome("call-1", "succeeded")
+		t.recordToolOutcome("call-3", "control_plane")
+		const snap = t.get()
+		expect(snap?.outcomes?.total).toBe(snap?.toolCalls)
+		expect(snap?.outcomes?.total).toBe(3)
+		expect(snap?.outcomes?.pending).toBe(1)
+	})
+})

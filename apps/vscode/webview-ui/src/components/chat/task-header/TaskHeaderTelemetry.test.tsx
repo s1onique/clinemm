@@ -10,7 +10,7 @@
  *     tool failures).
  *   - Tooltip for tool count corrected.
  */
-import type { TaskHeaderTelemetryStrip, TurnState } from "@shared/ExtensionMessage"
+import type { TaskHeaderTelemetryStrip, ToolOutcomeSummary, TurnState } from "@shared/ExtensionMessage"
 import { act, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import TaskHeaderTelemetry from "./TaskHeaderTelemetry"
@@ -774,5 +774,153 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			const style = el.getAttribute("style") ?? ""
 			expect(style).toMatch(/--vscode-errorForeground/)
 		})
+	})
+})
+
+// =========================================================================
+// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01
+//
+// The tool-outcome projection is OPTIONAL and VALIDATED at the wire
+// boundary. When it is absent or invalid, the strip renders exactly
+// the V1 flat `🔧 N` display — it never renders a partially
+// trustworthy breakdown.
+// =========================================================================
+
+describe("ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskHeaderTelemetry", () => {
+	const outcomeTelemetry = (outcomes: ToolOutcomeSummary | undefined, toolCalls = 10): TaskHeaderTelemetryStrip =>
+		telemetry({
+			toolCalls,
+			...(outcomes !== undefined ? { outcomes } : {}),
+		})
+
+	it("TOO-UI-01: renders the outcome breakdown when the projection is valid", () => {
+		render(
+			<TaskHeaderTelemetry
+				telemetry={outcomeTelemetry({
+					total: 10,
+					succeeded: 6,
+					failed: 2,
+					pending: 1,
+					controlPlane: 1,
+					unknown: 0,
+				})}
+				turnState={ts("streaming")}
+			/>,
+		)
+		expect(screen.getByTestId("task-header-tool-outcomes")).toBeTruthy()
+		expect(screen.getByTestId("task-header-outcome-succeeded").textContent).toContain("6")
+		expect(screen.getByTestId("task-header-outcome-failed").textContent).toContain("2")
+		expect(screen.getByTestId("task-header-outcome-pending").textContent).toContain("1")
+		expect(screen.getByTestId("task-header-outcome-controlPlane").textContent).toContain("1")
+		// A zero bucket is hidden.
+		expect(screen.queryByTestId("task-header-outcome-unknown")).toBeNull()
+	})
+
+	it("TOO-UI-02: an ABSENT projection renders the V1 flat display with no outcome chip", () => {
+		render(<TaskHeaderTelemetry telemetry={outcomeTelemetry(undefined)} turnState={ts("streaming")} />)
+		expect(screen.queryByTestId("task-header-tool-outcomes")).toBeNull()
+		expect(screen.getByTestId("task-header-tool-count").textContent).toContain("10")
+	})
+
+	it("TOO-UI-03: a NON-CONSERVING projection falls back to the V1 flat display", () => {
+		render(
+			<TaskHeaderTelemetry
+				telemetry={outcomeTelemetry({
+					total: 10,
+					succeeded: 6,
+					failed: 2,
+					pending: 1,
+					controlPlane: 0,
+					unknown: 0,
+				})}
+				turnState={ts("streaming")}
+			/>,
+		)
+		expect(screen.queryByTestId("task-header-tool-outcomes")).toBeNull()
+		expect(screen.getByTestId("task-header-tool-count").textContent).toContain("10")
+	})
+
+	it("TOO-UI-04: a projection whose total disagrees with toolCalls falls back to the V1 flat display", () => {
+		render(
+			<TaskHeaderTelemetry
+				telemetry={outcomeTelemetry(
+					{
+						total: 9,
+						succeeded: 6,
+						failed: 2,
+						pending: 1,
+						controlPlane: 0,
+						unknown: 0,
+					},
+					10,
+				)}
+				turnState={ts("streaming")}
+			/>,
+		)
+		expect(screen.queryByTestId("task-header-tool-outcomes")).toBeNull()
+	})
+
+	it("TOO-UI-05: a MALFORMED projection falls back to the V1 flat display", () => {
+		render(
+			<TaskHeaderTelemetry
+				telemetry={outcomeTelemetry({
+					total: 10,
+					succeeded: Number.NaN,
+					failed: 2,
+					pending: 1,
+					controlPlane: 0,
+					unknown: 0,
+				})}
+				turnState={ts("streaming")}
+			/>,
+		)
+		expect(screen.queryByTestId("task-header-tool-outcomes")).toBeNull()
+		expect(screen.getByTestId("task-header-tool-count").textContent).toContain("10")
+	})
+
+	it("TOO-UI-06: a control-plane-only projection renders the blocked bucket and no success/failure chips", () => {
+		render(
+			<TaskHeaderTelemetry
+				telemetry={outcomeTelemetry(
+					{
+						total: 3,
+						succeeded: 0,
+						failed: 0,
+						pending: 0,
+						controlPlane: 3,
+						unknown: 0,
+					},
+					3,
+				)}
+				turnState={ts("streaming")}
+			/>,
+		)
+		expect(screen.getByTestId("task-header-outcome-controlPlane").textContent).toContain("3")
+		expect(screen.queryByTestId("task-header-outcome-succeeded")).toBeNull()
+		expect(screen.queryByTestId("task-header-outcome-failed")).toBeNull()
+	})
+
+	it("TOO-UI-07: the outcome breakdown is INDEPENDENT of the mechanism breakdown", () => {
+		render(
+			<TaskHeaderTelemetry
+				telemetry={telemetry({
+					toolCalls: 4,
+					mechanism: { total: 4, edit: 2, command: 1, read: 1, search: 0, mcp: 0, other: 0 },
+					outcomes: {
+						total: 4,
+						succeeded: 3,
+						failed: 0,
+						pending: 0,
+						controlPlane: 1,
+						unknown: 0,
+					},
+				})}
+				turnState={ts("streaming")}
+			/>,
+		)
+		expect(screen.getByTestId("task-header-mechanism-total")).toBeTruthy()
+		expect(screen.getByTestId("task-header-tool-outcomes")).toBeTruthy()
+		expect(screen.getByTestId("task-header-outcome-succeeded").textContent).toContain("3")
+		expect(screen.getByTestId("task-header-outcome-controlPlane").textContent).toContain("1")
 	})
 })

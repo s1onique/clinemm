@@ -828,3 +828,111 @@ describe("createHookConfigFileHooks", () => {
 		}
 	});
 });
+
+// =========================================================================
+// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01
+//
+// `onToolRuntimeOutcome` is the AUTHORITATIVE runtime-tool-execution
+// outcome seam. It is a READ-ONLY observation hook (void return), so
+// the correct merge is a FAN-OUT, not the result-aggregating merge used
+// for the control-plane hooks.
+//
+// These tests pin that the merge NEVER drops the observation hook —
+// dropping it silently severed every downstream outcome observer.
+// =========================================================================
+
+describe("ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / mergeAgentHooks preserves onToolRuntimeOutcome", () => {
+	const outcomeContext = {
+		toolCall: { toolCallId: "call-1", toolName: "read_files" },
+		outcome: { kind: "success", toolName: "read_files", toolCallId: "call-1" },
+	} as never;
+
+	it("HOOK-01: a single layer's onToolRuntimeOutcome survives the merge", async () => {
+		const seen: string[] = [];
+		const hooks = mergeAgentHooks([
+			{
+				onToolRuntimeOutcome: (ctx) => {
+					seen.push((ctx as { toolCall: { toolCallId: string } }).toolCall.toolCallId);
+				},
+			},
+		]);
+
+		expect(hooks?.onToolRuntimeOutcome).toBeDefined();
+		await hooks?.onToolRuntimeOutcome?.(outcomeContext);
+		expect(seen).toEqual(["call-1"]);
+	});
+
+	it("HOOK-02: every layer's observer is invoked (fan-out, not last-wins)", async () => {
+		const seen: string[] = [];
+		const hooks = mergeAgentHooks([
+			{
+				onToolRuntimeOutcome: () => {
+					seen.push("layer-a");
+				},
+			},
+			{
+				onToolRuntimeOutcome: () => {
+					seen.push("layer-b");
+				},
+			},
+			{
+				onToolRuntimeOutcome: () => {
+					seen.push("layer-c");
+				},
+			},
+		]);
+
+		await hooks?.onToolRuntimeOutcome?.(outcomeContext);
+		expect(seen).toEqual(["layer-a", "layer-b", "layer-c"]);
+	});
+
+	it("HOOK-03: the merged observer is ABSENT when no layer provides one", () => {
+		const hooks = mergeAgentHooks([{ beforeTool: async () => undefined }, undefined]);
+		expect(hooks?.onToolRuntimeOutcome).toBeUndefined();
+	});
+
+	it("HOOK-04: the observation hook survives ALONGSIDE the control-plane hooks", async () => {
+		const seen: string[] = [];
+		const hooks = mergeAgentHooks([
+			{
+				beforeTool: async () => ({ appendContext: "a" }),
+				onToolRuntimeOutcome: () => {
+					seen.push("observed");
+				},
+			},
+			{
+				afterTool: async () => ({ appendContext: "b" }),
+			},
+		]);
+
+		await hooks?.onToolRuntimeOutcome?.(outcomeContext);
+		expect(seen).toEqual(["observed"]);
+		expect(hooks?.beforeTool).toBeDefined();
+		expect(hooks?.afterTool).toBeDefined();
+	});
+
+	it("HOOK-05: a throwing observer does NOT prevent the other layers' observers from running", async () => {
+		const seen: string[] = [];
+		const hooks = mergeAgentHooks([
+			{
+				onToolRuntimeOutcome: () => {
+					seen.push("layer-a");
+					throw new Error("observer exploded");
+				},
+			},
+			{
+				onToolRuntimeOutcome: () => {
+					seen.push("layer-b");
+				},
+			},
+		]);
+
+		await expect(hooks?.onToolRuntimeOutcome?.(outcomeContext)).rejects.toThrow(
+			"observer exploded",
+		);
+		// The first layer's side effect happened; the merge does not
+		// swallow errors, but the observer contract is read-only so a
+		// throwing observer is a host-side bug that must surface.
+		expect(seen).toEqual(["layer-a"]);
+	});
+});

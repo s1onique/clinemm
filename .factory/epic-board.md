@@ -29940,3 +29940,142 @@ performed, so the closure is `PASS_STRUCTURAL_ONLY`, NOT `PASS_LIVE`.
   the hub transport forwards the discriminator.
 
 No Elm kernel, no protocol, no webview reducer, no schema.
+
+# ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 — PASS_STRUCTURAL_ONLY — 2026-10-31
+
+## Verdict
+
+`PASS_STRUCTURAL_ONLY`. The OPTIONAL TaskHeader projection of AUTHORITATIVE
+runtime tool outcomes (`succeeded` / `failed` / `pending` / `unknown` plus a
+SEPARATE `controlPlane` bucket) is implemented, wired end-to-end, and covered
+by executable witnesses. **Live UI acceptance was NOT executed**, so this is
+NOT `PASS_LIVE`.
+
+## What this ACT adds (and what it deliberately does NOT change)
+
+An OPTIONAL `outcomes` field on the existing `TaskHeaderTelemetryStrip` wire
+type. Mechanism counts and tool-execution behaviour are UNCHANGED.
+
+- The authority for `succeeded` / `failed` is the runtime's
+  `onToolRuntimeOutcome` hook — the `ToolRuntimeOutcome` produced at the
+  runtime tool-execution boundary. This is NOT shell subprocess exit status.
+- `control_plane` (host DENY, user rejection, runtime skip/abort) is a
+  SEPARATE bucket. A pre-execution denial is NEITHER a success NOR a failure,
+  and the wire type, the tracker, the validator and the rendering all keep it
+  separate.
+- `pending` = a tool start was observed but no authoritative outcome has
+  arrived yet.
+- `unknown` = an outcome whose kind could not be classified. Counted
+  conservatively; never folded into `succeeded` / `failed`.
+- Correlation is **exclusively by `toolCallId`**. Chronological / positional
+  fallback is FORBIDDEN — parallel tool batches complete out of order.
+
+## Conservation
+
+```
+total === succeeded + failed + pending + controlPlane + unknown
+total === telemetry.toolCalls
+```
+
+The host holds EXACTLY ONE record per observed tool start, so `total ===
+toolCalls` holds BY CONSTRUCTION, not by coincidence. The webview
+RE-CHECKS both invariants (`isUsableOutcomeProjection`) before rendering and
+falls back to the existing V1 flat `🔧 N` display when the projection is
+ABSENT or INVALID. The webview NEVER infers, repairs, or partially renders a
+breakdown.
+
+## The two chokepoints that were silently dropping `onToolRuntimeOutcome`
+
+This was the load-bearing discovery of the ACT. The authoritative outcome hook
+was being DROPPED by two SDK hook merges, severing every downstream observer
+before it could ever fire:
+
+1. `sdk/packages/core/src/hooks/hook-file-hooks.ts` → `mergeAgentHooks`.
+   `mergeHookFunction` only knows how to aggregate RESULT-BEARING hooks
+   (`beforeTool` / `afterTool` / …). `onToolRuntimeOutcome` is a VOID-return
+   READ-ONLY observation hook, so the merge dropped it. Fixed with a new
+   `mergeObservationHook` FAN-OUT (every layer's observer is invoked, in
+   layer order).
+2. `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts`
+   → `mergeRuntimeHooks`. The same omission. Fixed with an explicit fan-out.
+
+Both fixes preserve the hook's observation contract: it never mutates the
+outcome and never influences execution.
+
+## The double-count hazard that was avoided
+
+`tool-started` fires for EVERY tool call that reached the executor —
+INCLUDING denied calls — while the existing `recordToolStartedWithName`
+already incremented both `toolCalls` and the mechanism bucket. Adding a
+second, id-carrying recorder on the same path would have DOUBLE-COUNTED the
+start. The production seam is therefore a single COMBINED recorder,
+`recordToolStartedWithId(toolCallId, toolName)`, which increments `toolCalls`
+AND the mechanism bucket exactly once AND registers the correlation anchor.
+`WIRE-06` pins that the name-only recorder is NOT also called on that path.
+
+## Test results
+
+| Suite | Result |
+| --- | --- |
+| Tracker + end-to-end wiring (`apps/vscode/src/sdk`) | **90/90 PASS** |
+| SDK hooks + orchestrator (`sdk/packages/core`) | **89 PASS / 3 FAIL — PRE-EXISTING** |
+| Webview task-header family | **176/176 PASS** |
+| `bun run check-types` (apps/vscode) | **PASS** |
+| `bun run build:sdk` | **PASS** |
+| `bun run build:webview` | **PASS** |
+
+The tracker suite went **11 RED → 11 GREEN** on a genuine RED
+(`TypeError: t.recordToolStartedWithId is not a function` with the 64
+pre-existing tests passing). 7 further adversarial tracker tests, 8 wiring
+tests, 8 webview validator tests, 7 webview rendering tests, 5 SDK hook-merge
+tests and 3 orchestrator-merge tests were added on top.
+
+## No-regression measurement
+
+The `src/sdk/` suite was measured BEFORE and AFTER by stashing ONLY this
+ACT's paths and diffing the sorted `FAIL` lines:
+
+```text
+ADDED failures (regressions): 0
+REMOVED failures (fixed):     0
+IDENTICAL SETS:                True
+```
+
+(the sorted `FAIL` sets were 496 lines each with an EMPTY diff).
+
+## The environment limitation is recorded, not masked
+
+No VSIX was built or installed and NO LIVE re-run of the Task Header was
+performed, so the closure is `PASS_STRUCTURAL_ONLY`, NOT `PASS_LIVE`. The
+live acceptance remains the outstanding obligation.
+
+## Evidence
+
+- `.factory/evidence/ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01/`
+  (`00-red-tracker.txt`, `01-green-tracker-and-wiring.txt`,
+  `02-green-sdk-hooks-and-orchestrator.txt`, `03-green-webview.txt`,
+  `04-summary.md`)
+
+## Production changes
+
+- `apps/vscode/src/sdk/task-telemetry-tracker.ts` — `ToolOutcomeKind`,
+  `classifyToolOutcomeKind`, `ToolOutcomeRecord`, `recordToolStartedWithId`,
+  `recordToolOutcome`, `buildOutcomeSummary`, the optional `outcomes` wire
+  field, and the task-reset / clear semantics.
+- `apps/vscode/src/sdk/sdk-session-config-builder.ts` — attaches the
+  read-only `onToolRuntimeOutcome` observer to the session hook bag.
+- `apps/vscode/src/sdk/SdkController.ts` — records the tool start WITH its
+  authoritative id, and correlates the runtime outcome BY id onto the tracker.
+- `apps/vscode/src/shared/ExtensionMessage.ts` — the `ToolOutcomeSummary`
+  wire type and the optional `outcomes` field.
+- `sdk/packages/core/src/hooks/hook-file-hooks.ts` — `mergeObservationHook`
+  fan-out (chokepoint 1).
+- `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts`
+  — `mergeRuntimeHooks` fan-out (chokepoint 2).
+- `apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts`
+  — `isUsableOutcomeProjection` wire-boundary validator.
+- `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`
+  — the conservative outcome rendering with the V1 flat fallback.
+
+No Elm kernel, no protocol, no webview reducer, no schema change to the
+mechanism projection.

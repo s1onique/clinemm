@@ -2676,3 +2676,84 @@ describe("SessionRuntime auth retry", () => {
 		expect(result.finishReason).toBe("error");
 	});
 });
+
+// =========================================================================
+// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01
+//
+// `onToolRuntimeOutcome` is the AUTHORITATIVE runtime-tool-execution
+// outcome seam. `mergeRuntimeHooks` is one of the two chokepoints that
+// used to DROP it, silently severing every downstream outcome observer.
+//
+// These tests pin that the orchestrator's runtime hook bag preserves
+// the observation hook (and fans it out to every layer).
+// =========================================================================
+
+describe("ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / SessionRuntime preserves onToolRuntimeOutcome", () => {
+	const outcomeContext = {
+		toolCall: { toolCallId: "call-1", toolName: "read_files" },
+		outcome: { kind: "success", toolName: "read_files", toolCallId: "call-1" },
+	} as never;
+
+	function runtimeHooksOf(
+		config: Partial<AgentConfig>,
+		extensions?: AgentExtension[],
+	): AgentRuntimeConfig["hooks"] {
+		const session = new SessionRuntime(
+			makeAgentConfig({ extensions, ...config }),
+			{} as SessionRuntimeOrchestratorDeps,
+		);
+		return (
+			session as unknown as {
+				createRuntimeHooks(): AgentRuntimeConfig["hooks"];
+			}
+		).createRuntimeHooks();
+	}
+
+	it("ORCH-01: the config-level onToolRuntimeOutcome survives createRuntimeHooks", async () => {
+		const seen: string[] = [];
+		const hooks = runtimeHooksOf({
+			hooks: {
+				onToolRuntimeOutcome: (ctx) => {
+					seen.push(
+						(ctx as { toolCall: { toolCallId: string } }).toolCall.toolCallId,
+					);
+				},
+			},
+		});
+
+		expect(hooks?.onToolRuntimeOutcome).toBeDefined();
+		await hooks?.onToolRuntimeOutcome?.(outcomeContext);
+		expect(seen).toEqual(["call-1"]);
+	});
+
+	it("ORCH-02: an extension-level onToolRuntimeOutcome ALSO survives (fan-out)", async () => {
+		const seen: string[] = [];
+		const extension: AgentExtension = {
+			name: "test.outcome-observer",
+			manifest: { capabilities: ["hooks"] },
+			hooks: {
+				onToolRuntimeOutcome: () => {
+					seen.push("extension");
+				},
+			},
+		};
+		const hooks = runtimeHooksOf(
+			{
+				hooks: {
+					onToolRuntimeOutcome: () => {
+						seen.push("config");
+					},
+				},
+			},
+			[extension],
+		);
+
+		await hooks?.onToolRuntimeOutcome?.(outcomeContext);
+		expect(seen).toEqual(["config", "extension"]);
+	});
+
+	it("ORCH-03: the merged observer is ABSENT when no layer provides one", () => {
+		const hooks = runtimeHooksOf({});
+		expect(hooks?.onToolRuntimeOutcome).toBeUndefined();
+	});
+});

@@ -1,0 +1,25 @@
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO01: three starts, one success, one failure, one pending — the projection is exact
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO02: a control_plane outcome is neither succeeded nor failed
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO03: an unknown outcome kind is counted as unknown, never as succeeded/failed
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO04: conservation — outcomes.total is conserved against toolCalls
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO05: the projection is ABSENT until at least one tool start is observed
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO06: an outcome for an UNKNOWN tool-call id is ignored (no fabrication)
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO07: a repeated outcome for the same tool-call id does not double-count
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO08: a new task identity resets the outcome projection
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO09: the outcome projection does NOT perturb the mechanism conservation invariant
+TypeError: t.recordToolStartedWithId is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO10: outcomes before startTask are dropped (no unowned-task fabrication)
+TypeError: t.recordToolOutcome is not a function
+ FAIL  src/sdk/task-telemetry-tracker.test.ts > ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01 / TaskTelemetryTracker tool outcomes > TOO11: clear() wipes the outcome projection
+TypeError: t.recordToolStartedWithId is not a function
+ Test Files  1 failed (1)
+      Tests  11 failed | 64 passed (75)

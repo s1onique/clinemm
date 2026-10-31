@@ -1,0 +1,88 @@
+(node:29706) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm.tmp1/sdk/packages/core
+
+(node:29706) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29706) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/runtime/orchestration/session-runtime-orchestrator.test.ts (65 tests) 92ms
+ ❯ src/hooks/hook-file-hooks.test.ts (28 tests | 3 failed | 1 skipped) 5923ms
+     ✓ ignores example hook files 6ms
+     ✓ executes extensionless legacy hook files via bash fallback 17ms
+     ✓ adapts file hooks into an AgentExtension 14ms
+     ✓ honors shebang interpreter when present 20ms
+     ✓ parses review control from hook output 111ms
+     ✓ executes python hook files 99ms
+     ✓ returns appendContext from legacy contextModification output 102ms
+     ✓ does not inject context when the hook cancels 102ms
+     ✓ truncates oversized hook context 94ms
+     ✓ collects PostToolUse context and returns it from afterTool 93ms
+     ✓ honors PostToolUse cancel with the hook's error message as reason 103ms
+     ✓ prefers errorMessage over context for a cancelling hook's reason 94ms
+     ✓ falls back to context for the reason when errorMessage is blank 106ms
+     ✓ keeps another hook's context out of a cancelling hook's reason 108ms
+     ✓ concatenates appendContext across merged hook layers 1ms
+     ✓ falls back from py -3 to python when the Windows launcher is missing 0ms
+     ✓ does not rewrite python launch commands when fallback conditions are not met 0ms
+     ↓ executes PowerShell hook files on Windows
+     × maps TaskError hook files to agent_error stop events 1618ms
+     ✓ writes audit tool timing and completed turn payloads 8ms
+     ✓ merges before-model controls across hook layers 0ms
+     × dispatches agent_start and prompt_submit exactly once when both are configured 1633ms
+     × returns hooks and dispatches abort shutdown when only SessionShutdown is configured 1584ms
+     ✓ HOOK-01: a single layer's onToolRuntimeOutcome survives the merge 0ms
+     ✓ HOOK-02: every layer's observer is invoked (fan-out, not last-wins) 0ms
+     ✓ HOOK-03: the merged observer is ABSENT when no layer provides one 0ms
+     ✓ HOOK-04: the observation hook survives ALONGSIDE the control-plane hooks 0ms
+     ✓ HOOK-05: a throwing observer does NOT prevent the other layers' observers from running 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/hooks/hook-file-hooks.test.ts > createHookConfigFileHooks > maps TaskError hook files to agent_error stop events
+Error: ENOENT: no such file or directory, open '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm.tmp1/.tmp/hooks-task-error-1793405238643.json'
+ ❯ waitForFile src/hooks/hook-file-hooks.test.ts:26:11
+     24|  for (;;) {
+     25|   try {
+     26|    return await readFile(filePath, "utf8");
+       |           ^
+     27|   } catch (error) {
+     28|    const code =
+ ❯ src/hooks/hook-file-hooks.test.ts:631:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/hooks/hook-file-hooks.test.ts > createHookConfigFileHooks > dispatches agent_start and prompt_submit exactly once when both are configured
+Error: ENOENT: no such file or directory, open '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm.tmp1/.tmp/hooks-start-prompt-1793405240269.jsonl'
+ ❯ waitForFile src/hooks/hook-file-hooks.test.ts:26:11
+     24|  for (;;) {
+     25|   try {
+     26|    return await readFile(filePath, "utf8");
+       |           ^
+     27|   } catch (error) {
+     28|    const code =
+ ❯ waitForJsonLines src/hooks/hook-file-hooks.test.ts:47:19
+ ❯ src/hooks/hook-file-hooks.test.ts:758:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/hooks/hook-file-hooks.test.ts > createHookConfigFileHooks > returns hooks and dispatches abort shutdown when only SessionShutdown is configured
+Error: ENOENT: no such file or directory, open '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm.tmp1/.tmp/hooks-session-shutdown-1793405241903.json'
+ ❯ waitForFile src/hooks/hook-file-hooks.test.ts:26:11
+     24|  for (;;) {
+     25|   try {
+     26|    return await readFile(filePath, "utf8");
+       |           ^
+     27|   } catch (error) {
+     28|    const code =
+ ❯ src/hooks/hook-file-hooks.test.ts:814:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  3 failed | 89 passed | 1 skipped (93)
+   Start at  03:07:16
+   Duration  7.06s (transform 1.14s, setup 0ms, import 3.23s, tests 6.02s, environment 0ms)
+

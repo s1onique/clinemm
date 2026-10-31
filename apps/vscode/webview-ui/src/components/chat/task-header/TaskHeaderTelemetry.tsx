@@ -83,6 +83,7 @@ import type {
 	TaskHeaderPresentationProjection,
 	TaskHeaderTelemetryStrip,
 	ToolMechanismSummary,
+	ToolOutcomeSummary,
 	TurnState,
 } from "@shared/ExtensionMessage"
 import type { LucideIcon } from "lucide-react"
@@ -92,6 +93,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
 	formatElapsed,
 	isUsableMechanismProjection,
+	isUsableOutcomeProjection,
 	resolveElapsedDisplayMs,
 	taskHeaderPresentationStateLabel,
 } from "./taskHeaderTelemetryHelpers"
@@ -149,6 +151,38 @@ const MECHANISM_DESCRIPTORS: readonly MechanismDescriptor[] = [
 	{ key: "search", label: "search tool calls", Icon: SearchIcon, glyph: null },
 	{ key: "mcp", label: "MCP tool calls", Icon: PlugIcon, glyph: null },
 	{ key: "other", label: "unclassified tool calls", Icon: null, glyph: "?" },
+] as const
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+ *
+ * Per-outcome visual / a11y descriptor table for the OPTIONAL
+ * authoritative tool-outcome projection.
+ *
+ * The order is the canonical TaskHeader display order:
+ *
+ *   succeeded → failed → pending → controlPlane → unknown
+ *
+ * `controlPlane` is rendered as its OWN bucket — a pre-execution
+ * denial (host DENY, user rejection, runtime skip/abort) is NEITHER a
+ * success NOR a failure, and folding it into either would be a lie.
+ *
+ * `glyph` is a compact inline text symbol; `label` is the
+ * screen-reader / tooltip label fragment; `key` is the canonical
+ * `ToolOutcomeSummary` field name.
+ */
+interface OutcomeDescriptor {
+	key: keyof Omit<ToolOutcomeSummary, "total">
+	label: string
+	glyph: string
+}
+
+const OUTCOME_DESCRIPTORS: readonly OutcomeDescriptor[] = [
+	{ key: "succeeded", label: "succeeded tool calls", glyph: "✓" },
+	{ key: "failed", label: "failed tool calls", glyph: "✗" },
+	{ key: "pending", label: "tool calls still in flight", glyph: "…" },
+	{ key: "controlPlane", label: "tool calls blocked before execution", glyph: "⛔" },
+	{ key: "unknown", label: "tool calls with an unclassified outcome", glyph: "?" },
 ] as const
 
 /**
@@ -282,6 +316,30 @@ function MechanismChip({ descriptor, count }: { descriptor: MechanismDescriptor;
 	)
 }
 
+/**
+ * ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+ *
+ * Render one compact outcome chip. Glyph + count, with an explicit
+ * `aria-label` so screen readers hear `3 succeeded tool calls`
+ * rather than `check 3`.
+ */
+function OutcomeChip({ descriptor, count }: { descriptor: OutcomeDescriptor; count: number }) {
+	const testId = `task-header-outcome-${descriptor.key}`
+	const ariaLabel = `${count} ${descriptor.label}`
+	return (
+		<span
+			aria-label={ariaLabel}
+			className="inline-flex items-center gap-0.5 font-mono"
+			data-testid={testId}
+			title={ariaLabel}>
+			<span aria-hidden className="text-[0.7rem]">
+				{descriptor.glyph}
+			</span>
+			<span>{count}</span>
+		</span>
+	)
+}
+
 const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	telemetry,
 	taskHeaderPresentation,
@@ -332,6 +390,22 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	// calls: 10` against `visible: 🔧9 ✏️3 >_3 ...`).
 	const mechanism = telemetry.mechanism
 	const hasMechanismProjection = isUsableMechanismProjection(mechanism, telemetry.toolCalls)
+
+	// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+	// The OPTIONAL projection of AUTHORITATIVE runtime tool outcomes.
+	//
+	// The webview renders the outcome breakdown ONLY when the wire
+	// projection passes `isUsableOutcomeProjection` — i.e. it is
+	// present, every field is a finite non-negative integer, the
+	// bucket sum equals `total`, and `total === telemetry.toolCalls`.
+	//
+	// When the projection is ABSENT (Hub/Remote hosts, pre-observation
+	// sessions) or INVALID (malformed / non-conserving), the strip
+	// renders exactly the V1 display it rendered before this ACT —
+	// the flat `🔧 N` count. The webview NEVER infers, repairs, or
+	// partially renders an outcome breakdown.
+	const outcomes = telemetry.outcomes
+	const hasOutcomeProjection = isUsableOutcomeProjection(outcomes, telemetry.toolCalls)
 
 	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
 	// + ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
@@ -399,6 +473,27 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 					<span className="font-mono">{telemetry.toolCalls}</span>
 				</span>
 			)}
+			{hasOutcomeProjection && outcomes ? (
+				// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+				// The authoritative runtime tool-outcome breakdown. It
+				// is rendered as its OWN chip (not merged into the
+				// mechanism breakdown) because the two projections
+				// answer different questions: mechanism answers "what
+				// KIND of tool ran", outcome answers "what HAPPENED
+				// to it".
+				//
+				// `controlPlane` keeps its own glyph so a pre-execution
+				// denial is visibly neither a success nor a failure.
+				<span
+					aria-label={`Tool outcomes: ${outcomes.succeeded} succeeded, ${outcomes.failed} failed, ${outcomes.pending} in flight, ${outcomes.controlPlane} blocked before execution, ${outcomes.unknown} unclassified`}
+					className="inline-flex items-center gap-1"
+					data-testid="task-header-tool-outcomes"
+					title="Authoritative runtime tool outcomes for this task. Succeeded and failed describe runtime tool execution (not shell exit status). Blocked covers calls that never executed (host DENY, user rejection, runtime skip or abort) — those are neither successes nor failures.">
+					{OUTCOME_DESCRIPTORS.filter((d) => outcomes[d.key] > 0).map((d) => (
+						<OutcomeChip count={outcomes[d.key]} descriptor={d} key={d.key} />
+					))}
+				</span>
+			) : null}
 			{showRecovery ? (
 				<span
 					aria-label={`Recovery budget failures: ${telemetry.recoveryBudgetFailures}`}

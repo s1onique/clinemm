@@ -1604,6 +1604,28 @@ export class Controller {
 			stateManager: this.stateManager,
 			emitHookMessage: (msg) => this.messages.emitHookMessage(msg),
 			onConsecutiveMistakeLimitReached: (context) => this.interactions.handleConsecutiveMistakeLimitReached(context),
+			// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+			// Observe the AUTHORITATIVE runtime tool outcome. The
+			// runtime's `onToolRuntimeOutcome` hook fires once per tool
+			// call after the runtime produced a `ToolRuntimeOutcome` for
+			// it — this is the ONLY authority for runtime tool-execution
+			// outcomes (it is NOT shell subprocess exit status).
+			//
+			// `control_plane` outcomes (host DENY, user rejection,
+			// runtime skip/abort) are recorded in their OWN bucket: a
+			// pre-execution denial is neither a success nor a failure.
+			onToolRuntimeOutcome: (context) => {
+				const outcome = context.outcome
+				// The `control_plane` outcome carries an OPTIONAL
+				// `toolCallId`. Without one we cannot correlate it to a
+				// tool start, so it is dropped rather than attributed to
+				// an arbitrary call.
+				const toolCallId = outcome.toolCallId
+				if (!toolCallId) {
+					return
+				}
+				this.taskTelemetry.recordToolOutcome(toolCallId, outcome.kind)
+			},
 		})
 		this.diffEdits = new SdkDiffEditCoordinator({
 			getCwd: () => this.getWorkspaceRoot(),
@@ -2031,7 +2053,16 @@ export class Controller {
 			// command TEXT never reaches the classifier, by
 			// construction.
 			onToolStarted: (event) => {
-				this.taskTelemetry.recordToolStartedWithName(event.toolName)
+				// ACT-CLINEMM-TASK-HEADER-TOOL-OUTCOME-PROJECTION01:
+				// Record the tool start TOGETHER WITH its authoritative
+				// tool-call identity. `recordToolStartedWithId` is the
+				// COMBINED seam: it increments `toolCalls` AND the
+				// mechanism bucket exactly like
+				// `recordToolStartedWithName` did, so the start is never
+				// double-counted. The `toolCallId` is the correlation
+				// anchor for the authoritative runtime outcome that
+				// arrives later through `onToolRuntimeOutcome`.
+				this.taskTelemetry.recordToolStartedWithId(event.toolCallId, event.toolName)
 				// ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01
 				// CORRECTION01: the previous
 				// `observeMycToolStart(this.taskTelemetry,
@@ -2043,7 +2074,7 @@ export class Controller {
 				// `successful` made the wire read `myc 1/1` for
 				// a `myc_recall` that later errored (reviewer P1
 				// wrong-capture-boundary defect). The
-				// `recordToolStartedWithName` call above is
+				// `recordToolStartedWithId` call above is
 				// preserved — it feeds the existing
 				// `mechanism` projection (cumulative counter
 				// not tied to outcomes).
