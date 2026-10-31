@@ -29995,3 +29995,161 @@ performed, so the closure is `PASS_STRUCTURAL_ONLY`, NOT `PASS_LIVE`.
   the hub transport forwards the discriminator.
 
 No Elm kernel, no protocol, no webview reducer, no schema.
+
+```
+
+# ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01 — PASS_RECON_WITH_GAPS — 2026-10-31
+
+**Status:** CLOSED. `PASS_RECON_WITH_GAPS`.
+**ENTRY_HEAD:** `f7847712b47a6801840286c978971230e7b52bd9` (branch `main`, tree `e0391f7d07399d4c2e81adda113e3c878e974cc0`).
+**Type:** Reconnaissance + offline evidence qualification. P1 — cross-harness comparability.
+
+## What this ACT did
+
+Defined and **verified** a harness-neutral agent execution trace contract
+(`agent-trace/0.1`) against **real** ClineMM evidence, so that ClineMM and
+DeepSeek Harness can be compared on axes that mean the same thing in both.
+
+It added **no** production instrumentation, changed **no** production file, and
+did not touch the recorder, provider routing, editor semantics, or tool
+execution. The only executable additions are an **offline, read-only**
+normalizer and its focused witnesses.
+
+## The real evidence
+
+| Item | Value |
+| --- | --- |
+| Capture | `~/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/model-behavior-trace.jsonl` |
+| SHA-256 | `84f6bea329299bbb5af1a38ffef6ce4a87227c5c894c8947f32458043090a070` |
+| Records | 3 891 agent records + 1 terminal summary |
+| Truncated | no (`droppedCount: 0`) |
+| Normalization | **3 891 / 3 891**, 0 unnormalized, 0 loss, byte-deterministic |
+
+The named primary sample `model-behavior-trace(20261031-062206).jsonl` was not
+present as a separate file on disk. The capture above is the same recorder
+artifact and is real operator evidence; the substitution is recorded rather than
+concealed.
+
+## The five distinctions the contract preserves
+
+| Distinction | Status |
+| --- | --- |
+| tool invocation ≠ subprocess exit 0 | **ENFORCED** — separate `tool` / `process` families; `NEG-04` |
+| requested ≠ wire ≠ provider-reported reasoning | **ENFORCED** — three separate field groups; `REAL-03` |
+| editor application ≠ retained final delta | **ENFORCED** — separate records; `REAL-05` |
+| test exit code ≠ structured acceptance result | **ENFORCED** — `acceptance` is written only by an independent evaluator |
+| truncated ≠ complete | **ENFORCED** — `traceTruncated` on every record; `NEG-03` |
+
+## The central correlation finding
+
+ClineMM emits **two disjoint run-id namespaces** in one capture:
+`agent_runtime` (`run_<8>`) and `session_orchestrator`
+(`run_<epochMs>_<rand>`). `run_terminated` and the `model_request_*` records
+of the same run therefore do **not** share a run id. The portable contract
+carries the namespace explicitly and never joins across it.
+
+## Witnesses
+
+`apps/vscode/src/sdk/__tests__/agent-trace-contract-recon01.test.ts` —
+**12 / 12 PASS**. The five `REAL-*` witnesses executed against the **real**
+capture (not skipped); the six negative controls are explicitly `SYNTHETIC`.
+
+The blast-radius sweep (all model-behavior and comparator suites) is
+**117 / 117 PASS**.
+
+## DeepSeek mapping
+
+Pinned revision `deepseek-ai/deepseek-harness` @
+`ce7073d51254c26cd63b22a60835b8f948deb447`, consulted **read-only**. The
+repository was not cloned, modified, built, or run.
+
+- `SOURCE_VERIFIED` — the session-event vocabulary and the telemetry identity
+  model (read from the pinned source).
+- `CANDIDATE` — the request-start correspondence.
+- `UNAVAILABLE` — wire reasoning, process outcomes, retained workspace state,
+  acceptance.
+
+No DeepSeek **runtime** observation was made; every DeepSeek row is a
+source-document claim about what the code *can* emit.
+
+## The bounded gaps
+
+Ten gaps were inventoried and clustered into **three** real production
+boundaries (not ten successor ACTs). The only P0 that ClineMM itself must
+close is the **process/command completion seam** (no exit status is recorded).
+**8 of 17** manifest fields are missing from a real ClineMM capture, so a
+ClineMM↔DeepSeek comparison today is `DESCRIPTIVE`, not causal.
+
+## Successor ACTs (dependency-clustered)
+
+1. `ACT-CLINEMM-AGENT-TRACE-PROCESS-OUTCOME01` — the process seam (P0).
+2. `ACT-CLINEMM-AGENT-TRACE-MANIFEST-SNAPSHOT01` — the session-build seam.
+3. `ACT-CLINEMM-AGENT-TRACE-RUN-IDENTITY-HANDSHAKE01` — the identity handshake.
+4. `ACT-CLINEMM-DEEPSEEK-HARNESS-ADAPTER01` — the DeepSeek-side adapter.
+5. `ACT-CLINEMM-INDEPENDENT-ACCEPTANCE-EVALUATOR01` — the external evaluator.
+
+## Evidence
+
+- `docs/acts/ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01/REPORT.md`
+- `docs/acts/ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01/agent-trace-v0.1.md`
+- `docs/acts/ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01/cline-native-to-portable.md`
+- `docs/acts/ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01/evidence/real.normalized.sample.jsonl`
+- `docs/acts/ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01/evidence/real.coverage.json`
+- `apps/vscode/src/sdk/normalize-agent-trace.ts` — NEW, offline, read-only.
+- `apps/vscode/src/sdk/__tests__/agent-trace-contract-recon01.test.ts` — NEW.
+
+**No production file was modified.** The recorder implementation is unchanged.
+
+# ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01-CORR01 — PASS_CORRECTED — 2026-10-31
+
+**Status:** CLOSED. `PASS_CORRECTED`. Reopens `ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01` (verdict `HALT_PORTABLE_TRACE_CONTRACT`).
+**Starting subject tree (preserved):** `15d2e3f17a56e2ab6df97b88c65cf09aaa98efae`.
+**Scope:** the same **eight** paths as the predecessor. No production file touched.
+
+## The three P0 corrections
+
+| P0 | Defect | Correction |
+|---|---|---|
+| **P0-1** | `filterPortablePayload()` was a **deny-list** applied only at the TOP level; a forbidden key nested in an object or an array element escaped unchanged | The filter is now a **schema-aware ALLOWLIST**: a key is exported only if **explicitly permitted for its family**, the allowlist applies at **every depth**, an **unfamiliar** key does not escape, the depth is capped at 4, and the deny-list is retained as defence in depth |
+| **P0-2** | A capture with **no terminal summary** — the state an interrupted capture leaves — reported `traceComplete: true`; malformed / unrecognized lines were excluded from the decision | Completeness is now an **explicit, proven** classification: `COMPLETE` / `PARTIAL` / `INCOMPLETE` / `INVALID`, with every non-`COMPLETE` result naming its reasons. A missing, contradictory, malformed or unrecognized capture is **never** complete |
+| **P0-3** | The subject was **staged but uncommitted**; `HEAD` still reported `f7847712b` | The subject is now **committed** through the normal Git checkout on `main`; the actual `SUBJECT_HEAD` and its committed tree are recorded in the closure note |
+
+**P0-1 RED** (predecessor implementation):
+`filterPortablePayload({ metadata: { password: "example-secret" }, entries: [{ stdout: "private output" }] })`
+returned `payload.metadata.password === "example-secret"` and `payload.entries[0].stdout === "private output"`, `dropped: []`.
+
+**P0-1 GREEN**: the same probe returns `payload: {}`, `dropped: ["metadata", "entries"]`; neither secret appears in the serialized output.
+
+**P0-2 RED**: a capture with no summary reported `traceComplete: true`; a capture with one malformed line also reported `traceComplete: true`.
+
+**P0-2 GREEN**: all four cases are now explicitly non-complete, and a legitimately truncated capture is **preserved** as `PARTIAL` with its records intact.
+
+## The non-blocking findings, closed in the same correction
+
+- `privacyFilteredFields` is now **populated** — every dropped field is counted by key path.
+- The manifest count is reconciled: the contract lists **18** fields and the report now says **9 of 18** missing (the predecessor's "8 of 17" was wrong on both).
+- The tool-catalog digest is now an **HMAC keyed by the capture's own trace id** — **stable within a capture** (so the capture stays byte-reproducible) and **scoped across captures**. The coverage report publishes a one-way `toolCatalogDigestKeyId`.
+- The gates now record **actual process exit codes**; the predecessor's `echo "typecheck clean"` ran regardless of the typecheck's result.
+
+## Evidence
+
+- `apps/vscode/src/sdk/normalize-agent-trace.ts` — the fail-closed filter and the completeness assessment.
+- `apps/vscode/src/sdk/__tests__/agent-trace-contract-recon01.test.ts` — **29 / 29 PASS**, including 16 new CORR01 witnesses.
+- Blast-radius sweep: **134 / 134 PASS**, exit **0**.
+- `apps/vscode` typecheck: exit **0**, 0 diagnostic lines. Biome lint: exit **0**.
+- Byte-determinism: two independent adapter processes produce **byte-identical** normalized and coverage files.
+- Privacy gate: **0 violations** across all 3 891 records.
+- Positive conservation against the real capture: **LOST NONE, GAINED NONE, VALUE DIFFS NONE** (excluding the now-scoped catalog digest).
+- The real capture still classifies as **`COMPLETE`**: validated summary, `retainedCount: 3891` matching the 3 891 observed records, `truncated: false`, zero malformed or unrecognized lines.
+- **No production-recorder change** — `git diff HEAD -- <recorder seams>` is empty.
+
+The 296 residual epic-board validator issues and the invalid historical `gate-summary.json` are **NON-BLOCKING** and were deliberately NOT investigated, per the reviewer's instruction.
+
+## Successor priority (the reviewer's re-ordering, adopted)
+
+1. Correct and commit `agent-trace/0.1` — **this ACT**.
+2. Build the **independent acceptance evaluator** and the frozen fixture manifest.
+3. Instrument DeepSeek's real seams and compare both harnesses using the same model.
+4. **Only if needed**, add in-session subprocess outcomes for time-to-RED/GREEN and command-level failures the external evaluator cannot reconstruct.
+
+The predecessor's proposal to instrument subprocess outcomes FIRST is withdrawn: the recon's own gap table shows an independent evaluator can supply authoritative test exit codes, so a ClineMM production change is **not** a prerequisite for the first meaningful comparison.

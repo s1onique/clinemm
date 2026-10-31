@@ -1,0 +1,174 @@
+{
+  "contract": "agent-trace/0.1",
+  "harness": "cline",
+  "sourceTraceId": "mbt_b784e4facea04dbe50e295b7",
+  "sourceDumpedAt": "2026-10-31T08:28:29.201Z",
+  "nativeRecordsRead": 3891,
+  "portableRecordsWritten": 3891,
+  "unnormalizedRecords": 0,
+  "byNativeEventType": {
+    "model_config": 2,
+    "compaction_diagnostics": 469,
+    "effective_model_config": 469,
+    "model_request_start": 469,
+    "model_wire_reasoning": 479,
+    "model_request_finish": 469,
+    "loop_verdict": 483,
+    "tool_start": 483,
+    "tool_finish": 483,
+    "edit_attempt": 20,
+    "edit_target_resolved": 19,
+    "edit_application": 19,
+    "edit_write_verification": 17,
+    "edit_failure": 2,
+    "compaction_completed": 1,
+    "run_terminated": 5,
+    "edit_checkpoint_observation": 2
+  },
+  "byFamily": {
+    "model": 1888,
+    "context": 470,
+    "run": 488,
+    "tool": 966,
+    "workspace": 79
+  },
+  "coverage": {
+    "run": {
+      "finishReason": "observed",
+      "durationMs": "observed",
+      "iterations": "observed",
+      "verdict": "observed",
+      "hasMessage": "observed"
+    },
+    "model": {
+      "requestedThinking": "observed",
+      "requestedReasoningEffort": "observed",
+      "reasoningEffortAdvertised": "observed",
+      "wireThinkingMode": "observed",
+      "wireOutputConfigEffort": "observed",
+      "wireOutputTokenLimit": "observed",
+      "providerReportedReasoningTokens": "observed",
+      "reasoningContentBytes": "observed",
+      "inputTokens": "observed",
+      "outputTokens": "observed",
+      "cacheReadTokens": "observed",
+      "cacheWriteTokens": "observed",
+      "requestDurationMs": "observed",
+      "finishReason": "observed",
+      "toolCallCount": "observed",
+      "toolSchemaCount": "observed",
+      "messageCount": "observed",
+      "thinkingEnabled": "observed",
+      "reasoningEffort": "observed",
+      "selectedModelId": "observed",
+      "runtimeModelId": "observed",
+      "providerConfirmedModelId": "observed"
+    },
+    "tool": {
+      "toolName": "observed",
+      "toolCallId": "observed",
+      "origin": "observed",
+      "outcome": "observed",
+      "executionInvoked": "observed",
+      "durationMs": "observed",
+      "outputSizeChars": "observed",
+      "argumentFingerprint": "observed"
+    },
+    "process": {},
+    "workspace": {
+      "operation": "observed",
+      "outcome": "observed",
+      "failureCategory": "observed",
+      "approvalOutcome": "observed",
+      "executionInvoked": "observed",
+      "noOp": "observed",
+      "requestedFileCount": "observed",
+      "mutatedFileCount": "observed",
+      "unmutatedFileCount": "observed",
+      "writeReturned": "observed",
+      "readbackAttempted": "observed",
+      "readbackMatched": "observed",
+      "fileExistsAfterWrite": "observed",
+      "observedTargetCount": "observed",
+      "targetCount": "observed",
+      "durationMs": "observed",
+      "provenance": "observed"
+    },
+    "context": {
+      "mode": "observed",
+      "strategy": "observed",
+      "requestInputTokens": "observed",
+      "maxInputTokens": "observed",
+      "effectiveMaxInputTokens": "observed",
+      "requestTriggerTokens": "observed",
+      "userContextCeiling": "observed",
+      "inputBudgetSource": "observed",
+      "shouldCompact": "observed",
+      "usedFallbackBudget": "observed",
+      "tokensBefore": "observed",
+      "tokensAfter": "observed",
+      "tokensSaved": "observed",
+      "messagesBefore": "observed",
+      "messagesAfter": "observed"
+    },
+    "acceptance": {}
+  },
+  "truncation": {
+    "truncated": false,
+    "droppedCount": 0,
+    "totalRecorded": 3891,
+    "retainedCount": 3891,
+    "retainedBytes": 2135187
+  },
+  "unjoinableIdentities": [
+    {
+      "kind": "wire_request_without_request_id",
+      "detail": "model_wire_reasoning records that carry no requestId; they CANNOT be joined to an agent-side model request. The adapter does NOT join them by timestamp or by proximity to the neighbouring model_request_start.",
+      "count": 10
+    },
+    {
+      "kind": "wire_request_without_run_id",
+      "detail": "model_wire_reasoning records that carry no runId; they cannot be attributed to a ClineMM run.",
+      "count": 10
+    },
+    {
+      "kind": "record_without_run_id",
+      "detail": "model_config records that carry no runId; they are correlated by their other identities only.",
+      "count": 2
+    },
+    {
+      "kind": "record_without_run_id",
+      "detail": "compaction_diagnostics records that carry no runId; they are correlated by their other identities only.",
+      "count": 469
+    },
+    {
+      "kind": "record_without_run_id",
+      "detail": "model_wire_reasoning records that carry no runId; they are correlated by their other identities only.",
+      "count": 10
+    },
+    {
+      "kind": "record_without_run_id",
+      "detail": "compaction_completed records that carry no runId; they are correlated by their other identities only.",
+      "count": 1
+    },
+    {
+      "kind": "dual_run_id_namespace",
+      "detail": "ClineMM emits TWO disjoint run-id namespaces (agent_runtime `run_<8>` and session_orchestrator `run_<epochMs>_<rand>`). The adapter carries the namespace explicitly and never joins across namespaces.",
+      "count": 957
+    }
+  ],
+  "privacyFilteredFields": {
+    "toolNames": 471
+  },
+  "toolCatalogDigestKeyId": "k_d9a029f2",
+  "traceComplete": true,
+  "completeness": {
+    "completeness": "COMPLETE",
+    "complete": true,
+    "reasons": [],
+    "observedRecords": 3891,
+    "unparsedLines": 0,
+    "unrecognizedLines": 0,
+    "summaryPresent": true
+  }
+}
