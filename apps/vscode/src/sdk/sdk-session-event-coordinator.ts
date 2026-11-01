@@ -3406,18 +3406,16 @@ export class SdkSessionEventCoordinator {
 				// answers the question this writer needs to ask: "is the
 				// completion for this (sessionId, taskId, epoch) still
 				// HELD?" While that marker is live and identity-matched,
-				// the pending prompt being drained is the BCB's OWN
+				// the pending prompt being drained may be the BCB's OWN
 				// coalesced continuation (`enqueueCompletionContinuationIfHeld`
-				// enqueues precisely while the marker is live), NOT an
-				// independent user-initiated turn. Re-asserting `streaming`
-				// for it publishes a phase that contradicts the barrier.
+				// enqueues precisely while the marker is live).
 				//
 				// The marker is deliberately NOT cleared by this event (the
 				// existing `clearTurnOutcome()` / `setRunning(true)` /
 				// barrier-lifetime semantics are untouched), so the guard
 				// is checkable AT the seam with no new state.
 				//
-				// WHAT THIS GUARD DOES NOT DO:
+				// WHAT THIS WRITER DOES NOT DO:
 				//   - It does NOT write any terminal phase. The C10 stays
 				//     HELD; the Elm authority is never consulted here.
 				//   - It does NOT fabricate `completed`. The barrier's own
@@ -3451,12 +3449,9 @@ export class SdkSessionEventCoordinator {
 				//
 				//   The barrier identity triple answers "is the held
 				//   completion still outstanding?", NOT "whose prompt is
-				//   this?". Suppressing `streaming` for an independent
-				//   user prompt left the runtime GENUINELY RUNNING while
-				//   the committed phase stayed `resumable` — the exact
-				//   opposite of the false-Working defect this guard was
-				//   added to repair, and with no later event to correct
-				//   it (verified by the B2PO01 probe).
+				//   this?". The origin discriminator is required so an
+				//   independent user prompt is never confused with the
+				//   host-owned continuation.
 				//
 				//   The `runtimeControlKind` discriminator is the
 				//   STRUCTURAL origin bit the trusted host already
@@ -3465,7 +3460,7 @@ export class SdkSessionEventCoordinator {
 				//   the event boundary (see
 				//   `SessionPendingPromptSubmittedEvent.runtimeControlKind`).
 				//
-				//   The guard therefore requires BOTH:
+				//   The writer therefore distinguishes BOTH:
 				//     (a) the barrier still holds THIS turn's
 				//         completion (the identity triple), AND
 				//     (b) the drained prompt IS the host-owned
@@ -3484,14 +3479,28 @@ export class SdkSessionEventCoordinator {
 				if (barrierHoldsThisTurn && promptIsHostOwnedContinuation) {
 					// The held obligation is still outstanding AND the
 					// drained prompt is the BCB's OWN continuation.
-					// Publishing `streaming` here would assert ACTIVE
-					// work that the barrier says is HELD — the exact
-					// LIVE false-Working symptom. Preserve the
-					// committed phase so the authoritative projection
-					// stays truthful.
-					Logger.warn(
-						`[SdkController] pending_prompt_submitted for session ${activeSession.sessionId} arrived while the deferred-completion barrier still holds this turn's completion; NOT re-asserting 'streaming' (PTWCR01C01 BCB-hold guard)`,
+					//
+					// ACT-CLINEMM-PREMATURE-PAUSED-BCB-REPRO-REPAIR01:
+					// The BCB hold's `resumable` is the truthful state
+					// BEFORE the automatic continuation starts. Once the
+					// host-owned continuation is submitted, however, the
+					// SAME session owns active forward progress. Leaving
+					// the committed phase at `resumable` projects the
+					// user-facing "Resume Task" button while that automatic
+					// work is active, which asks the user to resume work
+					// the host is already doing for them.
+					//
+					// Reseed the phase at the existing continuation-entry
+					// seam. This is NOT a terminal completion decision: the
+					// BCB marker remains live, the Elm completion authority
+					// is not consulted, and NO C10 is emitted. A later
+					// barrier release still owns the terminal phase.
+					this.options.setTurnPhase?.(
+						PROVIDER_FAILURE_PHASE.STREAMING,
+						undefined,
+						"session-event-pending-prompt-submitted",
 					)
+					this.bcbHoldResumablePublished = false
 				} else {
 					// EITHER the barrier does not hold this turn's
 					// completion, OR the drained prompt is NOT the

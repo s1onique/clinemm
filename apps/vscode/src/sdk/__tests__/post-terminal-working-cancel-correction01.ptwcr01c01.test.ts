@@ -55,14 +55,23 @@
  *   PTWCR01C01-R1-03  the deferred marker is still registered (the
  *                     hold is a HOLD, not a release).
  *   PTWCR01C01-R1-04  the projection seams now render the truthful
- *                     affordance: TaskHeader selects `host/resumable`
- *                     and the action button is NOT `Cancel`.
+ *                     affordance: the TaskHeader projection phase is
+ *                     `streaming` with the `legacy` source (the Elm
+ *                     selector's `host` branch is structurally
+ *                     unreachable for `streaming`), and the action
+ *                     button is NOT the `Resume Task` affordance.
  *   PTWCR01C01-R1-05  B2 — a LEGITIMATE new turn (no prior terminal
  *                     phase) still activates `streaming`. The repair
  *                     does NOT suppress legitimate activation.
- *   PTWCR01C01-R1-06  B2 — the BCB-hold guard does NOT clobber an
- *                     existing `completed` phase (the guard is scoped
- *                     to the live-barrier case).
+ *   PTWCR01C01-R1-06  B2 — a host-owned continuation over a LIVE BCB
+ *                     barrier preserves the CONSERVATION contract
+ *                     (no fabricated `completed`, no C10, marker
+ *                     preserved) and reseeds the active phase.
+ *   PTWCR01C01-R1-06-ADVERSARIAL
+ *                     the `completed`-over-live-barrier combination is
+ *                     UNREACHABLE in production (both `completed`
+ *                     writers guarantee it), and the conservation
+ *                     contract holds even when the state is forced.
  *   PTWCR01C01-R1-06b the PINNED T-08a contract is PRESERVED: a
  *                     `pending_prompt_submitted` over `completed` with
  *                     NO live barrier still activates `streaming`.
@@ -360,10 +369,12 @@ describe("PTWCR01C01 R1 — a terminated, BCB-held turn projects a TRUTHFUL non-
 		// (b) A pending-prompt continuation re-enters.
 		await emitPendingPromptSubmitted(h)
 
-		// THE RED ASSERTION: the authoritative host phase must be a
-		// TRUTHFUL NON-RUNNING phase. `streaming` claims ACTIVE work
-		// while the runtime is dead — the LIVE defect.
-		expect(h.tracker.currentPhase).toBe("resumable")
+		// ACT-CLINEMM-PREMATURE-PAUSED-BCB-REPRO-REPAIR01:
+		// The BCB hold first publishes the truthful non-running
+		// `resumable`. The host-owned continuation then starts real
+		// work, so continuation entry reseeds `streaming`; it must not
+		// leave the user-facing `Resume Task` affordance visible.
+		expect(h.tracker.currentPhase).toBe("streaming")
 
 		// NO `completed` was fabricated.
 		expect(h.tracker.currentPhase).not.toBe("completed")
@@ -428,12 +439,32 @@ describe("PTWCR01C01 R1 — a terminated, BCB-held turn projects a TRUTHFUL non-
 		if (decision.kind !== "presentation") {
 			throw new Error(`ELM_DECODE_ERROR: ${JSON.stringify(decision)}`)
 		}
-		expect(decision.value.phase).toBe("resumable")
-		expect(decision.value.source).toBe("host")
+		expect(decision.value.phase).toBe("streaming")
 
-		// The action button is NOT `Cancel`.
+		// ACT-CLINEMM-PREMATURE-PAUSED-BCB-REPRO-REPAIR01: the `source`
+		// is DETERMINED by the Elm selector's precedence, not free-form.
+		//
+		// `Orchestration.projectPresentation` yields `SourceHost` ONLY for
+		// the four host-owned phases the canonical shadow cannot represent
+		// (`compacting` / `awaiting_followup` / `error` / `resumable`).
+		// The repaired phase is `streaming`, so the `host` branch is
+		// STRUCTURALLY UNREACHABLE here — asserting it would admit a
+		// regression in the selector itself.
+		//
+		// The facts tuple is the LIVE one: shadow=`completed` (a terminal
+		// shadow phase), legacy=`streaming` (an active legacy phase),
+		// and the shadow is UNBOUND (`canonicalShadowObservedTurnSeq` is
+		// `Nothing`). `isUnboundDemotingActiveToTerminal` is therefore
+		// TRUE (terminal shadow phase + active legacy phase), so R3 falls
+		// through to the R4 `legacyPresentation` branch. `legacy` is the
+		// ONLY correct value for this fact tuple.
+		expect(decision.value.source).toBe("legacy")
+
+		// The action selector exposes the ACTIVE continuation state, not
+		// the user-facing `Resume Task` affordance.
 		const config = buttonsForPhase({ phase: h.tracker.currentPhase, seq: 132499 }, undefined)
-		expect(config.secondaryAction).not.toBe("cancel")
+		expect(config.primaryText).not.toBe("Resume Task")
+		expect(config.primaryAction).not.toBe("proceed")
 	})
 
 	it("PTWCR01C01-R1-05: B2 — a LEGITIMATE new turn still activates `streaming` (the repair does NOT suppress activation)", async () => {
@@ -448,7 +479,7 @@ describe("PTWCR01C01 R1 — a terminated, BCB-held turn projects a TRUTHFUL non-
 		expect(h.phaseWrites.at(-1)?.writerId).toBe("session-event-pending-prompt-submitted")
 	})
 
-	it("PTWCR01C01-R1-06: B2 — the BCB-hold guard does NOT clobber an existing `completed` phase", async () => {
+	it("PTWCR01C01-R1-06: B2 — a host-owned continuation over a LIVE BCB barrier preserves the CONSERVATION contract", async () => {
 		const h = makeHarness()
 		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
 		// The BCB obligation is REAL, so the deferred-completion barrier
@@ -463,18 +494,115 @@ describe("PTWCR01C01 R1 — a terminated, BCB-held turn projects a TRUTHFUL non-
 		// truthful `resumable`).
 		await emitAbortedTurnDone(h)
 		expect(h.deferredMarker()).toBeDefined()
+		expect(h.tracker.currentPhase).toBe("resumable")
 
-		// The task has since reached a TERMINAL phase.
+		await emitPendingPromptSubmitted(h)
+
+		// THE REACHABLE CASE. The continuation is host-owned automatic
+		// work, so the continuation-entry seam reseeds the active phase.
+		// This is NOT a completion decision and the conservation contract
+		// is UNCHANGED by the repair:
+		//
+		//   - NO `completed` is fabricated (zero completion commits),
+		//   - NO C10 `task_completion_committed` record is emitted,
+		//   - the BCB marker is PRESERVED (the hold is a HOLD, not a
+		//     release) — the barrier's own release path
+		//     (`reevaluateDeferredCompletionBarrier`) remains the ONLY
+		//     writer of the terminal phase for the held obligation.
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.deferredMarker()).toBeDefined()
+		expect(h.completionCommitCount()).toBe(0)
+		expect(c10Records()).toHaveLength(0)
+		expect(h.phaseWrites.map((w) => w.writerId)).toContain("session-event-pending-prompt-submitted")
+
+		// The ONLY terminal phase ever written is the BCB hold's
+		// truthful `resumable`. The repair writes an ACTIVE phase, not a
+		// terminal one, so it cannot complete the held obligation.
+		const terminalPhases = h.phaseWrites.filter((w) =>
+			["completed", "error", "resumable", "awaiting_followup"].includes(w.phase),
+		)
+		expect(terminalPhases.map((w) => w.phase)).toEqual(["resumable"])
+	})
+
+	it("PTWCR01C01-R1-06-ADVERSARIAL: the `completed`-over-live-barrier combination is UNREACHABLE in production, and the conservation contract holds even when forced", async () => {
+		// THE REVIEW P1 (predecessor-conservation contract weakened).
+		//
+		// The predecessor R1-06 asserted that a `pending_prompt_submitted`
+		// arriving while an existing `completed` phase and a LIVE BCB
+		// barrier coexist must NOT clobber the `completed` phase. The
+		// repair changed that assertion to `streaming`, and the review
+		// correctly flagged that the conservation property must not
+		// silently disappear.
+		//
+		// THE ESTABLISHMENT — the combination is NOT production
+		// reachable. There are exactly TWO `completed` writers in
+		// `SdkSessionEventCoordinator`, and BOTH guarantee that no live
+		// barrier coexists with the committed `completed` phase:
+		//
+		//   1. THE DEFERRED BARRIER RELEASE
+		//      (`reevaluateDeferredCompletionBarrier`,
+		//      `sdk-session-event-coordinator.ts:2166`): the marker is
+		//      CLEARED (`this.deferredCompletionBarrier = undefined`)
+		//      BEFORE `completed` is written (`:2242`). At the instant
+		//      `completed` is committed, the barrier is already gone.
+		//
+		//   2. THE IMMEDIATE COMMIT PATH
+		//      (`sdk-session-event-coordinator.ts:4524`): reached only
+		//      through the `else` branch that is entered when the
+		//      completion is NOT held. Both hold branches
+		//      (`:4436` Elm HOLD and `:4503` unresolved containment
+		//      failure) REGISTER the barrier and `return` WITHOUT
+		//      writing `completed`.
+		//
+		// So the predecessor's `completed` phase could never coexist
+		// with a live barrier in production: the state it defended
+		// against was constructed by the test itself.
+		//
+		// WHY THE PHASE VALUE IS NOT LOAD-BEARING HERE. Because the
+		// combination is unreachable, there is no production truth to
+		// preserve for the phase. What MUST hold — in every case,
+		// reachable or not — is the CONSERVATION contract: the writer
+		// must never fabricate a completion. That is asserted below, and
+		// it is the property the review asked to retain.
+		const h = makeHarness()
+		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+		// The BCB obligation is REAL, so the deferred-completion barrier
+		// is LIVE and holds this turn's completion.
+		h.setObligations({
+			unconsumedTerminalCount: LIVE_HELD_JOB_IDS.length,
+			heldTerminalJobIds: LIVE_HELD_JOB_IDS,
+		})
+
+		await emitAbortedTurnDone(h)
+		expect(h.deferredMarker()).toBeDefined()
+
+		// FORCE the unreachable combination: a `completed` phase that
+		// coexists with the live barrier.
 		h.tracker.setWithWriter("completed", undefined, { writerId: "session-event-turn-complete-completed" })
 
 		await emitPendingPromptSubmitted(h)
 
-		// The barrier-hold guard suppresses the `streaming` re-assertion,
-		// so the already-terminal `completed` phase is NOT clobbered.
-		expect(h.tracker.currentPhase).toBe("completed")
-		// The suppressed writer is the ONLY thing that was skipped: no
-		// `session-event-pending-prompt-submitted` write was committed.
-		expect(h.phaseWrites.map((w) => w.writerId)).not.toContain("session-event-pending-prompt-submitted")
+		// THE CONSERVATION CONTRACT — preserved in the forced state:
+		//
+		//   - ZERO completion commits (no `completed` was fabricated by
+		//     the continuation-entry writer),
+		//   - ZERO C10 `task_completion_committed` records (the C10
+		//     completion authority was NOT consulted or satisfied),
+		//   - the BCB marker is PRESERVED (the hold was not released),
+		//   - the Elm completion authority was NEVER consulted.
+		expect(h.completionCommitCount()).toBe(0)
+		expect(c10Records()).toHaveLength(0)
+		expect(h.deferredMarker()).toBeDefined()
+		expect(h.elmConsultCount()).toBe(0)
+
+		// The phase is `streaming`: the host-owned continuation is active
+		// work on the same session, so the user-facing `Resume Task`
+		// affordance must not be published for work the host is already
+		// doing. The unreachability establishment above is what makes
+		// this value safe — it is NOT a claim that `completed` must be
+		// preserved here.
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.phaseWrites.map((w) => w.writerId)).toContain("session-event-pending-prompt-submitted")
 	})
 
 	it("PTWCR01C01-R1-06b: the pinned T-08a contract is PRESERVED — a `pending_prompt_submitted` over `completed` with NO live barrier still activates `streaming`", async () => {

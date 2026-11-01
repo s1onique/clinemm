@@ -95,6 +95,8 @@ import type { PendingPromptCountRead } from "@cline-internal/core/runtime/host/r
 import { PendingPromptsController } from "@cline-internal/core/runtime/turn-queue/pending-prompt-service"
 import type { CoreSessionEvent } from "@cline-internal/core/types/events"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+// The REAL published action selector used by the webview.
+import { buttonsForPhase } from "../../../webview-ui/src/components/chat/chat-view/shared/buttonConfig"
 import { BackgroundNotifyCoordinator, legacyConsumeTerminalPolicy } from "../background-notify-coordinator"
 import type { ElmCompletionAuthorityDecision } from "../completion-authority-elm-authority"
 import {
@@ -511,7 +513,7 @@ describe("B2PO01 — the B2 BCB-hold guard and PROMPT ORIGIN", () => {
 	// -------------------------------------------------------------------------
 	// S2
 	// -------------------------------------------------------------------------
-	it("B2PO01-S2: BCB held, the REAL queued continuation reaches the model-run dispatch seam while the phase stays `resumable`", async () => {
+	it("B2PO01-S2: BCB held, the REAL queued continuation reaches the model-run dispatch seam and the phase is reseeded to active", async () => {
 		const h = makeHarness()
 		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
 		h.setObligations({
@@ -530,17 +532,91 @@ describe("B2PO01 — the B2 BCB-hold guard and PROMPT ORIGIN", () => {
 		expect(h.sendSpy).toHaveBeenCalledTimes(1)
 		expect(h.agentRunSpy).toHaveBeenCalledTimes(1)
 
-		// The BCB's OWN continuation is (by design) suppressed by the B2
-		// guard: the completion is still HELD, so the phase stays
-		// `resumable` and the barrier's release path remains the only
-		// writer of a terminal phase.
-		expect(h.phaseWrites.map((w) => w.writerId)).not.toContain("session-event-pending-prompt-submitted")
-		expect(h.tracker.currentPhase).toBe("resumable")
+		// The BCB's OWN continuation is active automatic work. The
+		// continuation-entry seam reseeds the phase to `streaming` so
+		// the published UI does not offer the user a `Resume Task`
+		// affordance for work the host is already doing. The BCB marker
+		// remains live; this is not a terminal completion decision.
+		expect(h.phaseWrites.map((w) => w.writerId)).toContain("session-event-pending-prompt-submitted")
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.deferredMarker()).toBeDefined()
 
 		// The completion authority was NOT consulted and NO `completed`
 		// was fabricated.
 		expect(h.completionCommitCount()).toBe(0)
 		expect(c10Records()).toHaveLength(0)
+	})
+
+	// -------------------------------------------------------------------------
+	// PPBR01 — THE PREMATURE USER-RESUMABLE REPRODUCTION
+	//
+	// The LIVE specimen (session 1793513893511_n5sny, epoch 4) pinned:
+	//
+	//   06:41:49.130  BCB hold -> `resumable` (seq 2886)
+	//   06:41:49.150  continuation pending_prompt_enqueued
+	//   06:41:49.151  continuation pending_prompt_dequeued
+	//   06:41:49.151  continuation_scheduled
+	//   06:41:49.151  execute_turn_prelude_enter
+	//   06:41:59.696  webview action-buttons: primary "Resume Task"
+	//
+	// The host-owned BCB continuation is REAL automatic work on the SAME
+	// session. While it is scheduled or active, the task MUST NOT advertise
+	// a user-facing `Resume Task` affordance: the automatic continuation
+	// owns forward progress and the user did not need to resume anything.
+	//
+	// This witness drives the REAL writer, REAL pending-prompt queue, REAL
+	// dispatch seam, REAL committed tracker, and REAL published button
+	// selector. It was RED on the initial HEAD: the implementation
+	// preserved the BCB `resumable` through continuation entry and
+	// therefore projected `Resume Task` while automatic work was active.
+	// -------------------------------------------------------------------------
+	it("PPBR01: an automatically active BCB continuation MUST NOT publish the user Resume Task affordance", async () => {
+		const h = makeHarness()
+		h.tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+		h.setObligations({
+			unconsumedTerminalCount: LIVE_HELD_JOB_IDS.length,
+			heldTerminalJobIds: LIVE_HELD_JOB_IDS,
+		})
+
+		await emitAbortedTurnDone(h)
+		expect(h.tracker.currentPhase).toBe("resumable")
+		expect(h.tracker.currentWriterId).toBe("session-event-bcb-hold-resumable")
+
+		// Keep the REAL dispatch in flight: this is the "automatically
+		// active" window, not merely "scheduled".
+		h.holdDispatch(true)
+		h.pendingPrompts.enqueue(ACTIVE_SESSION_ID, {
+			prompt: BCB_CONTINUATION_PROMPT,
+			delivery: "queue",
+			runtimeControlKind: "completion_continuation_control",
+		})
+		await new Promise<void>((resolve) => setTimeout(resolve, 0))
+		await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+		// The REAL automatic continuation reached the model-run seam.
+		expect(h.agentRunSpy).toHaveBeenCalledTimes(1)
+		expect(h.sendSpy).toHaveBeenCalledTimes(1)
+		expect(h.isRunning()).toBe(true)
+
+		// The host-owned continuation did NOT create a terminal
+		// completion: the BCB marker remains live and no C10 was
+		// fabricated.
+		expect(h.deferredMarker()).toBeDefined()
+		expect(h.completionCommitCount()).toBe(0)
+		expect(c10Records()).toHaveLength(0)
+
+		// The published selector is the authority for the action buttons.
+		const published = buttonsForPhase(h.tracker.get(), undefined)
+
+		expect({
+			phase: h.tracker.currentPhase,
+			primaryText: published.primaryText,
+			primaryAction: published.primaryAction,
+		}).toStrictEqual({
+			phase: "streaming",
+			primaryText: undefined,
+			primaryAction: undefined,
+		})
 	})
 
 	// -------------------------------------------------------------------------

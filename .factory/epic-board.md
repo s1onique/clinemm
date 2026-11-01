@@ -1,3 +1,30 @@
+# ACT-CLINEMM-PREMATURE-PAUSED-BCB-REPRO-REPAIR01 — PASS_STRUCTURAL_ONLY — 2026-11-01
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. The production-seam RED was reproduced from the trusted live capture ordering, the causal discriminator proved that the BCB hold write is legitimate while continuation-entry reseed is necessary, and the bounded repair plus structural/ablation gates are GREEN. Installed dogfood UI qualification was **NOT executed** and remains an explicit successor. No transcript-tail `completion_result` is treated as authoritative task completion.
+
+```text
+ACT_ID: ACT-CLINEMM-PREMATURE-PAUSED-BCB-REPRO-REPAIR01
+ENTRY_HEAD: 118a462f595570d861400270d40d65b79a81ff6a (main)
+LIVE_SPECIMEN: session/task 1793513893511_n5sny, epoch 4
+LIVE_ORDER: BCB resumable seq 2886 @ 06:41:49.130 -> pending_prompt_enqueued @ .150 -> pending_prompt_dequeued @ .151 -> continuation_scheduled @ .151 -> execute_turn_prelude_enter @ .151 -> webview primary "Resume Task" @ 06:41:59.696
+RED_COMMAND: cd apps/vscode && bun run test:vitest:b2po01 -- --reporter=verbose
+RED_EXIT: 1
+RED_ASSERTION: received { phase: "resumable", primaryAction: "proceed", primaryText: "Resume Task" }; expected active continuation projection
+RED_SEAM: real SdkSessionEventCoordinator + real TurnStateTracker + real PendingPromptsController + real dispatch seam + real webview buttonsForPhase selector
+CAUSAL_RESULT: continuation-entry reseed is necessary; blocking only the BCB hold write breaks 8/9 B2PO01 assertions and is NOT a valid repair
+REPAIR: on host-owned completion_continuation_control pending_prompt_submitted, reseed committed phase to streaming at the existing continuation-entry writer; BCB marker remains live; no C10; no new wire field
+GREEN_COMMANDS: test:vitest:b2po01 (9/9); focused PTWCR01/PTWCR01C01/TPC01 (84/84); webview buttonConfig+turnStateSelectors threads pool (49/49); check-types:b2po01; check-types; lint; esbuild
+ABLATION: reverting only continuation-entry reseed reproduces PPBR01 RED; restoring fix returns GREEN; blocking only hold write yields 8 failures / 1 pass
+FULL_STREAM_LIMITATION: apps/vscode full Vitest stream exits 1 because the forks pool hits kill EPERM and aborts without a summary; individual LHOWA01 failure is identical on the clean entry HEAD and is therefore baseline, not ACT-owned
+INSTALLED_UI: NOT_EXECUTED
+COMPLETION_AUTHORITY: task_completion_committed remains distinct from transcript-tail completion_result; no authority equivalence is claimed
+CHANGED_FILES: apps/vscode/src/sdk/sdk-session-event-coordinator.ts; apps/vscode/src/sdk/__tests__/post-terminal-working-cancel-b2-prompt-origin01.b2po01.test.ts; apps/vscode/src/sdk/__tests__/post-terminal-working-cancel-repro01.ptwcr01.test.ts; apps/vscode/src/sdk/__tests__/post-terminal-working-cancel-correction01.ptwcr01c01.test.ts; .factory/epic-board.md
+```
+
+**Preservation.** Manual cancellation and interrupted-session reopen remain `resumable`; independent user prompts and genuine blocked workflows retain their existing transitions; BCB no-forgotten-terminal-result, automatic continuation delivery, one-dispatch cardinality, and completion authority remain intact. The only production behavior change is the phase reseed at host-owned continuation entry.
+
+**Successor.** Perform an authorized installed dogfood qualification on the exact repaired subject and verify the live webview no longer publishes `Resume Task` while the automatic continuation is scheduled/active, without conflating transcript completion rows with authoritative C10 completion.
+
 # ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01 — PASS_STRUCTURAL_ONLY — 2026-11-01
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. The bounded `VIAPD` → `VIAPDT` feature is implemented, the T01–T15 witnesses are GREEN, the necessity ablation is demonstrated, and the typecheck / lint / webview-build / extension-build / exact-head-VSIX gates pass. The **installed-UI qualification was NOT performed** and remains an explicit successor: the dogfood extensions directory (`~/.vscodium-clinemm/extensions`) is read-only to this agent context, so the VSIX install fails with `EPERM` (the same sandbox limitation the dogfood operator runbook already records), and no `codium-cline` dogfood launcher wrapper is present on this host.
