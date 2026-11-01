@@ -1075,3 +1075,19 @@ QUALIFICATION_BOUNDARY          DERIVED_FROM_REAL + STRUCTURAL/EXECUTED;
 - It does **not** claim the evaluator validated these artifacts (§14.11).
 - It does **not** claim the sample's row selection is algorithmically
   reproducible (§14.7).
+
+### 14.14 The epic board
+
+`.factory/epic-board.md` was updated **once**, at terminal closure, with this
+ACT's entry.
+
+The board's own validator (`scripts/check-epic-board-markdown.py`) reports
+**396** issues at the subject head and **395** after this ACT's entry. The
+board carries a **pre-existing, board-wide** fence-convention defect — a bare
+` ``` ` opener at L30102 is never closed, so every later heading is swallowed
+into a code block. As the recon ACT did, this ACT closes that opener with a
+**single closing fence** immediately before its own section, so the section
+renders as headings. The count therefore went **down by one** (396 → 395).
+
+The remaining 395 issues are pre-existing headings in earlier sections and are
+**out of scope** for this ACT; they are recorded, not silently absorbed.
