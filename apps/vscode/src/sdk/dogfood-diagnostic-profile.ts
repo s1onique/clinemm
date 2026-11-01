@@ -75,10 +75,21 @@
  *     means "no workspace toggle read available" (treat as
  *     undefined; falls through to profile default).
  *
- *   - composeEffectiveDiagnosticKnobs(env, isDogfood, vCapturePath, workspaceToggle)
- *     returns EffectiveDiagnosticKnobs = { v, i, a, p, d } by
- *     composing the 4-knob resolver with the D resolver. Wire
- *     payloads and the formatter consume this composed shape.
+ *   - composeEffectiveDiagnosticKnobs(env, isDogfood, vCapturePath, workspaceToggle, modelBehaviorTraceEnabled)
+ *     returns EffectiveDiagnosticKnobs = { v, i, a, p, d, t } by
+ *     composing the 4-knob resolver with the D resolver and the live T
+ *     bit. Wire payloads and the formatter consume this composed shape.
+ *
+ *   - ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01 adds the T knob:
+ *       T = centralized model-behavior flight recorder enabled.
+ *     The T knob is OBSERVATIONAL on the wire: it is read from the ACTUAL
+ *     recorder enable bit (`isModelBehaviorTraceEnabled()`), never
+ *     recomputed from the profile. The dogfood profile only decides the
+ *     STARTUP default; `resolveEffectiveModelBehaviorTraceT` is the
+ *     startup-time authority with the precedence:
+ *       explicit workspace override (`modelBehaviorTraceEnabled`:
+ *         true/false/undefined) > dogfood profile default (ON) >
+ *         public profile default (OFF).
  *
  * Precedence for V/I/A/P (top wins; deterministic, fail-closed):
  *
@@ -163,7 +174,7 @@ import {
 } from "./task-header-selector-input-capture"
 import type { TurnStateWriterProvenanceDiagnosticContext } from "./turn-state-writer-provenance-runtime"
 
-const ENV_VARS: Readonly<Record<DiagnosticKnob, string>> = {
+const ENV_VARS: Readonly<Record<EnvResolvedDiagnosticKnob, string>> = {
 	v: "CLINEMM_CAPTURE_V2_PATH",
 	i: "CLINEMM_DIAG_INPUT_SHAPE_V2",
 	a: "CLINEMM_DIAG_ACTIVITY_STATE_V1",
@@ -174,7 +185,7 @@ const ENV_VARS: Readonly<Record<DiagnosticKnob, string>> = {
 const TRUTHY_DISABLE = new Set(["0", "off", "false"])
 const TRUTHY_ENABLE = new Set(["1", "true", "yes"])
 
-function decideKnob(env: NodeJS.ProcessEnv, knob: DiagnosticKnob, isDogfood: boolean): boolean {
+function decideKnob(env: NodeJS.ProcessEnv, knob: EnvResolvedDiagnosticKnob, isDogfood: boolean): boolean {
 	const raw = env[ENV_VARS[knob]]
 	if (typeof raw === "string" && raw.length > 0) {
 		const normalized = raw.trim().toLowerCase()
@@ -283,9 +294,24 @@ export function formatEffectiveKnobLetters(knobs: EffectiveDiagnosticKnobs): str
 	if (knobs.a) s += "A"
 	if (knobs.p) s += "P"
 	if (knobs.d) s += "D"
+	// ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the T knob is
+	// APPENDED to the canonical order (V -> I -> A -> P -> D -> T). The
+	// existing V/I/A/P/D letters and their order are untouched.
+	if (knobs.t) s += "T"
 	return s
 }
-export type DiagnosticKnob = "v" | "i" | "a" | "p" | "d"
+export type DiagnosticKnob = "v" | "i" | "a" | "p" | "d" | "t"
+
+/**
+ * The knobs that are resolved through an ENV override + profile default.
+ *
+ * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the `t` knob is
+ * deliberately NOT in this set. The T knob has NO env var and NO new
+ * launcher surface — its startup default comes from the closed dogfood
+ * profile plus the persisted workspace override, and its wire value comes
+ * from the live recorder state.
+ */
+export type EnvResolvedDiagnosticKnob = Exclude<DiagnosticKnob, "t">
 
 /**
  * Result of `resolveEffectiveDiagnosticKnobs`: the 4-knob
@@ -301,10 +327,17 @@ export interface ResolvedViapDiagnosticKnobs {
 }
 
 /**
- * The 5-knob wire-payload shape consumed by the TaskHeader indicator
- * (formatter + UI) and the wire `diagnosticKnobs` field. Produced
- * exclusively by `composeEffectiveDiagnosticKnobs` (the SOLE D
- * authority) so the wire cannot disagree with the ring state.
+ * The 6-knob wire-payload shape consumed by the TaskHeader indicator
+ * (formatter + UI) and the wire `diagnosticKnobs` field.
+ *
+ * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01 adds the additive `t`
+ * knob: `T = centralized model-behavior flight recorder enabled`.
+ *
+ * The projected `t` MUST come from the ACTUAL recorder state
+ * (`isModelBehaviorTraceEnabled()`), NOT from a recomputation of the
+ * dogfood profile default: the profile controls only the STARTUP default,
+ * while the header must describe the ACTIVE recorder (which a manual live
+ * toggle can change at any moment).
  */
 export interface EffectiveDiagnosticKnobs {
 	readonly v: boolean
@@ -312,6 +345,11 @@ export interface EffectiveDiagnosticKnobs {
 	readonly a: boolean
 	readonly p: boolean
 	readonly d: boolean
+	/**
+	 * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the live
+	 * model-behavior flight-recorder enable bit.
+	 */
+	readonly t: boolean
 }
 
 /**
@@ -333,10 +371,54 @@ export function composeEffectiveDiagnosticKnobs(
 	isDogfood: boolean,
 	vCapturePath: string | null,
 	workspaceToggle: boolean | null | undefined,
+	/**
+	 * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the LIVE model-behavior
+	 * recorder enable bit, read from `isModelBehaviorTraceEnabled()`.
+	 *
+	 * The T knob is OBSERVATIONAL: it reports the ACTIVE recorder, never a
+	 * recomputation of the dogfood profile default. The profile default only
+	 * decides the STARTUP state; a manual live toggle can change the
+	 * recorder at any moment and the header must stay truthful.
+	 *
+	 * When omitted, the T knob resolves OFF (the public default) so callers
+	 * that do not track the recorder cannot accidentally claim it is on.
+	 */
+	modelBehaviorTraceEnabled: boolean = false,
 ): EffectiveDiagnosticKnobs {
 	const viap = resolveEffectiveDiagnosticKnobs(env, isDogfood, vCapturePath)
 	const dResolved = resolveEffectiveTurnStateWriterProvenanceD(env, isDogfood, workspaceToggle ?? undefined)
-	return { ...viap, d: dResolved.d }
+	return { ...viap, d: dResolved.d, t: modelBehaviorTraceEnabled === true }
+}
+
+/**
+ * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01:
+ *
+ * The T-knob resolver — the SINGLE authority for the EFFECTIVE
+ * model-behavior flight-recorder state at STARTUP.
+ *
+ * Precedence (frozen; top wins):
+ *
+ *   1. Explicit workspace override (`modelBehaviorTraceEnabled`):
+ *        true  -> ON
+ *        false -> OFF
+ *        undefined (never toggled) -> falls through to (2)
+ *
+ *   2. Profile default:
+ *        dogfood -> ON
+ *        public  -> OFF
+ *
+ * Pure / synchronous / no I/O / no side effects. The LIVE wire projection
+ * does NOT use this resolver — it reads the recorder's actual enable bit —
+ * so the header can never disagree with the running recorder.
+ */
+export function resolveEffectiveModelBehaviorTraceT(
+	isDogfood: boolean,
+	workspaceOverride: boolean | undefined,
+): { readonly t: boolean; readonly source: "workspace" | "profile" } {
+	if (workspaceOverride !== undefined) {
+		return { t: workspaceOverride, source: "workspace" }
+	}
+	return { t: isDogfood, source: "profile" }
 }
 
 /**

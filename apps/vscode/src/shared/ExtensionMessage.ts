@@ -185,12 +185,12 @@ export interface ExtensionState {
 	 * {@link resolveEffectiveDiagnosticKnobs} from
 	 * `isDogfoodRuntime()` + env overrides + the resolved V2 capture
 	 * path. The webview TaskHeader indicator renders the letters V / I
-	 * / A / P / D in canonical order (e.g. `"VIAPD"` for the dogfood
-	 * initial render after D landed via
-	 * `ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01`; `"VIAP"`
-	 * was the pre-D historical value; `"VIP"` was the pre-A
-	 * historical value). Hidden entirely in public (when
-	 * `isDogfood === false` all five are false and the field is
+	 * / A / P / D / T in canonical order (e.g. `"VIAPDT"` for the dogfood
+	 * initial render once T landed via
+	 * `ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01`; `"VIAPD"` was
+	 * the pre-T historical value; `"VIAP"` was the pre-D historical value;
+	 * `"VIP"` was the pre-A historical value). Hidden entirely in public
+	 * (when `isDogfood === false` all six are false and the field is
 	 * omitted from the UI).
 	 *
 	 * Wire contract: always present. Each knob is a boolean. `a`
@@ -200,6 +200,13 @@ export interface ExtensionState {
 	 * and overridable via
 	 * `CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE=<truthy>` (default-on
 	 * in dogfood).
+	 *
+	 * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: `t` is the
+	 * centralized model-behavior flight-recorder enable bit. It is the
+	 * OBSERVATIONAL live recorder state (`isModelBehaviorTraceEnabled()`),
+	 * NOT a recomputation of the dogfood profile default — the profile
+	 * only decides the STARTUP default, so a manual live toggle is
+	 * reflected truthfully.
 	 */
 	diagnosticKnobs?: {
 		readonly v: boolean
@@ -207,6 +214,11 @@ export interface ExtensionState {
 		readonly a: boolean
 		readonly p: boolean
 		readonly d: boolean
+		/**
+		 * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the live
+		 * model-behavior flight-recorder enable bit.
+		 */
+		readonly t: boolean
 	}
 	/**
 	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:

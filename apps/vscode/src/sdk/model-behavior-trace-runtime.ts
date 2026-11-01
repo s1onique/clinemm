@@ -11,8 +11,18 @@
  *
  * TRUST BINDING
  * -------------
- *   - Default OFF: the recorder is inert until the operator invokes
- *     `cline.debug.toggleModelBehaviorTrace`.
+ *   - Default OFF in PUBLIC installs: the recorder is inert until the
+ *     operator invokes `cline.debug.toggleModelBehaviorTrace` (or an
+ *     explicit ON override is persisted).
+ *   - ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the closed
+ *     dogfood runtime profile (`CLINEMM_RUNTIME_PROFILE=dogfood`) starts
+ *     with the recorder ARMED by default. The dogfood identity is the
+ *     ONLY thing that changes the startup default; there is no extra
+ *     launcher env var and no new public setting.
+ *   - The persisted `modelBehaviorTraceEnabled` override is a THREE-state
+ *     value (`undefined` / `true` / `false`). An EXPLICIT operator choice
+ *     always beats the profile default, and `undefined` (never toggled)
+ *     stays distinct from `false` (explicitly OFF).
  *   - One user action: the toggle flips the recorder's enable bit. The
  *     recorder is consulted at OBSERVATION time, so the toggle affects
  *     already-running sessions for subsequent events — no extension reload
@@ -100,22 +110,104 @@ export function setModelBehaviorTraceEnabled(enabled: boolean): void {
 }
 
 /**
+ * Read the persisted workspace override.
+ *
+ * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the persisted value is
+ * a THREE-state override, NOT a boolean:
+ *
+ *   undefined -> never toggled (no explicit operator choice)
+ *   true      -> explicit ON
+ *   false     -> explicit OFF
+ *
+ * `undefined` MUST remain distinct from `false`: the dogfood profile default
+ * only applies when there is NO explicit override. Treating `undefined` as
+ * `false` would make the first live toggle in a dogfood session re-arm the
+ * recorder instead of switching it off.
+ */
+export function readModelBehaviorTraceWorkspaceOverride(context: ModelBehaviorTraceContext): boolean | undefined {
+	const raw = context.workspaceState.get<unknown>(WORKSPACE_STATE_KEY)
+	if (raw === true) {
+		return true
+	}
+	if (raw === false) {
+		return false
+	}
+	return undefined
+}
+
+/**
+ * The identity/profile bit used to resolve the effective trace state.
+ *
+ * The dogfood identity is supplied by the caller (the extension activation
+ * seam reads it from `isDogfoodRuntime()`); this module never reads
+ * `process.env` itself so the contract is testable and single-sourced.
+ */
+export interface ModelBehaviorTraceProfile {
+	/** True when the current runtime is the closed dogfood profile. */
+	readonly isDogfood: boolean
+}
+
+/**
+ * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01:
+ *
+ * Resolve the EFFECTIVE model-behavior-trace enablement.
+ *
+ * Precedence (frozen; top wins):
+ *
+ *   1. Explicit workspace override (`modelBehaviorTraceEnabled`):
+ *        true  -> ON
+ *        false -> OFF
+ *        undefined (never toggled) -> falls through to (2)
+ *
+ *   2. Profile default:
+ *        dogfood -> ON
+ *        public  -> OFF
+ *
+ * Pure / synchronous / no I/O. This is the SINGLE authority for the
+ * startup default; the wire projection reads the LIVE recorder state
+ * instead (so a manual live toggle is reflected truthfully).
+ */
+export function resolveEffectiveModelBehaviorTraceEnabled(
+	workspaceOverride: boolean | undefined,
+	profile: ModelBehaviorTraceProfile,
+): boolean {
+	if (workspaceOverride !== undefined) {
+		return workspaceOverride
+	}
+	return profile.isDogfood
+}
+
+/**
  * Read the persisted workspace toggle.
  *
- * `undefined` (never toggled) means OFF.
+ * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: this reports whether an
+ * EXPLICIT ON override is persisted. `false` and `undefined` both mean "not
+ * explicitly enabled" for this legacy predicate; use
+ * {@link readModelBehaviorTraceWorkspaceOverride} when the distinction
+ * between "unset" and "explicit false" matters.
  */
 export function isModelBehaviorTraceWorkspaceEnabled(context: ModelBehaviorTraceContext): boolean {
-	return context.workspaceState.get<boolean>(WORKSPACE_STATE_KEY) === true
+	return readModelBehaviorTraceWorkspaceOverride(context) === true
 }
 
 /**
  * Flip the persisted workspace toggle and apply it to the live recorder.
  *
+ * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the toggle inverts the
+ * EFFECTIVE enabled state, not a boolean that treats an unset override as
+ * OFF. A dogfood session that starts with the implicit default ON therefore
+ * switches OFF on the first toggle, and subsequent toggles alternate
+ * correctly and persist explicit choices.
+ *
  * Returns the new value. The live recorder is updated immediately so the
  * toggle affects already-running sessions for subsequent events.
  */
-export async function toggleModelBehaviorTraceWorkspaceEnabled(context: ModelBehaviorTraceContext): Promise<boolean> {
-	const next = !isModelBehaviorTraceWorkspaceEnabled(context)
+export async function toggleModelBehaviorTraceWorkspaceEnabled(
+	context: ModelBehaviorTraceContext,
+	profile: ModelBehaviorTraceProfile = { isDogfood: false },
+): Promise<boolean> {
+	const currentEffective = resolveEffectiveModelBehaviorTraceEnabled(readModelBehaviorTraceWorkspaceOverride(context), profile)
+	const next = !currentEffective
 	await context.workspaceState.update(WORKSPACE_STATE_KEY, next)
 	recorder.setEnabled(next)
 	return next
@@ -124,12 +216,21 @@ export async function toggleModelBehaviorTraceWorkspaceEnabled(context: ModelBeh
 /**
  * Restore the persisted toggle into the live recorder.
  *
- * Called at extension activation so a toggle survives an extension reload.
+ * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the effective state is
+ * resolved as "explicit workspace override > profile default". Called at
+ * extension activation so an explicit operator choice survives an extension
+ * reload, while an UNSET override falls back to the profile default.
+ *
+ * The implicit dogfood default is NOT written into workspace persistence —
+ * the absence of an override must remain meaningful.
  */
-export async function syncModelBehaviorTraceEnabled(context: ModelBehaviorTraceContext): Promise<boolean> {
-	const persisted = isModelBehaviorTraceWorkspaceEnabled(context)
-	recorder.setEnabled(persisted)
-	return persisted
+export async function syncModelBehaviorTraceEnabled(
+	context: ModelBehaviorTraceContext,
+	profile: ModelBehaviorTraceProfile = { isDogfood: false },
+): Promise<boolean> {
+	const effective = resolveEffectiveModelBehaviorTraceEnabled(readModelBehaviorTraceWorkspaceOverride(context), profile)
+	recorder.setEnabled(effective)
+	return effective
 }
 
 /**

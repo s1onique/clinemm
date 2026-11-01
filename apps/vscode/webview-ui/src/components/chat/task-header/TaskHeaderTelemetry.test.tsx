@@ -603,7 +603,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 		it("hides the indicator when all knobs are OFF (public default)", () => {
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: false, i: false, a: false, p: false, d: false }}
+					diagnosticKnobs={{ v: false, i: false, a: false, p: false, d: false, t: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -619,7 +619,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			// drops a knob.
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: true, i: true, a: false, p: true, d: false }}
+					diagnosticKnobs={{ v: true, i: true, a: false, p: true, d: false, t: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -635,7 +635,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			// drops of D when D=false.
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: false }}
+					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: false, t: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -646,7 +646,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 		it("WV1: renders 'VIAPD' when all five knobs are ON (D landed, canonical dogfood initial render)", () => {
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true }}
+					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -657,7 +657,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 		it("renders 'IP' when V is overridden off in dogfood", () => {
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: false, i: true, a: false, p: true, d: false }}
+					diagnosticKnobs={{ v: false, i: true, a: false, p: true, d: false, t: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -671,7 +671,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			// that and render "VIAP" (the canonical pre-D render).
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: false }}
+					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: false, t: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -682,12 +682,129 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 		it("WV3: renders 'D' when only D is ON (TSWPD-only dogfood probe)", () => {
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: false, i: false, a: false, p: false, d: true }}
+					diagnosticKnobs={{ v: false, i: false, a: false, p: false, d: true, t: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
 			)
 			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("D")
+		})
+
+		// ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01:
+		// The `T` knob renders the host-supplied live model-behavior
+		// flight-recorder state. These are RENDERED assertions (not source
+		// presence), so they establish the actual visible output and the
+		// accessibility text.
+		describe("ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01 — T knob", () => {
+			it("T08: renders 'VIAPDT' when the recorder is ON with all other knobs ON", () => {
+				render(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: true }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAPDT")
+			})
+
+			it("T09: renders 'VIAPD' when the recorder is OFF with all other knobs ON", () => {
+				render(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: false }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAPD")
+			})
+
+			it("T10: renders 'T' when the recorder is ON alone", () => {
+				render(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: false, i: false, a: false, p: false, d: false, t: true }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("T")
+			})
+
+			it("T11: hides the indicator when every knob (including T) is OFF", () => {
+				render(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: false, i: false, a: false, p: false, d: false, t: false }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				expect(screen.queryByTestId("task-header-diagnostic-knobs")).toBeNull()
+			})
+
+			it("T13: the live toggle updates the rendered indicator", () => {
+				const { rerender } = render(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: true }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAPDT")
+				// The host publishes the updated live recorder state; the
+				// indicator follows WITHOUT a reload or a new task.
+				rerender(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: false }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAPD")
+				rerender(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: true }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAPDT")
+			})
+
+			it("exposes the T state in the tooltip and the accessible label", () => {
+				render(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: true }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				const indicator = screen.getByTestId("task-header-diagnostic-knobs")
+				expect(indicator.getAttribute("title")).toContain("T=on")
+				expect(indicator.getAttribute("aria-label")).toContain("T=on")
+			})
+
+			it("exposes T=off in the tooltip and the accessible label when the recorder is OFF", () => {
+				render(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: false }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				const indicator = screen.getByTestId("task-header-diagnostic-knobs")
+				expect(indicator.getAttribute("title")).toContain("T=off")
+				expect(indicator.getAttribute("aria-label")).toContain("T=off")
+			})
+
+			it("T14: the existing V/I/A/P/D output is unchanged by the T knob", () => {
+				render(
+					<TaskHeaderTelemetry
+						diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true, t: false }}
+						telemetry={telemetry()}
+						turnState={ts("streaming")}
+					/>,
+				)
+				expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAPD")
+			})
 		})
 	})
 

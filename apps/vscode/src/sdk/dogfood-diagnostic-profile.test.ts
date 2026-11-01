@@ -67,7 +67,7 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 
 	it("C4: dogfood + no env + auto path -> VIAPD (canonical indicator, D landed)", () => {
 		const knobs = composeEffectiveDiagnosticKnobs({}, true, AUTO_PATH, null)
-		expect(knobs).toEqual({ v: true, i: true, a: true, p: true, d: true })
+		expect(knobs).toEqual({ v: true, i: true, a: true, p: true, d: true, t: false })
 		expect(formatEffectiveKnobLetters(knobs)).toBe("VIAPD")
 	})
 
@@ -118,24 +118,16 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 
 	it("C7: A is governed by dogfood + env precedence (LANDED by CANCEL-AFFORDANCE-AUTHORITY-RECON)", () => {
 		// C7a: explicit-on "1" in dogfood -> A=true
-		expect(
-			resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "1" }, true, AUTO_PATH).a,
-		).toBe(true)
+		expect(resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "1" }, true, AUTO_PATH).a).toBe(true)
 		// C7b: explicit-off "0" in dogfood -> A=false (override-down)
-		expect(
-			resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "0" }, true, AUTO_PATH).a,
-		).toBe(false)
+		expect(resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "0" }, true, AUTO_PATH).a).toBe(false)
 		// C7c: no env var in dogfood -> A=true (auto-on, same as I/P)
 		expect(resolveEffectiveDiagnosticKnobs({}, true, AUTO_PATH).a).toBe(true)
 		// C7d: explicit-on in public -> A=false (no public product setting;
 		// identity is the SOLE gate per ACT section 18 invariant)
-		expect(
-			resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "1" }, false, EMPTY_PATH).a,
-		).toBe(false)
+		expect(resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "1" }, false, EMPTY_PATH).a).toBe(false)
 		// C7e: garbage env value falls through to dogfood default
-		expect(
-			resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "banana" }, true, AUTO_PATH).a,
-		).toBe(true)
+		expect(resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "banana" }, true, AUTO_PATH).a).toBe(true)
 	})
 
 	it("C8: empty-string env values fall through to default (V/I/A/P on in dogfood)", () => {
@@ -168,7 +160,6 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 		expect(before).toEqual(beforeSnapshot)
 		expect(result.i).toBe(false)
 	})
-
 })
 
 // ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01 (Round 2 fix):
@@ -207,11 +198,11 @@ describe("resolveEffectiveTurnStateWriterProvenanceD (Round 2)", () => {
 
 describe("formatEffectiveKnobLetters", () => {
 	it("empty string when all OFF", () => {
-		expect(formatEffectiveKnobLetters({ v: false, i: false, a: false, p: false, d: false })).toBe("")
+		expect(formatEffectiveKnobLetters({ v: false, i: false, a: false, p: false, d: false, t: false })).toBe("")
 	})
 
 	it("'V' when only V is ON", () => {
-		expect(formatEffectiveKnobLetters({ v: true, i: false, a: false, p: false, d: false })).toBe("V")
+		expect(formatEffectiveKnobLetters({ v: true, i: false, a: false, p: false, d: false, t: false })).toBe("V")
 	})
 
 	it("'VIP' for the legacy pre-A dogfood initial render (frozen for historical-context)", () => {
@@ -220,7 +211,7 @@ describe("formatEffectiveKnobLetters", () => {
 		// "VIAPD for the current canonical dogfood initial render" test.
 		// D is OFF here (pre-D historical value); the formatter therefore
 		// returns "VIP", not "VIPD".
-		expect(formatEffectiveKnobLetters({ v: true, i: true, a: false, p: true, d: false })).toBe("VIP")
+		expect(formatEffectiveKnobLetters({ v: true, i: true, a: false, p: true, d: false, t: false })).toBe("VIP")
 	})
 
 	it("'VIAP' when A is ON but D is OFF (pre-D canonical dogfood initial render)", () => {
@@ -228,18 +219,18 @@ describe("formatEffectiveKnobLetters", () => {
 		// is OFF in the historical pre-D canonical render. The D8
 		// test pins the "VIAP" render so the post-D canonical
 		// "VIAPD" does not silently invalidate prior dumps.
-		expect(formatEffectiveKnobLetters({ v: true, i: true, a: true, p: true, d: false })).toBe("VIAP")
+		expect(formatEffectiveKnobLetters({ v: true, i: true, a: true, p: true, d: false, t: false })).toBe("VIAP")
 	})
 
 	it("'VIAPD' when D is ON (current canonical dogfood initial render, D landed)", () => {
-		expect(formatEffectiveKnobLetters({ v: true, i: true, a: true, p: true, d: true })).toBe("VIAPD")
+		expect(formatEffectiveKnobLetters({ v: true, i: true, a: true, p: true, d: true, t: false })).toBe("VIAPD")
 	})
 
 	it("'IAPD' when V is overridden off in dogfood (A still ON, D still ON)", () => {
-		expect(formatEffectiveKnobLetters({ v: false, i: true, a: true, p: true, d: true })).toBe("IAPD")
+		expect(formatEffectiveKnobLetters({ v: false, i: true, a: true, p: true, d: true, t: false })).toBe("IAPD")
 	})
 
 	it("'IAP' when V is overridden off AND D is overridden off in dogfood (no D in render)", () => {
-		expect(formatEffectiveKnobLetters({ v: false, i: true, a: true, p: true, d: false })).toBe("IAP")
+		expect(formatEffectiveKnobLetters({ v: false, i: true, a: true, p: true, d: false, t: false })).toBe("IAP")
 	})
 })

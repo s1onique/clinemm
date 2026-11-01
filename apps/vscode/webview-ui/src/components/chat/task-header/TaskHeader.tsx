@@ -74,6 +74,10 @@ interface TaskHeaderProps {
 	 * letters in canonical order (e.g. `"VIAPD"` for the dogfood
 	 * initial render after D landed); when absent or all OFF (the
 	 * public default), the indicator is hidden.
+	 *
+	 * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the additive `t`
+	 * knob reports the HOST-SUPPLIED live model-behavior flight-recorder
+	 * state (the webview never recomputes it).
 	 */
 	diagnosticKnobs?: {
 		readonly v: boolean
@@ -81,6 +85,7 @@ interface TaskHeaderProps {
 		readonly a: boolean
 		readonly p: boolean
 		readonly d: boolean
+		readonly t: boolean
 	}
 }
 

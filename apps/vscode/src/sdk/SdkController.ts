@@ -119,6 +119,7 @@ import { isDogfoodRuntime } from "./dogfood-runtime-profile"
 import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
 import { MessageTranslatorState, reshapeErrorForWebview } from "./message-translator"
+import { isModelBehaviorTraceEnabled } from "./model-behavior-trace-runtime"
 import { createProviderCatalog, toSdkProviderConfig } from "./model-catalog/catalog"
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
@@ -6185,11 +6186,20 @@ export class Controller {
 			// The workspace toggle read MUST match the one the activation
 			// helper used (single workspaceState.get per state push), so
 			// the wire `d` cannot disagree with the actual ring state.
+			// ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01:
+			// The `t` knob is the OBSERVATIONAL live recorder state, read
+			// from `isModelBehaviorTraceEnabled()`. It is NEVER recomputed
+			// from the dogfood profile here: the profile only decides the
+			// STARTUP default, while the header must describe the ACTIVE
+			// recorder (which a manual live toggle can change at any
+			// moment). This publication path stays purely observational —
+			// it never activates or deactivates the recorder.
 			const diagnosticKnobsResolved = composeEffectiveDiagnosticKnobs(
 				process.env,
 				isDogfoodRuntime(process.env),
 				resolveCapturePathForProfileEffective(process.env),
 				this.context.workspaceState.get<boolean>("tswpdEnabled"),
+				isModelBehaviorTraceEnabled(),
 			)
 			const snapshot = {
 				...state,

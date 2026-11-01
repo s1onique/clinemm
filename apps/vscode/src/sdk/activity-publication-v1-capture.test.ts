@@ -35,24 +35,17 @@
  *     disabled). NOT proof of the publication contract.
  */
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import {
-	__resetV2CaptureForTests,
-	emitV2Capture,
-	isV2CaptureEnabled,
-} from "./v2-capture"
+import { type ActivityPublicationSnapshotLike, buildActivityPublicationV1Record } from "./activity-publication-v1"
 import {
 	composeEffectiveDiagnosticKnobs,
 	formatEffectiveKnobLetters,
 	resolveEffectiveDiagnosticKnobs,
 } from "./dogfood-diagnostic-profile"
-import {
-	buildActivityPublicationV1Record,
-	type ActivityPublicationSnapshotLike,
-} from "./activity-publication-v1"
+import { __resetV2CaptureForTests, emitV2Capture, isV2CaptureEnabled } from "./v2-capture"
 
 const EMPTY_PATH: string | null = null
 const AUTO_PATH = "/tmp/clinemm-runtime-diag/abc123.jsonl"
@@ -73,7 +66,11 @@ function makeSnapshot(overrides: Partial<ActivityPublicationSnapshotLike> = {}):
 			source: "shadow",
 			seq: 1,
 		} as unknown as ActivityPublicationSnapshotLike["thinkingPresentation"],
-		taskHeaderPresentation: { phase: "streaming", source: "shadow", seq: 1 } as unknown as ActivityPublicationSnapshotLike["taskHeaderPresentation"],
+		taskHeaderPresentation: {
+			phase: "streaming",
+			source: "shadow",
+			seq: 1,
+		} as unknown as ActivityPublicationSnapshotLike["taskHeaderPresentation"],
 		taskTelemetry: undefined,
 		foregroundCommandRunning: false,
 		backgroundCommandRunning: false,
@@ -98,7 +95,7 @@ describe("A1-A3: diagnostic-profile A knob", () => {
 		// pins the new canonical dogfood initial render "VIAPD";
 		// a sibling test in `dogfood-diagnostic-profile.test.ts`
 		// pins the pre-D "VIAP" for historical-context preservation.
-		const knobs = { v: true, i: true, a: true, p: true, d: true }
+		const knobs = { v: true, i: true, a: true, p: true, d: true, t: false }
 		expect(formatEffectiveKnobLetters(knobs)).toBe("VIAPD")
 	})
 })
@@ -158,7 +155,11 @@ describe("A4-A5: production seam (pure builder)", () => {
 			epoch: 7,
 			currentTaskItem: { id: "task-shadow-unbound" },
 			turnState: { phase: "streaming", seq: 99 } as ActivityPublicationSnapshotLike["turnState"],
-			taskHeaderPresentation: { phase: "streaming", source: "shadow", seq: 99 } as unknown as ActivityPublicationSnapshotLike["taskHeaderPresentation"],
+			taskHeaderPresentation: {
+				phase: "streaming",
+				source: "shadow",
+				seq: 99,
+			} as unknown as ActivityPublicationSnapshotLike["taskHeaderPresentation"],
 			thinkingPresentation: {
 				modelStreaming: true,
 				source: "shadow",
@@ -345,9 +346,7 @@ describe("A8: existing V/I/P behavior unchanged", () => {
 
 	it("A8c: public defaults remain all OFF (no public surface drift)", () => {
 		const knobs = composeEffectiveDiagnosticKnobs({}, false, EMPTY_PATH, null)
-		expect(knobs).toEqual({ v: false, i: false, a: false, p: false, d: false })
+		expect(knobs).toEqual({ v: false, i: false, a: false, p: false, d: false, t: false })
 		expect(formatEffectiveKnobLetters(knobs)).toBe("")
 	})
 })
-
-

@@ -109,6 +109,10 @@ interface TaskHeaderTelemetryProps {
 	 * AND at least one knob is ON, the indicator renders the active
 	 * letters (e.g. `"VIAPD"`) at the right of the row. When absent or
 	 * all-OFF (the public default), the indicator is hidden entirely.
+	 *
+	 * ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the additive `t`
+	 * knob reports the HOST-SUPPLIED live model-behavior flight-recorder
+	 * state (the webview never recomputes it).
 	 */
 	diagnosticKnobs?:
 		| {
@@ -117,6 +121,7 @@ interface TaskHeaderTelemetryProps {
 				readonly a: boolean
 				readonly p: boolean
 				readonly d: boolean
+				readonly t: boolean
 		  }
 		| undefined
 }
@@ -401,9 +406,14 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	// Compose the diagnostic-knob indicator from the host-supplied
 	// `diagnosticKnobs` field. Empty string -> nothing to render
 	// (the public default). Non-empty -> render the letters in the
-	// canonical V → I → A → P → D order (matches the host resolver's
+	// canonical V → I → A → P → D → T order (matches the host resolver's
 	// `formatEffectiveKnobLetters` output, mirrored here so the
 	// webview can render without re-importing the host resolver).
+	//
+	// ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the `t` knob is
+	// the HOST-SUPPLIED live recorder state (`isModelBehaviorTraceEnabled()`
+	// on the host) — the webview NEVER recomputes it. The `T` letter is
+	// therefore truthful even after a manual live toggle.
 	const indicatorLetters = diagnosticKnobs
 		? [
 				diagnosticKnobs.v ? "V" : "",
@@ -411,10 +421,11 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 				diagnosticKnobs.a ? "A" : "",
 				diagnosticKnobs.p ? "P" : "",
 				diagnosticKnobs.d ? "D" : "",
+				diagnosticKnobs.t ? "T" : "",
 			].join("")
 		: ""
 	const tooltipBody = diagnosticKnobs
-		? `V=${diagnosticKnobs.v ? "on" : "off"}, I=${diagnosticKnobs.i ? "on" : "off"}, A=${diagnosticKnobs.a ? "on" : "off"}, P=${diagnosticKnobs.p ? "on" : "off"}, D=${diagnosticKnobs.d ? "on" : "off"}`
+		? `V=${diagnosticKnobs.v ? "on" : "off"}, I=${diagnosticKnobs.i ? "on" : "off"}, A=${diagnosticKnobs.a ? "on" : "off"}, P=${diagnosticKnobs.p ? "on" : "off"}, D=${diagnosticKnobs.d ? "on" : "off"}, T=${diagnosticKnobs.t ? "on" : "off"}`
 		: ""
 
 	return (

@@ -59,6 +59,7 @@ import { dumpExtensionSideLifecycleClearSnapshot } from "@/sdk/lifecycle-clear-r
 import {
 	dumpModelBehaviorTrace,
 	installModelBehaviorWireReasoningObserver,
+	isModelBehaviorTraceEnabled,
 	syncModelBehaviorTraceEnabled,
 	toggleModelBehaviorTraceWorkspaceEnabled,
 } from "@/sdk/model-behavior-trace-runtime"
@@ -305,13 +306,24 @@ export async function activate(context: vscode.ExtensionContext) {
 	applyWCarrierTraceDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
-	// Restore the persisted model-behavior-trace toggle into the live
-	// recorder. The recorder is DEFAULT OFF in every build (public and
-	// dogfood) — the persisted flag is the ONLY thing that can arm it, and
-	// only an explicit operator toggle ever writes that flag. The recorder
-	// is consulted at observation time, so the toggle affects
+	// Resolve the EFFECTIVE model-behavior-trace state into the live
+	// recorder. Precedence (frozen): explicit workspace override
+	// (`modelBehaviorTraceEnabled`: true/false/undefined) > dogfood profile
+	// default (ON) > public profile default (OFF).
+	//
+	// ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the closed dogfood
+	// runtime profile (`CLINEMM_RUNTIME_PROFILE=dogfood`) now starts with the
+	// recorder ARMED, so the dogflight behavior is instrumented without any
+	// extra launcher env var and without a manual toggle after every restart.
+	// The public profile remains DEFAULT OFF.
+	//
+	// The implicit dogfood default is NOT written into workspace
+	// persistence: the absence of an override must stay meaningful, so the
+	// first live toggle in a dogfood session switches the recorder OFF.
+	//
+	// The recorder is consulted at observation time, so the toggle affects
 	// already-running sessions for subsequent events without a reload.
-	await syncModelBehaviorTraceEnabled(context)
+	await syncModelBehaviorTraceEnabled(context, { isDogfood: isDogfoodRuntime(process.env) })
 
 	// ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01:
 	// install the wire-reasoning observer that records the SERIALIZED
@@ -1061,16 +1073,36 @@ ${ctx.cellJson || "{}"}
 		}),
 		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
 		// Debug commands for the bounded, model-agnostic model behavior
-		// flight recorder. Default OFF in every build (public and dogfood).
+		// flight recorder. Default OFF in public builds; the closed dogfood
+		// profile starts ON (see the activation seam above).
+		//
+		// ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the toggle
+		// inverts the EFFECTIVE state, so a dogfood session that started
+		// with the implicit default ON switches OFF on its FIRST toggle.
 		// The toggle flips the workspace-state flag AND updates the live
 		// recorder immediately, so already-running sessions are affected for
-		// subsequent events — no extension reload and no task restart. The
-		// dump writes the centralized ring to
+		// subsequent events — no extension reload and no task restart.
+		// The dump writes the centralized ring to
 		// <globalStorageUri>/model-behavior-trace.jsonl, never clears the
 		// evidence, and works after tracing has been disabled.
 		vscode.commands.registerCommand(commands.ToggleModelBehaviorTrace, async () => {
-			const next = await toggleModelBehaviorTraceWorkspaceEnabled(context)
+			const wasEnabled = isModelBehaviorTraceEnabled()
+			const next = await toggleModelBehaviorTraceWorkspaceEnabled(context, {
+				isDogfood: isDogfoodRuntime(process.env),
+			})
 			const status = next ? "ENABLED" : "DISABLED"
+			// ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: publish the
+			// updated host state so the TaskHeader's `T` knob reflects the live
+			// recorder state right away — no new task, no extension restart,
+			// no webview reload, and no additional model request. The
+			// publication is skipped when the effective state did not change.
+			if (next !== wasEnabled) {
+				try {
+					await WebviewProvider.getInstance().controller.postStateToWebview()
+				} catch (err) {
+					Logger.error("[MBT] failed to publish state after toggle", err)
+				}
+			}
 			Logger.log(`[MBT] Model behavior trace \u2192 ${status}`)
 			void vscode.window.showInformationMessage(
 				`Model behavior trace: ${status}. Already-running sessions are affected for subsequent events.`,

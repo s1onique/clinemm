@@ -45,14 +45,28 @@ describe("model behavior trace command registration", () => {
 		expect(source).toMatch(/vscode\.commands\.registerCommand\(\s*commands\.DumpModelBehaviorTrace/)
 	})
 
-	it("CMD01.4: the recorder is default OFF — no build profile arms it", () => {
-		// The toggle is the ONLY thing that can arm the recorder: the
-		// persisted workspace flag, written solely by the toggle command.
+	it("CMD01.4: the recorder is default OFF in PUBLIC builds; only the closed dogfood profile arms it", () => {
+		// ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01: the closed
+		// dogfood runtime profile (`CLINEMM_RUNTIME_PROFILE=dogfood`) is now
+		// AUTHORIZED to arm the recorder by default, via the single
+		// activation seam. There is still NO extra launcher env var and NO
+		// new public setting — the dogfood identity is the only input.
+		//
+		// The PUBLIC default remains OFF: an ordinary install is never armed
+		// by a profile, and the persisted workspace override is still the
+		// only thing that can arm a public install.
 		const source = readCommandSource(COMMAND_REGISTRY_PATH)
 		expect(source).toContain("ToggleModelBehaviorTrace")
-		// There is no dogfood/public profile that enables the trace.
 		const extensionSource = readCommandSource(COMMAND_EXTENSION_PATH)
-		expect(extensionSource).not.toContain("applyModelBehaviorTraceDiagnosticProfile")
+		// The activation seam passes the dogfood identity bit explicitly.
+		expect(extensionSource).toMatch(
+			/syncModelBehaviorTraceEnabled\(\s*context,\s*\{\s*isDogfood:\s*isDogfoodRuntime\(process\.env\),?\s*\}\s*,?\s*\)/,
+		)
+		// The toggle seam ALSO honors the effective-state inversion.
+		expect(extensionSource).toMatch(
+			/toggleModelBehaviorTraceWorkspaceEnabled\(\s*context,\s*\{\s*isDogfood:\s*isDogfoodRuntime\(process\.env\),?\s*\}\s*,?\s*\)/,
+		)
+		// No NEW launcher environment variable is introduced for the trace.
 		expect(extensionSource).not.toContain("CLINEMM_MODEL_BEHAVIOR_TRACE")
 	})
 })
