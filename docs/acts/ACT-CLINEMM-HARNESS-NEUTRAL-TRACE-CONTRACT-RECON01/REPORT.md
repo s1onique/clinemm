@@ -659,6 +659,14 @@ are recorded, not silently absorbed.
 
 ### 12.4 Hashes
 
+> **CORR03 note (2026-11-02).** The three tables below are the **historical**
+> per-stage hashes of the recon / CORR01 / CORR02 subjects and are preserved
+> as history. The **current** committed hashes of the two evidence artifacts
+> are the ones recorded in §14.12 — they differ from the values below
+> because CORR03 regenerated both artifacts from the CORR02 source against
+> the preserved original capture. The stale `toolCatalogDigest` /
+> `toolCatalogDigestKeyId` values are gone.
+
 | Path | SHA-256 (of the COMMITTED blob) |
 |---|---|
 | `apps/vscode/src/sdk/normalize-agent-trace.ts` | `e06ef39b258ef9ca027499a06ac23bb81e430be62ab902c07bd23d8592bb8e66` |
@@ -786,3 +794,284 @@ DeepSeek run was observed — see §7.3):
 every desired telemetry field. The next bounded ACT is
 `ACT-CLINEMM-AGENT-TRACE-PROCESS-OUTCOME01` — the single P0 that ClineMM
 itself must close. This ACT stops here.
+
+---
+
+## 14. ACT-CLINEMM-PORTABLE-TRACE-EVIDENCE-BINDING-CORR03 — evidence re-binding
+
+**Type:** Evidence acquisition / correction and artifact binding (bounded,
+artifact-only).
+**Verdict:** `PASS_EVIDENCE_BOUND`.
+**ENTRY_HEAD:** `80e9261ef100925095975364621f9a3ec9b8acf3` (branch `main`).
+**Date:** 2026-11-02.
+
+### 14.1 What was wrong
+
+CORR02 corrected the portable export's **source** (removing the publicly
+reconstructible tool-catalog digest, and hardening the terminal-summary
+validator). It did **not** regenerate the two committed **evidence
+artifacts** that had been produced from the CORR01-era source. At the entry
+head both were stale:
+
+| Artifact | Stale field |
+|---|---|
+| `evidence/real.coverage.json` | `toolCatalogDigestKeyId: "k_d9a029f2"` (top level) |
+| `evidence/real.normalized.sample.jsonl` | `payload.toolCatalogDigest: "40ee4b4414520fd8"` (row 1) |
+
+Both were introduced by `4a70bce6d` (CORR01) and neither was touched by
+`269d87038` (CORR02). The stale artifacts also implied a knowable catalog
+identity, which CORR02's contract explicitly denies.
+
+### 14.2 RED — the mismatch reproduced at the real artifact seam
+
+A narrow, disposable, read-only validator (not checked in) was run against
+the committed artifacts at the entry head:
+
+```
+bun /tmp/corr03/validate-evidence.mjs \
+  --coverage   docs/acts/.../evidence/real.coverage.json \
+  --sample     docs/acts/.../evidence/real.normalized.sample.jsonl \
+  --full       /tmp/corr03/run1/real.normalized.jsonl \
+  --expect-complete
+→ exit 1, 3 diagnostics
+    obsolete field present at coverage/toolCatalogDigestKeyId
+    obsolete field present at sample[mbt_b784e4facea04dbe50e295b7:1]/payload/toolCatalogDigest
+    sample record mbt_b784e4facea04dbe50e295b7:1 is not equal to the generator's full-output record
+```
+
+The validator rejects obsolete fields **at any depth**, a fabricated
+`toolCatalogIdentity`, a `COMPLETE` classification contradicted by counts /
+trace ids / truncation, a sample row that is not the producer's verbatim
+record, and a changed sample row set.
+
+### 14.3 The preserved input was re-used unchanged
+
+| Item | Value |
+|---|---|
+| Input path | `~/.vscodium-clinemm/user-data/User/globalStorage/s1onique.clinemm/model-behavior-trace.jsonl` |
+| Input SHA-256 | `84f6bea329299bbb5af1a38ffef6ce4a87227c5c894c8947f32458043090a070` |
+| Input size | 2 139 292 bytes, 3 892 lines (3 891 agent records + 1 terminal summary) |
+| Verification | `shasum -a 256` **before** and **after** both generator runs — identical |
+| Evidence class | `REAL_CAPTURE` — the original capture, **not** re-recorded, **not** transcribed, **not** synthetic |
+
+The capture's private contents were never copied into the repository, the
+report, or any log.
+
+### 14.4 Generation — the existing producer, run twice
+
+The producer is the existing offline normalizer. **No production source was
+modified.**
+
+```
+bun apps/vscode/src/sdk/normalize-agent-trace.ts \
+  --in  <capture.jsonl> --out /tmp/corr03/run1/real --harness cline
+→ exit 0; "normalized 3891/3891 native records; truncated=false;
+   families={model:1888,context:470,run:488,tool:966,workspace:79}"
+
+bun apps/vscode/src/sdk/normalize-agent-trace.ts \
+  --in  <capture.jsonl> --out /tmp/corr03/run2/real --harness cline
+→ exit 0; identical stdout
+```
+
+| Generator output | Run 1 SHA-256 | Run 2 SHA-256 | Deterministic |
+|---|---|---|---|
+| `real.coverage.json` | `2937561f03ec7e9edcea0f814df2b94697984fddff2a0cec751cfb12e1d80710` | `2937561f03ec7e9edcea0f814df2b94697984fddff2a0cec751cfb12e1d80710` | **YES** |
+| `real.normalized.jsonl` (3 891 rows) | `ada3d1d3ed6b3056618dc2bc8bddd8b2a6ab94ced55f04909750679ba1f8c39b` | `ada3d1d3ed6b3056618dc2bc8bddd8b2a6ab94ced55f04909750679ba1f8c39b` | **YES** |
+
+### 14.5 Coverage accounting (full stream, not the sample)
+
+| Quantity | Value |
+|---|---|
+| Native records read | 3 891 |
+| Portable records written | 3 891 |
+| Unnormalized records | **0** |
+| Truncated | **false** (`droppedCount: 0`) |
+| `retainedCount` / `totalRecorded` | 3 891 / 3 891 |
+| Trace id | `mbt_b784e4facea04dbe50e295b7` (coverage `sourceTraceId` **and** every sample row agree) |
+| Classification | **COMPLETE** — `summaryPresent: true`, 0 unparsed, 0 unrecognized, `reasons: []`, `observedRecords == nativeRecordsRead` |
+
+This matches the reported historical 3 891 / 3 891, zero loss, COMPLETE
+exactly. **No discrepancy was found.**
+
+### 14.6 Catalog
+
+| Fact | Value | Class |
+|---|---|---|
+| Tool-catalog **identity** | `UNAVAILABLE_FROM_TRACE` | explicit — the trace does not reveal the catalog's identity |
+| `toolCatalogCount` | 22 (per record that carries a catalog count) | observed |
+| Records carrying a catalog count | 471 | observed |
+| `privacyFilteredFields.toolNames` | 471 | observed — the `toolNames` arrays were dropped by the privacy filter and are accounted for |
+
+**No digest, key label, HMAC, salt, or trace-ID-derived fingerprint is
+published**, and none was invented.
+
+### 14.7 The sample: what it is, and how it was rebuilt
+
+The tracked `real.normalized.sample.jsonl` is a **12-row sample**, not the
+3 891-record stream. Its established canonical form was recovered by
+observation, not assumption:
+
+- **canonical form** — sorted-key JSON serialization (separators `", "` /
+  `": "`), one producer record per line;
+- **row set** — the predecessor's curated 12 record ids, in the predecessor's
+  order.
+
+Rows 2–12 of the pre-repair sample are **byte-identical** to the CORR02
+producer's output under that canonical form; row 1 differs **only** by the
+removed `payload.toolCatalogDigest`. The rebuild therefore re-emits the
+producer's own records for the already-published record ids.
+
+> **Honest limit.** The sample's row **selection** is a curation, and **no
+> documented, executable selection algorithm for it exists in the repository**
+> (it was not reconstructed from a stride, a hash order, a seeded shuffle, a
+> per-family first-occurrence rule, or a per-(event-type × correlation-class)
+> rule — each was tested and rejected). CORR03 does **not** invent one. What
+> it guarantees is that every committed row is the **current producer's
+> verbatim output** for that record id, so the artifact cannot drift from
+> source. The full-stream counts come from the producer's complete output and
+> coverage (§14.5), never from the sample's line count.
+
+### 14.8 Privacy
+
+The new sample is **strictly narrower** than the pre-repair approved contract:
+
+| Comparison | Result |
+|---|---|
+| Keys present only in the OLD sample | `toolCatalogDigest` (removed) |
+| Keys present only in the NEW sample | **none** |
+| Absolute path strings | **0** |
+| Raw prompts / reasoning content / tool arguments / command output | **none** — the sample contains only the recorder's pre-sanitized scalars, fingerprints and counts |
+| Record count / record ids / order | 12 / identical / identical |
+
+### 14.9 GREEN and conservation
+
+| Gate | Command | Exit | Result |
+|---|---|---|---|
+| Evidence validator (post-repair) | the validator above, against the tracked files | **0** | PASS |
+| Focused CORR02 witnesses | `vitest run … agent-trace-contract-recon01.test.ts` | **0** | **31 / 31** |
+| Broader trace sweep | `vitest run … (agent-trace \| compare-model \| model-behavior)` | **0** | **60 / 60** (4 files) |
+| Typecheck | `bunx tsc --noEmit` (apps/vscode) | **0** | 0 diagnostic lines |
+| Normalizer source delta | `git diff HEAD -- apps/vscode/src/sdk/normalize-agent-trace.ts` | **0** | **empty** |
+| Focused-witness source delta | `git diff HEAD -- …/agent-trace-contract-recon01.test.ts` | **0** | **empty** |
+
+The predecessor's reported 31 / 31 and 119 / 119 are historical context; the
+numbers above are **newly executed** exits.
+
+### 14.10 Adverse controls
+
+| Control | Expected | Observed |
+|---|---|---|
+| Reinsert `toolCatalogDigest` into a sample row | REJECT | **REJECT** (exit 1, 2 diagnostics) |
+| Fabricate a concrete `toolCatalogIdentity` | REJECT | **REJECT** (exit 1, 1 diagnostic) |
+| Contradict COMPLETE with the retained count | REJECT | **REJECT** (exit 1, 2 diagnostics) |
+| Contradict COMPLETE with the trace id | REJECT | **REJECT** (exit 1, 12 diagnostics) |
+| Contradict COMPLETE with the truncation flag | REJECT | **REJECT** (exit 1, 3 diagnostics) |
+| Corrupt a normalized sample row's payload | REJECT | **REJECT** (exit 1, 1 diagnostic) |
+| Drop a normalized sample row | REJECT | **REJECT** (exit 1, 2 diagnostics) — *via the explicit row-set binding*; a row-count loss alone is **not** detectable by a schema/consistency check, so the row set is bound as part of the artifact identity |
+| Change the original capture's bytes / SHA | REJECT before normalization | **REJECT** (tampered digest `1e891722…` ≠ frozen `84f6bea3…`) |
+| Generate from a synthetic fixture but label it REAL | REJECT provenance binding | **REJECT** in the mixed cases (24 and 14 diagnostics). **Honest limit:** a *fully self-consistent* synthetic artifact passes the schema validator on its own — the provenance discriminator is the **frozen input SHA-256 gate** (§14.3) plus the identity receipt below, not the schema check |
+
+### 14.11 The independent evaluator — a separate proof
+
+The evaluator is `scripts/evaluate-agent-fixture.ts` (`agent-fixture/0.1` +
+`agent-acceptance/0.1`), the **pre-existing** one at commit `0bfc178bb`. Its
+fixture was verified on disk before use:
+
+| Item | Value |
+|---|---|
+| Fixture repository | `/tmp/clinemm-acceptance/fixtures/typescript-three-defect-01` |
+| Fixture commit | `14bcdc8874978d44acf4d08c5c2bccceb462bacc` |
+| Fixture tree | `b626c98912dbcce39ac5cf8f37a535961d69723d` |
+| Manifest SHA-256 | `a58a448c8196284d394165f4904a17ff244e9e9dce3a4a6eba8d6125fe575824` |
+
+| Run | Command | Exit | Verdict | Baseline | Final |
+|---|---|---|---|---|---|
+| **A** — broken baseline | `bun scripts/evaluate-agent-fixture.ts --manifest … --candidate …/candidateA --out-dir …/A` | **1** | **`FAIL`** (`TEST_FAILURE`) | 18 total / 14 pass / 4 fail / exit 1 | 18 / 14 / 4 / exit 1 |
+| **B** — repaired source | same, `--candidate …/candidateB` | **0** | **`PASS`** | 18 / 14 / 4 / exit 1 | **18 / 0 fail / exit 0** |
+| **B** — no trace supplied | same, no `--trace` | **0** | **`PASS`** | 18 / 14 / 4 / exit 1 | 18 / 0 fail / exit 0 |
+| **B** — trace supplied | same, `--trace <normalized.jsonl>` | **0** | **`PASS`** | 18 / 14 / 4 / exit 1 | 18 / 0 fail / exit 0 |
+
+This reproduces the historical discriminator exactly (broken 14/4 → FAIL;
+repaired 18/0 → PASS). **Trace-independence is directly observed**: with the
+trace supplied, `traceProvided` flips to `true`, yet the verdict and every
+deterministic digest are **identical** —
+`finalWorkspaceDigest 65d6f42514e56788…`, `candidateDeltaSha256
+52c39d8abea1e8e5…`, `testReportSha256 a0bdc8aa3fcc6415…`.
+
+The evaluator's own witness suite was executed as well: **18 passed, 10
+skipped, exit 0**.
+
+> **Scope.** The evaluator validates **neither** `real.coverage.json` **nor**
+> the normalized sample. It was designed to be trace-independent, and this
+> run confirms it. It is reported here as `INDEPENDENT_ACCEPTANCE`, separately
+> from the evidence-pack normalization pass. No new harness, no new tests,
+> no fixture or evaluator source was modified.
+
+### 14.12 Durable identity receipt
+
+Bound to the **pre-edit** source head and blob, and to the frozen input
+digest. No commit SHA of the commit that carries this receipt is embedded in
+the artifacts it describes (that would be self-referential).
+
+```
+ACT_ID                          ACT-CLINEMM-PORTABLE-TRACE-EVIDENCE-BINDING-CORR03
+ENTRY_HEAD                      80e9261ef100925095975364621f9a3ec9b8acf3
+BRANCH                          main
+ENTRY_STATUS                    clean (git status --porcelain=v1 -uall empty)
+SOURCE_HEAD                     80e9261ef100925095975364621f9a3ec9b8acf3
+NORMALIZER_SOURCE_BLOB          90019c41a7a5f96865989f7352b10a4a2ef8fe8a
+NORMALIZER_SOURCE_SHA256        6765925145922c1bbe8ee24ef02ca1be16562501c4ed8ea103efa721b34424dd
+CORR02_ANCESTRY                 269d8703864f2cd67d68060814dabb527de6d44b IS an
+                                ancestor of SOURCE_HEAD (git merge-base
+                                --is-ancestor → 0); the corrected semantics
+                                are present in the actual source
+RAW_CAPTURE_SHA256              84f6bea329299bbb5af1a38ffef6ce4a87227c5c894c8947f32458043090a070 [VERIFIED]
+RAW_CAPTURE_CLASS               REAL_CAPTURE (preserved original, not re-recorded)
+GENERATOR_INVOCATION            bun apps/vscode/src/sdk/normalize-agent-trace.ts --in <capture> --out <prefix> --harness cline
+GENERATOR_EXIT                  0 (run 1 and run 2)
+RUNTIME                         bun 1.3.14
+COVERAGE_ACCOUNTING             native 3891 / portable 3891 / unnormalized 0 /
+                                truncated false / droppedCount 0 / retained
+                                3891 / totalRecorded 3891
+TRACE_ID_CONSISTENCY            coverage.sourceTraceId ==
+                                mbt_b784e4facea04dbe50e295b7 == every sample row
+COMPLETENESS                    COMPLETE (all CORR02 invariants satisfied)
+CATALOG                         count=22 per record (471 records carry a count)
+                                identity=UNAVAILABLE_FROM_TRACE
+ARTIFACT_1_PATH                 docs/acts/ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01/evidence/real.coverage.json
+ARTIFACT_1_BYTES                5567
+ARTIFACT_1_SHA256               2937561f03ec7e9edcea0f814df2b94697984fddff2a0cec751cfb12e1d80710
+ARTIFACT_1_PRE_REPAIR_SHA256    206663a1419e9d8fbe497bb9547d0839a2b7dafab226c09a1b0178a72101ce86
+ARTIFACT_2_PATH                 docs/acts/ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01/evidence/real.normalized.sample.jsonl
+ARTIFACT_2_BYTES                11867
+ARTIFACT_2_SHA256               c572bbd2a1d4087243ef7d7265d00f3a6f5be279e9be09153f4e6ad75016007f
+ARTIFACT_2_PRE_REPAIR_SHA256    0c91d2f15bbd12c3aacbd20694d90b26225b804efa722576716494934152c57d
+RED                             the validator above → exit 1 (3 diagnostics)
+GREEN                           the validator above → exit 0; focused 31/31;
+                                sweep 60/60; typecheck 0
+ADVERSE_CONTROLS                9 controls, all REJECT (2 with a stated
+                                observability limit — §14.10)
+INDEPENDENT_EVALUATOR            A → FAIL exit 1; B → PASS exit 0; B-without-
+                                trace → PASS exit 0; B-with-trace → PASS exit 0;
+                                verdict + digests identical with and without the
+                                trace; evaluator witnesses 18 passed / 10
+                                skipped, exit 0
+PROVENANCE_LABELS               REAL_CAPTURE (input) /
+                                DERIVED_FROM_REAL (both artifacts) /
+                                UNAVAILABLE_FROM_TRACE (catalog identity)
+SOURCE_DELTA                    zero — the normalizer and its focused witness
+                                are byte-identical to ENTRY_HEAD
+QUALIFICATION_BOUNDARY          DERIVED_FROM_REAL + STRUCTURAL/EXECUTED;
+                                INSTALLED_UI = NOT_EXECUTED
+```
+
+### 14.13 What this ACT does NOT claim
+
+- It does **not** claim the trace is complete beyond this one capture.
+- It does **not** claim the capture's completeness is a property of the
+  harness — only of these 3 892 preserved input lines.
+- It does **not** claim an installed UI, a live dogfood run, or any model
+  behaviour.
+- It does **not** claim the evaluator validated these artifacts (§14.11).
+- It does **not** claim the sample's row selection is algorithmically
+  reproducible (§14.7).
