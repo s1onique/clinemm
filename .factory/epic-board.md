@@ -1,3 +1,33 @@
+# ACT-CLINEMM-FORK-UPSTREAM-MERGE01-QUALIFICATION-CORR01 — PASS_STRUCTURAL_ONLY — 2026-11-03
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. Bounded correction of the three P1 findings from the independent Codex review of `ACT-CLINEMM-FORK-UPSTREAM-MERGE01`. The upstream merge was NOT recreated; the existing two-parent merge `167f5ca8d` is intact. The upstream remote-hook filter was EXERCISED and found to change **no** ClineMM trace coverage, identity, ordering or cardinality — the upstream optimization is preserved and no remedy was applied. Two historical evidence artifacts unintentionally modified by the merge were restored byte-for-byte. 30 distinct qualification gates executed: 28 PASS, 2 non-PASS results both proven identical at the fork baseline, **0 ACT-owned failures**. Live UI / installed-VSIX qualification was NOT possible in this environment and is explicitly NOT claimed.
+
+```text
+ACT_ID: ACT-CLINEMM-FORK-UPSTREAM-MERGE01-QUALIFICATION-CORR01
+TYPE: CORRECTION (qualification of the upstream merge; bounded, one cycle)
+EPIC: EPIC-CLINEMM-UPSTREAM-AND-AGENT-CONTROL-01
+VERDICT: PASS_STRUCTURAL_ONLY
+SUBJECT_HEAD: 3fc91ddda3e6d27f05640aca497acecadd558320
+BRANCH: integration/upstream-20261102
+MERGE_COMMIT (unchanged): 167f5ca8d639cc83c21ddf8e0d96369cfc319d0a
+MERGE_PARENT1 (fork): 265044bf37429cb3c48918eb7473e46cc3933964
+MERGE_PARENT2 (upstream): a6507a62a147db4a35e27f4294589742ccac5060
+MERGE_BASE: 48d63852745460ff0fa3dfcc0457bbe2493841de
+MAIN (unchanged): 265044bf37429cb3c48918eb7473e46cc3933964
+PUSHED: NO   INSTALLED: NO   STASHES_TOUCHED: 0
+EVIDENCE: .factory/evidence/ACT-CLINEMM-FORK-UPSTREAM-MERGE01-QUALIFICATION-CORR01/{01-identity-and-ancestry.md,02-historical-evidence-conservation.md,03-hub-trace-cardinality-discriminator.md,04-qualification-gates.md,05-decision-record.md,ledger.json}
+```
+
+**C0 — IDENTITY AND EVIDENCE.** HEAD `3fc91ddda` was DISCOVERED and confirmed to be the reviewed head named in the brief (not assumed). The merge `167f5ca8d` is a genuine two-parent merge (parents `265044bf3` + `a6507a62`, base `48d63852`) and was NOT recreated. The worktree was clean at entry. `main` is unchanged; both protected stashes are untouched; nothing was pushed, installed or published. The U02 → existing-ACT mapping is recorded as a POINTER table (evidence reused by reference, receipts NOT duplicated); the U02 evidence directory is not modified by this ACT.
+
+**C1 — HISTORICAL EVIDENCE CONSERVATION (P1-1, RESOLVED).** The merge had unintentionally modified two artifacts belonging to EARLIER ACTs: `ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01/test-replay-summary.json` (its recorded `kernel.path` was re-anchored to the temporary worktree path) and `act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md` (its `Generated:` timestamp was bumped). Both are regeneration side-effects that destroy provenance without adding information. Both were restored byte-for-byte from baseline `265044bf3` — SHA-256 `818ae980…6410` (4735 bytes) and `be41bc03…e58` (2344 bytes) respectively, matching the baseline exactly. All new findings and checksums live EXCLUSIVELY in this ACT's evidence directory.
+
+**C2 — HUB TRACE-CARDINALITY DISCRIMINATOR (P1-2, RESOLVED: NO COVERAGE LOSS).** The upstream filter (`94980446c`, extended by `590785eff`) drops FOUR per-chunk event types — `assistant-text-delta`, `assistant-reasoning-delta`, `tool-call-delta`, `tool-updated` — from the **remote `onEvent` hook proxy** in `hub-client-contributions.ts`. Two facts that only EXECUTION established: (a) the merged tree's filter set is FOUR types, not the three the brief describes (the brief omits `tool-call-delta`); (b) BOTH filter commits ARE ancestors of HEAD, and the merged file is **byte-identical to upstream head** — the optimization landed in the merge despite U02's triage note recording it as deferred. The ClineMM recorder does **not** consume that path: it is wired as a `ModelBehaviorTraceSink` on the session/agent config and invoked INLINE by the agent runtime, so the two paths are structurally disjoint. Exercising the REAL hub proxy and the REAL agent runtime with assistant-text, assistant-reasoning, tool-call and tool-update deltas proved **coverage, identity, ordering and cardinality are all unchanged** (exactly one record per boundary: 2 effective-config, 2 request-start, 2 request-finish, 1 tool-start, 1 tool-finish; session/run/tool-call correlation intact; ordering intact; tracing-OFF execution identical). **The upstream optimization is preserved; no remedy was applied because none was needed.**
+
+**C3 — MISSING INTEGRATION QUALIFICATION (P1-3, RESOLVED).** 30 distinct gates executed at this HEAD: 28 PASS; 2 non-PASS results proven PRE-EXISTING by identical fork-baseline execution; **0 ACT-owned failures**. Typechecks compared by DIAGNOSTIC IDENTITY, not counts: `@cline/core` shows 37 diagnostics on both trees with **ADDED = 0, REMOVED = 0** on (file, code, message) — the 2 raw line shifts are explained by upstream growing `compaction.test.ts` (+527) and `definitions.test.ts` (+267). **Editor realpath RED matrix: 3 failed (C/D/E) / 4 passed (A/B/F/H) — EXACT MATCH.** **B2PO01: 9/9 GREEN — EXACT MATCH.** MiniMax M3.1 exact-ID 8/8 GREEN; reasoning witnesses 12/12; CLI JSON event compatibility 4 files / 67 tests PASS; SDK build, webview build, esbuild production bundle and VSIX packaging (523 files, 48.16 MB) all EXIT=0. The hub-server `ui-events` / `replay-wire` / `hub-plugins` failures are ENVIRONMENTAL (the hub server cannot open its SQLite DB at the default `~/.cline`: `EPERM … mkdir`, `unable to open database file`) — with a writable `CLINE_DIR` the same files are **15/15 GREEN**. Installed-VSIX dogfood UI is `LIVE_UNOBSERVABLE`; live provider turn, live-hub CLI e2e and `bun install` are `NOT_EXECUTED`. **No passing result was invented.**
+
+**C4 — EVIDENCE AND CLOSURE.** ACT-owned command receipts, expected-vs-observed comparisons, full SHA-256 artifact hashes, source HEAD identity and a concise decision record are in this ACT's evidence directory. The VSIX was **packaged but NOT installed** (`sha256 21f0a161…d14e9`); no installed-UI claim is derived from it. The bounded correction is committed on the EXISTING integration branch `integration/upstream-20261102` with a clean tree.
+
 # ACT-CLINEMM-FORK-UPSTREAM-MERGE01 — PASS_STRUCTURAL_ONLY — 2026-11-02
 
 **Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. Frozen full upstream merge `a6507a62` into the ClineMM integration branch `265044bf3`, preserving all fork authorities. All 67 merge conflicts resolved; 0 unmerged paths; 0 conflict markers remaining. Live UI / installed-VSIX qualification was NOT possible in this environment and is explicitly NOT claimed.

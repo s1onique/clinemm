@@ -1,0 +1,216 @@
+{
+  "act": "ACT-CLINEMM-FORK-UPSTREAM-MERGE01-QUALIFICATION-CORR01",
+  "classification": "PASS_STRUCTURAL_ONLY",
+  "subject_head": "3fc91ddda3e6d27f05640aca497acecadd558320",
+  "branch": "integration/upstream-20261102",
+  "merge": {
+    "commit": "167f5ca8d639cc83c21ddf8e0d96369cfc319d0a",
+    "parent1_fork": "265044bf37429cb3c48918eb7473e46cc3933964",
+    "parent2_upstream": "a6507a62a147db4a35e27f4294589742ccac5060",
+    "merge_base": "48d63852745460ff0fa3dfcc0457bbe2493841de",
+    "recreated_by_this_act": false
+  },
+  "protected_state": {
+    "main_pointer": "265044bf37429cb3c48918eb7473e46cc3933964",
+    "main_changed": false,
+    "stashes_touched": 0,
+    "pushed": false,
+    "installed": false
+  },
+  "c1_historical_evidence_conservation": {
+    "restored": [
+      {
+        "path": ".factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01/test-replay-summary.json",
+        "baseline_sha256": "818ae980171ee4fa899adad094c42b2927b1ca46e508d40c320eca26fefe6410",
+        "restored_sha256": "818ae980171ee4fa899adad094c42b2927b1ca46e508d40c320eca26fefe6410",
+        "bytes": 4735,
+        "byte_identical": true
+      },
+      {
+        "path": ".factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md",
+        "baseline_sha256": "be41bc034ef03c316757372ed80ad01dee6edec410a77ec023e764d1c11ebe58",
+        "restored_sha256": "be41bc034ef03c316757372ed80ad01dee6edec410a77ec023e764d1c11ebe58",
+        "bytes": 2344,
+        "byte_identical": true
+      }
+    ],
+    "u02_evidence_directory_modified": false,
+    "new_findings_placed_exclusively_in": ".factory/evidence/ACT-CLINEMM-FORK-UPSTREAM-MERGE01-QUALIFICATION-CORR01/"
+  },
+  "c2_hub_trace_cardinality_discriminator": {
+    "upstream_filter_commits": [
+      {
+        "sha": "94980446c99f24040e9ed7a03e7726be4aea9198",
+        "subject": "fix(hub): stop forwarding per-chunk stream events to remote onEvent hooks (#14120)",
+        "is_ancestor_of_head": true
+      },
+      {
+        "sha": "590785eff565f167b16d5f750d682c4d9d2b7128",
+        "subject": "feat(telemetry): report per-run stall signals (#15228)",
+        "is_ancestor_of_head": true
+      }
+    ],
+    "filter_set_in_merged_tree": [
+      "assistant-text-delta",
+      "assistant-reasoning-delta",
+      "tool-call-delta",
+      "tool-updated"
+    ],
+    "filter_set_note": "The ACT brief described three types; upstream commit 590785eff added tool-call-delta to the set. The merged tree's hub-client-contributions.ts is byte-identical to upstream head a6507a62.",
+    "file_byte_identical_to_upstream_head": true,
+    "protected_consumer_affected": false,
+    "coverage_changed": false,
+    "identity_changed": false,
+    "ordering_changed": false,
+    "cardinality_changed": false,
+    "upstream_optimization_preserved": true,
+    "remedy_implemented": "none (no coverage lost)",
+    "new_witnesses": [
+      {
+        "path": "sdk/packages/core/src/hub/server/hub-trace-cardinality-discriminator.c2-4-fork-upstream-corr01.test.ts",
+        "sha256": "28a6ba13e069c2b008106af361bc3a545bfb7b53ea26b0bc113a9904032042ea",
+        "tests": 4,
+        "passed": 4
+      },
+      {
+        "path": "sdk/packages/agents/src/agent-runtime.hub-trace-cardinality-discriminator.c2-4-fork-upstream-corr01.test.ts",
+        "sha256": "b8bc1f08eda9c79b2b0acc98168502578f329b9d4a7dc7faa487c7e6b911b7e0",
+        "tests": 2,
+        "passed": 2
+      }
+    ],
+    "d3_cardinality_observed": {
+      "effective_model_config": 2,
+      "model_request_start": 2,
+      "model_request_finish": 2,
+      "tool_start": 1,
+      "tool_finish": 1
+    }
+  },
+  "c3_qualification": {
+    "distinct_gates_executed": 30,
+    "gates_passing": 28,
+    "gates_failing_only_pre_existing_or_environmental": 2,
+    "act_owned_failures": 0,
+    "typecheck_diagnostic_identity": {
+      "package": "@cline/core",
+      "merged_diagnostics": 37,
+      "fork_baseline_diagnostics": 37,
+      "added": 0,
+      "removed": 0,
+      "comparison_basis": "(file, code, message) with line/column normalized",
+      "line_shifts": 2,
+      "line_shift_cause": "upstream added lines to compaction.test.ts and definitions.test.ts"
+    },
+    "required_baselines": {
+      "editor_realpath_red_matrix": {
+        "expected": "3 failed / 4 passed",
+        "observed": "3 failed / 4 passed",
+        "match": true
+      },
+      "b2po01_continuation_regression": {
+        "expected": "9/9 GREEN",
+        "observed": "9 passed / 9",
+        "match": true
+      },
+      "minimax_m31_exact_id": {
+        "expected": "8/8 GREEN",
+        "observed": "8 passed / 8",
+        "match": true
+      }
+    },
+    "pre_existing_failures": [
+      {
+        "id": "F1",
+        "gate": "@cline/core typecheck",
+        "merged": "37 diagnostics",
+        "fork_baseline": "37 identical diagnostics",
+        "classification": "PRE_EXISTING"
+      },
+      {
+        "id": "F2",
+        "gate": "editor.realpath-authority.test.ts",
+        "merged": "3 failed / 4 passed",
+        "fork_baseline": "n/a (intentional RED matrix declared by the file's own header)",
+        "classification": "PRE_EXISTING_BY_DESIGN"
+      },
+      {
+        "id": "F3",
+        "gate": "local-runtime-host.test.ts",
+        "merged": "1 failed",
+        "fork_baseline": "1 failed, same assertion and same values",
+        "classification": "PRE_EXISTING"
+      },
+      {
+        "id": "F4",
+        "gate": "hub ui-events + replay-wire",
+        "merged": "5 failed / 8 passed",
+        "fork_baseline": "5 failed / 8 passed, same test names",
+        "classification": "PRE_EXISTING_ENVIRONMENTAL",
+        "cause": "hub server cannot open its SQLite DB at the default ~/.cline (EPERM mkdir / unable to open database file)",
+        "green_with_writable_cline_dir": "15/15"
+      },
+      {
+        "id": "F5",
+        "gate": "hub-plugins.test.ts",
+        "merged": "2 failed",
+        "fork_baseline": "file absent in fork baseline (upstream-new, 12a4c6bfe)",
+        "classification": "PRE_EXISTING_ENVIRONMENTAL",
+        "cause": "same CLINE_DIR cause; green with writable CLINE_DIR"
+      },
+      {
+        "id": "F6",
+        "gate": "vitest worker teardown",
+        "merged": "EPERM syscall kill on worker teardown",
+        "fork_baseline": "identical (recorded by U02)",
+        "classification": "ENVIRONMENTAL"
+      }
+    ],
+    "not_executed_or_unobservable": [
+      {
+        "item": "installed-VSIX dogfood UI qualification",
+        "status": "LIVE_UNOBSERVABLE",
+        "reason": "no installed VS Code build is driven here; the VSIX was packaged but NOT installed"
+      },
+      {
+        "item": "live model-provider turn (real MiniMax credential)",
+        "status": "NOT_EXECUTED",
+        "reason": "no provider credential configured in this environment"
+      },
+      {
+        "item": "CLI end-to-end against a live hub daemon",
+        "status": "NOT_EXECUTED",
+        "reason": "requires a live @cline/cline-hub daemon and provider credentials"
+      },
+      {
+        "item": "bun install / lockfile regeneration",
+        "status": "NOT_EXECUTED",
+        "reason": "bun 1.3.13 cannot write its temp dir in this sandbox; bun.lock was NOT modified"
+      },
+      {
+        "item": "whole-suite VS Code / core collection and per-file A/B",
+        "status": "REUSED_FROM_U02",
+        "reason": "merge-time artifact; outside a bounded correction cycle. U02 ledger records net regressions = 0 for both suites."
+      }
+    ],
+    "artifacts": {
+      "vsix": {
+        "path": "dist/clinemm-corr01-qualification.vsix",
+        "bytes": 50504372,
+        "sha256": "21f0a1615187afc5d5a1aa2a15fe4245302820d132c3ade7b6a26b74b13d14e9",
+        "installed": false
+      }
+    }
+  },
+  "not_done": [
+    "no merge recreated",
+    "no push",
+    "no install",
+    "no promotion",
+    "no release",
+    "main not changed",
+    "no protected stash touched",
+    "no Factory infrastructure rebuilt",
+    "no new general review round initiated"
+  ]
+}
