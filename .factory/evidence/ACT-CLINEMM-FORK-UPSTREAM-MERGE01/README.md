@@ -65,11 +65,12 @@ Elm requires `ELM_HOME=/tmp/cline-int/elm-home` (the default package cache is no
 
 ## 5. VS Code extension suite — three-way A/B
 
-Full suite (merged): **5434 passed / 148 failed / 491 suites**.
+Full suite (merged): **5434 passed / 148 failed / 491 suite files** (vitest reported 1894 total suites).
 
-The fork baseline collection was truncated (872 vs 1060 suites — mixed/symlinked
-deps in the baseline worktree), so every candidate delta was re-run **per-file
-A/B on both trees** rather than compared as whole-suite totals.
+The fork baseline collection was truncated — it collected **475 of 1660** suite files
+(vs **491 of 1894** in the merged run; mixed/symlinked deps in the baseline
+worktree) — so every candidate delta was re-run **per-file A/B on both trees**
+rather than compared as whole-suite totals.
 
 | A/B group | Merged | Fork | Upstream | Verdict |
 |---|---|---|---|---|
@@ -89,8 +90,9 @@ A/B on both trees** rather than compared as whole-suite totals.
 
 ## 6. Core SDK suite — three-way A/B
 
-Full suite (merged): **4863 passed / 44 failed / 311 suites** vs fork
-**3538 passed / 98 failed / 252 suites**.
+Full suite (merged): **4863 passed / 44 failed / 320 suite files** (vitest reported
+1060 total suites) vs fork **3538 passed / 98 failed / 258 suite files** (872
+reported).
 
 | Metric | Value |
 |---|---|
@@ -139,7 +141,7 @@ introduced by the merge.
 | vitest worker teardown | `processTimers` `EPERM` on `syscall: 'kill'` — **identical in fork and upstream**; all tests pass, only worker teardown fails |
 | Core checkpoint / hub-runtime | pass with writable `CLINE_DIR=/tmp/cline-int/cline-dir-cp*` and `TMPDIR=/tmp/cline-int/stable-tmp` |
 | Elm package cache | requires `ELM_HOME=/tmp/cline-int/elm-home` (default cache not writable) |
-| Fork baseline collection truncated | 872 vs 1060 suites (mixed/symlinked deps) → comparison performed per-file A/B, never as whole-suite totals |
+| Fork baseline collection truncated | VS Code: 475 of 1660 suite files collected (vs 491 of 1894 merged); core: 258 of 872 (vs 320 of 1060) → comparison performed per-file A/B, never as whole-suite totals |
 | No live UI / install qualification | no installed-VSIX dogfood in this environment |
 
 ## 9. Classification

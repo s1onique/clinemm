@@ -24,15 +24,15 @@ agents bun test (whole package)                EXIT=1 (553P/11F upstream-inherit
 agents bun test src/agent-runtime.test.ts      merged=142P/10F upstream=142P/10F fork=64P/0F
 agents bun run test (vitest)                   EXIT=1 ENV (processTimers EPERM; fork identical)
 elm make src/Main.elm (5 kernels)              EXIT=0 each
-vscode vitest full (491 suites)                5434P/148F
-core vitest full (311 suites)                  4862P/45F
+vscode vitest full (491 suite files)           5434P/148F
+core vitest full (320 suite files)             4863P/44F
 elm-test 4 suites w/ ELM_HOME                  25/0, 31/0, 39/2(fork-parity), 48/0
 ```
 
 ## Raw result artifacts (sha256 prefix)
 ```
 /tmp/cline-int/vitest-results8.json                    fbf61aef4109ac40
-/tmp/cline-int/core-results5.json                      c8583396891da05d
+/tmp/cline-int/core-results6.json                      6ba841fbe02d8bdf
 /tmp/cline-int/baseline-vitest-results2.json           cd8be41ee13ce9cd
 /tmp/cline-int/fork-core-results.json                  39fa81ab23039b57
 ```

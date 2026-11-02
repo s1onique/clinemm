@@ -69,8 +69,9 @@
     "fork_baseline_collection": {
       "passed": 3882,
       "failed": 465,
-      "suites": 872,
-      "note": "truncated; per-file A/B used instead of whole-suite totals"
+      "suites": 475,
+      "total_suites_reported": 1660,
+      "note": "fork baseline collection was TRUNCATED (475 of 1660 suite files collected vs 491 of 1894 in the merged run); per-file A/B was used instead of whole-suite totals"
     },
     "fork_reds_fixed": 335,
     "candidate_regressions": 14,
@@ -111,14 +112,15 @@
   },
   "core_suite": {
     "merged": {
-      "passed": 4862,
-      "failed": 45,
-      "suites": 311
+      "passed": 4863,
+      "failed": 44,
+      "suites": 320
     },
     "fork_baseline": {
       "passed": 3538,
       "failed": 98,
-      "suites": 252
+      "suites": 258,
+      "total_suites_reported": 872
     },
     "fork_reds_fixed": 75,
     "candidate_regressions": 12,
@@ -139,7 +141,7 @@
     "vitest worker teardown EPERM on syscall kill (identical in fork and upstream)",
     "core requires writable CLINE_DIR and TMPDIR=/tmp/cline-int/stable-tmp",
     "Elm requires ELM_HOME=/tmp/cline-int/elm-home",
-    "fork baseline suite collection truncated (872 vs 1060 suites) -> per-file A/B",
+    "fork baseline suite collection truncated (VS Code 475 of 1660 suite files vs 491 of 1894 merged; core 258 of 872 vs 320 of 1060) -> per-file A/B, never whole-suite totals",
     "no live UI / installed-VSIX qualification performed"
   ],
   "not_done": [
