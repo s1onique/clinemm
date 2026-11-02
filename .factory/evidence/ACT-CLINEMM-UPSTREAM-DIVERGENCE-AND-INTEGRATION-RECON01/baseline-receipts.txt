@@ -1,0 +1,70 @@
+# ACT-CLINEMM-UPSTREAM-DIVERGENCE-AND-INTEGRATION-RECON01 — DRY BASELINE RECEIPTS
+# Captured: 2026-11-02T10:57:57Z
+# ENTRY_HEAD=6bdc07c8d2651bfb93331552342f2912697dc406
+# UPSTREAM_HEAD=a6507a62a147db4a35e27f4294589742ccac5060
+
+## git status --porcelain=v1 --untracked-files=all (pre-baseline, only run-owned evidence untracked)
+lines=15 (all under .factory/evidence/ACT-CLINEMM-UPSTREAM-DIVERGENCE-AND-INTEGRATION-RECON01/)
+
+## sdk/packages/agents: bunx tsc --noEmit -p tsconfig.json
+EXIT=0 errors=0
+
+## sdk/packages/llms: bunx tsc --noEmit -p tsconfig.json
+EXIT=0 errors=0
+
+## sdk/packages/core: bunx tsc --noEmit -p tsconfig.json
+EXIT=2 errors=55 (ALL in .test.ts files; PRE-EXISTING baseline failure at ENTRY_HEAD)
+  BASELINE_ERR_FILE: src/extensions/context/compaction.test.ts
+  BASELINE_ERR_FILE: src/extensions/context/compaction.working-context-authority-publish.test.ts
+  BASELINE_ERR_FILE: src/extensions/context/compaction.working-context-ratio.test.ts
+  BASELINE_ERR_FILE: src/extensions/tools/definitions.test.ts
+  BASELINE_ERR_FILE: src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+  BASELINE_ERR_FILE: src/extensions/tools/executors/bash.supervised.test.ts
+  BASELINE_ERR_FILE: src/hub/server/hub-upgrades.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/command-execution-plan.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/command-safe-rules.hostile-filename.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/parser-helper/runtime.real-binary.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/parser-provenance.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/path-authority.temporary-external.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/structured-command-risk.attack-witness.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/structured-command-risk.cd-cwd-authority.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/structured-command-risk.find-quoted-pattern.test.ts
+  BASELINE_ERR_FILE: src/runtime/command-policy/structured-command-risk.reader-path-authority.test.ts
+  BASELINE_ERR_FILE: src/runtime/host/local-runtime-host.subscribe-runtime-events.e2f-f1-correction01.test.ts
+  BASELINE_ERR_FILE: src/runtime/host/local-runtime-host.subscribe-runtime-events.e2f-f1.test.ts
+  BASELINE_ERR_FILE: src/runtime/observability/model-behavior-trace.test.ts
+  BASELINE_ERR_FILE: src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts
+  BASELINE_ERR_FILE: src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts
+  BASELINE_ERR_FILE: src/runtime/sandbox/macos/seatbelt-go-default-cache-authority01.test.ts
+  BASELINE_ERR_FILE: src/runtime/turn-queue/pending-prompt-service.test.ts
+
+## apps/cli: bunx tsc --noEmit -p tsconfig.json
+EXIT=0 errors=0
+
+## git merge-tree --write-tree HEAD FETCH_HEAD
+EXIT=1 (conflicts) stdout_bytes=36205 stderr_bytes=0 tree_oid=51294a8dc6c197167a6d9373faafb62354204147 conflicts=67
+
+## sdk/packages/llms: bunx vitest run src/providers/routing/minimax-m31-exact-id-wire01.test.ts
+EXIT=0 Test Files 1 passed Tests 8 passed  (MiniMax M3.1 exact model-id wire witness GREEN at ENTRY_HEAD)
+
+## sdk/packages/core: bunx vitest run src/extensions/tools/executors/editor.realpath-authority.test.ts
+EXIT=1 Test Files 1 failed Tests 3 failed | 4 passed
+BASELINE_RED (INTENTIONAL, PRE-EXISTING): this is the ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01 RED matrix.
+  Cases C (ABSOLUTE OUTSIDE TARGET), D (EXISTING SYMLINK ESCAPE), E (NONEXISTENT OUTSIDE TREE) are the LOAD-BEARING DEFECT OBSERVATIONS.
+  Cases A/B/F/H are positive controls and PASS.
+  The file's own header states: "Once the production repair is in place, this test must GREEN at C, D, and E".
+  => U02 MUST preserve this exact 3-failed/4-passed baseline; any change to these counts is an ACT-OWNED DELTA, not a baseline.
+
+## apps/vscode: bun run test:vitest:b2po01 -- --reporter=verbose
+EXIT=0 Test Files 2 passed Tests 9 passed  (premature Resume Task regression witness GREEN at ENTRY_HEAD)
+
+## apps/vscode: bun run test:vitest:b2po01 (background-command cancel fence + prompt origin)
+NOTE: the vitest-pool "Failed to terminate forks worker ... kill EPERM" line is a WORKER-TEARDOWN artifact of this sandbox, NOT a test failure. Exit code is 0 and all tests pass.
+
+## NOT_EXECUTED (with reason)
+- apps/vscode `bun run test:unit` (full suite): NOT_EXECUTED - broad suite; the focused witnesses above already cover the C5 invariants that the integration touches. Deferred to U02's first-wave gate.
+- apps/vscode `bun run check-types`: NOT_EXECUTED - requires `bun run protos` (mutates generated sources) and is not a harmless read-only probe in this RECON.
+- apps/vscode `bun run build:webview` / `bun esbuild.mjs` / VSIX package: NOT_EXECUTED - build artifacts are production source mutations, forbidden in RECON.
+- apps/cli e2e (`bun run test:e2e`): NOT_EXECUTED - requires a spawned hub daemon + provider credentials.
+- cline-hub cross-client attach/reconnect e2e: NOT_EXECUTED - requires a live hub daemon and a second client process.
+- installed VSIX dogfood UI: LIVE_UNOBSERVABLE - the Electron/VSCode host cannot launch in this environment (documented in prior ClineMM ACTs); the installed bundle is bound to pre-integration head 5a1c485cb.
