@@ -1,0 +1,15 @@
+# SHA256SUMS — ACT-CLINEMM-UPSTREAM-VSCODE-PROVIDER-RECONCILE01
+# Subject HEAD: eab87e94759deb483571904b7943e6ad53f9e42b
+# Branch: integration/upstream-20261102
+# Merge (unchanged): 167f5ca8d639cc83c21ddf8e0d96369cfc319d0a
+#
+# --- ACT-owned evidence artifacts ---
+7981c89ac7165df73833b765c13c52ed8a34d89123f43964dd776b90685679fc  identity-and-ancestry.txt
+b5a4b893a2615132ec200fb9f8097518b5e47893599ac94d8b569d2eed6b4391  u02-gate-tally-reconciliation.md
+c06c628f990cd6824e2d6fb1f0329d2573af87cb3f6ec3134943e510b30794f3  production-seam-map.md
+543b3c3dce6e429cdfac6ac3250ea9857ec964e783f9ef1b1529a0de2c9a2a50  commands-and-results.md
+5c619fa1b8b90842ad00447e9dca549fac8eacee58b23e74126c2f851047c71d  repair-or-no-change-decision.md
+#
+# --- built exact-head artifacts (OUTPUT, not proof of installed UI) ---
+a968f513fbbb5f63ed76f27590e2f66c9f17f81d25d8ee76aafa7300a732a0af  ../../../apps/vscode/dist/extension.js  (27696547 bytes; extension bundle at HEAD eab87e947)
+9266d38d95fdf6db6982e2c69603f4a1b860e1bc6d1ad75e085c350a4844bb4f  ../../../dist/clinemm-u03-reconcile-qualification.vsix  (50505313 bytes; VSIX at HEAD eab87e947; BUILT, NOT INSTALLED)

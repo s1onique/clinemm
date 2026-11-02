@@ -1,0 +1,131 @@
+ACT-CLINEMM-UPSTREAM-VSCODE-PROVIDER-RECONCILE01 — C0 Identity and Ancestry
+Captured in the EXISTING integration worktree BEFORE any execution.
+No merge was recreated, no reset/rebase/re-merge, no push, no install,
+no protected stash was popped/applied/dropped, no branch was created.
+
+## 1. Checkout identity
+
+git rev-parse --show-toplevel   /private/tmp/cline-int-worktree
+git branch --show-current       integration/upstream-20261102
+git rev-parse HEAD              eab87e94759deb483571904b7943e6ad53f9e42b
+git show --no-patch --format='%H%n%P%n%s' HEAD
+  eab87e94759deb483571904b7943e6ad53f9e42b
+  3fc91ddda3e6d27f05640aca497acecadd558320
+  fix(factory): ACT-CLINEMM-FORK-UPSTREAM-MERGE01-QUALIFICATION-CORR01 — qualify
+  the upstream merge; verdict PASS_STRUCTURAL_ONLY
+
+EXPECTED ENTRY HEAD per the ACT brief : eab87e94759deb483571904b7943e6ad53f9e42b
+OBSERVED HEAD                        : eab87e94759deb483571904b7943e6ad53f9e42b
+MATCH                                : YES — exact match, no substitution needed.
+                                       HEAD had NOT moved since the brief was written.
+
+## 2. Cleanliness at entry
+
+git status --porcelain=v1 --untracked-files=all   ->  EMPTY (clean tree)
+git stash list                                     ->  2 protected stashes, both intact:
+  stash@{0}: WIP on main: 026a64d1b PTLL01-CORR01: board — L1 causal proof corrected,
+             VSIX built+installed, live blocked by environment
+  stash@{1}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime):
+             separate REARM lifetime from STALL lifetime at BCB re-registration
+
+Unexpected tracked dirt: NONE.  (HALT_UNEXPECTED_DIRT not raised.)
+
+## 3. Worktrees (git worktree list --porcelain)
+
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+      HEAD 265044bf37429cb3c48918eb7473e46cc3933964   branch refs/heads/main
+  /private/tmp/cline-fork-baseline
+      HEAD 265044bf37429cb3c48918eb7473e46cc3933964   detached  (BASELINE reference)
+  /private/tmp/cline-int-worktree
+      HEAD eab87e94759deb483571904b7943e6ad53f9e42b   branch refs/heads/integration/upstream-20261102  (SUBJECT)
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first
+      HEAD 38e726c45de0b9412e6d3822bfd104fd7cbe2cbf   branch refs/heads/experiment/m31-action-first
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded
+      HEAD 0366ea5064cfc03fc6693914b6b4f365c49631fc   detached
+
+No new worktree or branch was created by this ACT.
+
+## 4. Ancestry (DISCOVERED, not inferred)
+
+MERGED HISTORY SUBJECT (full SHA, discovered):
+  167f5ca8d639cc83c21ddf8e0d96369cfc319d0a
+  "Merge upstream 'a6507a62' into integration/upstream-20261102"
+  parents: 265044bf37429cb3c48918eb7473e46cc3933964 (fork)
+           a6507a62a147db4a35e27f4294589742ccac5060 (upstream)
+
+MERGE BASE: 48d63852745460ff0fa3dfcc0457bbe2493841de
+
+  git merge-base --is-ancestor 265044bf37429cb3c48918eb7473e46cc3933964 HEAD  -> 0 (yes)
+  git merge-base --is-ancestor a6507a62a147db4a35e27f4294589742ccac5060 HEAD  -> 0 (yes)
+
+Both the frozen upstream integration parent and the baseline fork parent ARE
+ancestors of HEAD.  The two-parent merge is intact and was NOT recreated.
+
+## 5. Protected state
+
+  main           265044bf37429cb3c48918eb7473e46cc3933964   UNCHANGED
+  origin/main    265044bf37429cb3c48918eb7473e46cc3933964   UNCHANGED
+  pushed                NO
+  VSIX installed       NO
+  stashes touched       0
+  main altered          NO
+
+
+## 6. Effective toolchain (recorded exactly as used)
+
+  bun      1.3.13            ($HOME/.bun/bin/bun)        — package manager + task runner
+  node     v24.19.0          (/nix/store/...nodejs-24.19.0/bin/node)
+                                                      — used for vitest (see §7)
+  node     v26.0.0           (/opt/homebrew/bin/node)   — used for elm-test
+  elm      0.19.2            (/opt/homebrew/bin/elm)    — resolved via the repo's
+                                                         scripts/elm_toolchain.sh authority
+  git      2.54.0
+
+Environment variables set for every test invocation:
+
+  TMPDIR=/tmp/cline-int/stable-tmp        (writable — bun/vitest temp dir)
+  CLINE_DIR=/tmp/cline-recon01/cline-dir-hub  (PRIVATE, writable, created by this ACT)
+  ELM_HOME=/tmp/cline-int/elm-home         (writable Elm package cache)
+  SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt (only for Elm; see §7)
+
+CLINE_DIR MUST point at a writable, private location for hub-related tests.
+This ACT used /tmp/cline-recon01/cline-dir-hub — it is NOT the user's live
+~/.cline, and the user's Hub / credential store was never touched.
+
+## 7. Two environment blockers found, diagnosed, and worked around (NO product change)
+
+BLK-1 — vitest could not resolve the zod named export `z`.
+  Symptom: `TypeError: undefined is not an object (evaluating 'z.enum')` in
+           ../shared/src/llms/reasoning-options.ts:13, for EVERY @cline/llms suite.
+  Diagnosis: the node binary bundled with the vitest 4.1.10 download was
+           node v24.3.0; zod@4.4.3's ESM entry re-exports `z` in a way that
+           v24.3.0's CJS-named-export detection does not pick up.  The SAME
+           failure reproduces IDENTICALLY at the fork baseline
+           (/private/tmp/cline-fork-baseline) => environmental, NOT a merge regression.
+  Fix (environment only): put node v24.19.0 first on PATH.
+  Verification: the identical command then returns
+           minimax-m31-exact-id-wire01.test.ts -> 8 passed (8), exit 0.
+
+BLK-2 — elm could not fetch the package list.
+  Symptom: "PROBLEM LOADING PACKAGE LIST ... certificate has unknown CA" and
+           "Your elm.json says this application needs a different version of
+           Elm. It requires 0.19.2, but you are using 0.19.1".
+  Diagnosis: (a) the nix-system `elm` on PATH is 0.19.1, which the repo's
+           scripts/elm_toolchain.sh resolver deliberately REJECTS; the resolver
+           prefers the repo-vendored /opt/homebrew 0.19.2.  (b) Elm's own HTTP
+           client does not trust the system CA store; `curl` to the same URL
+           returns HTTP 200, proving the network path is fine.
+  Fix (environment only): SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt and
+           the repo's own scripts/elm_toolchain.sh resolver.
+  Verification: all 5 Elm kernels build and reproduce byte-identical SHA-256
+           against their tracked .sha256 sidecars (see production-seam-map.md).
+
+Neither blocker was "fixed" in product source.  Both are recorded as
+environmental preconditions, not as ACT-owned defects.
+
+## 8. End-state cleanliness
+
+After all builds and test runs:
+  git status --porcelain=v1 --untracked-files=all ->  EMPTY (clean tree)
+No tracked file was modified.  No production source was changed.  See
+repair-or-no-change-decision.md.
