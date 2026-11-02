@@ -39,10 +39,10 @@
 // FROZEN at b24b954db (ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01).
 // ============================================================================
 import type { MessageWithMetadata } from "@cline/shared"
-import { describe, expect, it } from "vitest"
-import { sdkMessagesToClineMessages } from "../message-translator"
 import type { ClineMessage } from "@shared/ExtensionMessage"
+import { describe, expect, it } from "vitest"
 import { resolveTerminalReportFraming } from "../../../webview-ui/src/components/chat/terminalReportFraming"
+import { sdkMessagesToClineMessages } from "../message-translator"
 
 const SUMMARY_A = "First-submit summary (length 3895) — see live transcript"
 const SUMMARY_B = "Second-submit summary (length 2398) — see live transcript"
@@ -60,7 +60,7 @@ type AnyMsg = MessageWithMetadata & { metadata?: Record<string, unknown> }
 
 function buildHeldThenCommittedFixture(): AnyMsg[] {
 	return [
-		{ role: "user", content: [{ type: "text", text: "<user_input mode=\"act\"># ACT task</user_input>" }] },
+		{ role: "user", content: [{ type: "text", text: '<user_input mode="act"># ACT task</user_input>' }] },
 		{
 			role: "assistant",
 			id: "msg_held",
@@ -74,14 +74,26 @@ function buildHeldThenCommittedFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tool_result_held",
 			ts: 1791893907220,
-			content: [{ type: "tool_result", tool_use_id: "call_function_xxakngsgiq8s_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_xxakngsgiq8s_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 		{
 			role: "user",
 			id: "runtime-control-1791893907292",
 			ts: 1791893907292,
 			metadata: { runtimeAuthority: "host_runtime_control", kind: "completion_continuation_control" },
-			content: [{ type: "text", text: "<user_input mode=\"act\">A deferred completion is requesting observation of unconsumed terminal results.</user_input>" }],
+			content: [
+				{
+					type: "text",
+					text: '<user_input mode="act">A deferred completion is requesting observation of unconsumed terminal results.</user_input>',
+				},
+			],
 		},
 		{
 			role: "assistant",
@@ -96,14 +108,21 @@ function buildHeldThenCommittedFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tool_result_committed",
 			ts: 1791893920510,
-			content: [{ type: "tool_result", tool_use_id: "call_function_jyd622908p3h_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_jyd622908p3h_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 	]
 }
 
 function buildTwoHeldThenCommittedFixture(): AnyMsg[] {
 	return [
-		{ role: "user", content: [{ type: "text", text: "<user_input mode=\"act\"># task</user_input>" }] },
+		{ role: "user", content: [{ type: "text", text: '<user_input mode="act"># task</user_input>' }] },
 		{
 			role: "assistant",
 			id: "msg_held1",
@@ -117,14 +136,21 @@ function buildTwoHeldThenCommittedFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tr_h1",
 			ts: 110,
-			content: [{ type: "tool_result", tool_use_id: "call_function_h1_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_h1_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 		{
 			role: "user",
 			id: "runtime-control-1",
 			ts: 120,
 			metadata: { runtimeAuthority: "host_runtime_control", kind: "completion_continuation_control" },
-			content: [{ type: "text", text: "<user_input mode=\"act\">observe</user_input>" }],
+			content: [{ type: "text", text: '<user_input mode="act">observe</user_input>' }],
 		},
 		{
 			role: "assistant",
@@ -139,14 +165,21 @@ function buildTwoHeldThenCommittedFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tr_h2",
 			ts: 210,
-			content: [{ type: "tool_result", tool_use_id: "call_function_h2_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_h2_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 		{
 			role: "user",
 			id: "runtime-control-2",
 			ts: 220,
 			metadata: { runtimeAuthority: "host_runtime_control", kind: "completion_continuation_control" },
-			content: [{ type: "text", text: "<user_input mode=\"act\">observe again</user_input>" }],
+			content: [{ type: "text", text: '<user_input mode="act">observe again</user_input>' }],
 		},
 		{
 			role: "assistant",
@@ -161,14 +194,21 @@ function buildTwoHeldThenCommittedFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tr_c",
 			ts: 310,
-			content: [{ type: "tool_result", tool_use_id: "call_function_c_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_c_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 	]
 }
 
 function buildSingleCommitFixture(): AnyMsg[] {
 	return [
-		{ role: "user", content: [{ type: "text", text: "<user_input mode=\"act\"># task</user_input>" }] },
+		{ role: "user", content: [{ type: "text", text: '<user_input mode="act"># task</user_input>' }] },
 		{
 			role: "assistant",
 			id: "msg_single",
@@ -182,14 +222,21 @@ function buildSingleCommitFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tool_result_single",
 			ts: 110,
-			content: [{ type: "tool_result", tool_use_id: "call_function_single_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_single_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 	]
 }
 
 function buildLegacyUnknownShapeFixture(): AnyMsg[] {
 	return [
-		{ role: "user", content: [{ type: "text", text: "<user_input mode=\"act\"># task</user_input>" }] },
+		{ role: "user", content: [{ type: "text", text: '<user_input mode="act"># task</user_input>' }] },
 		{
 			role: "assistant",
 			id: "msg_held",
@@ -203,13 +250,20 @@ function buildLegacyUnknownShapeFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tr_h",
 			ts: 110,
-			content: [{ type: "tool_result", tool_use_id: "call_function_h_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_h_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 		{
 			role: "user",
 			id: "legacy-runtime-prompt",
 			ts: 120,
-			content: [{ type: "text", text: "<user_input mode=\"act\">some other text</user_input>" }],
+			content: [{ type: "text", text: '<user_input mode="act">some other text</user_input>' }],
 		},
 		{
 			role: "assistant",
@@ -224,14 +278,21 @@ function buildLegacyUnknownShapeFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tr_c",
 			ts: 210,
-			content: [{ type: "tool_result", tool_use_id: "call_function_c_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_c_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 	]
 }
 
 function buildTwoLegitimateEpisodesFixture(): AnyMsg[] {
 	return [
-		{ role: "user", content: [{ type: "text", text: "<user_input mode=\"act\"># task</user_input>" }] },
+		{ role: "user", content: [{ type: "text", text: '<user_input mode="act"># task</user_input>' }] },
 		{
 			role: "assistant",
 			id: "msg_first",
@@ -245,7 +306,14 @@ function buildTwoLegitimateEpisodesFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tool_result_first",
 			ts: 110,
-			content: [{ type: "tool_result", tool_use_id: "call_function_first_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_first_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 		{
 			role: "user",
@@ -266,7 +334,14 @@ function buildTwoLegitimateEpisodesFixture(): AnyMsg[] {
 			role: "user",
 			id: "msg_tool_result_second",
 			ts: 210,
-			content: [{ type: "tool_result", tool_use_id: "call_function_second_1", name: "submit_and_exit", content: "submitted (verified=true)" }],
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_second_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
+			],
 		},
 	]
 }
@@ -322,7 +397,7 @@ function buildTwoLegitimateEpisodesFixture(): AnyMsg[] {
 
 function buildCommittedThenHeldThenCommittedFixture(): AnyMsg[] {
 	return [
-		{ role: "user", content: [{ type: "text", text: "<user_input mode=\"act\"># ACT task F</user_input>" }] },
+		{ role: "user", content: [{ type: "text", text: '<user_input mode="act"># ACT task F</user_input>' }] },
 		{
 			role: "assistant",
 			id: "msg_F_A",
@@ -337,7 +412,12 @@ function buildCommittedThenHeldThenCommittedFixture(): AnyMsg[] {
 			id: "msg_F_tr_A",
 			ts: 110,
 			content: [
-				{ type: "tool_result", tool_use_id: "call_function_F_A_1", name: "submit_and_exit", content: "submitted (verified=true)" },
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_F_A_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
 			],
 		},
 		// User follow-up between A and B.
@@ -362,7 +442,12 @@ function buildCommittedThenHeldThenCommittedFixture(): AnyMsg[] {
 			id: "msg_F_tr_B",
 			ts: 210,
 			content: [
-				{ type: "tool_result", tool_use_id: "call_function_F_B_1", name: "submit_and_exit", content: "submitted (verified=true)" },
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_F_B_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
 			],
 		},
 		// Host runtime-control observes B (the immediately-prior completion).
@@ -371,7 +456,7 @@ function buildCommittedThenHeldThenCommittedFixture(): AnyMsg[] {
 			id: "runtime-control-F",
 			ts: 220,
 			metadata: { runtimeAuthority: "host_runtime_control", kind: "completion_continuation_control" },
-			content: [{ type: "text", text: "<user_input mode=\"act\">observe B</user_input>" }],
+			content: [{ type: "text", text: '<user_input mode="act">observe B</user_input>' }],
 		},
 		// Agent re-issues completion C (COMMITTED).
 		{
@@ -388,7 +473,12 @@ function buildCommittedThenHeldThenCommittedFixture(): AnyMsg[] {
 			id: "msg_F_tr_C",
 			ts: 310,
 			content: [
-				{ type: "tool_result", tool_use_id: "call_function_F_C_1", name: "submit_and_exit", content: "submitted (verified=true)" },
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_F_C_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
 			],
 		},
 	]
@@ -396,7 +486,7 @@ function buildCommittedThenHeldThenCommittedFixture(): AnyMsg[] {
 
 function buildMultipleEpisodesWithHoldsFixture(): AnyMsg[] {
 	return [
-		{ role: "user", content: [{ type: "text", text: "<user_input mode=\"act\"># ACT task G</user_input>" }] },
+		{ role: "user", content: [{ type: "text", text: '<user_input mode="act"># ACT task G</user_input>' }] },
 		// Episode 1: A is HELD, B is COMMITTED.
 		{
 			role: "assistant",
@@ -412,7 +502,12 @@ function buildMultipleEpisodesWithHoldsFixture(): AnyMsg[] {
 			id: "msg_G_tr_A",
 			ts: 110,
 			content: [
-				{ type: "tool_result", tool_use_id: "call_function_G_A_1", name: "submit_and_exit", content: "submitted (verified=true)" },
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_G_A_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
 			],
 		},
 		{
@@ -420,7 +515,7 @@ function buildMultipleEpisodesWithHoldsFixture(): AnyMsg[] {
 			id: "runtime-control-G1",
 			ts: 120,
 			metadata: { runtimeAuthority: "host_runtime_control", kind: "completion_continuation_control" },
-			content: [{ type: "text", text: "<user_input mode=\"act\">observe A</user_input>" }],
+			content: [{ type: "text", text: '<user_input mode="act">observe A</user_input>' }],
 		},
 		{
 			role: "assistant",
@@ -436,7 +531,12 @@ function buildMultipleEpisodesWithHoldsFixture(): AnyMsg[] {
 			id: "msg_G_tr_B",
 			ts: 210,
 			content: [
-				{ type: "tool_result", tool_use_id: "call_function_G_B_1", name: "submit_and_exit", content: "submitted (verified=true)" },
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_G_B_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
 			],
 		},
 		// User follow-up between episodes.
@@ -461,7 +561,12 @@ function buildMultipleEpisodesWithHoldsFixture(): AnyMsg[] {
 			id: "msg_G_tr_C",
 			ts: 310,
 			content: [
-				{ type: "tool_result", tool_use_id: "call_function_G_C_1", name: "submit_and_exit", content: "submitted (verified=true)" },
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_G_C_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
 			],
 		},
 		{
@@ -469,7 +574,7 @@ function buildMultipleEpisodesWithHoldsFixture(): AnyMsg[] {
 			id: "runtime-control-G2",
 			ts: 320,
 			metadata: { runtimeAuthority: "host_runtime_control", kind: "completion_continuation_control" },
-			content: [{ type: "text", text: "<user_input mode=\"act\">observe C</user_input>" }],
+			content: [{ type: "text", text: '<user_input mode="act">observe C</user_input>' }],
 		},
 		{
 			role: "assistant",
@@ -485,7 +590,12 @@ function buildMultipleEpisodesWithHoldsFixture(): AnyMsg[] {
 			id: "msg_G_tr_D",
 			ts: 410,
 			content: [
-				{ type: "tool_result", tool_use_id: "call_function_G_D_1", name: "submit_and_exit", content: "submitted (verified=true)" },
+				{
+					type: "tool_result",
+					tool_use_id: "call_function_G_D_1",
+					name: "submit_and_exit",
+					content: "submitted (verified=true)",
+				},
 			],
 		},
 	]

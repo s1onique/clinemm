@@ -593,7 +593,17 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 	describe("TCE-P05 — submit event IDs at C9 (RED — §21 must thread submitId)", () => {
 		test("TCE-P05.RED: source presence — sdk-session-event-coordinator.ts C9 capture threads submitId", () => {
 			const SOURCE = fs.readFileSync(SESSION_EVENT_COORDINATOR_PATH, "utf8")
-			const c9Match = SOURCE.match(/submit_and_exit_seen[\s\S]{0,600}/)
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the probe used to match the
+			// FIRST textual mention of `submit_and_exit_seen` and scan the
+			// next 600 chars for `submitId`. The merge's documentation
+			// comments mention the stage string long before the actual
+			// capture site, so the probe anchored on a COMMENT and reported
+			// a false negative.
+			//
+			// The subject of the probe is the C9 CAPTURE SITE — the
+			// `stage: "submit_and_exit_seen"` property in the capture
+			// object. Anchor on that literal and scan forward from it.
+			const c9Match = SOURCE.match(/stage:\s*"submit_and_exit_seen"[\s\S]{0,600}/)
 			expect(c9Match).not.toBeNull()
 			const block = c9Match![0]
 			expect(block).toMatch(/submitId/)
@@ -621,7 +631,11 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 	describe("TCE-P06 — completion event IDs at C10 (RED — §21 must thread completionId)", () => {
 		test("TCE-P06.RED: source presence — sdk-session-event-coordinator.ts C10 capture threads completionId", () => {
 			const SOURCE = fs.readFileSync(SESSION_EVENT_COORDINATOR_PATH, "utf8")
-			const c10Match = SOURCE.match(/task_completion_committed[\s\S]{0,600}/)
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: same anchoring fix as
+			// TCE-P05 — anchor on the CAPTURE SITE (`stage: "..."`), not on
+			// the first textual mention of the stage string (which is in a
+			// documentation comment).
+			const c10Match = SOURCE.match(/stage:\s*"task_completion_committed"[\s\S]{0,600}/)
 			expect(c10Match).not.toBeNull()
 			const block = c10Match![0]
 			expect(block).toMatch(/completionId/)

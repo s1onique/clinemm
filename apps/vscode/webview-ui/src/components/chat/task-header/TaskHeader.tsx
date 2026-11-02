@@ -6,6 +6,7 @@ import type {
 } from "@shared/ExtensionMessage"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
+import { CloudTaskBadge } from "@/components/cloud/CloudTaskBadge"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -50,6 +51,8 @@ interface TaskHeaderProps {
 	// `apps/vscode/webview-ui/src/components/chat/task-header/
 	// ContextWindow.tsx` for the full precedence rules.
 	currentWorkingContextEstimate?: number | null
+	compactDisabled: boolean
+	compactTask: () => Promise<boolean>
 	onClose: () => void
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
 	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: host-owned task telemetry
@@ -91,6 +94,23 @@ interface TaskHeaderProps {
 
 const BUTTON_CLASS = "max-h-3 border-0 font-bold bg-transparent hover:opacity-100 text-foreground"
 
+/**
+ * Whether the header may show the task's cost. A cloud task is billed by the
+ * cloud service, so its cost is shown only when the sandbox reported usage;
+ * the local provider's cost display setting does not apply to it, and an
+ * unknown cloud charge must not render as a confirmed $0.0000.
+ */
+export function isTaskCostAvailable(input: {
+	isCloudTask: boolean
+	cloudUsageAvailable: boolean | undefined
+	localCostAvailable: boolean
+}): boolean {
+	if (input.isCloudTask) {
+		return input.cloudUsageAvailable === true
+	}
+	return input.localCostAvailable
+}
+
 const TaskHeader: React.FC<TaskHeaderProps> = ({
 	task,
 	tokensIn,
@@ -105,6 +125,8 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// from ChatView -> TaskSection -> TaskHeader ->
 	// ContextWindow.
 	currentWorkingContextEstimate,
+	compactDisabled,
+	compactTask,
 	onClose,
 	onSendMessage,
 	taskTelemetry: taskTelemetryProp,
@@ -125,6 +147,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		taskTelemetry: taskTelemetryFromContext,
 		taskHeaderPresentation: taskHeaderPresentationFromContext,
 		diagnosticKnobs: diagnosticKnobsFromContext,
+		currentCloudTask,
 	} = useExtensionState()
 
 	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: prefer the prop if provided
@@ -194,15 +217,21 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// spend. The webview must only render the price-tag when the SDK
 	// confirms the provider is genuinely metered (i.e. `=== "show"`).
 	const usageCostDisplay = useProviderUsageCostDisplay(modeFields.apiProvider)
-	const isCostAvailable =
-		(totalCost &&
-			modeFields.apiProvider === "openai" &&
-			modeFields.openAiModelInfo?.inputPrice &&
-			modeFields.openAiModelInfo?.outputPrice) ||
-		(modeFields.apiProvider !== "vscode-lm" &&
-			modeFields.apiProvider !== "ollama" &&
-			modeFields.apiProvider !== "lmstudio" &&
-			usageCostDisplay === "show")
+	const isCostAvailable = isTaskCostAvailable({
+		isCloudTask: !!currentCloudTask,
+		cloudUsageAvailable: currentTaskItem?.cloudUsageAvailable,
+		localCostAvailable:
+			!!(
+				totalCost &&
+				modeFields.apiProvider === "openai" &&
+				modeFields.openAiModelInfo?.inputPrice &&
+				modeFields.openAiModelInfo?.outputPrice
+			) ||
+			(modeFields.apiProvider !== "vscode-lm" &&
+				modeFields.apiProvider !== "ollama" &&
+				modeFields.apiProvider !== "lmstudio" &&
+				usageCostDisplay === "show"),
+	})
 
 	// Event handlers
 	const toggleTaskExpanded = useCallback(() => setIsTaskExpanded(!isTaskExpanded), [setIsTaskExpanded, isTaskExpanded])
@@ -226,7 +255,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 				{/* Task Title */}
 				<div
 					aria-label={isTaskExpanded ? "Collapse task header" : "Expand task header"}
-					className="flex justify-between items-center cursor-pointer"
+					className="flex justify-between items-start cursor-pointer"
 					onClick={toggleTaskExpanded}
 					onKeyDown={(e) => {
 						if (e.key === "Enter" || e.key === " ") {
@@ -236,57 +265,64 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						}
 					}}
 					tabIndex={0}>
-					<div className="flex justify-between items-center">
-						{isTaskExpanded ? <ChevronDownIcon size="16" /> : <ChevronRightIcon size="16" />}
-						{isTaskExpanded && (
-							<div className="mt-1 flex justify-end cursor-pointer opacity-80 gap-2 mx-2">
-								<CopyTaskButton className={BUTTON_CLASS} taskText={task.text} />
-								<DeleteTaskButton
-									className={BUTTON_CLASS}
-									taskId={currentTaskItem?.id}
-									taskSize={currentTaskItem?.size}
-								/>
-								{/* Only visible in development mode */}
-								{IS_DEV && (
-									<OpenDiskConversationHistoryButton className={BUTTON_CLASS} taskId={currentTaskItem?.id} />
-								)}
-							</div>
-						)}
-					</div>
-					{/* ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: compact telemetry strip
+					<div className="flex flex-wrap gap-y-1 items-center grow min-w-0">
+						{/* ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: compact telemetry strip
 						(elapsed / state / tool count / recovery interventions).
 						Always visible in both collapsed and expanded states so the
 						user has a stable, faithful lifecycle surface. Renders "-"
 						when the host has no canonical telemetry on the wire. */}
-					<div className="flex items-center justify-between gap-2 mt-0.5">
-						<TaskHeaderTelemetry
-							diagnosticKnobs={diagnosticKnobs}
-							taskHeaderPresentation={taskHeaderPresentation}
-							telemetry={taskTelemetry}
-							turnState={turnState}
-						/>
-					</div>
-					<div className="flex items-center select-none grow min-w-0 gap-1 justify-between">
+						<div className="flex items-center justify-between gap-2 mt-0.5">
+							<TaskHeaderTelemetry
+								diagnosticKnobs={diagnosticKnobs}
+								taskHeaderPresentation={taskHeaderPresentation}
+								telemetry={taskTelemetry}
+								turnState={turnState}
+							/>
+						</div>
+						<div className="flex justify-between items-center">
+							{isTaskExpanded ? <ChevronDownIcon size="16" /> : <ChevronRightIcon size="16" />}
+							{isTaskExpanded && (
+								<div className="mt-1 flex justify-end cursor-pointer opacity-80 gap-2 mx-2">
+									<CopyTaskButton className={BUTTON_CLASS} taskText={task.text} />
+									<DeleteTaskButton
+										className={BUTTON_CLASS}
+										taskId={currentTaskItem?.id}
+										taskSize={currentTaskItem?.size}
+									/>
+									{/* Only visible in development mode */}
+									{IS_DEV && (
+										<OpenDiskConversationHistoryButton
+											className={BUTTON_CLASS}
+											taskId={currentTaskItem?.id}
+										/>
+									)}
+								</div>
+							)}
+						</div>
 						{!isTaskExpanded && (
-							<div className="whitespace-nowrap overflow-hidden text-ellipsis grow min-w-0">
+							<div className="select-none whitespace-nowrap overflow-hidden text-ellipsis grow basis-0 min-w-16">
 								<span className="ph-no-capture text-base">{highlightedText}</span>
 							</div>
 						)}
-					</div>
-					<div className="inline-flex items-center justify-end select-none shrink-0">
-						<TaskWorkingDirectoryBadge
-							platform={platform}
-							taskCwd={currentTaskItem?.cwdOnTaskInitialization}
-							workspaceRoots={workspaceRoots}
-						/>
-						{isCostAvailable && (
-							<div
-								className="mx-1 px-1 py-0.25 rounded-full inline-flex shrink-0 text-badge-background bg-badge-foreground/80 items-center"
-								id="price-tag">
-								<span className="text-xs sm:text-sm">${totalCost?.toFixed(4)}</span>
-							</div>
-						)}
-						<NewTaskButton className={BUTTON_CLASS} onClick={onClose} />
+						<div className="inline-flex flex-wrap gap-y-1 items-center justify-end select-none ml-auto min-w-0">
+							{currentCloudTask ? (
+								<CloudTaskBadge cloudTask={currentCloudTask} />
+							) : (
+								<TaskWorkingDirectoryBadge
+									platform={platform}
+									taskCwd={currentTaskItem?.cwdOnTaskInitialization}
+									workspaceRoots={workspaceRoots}
+								/>
+							)}
+							{isCostAvailable && (
+								<div
+									className="mx-1 px-1 py-0.25 rounded-full inline-flex shrink-0 text-badge-background bg-badge-foreground/80 items-center"
+									id="price-tag">
+									<span className="text-xs sm:text-sm">${totalCost?.toFixed(4)}</span>
+								</div>
+							)}
+						</div>
+						<NewTaskButton className={cn(BUTTON_CLASS, "shrink-0 mt-1")} onClick={onClose} />
 					</div>
 				</div>
 
@@ -322,6 +358,8 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						<ContextWindow
 							cacheReads={cacheReads}
 							cacheWrites={cacheWrites}
+							compactDisabled={compactDisabled}
+							compactTask={compactTask}
 							contextWindow={selectedModelInfo?.contextWindow}
 							// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 							// (twenty-first-pass): Boundary 5 — pass W

@@ -480,6 +480,9 @@ describe("A2A-16: SdkSessionLifecycle.endActiveSession tears down the per-sessio
 			config: { sessionId: "session-A", cwd: "/workspace" } as unknown as ClineCoreStartInput["config"],
 		})
 		expect(startResult.status).toBe("started")
+		if (startResult.status !== "started") {
+			throw new Error(`expected a started session, got status "${startResult.status}"`)
+		}
 		expect(startResult.startResult.sessionId).toBe("session-A")
 		const fakeInner = mockClineCoreCreate.latestInstance()
 		// Wrap stop in a sinon spy so we can assert it was called.

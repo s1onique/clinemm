@@ -34,11 +34,13 @@ import {
 	resetCompletionContinuationControlElmAuthorityForTests,
 } from "../completion-continuation-control-elm"
 
-function makeFacts(over: {
-	priorHeldSetSorted?: readonly string[] | undefined
-	currentHeldSetSorted?: readonly string[]
-	unconsumedCount?: number
-} = {}) {
+function makeFacts(
+	over: {
+		priorHeldSetSorted?: readonly string[] | undefined
+		currentHeldSetSorted?: readonly string[]
+		unconsumedCount?: number
+	} = {},
+) {
 	return {
 		unconsumedCount: over.unconsumedCount ?? 2,
 		capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
@@ -144,10 +146,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C7) — ABLATION 
 		// is REMOVED. The Elm kernel owns the comparison. The
 		// ACT marker comment (above) is allowed; the function
 		// body is not.
-		const coordinatorSrc = readFileSync(
-			resolve(__dirname, "..", "sdk-session-event-coordinator.ts"),
-			"utf8",
-		)
+		const coordinatorSrc = readFileSync(resolve(__dirname, "..", "sdk-session-event-coordinator.ts"), "utf8")
 		expect(coordinatorSrc).not.toMatch(/^function isStrictSupersetOf/m)
 	})
 

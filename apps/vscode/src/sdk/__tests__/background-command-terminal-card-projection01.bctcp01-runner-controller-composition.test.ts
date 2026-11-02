@@ -122,115 +122,109 @@ function makeControllerSubject(): {
 		sessionEvents: { reevaluateDeferredContinuation: vi.fn() },
 	}
 }
-describe(
-	"ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 / runner->controller composition (correction01 round 2)",
-	() => {
-		beforeEach(() => {
-			process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
-		})
-		afterEach(() => {
-			delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
-		})
+describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 / runner->controller composition (correction01 round 2)", () => {
+	beforeEach(() => {
+		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
+	})
+	afterEach(() => {
+		delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+	})
 
-		it(
-			"BCTCP-RUNNER-COMPOSITION-01 real runner callbacks drive real SdkController.updateBackgroundCommandState end-to-end (J1 cancel + J2 stays running -> J1=cancelled / J2=running / scalar=true / taskId=J2; then J2 cancel -> scalar=false / taskId=undefined)",
-			async () => {
-				const manager = new CommandJobManager({
-					maxWaitBudgetMs: 5_000,
-					maxExecutionDeadlineMs: 60_000,
-					spawnFactory: () => {
-						const handle = fakeSupervisor()
-						return handle.supervisor
-					},
-				})
-				const subject = makeControllerSubject()
-				// Bind the runner callback to the REAL
-				// SdkController.prototype.updateBackgroundCommandState
-				// -- the production wiring (see SdkController.ts:1457).
-				const tool = createVscodeRunCommandsTool({
-					cwd: process.cwd(),
-					getTerminalManager: () => {
-						throw new Error("foreground not used")
-					},
-					vscodeTerminalExecutionMode: "backgroundExec",
-					commandJobManager: manager,
-					backgroundWaitBudgetMs: 50,
-					backgroundExecutionDeadlineMs: 60_000,
-					onBackgroundStateChange: (
-						running: boolean,
-						jobId: string | undefined,
-						terminalState?: Parameters<SdkController["updateBackgroundCommandState"]>[2],
-					) => {
-						SdkController.prototype.updateBackgroundCommandState.call(
-							// biome-ignore lint/suspicious/noExplicitAny: test seam (private surface used in prod)
-							subject as any,
-							running,
-							jobId,
-							terminalState,
-						)
-					},
-				})
-
-				try {
-					const startJob = async (): Promise<string> => {
-						const result = await tool.execute(
-							{ commands: ["/bin/sh -c 'sleep 30'"] },
-							{ agentId: "test-agent", conversationId: "conv-1", iteration: 1 },
-						)
-						const arr = Array.isArray(result) ? (result as Array<{ result: string }>) : []
-						const parsed = JSON.parse(arr[0]?.result ?? "{}")
-						expect(parsed.status).toBe("running")
-						return parsed.jobId as string
-					}
-					const jobId1 = await startJob()
-					const jobId2 = await startJob()
-
-					// After both starts: per-job map has BOTH entries
-					// (the start-side invariant the Factory reviewer demanded).
-					expect(subject.backgroundCommandJobStates[jobId1]).toBe("running")
-					expect(subject.backgroundCommandJobStates[jobId2]).toBe("running")
-					expect(subject.backgroundCommandRunning).toBe(true)
-					expect(subject.backgroundCommandTaskId).toBe(jobId2) // last started
-
-					// Terminalize J1 via the public cancel() seam.
-					await manager.cancel({
-						jobId: jobId1,
-						origin: "other:bctcp-runner-composition-01",
-					})
-					await sleep(50)
-
-					// Per-job terminal: J1 flipped, J2 still running.
-					expect(subject.backgroundCommandJobStates[jobId1]).toBe("cancelled")
-					expect(subject.backgroundCommandJobStates[jobId2]).toBe("running")
-					// Scalar still true because J2 is alive.
-					expect(subject.backgroundCommandRunning).toBe(true)
-					// Active taskId points at J2.
-					expect(subject.backgroundCommandTaskId).toBe(jobId2)
-					// Manager (the authority) confirms J2 is RUNNING.
-					const j2Status = await manager.status({ jobId: jobId2, waitMs: 0 })
-					expect(j2Status.ok).toBe(true)
-					if (j2Status.ok) {
-						expect(j2Status.snapshot.state).toBe("running")
-					}
-
-					// Terminalize J2: the >0->0 cardinal transition.
-					await manager.cancel({
-						jobId: jobId2,
-						origin: "other:bctcp-runner-composition-01",
-					})
-					await sleep(50)
-
-					// Per-job terminal: J2 flipped. Both jobs now terminal.
-					expect(subject.backgroundCommandJobStates[jobId1]).toBe("cancelled")
-					expect(subject.backgroundCommandJobStates[jobId2]).toBe("cancelled")
-					// Scalar flips to false (no more "running" entries).
-					expect(subject.backgroundCommandRunning).toBe(false)
-					// Active taskId is undefined (no running jobs).
-					expect(subject.backgroundCommandTaskId).toBe(undefined)
-				} finally {
-					await manager.dispose()
-				}
+	it("BCTCP-RUNNER-COMPOSITION-01 real runner callbacks drive real SdkController.updateBackgroundCommandState end-to-end (J1 cancel + J2 stays running -> J1=cancelled / J2=running / scalar=true / taskId=J2; then J2 cancel -> scalar=false / taskId=undefined)", async () => {
+		const manager = new CommandJobManager({
+			maxWaitBudgetMs: 5_000,
+			maxExecutionDeadlineMs: 60_000,
+			spawnFactory: () => {
+				const handle = fakeSupervisor()
+				return handle.supervisor
 			},
-		)
-	},
-)
+		})
+		const subject = makeControllerSubject()
+		// Bind the runner callback to the REAL
+		// SdkController.prototype.updateBackgroundCommandState
+		// -- the production wiring (see SdkController.ts:1457).
+		const tool = createVscodeRunCommandsTool({
+			cwd: process.cwd(),
+			getTerminalManager: () => {
+				throw new Error("foreground not used")
+			},
+			vscodeTerminalExecutionMode: "backgroundExec",
+			commandJobManager: manager,
+			backgroundWaitBudgetMs: 50,
+			backgroundExecutionDeadlineMs: 60_000,
+			onBackgroundStateChange: (
+				running: boolean,
+				jobId: string | undefined,
+				terminalState?: Parameters<SdkController["updateBackgroundCommandState"]>[2],
+			) => {
+				SdkController.prototype.updateBackgroundCommandState.call(
+					// biome-ignore lint/suspicious/noExplicitAny: test seam (private surface used in prod)
+					subject as any,
+					running,
+					jobId,
+					terminalState,
+				)
+			},
+		})
+
+		try {
+			const startJob = async (): Promise<string> => {
+				const result = await tool.execute(
+					{ commands: ["/bin/sh -c 'sleep 30'"] },
+					{ agentId: "test-agent", conversationId: "conv-1", iteration: 1 },
+				)
+				const arr = Array.isArray(result) ? (result as Array<{ result: string }>) : []
+				const parsed = JSON.parse(arr[0]?.result ?? "{}")
+				expect(parsed.status).toBe("running")
+				return parsed.jobId as string
+			}
+			const jobId1 = await startJob()
+			const jobId2 = await startJob()
+
+			// After both starts: per-job map has BOTH entries
+			// (the start-side invariant the Factory reviewer demanded).
+			expect(subject.backgroundCommandJobStates[jobId1]).toBe("running")
+			expect(subject.backgroundCommandJobStates[jobId2]).toBe("running")
+			expect(subject.backgroundCommandRunning).toBe(true)
+			expect(subject.backgroundCommandTaskId).toBe(jobId2) // last started
+
+			// Terminalize J1 via the public cancel() seam.
+			await manager.cancel({
+				jobId: jobId1,
+				origin: "other:bctcp-runner-composition-01",
+			})
+			await sleep(50)
+
+			// Per-job terminal: J1 flipped, J2 still running.
+			expect(subject.backgroundCommandJobStates[jobId1]).toBe("cancelled")
+			expect(subject.backgroundCommandJobStates[jobId2]).toBe("running")
+			// Scalar still true because J2 is alive.
+			expect(subject.backgroundCommandRunning).toBe(true)
+			// Active taskId points at J2.
+			expect(subject.backgroundCommandTaskId).toBe(jobId2)
+			// Manager (the authority) confirms J2 is RUNNING.
+			const j2Status = await manager.status({ jobId: jobId2, waitMs: 0 })
+			expect(j2Status.ok).toBe(true)
+			if (j2Status.ok) {
+				expect(j2Status.snapshot.state).toBe("running")
+			}
+
+			// Terminalize J2: the >0->0 cardinal transition.
+			await manager.cancel({
+				jobId: jobId2,
+				origin: "other:bctcp-runner-composition-01",
+			})
+			await sleep(50)
+
+			// Per-job terminal: J2 flipped. Both jobs now terminal.
+			expect(subject.backgroundCommandJobStates[jobId1]).toBe("cancelled")
+			expect(subject.backgroundCommandJobStates[jobId2]).toBe("cancelled")
+			// Scalar flips to false (no more "running" entries).
+			expect(subject.backgroundCommandRunning).toBe(false)
+			// Active taskId is undefined (no running jobs).
+			expect(subject.backgroundCommandTaskId).toBe(undefined)
+		} finally {
+			await manager.dispose()
+		}
+	})
+})

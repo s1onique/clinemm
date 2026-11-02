@@ -27,15 +27,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	clearHostOwnershipDiagnostic,
+	deriveCandidateAwaitingFollowup,
 	disableHostOwnershipDiagnostic,
 	enableHostOwnershipDiagnostic,
-	isHostOwnershipDiagnosticEnabled,
-	recordHostOwnershipFacts,
 	getHostOwnershipDiagnostic,
-	setHostOwnershipDiagnosticBufferSize,
-	deriveCandidateAwaitingFollowup,
 	HOST_OWNERSHIP_DIAGNOSTIC_ID,
 	type HostOwnershipFactsSnapshot,
+	isHostOwnershipDiagnosticEnabled,
+	recordHostOwnershipFacts,
+	setHostOwnershipDiagnosticBufferSize,
 } from "./host-ownership-diagnostic"
 
 function makeSnapshot(overrides: Partial<HostOwnershipFactsSnapshot> = {}): HostOwnershipFactsSnapshot {
@@ -186,9 +186,7 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-COR
 			enableHostOwnershipDiagnostic()
 			const variants = ["completed", "aborted", "error", "max_iterations", "mistake_limit"] as const
 			for (const v of variants) {
-				recordHostOwnershipFacts(
-					makeSnapshot({ lastInteractiveTurnFinishReason: v, _ptadPushId: variants.indexOf(v) }),
-				)
+				recordHostOwnershipFacts(makeSnapshot({ lastInteractiveTurnFinishReason: v, _ptadPushId: variants.indexOf(v) }))
 			}
 			const got = getHostOwnershipDiagnostic().map((s) => s.lastInteractiveTurnFinishReason)
 			expect(got).toEqual([...variants])

@@ -11,10 +11,13 @@
  * re-read independently of the next state push).
  */
 
+import {
+	getGlobalDefaultProfileId,
+	projectModelProfilesForWebview,
+	readActiveProfileIdFromHistoryItem,
+} from "@/sdk/profile-store/owner"
 import { ListModelProfilesRequest, ListModelProfilesResponse, ModelProfile } from "@/shared/proto/cline/state"
 import type { Controller } from ".."
-import { projectModelProfilesForWebview, readActiveProfileIdFromHistoryItem } from "@/sdk/profile-store/owner"
-import { getGlobalDefaultProfileId } from "@/sdk/profile-store/owner"
 
 /**
  * Snapshot read of all defined ModelProfiles + the active/default

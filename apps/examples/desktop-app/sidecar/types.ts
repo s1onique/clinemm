@@ -5,9 +5,15 @@ import type {
 	ITelemetryService,
 	ManagedHubBuildMismatchEvent,
 	NodeHubClient,
+	RemoteEnvironmentConnection,
+	RemoteEnvironmentService,
 	ToolApprovalResult,
 } from "@cline/core";
 import type { MessageWithMetadata } from "@cline/llms";
+import type { UserContext } from "@cline/shared";
+import type { HubStartup } from "./hub-startup";
+
+export const LOCAL_ENVIRONMENT_ID = "local";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -17,19 +23,6 @@ export type ChatTurnAttachments = {
 };
 
 export type ChatSessionCommandRequest = {
-	action:
-		| "start"
-		| "attach"
-		| "send"
-		| "stop"
-		| "abort"
-		| "fork"
-		| "reset"
-		| "restore_checkpoint"
-		| "pending_prompts"
-		| "steer_prompt"
-		| "update_pending_prompt"
-		| "remove_pending_prompt";
 	sessionId?: string;
 	prompt?: string;
 	promptId?: string;
@@ -38,7 +31,30 @@ export type ChatSessionCommandRequest = {
 	delivery?: "queue" | "steer";
 	config?: JsonRecord;
 	attachments?: ChatTurnAttachments;
-};
+	/** Opaque webview correlation token echoed on handoff progress events. */
+	handoffAttemptId?: string;
+	completedHandoffAttemptId?: string;
+	gitPreparationId?: string;
+	/** Optional instruction appended to the locally generated summary. */
+	nextCommand?: string;
+} & (
+	| {
+			action:
+				| "start"
+				| "attach"
+				| "send"
+				| "stop"
+				| "abort"
+				| "fork"
+				| "reset"
+				| "restore_checkpoint"
+				| "pending_prompts"
+				| "steer_prompt"
+				| "update_pending_prompt"
+				| "remove_pending_prompt";
+	  }
+	| { action: "handoff"; operation: "prepare" | "discard" | "launch" }
+);
 
 export type PromptInQueue = {
 	id: string;
@@ -49,6 +65,7 @@ export type PromptInQueue = {
 };
 
 export type LiveSession = {
+	environmentId?: string;
 	config: JsonRecord;
 	messages: MessageWithMetadata[];
 	promptsInQueue: PromptInQueue[];
@@ -60,12 +77,29 @@ export type LiveSession = {
 	prompt?: string;
 	title?: string;
 	attachedViaHub?: boolean;
+	/** Last Hub lifecycle sequence applied to this session. */
+	lastHubStatusSequence?: number;
+	/** Iterations already in flight when the user supplied recovery guidance. */
+	mistakeRecovery?: {
+		latestIteration: number;
+		continuedThroughIteration?: number;
+	};
 	/** Materialized attachment files for prompts still waiting in the queue. */
 	queuedAttachmentFiles?: Map<string, string[]>;
 	/** Last prompt id announced via chat_queued_prompt_start, to dedupe emits. */
 	lastQueuedPromptStartId?: string;
 	/** Materialized attachment files whose prompt was submitted; deleted when the turn ends. */
 	consumedAttachmentFiles?: Map<string, string[]>;
+};
+
+export type SessionRuntimeBinding = {
+	environmentId: string;
+	kind: "local" | "ssh";
+	workspaceRoot: string;
+	sessionManager: ClineCore;
+	hubClient: NodeHubClient;
+	unsubscribeSessionEvents: () => void;
+	remote?: RemoteEnvironmentConnection;
 };
 
 export type ToolApprovalRequestItem = {
@@ -82,8 +116,9 @@ export type ToolApprovalRequestItem = {
 
 export type PendingToolApproval = {
 	item: ToolApprovalRequestItem;
-	owner: SidecarWebSocketClient;
-	resolve: (result: ToolApprovalResult) => void;
+	/** Cloud approvals have no local WebSocket owner and may resolve remotely. */
+	owner?: SidecarWebSocketClient;
+	resolve: (result: ToolApprovalResult) => void | Promise<void>;
 };
 
 export type AskQuestionRequestItem = {
@@ -115,20 +150,35 @@ export type SidecarContext = {
 	liveSessions: Map<string, LiveSession>;
 	restoringWorkspacePaths: Set<string>;
 	streamIndices: Map<string, number>;
+	/**
+	 * Identifies this sidecar process. `streamIndices` restarts whenever the
+	 * sidecar does, so the webview needs to tell "index 1 of a new process"
+	 * apart from a replay of the run it already rendered.
+	 */
+	bootId: string;
 	wsClients: Set<SidecarWebSocketClient>;
 	pendingApprovals: Map<string, PendingToolApproval>;
 	pendingQuestions: Map<string, PendingAskQuestion>;
-	sessionManager: ClineCore | null;
-	hubClient: NodeHubClient | null;
-	workspaceRoot: string;
+	runtimeBindings: Map<string, SessionRuntimeBinding>;
+	sessionEnvironmentIds: Map<string, string>;
+	activeEnvironmentId: string;
+	remoteEnvironments: RemoteEnvironmentService | null;
+	localWorkspaceRoot: string;
 	logger?: BasicLogger;
 	telemetry?: ITelemetryService;
-	unsubscribeSessionEvents: (() => void) | null;
+	/** Analytics identity and explicit account state forwarded with each session. */
+	telemetryUser?: UserContext;
+	cloudSessionManager: {
+		dispose(): Promise<void>;
+		isCloudSession(sessionId: string): boolean;
+	} | null;
 	/**
 	 * Latest managed Hub build mismatch, broadcast as `hub_build_mismatch` and
 	 * replayed to webviews that connect after the event fired.
 	 */
 	hubBuildMismatch: ManagedHubBuildMismatchEvent | null;
+	/** Local Hub setup, which runs after the transport is published. */
+	hubStartup?: HubStartup;
 };
 export type BunRuntimeApi = {
 	serve: (options: unknown) => { port: number; stop?: () => void };

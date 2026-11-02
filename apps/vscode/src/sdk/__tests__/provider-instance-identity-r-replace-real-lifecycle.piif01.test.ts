@@ -48,12 +48,9 @@
  */
 
 import type { CoreSessionConfig } from "@cline/core"
-import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import {
-	MissingProviderInstanceCredentialError,
-	type ProviderConfigurationInstance,
-} from "../instance-store/contracts"
+import type { InstanceSecretName } from "@/shared/storage/instance-secret"
+import { MissingProviderInstanceCredentialError, type ProviderConfigurationInstance } from "../instance-store/contracts"
 import { SdkSessionConfigBuilder } from "../sdk-session-config-builder"
 import { SdkSessionLifecycle } from "../sdk-session-lifecycle"
 
@@ -193,7 +190,6 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R-REPLACE", 
 	it("R_REPLACE_POSITIVE: apply B through REAL SdkSessionConfigBuilder + REAL SdkSessionLifecycle.replaceActiveSession installs the projected B", async () => {
 		const fakeHost = makeFakeSdkHost(["sess-A", "sess-B"])
 		mocks.createSessionHost.mockResolvedValue(fakeHost)
-
 
 		const builder = makeBuilder((name) => {
 			if (name === ("instance:inst-B-key" as InstanceSecretName)) {

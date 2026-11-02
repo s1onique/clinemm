@@ -21,11 +21,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import {
-	type ElmShadowCountersSnapshot,
-	getElmShadowCounters,
-	getElmShadowRing,
-} from "./completion-authority-elm-shadow"
+import { type ElmShadowCountersSnapshot, getElmShadowCounters, getElmShadowRing } from "./completion-authority-elm-shadow"
 
 const DUMP_FILE_RING = "completion-authority-elm-shadow.jsonl"
 const DUMP_FILE_COUNTERS = "completion-authority-elm-shadow.counters.json"

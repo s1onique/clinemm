@@ -19,25 +19,23 @@
  *     host-facts read (CORRECTION02 P0 #1 closure).
  */
 
-import { describe, expect, it, beforeEach, afterEach } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import type { ActiveSession as VscodeActiveSession } from "@/sdk/cline-session-factory"
 import {
+	clearHostOwnershipDiagnostic,
 	disableHostOwnershipDiagnostic,
 	enableHostOwnershipDiagnostic,
-	isHostOwnershipDiagnosticEnabled,
-	clearHostOwnershipDiagnostic,
 	getHostOwnershipDiagnostic,
+	isHostOwnershipDiagnosticEnabled,
 } from "@/shared/host-ownership-diagnostic"
 import {
 	captureAndRecordHostOwnershipFacts,
 	captureFromActiveSession,
-	type HostOwnershipProbe,
 	type HostOwnershipHostFacts,
+	type HostOwnershipProbe,
 } from "./host-ownership-capture"
-import type { ActiveSession as VscodeActiveSession } from "@/sdk/cline-session-factory"
 
-function makeProbe(
-	opts: { implements?: boolean; facts?: HostOwnershipHostFacts } = { implements: true },
-): HostOwnershipProbe {
+function makeProbe(opts: { implements?: boolean; facts?: HostOwnershipHostFacts } = { implements: true }): HostOwnershipProbe {
 	if (opts.implements === false) return {}
 	return {
 		readHostFacts: (_sessionId: string | undefined) =>

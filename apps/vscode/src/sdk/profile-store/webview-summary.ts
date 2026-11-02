@@ -97,9 +97,7 @@ export function projectAllModelProfilesToSummaries(
 	const serialized = JSON.stringify(out)
 	for (const sentinel of secretSentinels) {
 		if (serialized.includes(sentinel)) {
-			throw new Error(
-				`ModelProfileSummary projection leaked a secret sentinel: ${JSON.stringify(sentinel)}`,
-			)
+			throw new Error(`ModelProfileSummary projection leaked a secret sentinel: ${JSON.stringify(sentinel)}`)
 		}
 	}
 	return out

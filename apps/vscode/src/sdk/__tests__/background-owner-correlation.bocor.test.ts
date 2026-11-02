@@ -10,13 +10,13 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	type BackgroundOwnerCorrelationRecord,
 	captureBackgroundOwnerCorrelationRecord,
 	clearBackgroundOwnerCorrelationCaptureRecords,
 	getBackgroundOwnerCorrelationCaptureRecords,
 	isBackgroundOwnerCorrelationCaptureEnabled,
 	setBackgroundOwnerCorrelationCaptureBufferSize,
 	setBackgroundOwnerCorrelationCaptureEnabled,
-	type BackgroundOwnerCorrelationRecord,
 } from "../background-owner-correlation"
 
 const makeRecord = (overrides: Partial<BackgroundOwnerCorrelationRecord> = {}): BackgroundOwnerCorrelationRecord => ({

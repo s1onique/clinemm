@@ -109,6 +109,10 @@ describe("createContextCompactionPrepareTurn real-producer-seam RED", () => {
 			const prepareTurn = createCompactionStateAwarePrepareTurn({
 				compact,
 				getState: () => undefined,
+				// R3 (upstream compaction seam): `prepareApiMessages` is the
+				// runtime's provider-request transform; re-compaction swaps in a
+				// projected transcript and must estimate against its API-safe form.
+				prepareApiMessages: async (messages) => messages,
 				saveState,
 			});
 

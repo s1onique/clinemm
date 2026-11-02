@@ -127,9 +127,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase A", (
 	describe("MP-R1: save two same-provider profiles durably", () => {
 		it("MPQS01_TWO_PROFILES_SAME_PROVIDER_COEXIST: prof-A and prof-B (different instances, same providerId) both persist", () => {
 			const store = new ProfilesStore({ filePath: storeFile })
-			store.upsert(
-				makeProfile({ profileId: "prof-A", name: "Corporate", modelId: "model-A" }),
-			)
+			store.upsert(makeProfile({ profileId: "prof-A", name: "Corporate", modelId: "model-A" }))
 			store.upsert(
 				makeProfile({
 					profileId: "prof-B",
@@ -188,10 +186,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase A", (
 	// -------------------------------------------------------------------------
 	describe("corruption fail-closed invariant", () => {
 		it("MPQS01_CORRUPT_FILE_FAILS_CLOSED: a profiles.json that parses but is invalid throws ProfilesStoreError", () => {
-			fs.writeFileSync(
-				storeFile,
-				JSON.stringify({ version: 1, profiles: { "prof-A": { profileId: "WRONG" } } }),
-			)
+			fs.writeFileSync(storeFile, JSON.stringify({ version: 1, profiles: { "prof-A": { profileId: "WRONG" } } }))
 			expect(() => new ProfilesStore({ filePath: storeFile })).toThrow(ProfilesStoreError)
 		})
 

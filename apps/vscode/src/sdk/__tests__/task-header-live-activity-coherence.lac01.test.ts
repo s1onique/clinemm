@@ -22,19 +22,19 @@
  *        not stale or absent).
  */
 import { TaskState } from "@cline/agents"
-import type { AgentRuntimeEvent, AgentRuntimeRecoverySnapshot, AgentRunStatus, LiveAgentRuntimeEvent } from "@cline/shared"
+import type { AgentRunStatus, AgentRuntimeEvent, AgentRuntimeRecoverySnapshot, LiveAgentRuntimeEvent } from "@cline/shared"
 import type { TurnPhase } from "@shared/ExtensionMessage"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { subscribeCanonicalRuntimeEventsToShadow } from "../canonical-event-subscription"
 import type { SdkSessionHost } from "../session-host"
-import { emitTaskReset, emitTaskRequested, sinkFromWiring } from "../task-state-shadow-host-msgs"
+import { selectTaskHeaderPresentation } from "../task-state-shadow-arbiter-mapper"
+import { emitTaskRequested, emitTaskReset, sinkFromWiring } from "../task-state-shadow-host-msgs"
 import {
 	createTaskShadowHostWiring,
 	emptyArbiterSnapshot,
 	type TaskShadowHostWiringWithSink,
 } from "../task-state-shadow-host-wiring"
 import { TaskTelemetryTracker } from "../task-telemetry-tracker"
-import { selectTaskHeaderPresentation } from "../task-state-shadow-arbiter-mapper"
 import {
 	formatElapsed,
 	resolveElapsedDisplayMs,

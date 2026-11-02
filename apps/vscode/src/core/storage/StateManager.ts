@@ -19,11 +19,7 @@ import type { StorageContext } from "@shared/storage/storage-context"
 import { FSWatcher } from "chokidar"
 import { initializeDistinctId } from "@/services/logging/distinctId"
 import { Logger } from "@/shared/services/Logger"
-import {
-	INSTANCE_SECRET_NAME_PATTERN,
-	type InstanceSecretName,
-	parseInstanceSecretName,
-} from "@/shared/storage/instance-secret"
+import { INSTANCE_SECRET_NAME_PATTERN, type InstanceSecretName, parseInstanceSecretName } from "@/shared/storage/instance-secret"
 import { AgentConfigLoader } from "../task/tools/subagent/AgentConfigLoader"
 import { readTaskSettingsFromStorage, writeTaskSettingsToStorage } from "./disk"
 import { STATE_MANAGER_NOT_INITIALIZED } from "./error-messages"
@@ -124,6 +120,11 @@ export class StateManager {
 
 			StateManager.instance.isInitialized = true
 
+			// ACT-CLINEMM-FORK-AUTHORITY: the fork awaits the subagent config
+			// loader during initialization so the dynamic tool-use names are
+			// registered BEFORE any task can start. Upstream moved this to a
+			// different lifecycle point; restoring it here keeps the fork's
+			// subagent surface authoritative.
 			await AgentConfigLoader.getInstance().ready()
 		} catch (error) {
 			Logger.error("[StateManager] Failed to initialize:", error)

@@ -67,6 +67,8 @@ import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
+import { resetMessageTranslatorAndFenceSignature } from "./sdk-controller-signature-probes"
+
 const SDK_CONTROLLER_PATH = resolve(__dirname, "../SdkController.ts")
 
 function readSource(path: string): string {
@@ -145,7 +147,7 @@ function executeProductionReseed(args: {
  */
 function getProductionReseedBody(): string {
 	const source = readSource(SDK_CONTROLLER_PATH)
-	let start = source.indexOf("resetMessageTranslatorAndFence(): void")
+	let start = source.indexOf(resetMessageTranslatorAndFenceSignature())
 	if (start < 0) {
 		start = source.indexOf("resetMessageTranslatorAndFence(requestedPhase")
 	}

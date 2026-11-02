@@ -17,8 +17,8 @@
  * satisfying the typed reader/writer signature).
  */
 
-import { describe, expect, it } from "vitest"
 import type { HistoryItem } from "@shared/HistoryItem"
+import { describe, expect, it } from "vitest"
 import {
 	isKnownProfileId,
 	readActiveProfileIdFromHistoryItem,

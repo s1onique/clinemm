@@ -22,8 +22,8 @@
 //   host; see ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01
 //   11-live-qualification-environment-note.txt).
 
-import { describe, expect, it } from "vitest"
 import { render, screen } from "@testing-library/react"
+import { describe, expect, it } from "vitest"
 import TaskHeaderTelemetry from "./TaskHeaderTelemetry"
 
 // Wire snapshots are byte-identical to the live-green driver output.
@@ -45,16 +45,12 @@ const TURN_STATE = { phase: "streaming" } as const
 
 describe("TaskHeaderTelemetry — live-wire DOM render witness", () => {
 	it("LIVE_HEADER_BEFORE: counter is zero-hiding (no glyph)", () => {
-		const { container } = render(
-			<TaskHeaderTelemetry telemetry={WIRE_BEFORE} turnState={TURN_STATE} />,
-		)
+		const { container } = render(<TaskHeaderTelemetry telemetry={WIRE_BEFORE} turnState={TURN_STATE} />)
 		expect(container.querySelector("[data-testid=task-header-runtime-error-count]")).toBeNull()
 	})
 
 	it("LIVE_HEADER_0_TO_1: ⚠ 1 glyph appears after first EPERM incident", () => {
-		const { container } = render(
-			<TaskHeaderTelemetry telemetry={WIRE_AFTER_FIRST_EPERM} turnState={TURN_STATE} />,
-		)
+		const { container } = render(<TaskHeaderTelemetry telemetry={WIRE_AFTER_FIRST_EPERM} turnState={TURN_STATE} />)
 		const el = container.querySelector("[data-testid=task-header-runtime-error-count]") as HTMLElement
 		expect(el).toBeTruthy()
 		expect(el.textContent).toContain("⚠")
@@ -70,9 +66,7 @@ describe("TaskHeaderTelemetry — live-wire DOM render witness", () => {
 	})
 
 	it("LIVE_HEADER_1_TO_2: ⚠ 2 glyph appears after second independent EPERM incident", () => {
-		const { container } = render(
-			<TaskHeaderTelemetry telemetry={WIRE_AFTER_SECOND_EPERM} turnState={TURN_STATE} />,
-		)
+		const { container } = render(<TaskHeaderTelemetry telemetry={WIRE_AFTER_SECOND_EPERM} turnState={TURN_STATE} />)
 		const el = container.querySelector("[data-testid=task-header-runtime-error-count]") as HTMLElement
 		expect(el).toBeTruthy()
 		expect(el.textContent).toContain("⚠")
@@ -85,9 +79,7 @@ describe("TaskHeaderTelemetry — live-wire DOM render witness", () => {
 		// snapshot — no new runtimeErrorCount is sent because no
 		// recordRuntimeError call fires for an ordinary command exit.
 		// The DOM renders "⚠ 2" exactly as it did before the exit-7 path.
-		const { container } = render(
-			<TaskHeaderTelemetry telemetry={WIRE_AFTER_EXIT7} turnState={TURN_STATE} />,
-		)
+		const { container } = render(<TaskHeaderTelemetry telemetry={WIRE_AFTER_EXIT7} turnState={TURN_STATE} />)
 		const el = container.querySelector("[data-testid=task-header-runtime-error-count]") as HTMLElement
 		expect(el).toBeTruthy()
 		expect(el.textContent).toContain("2")
@@ -99,9 +91,7 @@ describe("TaskHeaderTelemetry — live-wire DOM render witness", () => {
 	// composition (real wire from real tracker → real DOM via real React).
 	// It is NOT a replacement for the 46-test family.
 	it("LIVE_SANITY: data-testid matches the canonical selector used by the existing 46-test family", () => {
-		const { container } = render(
-			<TaskHeaderTelemetry telemetry={WIRE_AFTER_SECOND_EPERM} turnState={TURN_STATE} />,
-		)
+		const { container } = render(<TaskHeaderTelemetry telemetry={WIRE_AFTER_SECOND_EPERM} turnState={TURN_STATE} />)
 		const elByTestId = screen.getByTestId("task-header-runtime-error-count")
 		const elByQuery = container.querySelector("[data-testid=task-header-runtime-error-count]")
 		expect(elByQuery).toBe(elByTestId)

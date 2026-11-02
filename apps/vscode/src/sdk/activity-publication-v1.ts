@@ -63,7 +63,7 @@
  * `kind === "emit"` and only forwards the data to `emitV2Capture`.
  */
 
-import type { TurnState, ThinkingPresentationProjection } from "@shared/ExtensionMessage"
+import type { ThinkingPresentationProjection, TurnState } from "@shared/ExtensionMessage"
 import type { TaskHeaderPresentationProjection } from "./task-state-shadow-arbiter-mapper"
 import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 
@@ -181,13 +181,9 @@ export function buildActivityPublicationV1Record(args: {
 			modelStreaming: runtimeModelStreaming ?? null,
 			toolActive: runtimePendingToolCount > 0,
 			foregroundCommandRunning:
-				typeof snapshot.foregroundCommandRunning === "boolean"
-					? snapshot.foregroundCommandRunning
-					: null,
+				typeof snapshot.foregroundCommandRunning === "boolean" ? snapshot.foregroundCommandRunning : null,
 			backgroundCommandRunning:
-				typeof snapshot.backgroundCommandRunning === "boolean"
-					? snapshot.backgroundCommandRunning
-					: null,
+				typeof snapshot.backgroundCommandRunning === "boolean" ? snapshot.backgroundCommandRunning : null,
 			// UI authority (snapshot-derived). Each projection carries
 			// its own `source` provenance so the post-capture join can
 			// see which authority was active ("shadow" vs "legacy"
@@ -211,4 +207,3 @@ export function buildActivityPublicationV1Record(args: {
 		},
 	}
 }
-

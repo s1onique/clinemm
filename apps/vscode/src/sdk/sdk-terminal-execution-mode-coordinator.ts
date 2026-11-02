@@ -6,9 +6,9 @@ import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { SdkSessionRebuildScheduler } from "./sdk-session-rebuild-scheduler"
+import type { SessionAutoApprovalOverride } from "./session-auto-approval"
 import type { SdkSessionHost } from "./session-host"
 import type { VscodeSessionHost } from "./vscode-session-host"
-import type { SessionAutoApprovalOverride } from "./session-auto-approval"
 import { getEffectiveTerminalExecutionMode, type VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
 
 type StartInput = Parameters<VscodeSessionHost["start"]>[0]

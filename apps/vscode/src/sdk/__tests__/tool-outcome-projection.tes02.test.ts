@@ -256,8 +256,8 @@ describe("ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01 / runtime vs
 		tracker.recordToolStartedWithName("run_commands")
 		const outcome = tracker.get()?.outcome
 		expect(outcome?.unknown).toBe(2)
-		expect(
-			(outcome?.succeeded ?? 0) + (outcome?.failed ?? 0) + (outcome?.pending ?? 0) + (outcome?.unknown ?? 0),
-		).toBe(tracker.get()?.toolCalls)
+		expect((outcome?.succeeded ?? 0) + (outcome?.failed ?? 0) + (outcome?.pending ?? 0) + (outcome?.unknown ?? 0)).toBe(
+			tracker.get()?.toolCalls,
+		)
 	})
 })

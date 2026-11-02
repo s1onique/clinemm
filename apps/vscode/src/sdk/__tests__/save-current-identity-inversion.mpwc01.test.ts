@@ -22,13 +22,13 @@
  * GREEN after (handlers require an authoritative identity source).
  */
 
+import type { HistoryItem } from "@shared/HistoryItem"
 import { describe, expect, it } from "vitest"
+import type { Controller } from "@/core/controller"
 import { saveCurrentAsModelProfile } from "@/core/controller/state/saveCurrentAsModelProfile"
 import { updateModelProfileFromCurrent } from "@/core/controller/state/updateModelProfileFromCurrent"
-import type { Controller } from "@/core/controller"
-import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import type { ProviderConfigurationInstance } from "@/sdk/instance-store/contracts"
-import type { HistoryItem } from "@shared/HistoryItem"
+import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 
 function makeInstancesStoreStub(instances: ProviderConfigurationInstance[]) {
 	return {
@@ -112,9 +112,9 @@ describe("MPWC01_C3_SAVE_CURRENT_IDENTITY_INVERSION", () => {
 			activeSessionProviderId: "openai-compatible",
 		})
 
-		await expect(
-			saveCurrentAsModelProfile(controller, { name: "Captured" } as never),
-		).rejects.toThrow(/authoritative providerInstanceId/i)
+		await expect(saveCurrentAsModelProfile(controller, { name: "Captured" } as never)).rejects.toThrow(
+			/authoritative providerInstanceId/i,
+		)
 	})
 
 	it("updateModelProfileFromCurrent fails closed when no authoritative providerInstanceId is available", async () => {
@@ -124,9 +124,9 @@ describe("MPWC01_C3_SAVE_CURRENT_IDENTITY_INVERSION", () => {
 			activeSessionProviderId: "openai-compatible",
 		})
 
-		await expect(
-			updateModelProfileFromCurrent(controller, { profileId: "prof-1" } as never),
-		).rejects.toThrow(/authoritative providerInstanceId/i)
+		await expect(updateModelProfileFromCurrent(controller, { profileId: "prof-1" } as never)).rejects.toThrow(
+			/authoritative providerInstanceId/i,
+		)
 	})
 
 	it("saveCurrentAsModelProfile does NOT silently pick inst-A when runtime is inst-B", async () => {
@@ -140,8 +140,6 @@ describe("MPWC01_C3_SAVE_CURRENT_IDENTITY_INVERSION", () => {
 			activeSessionProviderId: "openai-compatible",
 		})
 
-		await expect(
-			saveCurrentAsModelProfile(controller, { name: "X" } as never),
-		).rejects.toThrow()
+		await expect(saveCurrentAsModelProfile(controller, { name: "X" } as never)).rejects.toThrow()
 	})
 })

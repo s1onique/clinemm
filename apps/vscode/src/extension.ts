@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 
 import assert from "node:assert"
+import { disableCurrentDirectoryExecutableSearch } from "@cline/shared"
 import {
 	isBcbObservationUnavailableCaptureEnabled as _isBcbObservationUnavailableCaptureEnabledForDump,
 	getBcbObservationUnavailableCaptureRecords,
@@ -106,6 +107,7 @@ import { improveWithCline } from "./core/controller/commands/improveWithCline"
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
 import { sendShowWebviewEvent } from "./core/controller/ui/subscribeToShowWebview"
 import { HookDiscoveryCache } from "./core/hooks/HookDiscoveryCache"
+import { migrateOpenAiCompatibleBaseUrlToV1 } from "./core/storage/openai-base-url-migration"
 import {
 	cleanupMcpMarketplaceCatalogFromGlobalState,
 	cleanupOldApiKey,
@@ -609,6 +611,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	// The call is a no-op when CLINEMM_CAPTURE_V2_PATH is unset
 	// (DEFAULT_OFF preserved).
 	emitCaptureAttach()
+	// Before anything spawns with the workspace as cwd (rg, git, hooks, MCP).
+	disableCurrentDirectoryExecutableSearch()
 
 	// 1. Set up HostProvider for VSCode
 	// IMPORTANT: This must be done before any service can be registered
@@ -624,6 +628,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
 	const storageContext = createStorageContext({ workspacePath })
 	await exportVSCodeStorageToSharedFiles(context, storageContext)
+	migrateOpenAiCompatibleBaseUrlToV1(storageContext)
 
 	// 4. Register services and perform common initialization
 	// IMPORTANT: Must be done after host provider is setup and migrations are complete

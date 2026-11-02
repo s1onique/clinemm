@@ -9,12 +9,12 @@
  * Elm -- not stale TS -- is authoritative.
  */
 
-import { describe, expect, it, beforeEach } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import {
-	pickContinuationDirectiveForPublication,
-	resetCompletionContinuationControlElmAuthorityForTests,
 	type CompletionContinuationControlFactsInput,
 	type ContinuationDirective,
+	pickContinuationDirectiveForPublication,
+	resetCompletionContinuationControlElmAuthorityForTests,
 } from "../completion-continuation-control-elm"
 
 const FACT_INPUT: CompletionContinuationControlFactsInput = {

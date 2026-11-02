@@ -17,11 +17,10 @@
  */
 
 import type { CoreSessionConfig } from "@cline/core"
-import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import { describe, expect, it, vi } from "vitest"
+import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import { MissingProviderInstanceCredentialError, type ProviderConfigurationInstance } from "../instance-store/contracts"
 import { SdkSessionConfigBuilder } from "../sdk-session-config-builder"
-
 
 const mocks = vi.hoisted(() => ({
 	buildSessionConfig: vi.fn(),

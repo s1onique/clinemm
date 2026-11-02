@@ -1,21 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import type { ButtonHTMLAttributes, PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import ContextWindow from "./ContextWindow"
-
-const condense = vi.fn().mockResolvedValue(undefined)
-
-vi.mock("@/services/grpc-client", () => ({
-	SlashServiceClient: {
-		condense: (request: unknown) => condense(request),
-	},
-}))
-
-vi.mock("@shared/proto/cline/common", () => ({
-	StringRequest: {
-		create: (request: unknown) => request,
-	},
-}))
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeButton: ({ children, ...props }: PropsWithChildren<ButtonHTMLAttributes<HTMLButtonElement>>) => (
@@ -50,15 +36,16 @@ vi.mock("@/components/ui/button", () => ({
 }))
 
 describe("ContextWindow compact button", () => {
-	beforeEach(() => {
-		condense.mockClear()
-	})
+	beforeEach(() => vi.clearAllMocks())
 
-	it("runs the compact RPC after confirmation instead of sending /compact as a message", async () => {
+	it("runs the shared compact handler after confirmation instead of sending /compact as a message", () => {
+		const compactTask = vi.fn().mockResolvedValue(true)
 		const onSendMessage = vi.fn()
 
 		render(
 			<ContextWindow
+				compactDisabled={false}
+				compactTask={compactTask}
 				contextWindow={200_000}
 				lastApiReqContextInputTokens={120_000}
 				onSendMessage={onSendMessage}
@@ -69,8 +56,22 @@ describe("ContextWindow compact button", () => {
 		fireEvent.click(screen.getByRole("button", { name: /compact task/i }))
 		fireEvent.click(screen.getByRole("button", { name: /^compact$/i }))
 
-		await waitFor(() => expect(condense).toHaveBeenCalledWith({ value: "compact" }))
+		expect(compactTask).toHaveBeenCalledTimes(1)
 		expect(onSendMessage).not.toHaveBeenCalled()
+	})
+
+	it("disables compaction during API error recovery", () => {
+		render(
+			<ContextWindow
+				compactDisabled={true}
+				compactTask={vi.fn()}
+				contextWindow={200_000}
+				lastApiReqTotalTokens={120_000}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByRole("button", { name: /compact task/i })).toBeDisabled()
 	})
 })
 
@@ -286,9 +287,7 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 		// the raw float — see the
 		// "FACTORY CONSERVATION" note in
 		// ContextWindow.tsx for the rationale.
-		expect(screen.getByRole("progressbar")).toHaveTextContent(
-			String((W_SENTINEL / 200_000) * 100),
-		)
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((W_SENTINEL / 200_000) * 100))
 	})
 
 	it("RED -> GREEN: W defined, the displayed `used` value is W (not P)", () => {
@@ -308,9 +307,7 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 		// uses the `used` value with the
 		// `Current tokens used in this request` title.
 		// Both must show W (271,337), not P (364,900).
-		const usedElements = screen.getAllByTitle(
-			/Current tokens used in this request/i,
-		)
+		const usedElements = screen.getAllByTitle(/Current tokens used in this request/i)
 		expect(usedElements.length).toBeGreaterThan(0)
 		for (const el of usedElements) {
 			expect(el.textContent).toMatch(/271[,.]?337|271\.3k/i)
@@ -353,9 +350,7 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 				useAutoCondense={false}
 			/>,
 		)
-		const usedElements = screen.queryAllByTitle(
-			/Current tokens used in this request/i,
-		)
+		const usedElements = screen.queryAllByTitle(/Current tokens used in this request/i)
 		// Either the element does not render at all
 		// (preferred — full null-fallback) OR it
 		// does not contain P. Both are acceptable;
@@ -418,9 +413,7 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 		// Raw ratio (NOT pre-rounded) — see the
 		// "FACTORY CONSERVATION" note in
 		// ContextWindow.tsx for the rationale.
-		expect(screen.getByRole("progressbar")).toHaveTextContent(
-			String((P_SENTINEL / 200_000) * 100),
-		)
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
 	})
 
 	it("COMPACTION_PRESENTATION_TRANSITION (SYNTHETIC_REAL / PASS): bar flips from W_before to W_after across a re-render — proves IF the webview receives W_after, ContextWindow updates", () => {
@@ -476,9 +469,7 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 			/>,
 		)
 		// 380_000 / 200_000 = 1.9 = 190% (raw ratio).
-		expect(screen.getByRole("progressbar")).toHaveTextContent(
-			String((W_BEFORE / 200_000) * 100),
-		)
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((W_BEFORE / 200_000) * 100))
 
 		// Runtime publishes a fresh W_after event.
 		// The webview re-renders with the new prop.
@@ -494,15 +485,11 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 		// The bar flipped from 190% to 45% — the
 		// compaction dropped W, and the bar reflects
 		// the new runtime-published value.
-		expect(screen.getByRole("progressbar")).toHaveTextContent(
-			String((W_AFTER / 200_000) * 100),
-		)
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((W_AFTER / 200_000) * 100))
 
 		// And: the displayed `used` value follows
 		// the same oracle — W_AFTER, not P.
-		const usedElements = screen.getAllByTitle(
-			/Current tokens used in this request/i,
-		)
+		const usedElements = screen.getAllByTitle(/Current tokens used in this request/i)
 		for (const el of usedElements) {
 			expect(el.textContent).toMatch(/90[,.]?000|90k|90\./i)
 		}
@@ -518,10 +505,7 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 		const fs = require("node:fs") as typeof import("node:fs")
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const path = require("node:path") as typeof import("node:path")
-		const file = fs.readFileSync(
-			path.resolve(__dirname, "ContextWindow.tsx"),
-			"utf8",
-		)
+		const file = fs.readFileSync(path.resolve(__dirname, "ContextWindow.tsx"), "utf8")
 		expect(file).not.toMatch(/estimateRequestInputTokens/)
 		expect(file).not.toMatch(/estimateMessageTokens/)
 		expect(file).not.toMatch(/@\/utils\/tokenEstimators/)

@@ -19,9 +19,10 @@
  * binding (what was passed to `spawn()`) via the DI seam rather than
  * inspecting a process that no longer exists.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { SandboxError } from "@cline/core"
+
 import type { CommandCapability, CommandInvocation, SandboxBackend, SandboxMode, SandboxPreparedInvocation } from "@cline/core"
+import { SandboxError } from "@cline/core"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { CommandJobManager } from "./command-job-manager"
 
 const SANDBOX_OPTIN_ENV = "CLINEMM_EXPERIMENTAL_SANDBOX"
@@ -213,7 +214,10 @@ describe("backend prepared invocation reaches the supervisor (structural)", () =
 		const stubBackend = makeCaptureBackend({})
 		const stubBackendWithCapture = {
 			...stubBackend,
-			async prepare(input: { capability: CommandCapability; command: CommandInvocation }): Promise<SandboxPreparedInvocation> {
+			async prepare(input: {
+				capability: CommandCapability
+				command: CommandInvocation
+			}): Promise<SandboxPreparedInvocation> {
 				const r = await stubBackend.prepare(input)
 				capturedPrepared = r
 				return r
@@ -255,7 +259,12 @@ describe("backend prepared invocation reaches the supervisor (structural)", () =
 	})
 
 	it("prepared envSemantics=complete is honored end-to-end (structurally)", async () => {
-		let capturedConfig: { executable: string; args: readonly string[]; envSemantics: string | undefined; env: Record<string, string> } | null = null
+		let capturedConfig: {
+			executable: string
+			args: readonly string[]
+			envSemantics: string | undefined
+			env: Record<string, string>
+		} | null = null
 		const stubBackend = makeCaptureBackend({})
 		// Wrap spawnSupervisableShellCommand via the prepared invocation
 		// inspection — we capture the prepared invocation and assert
@@ -263,8 +272,13 @@ describe("backend prepared invocation reaches the supervisor (structural)", () =
 		const manager = new CommandJobManager({
 			sandboxBackendResolver: async () => ({
 				id: "capture-envSemantics",
-				async isAvailable() { return true },
-				async prepare(input: { capability: CommandCapability; command: CommandInvocation }): Promise<SandboxPreparedInvocation> {
+				async isAvailable() {
+					return true
+				},
+				async prepare(input: {
+					capability: CommandCapability
+					command: CommandInvocation
+				}): Promise<SandboxPreparedInvocation> {
 					const r = await stubBackend.prepare(input)
 					capturedConfig = {
 						executable: r.executable,
@@ -338,7 +352,9 @@ describe("real production seam: prepared cwd reaches the spawned child", () => {
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async () => ({
 					id: "cwd-replacement",
-					async isAvailable() { return true },
+					async isAvailable() {
+						return true
+					},
 					async prepare(): Promise<SandboxPreparedInvocation> {
 						return {
 							executable: "/bin/sh",
@@ -480,7 +496,9 @@ describe("fail-closed: prepare failure", () => {
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async () => ({
 					id: "failing-backend",
-					async isAvailable() { return true },
+					async isAvailable() {
+						return true
+					},
 					async prepare() {
 						throw new SandboxError("synthetic canonicalize failure", {
 							backendId: "failing-backend",
@@ -511,7 +529,9 @@ describe("fail-closed: prepare failure", () => {
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async () => ({
 					id: "failing-backend-2",
-					async isAvailable() { return true },
+					async isAvailable() {
+						return true
+					},
 					async prepare() {
 						throw new Error("synthetic prepare crash")
 					},
@@ -605,10 +625,7 @@ describe("wiring sanity", () => {
 describe("ACT-IMPL01: sshAuthenticationAuthority reaches the production seam", () => {
 	const SSH_AGENT_OPTIN_ENV = "CLINEMM_SAFE_YOLO_SSH_AGENT"
 
-	function withSshAgentOptIn<T>(
-		value: string | undefined,
-		fn: () => Promise<T> | T,
-	): Promise<T> | T {
+	function withSshAgentOptIn<T>(value: string | undefined, fn: () => Promise<T> | T): Promise<T> | T {
 		const prev = process.env[SSH_AGENT_OPTIN_ENV]
 		if (value === undefined) {
 			delete process.env[SSH_AGENT_OPTIN_ENV]
@@ -636,17 +653,20 @@ describe("ACT-IMPL01: sshAuthenticationAuthority reaches the production seam", (
 	// the frozen backend object — that field is bound to the initial
 	// null at literal evaluation time and cannot be observed later).
 	function makeCapturingBackend(label: string): {
-		backend: SandboxBackend;
-		readonly captured: { value: { cap: CommandCapability; cmd: CommandInvocation } | null };
+		backend: SandboxBackend
+		readonly captured: { value: { cap: CommandCapability; cmd: CommandInvocation } | null }
 	} {
-		const captured = { value: null as { cap: CommandCapability; cmd: CommandInvocation } | null };
+		const captured = { value: null as { cap: CommandCapability; cmd: CommandInvocation } | null }
 		const backend: SandboxBackend = Object.freeze({
 			id: `ssh-agent-${label}`,
 			async isAvailable() {
-				return true;
+				return true
 			},
-			async prepare(input: { capability: CommandCapability; command: CommandInvocation }): Promise<SandboxPreparedInvocation> {
-				captured.value = { cap: input.capability, cmd: input.command };
+			async prepare(input: {
+				capability: CommandCapability
+				command: CommandInvocation
+			}): Promise<SandboxPreparedInvocation> {
+				captured.value = { cap: input.capability, cmd: input.command }
 				return {
 					executable: "/usr/bin/sandbox-exec",
 					args: ["-f", "/tmp/profile.sb", input.command.executable, ...input.command.args],
@@ -656,18 +676,18 @@ describe("ACT-IMPL01: sshAuthenticationAuthority reaches the production seam", (
 					envSemantics: "complete",
 					backendId: `ssh-agent-${label}`,
 					cleanup: async () => {},
-				};
+				}
 			},
-		});
-		return { backend, captured };
+		})
+		return { backend, captured }
 	}
 
 	it("default (env unset): CommandCapability has NO sshAuthenticationAuthority field", async () => {
 		await withSandboxOptIn("seatbelt", async () => {
-			const { backend, captured } = makeCapturingBackend("default");
+			const { backend, captured } = makeCapturingBackend("default")
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async () => backend,
-			});
+			})
 			try {
 				await withSshAgentOptIn(undefined, async () => {
 					await manager.start({
@@ -675,22 +695,22 @@ describe("ACT-IMPL01: sshAuthenticationAuthority reaches the production seam", (
 						cwd: process.cwd(),
 						waitBudgetMs: 5_000,
 						executionDeadlineMs: 5_000,
-					});
-					expect(captured.value).not.toBeNull();
-					expect(captured.value?.cap.sshAuthenticationAuthority).toBeUndefined();
-				});
+					})
+					expect(captured.value).not.toBeNull()
+					expect(captured.value?.cap.sshAuthenticationAuthority).toBeUndefined()
+				})
 			} finally {
-				await manager.dispose();
+				await manager.dispose()
 			}
-		});
-	});
+		})
+	})
 
 	it("CLINEMM_SAFE_YOLO_SSH_AGENT=allow: CommandCapability.sshAuthenticationAuthority.mode === 'agent'", async () => {
 		await withSandboxOptIn("seatbelt", async () => {
-			const { backend, captured } = makeCapturingBackend("allow");
+			const { backend, captured } = makeCapturingBackend("allow")
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async () => backend,
-			});
+			})
 			try {
 				await withSshAgentOptIn("allow", async () => {
 					await manager.start({
@@ -698,24 +718,24 @@ describe("ACT-IMPL01: sshAuthenticationAuthority reaches the production seam", (
 						cwd: process.cwd(),
 						waitBudgetMs: 5_000,
 						executionDeadlineMs: 5_000,
-					});
-					expect(captured.value).not.toBeNull();
+					})
+					expect(captured.value).not.toBeNull()
 					expect(captured.value?.cap.sshAuthenticationAuthority).toEqual({
 						mode: "agent",
-					});
-				});
+					})
+				})
 			} finally {
-				await manager.dispose();
+				await manager.dispose()
 			}
-		});
-	});
+		})
+	})
 
 	it("CLINEMM_SAFE_YOLO_SSH_AGENT=deny (or any value other than 'allow'): no agent authority", async () => {
 		await withSandboxOptIn("seatbelt", async () => {
-			const { backend, captured } = makeCapturingBackend("deny");
+			const { backend, captured } = makeCapturingBackend("deny")
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async () => backend,
-			});
+			})
 			try {
 				await withSshAgentOptIn("deny", async () => {
 					await manager.start({
@@ -723,22 +743,22 @@ describe("ACT-IMPL01: sshAuthenticationAuthority reaches the production seam", (
 						cwd: process.cwd(),
 						waitBudgetMs: 5_000,
 						executionDeadlineMs: 5_000,
-					});
-					expect(captured.value).not.toBeNull();
-					expect(captured.value?.cap.sshAuthenticationAuthority).toBeUndefined();
-				});
+					})
+					expect(captured.value).not.toBeNull()
+					expect(captured.value?.cap.sshAuthenticationAuthority).toBeUndefined()
+				})
 			} finally {
-				await manager.dispose();
+				await manager.dispose()
 			}
-		});
-	});
+		})
+	})
 
 	it("CLINEMM_SAFE_YOLO_SSH_AGENT=allow WITHOUT seatbelt mode: no agent authority (mode-gated)", async () => {
 		await withSandboxOptIn("off", async () => {
-			const { backend, captured } = makeCapturingBackend("classic");
+			const { backend, captured } = makeCapturingBackend("classic")
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async () => backend,
-			});
+			})
 			try {
 				await withSshAgentOptIn("allow", async () => {
 					await manager.start({
@@ -746,14 +766,14 @@ describe("ACT-IMPL01: sshAuthenticationAuthority reaches the production seam", (
 						cwd: process.cwd(),
 						waitBudgetMs: 5_000,
 						executionDeadlineMs: 5_000,
-					});
+					})
 					// Classic path: no backend was invoked (resolver not
 					// called); captured.value stays null.
-					expect(captured.value).toBeNull();
-				});
+					expect(captured.value).toBeNull()
+				})
 			} finally {
-				await manager.dispose();
+				await manager.dispose()
 			}
-		});
-	});
+		})
+	})
 })

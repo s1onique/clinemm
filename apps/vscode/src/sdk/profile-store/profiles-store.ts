@@ -27,8 +27,8 @@ import * as path from "node:path"
 import {
 	emptyProfilesFile,
 	type ModelProfile,
-	type ProfilesFile,
 	ProfilesContractError,
+	type ProfilesFile,
 	parseModelProfile,
 	parseProfilesFile,
 } from "./contracts"
@@ -96,10 +96,7 @@ export class ProfilesStore {
 			if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
 				return undefined
 			}
-			throw new ProfilesStoreError(
-				`profiles.json at ${this.options.filePath} is unreadable / malformed (fail closed)`,
-				err,
-			)
+			throw new ProfilesStoreError(`profiles.json at ${this.options.filePath} is unreadable / malformed (fail closed)`, err)
 		}
 	}
 
@@ -143,9 +140,7 @@ export class ProfilesStore {
 	rename(profileId: string, newName: string): void {
 		const existing = this.cache.profiles[profileId]
 		if (!existing) {
-			throw new ProfilesStoreError(
-				`Cannot rename: profile '${profileId}' does not exist`,
-			)
+			throw new ProfilesStoreError(`Cannot rename: profile '${profileId}' does not exist`)
 		}
 		if (typeof newName !== "string" || newName.length === 0) {
 			throw new ProfilesStoreError(`Cannot rename: newName must be a non-empty string`)

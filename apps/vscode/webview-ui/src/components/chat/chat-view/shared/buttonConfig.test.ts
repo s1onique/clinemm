@@ -1,5 +1,7 @@
+import { CLOUD_CREATION_UNCONFIRMED_ERROR_CODE } from "@shared/cloud/cloud-sessions"
 import type { ClineMessage, TurnState } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
+import { ClineError } from "../../../../../../src/services/error/ClineError"
 import {
 	BUTTON_CONFIGS,
 	buttonsForPhase,
@@ -332,9 +334,27 @@ describe("buttonsForPhase (TurnState-driven)", () => {
 			ask: "mistake_limit_reached",
 			text: "Advisory",
 		}
-		expect(buttonsForPhase(ts("awaiting_followup", 8), mistake)).toEqual(
-			BUTTON_CONFIGS.mistake_limit_reached,
-		)
+		expect(buttonsForPhase(ts("awaiting_followup", 8), mistake)).toEqual(BUTTON_CONFIGS.mistake_limit_reached)
+	})
+
+	it("offers only New Task for an unconfirmed cloud creation in anchored and legacy state", () => {
+		const failed: ClineMessage = {
+			ts: 9,
+			type: "ask",
+			ask: "api_req_failed",
+			text: new ClineError({
+				message: "Check History before starting another cloud task.",
+				code: CLOUD_CREATION_UNCONFIRMED_ERROR_CODE,
+			}).serialize(),
+		}
+		for (const state of [ts("error", failed.ts), undefined]) {
+			expect(getButtonConfigFromState([failed], state, "act")).toEqual({
+				sendingDisabled: true,
+				enableButtons: true,
+				primaryText: "Start New Task",
+				primaryAction: "new_task",
+			})
+		}
 	})
 })
 

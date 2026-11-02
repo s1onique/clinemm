@@ -53,11 +53,13 @@ interface MalformedFacts {
 	readonly alreadyCommitted: boolean
 }
 
-function makeMalformedFacts(over: {
-	priorHeldSetSorted?: readonly string[] | undefined
-	currentHeldSetSorted?: readonly string[]
-	unconsumedCount?: number
-} = {}): MalformedFacts {
+function makeMalformedFacts(
+	over: {
+		priorHeldSetSorted?: readonly string[] | undefined
+		currentHeldSetSorted?: readonly string[]
+		unconsumedCount?: number
+	} = {},
+): MalformedFacts {
 	return {
 		unconsumedCount: over.unconsumedCount ?? 2,
 		capabilities: { canObserveHeldResults: true, canRetryCompletion: true },

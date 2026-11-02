@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { isAbortError, SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import { SessionAutoApprovalStore } from "./session-auto-approval"
+import type { SdkSessionHost } from "./session-host"
 
 type StartInput = Parameters<SdkSessionLifecycle["startNewSession"]>[0]
 type SendHost = Parameters<SdkSessionLifecycle["fireAndForgetSend"]>[0]
+type StartSessionResult = Awaited<ReturnType<SdkSessionHost["start"]>>
 
 const mockCreateSessionHost = vi.hoisted(() => vi.fn())
 
@@ -21,6 +23,22 @@ vi.mock("./vscode-session-host", () => ({
 	},
 }))
 
+/**
+ * The lifecycle's `startNewSession` returns a discriminated union on
+ * `status` ("started" | "superseded"). These tests assert on the STARTED
+ * branch, so narrow to it explicitly: the union member that carries
+ * `startResult` is only present when the start actually succeeded.
+ */
+function expectStarted(result: Awaited<ReturnType<SdkSessionLifecycle["startNewSession"]>>): {
+	startResult: StartSessionResult
+	sdkHost: SdkSessionHost
+} {
+	if (result.status !== "started") {
+		throw new Error(`expected a started session, got status "${result.status}"`)
+	}
+	return result
+}
+
 describe("SdkSessionLifecycle", () => {
 	beforeEach(() => {
 		mockCreateSessionHost.mockReset()
@@ -33,13 +51,81 @@ describe("SdkSessionLifecycle", () => {
 		const lifecycle = makeLifecycle()
 
 		// biome-ignore lint/suspicious/noExplicitAny: focused fake for lifecycle unit test
-		const result = await lifecycle.startNewSession({} as any)
+		const result = expectStarted(await lifecycle.startNewSession({} as any))
 
 		expect(result.startResult.sessionId).toBe("session-123")
 		expect(result.sdkHost).toBe(sdkHost)
 		expect(sdkHost.subscribe).toHaveBeenCalled()
 		expect(lifecycle.getActiveSession()?.sessionId).toBe("session-123")
 		expect(lifecycle.getActiveSession()?.isRunning).toBe(true)
+	})
+
+	it("does not start a host when the caller is superseded", async () => {
+		const sdkHost = makeSdkHost({ startResult: { sessionId: "session-stale" } })
+		const lifecycle = makeLifecycle()
+
+		// The merged signature is (startInput, operationToken?, hostOverride?,
+		// shouldContinue?). The `shouldContinue` predicate is the upstream
+		// supersession channel: it THROWS SessionStartSupersededError. The
+		// fork's operation-token fence instead RETURNS { status: "superseded" }.
+		await expect(lifecycle.startNewSession({} as StartInput, undefined, sdkHost as never, () => false)).rejects.toMatchObject(
+			{
+				name: "SessionStartSupersededError",
+			},
+		)
+
+		expect(sdkHost.start).not.toHaveBeenCalled()
+		expect(lifecycle.getActiveSession()).toBeUndefined()
+	})
+
+	it("records the mode the active session was built for", async () => {
+		const sdkHost = makeSdkHost({ startResult: { sessionId: "session-123" } })
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const lifecycle = makeLifecycle()
+
+		await lifecycle.startNewSession({
+			config: { providerId: "anthropic", modelId: "claude-sonnet-4", mode: "plan" },
+		} as StartInput)
+
+		expect(lifecycle.getActiveSession()?.mode).toBe("plan")
+	})
+
+	it("waits for tracked session starts, including ones that fail", async () => {
+		const lifecycle = makeLifecycle()
+		let finishStart!: () => void
+		const start = lifecycle.trackSessionStart(
+			() =>
+				new Promise<void>((resolve) => {
+					finishStart = resolve
+				}),
+		)
+		let waited = false
+		const waiting = lifecycle.waitForSessionStarts().then(() => {
+			waited = true
+		})
+
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(waited).toBe(false)
+
+		finishStart()
+		await start
+		await waiting
+		expect(waited).toBe(true)
+
+		// A waiter already in place when a start fails is released, not rejected:
+		// a mode toggle waiting on a failed new-task start must still go ahead.
+		let failStart!: (error: Error) => void
+		const failing = lifecycle.trackSessionStart(
+			() =>
+				new Promise<void>((_resolve, reject) => {
+					failStart = reject
+				}),
+		)
+		const waitingOnFailure = lifecycle.waitForSessionStarts()
+		failStart(new Error("start failed"))
+		await expect(failing).rejects.toThrow("start failed")
+		await expect(waitingOnFailure).resolves.toBeUndefined()
+		await expect(lifecycle.waitForSessionStarts()).resolves.toBeUndefined()
 	})
 
 	it("stores the provider and model config used to start the active session", async () => {
@@ -174,6 +260,106 @@ describe("SdkSessionLifecycle", () => {
 		lifecycle.fireAndForgetSend(sdkHost as any, "session-123", "hello")
 		await vi.waitFor(() => expect(onSendComplete).toHaveBeenCalledWith("session-123"))
 
+		expect(lifecycle.getActiveSession()?.isRunning).toBe(false)
+	})
+
+	it("keeps the session running when a send settles after Core started the next queued turn", async () => {
+		const onDidBecomeIdle = vi.fn()
+		let resolveSend: () => void = () => {}
+		const sdkHost = makeSdkHost({
+			send: vi.fn(
+				() =>
+					new Promise<void>((resolve) => {
+						resolveSend = resolve
+					}),
+			),
+		})
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const lifecycle = makeLifecycle({ onDidBecomeIdle })
+		await lifecycle.startNewSession({} as StartInput)
+
+		lifecycle.fireAndForgetSend(sdkHost as any, "session-123", "first")
+		// Core emits idle for the first turn and immediately drains a queued prompt.
+		lifecycle.setRunning(false)
+		lifecycle.setRunning(true)
+		resolveSend()
+		await new Promise((resolve) => setTimeout(resolve, 0))
+
+		expect(lifecycle.getActiveSession()?.isRunning).toBe(true)
+		expect(onDidBecomeIdle).toHaveBeenCalledOnce()
+	})
+
+	it("waits for the active session's turn send to settle, even when it is aborted", async () => {
+		let rejectSend: (error: Error) => void = () => {}
+		const sdkHost = makeSdkHost({
+			send: vi.fn(
+				() =>
+					new Promise<void>((_, reject) => {
+						rejectSend = reject
+					}),
+			),
+		})
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const lifecycle = makeLifecycle()
+		await lifecycle.startNewSession({} as StartInput)
+		const session = lifecycle.getActiveSession() as NonNullable<ReturnType<SdkSessionLifecycle["getActiveSession"]>>
+
+		lifecycle.fireAndForgetSend(sdkHost as unknown as SendHost, "session-123", "first")
+		let settled = false
+		const wait = lifecycle.waitForTurnSend(session).then((result) => {
+			settled = true
+			return result
+		})
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(settled).toBe(false)
+
+		const abortError = new Error("aborted")
+		abortError.name = "AbortError"
+		rejectSend(abortError)
+		await expect(wait).resolves.toBe(true)
+		expect(settled).toBe(true)
+	})
+
+	it("reports a turn send that is still in flight after the timeout", async () => {
+		const sdkHost = makeSdkHost({ send: vi.fn(() => new Promise<void>(() => {})) })
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const lifecycle = makeLifecycle()
+		await lifecycle.startNewSession({} as StartInput)
+		const session = lifecycle.getActiveSession() as NonNullable<ReturnType<SdkSessionLifecycle["getActiveSession"]>>
+
+		lifecycle.fireAndForgetSend(sdkHost as unknown as SendHost, "session-123", "first")
+
+		await expect(lifecycle.waitForTurnSend(session, 10)).resolves.toBe(false)
+	})
+
+	it("treats an emptied prompt queue on an idle session as becoming idle", async () => {
+		const onDidBecomeIdle = vi.fn()
+		const sdkHost = makeSdkHost()
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const lifecycle = makeLifecycle({ onDidBecomeIdle })
+		await lifecycle.startNewSession({} as StartInput)
+
+		lifecycle.setQueuedPromptCount(2)
+		lifecycle.setRunning(false)
+		expect(onDidBecomeIdle).toHaveBeenCalledTimes(1)
+		expect(lifecycle.getActiveSession()?.queuedPromptCount).toBe(2)
+
+		lifecycle.setQueuedPromptCount(0)
+		expect(onDidBecomeIdle).toHaveBeenCalledTimes(2)
+	})
+
+	it("notifies idle listeners after a send fails", async () => {
+		const onDidBecomeIdle = vi.fn()
+		const onSendError = vi.fn()
+		const sdkHost = makeSdkHost({ send: vi.fn().mockRejectedValue(new Error("provider failed")) })
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const lifecycle = makeLifecycle({ onDidBecomeIdle, onSendError })
+		await lifecycle.startNewSession({} as StartInput)
+
+		lifecycle.fireAndForgetSend(sdkHost as any, "session-123", "hello")
+		await vi.waitFor(() => expect(onSendError).toHaveBeenCalledWith(expect.any(Error), "session-123"))
+
+		expect(onDidBecomeIdle).toHaveBeenCalledOnce()
 		expect(lifecycle.getActiveSession()?.isRunning).toBe(false)
 	})
 
@@ -426,7 +612,7 @@ describe("SdkSessionLifecycle", () => {
 		expect(start).toHaveBeenCalledTimes(1)
 
 		resolveStop()
-		const result = await resumePromise
+		const result = expectStarted(await resumePromise)
 
 		expect(start).toHaveBeenCalledTimes(2)
 		expect(result.startResult.sessionId).toBe("task-1")
@@ -442,7 +628,7 @@ describe("SdkSessionLifecycle", () => {
 
 		// A brand-new task does not reuse the old sessionId, so it must not be
 		// delayed by the old session's stop.
-		const result = await lifecycle.startNewSession({ config: {} } as unknown as StartInput)
+		const result = expectStarted(await lifecycle.startNewSession({ config: {} } as unknown as StartInput))
 
 		expect(result.startResult.sessionId).toBe("task-2")
 		expect(stop).toHaveBeenCalledWith("task-1")
@@ -643,7 +829,7 @@ describe("SdkSessionLifecycle", () => {
 		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
 		const lifecycle = makeLifecycle() // no consumePendingOverride passed
 
-		const result = await lifecycle.startNewSession({} as any)
+		const result = expectStarted(await lifecycle.startNewSession({} as any))
 
 		expect(result.startResult.sessionId).toBe("session-X")
 		expect(lifecycle.getActiveSession()?.sessionId).toBe("session-X")

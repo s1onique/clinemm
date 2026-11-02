@@ -29,8 +29,8 @@
  * `darwin-seatbelt-default-on-real-kernel01.c1-green.test.ts`.
  */
 
-import { afterEach, describe, expect, it } from "vitest"
 import { readExperimentalSandboxOptIn } from "@cline/core"
+import { afterEach, describe, expect, it } from "vitest"
 import { InvalidSandboxConfigurationError, resolveExperimentalSandboxMode } from "../sandbox-policy"
 
 const SANDBOX_OPTIN_ENV = "CLINEMM_EXPERIMENTAL_SANDBOX"

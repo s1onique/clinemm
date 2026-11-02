@@ -4,14 +4,17 @@
 // I/O, so KEEP IT FIRST: do not add an import above this line that performs network
 // work at module-eval time, or proxy support silently breaks on JetBrains/CLI.
 import "@/shared/net"
+import { disableCurrentDirectoryExecutableSearch } from "@cline/shared"
 import { ExternalCommentReviewController } from "@hosts/external/ExternalCommentReviewController"
 import { ExternalEditPreview } from "@hosts/external/ExternalEditPreview"
 import { ExternalWebviewProvider } from "@hosts/external/ExternalWebviewProvider"
+import { captureHostBridgeTokenFromEnvironment } from "@hosts/external/host-bridge-auth"
 import { ExternalHostBridgeClientManager } from "@hosts/external/host-bridge-client-manager"
 import { retryOperation } from "@utils/retry"
 import * as path from "path"
 import { initialize, tearDown } from "@/common"
 import { SqliteLockManager } from "@/core/locks/SqliteLockManager"
+import { migrateOpenAiCompatibleBaseUrlToV1 } from "@/core/storage/openai-base-url-migration"
 import { WebviewProvider } from "@/core/webview"
 import { AuthHandler } from "@/hosts/external/AuthHandler"
 import { HostProvider } from "@/hosts/host-provider"
@@ -29,12 +32,15 @@ let globalCoreConnection: CoreConnection | undefined
 let shutdownPromise: Promise<void> | undefined
 
 async function main() {
-	// Remove the per-spawn secret before initialization can launch provider or
-	// MCP child processes. Descendants must never inherit the credential that
-	// authenticates this core connection.
-	const coreConnectionToken = process.env.CLINE_CORE_CONNECTION_TOKEN
+	// Before anything spawns with the workspace as cwd (rg, git, hooks, MCP).
+	disableCurrentDirectoryExecutableSearch()
+
+	// Capture the per-spawn secret and scrub it from the environment before
+	// initialization can launch provider or MCP child processes, and before the
+	// environment is logged below. Descendants must never inherit the credential;
+	// it is retained in process memory for the bridge clients and the hello.
+	const coreConnectionToken = captureHostBridgeTokenFromEnvironment()
 	const coreInstanceId = process.env.CLINE_CORE_INSTANCE_ID
-	delete process.env.CLINE_CORE_CONNECTION_TOKEN
 
 	log("\n\n\nStarting cline-core service...\n\n\n")
 	log(`Environment variables: ${JSON.stringify(process.env)}`)
@@ -82,6 +88,7 @@ async function main() {
 
 		// Create shared file-backed storage
 		const storageContext = createStorageContext()
+		migrateOpenAiCompatibleBaseUrlToV1(storageContext)
 		const webviewProvider = await initialize(storageContext)
 
 		// Enable the localhost HTTP server that handles auth redirects.

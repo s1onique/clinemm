@@ -10,10 +10,10 @@
  * `defaultModelProfileId` key.
  */
 
+import { isKnownProfile, setGlobalDefaultProfileId } from "@/sdk/profile-store/owner"
 import { Empty } from "@/shared/proto/cline/common"
 import { SetDefaultModelProfileRequest } from "@/shared/proto/cline/state"
 import type { Controller } from ".."
-import { isKnownProfile, setGlobalDefaultProfileId } from "@/sdk/profile-store/owner"
 
 export async function setDefaultModelProfile(controller: Controller, request: SetDefaultModelProfileRequest): Promise<Empty> {
 	const owner = controller.modelProfilesOwner

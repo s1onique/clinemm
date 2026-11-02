@@ -21,10 +21,7 @@ import { z } from "zod"
 
 const WITNESS = "MYC-AUTO-PRIME-WITNESS-AUTO01"
 
-const server = new McpServer(
-	{ name: "myc-prime-auto", version: "0.0.0" },
-	{ capabilities: { tools: {} } },
-)
+const server = new McpServer({ name: "myc-prime-auto", version: "0.0.0" }, { capabilities: { tools: {} } })
 
 server.tool(
 	"prime",
@@ -41,7 +38,11 @@ server.tool(
 			`# READY 1 of 1\n` +
 			`# auto-prime (deterministic fixture)\n` +
 			`session: ${session ?? "<unset>"}\n` +
-			`session_keys: ${Object.keys(process.env).filter((k) => k.startsWith("MYC_")).join(",") || "<none>"}\n` +
+			`session_keys: ${
+				Object.keys(process.env)
+					.filter((k) => k.startsWith("MYC_"))
+					.join(",") || "<none>"
+			}\n` +
 			`called_with_session: ${args && typeof args.session === "string" ? args.session : "<unset>"}\n` +
 			`called_with_repo: ${args && typeof args.repo === "string" ? args.repo : "<unset>"}\n` +
 			`called_with_format: ${args && typeof args.format === "string" ? args.format : "<unset>"}\n` +

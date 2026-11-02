@@ -408,8 +408,16 @@ async function runEditorOperation(
 		return createFile(filePath, input.new_text, encoding, observation);
 	}
 	if (input.old_text == null) {
+		// R3 (upstream `2f0f78bb8e` editor null recovery): upstream spells the
+		// recovery out so the next model call DIFFERS from the rejected one.
+		// The fork keeps its typed `EditOperationError` with the
+		// `invalid_patch` category, so the failure is still classified
+		// structurally (never by substring-matching model prose) and the
+		// fork's observation/audit trail is unchanged.
 		throw new EditOperationError(
-			"Parameter `old_text` is required when editing an existing file without `insert_line`",
+			`${filePath} already exists, but \`old_text\` was ${
+				input.old_text === null ? "null" : "omitted"
+			}. To edit an existing file, set \`old_text\` to the exact text in the file that \`new_text\` should replace (read the file first if needed). To insert instead, provide \`insert_line\`. Do not re-send this call unchanged.`,
 			"invalid_patch",
 		);
 	}

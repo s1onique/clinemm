@@ -1,4 +1,9 @@
-import { VERCEL_OPENROUTER_MODEL_ID_ALIAS_RULES } from "@cline/llms";
+import {
+	buildClineClientHeaders,
+	GENERATED_CLINE_RECOMMENDED_MODELS,
+	getGeneratedProviderModels,
+	VERCEL_OPENROUTER_MODEL_ID_ALIAS_RULES,
+} from "@cline/llms";
 import {
 	getClineEnvironmentConfig,
 	type ProviderModel,
@@ -20,6 +25,8 @@ export interface ClineRecommendedModelsData {
 	recommended: ClineRecommendedModel[];
 	free: ClineRecommendedModel[];
 	clinePass: ClineRecommendedModel[];
+	/** Free models offered only to cloud sessions (ClineFree). */
+	clineCloud?: ClineRecommendedModel[];
 }
 
 type ModelsCatalog = Record<string, Record<string, ModelInfo>>;
@@ -41,49 +48,15 @@ export interface FetchClineRecommendedModelsOptions {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 5_000;
 
-export const FALLBACK_CLINE_RECOMMENDED_MODELS: ClineRecommendedModelsData = {
-	recommended: [
-		{
-			id: "anthropic/claude-opus-4.6",
-			name: "Claude Opus 4.6",
-			description: "Most intelligent model for agents and coding",
-			tags: ["BEST"],
+export const FALLBACK_CLINE_RECOMMENDED_MODELS: ClineRecommendedModelsData =
+	resolveCatalogDisplayNames(
+		normalizeResponse(GENERATED_CLINE_RECOMMENDED_MODELS) ?? {
+			recommended: [],
+			free: [],
+			clinePass: [],
 		},
-		{
-			id: "anthropic/claude-sonnet-4.6",
-			name: "Claude Sonnet 4.6",
-			description: "Strong coding and agent performance",
-			tags: ["NEW"],
-		},
-		{
-			id: "google/gemini-3.1-pro-preview",
-			name: "Gemini 3.1 Pro Preview",
-			description: "1M context window, strong coding performance",
-			tags: ["NEW"],
-		},
-		{
-			id: "openai/gpt-5.3-codex",
-			name: "GPT-5.3 Codex",
-			description: "OpenAI's latest with strong coding abilities",
-			tags: ["NEW"],
-		},
-	],
-	free: [
-		{
-			id: "kwaipilot/kat-coder-pro",
-			name: "KwaiKAT Kat Coder Pro",
-			description: "Advanced agentic coding model",
-			tags: ["FREE"],
-		},
-		{
-			id: "arcee-ai/trinity-large-preview:free",
-			name: "Arcee AI Trinity Large Preview",
-			description: "Advanced large preview model",
-			tags: ["FREE"],
-		},
-	],
-	clinePass: [],
-};
+		getGeneratedProviderModels(),
+	);
 
 function cloneRecommendedModels(
 	data: ClineRecommendedModelsData,
@@ -95,6 +68,10 @@ function cloneRecommendedModels(
 		})),
 		free: data.free.map((model) => ({ ...model, tags: [...model.tags] })),
 		clinePass: data.clinePass.map((model) => ({
+			...model,
+			tags: [...model.tags],
+		})),
+		clineCloud: data.clineCloud?.map((model) => ({
 			...model,
 			tags: [...model.tags],
 		})),
@@ -135,11 +112,14 @@ function normalizeResponse(raw: unknown): ClineRecommendedModelsData | null {
 	const clinePass = clinePassRaw
 		.map(normalizeModel)
 		.filter((model): model is ClineRecommendedModel => model !== null);
+	const clineCloud = (Array.isArray(data.clineCloud) ? data.clineCloud : [])
+		.map(normalizeModel)
+		.filter((model): model is ClineRecommendedModel => model !== null);
 	if (recommended.length === 0 && free.length === 0 && clinePass.length === 0) {
 		return null;
 	}
 
-	return { recommended, free, clinePass };
+	return { recommended, free, clinePass, clineCloud };
 }
 
 function getConfiguredApiBaseUrl(
@@ -163,11 +143,12 @@ async function fetchWithTimeout(
 	fetchImpl: typeof fetch,
 	input: string,
 	timeoutMs: number,
+	headers: Record<string, string>,
 ): Promise<Response> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
 	try {
-		return await fetchImpl(input, { signal: controller.signal });
+		return await fetchImpl(input, { headers, signal: controller.signal });
 	} finally {
 		clearTimeout(timer);
 	}
@@ -256,6 +237,13 @@ async function resolveDisplayNames(
 	timeoutMs: number,
 ): Promise<ClineRecommendedModelsData> {
 	const catalog = await loadCatalogWithTimeout(catalogLoader, timeoutMs);
+	return resolveCatalogDisplayNames(data, catalog);
+}
+
+function resolveCatalogDisplayNames(
+	data: ClineRecommendedModelsData,
+	catalog: ModelsCatalog | undefined,
+): ClineRecommendedModelsData {
 	const withNames = (
 		models: ClineRecommendedModel[],
 		catalogs: Array<Record<string, ModelInfo> | undefined>,
@@ -269,6 +257,8 @@ async function resolveDisplayNames(
 		recommended: withNames(data.recommended, [catalog?.openrouter]),
 		free: withNames(data.free, [catalog?.cline, catalog?.openrouter]),
 		clinePass: withNames(data.clinePass, [catalog?.["cline-pass"]]),
+		clineCloud:
+			data.clineCloud && withNames(data.clineCloud, [catalog?.cline]),
 	};
 }
 
@@ -288,6 +278,7 @@ export async function fetchClineRecommendedModels(
 			fetchImpl,
 			`${base}/api/v1/ai/cline/recommended-models`,
 			timeoutMs,
+			buildClineClientHeaders(),
 		);
 		if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 		const json: unknown = await resp.json();
@@ -396,7 +387,7 @@ const FEATURED_TIER_BUCKETS: Record<
 	],
 };
 
-function idSlug(modelId: string): string {
+export function idSlug(modelId: string): string {
 	return modelId.split("/").at(-1) ?? modelId;
 }
 

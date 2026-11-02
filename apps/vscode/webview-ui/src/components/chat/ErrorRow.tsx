@@ -10,7 +10,7 @@ import OrgClinePassRestrictionError from "@/components/chat/OrgClinePassRestrict
 import SpendLimitError from "@/components/chat/SpendLimitError"
 import { Button } from "@/components/ui/button"
 import { useClineAuth, useClineSignIn } from "@/context/ClineAuthContext"
-import { ClineError, ClineErrorType } from "../../../../src/services/error/ClineError"
+import { ClineError, ClineErrorType, MODEL_NOT_FOUND_GUIDANCE } from "../../../../src/services/error/ClineError"
 
 const _errorColor = "var(--vscode-errorForeground)"
 
@@ -19,9 +19,11 @@ interface ErrorRowProps {
 	errorType: "error" | "mistake_limit_reached" | "diff_error" | "clineignore_error"
 	apiRequestFailedMessage?: string
 	apiReqStreamingFailedMessage?: string
+	retryFailedRequest?: () => Promise<boolean>
 }
 
-const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStreamingFailedMessage }: ErrorRowProps) => {
+const ErrorRow = memo((props: ErrorRowProps) => {
+	const { message, errorType, apiRequestFailedMessage, apiReqStreamingFailedMessage, retryFailedRequest } = props
 	const { clineUser } = useClineAuth()
 	const rawApiError = apiRequestFailedMessage || apiReqStreamingFailedMessage
 
@@ -37,19 +39,16 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 			case "mistake_limit_reached":
 				return (
 					<div
-						data-testid="mistake-limit-advisory"
 						className="flex flex-col gap-2 p-3 rounded border border-neutral-500/30 bg-quote text-foreground text-sm"
-					>
+						data-testid="mistake-limit-advisory">
 						<div className="flex items-center gap-2 font-semibold">
-							<span className="codicon codicon-info" aria-hidden="true" />
+							<span aria-hidden="true" className="codicon codicon-info" />
 							<span>Advisory: repeated protocol errors</span>
 						</div>
-						<p className="m-0 whitespace-pre-wrap text-description">
-							{message.text}
-						</p>
+						<p className="m-0 whitespace-pre-wrap text-description">{message.text}</p>
 						<p className="m-0 text-xs text-description">
-							This notice is informational. The task can continue, be paused, or be resumed from the
-							latest state — it is not blocked on this message.
+							This notice is informational. The task can continue, be paused, or be resumed from the latest state —
+							it is not blocked on this message.
 						</p>
 					</div>
 				)
@@ -75,6 +74,7 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 									buyCreditsUrl={errorDetails?.buy_credits_url}
 									currentBalance={errorDetails?.current_balance}
 									message={errorDetails?.message}
+									retryFailedRequest={retryFailedRequest}
 									totalPromotions={errorDetails?.total_promotions}
 									totalSpent={errorDetails?.total_spent}
 								/>
@@ -97,7 +97,7 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 
 					if (clineError?.isErrorType(ClineErrorType.Entitlement)) {
 						const detailMessage = clineError?._error?.details?.message || errorMessage
-						return <EntitlementError message={detailMessage} />
+						return <EntitlementError message={detailMessage} retryFailedRequest={retryFailedRequest} />
 					}
 
 					if (clineError?.isErrorType(ClineErrorType.OrgClinePassRestriction)) {
@@ -135,6 +135,15 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 						return <p className="m-0 whitespace-pre-wrap text-error wrap-anywhere">{detailMessage}</p>
 					}
 
+					// A 404/405/410 is the server saying the model id or endpoint
+					// path does not exist. The host already appends this guidance
+					// when it can recognise the message text; add it here only
+					// when the status alone carried the verdict.
+					const notFoundGuidance =
+						clineError?.isErrorType(ClineErrorType.NotFound) && !errorMessage.includes(MODEL_NOT_FOUND_GUIDANCE)
+							? `The model or endpoint was not found. ${MODEL_NOT_FOUND_GUIDANCE}`
+							: undefined
+
 					if (clineError?.isErrorType(ClineErrorType.Auth) && isClineUsageBillingProvider) {
 						return !clineUser ? (
 							// User is using Cline provider and is not logged in
@@ -170,6 +179,8 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 								{errorMessage}
 								{requestId && <div>Request ID: {requestId}</div>}
 							</header>
+
+							{notFoundGuidance && <div>{notFoundGuidance}</div>}
 
 							{/* Windows Powershell Issue */}
 							{errorMessage?.toLowerCase()?.includes("powershell") && (

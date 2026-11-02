@@ -22,10 +22,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { ApplyModelProfileRequest, ApplyModelProfileResponse } from "@/shared/proto/cline/state"
-import { applyModelProfile as applyModelProfileHandler } from "@/core/controller/state/applyModelProfile"
 import type { Controller } from "@/core/controller"
+import { applyModelProfile as applyModelProfileHandler } from "@/core/controller/state/applyModelProfile"
 import type { ModelProfilesOwnerDeps } from "@/sdk/profile-store/owner"
+import { ApplyModelProfileRequest, ApplyModelProfileResponse } from "@/shared/proto/cline/state"
 
 function makeFakeOwner(overrides?: Partial<ModelProfilesOwnerDeps>): ModelProfilesOwnerDeps {
 	const profilesStore = {
@@ -53,9 +53,7 @@ function makeFakeOwner(overrides?: Partial<ModelProfilesOwnerDeps>): ModelProfil
 	} as unknown as ModelProfilesOwnerDeps["profilesStore"]
 
 	const instancesStore = {
-		read: vi.fn((id: string) =>
-			id === "inst-A" ? ({ instanceId: "inst-A", providerId: "openai" } as never) : undefined,
-		),
+		read: vi.fn((id: string) => (id === "inst-A" ? ({ instanceId: "inst-A", providerId: "openai" } as never) : undefined)),
 		list: vi.fn(() => ({})),
 	} as unknown as ModelProfilesOwnerDeps["instancesStore"]
 

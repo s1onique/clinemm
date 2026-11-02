@@ -33,6 +33,7 @@ export default defineConfig({
 			"src/shared/post-terminal-authority-diagnostic-aoc02-live-capture01.test.ts",
 			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01
 			"src/shared/host-ownership-diagnostic.live-capture01.test.ts",
+			"src/shared/net.test.ts",
 			"src/shared/proto-conversions/models/**/*.test.ts",
 			// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01 (validator unit
 			// tests + cross-instance two-reader / one-backing-store tests):
@@ -40,9 +41,12 @@ export default defineConfig({
 			"src/core/storage/__tests__/temporaryExternalPathAuthorityCrossInstance.test.ts",
 			"src/core/storage/remote-config/**/*.test.ts",
 			"src/core/controller/account/setUserOrganization.test.ts",
+			"src/services/cloud/workspace-cloud-defaults.test.ts",
 			"src/core/controller/remoteConfig/**/*.test.ts",
 			"src/core/controller/state/**/*.test.ts",
 			"src/core/controller/slash/**/*.test.ts",
+			"src/core/controller/task/newTask.test.ts",
+			"src/services/ClineClientIdentity.test.ts",
 			"src/services/mcp/__tests__/settingsLock.test.ts",
 			// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5 HALT correction.
 			// Production-shape tests driving VscodeSessionHost.prepareStartSessionInput,
@@ -65,6 +69,7 @@ export default defineConfig({
 			"src/core/controller/models/__tests__/refreshClineRecommendedModels.test.ts",
 			"src/core/controller/models/__tests__/refreshProviderModels.test.ts",
 			"src/core/controller/models/__tests__/refreshOpenAiModels.test.ts",
+			"src/core/controller/models/__tests__/getLmStudioModels.test.ts",
 		],
 		environment: "node",
 		setupFiles: ["./src/test/vitest-setup.ts"],
@@ -480,24 +485,43 @@ export default defineConfig({
 		noExternal: ["zod"],
 	},
 	resolve: {
-		alias: {
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the alias table uses Vite's
+		// ARRAY form. Upstream's regex `find` entries (the `zod` namespace
+		// restore and the `@cline/core/cloud` subpath) require the array
+		// form; the fork's plain string keys are expressible in the same
+		// form. Keeping one form avoids the mixed object/array nesting that
+		// the naive merge produced (which is a parse error).
+		alias: [
+			// Vite drops Zod's named namespace export on Windows while preserving
+			// its default export. Restore the package's declared `z` export for tests.
+			{ find: /^zod$/, replacement: path.resolve(__dirname, "src/test/zod-vitest-stub.ts") },
+			{
+				find: /^@cline\/core\/cloud$/,
+				replacement: path.resolve(__dirname, "node_modules/@cline/core/dist/cloud/index.js"),
+			},
 			// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
 			// the trusted-internal deep import path. Defined FIRST so
 			// vite-resolve picks this exact match before the bare
 			// `@cline/core` alias below redirects it to the stub.
-			"@cline/core/internal/command-risk-internal": path.resolve(
-				__dirname,
-				"../../sdk/packages/core/src/runtime/command-policy/command-risk-internal.ts",
-			),
+			{
+				find: "@cline/core/internal/command-risk-internal",
+				replacement: path.resolve(
+					__dirname,
+					"../../sdk/packages/core/src/runtime/command-policy/command-risk-internal.ts",
+				),
+			},
 			// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
 			// CORRECTION02 Phase 2: the trusted parser helper module.
 			// Same aliasing strategy as `command-risk-internal` —
 			// resolve to the source path directly so vitest picks
 			// up the live TypeScript rather than the dist bundle.
-			"@cline/core/internal/parser-helper-runtime": path.resolve(
-				__dirname,
-				"../../sdk/packages/core/src/runtime/command-policy/parser-helper/runtime.ts",
-			),
+			{
+				find: "@cline/core/internal/parser-helper-runtime",
+				replacement: path.resolve(
+					__dirname,
+					"../../sdk/packages/core/src/runtime/command-policy/parser-helper/runtime.ts",
+				),
+			},
 			// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
 			// The reformulation classifier is reachable through the
 			// narrow `@cline/core/internal/reformulation-classifier`
@@ -507,38 +531,44 @@ export default defineConfig({
 			// those trusted-internal paths — resolve to the live
 			// TypeScript source so vitest sees the current
 			// classifier code rather than the bundled stub.
-			"@cline/core/internal/reformulation-classifier": path.resolve(
-				__dirname,
-				"../../sdk/packages/core/src/runtime/command-policy/reformulation-classifier-internal.ts",
-			),
-			"@cline/core": path.resolve(__dirname, "src/test/cline-core-vitest-stub.ts"),
-			"@cline/llms": path.resolve(__dirname, "node_modules/@cline/llms/dist/index.js"),
+			{
+				find: "@cline/core/internal/reformulation-classifier",
+				replacement: path.resolve(
+					__dirname,
+					"../../sdk/packages/core/src/runtime/command-policy/reformulation-classifier-internal.ts",
+				),
+			},
+			{ find: "@cline/core", replacement: path.resolve(__dirname, "src/test/cline-core-vitest-stub.ts") },
+			{ find: "@cline/llms", replacement: path.resolve(__dirname, "node_modules/@cline/llms/dist/index.js") },
 			// Map @cline/shared subpath exports explicitly. The bare "@cline/shared"
 			// alias below does not cover subpaths (e.g. "@cline/shared/storage"), and
 			// Vite's fallback Node resolution does not read the package `exports` map
 			// here, so subpath imports fail with "Cannot find package". Keep the more
 			// specific subpath alias(es) before the bare package alias.
-			"@cline/shared/storage": path.resolve(__dirname, "node_modules/@cline/shared/dist/storage/index.js"),
+			{
+				find: "@cline/shared/storage",
+				replacement: path.resolve(__dirname, "node_modules/@cline/shared/dist/storage/index.js"),
+			},
 			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
 			// The runtime-builder pulls in sqlite-team-store which imports
 			// `@cline/shared/db` — alias the dist path so the load-bearing
 			// integration test can drive DefaultRuntimeBuilder.build().
-			"@cline/shared/db": path.resolve(__dirname, "node_modules/@cline/shared/dist/db/index.js"),
-			"@cline/shared": path.resolve(__dirname, "node_modules/@cline/shared/dist/index.js"),
-			vscode: path.resolve(__dirname, "src/test/vscode-vitest-stub.ts"),
-			"@": path.resolve(__dirname, "src"),
-			"@api": path.resolve(__dirname, "src/core/api"),
-			"@core": path.resolve(__dirname, "src/core"),
-			"@generated": path.resolve(__dirname, "src/generated"),
-			"@hosts": path.resolve(__dirname, "src/hosts"),
-			"@integrations": path.resolve(__dirname, "src/integrations"),
-			"@services": path.resolve(__dirname, "src/services"),
-			"@shared/proto/cline/common": path.resolve(__dirname, "src/shared/proto/cline/common.ts"),
-			"@shared/proto/cline/models": path.resolve(__dirname, "src/shared/proto/cline/models.ts"),
-			"@shared/proto": path.resolve(__dirname, "src/shared/proto"),
-			"@shared": path.resolve(__dirname, "src/shared"),
-			"@utils": path.resolve(__dirname, "src/utils"),
-			"@packages": path.resolve(__dirname, "src/packages"),
-		},
+			{ find: "@cline/shared/db", replacement: path.resolve(__dirname, "node_modules/@cline/shared/dist/db/index.js") },
+			{ find: "@cline/shared", replacement: path.resolve(__dirname, "node_modules/@cline/shared/dist/index.js") },
+			{ find: "vscode", replacement: path.resolve(__dirname, "src/test/vscode-vitest-stub.ts") },
+			{ find: "@", replacement: path.resolve(__dirname, "src") },
+			{ find: "@api", replacement: path.resolve(__dirname, "src/core/api") },
+			{ find: "@core", replacement: path.resolve(__dirname, "src/core") },
+			{ find: "@generated", replacement: path.resolve(__dirname, "src/generated") },
+			{ find: "@hosts", replacement: path.resolve(__dirname, "src/hosts") },
+			{ find: "@integrations", replacement: path.resolve(__dirname, "src/integrations") },
+			{ find: "@services", replacement: path.resolve(__dirname, "src/services") },
+			{ find: "@shared/proto/cline/common", replacement: path.resolve(__dirname, "src/shared/proto/cline/common.ts") },
+			{ find: "@shared/proto/cline/models", replacement: path.resolve(__dirname, "src/shared/proto/cline/models.ts") },
+			{ find: "@shared/proto", replacement: path.resolve(__dirname, "src/shared/proto") },
+			{ find: "@shared", replacement: path.resolve(__dirname, "src/shared") },
+			{ find: "@utils", replacement: path.resolve(__dirname, "src/utils") },
+			{ find: "@packages", replacement: path.resolve(__dirname, "src/packages") },
+		],
 	},
 })

@@ -20,13 +20,13 @@
 import type { SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	type BackgroundJobLivenessAuthorityJobActiveInsertedRecord,
+	type BackgroundJobLivenessAuthorityJobStatusLookupRecord,
 	clearBackgroundJobLivenessAuthorityCaptureRecords,
 	getBackgroundJobLivenessAuthorityCaptureRecords,
 	getDiagnosticManagerId,
 	setBackgroundJobLivenessAuthorityCaptureBufferSize,
 	setBackgroundJobLivenessAuthorityCaptureEnabled,
-	type BackgroundJobLivenessAuthorityJobActiveInsertedRecord,
-	type BackgroundJobLivenessAuthorityJobStatusLookupRecord,
 } from "../background-job-liveness-authority"
 import { CommandJobManager } from "../command-job-manager"
 

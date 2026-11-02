@@ -5,7 +5,7 @@ import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/cline/state
 import { type SlashCommand } from "@shared/slashCommands"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import { AtSignIcon, PlusIcon } from "lucide-react"
+import { AtSignIcon, PlusIcon, TriangleAlertIcon } from "lucide-react"
 import type React from "react"
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
@@ -102,15 +102,14 @@ interface GitCommit {
 const PLAN_MODE_COLOR = "var(--vscode-activityWarningBadge-background)"
 const ACT_MODE_COLOR = "var(--vscode-focusBorder)"
 
-const SwitchContainer = styled.div<{ disabled: boolean }>`
+const SwitchContainer = styled.div`
 	display: flex;
 	align-items: center;
 	background-color: transparent;
 	border: 1px solid var(--vscode-input-border);
 	border-radius: 12px;
 	overflow: hidden;
-	cursor: ${(props) => (props.disabled ? "not-allowed" : "pointer")};
-	opacity: ${(props) => (props.disabled ? 0.5 : 1)};
+	cursor: pointer;
 	transform: scale(1);
 	transform-origin: right center;
 	margin-left: 0;
@@ -221,7 +220,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		ref,
 	) => {
 		const {
-			mode,
+			mode: selectedMode,
 			apiConfiguration,
 			openRouterModels,
 			platform,
@@ -231,7 +230,18 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			remoteConfigSettings,
 			navigateToSettingsModelPicker,
 			mcpServers,
+			clineMessages = [],
+			cloudSessionsEnabled,
+			cloudTaskTarget,
+			currentCloudTask,
+			cloudModelId,
 		} = useExtensionState()
+		// Cloud sessions are Act-only (like the desktop app and the cloud dashboard).
+		// While a cloud task is shown, or a new task is about to run in the cloud,
+		// the mode is pinned to Act and the toggle is hidden; the stored mode is untouched.
+		const cloudActOnly =
+			!!currentCloudTask || (clineMessages.length === 0 && !!cloudSessionsEnabled && cloudTaskTarget?.target === "cloud")
+		const mode = cloudActOnly ? "act" : selectedMode
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
@@ -266,7 +276,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
 		const [, metaKeyChar] = useMetaKeyDetection(platform)
-		const { selectedProvider, selectedModelId } = useNormalizedApiConfiguration(mode)
+		const { selectedProvider, selectedModelId, selectedModelInfo } = useNormalizedApiConfiguration(mode)
+		// Images are attached regardless; when the selected model has no image input the thumbnails get a warning
+		// badge and a notice offers to switch models. Unknown capability data fails open, like core does.
+		const modelSupportsImages = selectedModelInfo.supportsImages !== false
+		const unsupportedImagesAttached = selectedImages.length > 0 && !modelSupportsImages
 
 		// Fetch git commits when Git is selected or when typing a hash
 		useEffect(() => {
@@ -732,7 +746,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				const newCursorPosition = e.target.selectionStart
 				setInputValue(newValue)
 				setCursorPosition(newCursorPosition)
-				let showMenu = shouldShowContextMenu(newValue, newCursorPosition)
+				// The context menu searches the local workspace, which a cloud sandbox cannot see.
+				let showMenu = !cloudActOnly && shouldShowContextMenu(newValue, newCursorPosition)
 				const showSlashCommandsMenu = shouldShowSlashCommandsMenu(newValue, newCursorPosition)
 
 				// we do not allow both menus to be shown at the same time
@@ -824,7 +839,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					setFileSearchResults([])
 				}
 			},
-			[setInputValue, setFileSearchResults, selectedType],
+			[setInputValue, setFileSearchResults, selectedType, cloudActOnly],
 		)
 
 		useEffect(() => {
@@ -1030,6 +1045,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		)
 
 		const onModeToggle = useCallback(() => {
+			if (cloudActOnly) {
+				return
+			}
 			void (async () => {
 				const convertedProtoMode = mode === "plan" ? PlanActMode.ACT : PlanActMode.PLAN
 				const submittedText = inputValue
@@ -1082,9 +1100,17 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					textAreaRef.current?.focus()
 				}, 100)
 			})()
-		}, [mode, inputValue, selectedImages, selectedFiles, setInputValue, setSelectedImages, setSelectedFiles])
+		}, [cloudActOnly, mode, inputValue, selectedImages, selectedFiles, setInputValue, setSelectedImages, setSelectedFiles])
 
 		useShortcut(usePlatform().togglePlanActKeys, onModeToggle, { disableTextInputs: false }) // important that we don't disable the text input here
+
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream's `handleModelButtonClick`
+		// (routes to the model picker) was dropped by the naive merge, but the
+		// "choose an image-capable model" affordance still calls it. Restored,
+		// routing to the fork's dedicated Model Profiles tab.
+		const handleModelButtonClick = useCallback(() => {
+			navigateToSettingsModelPicker({ targetSection: "model-profiles" })
+		}, [navigateToSettingsModelPicker])
 
 		const handleContextButtonClick = useCallback(() => {
 			// Focus the textarea first
@@ -1154,6 +1180,14 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			} = getModeSpecificFields(apiConfiguration, mode)
 			const unknownModel = "unknown"
 
+			// A cloud task runs on a Cline model in the sandbox, whatever the
+			// local provider is; the extension reports which one.
+			if (cloudActOnly) {
+				const cloudModel = cloudModelId || unknownModel
+				return cloudModel.startsWith("cline-pass/")
+					? `cline-pass:${cloudModel.replace(/^cline-pass\//, "")}`
+					: `cline:${cloudModel}`
+			}
 			if (!apiConfiguration) {
 				return unknownModel
 			}
@@ -1208,7 +1242,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				supportedEfforts,
 			})
 			return formatComposerModelLabel(baseModelLabel, configuredEffort)
-		}, [apiConfiguration, mode, selectedProvider, selectedModelId])
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork's reasoning-effort
+			// label depends on `apiConfiguration` / `mode`; upstream's cloud
+			// label depends on `cloudActOnly` / `cloudModelId`. Both sides'
+			// dependencies are required — the merged list is the union.
+		}, [apiConfiguration, mode, selectedProvider, selectedModelId, cloudActOnly, cloudModelId])
 
 		// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
 		// (C5 EXISTING_MODEL_LABEL_TRIGGER) - DECLARED AFTER modelDisplayName
@@ -1614,13 +1652,16 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					/>
 					{!inputValue && selectedImages.length === 0 && selectedFiles.length === 0 && (
 						<div className="text-xs absolute bottom-5 left-6.5 right-16 text-(--vscode-input-placeholderForeground)/50 whitespace-nowrap overflow-hidden text-ellipsis pointer-events-none z-1">
-							Type @ for context, / for slash commands & workflows, hold shift to drag in files/images
+							{cloudActOnly
+								? "Type / for slash commands & workflows, hold shift to drag in images"
+								: "Type @ for context, / for slash commands & workflows, hold shift to drag in files/images"}
 						</div>
 					)}
 					{(selectedImages.length > 0 || selectedFiles.length > 0) && (
 						<Thumbnails
 							files={selectedFiles}
 							images={selectedImages}
+							imagesUnsupported={unsupportedImagesAttached}
 							onHeightChange={handleThumbnailsHeightChange}
 							setFiles={setSelectedFiles}
 							setImages={setSelectedImages}
@@ -1650,26 +1691,50 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						</div>
 					</div>
 				</div>
+				{unsupportedImagesAttached && (
+					<div
+						className="flex items-center gap-1.5 px-3.5 pb-1.5 text-xs"
+						data-testid="images-unsupported-notice"
+						role="status"
+						style={{ color: "var(--vscode-editorWarning-foreground)" }}>
+						<TriangleAlertIcon className="shrink-0" size={12} />
+						<span className="min-w-0">
+							{selectedModelId} doesn't support images, so{" "}
+							{selectedImages.length === 1 ? "the attached image" : `the ${selectedImages.length} attached images`}{" "}
+							will be ignored.{" "}
+							<button
+								className="underline cursor-pointer bg-transparent border-0 p-0 m-0 text-[var(--vscode-textLink-foreground)] hover:text-[var(--vscode-textLink-activeForeground)]"
+								data-testid="images-unsupported-choose-model"
+								onClick={handleModelButtonClick}
+								type="button">
+								Choose an image-capable model
+							</button>{" "}
+							or remove {selectedImages.length === 1 ? "it" : "them"}.
+						</span>
+					</div>
+				)}
 				<div className="flex justify-between items-center -mt-[2px] px-3 pb-2">
 					{/* Always render both components, but control visibility with CSS */}
 					<div className="relative flex-1 min-w-0 h-5">
 						{/* ButtonGroup - always in DOM but visibility controlled */}
 						<ButtonGroup className="absolute top-0 left-0 right-0 ease-in-out w-full h-5 z-10 flex items-center">
-							<Tooltip>
-								<TooltipContent>Add Context</TooltipContent>
-								<TooltipTrigger>
-									<VSCodeButton
-										appearance="icon"
-										aria-label="Add Context"
-										className="p-0 m-0 flex items-center"
-										data-testid="context-button"
-										onClick={handleContextButtonClick}>
-										<ButtonContainer>
-											<AtSignIcon size={12} />
-										</ButtonContainer>
-									</VSCodeButton>
-								</TooltipTrigger>
-							</Tooltip>
+							{!cloudActOnly && (
+								<Tooltip>
+									<TooltipContent>Add Context</TooltipContent>
+									<TooltipTrigger>
+										<VSCodeButton
+											appearance="icon"
+											aria-label="Add Context"
+											className="p-0 m-0 flex items-center"
+											data-testid="context-button"
+											onClick={handleContextButtonClick}>
+											<ButtonContainer>
+												<AtSignIcon size={12} />
+											</ButtonContainer>
+										</VSCodeButton>
+									</TooltipTrigger>
+								</Tooltip>
+							)}
 
 							<Tooltip>
 								<TooltipContent>Add Files & Images</TooltipContent>
@@ -1692,9 +1757,13 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								</TooltipTrigger>
 							</Tooltip>
 
-							<ServersToggleModal />
-
-							<ClineRulesToggleModal />
+							{/* MCP servers and rules/workflows/hooks/skills configure this machine, not the cloud sandbox. */}
+							{!cloudActOnly && (
+								<>
+									<ServersToggleModal />
+									<ClineRulesToggleModal />
+								</>
+							)}
 
 							<ModelContainer>
 								<ModelButtonWrapper>
@@ -1729,37 +1798,38 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</ModelContainer>
 						</ButtonGroup>
 					</div>
-					{/* Tooltip for Plan/Act toggle remains outside the conditional rendering */}
-					<Tooltip>
-						<TooltipContent
-							className="text-xs px-2 flex flex-col gap-1"
-							hidden={shownTooltipMode === null}
-							side="top">
-							{`In ${shownTooltipMode === "act" ? "Act" : "Plan"}  mode, Cline will ${shownTooltipMode === "act" ? "complete the task immediately" : "gather information to architect a plan"}`}
-							<p className="text-description/80 text-xs mb-0">
-								Toggle w/ <kbd className="text-muted-foreground mx-1">{togglePlanActKeys}</kbd>
-							</p>
-						</TooltipContent>
-						<TooltipTrigger>
-							<SwitchContainer data-testid="mode-switch" disabled={false} onClick={onModeToggle}>
-								<Slider isAct={mode === "act"} isPlan={mode === "plan"} />
-								{["Plan", "Act"].map((m) => (
-									<div
-										aria-checked={mode === m.toLowerCase()}
-										className={cn(
-											"pt-0.5 pb-px px-2 z-10 text-xs w-1/2 text-center bg-transparent",
-											mode === m.toLowerCase() ? "text-white" : "text-input-foreground",
-										)}
-										key={m}
-										onMouseLeave={() => setShownTooltipMode(null)}
-										onMouseOver={() => setShownTooltipMode(m.toLowerCase() === "plan" ? "plan" : "act")}
-										role="switch">
-										{m}
-									</div>
-								))}
-							</SwitchContainer>
-						</TooltipTrigger>
-					</Tooltip>
+					{!cloudActOnly && (
+						<Tooltip>
+							<TooltipContent
+								className="text-xs px-2 flex flex-col gap-1"
+								hidden={shownTooltipMode === null}
+								side="top">
+								{`In ${shownTooltipMode === "act" ? "Act" : "Plan"}  mode, Cline will ${shownTooltipMode === "act" ? "complete the task immediately" : "gather information to architect a plan"}`}
+								<p className="text-description/80 text-xs mb-0">
+									Toggle w/ <kbd className="text-muted-foreground mx-1">{togglePlanActKeys}</kbd>
+								</p>
+							</TooltipContent>
+							<TooltipTrigger>
+								<SwitchContainer data-testid="mode-switch" onClick={onModeToggle}>
+									<Slider isAct={mode === "act"} isPlan={mode === "plan"} />
+									{["Plan", "Act"].map((m) => (
+										<div
+											aria-checked={mode === m.toLowerCase()}
+											className={cn(
+												"pt-0.5 pb-px px-2 z-10 text-xs w-1/2 text-center bg-transparent",
+												mode === m.toLowerCase() ? "text-white" : "text-input-foreground",
+											)}
+											key={m}
+											onMouseLeave={() => setShownTooltipMode(null)}
+											onMouseOver={() => setShownTooltipMode(m.toLowerCase() === "plan" ? "plan" : "act")}
+											role="switch">
+											{m}
+										</div>
+									))}
+								</SwitchContainer>
+							</TooltipTrigger>
+						</Tooltip>
+					)}
 				</div>
 			</div>
 		)

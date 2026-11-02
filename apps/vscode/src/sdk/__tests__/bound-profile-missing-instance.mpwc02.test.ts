@@ -24,17 +24,17 @@
  *     instancesStore (instance_not_found)
  */
 
-import { describe, expect, it } from "vitest"
-import type { InstanceSecretName } from "@/shared/storage/instance-secret"
-import type { ProviderConfigurationInstance } from "@/sdk/instance-store/contracts"
-import type { StateManager } from "@/core/storage/StateManager"
-import { SdkTaskStartCoordinator } from "@/sdk/sdk-task-start-coordinator"
-import type { SessionConfigInput } from "@/sdk/cline-session-factory"
-import { TaskOperationFence } from "@/sdk/task-operation-fence"
 import type { HistoryItem } from "@shared/HistoryItem"
+import { describe, expect, it } from "vitest"
+import type { StateManager } from "@/core/storage/StateManager"
+import type { SessionConfigInput } from "@/sdk/cline-session-factory"
+import type { ProviderConfigurationInstance } from "@/sdk/instance-store/contracts"
+import { InstancesStore } from "@/sdk/instance-store/instances-store"
 import { resolveActiveInstanceTypedDiscriminated } from "@/sdk/profile-store/owner"
 import { ProfilesStore } from "@/sdk/profile-store/profiles-store"
-import { InstancesStore } from "@/sdk/instance-store/instances-store"
+import { SdkTaskStartCoordinator } from "@/sdk/sdk-task-start-coordinator"
+import { TaskOperationFence } from "@/sdk/task-operation-fence"
+import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 
 function makeInst(id: string, modelId: string): ProviderConfigurationInstance {
 	return {
@@ -92,6 +92,14 @@ function makeCoordinator(opts: {
 				throw new Error("STOP_AFTER_BUILD (should not be reached when BOUND_BUT_BROKEN)")
 			},
 			fireAndForgetSend: () => {},
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: `initTask` runs the config
+			// build inside `sessions.trackSessionStart(...)` so the
+			// mode-toggle window ("tracked from the mode read until the first
+			// prompt is sent") covers the build. This fixture predates that
+			// seam and did not stub it, so the call threw
+			// `trackSessionStart is not a function` BEFORE the config build
+			// ran and the NONE_BOUND fallback was never observed.
+			trackSessionStart: (operation: () => Promise<unknown>) => operation(),
 		} as never,
 		messages: {
 			appendAndEmit: () => {},
@@ -118,13 +126,7 @@ function makeCoordinator(opts: {
 		postStateToWebview: async () => {},
 		setTurnPhase: () => {},
 		resolveProviderInstanceTyped: ({ historyItem, isResume }) => {
-			return resolveActiveInstanceTypedDiscriminated(
-				profilesStore,
-				instancesStore,
-				defaultProfileId,
-				historyItem,
-				isResume,
-			)
+			return resolveActiveInstanceTypedDiscriminated(profilesStore, instancesStore, defaultProfileId, historyItem, isResume)
 		},
 	})
 }
@@ -256,9 +258,11 @@ describe("MPWC02_C6_BOUND_PROFILE_MISSING_INSTANCE_FAIL_CLOSED", () => {
 			activeProfileId: "prof-D",
 		} as unknown as HistoryItem
 
-		;(coordinator as unknown as {
-			options: { taskHistory: { findHistoryItem: (id: string) => Promise<HistoryItem | undefined> } }
-		}).options.taskHistory = {
+		;(
+			coordinator as unknown as {
+				options: { taskHistory: { findHistoryItem: (id: string) => Promise<HistoryItem | undefined> } }
+			}
+		).options.taskHistory = {
 			findHistoryItem: async () => historyItem,
 		}
 

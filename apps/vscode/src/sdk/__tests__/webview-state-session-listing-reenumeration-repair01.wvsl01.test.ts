@@ -21,13 +21,13 @@
  * patch path on updateCachedSessionRecord on index >= 0.
  */
 
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test"
 import type { CoreSessionEvent, SessionHistoryRecord } from "@cline/core"
 import type { HistoryItem } from "@shared/HistoryItem"
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test"
 import type { McpHub } from "@/services/mcp/McpHub"
 import type { TelemetryService } from "@/services/telemetry/TelemetryService"
-import { SdkTaskHistory } from "../sdk-task-history"
 import type { SdkSessionLifecycle } from "../sdk-session-lifecycle"
+import { SdkTaskHistory } from "../sdk-task-history"
 import type { VscodeSessionHost } from "../vscode-session-host"
 
 vi.mock("@/core/storage/disk", () => ({
@@ -521,9 +521,7 @@ describe("WVSL01 — webview-state session-listing re-enumeration repair", () =>
 			type: "session_snapshot",
 			payload: {
 				sessionId: "task-1",
-				snapshot: {} as unknown as CoreSessionEvent extends { type: "session_snapshot" }
-					? never
-					: never,
+				snapshot: {} as unknown as CoreSessionEvent extends { type: "session_snapshot" } ? never : never,
 			},
 		})
 

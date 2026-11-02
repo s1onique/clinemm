@@ -8,7 +8,7 @@ import { isModelToolEnabledGlobally, readCompactionStrategyGlobally } from "@cli
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import type { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { ClineEnv } from "@/config"
-import { ExtensionRegistryInfo } from "@/registry"
+import { ExtensionRegistryInfo, HostRegistryInfo } from "@/registry"
 // ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 // (twenty-sixth-pass): optional Q1..Q4 W-carrier trace observer.
 // Default OFF. See apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
@@ -172,6 +172,8 @@ export async function getStateToPostToWebview(controller: {
 	const version = ExtensionRegistryInfo.version
 	const clineConfig = ClineEnv.config()
 	const environment = clineConfig.environment
+	const hostPlatform = HostRegistryInfo.get()?.platform
+	const hostName = hostPlatform && hostPlatform !== "unknown" ? hostPlatform : undefined
 	const banners = BannerService.get().getActiveBanners() ?? []
 	const welcomeBanners = BannerService.get().getWelcomeBanners() ?? []
 
@@ -290,6 +292,7 @@ export async function getStateToPostToWebview(controller: {
 		enableCheckpointsSetting: enableCheckpointsSetting ?? true,
 		platform,
 		environment,
+		hostName,
 		distinctId,
 		globalClineRulesToggles: globalClineRulesToggles || {},
 		localClineRulesToggles: localClineRulesToggles || {},

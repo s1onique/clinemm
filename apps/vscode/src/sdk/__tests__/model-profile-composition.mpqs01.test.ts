@@ -33,15 +33,15 @@
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import type { HistoryItem } from "@shared/HistoryItem"
 import type { CoreSessionConfig } from "@cline/core"
-import type { InstanceSecretName } from "@/shared/storage/instance-secret"
+import type { HistoryItem } from "@shared/HistoryItem"
 import { describe, expect, it, vi } from "vitest"
+import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import type { ProviderConfigurationInstance } from "../instance-store/contracts"
-import { SdkSessionConfigBuilder } from "../sdk-session-config-builder"
-import { SdkProviderChangeCoordinator } from "../sdk-provider-change-coordinator"
-import { ProfilesStore } from "../profile-store/profiles-store"
 import { applyModelProfile } from "../profile-store/profile-application"
+import { ProfilesStore } from "../profile-store/profiles-store"
+import { SdkProviderChangeCoordinator } from "../sdk-provider-change-coordinator"
+import { SdkSessionConfigBuilder } from "../sdk-session-config-builder"
 
 interface BaselineShape {
 	providerId?: string
@@ -211,7 +211,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / MP-C1 compo
 				getWorkspaceRoot: async () => "/workspace",
 				getMode: () => "act",
 				getCurrentTaskHistoryItem: () =>
-					({ id: "task-1", ts: 1, task: "T", tokensIn: 0, tokensOut: 0, totalCost: 0 } as HistoryItem),
+					({ id: "task-1", ts: 1, task: "T", tokensIn: 0, tokensOut: 0, totalCost: 0 }) as HistoryItem,
 				getCurrentTaskProviderInstanceId: () => "inst-A",
 				writeTaskHistoryItem,
 				postStateToWebview,

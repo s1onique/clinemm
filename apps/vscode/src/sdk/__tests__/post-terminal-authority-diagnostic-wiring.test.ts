@@ -26,6 +26,8 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
+import { getStateToPostToWebviewSignature } from "./sdk-controller-signature-probes"
+
 const SDK_CONTROLLER_PATH = resolve(__dirname, "../SdkController.ts")
 const BUILDER_PATH = resolve(__dirname, "../post-terminal-authority-diagnostic-builder.ts")
 const SHARED_DIAGNOSTIC_PATH = resolve(__dirname, "../../shared/post-terminal-authority-diagnostic.ts")
@@ -135,7 +137,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 	}
 
 	describe("W2: extension-side capture wiring", () => {
-		const getStateSignature = "async getStateToPostToWebview(): Promise<ExtensionState>"
+		const getStateSignature = getStateToPostToWebviewSignature()
 
 		it("W2-1: getStateToPostToWebview contains the opt-in capture block", () => {
 			const source = readSource(SDK_CONTROLLER_PATH)
@@ -297,7 +299,15 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			const source = readSource(INPUT_SECTION_PATH)
 			expect(source).toMatch(/isPostTerminalAuthorityDiagnosticEnabled\("webview"\)/)
 			expect(source).toMatch(/chatReducerSendingDisabled: sendingDisabled/)
-			expect(source).toMatch(/submitDisabled,/)
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream added a SECOND,
+			// cloud-aware submit gate, so the merged component distinguishes
+			// the fork's turn-state gate (`submitDisabledFromTurnState`) from
+			// the combined gate. The captured `submitDisabled` field must
+			// still carry the FORK's turn-state derivation
+			// (`sendingDisabled && !allowQueuedSubmit`) — assert the
+			// derivation and the capture together.
+			expect(source).toMatch(/const submitDisabledFromTurnState\s*=\s*sendingDisabled\s*&&\s*!allowQueuedSubmit/)
+			expect(source).toMatch(/submitDisabled:\s*submitDisabledFromTurnState/)
 			expect(source).toMatch(/allowQueuedSubmit,/)
 		})
 

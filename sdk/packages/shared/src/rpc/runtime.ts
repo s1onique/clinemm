@@ -1,11 +1,17 @@
 import z from "zod";
-import type { HubToolExecutorName } from "../hub";
+import type {
+	HubToolExecutorName,
+	PluginPolicies,
+	SessionPluginIssue,
+} from "../hub";
 import type {
 	ModelModality,
 	ModelOperation,
 	ModelOperationMode,
 } from "../llms/model-info";
+import type { ModelToolName } from "../llms/model-tools";
 import type { ReasoningLevel } from "../llms/reasoning-options";
+import type { ProviderAuthInfo } from "../provider-auth";
 import type {
 	RuntimeConfigExtensionKind,
 	SessionExecutionConfig,
@@ -20,11 +26,15 @@ export interface ChatRuntimeConfig extends SessionPromptConfig {
 	enableSpawn?: boolean;
 	enableTeams?: boolean;
 	disableMcpSettingsTools?: boolean;
+	/** Additional Agent Plugins package roots resolved by the hub runtime. */
+	agentPluginPaths?: string[];
 	autoApproveTools?: boolean;
 	missionStepInterval?: number;
 	missionTimeIntervalMs?: number;
 	timeoutSeconds?: number;
 	toolPolicies?: SessionExecutionConfig["toolPolicies"];
+	/** Per-session plugin selection, shaped like `toolPolicies`. */
+	plugins?: PluginPolicies;
 	toolExecutors?: HubToolExecutorName[];
 	configExtensions?: RuntimeConfigExtensionKind[];
 }
@@ -55,6 +65,8 @@ export interface ChatStartSessionArtifacts {
 export interface ChatStartSessionResponse {
 	sessionId: string;
 	startResult?: ChatStartSessionArtifacts;
+	/** Plugins the session asked for but does not have (failed or disabled). */
+	pluginIssues?: SessionPluginIssue[];
 }
 
 export interface ChatAttachmentFile {
@@ -206,6 +218,9 @@ export interface ProviderConfigField {
 }
 
 export interface ProviderListItem {
+	/** Native tools offered by at least some models, resolved by the host. */
+	modelTools: ModelToolName[];
+	auth: ProviderAuthInfo;
 	id: string;
 	name: string;
 	models: number | null;
@@ -456,6 +471,10 @@ export type ClineAccountActionRequest =
 	| {
 			action: "clineAccount";
 			operation: "fetchFeaturebaseToken";
+	  }
+	| {
+			action: "clineAccount";
+			operation: "fetchCurrentUserPlan";
 	  };
 
 export type ProviderActionRequest =

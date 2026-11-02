@@ -76,6 +76,7 @@ describe("auto-approve settings after New Task (#13260)", () => {
 			// boundary added by ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01).
 			// Provide a per-test fence so clearTask().begin() resolves.
 			taskOperationFence: new TaskOperationFence(),
+			rebuilds: { runTaskTransition: async <T>(operation: () => Promise<T>) => operation() },
 			setTurnPhase: () => {},
 		} as unknown as SdkTaskControlCoordinatorOptions)
 

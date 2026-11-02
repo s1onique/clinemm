@@ -201,10 +201,8 @@ function formatToolParams(
 		case "skills": {
 			if (rawInput && typeof rawInput === "object" && "skill" in rawInput) {
 				const s = String((rawInput as { skill: unknown }).skill);
-				const args =
-					"args" in rawInput
-						? ` ${String((rawInput as { args: unknown }).args)}`
-						: "";
+				const rawArgs = (rawInput as { args?: unknown }).args;
+				const args = rawArgs == null || rawArgs === "" ? "" : ` ${rawArgs}`;
 				const full = `${s}${args}`;
 				return full.length > 70 ? `${full.slice(0, 70)}...` : full;
 			}
@@ -657,11 +655,18 @@ export function ChatEntryView(props: {
 						 * token identity, so settled content never re-renders.
 						 * tableOptions preserves the bordered table style that coalesced
 						 * mode used by default (top-level defaults to borderless columns).
+						 *
+						 * streaming stays true even after the entry settles: flipping the
+						 * prop makes MarkdownRenderable rebuild every block from scratch
+						 * (updateBlocks(true) skips all reuse paths), so the finished
+						 * message flashes back to unhighlighted text while tree-sitter
+						 * re-highlights. opencode's TUI keeps streaming={true} for the
+						 * same reason. entry.streaming still drives the spinner glyph.
 						 */}
 						<markdown
 							content={content}
 							syntaxStyle={getSyntaxStyle(theme, mode)}
-							streaming={entry.streaming}
+							streaming={true}
 							internalBlockMode="top-level"
 							tableOptions={{ style: "grid" }}
 							fg={defaultFg}

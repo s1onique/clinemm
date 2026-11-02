@@ -92,9 +92,9 @@
 // ============================================================================
 
 import type { MessageWithMetadata } from "@cline/shared"
+import type { ClineMessage } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
 import { sdkMessagesToClineMessages } from "../message-translator"
-import type { ClineMessage } from "@shared/ExtensionMessage"
 
 // The two distinct summary bodies from the live task
 // 1791892624249_io4fp, msg 333 (toolUseId xxakngsgiq8s_1) and
@@ -118,7 +118,7 @@ function buildTwoSubmitAndExitFixture(): MessageWithMetadata[] {
 	return [
 		{
 			role: "user",
-			content: [{ type: "text", text: "<user_input mode=\"act\"># ACT-CLINEMM task prompt</user_input>" }],
+			content: [{ type: "text", text: '<user_input mode="act"># ACT-CLINEMM task prompt</user_input>' }],
 		},
 		{
 			role: "assistant",
@@ -154,7 +154,7 @@ function buildTwoSubmitAndExitFixture(): MessageWithMetadata[] {
 			content: [
 				{
 					type: "text",
-					text: "<user_input mode=\"act\">A deferred completion is requesting observation of unconsumed terminal results.</user_input>",
+					text: '<user_input mode="act">A deferred completion is requesting observation of unconsumed terminal results.</user_input>',
 				},
 			],
 		},
@@ -182,7 +182,16 @@ function buildTwoSubmitAndExitFixture(): MessageWithMetadata[] {
 					tool_use_id: "call_function_gru4wt89y8wl_1",
 					name: "command_status",
 					content: [
-						{ type: "text", text: JSON.stringify({ ok: true, jobId: "cmd_mv6mq5t8qhepcxxm", state: "containment_failed", signal: "SIGTERM", elapsed: 1081302 }) },
+						{
+							type: "text",
+							text: JSON.stringify({
+								ok: true,
+								jobId: "cmd_mv6mq5t8qhepcxxm",
+								state: "containment_failed",
+								signal: "SIGTERM",
+								elapsed: 1081302,
+							}),
+						},
 					],
 				},
 			],

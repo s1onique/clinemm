@@ -1,3 +1,4 @@
+import { isCloudTargetReady } from "@shared/cloud/cloud-sessions"
 import {
 	isPostTerminalAuthorityDiagnosticEnabled,
 	recordPostTerminalAuthoritySnapshot,
@@ -43,10 +44,18 @@ export const InputSection: React.FC<InputSectionProps> = ({
 		textAreaRef,
 		handleFocusChange,
 		lastMessage,
+		pendingResponse,
 	} = chatState
 
 	const { isAtBottom, scrollToBottomAuto } = scrollBehavior
-	const { turnState } = useExtensionState()
+	// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork reads `turnState` here to
+	// derive `submitDisabled` from the runtime turn state; upstream reads the
+	// cloud-session fields in a SECOND `useExtensionState()` call further down.
+	// Two calls are legal, but the second one also redeclared `turnState` and
+	// `submitDisabled`. The single destructuring below is the union of both
+	// sides; the fork's `submitDisabled` derivation is kept (upstream's
+	// cloud-aware variant is applied as an ADDITIONAL gate below).
+	const { turnState, cloudSessionsEnabled, cloudTaskTarget, currentCloudTask, clineMessages = [] } = useExtensionState()
 	// The composer is submittable while a turn is in flight. The source of truth is the
 	// backend-owned `turnState` (streamed from `turnStateTracker` via `SdkController`),
 	// which already covers "streaming" (model/tool running) and "awaiting_approval"
@@ -63,7 +72,9 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	// dropping it). The boolean is identical to the pre-fix shape minus the legacy term:
 	// the previous `legacyTaskRunning` was an `OR` short-circuit on `turnState === undefined`
 	// and disappeared with that branch.
-	const submitDisabled = sendingDisabled && !allowQueuedSubmit
+	// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: renamed to distinguish the fork's
+	// turn-state gate from upstream's cloud-aware gate (see `submitDisabledFinal`).
+	const submitDisabledFromTurnState = sendingDisabled && !allowQueuedSubmit
 	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION02:
 	// Correlation-domain fix: the capture stamps `stateVersion` with the
 	// wire-side ExtensionState.stateVersion (the SAME counter the push
@@ -92,12 +103,12 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			legacyAnchorTs: turnState?.anchorTs,
 			chatReducerSendingDisabled: sendingDisabled,
 			allowQueuedSubmit,
-			submitDisabled,
+			submitDisabled: submitDisabledFromTurnState,
 			// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01:
 			// Stamp the composer enabled predicate and message-tail identity at the
 			// SAME committed object as sendingDisabled/allowQueuedSubmit/submitDisabled.
 			// Pure additions; production semantics unchanged when default-off.
-			composerEnabled: !submitDisabled,
+			composerEnabled: !submitDisabledFromTurnState,
 			messageTail: lastMessage
 				? {
 						ts: lastMessage.ts,
@@ -116,16 +127,48 @@ export const InputSection: React.FC<InputSectionProps> = ({
 		turnState?.anchorTs,
 		sendingDisabled,
 		allowQueuedSubmit,
-		submitDisabled,
+		submitDisabledFromTurnState,
 		wireStateVersion,
 		wirePtadPushId,
 	])
 	// `lastMessage` is destructured for type parity with the chat state surface; the field
 	// is no longer part of the runtime-task inference.
 	void lastMessage
+	const legacyTaskRunning =
+		turnState === undefined &&
+		(lastMessage?.partial === true || (lastMessage?.type === "say" && lastMessage.say === "api_req_started"))
+	const allowSubmitWhileDisabled =
+		turnState?.phase === "streaming" ||
+		turnState?.phase === "awaiting_approval" ||
+		(messageHandlers.errorRecoveryAvailable && pendingResponse === undefined && !messageHandlers.recoveryActionInFlight) ||
+		legacyTaskRunning
+	const cloudSelectedForNewTask = clineMessages.length === 0 && !!cloudSessionsEnabled && cloudTaskTarget?.target === "cloud"
+	// The task-target panel above the composer shows what is still missing.
+	const cloudTargetIncomplete = cloudSelectedForNewTask && !isCloudTargetReady(cloudTaskTarget)
+	// Local file paths cannot be read from a cloud sandbox. Refuse the send
+	// rather than silently dropping the attachments from the request.
+	const cloudFilesUnsupported = cloudSelectedForNewTask && selectedFiles.length > 0
+	// A provisioning sandbox has no session to queue a follow-up on yet; the draft stays in the composer.
+	const submitDisabledByCloud =
+		(sendingDisabled && !allowSubmitWhileDisabled) ||
+		cloudTargetIncomplete ||
+		cloudFilesUnsupported ||
+		currentCloudTask?.status === "provisioning"
+
+	// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork's turn-state gate
+	// (`allowsQueuedSubmit(turnState)`) and upstream's cloud-aware gate are
+	// BOTH gates on the send button. Compose them instead of redeclaring the
+	// binding (the naive merge emitted two `submitDisabled` declarations).
+	const submitDisabled = submitDisabledByCloud || submitDisabledFromTurnState
 
 	return (
 		<>
+			{cloudFilesUnsupported && (
+				<p className="mx-[15px] mt-[10px] mb-0 text-[11px] leading-snug text-description" role="status">
+					Attached files can't be sent to a cloud sandbox. Remove them, or mention them in the prompt and let the agent
+					read them from the repository.
+				</p>
+			)}
 			{activeQuote && (
 				<div style={{ marginBottom: "-12px", marginTop: "10px" }}>
 					<QuotedMessagePreview

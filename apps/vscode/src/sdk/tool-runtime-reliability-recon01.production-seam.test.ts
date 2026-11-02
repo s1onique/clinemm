@@ -269,7 +269,9 @@ describe("ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01 / production-seam A2 (rea
 })
 
 describe("ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01 / production-seam A3 (markerless idle, no C marker, prompt-quiet)", () => {
-	it("real VscodeTerminalProcess settles via prompt-quiet heuristic when no C marker ever arrives", { timeout: 60_000 }, async () => {
+	it("real VscodeTerminalProcess settles via prompt-quiet heuristic when no C marker ever arrives", {
+		timeout: 60_000,
+	}, async () => {
 		// Stream yields a single chunk that ends with a strong shell prompt;
 		// never yields C marker; stream then hangs.
 		const terminal = makeTerminal({

@@ -1,3 +1,5 @@
+import type { CloudSessionStatus } from "./cloud/cloud-sessions"
+
 export type HistoryItem = {
 	id: string
 	ulid?: string // ULID for better tracking and metrics
@@ -38,4 +40,12 @@ export type HistoryItem = {
 	 * which is the single writer/reader of this field.
 	 */
 	activeProfileId?: string
+
+	/** "cloud" for Cline Cloud sessions; absent/"local" for tasks run in this workspace. */
+	executionTarget?: "local" | "cloud"
+	cloudStatus?: CloudSessionStatus
+	cloudRepoUrl?: string
+	cloudBranch?: string
+	/** True when cloud usage came from an authoritative remote runtime snapshot. */
+	cloudUsageAvailable?: boolean
 }

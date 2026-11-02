@@ -74,7 +74,7 @@ describe("ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01 / NDHA", () =>
 	// via the existing controller.initTask seam.
 	//
 	it("NDHA01: /newtask routes to handoffWithContext and creates a new task identity (RED)", () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 2500)
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 4000)
 
 		// /newtask must remain in the dispatch predicate (intercept window).
 		const dispatchHasNewtask = interceptBlock.match(/messageToSend\s*===\s*"\/newtask"/)
@@ -85,11 +85,22 @@ describe("ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01 / NDHA", () =>
 		expect(interceptBlock).toMatch(/TaskServiceClient\.handoffWithContext\s*\(/)
 		expect(interceptBlock).toMatch(/EmptyRequest\.create\s*\(\s*\{\s*\}\s*\)/)
 
-		// The compact/smol dispatch MUST still call SlashServiceClient.condense
-		// (preserves the same-task compaction contract).
-		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\s*\(/)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream refactored the inline
+		// `SlashServiceClient.condense(...)` call into a `compactTask()`
+		// helper and replaced the literal `/compact` + `/smol` header with
+		// the `isCompactionCommand(...)` predicate. The probes below
+		// asserted the literal call site inside the dispatch window, which
+		// the refactor legitimately moved.
+		//
+		// The contract is "the compact/smol dispatch still reaches the
+		// condense RPC, hardcoding value:'compact'", so assert the same
+		// contract against the new structure: the dispatch branch calls the
+		// helper, and the helper owns the condense RPC with the hardcoded
+		// value.
+		expect(interceptBlock).toMatch(/compactTask\s*\(\s*\)/)
+		expect(HookSource).toMatch(/const compactTask\s*=\s*useCallback[\s\S]*?SlashServiceClient\.condense\s*\(/)
 		// The intercept's condense call MUST still hardcode value:"compact".
-		const condenseCallLine = interceptBlock.match(/SlashServiceClient\.condense\([\s\S]{0,200}value:\s*"compact"/)
+		const condenseCallLine = HookSource.match(/SlashServiceClient\.condense\([\s\S]{0,200}value:\s*"compact"/)
 		expect(condenseCallLine).not.toBeNull()
 
 		// The handoff handler must create a fresh task identity via
@@ -107,50 +118,93 @@ describe("ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01 / NDHA", () =>
 		}
 		return source.slice(start, start + maxChars)
 	}
+
+	/**
+	 * Strips block and line comments so a source probe can assert about
+	 * CODE rather than about prose that happens to mention a literal.
+	 * ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream's refactor left a
+	 * comment in the dispatch block naming the old
+	 * `messageToSend === "/compact" || messageToSend === "/smol"` header,
+	 * which made a code-level probe false-positive on it.
+	 */
+	function stripComments(source: string): string {
+		return source
+			.replace(/\/\*[\s\S]*?\*\//g, "")
+			.split("\n")
+			.map((line) => line.replace(/\/\/.*$/, ""))
+			.join("\n")
+	}
 	//
 	// NDHA02 -- CONTROL: /compact still routes to condense RPC at the same seam.
 	//
 	it("NDHA02 (CONTROL): /compact still routes to the condense RPC", () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 2500)
-		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/compact"/)
-		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\s*\(/)
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 4000)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the literal
+		// `messageToSend === "/compact"` header was superseded by upstream's
+		// `isCompactionCommand(...)` predicate; the inline condense call was
+		// superseded by the `compactTask()` helper. Assert the same
+		// contract against the new structure.
+		expect(interceptBlock).toMatch(/isCompactionCommand\s*\(\s*messageToSend\s*\)/)
+		expect(HookSource).toMatch(/function isCompactionCommand[\s\S]*?text\s*===\s*"\/compact"/)
+		expect(interceptBlock).toMatch(/compactTask\s*\(\s*\)/)
+		expect(HookSource).toMatch(/const compactTask\s*=\s*useCallback[\s\S]*?SlashServiceClient\.condense\s*\(/)
 		// /compact MUST NOT be co-dispatched with the new handoff RPC. The
 		// /newtask branch IS allowed to reference handoffWithContext (that is
 		// the new repair). What is forbidden is /compact dispatching to it.
 		// Pin by reading the post-/-newtask-block code: the /compact branch
 		// must NOT exist after the /newtask dispatch.
 		const newtaskBlockEnd = interceptBlock.indexOf("TaskServiceClient.handoffWithContext")
-		const condenseCallPos = interceptBlock.indexOf("SlashServiceClient.condense")
+		const compactionDispatchPos = interceptBlock.indexOf("isCompactionCommand(messageToSend)")
 		expect(newtaskBlockEnd).toBeGreaterThan(-1)
-		expect(condenseCallPos).toBeGreaterThan(-1)
-		// The condense call appears AFTER the /newtask dispatch in the file,
-		// proving they are sibling branches (not /compact reaching handoff).
-		expect(condenseCallPos).toBeGreaterThan(newtaskBlockEnd)
+		expect(compactionDispatchPos).toBeGreaterThan(-1)
+		// The compaction dispatch appears AFTER the /newtask dispatch in the
+		// file, proving they are sibling branches (not /compact reaching
+		// handoff).
+		expect(compactionDispatchPos).toBeGreaterThan(newtaskBlockEnd)
 	})
 
 	//
 	// NDHA03 -- CONTROL: /smol still routes to condense RPC at the same seam.
 	//
 	it("NDHA03 (CONTROL): /smol still routes to the condense RPC", () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 2500)
-		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/smol"/)
-		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\s*\(/)
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 4000)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the literal `/smol` header was
+		// superseded by upstream's `isCompactionCommand(...)` predicate; the
+		// inline condense call was superseded by the `compactTask()` helper.
+		expect(interceptBlock).toMatch(/isCompactionCommand\s*\(\s*messageToSend\s*\)/)
+		expect(HookSource).toMatch(/function isCompactionCommand[\s\S]*?text\s*===\s*"\/smol"/)
+		expect(interceptBlock).toMatch(/compactTask\s*\(\s*\)/)
+		expect(HookSource).toMatch(/const compactTask\s*=\s*useCallback[\s\S]*?SlashServiceClient\.condense\s*\(/)
 		// /smol is co-dispatched with /compact (same predicate). /smol MUST NOT
 		// be co-dispatched with /newtask. Pin by checking the /smol literal
 		// is in the SAME predicate as /compact, NOT /newtask.
-		const smolMatch = interceptBlock.match(/messageToSend\s*===\s*"\/smol"/)
+		//
+		// The predicate is now the shared authority: `isCompactionCommand`
+		// recognises /compact and /smol (and /newtask), while the /newtask
+		// DISPATCH is a separate, earlier branch that routes to
+		// `handoffWithContext`. So the invariant is: /smol appears in the
+		// predicate, and the /newtask branch body does not reference /smol.
+		const smolMatch = HookSource.match(/function isCompactionCommand[\s\S]*?text\s*===\s*"\/smol"/)
 		expect(smolMatch).not.toBeNull()
-		// The /compact predicate must include /smol alongside it (within 40 chars).
-		expect(interceptBlock).toMatch(
-			/messageToSend\s*===\s*"\/compact"[\s\S]{0,40}messageToSend\s*===\s*"\/smol"|messageToSend\s*===\s*"\/smol"[\s\S]{0,40}messageToSend\s*===\s*"\/compact"/,
+		// The predicate must include /smol alongside /compact.
+		expect(HookSource).toMatch(
+			/function isCompactionCommand[\s\S]*?text\s*===\s*"\/compact"[\s\S]{0,120}text\s*===\s*"\/smol"|function isCompactionCommand[\s\S]*?text\s*===\s*"\/smol"[\s\S]{0,120}text\s*===\s*"\/compact"/,
 		)
 		// The /smol literal must NOT appear in the /newtask branch (i.e. between
 		// the /newtask predicate and the closing brace of its branch). Take the
 		// region from the /newtask predicate up to the next sibling dispatch.
+		//
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the sibling dispatch is now the
+		// `isCompactionCommand(messageToSend)` predicate, and the block
+		// between the two branches carries a COMMENT that mentions
+		// `messageToSend === "/compact" || messageToSend === "/smol"`. The
+		// invariant is about CODE, not about comments, so strip comments
+		// before slicing.
 		const newtaskPredicatePos = interceptBlock.indexOf('messageToSend === "/newtask"')
 		expect(newtaskPredicatePos).toBeGreaterThan(-1)
-		const nextDispatchPos = interceptBlock.indexOf('messageToSend === "/compact"', newtaskPredicatePos)
-		const newtaskBranch = interceptBlock.slice(newtaskPredicatePos, nextDispatchPos)
+		const nextDispatchPos = interceptBlock.indexOf("isCompactionCommand(messageToSend)", newtaskPredicatePos)
+		expect(nextDispatchPos).toBeGreaterThan(newtaskPredicatePos)
+		const newtaskBranch = stripComments(interceptBlock.slice(newtaskPredicatePos, nextDispatchPos))
 		// /smol MUST NOT be referenced inside the /newtask branch.
 		expect(newtaskBranch).not.toMatch(/"\/smol"/)
 	})

@@ -68,7 +68,11 @@ const requireSeq = (message: ClineMessage): number => {
 
 describe("P1_RESULT_PUBLICATION_TO_SESSION_EVENT", () => {
 	it("command_output-shaped RESULT_EXISTS message -> semantic identity persists across append + fanout", () => {
-		const task = createTaskProxy("session-123", () => Promise.resolve(), () => Promise.resolve())
+		const task = createTaskProxy(
+			"session-123",
+			() => Promise.resolve(),
+			() => Promise.resolve(),
+		)
 		const minter = new MessageIdMinter()
 		const coord = new SdkMessageCoordinator({ getTask: () => task, getMinter: () => minter })
 		// Type the listener with the real SessionEventListener callback signature so

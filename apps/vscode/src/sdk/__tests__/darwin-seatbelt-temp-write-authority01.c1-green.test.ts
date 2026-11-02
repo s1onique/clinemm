@@ -187,97 +187,95 @@ async function runSandboxed(opts: StartOptions): Promise<StartOutcome> {
 	}
 }
 
-describe.skipIf(!HAS_SUBSTRATE)(
-	"ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01 — kernel matrix",
-	() => {
-		it("T1 GREEN: mktemp /tmp/clinemm-seatbelt-XXXXXX (literal /tmp) -> exit 0, file under canonical /tmp", async () => {
-			if (!canonicalTmp) {
-				expect(true).toBe(true)
-				return
-			}
-			const out = await runSandboxed({
-				command: `/usr/bin/mktemp /tmp/clinemm-seatbelt-c1.XXXXXX`,
-			})
-			expect(out.exitCode).toBe(0)
-			expect(out.stderr).not.toMatch(/Operation not permitted|EPERM/)
-			const stdout = out.stdout.trim()
-			expect(stdout).toMatch(/^\/tmp\//)
-			const real = realpathSync(stdout)
-			expect(real.startsWith(canonicalTmp)).toBe(true)
-			try {
-				rmSync(stdout, { force: true })
-			} catch {}
+describe.skipIf(!HAS_SUBSTRATE)("ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01 — kernel matrix", () => {
+	it("T1 GREEN: mktemp /tmp/clinemm-seatbelt-XXXXXX (literal /tmp) -> exit 0, file under canonical /tmp", async () => {
+		if (!canonicalTmp) {
+			expect(true).toBe(true)
+			return
+		}
+		const out = await runSandboxed({
+			command: `/usr/bin/mktemp /tmp/clinemm-seatbelt-c1.XXXXXX`,
 		})
+		expect(out.exitCode).toBe(0)
+		expect(out.stderr).not.toMatch(/Operation not permitted|EPERM/)
+		const stdout = out.stdout.trim()
+		expect(stdout).toMatch(/^\/tmp\//)
+		const real = realpathSync(stdout)
+		expect(real.startsWith(canonicalTmp)).toBe(true)
+		try {
+			rmSync(stdout, { force: true })
+		} catch {}
+	})
 
-		it("T2 CONSERVATION: mktemp -d (no template) -> exit != 0, no path created, EPERM signal on stderr (per-user os.tmpdir() NOT globally granted)", async () => {
-			// macOS BSD mktemp(1) with no template and no -t flag
-			// falls back to _CS_DARWIN_USER_TEMP_DIR (== os.tmpdir())
-			// and IGNORES the parent's TMPDIR per Apple's platform
-			// contract.
-			//
-			// Per the CORRECTED scope, os.tmpdir() is NOT in the
-			// global write allow. Tooling that lands there WITHOUT
-			// a capability tempRoot that names it as such will hit
-			// EPERM (or fail to create). The CORRECTED test asserts
-			// this conservation witness exactly: the kernel MUST
-			// deny the operation, no dir MAY be created, and the
-			// denial signal MUST be visible.
-			//
-			// The bounded pattern for normal tooling is: callers
-			// supply a `tempRoot` capability pointing at os.tmpdir()
-			// (or any writable scratch), and the synthesized
-			// per-invocation dir is granted as a (subpath ...) write
-			// rule. The TMPDIR/TMP/TEMP env materialization steers
-			// $TMPDIR-honoring tools into that root.
-			if (!canonicalTmpdir) {
-				expect(true).toBe(true)
-				return
-			}
-			const out = await runSandboxed({
-				command: `/usr/bin/mktemp -d`,
-			})
-			// Load-bearing invariant: the kernel denied the write.
-			//   - exit code MUST be non-zero (mktemp failed).
-			//   - if mktemp printed a candidate path before failing,
-			//     that path MUST NOT exist on disk.
-			//   - stderr MUST carry a permission-denial marker
-			//     (Seatbelt translates sandbox denials to
-			//     "Operation not permitted" / EPERM via libbx).
-			expect(out.exitCode).not.toBe(0)
-			const candidate = out.stdout.trim()
-			if (candidate) {
-				expect(existsSync(candidate)).toBe(false)
-			}
-			expect(out.stderr).toMatch(/Operation not permitted|EPERM|not permitted/i)
+	it("T2 CONSERVATION: mktemp -d (no template) -> exit != 0, no path created, EPERM signal on stderr (per-user os.tmpdir() NOT globally granted)", async () => {
+		// macOS BSD mktemp(1) with no template and no -t flag
+		// falls back to _CS_DARWIN_USER_TEMP_DIR (== os.tmpdir())
+		// and IGNORES the parent's TMPDIR per Apple's platform
+		// contract.
+		//
+		// Per the CORRECTED scope, os.tmpdir() is NOT in the
+		// global write allow. Tooling that lands there WITHOUT
+		// a capability tempRoot that names it as such will hit
+		// EPERM (or fail to create). The CORRECTED test asserts
+		// this conservation witness exactly: the kernel MUST
+		// deny the operation, no dir MAY be created, and the
+		// denial signal MUST be visible.
+		//
+		// The bounded pattern for normal tooling is: callers
+		// supply a `tempRoot` capability pointing at os.tmpdir()
+		// (or any writable scratch), and the synthesized
+		// per-invocation dir is granted as a (subpath ...) write
+		// rule. The TMPDIR/TMP/TEMP env materialization steers
+		// $TMPDIR-honoring tools into that root.
+		if (!canonicalTmpdir) {
+			expect(true).toBe(true)
+			return
+		}
+		const out = await runSandboxed({
+			command: `/usr/bin/mktemp -d`,
 		})
+		// Load-bearing invariant: the kernel denied the write.
+		//   - exit code MUST be non-zero (mktemp failed).
+		//   - if mktemp printed a candidate path before failing,
+		//     that path MUST NOT exist on disk.
+		//   - stderr MUST carry a permission-denial marker
+		//     (Seatbelt translates sandbox denials to
+		//     "Operation not permitted" / EPERM via libbx).
+		expect(out.exitCode).not.toBe(0)
+		const candidate = out.stdout.trim()
+		if (candidate) {
+			expect(existsSync(candidate)).toBe(false)
+		}
+		expect(out.stderr).toMatch(/Operation not permitted|EPERM|not permitted/i)
+	})
 
-		it("T3 GREEN: Node inside the real sandbox seam -> os.tmpdir() / TMPDIR / TMP / TEMP all equal capability tempRoot, write under os.tmpdir() succeeds", async () => {
-			// Per the CORRECTED scope, os.tmpdir() is NOT in the
-			// global write allow. Per-invocation temp authority is
-			// bounded to the capability's `tempRoot`. The
-			// CommandJobManager (used by `runSandboxed`) synthesizes
-			// a per-invocation tempRoot under `os.tmpdir()` and
-			// passes it to `materializeEnvironment` as
-			// `syntheticTempDir`. With the corrected env helper,
-			// that path is set as TMPDIR + TMP + TEMP, and Node.js
-			// (which honors TMPDIR → TMP → TEMP on non-Windows)
-			// resolves `os.tmpdir()` to it.
-			//
-			// We run a real Node process INSIDE the sandbox seam
-			// and assert on what it sees. This exercises the real
-			// production path: CommandJobManager.start →
-			// SeatbeltSandboxBackendExperimental.prepare →
-			// materializeEnvironment → sandbox-exec → Node.
-			//
-			// The Node script asserts:
-			//   1) os.tmpdir()             == TMPDIR
-			//   2) process.env.TMPDIR === process.env.TMP === process.env.TEMP
-			//   3) process.env.TMPDIR  is a real directory
-			//   4) write to TMPDIR + '/clinemm-t3-' + Date.now() succeeds
-			//      AND reads back the content we wrote
-			// If any of those fail, the script prints FAIL:<reason>
-			// and exits with a non-zero code, which we surface.
-			const nodeScript = `
+	it("T3 GREEN: Node inside the real sandbox seam -> os.tmpdir() / TMPDIR / TMP / TEMP all equal capability tempRoot, write under os.tmpdir() succeeds", async () => {
+		// Per the CORRECTED scope, os.tmpdir() is NOT in the
+		// global write allow. Per-invocation temp authority is
+		// bounded to the capability's `tempRoot`. The
+		// CommandJobManager (used by `runSandboxed`) synthesizes
+		// a per-invocation tempRoot under `os.tmpdir()` and
+		// passes it to `materializeEnvironment` as
+		// `syntheticTempDir`. With the corrected env helper,
+		// that path is set as TMPDIR + TMP + TEMP, and Node.js
+		// (which honors TMPDIR → TMP → TEMP on non-Windows)
+		// resolves `os.tmpdir()` to it.
+		//
+		// We run a real Node process INSIDE the sandbox seam
+		// and assert on what it sees. This exercises the real
+		// production path: CommandJobManager.start →
+		// SeatbeltSandboxBackendExperimental.prepare →
+		// materializeEnvironment → sandbox-exec → Node.
+		//
+		// The Node script asserts:
+		//   1) os.tmpdir()             == TMPDIR
+		//   2) process.env.TMPDIR === process.env.TMP === process.env.TEMP
+		//   3) process.env.TMPDIR  is a real directory
+		//   4) write to TMPDIR + '/clinemm-t3-' + Date.now() succeeds
+		//      AND reads back the content we wrote
+		// If any of those fail, the script prints FAIL:<reason>
+		// and exits with a non-zero code, which we surface.
+		const nodeScript = `
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -297,71 +295,53 @@ if (back !== 'T3_OK') { console.log('FAIL:readback_mismatch:' + back); process.e
 fs.unlinkSync(probe);
 console.log('T3_OK:' + TMPDIR);
 `
-			const out = await runSandboxed({
-				command: `/usr/bin/env node -e ${JSON.stringify(nodeScript)}`,
-			})
-			// The Node script exits 0 on success. If any assertion
-			// in the script fails, the exit code is non-zero and
-			// stdout carries the FAIL:<reason> marker. The
-			// capability-private tempRoot synthesis is automatic
-			// for every CommandJobManager.start, so writes under
-			// it succeed (Seatbelt allows (subpath "<tempRoot>")
-			// and os.tmpdir() == tempRoot per Node's env lookup).
-			expect(out.exitCode).toBe(0)
-			expect(out.stderr).not.toMatch(/Operation not permitted|EPERM/)
-			const stdout = out.stdout.trim()
-			expect(stdout).toMatch(/^T3_OK:/)
-			// The reported path MUST be under canonical os.tmpdir()
-			// (the synthesized tempRoot is a subdir of os.tmpdir()).
-			if (canonicalTmpdir) {
-				const reported = stdout.split(":")[1]
-				expect(reported).toBeDefined()
-				expect(realpathSync(reported!).startsWith(canonicalTmpdir)).toBe(
-					true,
-				)
-			}
+		const out = await runSandboxed({
+			command: `/usr/bin/env node -e ${JSON.stringify(nodeScript)}`,
 		})
+		// The Node script exits 0 on success. If any assertion
+		// in the script fails, the exit code is non-zero and
+		// stdout carries the FAIL:<reason> marker. The
+		// capability-private tempRoot synthesis is automatic
+		// for every CommandJobManager.start, so writes under
+		// it succeed (Seatbelt allows (subpath "<tempRoot>")
+		// and os.tmpdir() == tempRoot per Node's env lookup).
+		expect(out.exitCode).toBe(0)
+		expect(out.stderr).not.toMatch(/Operation not permitted|EPERM/)
+		const stdout = out.stdout.trim()
+		expect(stdout).toMatch(/^T3_OK:/)
+		// The reported path MUST be under canonical os.tmpdir()
+		// (the synthesized tempRoot is a subdir of os.tmpdir()).
+		if (canonicalTmpdir) {
+			const reported = stdout.split(":")[1]
+			expect(reported).toBeDefined()
+			expect(realpathSync(reported!).startsWith(canonicalTmpdir)).toBe(true)
+		}
+	})
 
-		it("T4 CONSERVATION: write outside workspace/temp (~/seatbelt-forbidden) -> REMAINS DENIED", async () => {
-			const forbidden = join(homedir(), `seatbelt-forbidden-c1-${Date.now()}`)
+	it("T4 CONSERVATION: write outside workspace/temp (~/seatbelt-forbidden) -> REMAINS DENIED", async () => {
+		const forbidden = join(homedir(), `seatbelt-forbidden-c1-${Date.now()}`)
+		try {
+			rmSync(forbidden, { recursive: true, force: true })
+		} catch {}
+		const sentinel = join(forbidden, "x.txt")
+		try {
+			const out = await runSandboxed({
+				command: `/bin/sh -c 'mkdir -p "${forbidden}" && printf "BAD" > "${sentinel}"'`,
+			})
+			expect(existsSync(sentinel)).toBe(false)
+			if (out.exitCode === 0) {
+				expect(existsSync(sentinel)).toBe(false)
+			}
+		} finally {
 			try {
 				rmSync(forbidden, { recursive: true, force: true })
 			} catch {}
-			const sentinel = join(forbidden, "x.txt")
-			try {
-				const out = await runSandboxed({
-					command: `/bin/sh -c 'mkdir -p "${forbidden}" && printf "BAD" > "${sentinel}"'`,
-				})
-				expect(existsSync(sentinel)).toBe(false)
-				if (out.exitCode === 0) {
-					expect(existsSync(sentinel)).toBe(false)
-				}
-			} finally {
-				try {
-					rmSync(forbidden, { recursive: true, force: true })
-				} catch {}
-			}
-		})
+		}
+	})
 
-		it("T5 CONSERVATION: write ~/.ssh/test -> REMAINS DENIED", async () => {
-			const probe = join(homedir(), ".ssh", `test-c1-${Date.now()}`)
-			try {
-				const out = await runSandboxed({
-					command: `/bin/sh -c 'printf "BAD" > "${probe}"'`,
-				})
-				expect(existsSync(probe)).toBe(false)
-				if (out.exitCode === 0) {
-					expect(existsSync(probe)).toBe(false)
-				}
-			} finally {
-				try {
-					rmSync(probe, { force: true })
-				} catch {}
-			}
-		})
-
-		it("T6 CONSERVATION: write /etc/cinemm-c1-forbidden -> REMAINS DENIED", async () => {
-			const probe = `/etc/clinemm-c1-forbidden-${Date.now()}`
+	it("T5 CONSERVATION: write ~/.ssh/test -> REMAINS DENIED", async () => {
+		const probe = join(homedir(), ".ssh", `test-c1-${Date.now()}`)
+		try {
 			const out = await runSandboxed({
 				command: `/bin/sh -c 'printf "BAD" > "${probe}"'`,
 			})
@@ -369,123 +349,138 @@ console.log('T3_OK:' + TMPDIR);
 			if (out.exitCode === 0) {
 				expect(existsSync(probe)).toBe(false)
 			}
+		} finally {
 			try {
 				rmSync(probe, { force: true })
 			} catch {}
-		})
+		}
+	})
 
-		it("T7 CONSERVATION: sibling path under canonical os.tmpdir() (outside capability tempRoot) -> REMAINS DENIED", async () => {
-			// Per-user temp authority is bounded to the capability's
-			// tempRoot, NOT to the whole os.tmpdir(). Pick a sibling
-			// path inside canonical os.tmpdir() that is NOT the
-			// capability's tempRoot — write to it MUST be denied.
-			//
-			// We seed the sibling file OUTSIDE the sandbox (no
-			// Seatbelt restrictions on the test harness), then
-			// attempt to overwrite it from inside the sandbox.
-			if (!canonicalTmpdir) {
-				expect(true).toBe(true)
-				return
-			}
-			const siblingPath = join(canonicalTmpdir, `clinemm-c1-sibling-${Date.now()}.txt`)
-			writeFileSync(siblingPath, "ORIGINAL_SIBLING\n", "utf8")
-			try {
-				const out = await runSandboxed({
-					command: `/bin/sh -c 'printf "OVERWRITTEN" > "${siblingPath}"'`,
-				})
-				// The sentinel content MUST NOT change. The original
-				// "ORIGINAL_SIBLING" string remains intact.
-				expect(existsSync(siblingPath)).toBe(true)
-				const { readFileSync } = await import("node:fs")
+	it("T6 CONSERVATION: write /etc/cinemm-c1-forbidden -> REMAINS DENIED", async () => {
+		const probe = `/etc/clinemm-c1-forbidden-${Date.now()}`
+		const out = await runSandboxed({
+			command: `/bin/sh -c 'printf "BAD" > "${probe}"'`,
+		})
+		expect(existsSync(probe)).toBe(false)
+		if (out.exitCode === 0) {
+			expect(existsSync(probe)).toBe(false)
+		}
+		try {
+			rmSync(probe, { force: true })
+		} catch {}
+	})
+
+	it("T7 CONSERVATION: sibling path under canonical os.tmpdir() (outside capability tempRoot) -> REMAINS DENIED", async () => {
+		// Per-user temp authority is bounded to the capability's
+		// tempRoot, NOT to the whole os.tmpdir(). Pick a sibling
+		// path inside canonical os.tmpdir() that is NOT the
+		// capability's tempRoot — write to it MUST be denied.
+		//
+		// We seed the sibling file OUTSIDE the sandbox (no
+		// Seatbelt restrictions on the test harness), then
+		// attempt to overwrite it from inside the sandbox.
+		if (!canonicalTmpdir) {
+			expect(true).toBe(true)
+			return
+		}
+		const siblingPath = join(canonicalTmpdir, `clinemm-c1-sibling-${Date.now()}.txt`)
+		writeFileSync(siblingPath, "ORIGINAL_SIBLING\n", "utf8")
+		try {
+			const out = await runSandboxed({
+				command: `/bin/sh -c 'printf "OVERWRITTEN" > "${siblingPath}"'`,
+			})
+			// The sentinel content MUST NOT change. The original
+			// "ORIGINAL_SIBLING" string remains intact.
+			expect(existsSync(siblingPath)).toBe(true)
+			const { readFileSync } = await import("node:fs")
+			expect(readFileSync(siblingPath, "utf8")).toBe("ORIGINAL_SIBLING\n")
+			if (out.exitCode === 0) {
+				// Belt-and-suspenders: if the sandboxed command
+				// somehow exited 0, the file MUST still be the
+				// original sibling content.
 				expect(readFileSync(siblingPath, "utf8")).toBe("ORIGINAL_SIBLING\n")
-				if (out.exitCode === 0) {
-					// Belt-and-suspenders: if the sandboxed command
-					// somehow exited 0, the file MUST still be the
-					// original sibling content.
-					expect(readFileSync(siblingPath, "utf8")).toBe("ORIGINAL_SIBLING\n")
-				}
-			} finally {
-				try {
-					rmSync(siblingPath, { force: true })
-				} catch {}
 			}
-		})
-
-		it("T8 CONSERVATION: workspace write -> REMAINS PASS (carried invariant)", async () => {
-			const wsRoot = mkdtempSync(join(tmpRoot!, "ws-"))
-			const sentinel = join(wsRoot, "sentinel.txt")
+		} finally {
 			try {
-				writeFileSync(sentinel, "WS_ORIGINAL\n", "utf8")
-				const manager = new CommandJobManager({
-					experimentalSandboxWorkspaceRoots: [wsRoot],
-				})
-				try {
-					const out = await withSandboxOptIn(SEATBELT_OPTIN, async () => {
-						const start = await manager.start({
-							command: `/bin/sh -c 'printf "OVERWRITTEN" > "${sentinel}"'`,
-							cwd: wsRoot,
-							waitBudgetMs: 5_000,
-							executionDeadlineMs: 5_000,
-						})
-						await start.terminalPromise
-						const statusResult = await manager.status({ jobId: start.jobId, waitMs: 0 })
-						if (!statusResult.ok) {
-							throw new Error(`status() returned code=${statusResult.code}`)
-						}
-						return statusResult.snapshot
+				rmSync(siblingPath, { force: true })
+			} catch {}
+		}
+	})
+
+	it("T8 CONSERVATION: workspace write -> REMAINS PASS (carried invariant)", async () => {
+		const wsRoot = mkdtempSync(join(tmpRoot!, "ws-"))
+		const sentinel = join(wsRoot, "sentinel.txt")
+		try {
+			writeFileSync(sentinel, "WS_ORIGINAL\n", "utf8")
+			const manager = new CommandJobManager({
+				experimentalSandboxWorkspaceRoots: [wsRoot],
+			})
+			try {
+				const out = await withSandboxOptIn(SEATBELT_OPTIN, async () => {
+					const start = await manager.start({
+						command: `/bin/sh -c 'printf "OVERWRITTEN" > "${sentinel}"'`,
+						cwd: wsRoot,
+						waitBudgetMs: 5_000,
+						executionDeadlineMs: 5_000,
 					})
-					expect(out.exitCode).toBe(0)
-					expect(existsSync(sentinel)).toBe(true)
-					const { readFileSync } = await import("node:fs")
-					expect(readFileSync(sentinel, "utf8")).toBe("OVERWRITTEN")
-				} finally {
-					await manager.dispose()
-				}
-			} finally {
-				try {
-					rmSync(wsRoot, { recursive: true, force: true })
-				} catch {}
-			}
-		})
-
-		it("T9 POLICY DOCUMENTATION: blast radius of explicit /tmp grant — overwrite an UNRELATED existing file under /private/tmp -> ALLOWED", async () => {
-			// The CORRECTED scope grants canonical /tmp as an
-			// explicit compatibility allowance. This means a
-			// sandboxed command CAN overwrite, delete, or rename
-			// ANY file under canonical /tmp subject to Unix DAC.
-			// This test DOCUMENTS that blast radius so the policy
-			// choice is explicit.
-			//
-			// We seed an unrelated file under /private/tmp (the
-			// canonical resolution of /tmp) with a marker value,
-			// then run a sandboxed command that overwrites it.
-			// The expectation is that the overwrite succeeds:
-			// the sandboxed command has (subpath "<canonical /tmp>")
-			// authority.
-			//
-			// If this test ever FAILS (Seatbelt denies the
-			// overwrite), it means the /tmp grant has been
-			// narrowed in some way and the policy documentation
-			// needs to be updated.
-			if (!canonicalTmp) {
-				expect(true).toBe(true)
-				return
-			}
-			const unrelatedPath = join(canonicalTmp, `clinemm-c1-unrelated-${Date.now()}.txt`)
-			writeFileSync(unrelatedPath, "UNRELATED_ORIGINAL\n", "utf8")
-			try {
-				const out = await runSandboxed({
-					command: `/bin/sh -c 'printf "OVERWRITTEN_BY_SANDBOX" > "${unrelatedPath}"'`,
+					await start.terminalPromise
+					const statusResult = await manager.status({ jobId: start.jobId, waitMs: 0 })
+					if (!statusResult.ok) {
+						throw new Error(`status() returned code=${statusResult.code}`)
+					}
+					return statusResult.snapshot
 				})
 				expect(out.exitCode).toBe(0)
-				expect(existsSync(unrelatedPath)).toBe(true)
+				expect(existsSync(sentinel)).toBe(true)
 				const { readFileSync } = await import("node:fs")
-				expect(readFileSync(unrelatedPath, "utf8")).toBe("OVERWRITTEN_BY_SANDBOX")
+				expect(readFileSync(sentinel, "utf8")).toBe("OVERWRITTEN")
 			} finally {
-				try {
-					rmSync(unrelatedPath, { force: true })
-				} catch {}
+				await manager.dispose()
 			}
-		})
-	},
-)
+		} finally {
+			try {
+				rmSync(wsRoot, { recursive: true, force: true })
+			} catch {}
+		}
+	})
+
+	it("T9 POLICY DOCUMENTATION: blast radius of explicit /tmp grant — overwrite an UNRELATED existing file under /private/tmp -> ALLOWED", async () => {
+		// The CORRECTED scope grants canonical /tmp as an
+		// explicit compatibility allowance. This means a
+		// sandboxed command CAN overwrite, delete, or rename
+		// ANY file under canonical /tmp subject to Unix DAC.
+		// This test DOCUMENTS that blast radius so the policy
+		// choice is explicit.
+		//
+		// We seed an unrelated file under /private/tmp (the
+		// canonical resolution of /tmp) with a marker value,
+		// then run a sandboxed command that overwrites it.
+		// The expectation is that the overwrite succeeds:
+		// the sandboxed command has (subpath "<canonical /tmp>")
+		// authority.
+		//
+		// If this test ever FAILS (Seatbelt denies the
+		// overwrite), it means the /tmp grant has been
+		// narrowed in some way and the policy documentation
+		// needs to be updated.
+		if (!canonicalTmp) {
+			expect(true).toBe(true)
+			return
+		}
+		const unrelatedPath = join(canonicalTmp, `clinemm-c1-unrelated-${Date.now()}.txt`)
+		writeFileSync(unrelatedPath, "UNRELATED_ORIGINAL\n", "utf8")
+		try {
+			const out = await runSandboxed({
+				command: `/bin/sh -c 'printf "OVERWRITTEN_BY_SANDBOX" > "${unrelatedPath}"'`,
+			})
+			expect(out.exitCode).toBe(0)
+			expect(existsSync(unrelatedPath)).toBe(true)
+			const { readFileSync } = await import("node:fs")
+			expect(readFileSync(unrelatedPath, "utf8")).toBe("OVERWRITTEN_BY_SANDBOX")
+		} finally {
+			try {
+				rmSync(unrelatedPath, { force: true })
+			} catch {}
+		}
+	})
+})

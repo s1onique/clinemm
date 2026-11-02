@@ -1,7 +1,12 @@
 import { Logger } from "@/shared/services/Logger"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
 
-export type SessionRebuildReason = "provider" | "mcpTools" | "terminalExecutionMode" | "sessionAutoApprovalOverride"
+export type SessionRebuildReason =
+	| "provider"
+	| "mcpTools"
+	| "terminalExecutionMode"
+	| "sessionAutoApprovalOverride"
+	| "checkpoints"
 
 /**
  * ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION:
@@ -39,11 +44,47 @@ export interface SdkSessionRebuildSchedulerOptions {
 	isDeferredCompletionOutstanding?: () => boolean
 }
 
-/** Serializes passive session rebuilds and drains them only while the session is idle. */
+/**
+ * A rebuild replaces the session, so it may only run between turns. Core
+ * drains its own prompt queue the moment a turn ends, so a session with
+ * queued prompts is about to run again: treat it as busy until Core has
+ * emptied the queue.
+ *
+ * ACT-CLINEMM-FORK-UPSTREAM-MERGE01: a session that does not REPORT a
+ * queued-prompt count is not evidence of a busy session. `undefined` must
+ * therefore be treated as "no queued prompts known" (idle), not as
+ * "queued count unknown" (busy) — otherwise every session whose
+ * `ActiveSession` predates the `queuedPromptCount` field (or whose host
+ * does not populate it) can NEVER be rebuilt, and the pending rebuild
+ * silently wedges forever.
+ */
+function isIdle(session: ReturnType<SdkSessionLifecycle["getActiveSession"]>): boolean {
+	if (session === undefined || session.isRunning) {
+		return false
+	}
+	return session.queuedPromptCount === undefined || session.queuedPromptCount === 0
+}
+
+export interface SessionRebuildContext {
+	/**
+	 * True until a newer request for the same reason arrives. A superseded
+	 * rebuild should stop before replacing the session, or leave work it has
+	 * not yet started to the newer rebuild, which runs next in the same drain.
+	 */
+	isCurrent: () => boolean
+}
+
+interface ScheduledRebuild {
+	run: (context: SessionRebuildContext) => Promise<void>
+	generation: number
+}
+
+/** Serializes passive session rebuilds and drains them only while the session is idle (see isIdle). */
 export class SdkSessionRebuildScheduler {
-	private readonly pending = new Map<SessionRebuildReason, () => Promise<void>>()
+	private readonly pending = new Map<SessionRebuildReason, ScheduledRebuild>()
 	private drainInFlight: Promise<void> | undefined
 	private deferredOutstandingPredicate: () => boolean
+	private readonly latestGeneration = new Map<SessionRebuildReason, number>()
 
 	constructor(private readonly options: SdkSessionRebuildSchedulerOptions) {
 		// Bind the predicate to a stable reference; `setIsDeferredCompletionOutstanding`
@@ -65,13 +106,35 @@ export class SdkSessionRebuildScheduler {
 		this.deferredOutstandingPredicate = predicate
 	}
 
-	request(reason: SessionRebuildReason, rebuild: () => Promise<void>): void {
-		this.pending.set(reason, rebuild)
+	/**
+	 * Queues a rebuild, replacing any queued rebuild for the same reason. A
+	 * rebuild for the same reason that is already running is superseded: its
+	 * context.isCurrent() turns false and this request runs after it.
+	 */
+	request(reason: SessionRebuildReason, run: (context: SessionRebuildContext) => Promise<void>): void {
+		const generation = (this.latestGeneration.get(reason) ?? 0) + 1
+		this.latestGeneration.set(reason, generation)
+		this.pending.set(reason, { run, generation })
 		this.drainIfIdle()
 	}
 
+	/**
+	 * Cancels a queued rebuild for the given reason.
+	 *
+	 * ACT-CLINEMM-SESSION-REBUILD-SCHEDULER-CANCEL01 (fork-owned behavior
+	 * that upstream removed): upstream folded cancellation into
+	 * `runTaskTransition` (which clears the whole pending map), but the
+	 * fork needs to drop a SINGLE reason — e.g. a terminal-execution-mode
+	 * change that is superseded by a newer request for the same reason,
+	 * where the newer request must still be delivered.
+	 *
+	 * Cancelling bumps the reason's generation so an in-flight rebuild for
+	 * the same reason observes `context.isCurrent() === false` and stops
+	 * before replacing the session.
+	 */
 	cancel(reason: SessionRebuildReason): void {
 		this.pending.delete(reason)
+		this.latestGeneration.set(reason, (this.latestGeneration.get(reason) ?? 0) + 1)
 	}
 
 	async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -92,6 +155,19 @@ export class SdkSessionRebuildScheduler {
 			}
 			this.drainIfIdle()
 		}
+	}
+
+	/**
+	 * Moves the displayed task at the session-rebuild consistency boundary.
+	 * Queued rebuilds belong to the outgoing session, so the transition drops
+	 * them before ending that session. Rebuilds requested during the transition
+	 * remain queued until the new task view is complete.
+	 */
+	async runTaskTransition<T>(operation: () => Promise<T>): Promise<T> {
+		return this.runExclusive(async () => {
+			this.pending.clear()
+			return operation()
+		})
 	}
 
 	sessionBecameIdle(): void {
@@ -133,8 +209,16 @@ export class SdkSessionRebuildScheduler {
 			this.pending.size === 0 ||
 			!activeSession ||
 			activeSession.isRunning ||
-			this.isDeferredCompletionOutstanding()
+			this.isDeferredCompletionOutstanding() ||
+			!isIdle(activeSession)
 		) {
+			return
+		}
+		// Cloud sessions run on the sandbox with its own tools/provider; local
+		// MCP, provider and terminal changes do not apply and must not rebuild
+		// the sandbox conversation into a local one.
+		if (activeSession.sdkHost && "isCloud" in activeSession.sdkHost) {
+			this.pending.clear()
 			return
 		}
 
@@ -146,7 +230,7 @@ export class SdkSessionRebuildScheduler {
 		// in-flight drain's snapshot). New entries whose reasons were not
 		// in the snapshot (e.g. different rebuild reasons arriving
 		// mid-drain) trigger a follow-on drain cycle.
-		const snapshot: Array<[SessionRebuildReason, () => Promise<void>]> = Array.from(this.pending.entries())
+		const snapshot: Array<[SessionRebuildReason, ScheduledRebuild]> = Array.from(this.pending.entries())
 		// Mark every snapshotted reason as in-flight (delete from
 		// `pending`) BEFORE any rebuild runs so a concurrent
 		// `request(reason)` re-queues a fresh entry instead of being
@@ -200,6 +284,27 @@ export class SdkSessionRebuildScheduler {
 					}
 					return
 				}
+				if (!isIdle(activeSession)) {
+					// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream added this
+					// branch WITHOUT the suffix requeue that the
+					// `isRunning` branch above performs. Returning here
+					// DROPS the unexecuted snapshot entries permanently —
+					// the `pending.delete(reason)` happened before the
+					// loop — so a session that became busy mid-drain
+					// silently loses its pending rebuilds and never
+					// rebuilds again.
+					//
+					// The fork's conservation invariant ("requeue
+					// unexecuted entries, not replay executed ones") applies
+					// to EVERY early-return branch, not just the isRunning
+					// one. Requeue the same suffix.
+					for (const [requeueReason, requeueRebuild] of snapshot.slice(currentIndex)) {
+						if (!this.pending.has(requeueReason)) {
+							this.pending.set(requeueReason, requeueRebuild)
+						}
+					}
+					return
+				}
 				if (this.isDeferredCompletionOutstanding()) {
 					// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION04-P1-CONSERVATION-SUFFIX:
 					// Hold the rebuild until the deferred obligation
@@ -216,7 +321,7 @@ export class SdkSessionRebuildScheduler {
 				}
 
 				try {
-					await rebuild()
+					await rebuild.run({ isCurrent: () => rebuild.generation === this.latestGeneration.get(reason) })
 				} catch (error) {
 					Logger.error(`[SdkController] Failed scheduled ${reason} session rebuild:`, error)
 				}

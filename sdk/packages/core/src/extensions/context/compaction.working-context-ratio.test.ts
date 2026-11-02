@@ -163,6 +163,26 @@ async function drivePrepareTurn(
 	const prepareTurn = createCompactionStateAwarePrepareTurn({
 		compact,
 		getState: sessionState.getState,
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream made
+		// `prepareApiMessages` a REQUIRED input of
+		// `createCompactionStateAwarePrepareTurn`. It is the runtime's
+		// provider-request transform (the extension message builders +
+		// `MessageBuilder.buildForApi`) — i.e. what produced
+		// `context.apiMessages` from `context.messages`. Re-compaction
+		// swaps in a projected transcript and must estimate against its
+		// API-safe form, not the raw projection.
+		//
+		// This harness measures the SAME thing the production host does
+		// (`local-runtime-host.ts` calls
+		// `agent.prepareProviderMessagesForApi(messages)`), so the
+		// harness uses the same `MessageBuilder` transform. Before the
+		// upstream change the input was optional and the test harness
+		// omitted it, so the re-compaction branch threw
+		// `input.prepareApiMessages is not a function`.
+		prepareApiMessages: async (messages) => {
+			const builder = new MessageBuilder();
+			return builder.buildForApi(messages);
+		},
 		saveState: sessionState.saveState,
 	});
 	return await prepareTurn({

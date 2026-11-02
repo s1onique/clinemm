@@ -23,13 +23,27 @@ export type {
 	RemoteOptions,
 } from "./cline-core/types";
 export type {
+	AgentPluginPackageDiagnostic,
+	AgentPluginPackageDiagnosticScope,
+	AgentPluginPackageLoadReport,
+	AgentPluginPackageManifest,
+	AgentPluginPackageMcpServer,
+	AgentPluginPackageSkill,
+	AgentSkillMetadata,
 	LoadAgentPluginFromPathOptions,
+	LoadAgentPluginPackagesOptions,
+	LoadedAgentPluginPackage,
+	ParsedAgentSkill,
 	ResolveAgentPluginPathsOptions,
 } from "./extensions";
 export {
+	AGENT_PLUGINS_V1_MANIFEST_SCHEMA,
+	AGENT_PLUGINS_V1_MCP_SCHEMA,
 	discoverPluginModulePaths,
 	loadAgentPluginFromPath,
+	loadAgentPluginPackages,
 	loadAgentPluginsFromPaths,
+	parseAgentSkillMarkdown,
 	resolveAgentPluginPaths,
 	resolveAndLoadAgentPlugins,
 	resolvePluginConfigSearchPaths,
@@ -57,6 +71,7 @@ export type {
 	WorkflowConfig,
 } from "./extensions/config";
 export {
+	combineUserInstructionConfigServices,
 	createRulesConfigDefinition,
 	createSkillsConfigDefinition,
 	createUserInstructionConfigService,
@@ -114,6 +129,8 @@ export type {
 	SubprocessSandboxOptions,
 } from "./runtime/tools/subprocess-sandbox";
 export { SubprocessSandbox } from "./runtime/tools/subprocess-sandbox";
+export type { WorkerSandboxOptions } from "./runtime/tools/worker-sandbox";
+export { WorkerSandbox } from "./runtime/tools/worker-sandbox";
 export {
 	FeatureFlagsService,
 	type FeatureFlagsServiceOptions,
@@ -130,6 +147,7 @@ export {
 	filterDisabledTools,
 	filterExtensionToolRegistrations,
 	GlobalSettingsSchema,
+	isAgentPluginDisabledGlobally,
 	isAutoUpdateEnabledGlobally,
 	isModelToolEnabledGlobally,
 	isPluginDisabledGlobally,
@@ -140,12 +158,14 @@ export {
 	readGlobalSettings,
 	readPlanActModeGlobally,
 	readToolAutoApproveGlobally,
+	resolveDisabledAgentPluginNames,
 	resolveDisabledPluginPaths,
 	resolveDisabledToolNames,
 	resolveModelToolSettings,
 	setAutoUpdateEnabledGlobally,
 	setCompactionModeGlobally,
 	setCompactionStrategyGlobally,
+	setDisabledAgentPlugin,
 	setDisabledPlugin,
 	setDisabledTools,
 	setModelToolEnabledGlobally,

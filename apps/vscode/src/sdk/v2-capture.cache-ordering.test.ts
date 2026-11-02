@@ -37,14 +37,11 @@
  * is the correct runner for these RED/control cases.
  */
 
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import {
-	__resetAutoV2CapturePathForTests,
-	configureDogfoodCaptureStorage,
-} from "./dogfood-runtime-capture-path"
+import { __resetAutoV2CapturePathForTests, configureDogfoodCaptureStorage } from "./dogfood-runtime-capture-path"
 import {
 	__resetV2CaptureForTests,
 	emitCaptureAttach,

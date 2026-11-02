@@ -8,11 +8,12 @@
  * consumes the previous case's output (where appropriate) so the
  * chain is end-to-end.
  */
+
+import { commandHostAuthorization } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
-import { evaluateCommandToolApproval, evaluateCommandToolApprovalWithPlan } from "../sdk-tool-policies"
-import { commandHostAuthorization } from "@cline/core"
 import { buildExperimentalReconCapability } from "../sandbox-policy"
+import { evaluateCommandToolApproval, evaluateCommandToolApprovalWithPlan } from "../sdk-tool-policies"
 
 const R5_CATASTROPHIC = 'rm -rf "$HOME"'
 const R5_INPUT = { command: R5_CATASTROPHIC, requires_approval: false }
@@ -30,7 +31,7 @@ vi.mock("@cline/core", async () => {
 		spawnSupervisableShellCommand: () => {
 			supervisorCallCount++
 			throw new Error(
-				"HOST_SHELL_FALLBACK_INVOKED: CommandJobManager.start() reached spawnSupervisableShellCommand; the executor must refuse this path when mandatorySeatbeltExecution is true."
+				"HOST_SHELL_FALLBACK_INVOKED: CommandJobManager.start() reached spawnSupervisableShellCommand; the executor must refuse this path when mandatorySeatbeltExecution is true.",
 			)
 		},
 	}
@@ -116,8 +117,12 @@ describe("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 C1 - T3 NO-FALL
 
 			const throwingBackend = {
 				id: "test-throwing-mandatory-seatbelt",
-				async isAvailable() { return true },
-				async prepare(): Promise<never> { throw new Error("profile-generation forced failure") },
+				async isAvailable() {
+					return true
+				},
+				async prepare(): Promise<never> {
+					throw new Error("profile-generation forced failure")
+				},
 			}
 
 			const manager = new CommandJobManager({

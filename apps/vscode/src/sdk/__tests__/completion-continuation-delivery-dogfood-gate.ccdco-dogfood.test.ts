@@ -74,6 +74,7 @@ function makeSession(opts: { sessionId: string }): {
 		sdkHost: sdkHost as unknown as ActiveSession["sdkHost"],
 		unsubscribe: () => undefined,
 		startResult: undefined,
+		queuedPromptCount: 0,
 		isRunning: false,
 	}
 	return { session, sdkHostSendCalls, sdkHost }

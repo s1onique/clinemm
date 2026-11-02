@@ -9,16 +9,16 @@
  * Mirrors `task-header-elm-loader-discriminator.test.ts`.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { join } from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	COMPLETION_CONTINUATION_CONTROL_ELM_RUNTIME_ASSET_ID,
 	ensureElmKernelEvaluated,
 	getCompletionContinuationControlElmKernelDiagnostic,
 	loadCompiledElmKernel,
-	resolveProductionKernelPath,
 	resetElmKernelForTests,
+	resolveProductionKernelPath,
 	setCompletionContinuationControlElmProductionKernelPath,
-	COMPLETION_CONTINUATION_CONTROL_ELM_RUNTIME_ASSET_ID,
 } from "../completion-continuation-control-elm"
 
 describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C27/C11 loader", () => {
@@ -79,9 +79,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C27/
 	})
 
 	it("GREEN: COMPLETION_CONTINUATION_CONTROL_ELM_RUNTIME_ASSET_ID is the canonical VSIX path", () => {
-		expect(COMPLETION_CONTINUATION_CONTROL_ELM_RUNTIME_ASSET_ID).toBe(
-			"runtime-assets/completion-continuation-control.js",
-		)
+		expect(COMPLETION_CONTINUATION_CONTROL_ELM_RUNTIME_ASSET_ID).toBe("runtime-assets/completion-continuation-control.js")
 	})
 
 	it("integration: installed runtime path (mirrors TaskHeader activation wiring)", () => {

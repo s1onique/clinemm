@@ -31,13 +31,8 @@
  * and proves the captured capability reverts to env-only behaviour.
  */
 
+import type { CommandCapability, CommandInvocation, SandboxBackend, SandboxPreparedInvocation } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type {
-	CommandCapability,
-	CommandInvocation,
-	SandboxBackend,
-	SandboxPreparedInvocation,
-} from "@cline/core"
 import { CommandJobManager } from "./command-job-manager"
 
 interface Captured {
@@ -51,10 +46,7 @@ function makeCaptureBackend(): SandboxBackend & { __capture: Captured } {
 		async isAvailable() {
 			return true
 		},
-		async prepare(input: {
-			capability: CommandCapability
-			command: CommandInvocation
-		}): Promise<SandboxPreparedInvocation> {
+		async prepare(input: { capability: CommandCapability; command: CommandInvocation }): Promise<SandboxPreparedInvocation> {
 			captured.cap = input.capability
 			return {
 				executable: "/usr/bin/sandbox-exec",
@@ -86,10 +78,12 @@ afterEach(() => {
 	delete process.env.CLINEMM_SAFE_YOLO_SSH_AGENT
 })
 
-async function captureCapabilityFrom(source: () => {
-	readonly network: boolean | undefined
-	readonly sshAgent: boolean | undefined
-}): Promise<CommandCapability> {
+async function captureCapabilityFrom(
+	source: () => {
+		readonly network: boolean | undefined
+		readonly sshAgent: boolean | undefined
+	},
+): Promise<CommandCapability> {
 	const backend = makeCaptureBackend()
 	const manager = new CommandJobManager({
 		sandboxBackendResolver: async () => backend,
@@ -133,9 +127,7 @@ async function captureCapabilityWithoutSource(): Promise<CommandCapability> {
  * (e.g. command-job-manager.ts) read the field.
  */
 type CapabilityWithSshAuth = CommandCapability & {
-	readonly sshAuthenticationAuthority?:
-		| { readonly mode: "agent" }
-		| undefined
+	readonly sshAuthenticationAuthority?: { readonly mode: "agent" } | undefined
 }
 
 describe("ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01-CORRECTION01 — production composition", () => {

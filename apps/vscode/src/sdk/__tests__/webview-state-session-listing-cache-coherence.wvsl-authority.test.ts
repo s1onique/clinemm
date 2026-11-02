@@ -80,16 +80,13 @@
  * Success → repair sufficient.
  */
 
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test"
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-
+import type { CoreSessionEvent, SessionHistoryRecord } from "@cline/core"
 import type { McpHub } from "@/services/mcp/McpHub"
 import type { TelemetryService } from "@/services/telemetry/TelemetryService"
-
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test"
-
-import type { CoreSessionEvent, SessionHistoryRecord } from "@cline/core"
 import type { SdkSessionLifecycle } from "../sdk-session-lifecycle"
 import { SdkTaskHistory } from "../sdk-task-history"
 import type { VscodeSessionHost } from "../vscode-session-host"

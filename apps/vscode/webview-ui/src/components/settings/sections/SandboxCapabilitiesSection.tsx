@@ -61,14 +61,7 @@ const SandboxRow = memo(({ checked, onChange, label, description }: SandboxCapab
 	<div className="flex flex-col items-start justify-between gap-1 py-3 w-full">
 		<div className="flex w-full items-center justify-between gap-3">
 			<span className="text-sm text-foreground font-medium">{label}</span>
-			<Switch
-				aria-label={label}
-				checked={checked}
-				className="shrink-0"
-				id={label}
-				onCheckedChange={onChange}
-				size="lg"
-			/>
+			<Switch aria-label={label} checked={checked} className="shrink-0" id={label} onCheckedChange={onChange} size="lg" />
 		</div>
 		<div className="text-xs text-description pr-10">{description}</div>
 	</div>
@@ -79,58 +72,44 @@ interface SandboxCapabilitiesSectionProps {
 }
 
 const SandboxCapabilitiesSection = ({ renderSectionHeader }: SandboxCapabilitiesSectionProps) => {
-	const {
-		clinemmSafeYoloAllowNetwork,
-		clinemmSafeYoloAllowSshAgent,
-	} = useExtensionState()
+	const { clinemmSafeYoloAllowNetwork, clinemmSafeYoloAllowSshAgent } = useExtensionState()
 
 	return (
 		<div>
 			{renderSectionHeader("sandbox")}
 			<Section>
-				<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">
-					Sandbox
-				</div>
+				<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">Sandbox</div>
 				<div className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50">
 					<p className="text-sm text-muted-foreground pt-3 pb-2">
-						ClineMM runs commands through the Seatbelt sandbox on macOS. The
-						settings below opt into narrowly scoped host capabilities. Each
-						toggle is independent: enabling one does not enable the others.
-						These settings overwrite the corresponding
-						CLINEMM_SAFE_YOLO_* environment variables when persisted.
+						ClineMM runs commands through the Seatbelt sandbox on macOS. The settings below opt into narrowly scoped
+						host capabilities. Each toggle is independent: enabling one does not enable the others. These settings
+						overwrite the corresponding CLINEMM_SAFE_YOLO_* environment variables when persisted.
 					</p>
 
 					<SandboxRow
 						checked={!!clinemmSafeYoloAllowNetwork}
 						description={
 							<>
-								Permits sandboxed commands to make outbound network connections.
-								Without this, the sandbox blocks all network egress. Enabling
-								this activates the network-open credential read guard (the
-								dangerous capability triggers the curated deny list).
+								Permits sandboxed commands to make outbound network connections. Without this, the sandbox blocks
+								all network egress. Enabling this activates the network-open credential read guard (the dangerous
+								capability triggers the curated deny list).
 							</>
 						}
 						label="Allow outbound network"
-						onChange={(next) =>
-							updateSetting("clinemmSafeYoloAllowNetwork", next)
-						}
+						onChange={(next) => updateSetting("clinemmSafeYoloAllowNetwork", next)}
 					/>
 
 					<SandboxRow
 						checked={!!clinemmSafeYoloAllowSshAgent}
 						description={
 							<>
-								Reintroduces the <code>SSH_AUTH_SOCK</code> socket into
-								sandboxed commands so they can talk to your ssh-agent. Raw
-								SSH private keys (e.g. <code>~/.ssh/id_rsa</code>) remain
-								unreadable; only the agent socket is granted AF_UNIX connect
-								authority.
+								Reintroduces the <code>SSH_AUTH_SOCK</code> socket into sandboxed commands so they can talk to
+								your ssh-agent. Raw SSH private keys (e.g. <code>~/.ssh/id_rsa</code>) remain unreadable; only the
+								agent socket is granted AF_UNIX connect authority.
 							</>
 						}
 						label="Allow SSH agent authentication"
-						onChange={(next) =>
-							updateSetting("clinemmSafeYoloAllowSshAgent", next)
-						}
+						onChange={(next) => updateSetting("clinemmSafeYoloAllowSshAgent", next)}
 					/>
 				</div>
 			</Section>

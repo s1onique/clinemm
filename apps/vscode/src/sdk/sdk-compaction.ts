@@ -16,8 +16,8 @@ import {
 	createSessionCompactionState,
 	type SessionCompactionState,
 } from "@cline/core"
-import { estimateRequestInputTokens } from "@cline/shared"
 import type { Message as SdkMessage, ModelInfo as SdkModelInfo } from "@cline/llms"
+import { estimateRequestInputTokens } from "@cline/shared"
 import { Logger } from "@/shared/services/Logger"
 
 // When the active model does not declare a context window, fall back to a

@@ -216,170 +216,196 @@ export class SdkTaskStartCoordinator {
 			// bound to it AFTER the id is allocated below — by the same
 			// authority that allocated it, never by timestamp proximity.
 			let modelBehaviorConfigSnapshot: ModelBehaviorTraceConfigSnapshot | undefined
-			const config = await this.options.sessionConfigBuilder.build({
-				prompt,
-				images,
-				files,
-				historyItem,
-				taskSettings,
-				cwd,
-				mode,
-				// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
-				// CAI-01B production seam — peek the armed override so the
-				// capability derivation at buildSessionConfig sees the user's
-				// "ALL — this task" intent. The intent will be consumed by
-				// `consumePendingOverride(sessionId)` at session-id allocation,
-				// which happens later in `startNewSession`.
-				sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(),
-				...(providerInstanceTyped ? { providerConfigurationInstanceTyped: providerInstanceTyped } : {}),
-				onModelBehaviorConfigSnapshot: (snapshot: ModelBehaviorTraceConfigSnapshot) => {
-					modelBehaviorConfigSnapshot = snapshot
-				},
-			})
-			providerId = config.providerId
-			modelId = config.modelId
-
-			Logger.log(
-				`[SdkController] Session config: provider=${config.providerId}, model=${config.modelId}, hasApiKey=${!!config.apiKey}`,
-			)
-
-			if (usesClineAccountAuth(config.providerId) && !config.apiKey) {
-				Logger.warn(
-					`[SdkController] ${config.providerId} provider selected but no Cline auth token — emitting auth error`,
-				)
-				// No task/session id exists yet, so this preflight auth UI path is
-				// intentionally not recorded as task-joinable provider error telemetry.
-				this.options.emitClineAuthError(prompt)
-				return undefined
-			}
-
-			taskSessionId = config.sessionId?.trim() || createSessionId()
-			// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4):
-			// bind the build-time configuration snapshot to the session id that
-			// was JUST allocated.
-			//
-			// This is the identity assertion the ACT requires: the authority
-			// that allocated the session id is the same authority that binds
-			// the configuration to it. No timestamp proximity is involved.
-			if (modelBehaviorConfigSnapshot !== undefined) {
-				bindModelBehaviorTraceConfigToSession(taskSessionId, modelBehaviorConfigSnapshot, {
-					providerId: config.providerId,
-					modelId: config.modelId,
+			// Tracked from the mode read until the first prompt is sent, so a mode
+			// toggle in between waits for this session instead of missing it.
+			return await this.options.sessions.trackSessionStart(async () => {
+				// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the merge produced TWO
+				// `sessionConfigBuilder.build(...)` calls inside `initTask` —
+				// the upstream-augmented one (which carries
+				// `sessionAutoApprovalOverride`,
+				// `providerConfigurationInstanceTyped` and the model-behavior
+				// snapshot callback) and the fork's original one.
+				//
+				// The second call SHADOWED the first `config`, which silently
+				// discarded the upstream-augmented fields and — because the
+				// builder allocates the session id — could allocate a
+				// DIFFERENT session id than the one the caller observed.
+				// The task-control liveness witness TCL-PARENT-ADVERSARIAL01-B
+				// caught this: the second init consumed the next mocked
+				// builder result, so the superseded init installed its own
+				// TaskProxy.
+				//
+				// The two calls are now ONE: the upstream-augmented build is
+				// the single authority for the session config. It stays
+				// INSIDE the tracked session start so the mode-toggle window
+				// ("tracked from the mode read until the first prompt is
+				// sent") still covers the config build.
+				const config = await this.options.sessionConfigBuilder.build({
+					prompt,
+					images,
+					files,
+					historyItem,
+					taskSettings,
+					cwd,
+					mode,
+					// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+					// CAI-01B production seam — peek the armed override so the
+					// capability derivation at buildSessionConfig sees the user's
+					// "ALL — this task" intent. The intent will be consumed by
+					// `consumePendingOverride(sessionId)` at session-id allocation,
+					// which happens later in `startNewSession`.
+					sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(),
+					...(providerInstanceTyped ? { providerConfigurationInstanceTyped: providerInstanceTyped } : {}),
+					onModelBehaviorConfigSnapshot: (snapshot: ModelBehaviorTraceConfigSnapshot) => {
+						modelBehaviorConfigSnapshot = snapshot
+					},
 				})
-			}
-			const configWithSessionId = {
-				...config,
-				sessionId: taskSessionId,
-			}
+				providerId = config.providerId
+				modelId = config.modelId
 
-			const startInput = this.options.buildStartSessionInput(configWithSessionId, {
-				prompt: prompt,
-				images,
-				files,
-				historyItem,
-				taskSettings,
-				cwd,
-				mode,
+				Logger.log(
+					`[SdkController] Session config: provider=${config.providerId}, model=${config.modelId}, hasApiKey=${!!config.apiKey}`,
+				)
+
+				taskSessionId = config.sessionId?.trim() || createSessionId()
+				// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4):
+				// bind the build-time configuration snapshot to the session id that
+				// was JUST allocated.
+				//
+				// This is the identity assertion the ACT requires: the authority
+				// that allocated the session id is the same authority that binds
+				// the configuration to it. No timestamp proximity is involved.
+				if (modelBehaviorConfigSnapshot !== undefined) {
+					bindModelBehaviorTraceConfigToSession(taskSessionId, modelBehaviorConfigSnapshot, {
+						providerId: config.providerId,
+						modelId: config.modelId,
+					})
+				}
+				// Upstream: preflight the Cline-account auth BEFORE any session id
+				// is allocated. No task/session id exists yet, so this preflight
+				// auth UI path is intentionally not recorded as task-joinable
+				// provider error telemetry.
+				if (usesClineAccountAuth(config.providerId) && !config.apiKey) {
+					Logger.warn(
+						`[SdkController] ${config.providerId} provider selected but no Cline auth token — emitting auth error`,
+					)
+					this.options.emitClineAuthError(prompt)
+					return undefined
+				}
+
+				const configWithSessionId = {
+					...config,
+					sessionId: taskSessionId,
+				}
+
+				const startInput = this.options.buildStartSessionInput(configWithSessionId, {
+					prompt: prompt,
+					images,
+					files,
+					historyItem,
+					taskSettings,
+					cwd,
+					mode,
+				})
+
+				// FENCE: refuse to install TaskProxy B if a newer intent has
+				// superseded this operation while we awaited config/build.
+				if (!isCurrent()) {
+					Logger.debug(
+						`[SdkController] initTask: abandoning before createAndSetTask; operationToken=${operationToken} superseded`,
+					)
+					return undefined
+				}
+
+				const task = this.createAndSetTask(taskSessionId)
+				this.emitInitialTaskMessage(taskSessionId, prompt ?? "", images, files)
+
+				// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION01: ship a state
+				// post so the webview sees the initial task message immediately
+				// while `startNewSession` resolves in parallel below. The
+				// authoritative `streaming` turn-phase is asserted right after
+				// `startNewSession` returns (below) — not here, because at
+				// THIS point the previous task's `clearTask()` has already
+				// stamped `idle`, and posting here would just confirm that
+				// idle state. Posting here is still useful to seed the
+				// task message into the webview's transcript; the phase is
+				// pinned on the next post, once the session is running.
+				this.options.postStateToWebview().catch((error) => {
+					Logger.error("[SdkController] Failed to post state after emitting initial task message:", error)
+				})
+
+				const startResultEnvelope = await this.options.sessions.startNewSession(startInput, operationToken)
+
+				// FENCE: this is the load-bearing check. If a newer intent
+				// advanced the fence while host.start awaited, the lifecycle
+				// has already disposed the just-started session and returned
+				// "superseded". We MUST NOT call setTurnPhase, MUST NOT
+				// install TaskProxy (already installed above; the newer
+				// intent owns it now), MUST NOT fireAndForgetSend. Critically:
+				// we MUST NOT call setTask(undefined) — that would erase the
+				// newer TaskProxy installed by the superseding operation.
+				if (startResultEnvelope.status === "superseded") {
+					Logger.debug(
+						`[SdkController] initTask: post-start supersession; abandoning without mutating shared state; operationToken=${operationToken}`,
+					)
+					// Clean up only resources this operation uniquely owns.
+					// Do NOT touch shared task/session state — the superseding
+					// operation is the new authority.
+					return undefined
+				}
+				const { startResult, sdkHost } = startResultEnvelope
+				if (startResult.sessionId !== taskSessionId) {
+					Logger.warn(
+						`[SdkController] SDK returned session id ${startResult.sessionId} after requested id ${taskSessionId}`,
+					)
+					task.taskId = startResult.sessionId
+					taskSessionId = startResult.sessionId
+				}
+
+				// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION03: this is the
+				// CANONICAL authority for the new-task → streaming transition.
+				// Sole writer — `SdkController.initTask` no longer re-asserts
+				// streaming after this returns. Asserting it HERE (after the
+				// inner `clearTask()` ran and after `startNewSession`
+				// resolves) guarantees:
+				//
+				//   1. The header's streaming indicator reaches the webview
+				//      AFTER the seed post — the initial task message lands
+				//      first, then the phase flips to streaming.
+				//   2. The new session is actually running before we claim
+				//      "streaming" — the deferred-promise test in
+				//      `sdk-task-start-coordinator.test.ts` pins this by
+				//      blocking `startNewSession` on a manual resolver and
+				//      asserting `setTurnPhase` is NOT called until the
+				//      session promise resolves.
+				//   3. One logical new-task lifecycle produces exactly ONE
+				//      streaming transition. Nothing else writes it.
+				//   4. The setTurnPhase option is REQUIRED (not optional) —
+				//      see `SdkTaskStartCoordinatorOptions.setTurnPhase`.
+				//      TypeScript enforces that every constructor supplies
+				//      the authority.
+				//   5. A subsequent `postStateToWebview()` follows below so
+				//      the webview observes the streaming phase. The order
+				//      is asserted by CORRECTION03-1.
+				this.options.setTurnPhase("streaming", undefined, "task-start-init-task")
+
+				const newHistoryItem = this.options.createHistoryItemFromSession(
+					taskSessionId,
+					prompt ?? "",
+					configWithSessionId.modelId,
+					cwd,
+				)
+				await this.options.taskHistory.updateTaskHistoryItem(newHistoryItem)
+				await this.options.postStateToWebview()
+				if (prompt?.trim() || images?.length || files?.length) {
+					Logger.log(`[SdkController] Sending prompt to session: ${taskSessionId}`)
+					const resolvedTask = await this.options.resolveContextMentions(prompt || "")
+					this.options.sessions.fireAndForgetSend(sdkHost, taskSessionId, resolvedTask, images, files)
+				}
+
+				Logger.log(`[SdkController] Task initialized: ${taskSessionId}`)
+				return taskSessionId
 			})
-
-			// FENCE: refuse to install TaskProxy B if a newer intent has
-			// superseded this operation while we awaited config/build.
-			if (!isCurrent()) {
-				Logger.debug(
-					`[SdkController] initTask: abandoning before createAndSetTask; operationToken=${operationToken} superseded`,
-				)
-				return undefined
-			}
-
-			const task = this.createAndSetTask(taskSessionId)
-			this.emitInitialTaskMessage(taskSessionId, prompt ?? "", images, files)
-
-			// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION01: ship a state
-			// post so the webview sees the initial task message immediately
-			// while `startNewSession` resolves in parallel below. The
-			// authoritative `streaming` turn-phase is asserted right after
-			// `startNewSession` returns (below) — not here, because at
-			// THIS point the previous task's `clearTask()` has already
-			// stamped `idle`, and posting here would just confirm that
-			// idle state. Posting here is still useful to seed the
-			// task message into the webview's transcript; the phase is
-			// pinned on the next post, once the session is running.
-			this.options.postStateToWebview().catch((error) => {
-				Logger.error("[SdkController] Failed to post state after emitting initial task message:", error)
-			})
-
-			const startResultEnvelope = await this.options.sessions.startNewSession(startInput, operationToken)
-
-			// FENCE: this is the load-bearing check. If a newer intent
-			// advanced the fence while host.start awaited, the lifecycle
-			// has already disposed the just-started session and returned
-			// "superseded". We MUST NOT call setTurnPhase, MUST NOT
-			// install TaskProxy (already installed above; the newer
-			// intent owns it now), MUST NOT fireAndForgetSend. Critically:
-			// we MUST NOT call setTask(undefined) — that would erase the
-			// newer TaskProxy installed by the superseding operation.
-			if (startResultEnvelope.status === "superseded") {
-				Logger.debug(
-					`[SdkController] initTask: post-start supersession; abandoning without mutating shared state; operationToken=${operationToken}`,
-				)
-				// Clean up only resources this operation uniquely owns.
-				// Do NOT touch shared task/session state — the superseding
-				// operation is the new authority.
-				return undefined
-			}
-			const { startResult, sdkHost } = startResultEnvelope
-			if (startResult.sessionId !== taskSessionId) {
-				Logger.warn(
-					`[SdkController] SDK returned session id ${startResult.sessionId} after requested id ${taskSessionId}`,
-				)
-				task.taskId = startResult.sessionId
-				taskSessionId = startResult.sessionId
-			}
-
-			// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION03: this is the
-			// CANONICAL authority for the new-task → streaming transition.
-			// Sole writer — `SdkController.initTask` no longer re-asserts
-			// streaming after this returns. Asserting it HERE (after the
-			// inner `clearTask()` ran and after `startNewSession`
-			// resolves) guarantees:
-			//
-			//   1. The header's streaming indicator reaches the webview
-			//      AFTER the seed post — the initial task message lands
-			//      first, then the phase flips to streaming.
-			//   2. The new session is actually running before we claim
-			//      "streaming" — the deferred-promise test in
-			//      `sdk-task-start-coordinator.test.ts` pins this by
-			//      blocking `startNewSession` on a manual resolver and
-			//      asserting `setTurnPhase` is NOT called until the
-			//      session promise resolves.
-			//   3. One logical new-task lifecycle produces exactly ONE
-			//      streaming transition. Nothing else writes it.
-			//   4. The setTurnPhase option is REQUIRED (not optional) —
-			//      see `SdkTaskStartCoordinatorOptions.setTurnPhase`.
-			//      TypeScript enforces that every constructor supplies
-			//      the authority.
-			//   5. A subsequent `postStateToWebview()` follows below so
-			//      the webview observes the streaming phase. The order
-			//      is asserted by CORRECTION03-1.
-			this.options.setTurnPhase("streaming", undefined, "task-start-init-task")
-
-			const newHistoryItem = this.options.createHistoryItemFromSession(
-				taskSessionId,
-				prompt ?? "",
-				configWithSessionId.modelId,
-				cwd,
-			)
-			await this.options.taskHistory.updateTaskHistoryItem(newHistoryItem)
-			await this.options.postStateToWebview()
-
-			if (prompt?.trim() || images?.length || files?.length) {
-				Logger.log(`[SdkController] Sending prompt to session: ${taskSessionId}`)
-				const resolvedTask = await this.options.resolveContextMentions(prompt || "")
-				this.options.sessions.fireAndForgetSend(sdkHost, taskSessionId, resolvedTask, images, files)
-			}
-
-			Logger.log(`[SdkController] Task initialized: ${taskSessionId}`)
-			return taskSessionId
 		} catch (error) {
 			this.options.captureProviderApiError?.({
 				sessionId: taskSessionId,

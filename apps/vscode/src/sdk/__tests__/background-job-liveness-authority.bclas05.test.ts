@@ -25,14 +25,14 @@
 
 import type { SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { CommandJobLifecycleEvent } from "../command-job-manager"
-import { CommandJobManager } from "../command-job-manager"
 import {
 	clearBackgroundJobLivenessAuthorityCaptureRecords,
 	getBackgroundJobLivenessAuthorityCaptureRecords,
 	setBackgroundJobLivenessAuthorityCaptureBufferSize,
 	setBackgroundJobLivenessAuthorityCaptureEnabled,
 } from "../background-job-liveness-authority"
+import type { CommandJobLifecycleEvent } from "../command-job-manager"
+import { CommandJobManager } from "../command-job-manager"
 
 const originalSandbox = process.env.CLINEMM_EXPERIMENTAL_SANDBOX
 beforeEach(() => {

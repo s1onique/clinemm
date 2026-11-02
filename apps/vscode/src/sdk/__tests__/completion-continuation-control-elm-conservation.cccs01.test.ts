@@ -19,11 +19,11 @@
  *                                  not a Role.
  */
 
-import { describe, expect, it, beforeEach } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import {
+	type CompletionContinuationControlFactsInput,
 	pickContinuationDirectiveForPublication,
 	resetCompletionContinuationControlElmAuthorityForTests,
-	type CompletionContinuationControlFactsInput,
 } from "../completion-continuation-control-elm"
 
 describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/C18/C19/C20 conservation", () => {
@@ -39,7 +39,8 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const d = await pickContinuationDirectiveForPublication({
 				unconsumedCount: 2,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				priorHeldSetSorted: ["j1", "j2"], currentHeldSetSorted: ["j1", "j2"],
+				priorHeldSetSorted: ["j1", "j2"],
+				currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -54,7 +55,8 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const d = await pickContinuationDirectiveForPublication({
 				unconsumedCount: 2,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				priorHeldSetSorted: ["j1", "j2"], currentHeldSetSorted: ["j1", "j2"],
+				priorHeldSetSorted: ["j1", "j2"],
+				currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: false,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -79,7 +81,8 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const baseFacts: CompletionContinuationControlFactsInput = {
 				unconsumedCount: 1,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
+				priorHeldSetSorted: undefined,
+				currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -103,7 +106,8 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const d = await pickContinuationDirectiveForPublication({
 				unconsumedCount: 1,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
+				priorHeldSetSorted: undefined,
+				currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,
@@ -126,7 +130,8 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C17/
 			const d = await pickContinuationDirectiveForPublication({
 				unconsumedCount: 1,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
+				priorHeldSetSorted: undefined,
+				currentHeldSetSorted: ["j1", "j2"],
 				sessionMatches: true,
 				taskMatches: true,
 				alreadyCommitted: false,

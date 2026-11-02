@@ -52,11 +52,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { StateManager } from "@/core/storage/StateManager"
 import { __resetPrimeInjectionStateForTests, buildAgentHooks } from "@/sdk/hooks-adapter"
-import {
-	__resetMycPrimeResultsForTests,
-	getMycPrimeResult,
-	runMycPrimeOnSessionStart,
-} from "@/sdk/myc-prime-automation"
+import { __resetMycPrimeResultsForTests, getMycPrimeResult, runMycPrimeOnSessionStart } from "@/sdk/myc-prime-automation"
 import { SdkSessionLifecycle } from "@/sdk/sdk-session-lifecycle"
 import { McpHub } from "@/services/mcp/McpHub"
 import type { McpConnection } from "@/services/mcp/types"

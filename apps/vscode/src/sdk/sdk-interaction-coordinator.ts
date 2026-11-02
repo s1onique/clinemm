@@ -1,9 +1,10 @@
-import type { CommandExecutionPlan, CommandHostAuthorization } from "@cline/core"
+import type { AskQuestionExecutor, CommandExecutionPlan, CommandHostAuthorization } from "@cline/core"
 import { isReformulatable, REFORMULATION_REASON_CODE } from "@cline/core/internal/reformulation-classifier"
-import type { ConsecutiveMistakeLimitContext, ConsecutiveMistakeLimitDecision } from "@cline/shared"
+import type { ConsecutiveMistakeLimitContext, ConsecutiveMistakeLimitDecision, ImageContent, TextContent } from "@cline/shared"
 import type { ClineAskQuestion, ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { ClineAskResponse } from "@shared/WebviewMessage"
+import { processFilesIntoText } from "@/integrations/misc/extract-text"
 import { Logger } from "@/shared/services/Logger"
 import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
 import { isDogfoodRuntime } from "./dogfood-runtime-profile"
@@ -49,6 +50,26 @@ import {
  * explicit api_req_failed retry exhaustion, etc.) — the advisory boundary
  * only removes the model-quality → abort coupling.
  */
+
+const TOOL_APPROVAL_DELIVERY_FAILED_REASON = "The tool approval request could not be displayed, so the tool was not executed."
+
+type AskQuestionAnswer = Awaited<ReturnType<AskQuestionExecutor>>
+
+async function buildAnswerWithAttachments(
+	text: string,
+	images: string[] = [],
+	files: string[] = [],
+): Promise<Array<TextContent | ImageContent>> {
+	const filesText = files.length > 0 ? await processFilesIntoText(files) : ""
+	return [
+		...(text ? [{ type: "text" as const, text }] : []),
+		...images.map((dataUrl): ImageContent => {
+			const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/)
+			return { type: "image", mediaType: match?.[1] ?? "image/png", data: match?.[2] ?? dataUrl }
+		}),
+		...(filesText ? [{ type: "text" as const, text: filesText }] : []),
+	]
+}
 
 export interface ToolApprovalRequest {
 	agentId: string
@@ -296,7 +317,6 @@ function emitNonCommandDecisionProbe(input: {
 }
 
 export class SdkInteractionCoordinator {
-	private pendingAskResolve: ((answer: string) => void) | undefined
 	private pendingToolApprovalResolve:
 		| ((result: {
 				approved: boolean
@@ -305,6 +325,11 @@ export class SdkInteractionCoordinator {
 		  }) => void)
 		| undefined
 	private pendingMistakeLimitResolve: ((decision: MistakeLimitDecision) => void) | undefined
+	// R3 (upstream ask_question reframe, 59f219fad9): the answer may
+	// carry attachments, so the resolver type widens.
+	private pendingAskResolve: ((answer: AskQuestionAnswer) => void) | undefined
+	// An answered question whose attachments are still loading; cancellation must still settle it.
+	private loadingAskResolve: ((answer: AskQuestionAnswer) => void) | undefined
 	private pendingToolApprovalMessage:
 		| {
 				toolCallId: string
@@ -738,24 +763,70 @@ export class SdkInteractionCoordinator {
 			}
 		}
 		this.options.setTurnPhase?.("awaiting_approval", toolAskMessage.ts, "interaction-handle-tool-approval")
-		await this.options.postStateToWebview()
 
-		return new Promise<{ approved: boolean; reason?: string; executionPlan?: CommandExecutionPlan }>((resolve) => {
-			this.pendingToolApprovalResolve = resolve
-			this.pendingToolApprovalMessage = {
-				toolCallId: request.toolCallId,
-				messageTs: toolAskMessage.ts,
-				toolName: request.toolName,
-				// ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 PHASE 2:
-				// Thread the editor/apply_patch decision evidence into the
-				// pending record when present; otherwise fall back to the
-				// command-tool decision carried by commandEval.
-				decision: this.lastEditorOrApplyPatchDecision ?? commandEval?.decision,
-				executionPlan: commandEval?.executionPlan, // CORRECTION04: plan captured atomically at entry
-			}
-			// Clear the carrier after consumption to prevent bleed-across.
-			this.lastEditorOrApplyPatchDecision = null
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork's bare
+		// `await this.options.postStateToWebview()` was REMOVED here.
+		//
+		// The fork awaited the post so the ask row was on the wire before
+		// the method returned; upstream established the same guarantee by
+		// installing the resolver FIRST and then posting state in a
+		// fire-and-forget promise whose `.catch()` denies the approval when
+		// the post fails.
+		//
+		// Keeping BOTH was a merge defect: the bare `await` sat BEFORE the
+		// promise-based post, so a failing post REJECTED out of
+		// `handleRequestToolApproval` and the `.catch()` denial path (the
+		// authority that denies an approval whose ask could not be
+		// displayed) was never reached. The approval promise then leaked
+		// unresolved. The single authority is upstream's promise-based
+		// post + `.catch()` below; the resolver is installed before it so
+		// the user can answer while the post is in flight.
+
+		// Register the resolver before posting state: the ask row reaches the webview through
+		// appendAndEmit above, so the user can click Approve/Reject while the post is in flight.
+		let resolveApproval!: (result: { approved: boolean; reason?: string }) => void
+		const approval = new Promise<{ approved: boolean; reason?: string }>((resolve) => {
+			resolveApproval = resolve
 		})
+		this.pendingToolApprovalResolve = resolveApproval
+		this.pendingToolApprovalMessage = {
+			toolCallId: request.toolCallId,
+			messageTs: toolAskMessage.ts,
+			toolName: request.toolName,
+			// ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 PHASE 2:
+			// Thread the editor/apply_patch decision evidence into the
+			// pending record when present; otherwise fall back to the
+			// command-tool decision carried by commandEval.
+			decision: this.lastEditorOrApplyPatchDecision ?? commandEval?.decision,
+			executionPlan: commandEval?.executionPlan, // CORRECTION04: plan captured atomically at entry
+		}
+		// Clear the carrier after consumption to prevent bleed-across.
+		this.lastEditorOrApplyPatchDecision = null
+		// R3: upstream also marks the awaiting_approval phase without a
+		// third argument; the fork passes a structured reason.
+		this.options.setTurnPhase?.("awaiting_approval", toolAskMessage.ts)
+		Logger.log(`[SdkController] Awaiting tool approval: tool=${request.toolName}`)
+
+		void Promise.resolve()
+			.then(() => this.options.postStateToWebview())
+			.catch((error) => {
+				Logger.warn(`[SdkController] Failed to display tool approval: ${error}`)
+				// The post can fail after this approval was answered and a later one is pending;
+				// only deny the approval this post was made for.
+				if (this.pendingToolApprovalResolve !== resolveApproval) {
+					return
+				}
+				if (this.denyPendingToolApproval(TOOL_APPROVAL_DELIVERY_FAILED_REASON)) {
+					// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork's turn-state
+					// WRITER PROVENANCE authority requires every phase
+					// transition to name its writer. Upstream's bare
+					// `setTurnPhase("streaming")` left the transition
+					// unattributed; the fork threads the writer id.
+					this.options.setTurnPhase?.("streaming", undefined, "interaction-tool-approval-delivery-failed")
+				}
+			})
+
+		return approval
 	}
 
 	/**
@@ -878,7 +949,26 @@ export class SdkInteractionCoordinator {
 		}
 	}
 
-	async handleAskQuestion(question: string, options: string[], _context: unknown): Promise<string> {
+	/**
+	 * Present an ask_question prompt and await the user's answer.
+	 *
+	 * Upstream's shape (a promise that can also REJECT) is preserved: the
+	 * resolver is installed BEFORE the ask is emitted so a response or task
+	 * teardown can settle it even while the full webview state is still being
+	 * built. The fork's `setTurnPhase` call additionally threads the
+	 * structured reason (`interaction-handle-ask-question`) that the fork's
+	 * turn-phase authority requires.
+	 *
+	 * ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork's awaited
+	 * `postStateToWebview()` was removed — an `await` inside this async
+	 * function kept the CALLER's promise suspended for the whole post
+	 * duration (so a teardown-settled ask was not observable until the
+	 * post completed) and let a failing post reject before the
+	 * `.catch()` that owns the rejection was installed. The
+	 * resolver-first installation already provides the ordering the
+	 * fork's await was reaching for.
+	 */
+	async handleAskQuestion(question: string, options: string[], _context: unknown): Promise<AskQuestionAnswer> {
 		const askData: ClineAskQuestion = {
 			question,
 			options: options?.length ? options : undefined,
@@ -891,16 +981,77 @@ export class SdkInteractionCoordinator {
 			partial: false,
 		}
 
+		// Install before emitting the ask so responses and task teardown can settle it
+		// even while the full webview state is still being built.
+		let resolveAnswer!: (answer: AskQuestionAnswer) => void
+		let rejectAnswer!: (reason: unknown) => void
+		const answer = new Promise<AskQuestionAnswer>((resolve, reject) => {
+			resolveAnswer = resolve
+			rejectAnswer = reject
+		})
+		this.pendingAskResolve = resolveAnswer
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the turn phase is set BEFORE
+		// the ask is emitted (upstream's ordering; the fork emitted first).
+		//
+		// The fork's order created a race: `appendAndEmit` synchronously
+		// notifies the session-event subscribers, and a subscriber that
+		// answers the ask (the "accepts an ask_question response as soon as
+		// the ask is emitted" contract) resolves the pending ask BEFORE the
+		// `awaiting_followup` transition had been recorded. The phase then
+		// landed AFTER the `streaming` transition that the answer produced,
+		// leaving the turn stuck in `awaiting_followup` with the answer
+		// already consumed.
+		//
+		// Setting the phase first makes the transition order total:
+		// `awaiting_followup` (with the fork's writer id) always precedes
+		// the `streaming` transition produced by the answer.
+		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts, "interaction-handle-ask-question")
+
 		this.options.messages.appendAndEmit([askMessage], {
 			type: "status",
 			payload: { sessionId: this.options.getSessionId(), status: "running" },
 		})
-		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts, "interaction-handle-ask-question")
-		await this.options.postStateToWebview()
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork's AWAITED
+		// `postStateToWebview()` was REMOVED here.
+		//
+		// The fork's intent was "the ask row reaches the webview before
+		// the caller observes the pending ask". The AWAIT did not
+		// achieve that and broke two load-bearing invariants:
+		//
+		//  1. `handleAskQuestion` is an ASYNC function, so an `await`
+		//     inside it keeps the function's OWN returned promise
+		//     suspended. The inner `answer` promise could be settled by
+		//     `clearPending` (session teardown) while the post was still
+		//     in flight, but the CALLER could not observe that
+		//     settlement until the post completed — so a cancelled task
+		//     stayed suspended for the whole post duration.
+		//  2. A FAILING post rejected out of `handleAskQuestion`
+		//     before the `.catch()` below (the authority that REJECTS
+		//     the ask when it could not be displayed) was installed, and
+		//     the ask promise leaked unresolved.
+		//
+		// Upstream's fire-and-forget post already provides the ordering
+		// guarantee the fork wanted: the resolver is installed BEFORE
+		// the post is issued (see above), so a response or task teardown
+		// can settle the ask even while the webview state is still being
+		// built.
+		void Promise.resolve()
+			.then(() => this.options.postStateToWebview())
+			.catch((error) => {
+				Logger.warn(`[SdkController] Failed to display question: ${error}`)
+				// A cleared/answered ask may already have been replaced by a new one.
+				if (this.pendingAskResolve !== resolveAnswer) {
+					return
+				}
+				this.pendingAskResolve = undefined
+				// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: thread the fork's
+				// turn-state writer id (upstream's bare `setTurnPhase`
+				// left the transition unattributed).
+				this.options.setTurnPhase?.("streaming", undefined, "interaction-ask-question-delivery-failed")
+				rejectAnswer(error)
+			})
 
-		return new Promise<string>((resolve) => {
-			this.pendingAskResolve = resolve
-		})
+		return answer
 	}
 
 	resolvePendingToolApproval(
@@ -968,7 +1119,7 @@ export class SdkInteractionCoordinator {
 		return true
 	}
 
-	resolvePendingAskQuestion(prompt: string | undefined): boolean {
+	resolvePendingAskQuestion(prompt: string | undefined, images?: string[], files?: string[]): boolean {
 		if (!this.pendingAskResolve) {
 			return false
 		}
@@ -976,14 +1127,17 @@ export class SdkInteractionCoordinator {
 		const resolve = this.pendingAskResolve
 		this.pendingAskResolve = undefined
 		const responseText = prompt ?? ""
+		const hasAttachments = !!(images?.length || files?.length)
 		Logger.log(`[SdkController] Resolving pending ask_question with: "${responseText.substring(0, 80)}"`)
 
-		if (responseText) {
+		if (responseText || hasAttachments) {
 			const userMessage: ClineMessage = {
 				ts: this.nextMessageTs(),
 				type: "say",
 				say: "user_feedback",
 				text: responseText,
+				images,
+				files,
 				partial: false,
 			}
 			this.options.messages.appendAndEmit([userMessage], {
@@ -994,7 +1148,26 @@ export class SdkInteractionCoordinator {
 
 		// User answered the follow-up — the agent resumes its turn.
 		this.options.setTurnPhase?.("streaming", undefined, "interaction-resolve-ask-question")
-		resolve(responseText)
+		if (!hasAttachments) {
+			resolve(responseText)
+			return true
+		}
+
+		// Upstream: an answer that carries attachments must be assembled
+		// before it settles the question, so the model receives the files.
+		this.loadingAskResolve = resolve
+		void buildAnswerWithAttachments(responseText, images, files)
+			.catch((error) => {
+				Logger.error("[SdkController] Failed to load ask_question attachments: ${error}")
+				return responseText
+			})
+			.then((answer) => {
+				if (this.loadingAskResolve === resolve) {
+					this.loadingAskResolve = undefined
+				}
+				// No-op if clearPending already settled this question.
+				resolve(answer)
+			})
 		return true
 	}
 
@@ -1052,6 +1225,26 @@ export class SdkInteractionCoordinator {
 		return true
 	}
 
+	private denyPendingToolApproval(reason: string): boolean {
+		const resolve = this.pendingToolApprovalResolve
+		if (!resolve) {
+			return false
+		}
+
+		const pendingMessage = this.pendingToolApprovalMessage
+		this.pendingToolApprovalResolve = undefined
+		this.pendingToolApprovalMessage = undefined
+		// Record before resolving: the denial unblocks the core, which emits the
+		// tool's lifecycle events before the caller's abort lands. Unless the
+		// denial is already recorded, the translator renders those events as a
+		// second tool row next to the still-visible approval ask.
+		if (pendingMessage) {
+			this.options.recordDeniedToolApproval?.(pendingMessage.toolCallId, pendingMessage.toolName, reason)
+		}
+		resolve({ approved: false, reason })
+		return true
+	}
+
 	/**
 	 * Cancel any pending prompts.
 	 *
@@ -1063,17 +1256,25 @@ export class SdkInteractionCoordinator {
 	 * directly. Resolving the pending advisory here just unblocks the
 	 * MistakeTracker's await so it doesn't hang on a never-arriving
 	 * decision.
+	 *
+	 * Upstream's shape is preserved: the pending ask-question (and its
+	 * still-loading attachment variant) is settled with an empty answer so
+	 * the outgoing agent run can unwind instead of remaining suspended, and
+	 * the pending tool approval is denied through `denyPendingToolApproval`
+	 * (which records the denial BEFORE resolving so the translator does not
+	 * render a second tool row).
 	 */
 	clearPending(reason: string): void {
-		// Resolve any pending ask-question with an empty answer. Mirrors
-		// resolvePendingAskQuestion(undefined) so callers that switched away
-		// (e.g. showTaskWithId) do not leak the old task's pending question
-		// into the new task's first user message.
-		if (this.pendingAskResolve) {
-			const askResolve = this.pendingAskResolve
-			this.pendingAskResolve = undefined
-			askResolve("")
-		}
+		const resolveAsk = this.pendingAskResolve
+		const resolveLoadingAsk = this.loadingAskResolve
+		this.pendingAskResolve = undefined
+		this.loadingAskResolve = undefined
+		// ask_question is awaiting this promise inside the outgoing agent run. Settle it
+		// before session teardown so the run can unwind instead of remaining suspended;
+		// use an empty answer so the lifecycle reason is not presented as user input.
+		resolveAsk?.("")
+		resolveLoadingAsk?.("")
+
 		if (this.pendingMistakeLimitResolve) {
 			this.pendingMistakeLimitResolve({
 				action: "continue",
@@ -1082,24 +1283,13 @@ export class SdkInteractionCoordinator {
 			} as MistakeLimitDecision)
 			this.pendingMistakeLimitResolve = undefined
 		}
-		const pendingMessage = this.pendingToolApprovalMessage
-		this.pendingToolApprovalMessage = undefined
-		if (this.pendingToolApprovalResolve) {
-			// Record before resolving: the denial unblocks the core, which emits the
-			// tool's lifecycle events before the caller's abort lands. Unless the
-			// denial is already recorded, the translator renders those events as a
-			// second tool row next to the still-visible approval ask.
-			if (pendingMessage) {
-				this.options.recordDeniedToolApproval?.(pendingMessage.toolCallId, pendingMessage.toolName, reason)
-			}
-			this.pendingToolApprovalResolve({ approved: false, reason })
-			this.pendingToolApprovalResolve = undefined
-		}
 		// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
 		// Drop the pending reformulation slot on session teardown so a
 		// later re-instantiation (or a new conversation in the same
 		// controller) starts without a stale armed slot.
 		this.pendingReformulationSlot = undefined
+
+		this.denyPendingToolApproval(reason)
 	}
 
 	/**

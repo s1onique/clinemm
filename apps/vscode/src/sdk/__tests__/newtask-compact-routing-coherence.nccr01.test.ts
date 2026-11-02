@@ -156,18 +156,33 @@ describe("ACT-CLINEMM-NEWTASK-COMPACT-ROUTING-COHERENCE01 / NCCR (POST-REPAIR)",
 	// POST-NCCR02 -- /compact still reaches condense RPC (same-task control).
 	//
 	it("POST-NCCR02 (CONTROL): /compact still reaches the condense RPC", () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 2500)
-		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/compact"/)
-		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\(/)
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 4000)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream replaced the fork's
+		// inline `messageToSend === "/compact" || messageToSend === "/smol"`
+		// header with the `isCompactionCommand(...)` predicate (which also
+		// covers the localised aliases). The predicate is the authority
+		// now, so assert the dispatch uses it AND that the predicate
+		// still recognises "/compact".
+		expect(interceptBlock).toMatch(/isCompactionCommand\s*\(\s*messageToSend\s*\)/)
+		expect(HookSource).toMatch(/function isCompactionCommand[\s\S]*?text\s*===\s*"\/compact"/)
+		// The dispatch branch calls the helper, and the helper owns the
+		// condense RPC.
+		expect(interceptBlock).toMatch(/compactTask\s*\(\s*\)/)
+		expect(HookSource).toMatch(/const compactTask\s*=\s*useCallback[\s\S]*?SlashServiceClient\.condense\s*\(/)
 	})
 
 	//
 	// POST-NCCR03 -- /smol still reaches condense RPC (same-task control).
 	//
 	it("POST-NCCR03 (CONTROL): /smol still reaches the condense RPC", () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 2500)
-		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/smol"/)
-		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\(/)
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 4000)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: same predicate refactor as
+		// POST-NCCR02 — the dispatch uses `isCompactionCommand(...)`, and
+		// the predicate still recognises "/smol".
+		expect(interceptBlock).toMatch(/isCompactionCommand\s*\(\s*messageToSend\s*\)/)
+		expect(HookSource).toMatch(/function isCompactionCommand[\s\S]*?text\s*===\s*"\/smol"/)
+		expect(interceptBlock).toMatch(/compactTask\s*\(\s*\)/)
+		expect(HookSource).toMatch(/const compactTask\s*=\s*useCallback[\s\S]*?SlashServiceClient\.condense\s*\(/)
 	})
 
 	//
@@ -250,10 +265,13 @@ describe("ACT-CLINEMM-NEWTASK-COMPACT-ROUTING-COHERENCE01 / NCCR (POST-REPAIR)",
 	})
 
 	it('CONSERVATION: the /compact-and-/smol branch still hardcodes value:"compact" (same-task semantics)', () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 2500)
-		// The condense call site must still carry value:"compact".
-		const condenseCall = interceptBlock.match(/SlashServiceClient\.condense\([\s\S]{0,200}value:\s*"compact"/)
-		expect(condenseCall).not.toBeNull()
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream moved the condense
+		// call out of the dispatch block into the `compactTask()` helper.
+		// The contract — "the compaction dispatch hardcodes value:'compact'"
+		// — is asserted against the helper that owns the call.
+		expect(HookSource).toMatch(
+			/const compactTask\s*=\s*useCallback[\s\S]*?SlashServiceClient\.condense\s*\([\s\S]{0,200}value:\s*"compact"/,
+		)
 	})
 
 	it("CONSERVATION: the /newtask-with-context seam remains the button flow (TaskServiceClient.newTask -> controller.initTask)", () => {

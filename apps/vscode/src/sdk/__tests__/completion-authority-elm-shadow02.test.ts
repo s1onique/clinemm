@@ -28,13 +28,13 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import * as shadow from "../completion-authority-elm-shadow"
-import * as dogfoodProfile from "../dogfood-diagnostic-profile"
 import {
 	captureContinuationCardinalityAuthorityRecord,
 	clearContinuationCardinalityAuthorityCapture,
 	getContinuationCardinalityAuthorityCaptureRecords,
 	setContinuationCardinalityAuthorityCaptureEnabled,
 } from "../continuation-cardinality-authority"
+import * as dogfoodProfile from "../dogfood-diagnostic-profile"
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(TEST_DIR, "../../../../../")
@@ -84,7 +84,6 @@ function asShadowObservation(rec: Record<string, unknown>): {
 		elmOutputKind: typeof rec.elmOutputKind === "string" ? (rec.elmOutputKind as string) : null,
 	}
 }
-
 
 function captureAndObserve(record: Parameters<typeof captureContinuationCardinalityAuthorityRecord>[0]): void {
 	captureContinuationCardinalityAuthorityRecord(record)
@@ -360,7 +359,19 @@ describe("ELS02-08 — Elm violation is diagnostic-only", () => {
 		expect(ring.length).toBe(3)
 		if (lastObs.model) {
 			expect(Object.keys(lastObs.model).sort()).toEqual(
-				["activeRun", "commitReadyRun", "committedCompletion", "completionAuthorized", "holdReasons", "jobRunningCount", "pendingPromptCount", "presentedCompletion", "scheduledContinuationCount", "submitCount", "task"].sort(),
+				[
+					"activeRun",
+					"commitReadyRun",
+					"committedCompletion",
+					"completionAuthorized",
+					"holdReasons",
+					"jobRunningCount",
+					"pendingPromptCount",
+					"presentedCompletion",
+					"scheduledContinuationCount",
+					"submitCount",
+					"task",
+				].sort(),
 			)
 		}
 	})
@@ -608,10 +619,7 @@ describe("ELS02-15 — Elm shadow runtime has zero second hand-written stage→M
 
 describe("ELS02-16-DEFAULT01 — Elm shadow retired from production wiring", () => {
 	test("ELS02-16-DEFAULT01.A: applyElmShadowDiagnosticProfile is REMOVED from dogfood-diagnostic-profile.ts", () => {
-		const profilePath = path.resolve(
-			REPO_ROOT,
-			"apps/vscode/src/sdk/dogfood-diagnostic-profile.ts",
-		)
+		const profilePath = path.resolve(REPO_ROOT, "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts")
 		const source = fs.readFileSync(profilePath, "utf8")
 		// The shadow activation helper has been removed; the production
 		// surface no longer references it.
@@ -650,24 +658,14 @@ describe("ELS02-16-DEFAULT01 — Elm shadow retired from production wiring", () 
 		// root" is the apps/vscode directory; the kernel is expected
 		// at apps/vscode/runtime-assets/completion-authority.js when
 		// the VSIX is staged.
-		const simulatedExtensionRoot = path.resolve(
-			REPO_ROOT,
-			"apps/vscode",
-		)
-		const simulatedKernelPath = path.join(
-			simulatedExtensionRoot,
-			"runtime-assets",
-			"completion-authority.js",
-		)
+		const simulatedExtensionRoot = path.resolve(REPO_ROOT, "apps/vscode")
+		const simulatedKernelPath = path.join(simulatedExtensionRoot, "runtime-assets", "completion-authority.js")
 		// The runtime-asset path is populated by the dogfood build
 		// step; in a fresh checkout it may not exist yet. This test
 		// only asserts that the path-resolution logic is correct in
 		// the staged VSIX, so we accept either presence or absence
 		// and assert that the SHADOW vendor path is NOT in use.
-		const shadowPath = path.resolve(
-			REPO_ROOT,
-			"apps/vscode/elm/completion-authority/vendor/completion-authority.js",
-		)
+		const shadowPath = path.resolve(REPO_ROOT, "apps/vscode/elm/completion-authority/vendor/completion-authority.js")
 		expect(fs.existsSync(shadowPath)).toBe(true)
 		// The shadow path is fine as a build-time artifact but no
 		// longer wired into runtime; the test fixture is documented
@@ -683,18 +681,15 @@ describe("ELS02-16-DEFAULT01 — Elm shadow retired from production wiring", () 
 	})
 
 	test("ELS02-16-DEFAULT01.D: package.json does NOT declare the dump command for the contribution point", () => {
-		const pkg = JSON.parse(
-			fs.readFileSync(path.resolve(REPO_ROOT, "apps/vscode/package.json"), "utf8"),
-		) as { contributes?: { commands?: Array<{ command?: string }> } }
+		const pkg = JSON.parse(fs.readFileSync(path.resolve(REPO_ROOT, "apps/vscode/package.json"), "utf8")) as {
+			contributes?: { commands?: Array<{ command?: string }> }
+		}
 		const ids = (pkg.contributes?.commands ?? []).map((c) => c.command ?? "")
 		expect(ids).not.toContain("cline.debug.dumpCompletionAuthorityElmShadow")
 	})
 
 	test("ELS02-16-DEFAULT01.E: dump runtime module is RETAINED as test-fixture-only", () => {
-		const runtimePath = path.resolve(
-			REPO_ROOT,
-			"apps/vscode/src/sdk/completion-authority-elm-shadow-runtime.ts",
-		)
+		const runtimePath = path.resolve(REPO_ROOT, "apps/vscode/src/sdk/completion-authority-elm-shadow-runtime.ts")
 		// The file is retained as a pure-Elm-kernel correspondence
 		// test fixture even though the production wiring has been
 		// retired. The module is no longer imported by production
@@ -703,9 +698,7 @@ describe("ELS02-16-DEFAULT01 — Elm shadow retired from production wiring", () 
 	})
 
 	test("ELS02-16-DEFAULT01.F: initializeElmAuthorityRuntime is UNCONDITIONAL (no env gate)", () => {
-		const init = dogfoodProfile.initializeElmAuthorityRuntime as (
-			kernelPath: string | null,
-		) => {
+		const init = dogfoodProfile.initializeElmAuthorityRuntime as (kernelPath: string | null) => {
 			enabled: boolean
 			flipped: boolean
 			kernelPath: string | null

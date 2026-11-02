@@ -1,10 +1,12 @@
-import type { AgentEvent } from "@cline/shared"
+import { type AgentEvent, USER_REJECTED_TOOL_REASON } from "@cline/shared"
 import { describe, expect, it, vi } from "vitest"
+import { processFilesIntoText } from "@/integrations/misc/extract-text"
 import { MessageTranslatorState, translateSessionEvent } from "./message-translator"
 import {
 	buildMistakeLimitAdvisoryText,
 	SdkInteractionCoordinator,
 	type SdkInteractionCoordinatorOptions,
+	type ToolApprovalRequest,
 } from "./sdk-interaction-coordinator"
 import { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { createTaskProxy } from "./task-proxy"
@@ -16,6 +18,10 @@ vi.mock("./webview-grpc-bridge", () => ({
 
 vi.mock("@core/storage/disk", () => ({
 	saveClineMessages: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock("@/integrations/misc/extract-text", () => ({
+	processFilesIntoText: vi.fn(async (files: string[]) => `Files attached by the user:\n\n${files.join("\n")}`),
 }))
 
 describe("SdkInteractionCoordinator", () => {
@@ -417,6 +423,219 @@ describe("SdkInteractionCoordinator", () => {
 		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming", undefined, expect.any(String))
 	})
 
+	it.each([
+		{ prompt: "Use this design", expectedText: [{ type: "text", text: "Use this design" }] },
+		{ prompt: undefined, expectedText: [] },
+	])("resolves ask_question with attached images and files: $prompt", async ({ prompt, expectedText }) => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+		})
+		const images = ["data:image/jpeg;base64,abc"]
+		const files = ["/workspace/spec.md"]
+
+		const answerPromise = coordinator.handleAskQuestion("Which layout?", ["A", "B"], undefined)
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+
+		expect(coordinator.resolvePendingAskQuestion(prompt, images, files)).toBe(true)
+		await expect(answerPromise).resolves.toEqual([
+			...expectedText,
+			{ type: "image", mediaType: "image/jpeg", data: "abc" },
+			{ type: "text", text: "Files attached by the user:\n\n/workspace/spec.md" },
+		])
+		expect(task.messageStateHandler.getClineMessages()).toMatchObject([
+			{ type: "ask", ask: "followup" },
+			{ type: "say", say: "user_feedback", text: prompt ?? "", images, files },
+		])
+	})
+
+	it("settles an answered ask_question on cancel while its attachments are still loading", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+		})
+		let finishLoading!: (text: string) => void
+		vi.mocked(processFilesIntoText).mockImplementationOnce(
+			() =>
+				new Promise<string>((resolve) => {
+					finishLoading = resolve
+				}),
+		)
+
+		const answerPromise = coordinator.handleAskQuestion("Which spec?", ["A", "B"], undefined)
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+		expect(coordinator.resolvePendingAskQuestion("Use this spec", undefined, ["/workspace/huge.pdf"])).toBe(true)
+
+		coordinator.clearPending("Cancelled")
+		await expect(answerPromise).resolves.toBe("")
+		finishLoading("Files attached by the user:\n\n/workspace/huge.pdf")
+		await expect(answerPromise).resolves.toBe("")
+	})
+
+	it("accepts an ask_question response as soon as the ask is emitted", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const messages = new SdkMessageCoordinator({ getTask: () => task })
+		const setTurnPhase = vi.fn()
+		const coordinator = new SdkInteractionCoordinator({
+			messages,
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn(() => new Promise<void>(() => {})),
+			setTurnPhase,
+		})
+		let accepted = false
+		messages.onSessionEvent(() => {
+			if (task.messageStateHandler.getClineMessages().length === 1) {
+				accepted = coordinator.resolvePendingAskQuestion("yes")
+			}
+		})
+
+		const answer = coordinator.handleAskQuestion("Continue?", ["Yes"], undefined)
+
+		expect(accepted).toBe(true)
+		await expect(answer).resolves.toBe("yes")
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork threads the turn-state
+		// WRITER id as the third argument (turn-state writer provenance).
+		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming", undefined, expect.any(String))
+	})
+
+	it.each(["Task cancelled", "Task switched"])("settles ask_question during its state post on %s", async (reason) => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		let releasePost!: () => void
+		const postStateToWebview = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					releasePost = resolve
+				}),
+		)
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview,
+		})
+		let result: Awaited<ReturnType<SdkInteractionCoordinator["handleAskQuestion"]>> | undefined
+		const answer = coordinator.handleAskQuestion("Continue?", [], undefined).then((value) => {
+			result = value
+		})
+		await vi.waitFor(() => expect(postStateToWebview).toHaveBeenCalledOnce())
+
+		coordinator.clearPending(reason)
+		await vi.waitFor(() => expect(result).toBe(""))
+		expect(task.messageStateHandler.getClineMessages()).toHaveLength(1)
+
+		releasePost()
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(coordinator.resolvePendingAskQuestion("new task input")).toBe(false)
+		await answer
+	})
+
+	it.each(["resolves", "rejects"])("keeps a later ask when a cleared ask's state post %s", async (outcome) => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		let releaseFirstPost!: () => void
+		let rejectFirstPost!: (error: Error) => void
+		const postStateToWebview = vi
+			.fn<() => Promise<void>>()
+			.mockImplementationOnce(
+				() =>
+					new Promise<void>((resolve, reject) => {
+						releaseFirstPost = resolve
+						rejectFirstPost = reject
+					}),
+			)
+			.mockResolvedValue(undefined)
+		const setTurnPhase = vi.fn()
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview,
+			setTurnPhase,
+		})
+		const firstAnswer = coordinator.handleAskQuestion("Old question?", [], undefined)
+		await vi.waitFor(() => expect(postStateToWebview).toHaveBeenCalledTimes(1))
+		coordinator.clearPending("Task switched")
+		await expect(firstAnswer).resolves.toBe("")
+
+		const secondAnswer = coordinator.handleAskQuestion("New question?", [], undefined)
+		await vi.waitFor(() => expect(postStateToWebview).toHaveBeenCalledTimes(2))
+		const secondAskTs = task.messageStateHandler.getClineMessages()[1].ts
+		if (outcome === "resolves") {
+			releaseFirstPost()
+		} else {
+			rejectFirstPost(new Error("Task changed while building webview state"))
+		}
+		await new Promise((resolve) => setTimeout(resolve, 0))
+
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork threads the turn-state
+		// WRITER id as the third argument (turn-state writer provenance).
+		expect(setTurnPhase).toHaveBeenLastCalledWith("awaiting_followup", secondAskTs, expect.any(String))
+		expect(coordinator.resolvePendingAskQuestion("new answer")).toBe(true)
+		await expect(secondAnswer).resolves.toBe("new answer")
+	})
+
+	it("rejects and clears the ask whose state post fails", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const error = new Error("Failed to build webview state")
+		const setTurnPhase = vi.fn()
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn().mockRejectedValue(error),
+			setTurnPhase,
+		})
+
+		await expect(coordinator.handleAskQuestion("Continue?", [], undefined)).rejects.toBe(error)
+		expect(coordinator.resolvePendingAskQuestion("late answer")).toBe(false)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork threads the turn-state
+		// WRITER id as the third argument (turn-state writer provenance).
+		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming", undefined, expect.any(String))
+	})
+
+	it("shows an error row and stops immediately when the mistake limit is reached", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const setTurnPhase = vi.fn()
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+			setTurnPhase,
+		})
+
+		const decisionPromise = coordinator.handleConsecutiveMistakeLimitReached({
+			iteration: 4,
+			consecutiveMistakes: 3,
+			maxConsecutiveMistakes: 3,
+			reason: "tool_execution_failed",
+			details: "bad arguments",
+		})
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+
+		const ask = task.messageStateHandler.getClineMessages()[0]
+		expect(ask).toMatchObject({
+			type: "ask",
+			ask: "mistake_limit_reached",
+			partial: false,
+		})
+		// The advisory is a follow-up, not an error — input stays enabled.
+		expect(setTurnPhase).toHaveBeenCalledWith("awaiting_followup", ask.ts, expect.any(String))
+		expect(ask.text).toContain("protocol errors")
+		expect(ask.text).not.toMatch(/claude|sonnet|opus|anthropic/i)
+
+		expect(coordinator.resolvePendingMistakeLimit("try smaller steps", "messageResponse")).toBe(true)
+		await expect(decisionPromise).resolves.toEqual({
+			action: "continue",
+			guidance: "mistake_limit_reached: try smaller steps",
+			kind: "user-resolved",
+		})
+		expect(task.messageStateHandler.getClineMessages()).toMatchObject([
+			{ type: "ask", ask: "mistake_limit_reached" },
+			{ type: "say", say: "user_feedback", text: "try smaller steps" },
+		])
+		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming", undefined, expect.any(String))
+	})
+
 	it("resolves mistake-limit dismiss (noButtonClicked) as advisory continue, NOT stop", async () => {
 		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
 		const setTurnPhase = vi.fn()
@@ -586,6 +805,79 @@ describe("SdkInteractionCoordinator", () => {
 		await expect(approvalPromise).resolves.toEqual({ approved: false, reason: "Task cancelled" })
 		expect(recordDeniedToolApproval).toHaveBeenCalledWith("tool-call", "read_files", "Task cancelled")
 		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(false)
+	})
+
+	it("resolves an approval answered while its state post is still in flight", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn(() => new Promise<void>(() => {})),
+		})
+
+		const approvalPromise = coordinator.handleRequestToolApproval(approvalRequest("tool-call"))
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+
+		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
+		await expect(approvalPromise).resolves.toEqual({ approved: true })
+	})
+
+	it("denies the approval whose state post fails", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const recordDeniedToolApproval = vi.fn()
+		const setTurnPhase = vi.fn()
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn().mockRejectedValue(new Error("Task changed while building webview state")),
+			recordDeniedToolApproval,
+			setTurnPhase,
+		})
+
+		const reason = "The tool approval request could not be displayed, so the tool was not executed."
+		await expect(coordinator.handleRequestToolApproval(approvalRequest("tool-call"))).resolves.toEqual({
+			approved: false,
+			reason,
+		})
+		expect(recordDeniedToolApproval).toHaveBeenCalledWith("tool-call", "run_commands", reason)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork threads the turn-state
+		// WRITER id as the third argument (turn-state writer provenance).
+		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming", undefined, expect.any(String))
+	})
+
+	it("does not deny a later approval when an earlier approval's state post fails", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		let rejectFirstPost!: (error: Error) => void
+		const postStateToWebview = vi
+			.fn<() => Promise<void>>()
+			.mockImplementationOnce(
+				() =>
+					new Promise<void>((_resolve, reject) => {
+						rejectFirstPost = reject
+					}),
+			)
+			.mockResolvedValue(undefined)
+		const recordDeniedToolApproval = vi.fn()
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview,
+			recordDeniedToolApproval,
+		})
+
+		const firstApproval = coordinator.handleRequestToolApproval(approvalRequest("first-call"))
+		await vi.waitFor(() => expect(postStateToWebview).toHaveBeenCalledTimes(1))
+		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
+		await expect(firstApproval).resolves.toEqual({ approved: true })
+
+		const secondApproval = coordinator.handleRequestToolApproval(approvalRequest("second-call"))
+		await vi.waitFor(() => expect(postStateToWebview).toHaveBeenCalledTimes(2))
+		rejectFirstPost(new Error("Task changed while building webview state"))
+		await new Promise((resolve) => setTimeout(resolve, 0))
+
+		expect(recordDeniedToolApproval).not.toHaveBeenCalled()
+		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
+		await expect(secondApproval).resolves.toEqual({ approved: true })
 	})
 
 	it("awaits onToolApprovalAsk before emitting the approval ask", async () => {
@@ -796,7 +1088,12 @@ describe("SdkInteractionCoordinator", () => {
 			})
 			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
 			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
-			await expect(promise).resolves.toMatchObject({ approved: false, reason: expect.stringContaining("denied") })
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the denial reason is now
+			// the SHARED `USER_REJECTED_TOOL_REASON` (upstream's shared
+			// constant), replacing the fork's local
+			// `"User denied the tool execution"` literal. Assert against
+			// the shared authority instead of a hardcoded substring.
+			await expect(promise).resolves.toMatchObject({ approved: false, reason: USER_REJECTED_TOOL_REASON })
 		})
 
 		it("ALLOW => auto-approved immediately; no approval UI", async () => {
@@ -1469,3 +1766,15 @@ describe("SdkInteractionCoordinator", () => {
 		})
 	})
 })
+
+function approvalRequest(toolCallId: string): ToolApprovalRequest {
+	return {
+		agentId: "agent",
+		conversationId: "conversation",
+		iteration: 1,
+		toolCallId,
+		toolName: "run_commands",
+		input: { commands: ["echo safe"] },
+		policy: { autoApprove: false },
+	}
+}

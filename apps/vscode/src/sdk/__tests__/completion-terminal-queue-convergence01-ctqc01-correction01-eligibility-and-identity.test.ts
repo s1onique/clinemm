@@ -148,6 +148,7 @@ function makeCorr01Harness(
 		}),
 		sessions: {
 			getActiveSession: () => ({
+				queuedPromptCount: 0,
 				sessionId: activeSessionId,
 				sdkHost: {
 					send: ({
@@ -204,6 +205,7 @@ function makeCorr01Harness(
 		enqueueCompletionContinuation: buildSdkControllerEnqueueCompletionContinuation({
 			getActiveSession: () => ({
 				sessionId: activeSessionId,
+				queuedPromptCount: 0,
 				sdkHost: {
 					send: ({
 						sessionId: sendSessionId,

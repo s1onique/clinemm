@@ -87,6 +87,8 @@ export const StoredProviderEntrySchema = z
 	.object({
 		provider: StoredProviderMetadataSchema.optional(),
 		models: z.record(z.string(), StoredModelEntrySchema).optional(),
+		// Models owned solely by discovery; all other entries are user-managed.
+		discoveredModelIds: z.array(z.string()).optional(),
 	})
 	.passthrough();
 
@@ -105,6 +107,12 @@ const StoredModelsFileEnvelopeSchema = z.object({
 });
 
 const LOADED_MODELS_REGISTRY_PATHS = new Set<string>();
+
+/**
+ * User-added providers are self-hosted OpenAI-compatible endpoints whose
+ * key the runtime never pre-flights (see `resolveProviderApiKeyOptional`).
+ */
+const CUSTOM_ENDPOINT_METADATA = { apiKeyOptional: true } as const;
 
 function titleCaseFromId(id: string): string {
 	return id
@@ -219,6 +227,23 @@ export async function writeModelsFile(
 	}
 }
 
+/**
+ * Projects one capability onto `ProviderModel`'s tri-state booleans, where
+ * `undefined` means "not declared" and drives each picker's own default.
+ * A missing OR empty capability list carries no signal (see
+ * `modelHasCapability`), so both must stay `undefined` rather than collapsing
+ * to a `false` that reads as an authoritative denial.
+ */
+function declaredCapability(
+	capabilities: ModelInfo["capabilities"],
+	capability: ModelCapability,
+): boolean | undefined {
+	if (capabilities === undefined || capabilities.length === 0) {
+		return undefined;
+	}
+	return capabilities.includes(capability);
+}
+
 export function toProviderModel(
 	modelId: string,
 	info: Pick<
@@ -241,10 +266,15 @@ export function toProviderModel(
 		...(info.contextWindow !== undefined
 			? { contextWindow: info.contextWindow }
 			: {}),
-		supportsAttachments: info.capabilities?.includes("files"),
-		supportsVision: info.capabilities?.includes("images"),
+		supportsAttachments: declaredCapability(info.capabilities, "files"),
+		supportsVision: declaredCapability(info.capabilities, "images"),
+		// A thinking config is positive evidence on its own; its absence is
+		// not evidence of absence, so fall back to whatever the capability
+		// list declares (including "not declared").
 		supportsReasoning:
-			info.capabilities?.includes("reasoning") || info.thinkingConfig != null,
+			info.thinkingConfig != null
+				? true
+				: declaredCapability(info.capabilities, "reasoning"),
 		operationModes: info.operationModes,
 		inputModalities: info.modalities?.input,
 		outputModalities: info.modalities?.output,
@@ -535,6 +565,7 @@ export function registerProviderSettingsProvider(
 				toProviderCapabilities(settings.capabilities) ??
 				existingCollection?.provider.capabilities,
 			source: "file",
+			metadata: CUSTOM_ENDPOINT_METADATA,
 		},
 		models,
 	});
@@ -605,6 +636,7 @@ export function registerCustomProvider(
 			defaultModelId,
 			capabilities: toProviderCapabilities(entry.provider.capabilities),
 			source: "file",
+			metadata: CUSTOM_ENDPOINT_METADATA,
 		},
 		models: normalizedModels,
 	});

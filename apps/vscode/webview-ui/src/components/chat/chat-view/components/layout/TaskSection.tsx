@@ -61,6 +61,8 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 			// (twenty-first-pass): Boundary 5 — pass W through
 			// to TaskHeader so the ContextWindow component can
 			// use it as the bar numerator (W-defined path).
+			compactDisabled={messageHandlers.errorRecoveryAvailable}
+			compactTask={messageHandlers.compactTask}
 			currentWorkingContextEstimate={currentWorkingContextEstimate}
 			doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
 			lastApiReqContextInputTokens={lastApiReqContextInputTokens}

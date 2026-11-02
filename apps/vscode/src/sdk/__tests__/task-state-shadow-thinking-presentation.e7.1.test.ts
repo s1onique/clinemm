@@ -41,6 +41,8 @@ import { selectThinkingPresentation, type ThinkingPresentationInputs } from "../
 import { emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
 import type { ArbiterSnapshot } from "../task-state-shadow-recorder"
 
+import { getStateToPostToWebviewSignature } from "./sdk-controller-signature-probes"
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -188,7 +190,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1 / SdkController.wiring", () => {
 		const path = require("node:path") as typeof import("node:path")
 		const sdkControllerPath = path.resolve(__dirname, "../SdkController.ts")
 		const source = fs.readFileSync(sdkControllerPath, "utf8")
-		const start = source.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>")
+		const start = source.indexOf(getStateToPostToWebviewSignature())
 		expect(start, "SdkController.getStateToPostToWebview signature must exist").toBeGreaterThanOrEqual(0)
 		const body = source.slice(start)
 		expect(body).toMatch(/thinkingPresentation:\s*selectThinkingPresentation\(/)
@@ -199,7 +201,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1 / SdkController.wiring", () => {
 		const path = require("node:path") as typeof import("node:path")
 		const sdkControllerPath = path.resolve(__dirname, "../SdkController.ts")
 		const source = fs.readFileSync(sdkControllerPath, "utf8")
-		const start = source.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>")
+		const start = source.indexOf(getStateToPostToWebviewSignature())
 		expect(start, "SdkController.getStateToPostToWebview signature must exist").toBeGreaterThanOrEqual(0)
 		const body = source.slice(start)
 		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1

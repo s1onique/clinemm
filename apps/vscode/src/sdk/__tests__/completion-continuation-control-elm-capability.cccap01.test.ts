@@ -12,11 +12,11 @@
  * sees literal tool names.
  */
 
-import { describe, expect, it, beforeEach } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import {
+	type CompletionContinuationControlFactsInput,
 	pickContinuationDirectiveForPublication,
 	resetCompletionContinuationControlElmAuthorityForTests,
-	type CompletionContinuationControlFactsInput,
 } from "../completion-continuation-control-elm"
 
 function factsFromRegistry(
@@ -29,7 +29,8 @@ function factsFromRegistry(
 			canObserveHeldResults: tools.includes("command_status"),
 			canRetryCompletion: tools.includes("submit_and_exit"),
 		},
-		priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
+		priorHeldSetSorted: undefined,
+		currentHeldSetSorted: ["j1", "j2"],
 		sessionMatches: true,
 		taskMatches: true,
 		alreadyCommitted: false,
@@ -60,9 +61,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C16 
 	})
 
 	it("CAP-02 only submit_and_exit + held -> FailClosed ObservationUnavailable", async () => {
-		const d = await pickContinuationDirectiveForPublication(
-			factsFromRegistry(["submit_and_exit"], { unconsumedCount: 2 }),
-		)
+		const d = await pickContinuationDirectiveForPublication(factsFromRegistry(["submit_and_exit"], { unconsumedCount: 2 }))
 		expect(d.tag).toBe("fail_closed")
 		if (d.tag === "fail_closed") {
 			expect(d.failureReason).toBe("observation_unavailable")
@@ -78,9 +77,7 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C16 
 	})
 
 	it("CAP-03 only command_status + held -> ObserveThenRetry", async () => {
-		const d = await pickContinuationDirectiveForPublication(
-			factsFromRegistry(["command_status"], { unconsumedCount: 2 }),
-		)
+		const d = await pickContinuationDirectiveForPublication(factsFromRegistry(["command_status"], { unconsumedCount: 2 }))
 		expect(d.tag).toBe("observe_then_retry")
 	})
 

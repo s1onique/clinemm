@@ -25,10 +25,9 @@
  * first writer.
  */
 
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	clearTurnStateWriterProvenanceDiagnostic,
 	disableTurnStateWriterProvenanceDiagnostic,
@@ -37,16 +36,17 @@ import {
 	isTurnStateWriterProvenanceDiagnosticEnabled,
 	recordTurnStateWriterProvenance,
 } from "@shared/turn-state-writer-provenance"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	resolveEffectiveTurnStateWriterProvenanceD,
 } from "../dogfood-diagnostic-profile"
+import { MessageIdMinter } from "../message-id-minter"
+import { TurnStateTracker } from "../turn-state-tracker"
 import {
 	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
 	type TurnStateWriterProvenanceDiagnosticContext,
 } from "../turn-state-writer-provenance-runtime"
-import { MessageIdMinter } from "../message-id-minter"
-import { TurnStateTracker } from "../turn-state-tracker"
 
 /**
  * Factory helper: builds a structurally-compatible ExtensionContext-shaped
@@ -334,11 +334,7 @@ describe("AC8: resolveEffectiveTurnStateWriterProvenanceD precedence (pure resol
 	// The pure resolver tests pin the precedence contract independently
 	// of the activation helper (they don't touch the ring).
 	it("layer 1: env truthy forces ON regardless of profile", () => {
-		const r1 = resolveEffectiveTurnStateWriterProvenanceD(
-			{ CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE: "1" },
-			false,
-			false,
-		)
+		const r1 = resolveEffectiveTurnStateWriterProvenanceD({ CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE: "1" }, false, false)
 		expect(r1).toEqual({ d: true, source: "env" })
 		const r2 = resolveEffectiveTurnStateWriterProvenanceD(
 			{ CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE: "true" },
@@ -364,11 +360,7 @@ describe("AC8: resolveEffectiveTurnStateWriterProvenanceD precedence (pure resol
 	})
 
 	it("garbage env value falls through to layer 2", () => {
-		const r = resolveEffectiveTurnStateWriterProvenanceD(
-			{ CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE: "banana" },
-			true,
-			true,
-		)
+		const r = resolveEffectiveTurnStateWriterProvenanceD({ CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE: "banana" }, true, true)
 		expect(r).toEqual({ d: true, source: "workspace" })
 	})
 

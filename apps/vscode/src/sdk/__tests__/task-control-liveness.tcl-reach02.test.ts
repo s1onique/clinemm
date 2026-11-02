@@ -144,7 +144,17 @@ function makeFixture(): Fixture {
 	const fx_fence = new TaskOperationFence()
 
 	const lifecycle = new SdkSessionLifecycle({
-		mcpHub: {} as never,
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the real
+		// `SdkSessionLifecycle` calls `mcpHub.disconnectSession(sessionId)`
+		// as part of the session stop (the MCP teardown sits inside the
+		// `Promise.all` with `sdkHost.stop`). An empty `{}` stub made the
+		// call throw `TypeError: mcpHub.disconnectSession is not a
+		// function`, which aborted the stop BEFORE the lifecycle could be
+		// exercised — so these reachability witnesses never reached the
+		// wedge/no-wedge assertion they exist to prove.
+		mcpHub: {
+			disconnectSession: vi.fn().mockResolvedValue(undefined),
+		} as never,
 		requestToolApproval: vi.fn(),
 		askQuestion: vi.fn(),
 		onSessionEvent: vi.fn(),
@@ -186,6 +196,7 @@ function makeFixture(): Fixture {
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		setTurnPhase: vi.fn(),
 		raiseCancelFence: vi.fn(),
+		rebuilds: { runTaskTransition: async <T>(operation: () => Promise<T>): Promise<T> => operation() },
 	}
 
 	const coordinator = new SdkTaskControlCoordinator(options)

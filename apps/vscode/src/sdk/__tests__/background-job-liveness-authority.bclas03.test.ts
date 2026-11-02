@@ -20,11 +20,11 @@
 import type { SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	type BackgroundJobLivenessAuthorityJobStatusLookupRecord,
 	clearBackgroundJobLivenessAuthorityCaptureRecords,
 	getBackgroundJobLivenessAuthorityCaptureRecords,
 	setBackgroundJobLivenessAuthorityCaptureBufferSize,
 	setBackgroundJobLivenessAuthorityCaptureEnabled,
-	type BackgroundJobLivenessAuthorityJobStatusLookupRecord,
 } from "../background-job-liveness-authority"
 import { CommandJobManager } from "../command-job-manager"
 
@@ -114,8 +114,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01 / BCLAS-03",
 
 		const records = getBackgroundJobLivenessAuthorityCaptureRecords()
 		const lookups = records.filter(
-			(r): r is BackgroundJobLivenessAuthorityJobStatusLookupRecord =>
-				r.event === "job_status_lookup",
+			(r): r is BackgroundJobLivenessAuthorityJobStatusLookupRecord => r.event === "job_status_lookup",
 		)
 
 		// We expect at least one lookup per source bucket. The exact

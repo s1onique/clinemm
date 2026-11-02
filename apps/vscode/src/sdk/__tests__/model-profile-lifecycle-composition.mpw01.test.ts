@@ -24,13 +24,13 @@
  *     layer that the factory will consume).
  */
 
-import { describe, expect, it } from "vitest"
-import { ProfilesStore } from "@/sdk/profile-store/profiles-store"
-import { resolveActiveProfileForNewTask, resolveActiveProfileForResume } from "@/sdk/profile-store/owner"
-import type { HistoryItem } from "@shared/HistoryItem"
 import * as fs from "node:fs"
-import * as path from "node:path"
 import * as os from "node:os"
+import * as path from "node:path"
+import type { HistoryItem } from "@shared/HistoryItem"
+import { describe, expect, it } from "vitest"
+import { resolveActiveProfileForNewTask, resolveActiveProfileForResume } from "@/sdk/profile-store/owner"
+import { ProfilesStore } from "@/sdk/profile-store/profiles-store"
 
 function makeProfilesStore(): ProfilesStore {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mpw01-lifecycle-"))

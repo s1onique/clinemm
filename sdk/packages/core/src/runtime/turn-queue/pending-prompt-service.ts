@@ -393,6 +393,17 @@ export class PendingPromptsController {
 		return this.service.list(this.deps.getSession(sessionId));
 	}
 
+	steerFirst(sessionId: string): PendingPromptMutationResult {
+		// Selection and promotion share one synchronous runtime operation. No
+		// client snapshot or asynchronous request can intervene between them.
+		const session = this.deps.getSession(sessionId);
+		const first = session?.pendingPrompts[0];
+		if (!first || first.delivery === "steer") {
+			return { sessionId, prompts: this.service.list(session), updated: false };
+		}
+		return this.update({ sessionId, promptId: first.id, delivery: "steer" });
+	}
+
 	update(input: PendingPromptsUpdateInput): PendingPromptMutationResult {
 		const session = this.deps.getSession(input.sessionId);
 		if (!session) {
@@ -400,6 +411,13 @@ export class PendingPromptsController {
 		}
 		const result = this.service.update(session, input);
 		this.emitPrompts(session);
+		if (
+			result.updated &&
+			result.prompt?.delivery === "steer" &&
+			!session.aborting
+		) {
+			session.agent.notifyPendingUserMessage();
+		}
 		this.scheduleDrain(input.sessionId, session);
 		return result;
 	}
@@ -478,6 +496,9 @@ export class PendingPromptsController {
 						: {}),
 				});
 			}
+	}
+		if (entry.delivery === "steer" && !session.aborting) {
+			session.agent.notifyPendingUserMessage();
 		}
 		this.scheduleDrain(sessionId, session);
 	}
@@ -591,6 +612,7 @@ export class PendingPromptsController {
 						: {}),
 				});
 			}
+			session.replayingQueuedPrompt = true;
 			const result = await this.deps.send({
 				sessionId,
 				prompt: next.prompt,

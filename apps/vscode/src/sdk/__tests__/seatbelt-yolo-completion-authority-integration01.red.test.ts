@@ -23,9 +23,10 @@
  * file no longer contains failing tests; the suffix is kept for
  * forensic traceability of the bounded RED→GREEN correction cycle.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
+
 import { getSandboxBackend } from "@cline/core"
+import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // vi.hoisted runs BEFORE module imports, so we cannot use the imported
 // DEFAULT_AUTO_APPROVAL_SETTINGS here. We replicate the canonical default
@@ -153,7 +154,13 @@ import { resolveExperimentalSandboxMode } from "../sandbox-policy"
 
 const mockResolveMode = vi.mocked(resolveExperimentalSandboxMode)
 const mockGetSandboxBackend = vi.mocked(getSandboxBackend)
-const { YOLO_PERSISTED_AUTO_APPROVAL, MIXED_PERSISTED_AUTO_APPROVAL, MANUAL_PERSISTED_AUTO_APPROVAL, FAKE_BACKEND, stateManagerMock } = hoisted
+const {
+	YOLO_PERSISTED_AUTO_APPROVAL,
+	MIXED_PERSISTED_AUTO_APPROVAL,
+	MANUAL_PERSISTED_AUTO_APPROVAL,
+	FAKE_BACKEND,
+	stateManagerMock,
+} = hoisted
 
 beforeEach(() => {
 	vi.clearAllMocks()

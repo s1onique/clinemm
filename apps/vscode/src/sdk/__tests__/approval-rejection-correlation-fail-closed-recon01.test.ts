@@ -31,8 +31,9 @@
  *   MUST present a fresh ASK (NOT skip approval, NOT reuse A's
  *   decision, NOT use A's rejection as B's authorization).
  */
-import { describe, expect, it, vi } from "vitest"
 
+import { USER_REJECTED_TOOL_REASON } from "@cline/shared"
+import { describe, expect, it, vi } from "vitest"
 import { SdkInteractionCoordinator, type ToolApprovalRequest } from "../sdk-interaction-coordinator"
 import { SdkMessageCoordinator } from "../sdk-message-coordinator"
 import { createTaskProxy } from "../task-proxy"
@@ -223,7 +224,18 @@ describe("ACT-CLINEMM-APPROVAL-REJECTION-CORRELATION-FAIL-CLOSED-RECON01", () =>
 		// with the buildToolApprovalDenialReason value. The contract is that it MUST be
 		// called exactly once with A.s toolCallId + toolName.
 		expect(recordDeniedToolApproval).toHaveBeenCalledTimes(1)
-		expect(recordDeniedToolApproval).toHaveBeenCalledWith("tc-A", "run_commands", expect.stringContaining("denied"))
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the assertion used to be
+		// `expect.stringContaining("denied")`, which hard-coded the fork's
+		// old default denial wording ("User denied the tool execution").
+		// The merge replaced that wording with the SHARED protocol
+		// constant `USER_REJECTED_TOOL_REASON`
+		// ("This tool call was rejected by the user and not executed.").
+		//
+		// The wording is a cross-client protocol (VS Code / CLI /
+		// JetBrains all classify a tool result as a user rejection by
+		// matching this exact string), so the test must assert the
+		// CONSTANT, not a substring of one spelling of it.
+		expect(recordDeniedToolApproval).toHaveBeenCalledWith("tc-A", "run_commands", USER_REJECTED_TOOL_REASON)
 	})
 
 	// ---------------------------------------------------------------------

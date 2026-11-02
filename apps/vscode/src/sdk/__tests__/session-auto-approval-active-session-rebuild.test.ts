@@ -30,11 +30,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { SessionAutoApprovalStore } from "../session-auto-approval"
 import {
 	SdkSessionAutoApprovalCoordinator,
 	type SdkSessionAutoApprovalCoordinatorOptions,
 } from "../sdk-session-auto-approval-coordinator"
+import { SessionAutoApprovalStore } from "../session-auto-approval"
 
 function makeCoordinator(overrides: Partial<SdkSessionAutoApprovalCoordinatorOptions> = {}): {
 	coordinator: SdkSessionAutoApprovalCoordinator
@@ -316,13 +316,15 @@ describe("ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / acti
 			sessions: {
 				getActiveSession: vi.fn(() => {
 					callCount++
-					return callCount === 1 ? {
-						sessionId: "active-session",
-						sdkHost: { readMessages: vi.fn(), abort: vi.fn() },
-						unsubscribe: vi.fn(),
-						startResult: undefined,
-						isRunning: false,
-					} : otherSession
+					return callCount === 1
+						? {
+								sessionId: "active-session",
+								sdkHost: { readMessages: vi.fn(), abort: vi.fn() },
+								unsubscribe: vi.fn(),
+								startResult: undefined,
+								isRunning: false,
+							}
+						: otherSession
 				}),
 				replaceActiveSession: vi.fn(async () => undefined),
 				clearActiveSession,
@@ -362,13 +364,15 @@ describe("ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / acti
 			sessions: {
 				getActiveSession: vi.fn(() => {
 					callCount++
-					return callCount === 1 ? {
-						sessionId: "active-session",
-						sdkHost: { readMessages: vi.fn(), abort: vi.fn() },
-						unsubscribe: vi.fn(),
-						startResult: undefined,
-						isRunning: false,
-					} : otherSession
+					return callCount === 1
+						? {
+								sessionId: "active-session",
+								sdkHost: { readMessages: vi.fn(), abort: vi.fn() },
+								unsubscribe: vi.fn(),
+								startResult: undefined,
+								isRunning: false,
+							}
+						: otherSession
 				}),
 				replaceActiveSession: vi.fn(async () => {
 					throw new Error("simulated rebuild failure")

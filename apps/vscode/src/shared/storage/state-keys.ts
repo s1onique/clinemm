@@ -10,7 +10,7 @@ import {
 } from "@shared/api"
 import { BrowserSettings, DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { ClineRulesToggles } from "@shared/cline-rules"
-import { DEFAULT_FOCUS_CHAIN_SETTINGS, FocusChainSettings } from "@shared/FocusChainSettings"
+import type { CloudTaskTargetSelection, RememberedCloudStatuses } from "@shared/cloud/cloud-sessions"
 import { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_MCP_DISPLAY_MODE, McpDisplayMode } from "@shared/McpDisplayMode"
 import { toLegacyApiProvider } from "@shared/model-catalog/provider-helpers"
@@ -103,6 +103,12 @@ const GLOBAL_STATE_FIELDS = {
 	remoteWorkflowToggles: { default: {} as ClineRulesToggles },
 	remoteSkillsToggles: { default: {} as ClineRulesToggles },
 	dismissedBanners: { default: [] as Array<{ bannerId: string; dismissedAt: number }> },
+	// Last Local/Cloud choice (and repository) picked on the home screen for new tasks
+	cloudTaskTarget: { default: undefined as CloudTaskTargetSelection | undefined },
+	// Cline model picked in Settings for new cloud tasks
+	cloudModelId: { default: undefined as string | undefined },
+	// Last agent status confirmed over a live connection, per cloud session id
+	cloudSessionStatuses: { default: {} as RememberedCloudStatuses },
 	// Path to worktree that should auto-open Cline sidebar when launched
 	worktreeAutoOpenPath: { default: undefined as string | undefined },
 } satisfies FieldDefinitions
@@ -334,9 +340,9 @@ const USER_SETTINGS_FIELDS = {
 	clinemmTemporaryExternalPathAuthorities: {
 		default: [] as TemporaryExternalPathAuthority[],
 	},
+	cloudSessionsEnabled: { default: false as boolean },
 	preferredLanguage: { default: "English" as string },
 	mode: { default: "act" as Mode },
-	focusChainSettings: { default: DEFAULT_FOCUS_CHAIN_SETTINGS as FocusChainSettings },
 	backgroundEditEnabled: { default: false as boolean },
 	optOutOfRemoteConfig: { default: false as boolean },
 	showFeatureTips: { default: false as boolean },
@@ -345,6 +351,7 @@ const USER_SETTINGS_FIELDS = {
 	openTelemetryEnabled: { default: true as boolean },
 	openTelemetryMetricsExporter: { default: undefined as string | undefined },
 	openTelemetryLogsExporter: { default: undefined as string | undefined },
+	openTelemetryTracesExporter: { default: undefined as string | undefined },
 	openTelemetryOtlpProtocol: { default: "http/json" as string | undefined },
 	openTelemetryOtlpEndpoint: { default: "http://localhost:4318" as string | undefined },
 	openTelemetryOtlpMetricsProtocol: { default: undefined as string | undefined },

@@ -28,14 +28,14 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	type BackgroundOwnerCorrelationRecord,
 	captureBackgroundOwnerCorrelationRecord,
 	clearBackgroundOwnerCorrelationCaptureRecords,
 	setBackgroundOwnerCorrelationCaptureEnabled,
-	type BackgroundOwnerCorrelationRecord,
 } from "../background-owner-correlation"
 import {
-	dumpExtensionSideBackgroundOwnerCorrelationDiagnostic,
 	type BackgroundOwnerCorrelationDiagnosticContext,
+	dumpExtensionSideBackgroundOwnerCorrelationDiagnostic,
 } from "../background-owner-correlation-runtime"
 
 const makeRecord = (overrides: Partial<BackgroundOwnerCorrelationRecord> = {}): BackgroundOwnerCorrelationRecord => ({
@@ -159,9 +159,17 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01 / BOCOR dum
 		captureBackgroundOwnerCorrelationRecord(makeRecord({ capturedAt: 100 }))
 		captureBackgroundOwnerCorrelationRecord(makeRecord({ capturedAt: 200 }))
 		const r1 = await dumpExtensionSideBackgroundOwnerCorrelationDiagnostic(ctx)
-		expect(readFileSync(r1.file, "utf8").split("\n").filter((l) => l.length > 0)).toHaveLength(2)
+		expect(
+			readFileSync(r1.file, "utf8")
+				.split("\n")
+				.filter((l) => l.length > 0),
+		).toHaveLength(2)
 		const r2 = await dumpExtensionSideBackgroundOwnerCorrelationDiagnostic(ctx)
-		expect(readFileSync(r2.file, "utf8").split("\n").filter((l) => l.length > 0)).toHaveLength(2)
+		expect(
+			readFileSync(r2.file, "utf8")
+				.split("\n")
+				.filter((l) => l.length > 0),
+		).toHaveLength(2)
 		expect(r1.recordCount).toBe(2)
 		expect(r2.recordCount).toBe(2)
 	})

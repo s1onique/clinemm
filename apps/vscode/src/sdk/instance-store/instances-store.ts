@@ -28,8 +28,8 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import {
 	emptyInstancesFile,
-	type InstancesFile,
 	InstancesContractError,
+	type InstancesFile,
 	type ProviderConfigurationInstance,
 	parseInstancesFile,
 	parseProviderConfigurationInstance,

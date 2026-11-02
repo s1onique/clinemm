@@ -953,7 +953,7 @@ export function assessCaptureCompleteness(parsed: ParsedNativeTrace): Completene
 					`the terminal summary declares totalRecorded=${truncation.totalRecorded}, but retainedCount=${truncation.retainedCount} plus droppedCount=${truncation.droppedCount} is ${truncation.retainedCount + truncation.droppedCount}; the summary counts CONTRADICT each other`,
 				)
 			}
-			if (truncation.truncated !== (truncation.droppedCount > 0)) {
+			if (truncation.truncated !== truncation.droppedCount > 0) {
 				reasons.push(
 					`the terminal summary declares truncated=${truncation.truncated} but droppedCount=${truncation.droppedCount}; the truncation state CONTRADICTS the counts`,
 				)

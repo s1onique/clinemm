@@ -19,7 +19,6 @@ const mockExtensionState = vi.hoisted(() => ({
 		userContextCeiling: undefined,
 		subagentsEnabled: false,
 		worktreesEnabled: { user: true, featureFlag: true },
-		focusChainSettings: { enabled: false, remindClineInterval: 6 },
 		remoteConfigSettings: {},
 		backgroundEditEnabled: false,
 	},
@@ -29,7 +28,7 @@ vi.mock("@/context/ExtensionStateContext", () => ({
 	useExtensionState: vi.fn(() => mockExtensionState.value),
 }))
 
-vi.mock("../utils/settingsHandlers", () => ({
+vi.mock("@/components/settings/utils/settingsHandlers", () => ({
 	updateSetting: (...args: unknown[]) => mockUpdateSetting(...args),
 }))
 
@@ -81,8 +80,8 @@ describe("FeatureSettingsSection", () => {
 		const advancedSection = container.querySelector("#advanced-features")
 		const agentSection = container.querySelector("#agent-features")
 
-		expect(advancedSection?.querySelector("#Hooks")).toBeTruthy()
-		expect(agentSection?.querySelector("#Hooks")).toBeNull()
+		expect(advancedSection?.querySelector("#hooks-setting-control")).toBeTruthy()
+		expect(agentSection?.querySelector("#hooks-setting-control")).toBeNull()
 	})
 
 	it("renders Feature Tips toggle in the Editor section", () => {
@@ -93,8 +92,8 @@ describe("FeatureSettingsSection", () => {
 		const editorSection = container.querySelector("#optional-features")
 		const agentSection = container.querySelector("#agent-features")
 
-		expect(editorSection?.querySelector('[id="Feature Tips"]')).toBeTruthy()
-		expect(agentSection?.querySelector('[id="Feature Tips"]')).toBeNull()
+		expect(editorSection?.querySelector("#show-feature-tips-setting-control")).toBeTruthy()
+		expect(agentSection?.querySelector("#show-feature-tips-setting-control")).toBeNull()
 	})
 
 	it("renders the Auto Compact Strategy setting in the Agent section", () => {
@@ -114,23 +113,17 @@ describe("FeatureSettingsSection", () => {
 	})
 
 	it("calls updateSetting with hooksEnabled when toggled", () => {
-		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+		render(<FeatureSettingsSection renderSectionHeader={() => null} />)
 
-		const hooksSwitch = container.querySelector("#Hooks")
-		expect(hooksSwitch).toBeTruthy()
-
-		fireEvent.click(hooksSwitch as Element)
+		fireEvent.click(screen.getByRole("switch", { name: "Hooks" }))
 
 		expect(mockUpdateSetting).toHaveBeenCalledWith("hooksEnabled", true)
 	})
 
 	it("calls updateSetting with showFeatureTips when toggled", () => {
-		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+		render(<FeatureSettingsSection renderSectionHeader={() => null} />)
 
-		const featureTipsSwitch = container.querySelector('[id="Feature Tips"]')
-		expect(featureTipsSwitch).toBeTruthy()
-
-		fireEvent.click(featureTipsSwitch as Element)
+		fireEvent.click(screen.getByRole("switch", { name: "Feature Tips" }))
 
 		expect(mockUpdateSetting).toHaveBeenCalledWith("showFeatureTips", true)
 	})
@@ -208,5 +201,20 @@ describe("FeatureSettingsSection", () => {
 		expect(mockUpdateSetting).toHaveBeenCalledWith("clearUserContextCeiling", true)
 		// The value field must NOT be sent alongside the clear signal.
 		expect(mockUpdateSetting).not.toHaveBeenCalledWith("userContextCeiling", undefined)
+	})
+
+	it("hides the Cloud toggle unless the rollout flag makes it available", () => {
+		render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+
+		expect(screen.queryByRole("switch", { name: "Cloud" })).toBeNull()
+	})
+
+	it("calls updateSetting with cloudSessionsEnabled when the available Cloud toggle is switched", () => {
+		mockExtensionState.value = { ...mockExtensionState.value, cloudSessionsAvailable: true, cloudSessionsEnabled: false }
+		render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+
+		fireEvent.click(screen.getByRole("switch", { name: "Cloud" }))
+
+		expect(mockUpdateSetting).toHaveBeenCalledWith("cloudSessionsEnabled", true)
 	})
 })

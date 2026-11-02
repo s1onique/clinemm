@@ -7,9 +7,9 @@
  * legacy resolution (current ApiConfiguration).
  */
 
+import { setGlobalDefaultProfileId } from "@/sdk/profile-store/owner"
 import { Empty, EmptyRequest } from "@/shared/proto/cline/common"
 import type { Controller } from ".."
-import { setGlobalDefaultProfileId } from "@/sdk/profile-store/owner"
 
 export async function clearDefaultModelProfile(controller: Controller, _request: EmptyRequest): Promise<Empty> {
 	const owner = controller.modelProfilesOwner

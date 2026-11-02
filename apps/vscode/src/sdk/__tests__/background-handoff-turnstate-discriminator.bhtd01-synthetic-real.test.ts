@@ -72,6 +72,8 @@ import {
 	type TurnStateWriterProvenanceDiagnosticContext,
 } from "../turn-state-writer-provenance-runtime"
 
+import { resetMessageTranslatorAndFenceSignature } from "./sdk-controller-signature-probes"
+
 const SDK_CONTROLLER_PATH = resolve(__dirname, "../SdkController.ts")
 
 // ----------------------------------------------------------------------------
@@ -136,7 +138,7 @@ function readProductionLine(writerId: TurnStateWriterId): string {
 
 function getResetMessageTranslatorAndFenceBody(): string {
 	const source = readFileSync(SDK_CONTROLLER_PATH, "utf8")
-	let start = source.indexOf("resetMessageTranslatorAndFence(): void")
+	let start = source.indexOf(resetMessageTranslatorAndFenceSignature())
 	if (start < 0) {
 		start = source.indexOf("resetMessageTranslatorAndFence(requestedPhase")
 	}
@@ -318,7 +320,13 @@ describe("ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 / TSWPD synth
 		// Anchor on the function signature line; capture up to the first
 		// matching closing brace. The body is short and indentation is
 		// uniform (single tab).
-		const sigIdx = sdkSource.indexOf("updateBackgroundCommandState(running:")
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the declaration is formatted
+		// across multiple lines by the formatter
+		// (`async updateBackgroundCommandState(\n\trunning: boolean, ...`),
+		// so a one-line literal does not match. Locate the declaration by
+		// regex so the probe is insensitive to parameter-list formatting.
+		const sigMatch = /updateBackgroundCommandState\s*\(\s*running:\s*boolean/.exec(sdkSource)
+		const sigIdx = sigMatch?.index ?? -1
 		expect(sigIdx, "updateBackgroundCommandState signature must exist").toBeGreaterThan(-1)
 		const openBraceIdx = sdkSource.indexOf("{", sigIdx)
 		expect(openBraceIdx).toBeGreaterThan(sigIdx)

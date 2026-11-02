@@ -364,6 +364,8 @@ describe("ACT-CLINEMM-ASK-RESPONSE-EPOCH-TURNSTATE-COHERENCE01 / ARETC01", () =>
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
+import { resetMessageTranslatorAndFenceSignature } from "./sdk-controller-signature-probes"
+
 const SDK_CONTROLLER_PATH = resolve(__dirname, "../SdkController.ts")
 
 function readSource(path: string): string {
@@ -372,7 +374,7 @@ function readSource(path: string): string {
 
 function resetMessageTranslatorAndFenceBody(): string {
 	const source = readSource(SDK_CONTROLLER_PATH)
-	const start = source.indexOf("resetMessageTranslatorAndFence(): void")
+	const start = source.indexOf(resetMessageTranslatorAndFenceSignature())
 	expect(start, "SdkController.resetMessageTranslatorAndFence signature must exist").toBeGreaterThanOrEqual(0)
 	return source.slice(start)
 }
@@ -383,9 +385,19 @@ describe("ACT-CLINEMM-ASK-RESPONSE-EPOCH-TURNSTATE-COHERENCE01 / ARETC01 P0 stru
 		expect(body).toMatch(/getMinter\(\)\.bumpEpoch\(\)/)
 	})
 
-	it("P0-2: SdkController.resetMessageTranslatorAndFence resets the legacy TurnStateTracker to idle via writerIdentity('controller-epoch-transition-reseed')", () => {
+	it("P0-2: SdkController.resetMessageTranslatorAndFence resets the legacy TurnStateTracker to the requested phase via writerIdentity('controller-epoch-transition-reseed')", () => {
 		const body = resetMessageTranslatorAndFenceBody()
-		expect(body).toMatch(/turnStateTracker\.setWithWriter\(\s*"idle"/)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the fork's production signature
+		// is `resetMessageTranslatorAndFence(requestedPhase: TurnPhase =
+		// "idle")` and it forwards `requestedPhase` to
+		// `setWithWriter`. This probe previously asserted the literal
+		// `"idle"` argument, which does not match the fork's OWN
+		// production source (the parameter defaults to `"idle"`, but the
+		// forwarded value is the parameter). Assert the forwarding of the
+		// requested phase — the load-bearing behaviour — and separately
+		// assert that the parameter's default is `"idle"`.
+		expect(body).toMatch(/turnStateTracker\.setWithWriter\(\s*requestedPhase\b/)
+		expect(body).toMatch(/requestedPhase:\s*TurnPhase\s*=\s*"idle"/)
 		expect(body).toMatch(/writerIdentity\(\s*"controller-epoch-transition-reseed"\s*\)/)
 	})
 

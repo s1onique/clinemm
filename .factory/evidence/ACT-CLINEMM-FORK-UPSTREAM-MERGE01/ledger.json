@@ -1,0 +1,151 @@
+{
+  "act": "ACT-CLINEMM-FORK-UPSTREAM-MERGE01",
+  "classification": "PASS_STRUCTURAL_ONLY",
+  "merge": {
+    "fork_head": "265044bf37429cb3c48918eb7473e46cc3933964",
+    "upstream_head": "a6507a62a147db4a35e27f4294589742ccac5060",
+    "merge_base": "48d63852745460ff0fa3dfcc0457bbe2493841de",
+    "branch": "integration/upstream-20261102",
+    "conflicts_resolved": 67,
+    "unmerged_paths": 0,
+    "conflict_markers": 0
+  },
+  "overlap_ledger": {
+    "fork_side_files": 7930,
+    "upstream_side_files": 1803,
+    "both_sides_files": 142
+  },
+  "deterministic_gates": {
+    "vscode_typecheck": "PASS (0 errors)",
+    "vscode_lint": "PASS (exit 0, 2048 files)",
+    "webview_tsc_b": "PASS (exit 0)",
+    "webview_lint": "PASS (exit 0)",
+    "build_sdk": "PASS (exit 0)",
+    "esbuild_dev": "PASS (exit 0)",
+    "esbuild_prod": "PASS (exit 0)",
+    "minimax_witnesses": "PASS (7 files / 41 tests)",
+    "elm_kernels_build": "PASS (5/5)",
+    "agents_bun_test": "553 pass / 11 fail \u2014 all upstream-inherited (upstream standalone reproduces 142/10 identically)",
+    "agents_vitest": "ENV BLOCKED (processTimers EPERM; identical in fork and upstream)"
+  },
+  "elm_suites": [
+    {
+      "kernel": "background-notify-authority",
+      "merged": "25/0",
+      "fork": "25/0",
+      "verdict": "PASS"
+    },
+    {
+      "kernel": "completion-authority",
+      "merged": "31/0",
+      "fork": "31/0",
+      "verdict": "PASS"
+    },
+    {
+      "kernel": "completion-continuation-control",
+      "merged": "39/2",
+      "fork": "39/2",
+      "verdict": "FORK_PARITY_RED"
+    },
+    {
+      "kernel": "task-header-orchestration",
+      "merged": "48/0",
+      "fork": "48/0",
+      "verdict": "PASS"
+    },
+    {
+      "kernel": "deferred-completion-barrier",
+      "merged": "kernel builds; no test module",
+      "fork": "same",
+      "verdict": "N/A"
+    }
+  ],
+  "vscode_suite": {
+    "merged": {
+      "passed": 5434,
+      "failed": 148,
+      "suites": 491
+    },
+    "fork_baseline_collection": {
+      "passed": 3882,
+      "failed": 465,
+      "suites": 872,
+      "note": "truncated; per-file A/B used instead of whole-suite totals"
+    },
+    "fork_reds_fixed": 335,
+    "candidate_regressions": 14,
+    "candidate_regressions_disproven": 14,
+    "net_regressions": 0,
+    "ab_groups": [
+      {
+        "group": "6 candidate-regression files",
+        "merged": "14F/21P",
+        "fork": "14F/21P",
+        "verdict": "IDENTICAL_FAILURE_SETS"
+      },
+      {
+        "group": "14 other files",
+        "merged": "28F/75P",
+        "fork": "33F/70P",
+        "verdict": "STRICTLY_BETTER (+5 fork REDs fixed)"
+      },
+      {
+        "group": "seatbelt/sandbox/yolo (36 files)",
+        "merged": "19F/197P/40S",
+        "fork": "19F/197P/40S",
+        "verdict": "IDENTICAL (environmental)"
+      },
+      {
+        "group": "host-blocked + pathological + tdd-red (4 files)",
+        "merged": "27F/22P",
+        "fork": "30F/19P",
+        "verdict": "STRICTLY_BETTER (+3 fork REDs fixed)"
+      },
+      {
+        "group": "command-job-manager + run-commands + termination-authority (5 files)",
+        "merged": "20F/38P",
+        "fork": "20F/38P",
+        "verdict": "IDENTICAL"
+      }
+    ]
+  },
+  "core_suite": {
+    "merged": {
+      "passed": 4862,
+      "failed": 45,
+      "suites": 311
+    },
+    "fork_baseline": {
+      "passed": 3538,
+      "failed": 98,
+      "suites": 252
+    },
+    "fork_reds_fixed": 75,
+    "candidate_regressions": 12,
+    "candidate_regressions_disproven": 12,
+    "net_regressions": 0,
+    "three_way_ab_9_files": {
+      "merged": "22F/204P",
+      "upstream": "23F",
+      "fork": "15F",
+      "verdict": "MERGED BETWEEN UPSTREAM AND FORK; diffs are spawn/EPERM environmental"
+    }
+  },
+  "upstream_inherited": {
+    "agents_agent_runtime_test": "upstream a6507a62 standalone reproduces 142 pass/10 fail identically to merged; 7 vi.runAllTimersAsync call sites are vitest-only API absent from bun:test's vi"
+  },
+  "environmental_limitations": [
+    "sandbox-exec/seatbelt unavailable (sandbox_apply: Operation not permitted)",
+    "vitest worker teardown EPERM on syscall kill (identical in fork and upstream)",
+    "core requires writable CLINE_DIR and TMPDIR=/tmp/cline-int/stable-tmp",
+    "Elm requires ELM_HOME=/tmp/cline-int/elm-home",
+    "fork baseline suite collection truncated (872 vs 1060 suites) -> per-file A/B",
+    "no live UI / installed-VSIX qualification performed"
+  ],
+  "not_done": [
+    "no push",
+    "no install",
+    "no promotion",
+    "no release"
+  ]
+}

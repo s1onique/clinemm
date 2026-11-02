@@ -50,7 +50,7 @@
 
 import { createContextCompactionPrepareTurn } from "@cline/core"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { compactSessionMessages, type CompactSessionMessagesInput } from "../sdk-compaction"
+import { type CompactSessionMessagesInput, compactSessionMessages } from "../sdk-compaction"
 import { WorkingContextHostCapture } from "../working-context-host-capture"
 
 // Mock @cline/core — the vitest stub does not export
@@ -66,8 +66,7 @@ vi.mock("@cline/core", () => ({
 	})),
 }))
 
-const mockCreateContextCompactionPrepareTurn =
-	createContextCompactionPrepareTurn as unknown as ReturnType<typeof vi.fn>
+const mockCreateContextCompactionPrepareTurn = createContextCompactionPrepareTurn as unknown as ReturnType<typeof vi.fn>
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -88,9 +87,7 @@ function buildMessages(count: number) {
 // Session-config-time operands used by the manual seam to compute
 // POST_COMPACTION_CURRENT_CONFIG_W per Option 1.
 const SYSTEM_PROMPT_FOR_RECON01 = "system"
-const EXTRA_TOOLS_FOR_RECON01 = [
-	{ name: "test_tool", description: "t", input_schema: { type: "object" } },
-] as never
+const EXTRA_TOOLS_FOR_RECON01 = [{ name: "test_tool", description: "t", input_schema: { type: "object" } }] as never
 
 function makeBaseInput(messages: CompactSessionMessagesInput["messages"]): CompactSessionMessagesInput {
 	return {

@@ -138,11 +138,7 @@ describe("ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01 — RED (CASE S0)
 	})
 
 	beforeEach(() => {
-		for (const k of [
-			"CLINEMM_EXPERIMENTAL_SANDBOX",
-			"CLINEMM_SAFE_YOLO_NETWORK",
-			"CLINEMM_SAFE_YOLO_SSH_AGENT",
-		]) {
+		for (const k of ["CLINEMM_EXPERIMENTAL_SANDBOX", "CLINEMM_SAFE_YOLO_NETWORK", "CLINEMM_SAFE_YOLO_SSH_AGENT"]) {
 			savedEnv[k] = process.env[k]
 		}
 		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "seatbelt"

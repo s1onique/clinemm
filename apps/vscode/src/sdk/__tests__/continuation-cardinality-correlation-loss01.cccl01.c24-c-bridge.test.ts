@@ -63,6 +63,7 @@ function makeFakeSession(sessionId: string, sendImpl?: (input: unknown) => Promi
 		sdkHost,
 		unsubscribe: () => undefined,
 		startResult: undefined,
+		queuedPromptCount: 0,
 		isRunning: true,
 	}
 	return { session, send }

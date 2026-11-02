@@ -243,6 +243,14 @@ function edgeKeyOf(event: AgentRuntimeEvent): string {
 			return `turn-finished:${event.iteration}`
 		case "tool-started":
 			return `tool-started:${event.toolCall.toolCallId}`
+		case "tool-call-delta":
+			// Upstream's streaming tool-call progress event. It carries a
+			// runtime-state snapshot but NO task-state mutation (the shadow's
+			// `TaskModel` has no edge for it — the adapter produces zero
+			// TaskMsg). Classified in the `presentational:` family so the
+			// dedup gate and the fallback dedup route it without triggering a
+			// state mutation, and so the `never` exhaustiveness check passes.
+			return `presentational:${event.type}`
 		case "tool-updated":
 			return `tool-updated:${event.toolCall.toolCallId}`
 		case "tool-finished":

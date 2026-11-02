@@ -69,8 +69,8 @@
  *                  src/sdk/instance-store/typed-projector.test.ts
  */
 import type { CoreSessionConfig } from "@cline/core"
-import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import { describe, expect, it } from "vitest"
+import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import { MissingProviderInstanceCredentialError, type ProviderConfigurationInstance } from "./contracts"
 import { applyTypedProviderInstanceToConfig } from "./typed-projector"
 
@@ -241,9 +241,7 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5", () => {
 		// undefined; same fail-closed semantics.
 		const config = makeBaselineA({ apiKey: "secret-A-value" }) as unknown as CoreSessionConfig
 		const instance = makeInstanceB()
-		expect(() => applyTypedProviderInstanceToConfig(config, instance, "")).toThrow(
-			MissingProviderInstanceCredentialError,
-		)
+		expect(() => applyTypedProviderInstanceToConfig(config, instance, "")).toThrow(MissingProviderInstanceCredentialError)
 	})
 
 	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07

@@ -52,11 +52,7 @@ vi.mock("@/services/logging/distinctId", () => ({
 
 import { StateManager } from "@/core/storage/StateManager"
 import { ClineFileStorage } from "@/shared/storage/ClineFileStorage"
-import {
-	INSTANCE_SECRET_NAME_PATTERN,
-	nameFor,
-	parseInstanceSecretName,
-} from "@/shared/storage/instance-secret"
+import { INSTANCE_SECRET_NAME_PATTERN, nameFor, parseInstanceSecretName } from "@/shared/storage/instance-secret"
 import { createStorageContext } from "@/shared/storage/storage-context"
 
 let CLINE_DIR: string

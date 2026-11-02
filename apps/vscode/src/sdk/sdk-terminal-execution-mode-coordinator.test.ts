@@ -94,12 +94,12 @@ describe("SdkTerminalExecutionModeCoordinator", () => {
 		await coordinator.restartSessionForTerminalExecutionMode()
 
 		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
-		cwd: "/workspace",
-		mode: "plan",
-		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
-		// the new completion-authority seam threads the bound override.
-		sessionAutoApprovalOverride: "none",
-	})
+			cwd: "/workspace",
+			mode: "plan",
+			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+			// the new completion-authority seam threads the bound override.
+			sessionAutoApprovalOverride: "none",
+		})
 		expect(options.loadInitialMessages).toHaveBeenCalledWith(activeSession.sdkHost, "old-session")
 		expect(options.buildStartSessionInput).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "old-session" }), {
 			cwd: "/workspace",

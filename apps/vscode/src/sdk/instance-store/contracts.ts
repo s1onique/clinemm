@@ -28,11 +28,7 @@
 // Errors
 // ---------------------------------------------------------------------------
 
-import {
-	INSTANCE_SECRET_NAME_PATTERN,
-	type InstanceSecretName,
-	isInstanceSecretName,
-} from "@/shared/storage/instance-secret"
+import { INSTANCE_SECRET_NAME_PATTERN, type InstanceSecretName, isInstanceSecretName } from "@/shared/storage/instance-secret"
 
 /**
  * Thrown by the contract validators on malformed input. The
@@ -121,25 +117,16 @@ export interface InstanceCredentialRef {
 	name: InstanceSecretName
 }
 
-export function parseInstanceCredentialRef(
-	raw: unknown,
-	path = "credentialRef",
-): InstanceCredentialRef {
+export function parseInstanceCredentialRef(raw: unknown, path = "credentialRef"): InstanceCredentialRef {
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
 		throw new InstancesContractError(`${path}: expected object`, path)
 	}
 	const obj = raw as Record<string, unknown>
 	if (obj.kind !== "secret") {
-		throw new InstancesContractError(
-			`${path}.kind: must be "secret" (got ${JSON.stringify(obj.kind)})`,
-			`${path}.kind`,
-		)
+		throw new InstancesContractError(`${path}.kind: must be "secret" (got ${JSON.stringify(obj.kind)})`, `${path}.kind`)
 	}
 	if (typeof obj.name !== "string" || obj.name.length === 0) {
-		throw new InstancesContractError(
-			`${path}.name: must be a non-empty string`,
-			`${path}.name`,
-		)
+		throw new InstancesContractError(`${path}.name: must be a non-empty string`, `${path}.name`)
 	}
 	// Per the twelfth reviewer
 	// (HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED), the
@@ -202,11 +189,7 @@ export interface ProviderConnection {
 }
 
 /** Validate that `raw` is a plain string-to-string record (or null). */
-function parseStringRecord(
-	raw: unknown,
-	path: string,
-	allowNull: boolean,
-): Record<string, string> | null | undefined {
+function parseStringRecord(raw: unknown, path: string, allowNull: boolean): Record<string, string> | null | undefined {
 	if (raw === undefined) return undefined
 	if (raw === null) {
 		if (!allowNull) {
@@ -220,20 +203,14 @@ function parseStringRecord(
 	const out: Record<string, string> = {}
 	for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
 		if (typeof v !== "string") {
-			throw new InstancesContractError(
-				`${path}.${k}: expected string`,
-				`${path}.${k}`,
-			)
+			throw new InstancesContractError(`${path}.${k}: expected string`, `${path}.${k}`)
 		}
 		out[k] = v
 	}
 	return out
 }
 
-export function parseProviderConnection(
-	raw: unknown,
-	path = "connection",
-): ProviderConnection {
+export function parseProviderConnection(raw: unknown, path = "connection"): ProviderConnection {
 	if (raw === undefined) return {}
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
 		throw new InstancesContractError(`${path}: expected object`, path)
@@ -248,10 +225,7 @@ export function parseProviderConnection(
 		} else if (typeof v === "string" && v.length > 0) {
 			conn.baseUrl = v
 		} else {
-			throw new InstancesContractError(
-				`${path}.baseUrl: must be non-empty string or null`,
-				`${path}.baseUrl`,
-			)
+			throw new InstancesContractError(`${path}.baseUrl: must be non-empty string or null`, `${path}.baseUrl`)
 		}
 	}
 	if ("apiKeyRef" in obj) {
@@ -269,10 +243,7 @@ export function parseProviderConnection(
 	if ("modelId" in obj) {
 		const v = obj.modelId
 		if (typeof v !== "string" || v.length === 0) {
-			throw new InstancesContractError(
-				`${path}.modelId: must be non-empty string`,
-				`${path}.modelId`,
-			)
+			throw new InstancesContractError(`${path}.modelId: must be non-empty string`, `${path}.modelId`)
 		}
 		conn.modelId = v
 	}
@@ -283,10 +254,7 @@ export function parseProviderConnection(
 		} else if (typeof v === "string" && v.length > 0) {
 			conn.region = v
 		} else {
-			throw new InstancesContractError(
-				`${path}.region: must be non-empty string or null`,
-				`${path}.region`,
-			)
+			throw new InstancesContractError(`${path}.region: must be non-empty string or null`, `${path}.region`)
 		}
 	}
 	if ("apiLine" in obj) {
@@ -296,18 +264,11 @@ export function parseProviderConnection(
 		} else if (typeof v === "string" && v.length > 0) {
 			conn.apiLine = v
 		} else {
-			throw new InstancesContractError(
-				`${path}.apiLine: must be non-empty string or null`,
-				`${path}.apiLine`,
-			)
+			throw new InstancesContractError(`${path}.apiLine: must be non-empty string or null`, `${path}.apiLine`)
 		}
 	}
 	if ("headers" in obj) {
-		conn.headers = parseStringRecord(
-			obj.headers,
-			`${path}.headers`,
-			true,
-		) as Record<string, string> | null | undefined
+		conn.headers = parseStringRecord(obj.headers, `${path}.headers`, true) as Record<string, string> | null | undefined
 	}
 	if ("providerSpecificConfig" in obj) {
 		const v = obj.providerSpecificConfig
@@ -354,47 +315,29 @@ export interface ProviderConfigurationInstance {
 	updatedAt: number
 }
 
-export function parseProviderConfigurationInstance(
-	raw: unknown,
-	path = "instance",
-): ProviderConfigurationInstance {
+export function parseProviderConfigurationInstance(raw: unknown, path = "instance"): ProviderConfigurationInstance {
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
 		throw new InstancesContractError(`${path}: expected object`, path)
 	}
 	const obj = raw as Record<string, unknown>
 	if (typeof obj.instanceId !== "string" || obj.instanceId.length === 0) {
-		throw new InstancesContractError(
-			`${path}.instanceId: must be non-empty string`,
-			`${path}.instanceId`,
-		)
+		throw new InstancesContractError(`${path}.instanceId: must be non-empty string`, `${path}.instanceId`)
 	}
 	if (typeof obj.providerId !== "string" || obj.providerId.length === 0) {
-		throw new InstancesContractError(
-			`${path}.providerId: must be non-empty string`,
-			`${path}.providerId`,
-		)
+		throw new InstancesContractError(`${path}.providerId: must be non-empty string`, `${path}.providerId`)
 	}
 	if (typeof obj.displayLabel !== "string" || obj.displayLabel.length === 0) {
-		throw new InstancesContractError(
-			`${path}.displayLabel: must be non-empty string`,
-			`${path}.displayLabel`,
-		)
+		throw new InstancesContractError(`${path}.displayLabel: must be non-empty string`, `${path}.displayLabel`)
 	}
 	const credentialRef = parseInstanceCredentialRef(obj.credentialRef, `${path}.credentialRef`)
 	const connection = parseProviderConnection(obj.connection, `${path}.connection`)
 	const createdAt = typeof obj.createdAt === "number" && obj.createdAt >= 0 ? obj.createdAt : NaN
 	const updatedAt = typeof obj.updatedAt === "number" && obj.updatedAt >= 0 ? obj.updatedAt : NaN
 	if (!Number.isFinite(createdAt)) {
-		throw new InstancesContractError(
-			`${path}.createdAt: must be non-negative number`,
-			`${path}.createdAt`,
-		)
+		throw new InstancesContractError(`${path}.createdAt: must be non-negative number`, `${path}.createdAt`)
 	}
 	if (!Number.isFinite(updatedAt)) {
-		throw new InstancesContractError(
-			`${path}.updatedAt: must be non-negative number`,
-			`${path}.updatedAt`,
-		)
+		throw new InstancesContractError(`${path}.updatedAt: must be non-negative number`, `${path}.updatedAt`)
 	}
 	return {
 		instanceId: obj.instanceId,
@@ -431,16 +374,10 @@ export function parseInstancesFile(raw: unknown, path = "instancesFile"): Instan
 	}
 	const obj = raw as Record<string, unknown>
 	if (obj.version !== 1) {
-		throw new InstancesContractError(
-			`${path}.version: must be 1 (got ${JSON.stringify(obj.version)})`,
-			`${path}.version`,
-		)
+		throw new InstancesContractError(`${path}.version: must be 1 (got ${JSON.stringify(obj.version)})`, `${path}.version`)
 	}
 	if (!obj.instances || typeof obj.instances !== "object" || Array.isArray(obj.instances)) {
-		throw new InstancesContractError(
-			`${path}.instances: expected object`,
-			`${path}.instances`,
-		)
+		throw new InstancesContractError(`${path}.instances: expected object`, `${path}.instances`)
 	}
 	const instances: Record<string, ProviderConfigurationInstance> = {}
 	for (const [k, v] of Object.entries(obj.instances as Record<string, unknown>)) {

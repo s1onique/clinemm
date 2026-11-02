@@ -21,10 +21,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { nameFor } from "@/shared/storage/instance-secret"
-import {
-	emptyInstancesFile,
-	type ProviderConfigurationInstance,
-} from "./contracts"
+import { emptyInstancesFile, type ProviderConfigurationInstance } from "./contracts"
 import { InstancesStore } from "./instances-store"
 
 let tmpDir: string
@@ -234,8 +231,6 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3", () => {
 			},
 		}
 		writeFileSync(storePath, JSON.stringify(tampered), "utf-8")
-		expect(() => new InstancesStore({ filePath: storePath })).toThrow(
-			/instance-secret namespace/,
-		)
+		expect(() => new InstancesStore({ filePath: storePath })).toThrow(/instance-secret namespace/)
 	})
 })

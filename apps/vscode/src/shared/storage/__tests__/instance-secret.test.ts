@@ -22,30 +22,20 @@ import {
 describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4", () => {
 	it("R4-01: parseInstanceSecretName accepts only the 'instance:' prefix", () => {
 		expect(parseInstanceSecretName("instance:foo")).toBe("instance:foo")
-		expect(parseInstanceSecretName("instance:corp-llm-key")).toBe(
-			"instance:corp-llm-key",
-		)
+		expect(parseInstanceSecretName("instance:corp-llm-key")).toBe("instance:corp-llm-key")
 	})
 
 	it("R4-02: parseInstanceSecretName rejects non-prefixed names (fail closed)", () => {
 		expect(() => parseInstanceSecretName("foo")).toThrow(InstanceSecretError)
-		expect(() => parseInstanceSecretName("openaiApiKey")).toThrow(
-			InstanceSecretError,
-		)
+		expect(() => parseInstanceSecretName("openaiApiKey")).toThrow(InstanceSecretError)
 		expect(() => parseInstanceSecretName("")).toThrow(InstanceSecretError)
 		expect(() => parseInstanceSecretName("instance:")).toThrow(InstanceSecretError)
 	})
 
 	it("R4-03: parseInstanceSecretName rejects a non-string (fail closed)", () => {
-		expect(() =>
-			parseInstanceSecretName(123 as unknown as string),
-		).toThrow(InstanceSecretError)
-		expect(() =>
-			parseInstanceSecretName(null as unknown as string),
-		).toThrow(InstanceSecretError)
-		expect(() =>
-			parseInstanceSecretName(undefined as unknown as string),
-		).toThrow(InstanceSecretError)
+		expect(() => parseInstanceSecretName(123 as unknown as string)).toThrow(InstanceSecretError)
+		expect(() => parseInstanceSecretName(null as unknown as string)).toThrow(InstanceSecretError)
+		expect(() => parseInstanceSecretName(undefined as unknown as string)).toThrow(InstanceSecretError)
 	})
 
 	it("R4-04: nameFor builds a namespaced key from an instanceId", () => {

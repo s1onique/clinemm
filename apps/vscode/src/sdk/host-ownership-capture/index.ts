@@ -38,10 +38,10 @@
 import type { AgentFinishReason } from "@cline/shared"
 import type { ActiveSession as VscodeActiveSession } from "@/sdk/cline-session-factory"
 import {
-	recordHostOwnershipFacts,
-	isHostOwnershipDiagnosticEnabled,
 	deriveCandidateAwaitingFollowup,
 	type HostOwnershipFactsSnapshot,
+	isHostOwnershipDiagnosticEnabled,
+	recordHostOwnershipFacts,
 } from "@/shared/host-ownership-diagnostic"
 
 /**
@@ -58,9 +58,7 @@ import {
  * and the chain stays synchronous end-to-end.
  */
 export interface HostOwnershipProbe {
-	readonly readHostFacts?: (
-		sessionId: string | undefined,
-	) => HostOwnershipHostFacts | undefined
+	readonly readHostFacts?: (sessionId: string | undefined) => HostOwnershipHostFacts | undefined
 }
 
 export interface HostOwnershipHostFacts {

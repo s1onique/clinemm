@@ -116,6 +116,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({
 				onToggleExpand={onToggleExpand}
 				reasoningContent={reasoningData.reasoning}
 				responseStarted={reasoningData.responseStarted}
+				retryFailedRequest={messageHandlers.retryFailedRequest}
 				sendMessageFromChatRow={messageHandlers.handleSendMessage}
 			/>
 		</div>

@@ -63,6 +63,7 @@ interface RequestStartRowProps {
 	 * buffer" is not evidence of an in-flight turn.
 	 */
 	turnState?: TurnState
+	retryFailedRequest?: () => Promise<boolean>
 }
 
 // State type for api_req_started rendering
@@ -182,6 +183,7 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 	isExpanded,
 	message,
 	turnState: turnStateProp,
+	retryFailedRequest,
 }) => {
 	// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04:
 	//
@@ -347,6 +349,7 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 					apiRequestFailedMessage={apiRequestFailedMessage}
 					errorType="error"
 					message={message}
+					retryFailedRequest={retryFailedRequest}
 				/>
 			)}
 		</div>

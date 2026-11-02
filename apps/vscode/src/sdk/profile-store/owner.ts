@@ -31,11 +31,8 @@ import type { SdkProviderChangeCoordinator } from "../sdk-provider-change-coordi
 import type { SdkSessionConfigBuilder } from "../sdk-session-config-builder"
 import type { SdkSessionLifecycle } from "../sdk-session-lifecycle"
 import type { SdkSessionRebuildScheduler } from "../sdk-session-rebuild-scheduler"
-import {
-	applyModelProfile as applyModelProfileCoordinator,
-	type ApplyModelProfileFailureReason,
-} from "./profile-application"
 import type { ModelProfile } from "./contracts"
+import { type ApplyModelProfileFailureReason, applyModelProfile as applyModelProfileCoordinator } from "./profile-application"
 import { ProfilesStore } from "./profiles-store"
 import {
 	DEFAULT_MODEL_PROFILE_ID_KEY,
@@ -209,9 +206,7 @@ export type ResolveActiveInstanceResult =
 	| { kind: "NONE_BOUND" }
 	| {
 			kind: "BOUND_BUT_BROKEN"
-			reason:
-				| "profile_missing_providerInstanceId"
-				| "instance_not_found"
+			reason: "profile_missing_providerInstanceId" | "instance_not_found"
 			profileId: string
 			profileName: string
 			referencedInstanceId: string | undefined
@@ -302,13 +297,7 @@ export function resolveActiveInstanceTyped(
 	historyItem: HistoryItem | undefined,
 	isResume: boolean,
 ): ProviderConfigurationInstance | undefined {
-	const result = resolveActiveInstanceTypedDiscriminated(
-		profilesStore,
-		instancesStore,
-		defaultProfileId,
-		historyItem,
-		isResume,
-	)
+	const result = resolveActiveInstanceTypedDiscriminated(profilesStore, instancesStore, defaultProfileId, historyItem, isResume)
 	return result.kind === "RESOLVED" ? result.instance : undefined
 }
 
@@ -317,9 +306,7 @@ export function resolveActiveInstanceTyped(
  */
 export function readActiveProfileIdFromHistoryItem(item: HistoryItem | undefined): string | undefined {
 	if (!item) return undefined
-	return typeof item.activeProfileId === "string" && item.activeProfileId.length > 0
-		? item.activeProfileId
-		: undefined
+	return typeof item.activeProfileId === "string" && item.activeProfileId.length > 0 ? item.activeProfileId : undefined
 }
 
 /**
@@ -679,6 +666,3 @@ function getDefaultDataDir(): string {
 	const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "/tmp"
 	return path.join(home, ".cline", "data")
 }
-
-
-

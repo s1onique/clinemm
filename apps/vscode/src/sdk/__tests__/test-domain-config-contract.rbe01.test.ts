@@ -106,9 +106,7 @@ function parseVitestConfigSnapshot(configPath: string): VitestConfigSnapshot {
 	const includeMatch = inner.match(/include\s*:\s*\[([\s\S]*?)\]/)
 	const excludeMatch = inner.match(/exclude\s*:\s*\[([\s\S]*?)\]/)
 	if (!includeMatch) {
-		throw new Error(
-			`RBE01: could not locate \`include:\` array inside \`test:\` block of ${configPath}.`,
-		)
+		throw new Error(`RBE01: could not locate \`include:\` array inside \`test:\` block of ${configPath}.`)
 	}
 	const pluck = (block: string): string[] =>
 		block
@@ -176,12 +174,12 @@ describe("RBE01 test-domain config-contract (base vs bridge)", () => {
 			// config will lack the bridge aliases, and the canonical
 			// coverage ratchet will fail.
 			it("every bridge vitest include is excluded from the BASE vitest config", () => {
-				const missing = bridgeVitest.includes.filter(
-					(bridgeFile) => !baseVitest.excludes.includes(bridgeFile),
-				)
+				const missing = bridgeVitest.includes.filter((bridgeFile) => !baseVitest.excludes.includes(bridgeFile))
 				expect(
 					missing,
-					"Bridge vitest config " + bridge.name + " includes these files but the BASE vitest.config.ts does NOT exclude them (they will be discovered by the base glob and fail with module-load errors because the base config lacks the bridge aliases):\n" +
+					"Bridge vitest config " +
+						bridge.name +
+						" includes these files but the BASE vitest.config.ts does NOT exclude them (they will be discovered by the base glob and fail with module-load errors because the base config lacks the bridge aliases):\n" +
 						missing.map((f) => "  - " + f).join("\n"),
 				).toEqual([])
 			})
@@ -192,12 +190,12 @@ describe("RBE01 test-domain config-contract (base vs bridge)", () => {
 			// and fail because the `@cline-internal/core/...` aliases
 			// are not declared in the base tsconfig.
 			it("every bridge vitest include is excluded from the BASE tsconfig", () => {
-				const missing = bridgeVitest.includes.filter(
-					(bridgeFile) => !baseTsConfig.excludes.includes(bridgeFile),
-				)
+				const missing = bridgeVitest.includes.filter((bridgeFile) => !baseTsConfig.excludes.includes(bridgeFile))
 				expect(
 					missing,
-					"Bridge vitest config " + bridge.name + " includes these files but the BASE tsconfig.json does NOT exclude them (they will be typechecked by the base tsc and fail because the bridge aliases are not declared in the base tsconfig):\n" +
+					"Bridge vitest config " +
+						bridge.name +
+						" includes these files but the BASE tsconfig.json does NOT exclude them (they will be typechecked by the base tsc and fail because the bridge aliases are not declared in the base tsconfig):\n" +
 						missing.map((f) => "  - " + f).join("\n"),
 				).toEqual([])
 			})
@@ -206,12 +204,12 @@ describe("RBE01 test-domain config-contract (base vs bridge)", () => {
 			// typechecked by the bridge tsconfig. Otherwise a bridge
 			// test could execute with stale or absent type information.
 			it("every bridge vitest include is in the BRIDGE tsconfig include", () => {
-				const missing = bridgeVitest.includes.filter(
-					(bridgeFile) => !bridgeTsConfig.includes.includes(bridgeFile),
-				)
+				const missing = bridgeVitest.includes.filter((bridgeFile) => !bridgeTsConfig.includes.includes(bridgeFile))
 				expect(
 					missing,
-					"Bridge vitest config " + bridge.name + " includes these files but the bridge tsconfig does NOT include them (the file would execute but NOT be typechecked):\n" +
+					"Bridge vitest config " +
+						bridge.name +
+						" includes these files but the bridge tsconfig does NOT include them (the file would execute but NOT be typechecked):\n" +
 						missing.map((f) => "  - " + f).join("\n"),
 				).toEqual([])
 			})
@@ -220,12 +218,12 @@ describe("RBE01 test-domain config-contract (base vs bridge)", () => {
 			// in the bridge vitest include. Otherwise a file would be
 			// typechecked but never executed (orphan-typechecked file).
 			it("every bridge tsconfig include is in the BRIDGE vitest include", () => {
-				const orphan = bridgeTsConfig.includes.filter(
-					(bridgeFile) => !bridgeVitest.includes.includes(bridgeFile),
-				)
+				const orphan = bridgeTsConfig.includes.filter((bridgeFile) => !bridgeVitest.includes.includes(bridgeFile))
 				expect(
 					orphan,
-					"Bridge tsconfig includes these files but the bridge vitest config " + bridge.name + " does NOT execute them (orphan typecheck -- no test runs them):\n" +
+					"Bridge tsconfig includes these files but the bridge vitest config " +
+						bridge.name +
+						" does NOT execute them (orphan typecheck -- no test runs them):\n" +
 						orphan.map((f) => "  - " + f).join("\n"),
 				).toEqual([])
 			})

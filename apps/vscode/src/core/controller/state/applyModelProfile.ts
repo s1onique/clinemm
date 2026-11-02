@@ -13,11 +13,10 @@
  * `applyModelProfile` (the coordinator) are an internal seam.
  */
 
-import { Logger } from "@/shared/services/Logger"
+import { applyModelProfileViaOwner, isKnownProfile } from "@/sdk/profile-store/owner"
 import { ApplyModelProfileRequest, ApplyModelProfileResponse } from "@/shared/proto/cline/state"
+import { Logger } from "@/shared/services/Logger"
 import type { Controller } from ".."
-import { applyModelProfileViaOwner } from "@/sdk/profile-store/owner"
-import { isKnownProfile } from "@/sdk/profile-store/owner"
 
 /**
  * Apply a ModelProfile to the active task.

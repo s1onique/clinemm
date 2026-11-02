@@ -710,6 +710,7 @@ describe("PTLL01 L2 — cancellation liveness (RED-04)", () => {
 				fenceRaised += 1
 				minter.bumpEpoch()
 			},
+			rebuilds: { runTaskTransition: async <T>(operation: () => Promise<T>): Promise<T> => operation() },
 		})
 
 		const epochBefore = minter.epoch
@@ -790,6 +791,7 @@ describe("PTLL01 L2 — cancellation liveness (RED-04)", () => {
 				fenceRaised += 1
 				minter.bumpEpoch()
 			},
+			rebuilds: { runTaskTransition: async <T>(operation: () => Promise<T>): Promise<T> => operation() },
 		})
 
 		await coordinator.cancelTask()
@@ -837,6 +839,7 @@ describe("PTLL01 L2 — cancellation liveness (RED-04)", () => {
 			}) as never,
 			getTurnPhase: () => currentPhase,
 			raiseCancelFence: () => minter.bumpEpoch(),
+			rebuilds: { runTaskTransition: async <T>(operation: () => Promise<T>): Promise<T> => operation() },
 		})
 
 		// The canonical completion already committed `completed`.
@@ -893,6 +896,7 @@ describe("PTLL01 L2 — cancellation liveness (RED-04)", () => {
 				fenceRaised += 1
 				minter.bumpEpoch()
 			},
+			rebuilds: { runTaskTransition: async <T>(operation: () => Promise<T>): Promise<T> => operation() },
 		})
 
 		await coordinator.cancelTask()

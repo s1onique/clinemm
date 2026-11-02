@@ -79,10 +79,7 @@ export function parseModelProfile(raw: unknown, path = "profile"): ModelProfile 
 		throw new ProfilesContractError(`${path}.name: must be non-empty string`, `${path}.name`)
 	}
 	if (typeof obj.providerInstanceId !== "string" || obj.providerInstanceId.length === 0) {
-		throw new ProfilesContractError(
-			`${path}.providerInstanceId: must be non-empty string`,
-			`${path}.providerInstanceId`,
-		)
+		throw new ProfilesContractError(`${path}.providerInstanceId: must be non-empty string`, `${path}.providerInstanceId`)
 	}
 	if (typeof obj.modelId !== "string" || obj.modelId.length === 0) {
 		throw new ProfilesContractError(`${path}.modelId: must be non-empty string`, `${path}.modelId`)
@@ -133,10 +130,7 @@ export function parseProfilesFile(raw: unknown, path = "profilesFile"): Profiles
 	}
 	const obj = raw as Record<string, unknown>
 	if (obj.version !== 1) {
-		throw new ProfilesContractError(
-			`${path}.version: must be 1 (got ${JSON.stringify(obj.version)})`,
-			`${path}.version`,
-		)
+		throw new ProfilesContractError(`${path}.version: must be 1 (got ${JSON.stringify(obj.version)})`, `${path}.version`)
 	}
 	if (!obj.profiles || typeof obj.profiles !== "object" || Array.isArray(obj.profiles)) {
 		throw new ProfilesContractError(`${path}.profiles: expected object`, `${path}.profiles`)

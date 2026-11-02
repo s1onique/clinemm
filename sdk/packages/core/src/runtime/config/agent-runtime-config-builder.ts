@@ -73,6 +73,8 @@ export interface CreateAgentRuntimeConfigInput {
 		| Promise<AgentRuntimePrepareTurnResult | undefined>
 		| AgentRuntimePrepareTurnResult
 		| undefined;
+	/** Host-derived diagnostics merged into the run-end telemetry. */
+	readonly runEndTelemetryProperties?: AgentRuntimeConfig["runEndTelemetryProperties"];
 	/** Seed messages (usually `session.conversation.getMessages()`). */
 	readonly initialMessages?: readonly AgentMessage[];
 	/**
@@ -130,6 +132,7 @@ export function createAgentRuntimeConfig(
 		// decision.
 		modelBehaviorTraceSink:
 			input.modelBehaviorTraceSink ?? agentConfig.modelBehaviorTraceSink,
+		runEndTelemetryProperties: input.runEndTelemetryProperties,
 		initialMessages: input.initialMessages,
 		completionPolicy:
 			input.completionPolicy === null

@@ -1,9 +1,12 @@
 import type {
+	ClientContext,
 	HubCommandEnvelope,
 	HubCommandInput,
 	HubReplyEnvelope,
 	JsonValue,
+	PluginPolicies,
 	ToolApprovalRequest,
+	UserContext,
 } from "@cline/shared";
 import {
 	createSessionId,
@@ -31,7 +34,10 @@ import {
 } from "../hub-client-contributions";
 import { logHubMessage } from "../hub-server-logging";
 import { toHubSessionRecord } from "../hub-session-records";
-import { cancelPendingCapabilityRequests } from "./capability-handlers";
+import {
+	CAPABILITY_OWNER_GONE_MESSAGE,
+	cancelPendingCapabilityRequests,
+} from "./capability-handlers";
 import {
 	asPlainRecord,
 	ensureSessionParticipant,
@@ -45,6 +51,57 @@ import {
 } from "./context";
 
 const CAPABILITY_OWNER_METADATA_KEY = "hubCapabilityOwnerClientId";
+
+function readHubContextString(
+	record: Record<string, unknown> | undefined,
+	key: string,
+): string | undefined {
+	const candidate = record?.[key];
+	return typeof candidate === "string" && candidate.trim()
+		? candidate.trim()
+		: undefined;
+}
+
+/** Parse the serializable subset of ExtensionContext carried by Hub clients. */
+export function readHubClientContext(
+	value: unknown,
+): ClientContext | undefined {
+	const record = asPlainRecord(value);
+	const name = typeof record?.name === "string" ? record.name.trim() : "";
+	if (!name) return undefined;
+	const version = readHubContextString(record, "version");
+	const platform = readHubContextString(record, "platform");
+	const platformVersion = readHubContextString(record, "platformVersion");
+	return {
+		name,
+		...(version ? { version } : {}),
+		...(platform ? { platform } : {}),
+		...(platformVersion ? { platformVersion } : {}),
+		...(typeof record?.isMultiRoot === "boolean"
+			? { isMultiRoot: record.isMultiRoot }
+			: {}),
+	};
+}
+
+/** Parse authenticated identity separately from the transport-neutral config. */
+export function readHubUserContext(value: unknown): UserContext | undefined {
+	const record = asPlainRecord(value);
+	const distinctId = readHubContextString(record, "distinctId");
+	const rawAccountId = record?.accountId;
+	const accountId =
+		rawAccountId === null ? null : readHubContextString(record, "accountId");
+	const email = readHubContextString(record, "email");
+	const organizationId = readHubContextString(record, "organizationId");
+	if (!distinctId && accountId === undefined && !email && !organizationId) {
+		return undefined;
+	}
+	return {
+		...(distinctId ? { distinctId } : {}),
+		...(accountId !== undefined ? { accountId } : {}),
+		...(email ? { email } : {}),
+		...(organizationId ? { organizationId } : {}),
+	};
+}
 
 async function deleteSessionAndCleanDerivedState(
 	ctx: HubTransportContext,
@@ -150,6 +207,11 @@ function getCapabilityOwnerClientId(
 	return ctx.sessionState.get(sessionId)?.createdByClientId;
 }
 
+/** `null` is meaningful for prompt/title updates (it clears the field). */
+function asNullableString(value: unknown): string | null | undefined {
+	return typeof value === "string" || value === null ? value : undefined;
+}
+
 function stripServerOwnedSessionMetadata(
 	metadata: Record<string, JsonValue | undefined> | undefined,
 ): Record<string, JsonValue | undefined> | undefined {
@@ -204,6 +266,63 @@ function authorizeSessionCompactionAccess(input: {
 	return undefined;
 }
 
+/** Accepts `{ "*"?: { enabled?: boolean }, [plugin]: { enabled?: boolean } }`. */
+export function parsePluginPolicies(
+	value: unknown,
+): PluginPolicies | undefined {
+	const record = asPlainRecord(value);
+	if (!record) return undefined;
+	const policies: PluginPolicies = {};
+	for (const [name, policy] of Object.entries(record)) {
+		const enabled = asPlainRecord(policy)?.enabled;
+		policies[name] = typeof enabled === "boolean" ? { enabled } : {};
+	}
+	return Object.keys(policies).length > 0 ? policies : undefined;
+}
+
+export async function handleSessionResume(
+	ctx: HubTransportContext,
+	envelope: HubCommandEnvelope,
+	requestToolApproval: (
+		request: ToolApprovalRequest,
+	) => Promise<{ approved: boolean; reason?: string }>,
+): Promise<HubReplyEnvelope> {
+	const sessionConfig = asPlainRecord(envelope.payload?.sessionConfig);
+	const sessionId =
+		typeof sessionConfig?.sessionId === "string"
+			? sessionConfig.sessionId.trim()
+			: "";
+	if (!sessionId) {
+		return errorReply(
+			envelope,
+			"invalid_resume",
+			"sessionConfig.sessionId is required",
+		);
+	}
+	if (!(await ctx.sessionHost.getSession(sessionId))) {
+		return errorReply(
+			envelope,
+			"session_not_found",
+			"The saved session was not found.",
+		);
+	}
+	const initialMessages = await (ctx.sessionHost.readLiveSessionMessages
+		? ctx.sessionHost.readLiveSessionMessages(sessionId)
+		: ctx.sessionHost.readSessionMessages(sessionId));
+	if (initialMessages.length === 0) {
+		return errorReply(
+			envelope,
+			"session_messages_not_found",
+			"The saved conversation is empty or unavailable.",
+		);
+	}
+	return handleSessionCreate(
+		ctx,
+		{ ...envelope, payload: { ...envelope.payload, initialMessages } },
+		requestToolApproval,
+	);
+}
+
 export async function handleSessionCreate(
 	ctx: HubTransportContext,
 	envelope: HubCommandEnvelope,
@@ -237,6 +356,8 @@ export async function handleSessionCreate(
 		payload.runtimeOptions && typeof payload.runtimeOptions === "object"
 			? (payload.runtimeOptions as Record<string, unknown>)
 			: {};
+	const clientContext = readHubClientContext(runtimeOptions.clientContext);
+	const userContext = readHubUserContext(runtimeOptions.userContext);
 	const initialCompactionState = parseSessionCompactionState(
 		payload.initialCompactionState,
 	);
@@ -293,6 +414,9 @@ export async function handleSessionCreate(
 		sessionId,
 		configExtensionCount: configExtensions?.length ?? 0,
 	});
+	// Re-creating after a detach makes this client the owner again, including
+	// for callbacks raised while the session starts.
+	ctx.detachedClientsBySession?.get(sessionId)?.delete(clientId);
 	const clientContributionRuntime = createHubClientContributionRuntime({
 		sessionId,
 		targetClientId: clientId,
@@ -341,6 +465,15 @@ export async function handleSessionCreate(
 			},
 			configExtensions,
 			...clientContributionRuntime.localRuntime,
+			...(clientContext || userContext
+				? {
+						extensionContext: {
+							...clientContributionRuntime.localRuntime.extensionContext,
+							...(clientContext ? { client: clientContext } : {}),
+							...(userContext ? { user: userContext } : {}),
+						},
+					}
+				: {}),
 			extensions: [
 				...(ctx.sessionExtensions ?? []),
 				...(clientContributionRuntime.localRuntime.extensions ?? []),
@@ -423,7 +556,22 @@ export async function handleSessionCreate(
 				: runtimeOptions.autoApproveTools === true
 					? { "*": { autoApprove: true } }
 					: undefined,
+		plugins: parsePluginPolicies(payload.plugins),
 	});
+	const pluginIssues = started.pluginIssues ?? [];
+	if (pluginIssues.length > 0) {
+		logHubMessage("warn", "session.create.plugin_issues", {
+			...baseLogContext,
+			sessionId: started.sessionId,
+			plugins: pluginIssues.map((issue) => ({
+				name: issue.name,
+				state: issue.state,
+				reason: issue.reason,
+				phase: issue.lastError?.phase,
+				message: issue.lastError?.message,
+			})),
+		});
+	}
 	logHubMessage("info", "session.create.start_session.end", {
 		...baseLogContext,
 		sessionId: started.sessionId,
@@ -448,11 +596,19 @@ export async function handleSessionCreate(
 		hasSnapshot: !!snapshot,
 		elapsedMs: Math.round(performance.now() - startedAt),
 	});
+	const pluginIssuePayload =
+		pluginIssues.length > 0
+			? { pluginIssues: JSON.parse(JSON.stringify(pluginIssues)) }
+			: {};
 	if (session) {
 		ctx.publish(
 			ctx.buildEvent(
 				"session.created",
-				{ session, ...(snapshot ? { snapshot } : {}) },
+				{
+					session,
+					...(snapshot ? { snapshot } : {}),
+					...pluginIssuePayload,
+				},
 				started.sessionId,
 			),
 		);
@@ -462,7 +618,11 @@ export async function handleSessionCreate(
 		sessionId: started.sessionId,
 		elapsedMs: Math.round(performance.now() - startedAt),
 	});
-	return okReply(envelope, { session, ...(snapshot ? { snapshot } : {}) });
+	return okReply(envelope, {
+		session,
+		...(snapshot ? { snapshot } : {}),
+		...pluginIssuePayload,
+	});
 }
 
 export async function handleSessionRestore(
@@ -519,6 +679,8 @@ export async function handleSessionRestore(
 			payload.runtimeOptions && typeof payload.runtimeOptions === "object"
 				? (payload.runtimeOptions as Record<string, unknown>)
 				: {};
+		const clientContext = readHubClientContext(runtimeOptions.clientContext);
+		const userContext = readHubUserContext(runtimeOptions.userContext);
 		const initialCompactionState = parseSessionCompactionState(
 			payload.initialCompactionState,
 		);
@@ -562,6 +724,7 @@ export async function handleSessionRestore(
 		const configExtensions = parseRuntimeConfigExtensions(
 			runtimeOptions.configExtensions,
 		);
+		ctx.detachedClientsBySession?.get(sessionId)?.delete(clientId);
 		const clientContributionRuntime = createHubClientContributionRuntime({
 			sessionId,
 			targetClientId: clientId,
@@ -573,6 +736,7 @@ export async function handleSessionRestore(
 		const result = await service.restoreCheckpoint({
 			sessionId: sourceSessionId,
 			checkpointRunCount,
+			telemetry: ctx.telemetry,
 			restore: {
 				messages: restoreOptions.messages as boolean | undefined,
 				workspace: restoreOptions.workspace as boolean | undefined,
@@ -623,6 +787,15 @@ export async function handleSessionRestore(
 						},
 						configExtensions,
 						...clientContributionRuntime.localRuntime,
+						...(clientContext || userContext
+							? {
+									extensionContext: {
+										...clientContributionRuntime.localRuntime.extensionContext,
+										...(clientContext ? { client: clientContext } : {}),
+										...(userContext ? { user: userContext } : {}),
+									},
+								}
+							: {}),
 						extensions: [
 							...(ctx.sessionExtensions ?? []),
 							...(clientContributionRuntime.localRuntime.extensions ?? []),
@@ -702,6 +875,7 @@ export async function handleSessionRestore(
 							: runtimeOptions.autoApproveTools === true
 								? { "*": { autoApprove: true } }
 								: undefined,
+					plugins: parsePluginPolicies(payload.plugins),
 				};
 			},
 			startSession: (startInput) => ctx.sessionHost.startSession(startInput),
@@ -818,6 +992,13 @@ export async function handleSessionDetach(
 		);
 	}
 	const clientId = envelope.clientId?.trim() || "hub-client";
+	// ponytail: entries live as long as the hub process; prune on session delete if it grows.
+	let detached = ctx.detachedClientsBySession?.get(sessionId);
+	if (!detached && ctx.detachedClientsBySession) {
+		detached = new Set();
+		ctx.detachedClientsBySession.set(sessionId, detached);
+	}
+	detached?.add(clientId);
 	const state = ctx.sessionState.get(sessionId);
 	if (state) {
 		state.participants.delete(clientId);
@@ -832,7 +1013,7 @@ export async function handleSessionDetach(
 		ctx,
 		(request) =>
 			request.sessionId === sessionId && request.targetClientId === clientId,
-		`Capability owner client ${clientId} detached before request was resolved.`,
+		CAPABILITY_OWNER_GONE_MESSAGE,
 	);
 	const [session, snapshot] = await Promise.all([
 		readHubSessionRecord(ctx, sessionId),
@@ -935,7 +1116,9 @@ export async function handleSessionList(
 ): Promise<HubReplyEnvelope> {
 	const limit =
 		typeof envelope.payload?.limit === "number" ? envelope.payload.limit : 200;
-	const records = await ctx.sessionHost.listSessions(limit);
+	const records = await ctx.sessionHost.listSessions(limit, {
+		rootOnly: envelope.payload?.rootOnly === true,
+	});
 	const sessions = records.map((session) =>
 		toHubSessionRecord(session, ctx.sessionState.get(session.sessionId)),
 	);
@@ -974,7 +1157,13 @@ export async function handleSessionUpdate(
 	const metadata = stripServerOwnedSessionMetadata(
 		asPlainRecord(envelope.payload?.metadata),
 	);
-	const updated = await ctx.sessionHost.updateSession(sessionId, { metadata });
+	const prompt = asNullableString(envelope.payload?.prompt);
+	const title = asNullableString(envelope.payload?.title);
+	const updated = await ctx.sessionHost.updateSession(sessionId, {
+		metadata,
+		...(prompt !== undefined ? { prompt } : {}),
+		...(title !== undefined ? { title } : {}),
+	});
 	const [session, snapshot] = await Promise.all([
 		readHubSessionRecord(ctx, sessionId),
 		readCoreSessionSnapshot(ctx, sessionId),
@@ -1126,6 +1315,26 @@ export async function handleSessionPendingPrompts(
 	}
 	const prompts = await service.list({ sessionId });
 	return okReply(envelope, { sessionId, prompts });
+}
+
+export async function handleSessionSteerFirstPendingPrompt(
+	ctx: HubTransportContext,
+	envelope: HubCommandEnvelope,
+): Promise<HubReplyEnvelope> {
+	const sessionId = extractSessionId(envelope);
+	const service = ctx.sessionHost.pendingPrompts;
+	if (!service) {
+		return errorReply(
+			envelope,
+			"pending_prompts_unavailable",
+			"Pending prompt service is not available.",
+		);
+	}
+	const result = await service.steerFirst({ sessionId });
+	return okReply(
+		envelope,
+		result as unknown as Record<string, JsonValue | undefined>,
+	);
 }
 
 export async function handleSessionUpdatePendingPrompt(

@@ -124,16 +124,15 @@
  *          LIVE USER SESSION      = NOT_EXECUTED
  */
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { estimateRequestInputTokens } from "@cline/shared"
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 // ---- Mocks for the @cline/core seam (mirror sdk-compaction.test.ts) ----
 
 const createContextCompactionPrepareTurn = vi.fn()
 const createSessionCompactionState = vi.fn((input: unknown) => ({ version: 1, input }))
 vi.mock("@cline/core", () => ({
-	createContextCompactionPrepareTurn: (...args: unknown[]) =>
-		createContextCompactionPrepareTurn(...args),
+	createContextCompactionPrepareTurn: (...args: unknown[]) => createContextCompactionPrepareTurn(...args),
 	createSessionCompactionState: (input: unknown) => createSessionCompactionState(input),
 }))
 
@@ -145,8 +144,7 @@ vi.mock("@/shared/services/Logger", () => ({
 // under test sees the mocked @cline/core.
 let compactSessionMessages: typeof import("./sdk-compaction").compactSessionMessages
 
-const SYSTEM_PROMPT =
-	"You are a concise coding assistant. Help with tasks succinctly."
+const SYSTEM_PROMPT = "You are a concise coding assistant. Help with tasks succinctly."
 
 // Two minimal tool entries -- same shape as the RED baseline at
 // compaction.real-producer-seam-red.test.ts (snake_case
@@ -180,9 +178,7 @@ const MESSAGES_BEFORE = [
 // The shape a successful manual compaction would return from
 // @cline/core under the existing prod seam
 // (sdk/packages/core/src/extensions/context/compaction.ts).
-const PROJECTED_MESSAGES = [
-	{ role: "user" as const, content: "summary" },
-]
+const PROJECTED_MESSAGES = [{ role: "user" as const, content: "summary" }]
 
 function makeBaseConfig() {
 	return {
@@ -294,8 +290,7 @@ describe("compactSessionMessages -- Option 1 W publication (seventy-seventh-pass
 
 		const runtimeAddedTool = {
 			name: "mcp_server_tool",
-			description:
-				"Runtime-added MCP server tool with a long description",
+			description: "Runtime-added MCP server tool with a long description",
 			input_schema: {
 				type: "object",
 				properties: {

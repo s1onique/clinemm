@@ -31,6 +31,8 @@ import { MessageTranslatorState } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
+import { getStateToPostToWebviewSignature } from "./sdk-controller-signature-probes"
+
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
 		error: vi.fn(),
@@ -165,9 +167,7 @@ describe("ACT-CLINEMM-P0-BRPU01 / blocked recovery — host publication (RED + G
 			// production accessor `getCurrentDeferredCompletionBarrier()`
 			// (the test-only `*ForTesting` alias is NOT a production
 			// read path). The call must be a single expression, not
-			const getStateBody = SdkControllerSource.slice(
-				SdkControllerSource.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>"),
-			)
+			const getStateBody = SdkControllerSource.slice(SdkControllerSource.indexOf(getStateToPostToWebviewSignature()))
 			expect(getStateBody).toMatch(/blockedRecovery:\s*projectBlockedRecovery\(/)
 			expect(getStateBody).toMatch(/this\.sessionEvents\?\.getCurrentDeferredCompletionBarrier\?\.\(\)/)
 			expect(getStateBody).not.toMatch(/getDeferredCompletionBarrierForTesting/)

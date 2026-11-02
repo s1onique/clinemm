@@ -33,8 +33,10 @@ import {
 } from "lucide-react"
 import { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
+import { isOptionsAskActive } from "@/components/chat/chat-view/shared/buttonConfig"
 import { canRestoreWorkspaceFromMessage } from "@/components/chat/chat-view/utils/messageUtils"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
+import { CloudProvisioningRow } from "@/components/cloud/CloudProvisioningRow"
 import { WithCopyButton } from "@/components/common/CopyButton"
 import Thumbnails from "@/components/common/Thumbnails"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
@@ -111,6 +113,7 @@ interface ChatRowProps {
 	mode?: Mode
 	reasoningContent?: string
 	responseStarted?: boolean
+	retryFailedRequest?: () => Promise<boolean>
 }
 
 export interface QuoteButtonState {
@@ -177,22 +180,32 @@ export const ChatRowContent = memo(
 		mode,
 		reasoningContent,
 		responseStarted,
+		retryFailedRequest,
 	}: ChatRowContentProps) => {
 		const {
-			backgroundEditEnabled,
+			backgroundEditEnabled: backgroundEditSetting,
 			mcpServers,
 			vscodeTerminalExecutionMode,
 			clineMessages,
 			showFeatureTips,
-			enableCheckpointsSetting,
-			turnState,
 			thinkingPresentation,
 			// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
 			// Per-job lifecycle projection. The chat-row consults this map
 			// to override the historical `commandExecutionDisposition` flag
 			// when the authoritative CommandJob has finalized.
 			backgroundCommandJobStates,
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: upstream aliases the raw
+			// flag as `checkpointsSetting`; the fork read the same field
+			// under its plain name. One alias — the naive merge declared
+			// `enableCheckpointsSetting` twice and `turnState` twice.
+			enableCheckpointsSetting: checkpointsSetting,
+			turnState,
+			currentCloudTask,
 		} = useExtensionState()
+		// Cloud tasks edit files inside the sandbox: there is no local editor to
+		// preview in, so diffs render inline, and no local workspace to checkpoint.
+		const backgroundEditEnabled = backgroundEditSetting || !!currentCloudTask
+		const enableCheckpointsSetting = checkpointsSetting && !currentCloudTask
 		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
 			visible: false,
 			top: 0,
@@ -258,8 +271,7 @@ export const ChatRowContent = memo(
 		// is still alive — the row is NOT terminal, the Cancel
 		// affordance MUST remain available, and the status pill MUST
 		// read "Backgrounded" (NOT "Completed").
-		const historicalIsCommandBackgrounded =
-			isCommandMessage && message.commandExecutionDisposition === "backgrounded"
+		const historicalIsCommandBackgrounded = isCommandMessage && message.commandExecutionDisposition === "backgrounded"
 		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
 		// Live override. The historical `commandExecutionDisposition`
 		// was stamped ONCE by the message-translator at content_end
@@ -270,9 +282,7 @@ export const ChatRowContent = memo(
 		// the Cancel affordance. The historical `clineMessages` entry
 		// is NOT mutated (CPJ-CTL-01); only this render-projection
 		// is.
-		const backgroundedJobId = isCommandMessage
-			? extractJobIdFromCommandOutput(message.text ?? "")
-			: undefined
+		const backgroundedJobId = isCommandMessage ? extractJobIdFromCommandOutput(message.text ?? "") : undefined
 		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
 		// (correction01): the projection value is one of
 		// `"running"` / `"exited"` / `"cancelled"` /
@@ -281,8 +291,7 @@ export const ChatRowContent = memo(
 		// Only the literal string `"running"` means the job is
 		// still in flight; EVERY OTHER value (including the
 		// legacy `"terminal"`) means the job has settled.
-		const liveProjectionValue =
-			backgroundedJobId !== undefined ? backgroundCommandJobStates?.[backgroundedJobId] : undefined
+		const liveProjectionValue = backgroundedJobId !== undefined ? backgroundCommandJobStates?.[backgroundedJobId] : undefined
 		const liveProjectionTerminal = liveProjectionValue !== undefined && liveProjectionValue !== "running"
 		// Pass through the exact terminal reason for the renderer
 		// to surface on the pill (Cancelled / Deadline exceeded /
@@ -299,8 +308,7 @@ export const ChatRowContent = memo(
 		// `isCommandExecuting` to false so the Cancel button hides
 		// (CommandOutputRow.showCancelButton is OR'd over all three
 		// flags: isCommandExecuting || isCommandPending || isCommandBackgrounded).
-		const isCommandExecuting =
-			isCommandMessage && !message.commandCompleted && commandHasOutput && !liveProjectionTerminal
+		const isCommandExecuting = isCommandMessage && !message.commandCompleted && commandHasOutput && !liveProjectionTerminal
 		// A command is pending if it hasn't started (no output) and hasn't completed
 		const isCommandPending =
 			isCommandMessage && isLast && !message.commandCompleted && !commandHasOutput && !liveProjectionTerminal
@@ -313,8 +321,7 @@ export const ChatRowContent = memo(
 		// pill text + the Cancel-hiding predicate BOTH pick up the
 		// terminal state. Historical `message.commandCompleted: false`
 		// is preserved verbatim (CPJ-CTL-01).
-		const isCommandCompleted =
-			isCommandMessage && (message.commandCompleted === true || liveProjectionTerminal)
+		const isCommandCompleted = isCommandMessage && (message.commandCompleted === true || liveProjectionTerminal)
 
 		const isMcpServerResponding = isLast && lastModifiedMessage?.say === "mcp_server_request_started"
 
@@ -532,6 +539,7 @@ export const ChatRowContent = memo(
 							</div>
 							{backgroundEditEnabled && tool.path && (tool.diff || tool.content) ? (
 								<DiffEditRow
+									canOpenFile={!currentCloudTask}
 									isLoading={message.partial}
 									patch={tool.diff || tool.content!}
 									path={tool.path}
@@ -576,7 +584,12 @@ export const ChatRowContent = memo(
 								<span className="font-bold">Cline wants to create a new file:</span>
 							</div>
 							{backgroundEditEnabled && tool.path && tool.content ? (
-								<DiffEditRow patch={tool.content} path={tool.path} startLineNumbers={tool.startLineNumbers} />
+								<DiffEditRow
+									canOpenFile={!currentCloudTask}
+									patch={tool.content}
+									path={tool.path}
+									startLineNumbers={tool.startLineNumbers}
+								/>
 							) : (
 								<CodeAccordian
 									code={tool.content!}
@@ -867,8 +880,8 @@ export const ChatRowContent = memo(
 					isCommandExecuting={isCommandExecuting}
 					isCommandPending={isCommandPending}
 					isCommandRejected={isCommandRejected}
-					liveProjectionTerminalReason={liveProjectionTerminalReason}
 					isOutputFullyExpanded={isOutputFullyExpanded}
+					liveProjectionTerminalReason={liveProjectionTerminalReason}
 					message={message}
 					onCancelCommand={onCancelCommand}
 					onOutputChange={onLastRowContentChange}
@@ -960,6 +973,7 @@ export const ChatRowContent = memo(
 								mode={mode}
 								reasoningContent={reasoningContent}
 								responseStarted={responseStarted}
+								retryFailedRequest={retryFailedRequest}
 							/>
 						)
 					case "api_req_finished":
@@ -1066,10 +1080,14 @@ export const ChatRowContent = memo(
 					case "user_feedback":
 						return (
 							<UserMessage
-								canRestoreWorkspace={canRestoreWorkspaceFromMessage(clineMessages, message.ts)}
+								canRestoreWorkspace={
+									!currentCloudTask && canRestoreWorkspaceFromMessage(clineMessages, message.ts)
+								}
 								files={message.files}
+								// Edit-and-regenerate rebuilds the conversation as a local session, which
+								// a cloud task cannot use; without a timestamp the row is read-only.
 								images={message.images}
-								messageTs={message.ts}
+								messageTs={currentCloudTask ? undefined : message.ts}
 								sendMessageFromChatRow={sendMessageFromChatRow}
 								text={message.text}
 							/>
@@ -1087,7 +1105,7 @@ export const ChatRowContent = memo(
 							</div>
 						)
 					case "error":
-						return <ErrorRow errorType="error" message={message} />
+						return <ErrorRow errorType="error" message={message} retryFailedRequest={retryFailedRequest} />
 					case "diff_error":
 						return <ErrorRow errorType="diff_error" message={message} />
 					case "clineignore_error":
@@ -1188,10 +1206,10 @@ export const ChatRowContent = memo(
 								</button>
 							</div>
 						)
-					case "task_progress":
-						return <InvisibleSpacer /> // task_progress messages should be displayed in TaskHeader only, not in chat
 					case "compaction":
 						return <CompactionRow message={message} />
+					case "cloud_provisioning":
+						return <CloudProvisioningRow active={lastModifiedMessage?.ts === message.ts} message={message} />
 					default:
 						return (
 							<div>
@@ -1210,7 +1228,13 @@ export const ChatRowContent = memo(
 			case "ask":
 				switch (message.ask) {
 					case "mistake_limit_reached":
-						return <ErrorRow errorType="mistake_limit_reached" message={message} />
+						return (
+							<ErrorRow
+								errorType="mistake_limit_reached"
+								message={message}
+								retryFailedRequest={retryFailedRequest}
+							/>
+						)
 					case "completion_result":
 						if (message.text) {
 							const hasChanges = message.text.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
@@ -1275,10 +1299,7 @@ export const ChatRowContent = memo(
 								<div className="pt-3">
 									<OptionsButtons
 										inputValue={inputValue}
-										isActive={
-											(isLast && lastModifiedMessage?.ask === "followup") ||
-											(!selected && options && options.length > 0)
-										}
+										isActive={isOptionsAskActive(message, turnState, isLast, lastModifiedMessage)}
 										options={options}
 										selected={selected}
 									/>
@@ -1333,10 +1354,7 @@ export const ChatRowContent = memo(
 								<PlanCompletionOutputRow text={response || message.text || ""} />
 								<OptionsButtons
 									inputValue={inputValue}
-									isActive={
-										(isLast && lastModifiedMessage?.ask === "plan_mode_respond") ||
-										(!selected && options && options.length > 0)
-									}
+									isActive={isOptionsAskActive(message, turnState, isLast, lastModifiedMessage)}
 									options={options}
 									selected={selected}
 								/>

@@ -8,14 +8,14 @@
  * in that case.
  */
 
-import { Logger } from "@/shared/services/Logger"
-import { DeleteModelProfileRequest, DeleteModelProfileResponse } from "@/shared/proto/cline/state"
-import type { Controller } from ".."
 import {
 	deleteModelProfile as deleteInOwner,
 	getGlobalDefaultProfileId,
 	readActiveProfileIdFromHistoryItem,
 } from "@/sdk/profile-store/owner"
+import { DeleteModelProfileRequest, DeleteModelProfileResponse } from "@/shared/proto/cline/state"
+import { Logger } from "@/shared/services/Logger"
+import type { Controller } from ".."
 
 export async function deleteModelProfile(
 	controller: Controller,

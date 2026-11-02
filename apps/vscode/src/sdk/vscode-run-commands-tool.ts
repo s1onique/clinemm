@@ -37,6 +37,7 @@ import {
 } from "@/integrations/terminal/types"
 import { Logger } from "@/shared/services/Logger"
 import { getShellForProfile } from "@/utils/shell"
+import { describeBackgroundFailure } from "./background-failure"
 import { captureBackgroundJobLivenessAuthorityRecord, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import {
 	CommandJobManager,
@@ -48,6 +49,7 @@ import {
 import { triggerExtensionHostAllocationProfilerOnFirstQualifyingJob } from "./extension-host-allocation-profiler"
 import { triggerExtensionHostCpuProfilerOnFirstQualifyingJob } from "./extension-host-cpu-profiler"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
+import { isStandaloneHost } from "./vscode-terminal-execution-mode"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -784,6 +786,7 @@ export function createVscodeRunCommandsTool(options: VscodeRunCommandsToolOption
 function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state: { snapshot: ShellSnapshot }): ShellExecutor {
 	const { cwd, getTerminalManager } = options
 	const executionMode = options.vscodeTerminalExecutionMode ?? "vscodeTerminal"
+	const terminalType = isStandaloneHost() ? "standalone" : "vscode"
 
 	// Lazy-init terminal manager reference
 	let terminalManager: VscodeTerminalManager | undefined
@@ -952,7 +955,14 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					},
 					context,
 				)
-				telemetryService.captureTerminalExecution(true, "vscode", "child_process", {
+				// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the telemetry label must
+				// name the ACTUAL host (`standalone` vs `vscode`), not a
+				// hard-coded `"vscode"`. Upstream emits the resolved
+				// `terminalType`; the fork's background path had kept the
+				// literal, so standalone hosts reported their background
+				// executions under the wrong host label. `terminalType` is
+				// already resolved above from `isStandaloneHost()`.
+				telemetryService.captureTerminalExecution(true, terminalType, "child_process", {
 					...(start.exitCode !== undefined ? { exitCode: start.exitCode } : {}),
 					terminalExecutionMode: "backgroundExec",
 				})
@@ -1933,8 +1943,12 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 						notifyBackgroundStateChange(false, jobId, terminalState, ownerResolution?.sessionId)
 					})
 				}
-				telemetryService.captureTerminalExecution(false, "vscode", "child_process", {
+				// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: use the resolved host
+				// label (`standalone` vs `vscode`) — see the success-path
+				// capture above.
+				telemetryService.captureTerminalExecution(false, terminalType, "child_process", {
 					...(error instanceof CommandExitError && { exitCode: error.exitCode }),
+					...describeBackgroundFailure(error),
 					terminalExecutionMode: "backgroundExec",
 				})
 				throw error

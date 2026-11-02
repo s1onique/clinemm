@@ -76,9 +76,7 @@ describe("ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01 — Sandbox
 
 	it("toggling Allow SSH agent dispatches updateSetting(clinemmSafeYoloAllowSshAgent, true)", () => {
 		const { container } = render(<SandboxCapabilitiesSection renderSectionHeader={() => null} />)
-		const sshAgentSwitch = container.querySelector(
-			'[aria-label="Allow SSH agent authentication"]',
-		)
+		const sshAgentSwitch = container.querySelector('[aria-label="Allow SSH agent authentication"]')
 		expect(sshAgentSwitch).toBeTruthy()
 		fireEvent.click(sshAgentSwitch as Element)
 		expect(mockUpdateSetting).toHaveBeenCalledWith("clinemmSafeYoloAllowSshAgent", true)
@@ -89,10 +87,7 @@ describe("ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01 — Sandbox
 		const networkSwitch = container.querySelector('[aria-label="Allow outbound network"]')
 		fireEvent.click(networkSwitch as Element)
 		expect(mockUpdateSetting).toHaveBeenCalledWith("clinemmSafeYoloAllowNetwork", true)
-		expect(mockUpdateSetting).not.toHaveBeenCalledWith(
-			"clinemmSafeYoloAllowSshAgent",
-			expect.anything(),
-		)
+		expect(mockUpdateSetting).not.toHaveBeenCalledWith("clinemmSafeYoloAllowSshAgent", expect.anything())
 	})
 
 	it("renders the persisted true value as the switch's checked state (visual truth)", () => {
@@ -117,7 +112,7 @@ describe("ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01 — Sandbox
 				renderSectionHeader={(tabId) => {
 					observed.push(tabId)
 					return (
-						<div data-testid="section-header" data-tab-id={tabId}>
+						<div data-tab-id={tabId} data-testid="section-header">
 							Sandbox & Capabilities
 						</div>
 					)
@@ -129,8 +124,6 @@ describe("ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01 — Sandbox
 		// SettingsView.tsx). A return of null means the section
 		// renders without its heading.
 		expect(observed).toEqual(["sandbox"])
-		expect(
-			container.querySelector('[data-testid="section-header"][data-tab-id="sandbox"]'),
-		).toBeTruthy()
+		expect(container.querySelector('[data-testid="section-header"][data-tab-id="sandbox"]')).toBeTruthy()
 	})
 })

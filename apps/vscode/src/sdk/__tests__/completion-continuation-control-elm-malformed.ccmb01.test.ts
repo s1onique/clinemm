@@ -7,13 +7,13 @@
  * No malformed input MUST default-authorize to RetryCompletion.
  */
 
-import { describe, expect, it, beforeEach } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import {
+	type CompletionContinuationControlFactsJson,
 	decodeDirective,
 	invokeElmKernel,
 	resetCompletionContinuationControlElmAuthorityForTests,
 	resetElmKernelForTests,
-	type CompletionContinuationControlFactsJson,
 } from "../completion-continuation-control-elm"
 
 const wellFormedFacts: CompletionContinuationControlFactsJson = {

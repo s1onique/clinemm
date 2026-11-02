@@ -149,6 +149,14 @@ function makeCoordinator(state: CoordinatorState) {
 		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-PRE-EXISTING-RACE-RECON01: this
 		// stub was missing for the same reason as tcl-parent*.test.ts.
 		clearTaskSettings: async () => {},
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: `clearTask` runs inside the
+		// exclusive `rebuilds.runTaskTransition` boundary (upstream's
+		// task-transition serialization). The fixture did not provide it,
+		// so the clear threw `Cannot read properties of undefined
+		// (reading 'runTaskTransition')` before the lifecycle was reached.
+		rebuilds: {
+			runTaskTransition: async (operation: () => Promise<unknown>) => operation(),
+		},
 	} as unknown as SdkTaskControlCoordinatorOptions & {
 		sessions: SdkTaskControlCoordinatorOptions["sessions"] & {
 			getActiveSession: ReturnType<typeof vi.fn>

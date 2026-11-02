@@ -55,19 +55,27 @@ describe("ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01 / central-
 	})
 
 	it("TUSIX01-GATE_ON: env=1 / true / yes (case-insensitive) returns enabled=true source=env", () => {
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" }, false)).toEqual({
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" }, false)).toEqual(
+			{
+				enabled: true,
+				source: "env",
+			},
+		)
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "true" }, false),
+		).toEqual({
 			enabled: true,
 			source: "env",
 		})
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "true" }, false)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "YES" }, false),
+		).toEqual({
 			enabled: true,
 			source: "env",
 		})
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "YES" }, false)).toEqual({
-			enabled: true,
-			source: "env",
-		})
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: " 1 " }, false)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: " 1 " }, false),
+		).toEqual({
 			enabled: true,
 			source: "env",
 		})
@@ -75,11 +83,15 @@ describe("ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01 / central-
 
 	it("TUSIX01-GATE_OTHER: env=0 / off / false / empty / garbage returns enabled=false (public profile)", () => {
 		// explicit OFF (env-driven, but the result is OFF)
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" }, false)).toEqual({
-			enabled: false,
-			source: "env",
-		})
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "off" }, false)).toEqual({
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" }, false)).toEqual(
+			{
+				enabled: false,
+				source: "env",
+			},
+		)
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "off" }, false),
+		).toEqual({
 			enabled: false,
 			source: "env",
 		})
@@ -89,7 +101,9 @@ describe("ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01 / central-
 			source: "profile",
 		})
 		// garbage -> falls through to profile default (public = OFF)
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "banana" }, false)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "banana" }, false),
+		).toEqual({
 			enabled: false,
 			source: "profile",
 		})

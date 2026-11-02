@@ -19,7 +19,6 @@ import { rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { applyBackgroundOwnerCorrelationDiagnosticProfile } from "../dogfood-diagnostic-profile"
 import {
 	captureBackgroundOwnerCorrelationRecord,
 	clearBackgroundOwnerCorrelationCaptureRecords,
@@ -27,9 +26,10 @@ import {
 	setBackgroundOwnerCorrelationCaptureEnabled,
 } from "../background-owner-correlation"
 import {
-	dumpExtensionSideBackgroundOwnerCorrelationDiagnostic,
 	type BackgroundOwnerCorrelationDiagnosticContext,
+	dumpExtensionSideBackgroundOwnerCorrelationDiagnostic,
 } from "../background-owner-correlation-runtime"
+import { applyBackgroundOwnerCorrelationDiagnosticProfile } from "../dogfood-diagnostic-profile"
 
 describe("ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01-CORRECTION01 / BOCOR dogfood profile", () => {
 	let dirs: string[] = []
@@ -108,7 +108,9 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01-CORRECTION0
 		})
 		const { file } = await dumpExtensionSideBackgroundOwnerCorrelationDiagnostic(ctx)
 		expect(file).toBe(join(dir, "background-owner-correlation.jsonl"))
-		const lines = readFileSync(file, "utf8").split("\n").filter((l) => l.length > 0)
+		const lines = readFileSync(file, "utf8")
+			.split("\n")
+			.filter((l) => l.length > 0)
 		expect(lines).toHaveLength(1)
 	})
 

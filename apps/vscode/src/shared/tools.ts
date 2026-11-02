@@ -22,7 +22,6 @@ export enum ClineDefaultTool {
 	NEW_TASK = "new_task",
 	PLAN_MODE = "plan_mode_respond",
 	ACT_MODE = "act_mode_respond",
-	TODO = "focus_chain",
 	WEB_FETCH = "web_fetch",
 	WEB_SEARCH = "web_search",
 	CONDENSE = "condense",
@@ -34,6 +33,22 @@ export enum ClineDefaultTool {
 	USE_SUBAGENTS = "use_subagents",
 }
 
+/**
+ * ACT-CLINEMM-FOCUS-CHAIN: the fork's focus-chain tool. Upstream removed
+ * the focus-chain surface; the fork's subagent loader still references it,
+ * so the enum member is preserved.
+ */
+export enum ClineFocusChainTool {
+	TODO = "focus_chain",
+}
+
+/**
+ * Per-namespace registry of dynamically-registered tool-use names.
+ *
+ * The fork's subagent loader registers the names of the tools it surfaces
+ * at runtime, so the shared tool-name registry must accept them dynamically
+ * rather than only the statically-enumerated members above.
+ */
 const dynamicToolUseNamesByNamespace = new Map<string, Set<string>>()
 
 export function setDynamicToolUseNames(namespace: string, names: string[]): void {

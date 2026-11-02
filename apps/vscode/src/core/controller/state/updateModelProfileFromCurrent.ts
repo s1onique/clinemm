@@ -7,10 +7,10 @@
  * current task's effective configuration. Name is preserved.
  */
 
-import { Logger } from "@/shared/services/Logger"
-import { ModelProfile, UpdateModelProfileFromCurrentRequest } from "@/shared/proto/cline/state"
-import type { Controller } from ".."
 import { updateModelProfileFromConfig as updateInOwner } from "@/sdk/profile-store/owner"
+import { ModelProfile, UpdateModelProfileFromCurrentRequest } from "@/shared/proto/cline/state"
+import { Logger } from "@/shared/services/Logger"
+import type { Controller } from ".."
 
 export async function updateModelProfileFromCurrent(
 	controller: Controller,

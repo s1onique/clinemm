@@ -1,3 +1,47 @@
+# ACT-CLINEMM-FORK-UPSTREAM-MERGE01 — PASS_STRUCTURAL_ONLY — 2026-11-02
+
+**Status:** CLOSED with verdict **`PASS_STRUCTURAL_ONLY`**. Frozen full upstream merge `a6507a62` into the ClineMM integration branch `265044bf3`, preserving all fork authorities. All 67 merge conflicts resolved; 0 unmerged paths; 0 conflict markers remaining. Live UI / installed-VSIX qualification was NOT possible in this environment and is explicitly NOT claimed.
+
+```text
+ACT_ID: ACT-CLINEMM-FORK-UPSTREAM-MERGE01
+TYPE: MERGE (frozen full upstream integration)
+EPIC: EPIC-CLINEMM-UPSTREAM-AND-AGENT-CONTROL-01
+VERDICT: PASS_STRUCTURAL_ONLY
+FORK_HEAD (parent 1): 265044bf37429cb3c48918eb7473e46cc3933964
+UPSTREAM_HEAD (parent 2): a6507a62a147db4a35e27f4294589742ccac5060
+MERGE_BASE: 48d63852745460ff0fa3dfcc0457bbe2493841de
+BRANCH: integration/upstream-20261102
+CONFLICTS_RESOLVED: 67
+UNMERGED_PATHS: 0
+CONFLICT_MARKERS_REMAINING: 0
+OVERLAP_LEDGER: fork-side 7930 files / upstream-side 1803 files / BOTH-SIDES 142 files
+EVIDENCE: .factory/evidence/ACT-CLINEMM-FORK-UPSTREAM-MERGE01/{README.md,ledger.json,command-receipts.md}
+```
+
+**C1 — FORK-AUTHORITY REGRESSIONS FOUND AND REPAIRED (7).** These were silent behavioral losses the merge reintroduced; each was caught by A/B against the fork baseline, not by reading diffs alone.
+
+1. `apps/vscode/src/sdk/sdk-task-control-coordinator.ts` — duplicate `clearPending`; repaired with optional `{ skipInteractionClear?: boolean }`, and `clearTaskWithFence` now settles interactions exactly once before `runTaskTransition`.
+2. `apps/vscode/src/sdk/sdk-task-start-coordinator.ts` — a SECOND `sessionConfigBuilder.build` shadowed the upstream-augmented config and allocated a DIFFERENT session id; the single build now lives inside `sessions.trackSessionStart`.
+3. `apps/vscode/src/sdk/SdkController.ts` — reintroduced upstream `turnStateTracker.set("streaming")` in `initTask`, violating the fork single-writer invariant; removed.
+4. `apps/vscode/src/sdk/message-translator.ts` — the 2-arg `setStreamingToolContext` seeded `streamingCommandOutput`, which SILENTLY DROPPED every `submit_and_exit` completion row (root cause of 7 CPA01 failures); no longer seeded.
+5. `apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts` — `isIdle` treated a missing `queuedPromptCount` as busy and the `!isIdle` branch DROPPED pending entries; missing count now means idle and pending entries are requeued.
+6. `apps/vscode/src/sdk/cline-session-factory.ts` — the fork's `lmstudio: "apiKey"` map entry was dropped (BOOTSTRAP_COVERAGE invariant); restored, and `resolveApiKey` reordered so providers.json for the provider is authoritative with `PROVIDER_API_KEY_MAP` field as legacy fallback only.
+7. `sdk/packages/llms/src/catalog/catalog-m31-flash-snapshot01.test.ts` — a fork-only witness pinned the fork's STALE `minimax/MiniMax-M3` snapshot (1_048_576 / 512_000) against upstream's authoritative catalog (1_000_000 / 524_288); the witness now follows the upstream catalog while preserving the property it protects (adding `MiniMax-M3.1-Flash` did not disturb the sibling `MiniMax-M3`, and the `reasoningOptions` toggle shape is unchanged).
+
+**C2 — DETERMINISTIC GATES (final, post-edit).** `apps/vscode` `bun run check-types` **EXIT=0 (0 errors)**; `apps/vscode` `bun run lint` **EXIT=0 (2048 files)**; `apps/vscode/webview-ui` `bunx tsc -b` **EXIT=0**; `apps/vscode/webview-ui` `bun run lint` **EXIT=0**; `bun run build:sdk` **EXIT=0**; `apps/vscode` `IS_DEV=true bun esbuild.mjs` **EXIT=0**; `apps/vscode` `bun esbuild.mjs` **EXIT=0**; MiniMax witnesses (7 files under `sdk/packages/llms`) **7 files / 41 passed / 0 failed**; all **5/5 Elm kernels build**.
+
+**C3 — ELM KERNELS.** `background-notify-authority` **25/0**; `completion-authority` **31/0**; `task-header-orchestration` **48/0**; `completion-continuation-control` **39 passed / 2 failed — FORK-PARITY RED** (the fork baseline reproduces the identical 2 failure names: `negative unconsumedCount is always MalformedFacts`, `long passive accumulation (LIVE STALLED-REARM-LOOP01)`); `deferred-completion-barrier` has NO test module (`tests/` holds only `elm.json`) — its kernel builds. Requires `ELM_HOME=/tmp/cline-int/elm-home` (the default package cache is not writable here).
+
+**C4 — VS CODE SUITE (three-way per-file A/B).** Merged full suite **5434 passed / 148 failed / 491 suites**. The fork baseline collection was TRUNCATED (872 vs 1060 suites — mixed/symlinked deps), so whole-suite totals were NEVER compared directly; every candidate delta was re-run per-file A/B on both trees. **335 fork REDs fixed by the merge. 14 candidate regressions — ALL 14 disproven as pre-existing** (identical failure sets in both trees). **NET REGRESSIONS: 0.** A/B groups: 6 candidate-regression files **14F/21P merged vs 14F/21P fork — IDENTICAL failure sets**; 14 other files **28F/75P merged vs 33F/70P fork — STRICTLY BETTER (+5 fork REDs fixed)**; seatbelt/sandbox/yolo (36 files) **19F/197P/40S vs IDENTICAL** (environmental); host-blocked + pathological corpus + tdd-red (4 files) **27F/22P vs 30F/19P — STRICTLY BETTER (+3 fork REDs fixed)**; command-job-manager + run-commands + termination-authority (5 files) **20F/38P vs IDENTICAL**.
+
+**C5 — CORE SDK SUITE (three-way A/B).** Merged **4863 passed / 44 failed / 311 suites** vs fork **3538 / 98 / 252**. **75 fork REDs fixed. 12 candidate regressions — ALL 12 triaged. NET REGRESSIONS: 0.** Per-file A/B over the 9 implicated files: merged **22F/204P**, upstream `a6507a62` **23F**, fork **15F** — the merged tree sits BETWEEN upstream and fork: it inherits upstream's newly-added test files and FIXES the fork's `terminates the real child when the final initialize attempt fails` RED. The remaining differences are spawn/EPERM/timer environmental: `reclaims an idle plugin process and reinitializes it on the next call` fails in ALL THREE trees; `supports createTool through the agents package export in the sandbox` is upstream-only and FIXED by the merge.
+
+**C6 — UPSTREAM-INHERITED FAILURES (not merge regressions).** `sdk/packages/agents/src/agent-runtime.test.ts` under `bun test`: upstream `a6507a62` run in an ISOLATED detached worktree reproduces **142 pass / 10 fail — byte-identical to the merged tree** (fork: 64 pass / 0 fail, the test file predates upstream). The 7 `vi.runAllTimersAsync(...)` call sites exist in upstream `a6507a62` itself; `runAllTimersAsync` is a VITEST-ONLY API absent from `bun:test`'s `vi`. These are upstream-introduced and inherited verbatim.
+
+**C7 — ENVIRONMENTAL LIMITATIONS (documented, not code defects).** `sandbox-exec` / seatbelt unavailable (`sandbox_apply: Operation not permitted`; seatbelt suites fail identically in fork and merged, 19/19). vitest worker teardown `EPERM` on `syscall: 'kill'` — IDENTICAL in fork and upstream; all tests pass, only worker teardown fails. Core checkpoint/hub-runtime need writable `CLINE_DIR` and `TMPDIR=/tmp/cline-int/stable-tmp`. Elm needs `ELM_HOME=/tmp/cline-int/elm-home`. Fork baseline suite collection truncated → per-file A/B, never whole-suite totals. No live UI / installed-VSIX dogfood performed.
+
+**C8 — NOT DONE (explicitly).** No push. No install. No promotion. No release. No merge to any protected branch. The two-parent merge commit is created locally on `integration/upstream-20261102` only.
+
 # ACT-CLINEMM-UPSTREAM-DIVERGENCE-AND-INTEGRATION-RECON01 — PASS_RECON — 2026-11-02
 
 **Status:** CLOSED with verdict **`PASS_RECON`**. Read-only reconnaissance only: no merge, no cherry-pick, no rebase, no reset, no checkout, no force-push, no install. The local checkout, branch, index, protected stashes, package locks, production source, tests, and the installed extension were NOT modified. The only writes are run-owned evidence under `.factory/evidence/ACT-CLINEMM-UPSTREAM-DIVERGENCE-AND-INTEGRATION-RECON01/` (24 files, SHA-256 pinned) plus this terminal board closure.

@@ -12,9 +12,9 @@
  * Collaborators stubbed: readInstance (a plain function).
  */
 
+import { describe, expect, it } from "vitest"
 import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import type { ProviderConfigurationInstance } from "../instance-store/contracts"
-import { describe, expect, it } from "vitest"
 import { type ModelProfile } from "../profile-store/contracts"
 import {
 	DEFAULT_SECRET_SENTINELS,
@@ -22,11 +22,7 @@ import {
 	projectModelProfileToSummary,
 } from "../profile-store/webview-summary"
 
-function makeInstance(
-	instanceId: string,
-	providerId: string,
-	modelId: string,
-): ProviderConfigurationInstance {
+function makeInstance(instanceId: string, providerId: string, modelId: string): ProviderConfigurationInstance {
 	return {
 		instanceId,
 		providerId,
@@ -102,12 +98,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase D", (
 				"inst-A": makeInstance("inst-A", "openai-compatible", "model-A"),
 				"inst-B": makeInstance("inst-B", "openai-compatible", "model-B"),
 			}
-			const summaries = projectAllModelProfilesToSummaries(
-				profiles,
-				(id) => instances[id],
-				"prof-A",
-				"prof-B",
-			)
+			const summaries = projectAllModelProfilesToSummaries(profiles, (id) => instances[id], "prof-A", "prof-B")
 			expect(summaries).toHaveLength(2)
 			expect(summaries.find((s) => s.profileId === "prof-A")?.isActive).toBe(true)
 			expect(summaries.find((s) => s.profileId === "prof-B")?.isDefault).toBe(true)
@@ -122,12 +113,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase D", (
 				"inst-A": makeInstance("inst-A", "openai-compatible", "model-A"),
 				"inst-B": makeInstance("inst-B", "openai-compatible", "model-B"),
 			}
-			const summaries = projectAllModelProfilesToSummaries(
-				profiles,
-				(id) => instances[id],
-				undefined,
-				undefined,
-			)
+			const summaries = projectAllModelProfilesToSummaries(profiles, (id) => instances[id], undefined, undefined)
 			const serialized = JSON.stringify(summaries)
 			for (const sentinel of DEFAULT_SECRET_SENTINELS) {
 				expect(serialized.toLowerCase()).not.toContain(sentinel.toLowerCase())
@@ -158,12 +144,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase D", (
 			const instances: Record<string, ProviderConfigurationInstance> = {
 				"inst-A": makeInstance("inst-A", "openai-compatible", "model-A"),
 			}
-			const summaries = projectAllModelProfilesToSummaries(
-				profiles,
-				(id) => instances[id],
-				"prof-A",
-				"prof-A",
-			)
+			const summaries = projectAllModelProfilesToSummaries(profiles, (id) => instances[id], "prof-A", "prof-A")
 			const allowedKeys = new Set(["profileId", "name", "providerId", "modelId", "isActive", "isDefault"])
 			for (const summary of summaries) {
 				for (const k of Object.keys(summary)) {

@@ -20,16 +20,16 @@
  *   postStateToWebview          = SYNTHETIC
  */
 
-import type { HistoryItem } from "@shared/HistoryItem"
-import type { InstanceSecretName } from "@/shared/storage/instance-secret"
-import type { ProviderConfigurationInstance } from "../instance-store/contracts"
-import { describe, expect, it, vi } from "vitest"
-import { type ModelProfile } from "../profile-store/contracts"
-import { applyModelProfile } from "../profile-store/profile-application"
-import { ProfilesStore } from "../profile-store/profiles-store"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import type { HistoryItem } from "@shared/HistoryItem"
+import { describe, expect, it, vi } from "vitest"
+import type { InstanceSecretName } from "@/shared/storage/instance-secret"
+import type { ProviderConfigurationInstance } from "../instance-store/contracts"
+import { type ModelProfile } from "../profile-store/contracts"
+import { applyModelProfile } from "../profile-store/profile-application"
+import { ProfilesStore } from "../profile-store/profiles-store"
 
 interface FakeSession {
 	sessionId: string
@@ -124,7 +124,8 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase C", (
 					},
 					rebuilds: { request: vi.fn() } as never,
 					getWorkspaceRoot: async () => "/workspace",
-					getCurrentTaskHistoryItem: () => ({ id: "task-1", ts: 1, task: "T", tokensIn: 0, tokensOut: 0, totalCost: 0 } as HistoryItem),
+					getCurrentTaskHistoryItem: () =>
+						({ id: "task-1", ts: 1, task: "T", tokensIn: 0, tokensOut: 0, totalCost: 0 }) as HistoryItem,
 					getCurrentTaskProviderInstanceId: () => "inst-A",
 					writeTaskHistoryItem,
 					postStateToWebview,
@@ -317,7 +318,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase C", (
 					profilesStore,
 					readInstance: () => makeInstance("inst-B", "openai-compatible", "model-B", "key-B"),
 					getInstanceSecret: () => undefined, // MISSING
-					sessions: { getActiveSession: () => sessionA as never, updateActiveSessionModel: updateSessionModel } as never,
+					sessions: {
+						getActiveSession: () => sessionA as never,
+						updateActiveSessionModel: updateSessionModel,
+					} as never,
 					sessionConfigBuilder: {} as never,
 					providerChange: { applyTypedProviderConfigurationInstance: applySpy as never },
 					rebuilds: { request: vi.fn() } as never,
@@ -348,7 +352,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase C", (
 					profilesStore,
 					readInstance: () => undefined,
 					getInstanceSecret: () => "key",
-					sessions: { getActiveSession: () => ({ sessionId: "sess", isRunning: false } as never), updateActiveSessionModel: vi.fn() } as never,
+					sessions: {
+						getActiveSession: () => ({ sessionId: "sess", isRunning: false }) as never,
+						updateActiveSessionModel: vi.fn(),
+					} as never,
 					sessionConfigBuilder: {} as never,
 					providerChange: { applyTypedProviderConfigurationInstance: vi.fn() },
 					rebuilds: { request: vi.fn() } as never,
@@ -406,7 +413,8 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase C", (
 					providerChange: { applyTypedProviderConfigurationInstance: applySpy as never },
 					rebuilds: { request: vi.fn() } as never,
 					getWorkspaceRoot: async () => "/workspace",
-					getCurrentTaskHistoryItem: () => ({ id: "task-1", ts: 1, task: "T", tokensIn: 0, tokensOut: 0, totalCost: 0 } as HistoryItem),
+					getCurrentTaskHistoryItem: () =>
+						({ id: "task-1", ts: 1, task: "T", tokensIn: 0, tokensOut: 0, totalCost: 0 }) as HistoryItem,
 					getCurrentTaskProviderInstanceId: () => "inst-A",
 					writeTaskHistoryItem,
 					postStateToWebview,

@@ -15,9 +15,9 @@
  *   - One-click preset: "Allow /private/tmp for 24h".
  */
 
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react"
-import { VSCodeButton, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import type { TemporaryExternalPathAuthority } from "@cline/core"
+import { VSCodeButton, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
+import { memo, type ReactNode, useCallback, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import Section from "../Section"
 import { updateSetting } from "../utils/settingsHandlers"
@@ -55,9 +55,7 @@ function formatRemainingHours(expiresAt: string): { text: string; expired: boole
 
 const TemporaryExternalPathsSection = ({ renderSectionHeader }: TemporaryExternalPathsSectionProps) => {
 	const { clinemmTemporaryExternalPathAuthorities = [] } = useExtensionState()
-	const entries = useMemo(() => clinemmTemporaryExternalPathAuthorities ?? [], [
-		clinemmTemporaryExternalPathAuthorities,
-	])
+	const entries = useMemo(() => clinemmTemporaryExternalPathAuthorities ?? [], [clinemmTemporaryExternalPathAuthorities])
 	const [newPath, setNewPath] = useState("")
 	const [newDurationHours, setNewDurationHours] = useState<number>(DEFAULT_DURATION_HOURS)
 
@@ -107,64 +105,48 @@ const TemporaryExternalPathsSection = ({ renderSectionHeader }: TemporaryExterna
 				</div>
 				<div className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50">
 					<p className="text-sm text-muted-foreground pt-3 pb-2">
-						Temporarily trust specific external filesystem roots for R0 read-only
-						command auto-approval. Each entry expires automatically. Maximum
-						lifetime: 24h. This widens the workspace path authority set; it does
-						not bypass hard deny, Seatbelt, sensitive-file protections, or
-						realpath verification.
+						Temporarily trust specific external filesystem roots for R0 read-only command auto-approval. Each entry
+						expires automatically. Maximum lifetime: 24h. This widens the workspace path authority set; it does not
+						bypass hard deny, Seatbelt, sensitive-file protections, or realpath verification.
 					</p>
 
 					<p className="text-xs text-muted-foreground italic pb-2">
-						CORRECTION01: each entry shows the path you typed. The host
-						canonicalizes it (via <code>fs.realpathSync</code>) before granting
-						authority at evaluation time, so symlinks at the configured path
-						resolve to their target and only match when the target is itself
-						inside the configured root. Expired entries are visually marked
-						and do not grant authority.
+						CORRECTION01: each entry shows the path you typed. The host canonicalizes it (via{" "}
+						<code>fs.realpathSync</code>) before granting authority at evaluation time, so symlinks at the configured
+						path resolve to their target and only match when the target is itself inside the configured root. Expired
+						entries are visually marked and do not grant authority.
 					</p>
 
 					{entries.length === 0 ? (
-						<p className="text-sm text-muted-foreground italic pb-2">
-							No temporary paths configured.
-						</p>
+						<p className="text-sm text-muted-foreground italic pb-2">No temporary paths configured.</p>
 					) : (
 						<ul className="flex flex-col gap-2 pb-2">
 							{entries.map((entry) => {
 								const remaining = formatRemainingHours(entry.expiresAt)
 								return (
 									<li
-										key={`${entry.path}-${entry.expiresAt}`}
 										className={`flex items-center justify-between gap-2 px-3 py-2 rounded border ${
 											remaining.expired
 												? "border-description/40 bg-background/30 opacity-70"
 												: "border-editor-widget-border/40 bg-background/50"
 										}`}
 										data-testid={`temp-external-entry-${entry.path}`}
-									>
+										key={`${entry.path}-${entry.expiresAt}`}>
 										<div className="flex flex-col gap-0.5 min-w-0">
-											<code
-												className="text-sm truncate"
-												title={entry.path}
-											>
+											<code className="text-sm truncate" title={entry.path}>
 												{entry.path}
 											</code>
 											<span
-												className={`text-xs ${
-													remaining.expired ? "text-error" : "text-description"
-												}`}
-												data-testid={`temp-external-status-${entry.path}`}
-											>
-												{remaining.expired
-													? "Expired (no authority)"
-													: `expires in ${remaining.text}`}
+												className={`text-xs ${remaining.expired ? "text-error" : "text-description"}`}
+												data-testid={`temp-external-status-${entry.path}`}>
+												{remaining.expired ? "Expired (no authority)" : `expires in ${remaining.text}`}
 											</span>
 										</div>
 										<VSCodeButton
 											appearance="secondary"
 											aria-label={`Remove temporary external path ${entry.path}`}
 											data-testid={`remove-temp-external-${entry.path}`}
-											onClick={() => handleRemove(entry.expiresAt)}
-										>
+											onClick={() => handleRemove(entry.expiresAt)}>
 											Remove
 										</VSCodeButton>
 									</li>
@@ -174,9 +156,7 @@ const TemporaryExternalPathsSection = ({ renderSectionHeader }: TemporaryExterna
 					)}
 
 					<div className="flex flex-col gap-2 pb-2">
-						<label className="text-xs font-medium text-foreground/80">
-							Add a path
-						</label>
+						<label className="text-xs font-medium text-foreground/80">Add a path</label>
 						<VSCodeTextField
 							aria-label="Path to trust temporarily"
 							data-testid="temp-external-path-input"
@@ -185,12 +165,10 @@ const TemporaryExternalPathsSection = ({ renderSectionHeader }: TemporaryExterna
 							value={newPath}
 						/>
 						<fieldset className="flex flex-col gap-1">
-							<legend className="text-xs font-medium text-foreground/80">
-								Duration
-							</legend>
+							<legend className="text-xs font-medium text-foreground/80">Duration</legend>
 							<div className="flex items-center gap-3 text-sm">
 								{[1, 4, 8, MAX_DURATION_HOURS].map((h) => (
-									<label key={h} className="flex items-center gap-1">
+									<label className="flex items-center gap-1" key={h}>
 										<input
 											checked={newDurationHours === h}
 											data-testid={`temp-external-duration-${h}h`}
@@ -207,21 +185,17 @@ const TemporaryExternalPathsSection = ({ renderSectionHeader }: TemporaryExterna
 							appearance="primary"
 							data-testid="temp-external-add"
 							disabled={newPath.trim().length === 0}
-							onClick={handleAdd}
-						>
+							onClick={handleAdd}>
 							Add path
 						</VSCodeButton>
 					</div>
 
 					<div className="flex flex-col gap-1 pt-2 border-t border-editor-widget-border/30">
-						<label className="text-xs font-medium text-foreground/80">
-							Quick presets
-						</label>
+						<label className="text-xs font-medium text-foreground/80">Quick presets</label>
 						<VSCodeButton
 							appearance="secondary"
 							data-testid="temp-external-preset-private-tmp"
-							onClick={handleAllowPrivateTmpFor24h}
-						>
+							onClick={handleAllowPrivateTmpFor24h}>
 							Allow /private/tmp for 24h
 						</VSCodeButton>
 					</div>

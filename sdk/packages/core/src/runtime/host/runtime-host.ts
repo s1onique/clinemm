@@ -7,6 +7,13 @@ import type {
 	AgentRuntimeRecoverySnapshot,
 	RuntimeConfigExtensionKind
 } from "@cline/shared";
+import type {
+	McpAppResourceReadRequest,
+	McpAppToolBinding,
+	McpAppToolCallRequest,
+	McpResourceReadResult,
+	McpToolCallResult,
+} from "../../extensions/mcp";
 import type { HookEventPayload } from "../../hooks";
 import type { CheckpointEntry } from "../../hooks/checkpoint-hooks";
 import type { ProviderSettings } from "../../services/llms/provider-settings";
@@ -172,6 +179,12 @@ export interface StartSessionInput {
 	localRuntime?: LocalRuntimeStartOptions;
 	capabilities?: RuntimeCapabilities;
 	toolPolicies?: import("@cline/shared").AgentConfig["toolPolicies"];
+	/**
+	 * Which plugins this session uses, shaped like `toolPolicies`:
+	 * `{ "*": { enabled: true }, "my-plugin": { enabled: false } }`. Plugins
+	 * are enabled by default. Plugin tools still go through `toolPolicies`.
+	 */
+	plugins?: import("@cline/shared").PluginPolicies;
 }
 
 /** Session input after the execution host has resolved a concrete workspace. */
@@ -260,6 +273,11 @@ export interface StartSessionResult {
 	manifestPath: string;
 	messagesPath: string;
 	result?: AgentResult;
+	/**
+	 * Plugins the session asked for but does not have because they failed or
+	 * are disabled. Clients should show these to the user.
+	 */
+	pluginIssues?: import("@cline/shared").SessionPluginIssue[];
 }
 
 export interface SendSessionInput {
@@ -371,6 +389,10 @@ export type PendingPromptCountRead =
 	| { available: false };
 
 export interface PendingPromptsServiceApi {
+	/** Select and steer the current queue head atomically in the runtime. */
+	steerFirst(
+		input: PendingPromptsListInput,
+	): Promise<PendingPromptMutationResult>;
 	list(input: PendingPromptsListInput): Promise<SessionPendingPrompt[]>;
 	update(
 		input: PendingPromptsUpdateInput,
@@ -450,6 +472,21 @@ export interface SessionConnectionRuntimeService {
 	): Promise<void>;
 }
 
+export interface McpAppsRuntimeService {
+	resolveMcpAppTool(
+		sessionId: string,
+		toolName: string,
+	): Promise<McpAppToolBinding | undefined>;
+	readMcpAppResource(
+		sessionId: string,
+		request: McpAppResourceReadRequest,
+	): Promise<McpResourceReadResult>;
+	callMcpAppTool(
+		sessionId: string,
+		request: McpAppToolCallRequest,
+	): Promise<McpToolCallResult>;
+}
+
 export interface CommandExecutionRuntimeService {
 	proceedWhileRunning(sessionId: string, toolCallId?: string): Promise<number>;
 }
@@ -475,6 +512,11 @@ export interface RestoreSessionResult {
 	startResult?: StartSessionResult;
 	messages?: LlmsProviders.MessageWithMetadata[];
 	checkpoint: CheckpointEntry;
+}
+
+export interface ListSessionsOptions {
+	/** Only root sessions: excludes subagent and team-task child rows. */
+	rootOnly?: boolean;
 }
 
 /**
@@ -509,7 +551,10 @@ export interface RuntimeHost {
 	stopSession(sessionId: string): Promise<void>;
 	dispose(reason?: string): Promise<void>;
 	getSession(sessionId: string): Promise<SessionRecord | undefined>;
-	listSessions(limit?: number): Promise<SessionRecord[]>;
+	listSessions(
+		limit?: number,
+		options?: ListSessionsOptions,
+	): Promise<SessionRecord[]>;
 	deleteSession(sessionId: string): Promise<boolean>;
 	updateSession(
 		sessionId: string,
@@ -621,6 +666,12 @@ export interface RuntimeHost {
 	 * every backend implementing `PendingPromptsServiceApi` MUST
 	 * provide.
 	 */
+	/**
+	 * Whether this host currently holds a live-event subscription for the
+	 * session. Optional: only hosts that subscribe to sessions individually
+	 * (e.g. hub clients) have anything to report.
+	 */
+	hasSessionSubscription?(sessionId: string): boolean;
 }
 
 export type RuntimeHostMode = "auto" | "local" | "hub" | "remote";

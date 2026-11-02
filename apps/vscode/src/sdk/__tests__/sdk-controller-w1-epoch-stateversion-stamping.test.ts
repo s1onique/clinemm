@@ -39,6 +39,8 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { MessageIdMinter } from "../message-id-minter"
 
+import { getStateToPostToWebviewSignature } from "./sdk-controller-signature-probes"
+
 const SDK_CONTROLLER_PATH = resolve(__dirname, "../SdkController.ts")
 
 function readSource(path: string): string {
@@ -47,7 +49,7 @@ function readSource(path: string): string {
 
 function getStateToPostToWebviewBody(): string {
 	const source = readSource(SDK_CONTROLLER_PATH)
-	const start = source.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>")
+	const start = source.indexOf(getStateToPostToWebviewSignature())
 	expect(start, "SdkController.getStateToPostToWebview signature must exist").toBeGreaterThanOrEqual(0)
 	return source.slice(start)
 }

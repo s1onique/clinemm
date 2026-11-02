@@ -73,7 +73,16 @@ describe("ACT-CLINEMM-M31-CATALOG-SNAPSHOT-REFRESH01: bundled MiniMax M3.1 Flash
 		const models = getGeneratedModelsForProvider(PROVIDER_ID);
 
 		expect(models["MiniMax-M3"]).toBeDefined();
-		expect(models["MiniMax-M3"]?.contextWindow).toBe(1_048_576);
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the upstream catalog refresh
+		// re-published `minimax/MiniMax-M3` with the models.dev-authoritative
+		// context window (1_000_000) and output limit (524_288), replacing the
+		// fork-side snapshot values (1_048_576 / 512_000). The catalog is the
+		// upstream-authoritative artifact, so the witness follows it; the
+		// property this case protects — that adding `MiniMax-M3.1-Flash` did
+		// not disturb the sibling `MiniMax-M3` entry — is preserved, and the
+		// `reasoningOptions` toggle shape is unchanged by the refresh.
+		expect(models["MiniMax-M3"]?.contextWindow).toBe(1_000_000);
+		expect(models["MiniMax-M3"]?.maxTokens).toBe(524_288);
 		expect(models["MiniMax-M3"]?.reasoningOptions).toEqual([
 			{ type: "toggle" },
 		]);

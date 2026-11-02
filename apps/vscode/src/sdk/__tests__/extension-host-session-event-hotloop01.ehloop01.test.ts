@@ -129,6 +129,10 @@ function makeCoordinator(opts: {
 		sessions: {
 			getActiveSession: () => activeSession,
 			setRunning: vi.fn(),
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the coordinator records Core's
+			// queue length on the active session. The mock lifecycle must
+			// expose the method the coordinator actually calls.
+			setQueuedPromptCount: vi.fn(),
 		} as never,
 		messages: {
 			appendAndEmit: vi.fn(),

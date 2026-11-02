@@ -344,7 +344,7 @@ describe("WPROV07: mechanical inventory — every production writerId is mapped;
 	it("WPROV07.1: writerId union fully reconciles with production call sites", async () => {
 		const { readFile } = await import("node:fs/promises")
 
-		const diagSrc = await readFile("src/shared/turn-state-writer-provenance.ts", "utf8")
+		const diagSrc = stripCommentsPreservingLines(await readFile("src/shared/turn-state-writer-provenance.ts", "utf8"))
 		const unionIds = new Set<string>()
 		const unionRe = /\|\s*"([a-z][^"]+)"/g
 		let m: RegExpExecArray | null
@@ -364,7 +364,20 @@ describe("WPROV07: mechanical inventory — every production writerId is mapped;
 		const usedIds = new Set<string>()
 		let callSites = 0
 		for (const file of sdkFiles) {
-			const src = await readFile(file, "utf8")
+			// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: strip comments before the
+			// call-site scan. The production sources DOCUMENT their phase
+			// transitions in prose, e.g.
+			//   // ... AND setTurnPhase("completed", ...) so a ...
+			// The scanner's `setTurnPhase(` pattern matched those COMMENT
+			// mentions and harvested the PHASE literal ("completed" /
+			// "streaming") as if it were a writer id — so the probe reported
+			// phantom "missing from the union" ids for two phase names that
+			// are not writer ids at all.
+			//
+			// The probe's subject is PRODUCTION CALL SITES; comments are not
+			// call sites. Strip them (replacing each with equivalent
+			// newlines so line numbers stay stable) before scanning.
+			const src = stripCommentsPreservingLines(await readFile(file, "utf8"))
 			// Match the START of any setTurnPhase( call. Handles three forms:
 			//   setTurnPhase?.(          (bare, closure-internal)
 			//   this.options.setTurnPhase?.(  (coordinator internal)
@@ -406,7 +419,7 @@ describe("WPROV07: mechanical inventory — every production writerId is mapped;
 				startRe.lastIndex = j + 1
 			}
 		}
-		const controllerSrc = await readFile("src/sdk/SdkController.ts", "utf8")
+		const controllerSrc = stripCommentsPreservingLines(await readFile("src/sdk/SdkController.ts", "utf8"))
 		// Walk every setWithWriter( call in SdkController and read its
 		// writerIdentity("...") literal — exact-args matching, paren-balanced.
 		const cRe = /setWithWriter\s*\(/g
@@ -708,6 +721,33 @@ describe("CMD05: command registration does not enable the diagnostic by default"
 		expect(stripped).not.toMatch(/enableTurnStateWriterProvenanceDiagnostic\s*\(/)
 	})
 })
+
+/**
+ * Removes block and line comments from a TypeScript source while PRESERVING
+ * line numbering (each removed comment's newlines are kept, and the comment
+ * body is replaced by spaces).
+ *
+ * ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the WPROV07.1 inventory probe scans
+ * production sources for `setTurnPhase(...)` call sites. The production
+ * sources DOCUMENT their phase transitions in prose — e.g.
+ * `// ... AND setTurnPhase("completed", ...) so a ...` — and the scanner
+ * matched those COMMENT mentions, harvesting the PHASE literal
+ * ("completed" / "streaming") as if it were a writer id. The probe then
+ * reported two phantom "writer ids missing from the union".
+ *
+ * The probe's subject is PRODUCTION CALL SITES; comments are not call
+ * sites. Stripping comments (without shifting line numbers) keeps the
+ * probe's error messages pointing at the right source lines.
+ */
+function stripCommentsPreservingLines(src: string): string {
+	// Replace block comments with spaces, keeping their newlines.
+	const withoutBlockComments = src.replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "))
+	// Replace line comments with spaces, keeping the newline.
+	return withoutBlockComments
+		.split("\n")
+		.map((line) => line.replace(/\/\/.*$/, (match) => " ".repeat(match.length)))
+		.join("\n")
+}
 
 function findStringEnd(src: string, startQuoteAt: number, quote: string): number {
 	let end = startQuoteAt + 1

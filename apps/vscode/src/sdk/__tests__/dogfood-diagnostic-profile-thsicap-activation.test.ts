@@ -77,11 +77,15 @@ describe("T1..T4: resolveEffectiveTaskHeaderSelectorInputCapture precedence (pur
 	it("T3: dogfood + env=0 -> OFF (explicit override-down wins in dogfood)", () => {
 		const r = resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" }, true)
 		expect(r).toEqual({ enabled: false, source: "env" })
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "off" }, true)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "off" }, true),
+		).toEqual({
 			enabled: false,
 			source: "env",
 		})
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "false" }, true)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "false" }, true),
+		).toEqual({
 			enabled: false,
 			source: "env",
 		})
@@ -90,22 +94,30 @@ describe("T1..T4: resolveEffectiveTaskHeaderSelectorInputCapture precedence (pur
 	it("T4: public + env=1 -> ON (operator opt-in preserved in public)", () => {
 		const r = resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" }, false)
 		expect(r).toEqual({ enabled: true, source: "env" })
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "true" }, false)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "true" }, false),
+		).toEqual({
 			enabled: true,
 			source: "env",
 		})
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "yes" }, false)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "yes" }, false),
+		).toEqual({
 			enabled: true,
 			source: "env",
 		})
 	})
 
 	it("garbage env value falls through to the profile default", () => {
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "banana" }, true)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "banana" }, true),
+		).toEqual({
 			enabled: true,
 			source: "profile",
 		})
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "DOGFOOD" }, false)).toEqual({
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "DOGFOOD" }, false),
+		).toEqual({
 			enabled: false,
 			source: "profile",
 		})
@@ -123,8 +135,12 @@ describe("T1..T4: resolveEffectiveTaskHeaderSelectorInputCapture precedence (pur
 	})
 
 	it("explicit env override beats the profile default in BOTH directions", () => {
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" }, true).enabled).toBe(false)
-		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" }, false).enabled).toBe(true)
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" }, true).enabled,
+		).toBe(false)
+		expect(
+			resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" }, false).enabled,
+		).toBe(true)
 	})
 
 	it("resolver body does not mutate its input env", () => {
@@ -177,7 +193,10 @@ describe("AC2: public default + override-down disarms the seam", () => {
 	it("dogfood + env=0 -> seam disarmed (explicit override-down honored)", () => {
 		applyTaskHeaderSelectorInputCaptureDiagnosticProfile({}, true)
 		expect(isTaskHeaderSelectorInputCaptureEnabled()).toBe(true)
-		const result = applyTaskHeaderSelectorInputCaptureDiagnosticProfile({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" }, true)
+		const result = applyTaskHeaderSelectorInputCaptureDiagnosticProfile(
+			{ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" },
+			true,
+		)
 		expect(result.enabled).toBe(false)
 		expect(result.source).toBe("env")
 		expect(isTaskHeaderSelectorInputCaptureEnabled()).toBe(false)
@@ -185,7 +204,10 @@ describe("AC2: public default + override-down disarms the seam", () => {
 
 	it("public + env=1 -> seam armed (operator opt-in preserved)", () => {
 		expect(isTaskHeaderSelectorInputCaptureEnabled()).toBe(false)
-		const result = applyTaskHeaderSelectorInputCaptureDiagnosticProfile({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" }, false)
+		const result = applyTaskHeaderSelectorInputCaptureDiagnosticProfile(
+			{ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" },
+			false,
+		)
 		expect(result.enabled).toBe(true)
 		expect(result.source).toBe("env")
 		expect(isTaskHeaderSelectorInputCaptureEnabled()).toBe(true)

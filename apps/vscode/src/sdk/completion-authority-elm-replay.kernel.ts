@@ -22,7 +22,13 @@ import { adaptRecord } from "./completion-authority-elm-replay"
 
 let _bundleEvaluated = false
 let _kernelCodeCache: { path: string; code: string } | null = null
-let _ElmRef: { Main: { init: (flags: unknown) => { ports: { inbound: { send: (n: unknown) => void }; outbound: { subscribe: (cb: (v: unknown) => void) => void } } } } } | null = null
+let _ElmRef: {
+	Main: {
+		init: (flags: unknown) => {
+			ports: { inbound: { send: (n: unknown) => void }; outbound: { subscribe: (cb: (v: unknown) => void) => void } }
+		}
+	}
+} | null = null
 
 function evaluateBundleOnce(kernelPath: string): void {
 	if (_bundleEvaluated) return

@@ -181,6 +181,7 @@ describe("ACTIVE_SESSION_IMMEDIATE_NEXT_TOOL_CALL RED - the user contract", () =
 		} as unknown as ActiveSession["sdkHost"]
 		const activeSession: ActiveSession = {
 			sessionId: "S1",
+			queuedPromptCount: 0,
 			isRunning: true, // running — rebuild drain is deferred
 			sdkHost: stubSdkHost,
 			unsubscribe: vi.fn(),
@@ -192,6 +193,7 @@ describe("ACTIVE_SESSION_IMMEDIATE_NEXT_TOOL_CALL RED - the user contract", () =
 		// flipping isRunning back to false.
 		const replacementSession: ActiveSession = {
 			sessionId: "S1",
+			queuedPromptCount: 0,
 			isRunning: false, // rebuild fired → idle
 			sdkHost: stubSdkHost,
 			unsubscribe: vi.fn(),

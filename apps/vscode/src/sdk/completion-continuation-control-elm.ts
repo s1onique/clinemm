@@ -130,11 +130,7 @@ export interface CompletionContinuationControlFactsJson {
  *   correspondence fixtures and for the LIVE operator's dogfood
  *   dump.
  */
-export type HeldSetProgressTag =
-	| "indeterminate"
-	| "no_progress"
-	| "passive_accumulation"
-	| "contraction_or_membership_shift"
+export type HeldSetProgressTag = "indeterminate" | "no_progress" | "passive_accumulation" | "contraction_or_membership_shift"
 
 export type FailureReasonTag =
 	| "observation_unavailable"
@@ -230,7 +226,6 @@ const HELD_SET_PROGRESS_TAGS: ReadonlySet<HeldSetProgressTag> = new Set<HeldSetP
 	"passive_accumulation",
 	"contraction_or_membership_shift",
 ])
-
 
 /**
  * ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01 (C5):

@@ -146,6 +146,8 @@ import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
+import { resetMessageTranslatorAndFenceSignature } from "./sdk-controller-signature-probes"
+
 const SDK_CONTROLLER_PATH = resolve(__dirname, "../SdkController.ts")
 
 function readSource(path: string): string {
@@ -213,7 +215,7 @@ function executeProductionReseed(args: {
  */
 function getProductionReseedBody(): string {
 	const source = readSource(SDK_CONTROLLER_PATH)
-	let start = source.indexOf("resetMessageTranslatorAndFence(): void")
+	let start = source.indexOf(resetMessageTranslatorAndFenceSignature())
 	if (start < 0) {
 		start = source.indexOf("resetMessageTranslatorAndFence(requestedPhase")
 	}
@@ -534,7 +536,37 @@ describe("ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01 / SYNTH
 		if (idx < 0) {
 			throw new Error(`function header not found: ${headerLine}`)
 		}
-		const braceStart = source.indexOf("{", idx)
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the original extractor took the
+		// FIRST `{` after the header, which assumed the parameter list
+		// contains no braces. A parameter list with an inline object TYPE
+		// (e.g. `options: { skipInteractionClear?: boolean } = {}`) makes
+		// that assumption false — the extractor captured the type literal
+		// instead of the method body.
+		//
+		// Walk the parameter list depth-aware so the first `{` at DEPTH 0
+		// (relative to the header's own parens) is the body.
+		const parenStart = source.indexOf("(", idx)
+		if (parenStart < 0) {
+			throw new Error(`opening paren not found for: ${headerLine}`)
+		}
+		let parenDepth = 0
+		let braceStart = -1
+		for (let i = parenStart; i < source.length; i++) {
+			const ch = source[i]
+			if (ch === "(") parenDepth++
+			else if (ch === ")") {
+				parenDepth--
+				if (parenDepth === 0) {
+					// The body brace is the first `{` AFTER the parameter list.
+					const bodyBrace = source.indexOf("{", i)
+					if (bodyBrace < 0) {
+						throw new Error(`opening brace not found for: ${headerLine}`)
+					}
+					braceStart = bodyBrace
+					break
+				}
+			}
+		}
 		if (braceStart < 0) {
 			throw new Error(`opening brace not found for: ${headerLine}`)
 		}
@@ -584,7 +616,18 @@ describe("ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01 / SYNTH
 
 	it('CONTROL_CLEAR_TASK [STRUCTURAL]: SdkTaskControlCoordinator.clearTask consumer reaches the fence with no "streaming" argument (PTAD preserved)', () => {
 		const source = readSource(TASK_CONTROL_COORDINATOR_PATH)
-		const body = extractFunctionBody(source, "async clearTaskForOperation(token: number): Promise<void>")
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the probe anchored on the
+		// EXACT signature `async clearTaskForOperation(token: number):
+		// Promise<void>`. The merge added an optional `options` parameter
+		// (`{ skipInteractionClear?: boolean }`) so the explicit
+		// `clearTaskWithFence` path can settle the pending interactions
+		// exactly once (before the task-transition boundary) without the
+		// initTask/resume internal clears double-calling it.
+		//
+		// `extractFunctionBody` is now parameter-list aware (it skips
+		// inline object TYPES), so the anchor can stay on the method name
+		// and tolerate the extra parameter.
+		const body = extractFunctionBody(source, "async clearTaskForOperation(")
 		// The body MUST invoke `this.options.resetMessageTranslator()`.
 		expect(body).toMatch(/this\.options\.resetMessageTranslator\(/)
 		// The body MUST NOT invoke the callback with `"streaming"`.

@@ -28,11 +28,11 @@ import type { ClineMessage } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
-import type { SessionAutoApprovalOverride, SessionAutoApprovalStore } from "./session-auto-approval"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { SdkSessionRebuildScheduler } from "./sdk-session-rebuild-scheduler"
+import type { SessionAutoApprovalOverride, SessionAutoApprovalStore } from "./session-auto-approval"
 import type { SdkSessionHost } from "./session-host"
 import type { VscodeSessionHost } from "./vscode-session-host"
 
@@ -82,9 +82,7 @@ export class SdkSessionAutoApprovalCoordinator {
 
 		const next = this.options.sessionAutoApproval.getOverride(activeSession.sessionId)
 		if (next === prev) {
-			Logger.log(
-				`[SessionAutoApprovalCoordinator] Bound override unchanged (${next}) — no rebuild needed`,
-			)
+			Logger.log(`[SessionAutoApprovalCoordinator] Bound override unchanged (${next}) — no rebuild needed`)
 			return false
 		}
 
@@ -101,9 +99,7 @@ export class SdkSessionAutoApprovalCoordinator {
 	private async restartSessionForOverrideChange(sessionId: string): Promise<void> {
 		const activeSession = this.options.sessions.getActiveSession()
 		if (!activeSession) {
-			Logger.log(
-				"[SessionAutoApprovalCoordinator] Active session disappeared before rebuild — aborting",
-			)
+			Logger.log("[SessionAutoApprovalCoordinator] Active session disappeared before rebuild — aborting")
 			return
 		}
 		// Defensive re-check: session id must still match (a parallel
@@ -196,10 +192,7 @@ export class SdkSessionAutoApprovalCoordinator {
 				`[SessionAutoApprovalCoordinator] Session restarted for sessionAutoApprovalOverride: ${currentSessionId} -> ${startResult.sessionId}`,
 			)
 		} catch (error) {
-			Logger.error(
-				"[SessionAutoApprovalCoordinator] Failed to restart session for sessionAutoApprovalOverride:",
-				error,
-			)
+			Logger.error("[SessionAutoApprovalCoordinator] Failed to restart session for sessionAutoApprovalOverride:", error)
 			await this.applyRebuildFailurePolicy({
 				originalActiveSession: activeSession,
 				currentSessionId,
@@ -317,9 +310,7 @@ export class SdkSessionAutoApprovalCoordinator {
 			// stray arm existed from a previous toggle, clear it
 			// too so the next task doesn't inherit stale intent.)
 			this.options.sessionAutoApproval.setOverride(undefined, "none")
-			Logger.log(
-				`[SessionAutoApprovalCoordinator] Rebuild failed; "none" intent enforced — both bound and arm cleared`,
-			)
+			Logger.log(`[SessionAutoApprovalCoordinator] Rebuild failed; "none" intent enforced — both bound and arm cleared`)
 		}
 
 		const errorMessage: ClineMessage = {

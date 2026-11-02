@@ -367,6 +367,7 @@ describe("UPSTREAM-DIAG-05 — callback path end-to-end", () => {
 							unsubscribe: () => undefined,
 							startResult: undefined,
 							isRunning: false,
+							queuedPromptCount: 0,
 						}) as ActiveSession,
 					// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION06-CAPABILITY-FAIL-CLOSED-P1:
 					// Test fixture supplies the historical default tool

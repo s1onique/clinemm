@@ -37,8 +37,8 @@ import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	isPostTerminalAuthorityDiagnosticEffectivelyEnabled,
 	isPostTerminalAuthorityDiagnosticWorkspaceEnabled,
-	parseClinemmPtadEnv,
 	type PostTerminalAuthorityDiagnosticContext,
+	parseClinemmPtadEnv,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "../post-terminal-authority-diagnostic-runtime"
 

@@ -137,20 +137,12 @@ function fakeSupervisor(): FakeSupervisorHandle {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // Production-shape runner spy type.
-type NotifyTuple = [
-	boolean,
-	string | undefined,
-	Exclude<CommandJobState, "running">?,
-]
+type NotifyTuple = [boolean, string | undefined, Exclude<CommandJobState, "running">?]
 
 // Vitest's `vi.fn<P>()` doesn't accept arbitrary generic tuples as a
 // generic parameter; define a function-shaped alias and assert via the
 // `.mock.calls` array (which IS `NotifyTuple[]`).
-type SpyListener = (
-	running: boolean,
-	jobId: string | undefined,
-	terminalState?: Exclude<CommandJobState, "running">,
-) => void
+type SpyListener = (running: boolean, jobId: string | undefined, terminalState?: Exclude<CommandJobState, "running">) => void
 
 interface Harness {
 	manager: CommandJobManager
@@ -217,239 +209,214 @@ async function startJobViaTool(harness: Harness): Promise<string> {
 // Tests -- runner composition RED witness (the Factory P0 gate).
 // ---------------------------------------------------------------------------
 
-describe(
-	"ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 / runner->callback composition (correction01)",
-	() => {
-		beforeEach(() => {
-			process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
-		})
-		afterEach(() => {
-			delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
-		})
+describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 / runner->callback composition (correction01)", () => {
+	beforeEach(() => {
+		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
+	})
+	afterEach(() => {
+		delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+	})
 
-		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
-		// (correction01 / Factory
-		// HALT_MULTI_JOB_START_SIGNAL_DROPPED): start-per-job
-		// invariant. Before correction01 the runner gated the
-		// `(true, jobId)` signal on aggregate 0->1 cardinality
-		// (`if (start.becameActive)`). A concurrent J2 start after
-		// J1 was already running dropped J2's start signal
-		// entirely. After correction01 the runner fires
-		// `(true, start.jobId)` UNCONDITIONALLY for every RUNNING
-		// start.
-		it(
-			"BCTCP-RUNNER-MULTI-00 the runner fires (true, jobId) for EVERY RUNNING start, not only on aggregate 0->1",
-			async () => {
-				const harness = makeHarness()
-				try {
-					const jobId1 = await startJobViaTool(harness)
-					const jobId2 = await startJobViaTool(harness)
+	// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+	// (correction01 / Factory
+	// HALT_MULTI_JOB_START_SIGNAL_DROPPED): start-per-job
+	// invariant. Before correction01 the runner gated the
+	// `(true, jobId)` signal on aggregate 0->1 cardinality
+	// (`if (start.becameActive)`). A concurrent J2 start after
+	// J1 was already running dropped J2's start signal
+	// entirely. After correction01 the runner fires
+	// `(true, start.jobId)` UNCONDITIONALLY for every RUNNING
+	// start.
+	it("BCTCP-RUNNER-MULTI-00 the runner fires (true, jobId) for EVERY RUNNING start, not only on aggregate 0->1", async () => {
+		const harness = makeHarness()
+		try {
+			const jobId1 = await startJobViaTool(harness)
+			const jobId2 = await startJobViaTool(harness)
 
-					const trueCalls = harness.spy.mock.calls.filter((c) => c[0] === true)
-					// EXACTLY one (true, J1) and EXACTLY one (true, J2)
-					// -- no duplicates, no drops, no (true, undefined).
-					expect(trueCalls).toEqual([
-						[true, jobId1, undefined],
-						[true, jobId2, undefined],
-					])
-					expect(harness.spy).not.toHaveBeenCalledWith(true, undefined)
-				} finally {
-					await harness.manager.dispose()
-				}
-			},
-		)
+			const trueCalls = harness.spy.mock.calls.filter((c) => c[0] === true)
+			// EXACTLY one (true, J1) and EXACTLY one (true, J2)
+			// -- no duplicates, no drops, no (true, undefined).
+			expect(trueCalls).toEqual([
+				[true, jobId1, undefined],
+				[true, jobId2, undefined],
+			])
+			expect(harness.spy).not.toHaveBeenCalledWith(true, undefined)
+		} finally {
+			await harness.manager.dispose()
+		}
+	})
 
-		// The actual Factory P0 gate. The runner fires per-job on
-		// BOTH sides (start and terminal). Per-job start AND per-job
-		// terminal -- not gated on becameActive / becameIdle.
-		it(
-			"BCTCP-RUNNER-MULTI-01 real runner fires per-job (true, J) on every start AND (false, J1, 'cancelled') when J1 terminalizes while J2 stays running",
-			async () => {
-				const harness = makeHarness()
-				try {
-					const jobId1 = await startJobViaTool(harness)
-					const jobId2 = await startJobViaTool(harness)
+	// The actual Factory P0 gate. The runner fires per-job on
+	// BOTH sides (start and terminal). Per-job start AND per-job
+	// terminal -- not gated on becameActive / becameIdle.
+	it("BCTCP-RUNNER-MULTI-01 real runner fires per-job (true, J) on every start AND (false, J1, 'cancelled') when J1 terminalizes while J2 stays running", async () => {
+		const harness = makeHarness()
+		try {
+			const jobId1 = await startJobViaTool(harness)
+			const jobId2 = await startJobViaTool(harness)
 
-					// Sanity (NEW): runner fired (true, J1) and (true,
-					// J2) -- one of each. The card-projection map
-					// now has BOTH entries.
-					const trueCalls = harness.spy.mock.calls.filter((c) => c[0] === true)
-					expect(trueCalls).toContainEqual([true, jobId1, undefined])
-					expect(trueCalls).toContainEqual([true, jobId2, undefined])
+			// Sanity (NEW): runner fired (true, J1) and (true,
+			// J2) -- one of each. The card-projection map
+			// now has BOTH entries.
+			const trueCalls = harness.spy.mock.calls.filter((c) => c[0] === true)
+			expect(trueCalls).toContainEqual([true, jobId1, undefined])
+			expect(trueCalls).toContainEqual([true, jobId2, undefined])
 
-					// Canonical "J2 still alive" boundary.
-					const callsBeforeJ1Terminal = harness.spy.mock.calls.length
+			// Canonical "J2 still alive" boundary.
+			const callsBeforeJ1Terminal = harness.spy.mock.calls.length
 
-					// Terminalize J1 via the public cancel() seam.
-					await harness.manager.cancel({
-						jobId: jobId1,
-						origin: "other:bctcp-runner-multi-01",
-					})
-					await sleep(50)
+			// Terminalize J1 via the public cancel() seam.
+			await harness.manager.cancel({
+				jobId: jobId1,
+				origin: "other:bctcp-runner-multi-01",
+			})
+			await sleep(50)
 
-					// === Factory P0 gate ===
-					const falseCallsAfterJ1Terminal = harness.spy.mock.calls
-						.slice(callsBeforeJ1Terminal)
-						.filter((c) => c[0] === false)
-					expect(falseCallsAfterJ1Terminal).toEqual([[false, jobId1, "cancelled"]])
-					expect(harness.spy).not.toHaveBeenCalledWith(false, undefined)
-					expect(harness.spy).not.toHaveBeenCalledWith(false, undefined, "cancelled")
+			// === Factory P0 gate ===
+			const falseCallsAfterJ1Terminal = harness.spy.mock.calls.slice(callsBeforeJ1Terminal).filter((c) => c[0] === false)
+			expect(falseCallsAfterJ1Terminal).toEqual([[false, jobId1, "cancelled"]])
+			expect(harness.spy).not.toHaveBeenCalledWith(false, undefined)
+			expect(harness.spy).not.toHaveBeenCalledWith(false, undefined, "cancelled")
 
-					// J2 still alive in the manager.
-					const j2Status = await harness.manager.status({ jobId: jobId2, waitMs: 0 })
-					expect(j2Status.ok).toBe(true)
-					if (j2Status.ok) {
-						expect(j2Status.snapshot.state).toBe("running")
-					}
-				} finally {
-					await harness.manager.dispose()
-				}
-			},
-		)
+			// J2 still alive in the manager.
+			const j2Status = await harness.manager.status({ jobId: jobId2, waitMs: 0 })
+			expect(j2Status.ok).toBe(true)
+			if (j2Status.ok) {
+				expect(j2Status.snapshot.state).toBe("running")
+			}
+		} finally {
+			await harness.manager.dispose()
+		}
+	})
 
-		// Companion: the LAST terminal completion fires per-job
-		// tuple too (no (false, undefined) leak).
-		it(
-			"BCTCP-RUNNER-MULTI-02 the LAST terminal completion also fires per-job (no (false, undefined) leak)",
-			async () => {
-				const harness = makeHarness()
-				try {
-					const jobId1 = await startJobViaTool(harness)
-					const jobId2 = await startJobViaTool(harness)
+	// Companion: the LAST terminal completion fires per-job
+	// tuple too (no (false, undefined) leak).
+	it("BCTCP-RUNNER-MULTI-02 the LAST terminal completion also fires per-job (no (false, undefined) leak)", async () => {
+		const harness = makeHarness()
+		try {
+			const jobId1 = await startJobViaTool(harness)
+			const jobId2 = await startJobViaTool(harness)
 
-					await harness.manager.cancel({
-						jobId: jobId1,
-						origin: "other:bctcp-runner-multi-02",
-					})
-					await sleep(50)
-					await harness.manager.cancel({
-						jobId: jobId2,
-						origin: "other:bctcp-runner-multi-02",
-					})
-					await sleep(50)
+			await harness.manager.cancel({
+				jobId: jobId1,
+				origin: "other:bctcp-runner-multi-02",
+			})
+			await sleep(50)
+			await harness.manager.cancel({
+				jobId: jobId2,
+				origin: "other:bctcp-runner-multi-02",
+			})
+			await sleep(50)
 
-					const allFalseCalls = harness.spy.mock.calls.filter((c) => c[0] === false)
-					expect(allFalseCalls).toContainEqual([false, jobId1, "cancelled"])
-					expect(allFalseCalls).toContainEqual([false, jobId2, "cancelled"])
-					const undefinedFalseCalls = allFalseCalls.filter((c) => c[1] === undefined)
-					expect(undefinedFalseCalls).toEqual([])
-				} finally {
-					await harness.manager.dispose()
-				}
-			},
-		)
+			const allFalseCalls = harness.spy.mock.calls.filter((c) => c[0] === false)
+			expect(allFalseCalls).toContainEqual([false, jobId1, "cancelled"])
+			expect(allFalseCalls).toContainEqual([false, jobId2, "cancelled"])
+			const undefinedFalseCalls = allFalseCalls.filter((c) => c[1] === undefined)
+			expect(undefinedFalseCalls).toEqual([])
+		} finally {
+			await harness.manager.dispose()
+		}
+	})
 
-		// Composite (the Factory "better still"): the runner
-		// produces the right per-job tuple and it lands on a host
-		// projection map that maintains independent per-job
-		// state. Uses the existing harness's spy and the manager's
-		// own state to assert the chain end-to-end.
-		it(
-			"BCTCP-RUNNER-MULTI-03 composed runner->projection: per-job tuple lands on independent entries; manager still tracks J2 as running",
-			async () => {
-				const harness = makeHarness()
-				try {
-					const jobId1 = await startJobViaTool(harness)
-					const jobId2 = await startJobViaTool(harness)
+	// Composite (the Factory "better still"): the runner
+	// produces the right per-job tuple and it lands on a host
+	// projection map that maintains independent per-job
+	// state. Uses the existing harness's spy and the manager's
+	// own state to assert the chain end-to-end.
+	it("BCTCP-RUNNER-MULTI-03 composed runner->projection: per-job tuple lands on independent entries; manager still tracks J2 as running", async () => {
+		const harness = makeHarness()
+		try {
+			const jobId1 = await startJobViaTool(harness)
+			const jobId2 = await startJobViaTool(harness)
 
-					// Snapshot the projection map's intent BEFORE cancel.
-					// Real projection is computed by the controller in
-					// tests BCTCP-CTL-MULTI-01..05; here we only need
-					// to confirm that the runner's per-job tuple maps
-					// to a unique jobId and that the second job is
-					// still RUNNING (the bounded Factory P0 gate at the
-					// runner seam; the full controller invariant is
-					// proven by the parallel BCTCP-CTL-MULTI suite).
-					const projectionBefore: Record<
-						string,
-						"running" | "cancelled" | "exited" | "deadline_exceeded"
-					> = {}
-					projectionBefore[jobId1] = "running"
-					projectionBefore[jobId2] = "running"
+			// Snapshot the projection map's intent BEFORE cancel.
+			// Real projection is computed by the controller in
+			// tests BCTCP-CTL-MULTI-01..05; here we only need
+			// to confirm that the runner's per-job tuple maps
+			// to a unique jobId and that the second job is
+			// still RUNNING (the bounded Factory P0 gate at the
+			// runner seam; the full controller invariant is
+			// proven by the parallel BCTCP-CTL-MULTI suite).
+			const projectionBefore: Record<string, "running" | "cancelled" | "exited" | "deadline_exceeded"> = {}
+			projectionBefore[jobId1] = "running"
+			projectionBefore[jobId2] = "running"
 
-					// Cancel J1 (real manager.cancel); wait one macrotask
-					// for the runner's terminal listener to fire.
-					await harness.manager.cancel({
-						jobId: jobId1,
-						origin: "other:bctcp-runner-multi-03",
-					})
-					await sleep(50)
+			// Cancel J1 (real manager.cancel); wait one macrotask
+			// for the runner's terminal listener to fire.
+			await harness.manager.cancel({
+				jobId: jobId1,
+				origin: "other:bctcp-runner-multi-03",
+			})
+			await sleep(50)
 
-					// Mirror the per-job projection update locally
-					// (matching what the controller does in
-					// `updateBackgroundCommandState`).
-					const perJobTuple = harness.spy.mock.calls.find(
-						(c) => c[0] === false && c[1] === jobId1,
-					)
-					expect(perJobTuple).toBeDefined()
-					expect(perJobTuple?.[2]).toBe("cancelled")
-					projectionBefore[jobId1] = "cancelled"
-					// J2 stays running.
-					expect(projectionBefore[jobId2]).toBe("running")
+			// Mirror the per-job projection update locally
+			// (matching what the controller does in
+			// `updateBackgroundCommandState`).
+			const perJobTuple = harness.spy.mock.calls.find((c) => c[0] === false && c[1] === jobId1)
+			expect(perJobTuple).toBeDefined()
+			expect(perJobTuple?.[2]).toBe("cancelled")
+			projectionBefore[jobId1] = "cancelled"
+			// J2 stays running.
+			expect(projectionBefore[jobId2]).toBe("running")
 
-					// The manager still tracks J2 as RUNNING --
-					// the producer-side invariant (manager
-					// lifecycle is the authority). This proves the
-					// runner seam does NOT leak false-terminal
-					// signals to the manager.
-					const j2Status = await harness.manager.status({
-						jobId: jobId2,
-						waitMs: 0,
-					})
-					expect(j2Status.ok).toBe(true)
-					if (j2Status.ok) {
-						expect(j2Status.snapshot.state).toBe("running")
-					}
+			// The manager still tracks J2 as RUNNING --
+			// the producer-side invariant (manager
+			// lifecycle is the authority). This proves the
+			// runner seam does NOT leak false-terminal
+			// signals to the manager.
+			const j2Status = await harness.manager.status({
+				jobId: jobId2,
+				waitMs: 0,
+			})
+			expect(j2Status.ok).toBe(true)
+			if (j2Status.ok) {
+				expect(j2Status.snapshot.state).toBe("running")
+			}
 
-					// The runner fired per-job (not gated), AND no
-					// (false, undefined) leaked.
-					expect(harness.spy).toHaveBeenCalledWith(false, jobId1, "cancelled")
-					expect(harness.spy).not.toHaveBeenCalledWith(false, undefined)
-				} finally {
-					await harness.manager.dispose()
-				}
-			},
-		)
+			// The runner fired per-job (not gated), AND no
+			// (false, undefined) leaked.
+			expect(harness.spy).toHaveBeenCalledWith(false, jobId1, "cancelled")
+			expect(harness.spy).not.toHaveBeenCalledWith(false, undefined)
+		} finally {
+			await harness.manager.dispose()
+		}
+	})
 
-		// Property invariant the Factory reviewer wanted proven.
-		it(
-			"BCTCP-RUNNER-MULTI-04 the runner never fires (false, undefined) while at least one sibling is running",
-			async () => {
-				const harness = makeHarness()
-				try {
-					const jobId1 = await startJobViaTool(harness)
-					const jobId2 = await startJobViaTool(harness)
+	// Property invariant the Factory reviewer wanted proven.
+	it("BCTCP-RUNNER-MULTI-04 the runner never fires (false, undefined) while at least one sibling is running", async () => {
+		const harness = makeHarness()
+		try {
+			const jobId1 = await startJobViaTool(harness)
+			const jobId2 = await startJobViaTool(harness)
 
-					const callsBeforeAnyTerminal = harness.spy.mock.calls.length
+			const callsBeforeAnyTerminal = harness.spy.mock.calls.length
 
-					await harness.manager.cancel({
-						jobId: jobId1,
-						origin: "other:bctcp-runner-multi-04",
-					})
-					await sleep(50)
+			await harness.manager.cancel({
+				jobId: jobId1,
+				origin: "other:bctcp-runner-multi-04",
+			})
+			await sleep(50)
 
-					const undefinedFalseCalls = harness.spy.mock.calls
-						.slice(callsBeforeAnyTerminal)
-						.filter((c) => c[0] === false && c[1] === undefined)
-					expect(undefinedFalseCalls).toEqual([])
+			const undefinedFalseCalls = harness.spy.mock.calls
+				.slice(callsBeforeAnyTerminal)
+				.filter((c) => c[0] === false && c[1] === undefined)
+			expect(undefinedFalseCalls).toEqual([])
 
-					await harness.manager.cancel({
-						jobId: jobId2,
-						origin: "other:bctcp-runner-multi-04",
-					})
-					await sleep(50)
+			await harness.manager.cancel({
+				jobId: jobId2,
+				origin: "other:bctcp-runner-multi-04",
+			})
+			await sleep(50)
 
-					const undefinedFalseCallsAfterBoth = harness.spy.mock.calls
-						.slice(callsBeforeAnyTerminal)
-						.filter((c) => c[0] === false && c[1] === undefined)
-					expect(undefinedFalseCallsAfterBoth).toEqual([])
-				} finally {
-					await harness.manager.dispose()
-				}
-			},
-		)
-	},
-)
+			const undefinedFalseCallsAfterBoth = harness.spy.mock.calls
+				.slice(callsBeforeAnyTerminal)
+				.filter((c) => c[0] === false && c[1] === undefined)
+			expect(undefinedFalseCallsAfterBoth).toEqual([])
+		} finally {
+			await harness.manager.dispose()
+		}
+	})
+})
 
 // ===========================================================================
 // Production-composition evidence notes

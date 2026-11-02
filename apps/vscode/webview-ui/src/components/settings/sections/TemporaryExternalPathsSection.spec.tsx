@@ -7,16 +7,15 @@
  * canonical `updateSetting` helper.
  */
 
+import type { TemporaryExternalPathAuthority } from "@cline/core"
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { TemporaryExternalPathAuthority } from "@cline/core"
 import TemporaryExternalPathsSection from "./TemporaryExternalPathsSection"
 
 const mockUpdateSetting = vi.fn()
 const mockExtensionState = vi.hoisted(() => ({
 	value: {
-		clinemmTemporaryExternalPathAuthorities:
-			[] as TemporaryExternalPathAuthority[],
+		clinemmTemporaryExternalPathAuthorities: [] as TemporaryExternalPathAuthority[],
 	},
 }))
 
@@ -29,15 +28,7 @@ vi.mock("../utils/settingsHandlers", () => ({
 }))
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
-	VSCodeButton: ({
-		children,
-		onClick,
-		disabled,
-	}: {
-		children: React.ReactNode
-		onClick?: () => void
-		disabled?: boolean
-	}) => (
+	VSCodeButton: ({ children, onClick, disabled }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean }) => (
 		<button disabled={disabled} onClick={onClick}>
 			{children}
 		</button>
@@ -50,13 +41,7 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 		value?: string
 		onInput?: (e: { target: HTMLInputElement }) => void
 		placeholder?: string
-	}) => (
-		<input
-			onChange={(e) => onInput?.({ target: e.target })}
-			placeholder={placeholder}
-			value={value}
-		/>
-	),
+	}) => <input onChange={(e) => onInput?.({ target: e.target })} placeholder={placeholder} value={value} />,
 }))
 
 describe("ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01 — TemporaryExternalPathsSection", () => {
@@ -150,9 +135,7 @@ describe("ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01 — TemporaryExternalP
 	})
 
 	it("CORRECTION01: unparseable expiresAt also renders as 'Expired' (not 'expires in NaN')", () => {
-		mockExtensionState.value.clinemmTemporaryExternalPathAuthorities = [
-			{ path: "/var/log/bad", expiresAt: "not-a-date" },
-		]
+		mockExtensionState.value.clinemmTemporaryExternalPathAuthorities = [{ path: "/var/log/bad", expiresAt: "not-a-date" }]
 		render(<TemporaryExternalPathsSection renderSectionHeader={() => null} />)
 		const status = screen.getByTestId("temp-external-status-/var/log/bad")
 		expect(status.textContent).toMatch(/Expired/i)

@@ -200,13 +200,19 @@ export function getHostOwnershipDiagnostic(): HostOwnershipFactsSnapshot[] {
 export function deriveCandidateAwaitingFollowup(
 	facts: Omit<
 		HostOwnershipFactsSnapshot,
-		"stateVersion" | "_ptadPushId" | "sessionId" | "taskId" | "epoch" | "observationAvailable" | "candidateAwaitingFollowup" | "capturedAt"
+		| "stateVersion"
+		| "_ptadPushId"
+		| "sessionId"
+		| "taskId"
+		| "epoch"
+		| "observationAvailable"
+		| "candidateAwaitingFollowup"
+		| "capturedAt"
 	>,
 ): boolean | undefined {
 	if (facts.lastInteractiveTurnFinishReason === undefined) return undefined
 	const previousTurnWasUserOwned = facts.lastInteractiveTurnFinishReason === "completed"
-	const queuedSuccessorWillRun =
-		(facts.pendingPromptCount ?? 0) > 0 && facts.agentCanStartRun === true
+	const queuedSuccessorWillRun = (facts.pendingPromptCount ?? 0) > 0 && facts.agentCanStartRun === true
 	const drainInFlight = facts.drainingPendingPrompts === true
 	return previousTurnWasUserOwned && !queuedSuccessorWillRun && !drainInFlight
 }

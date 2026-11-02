@@ -219,6 +219,7 @@ function makeFixture(): Fixture {
 		onAskResponse: vi.fn(),
 		resetMessageTranslator: resetMessageTranslatorFn,
 		raiseCancelFence: vi.fn(),
+		rebuilds: { runTaskTransition: async <T>(operation: () => Promise<T>): Promise<T> => operation() },
 	}
 
 	const coordinator = new SdkTaskControlCoordinator(coordinatorOptions)

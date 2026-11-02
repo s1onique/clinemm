@@ -403,9 +403,7 @@ describe("POST_COMPACTION_W_BAR_REFRESH_RECON01 - load-bearing coordinator bridg
 		vi.clearAllMocks()
 	})
 
-	function makeCoordinatorWithPublisher(
-		publishPostCompactionW: ((w: number) => void) | undefined,
-	) {
+	function makeCoordinatorWithPublisher(publishPostCompactionW: ((w: number) => void) | undefined) {
 		const activeSession = makeActiveSession()
 		const base = makeCoordinator({ activeSession })
 		// Tighten the cast: we need to set the optional
@@ -458,11 +456,8 @@ describe("POST_COMPACTION_W_BAR_REFRESH_RECON01 - load-bearing coordinator bridg
 		// Mechanical ordering witness: publish MUST be called BEFORE
 		// the FINAL (LAST) postStateToWebview call, so that the
 		// resulting ExtensionState payload carries the new W.
-		const publishOrder = (publishSpy as unknown as { mock: { invocationCallOrder: number[] } }).mock
-			.invocationCallOrder[0]
-		const postInvocationOrders = (
-			postSpy as unknown as { mock: { invocationCallOrder: number[] } }
-		).mock.invocationCallOrder
+		const publishOrder = (publishSpy as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0]
+		const postInvocationOrders = (postSpy as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder
 		expect(postInvocationOrders.length).toBeGreaterThanOrEqual(2)
 		const lastPostOrder = postInvocationOrders[postInvocationOrders.length - 1]
 		expect(publishOrder).toBeDefined()

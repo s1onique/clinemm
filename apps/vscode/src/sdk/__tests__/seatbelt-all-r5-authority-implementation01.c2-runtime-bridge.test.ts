@@ -28,10 +28,11 @@
  * code, but they pin the precise shape of the producer's output for
  * the production call site.
  */
+
+import type { CommandHostAuthorization } from "@cline/core"
+import { commandHostAuthorization } from "@cline/core"
 import { describe, expect, it } from "vitest"
 import { applySeatbeltAuthorityEnvelope } from "../sdk-tool-policies"
-import { commandHostAuthorization } from "@cline/core"
-import type { CommandHostAuthorization } from "@cline/core"
 
 describe("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 C2 - Witness A producer", () => {
 	it("A1: mode=all + sandboxMode=seatbelt-experimental => mandatorySeatbelt=true", () => {

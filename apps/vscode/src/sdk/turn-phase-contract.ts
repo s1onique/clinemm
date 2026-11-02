@@ -388,6 +388,12 @@ export const TURN_PHASE_WRITER_MAP: Readonly<Record<TurnPhaseValue, readonly str
 		"interaction-resolve-tool-approval-yes-no",
 		"interaction-resolve-ask-question",
 		"interaction-resolve-mistake-limit",
+		// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the two delivery-failure
+		// transitions that upstream's bare streaming-phase call left
+		// unattributed — the fork's turn-state writer provenance requires
+		// every transition to name its writer.
+		"interaction-tool-approval-delivery-failed",
+		"interaction-ask-question-delivery-failed",
 		"followup-auto-continue-starting",
 	],
 	awaiting_approval: ["interaction-handle-tool-approval", "interaction-resolve-tool-approval-message-response"],

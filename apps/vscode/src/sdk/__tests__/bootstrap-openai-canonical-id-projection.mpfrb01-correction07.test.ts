@@ -59,18 +59,15 @@
  *     src/sdk/__tests__/bootstrap-openai-canonical-id-projection.mpfrb01-correction07.test.ts
  */
 
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import type { CoreSessionConfig } from "@cline/core"
 import { InstancesStore } from "../instance-store/instances-store"
 import { applyTypedProviderInstanceToConfig } from "../instance-store/typed-projector"
 import { toSdkProviderId } from "../model-catalog/sdk-provider-id"
-import {
-	type BootstrapModelProfileDeps,
-	bootstrapModelProfileFromCurrentConfiguration,
-} from "../profile-store/bootstrap"
+import { type BootstrapModelProfileDeps, bootstrapModelProfileFromCurrentConfiguration } from "../profile-store/bootstrap"
 import { ProfilesStore } from "../profile-store/profiles-store"
 
 // ---------------------------------------------------------------------------
@@ -188,11 +185,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07 canoni
 			apiKey: "secret-A-value",
 		} as unknown as CoreSessionConfig
 
-		applyTypedProviderInstanceToConfig(
-			baseline,
-			persisted!,
-			"sk-litellm-physical-key-XXXXXXXXXXXXX",
-		)
+		applyTypedProviderInstanceToConfig(baseline, persisted!, "sk-litellm-physical-key-XXXXXXXXXXXXX")
 
 		// -- RED guard (before fix): cfg.providerId was the legacy
 		// "openai" and the SDK gateway rejected the request with
@@ -208,9 +201,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07 canoni
 		// -- Connection fields are still projected (the fix is
 		// orthogonal to modelId / apiKey / baseUrl).
 		expect((baseline as unknown as { modelId: string }).modelId).toBe("MiniMax-M3")
-		expect((baseline as unknown as { apiKey: string }).apiKey).toBe(
-			"sk-litellm-physical-key-XXXXXXXXXXXXX",
-		)
+		expect((baseline as unknown as { apiKey: string }).apiKey).toBe("sk-litellm-physical-key-XXXXXXXXXXXXX")
 		expect((baseline as unknown as { baseUrl: string }).baseUrl).toBe("https://litellm.example.com/v1")
 	})
 
@@ -233,14 +224,22 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07 canoni
 			// Conservation: every other extension spelling is unchanged.
 			{ label: "anthropic", input: "anthropic", expected: "anthropic" },
 			{ label: "openrouter", input: "openrouter", expected: "openrouter" },
-			{ label: "openai-native (CRITICAL: distinct from openai-compatible)", input: "openai-native", expected: "openai-native" },
+			{
+				label: "openai-native (CRITICAL: distinct from openai-compatible)",
+				input: "openai-native",
+				expected: "openai-native",
+			},
 			{ label: "minimax", input: "minimax", expected: "minimax" },
 			{ label: "ollama", input: "ollama", expected: "ollama" },
 			{ label: "cline", input: "cline", expected: "cline" },
 			{ label: "vscode-lm", input: "vscode-lm", expected: "vscode-lm" },
 
 			// Already canonical: idempotent pass-through.
-			{ label: "openai-compatible (already canonical, idempotent)", input: "openai-compatible", expected: "openai-compatible" },
+			{
+				label: "openai-compatible (already canonical, idempotent)",
+				input: "openai-compatible",
+				expected: "openai-compatible",
+			},
 
 			// The other legacy alias: nousresearch -> nousResearch.
 			{ label: "nousresearch (legacy lowercase)", input: "nousresearch", expected: "nousResearch" },
@@ -311,11 +310,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07 canoni
 		// runtime spelling. Together: durable "openai" + projection
 		// "openai-compatible" is the correct chain.
 		const baseline: CoreSessionConfig = {} as unknown as CoreSessionConfig
-		applyTypedProviderInstanceToConfig(
-			baseline,
-			persisted!,
-			"sk-litellm-physical-key-XXXXXXXXXXXXX",
-		)
+		applyTypedProviderInstanceToConfig(baseline, persisted!, "sk-litellm-physical-key-XXXXXXXXXXXXX")
 		expect((baseline as unknown as { providerId: string }).providerId).toBe("openai-compatible")
 	})
 })

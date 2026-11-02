@@ -150,10 +150,7 @@ export interface ExplicitCompletionAuthorityInputs {
  * compatibility fields (`readFilesExternally`, `editFilesExternally`,
  * `executeAllCommands`) are explicitly excluded (RED a.6).
  */
-export function isYoloSessionRequested(
-	persisted: AutoApprovalSettings,
-	override: SessionAutoApprovalOverride,
-): boolean {
+export function isYoloSessionRequested(persisted: AutoApprovalSettings, override: SessionAutoApprovalOverride): boolean {
 	if (override === "all") {
 		return true
 	}
@@ -188,9 +185,7 @@ export function isYoloSessionRequested(
  * Caller is responsible for resolving the four facts from their canonical
  * sources at the buildSessionConfig seam (cline-session-factory.ts).
  */
-export function deriveExplicitCompletionAuthority(
-	inputs: ExplicitCompletionAuthorityInputs,
-): boolean {
+export function deriveExplicitCompletionAuthority(inputs: ExplicitCompletionAuthorityInputs): boolean {
 	return (
 		inputs.interactive === true &&
 		isYoloSessionRequested(inputs.persisted, inputs.override) &&

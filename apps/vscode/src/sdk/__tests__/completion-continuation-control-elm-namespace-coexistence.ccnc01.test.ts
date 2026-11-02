@@ -15,14 +15,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	pickContinuationDirectiveForPublication,
-	resetElmKernelForTests,
 	resetCompletionContinuationControlElmAuthorityForTests,
+	resetElmKernelForTests,
 } from "../completion-continuation-control-elm"
 
 const FACT_INPUT = {
 	unconsumedCount: 2,
 	capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-	priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
+	priorHeldSetSorted: undefined,
+	currentHeldSetSorted: ["j1", "j2"],
 	sessionMatches: true,
 	taskMatches: true,
 	alreadyCommitted: false,

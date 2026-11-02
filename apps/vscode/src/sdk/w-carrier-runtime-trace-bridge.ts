@@ -40,8 +40,6 @@
  *
  * @internal
  */
-import { isWCarrierTraceEnabled, recordWCarrierTrace } from "./w-carrier-trace-runtime"
-import type { WCarrierTraceContext } from "./w-carrier-trace-runtime"
 
 // Package-internal import: the install function is
 // exported from `agent-runtime.ts` (a source file inside
@@ -71,10 +69,12 @@ import type { WCarrierTraceContext } from "./w-carrier-trace-runtime"
 // (built by `@cline/agents/bun.mts`'s secondary build
 // entry; not registered in the package's `exports`).
 import {
-	installRuntimeWTraceObserver,
 	type AgentRuntimeWTraceObserver,
 	type AgentRuntimeWTraceRecord,
+	installRuntimeWTraceObserver,
 } from "../../../../sdk/packages/agents/dist/internal-w-trace.js"
+import type { WCarrierTraceContext } from "./w-carrier-trace-runtime"
+import { isWCarrierTraceEnabled, recordWCarrierTrace } from "./w-carrier-trace-runtime"
 
 /**
  * Lazy trace-context accessor. Returns the JSONL target
@@ -145,9 +145,7 @@ export type GetRuntimeWTraceContext = () => WCarrierTraceContext | undefined
  *
  * @internal
  */
-export function installRuntimeWTraceObserverForClineMM(
-	getTraceContext: GetRuntimeWTraceContext,
-): void {
+export function installRuntimeWTraceObserverForClineMM(getTraceContext: GetRuntimeWTraceContext): void {
 	if (!isWCarrierTraceEnabled()) {
 		return
 	}

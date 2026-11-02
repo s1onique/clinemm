@@ -132,9 +132,7 @@ function buildSandboxDiagObserver(): SandboxBackendDiagnosticObserver | null {
 
 	const clineDir = process.env.CLINE_DIR || join(homedir(), ".cline")
 	const dataDir = join(clineDir, "data")
-	const runId =
-		process.env.CLINEMM_CAPTURE_SANDBOX_RUN_ID ||
-		`default-${process.pid}-${Date.now()}`
+	const runId = process.env.CLINEMM_CAPTURE_SANDBOX_RUN_ID || `default-${process.pid}-${Date.now()}`
 	const outputPath = join(dataDir, "sandbox-diag", `${runId}.jsonl`)
 
 	let streamOk = false

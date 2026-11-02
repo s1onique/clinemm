@@ -8,21 +8,21 @@
  * their operational semantics.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { mkdir, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
+	clearHostOwnershipDiagnostic,
 	disableHostOwnershipDiagnostic,
 	enableHostOwnershipDiagnostic,
-	clearHostOwnershipDiagnostic,
 	recordHostOwnershipFacts,
 } from "@shared/host-ownership-diagnostic"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
-	isHostOwnershipDiagnosticWorkspaceEnabled,
-	toggleHostOwnershipDiagnosticWorkspaceEnabled,
 	dumpExtensionSideHostOwnershipDiagnostic,
 	type HostOwnershipDiagnosticContext,
+	isHostOwnershipDiagnosticWorkspaceEnabled,
+	toggleHostOwnershipDiagnosticWorkspaceEnabled,
 } from "../host-ownership-diagnostic-runtime"
 
 interface FakeState {

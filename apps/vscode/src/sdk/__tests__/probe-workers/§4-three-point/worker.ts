@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { randomBytes } from "node:crypto"
 /**
  * ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01 — §4 probe worker.
  *
@@ -28,10 +29,9 @@
  *     bun apps/vscode/src/sdk/__tests__/probe-workers/§4-three-point/worker.ts O
  */
 import { mkdtempSync, realpathSync, writeFileSync } from "node:fs"
+import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { randomBytes } from "node:crypto"
-import { createServer } from "node:net"
 import { CommandJobManager } from "../../../command-job-manager"
 import {
 	buildExperimentalReconCapability,

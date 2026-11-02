@@ -85,7 +85,7 @@
  *   NOT require a successful `spawn()` are sufficient evidence
  *   that the contract is satisfied:
  *
-     *     - Q6.1: empty manager returns false for any owner.
+ *     - Q6.1: empty manager returns false for any owner.
  *       (verifies the new query method exists with the
  *       documented degenerate-input behavior)
  *     - Q6.1b: type-level assertion that `CommandJobSnapshot`
@@ -103,10 +103,11 @@
  *   'CommandJobManager'`. After the production change
  *   (this commit), typecheck is clean.
  */
-import { afterEach, describe, expect, it } from "vitest"
+
 import type { AgentToolContext } from "@cline/shared"
-import { CommandJobManager } from "./command-job-manager"
+import { afterEach, describe, expect, it } from "vitest"
 import type { CommandJobSnapshot } from "./command-job-manager"
+import { CommandJobManager } from "./command-job-manager"
 
 const isPosix = process.platform !== "win32"
 

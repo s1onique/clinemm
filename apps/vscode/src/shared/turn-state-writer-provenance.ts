@@ -116,6 +116,14 @@ export type TurnStateWriterId =
 	| "interaction-handle-ask-question"
 	| "interaction-resolve-ask-question"
 	| "interaction-resolve-mistake-limit"
+	// ACT-CLINEMM-FORK-UPSTREAM-MERGE01: the two delivery-failure
+	// transitions that upstream's bare streaming-phase call left
+	// unattributed. The fork's turn-state WRITER PROVENANCE authority
+	// requires every phase transition to name its writer, so the
+	// approval-delivery-failed and ask-question-delivery-failed
+	// transitions carry their own writer ids.
+	| "interaction-tool-approval-delivery-failed"
+	| "interaction-ask-question-delivery-failed"
 	| "task-start-init-task"
 	| "task-start-reinit-existing-task"
 	| "task-control-resume-ask"

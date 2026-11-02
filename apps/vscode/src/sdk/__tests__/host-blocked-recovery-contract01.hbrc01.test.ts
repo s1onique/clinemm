@@ -41,6 +41,8 @@ import { MessageTranslatorState } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
+import { getStateToPostToWebviewSignature } from "./sdk-controller-signature-probes"
+
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
 		error: vi.fn(),
@@ -411,7 +413,7 @@ describe("HBRC01 - source-bound witnesses (the missing UI contract)", () => {
 	})
 
 	it("WITNESS-5: SdkController.getStateToPostToWebview projects turnState from the tracker (no writerId field is added on the wire)", () => {
-		const getStateStart = SdkControllerSource.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>")
+		const getStateStart = SdkControllerSource.indexOf(getStateToPostToWebviewSignature())
 		expect(getStateStart).toBeGreaterThanOrEqual(0)
 		const getStateBody = SdkControllerSource.slice(getStateStart)
 		expect(getStateBody).toMatch(/turnState:\s*this\.turnStateTracker\.get\(\)/)
@@ -712,9 +714,7 @@ describe("BRC-05 - UI/host correspondence: the writerId is not projected onto th
 		)
 		// No bcrMarker / blockedReason projection in the
 		// state push.
-		const getStateBody = SdkControllerSource.slice(
-			SdkControllerSource.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>"),
-		)
+		const getStateBody = SdkControllerSource.slice(SdkControllerSource.indexOf(getStateToPostToWebviewSignature()))
 		expect(getStateBody.slice(0, 30_000)).not.toMatch(/bcrMarker|blockedReason/)
 	})
 })

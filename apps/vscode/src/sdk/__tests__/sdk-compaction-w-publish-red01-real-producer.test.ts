@@ -56,20 +56,18 @@
  * of R5.
  */
 
-import { estimateRequestInputTokens } from "@cline/shared"
 import type { Message as SdkMessage } from "@cline/llms"
-import { describe, expect, it } from "vitest"
-
+import { estimateRequestInputTokens } from "@cline/shared"
 // REAL `@cline/core` factory, bypassing the vitest stub
 // alias. The alias is defined in
 // `apps/vscode/vitest.config.c2-4-c-bridge.ts`.
 import { createContextCompactionPrepareTurn } from "@cline-internal/core/extensions/context/compaction"
+import { describe, expect, it } from "vitest"
 
 // REAL adapter under test (not mocked).
 import { compactSessionMessages } from "../sdk-compaction"
 
-const SYSTEM_PROMPT =
-	"You are a concise coding assistant. Help with tasks succinctly."
+const SYSTEM_PROMPT = "You are a concise coding assistant. Help with tasks succinctly."
 
 // Minimal tool entry -- the estimator JSON.stringifies
 // whatever shape is provided; the exact tool type doesn't
@@ -97,8 +95,7 @@ const MESSAGES_BEFORE: SdkMessage[] = [
 	},
 	{
 		role: "assistant",
-		content:
-			"I've reviewed the failing tests. Here is a long analysis. ".repeat(150),
+		content: "I've reviewed the failing tests. Here is a long analysis. ".repeat(150),
 	},
 	{
 		role: "user",

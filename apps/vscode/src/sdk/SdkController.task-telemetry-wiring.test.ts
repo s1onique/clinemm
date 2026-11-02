@@ -50,13 +50,14 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { ExtensionState, TaskHeaderTelemetryStrip } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
+import { getStateToPostToWebviewSignature } from "./__tests__/sdk-controller-signature-probes"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 
 const SdkControllerPath = path.resolve(__dirname, "SdkController.ts")
 const SdkControllerSource = fs.readFileSync(SdkControllerPath, "utf8")
 
 function locateGetStateToPostToWebview(source: string): string {
-	const start = source.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>")
+	const start = source.indexOf(getStateToPostToWebviewSignature())
 	if (start < 0) {
 		throw new Error("SdkController.getStateToPostToWebview signature not found")
 	}

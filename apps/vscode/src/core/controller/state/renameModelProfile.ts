@@ -8,10 +8,10 @@
  * underlying credential are preserved.
  */
 
-import { Logger } from "@/shared/services/Logger"
-import { ModelProfile, RenameModelProfileRequest } from "@/shared/proto/cline/state"
-import type { Controller } from ".."
 import { renameModelProfile as renameInOwner } from "@/sdk/profile-store/owner"
+import { ModelProfile, RenameModelProfileRequest } from "@/shared/proto/cline/state"
+import { Logger } from "@/shared/services/Logger"
+import type { Controller } from ".."
 
 export async function renameModelProfile(controller: Controller, request: RenameModelProfileRequest): Promise<ModelProfile> {
 	const owner = controller.modelProfilesOwner

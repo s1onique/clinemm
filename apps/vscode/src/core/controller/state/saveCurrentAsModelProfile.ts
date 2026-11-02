@@ -11,10 +11,10 @@
  * providerInstanceId + modelId. The caller supplies a name.
  */
 
-import { Logger } from "@/shared/services/Logger"
-import { ModelProfile, SaveCurrentAsModelProfileRequest } from "@/shared/proto/cline/state"
-import type { Controller } from ".."
 import { saveCurrentAsProfile } from "@/sdk/profile-store/owner"
+import { ModelProfile, SaveCurrentAsModelProfileRequest } from "@/shared/proto/cline/state"
+import { Logger } from "@/shared/services/Logger"
+import type { Controller } from ".."
 
 export async function saveCurrentAsModelProfile(
 	controller: Controller,

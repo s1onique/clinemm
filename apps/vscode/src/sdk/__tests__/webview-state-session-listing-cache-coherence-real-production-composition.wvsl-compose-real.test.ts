@@ -23,10 +23,13 @@
  * stub.
  */
 
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test"
+import type { CoreSessionEvent, SessionHistoryRecord } from "@cline/core"
+import type { McpHub } from "@/services/mcp/McpHub"
+import type { TelemetryService } from "@/services/telemetry/TelemetryService"
 // Real production event bus. The SAME class that LocalRuntimeHost
 // uses internally as `this.events`. Not re-implemented.
 //
@@ -38,11 +41,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test"
 // tsconfig.json (TS6059 — outside apps/vscode rootDir); this
 // file runs under bun:test only.
 import { RuntimeHostEventBus } from "../../../../../sdk/packages/core/src/runtime/host/runtime-host-support"
-import type { CoreSessionEvent, SessionHistoryRecord } from "@cline/core"
-import type { McpHub } from "@/services/mcp/McpHub"
-import type { TelemetryService } from "@/services/telemetry/TelemetryService"
-import { SdkTaskHistory } from "../sdk-task-history"
 import type { SdkSessionLifecycle } from "../sdk-session-lifecycle"
+import { SdkTaskHistory } from "../sdk-task-history"
 import type { VscodeSessionHost } from "../vscode-session-host"
 
 function makeTelemetry(): TelemetryService {
@@ -107,8 +107,7 @@ function makeRecord(sessionId: string, prompt: string, title: string): Persisted
 }
 
 function recordToHistory(r: PersistedRecord): SessionHistoryRecord {
-	const title =
-		typeof r.metadata?.title === "string" ? r.metadata.title : r.sessionId
+	const title = typeof r.metadata?.title === "string" ? r.metadata.title : r.sessionId
 	return {
 		...({
 			ulid: r.sessionId,
@@ -133,12 +132,7 @@ class FileBackedSessionStore {
 		this.records.set(r.sessionId, r)
 		writeFileSync(this.filePath, JSON.stringify(this.read(), null, 2), "utf8")
 	}
-	updateStatus(
-		sessionId: string,
-		status: string,
-		endedAt: string | null,
-		exitCode: number | null,
-	): boolean {
+	updateStatus(sessionId: string, status: string, endedAt: string | null, exitCode: number | null): boolean {
 		const cur = this.records.get(sessionId)
 		if (!cur) return false
 		this.records.set(sessionId, {
@@ -167,9 +161,7 @@ class FileBackedSessionStore {
  */
 function makeProductionShapedHarness(store: FileBackedSessionStore) {
 	const events = new RuntimeHostEventBus()
-	const subscribe = vi.fn((listener: (event: CoreSessionEvent) => void) =>
-		events.subscribe(listener),
-	)
+	const subscribe = vi.fn((listener: (event: CoreSessionEvent) => void) => events.subscribe(listener))
 	const hostListHistoryCalls = { n: 0 }
 	const hostListHistory = vi.fn(async () => {
 		hostListHistoryCalls.n += 1
@@ -244,9 +236,7 @@ describe("WVSL-COMPOSE-REAL-01 — real production-class event bus → SdkTaskHi
 		})
 
 		const fresh = await history.listHistory({ hydrate: false, limit: 200 })
-		expect(fresh.map((r) => (r as unknown as { ulid: string }).ulid)).toContain(
-			"task-real-producer",
-		)
+		expect(fresh.map((r) => (r as unknown as { ulid: string }).ulid)).toContain("task-real-producer")
 		expect(hostListHistoryCalls.n).toBe(2)
 	})
 

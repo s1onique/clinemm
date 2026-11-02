@@ -107,6 +107,10 @@ const passThroughCompact: ContextPipelinePrepareTurn = async (context) => {
 async function runPrepareTurn(): Promise<ContextPipelinePrepareTurnResult | undefined> {
 	const prepareTurn = createCompactionStateAwarePrepareTurn({
 		compact: passThroughCompact,
+		// R3 (upstream compaction seam): `prepareApiMessages` is the
+		// runtime's provider-request transform; re-compaction swaps in a
+		// projected transcript and must estimate against its API-safe form.
+		prepareApiMessages: async (messages) => messages,
 	});
 	return await prepareTurn({
 		agentId: "agent-w-authority",
@@ -279,7 +283,11 @@ describe("compaction working-context authority publish", () => {
 
 		const prepareTurn = createCompactionStateAwarePrepareTurn({
 			compact: compactAThenSkip,
-			saveState: async (state, sourceMessages) => {
+			// R3 (upstream compaction seam): `prepareApiMessages` is the
+			// runtime's provider-request transform; re-compaction swaps in a
+			// projected transcript and must estimate against its API-safe form.
+			prepareApiMessages: async (messages) => messages,
+			saveState: async (_state, sourceMessages) => {
 				saveStateCalls.push({
 					sourceMessageCount: sourceMessages.length,
 				});

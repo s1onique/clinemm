@@ -14,24 +14,22 @@
  * the TS reference does not have -- see per-test annotations.
  */
 
-import { describe, expect, it, beforeEach } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
+import { buildCompletionContinuationControl, type CompletionContinuationControl } from "../background-notify-coordinator"
 import {
-	buildCompletionContinuationControl,
-	type CompletionContinuationControl,
-} from "../background-notify-coordinator"
-import {
-	pickContinuationDirectiveForPublication,
-	resetCompletionContinuationControlElmAuthorityForTests,
 	type CompletionContinuationControlFactsInput,
 	type ContinuationDirective,
 	type FailureReasonTag,
+	pickContinuationDirectiveForPublication,
+	resetCompletionContinuationControlElmAuthorityForTests,
 } from "../completion-continuation-control-elm"
 
 function facts(over: Partial<CompletionContinuationControlFactsInput> = {}): CompletionContinuationControlFactsInput {
 	return {
 		unconsumedCount: 0,
 		capabilities: { canObserveHeldResults: false, canRetryCompletion: false },
-		priorHeldSetSorted: undefined, currentHeldSetSorted: ["j1", "j2"],
+		priorHeldSetSorted: undefined,
+		currentHeldSetSorted: ["j1", "j2"],
 		sessionMatches: true,
 		taskMatches: true,
 		alreadyCommitted: false,
@@ -112,9 +110,13 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C14 
 		const elmDirective = await pickContinuationDirectiveForPublication(
 			facts({ unconsumedCount: 2, capabilities: { canObserveHeldResults: false, canRetryCompletion: true } }),
 		)
-		expect((tsToDirective(tsControl).tag === "fail_closed" ? tsToDirective(tsControl).failureReason : "not_fail_closed")).toBe("observation_unavailable")
+		expect(tsToDirective(tsControl).tag === "fail_closed" ? tsToDirective(tsControl).failureReason : "not_fail_closed").toBe(
+			"observation_unavailable",
+		)
 		expect(elmDirective.tag).toBe("fail_closed")
-		expect(elmDirective.tag === "fail_closed" ? elmDirective.failureReason : "not_fail_closed").toBe("observation_unavailable")
+		expect(elmDirective.tag === "fail_closed" ? elmDirective.failureReason : "not_fail_closed").toBe(
+			"observation_unavailable",
+		)
 	})
 
 	it("CTRL-03 not held + retry -> RetryCompletion (both)", async () => {
@@ -146,7 +148,9 @@ describe("ACT-CLINEMM-ELMIZE-P1-COMPLETION-CONTINUATION-CONTROL-AUTHORITY02 C14 
 		const elmDirective = await pickContinuationDirectiveForPublication(
 			facts({ unconsumedCount: 0, capabilities: { canObserveHeldResults: false, canRetryCompletion: false } }),
 		)
-		expect((tsToDirective(tsControl).tag === "fail_closed" ? tsToDirective(tsControl).failureReason : "not_fail_closed")).toBe("retry_unavailable")
+		expect(tsToDirective(tsControl).tag === "fail_closed" ? tsToDirective(tsControl).failureReason : "not_fail_closed").toBe(
+			"retry_unavailable",
+		)
 		expect(elmDirective.tag).toBe("fail_closed")
 		expect(elmDirective.tag === "fail_closed" ? elmDirective.failureReason : "not_fail_closed").toBe("retry_unavailable")
 	})
@@ -174,7 +178,8 @@ describe("C14-extension tests (Elm adds stall / identity / commit / malformed gu
 			facts({
 				unconsumedCount: 2,
 				capabilities: { canObserveHeldResults: true, canRetryCompletion: true },
-				priorHeldSetSorted: ["j1", "j2"], currentHeldSetSorted: ["j1", "j2"],
+				priorHeldSetSorted: ["j1", "j2"],
+				currentHeldSetSorted: ["j1", "j2"],
 			}),
 		)
 		expect(tsToDirective(tsControl).tag).toBe("observe_then_retry")

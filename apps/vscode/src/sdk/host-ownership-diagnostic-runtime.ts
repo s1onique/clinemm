@@ -65,9 +65,7 @@ export interface HostOwnershipDiagnosticContext {
  * reads this flag on every `getStateToPostToWebview` invocation and
  * enables / disables accordingly.
  */
-export function isHostOwnershipDiagnosticWorkspaceEnabled(
-	context: HostOwnershipDiagnosticContext,
-): boolean {
+export function isHostOwnershipDiagnosticWorkspaceEnabled(context: HostOwnershipDiagnosticContext): boolean {
 	const value = context.workspaceState.get<boolean>(WORKSPACE_STATE_KEY)
 	return value === true
 }
@@ -78,9 +76,7 @@ export function isHostOwnershipDiagnosticWorkspaceEnabled(
  * the new state without waiting for the SdkController's state-post
  * sync.
  */
-export async function toggleHostOwnershipDiagnosticWorkspaceEnabled(
-	context: HostOwnershipDiagnosticContext,
-): Promise<boolean> {
+export async function toggleHostOwnershipDiagnosticWorkspaceEnabled(context: HostOwnershipDiagnosticContext): Promise<boolean> {
 	const next = !isHostOwnershipDiagnosticWorkspaceEnabled(context)
 	await context.workspaceState.update(WORKSPACE_STATE_KEY, next)
 	if (next) {
@@ -106,9 +102,7 @@ async function ensureDirectory(pathname: string): Promise<void> {
  * is allowed even when the diagnostic is disabled so an operator can
  * inspect an existing ring (matches the PTAD contract).
  */
-export async function dumpExtensionSideHostOwnershipDiagnostic(
-	context: HostOwnershipDiagnosticContext,
-): Promise<string> {
+export async function dumpExtensionSideHostOwnershipDiagnostic(context: HostOwnershipDiagnosticContext): Promise<string> {
 	const records = getHostOwnershipDiagnostic()
 	const dir = context.globalStorageUri.fsPath
 	await ensureDirectory(dir)

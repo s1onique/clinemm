@@ -19,6 +19,7 @@
  * OAuth-retry and run replay feasible.
  */
 
+import { randomUUID } from "node:crypto";
 import type { AgentRuntime } from "@cline/agents";
 import { createAgentRuntime } from "@cline/agents";
 import {
@@ -51,6 +52,7 @@ import {
 	type ModelBehaviorTraceSink,
 	type ModelInfo,
 	mergeModelOptions,
+	modelSupportsImageInput,
 	modelSupportsToolCalling,
 	type ToolCallRecord,
 	usesImageGenerationOperation,
@@ -63,11 +65,20 @@ import {
 import {
 	captureAuthRunRetry,
 	captureMistakeLimitReached,
+	captureSessionErrorRecorded,
 } from "../../services/telemetry/core-events";
+import { RunHealthObserver } from "../../services/telemetry/run-health";
+import { toPersistedToolResultContent } from "../../session/persisted-tool-result-content";
 import {
+	DEFAULT_MAX_TOOL_RESULT_CHARS,
 	getMessageBuilderOptionsFromEnv,
 	MessageBuilder,
 } from "../../session/services/message-builder";
+import {
+	prepareToolResultPreview,
+	prepareToolResultRecovery,
+	ToolResultCache,
+} from "../../session/services/tool-result-cache";
 import { ConversationStore } from "../../session/stores/conversation-store";
 import {
 	agentMessagesToMessages,
@@ -223,11 +234,23 @@ function mergeRuntimeHooks(
 
 	return {
 		beforeRun: async (ctx) => {
+			let aggregate:
+				| Awaited<ReturnType<NonNullable<AgentRuntimeHooks["beforeRun"]>>>
+				| undefined;
 			for (const hook of hooks) {
 				const result = await hook.beforeRun?.(ctx);
-				if (result?.stop) return result;
+				if (!result) continue;
+				if (result.stop) return result;
+				const appendContext = [aggregate?.appendContext, result.appendContext]
+					.filter((value): value is string => Boolean(value?.trim()))
+					.join("\n\n");
+				aggregate = {
+					...aggregate,
+					...result,
+					appendContext: appendContext || undefined,
+				};
 			}
-			return undefined;
+			return aggregate;
 		},
 		afterRun: async (ctx) => {
 			for (const hook of hooks) {
@@ -376,6 +399,12 @@ export class SessionRuntime {
 	// (services/agent-events.ts).
 	readonly telemetry?: ITelemetryService;
 	private readonly conversation: ConversationStore;
+	private readonly toolResultCache: ToolResultCache;
+	private cacheableToolNames = new Set<string>();
+	private readonly maxCachedResultChars: number;
+	private pendingTerminalError:
+		| Extract<AgentEvent, { type: "error" }>
+		| undefined;
 	private readonly mistakeTracker: MistakeTracker;
 	private readonly loopTracker: LoopDetectionTracker;
 	/**
@@ -509,12 +538,15 @@ export class SessionRuntime {
 	private activeTrackerWork: Promise<void> = Promise.resolve();
 	/** True when tracker logic has issued an abort for the active run. */
 	private trackerAbortInFlight = false;
+	/** Why the tracker stopped the run; returned as stop control from the hooks. */
+	private trackerStopReason: string | undefined;
+	private readonly handleExternalAbort = (): void => {
+		this.abort(this.config.abortSignal?.reason);
+	};
 
 	constructor(config: AgentConfig, deps: SessionRuntimeOrchestratorDeps = {}) {
 		this.config = config;
-		this.agentId = `agent_${Date.now()}_${Math.random()
-			.toString(36)
-			.slice(2, 8)}`;
+		this.agentId = `agent_${randomUUID()}`;
 		this.parentAgentId = config.parentAgentId;
 		this.logger = deps.logger ?? config.logger;
 		this.telemetry = deps.telemetry ?? config.telemetry;
@@ -527,7 +559,19 @@ export class SessionRuntime {
 			deps.createAgentRuntimeImpl ?? createAgentRuntime;
 
 		this.conversation = new ConversationStore(config.initialMessages);
-		this.messageBuilder = new MessageBuilder(getMessageBuilderOptionsFromEnv());
+		this.toolResultCache = new ToolResultCache(
+			config.sessionId ?? this.agentId,
+		);
+		const messageBuilderOptions = getMessageBuilderOptionsFromEnv();
+		this.maxCachedResultChars =
+			messageBuilderOptions.maxToolResultChars ?? DEFAULT_MAX_TOOL_RESULT_CHARS;
+		this.messageBuilder = new MessageBuilder({
+			...messageBuilderOptions,
+			getToolResultRecovery: (result) =>
+				this.cacheableToolNames.has(result.name ?? "")
+					? { uri: this.toolResultCache.uriFor(result.tool_use_id) }
+					: undefined,
+		});
 		this.contributionRegistry = createContributionRegistry<
 			AgentExtension,
 			AgentTool,
@@ -613,7 +657,7 @@ export class SessionRuntime {
 
 	/** True when no run is currently active and the session is not shut down. */
 	canStartRun(): boolean {
-		return !this.running && !this.shutdownCalled;
+		return !this.running && !this.activeRunPromise && !this.shutdownCalled;
 	}
 
 	/**
@@ -687,6 +731,7 @@ export class SessionRuntime {
 	}
 
 	private resetConversationBoundaryTrackers(): void {
+		this.toolResultCache.clear();
 		this.messageBuilder.resetConversationState();
 		this.mistakeTracker.reset();
 		this.loopTracker.reset();
@@ -794,6 +839,9 @@ export class SessionRuntime {
 	snapshot(): LiveAgentRuntimeStateSnapshot | undefined {
 		return this.activeRuntime?.snapshot();
 	}
+	notifyPendingUserMessage(): void {
+		this.activeRuntime?.notifyPendingUserMessage();
+	}
 
 	abort(reason?: unknown): void {
 		const message =
@@ -870,6 +918,7 @@ export class SessionRuntime {
 			return;
 		}
 		this.shutdownCalled = true;
+		this.toolResultCache.clear();
 	}
 
 	// -------------------------------------------------------------------
@@ -881,6 +930,8 @@ export class SessionRuntime {
 		userImages?: string[],
 		userFiles?: string[],
 	): Promise<AgentResult> {
+		const rejection = this.getRunAdmissionError();
+		if (rejection) return Promise.reject(rejection);
 		this.conversation.resetForRun();
 		this.resetConversationBoundaryTrackers();
 		return this.executeRun({
@@ -906,6 +957,8 @@ export class SessionRuntime {
 		// next turn will repopulate the field; no envelope reaches
 		// `continue()` from the trusted host seam today.
 		this.runtimeTrustedContinuationInstruction = undefined;
+		const rejection = this.getRunAdmissionError();
+		if (rejection) return Promise.reject(rejection);
 		return this.executeRun({
 			userMessage,
 			userImages,
@@ -958,6 +1011,18 @@ export class SessionRuntime {
 		return baseWithRules;
 	}
 
+	private getRunAdmissionError(): Error | undefined {
+		if (this.shutdownCalled)
+			return new Error(
+				`SessionRuntime.run called after shutdown (agentId=${this.agentId})`,
+			);
+		if (this.running || this.activeRunPromise)
+			return new Error(
+				`SessionRuntime state is "running"; call canStartRun() first (agentId=${this.agentId})`,
+			);
+		return undefined;
+	}
+
 	private executeRun(input: {
 		userMessage?: AgentMessage | string;
 		userImages?: string[];
@@ -965,13 +1030,69 @@ export class SessionRuntime {
 		isContinue: boolean;
 	}): Promise<AgentResult> {
 		let activePromise!: Promise<AgentResult>;
-		activePromise = this.executeRunWithAuthRetry(input).finally(() => {
-			if (this.activeRunPromise === activePromise) {
-				this.activeRunPromise = null;
-			}
-		});
+		activePromise = this.executeRunWithAuthRetry(input)
+			.then(
+				(result) => {
+					if (result.finishReason === "error") {
+						this.recordTerminalError(result.text, "result");
+						return { ...result, messages: this.conversation.getMessages() };
+					}
+					this.pendingTerminalError = undefined;
+					return result;
+				},
+				(error: unknown) => {
+					this.recordTerminalError(
+						error instanceof Error ? error.message : String(error),
+						"thrown",
+					);
+					throw error;
+				},
+			)
+			.finally(() => {
+				if (this.activeRunPromise === activePromise) {
+					this.activeRunPromise = null;
+				}
+			});
 		this.activeRunPromise = activePromise;
 		return activePromise;
+	}
+
+	private recordTerminalError(
+		message: string,
+		source: "result" | "thrown",
+	): void {
+		this.conversation.appendMessage({
+			id: `error_${crypto.randomUUID()}`,
+			role: "assistant",
+			content: [{ type: "text", text: message }],
+			ts: Date.now(),
+			metadata: { displayOnly: true, displayRole: "error" },
+			modelInfo: { id: this.config.modelId, provider: this.config.providerId },
+		});
+		const event = this.pendingTerminalError;
+		this.pendingTerminalError = undefined;
+		this.emitLegacyEvent(
+			event?.error.message === message
+				? event
+				: {
+						type: "error",
+						error: new Error(message),
+						recoverable: false,
+						iteration: 0,
+					},
+		);
+		// Count terminal visible failures without collecting provider error text,
+		// prompts, credentials, or transcript content.
+		try {
+			captureSessionErrorRecorded(this.telemetry, {
+				sessionId: this.config.sessionId,
+				provider: this.config.providerId,
+				model: this.config.modelId,
+				source,
+			});
+		} catch {
+			// Telemetry must not prevent the transcript from being returned/saved.
+		}
 	}
 
 	/**
@@ -1029,7 +1150,7 @@ export class SessionRuntime {
 			.slice(2, 8)}`;
 		// Lazily initialize contribution-registry extensions on the
 		// first run, before runtime construction.
-		await this.ensureExtensionsInitialized();
+		await this.initializeExtensions();
 		this.eventAdapter.reset();
 		this.currentRunToolCalls = [];
 		this.currentRunUsage = { inputTokens: 0, outputTokens: 0 };
@@ -1040,6 +1161,7 @@ export class SessionRuntime {
 		this.currentTurnFailureDetails = [];
 		this.activeTrackerWork = Promise.resolve();
 		this.trackerAbortInFlight = false;
+		this.trackerStopReason = undefined;
 
 		const startedAt = new Date();
 		const effectiveUserMessage = input.userMessage;
@@ -1141,7 +1263,15 @@ export class SessionRuntime {
 					input.userFiles,
 					this.config.userFileContentLoader,
 				);
-				this.conversation.appendMessage({ role: "user", content });
+				// R3: upstream stamps an explicit message id on the persisted
+				// user turn. The fork's brand-gated path already persists
+				// `rawMessage.id`; the non-branded branch now stamps the same
+				// id shape so both paths agree.
+				this.conversation.appendMessage({
+					id: crypto.randomUUID(),
+					role: "user",
+					content,
+				});
 			}
 		}
 
@@ -1199,6 +1329,19 @@ export class SessionRuntime {
 		const initialMessages = messagesToAgentMessages(
 			this.conversation.getMessages(),
 		);
+		this.cacheableToolNames = new Set(
+			tools
+				.filter((tool) => tool.resultPolicy === "cache-oversized")
+				.map((tool) => tool.name.toLowerCase()),
+		);
+		const runHealth =
+			this.telemetry &&
+			new RunHealthObserver(this.telemetry, {
+				sessionId: this.config.sessionId,
+				isSubagent: Boolean(this.parentAgentId),
+				providerId: this.config.providerId,
+				modelId: this.config.modelId,
+			});
 		const runtimeConfig = createAgentRuntimeConfig({
 			agentConfig: this.config,
 			sessionId: this.config.sessionId,
@@ -1208,10 +1351,12 @@ export class SessionRuntime {
 			model: agentModel,
 			logger: this.logger,
 			telemetry: this.telemetry,
+			runEndTelemetryProperties: runHealth
+				? () => runHealth.endProperties()
+				: undefined,
 			tools,
 			toolContextMetadata: {
-				modelSupportsImages:
-					modelInfo?.capabilities?.includes("images") ?? true,
+				modelSupportsImages: modelSupportsImageInput(modelInfo ?? {}),
 				...this.config.toolContextMetadata,
 				// ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01: the
 				// edit-observation channel reaches the executor through the
@@ -1235,6 +1380,7 @@ export class SessionRuntime {
 								this.buildEditObservationWorkspaceIdentity(),
 						}
 					: {}),
+				toolResultCache: this.toolResultCache,
 			},
 			hooks: this.createRuntimeHooks(),
 			prepareTurn: this.createRuntimePrepareTurn(modelInfo, tools),
@@ -1244,15 +1390,30 @@ export class SessionRuntime {
 		});
 		const runtime = this.createAgentRuntimeImpl(runtimeConfig);
 		this.activeRuntime = runtime;
-		if (this.abortRequested) {
-			runtime.abort(this.abortReason);
-		}
 
 		// Subscribe to runtime events; fan out legacy events to listeners
 		// and keep private book-keeping for tool-call records / usage.
 		const unsubscribe = runtime.subscribe((event: AgentRuntimeEvent) => {
+			// AgentRuntime does not accept abort() until run-started. Retain an abort
+			// requested during finite startup and forward it at that existing lifecycle
+			// boundary instead of adding a second initialization-cancellation path.
+			if (event.type === "run-started" && this.abortRequested) {
+				runtime.abort(this.abortReason);
+			}
+			runHealth?.observe(event);
 			this.handleRuntimeEvent(event);
 		});
+		if (this.config.abortSignal) {
+			if (this.config.abortSignal.aborted) {
+				this.handleExternalAbort();
+			} else {
+				this.config.abortSignal.addEventListener(
+					"abort",
+					this.handleExternalAbort,
+					{ once: true },
+				);
+			}
+		}
 
 		let runResult: AgentRunResult | undefined;
 		let thrownError: Error | undefined;
@@ -1270,6 +1431,11 @@ export class SessionRuntime {
 			thrownError = error instanceof Error ? error : new Error(String(error));
 		} finally {
 			unsubscribe();
+			runHealth?.dispose();
+			this.config.abortSignal?.removeEventListener(
+				"abort",
+				this.handleExternalAbort,
+			);
 			// Drain any in-flight tracker work (mistake/loop side-effects
 			// queued from handleRuntimeEvent) before we clear state so a
 			// late abort can still reach the runtime if needed.
@@ -1326,6 +1492,16 @@ export class SessionRuntime {
 	 * Idempotent: subsequent calls are no-ops once the registry has
 	 * been activated.
 	 */
+	private extensionInitialization?: Promise<void>;
+	async initializeExtensions(): Promise<void> {
+		this.extensionInitialization ??= this.ensureExtensionsInitialized().catch(
+			(error) => {
+				this.extensionInitialization = undefined;
+				throw error;
+			},
+		);
+		return this.extensionInitialization;
+	}
 	private async ensureExtensionsInitialized(): Promise<void> {
 		if (this.extensionsInitialized) {
 			return;
@@ -1390,9 +1566,48 @@ export class SessionRuntime {
 				.getValidatedExtensions()
 				.map((extension) => extension.hooks),
 		]);
+		// Mistake-limit decisions run on activeTrackerWork, off the agent loop.
+		// Holding each model/tool boundary on it pauses the run while the
+		// onConsecutiveMistakeLimitReached callback (e.g. a user prompt) decides;
+		// it is already settled in every other turn. Failures are logged by the
+		// end-of-run drain, not raised here. A Stop decision is returned as stop
+		// control: abort alone does not keep the rest of a tool batch from running.
+		const trackerSettled = async () => {
+			await this.activeTrackerWork.catch(() => undefined);
+			return this.trackerAbortInFlight
+				? { stop: true as const, reason: this.trackerStopReason }
+				: undefined;
+		};
 		return {
 			...hooks,
+			beforeTool: async (ctx) => {
+				const stopped = await trackerSettled();
+				if (stopped) return stopped;
+				return hooks.beforeTool?.(ctx);
+			},
+			afterTool: async (ctx) => {
+				const stopped = await trackerSettled();
+				if (stopped) return stopped;
+				const control = await hooks.afterTool?.(ctx);
+				const result = control?.result ?? ctx.result;
+				if (ctx.tool.resultPolicy === "cache-oversized") {
+					const { text: previewText } = prepareToolResultPreview(
+						toPersistedToolResultContent(result.output),
+					);
+					if (
+						typeof previewText === "string" &&
+						previewText.length > this.maxCachedResultChars
+					) {
+						const { text } = prepareToolResultRecovery(result.output);
+						if (typeof text === "string")
+							this.toolResultCache.store(ctx.toolCall.toolCallId, text);
+					}
+				}
+				return control;
+			},
 			beforeModel: async (ctx) => {
+				const stopped = await trackerSettled();
+				if (stopped) return stopped;
 				const control = await hooks.beforeModel?.(ctx);
 				if (control?.stop) {
 					return control;
@@ -1482,6 +1697,7 @@ export class SessionRuntime {
 					info: modelInfo,
 				},
 				overflowRecovery: context.overflowRecovery,
+				previousRequestInputTokens: context.previousRequestInputTokens,
 				emitStatusNotice: context.emitStatusNotice,
 			});
 			if (!result) {
@@ -1517,7 +1733,12 @@ export class SessionRuntime {
 		return messagesToAgentMessages(providerMessages);
 	}
 
-	private async prepareProviderMessagesForApi(
+	/**
+	 * Projects canonical messages into the provider-request shape: extension
+	 * message builders, then `MessageBuilder.buildForApi` (tool-result
+	 * truncation, repairs). Produces the `apiMessages` given to `prepareTurn`.
+	 */
+	async prepareProviderMessagesForApi(
 		messages: MessageWithMetadata[],
 	): Promise<MessageWithMetadata[]> {
 		let providerMessages = messages;
@@ -1541,6 +1762,7 @@ export class SessionRuntime {
 				break;
 			}
 			case "turn-started": {
+				this.toolResultCache.advanceIteration();
 				// Reset per-turn tool-outcome counters used by the
 				// MistakeTracker wiring. Parity with pre-Step-9
 				// agent.ts which accumulates per-iteration success/fail
@@ -1706,6 +1928,11 @@ export class SessionRuntime {
 			}
 		}
 		for (const legacy of this.eventAdapter.translate(event)) {
+			if (legacy.type === "error" && !legacy.recoverable) {
+				// Auth retry is an internal attempt, not a terminal public failure.
+				this.pendingTerminalError = legacy;
+				continue;
+			}
 			this.emitLegacyEvent(legacy);
 		}
 	}
@@ -1906,6 +2133,7 @@ export class SessionRuntime {
 			const outcome = await this.mistakeTracker.record(input);
 			if (outcome.action === "stop") {
 				this.trackerAbortInFlight = true;
+				this.trackerStopReason = outcome.reason ?? outcome.message;
 				this.conversation.appendMessage({
 					role: "user",
 					content: [{ type: "text", text: outcome.message }],
@@ -1945,9 +2173,7 @@ export class SessionRuntime {
 					totalCost: runResult.usage.totalCost,
 				}
 			: this.currentRunUsage;
-		const messages = runResult
-			? agentMessagesToMessagesWithMetadata(runResult.messages)
-			: this.conversation.getMessages();
+		const messages = this.conversation.getMessages();
 		const modelInfo = tryGetModelInfo(this.config);
 		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the RUN TERMINATION
 		// boundary — the production finish reason plus the run's active
@@ -2034,12 +2260,5 @@ async function buildUserTurnContent(
 }
 
 function tryGetModelInfo(config: AgentConfig): ModelInfo | undefined {
-	if (config.knownModels?.[config.modelId]) {
-		return config.knownModels[config.modelId];
-	}
-	const resolvedKnownModels = resolveKnownModelsFromConfig(config);
-	if (resolvedKnownModels?.[config.modelId]) {
-		return resolvedKnownModels[config.modelId];
-	}
-	return undefined;
+	return resolveKnownModelsFromConfig(config)?.[config.modelId];
 }
