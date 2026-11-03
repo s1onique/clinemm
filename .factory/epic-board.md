@@ -30668,6 +30668,7 @@ The three-defect fixture has **already been exposed** to both models during prev
 
 ```
 
+```
 # ACT-CLINEMM-PORTABLE-TRACE-EVIDENCE-BINDING-CORR03 — PASS_EVIDENCE_BOUND — 2026-11-02
 
 **Status:** CLOSED. `PASS_EVIDENCE_BOUND`. **ENTRY_HEAD:** `80e9261ef100925095975364621f9a3ec9b8acf3` (branch `main`).
@@ -30749,3 +30750,106 @@ Bound to the **pre-edit** `SOURCE_HEAD` `80e9261ef100925095975364621f9a3ec9b8acf
 ## Successor
 
 `ACT-CLINEMM-DEEPSEEK-HARNESS-PORTABLE-TRACE-ADAPTER01` — adapter-specific capture and provenance, after this evidence is bound. Installed dogfood / VIAPDT and BCB premature-Paused qualification remain separately authorized operator-controlled live work and must **not** reuse any pre-repair VSIX as proof.
+
+---
+
+# ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01 — PASS_RECON_WITH_GAPS — 2026-11-03
+
+**Status:** C0–C10 executed. Verdict **`PASS_RECON_WITH_GAPS`** with one bounded successor
+(`ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01`) proposed and **NOT implemented**. This is a
+read-only production-seam reconnaissance: **no production file was created, modified or deleted; no
+recorder, runtime, React, Elm, protobuf or wire contract was touched; no captured command was executed
+or replayed; no prompt, reasoning text, command text, stdout/stderr, credential, environment value or
+absolute path was read into evidence; no protected stash was touched; no branch, push or install.**
+
+```text
+ACT_ID: ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01
+TYPE: RECON (production-seam reconnaissance / evidence qualification)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01-CORR03)
+VERDICT: PASS_RECON_WITH_GAPS
+SCOPE_EXECUTED: C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10
+PRODUCTION_DELTA: ZERO
+ENTRY_HEAD (discovered, not pre-baked): 14aaa2af1e7f38e9e37eab304763577be492b84c
+ENTRY_TREE: aa889b64b9f5458aed9f7459ed9952ddd4c052dd
+BRANCH: main (no ACT branch created)
+PRIOR_CLOSURE_HEAD (historical anchor only, NOT the current HEAD): 6bdc07c8d2651bfb93331552342f2912697dc406
+STASHES_TOUCHED: 0 (protected stash INTACT)
+WORKTREES: 4 (unchanged)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO
+```
+
+**Subject identity (C0, verified against the actual bytes).** Capture
+`model-behavior-trace(20261102-122649).jsonl`, SHA-256
+`e2f2fa3bf35d2205504890468af6ce96727366ba63c08b231c89b3284717f49b`, **4 202 370 bytes** — an **exact**
+match to the frozen identity. 7 941 recorded / 7 902 retained / 39 dropped (seq 1–39); 0 parse errors,
+0 duplicates, 0 gaps in the retained range; terminal summary present and self-consistent.
+
+**Main evidence result.** The production normalizer ran **unmodified** and reported
+**`completeness: PARTIAL`** with **`unnormalizedRecords: 0`** and `traceTruncated` on 7 902/7 902
+records — **`PASS_PORTABLE_PARTIAL`**, no P0 conformance defect. The specimen is a long
+**minimax / MiniMax-M3** session: **857** model iterations (zero gaps), **946** finished requests
+(0 errors, 0 aborts), **1 022** tool invocations, of which **949** are `run_commands`.
+
+**The decisive finding.** All **949/949** `run_commands` report `outcome:"success"` — and the trace
+contains **no exit-code-like key at all** (a scan of every payload key in all 7 902 records for
+`/exit|code|signal|job|process|status|state/i` returned the **empty set**) and **0 records carry a
+`jobId`**. `tool_finish.outcome` is computed at `agent-runtime.ts:4857` from the boolean
+`result.isError`, and the real exit code is collapsed to that boolean at `definitions.ts:366` — so
+**tool success is not command success**, and the 949 all-success result is *uninformative* precisely
+because it is a boolean collapse. Meanwhile the production authorities that **do** observe the exit
+status already exist on **both** paths (`CommandJobManager.finalize` at `:2450`;
+`VscodeTerminalProcess.getCompletionDetails()` at `:611`), with the background `jobId` already
+identity-bound and already model-visible (`vscode-run-commands-tool.ts:1810`).
+
+**Decision-sufficiency (C5).** Q1 "is the agent doing work?" → **YES**. Q2 "is execution succeeding?" →
+**`CAPTURE_INSUFFICIENT`** (no process outcome in the trace). Q3 "is correctness improving?" →
+**`CAPTURE_INSUFFICIENT`** (no independent acceptance milestone for this capture). The offline
+necessity ablation shows each evidence category is load-bearing: **− process result kills exactly
+Q2**; **− workspace checkpoint** and **− independent acceptance** each kill exactly Q3. The specimen
+supports the ablation; it is not fabricated.
+
+**Discipline honoured.** D1: 948/949 **distinct** argument fingerprints, max repeat 2, and the
+unchanged production `LoopDetectionTracker` reached `soft`×1 / `hard`×0 — **not** looping, and no
+loop heuristic is proposed. D3: application ≠ retained state (retained state lives only on the
+dump-time `edit_checkpoint_observation`). D4: compaction establishes the budget transition only
+(461 752 → 59 222 tokens, 940 → 39 messages), **not** recovery. D5: the single unpaired model request
+is the **last** one and the long session has **no** `run_terminated` — an **open run**, not a failure.
+No timestamp was used as a causal join key; no acceptance was inferred from the agent's completion
+message; no subprocess exit was inferred from tool success.
+
+**Executable gates (C8, existing suites only).** Agent-trace contract + comparator: **45/45 PASS**
+(`EXECUTED_PASS`). `run_commands` foreground/background classification: **PASS** (`EXECUTED_PASS`).
+Independent evaluator: **18 pass / 10 skip / 0 fail** (`EXECUTED_PASS`; the 10 skips are
+`CAPTURE_INSUFFICIENT` — they require the operator's `CLINE_ACCEPTANCE_FIXTURE_REPO` /
+`CLINE_ACCEPTANCE_MANIFEST` / `CLINE_ACCEPTANCE_REPAIR_DIR`, which are unset on this host).
+`command-job-manager.owner-session-id.test.ts`: **7 failed / 2 passed** — classified
+**`BASELINE_FAILURE` (environmental)**, not a recon regression: the test file is unmodified at HEAD
+and the failures are `spawn_failed`, reproduced independently as this sandbox denying
+`kill(-pgid, 0)` with `EPERM`. No unrelated repair was attempted.
+
+**Selected successor (proposed, NOT implemented).**
+`ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01` — record the process exit status
+(`exitCode` + terminal class, and background-only `jobId`) that the production seam **already
+observes**, on the **existing** `tool_finish` event, correlated by the **existing** `toolCallId`.
+A *record/encode* change at an existing observation boundary — **no new process monitor, no new event
+kind, no new identity namespace, no new timer, no new public wire field.** RED witness: today
+`outcome:"success"` is indistinguishable from a shell that exited non-zero or was killed.
+OFF-path neutrality: default-OFF, trace-OFF execution order byte-identical to today.
+
+**Remaining installed dogfood qualification.** Installed-VSIX dogfood / VIAPDT and the BCB
+premature-Paused qualification remain **separately authorized operator-controlled live work** and must
+**not** reuse any pre-repair VSIX as proof. A **second** live capture executed against the bridge
+would be required before any `PASS_RECON_DECISION_SUFFICIENT` claim. The **orthogonally larger but
+free** win — running the existing independent evaluator against the capture's workspace — requires
+**no production change at all** and makes Q3 answerable by composition today.
+
+**No changes to the already-closed CORR03 or the BCB repair statuses.** One **P2** documentary drift
+was recorded for terminal cleanup and **CORR03 was not reopened**:
+`agent-trace-v0.1.md:301` and `:331` still list `toolCatalogFingerprint`, which CORR02 established is
+`UNAVAILABLE_FROM_TRACE` (the implementation already reports it as such at
+`normalize-agent-trace.ts:350, :1352`).
+
+**Evidence**
+
+- `docs/acts/ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01/REPORT.md`
