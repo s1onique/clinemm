@@ -36,7 +36,7 @@ import {
 	SDK_ABORT_CAUSE_MAX_EVENTS_PER_SNAPSHOT,
 	SDK_ABORT_CAUSE_MAX_SNAPSHOTS,
 	setSdkAbortCauseRecordProvider,
-} from "../sdk-abort-cause-retention"
+} from "./sdk-abort-cause-retention"
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -551,6 +551,105 @@ describe("ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — retention", () => {
 			})
 		}
 		expect(getSdkAbortCauseSnapshots().length).toBeLessThanOrEqual(SDK_ABORT_CAUSE_MAX_SNAPSHOTS)
+	})
+
+	it("T13: a run whose two boundaries carry DIFFERENT run ids is still correlated", () => {
+		// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — CORRECTION01.
+		//
+		// The production SDK mints TWO run identities for ONE run: the
+		// `AgentRuntime` mints its own (`run_zf21Bf__`) and carries it on
+		// every model-request observation, while the `SessionRuntime`
+		// orchestrator mints a separate one (`run_1793..._xyz`) and carries
+		// it on the run-terminal observation.
+		//
+		// A snapshot keyed on ONE of them would silently drop the other
+		// half of the evidence — exactly the provider-terminal record that
+		// explains WHY the run ended.
+		const recorder = new ModelBehaviorTraceRecorder()
+		recorder.setEnabled(true)
+		const sink = makeHostSink(recorder)
+		setSdkAbortCauseRecordProvider(() => recorder.getRecords())
+
+		// The MODEL-REQUEST boundary: the runtime's own run id.
+		sink.observe("model_request_start", {
+			sessionId: "s-t13",
+			runId: "run-runtime-owned",
+			iteration: 1,
+			modelRequestId: "req-t13",
+			payload: {},
+		})
+		sink.observe("model_request_error", {
+			sessionId: "s-t13",
+			runId: "run-runtime-owned",
+			iteration: 1,
+			modelRequestId: "req-t13",
+			payload: {
+				errorName: "ProviderFailure",
+				requestOutcome: "provider_error",
+			},
+		})
+		// The RUN-TERMINAL boundary: the orchestrator's own run id. It
+		// carries the last-known model request id in its PAYLOAD (the
+		// orchestrator learns it from the same observation channel), which
+		// is what makes the join possible.
+		sink.observe("run_terminated", {
+			sessionId: "s-t13",
+			runId: "run-orchestrator-owned",
+			payload: {
+				status: "failed",
+				terminalPath: "caught_exception",
+				lastKnownModelRequestId: "req-t13",
+				errorName: "ProviderFailure",
+			},
+		})
+
+		const snapshot = getLatestSdkAbortCauseSnapshot()
+		expect(snapshot).toBeDefined()
+		// The provider-terminal record MUST be present, even though its run
+		// id differs from the terminal record's.
+		const events = snapshot?.events.map((e) => e.event) ?? []
+		expect(events).toContain("model_request_error")
+		expect(events).toContain("run_terminated")
+		expect(events).toContain("model_request_start")
+		// The attribution is the PROVIDER failure, not the terminal status.
+		expect(snapshot?.attribution.errorName).toBe("ProviderFailure")
+		expect(snapshot?.attribution.lastRequestOutcome).toBe("provider_error")
+		expect(snapshot?.attribution.lastModelRequestId).toBe("req-t13")
+	})
+
+	it("T14: a record from a DIFFERENT session is never admitted, even with a matching request id", () => {
+		const recorder = new ModelBehaviorTraceRecorder()
+		recorder.setEnabled(true)
+		const sink = makeHostSink(recorder)
+		setSdkAbortCauseRecordProvider(() => recorder.getRecords())
+
+		// Another session observed the SAME model request id (a collision
+		// the join must not treat as membership).
+		sink.observe("model_request_error", {
+			sessionId: "s-other",
+			runId: "r-other",
+			modelRequestId: "req-shared",
+			payload: { errorName: "ForeignError", requestOutcome: "provider_error" },
+		})
+		sink.observe("model_request_start", {
+			sessionId: "s-t14",
+			runId: "r-t14",
+			modelRequestId: "req-t14",
+			payload: {},
+		})
+		sink.observe("run_terminated", {
+			sessionId: "s-t14",
+			runId: "r-t14",
+			payload: { status: "failed", terminalPath: "caught_exception" },
+		})
+
+		const snapshot = getLatestSdkAbortCauseSnapshot()
+		expect(snapshot).toBeDefined()
+		// The FOREIGN record must not be in the snapshot.
+		expect(
+			snapshot?.events.filter((e) => e.sessionId === "s-other"),
+		).toHaveLength(0)
+		expect(snapshot?.events.every((e) => e.sessionId === "s-t14")).toBe(true)
 	})
 
 	it("T12: a secret inside an error message is absent from the retained artifact", async () => {

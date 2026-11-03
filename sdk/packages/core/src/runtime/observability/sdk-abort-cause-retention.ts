@@ -188,7 +188,19 @@ const snapshots: SdkAbortCauseSnapshot[] = []
  * from "the provider request was still in flight when the run ended".
  */
 interface RunRequestState {
-	readonly runKey: string
+	/**
+	 * The session the state belongs to.
+	 *
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — CORRECTION01: the state is
+	 * keyed by SESSION, not by run id, because the model-request boundary
+	 * and the run-terminal boundary carry DIFFERENT run ids for the same
+	 * execution. See {@link RunScope}.
+	 */
+	readonly sessionId: string
+	/** Every run id observed for this session. */
+	readonly runIds: Set<string>
+	/** Every model request id observed for this session. */
+	readonly modelRequestIds: Set<string>
 	lastModelRequestId?: string
 	lastRequestOutcome?: string
 	providerFinishReason?: string
@@ -228,6 +240,77 @@ function runKeyOf(record: ModelBehaviorTraceRecord): string | undefined {
 }
 
 /**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — CORRECTION01.
+ *
+ * The scope a snapshot collects evidence from.
+ *
+ * WHY A SCOPE AND NOT A SINGLE RUN KEY
+ * ------------------------------------
+ * The production SDK has TWO run identities for ONE run:
+ *   - the `AgentRuntime` mints its OWN `runId`
+ *     (`agent-runtime.ts`: `this.state.runId = createUID("run")`), and that
+ *     is the identity carried by every MODEL-REQUEST observation, and
+ *   - the `SessionRuntime` orchestrator mints a SEPARATE `activeRunId`
+ *     (`session-runtime-orchestrator.ts`: `run_${Date.now()}_...`), and
+ *     that is the identity carried by the RUN-TERMINAL observation.
+ *
+ * They are different strings for the same execution, so a snapshot keyed on
+ * ONE of them would silently drop the other half of the evidence — the
+ * provider-terminal record would be missing from a snapshot that describes
+ * exactly that provider failure.
+ *
+ * Unifying the two identities would mean changing the runtime's run id,
+ * which is a PRODUCTION SEMANTIC change (it changes the run result's
+ * `runId`) and is therefore out of this ACT's conservation scope.
+ *
+ * The scope therefore collects evidence by the identities that ARE shared:
+ *   - the SESSION id (both boundaries carry it), and
+ *   - the `modelRequestId` (the orchestrator learns it from the SAME
+ *     observation channel and reports it on the run-terminal record).
+ *
+ * A record is admitted when it shares the session AND either the run id or
+ * the model request id. Two concurrent sessions therefore still cannot
+ * contaminate each other: the session id is a mandatory part of the join.
+ */
+interface RunScope {
+	/** The session the run belongs to. Mandatory. */
+	readonly sessionId: string | undefined
+	/** Every run id observed for this run across the boundaries. */
+	readonly runIds: ReadonlySet<string>
+	/** Every model request id observed for this run. */
+	readonly modelRequestIds: ReadonlySet<string>
+}
+
+/**
+ * Does a record belong to the scope?
+ *
+ * The session id is REQUIRED: without it the record cannot be attributed
+ * and is not admitted. Beyond the session, a record is admitted when its
+ * run id OR its model request id is one the scope has observed.
+ */
+function recordMatchesScope(
+	record: ModelBehaviorTraceRecord,
+	scope: RunScope,
+): boolean {
+	if (scope.sessionId === undefined) {
+		return false
+	}
+	if (record.sessionId !== scope.sessionId) {
+		return false
+	}
+	if (record.runId !== undefined && scope.runIds.has(record.runId)) {
+		return true
+	}
+	if (
+		record.modelRequestId !== undefined &&
+		scope.modelRequestIds.has(record.modelRequestId)
+	) {
+		return true
+	}
+	return false
+}
+
+/**
  * Read a string field from a record payload.
  */
 function payloadString(record: ModelBehaviorTraceRecord, key: string): string | undefined {
@@ -252,15 +335,15 @@ export function observeSdkAbortCauseRecord(record: ModelBehaviorTraceRecord | un
 		if (!RETAINED_EVENT_KINDS.has(record.event)) {
 			return
 		}
-		const runKey = runKeyOf(record)
-		if (!runKey) {
+		const sessionId = record.sessionId
+		if (!sessionId) {
 			// An unbound record cannot be attributed to a run.
 			return
 		}
-		let state = runStates.get(runKey)
+		let state = runStates.get(sessionId)
 		if (!state) {
-			state = { runKey }
-			runStates.set(runKey, state)
+			state = { sessionId, runIds: new Set(), modelRequestIds: new Set() }
+			runStates.set(sessionId, state)
 			if (runStates.size > MAX_RUN_STATES) {
 				// Deterministic oldest-first eviction.
 				const oldest = runStates.keys().next()
@@ -268,6 +351,13 @@ export function observeSdkAbortCauseRecord(record: ModelBehaviorTraceRecord | un
 					runStates.delete(oldest.value)
 				}
 			}
+		}
+		// Every observed identity joins the scope.
+		if (record.runId !== undefined) {
+			state.runIds.add(record.runId)
+		}
+		if (record.modelRequestId !== undefined) {
+			state.modelRequestIds.add(record.modelRequestId)
 		}
 
 		switch (record.event) {
@@ -376,12 +466,31 @@ export function captureSdkAbortCauseSnapshot(record: ModelBehaviorTraceRecord | 
 			// A normal completion produces NO abnormal-terminal capture.
 			return undefined
 		}
-		const runKey = runKeyOf(record)
-		if (!runKey) {
+		const sessionId = record.sessionId
+		if (!sessionId) {
 			return undefined
 		}
-		const state = runStates.get(runKey)
-		const events = collectSnapshotEvents(runKey, record)
+		const state = runStates.get(sessionId)
+		// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — CORRECTION01: the scope
+		// collects evidence by the identities BOTH boundaries share. The
+		// run-terminal record's own run id is added to the scope so the
+		// terminal record is always a member of its own scope.
+		const scope: RunScope = {
+			sessionId,
+			runIds: new Set<string>([
+				...(state?.runIds ?? []),
+				...(record.runId !== undefined ? [record.runId] : []),
+			]),
+			modelRequestIds: new Set<string>([
+				...(state?.modelRequestIds ?? []),
+				...(record.modelRequestId !== undefined ? [record.modelRequestId] : []),
+				...(state?.lastModelRequestId !== undefined
+					? [state.lastModelRequestId]
+					: []),
+			]),
+		}
+		const events = collectSnapshotEvents(scope, record)
+		const candidateCount = countSnapshotCandidates(scope)
 		const snapshot: SdkAbortCauseSnapshot = {
 			schemaVersion: SNAPSHOT_SCHEMA_VERSION,
 			capturedAt: record.timestamp,
@@ -394,8 +503,8 @@ export function captureSdkAbortCauseSnapshot(record: ModelBehaviorTraceRecord | 
 			},
 			status,
 			events,
-			truncated: events.length < countSnapshotCandidates(runKey),
-			droppedEventCount: Math.max(0, countSnapshotCandidates(runKey) - events.length),
+			truncated: events.length < candidateCount,
+			droppedEventCount: Math.max(0, candidateCount - events.length),
 			attribution: {
 				...(state?.abortOrigin !== undefined ? { abortOrigin: state.abortOrigin } : {}),
 				...(state?.terminalPath !== undefined ? { terminalPath: state.terminalPath } : {}),
@@ -411,7 +520,7 @@ export function captureSdkAbortCauseSnapshot(record: ModelBehaviorTraceRecord | 
 			snapshots.shift()
 		}
 		// The run state has served its purpose.
-		runStates.delete(runKey)
+		runStates.delete(sessionId)
 		return snapshot
 	} catch {
 		// Failure isolation: a retention bug must never affect the runtime.
@@ -443,7 +552,7 @@ export function setSdkAbortCauseRecordProvider(provider: () => readonly ModelBeh
  * This is the number of RETAINED-KIND records that belong to the run, so
  * the snapshot can report how many it dropped.
  */
-function countSnapshotCandidates(runKey: string): number {
+function countSnapshotCandidates(scope: RunScope): number {
 	if (!recordProvider) {
 		return 0
 	}
@@ -452,7 +561,7 @@ function countSnapshotCandidates(runKey: string): number {
 		if (!RETAINED_EVENT_KINDS.has(record.event)) {
 			continue
 		}
-		if (runKeyOf(record) === runKey) {
+		if (recordMatchesScope(record, scope)) {
 			count++
 		}
 	}
@@ -469,7 +578,10 @@ function countSnapshotCandidates(runKey: string): number {
  *
  * Truncation is REPORTED by the caller via `droppedEventCount`.
  */
-function collectSnapshotEvents(runKey: string, terminalRecord: ModelBehaviorTraceRecord): readonly ModelBehaviorTraceRecord[] {
+function collectSnapshotEvents(
+	scope: RunScope,
+	terminalRecord: ModelBehaviorTraceRecord,
+): readonly ModelBehaviorTraceRecord[] {
 	if (!recordProvider) {
 		return [terminalRecord]
 	}
@@ -478,7 +590,7 @@ function collectSnapshotEvents(runKey: string, terminalRecord: ModelBehaviorTrac
 		if (!RETAINED_EVENT_KINDS.has(record.event)) {
 			continue
 		}
-		if (runKeyOf(record) === runKey) {
+		if (recordMatchesScope(record, scope)) {
 			candidates.push(record)
 		}
 	}

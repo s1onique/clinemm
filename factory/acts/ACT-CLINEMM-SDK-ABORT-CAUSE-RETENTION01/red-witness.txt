@@ -1,0 +1,113 @@
+ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 / C2 RED witness
+=================================================
+
+COMMAND:
+  cd sdk/packages/agents && bun x vitest run \
+    src/agent-runtime.abort-cause-retention.red01.test.ts --config vitest.config.ts
+
+BASELINE: production sources at ENTRY_HEAD 5e505e855 (the ACT's production
+changes stashed; ONLY the new witness test file present).
+The shared package was rebuilt from the stashed (original) source so the
+@cline/shared resolution was faithful to the baseline.
+
+RESULT: 5 failed | 0 passed  (exit 1)
+
+Each failure is a MISSING-OBSERVATION defect. No stimulus is an
+intentionally failing agent behavior: every stimulus is a NORMAL production
+path (a provider exception, a controlled stop, an operator cancel, a
+mid-stream failure).
+
+RED_OBSERVABILITY_GAP witnesses:
+  R1 provider exception   -> AssertionError: expected undefined to be 'ProviderStreamError'
+                              (the provider-terminal record carried NO error name)
+  R2 controlled stop      -> AssertionError: expected 0 to be greater than or equal to 1
+                              (NO abort-ORIGIN event existed at all)
+  R3 explicit cancel      -> AssertionError: expected 0 to be greater than or equal to 1
+                              (NO abort-ORIGIN event existed at all)
+  R4 in-flight at run end -> AssertionError: expected undefined to be truthy
+                              (the trace identity carried NO modelRequestId, so the
+                               provider-terminal record could not be joined to the
+                               provider's own request identity)
+  R5 mid-stream failure   -> AssertionError: expected undefined to be 'StreamError'
+                              (the provider-terminal record carried NO error name
+                               and NO observed request outcome)
+
+VERDICT: RED_OBSERVABILITY_GAP (5/5 witnesses demonstrate a missing observation).
+
+--- raw vitest output (trimmed) ---
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents
+ ❯ src/agent-runtime.abort-cause-retention.red01.test.ts (5 tests | 5 failed) 55ms
+     × R1: a provider exception retains the error identity and the request correlation 9ms
+     × R2: a controlled runtime stop is distinguishable from an explicit cancellation 1ms
+     × R3: an explicit cancellation retains its ORIGIN and is not misclassified as a provider failure 21ms
+     × R4: a request still in flight at run end is reported as in-flight, not as a provider error 22ms
+     × R5: a mid-stream failure is a stream error and fabricates no finish reason 1ms
+}
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/agent-runtime.abort-cause-retention.red01.test.ts > ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — RED > R1: a provider exception retains the error identity and the request correlation
+AssertionError: expected undefined to be 'ProviderStreamError' // Object.is equality
+- Expected:
+"ProviderStreamError"
++ Received:
+undefined
+ ❯ src/agent-runtime.abort-cause-retention.red01.test.ts:261:36
+    259|   // BEFORE the repair the payload carried ONLY the coarse `errorClass…
+    260|   // so two different provider failures were indistinguishable.
+    261|   expect(error?.payload.errorName).toBe("ProviderStreamError");
+       |                                    ^
+    262|   expect(error?.payload.errorMessage).toContain("provider exploded");
+    263|   // The OBSERVED outcome must be recorded, not inferred.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+ FAIL  src/agent-runtime.abort-cause-retention.red01.test.ts > ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — RED > R2: a controlled runtime stop is distinguishable from an explicit cancellation
+AssertionError: expected 0 to be greater than or equal to 1
+ ❯ src/agent-runtime.abort-cause-retention.red01.test.ts:300:26
+    298|
+    299|   const origins = observations.filter((o) => o.kind === "abort_request…
+    300|   expect(origins.length).toBeGreaterThanOrEqual(1);
+       |                          ^
+    301|
+    302|   // RED_OBSERVABILITY_GAP: before the repair there was NO origin event
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+ FAIL  src/agent-runtime.abort-cause-retention.red01.test.ts > ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — RED > R3: an explicit cancellation retains its ORIGIN and is not misclassified as a provider failure
+AssertionError: expected 0 to be greater than or equal to 1
+ ❯ src/agent-runtime.abort-cause-retention.red01.test.ts:332:26
+    330|
+    331|   const origins = observations.filter((o) => o.kind === "abort_request…
+    332|   expect(origins.length).toBeGreaterThanOrEqual(1);
+       |                          ^
+    333|   // RED_OBSERVABILITY_GAP: the ORIGIN of the cancellation.
+    334|   expect(origins[0]?.payload.abortOrigin).toBe("explicit_abort_request…
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+ FAIL  src/agent-runtime.abort-cause-retention.red01.test.ts > ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — RED > R4: a request still in flight at run end is reported as in-flight, not as a provider error
+AssertionError: expected undefined to be truthy
+- Expected:
+true
++ Received:
+undefined
+ ❯ src/agent-runtime.abort-cause-retention.red01.test.ts:370:37
+    368|   // The request WAS observed to start, so its id must be present.
+    369|   const starts = observations.filter((o) => o.kind === "start");
+    370|   expect(starts[0]?.modelRequestId).toBeTruthy();
+       |                                     ^
+    371|  });
+    372|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+ FAIL  src/agent-runtime.abort-cause-retention.red01.test.ts > ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — RED > R5: a mid-stream failure is a stream error and fabricates no finish reason
+AssertionError: expected undefined to be 'StreamError' // Object.is equality
+- Expected:
+"StreamError"
++ Received:
+undefined
+ ❯ src/agent-runtime.abort-cause-retention.red01.test.ts:394:40
+    392|   const errors = observations.filter((o) => o.kind === "error");
+    393|   expect(errors.length).toBeGreaterThanOrEqual(1);
+    394|   expect(errors[0]?.payload.errorName).toBe("StreamError");
+       |                                        ^
+    395|   // A mid-stream failure is a STREAM error, not a provider error.
+    396|   expect(errors[0]?.payload.requestOutcome).toBe("stream_error");
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  15:47:26
+   Duration  376ms (transform 199ms, setup 0ms, import 258ms, tests 55ms, environment 0ms)
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/agent-runtime.abort-cause-retention.red01.test.ts.

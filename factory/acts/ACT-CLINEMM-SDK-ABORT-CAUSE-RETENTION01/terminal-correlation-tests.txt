@@ -1,0 +1,271 @@
+ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 / C4 terminal-correlation tests
+========================================================================
+
+C1 FROZEN EVIDENCE CONTRACT (as implemented)
+--------------------------------------------
+  model_request_started
+         |
+         v
+  model_request_terminal          (model_request_error | model_request_abort
+         |                          | model_request_finish)
+         v
+  sdk_run_terminal                (run_terminated)
+         |
+         v
+  host_lifecycle_observation      (the EXISTING host lifecycle trace —
+                                   sdk-session-event-coordinator.ts
+                                   lifecycleTransitionTraceRecord)
+
+  An INDEPENDENT abort-origin event (run_abort_requested) may occur
+  before or during the provider request.
+
+  Contract clause honoured: "Do not assume that every request has a
+  terminal provider event." A request with no observed terminal provider
+  event is reported as `in_flight_at_run_end` — never silently
+  classified as `provider_error`.
+
+CORRELATION IDENTITY (only fields actually available at each source)
+--------------------------------------------------------------------
+  | Field            | Provider request boundary | SDK run-terminal boundary | Host |
+  |------------------|---------------------------|---------------------------|------|
+  | sessionId        | yes (runtime config)      | yes (runtime config)      | yes  |
+  | taskId           | no (not known to the      | yes (conversation id)     | yes  |
+  |                  | agent runtime)            |                           |      |
+  | runId            | yes (runtime state)       | yes (activeRunId)         | yes  |
+  | iteration        | yes (runtime counter)     | no                        | yes  |
+  | modelRequestId   | yes (minted per request,  | yes (last known, learned  | n/a  |
+  |                  | carried on the trace id)  | through the sink wrapper)|      |
+  | providerId       | yes                       | yes                       | yes  |
+  | modelId          | yes                       | yes                       | yes  |
+  | epoch            | NOT AVAILABLE in the SDK  | not available             | yes  |
+  |                  | (no epoch concept exists  |                           |      |
+  |                  | in agent-runtime.ts or    |                           |      |
+  |                  | the orchestrator)          |                           |      |
+
+  An unavailable identity is OMITTED, never synthesized. The `epoch` is
+  deliberately absent from the SDK records because the SDK has no epoch
+  concept; it is a HOST-side identity and is reused from the existing
+  host lifecycle trace rather than invented at the SDK boundary.
+
+  HOST LIFECYCLE OBSERVATION (reused, NOT duplicated)
+  --------------------------------------------------
+  The host side ALREADY retains its lifecycle decision through
+  `apps/vscode/src/sdk/lifecycle-transition-trace.ts`
+  (`LifecycleTransitionTraceRecord`), written from
+  `sdk-session-event-coordinator.ts` via `lifecycleTransitionTraceRecord(...)`.
+  The record carries:
+    - `task_id`  — the host-owned task identity,
+    - `turn_seq` — the epoch (`messageTranslatorState.getMinter().epoch`),
+    - `transition_id`, `decision_id`, `stage`, `outcome`, `source`.
+  That trace is the SDK-terminal -> host-receipt -> host-phase-decision
+  link required by C1 §4.5. NO second host-phase writer was added and
+  `sdk-session-event-coordinator.ts` was NOT modified by this ACT.
+
+  DISTINCT IDENTITIES PRESERVED (not conflated):
+  | Identity                 | Owner                | Carried where |
+  |--------------------------|----------------------|---------------|
+  | modelRequestId           | agent runtime        | trace identity (this ACT) |
+  | AI SDK callId            | provider transport   | provider error logs (ai-sdk.ts), NOT on the trace |
+  | provider HTTP request id | provider transport   | provider response headers (response-request-id.ts), NOT on the trace |
+
+T1 - successful provider request and completed run
+---------------------------------------------------
+  Witness: apps/vscode/src/sdk/__tests__/sdk-abort-cause-retention.green01.test.ts
+           T1
+  Stimulus: model_request_start -> model_request_finish(finishReason=stop)
+            -> run_terminated(status=completed)
+  Captured: the recorder holds [model_request_start, model_request_finish,
+            run_terminated] with the SAME modelRequestId on both request
+            boundaries.
+  NO abnormal snapshot: a NORMAL completion produces NO abnormal-terminal
+  capture. PASS.
+
+T2 - provider throws during request
+------------------------------------
+  Witnesses:
+    sdk/packages/agents/src/agent-runtime.abort-cause-retention.red01.test.ts R1
+    apps/vscode/.../sdk-abort-cause-retention.green01.test.ts T2
+  Stimulus: the provider stream throws `ProviderStreamError` before any
+            chunk.
+  Captured (provider terminal):
+    errorClass   = "provider_error"   (the coarse provider classification)
+    errorName    = "ProviderStreamError"   (the concrete error class)
+    errorMessage = "provider exploded: upstream said no"  (bounded, scrubbed)
+    requestOutcome = "provider_error"  (OBSERVED at the throwing seam)
+    modelRequestId = "req-t2"
+  Captured (SDK run terminal):
+    status = "failed"
+    terminalPath = "caught_exception"
+    errorName = "APICallError"
+    lastKnownModelRequestId = "req-t2"
+  CORRELATION: all three snapshot events share runId "r-t2"; both
+    request-bearing events share modelRequestId "req-t2".
+  PASS.
+
+T3 - stream fails terminally
+-----------------------------
+  Witness: green01.test.ts T3
+  Stimulus: the provider stream yields one chunk and then throws
+            `StreamError`.
+  Captured: requestOutcome = "stream_error" (NOT "provider_error").
+            NO providerFinishReason is present — a clean provider finish
+            reason is NOT fabricated for a failed request.
+  PASS.
+
+T4 - explicit cancellation
+---------------------------
+  Witnesses:
+    sdk/packages/agents/src/agent-runtime.abort-cause-retention.red01.test.ts R3
+    apps/vscode/.../sdk-abort-cause-retention.green01.test.ts T4
+  Stimulus: an in-flight request is cancelled through the production
+            `abort(reason, "explicit_abort_request")` path; the scripted
+            provider honours the request's abort signal exactly as a real
+            transport does.
+  Captured:
+    run_abort_requested: abortOrigin = "explicit_abort_request"
+                         initiator   = "agent_runtime"
+                         abortReason = "operator pressed stop"
+                         abortErrorName = "AgentRuntimeAbortError"
+                         modelRequestId = "req-t4"   (the interrupted request)
+    model_request_abort: requestOutcome = "caller_cancelled"
+                         aborted = true
+    run_terminated:     status = "aborted"
+                         terminalPath = "observed_cancellation"
+  NOT MISCLASSIFIED as a provider failure: the snapshot contains ZERO
+  model_request_error events, and the last request outcome is
+  `caller_cancelled`, not `provider_error`.
+  PASS.
+
+T5 - controlled recovery stop
+------------------------------
+  Witnesses:
+    sdk/packages/agents/src/agent-runtime.abort-cause-retention.red01.test.ts R2
+    apps/vscode/.../sdk-abort-cause-retention.green01.test.ts T5
+  Stimulus: the production `applyStopControl` path — an `afterModel` hook
+            returns `{stop: true, reason: "controlled_stop_probe"}`.
+  Captured:
+    run_abort_requested: abortOrigin = "runtime_controlled_stop"
+                         abortReason = "controlled_stop_probe"
+    run_terminated:     status = "aborted"
+                         terminalPath = "controlled_stop"
+  DISTINGUISHABLE from an explicit cancel: the origin is
+  "runtime_controlled_stop", not "explicit_abort_request".
+  NO provider failure is fabricated: ZERO model_request_error events.
+  PASS.
+
+T6 - request remains unobserved at run end
+-------------------------------------------
+  Witnesses:
+    sdk/packages/agents/src/agent-runtime.abort-cause-retention.red01.test.ts R4
+    apps/vscode/.../sdk-abort-cause-retention.green01.test.ts T6
+  Stimulus: the run ends while the provider request has produced NO
+            terminal provider event.
+  Captured: lastRequestOutcome = "in_flight_at_run_end".
+            NO provider error is invented (ZERO model_request_error events).
+            NO errorName is present.
+  PASS.
+
+T7 - two sequential model requests
+----------------------------------
+  Witness: green01.test.ts T7
+  Stimulus: request A completes with finishReason=tool_use; request B
+            fails.
+  Captured: the terminal event is associated with request B
+            (modelRequestId "req-t7-b"), while the finish event belongs to
+            request A ("req-t7-a"). The snapshot's lastModelRequestId is
+            "req-t7-b" and the errorName is the B error, not the A one.
+  PASS.
+
+T8 - two concurrent sessions
+----------------------------
+  Witness: green01.test.ts T8
+  Stimulus: session A and session B both run; B fails first, then A fails.
+  Captured: TWO snapshots. Each contains ONLY its own session's events
+            (snapshot A: every event has sessionId "s-A"; snapshot B:
+            every event has sessionId "s-B"). The error names are
+            attributed to the right session.
+  NO CROSS-SESSION CONTAMINATION. PASS.
+
+T9 - telemetry disabled
+-----------------------
+  Witness: green01.test.ts T9
+  Stimulus: the recorder is at its default (OFF) state.
+  Captured: `recorder.record(...)` returns undefined; 0 records are
+            retained; 0 snapshots exist; NO diagnostic I/O occurs.
+  PASS.
+
+T10 - diagnostic writer throws
+------------------------------
+  Witness: green01.test.ts T10
+  Stimulus: a diagnostic consumer throws on every observation.
+  Captured: the recorder's own outcome is UNCHANGED — the record still
+            exists, its payload still reads status="aborted", and the
+            record count is unchanged. The application failure is never
+            replaced by a telemetry failure.
+  PASS.
+
+T11 - truncation / buffer overflow
+----------------------------------
+  Witness: green01.test.ts T11
+  Stimulus: more events than the per-snapshot bound, then more
+            abnormal runs than the snapshot-store bound.
+  Captured: the retained event count is <= 64; `truncated` is TRUE;
+            `droppedEventCount` > 0; the terminal event is NEVER evicted
+            by the bound; the snapshot store stays <= 8.
+  TRUNCATION IS REPORTED, never silently presented as complete.
+  PASS.
+
+T12 - error contains a secret
+-----------------------------
+  Witness: green01.test.ts T12 + sdk-abort-cause-dump.persistence01.test.ts
+  Stimulus: an error message carrying `sk-ant-supersecretvalue1234567890`
+            in both an `Authorization: Bearer` header and an `api_key=`
+            assignment.
+  Captured: the sanitized message contains "[REDACTED:" and does NOT
+            contain the secret; the serialized snapshot does NOT contain
+            the secret. The written artifact is owner-only (mode & 0o077
+            === 0).
+  PASS.
+
+REQUIRED CAUSAL-FIDELITY ASSERTIONS
+------------------------------------
+  For a provider exception:
+      provider_request_started
+              ↓
+      provider_terminal_failure
+              ↓
+      sdk_run_terminal
+    All observed records correlate to the SAME run and the relevant model
+    request. ASSERTED by T2.
+
+  For a controlled stop:
+      runtime_controlled_stop
+              ↓
+      sdk_run_terminal
+    No provider failure is fabricated if none was observed. ASSERTED by
+    T5 (zero model_request_error events).
+
+  For cancellation:
+      abort_requested
+              ↓
+      sdk_run_terminal
+    The initiating cancellation is attributable to the correct owner
+    (`initiator: "agent_runtime"`, `abortOrigin:
+    "explicit_abort_request"`). ASSERTED by T4.
+
+  A MISSING `afterModel` callback must not prevent run-terminal evidence:
+  the run-terminal observation is emitted by the orchestrator's
+  `buildLegacyResult`, which does not depend on any model hook. (The
+  retention module's snapshot is keyed on the run, not on the hook.)
+
+RECOVERED ATTEMPTS vs UNRECOVERED TERMINAL FAILURES
+----------------------------------------------------
+  The production request identity is SHARED across the AI SDK transport
+  retries of one agent request (agent-runtime.ts mints ONE
+  `modelRequestId` per issued request, in `streamPreparedRequest`, and
+  the request is re-issued with the SAME id on the transient-error retry
+  path). A retried model request is therefore NOT counted as multiple
+  independent agent requests: the trace carries ONE `model_request_start`
+  boundary per issued request, and any recovered attempt produces no
+  terminal provider error. An UNRECOVERED terminal failure produces the
+  `model_request_error` record.

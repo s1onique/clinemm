@@ -1,0 +1,104 @@
+ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 / C0 existing-telemetry inventory
+=========================================================================
+
+VERDICT: the required evidence is PARTIALLY EMITTED but NOT RETAINED.
+          The three of four required boundaries already HAVE an emitter; what is
+          missing is (a) the modelRequestId join key, (b) the error name/message
+          on the provider-terminal and run-terminal records, (c) ANY abort-origin
+          event, and (d) an abnormal-terminal retention snapshot.
+
+EXISTING MECHANISM (reused, not replaced)
+------------------------------------------
+  ModelBehaviorTraceRecorder  sdk/packages/shared/src/runtime/model-behavior-trace.ts
+    - CENTRALIZED bounded ring: MODEL_BEHAVIOR_TRACE_MAX_RECORDS = 8192,
+      MODEL_BEHAVIOR_TRACE_MAX_BYTES = 4 MiB.
+    - DEFAULT OFF (`enabled = false`); `record()` returns undefined when off.
+    - PRIVACY: sanitizePayload() redacts FORBIDDEN_PAYLOAD_KEYS (apikey, auth,
+      authorization, credential, token, secret, prompt, message, ...) and
+      truncates any string > 64 chars to `[STRING:<len>]`.
+    - Failure-isolated: every entry point is try/catch-wrapped.
+    - TRUNCATION IS REPORTED (droppedCount + droppedFromSeq/droppedToSeq).
+  Host runtime / toggle / dump  apps/vscode/src/sdk/model-behavior-trace-runtime.ts
+    - Single module-level recorder instance; dump -> JSONL at
+      context.globalStorageUri/model-behavior-trace.jsonl.
+    - Enablement: 3-state workspace override `modelBehaviorTraceEnabled`
+      (undefined/true/false) > dogfood profile default > OFF. No new public API.
+    - Commands: cline.debug.toggleModelBehaviorTrace / dumpModelBehaviorTrace.
+  VS Code model-behavior bridge  sdk/packages/core/src/runtime/observability/model-behavior-trace.ts
+  Portable normalizer            apps/vscode/src/sdk/normalize-agent-trace.ts
+
+SIGNAL-BY-SIGNAL INVENTORY (against HEAD 5e505e855)
+---------------------------------------------------
+| Signal                        | Emitted? | Correlated?                          | Retained?  | Producer (real seam) |
+|-------------------------------|----------|--------------------------------------|------------|----------------------|
+| Model request started         | YES      | sessionId/runId/iteration            | in ring    | agent-runtime.ts:2800 observeModelRequestStart |
+| Model request ended (finish)  | YES      | sessionId/runId/iteration            | in ring    | agent-runtime.ts:3160 observeModelRequestFinish |
+| Provider finish reason        | PARTIAL  | same as above                        | in ring    | payload.finishReason (model finish reason only) |
+| Terminal provider error       | YES      | sessionId/runId/iteration            | in ring    | agent-runtime.ts:3264 / :3302 observeModelRequestFailure("error") |
+| Provider terminal error NAME  | NO       | -                                    | -          | payload has ONLY `errorClass` (coarse class) |
+| Provider terminal error MSG   | NO       | -                                    | -          | - |
+| Provider HTTP request id      | PARTIAL  | provider-side only                   | NO         | ai-sdk.ts appendRequestId -> telemetry only |
+| Caller cancellation           | PARTIAL  | telemetry task.cancelled             | NO (telem) | agent-runtime.ts:1112 captureTaskLifecycle(TASK_CANCELLED_EVENT) |
+| Controlled stop               | NO       | -                                    | -          | ControlledStopError thrown; only visible via result.error message |
+| SDK terminal result           | PARTIAL  | sessionId/taskId/runId               | in ring    | session-runtime-orchestrator.ts:2182 observeRunTerminated |
+| SDK terminal exception        | NO       | -                                    | -          | run_terminated payload = {finishReason,durationMs,iterations} ONLY |
+| Host receipt                  | YES      | taskId/epoch                         | YES        | sdk-session-event-coordinator.ts lifecycleTransitionTraceRecord |
+| modelRequestId join key       | NO       | -                                    | -          | minted agent-runtime.ts:2784, used by provider layer, ABSENT from trace |
+
+KEY FINDINGS
+------------
+F1. modelRequestId is ALREADY minted per model request
+    (agent-runtime.ts:2784 `createUID("model_request", 21)`), placed into the
+    request metadata (agent-runtime.ts:2788), and propagated to the provider
+    layer (ai-sdk.ts:738 reads metadata.modelRequestId). It is also carried by
+    the task-lifecycle telemetry channel (agent-runtime.ts:3336). It is NOT
+    carried by the model-behavior trace records, so the provider-terminal
+    record cannot be joined to the provider's own request identity.
+
+F2. The provider-terminal record carries `errorClass` only
+    (agent-runtime.ts:3269 / :3307 -> classifyProviderError). The concrete
+    error NAME and MESSAGE are dropped. Two different provider failures with
+    the same coarse class are indistinguishable in the retained evidence.
+
+F3. The SDK run-terminal record carries {finishReason,durationMs,iterations}
+    (session-runtime-orchestrator.ts:2020-2024). It has NO error identity, so
+    a run that ended `aborted` because of a controlled stop is
+    indistinguishable from one ended `aborted` because of an explicit cancel.
+
+F4. There is NO abort-origin event anywhere. `AgentRuntime.abort()`
+    (agent-runtime.ts:1100) records a task-lifecycle telemetry event but does
+    NOT record who initiated it; the orchestrator calls it from at least four
+    distinct initiators (host abort signal :544/:906, loop hard escalation
+    :2064, recovery-budget stop :2141). `ControlledStopError` (a distinct
+    class, agent-runtime.ts:461) is thrown for controlled stops but the
+    distinction is only visible via the run result's error message.
+
+F5. The recorder has NO abnormal-terminal retention. Every record is
+    symmetric; the operator must dump the whole ring and reconstruct the
+    chronology by hand. There is no per-run snapshot that binds the
+    provider-terminal record, the run-terminal record and the host receipt.
+
+F6. The host side ALREADY retains its lifecycle decision
+    (sdk-session-event-coordinator.ts lifecycleTransitionTraceRecord with
+    taskId/epoch). Per C1 §4.5 this must be REUSED, not duplicated.
+
+MINIMUM PRODUCTION SEAMS TO TOUCH (C0 gate)
+--------------------------------------------
+  S1  sdk/packages/shared/src/runtime/model-behavior-trace.ts
+      - add `modelRequestId` to ModelBehaviorTraceIdentity / Observation
+      - add `run_abort_requested` to ModelBehaviorTraceEvent
+      - add the corresponding sink callback
+      - add a bounded, sanitized error-message sanitizer
+  S2  sdk/packages/agents/src/agent-runtime.ts
+      - carry modelRequestId into the trace identity
+      - enrich the provider-terminal payload (errorName / bounded message)
+      - emit the abort-origin event at the REAL abort seam
+  S3  sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts
+      - enrich the run-terminal payload (error identity + terminalPath)
+  S4  apps/vscode/src/sdk/model-behavior-trace-runtime.ts
+      - abnormal-terminal snapshot retention (bounded, local only)
+
+NOT TOUCHED (out of scope / conservation):
+  - recovery policy, retry budgets, tool validation, completion semantics
+  - apps/vscode/webview-ui/** (React/Elm task header)
+  - the host lifecycle projection (reused as-is)

@@ -80,6 +80,21 @@ export {
 	resetEditCheckpointRegistry,
 } from "../../../../sdk/packages/core/src/extensions/tools/executors/edit-observation"
 export { resolveModelBehaviorTraceBudget } from "../../../../sdk/packages/core/src/runtime/observability/model-behavior-trace"
+export type { SdkAbortCauseSnapshot } from "../../../../sdk/packages/core/src/runtime/observability/sdk-abort-cause-retention"
+// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the bounded, local-only
+// abnormal-terminal retention. Re-exported from the REAL SDK source so the
+// host adapter and the retention are the SAME implementation under test.
+export {
+	_resetSdkAbortCauseRetention,
+	captureSdkAbortCauseSnapshot,
+	getLatestSdkAbortCauseSnapshot,
+	getSdkAbortCauseSnapshots,
+	observeSdkAbortCauseRecord,
+	SDK_ABORT_CAUSE_MAX_EVENTS_PER_SNAPSHOT,
+	SDK_ABORT_CAUSE_MAX_SNAPSHOT_BYTES,
+	SDK_ABORT_CAUSE_MAX_SNAPSHOTS,
+	setSdkAbortCauseRecordProvider,
+} from "../../../../sdk/packages/core/src/runtime/observability/sdk-abort-cause-retention"
 export { isPrivateModelCatalogProvider } from "../../../../sdk/packages/core/src/services/llms/provider-defaults"
 // Real implementation re-exported from the sdk source (same pattern as the
 // apply-patch executors below) so store writes are reflected in the live

@@ -1178,6 +1178,22 @@ export { createHubPluginCommandsApi } from "./hub/client/plugin-commands";
 export * from "./remote/remote-environments";
 export { ensureLoginShellPath } from "./remote/shell-path";
 export { resolveModelBehaviorTraceBudget } from "./runtime/observability/model-behavior-trace";
+// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the bounded, local-only
+// abnormal-terminal retention. It lives beside the runtime observability
+// layer because the SDK owns the run-terminal and provider-request
+// boundaries it correlates.
+export {
+	_resetSdkAbortCauseRetention,
+	captureSdkAbortCauseSnapshot,
+	getLatestSdkAbortCauseSnapshot,
+	getSdkAbortCauseSnapshots,
+	observeSdkAbortCauseRecord,
+	setSdkAbortCauseRecordProvider,
+	SDK_ABORT_CAUSE_MAX_EVENTS_PER_SNAPSHOT,
+	SDK_ABORT_CAUSE_MAX_SNAPSHOTS,
+	SDK_ABORT_CAUSE_MAX_SNAPSHOT_BYTES,
+} from "./runtime/observability/sdk-abort-cause-retention";
+export type { SdkAbortCauseSnapshot } from "./runtime/observability/sdk-abort-cause-retention";
 // ACT-CLINEMM-COMMAND-SANDBOX-BACKEND-ABSTRACTION01:
 // sandbox backend abstraction (experimental, DEFAULT_OFF).
 export {

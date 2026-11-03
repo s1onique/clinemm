@@ -1,0 +1,149 @@
+ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 / C5 conservation gates
+===============================================================
+
+BASELINE METHOD
+---------------
+Every baseline below was re-established against the CURRENT checkout by
+stashing the ACT's changes (`git stash push --include-untracked -- sdk/ apps/`)
+and re-running the same command. The predecessor's counts were NOT assumed.
+
+CHANGED PRODUCTION FILES (the complete set)
+-------------------------------------------
+  sdk/packages/shared/src/runtime/model-behavior-trace.ts      (schema + sanitizer)
+  sdk/packages/shared/src/index.ts                              (exports)
+  sdk/packages/agents/src/agent-runtime.ts                      (origin + error identity)
+  sdk/packages/agents/src/index.ts                              (type export)
+  sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts
+  sdk/packages/core/src/runtime/observability/model-behavior-trace.ts
+  apps/vscode/src/sdk/model-behavior-trace-runtime.ts           (retention wiring + dump)
+  apps/vscode/src/sdk/sdk-abort-cause-retention.ts              (NEW: retention module)
+  apps/vscode/src/sdk/normalize-agent-trace.ts                  (family map)
+  apps/vscode/src/extension.ts                                 (existing dump command)
+
+  NOT CHANGED (verified by `git status --short`):
+    apps/vscode/webview-ui/**            — ZERO changes (no React/Elm edit)
+    sdk/packages/core/src/runtime/safety/**                — untouched
+    sdk/packages/core/src/runtime/recovery/**              — untouched
+    sdk/packages/agents/src/runtime/recovery/**            — untouched
+    any tool executor / tool validator                     — untouched
+    the host lifecycle projection
+      (apps/vscode/src/sdk/sdk-session-event-coordinator.ts) — untouched
+
+AGENT RUNTIME CONSERVATION
+---------------------------
+  Provider requests / request bodies          UNCHANGED (no edit to model.stream args)
+  Retry budgets                               UNCHANGED (no edit to the retry constants)
+  Recovery budgets                            UNCHANGED (no edit to applyRecoveryPostClassification)
+  Tool execution                              UNCHANGED (no edit to any executor)
+  Tool validation                             UNCHANGED (no edit to any validator)
+  Conversation history                        UNCHANGED (no edit to appendMessage)
+  Run return values                           UNCHANGED (no edit to AgentRunResult construction)
+  Exception propagation                       UNCHANGED (the new observation is try/catch-wrapped)
+  Cancellation semantics                      UNCHANGED (abort() still aborts the same signal)
+
+  The ONLY behavioural additions to the agent runtime are:
+    - `abort(reason, origin?)` gains an OPTIONAL second parameter.
+      Existing callers are unaffected: an omitted origin defaults to
+      "unknown" (the agent runtime) and the orchestrator's public abort()
+      defaults to "explicit_abort_request". The abort SIGNAL, the abort
+      ERROR, the task-lifecycle telemetry event and the run result are
+      byte-for-byte unchanged.
+    - `observeRunAbortRequested(...)` — a new fire-and-forget, try/catch
+      wrapped observation. It cannot change the abort.
+    - `describeObservedProviderError(...)` — a pure function that BUILDS a
+      payload. It is spread into an existing observation payload; it does
+      not touch the error, the request, or the retry decision.
+
+SESSION ORCHESTRATION CONSERVATION
+-----------------------------------
+  Session creation / disposal decisions       UNCHANGED
+  Background job ownership                    UNCHANGED
+  Pending prompt delivery                     UNCHANGED
+  Completion continuation                     UNCHANGED
+  Cross-session isolation                     UNCHANGED (the run key binds every snapshot)
+  Session epoch semantics                     UNCHANGED (no epoch field was added or altered)
+
+REACT / ELM CONSERVATION
+------------------------
+  Task-header authority                       UNCHANGED (no webview file touched)
+  Lifecycle phase selection                   UNCHANGED (no webview file touched)
+  Diagnostic side effects inside React updaters  NONE (the ACT adds NO webview code at all)
+
+PERFORMANCE CONSERVATION
+------------------------
+  Disabled path performs NO diagnostic I/O.
+    The recorder's enable bit is consulted at observation time: with
+    tracing OFF, `recorder.record()` returns `undefined`, so
+    `observeSdkAbortCauseRecord(undefined)` and
+    `captureSdkAbortCauseSnapshot(undefined)` are both no-ops, and the
+    dump command is never invoked.
+    Witness: T9 (recorder disabled -> 0 records, 0 snapshots).
+  No per-token persistence.
+    The retention module retains ONLY the request-lifecycle and terminal
+    boundary kinds (model_request_start / _finish / _error / _abort /
+    run_abort_requested / run_terminated). Tokens, SSE chunks and tool
+    events are NOT retained.
+  No synchronous disk write in the provider streaming path.
+    The observation calls are synchronous and in-memory. The disk write
+    happens ONLY in the explicit operator dump command.
+  Bounded work.
+    At most 64 events and 256 KiB per snapshot; at most 8 snapshots.
+
+EXECUTABLE GATES (commands, counts, exit codes)
+-----------------------------------------------
+  cd sdk/packages/shared && bun x tsc --noEmit
+      -> exit 0, 0 diagnostics
+  cd sdk/packages/agents && bun x tsc --noEmit
+      -> exit 0, 0 diagnostics
+  cd sdk/packages/core && bun x tsc -p tsconfig.dev.json --noEmit
+      -> 67 diagnostic lines. BASELINE (same command, ACT stashed) = 67.
+         ACT-ATTRIBUTABLE = 0.
+  cd apps/vscode && bun x tsc --noEmit
+      -> exit 0, 0 diagnostics
+
+  cd sdk/packages/shared && bun x vitest run --config vitest.config.ts
+      BASELINE: 8 failed | 34 passed | 1 skipped (43 files); 10 failed | 375 passed | 7 skipped
+      ACT     : 8 failed | 34 passed | 1 skipped (43 files); 10 failed | 375 passed | 7 skipped
+      -> IDENTICAL. Zero regression.
+
+  cd sdk/packages/agents && bun x vitest run --config vitest.config.ts
+      BASELINE: 16 failed | 15 passed (31 files); 220 passed
+      ACT     : 16 failed | 16 passed (32 files); 225 passed
+      -> The SAME 16 pre-existing collection failures (all of them
+         `TypeError: undefined is not an object (evaluating 'z.object')`
+         — the package's pre-existing zod-bundling issue), PLUS the ACT's
+         new file with 5 passing tests. Zero regression.
+
+  cd apps/vscode && bun x vitest run <8 directly-affected files>
+      src/sdk/__tests__/agent-trace-contract-recon01.test.ts
+      src/sdk/__tests__/model-behavior-comparability-authority01.test.ts
+      src/sdk/__tests__/model-behavior-trace-command-registration.test.ts
+      src/sdk/__tests__/model-behavior-wire-reasoning-trace01.test.ts
+      src/sdk/__tests__/model-behavior-wire-reasoning-runtime01.test.ts
+      src/sdk/model-behavior-trace-runtime.test.ts
+      src/sdk/model-behavior-trace-dogfood-default.test.ts
+      src/sdk/__tests__/sdk-abort-cause-retention.green01.test.ts
+      -> 8 passed (8 files); 112 passed (112 tests). exit 0
+
+  cd apps/vscode && bun x vitest run \
+      src/sdk/__tests__/sdk-abort-cause-retention.green01.test.ts \
+      src/sdk/__tests__/sdk-abort-cause-dump.persistence01.test.ts
+      -> 2 passed (2 files); 14 passed (14 tests). exit 0
+
+  cd sdk/packages/agents && bun x vitest run \
+      src/agent-runtime.abort-cause-retention.red01.test.ts
+      -> 1 passed (1 file); 5 passed (5 tests). exit 0
+
+  biome lint (apps/vscode config) over the 6 changed/new host files
+      -> "Checked 6 files. No fixes applied." exit 0
+  biome lint (sdk config) over the 7 changed/new SDK files
+      -> "Checked 7 files. No fixes applied." exit 0
+
+  bun run build:sdk (repo root)
+      -> exit 0. Every SDK package built and typechecked.
+  cd apps/vscode && bun esbuild.mjs
+      -> exit 0. dist/extension.js written (56,862,692 bytes).
+
+  NOTE on the vitest "EPERM: operation not permitted, kill" lines: these
+  are the local macOS environment's worker-teardown artifact (the same
+  lines appear on the stashed baseline runs) and are NOT test failures.

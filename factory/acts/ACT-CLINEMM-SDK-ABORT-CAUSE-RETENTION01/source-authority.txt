@@ -1,0 +1,28 @@
+ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 / C0 source authority
+================================================================
+
+ENTRY_HEAD:    5e505e855692c72d8be178e96fd1c81336a68907
+ENTRY_TREE:    71e3f85c04f28cc204004e661ae773a3d50d3069
+BRANCH:        main
+WORKTREE:      clean at entry (no tracked modifications, no stashes created by this ACT)
+SDK_VERSION:   @cline/core 0.2.0 / @cline/agents (0.2.0) / @cline/llms / @cline/shared
+INSTALLED_EXTENSION_VERSION: 4.1.16 (s1onique.clinemm) — installed under
+               ~/.vscodium-cline/extensions/s1onique.clinemm-4.1.16-*
+
+Predecessor evidence (PRESERVED, UNCHANGED):
+  factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01/            (EVIDENCE_HEAD 3da1d47eb)
+  factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01.md
+
+Protected stash at entry (UNTOUCHED):
+  stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime)...
+
+NOTE ON HEAD DRIFT vs PREDECESSOR:
+  The predecessor's ENTRY_HEAD was 251779fdf80a9782e00ddf12996813433c7a7bbb and its
+  EVIDENCE_HEAD was 3da1d47eb2a422f1cd6c68a4f01f274d328f21ec. The current checkout is
+  6 commits LATER (5e505e855). Three of those commits added a SUBSTANTIAL observability
+  layer that the predecessor did not have:
+     4fe85071c  feat(observability): add BCB causal flight recorder + completion incident bundle
+     d46e33530  feat(trace): bridge command-execution authorities into the flight recorder
+     5e505e855  feat(observability): containment-ledger causal join — CLCR01 PASS_RECON
+  C0 therefore re-derived the inventory against the CURRENT checkout rather than
+  assuming the predecessor's line ranges.
