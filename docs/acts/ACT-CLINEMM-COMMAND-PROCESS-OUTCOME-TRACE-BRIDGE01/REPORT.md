@@ -10,13 +10,37 @@
 
 ## 0. Terminal verdict
 
-**`PASS_STRUCTURAL_VERIFIED`**
+**`PASS_STRUCTURAL_VERIFIED`** — superseded by
+**`PASS_STRUCTURAL_VERIFIED_CORRECTION01`**.
+
+> **CORRECTION01 (see
+> `CORRECTION01-EVIDENCE-PROVENANCE-AND-OFF-PATH-DELTA.md`).** The review of
+> this report returned `HALT_EVIDENCE_PROVENANCE_AND_OFF_PATH_DELTA` with two
+> P0 findings and one P2. Both P0 findings are **fixed** and the P2 is fixed:
+>
+> - **P0-2** — `executeShellCommands` stamped the correlation index into the
+>   executor context **unconditionally**, including with tracing OFF. The
+>   stamp is now **conditional** on the observation channel being **PRESENT**,
+>   so the disabled path hands the executor the **exact predecessor context**.
+>   The witnesses **discriminate** the defect (they fail against the
+>   pre-correction production code).
+> - **P0-1** — the necessity ablation ran over a hand-**authored** array that
+>   this report called "CAPTURED process evidence". The ablation now runs over
+>   the **real** `ModelBehaviorTraceRecorder`'s own output, produced by the
+>   **real** `run_commands` tool and the **real** `CommandJobManager`, and
+>   that capture is **committed** as source-bound evidence. The authored
+>   fixture is **retained** as an explicitly-labelled **synthetic control**.
+> - **P2** — the `git diff --check` blank-line-at-EOF diagnostic is fixed.
+>
+> The bridge, the event contract, the privacy allowlist, the per-command
+> correlation and the delayed-background-completion behaviour are preserved
+> unchanged.
 
 The bridge is implemented at the real command-execution authorities, the RED
 reproduction was genuine, every mandatory gate family passes, the executed
 necessity ablation shows the exact process-success classification becomes
-`CAPTURE_INSUFFICIENT` when the new category is removed, and the trace-OFF
-path is neutral.
+`CAPTURE_INSUFFICIENT` when the new category is removed — now over **real**
+recorder output — and the trace-OFF path is neutral.
 
 **No installed-dogfood qualification is claimed.** This ACT did not install a
 VSIX.
@@ -212,17 +236,20 @@ content, credential, or process environment is carried.
 |---|---|
 | `sdk/packages/shared/src/runtime/model-behavior-trace.ts` | the `process_observation` event; the terminal-state / execution-mode / observation-payload types; the two metadata keys; the `onProcessObservation` sink channel; `args`/`argv` added to the forbidden-key set |
 | `sdk/packages/shared/src/index.ts` | exports for the new symbols |
-| `sdk/packages/core/src/extensions/tools/definitions.ts` | stamps `commandIndex` into the per-command context metadata |
-| `sdk/packages/core/src/extensions/tools/executors/command-process-observation.ts` | **NEW** — the single narrow reporting channel |
+| `sdk/packages/core/src/extensions/tools/definitions.ts` | stamps `commandIndex` into the per-command context metadata — **CORRECTION01: conditionally**, only when the observation channel is PRESENT |
+| `sdk/packages/core/src/extensions/tools/executors/command-process-observation.ts` | **NEW** — the single narrow reporting channel; **CORRECTION01** adds the exported `isCommandProcessObservationChannelPresent` predicate |
 | `sdk/packages/core/src/index.ts` | exports the reporting channel |
-| `sdk/packages/core/src/extensions/tools/command-process-observation.test.ts` | **NEW** — RED-01/03/04 witnesses |
+| `sdk/packages/core/src/extensions/tools/command-process-observation.test.ts` | **NEW** — RED-01/03/04 witnesses; **CORRECTION01** adds the CORR01-1…5 disabled-path neutrality witnesses |
 | `apps/vscode/src/sdk/vscode-run-commands-tool.ts` | the foreground report at `getCompletionDetails()`; the background handoff, synchronous-terminal, delayed-terminal and launch-failure reports |
 | `apps/vscode/src/sdk/model-behavior-trace-runtime.ts` | the recorder's `onProcessObservation` channel |
 | `apps/vscode/src/sdk/normalize-agent-trace.ts` | `process_observation` → the portable `process` family; the `process` family payload allowlist |
 | `apps/vscode/src/test/cline-core-vitest-stub.ts` | re-exports the reporting channel so the host executor's observation path is the production one under vitest |
-| `apps/vscode/src/sdk/__tests__/command-process-outcome-trace-bridge01.test.ts` | **NEW** — G2/G3/G4/G5/G7/G8/G9 witnesses |
-| `apps/vscode/src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts` | **NEW** — G10/PORT-1/PORT-2/G9-PORT/C5 witnesses |
+| `apps/vscode/src/sdk/__tests__/command-process-outcome-trace-bridge01.test.ts` | **NEW** — G2/G3/G4/G5/G7/G8/G9 witnesses; **CORRECTION01** adds the G8-CORR01 ×2 host-level OFF-path witnesses |
+| `apps/vscode/src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts` | **NEW** — G10/PORT-1/PORT-2/G9-PORT witnesses; **CORRECTION01** re-badges C5 as an explicitly-labelled **SYNTHETIC CONTROL** |
+| `apps/vscode/src/sdk/__tests__/command-process-outcome-real-capture-ablation01.test.ts` | **NEW (CORRECTION01)** — the necessity ablation over a **REAL**, source-bound recorder capture |
 | `docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/evidence/process-observation-excerpt.jsonl` | **NEW** — the privacy-safe excerpt (§7) |
+| `docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/evidence/real-process-capture.jsonl` | **NEW (CORRECTION01)** — the real recorder capture the necessity ablation runs over (§8.1) |
+| `docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/CORRECTION01-EVIDENCE-PROVENANCE-AND-OFF-PATH-DELTA.md` | **NEW (CORRECTION01)** — the correction report |
 
 **No React, Elm, task-header state, completion authority, approval, shell
 execution, background-job containment, command policy, model-facing result,
@@ -236,9 +263,10 @@ public protobuf, or wire schema was touched.**
 
 | Suite | Command | Result |
 |---|---|---|
-| Core SDK — per-command observations | `cd sdk/packages/core && bun x vitest run src/extensions/tools/command-process-observation.test.ts --config vitest.config.ts` | **3 passed** (RED-01, RED-03, RED-04) |
-| VSCode — bridge conservation | `cd apps/vscode && CLINEMM_EXPERIMENTAL_SANDBOX=off bun x vitest run src/sdk/__tests__/command-process-outcome-trace-bridge01.test.ts --config vitest.config.ts` | **12 passed** (G2 ×5, G4, G5, G7 ×2, G8 ×2, G9) |
-| VSCode — portable normalizer + ablation | `cd apps/vscode && bun x vitest run src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts --config vitest.config.ts` | **8 passed** (G10 ×2, PORT-1, PORT-2, G9/PORT, C5 ×3) |
+| Core SDK — per-command observations | `cd sdk/packages/core && bun x vitest run src/extensions/tools/command-process-observation.test.ts --config vitest.config.ts` | **8 passed** (RED-01, RED-03, RED-04, **CORR01-1…5**) |
+| VSCode — bridge conservation | `cd apps/vscode && CLINEMM_EXPERIMENTAL_SANDBOX=off bun x vitest run src/sdk/__tests__/command-process-outcome-trace-bridge01.test.ts --config vitest.config.ts` | **14 passed** (G2 ×5, G4, G5, G7 ×2, G8 ×2, **G8-CORR01 ×2**, G9) |
+| VSCode — portable normalizer + **synthetic control** | `cd apps/vscode && bun x vitest run src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts --config vitest.config.ts` | **8 passed** (G10 ×2, PORT-1, PORT-2, G9/PORT, C5/CTRL ×3) |
+| **VSCode — REAL-capture ablation (CORRECTION01)** | `cd apps/vscode && CLINEMM_EXPERIMENTAL_SANDBOX=off bun x vitest run src/sdk/__tests__/command-process-outcome-real-capture-ablation01.test.ts --config vitest.config.ts` | **5 passed** |
 | Shared SDK — the recorder | `cd sdk/packages/shared && bun x vitest run src/runtime/model-behavior-trace.test.ts --config vitest.config.ts` | **18 passed** |
 | VSCode — trace runtime + dogfood + contract | `bun x vitest run <10 trace suites> --config vitest.config.ts` | **120 passed** across 10 files |
 
@@ -255,7 +283,8 @@ public protobuf, or wire schema was touched.**
 | Trace-OFF neutrality | Mandatory | **PASS** | G8: tracing OFF emits no observation; the execution ORDER witness is identical (`acquire → run`); tracing ON vs OFF yields byte-identical tool results |
 | Privacy allowlist | Mandatory | **PASS** | G9 + G9/PORT: `command` / `args` / `stdout` / `stderr` / `env` redacted by the recorder; the portable allowlist DROPS them plus absolute paths and unknown nested objects |
 | Historical normalizer compatibility | Mandatory | **PASS** | G10: the frozen pre-bridge fixture keeps its original counts; `byFamily.process` is absent; no pre-bridge record carries a process fact |
-| Executed necessity ablation | Mandatory | **PASS** | §8 |
+| Executed necessity ablation over **REAL** recorder output | Mandatory | **PASS** | §8.1 (CORRECTION01) — the ablation runs over the real `ModelBehaviorTraceRecorder`'s own output, committed as `evidence/real-process-capture.jsonl` |
+| Disabled-path executor-context neutrality | Mandatory | **PASS** | §9 (CORRECTION01) — CORR01-1…5 + G8-CORR01 ×2; the witnesses **fail** against the pre-correction production code |
 | Affected TypeScript typechecks | Mandatory | **PASS** | `sdk/packages/shared` — **0 errors**; `apps/vscode` — **0 errors**; `sdk/packages/core` — **40 errors, identical to the stashed baseline** |
 | Biome on changed files | Mandatory | **PASS** | 12 changed files checked at `--diagnostic-level=error` — **clean** (root config for the SDK packages, `apps/vscode/biome.jsonc` for the extension) |
 
@@ -295,37 +324,76 @@ output, and no paths** — only structural scalars.
 
 ## 8. Necessity ablation (EXECUTED)
 
-The ablation is executed over the CAPTURED process evidence, not over a
-conceptual table. The witnesses live in
-`apps/vscode/src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts`
-(the `C5 — executed necessity ablation over CAPTURED process evidence` suite).
+> **CORRECTION01.** This section originally described the ablation as running
+> over "the CAPTURED process evidence". That was **inaccurate**: the input was
+> a hand-**authored** array inside the test file, with invented timestamps and
+> invented events, and it placed `tool_finish` **before** the foreground
+> process observations — not the observed execution order. The ablation now
+> runs over the **real** recorder's own output (§8.1) and the authored
+> fixture is retained only as a **synthetic control** (§8.2).
 
-The captured shape is ONE `run_commands` tool call with FOUR commands:
-command 0 exited 0, command 1 exited 3, command 2 is still running, and
-command 3's exit status was not observed.
+### 8.1 The ablation over a REAL, source-bound recorder capture
+
+**Artifact:** `evidence/real-process-capture.jsonl`
+
+The capture is produced by the **real** `ModelBehaviorTraceRecorder`, fed
+through a sink wired exactly like the production `modelBehaviorTraceSink`, by
+the **real** `createVscodeRunCommandsTool` running a **real** command through
+the **real** `CommandJobManager`. The recorder's **own retained records** are
+what the normalizer parses and what the ablation removes a category from.
+
+The capture contains **both** the tool-activity events and the per-command
+process events, in the **observed** order: the `running` handoff precedes the
+`tool_finish`, and the authoritative terminal fact arrives **after** the tool
+call returned, carrying the **real** exit code (7) the process produced.
 
 | Phase | Q2 (exact process-success classification) | Tool-activity sequence |
 |---|---|---|
-| **BASELINE** (process records present) | **ANSWERABLE** — `exited_0`, `exited_nonzero_3`, `running`, `unknown` | observable |
-| **ABLATION** (only the `process_observation` category removed) | **`CAPTURE_INSUFFICIENT`** — the classifier finds **zero** per-command facts and does **not** infer any | **UNCHANGED and still observable** — `tool_start:run_commands`, `tool_finish:run_commands` |
-| **RESTORE** (process records put back) | **ANSWERABLE** again — `exited_nonzero_3` | observable |
+| **BASELINE** (process records present) | **ANSWERABLE** — `exited_nonzero_7` | observable — `tool_start:run_commands`, `tool_finish:run_commands` |
+| **ABLATION** (only the `process_observation` category removed) | **`CAPTURE_INSUFFICIENT`** — the classifier finds **zero** per-command facts and does **not** infer any | **UNCHANGED and still observable** |
+| **RESTORE** (process records put back) | **ANSWERABLE** again — `exited_nonzero_7` | observable |
 
 The decisive observation: in the ABLATION phase the aggregate tool outcome
 **still reads `success`** — exactly the defect the bridge removes. The
-aggregate cannot distinguish command 1's nonzero exit from command 0's clean
+aggregate cannot distinguish one command's nonzero exit from another's clean
+exit.
+
+**Witness:** `apps/vscode/src/sdk/__tests__/command-process-outcome-real-capture-ablation01.test.ts`
+(5 witnesses: the capture is real, BASELINE, ABLATION, RESTORE, and the
+source-binding of the committed artifact).
+
+### 8.2 The SYNTHETIC CONTROL (retained, relabelled)
+
+`apps/vscode/src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts`
+retains the authored fixture — renamed `SYNTHETIC_CONTROL_WITH_PROCESS` and
+re-badged `C5 — SYNTHETIC CONTROL`. It establishes **normalizer** behaviour
+(the process family maps, the allowlist drops hostile fields, the pre-bridge
+fixture is not retroactively reinterpreted, the classifier returns
+`CAPTURE_INSUFFICIENT` rather than inferring an outcome). It does **not**
+carry the real-evidence necessity claim, and no longer claims to.
 
 ---
 
 ## 9. Trace-OFF neutrality
 
+> **CORRECTION01.** BRIDGE01's `executeShellCommands` stamped the correlation
+> index into the per-command executor context **unconditionally** — including
+> with tracing OFF. That was an unconditional production-context delta, even
+> though it produced no command-result regression. The stamp is now
+> **conditional** on the observation channel being **PRESENT**, so the
+> disabled path hands the executor the **exact predecessor context**. The
+> "Exact executor context" row below is the new evidence for that.
+
 | Property | Result | Evidence |
 |---|---|---|
-| No recorder event while disabled | **PASS** | G8: zero observations with tracing OFF |
-| Identical tool results | **PASS** | G8: `JSON.stringify(offResult) === JSON.stringify(onResult)` |
-| Identical execution ORDER | **PASS** | G8: the ordering witness is `["acquire", "run"]` in both runs — comparing returned bytes alone would NOT have proven this |
+| No recorder event while disabled | **PASS** | G8: zero observations with tracing OFF; CORR01-2: the channel is present but disabled → **zero** observations emitted |
+| **Exact executor context while disabled** | **PASS (CORRECTION01)** | CORR01-1: channel ABSENT → the executor receives the **same object** (`toBe`) with **no** `__clineCommandProcessObservationIndex` key; G8-CORR01 (host level): the tool-call context's metadata is exactly `{}` |
+| Identical tool results | **PASS** | G8: `JSON.stringify(offResult) === JSON.stringify(onResult)`; CORR01-3: the same equality, asserted at the SDK seam |
+| Identical execution ORDER | **PASS** | G8: the ordering witness is `["acquire", "run"]` in both runs — comparing returned bytes alone would NOT have proven this; CORR01-3: an explicit per-command scheduling-order witness, identical in both modes |
 | No added `await` on the disabled path | **PASS** | the reporting channel is a synchronous, non-awaited call; the delayed terminal listener is `void`-ed and only ever installed on the RUNNING branch, which is reached identically in both modes |
 | No change to cancellation / deadline semantics | **PASS** | the bridge adds no `await` to the execution path and does not touch the manager's termination authority |
 | Identical number/order of command starts | **PASS** | G5 proves the per-command fanout order is unchanged; the `commandIndex` stamp is metadata-only |
+| The toggle contract survives the conditional stamp | **PASS (CORRECTION01)** | G7 ×2 unchanged: toggling OFF mid-job leaves the capture explicitly PARTIAL; toggling ON after the handoff still emits the delayed terminal fact. The stamp predicate is the channel's **PRESENCE**, not the enable bit — a background command handed off while disabled keeps its `commandIndex` so the delayed fact stays correlatable |
 | No new permanent public API or wire field | **PASS** | the new event is an INTERNAL recorder event; no protobuf, no public wire schema, no public setting |
 | Public default OFF / dogfood implicit ON / dogfood explicit OFF | **PASS** | unchanged — `model-behavior-trace-dogfood-default.test.ts` (T01–T15) passes unchanged |
 | Toggle OFF during an active job | **PASS** | G7: the later terminal observation is NOT emitted; the capture is explicitly PARTIAL; the `running` handoff is never restated as a success |
@@ -374,9 +442,10 @@ reinterpreted as 949 successful processes.** The historical specimen was
 
 | # | Gate | Command | Exit | Result |
 |---|---|---|---|---|
-| 1 | Core SDK per-command observations (RED-01/03/04 → GREEN) | `cd sdk/packages/core && bun x vitest run src/extensions/tools/command-process-observation.test.ts --config vitest.config.ts` | 0 | 3 passed |
-| 2 | VSCode bridge conservation (G2/G4/G5/G7/G8/G9) | `cd apps/vscode && CLINEMM_EXPERIMENTAL_SANDBOX=off bun x vitest run src/sdk/__tests__/command-process-outcome-trace-bridge01.test.ts --config vitest.config.ts` | 0 | 12 passed |
-| 3 | VSCode portable normalizer + C5 ablation (G10/PORT/G9-PORT/C5) | `cd apps/vscode && bun x vitest run src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts --config vitest.config.ts` | 0 | 8 passed |
+| 1 | Core SDK per-command observations + disabled-path neutrality (RED-01/03/04 → GREEN, CORR01-1…5) | `cd sdk/packages/core && bun x vitest run src/extensions/tools/command-process-observation.test.ts --config vitest.config.ts` | 0 | **8 passed** |
+| 2 | VSCode bridge conservation (G2/G4/G5/G7/G8/G9) + G8-CORR01 ×2 | `cd apps/vscode && CLINEMM_EXPERIMENTAL_SANDBOX=off bun x vitest run src/sdk/__tests__/command-process-outcome-trace-bridge01.test.ts --config vitest.config.ts` | 0 | **14 passed** |
+| 3 | VSCode portable normalizer + C5 SYNTHETIC CONTROL (G10/PORT/G9-PORT/C5) | `cd apps/vscode && bun x vitest run src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts --config vitest.config.ts` | 0 | 8 passed |
+| 3b | **VSCode REAL-capture necessity ablation (CORRECTION01)** | `cd apps/vscode && CLINEMM_EXPERIMENTAL_SANDBOX=off bun x vitest run src/sdk/__tests__/command-process-outcome-real-capture-ablation01.test.ts --config vitest.config.ts` | 0 | **5 passed** |
 | 4 | Shared SDK recorder | `cd sdk/packages/shared && bun x vitest run src/runtime/model-behavior-trace.test.ts --config vitest.config.ts` | 0 | 18 passed |
 | 5 | VSCode trace runtime + dogfood + contract (10 suites) | `cd apps/vscode && CLINEMM_EXPERIMENTAL_SANDBOX=off bun x vitest run src/sdk/__tests__/w-carrier-trace-runtime.test.ts src/sdk/__tests__/w-carrier-trace-command-registration.test.ts src/sdk/__tests__/w-carrier-trace-runtime-w-observe-roundtrip.test.ts src/sdk/__tests__/w-carrier-trace-production-dump-roundtrip.test.ts src/sdk/__tests__/agent-trace-contract-recon01.test.ts src/sdk/__tests__/compare-model-behavior-traces.test.ts src/sdk/__tests__/model-behavior-trace-command-registration.test.ts src/sdk/__tests__/model-behavior-wire-reasoning-trace01.test.ts src/sdk/__tests__/completion-authority-trace-capture-extension01.test.ts src/sdk/__tests__/background-owner-correlation-dogfood-profile.bocordp.test.ts --config vitest.config.ts` | 0 | 120 passed |
 | 6 | Full `apps/vscode` vitest — regression (batched, set-compared) | see the procedure below | 1 | **identical failing-file set, 23 files each, zero new** |
@@ -604,4 +673,3 @@ evaluator.
 Two hardening additions to the recorder's forbidden-key set were required by
 the G9 adversary gate: `args` and `argv` (argument arrays were not previously
 on the list).
-

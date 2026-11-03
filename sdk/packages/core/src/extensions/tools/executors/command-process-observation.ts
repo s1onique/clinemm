@@ -85,6 +85,73 @@ export interface CommandProcessObservationFacts {
 }
 
 /**
+ * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01.
+ *
+ * Whether the command-process observation channel is PRESENT for a tool
+ * context.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The per-command positional index (`commandIndex`) has to be stamped onto
+ * the per-command tool context so the executor can correlate a process
+ * outcome with its position in the batch. CORRECTION01 established that
+ * stamping that index UNCONDITIONALLY changed the executor's context even
+ * when tracing was OFF — an unconditional production-context delta that
+ * contradicts the frozen disabled-path neutrality contract.
+ *
+ * The fix is to stamp the metadata ONLY when the observation channel is
+ * PRESENT. This predicate is the SINGLE authority for that decision, so the
+ * stamp site and the report site can never disagree:
+ *
+ *   - the channel is ABSENT (no sink stamped by the runtime) → NOT present;
+ *   - the sink does not implement `onProcessObservation` → NOT present (it
+ *     can never receive an observation).
+ *
+ * WHY THE ENABLE BIT IS DELIBERATELY NOT CONSULTED HERE
+ * ------------------------------------------------------
+ * The recorder's enable bit is a RUNTIME TOGGLE, not a property of the
+ * channel. The G7 contract requires that toggling tracing ON *after* a
+ * background command was handed off still emits the delayed terminal fact
+ * — with its per-command correlation intact. If the stamp decision
+ * consulted the enable bit at launch time, a command launched while the
+ * recorder was disabled would lose its `commandIndex` forever, and the
+ * delayed terminal observation could never be correlated to its position in
+ * the batch.
+ *
+ * The enable bit IS still authoritative — but it is consulted at
+ * OBSERVATION time, inside `readObservationChannel`, where the observation
+ * is actually emitted. That keeps the two decisions separate:
+ *
+ *   - THIS predicate decides whether the executor's CONTEXT changes at all
+ *     (a stable, structural property of the runtime's wiring);
+ *   - `readObservationChannel` decides whether an OBSERVATION is emitted
+ *     (a volatile, per-event property of the recorder's enable bit).
+ *
+ * When the recorder is disabled and the channel is present, the executor
+ * receives a context with the index stamped, and the observation channel
+ * emits NOTHING. The disabled path therefore produces no recorder event
+ * while still preserving the correlation identity a later toggle needs.
+ *
+ * This predicate is a PURE, SYNCHRONOUS, SIDE-EFFECT-FREE read. It never
+ * allocates an observation, never awaits, and never introduces a suspension
+ * point in the command execution path.
+ */
+export function isCommandProcessObservationChannelPresent(
+	metadata: Record<string, unknown> | undefined,
+): boolean {
+	if (!metadata) {
+		return false;
+	}
+	const sink = metadata[COMMAND_PROCESS_OBSERVATION_SINK_METADATA_KEY] as
+		| ModelBehaviorTraceSink
+		| undefined;
+	if (!sink || typeof sink.onProcessObservation !== "function") {
+		return false;
+	}
+	return true;
+}
+
+/**
  * Read the trace sink and the runtime-owned identity out of a tool context.
  *
  * Returns `undefined` when tracing is OFF (no sink) or when the runtime did

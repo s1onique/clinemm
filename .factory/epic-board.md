@@ -19,9 +19,9 @@ BRANCH: main (no ACT branch created)
 WORKTREES: unchanged (4)   STASHES_TOUCHED: 0 (protected stash INTACT)
 PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO
 RED: REPRODUCED (3 per-command assertions + 1 delayed-terminal, at the real seams)
-ABLATION_CLASSIFICATION: EXECUTED (over CAPTURED process evidence — NOT HYPOTHESIS_ONLY)
+ABLATION_CLASSIFICATION: EXECUTED (CORRECTION01 — over REAL recorder output, NOT over an authored fixture; NOT HYPOTHESIS_ONLY)
 INSTALLED_DOGFOOD: NOT PERFORMED (no live qualification claimed)
-EVIDENCE: docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/{REPORT.md,evidence/process-observation-excerpt.jsonl}
+EVIDENCE: docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/{REPORT.md,CORRECTION01-EVIDENCE-PROVENANCE-AND-OFF-PATH-DELTA.md,evidence/process-observation-excerpt.jsonl,evidence/real-process-capture.jsonl}
 ```
 
 **The defect this closes.** `run_commands` executes N commands CONCURRENTLY and returns N POSITIONAL results, but
@@ -55,17 +55,34 @@ not process evidence). A `running` handoff is NEVER a success. A pre-execution r
 exited subprocess. A containment failure is never collapsed into a clean exit. The fast path reports synchronously
 and does NOT also attach a delayed listener, so a delivered-twice callback cannot create two terminal records.
 
-**Necessity, EXECUTED.** Over CAPTURED process evidence: with the new category present, Q2 is answerable per command
-(`exited_0`, `exited_nonzero_3`, `running`, `unknown`); removing ONLY that category makes the exact
+**Necessity, EXECUTED (CORRECTION01 — over REAL recorder output).** The BRIDGE01 ablation ran over a hand-AUTHORED
+array that the report called "CAPTURED process evidence"; that was an inaccurate provenance label and the correction
+replaces it. The ablation now runs over the **real** `ModelBehaviorTraceRecorder`'s **own** output, produced by the
+**real** `createVscodeRunCommandsTool` running a **real** command through the **real** `CommandJobManager`, through a
+sink wired exactly like the production `modelBehaviorTraceSink` — so the capture carries BOTH the tool-activity events
+AND the per-command process events, in the OBSERVED order (the `running` handoff precedes the `tool_finish`; the
+authoritative terminal fact arrives after the tool call returned). With the new category present, Q2 is answerable per
+command (`exited_nonzero_7` — the REAL exit code the process produced); removing ONLY that category makes the exact
 process-success classification **`CAPTURE_INSUFFICIENT`** while the tool-activity sequence stays fully observable —
 and the aggregate tool outcome STILL reads `success`, which is precisely the defect the bridge removes. Restoring
-the records makes Q2 answerable again.
+the records makes Q2 answerable again. The capture is COMMITTED as source-bound evidence
+(`evidence/real-process-capture.jsonl`). The authored fixture is RETAINED, renamed
+`SYNTHETIC_CONTROL_WITH_PROCESS` and re-badged `C5 — SYNTHETIC CONTROL`: it now carries the NORMALIZER-behaviour
+claim only, and no longer claims to be captured evidence.
 
 **Trace-OFF neutrality.** Zero recorder events while disabled; byte-identical tool results ON vs OFF; an identical
 execution-ORDER witness (`acquire → run`), which comparing returned bytes alone would not have proven; no added
 `await` on the disabled path; public default OFF, dogfood implicit ON and dogfood explicit OFF unchanged. Toggling
 OFF during an active job leaves the capture explicitly PARTIAL (the `running` handoff is never restated as a
 success); toggling ON after the handoff emits the terminal fact without manufacturing the missing handoff.
+**(CORRECTION01)** BRIDGE01 stamped the correlation index into the executor context UNCONDITIONALLY, which was an
+unconditional production-context delta on the disabled path. The stamp is now CONDITIONAL on the observation channel
+being **PRESENT**, so the disabled path hands the executor the **EXACT predecessor context** — the same object, with
+no new metadata key. The predicate is the channel's PRESENCE and NOT the recorder's enable bit: the enable bit is a
+RUNTIME TOGGLE, and a background command handed off while disabled must keep its `commandIndex` so its delayed
+terminal fact stays correlatable once tracing is turned back on (the G7 contract). The witnesses **discriminate** the
+defect — they FAIL against the pre-correction production code (2 failed / 6 passed) and PASS with the correction
+(8/8).
 
 **Privacy.** The recorder's fail-closed sanitizer remains the inbound gate and the portable per-family ALLOWLIST the
 outbound gate. The G9 adversaries (`command`, `args`, `stdout`, `stderr`, nested `env`, an absolute path, an unknown
@@ -98,6 +115,82 @@ terminal transition, or the exit code.
 **Hard stops.** `HALT_RED_NOT_REPRODUCED`, `HALT_CORRELATION_UNPROVEN`, `HALT_EXECUTION_SEMANTIC_DELTA`,
 `HALT_TRACE_OFF_DELTA`, `HALT_FALSE_TERMINALITY`, `HALT_EXIT_PROVENANCE_FALSE`, `HALT_PRIVACY` and
 `HALT_UNEXPECTED_DIRT` were all NOT triggered.
+
+---
+
+# ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01 — PASS_STRUCTURAL_VERIFIED_CORRECTION01 — 2026-11-03
+
+**Status:** bounded correction of the two P0 findings raised against BRIDGE01, CLOSED on the existing `main` branch.
+The reviewer's verdict was `HALT_EVIDENCE_PROVENANCE_AND_OFF_PATH_DELTA`. **Both P0 findings and the one P2 are
+FIXED.** The production bridge, the event contract, the privacy allowlist, the per-command correlation and the
+delayed-background-completion behaviour are PRESERVED UNCHANGED. The architecture was NOT reopened, process
+supervision was NOT touched, no repository-wide review was repeated. The protected stash and all unrelated worktrees
+are intact; no push, no install, no VSIX.
+
+```text
+ACT_ID: ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01
+TYPE: BOUNDED CORRECTION
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01)
+VERDICT: PASS_STRUCTURAL_VERIFIED_CORRECTION01
+REVIEW_VERDICT_ADDRESSED: HALT_EVIDENCE_PROVENANCE_AND_OFF_PATH_DELTA
+PARENT_HEAD: d46e33530a04fedfd7744ff440ae22073046d4a8
+BRANCH: main (no ACT branch created)
+WORKTREES: unchanged   STASHES_TOUCHED: 0 (protected stash INTACT)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO
+P0_1_EVIDENCE_PROVENANCE: FIXED (ablation now over REAL recorder output; authored fixture retained as SYNTHETIC CONTROL)
+P0_2_OFF_PATH_CONTEXT_DELTA: FIXED (stamp now CONDITIONAL on the observation channel being PRESENT; witnesses DISCRIMINATE)
+P2_HYGIENE: FIXED (git diff --check clean)
+INSTALLED_DOGFOOD: NOT PERFORMED (no live qualification claimed)
+EVIDENCE: docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/{CORRECTION01-EVIDENCE-PROVENANCE-AND-OFF-PATH-DELTA.md,REPORT.md,evidence/real-process-capture.jsonl}
+```
+
+**P0-1 — the ablation's evidence provenance.** BRIDGE01's C5 ablation ran over `CAPTURED_WITH_PROCESS`, a hard-coded
+array authored INSIDE the test file with invented timestamps and invented events, and the report described it as
+"CAPTURED process evidence". That promoted a CONSTRUCTED fixture to CAPTURED evidence; the fixture also placed
+`tool_finish` BEFORE the foreground process observations, which is NOT the observed execution order. CORRECTION01
+replaces the ablation input with the **real** `ModelBehaviorTraceRecorder`'s **own** output — produced by the **real**
+`createVscodeRunCommandsTool` running a **real** command through the **real** `CommandJobManager`, through a sink
+wired exactly like the production `modelBehaviorTraceSink`, so the capture carries BOTH the tool-activity events AND
+the per-command process events. The capture is COMMITTED (`evidence/real-process-capture.jsonl`) and its ordering is
+the observed one: `tool_start` → `running` handoff → `tool_finish` → authoritative terminal fact with the REAL exit
+code 7. The authored fixture is RETAINED, renamed `SYNTHETIC_CONTROL_WITH_PROCESS` and re-badged
+`C5 — SYNTHETIC CONTROL`; it carries the NORMALIZER-behaviour claim only.
+
+**P0-2 — the disabled-path context delta.** BRIDGE01's `executeShellCommands` built the per-command executor context
+UNCONDITIONALLY, so with tracing OFF the executor received a context object the predecessor never produced. The
+reviewer's finding was precise: no command-result regression, but a real unconditional production-context delta that
+contradicts the frozen disabled-path neutrality contract. CORRECTION01 makes the stamp CONDITIONAL on the observation
+channel being **PRESENT** (`isCommandProcessObservationChannelPresent`, exported as the single authority), so the
+disabled path hands the executor the **EXACT predecessor context** — the same object, with no new metadata key.
+
+**The one subtlety, and why the predicate is PRESENCE and not the enable bit.** The first attempt used the recorder's
+enable bit as the predicate. That **broke BRIDGE01's own G7 witness** — "toggling ON after the handoff emits the
+terminal fact" — because a background command handed off while the recorder was disabled would lose its
+`commandIndex` FOREVER, leaving its delayed terminal fact uncorrelatable. The enable bit is a RUNTIME TOGGLE, not a
+property of the channel's wiring. The two decisions are therefore kept apart: the predicate decides whether the
+executor's CONTEXT changes at all (stable, structural), and `readObservationChannel` — unchanged — decides whether an
+OBSERVATION is emitted (volatile, per-event, consulted at observation time). ABSENT and DISABLED are now distinct
+states with distinct, correct behaviour.
+
+**Discrimination was measured, not asserted.** With the production stamp reverted to BRIDGE01's unconditional form,
+CORR01-1 and CORR01-2 FAIL (2 failed / 6 passed); with the correction applied, 8/8 pass. The witnesses genuinely
+discriminate the defect. The G7 ×2 witnesses are unchanged and still pass.
+
+**Gates.** 8 + 14 + 8 + 5 + 18 + 120 focused tests PASS (the ten trace suites carry 120). `sdk/packages/shared` and
+`apps/vscode` typecheck with **0 errors**; `sdk/packages/core` shows **40** errors — IDENTICAL to the stashed
+baseline. Biome clean on all changed files. `bun run build:sdk` exits 0. `git diff --check` is **clean** (the P2
+blank-line-at-EOF is fixed). The regression comparison is per-suite and set-compared, because the pre-existing vitest
+worker-teardown `EPERM: operation not permitted, kill` fault aborts a whole-suite run before its summary: the
+`sdk/packages/core` `src/extensions/tools/` failing set (2 files / 6 tests) and the `apps/vscode`
+`vscode-run-commands-tool.background-state.test.ts` failing set (6 tests) are **identical** stashed and applied —
+**zero new**. Both are the documented pre-existing environmental failures.
+
+**Limitations.** No installed-dogfood qualification (no VSIX installed, no live extension-host run). The real capture
+exercises the BACKGROUND path, because that is the path that produces a delayed terminal fact — the FOREGROUND path's
+real capture is `evidence/process-observation-excerpt.jsonl` and its witnesses are G2/G4/G5. The synthetic control
+remains in the tree. Per the reviewer's instruction, installed-dogfood qualification is authorized DIRECTLY once these
+two proofs are established; it is the next step, not a claim made here.
 
 ---
 

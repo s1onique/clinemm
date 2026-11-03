@@ -446,6 +446,93 @@ describe("command-process-outcome trace bridge — trace-OFF neutrality (G8)", (
 		expect(observations).toHaveLength(1)
 		expect(observations[0]?.payload.exitCode).toBe(5)
 	})
+
+	/**
+	 * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01.
+	 *
+	 * The OFF-path EXECUTOR-CONTEXT equality witness.
+	 *
+	 * BRIDGE01 stamped the per-command positional index onto the executor's
+	 * tool context UNCONDITIONALLY. Even with tracing OFF, the executor
+	 * therefore received a context object the predecessor never produced —
+	 * an unconditional production-context delta that contradicts the frozen
+	 * disabled-path neutrality contract.
+	 *
+	 * CORRECTION01 makes the stamp conditional on the observation channel
+	 * being PRESENT. With the channel ABSENT (the trace-OFF shape), the
+	 * executor must receive the EXACT predecessor context — the same object,
+	 * with no new metadata key.
+	 *
+	 * The OFF-path witness asserts the property at the HOST boundary: the
+	 * tool-call context handed to the tool carries no correlation index,
+	 * and the tool completes without emitting a single observation.
+	 */
+	it("G8-CORR01: with the observation channel ABSENT, the executor receives the EXACT predecessor context", async () => {
+		const terminalProcess = {
+			isHot: false,
+			waitForShellIntegration: true,
+			on: () => undefined,
+			once: () => undefined,
+			removeListener: () => undefined,
+			continue: () => undefined,
+			detach: () => undefined,
+			getUnretrievedOutput: () => "",
+			getCompletionDetails: () => ({ exitCode: 0 }),
+		}
+		const terminalManager = {
+			getOrCreateTerminal: async () => ({ id: 1 }),
+			runCommand: () => terminalProcess,
+			releaseTerminalReservation: () => undefined,
+			sendInterrupt: () => undefined,
+		}
+		const tool = createVscodeRunCommandsTool({
+			cwd: process.cwd(),
+			getTerminalManager: () => terminalManager as never,
+			vscodeTerminalExecutionMode: "vscodeTerminal",
+		})
+
+		const offContext = makeTraceOffContext()
+		await tool.execute({ commands: ["echo hi", "echo there"] } as never, offContext)
+
+		// The OFF context carried NO correlation index — the predecessor
+		// never stamped one.
+		expect(offContext.metadata).not.toHaveProperty("__clineCommandProcessObservationIndex")
+		expect(offContext.metadata).toEqual({})
+	})
+
+	it("G8-CORR01: with the observation channel PRESENT, the executor's context DOES carry the per-command index", async () => {
+		const observations: CapturedObservation[] = []
+		const terminalProcess = {
+			isHot: false,
+			waitForShellIntegration: true,
+			on: () => undefined,
+			once: () => undefined,
+			removeListener: () => undefined,
+			continue: () => undefined,
+			detach: () => undefined,
+			getUnretrievedOutput: () => "",
+			getCompletionDetails: () => ({ exitCode: 0 }),
+		}
+		const terminalManager = {
+			getOrCreateTerminal: async () => ({ id: 1 }),
+			runCommand: () => terminalProcess,
+			releaseTerminalReservation: () => undefined,
+			sendInterrupt: () => undefined,
+		}
+		const tool = createVscodeRunCommandsTool({
+			cwd: process.cwd(),
+			getTerminalManager: () => terminalManager as never,
+			vscodeTerminalExecutionMode: "vscodeTerminal",
+		})
+
+		await tool.execute({ commands: ["echo hi", "echo there"] } as never, makeContext(observations))
+
+		// TWO commands, TWO DISTINCT positional indices — the correlation
+		// identity the bridge depends on.
+		expect(observations).toHaveLength(2)
+		expect(observations[0]?.payload.commandIndex).toBe(0)
+		expect(observations[1]?.payload.commandIndex).toBe(1)
+	})
 })
 
 describe("command-process-outcome trace bridge — privacy adversaries (G9)", () => {

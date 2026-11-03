@@ -20,6 +20,7 @@ import {
 } from "@cline/shared";
 import { captureRunCommandsTimeout } from "../../services/telemetry/core-events";
 import { CommandExitError, CommandTerminationError } from "./executors/bash";
+import { isCommandProcessObservationChannelPresent } from "./executors/command-process-observation";
 import {
 	MAX_COMMAND_OUTPUT_CHARS,
 	MAX_READ_LINES,
@@ -371,13 +372,45 @@ async function executeShellCommands(
 					// metadata-only: it does NOT change the executor's behavior,
 					// the result array, the execution order, or the timeout
 					// semantics.
-					const indexedContext: AgentToolContext = {
-						...commandContext,
-						metadata: {
-							...(commandContext.metadata ?? {}),
-							[COMMAND_PROCESS_OBSERVATION_INDEX_METADATA_KEY]: commandIndex,
-						},
-					};
+					//
+					// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01:
+					// The stamp is CONDITIONAL. CORRECTION01 established that
+					// stamping it UNCONDITIONALLY produced an unconditional
+					// production-context delta on the trace-OFF path — the
+					// executor received a context that the predecessor never
+					// produced. That contradicts the frozen disabled-path
+					// neutrality contract, which requires the disabled path to
+					// preserve the EXACT predecessor context.
+					//
+					// So the index is stamped ONLY when the observation channel
+					// is PRESENT
+					// (`isCommandProcessObservationChannelPresent`). When the
+					// channel is absent — the shape the production runtime
+					// produces when no recorder is wired at all — the EXACT
+					// predecessor context (`commandContext`) is handed to the
+					// executor: no new metadata key, no new object shape, no
+					// context delta at all.
+					//
+					// The channel's PRESENCE — not the recorder's enable bit —
+					// is the predicate, because the enable bit is a runtime
+					// TOGGLE. A background command handed off while the
+					// recorder was disabled must still be able to report its
+					// delayed terminal fact with its per-command correlation
+					// intact once tracing is turned back on (the G7
+					// contract). Whether an OBSERVATION is emitted is
+					// decided separately, at observation time.
+					const observationChannelPresent =
+						isCommandProcessObservationChannelPresent(commandContext.metadata);
+					const indexedContext: AgentToolContext = observationChannelPresent
+						? {
+								...commandContext,
+								metadata: {
+									...(commandContext.metadata ?? {}),
+									[COMMAND_PROCESS_OBSERVATION_INDEX_METADATA_KEY]:
+										commandIndex,
+								},
+							}
+						: commandContext;
 					const output = await withTimeout(
 						executor(command, cwd, indexedContext),
 						timeoutMs,

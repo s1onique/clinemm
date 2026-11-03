@@ -1,7 +1,7 @@
 /**
  * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01
  *
- * The PORTABLE-NORMALIZER gates plus the EXECUTED necessity ablation.
+ * The PORTABLE-NORMALIZER gates plus the SYNTHETIC-CONTROL ablation.
  *
  * GATES COVERED
  * -------------
@@ -14,8 +14,24 @@
  *   PORT-2   — the portable payload carries the per-command identity and
  *               the observed exit code, and drops everything else.
  *   G9/PORT  — the portable allowlist drops hostile and unknown fields.
- *   C5       — the EXECUTED necessity ablation over CAPTURED process
- *               evidence.
+ *   C5/CTRL  — the SYNTHETIC-CONTROL ablation: the normalizer's behaviour
+ *               over an AUTHORED fixture.
+ *
+ * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01:
+ * C5 IS NOW EXPLICITLY A **SYNTHETIC CONTROL**.
+ *
+ * BRIDGE01 ran the C5 ablation over a hand-authored array and labelled it
+ * "CAPTURED process evidence". That promoted a CONSTRUCTED fixture to
+ * captured evidence. The fixture is retained — it is a perfectly good control
+ * for the NORMALIZER's behaviour — but it is RENAMED and RELABELLED so it can
+ * no longer be mistaken for real evidence, and it no longer carries the
+ * necessity claim.
+ *
+ * The REAL-evidence necessity ablation lives in
+ * `command-process-outcome-real-capture-ablation01.test.ts`, where it runs
+ * over the REAL `ModelBehaviorTraceRecorder`'s OWN output, produced by the
+ * REAL `run_commands` tool driving REAL subprocesses through the REAL
+ * `CommandJobManager`.
  */
 
 import { describe, expect, it } from "vitest"
@@ -250,18 +266,48 @@ describe("portable normalizer — the new process family (PORT-1/PORT-2)", () =>
  *
  * RESTORE — put the process records back and Q2 is answerable again.
  *
- * This is a REAL executed ablation over controlled captured evidence. It
- * does NOT claim a correctness verdict (Q3).
+ * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01:
+ * THIS SUITE IS A **SYNTHETIC CONTROL**, NOT REAL-EVIDENCE NECESSITY.
+ *
+ * The fixture below is AUTHORED — hand-written timestamps, hand-written
+ * events, hand-written ordering. BRIDGE01 labelled it "CAPTURED" evidence and
+ * the report described the ablation as running over "captured process
+ * evidence"; that promoted a CONSTRUCTED fixture to captured evidence. The
+ * label was wrong and the report claim was not supported.
+ *
+ * An ablation over an authored fixture can only prove that the NORMALIZER
+ * classifies the fixture's shape. It cannot prove that the REAL producer
+ * emits records with that shape, and it cannot prove that removing the real
+ * category destroys the answerability of REAL evidence.
+ *
+ * The REAL-evidence necessity ablation now lives in
+ * `command-process-outcome-real-capture-ablation01.test.ts`, where the
+ * ablation runs over the REAL `ModelBehaviorTraceRecorder`'s OWN output
+ * produced by the REAL `run_commands` tool and the REAL `CommandJobManager`.
+ *
+ * What THIS suite still establishes, and it is worth keeping: the NORMALIZER
+ * maps the process family, the portable allowlist drops hostile fields, the
+ * pre-bridge fixture is NOT retroactively reinterpreted, and the classifier
+ * returns `CAPTURE_INSUFFICIENT` rather than inferring an outcome. Those are
+ * NORMALIZER properties, and they are exactly what a synthetic control is
+ * for.
  */
 
 // ============================================================================
-// The CAPTURED evidence.
+// The SYNTHETIC CONTROL fixture.
 //
-// A real captured shape: ONE `run_commands` tool call with FOUR commands,
+// AUTHORED, NOT CAPTURED. One `run_commands` tool call with FOUR commands
 // plus the per-command process observations the bridge produces.
+//
+// Note the ordering: the authored `tool_finish` precedes the process
+// observations. That is NOT the observed foreground execution order (a real
+// foreground capture emits the process observation BEFORE the tool finishes).
+// This suite does not assert the ordering, because the ordering is a
+// property of REAL evidence — and REAL evidence is asserted in
+// `command-process-outcome-real-capture-ablation01.test.ts`.
 // ============================================================================
 
-const CAPTURED_WITH_PROCESS = [
+const SYNTHETIC_CONTROL_WITH_PROCESS = [
 	{
 		seq: 0,
 		timestamp: "2026-03-01T00:00:00.000Z",
@@ -408,9 +454,9 @@ function toolActivitySequence(records: ReadonlyArray<{ nativeEventType: string; 
 		.map((record) => `${record.nativeEventType}:${String(record.payload.toolName ?? "?")}`)
 }
 
-describe("C5 — executed necessity ablation over CAPTURED process evidence", () => {
-	it("BASELINE: with the process records present, Q2 is answerable per command", () => {
-		const parsed = parseNativeTrace(CAPTURED_WITH_PROCESS.join("\n"))
+describe("C5 — SYNTHETIC CONTROL: the normalizer ablation over an AUTHORED fixture", () => {
+	it("SYNTHETIC CONTROL BASELINE: over the AUTHORED fixture, Q2 is answerable per command", () => {
+		const parsed = parseNativeTrace(SYNTHETIC_CONTROL_WITH_PROCESS.join("\n"))
 		const normalized = normalizeNativeTrace(parsed)
 		const q2 = classifyProcessSuccess(normalized.records)
 
@@ -421,8 +467,8 @@ describe("C5 — executed necessity ablation over CAPTURED process evidence", ()
 		expect(q2.perCommand.get(3)).toBe("unknown")
 	})
 
-	it("ABLATION: removing ONLY the process category makes Q2 CAPTURE_INSUFFICIENT, while the tool-activity sequence stays observable", () => {
-		const parsed = parseNativeTrace(CAPTURED_WITH_PROCESS.join("\n"))
+	it("SYNTHETIC CONTROL ABLATION: removing ONLY the process category makes Q2 CAPTURE_INSUFFICIENT, while the tool-activity sequence stays observable", () => {
+		const parsed = parseNativeTrace(SYNTHETIC_CONTROL_WITH_PROCESS.join("\n"))
 		const normalized = normalizeNativeTrace(parsed)
 
 		// The tool-activity sequence BEFORE the ablation.
@@ -449,8 +495,8 @@ describe("C5 — executed necessity ablation over CAPTURED process evidence", ()
 		expect(finish?.payload.outcome).toBe("success")
 	})
 
-	it("RESTORE: putting the process records back makes Q2 answerable again", () => {
-		const parsed = parseNativeTrace(CAPTURED_WITH_PROCESS.join("\n"))
+	it("SYNTHETIC CONTROL RESTORE: putting the process records back makes Q2 answerable again", () => {
+		const parsed = parseNativeTrace(SYNTHETIC_CONTROL_WITH_PROCESS.join("\n"))
 		const normalized = normalizeNativeTrace(parsed)
 		const q2 = classifyProcessSuccess(normalized.records)
 		expect(q2.answerable).toBe(true)
