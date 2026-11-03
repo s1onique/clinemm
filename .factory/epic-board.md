@@ -1,3 +1,126 @@
+# ACT-CLINEMM-UPSTREAM-LIVE-HUB-CROSSCLIENT-QUALIFICATION01 — PASS_PARTIAL_LIVE_PENDING — 2026-11-03
+
+**Status:** C0 + C1 executed; **C2–C5 NOT EXECUTED**. Verdict **`PASS_PARTIAL_LIVE_PENDING`** with the explicit
+ACT-mandated label **`VS_CODE_INTEROP_NOT_EXECUTED`**. This is a read-only topology qualification: **no production
+file was created, modified or deleted; no Hub was started, stopped, drained or upgraded; nothing was installed; no
+provider was invoked; no credential, token, signed URL or private transcript was read or committed; no protected
+stash was touched; no branch, push or release.**
+
+```text
+ACT_ID: ACT-CLINEMM-UPSTREAM-LIVE-HUB-CROSSCLIENT-QUALIFICATION01
+TYPE: QUALIFICATION (read-only topology; C0+C1 only)
+EPIC: EPIC-CLINEMM-UPSTREAM-AND-AGENT-CONTROL-01
+WORKSTREAM: U04 (successor of U03 ACT-CLINEMM-UPSTREAM-VSCODE-PROVIDER-RECONCILE01)
+VERDICT: PASS_PARTIAL_LIVE_PENDING
+LABEL: VS_CODE_INTEROP_NOT_EXECUTED
+SCOPE_EXECUTED: C0, C1
+SCOPE_NOT_EXECUTED: C2, C3, C4, C5
+PRODUCTION_DELTA: ZERO
+ENTRY_HEAD (discovered, not pre-baked): 06076666e66ca5678e84be230d2310f60b819e3c
+ENTRY_TREE: 7e0e9c29fecc85c8ba662a3e154b33398bd93c1e
+BRANCH: integration/upstream-20261102
+MERGE_COMMIT (unchanged): 167f5ca8d639cc83c21ddf8e0d96369cfc319d0a
+MERGE_PARENT1 (fork): 265044bf37429cb3c48918eb7473e46cc3933964
+MERGE_PARENT2 (upstream): a6507a62a147db4a35e27f4294589742ccac5060
+MERGE_BASE: 48d63852745460ff0fa3dfcc0457bbe2493841de
+MAIN (unchanged): 265044bf37429cb3c48918eb7473e46cc3933964
+ORIGIN_MAIN (unchanged): 265044bf37429cb3c48918eb7473e46cc3933964
+STASHES_TOUCHED: 0 (both protected stashes INTACT)
+BRANCH_CREATED: NO   PUSHED: NO   INSTALLED: NO   HUB_STARTED: NO
+BUN_LOCK_MODIFIED: NO (sha256 e65df0c9c6e3a58ca5acd5e8414df969d19c35865f48245a4f24a9b13bb7bfb7)
+WORKTREES: 5 (unchanged)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-UPSTREAM-LIVE-HUB-CROSSCLIENT-QUALIFICATION01/{00-identity-and-isolation.md,01-topology-discriminator.md,SHA256SUMS.txt}
+```
+
+**TOPOLOGY VERDICT (the operative finding).** The **installed ClineMM VS Code extension is LOCAL-ONLY** — it
+runs an in-process `LocalRuntimeHost` and **never** uses the Hub. The **CLI is hub-capable** (`backendMode:"auto"`
+→ `HubRuntimeHost` when a compatible Hub exists). Therefore **VS Code ↔ CLI cross-client attachment is NOT
+supported by the current production implementation**, no attachment was attempted, and the ACT-mandated label
+**`VS_CODE_INTEROP_NOT_EXECUTED`** is recorded. **C2 was NOT entered** (the ACT forbids altering architecture to
+make the experiment pass).
+
+**C0 — IDENTITY AND PROTECTED-ENVIRONMENT PREFLIGHT.** Entry HEAD was **discovered** as `06076666e` — an **exact
+match** with the brief's U03 anchor, no substitution; HEAD had not moved. Worktree **clean** at entry; `main` and
+`origin/main` unchanged; **both protected stashes intact**; 5 worktrees unchanged; `bun.lock` unmodified
+(`bun install` NOT executed); the upstream merge `167f5ca8d` was **not** recreated, reset, rebased or re-merged.
+
+*Installed extension identity — a correction to the inherited assumption.* Two ClineMM installs exist on this host.
+The **LIVE** one (the VSCodium actually running, `--extensions-dir ~/.vscodium-clinemm/extensions`) is
+**`s1onique.clinemm-4.1.16-5a1c485cb-06076666e`**, `dist/extension.js` sha256
+`f552118e272db6a9d5948ea17aff444a8c85cd768fd709975a67d518156e1047` — **byte-bound to the merge head `06076666e`**,
+and the running runtime's own `globalState.json → clineVersion` reads `4.1.16-5a1c485cb`. The install under the
+default `~/.vscode-oss/extensions` is the **stale** `4.1.10-26f1e7bb6` (1837 commits behind) that older board
+entries describe; it is **not** the live host and is **explicitly excluded** from this qualification. Attribution for
+the live install is therefore **LIVE + REAL_PRODUCTION_SEAM**, not `CAPTURE_INSUFFICIENT`.
+
+*CLI identity.* No `cline` binary and no `codium-clinemm` wrapper are installed; the source CLI in the subject
+worktree is `@cline/cli` **3.0.74** and `bun src/index.ts --version` confirms **3.0.74** (exit 0). Fork semantics
+were read from this checkout's production source, **not** assumed from the upstream 3.0.74 release notes.
+
+*Isolation — PROVEN SAFE, no `HALT_UNSAFE_HUB_TARGET`.* `~/.cline/data/locks/hub/owners/` is **empty** ⇒ **no
+personal/production Hub is running**; a read-only `cline hub status` against an isolated
+`CLINE_HUB_DISCOVERY_PATH` returns `{"running":false,"cliVersion":"3.0.74"}` (this subcommand never calls
+`ensureDetachedHubServer`). The working isolation levers are `CLINE_HUB_DISCOVERY_PATH` (daemon record) +
+`CLINE_DIR` (data/credentials/sessions) + `CLINE_HUB_BUILD_ID` (build fingerprint). **Honest caveat recorded:**
+`--data-dir`/`CLINE_DATA_DIR` is the **wrong** lever for this experiment — it sets `sandbox=true` and the CLI then
+**forces a local backend**, which would isolate *away* from the Hub.
+
+**C1 — PRODUCTION TOPOLOGY DISCRIMINATOR (answered from runtime traces + production source, not diagrams).**
+
+1. *Hub-backed or local?* **LOCAL.** Three independent lines of evidence: (a) the source seam
+   `apps/vscode/src/sdk/vscode-session-host.ts:475` passes an explicit `backendMode: "local"` — the **only**
+   `backendMode` occurrence in `apps/vscode/src/`; (b) the **live installed bundle** contains
+   `ClineCore.create({backendMode:"local",…})` at byte offset **25477111**, immediately preceded by the
+   `source:"vscode"` marker; (c) **live filesystem traces** — `~/.vscodium-clinemm/cline-data/locks/hub/` **does not
+   exist**, 495 session dirs + an actively-written `db/sessions.db(-wal)` show the **local** store, and the logs
+   contain **zero** `Using hub runtime host` / `Falling back to local runtime host` / `discovered local hub` lines.
+   `CLINE_SESSION_BACKEND_MODE=hub` **cannot** move the VS Code extension onto a Hub, because
+   `resolveConfiguredBackendMode` returns `options.backendMode` **before** the env var
+   (`sdk/packages/core/src/runtime/host/host.ts:20-21`).
+2. *Does B see A's daemon/session?* **VS Code ↔ CLI: NO**, for **two independent** reasons — A has no daemon
+   instance at all, and the build fingerprints differ (VSIX-embedded id vs the source CLI's `source-0.2.0`, rejected
+   by `isManagedHubReusable` on `build_mismatch`). The observable identity fields (`hubId`, `url`, `pid`,
+   `protocolVersion`, `buildId`, `buildEpochMs`, `coreVersion`, `capabilities[]`, `session_id`, `client_id`,
+   `startedAt`/`updatedAt`) are enumerated in `01-topology-discriminator.md` §2.2; `authToken` is **presence-only**.
+3. *Can B read without starting a session?* **YES** — `HubSessionClient.getSession` (`session.get`),
+   `readMessages` (`session.messages`) and `streamEvents` are **pure reads**. The CLI `--id` path is a genuine
+   **reattach**: `main.ts:728-741` sets `prompt: undefined` → `session-runtime.ts:272-296` calls
+   `manager.start({config:{sessionId}})` → `HubRuntimeHost.startSession` → `session.create` → the Hub server's
+   `LocalRuntimeHost.startSession` **reattach branch** (`local-runtime-host.ts:692-703`), whose own comment reads
+   *"Starting a session that is mid-run must not replace it … Reattach instead."* A second run is **structurally
+   impossible** there: a prompt-bearing start is rejected with *"already has a run in progress; queue the prompt
+   instead."* ⇒ **the upstream CLI 3.0.74 "attach without creating a second run" claim IS substantiated for this
+   fork's CLI↔CLI Hub path.** (The separate `session.attach` command exists in the Hub transport but is invoked in
+   this fork only by the **desktop-app example**, not by the CLI and not by VS Code.)
+
+**NOT_CLAIMED.** No live A/B overlap was produced; no event window, disconnect/reconnect, feedback/approval or
+cancellation boundary was observed; `session_id`/`client_id`/build fingerprint remain **STRUCTURAL** (production
+source) and were **not** promoted to LIVE. Nothing was inferred from a completion card, an API's mere existence, or
+an architecture diagram.
+
+**EXACT RECOMMENDED NEXT EXECUTABLE GATE.** A successor ACT for **CLI ↔ CLI cross-client attach on ONE isolated
+Hub**, entering C2 while retaining `VS_CODE_INTEROP_NOT_EXECUTED`:
+`CLINE_DIR=$ISO/cline-dir` + `CLINE_HUB_DISCOVERY_PATH=$ISO/hub-discovery.json` + a single pinned
+`CLINE_HUB_BUILD_ID` for daemon + client A + client B, both clients built from **this** worktree; **no** `--data-dir`,
+**no** `--yolo`, **no** `--zen` (explicit approvals only); disposable fixture; A starts exactly one bounded run, B
+attaches with `cline --id <session-id>` (**no prompt**) and observes read-only via
+`getSession`/`readMessages`/`streamEvents`. `hub stop`/`drain`/`upgrade` are forbidden; the personal `~/.cline` Hub
+and the live VSCodium are never addressed. Full recipe and safety argument:
+`.factory/evidence/ACT-CLINEMM-UPSTREAM-LIVE-HUB-CROSSCLIENT-QUALIFICATION01/01-topology-discriminator.md` §5.
+
+**OUTSTANDING GATE (explicit).** The single missing observation is: *the actual `session_id`, `client_id`, `hubId`,
+`buildId` and `session.attached`/`run.*` event window observed LIVE from two distinct CLI processes against ONE
+isolated Hub, together with proof that B's join created no second run.* Everything else needed for C2 is already
+established. **The external MCP adapter (A01/A02) remains gated on runtime-authority qualification and was NOT
+started.**
+
+**Successor chain:** this ACT resolves the U04 interop question as `VS_CODE_INTEROP_NOT_EXECUTED` and hands off to
+`ACT-CLINEMM-UPSTREAM-LIVE-PROVIDER-WIRE-QUALIFICATION01` (installed-runtime provider/model + MiniMax M3.1
+reasoning wire + a real tool/terminal lifecycle) — which, unlike this ACT, requires the operator's provider
+credential. U04 consolidation and any decision about promotion to `main` remain out of scope here.
+
+---
+
 # ACT-CLINEMM-UPSTREAM-VSCODE-PROVIDER-RECONCILE01 — PASS_NO_CHANGE_NEEDED — 2026-11-03
 
 **Status:** CLOSED with verdict **`PASS_NO_CHANGE_NEEDED`**. U03 — post-merge VS Code / provider reconciliation. The merged VS Code host + shared model/provider boundary **preserves the fork's declared production semantics**: all four reconciliation domains are **CONSERVED**, **no `OBSERVED_REGRESSION`** was found, and **PRODUCTION DELTA = ZERO** (no production source file was created, modified or deleted). ~40 distinct executable gates were run at HEAD against all seven required behavioural-matrix rows. The upstream merge `167f5ca8d` was NOT recreated and NOT re-reviewed; the merge, the fork's authorities and the prior accepted findings were carried forward by reference. The upstream Hub remote-event filter and the fork's intentional RED witnesses were re-exercised and remain intact. Live installed-UI / live-provider / live-hub qualification is NOT possible here and is explicitly NOT claimed.
