@@ -190,7 +190,7 @@ function buildBoundedCheckpoint(maxBytes: number): {
 	let minimal = withTruncationStats(kept, totalDropped, droppedRecords)
 	let minimalBytes = utf8ByteLength(JSON.stringify(minimal))
 	if (minimalBytes > maxBytes && kept.length > 0) {
-		// Shed the retained capsule's records, newest first, until the
+		// Shed the retained capsule's records, OLDEST first, until the
 		// serialized form fits the bound.
 		const retained = kept[0]
 		if (!retained) {
@@ -201,12 +201,37 @@ function buildBoundedCheckpoint(maxBytes: number): {
 				droppedRecords,
 			}
 		}
+		//
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION03:
+		// The shed count is computed against the ORIGINAL retained
+		// record count, NOT against the shrinking working array.
+		//
+		// The previous implementation derived `shed` from the
+		// difference between the working array's current length and
+		// the candidate's length — which was ALWAYS 1, because the
+		// candidate was produced with `slice(0, -1)` (exactly one
+		// element removed). So a checkpoint that had to discard 200
+		// records reported `droppedRecords: 1`, understating the
+		// evidence loss by 199. The persisted checkpoint's `stats`
+		// block carried that same understated number, so the artifact
+		// itself declared a clean capture while a large fraction of
+		// the incident's causal records had been dropped — a direct
+		// violation of the recorder's evidence-accounting contract.
+		//
+		// The shed count is now CUMULATIVE and exact:
+		//     shed = originalCount - retainedRecords.length
+		//
+		// The records are shed OLDEST-FIRST (`shift()`), which
+		// preserves the NEWEST causal records — the ones closest to
+		// the incident's terminal state and therefore the most
+		// valuable during incident diagnosis. (The previous
+		// `slice(0, -1)` dropped the NEWEST record instead.)
+		const originalCount = retained.records.length
 		const retainedRecords = [...retained.records]
-		while (retainedRecords.length > 0) {
-			const candidateRecords = retainedRecords.slice(0, -1)
-			const shed = retainedRecords.length - candidateRecords.length
+		while (true) {
+			const shed = originalCount - retainedRecords.length
 			const candidate = withTruncationStats(
-				[{ ...retained, records: candidateRecords }],
+				[{ ...retained, records: retainedRecords }],
 				totalDropped,
 				droppedRecords + shed,
 			)
@@ -217,7 +242,15 @@ function buildBoundedCheckpoint(maxBytes: number): {
 				droppedRecords += shed
 				break
 			}
-			retainedRecords.length = candidateRecords.length
+			if (retainedRecords.length === 0) {
+				// Even a capsule with ZERO records does not fit. The
+				// checkpoint cannot satisfy the byte bound, so the
+				// caller must report a FAILED checkpoint rather than
+				// persist an artifact that violates the bound.
+				throw new Error("Checkpoint cannot fit within byte bound")
+			}
+			// Shed the OLDEST retained record, preserving the newest.
+			retainedRecords.shift()
 		}
 	}
 	return {

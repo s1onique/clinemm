@@ -31,6 +31,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
+	getCompletionIncidentCapsules,
 	getCompletionIncidentRecorderStats,
 	resetCompletionIncidentRecorderForTests,
 	setCompletionIncidentFlightRecorderEnabled,
@@ -72,7 +73,7 @@ const CHECKPOINT_FILE = "completion-incident-checkpoint.json"
  * bounds are raised through the recorder's own configurable-bounds
  * seam — the production code path is unchanged.
  */
-async function fillOneOversizedAnomalousCapsule(): Promise<void> {
+async function fillOneOversizedAnomalousCapsule(): Promise<number> {
 	setCompletionIncidentRecorderBounds({
 		capsuleCap: 4,
 		capsuleRecordCap: 4096,
@@ -93,6 +94,12 @@ async function fillOneOversizedAnomalousCapsule(): Promise<void> {
 		await emitSubmitAndExit(h)
 		await flush()
 	}
+	// The number of records the capsule held BEFORE the checkpoint had
+	// to shed any of them. The exact loss accounting is asserted
+	// against this number.
+	const capsules = getCompletionIncidentCapsules()
+	expect(capsules).toHaveLength(1)
+	return capsules[0]?.records.length ?? 0
 }
 
 describe("BOUND.1: the checkpoint NEVER exceeds its byte bound", () => {
@@ -117,7 +124,7 @@ describe("BOUND.1: the checkpoint NEVER exceeds its byte bound", () => {
 	})
 
 	it("BOUND.1.2: the shed records are reported as dropped evidence", async () => {
-		await fillOneOversizedAnomalousCapsule()
+		const originalRecordCount = await fillOneOversizedAnomalousCapsule()
 
 		const result = await checkpointCompletionIncidentCapsules(context())
 		expect(result.succeeded).toBe(true)
@@ -126,5 +133,60 @@ describe("BOUND.1: the checkpoint NEVER exceeds its byte bound", () => {
 		// VISIBLE — never silently presented as a complete capture.
 		expect(result.droppedRecords ?? 0).toBeGreaterThan(0)
 		expect(getCompletionIncidentRecorderStats().checkpointTruncatedRecords ?? 0).toBeGreaterThan(0)
+	})
+
+	it("BOUND.1.3: the reported loss is EXACTLY the number of records dropped", async () => {
+		const originalRecordCount = await fillOneOversizedAnomalousCapsule()
+
+		const result = await checkpointCompletionIncidentCapsules(context())
+		expect(result.succeeded).toBe(true)
+
+		// The number of records actually PERSISTED, read back from the
+		// artifact on disk.
+		const persisted = JSON.parse(readFileSync(join(tmp, CHECKPOINT_FILE), "utf8")) as {
+			capsules: { records: unknown[] }[]
+		}
+		const persistedRecordCount = persisted.capsules.reduce((sum, c) => sum + c.records.length, 0)
+
+		// The loss accounting must be EXACT: the reported count is the
+		// difference between what the recorder held and what survived
+		// into the persisted artifact.
+		//
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION03: the
+		// previous implementation always reported `1` here (the shed
+		// count was derived from `slice(0, -1)`, which removes exactly
+		// one element), so a checkpoint that discarded hundreds of
+		// records understated the loss by hundreds. This assertion
+		// pins the EXACT accounting.
+		expect(result.droppedRecords).toBe(originalRecordCount - persistedRecordCount)
+
+		// And the persisted artifact's own stats block carries the same
+		// exact number — the artifact declares its own loss.
+		const stats = JSON.parse(readFileSync(join(tmp, CHECKPOINT_FILE), "utf8")) as {
+			stats: { checkpointTruncatedRecords: number }
+		}
+		expect(stats.stats.checkpointTruncatedRecords).toBe(originalRecordCount - persistedRecordCount)
+	})
+
+	it("BOUND.1.4: the shed preserves the NEWEST causal records", async () => {
+		await fillOneOversizedAnomalousCapsule()
+		const before = getCompletionIncidentCapsules()
+		const newestBefore = before[0]?.records.at(-1)
+
+		const result = await checkpointCompletionIncidentCapsules(context())
+		expect(result.succeeded).toBe(true)
+
+		const persisted = JSON.parse(readFileSync(join(tmp, CHECKPOINT_FILE), "utf8")) as {
+			capsules: { records: { eventSeq: number }[] }[]
+		}
+		const newestAfter = persisted.capsules[0]?.records.at(-1)
+
+		// The NEWEST record (the one closest to the incident's terminal
+		// state) is the most valuable during diagnosis and must survive
+		// the truncation. The previous implementation shed the tail
+		// (`slice(0, -1)`) and kept the OLDEST instead.
+		expect(newestBefore).toBeDefined()
+		expect(newestAfter).toBeDefined()
+		expect(newestAfter?.eventSeq).toBe(newestBefore?.eventSeq)
 	})
 })
