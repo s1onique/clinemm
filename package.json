@@ -35,6 +35,8 @@
         "verify:chart01-mermaid-parse": "bun scripts/verify-chart04-mermaid-parse.ts docs/architecture/task-lifecycle/01-task-turn-phase.md",
         "verify:markdown-mermaid-blocks": "bun scripts/verify-markdown-mermaid-blocks.ts docs/architecture/task-lifecycle/01-task-turn-phase.md docs/architecture/task-lifecycle/02-c9-bcb-elm-c10-authority.md docs/architecture/task-lifecycle/03-background-command-containment.md docs/architecture/task-lifecycle/04-completion-presentation.md",
         "verify:workos-device-auth": "bun sdk/scripts/verify-workos-device-auth.ts",
+        "verify:repository-hygiene": "bun factory/scripts/check-repository-hygiene.ts",
+        "verify:repository-hygiene:test": "bun test factory/scripts/repository-hygiene.test.ts",
         "biome": "bunx --bun @biomejs/biome",
         "format": "bun biome format sdk/ apps/cli/ apps/cline-hub/ apps/examples/",
         "lint": "bun biome lint sdk/ apps/cli/ apps/cline-hub/ apps/examples/",

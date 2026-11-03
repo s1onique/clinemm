@@ -164,3 +164,13 @@ tools/macos-host-helper/native/helper
 
 # ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01 — vitest JSON reporter scratch file
 .tmp-turn-phase-contract-vitest.json
+
+# Ephemeral outside-boundary test fixtures
+#
+# ACT-CLINEMM-REPOSITORY-ROOT-FIXTURE-CLEANUP01 — the seatbelt realpath
+# authority suites place their outside-root victims in a temp dir created
+# with `mkdtempSync(join(workspaceRoot, "../../clinemm-outside-*-\"))`, which
+# resolves to the REPOSITORY ROOT (apps/vscode -> repo root). Those dirs are
+# ephemeral and are removed in afterAll; this rule makes sure that a leaked
+# one can never reenter the index through an ordinary `git add -A`.
+/clinemm-outside-*/

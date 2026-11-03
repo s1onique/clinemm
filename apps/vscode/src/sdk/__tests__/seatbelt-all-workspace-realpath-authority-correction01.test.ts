@@ -283,6 +283,7 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 T2 
 describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 T3 (outside-root, no Seatbelt)", () => {
 	let workspaceRoot: string
 	let outsideVictim: string
+	let outsideDir: string
 
 	beforeAll(() => {
 		workspaceRoot = realpathSync(process.cwd())
@@ -292,9 +293,23 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 T3 
 		// to a path NOT contained in [workspaceRoot], so the
 		// conformance gate fails and the per-command verdict is
 		// ASK with the original realpath reason.
-		const outside = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-t3-"))
-		outsideVictim = join(outside, "victim.ts")
+		//
+		// `../../` escapes the workspace root (apps/vscode → repo root).
+		// The temp dir MUST be removed in afterAll — otherwise every
+		// run leaves a `clinemm-outside-*` directory at the repository
+		// root, which an ordinary `git add -A` sweeps into the index.
+		// (See ACT-CLINEMM-REPOSITORY-ROOT-FIXTURE-CLEANUP01.)
+		outsideDir = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-t3-"))
+		outsideVictim = join(outsideDir, "victim.ts")
 		writeFileSync(outsideVictim, "// outside-root T3\n", "utf8")
+	})
+
+	afterAll(() => {
+		try {
+			rmSync(outsideDir, { recursive: true, force: true })
+		} catch {
+			// ignore: workspace may already be cleaned
+		}
 	})
 
 	it("T3: outside-root operand + no mandatory Seatbelt → ASK with realpath reason preserved", () => {
@@ -320,16 +335,34 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 T4 
 	let workspaceRoot: string
 	let insideVictim: string
 	let outsideVictim: string
+	let insideTmp: string
+	let outsideTmp: string
 
 	beforeAll(() => {
 		workspaceRoot = realpathSync(process.cwd())
 		mkdirSync(join(workspaceRoot, ".factory", "tmp"), { recursive: true })
-		const insideTmp = mkdtempSync(join(workspaceRoot, ".factory/tmp/ws-realpath-t4-in-"))
+		insideTmp = mkdtempSync(join(workspaceRoot, ".factory/tmp/ws-realpath-t4-in-"))
 		insideVictim = join(insideTmp, "victim.ts")
 		writeFileSync(insideVictim, "// T4 inside\n", "utf8")
-		const outsideTmp = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-t4-"))
+		// `../../` escapes the workspace root (apps/vscode → repo root);
+		// the dir MUST be removed in afterAll (see ACT-CLINEMM-REPOSITORY-
+		// ROOT-FIXTURE-CLEANUP01) or a `git add -A` sweeps it into the index.
+		outsideTmp = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-t4-"))
 		outsideVictim = join(outsideTmp, "victim.ts")
 		writeFileSync(outsideVictim, "// T4 outside\n", "utf8")
+	})
+
+	afterAll(() => {
+		try {
+			rmSync(insideTmp, { recursive: true, force: true })
+		} catch {
+			// ignore: workspace may already be cleaned
+		}
+		try {
+			rmSync(outsideTmp, { recursive: true, force: true })
+		} catch {
+			// ignore: workspace may already be cleaned
+		}
 	})
 
 	it("T4: ONE inside-root + ONE outside-root operand under ALL+Seatbelt → ASK with realpath reason preserved (source ↔ kind coherence)", () => {
@@ -478,16 +511,34 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 INV
 	let workspaceRoot: string
 	let victim: string
 	let outsideVictim: string
+	let insideTmp: string
+	let outsideTmp: string
 
 	beforeAll(() => {
 		workspaceRoot = realpathSync(process.cwd())
 		mkdirSync(join(workspaceRoot, ".factory", "tmp"), { recursive: true })
-		const insideTmp = mkdtempSync(join(workspaceRoot, ".factory/tmp/ws-realpath-invariant-in-"))
+		insideTmp = mkdtempSync(join(workspaceRoot, ".factory/tmp/ws-realpath-invariant-in-"))
 		victim = join(insideTmp, "victim.ts")
 		writeFileSync(victim, "// invariant inside\n", "utf8")
-		const outsideTmp = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-invariant-"))
+		// `../../` escapes the workspace root (apps/vscode → repo root);
+		// the dir MUST be removed in afterAll (see ACT-CLINEMM-REPOSITORY-
+		// ROOT-FIXTURE-CLEANUP01) or a `git add -A` sweeps it into the index.
+		outsideTmp = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-invariant-"))
 		outsideVictim = join(outsideTmp, "victim.ts")
 		writeFileSync(outsideVictim, "// invariant outside\n", "utf8")
+	})
+
+	afterAll(() => {
+		try {
+			rmSync(insideTmp, { recursive: true, force: true })
+		} catch {
+			// ignore: workspace may already be cleaned
+		}
+		try {
+			rmSync(outsideTmp, { recursive: true, force: true })
+		} catch {
+			// ignore: workspace may already be cleaned
+		}
 	})
 
 	it("INV-1: source === host_mode_all_seatbelt_required ⇒ kind === allow (load-bearing case)", () => {
