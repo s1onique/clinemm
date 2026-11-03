@@ -22,6 +22,7 @@ import {
 } from "@shared/completion-incident-flight-recorder"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+	buildCompletionIncidentBundleSummaries,
 	buildCompletionIncidentBundleSummary,
 	type CompletionIncidentBundleManifest,
 	dumpCompletionIncidentBundle,
@@ -71,6 +72,9 @@ describe("BUNDLE-01: the dump writes a self-contained evidence bundle", () => {
 			"completion-authority.jsonl",
 			"header-selection.jsonl",
 			"summary.json",
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+			// ONE independent summary per retained incident.
+			"incident-summaries.json",
 		]) {
 			expect(existsSync(join(dir, file))).toBe(true)
 		}
@@ -190,7 +194,14 @@ describe("BUNDLE-03: the summary NEVER infers a missing transition from silence"
 		await emitSubmitAndExit(h)
 		await flush()
 
-		const summary = buildCompletionIncidentBundleSummary(getCompletionIncidentRecords())
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+		// The terminality assertion is INCIDENT-SCOPED. The bundle-wide
+		// summary is an OVERVIEW and never asserts an incident's
+		// outcome (it could otherwise report another task's
+		// completion). The per-incident summary carries the verdict.
+		const summaries = buildCompletionIncidentBundleSummaries(getCompletionIncidentRecords())
+		expect(summaries).toHaveLength(1)
+		const summary = summaries[0]!
 		// The Elm authority withheld the commit — that IS evidence, so
 		// the summary reports `false`, not `UNOBSERVED`.
 		expect(summary.completionCommitted).toBe(false)
@@ -203,7 +214,12 @@ describe("BUNDLE-03: the summary NEVER infers a missing transition from silence"
 		await emitSubmitAndExit(h)
 		await flush()
 
-		const summary = buildCompletionIncidentBundleSummary(getCompletionIncidentRecords())
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+		// The terminality assertion is INCIDENT-SCOPED (see
+		// BUNDLE-03.2b).
+		const summaries = buildCompletionIncidentBundleSummaries(getCompletionIncidentRecords())
+		expect(summaries).toHaveLength(1)
+		const summary = summaries[0]!
 		expect(summary.completionCommitted).toBe(true)
 		expect(summary.lastObservedPhase).toBe("completed")
 	})

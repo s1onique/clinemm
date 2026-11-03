@@ -174,6 +174,18 @@ export interface CompletionIncidentRecorderStats {
 	readonly evictedRecords: number
 	/** Records dropped inside a capsule by the per-capsule ring bound. */
 	readonly capsuleDroppedRecords: number
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+	 * Capsules DROPPED BY CHECKPOINT TRUNCATION. The persisted
+	 * checkpoint is a bounded artifact; when the serialized form
+	 * exceeded the byte bound the oldest capsules were dropped to
+	 * fit. That is EVIDENCE LOSS and it is counted here so the
+	 * bundle can declare it — a truncated capture is never
+	 * presented as complete.
+	 */
+	readonly checkpointTruncatedCapsules: number
+	/** Records dropped by checkpoint truncation (capsule-level count). */
+	readonly checkpointTruncatedRecords: number
 	/** Number of checkpoints that failed to persist. */
 	readonly failedCheckpoints: number
 	/** Number of successful checkpoints. */
@@ -252,8 +264,37 @@ interface RecorderState {
 	evictedCapsules: number
 	evictedRecords: number
 	capsuleDroppedRecords: number
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+	 * Capsules dropped by CHECKPOINT TRUNCATION (the persisted
+	 * checkpoint exceeded its byte bound). Counted as evidence loss.
+	 */
+	checkpointTruncatedCapsules: number
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+	 * Records dropped by CHECKPOINT TRUNCATION.
+	 */
+	checkpointTruncatedRecords: number
 	failedCheckpoints: number
 	successfulCheckpoints: number
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+	 * The diagnostic barrier-lifecycle map. Keyed by the LIFECYCLE
+	 * identity `(coordinatorInstanceId, sessionId, taskId, epoch)`;
+	 * the value is the stable diagnostic barrier id for that
+	 * lifecycle. A re-registration within the SAME epoch reuses the
+	 * SAME id (it is the same obligation); a NEW epoch mints a NEW
+	 * id (it is a new lifecycle).
+	 *
+	 * This map is DIAGNOSTIC ONLY. It never enters the runtime
+	 * identity model, the marker, or any protocol.
+	 */
+	barrierLifecycles: Map<string, string>
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+	 * Monotonic counter backing the minted barrier-lifecycle ids.
+	 */
+	barrierLifecycleSeq: number
 }
 
 function freshState(): RecorderState {
@@ -265,8 +306,12 @@ function freshState(): RecorderState {
 		evictedCapsules: 0,
 		evictedRecords: 0,
 		capsuleDroppedRecords: 0,
+		checkpointTruncatedCapsules: 0,
+		checkpointTruncatedRecords: 0,
 		failedCheckpoints: 0,
 		successfulCheckpoints: 0,
+		barrierLifecycles: new Map(),
+		barrierLifecycleSeq: 0,
 	}
 }
 
@@ -403,13 +448,37 @@ export function recordCompletionIncident(input: CompletionIncidentRecordInput): 
 }
 
 /**
- * Mint a diagnostic-only barrier id. It correlates the records of one
+ * Mint a diagnostic-only barrier id. It correlates the records of ONE
  * barrier lifecycle. It is derived from the diagnostic coordinator
- * instance and a monotonic counter — NEVER from the runtime identity
- * model, and it is never written back into the marker.
+ * instance and the LIFECYCLE identity — NEVER from the runtime
+ * identity model, and it is never written back into the marker.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+ * The id MUST be STABLE across the whole lifecycle. The previous
+ * implementation embedded `state.seq` — the process-wide event
+ * counter — in the id, so EVERY record of one lifecycle got a
+ * DIFFERENT id and the causal chain could not be followed through
+ * the timeline. The coordinator never supplied an explicit id, so
+ * the broken fallback was always taken.
+ *
+ * The id is now keyed by the LIFECYCLE identity
+ * `(coordinatorInstanceId, sessionId, taskId, epoch)`:
+ *
+ *   - registration → re-evaluation → clearance → completion in the
+ *     SAME epoch share ONE id (it is the same obligation);
+ *   - a re-registration WITHIN the same epoch reuses the SAME id;
+ *   - a NEW epoch mints a NEW id (it is a new lifecycle).
  */
 function mintBarrierId(input: CompletionIncidentRecordInput): string {
-	return `barrier-${coordinatorInstanceId}-${input.sessionId}-${input.taskId ?? "none"}-${input.epoch}-${state.seq}`
+	const lifecycleKey = [coordinatorInstanceId, input.sessionId, input.taskId ?? "none", String(input.epoch)].join("|")
+	const existing = state.barrierLifecycles.get(lifecycleKey)
+	if (existing) {
+		return existing
+	}
+	state.barrierLifecycleSeq += 1
+	const minted = `barrier-${coordinatorInstanceId}-${input.sessionId}-${input.taskId ?? "none"}-${input.epoch}-${state.barrierLifecycleSeq}`
+	state.barrierLifecycles.set(lifecycleKey, minted)
+	return minted
 }
 
 /**
@@ -591,6 +660,8 @@ export function getCompletionIncidentRecorderStats(): CompletionIncidentRecorder
 		evictedCapsules: state.evictedCapsules,
 		evictedRecords: state.evictedRecords,
 		capsuleDroppedRecords: state.capsuleDroppedRecords,
+		checkpointTruncatedCapsules: state.checkpointTruncatedCapsules,
+		checkpointTruncatedRecords: state.checkpointTruncatedRecords,
 		failedCheckpoints: state.failedCheckpoints,
 		successfulCheckpoints: state.successfulCheckpoints,
 	}
@@ -599,10 +670,22 @@ export function getCompletionIncidentRecorderStats(): CompletionIncidentRecorder
 /**
  * True when the recorder dropped evidence. The bundle manifest MUST
  * report this so a truncated capture is never presented as complete.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+ * CHECKPOINT TRUNCATION is evidence loss too. The previous
+ * implementation ignored it, so after a restart the bundle could
+ * report `evidenceLoss: false` even though records had been dropped
+ * while shrinking the persisted checkpoint to fit its byte bound.
  */
 export function hasCompletionIncidentEvidenceLoss(): boolean {
 	const stats = getCompletionIncidentRecorderStats()
-	return stats.evictedCapsules > 0 || stats.evictedRecords > 0 || stats.capsuleDroppedRecords > 0
+	return (
+		stats.evictedCapsules > 0 ||
+		stats.evictedRecords > 0 ||
+		stats.capsuleDroppedRecords > 0 ||
+		stats.checkpointTruncatedCapsules > 0 ||
+		stats.checkpointTruncatedRecords > 0
+	)
 }
 
 // ============================================================================
@@ -657,6 +740,15 @@ export function buildCompletionIncidentCheckpoint(): CompletionIncidentCheckpoin
  * The restore is bounded by the SAME caps: the per-capsule ring and
  * the global capsule cap are re-applied, so a hostile or corrupt
  * checkpoint cannot grow the recorder without bound.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+ * The checkpoint's LOSS STATISTICS are restored too. The previous
+ * implementation restored the capsules but NOT the eviction/failure
+ * statistics, so after a restart the bundle could report
+ * `evidenceLoss: false` even though records had been lost (for
+ * example while the checkpoint was truncated to fit its byte bound).
+ * The restored counters are ADDED to the live counters — the restore
+ * never erases loss that already happened in this process.
  */
 export function restoreCompletionIncidentCheckpoint(checkpoint: CompletionIncidentCheckpoint | undefined): void {
 	if (!checkpoint || checkpoint.schemaVersion !== COMPLETION_INCIDENT_SCHEMA_VERSION) {
@@ -690,6 +782,52 @@ export function restoreCompletionIncidentCheckpoint(checkpoint: CompletionIncide
 			}
 		}
 	}
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+	// Restore the PREVIOUS eviction / failure / truncation
+	// statistics. Without this, a restart silently resets the loss
+	// accounting and the bundle reports `evidenceLoss: false` for a
+	// capture that DID lose records.
+	//
+	// The TRUNCATION counters are restored as a HIGH-WATER MARK
+	// (the maximum), because the checkpoint carries the CUMULATIVE
+	// truncation count — adding it would double-count the same
+	// truncation that the live process already recorded.
+	const restored = checkpoint.stats
+	if (restored) {
+		state.evictedCapsules += restored.evictedCapsules ?? 0
+		state.evictedRecords += restored.evictedRecords ?? 0
+		state.capsuleDroppedRecords += restored.capsuleDroppedRecords ?? 0
+		state.checkpointTruncatedCapsules = Math.max(state.checkpointTruncatedCapsules, restored.checkpointTruncatedCapsules ?? 0)
+		state.checkpointTruncatedRecords = Math.max(state.checkpointTruncatedRecords, restored.checkpointTruncatedRecords ?? 0)
+		state.failedCheckpoints += restored.failedCheckpoints ?? 0
+		state.successfulCheckpoints += restored.successfulCheckpoints ?? 0
+	}
+}
+
+/**
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+ * Record the evidence LOST while the persisted checkpoint was
+ * truncated to fit its byte bound.
+ *
+ * The caller (`completion-incident-checkpoint-runtime.ts`) computes
+ * how many capsules the bounded builder had to drop and reports them
+ * here. The previous implementation DISCARDED that count, so the
+ * truncation silently lost evidence with no trace in the loss
+ * accounting.
+ *
+ * The counts are ABSOLUTE (cumulative), not deltas: the recorder
+ * keeps the HIGHEST value it has been told. A repeated checkpoint
+ * therefore never double-counts the same truncation, and the value
+ * still survives a restart (the checkpoint carries the cumulative
+ * count in its own `stats` block, which the restore adds).
+ */
+export function recordCompletionIncidentCheckpointTruncation(droppedCapsules: number, droppedRecords: number): void {
+	if (droppedCapsules > state.checkpointTruncatedCapsules) {
+		state.checkpointTruncatedCapsules = droppedCapsules
+	}
+	if (droppedRecords > state.checkpointTruncatedRecords) {
+		state.checkpointTruncatedRecords = droppedRecords
+	}
 }
 
 /**
@@ -719,8 +857,17 @@ export function clearCompletionIncidentRecorder(): void {
 	state.evictedCapsules = 0
 	state.evictedRecords = 0
 	state.capsuleDroppedRecords = 0
+	state.checkpointTruncatedCapsules = 0
+	state.checkpointTruncatedRecords = 0
 	state.failedCheckpoints = 0
 	state.successfulCheckpoints = 0
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+	// The barrier-lifecycle map is CLEARED too — a fresh process
+	// starts a fresh lifecycle map, so the same identity in the new
+	// process gets a NEW barrier id (it is a new coordinator
+	// instance and therefore a new lifecycle).
+	state.barrierLifecycles.clear()
+	state.barrierLifecycleSeq = 0
 }
 
 /**

@@ -2,6 +2,11 @@
 
 **Status:** `PASS_STRUCTURAL_READY_FOR_LIVE`
 
+**Correction:** `ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01` — see
+§7. The implementation baseline `4fe85071c` is preserved; the correction
+closes three evidence-integrity defects (P0) and one correlation-assertion
+defect (P1) without changing production completion semantics.
+
 **Purpose:** Evidence acquisition only. No task-state repair. No change to
 phase semantics, barrier predicates, scheduling, or Elm authority.
 
@@ -309,3 +314,99 @@ extension.ts handler when: first of (a) the incident class is
 diagnosed from a single dump on a LIVE incident, (b) the capture is
 classified `CAPTURE_INSUFFICIENT`, or (c) successor evidence supersedes
 it.
+
+---
+
+## 8. CORRECTION01 — evidence-integrity corrections
+
+`ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01` is a bounded
+correction on top of the implementation baseline `4fe85071c`. The
+architecture is NOT reopened; only the evidence-summary, loss-accounting
+and correlation-assertion seams are corrected. **Production completion
+semantics are unchanged** — no phase semantics, barrier predicate,
+scheduling or Elm-authority change.
+
+### 8.1 P0 — incident-scoped summaries (the bundle could report the wrong task)
+
+`buildCompletionIncidentBundleSummary(records)` searched across ALL
+retained task records and selected the LAST commit/withhold it found.
+With task A held (`Paused`) and task B completed, it selected task B's
+`committed` record and reported:
+
+```json
+{ "status": "CAPTURE_SUFFICIENT", "lastObservedPhase": "completed", "completionCommitted": true }
+```
+
+— even though task A's incident was unresolved. The retained evidence
+was correct; the SUMMARY told the wrong story.
+
+**Correction.** Summaries are now **INCIDENT-SCOPED**:
+
+| Function | Role |
+| --- | --- |
+| `buildCompletionIncidentBundleSummaries(records)` | ONE independent summary per retained task capsule (the causal identity). |
+| `buildCompletionIncidentBundleSummary(records)` | The bundle-wide **OVERVIEW**. It NEVER asserts an incident's outcome: `completionCommitted` is always `UNOBSERVED`, and its notes name each incident's verdict. |
+
+The bundle writes `incident-summaries.json` (the per-incident
+conclusions) alongside `summary.json` (the overview).
+
+### 8.2 P0 — conservative sufficiency and an explicit barrier stage set
+
+The status vocabulary is now **three-valued**:
+
+| Status | Meaning |
+| --- | --- |
+| `CAPTURE_SUFFICIENT` | This incident's OWN records establish a terminal outcome AND the capture was not lossy. |
+| `CAPTURE_INSUFFICIENT` | This incident's own records do NOT establish a terminal outcome — the incident is unresolved. |
+| `CAPTURE_EVIDENCE_LOST` | The capture for this incident was lossy, so the evidence CANNOT establish the outcome. Explicitly distinct from "the incident did not finish": we do not know. |
+
+`lastBarrierOutcome` now comes from an **explicit barrier-stage set**
+(`completion_attempt`, `barrier_registration`, `barrier_reevaluation`,
+`early_return`, `marker_clearance`, `completion_authority`). The
+previous `stage !== "continuation"` filter admitted an arbitrary
+non-continuation record (for example a `completion_attempt`
+`not_held`) as a barrier outcome.
+
+### 8.3 P0 — loss-safe checkpointing
+
+| Defect | Correction |
+| --- | --- |
+| `buildBoundedCheckpoint()` computed `droppedCapsules`; the caller DISCARDED it. | The truncation counts are recorded into the recorder's loss accounting (`checkpointTruncatedCapsules` / `checkpointTruncatedRecords`) and surfaced in the bundle manifest. |
+| `restoreCompletionIncidentCheckpoint()` restored the capsules but NOT the eviction/failure statistics. | The checkpoint's `stats` block is restored (truncation counters as a high-water mark so a repeated checkpoint never double-counts). The checkpoint artifact also carries its OWN truncation counts, so the persisted file is honest about the loss it incurred. |
+| The 512-KiB bound was enforced with `String.length` (UTF-16 code units). | The bound is enforced with actual UTF-8 byte counts (`Buffer.byteLength(value, "utf8")`) — exactly what `writeFile(..., "utf8")` persists. `MAX_CHECKPOINT_BYTES` is exported so the bound is assertable. |
+
+### 8.4 P1 — exact barrier-identity correlation
+
+`mintBarrierId()` embedded `state.seq` — the process-wide event counter —
+so the fallback minted a DIFFERENT id for every record of one lifecycle.
+The coordinator never supplied an explicit id, so the broken fallback was
+always taken: a single lifecycle produced N unrelated ids and the causal
+chain could not be followed through the timeline.
+
+**Correction.** The barrier id is minted ONCE per barrier **lifecycle**,
+keyed by `(coordinatorInstanceId, sessionId, taskId, epoch)`:
+
+- registration → re-evaluation → clearance → completion in the SAME
+  epoch share ONE id (it is the same obligation);
+- a **re-registration WITHIN the same epoch** reuses the SAME id;
+- a NEW epoch mints a NEW id (it is a new lifecycle).
+
+The id remains **diagnostic-only**: it never enters the runtime identity
+model, the marker, the epoch, or any public protocol.
+
+### 8.5 Executable evidence
+
+| Suite | Covers |
+| --- | --- |
+| `completion-incident-bundle-correction01.inc-scope.test.ts` | Task A held → task B completed: A's summary never reports B's commit; B's summary does; the overview asserts no incident's outcome; `lastBarrierOutcome` comes from a real barrier stage. |
+| `completion-incident-checkpoint-correction01.loss.test.ts` | Checkpoint truncation → restart → bundle: the truncation is counted, survives the restart, the persisted artifact stays within the UTF-8 byte bound, the bundle declares `evidenceLoss: true`, and a lossy incident is never `CAPTURE_SUFFICIENT`. |
+| `completion-incident-barrier-identity-correction01.corr.test.ts` | Exact same-lifecycle barrier id across registration / re-evaluation / completion, and across a re-registration within one epoch — asserted through the REAL coordinator seam. |
+
+Focused result: **48 passing** across the four baseline suites and the
+three correction suites.
+
+The truncation path is reached in the test by raising the recorder's
+CONFIGURABLE bounds (`setCompletionIncidentRecorderBounds`); the
+recorder's default caps (16 capsules / 2048 records) keep the
+checkpoint far below the byte bound. The truncation code path itself is
+unchanged production code.

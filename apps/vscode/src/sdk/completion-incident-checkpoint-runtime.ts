@@ -47,6 +47,7 @@ import {
 	type CompletionIncidentCheckpoint,
 	getCompletionIncidentCapsules,
 	recordCompletionIncidentCheckpointOutcome,
+	recordCompletionIncidentCheckpointTruncation,
 	restoreCompletionIncidentCheckpoint,
 } from "@shared/completion-incident-flight-recorder"
 
@@ -60,8 +61,12 @@ const CHECKPOINT_FILE = "completion-incident-checkpoint.json"
  * The maximum size of the serialized checkpoint. The checkpoint is a
  * BOUNDED diagnostic artifact; it is never allowed to grow without
  * limit.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+ * Exported so the bound can be asserted by the executable evidence
+ * rather than being an unobservable internal constant.
  */
-const MAX_CHECKPOINT_BYTES = 512 * 1024
+export const MAX_CHECKPOINT_BYTES = 512 * 1024
 
 /**
  * Narrow structural type for the bits of `vscode.ExtensionContext`
@@ -79,7 +84,26 @@ export interface CompletionIncidentCheckpointContext {
 export interface CompletionIncidentCheckpointResult {
 	readonly succeeded: boolean
 	readonly bytes: number
+	/** Capsules dropped to fit the byte bound. Evidence loss. */
+	readonly droppedCapsules?: number
+	/** Records dropped to fit the byte bound. Evidence loss. */
+	readonly droppedRecords?: number
 	readonly error?: string
+}
+
+/**
+ * The size of a serialized checkpoint in ACTUAL UTF-8 BYTES.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+ * The bound was previously enforced with `String.length`, which
+ * counts UTF-16 code units — NOT bytes. A checkpoint containing
+ * multi-byte characters could therefore exceed the 512-KiB bound on
+ * disk while appearing to fit. The bound is now enforced against
+ * the real byte length of the UTF-8 encoding, which is exactly what
+ * `writeFile(..., "utf8")` persists.
+ */
+function utf8ByteLength(value: string): number {
+	return Buffer.byteLength(value, "utf8")
 }
 
 /**
@@ -89,17 +113,44 @@ export interface CompletionIncidentCheckpointResult {
  * When the full checkpoint does not fit, the capsules are dropped
  * OLDEST-FIRST, preferring to keep the ANOMALOUS ones (the incidents
  * the operator is investigating). The drop is reported through the
- * returned `droppedCapsules` count.
+ * returned `droppedCapsules` / `droppedRecords` counts.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+ * The returned checkpoint's OWN `stats` block carries the truncation
+ * counts, so the PERSISTED artifact itself records the loss it
+ * incurred. Without this, the checkpoint on disk claimed a clean
+ * capture while silently having dropped capsules — and a restart
+ * restored that clean-looking accounting.
  */
 function buildBoundedCheckpoint(maxBytes: number): {
 	checkpoint: CompletionIncidentCheckpoint
 	bytes: number
 	droppedCapsules: number
+	droppedRecords: number
 } {
 	const full = buildCompletionIncidentCheckpoint()
+
+	/**
+	 * Fold the truncation counts into the checkpoint's persisted
+	 * stats so the artifact carries its own loss accounting.
+	 */
+	const withTruncationStats = (
+		capsules: readonly CompletionIncidentCheckpoint["capsules"][number][],
+		droppedCapsules: number,
+		droppedRecords: number,
+	): CompletionIncidentCheckpoint => ({
+		...full,
+		capsules,
+		stats: {
+			...full.stats,
+			checkpointTruncatedCapsules: full.stats.checkpointTruncatedCapsules + droppedCapsules,
+			checkpointTruncatedRecords: full.stats.checkpointTruncatedRecords + droppedRecords,
+		},
+	})
+
 	const serialized = JSON.stringify(full)
-	if (serialized.length <= maxBytes) {
-		return { checkpoint: full, bytes: serialized.length, droppedCapsules: 0 }
+	if (utf8ByteLength(serialized) <= maxBytes) {
+		return { checkpoint: full, bytes: utf8ByteLength(serialized), droppedCapsules: 0, droppedRecords: 0 }
 	}
 	// Drop capsules oldest-first, preferring to keep the anomalous
 	// ones. The in-memory recorder keeps its own copy; this only
@@ -108,22 +159,30 @@ function buildBoundedCheckpoint(maxBytes: number): {
 	const anomalous = capsules.filter((c) => c.anomalous)
 	const ordinary = capsules.filter((c) => !c.anomalous)
 	let dropped = 0
+	let droppedRecords = 0
 	while (ordinary.length > 0) {
-		capsules.splice(capsules.indexOf(ordinary.shift()!), 1)
+		const victim = ordinary.shift()!
+		capsules.splice(capsules.indexOf(victim), 1)
 		dropped += 1
-		const candidate: CompletionIncidentCheckpoint = { ...full, capsules }
-		const size = JSON.stringify(candidate).length
+		droppedRecords += victim.records.length
+		const candidate = withTruncationStats(capsules, dropped, droppedRecords)
+		const size = utf8ByteLength(JSON.stringify(candidate))
 		if (size <= maxBytes) {
-			return { checkpoint: candidate, bytes: size, droppedCapsules: dropped }
+			return { checkpoint: candidate, bytes: size, droppedCapsules: dropped, droppedRecords }
 		}
 	}
 	// Even the anomalous capsules alone do not fit. Keep only the
 	// most recent one and report the loss.
-	const minimal: CompletionIncidentCheckpoint = { ...full, capsules: anomalous.slice(-1) }
+	const kept = anomalous.slice(-1)
+	const droppedAnomalous = anomalous.slice(0, -1)
+	droppedRecords += droppedAnomalous.reduce((sum, c) => sum + c.records.length, 0)
+	const totalDropped = dropped + droppedAnomalous.length
+	const minimal = withTruncationStats(kept, totalDropped, droppedRecords)
 	return {
 		checkpoint: minimal,
-		bytes: JSON.stringify(minimal).length,
-		droppedCapsules: dropped + capsules.length - minimal.capsules.length,
+		bytes: utf8ByteLength(JSON.stringify(minimal)),
+		droppedCapsules: totalDropped,
+		droppedRecords,
 	}
 }
 
@@ -132,17 +191,33 @@ function buildBoundedCheckpoint(maxBytes: number): {
  *
  * NEVER throws — a failed checkpoint is recorded and reported, not
  * thrown into the production path.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+ * The TRUNCATION loss is no longer discarded. When the bounded
+ * builder dropped capsules to fit the byte bound, the dropped counts
+ * are recorded into the recorder's loss accounting so the bundle
+ * declares `evidenceLoss: true` instead of presenting a truncated
+ * capture as complete.
  */
 export async function checkpointCompletionIncidentCapsules(
 	context: CompletionIncidentCheckpointContext,
 ): Promise<CompletionIncidentCheckpointResult> {
 	try {
-		const { checkpoint, bytes } = buildBoundedCheckpoint(MAX_CHECKPOINT_BYTES)
+		const { checkpoint, bytes, droppedCapsules, droppedRecords } = buildBoundedCheckpoint(MAX_CHECKPOINT_BYTES)
 		const dir = context.globalStorageUri.fsPath
 		await mkdir(dir, { recursive: true })
 		await writeFile(join(dir, CHECKPOINT_FILE), JSON.stringify(checkpoint), "utf8")
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
+		// The truncation loss is no longer discarded. The CUMULATIVE
+		// count (as carried in the checkpoint's own `stats` block) is
+		// reported so the recorder's loss accounting matches the
+		// persisted artifact exactly — and survives a restart.
+		recordCompletionIncidentCheckpointTruncation(
+			checkpoint.stats.checkpointTruncatedCapsules,
+			checkpoint.stats.checkpointTruncatedRecords,
+		)
 		recordCompletionIncidentCheckpointOutcome(true)
-		return { succeeded: true, bytes }
+		return { succeeded: true, bytes, droppedCapsules, droppedRecords }
 	} catch (err) {
 		recordCompletionIncidentCheckpointOutcome(false)
 		return {
