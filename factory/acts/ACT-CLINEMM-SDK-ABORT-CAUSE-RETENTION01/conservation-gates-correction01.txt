@@ -1,0 +1,172 @@
+ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 / CORRECTION01 conservation + correlation
+===============================================================================
+
+WHY A CORRECTION WAS NEEDED
+---------------------------
+The first implementation (`10c1546cd`) keyed the abnormal-terminal retention
+scope on a SINGLE run id. The production SDK mints TWO run identities for ONE
+run:
+
+  - `AgentRuntime`   `agent-runtime.ts:1767`
+        `this.state.runId = createUID("run")`
+    -> carried by every MODEL-REQUEST observation.
+  - `SessionRuntime` `session-runtime-orchestrator.ts:1151`
+        `this.activeRunId = run_${Date.now()}_${...}`
+    -> carried by the RUN-TERMINAL observation.
+
+A scope keyed on either one alone silently DROPS the other half of the
+evidence. The CORRECTION01 RED witness demonstrated this against the REAL
+`SessionRuntime`:
+
+  expected [ 'run_terminated' ] to include 'model_request_error'
+  (the snapshot contained the run-terminal record but NO provider-terminal
+   record, because the two records carried different run ids)
+
+THE REPAIR
+----------
+The retention scope is now keyed on the MANDATORY `sessionId`, and admits a
+record when it shares the session AND EITHER
+  (a) the observed run id, OR
+  (b) the observed `modelRequestId`.
+
+The `sessionId` remains a MANDATORY part of the join, so concurrent sessions
+still cannot contaminate each other. The two run identities are preserved
+as DISTINCT fields on the records — they are never conflated and never
+synthesized.
+
+Unifying the two run identities would have required changing the run
+result's `runId` — a PRODUCTION SEMANTIC change that is explicitly OUT of
+this ACT's conservation scope.
+
+CORRELATION WITNESSES (CORRECTION01)
+-------------------------------------
+  T13  dual run ids correlate
+       Drive the REAL `SessionRuntime` orchestrator with a deterministic
+       failing provider. Assert the abnormal-terminal snapshot contains
+       BOTH the provider-terminal record and the run-terminal record, joined
+       through the session scope + the model request id, even though the
+       two records carry different run ids.
+       -> PASS (real `SessionRuntime`, not a stub)
+
+  T14  a foreign session is never admitted
+       Two concurrent sessions; a record from session B must never enter
+       session A's snapshot, even when a run id or a model request id
+       collides.
+       -> PASS
+
+  T15  the retained records still carry their OWN run ids
+       The snapshot must preserve both distinct run ids rather than
+       rewriting one into the other.
+       -> PASS
+
+  T16  the run result's `runId` is unchanged
+       The SDK run result's run id is byte-for-byte the orchestrator's own
+       `activeRunId`; the ACT did not rewrite it.
+       -> PASS
+
+CONSERVATION GATES AFTER THE CORRECTION
+----------------------------------------
+  The correction relocated the retention module from
+  `apps/vscode/src/sdk/sdk-abort-cause-retention.ts` into the SDK core
+  (`sdk/packages/core/src/runtime/observability/sdk-abort-cause-retention.ts`)
+  so that the REAL `SessionRuntime` path — not only the VS Code host
+  adapter — is covered by the correlation witness.
+
+  shared typecheck    0 diagnostics                    (baseline 0)      OK
+  agents typecheck    0 diagnostics                    (baseline 0)      OK
+  core typecheck      40 diagnostic lines              (baseline 41)     OK
+  apps/vscode typecheck 0 diagnostics                  (baseline 0)      OK
+
+  The core baseline was re-measured in a CLEAN git worktree at the ENTRY
+  commit (5e505e855692c72d8be178e96fd1c81336a68907) with the IDENTICAL
+  command, and compared by SET DIFFERENCE rather than by count:
+     ADDED   by the ACT : (none)
+     REMOVED by the ACT : 1 pre-existing, unrelated diagnostic
+       src/services/feature-flags/cline-account-feature-flags.ts:
+         error TS2307: Cannot find module
+         '@cline/core/services/feature-flags/posthog' ...
+  ACT-ATTRIBUTABLE DIAGNOSTICS = 0 (the ACT strictly REDUCED the count).
+
+  agents tests        the SAME 16 pre-existing collection failures,
+                      plus the ACT's new file with 5 passing tests    OK
+  core observability  3 files / 25 tests pass                          OK
+  apps/vscode affected 8 files / 102 tests pass                        OK
+
+  biome lint          clean on every changed file in both configs     OK
+  bun run build:sdk   exit 0                                           OK
+  bun esbuild.mjs     exit 0                                           OK
+
+NOT CHANGED BY THE CORRECTION (and still not changed)
+------------------------------------------------------
+  provider requests, retry budgets, recovery budgets, tool execution,
+  tool validation, conversation history, run return values, exception
+  propagation, cancellation semantics, session creation/disposal,
+  background job ownership, pending prompt delivery, completion
+  continuation, session epoch semantics, and every file under
+  `apps/vscode/webview-ui/`.
+
+CORRECTION01 COMMITS
+--------------------
+  eb5244b15  CORRECTION01: dual-run-id correlation + retention relocation
+
+FINAL RE-MEASUREMENT (final report; clean worktrees, identical commands)
+----------------------------------------------------------------------
+  The core typecheck baseline was re-established in a CLEAN git worktree at
+  the ENTRY commit (5e505e855692c72d8be178e96fd1c81336a68907) rather than by
+  "stashing" (a stash cannot cleanly revert a work that spans four
+  packages). The comparison is by SET DIFFERENCE, not by count.
+
+  sdk/packages/core
+    bun x tsc -p tsconfig.dev.json --noEmit
+      ENTRY (5e505e855) : 41 diagnostic lines
+      HEAD  (eb5244b15) : 40 diagnostic lines
+      ADDED by the ACT  : 0
+      REMOVED by the ACT : 1 (pre-existing, unrelated)
+        src/services/feature-flags/cline-account-feature-flags.ts
+          TS2307: Cannot find module
+          '@cline/core/services/feature-flags/posthog' ...
+
+  sdk/packages/shared   bun x tsc --noEmit              -> 0 diagnostics
+  sdk/packages/agents   bun x tsc --noEmit              -> 0 diagnostics
+  apps/vscode           bun x tsc --noEmit              -> 0 diagnostics
+
+  apps/vscode AFFECTED TEST FILES (9 files, the ones that exercise the
+  ACT's changed modules):
+      bun x vitest run --config vitest.config.ts <the 9 files>
+      -> 8 files passed, 100 tests passed
+      -> 1 file failed, 5 tests failed:
+           src/sdk/__tests__/command-process-outcome-real-capture-ablation01.test.ts
+             x the capture is REAL: the recorder's own records contain the tool
+               events AND the process events
+             x BASELINE: over the REAL capture, the per-command process facts
+               ARE answerable
+             x ABLATION: removing ONLY the process category from the REAL
+               capture makes Q2 CAPTURE_INSUFFICIENT, while the tool-activity
+               sequence stays observable
+             x RESTORE: putting the REAL process records back makes Q2
+               answerable again
+             x the REAL capture is SOURCE-BOUND: the committed artifact exists
+               and has the same SEMANTIC shape
+
+      BASELINE PROOF: the IDENTICAL command, run in the CLEAN worktree at the
+      ENTRY commit (with the ACT entirely absent), produces the IDENTICAL
+      5 failures with the IDENTICAL names:
+          Test Files  1 failed (1)
+          Tests       5 failed (5)
+      -> PRE-EXISTING, NOT ACT-ATTRIBUTABLE. (All five are 8-second
+         timeouts in a file the ACT does not touch.)
+
+  sdk/packages/core observability
+      bun x vitest run --config vitest.config.ts src/runtime/observability/
+      -> 3 files passed, 25 tests passed
+
+  sdk/packages/agents (ACT files)
+      bun x vitest run --config vitest.config.ts \
+        src/agent-runtime.abort-cause-retention.red01.test.ts \
+        src/agent-runtime.model-behavior-trace.test.ts \
+        src/agent-runtime.minimax-reasoning-trace01.test.ts
+      -> 3 files passed, 18 tests passed
+
+  biome lint (sdk/biome.json) on every changed file -> clean
+  bun run build:sdk -> exit 0
+  bun esbuild.mjs   -> exit 0

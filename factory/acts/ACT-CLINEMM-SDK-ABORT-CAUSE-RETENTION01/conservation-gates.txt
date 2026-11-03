@@ -96,8 +96,37 @@ EXECUTABLE GATES (commands, counts, exit codes)
   cd sdk/packages/agents && bun x tsc --noEmit
       -> exit 0, 0 diagnostics
   cd sdk/packages/core && bun x tsc -p tsconfig.dev.json --noEmit
-      -> 67 diagnostic lines. BASELINE (same command, ACT stashed) = 67.
-         ACT-ATTRIBUTABLE = 0.
+      -> 40 diagnostic lines.
+
+      RIGOROUS BASELINE (re-measured for the final report in a CLEAN
+      git worktree at the ENTRY commit 5e505e855692c72d8be178e96fd1c81336a68907,
+      using the IDENTICAL command):
+         BASELINE (entry commit) = 41 diagnostic lines
+         ACT      (HEAD)         = 40 diagnostic lines
+         ADDED by the ACT        = 0
+         REMOVED by the ACT      = 1 (a pre-existing, unrelated
+                                    `@cline/core/services/feature-flags/posthog`
+                                    module-resolution diagnostic)
+
+      Set difference (positions stripped, sorted):
+         ADDED   (baseline -> ACT) : (none)
+         REMOVED (baseline -> ACT) :
+           src/services/feature-flags/cline-account-feature-flags.ts:
+             error TS2307: Cannot find module
+             '@cline/core/services/feature-flags/posthog' or its
+             corresponding type declarations.
+
+      ACT-ATTRIBUTABLE DIAGNOSTICS = 0. The ACT strictly REDUCED the
+      diagnostic count by one. No diagnostic in any file the ACT touched
+      (shared, agents, core observability, apps/vscode) was introduced.
+
+      NOTE: an earlier, looser measurement in this ACT recorded "67
+      diagnostic lines". That number came from a DIFFERENT command variant
+      (it counted the full `bun run typecheck` output, which also runs the
+      smoke and barrel-witness projects and therefore re-emits the same
+      underlying errors). The 41-vs-40 measurement above is the
+      authoritative one: one identical command, two clean worktrees, two
+      known commits, compared by SET difference rather than by count.
   cd apps/vscode && bun x tsc --noEmit
       -> exit 0, 0 diagnostics
 

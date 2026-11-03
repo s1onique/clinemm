@@ -275,7 +275,12 @@ async function main(): Promise<void> {
 			null,
 			2,
 		)}\n`,
-		"utf8",
+		{
+			encoding: "utf8",
+			// Owner-only, matching the production artifact writer in
+			// `apps/vscode/src/sdk/model-behavior-trace-runtime.ts`.
+			mode: 0o600,
+		},
 	)
 
 	const report = {
@@ -292,7 +297,7 @@ async function main(): Promise<void> {
 	await writeFile(
 		join(OUT_DIR, "preflight-report.json"),
 		`${JSON.stringify(report, null, 2)}\n`,
-		"utf8",
+		{ encoding: "utf8", mode: 0o600 },
 	)
 
 	if (snapshots.length === 0) {

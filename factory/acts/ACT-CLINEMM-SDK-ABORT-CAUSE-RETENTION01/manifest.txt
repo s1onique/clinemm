@@ -1,0 +1,50 @@
+ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — evidence manifest
+========================================================
+
+ENTRY_COMMIT  5e505e855692c72d8be178e96fd1c81336a68907
+HEAD_AT_REPORT eb5244b152a78516ab6309efd6767450d6cdfa4f
+BRANCH        main
+
+COMMITS
+-------
+  10c1546cd  initial abort-cause retention
+  eb5244b15  CORRECTION01: dual-run-id correlation + retention relocation
+
+PRODUCTION SOURCE FILES CHANGED BY THE ACT
+-------------------------------------------
+  945225286e0830196e89d833e3fecd73e418c75cf0fb0aef7199176c66596ef6  apps/vscode/src/extension.ts
+  f3f35736d71d39ac6b5d747402e2b027a18121b13cc56b1da7443b1056792055  apps/vscode/src/sdk/__tests__/sdk-abort-cause-dump.persistence01.test.ts
+  d54d923ad22e50a7c8f6820680e1e7f1313e2b17c369e9973cf8e41bfc7d9cf5  apps/vscode/src/sdk/model-behavior-trace-runtime.ts
+  a4147a58f6e6c483865bcc0bc3fc30d8f5f58a48ab84231b301dd732aee720a7  apps/vscode/src/sdk/normalize-agent-trace.ts
+  ae9b8ee68efdfe8a2074e0ce8c2fce87b8662db45e25b49d6cfaa7feb2032dd9  apps/vscode/src/test/cline-core-vitest-stub.ts
+  3c1c49aa745087dc03af533dc07ae8a4751b397f4f946d6672d42f666a158cf7  sdk/packages/agents/src/agent-runtime.abort-cause-retention.red01.test.ts
+  543fbddbdef5146a02dbf06346f357537894279cee1a01973cd9db992ccd7ef9  sdk/packages/agents/src/agent-runtime.ts
+  534725029c6d458c104596324170928ccacf9ae06be514dc8e613ab41fc85f7c  sdk/packages/agents/src/index.ts
+  aa066e5fbc447eac320dc0231eaac1860140a20256d9ee2108e04d11009741e9  sdk/packages/core/src/index.ts
+  ee538d96497cfa48819546705614fa6f3545b7f16430bf2d31713b5f3af22283  sdk/packages/core/src/runtime/observability/live-preflight-abort-cause-retention.ts
+  dcf97b090bbb2adf6e9a4b60603a1f855177222c5affacca45088ba91f03c27c  sdk/packages/core/src/runtime/observability/model-behavior-trace.ts
+  69c2397c7ab42e002ee911cabea7e7f4dc732cc6bd7243d8a077ba1aa103a65e  sdk/packages/core/src/runtime/observability/sdk-abort-cause-correlation.red01.test.ts
+  cfb04d5e5dc22f7ebe15c26e8efa252dc9a9f5a3baa04fc4babade996c0796d0  sdk/packages/core/src/runtime/observability/sdk-abort-cause-retention.green01.test.ts
+  46f24dac769fa865ffe683d1ace97875a1a3e88eca05a148a58e6196d85660ca  sdk/packages/core/src/runtime/observability/sdk-abort-cause-retention.ts
+  f1cbc4eb6e04b791e342b6fda657c1dce343e6ae5fa003cd8584ffb1e0cf0c30  sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts
+  7e13565338c8297bf29ceea7f3bac19e659dd138988dd3d28df4a6707e6420da  sdk/packages/shared/src/index.ts
+  5b5acbff19bcdde0e940a42c5f18c07dab664194139af0f442b5b4ef81c94aa1  sdk/packages/shared/src/runtime/model-behavior-trace.ts
+
+EVIDENCE FILES
+-------------
+  83242993e62c7f2f96568ed93c4e524e6cc066708468c11e04be34fd622455b0  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.md
+  8c715cc4c1d54430f473a726c530b2010718a5654e73e3d226dc975fd2761f84  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/conservation-gates-correction01.txt
+  fed217115fa8f332d385a73ce948083d8076e635b4e8fd75cb68a6fd57fa5d0d  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/conservation-gates.txt
+  e2a75d2042f1e82ebb8165b6cbb86593cf87982688656d2580ec1fcabd1738fc  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/existing-telemetry-inventory.txt
+  8d246adca79d040fd351ad07f143cb5c86dca98e68c261cf44f979c0643c55b9  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/installed-qualification.txt
+  a492fd630da2c1e79dad4803de6993b8807bc1ce0769581aa68089bf37fa89f5  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/manifest.txt
+  79b082b7d19432a0c6d34626bc3d5e451fcdb03e821a924876f8a6596f694f8a  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/red-witness-correlation.txt
+  66b2200d837f7b75e9b498e5f3c45b715345b0cbe52921093e6d6b7b3ebf5cb6  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/red-witness.txt
+  70319ef5a73267292503797a85c719524e33a71370283af5bd368d5f2b1c7c09  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/source-authority.txt
+  0451acf1fc3ef75bdd033158b6bec474d96ed22110947c5d3bbe32922cead950  factory/acts/ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01/terminal-correlation-tests.txt
+
+ARTIFACTS (not tracked)
+-----------------------
+  c1fea3d4496ea274d00bdb1508b36a328173d8824981ea70684a0ab554dd54cf  dist/clinemm-4.1.16-acr01.vsix
+  cef247d7b8a4bec423223290444d4a69a5f83907ce2e52ca65218d97d979d8a1  sdk-abort-cause-snapshots.json (preflight, mode 600)
+  5e6707c43388e34b2310e3b98aaa5a0c4097bac2d0753341aaf498b4b67987c6  installed extension dist/extension.js

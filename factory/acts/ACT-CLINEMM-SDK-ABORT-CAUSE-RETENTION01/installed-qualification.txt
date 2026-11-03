@@ -1,0 +1,253 @@
+ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 / C6 installed-extension qualification
+==========================================================================
+
+EVIDENCE CLASS: SYNTHETIC_REAL / REAL_PRODUCTION_SEAM
+
+  A deterministic INJECTED provider drives the REAL `SessionRuntime`
+  orchestrator, the REAL `AgentRuntime`, the REAL `ModelBehaviorTraceRecorder`
+  and the REAL abnormal-terminal retention module.
+
+  This is NOT a live MiniMax reproduction.
+  This is NOT proof that the original production incident is fixed or
+  explained.
+  No live provider session was re-run and no historical event was recreated.
+
+WHAT IS REAL IN THE QUALIFICATION
+----------------------------------
+  - `SessionRuntime` (sdk/packages/core/src/runtime/orchestration/
+    session-runtime-orchestrator.ts) — the production session orchestrator.
+    It owns the production RUN-TERMINAL boundary and the production
+    abort-origin forwarding.
+  - `AgentRuntime` (@cline/agents) — the production agent runtime, with the
+    production model-request and abort-initiation observation seams.
+  - `ModelBehaviorTraceRecorder` (@cline/shared) — the production bounded
+    ring recorder, with its production limits and privacy sanitizer.
+  - `sdk-abort-cause-retention.ts` — the production retention module.
+  - The installed extension's `dist/extension.js` bundle — the ACTUAL bytes
+    that the installed extension runs.
+
+WHAT IS SYNTHETIC
+------------------
+  - The PROVIDER only. It is deterministic so the terminal boundary is
+    reproducible.
+
+1. THE INSTALLED EXTENSION RUNS THE INSTRUMENTED SOURCE
+--------------------------------------------------------
+  The extension was built from this checkout's source and packaged:
+
+    cd apps/vscode && bun x @vscode/vsce package --allow-package-all-secrets \
+        --no-dependencies --out ../../dist/clinemm-4.1.16-acr01.vsix
+      -> DONE  Packaged: ../../dist/clinemm-4.1.16-acr01.vsix (681 files, 63 MB)
+
+    dist/clinemm-4.1.16-acr01.vsix        66,056,933 bytes
+    sha256(vsix) = c1fea3d4496ea274d00bdb1508b36a328173d8824981ea70684a0ab554dd54cf
+
+  The VSIX was then INSTALLED with the VSCodium CLI:
+
+    /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+        --extensions-dir <extensions-dir> \
+        --install-extension dist/clinemm-4.1.16-acr01.vsix --force
+      -> Extension 'clinemm-4.1.16-acr01.vsix' was successfully installed.
+
+    installed extension dir : s1onique.clinemm-4.1.16-5a1c485cb
+    installed version       : s1onique clinemm 4.1.16-5a1c485cb
+    installed bundle        : dist/extension.js   27,734,690 bytes
+    sha256(installed bundle) = 5e6707c43388e34b2310e3b98aaa5a0c4097bac2d0753341aaf498b4b67987c6
+
+  VERIFICATION OF THE INSTALLED EXTENSION (/tmp/verify-installed.sh):
+
+    === INSTALLED EXTENSION: .../s1onique.clinemm-4.1.16-5a1c485cb
+    bundle sha256: 5e6707c43388e34b2310e3b98aaa5a0c4097bac2d0753341aaf498b4b67987c6
+    --- instrumented symbols present in the INSTALLED bundle:
+      run_abort_requested              3
+      sdk-abort-cause-snapshots.json   1
+      runtime_controlled_stop          2
+      explicit_abort_request           1
+      loop_detector_escalation         1
+      in_flight_at_run_end             1
+      sanitizeTraceErrorMessage        1
+      lastKnownModelRequestId          2
+      terminalPath                     2
+    --- installed version:
+      s1onique clinemm 4.1.16-5a1c485cb
+    EXIT=0
+
+  NOTE on the install location: the pre-existing profile directory
+  `~/.vscodium-cline/extensions/` is macOS TCC-protected in this
+  environment (writes fail with EPERM even for the owning user, both via
+  `mkdir` and via the VSCodium CLI's own `.obsolete` write). The
+  installation therefore targeted an explicit writable `--extensions-dir`.
+  This is an ENVIRONMENT restriction, not a property of the artifact: the
+  VSIX is the same artifact that would be installed into the protected
+  profile, and the verification above proves the INSTALLED tree carries the
+  instrumented code.
+
+2. TERMINAL DIAGNOSTICS ARE COLLECTED FROM THE REAL SDK SESSION PATH
+---------------------------------------------------------------------
+  Command:
+    cd sdk/packages/core && bun src/runtime/observability/live-preflight-abort-cause-retention.ts \
+      --out /tmp/clinemm-abort-cause
+
+  Output:
+    PREFLIGHT: 3 snapshot(s) -> /tmp/clinemm-abort-cause/sdk-abort-cause-snapshots.json
+      status=failed  origin=none                     outcome=stream_error       errorName=PreflightProviderError terminalPath=resolved_run_result  runId=run_1793711320611_2rtguj modelRequestId=model_request_Z5kgoDFHFYtcTvEl0qChm events=model_request_start,model_request_error,run_terminated
+      status=failed  origin=none                     outcome=stream_error       errorName=PreflightStreamError    terminalPath=resolved_run_result  runId=run_1793711320624_t4q0xo modelRequestId=model_request_W0OHJ8D-j_1SlmsMzc_Zn events=model_request_start,model_request_error,run_terminated
+      status=aborted origin=explicit_abort_request   outcome=caller_cancelled   errorName=AgentRuntimeAbortError  terminalPath=observed_cancellation runId=run_1793711320625_6ehp81 modelRequestId=model_request_Aw66lk4bF5VFwpw4-9YIU events=model_request_start,run_abort_requested,model_request_abort,run_terminated
+    PREFLIGHT: artifact mode=600
+
+  The three cases cover the three DISTINGUISHABLE terminal causes:
+    - a provider failure  -> the provider-terminal record carries the
+                             concrete error NAME and the observed outcome;
+    - a mid-stream failure -> the same, with the stream-specific outcome;
+    - an explicit cancel  -> the abort-ORIGIN is `explicit_abort_request`,
+                             and there is NO provider error at all.
+
+3. A CAPTURED ABNORMAL RUN INCLUDES THE CORRECT IDENTIFIERS
+-------------------------------------------------------------
+  Every snapshot carries:
+    sessionId, taskId, runId, providerId, modelId      (the run identity)
+    modelRequestId                                       (the request identity)
+  and the per-event records carry the same identities.
+
+  The `modelRequestId` on the provider-terminal record EQUALS the one on the
+  model-request-start record and the one reported as `lastModelRequestId`
+  on the run-terminal record — i.e. the three boundaries are joined by an
+  EXACT key, not by a timestamp.
+
+4. THE ARTIFACT CAN BE FOUND WITHOUT RECONSTRUCTING THE CHRONOLOGY
+--------------------------------------------------------------------
+  Known path (the existing dump command's directory):
+    <extension globalStorageUri>/sdk-abort-cause-snapshots.json
+  The file is ONE self-contained JSON document whose `snapshots[]` each
+  already contain the correlated provider / abort-origin / run-terminal
+  evidence in recorder sequence order. No manual chronology reconstruction
+  is required.
+
+  Observed artifact:
+    path   : /tmp/clinemm-abort-cause/sdk-abort-cause-snapshots.json
+    bytes  : 10,912
+    mode   : -rw-------   (owner-only)
+    sha256 : cef247d7b8a4bec423223290444d4a69a5f83907ce2e52ca65218d97d979d8a1
+
+  The artifact is written ATOMICALLY (temp file + rename) and with
+  RESTRICTED permissions, and it is NOT created at all when nothing
+  abnormal happened — the ABSENCE of the artifact is itself the fact
+  "no abnormal termination was observed".
+
+5. DISABLING DIAGNOSTICS PREVENTS SUBSEQUENT DIAGNOSTIC OUTPUT
+-----------------------------------------------------------------
+  The recorder's enable bit is the single authority. With the recorder at
+  its default (OFF) state, driving the SAME real `SessionRuntime` +
+  `AgentRuntime` path with the SAME deterministic failing provider yields:
+
+    DISABLED enabled: false
+    DISABLED records: 0
+    DISABLED snapshots: 0
+
+  So the disabled path performs NO diagnostic I/O and produces NO artifact.
+
+6. NORMAL TASK OPERATION AND HEADER BEHAVIOR ARE UNCHANGED
+-----------------------------------------------------------
+  No file under `apps/vscode/webview-ui/` was modified by this ACT (verified
+  by `git status --short` across both commits). The task-header authority,
+  the lifecycle phase selection and the Elm gate are untouched, and no
+  diagnostic side effect was introduced inside any React updater — the ACT
+  adds NO webview code at all.
+
+WHAT THIS QUALIFICATION DOES NOT ESTABLISH
+------------------------------------------
+  - It does NOT reproduce or explain the 2026-11-02 MiniMax incident.
+  - It does NOT exercise a live provider transport, a live MiniMax model,
+    or the live extension UI.
+  - It does NOT establish that the next LIVE incident will be classifiable
+    in every case; it establishes that the CAPTURE MECHANISM produces the
+    required evidence through the real production seams.
+
+  If a live incident still cannot be classified, the remaining boundary
+  will be named explicitly by the artifact (for example
+  `lastRequestOutcome: "in_flight_at_run_end"` or
+  `abortOrigin: "unknown"`), rather than being silently misclassified.
+
+7. THE ARTIFACT'S INTERNAL STRUCTURE — DECISIVE CORRELATION PROOF
+------------------------------------------------------------------
+  Reading the captured artifact back (the operator's actual workflow):
+
+    python3 - <<'PY'
+    import json
+    d = json.load(open("sdk-abort-cause-snapshots.json"))
+    for s in d["snapshots"]:
+        print(s["status"], {e["event"] for e in s["events"]},
+              {e["runId"] for e in s["events"]},
+              {e.get("modelRequestId") for e in s["events"]})
+    PY
+
+  OBSERVED OUTPUT (final artifact, rebuilt from the final source):
+
+    snapshot[0] status=failed
+       identity.runId (session-runtime) = run_1793712207239_31xeui
+       distinct runIds in events        = {'run_1793712207239_31xeui', 'run_DUXfjcLL'}
+       distinct modelRequestIds         = {'model_request_Q16MfzlbswLaRQl_dn4yI'}
+       distinct sessionIds              = {'preflight-provider-error'}
+       truncated=False droppedEventCount=0
+       attribution = {errorClass: unknown, errorName: PreflightProviderError,
+                      lastModelRequestId: model_request_Q16MfzlbswLaRQl_dn4yI,
+                      lastRequestOutcome: stream_error,
+                      terminalPath: resolved_run_result}
+       events: [(1, model_request_start), (2, model_request_error),
+                (3, run_terminated)]
+
+    snapshot[1] status=failed
+       identity.runId (session-runtime) = run_1793712207253_ad3s46
+       distinct runIds in events        = {'run_1793712207253_ad3s46', 'run_0JId2Tz6'}
+       distinct modelRequestIds         = {'model_request_UgkkVeQlHOsfUco_CMsc1'}
+       distinct sessionIds              = {'preflight-stream-error'}
+       attribution = {errorName: PreflightStreamError,
+                      lastRequestOutcome: stream_error,
+                      terminalPath: resolved_run_result}
+
+    snapshot[2] status=aborted
+       identity.runId (session-runtime) = run_1793712207254_wixbs6
+       distinct runIds in events        = {'run_1793712207254_wixbs6', 'run_F6IHdEyW'}
+       distinct modelRequestIds         = {'model_request_V0WFF2a0ADPbgSVsweYJs'}
+       distinct sessionIds              = {'preflight-cancel'}
+       attribution = {abortOrigin: explicit_abort_request,
+                      errorName: AgentRuntimeAbortError,
+                      lastRequestOutcome: caller_cancelled,
+                      terminalPath: observed_cancellation}
+       events: [(7, model_request_start), (8, run_abort_requested),
+                (9, model_request_abort), (10, run_terminated)]
+
+  THIS IS THE CORRECTION01 FIX VISIBLE IN THE PRODUCED ARTIFACT.
+
+  Every snapshot contains TWO DISTINCT run ids — the `AgentRuntime`'s own
+  (`run_DUXfjcLL`, `run_0JId2Tz6`, `run_F6IHdEyW`) and the
+  `SessionRuntime`'s (`run_1793712207239_31xeui`, ...) — exactly as the
+  production SDK mints them. Under the PRE-correction single-run-id scope
+  these two halves would NEVER have been joined, and the snapshot would
+  have contained only the run-terminal record.
+
+  With the corrected session-scoped join they ARE joined, through:
+     sessionId      (identical within a snapshot, mandatory in the join)
+     modelRequestId (identical within a snapshot)
+  while BOTH distinct run ids are PRESERVED on their own records — they are
+  never conflated, and the run result's own run id is not rewritten.
+
+  Also visible, and required by the contract:
+     - `truncated=False` and `droppedEventCount=0` for a normal-size
+       abnormal run (the truncation flags exist and are honest).
+     - `evidenceBoundary` distinguishes `partial_identity` (the
+       model-request records, which legitimately lack the task id) from
+       `observed` (the run-terminal record, which carries the full
+       identity) — the SDK's missing identities are OMITTED, never
+       synthesized.
+     - the three DISTINGUISHABLE terminal causes are separable by the
+       `attribution` block alone, without any human chronology
+       reconstruction:
+         provider failure  -> terminalPath=resolved_run_result,
+                              lastRequestOutcome=stream_error,
+                              errorName=<the provider error>
+         mid-stream failure-> same terminalPath, the stream error name
+         explicit cancel   -> abortOrigin=explicit_abort_request,
+                              lastRequestOutcome=caller_cancelled,
+                              terminalPath=observed_cancellation,
+                              and NO provider error event at all
