@@ -92,6 +92,12 @@ import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
 import { buildActivityPublicationV1Record } from "./activity-publication-v1"
 import { AuthService, LogoutReason } from "./auth-service"
+// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01): the
+// containment-ledger capture seam. Records WHY the controller
+// retained a `containment_failed` terminal projection and WHICH
+// owner session it was filed under, so the C10 blocker can be joined
+// back to the manager's per-job root-cause record.
+import { captureBackgroundJobLivenessAuthorityRecord } from "./background-job-liveness-authority"
 import {
 	BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX,
 	BackgroundNotifyCoordinator,
@@ -6050,7 +6056,8 @@ export class Controller {
 			// `terminalState` is the exact reason; if absent
 			// (legacy caller), fall back to "terminal" (the
 			// pre-correction01 projection value).
-			this.backgroundCommandJobStates[taskId] = terminalState ?? "terminal"
+			const publishedTerminalState = terminalState ?? "terminal"
+			this.backgroundCommandJobStates[taskId] = publishedTerminalState
 			// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
 			// (PHCF17): the terminal publication carries the same
 			// launch-time owner as the start publication. A job
@@ -6059,6 +6066,27 @@ export class Controller {
 			if (ownerSessionId !== undefined) {
 				this.backgroundCommandJobOwners[taskId] = ownerSessionId
 			}
+			// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01):
+			// Capture the TERMINAL-STATE PUBLICATION — the exact seam
+			// that writes `containment_failed` into the per-job map the
+			// C10 classifier reads. This is the LINK between the
+			// manager's root-cause record and the C10 blocker: it
+			// establishes WHY the controller retained the entry and
+			// WHICH owner session it was filed under.
+			//
+			// The capture reuses the ALREADY-EVALUATED published state
+			// and owner — no state mutation, no extra read of the
+			// authority input, no protocol field.
+			captureBackgroundJobLivenessAuthorityRecord({
+				event: "containment_terminal_state_published",
+				capturedAt: Date.now(),
+				managerInstance: null,
+				hostInstance: null,
+				jobId: taskId,
+				publishedState: publishedTerminalState,
+				ownerSessionId: ownerSessionId ?? null,
+				isContainmentFailure: publishedTerminalState === "containment_failed",
+			})
 		} else if (!running && taskId === undefined) {
 			for (const k of Object.keys(this.backgroundCommandJobStates)) {
 				if (this.backgroundCommandJobStates[k] === "running") {

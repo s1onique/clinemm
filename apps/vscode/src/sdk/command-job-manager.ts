@@ -473,9 +473,60 @@ export interface CommandJobManagerOptions {
 	 * Production callers MUST NOT supply this — it is reserved for
 	 * the DCCT test suite and any future operator-driven diagnostic
 	 * harness.
+	 *
+	 * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01: the probe may
+	 * ALSO return the OBJECT form `{ postcondition, osErrorCode }`.
+	 * The production classifier returns that form so the underlying
+	 * errno (`ESRCH` / `EPERM` / …) reaches the containment ledger
+	 * WITHOUT an additional syscall — the errno is already in hand
+	 * when `process.kill(-pgid, 0)` throws. The plain-string form
+	 * remains accepted so every pre-existing injected seam keeps
+	 * compiling unchanged.
 	 */
-	terminalPostconditionProbe?: (pgid: number) => "gone" | "alive" | "eperm" | "unknown"
+	terminalPostconditionProbe?: (pgid: number) => TerminalPostconditionProbeResult
 }
+
+/**
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01.
+ *
+ * The four fail-closed postcondition categories.
+ */
+export type TerminalPostcondition = "gone" | "alive" | "eperm" | "unknown"
+
+/**
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01.
+ *
+ * The probe result. The legacy form is the bare category string; the
+ * object form additionally carries the OS errno that produced it.
+ *
+ * The errno is what distinguishes the three containment outcomes the
+ * macOS `kill(2)` contract makes distinguishable:
+ *
+ *   - `ESRCH` → the process/group was NOT FOUND. The group is gone
+ *     (or never existed) — this is the ONLY verdict compatible with
+ *     the bounded invariant `TERMINAL ⇒ PRIMARY OWNED PGID GONE`.
+ *   - `EPERM` → the probe was DENIED (Seatbelt / privilege). The
+ *     group may or may not still exist; the invariant is UNPROVEN.
+ *   - `rc=0`  → the group EXISTS and the probe was permitted. The
+ *     group actually survived cleanup.
+ *
+ * Collapsing `alive` and `eperm` into one opaque "containment
+ * failure" hides exactly the distinction the containment ledger
+ * needs: a genuinely surviving process group versus a cleanup probe
+ * the sandbox refused.
+ */
+export type TerminalPostconditionProbeResult =
+	| TerminalPostcondition
+	| {
+			readonly postcondition: TerminalPostcondition
+			/**
+			 * The OS errno that produced the verdict, when the probe
+			 * THREW. `null` when the probe succeeded (rc=0 → `alive`).
+			 * `undefined` when the verdict came from a caller that did not
+			 * supply an errno (legacy string-form probe seams).
+			 */
+			readonly osErrorCode?: string | null
+	  }
 
 /**
  * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
@@ -1269,7 +1320,7 @@ export class CommandJobManager {
 	 * Defaults to the real-kernel classifier; see
 	 * `defaultTerminalPostconditionProbe` below.
 	 */
-	private readonly terminalPostconditionProbe: (pgid: number) => "gone" | "alive" | "eperm" | "unknown"
+	private readonly terminalPostconditionProbe: (pgid: number) => TerminalPostconditionProbeResult
 	private helperClientToken: string | undefined
 	/**
 	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction03):
@@ -2527,9 +2578,26 @@ export class CommandJobManager {
 		// causality: a terminal job is one whose kernel-level
 		// invariant was proven at the moment of finalization.
 		const savedPgid = readPgidFromSupervisor(job.process)
-		let postcondition: "gone" | "alive" | "eperm" | "unknown" | undefined
+		let postcondition: TerminalPostcondition | undefined
+		// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01: the OS errno
+		// that produced the verdict. `undefined` when no probe ran (no
+		// PGID resolvable) or when the probe seam did not supply one
+		// (legacy string-form seam); `null` when the probe SUCCEEDED
+		// (rc=0 → the group exists and the probe was permitted).
+		let postconditionOsErrorCode: string | null | undefined
 		if (typeof savedPgid === "number" && savedPgid > 0) {
-			postcondition = this.terminalPostconditionProbe(savedPgid)
+			// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01: the probe
+			// seam may return the legacy bare-category string OR the
+			// object form carrying the OS errno. Normalize here so the
+			// rest of the manager reads ONE shape.
+			const probeResult = this.terminalPostconditionProbe(savedPgid)
+			if (typeof probeResult === "string") {
+				postcondition = probeResult
+				postconditionOsErrorCode = undefined
+			} else {
+				postcondition = probeResult.postcondition
+				postconditionOsErrorCode = probeResult.osErrorCode
+			}
 			this.emitCommandJobLifecycle({
 				event: "command_job_primary_group_cleanup",
 				jobId: job.id,
@@ -2569,6 +2637,38 @@ export class CommandJobManager {
 			terminalState = "containment_failed"
 		}
 		job.state = terminalState
+		// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01):
+		// Capture the per-job ROOT CAUSE of a containment failure at the
+		// exact boundary the manager classifies it.
+		//
+		// This is the record that joins a C10 blocker back to the
+		// original cleanup outcome. It carries the ALREADY-EVALUATED
+		// production values only — the kernel verdict, the OS errno
+		// that produced it, the structured failure reason, the process
+		// identity and the launch-time owner. NO additional process
+		// signal is issued here: the errno came from the probe that
+		// already ran, and the pid/pgid are read from the supervisor
+		// that the probe just used.
+		//
+		// The capture happens ONLY on the failure path — a clean
+		// terminal (`postcondition === "gone"`) is not a containment
+		// failure and has no ledger entry.
+		if (!invariantProven) {
+			captureBackgroundJobLivenessAuthorityRecord({
+				event: "containment_failure_classified",
+				capturedAt: Date.now(),
+				managerInstance: getDiagnosticManagerId(this),
+				hostInstance: null,
+				jobId: job.id,
+				ownerSessionId: job.ownerSessionId ?? null,
+				pid: readRootPidFromSupervisor(job.process) ?? null,
+				pgid: typeof savedPgid === "number" ? savedPgid : null,
+				postcondition: postcondition ?? null,
+				osErrorCode: postconditionOsErrorCode,
+				containmentFailed: job.terminationFailed ?? "substrate_unknown",
+				jobState: "containment_failed",
+			})
+		}
 		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
 		// emit `command_job_residual_detected` on the failure path —
 		// a pre-delete observation of the kernel state. The gauge
@@ -3494,16 +3594,34 @@ function readPgidFromSupervisor(process: SupervisableShellProcess): number | und
  * saved PGID is still resolvable. No async work, no IPC, no helper
  * — this is the kernel's own verdict on whether the group has been
  * reaped.
+ *
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01: the classifier now
+ * returns the OBJECT form, carrying the OS errno that produced the
+ * verdict. This costs NOTHING extra at runtime — the errno is
+ * already in hand on the throw path, and it is the ONLY way to
+ * distinguish the macOS `kill(2)` outcomes the containment ledger
+ * must not conflate:
+ *
+ *   ESRCH → the group was NOT FOUND (it is gone).
+ *   EPERM → the probe was DENIED (Seatbelt / privilege). The
+ *           group's liveness is UNKNOWN — an UNPROVEN invariant.
+ *   rc=0 → the group EXISTS and the probe was permitted. The group
+ *           actually survived cleanup.
+ *   other → UNKNOWN errno, fail-closed.
  */
-function defaultTerminalPostconditionProbe(pgid: number): "gone" | "alive" | "eperm" | "unknown" {
+function defaultTerminalPostconditionProbe(pgid: number): TerminalPostconditionProbeResult {
 	try {
 		process.kill(-pgid, 0)
-		return "alive"
+		// rc=0: the probe was PERMITTED and the group EXISTS. The
+		// group genuinely survived cleanup — the strongest possible
+		// evidence that the bounded invariant is REFUTED.
+		return { postcondition: "alive", osErrorCode: null }
 	} catch (e) {
 		const err = e as NodeJS.ErrnoException
-		if (err.code === "ESRCH") return "gone"
-		if (err.code === "EPERM") return "eperm"
-		return "unknown"
+		const osErrorCode = typeof err.code === "string" ? err.code : null
+		if (err.code === "ESRCH") return { postcondition: "gone", osErrorCode }
+		if (err.code === "EPERM") return { postcondition: "eperm", osErrorCode }
+		return { postcondition: "unknown", osErrorCode }
 	}
 }
 

@@ -1,3 +1,86 @@
+# ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 — PASS_RECON — 2026-11-03
+
+**Status:** bounded source reconnaissance + ONE targeted causal-evidence extension, CLOSED on the existing `main` branch. The
+job-level causal join between the C10 completion-barrier blockers and their ORIGINAL cleanup outcomes is ESTABLISHED.
+**No completion-barrier semantic changed, no new process signal, no state-changing probe, no new protocol field, no
+React/Elm/webview/TaskHeader change, and no containment failure was speculatively cleared.** The protected stash and all
+unrelated worktrees are intact; no push, no install, no VSIX.
+
+```text
+ACT_ID: ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01
+TYPE: RECON (+ bounded diagnostic extension)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01)
+VERDICT: PASS_RECON
+ENTRY_HEAD: d297ad2d24149d030750ac5cfdc3c1d80647d74c
+ENTRY_TREE: 29d38e1f9529d1cb019609cbe3594d51c2e09ee4
+BRANCH: main (no ACT branch created)
+WORKTREES: unchanged (4)   STASHES_TOUCHED: 0 (protected stash INTACT)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO
+RED: REPRODUCED (20-test SYNTHETIC_REAL suite; unresolved-vs-historical-projection distinguished)
+ABLATION_CLASSIFICATION: NOT_PERFORMED (no repair attempted — see "Repair" below)
+INSTALLED_DOGFOOD: NOT PERFORMED (no live qualification claimed)
+EVIDENCE: docs/acts/ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01/REPORT.md
+```
+
+**The question.** *Why do we have 43 `containment_failed` entries, and how many still represent genuine containment
+obligations?* Answered **as far as the permitted evidence allows**: the 43 entries can now be joined one-by-one to their
+original cleanup outcome, and the set that actually held the completion is named **exactly** rather than counted.
+
+**The gap that was closed.** Before this ACT, the C10 hold captured only a **COUNT** of blockers, the postcondition was a
+bare category with no errno, and the pid lived on an adjacent record. The join now carries, per blocker: the **exact
+jobId set**, the **ownership class**, the **pid/pgid**, the **kernel verdict**, the **OS errno behind that verdict**, the
+**owner session**, and the **controller's terminal-state publication** — the full causal chain from the original cleanup to
+the completion hold.
+
+**The macOS `kill(2)` distinction, now observable.** Apple's `kill(2)` separates `ESRCH` from `EPERM`, and a signal-zero
+probe checks existence **and permission**, not successful termination. The previous capture collapsed these into one
+opaque "containment failure". The ledger now carries the errno **with no additional syscall** (it was already in hand on
+the throw path):
+
+| Verdict | errno | Meaning | Bounded invariant |
+|---|---|---|---|
+| `alive` | `null` | probe **permitted**, group **EXISTS** | **REFUTED** — a real, live obligation |
+| `eperm` | `EPERM` | probe **DENIED** (Seatbelt / privilege) | **UNPROVEN** — liveness unknown |
+| `gone` | `ESRCH` | group **NOT FOUND** | **PROVEN** — the only clean verdict |
+| `unknown` | verbatim | any other errno | fail-closed |
+
+**What was NOT done — no generic telemetry, no BOCOR dumps, no TaskHeader changes, no speculative clearing.** The ACT
+extended the EXISTING BJLA capture with three records (`containment_failure_classified`, `containment_ledger_blocking_set`,
+`containment_terminal_state_published`). The shared owner-scoped classifier remains the **single** containment predicate
+(1 definition, 1 `!== "containment_failed"` comparison, 5 call sites) — the diagnostic **consumes** the classification
+through an optional out-parameter the classifier fills during its own filter pass, rather than re-deriving it.
+
+**`UNAVAILABLE_FROM_TRACE` — the later authoritative observation.** Establishing whether a failure was superseded requires
+re-probing the process group, which is a **new process signal** the ACT forbids; the production probe runs only inside
+`finalize()`. The ledger can therefore prove **why** an entry is held, but it cannot prove **that the group later
+disappeared**. This is stated as a limitation, not papered over.
+
+**Repair: deliberately NOT performed.** A repair needs either a re-probe (forbidden) or clearing a `containment_failed`
+projection without proof — the "speculative clearing" the ACT ruled out, and unsafe because a genuinely live process group
+could then be silently classified safe. The ACT's own repair gate (necessity ablation + adversarial live/unknown-group
+tests) cannot be met while the necessary observation is unavailable. **The causal join was the deliverable.**
+
+**Gates.** `tsc --noEmit` clean; Biome lint + format clean; focused regression suite **117/117** across 9 suites (incl. the
+new 20-test CLCR01 suite); full `src/sdk/__tests__` sweep **byte-identical** to the clean-stash baseline (82 pre-existing
+sandbox/order-dependent failures; **zero new**, **zero masked**).
+
+**Successor.** `ACT-CLINEMM-CONTAINMENT-LEDGER-LIVE-QUALIFICATION01` — commit, build+install a VSIX bound to that exact
+HEAD, dogfood, then join `blockingJobIds` against `containment_failure_classified` and `containment_terminal_state_published`
+on REAL jobs. **No new telemetry implementation is justified yet.**
+
+**Carried-forward qualification (from review).** BJLA's capture ring is bounded: earlier root-cause records may be
+**evicted** before a later dump. An unmatched blocking job id must be reported as **missing evidence**, never assumed to
+be a stale entry. The blocking-set record carries the **denominator** so a later analysis can distinguish "evicted" from
+"never captured". Retention is to be assessed **only after** examining a LIVE capture.
+
+**Evidence**
+
+- `docs/acts/ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01/REPORT.md`
+- `apps/vscode/src/sdk/__tests__/containment-ledger-causal-recon01.clcr01.test.ts` — 20-test SYNTHETIC_REAL recon/RED suite
+
+---
+
 # ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01 — PASS_STRUCTURAL_VERIFIED — 2026-11-03
 
 **Status:** bounded production implementation + causal qualification, CLOSED on the existing `main` branch. The

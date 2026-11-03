@@ -130,6 +130,9 @@ export type BackgroundJobLivenessAuthorityRecord =
 	| BackgroundJobLivenessAuthorityBackgroundStateChangePublishedRecord
 	| BackgroundJobLivenessAuthorityJobLifecycleEventPublishedRecord
 	| BackgroundJobLivenessAuthorityJobCancellationRequestedRecord
+	| BackgroundJobLivenessAuthorityContainmentFailureClassifiedRecord
+	| BackgroundJobLivenessAuthorityContainmentLedgerBlockingSetRecord
+	| BackgroundJobLivenessAuthorityContainmentTerminalStatePublishedRecord
 
 export interface BackgroundJobLivenessAuthorityManagerConstructedRecord {
 	readonly event: "manager_constructed"
@@ -327,6 +330,219 @@ export interface BackgroundJobLivenessAuthorityJobCancellationRequestedRecord {
 	 * `job_cancellation_requested` per LIVE cycle has `firstWriterWins=true`.
 	 */
 	readonly firstWriterWins: boolean
+}
+
+// -----------------------------------------------------------------------------
+// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01)
+//
+// Containment-ledger causal evidence.
+//
+// The three records below close the specific gaps the containment
+// ledger recon identified. They EXTEND the EXISTING BJLA capture —
+// they are NOT a new telemetry system. Every field is an
+// ALREADY-EVALUATED production value: no additional process signals,
+// no state-changing probes, no new protocol fields.
+//
+// The gap they close:
+//
+//   BEFORE                                   AFTER
+//   ---------------------------------------  --------------------------------
+//   C10 hold captures a COUNT of blockers    the EXACT blocking jobId set
+//   owner scope is implicit in the count     an EXPLICIT ownership class
+//   postcondition is a bare category         the category AND the OS errno
+//   pid present on one adjacent record       pid present ON the failure
+//   terminal publication unexplained         the publication is captured
+// -----------------------------------------------------------------------------
+
+/**
+ * The OS errno that produced a containment postcondition verdict.
+ *
+ * Mirrors the macOS `kill(2)` contract:
+ *   - `ESRCH` — the process/group was NOT FOUND.
+ *   - `EPERM` — the probe was DENIED (Seatbelt / privilege).
+ *   - `null`  — the probe SUCCEEDED (rc=0): the group EXISTS and the
+ *                probe was permitted (the group survived cleanup).
+ *   - `undefined` — no errno was available (no probe ran, or the
+ *                   probe seam did not supply one).
+ */
+export type ContainmentOsErrorCode = string | null | undefined
+
+/**
+ * The ownership classification of a containment-failure entry
+ * relative to the session that consulted it.
+ *
+ * These are the FOUR cases the owner-scoped classifier distinguishes:
+ *
+ *   - `matching_owner`  — the entry's recorded owner session id EQUALS
+ *                          the consulting session id. BLOCKS.
+ *   - `foreign_owner`   — the entry's recorded owner session id is a
+ *                          DIFFERENT session. Does NOT block.
+ *   - `unknown_owner`   — the entry exists but no owner was ever
+ *                          recorded. BLOCKS (fail closed).
+ *   - `owner_map_absent` — the owner map is not wired at all, so the
+ *                          entry cannot be proven foreign. BLOCKS
+ *                          (fail closed).
+ */
+export type ContainmentOwnershipClass = "matching_owner" | "foreign_owner" | "unknown_owner" | "owner_map_absent"
+
+/**
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01).
+ *
+ * Captured at the CONTAINMENT BOUNDARY — the exact moment the
+ * manager classifies a job's terminalization as `containment_failed`.
+ *
+ * This is the per-job ROOT CAUSE record. It carries everything needed
+ * to join the C10 blocker back to the original cleanup outcome:
+ * the job id, the owner session, the process identity (pid/pgid), the
+ * manager identity, the kernel verdict, the OS errno behind that
+ * verdict, and the structured failure reason.
+ *
+ * It deliberately does NOT carry any prompt content, command text, or
+ * model output.
+ */
+export interface BackgroundJobLivenessAuthorityContainmentFailureClassifiedRecord {
+	readonly event: "containment_failure_classified"
+	readonly capturedAt: number
+	readonly managerInstance: string | null
+	readonly hostInstance: string | null
+	readonly jobId: string
+	/**
+	 * The LAUNCH-TIME owner session id (`CommandJob.ownerSessionId`).
+	 * `null` when the job carried no owner — the classifier treats
+	 * that as an UNKNOWN owner and fails closed.
+	 */
+	readonly ownerSessionId: string | null
+	/** The root PID of the supervised process. `null` when unresolvable. */
+	readonly pid: number | null
+	/** The primary owned process group id. `null` when unresolvable. */
+	readonly pgid: number | null
+	/**
+	 * The kernel verdict on the primary owned process group:
+	 * `gone` | `alive` | `eperm` | `unknown`. `null` when no probe
+	 * ran (no PGID resolvable).
+	 */
+	readonly postcondition: "gone" | "alive" | "eperm" | "unknown" | null
+	/**
+	 * The OS errno behind the verdict. `ESRCH` (not found), `EPERM`
+	 * (probe denied), `null` (probe permitted — the group exists),
+	 * `undefined` (no errno available).
+	 */
+	readonly osErrorCode: ContainmentOsErrorCode
+	/**
+	 * The structured failure reason latched on the job:
+	 * `pgid_unset` | `substrate_alive` | `substrate_eperm` |
+	 * `substrate_unknown`.
+	 */
+	readonly containmentFailed: "pgid_unset" | "substrate_alive" | "substrate_eperm" | "substrate_unknown"
+	/** The terminal state the job was overwritten with. */
+	readonly jobState: "containment_failed"
+}
+
+/**
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01).
+ *
+ * Captured at the C10 COMPLETION HOLD boundary — the point where the
+ * completion barrier is held by unresolved containment failures.
+ *
+ * This is the JOIN record. It names the EXACT blocking job id set
+ * (previously only a COUNT was captured) and the OWNERSHIP
+ * CLASSIFICATION of each blocker, so an operator can tell:
+ *
+ *   - which of the ledger entries actually held the completion, and
+ *   - for each, whether it blocked because it MATCHED the active
+ *     session, because its owner was UNKNOWN, or because the owner
+ *     map was not wired at all.
+ *
+ * The per-blocker ownership classes are recorded as parallel arrays
+ * positionally aligned with `blockingJobIds` (index i of
+ * `blockingOwnershipClasses` describes index i of `blockingJobIds`).
+ */
+export interface BackgroundJobLivenessAuthorityContainmentLedgerBlockingSetRecord {
+	readonly event: "containment_ledger_blocking_set"
+	readonly capturedAt: number
+	readonly managerInstance: string | null
+	readonly hostInstance: string | null
+	/**
+	 * The session whose jobs were in scope for the consultation.
+	 */
+	readonly activeSessionId: string | null
+	/**
+	 * The EXACT set of job ids whose containment failure was
+	 * unresolved AND blocking at this boundary. Empty when the
+	 * completion was not held by containment.
+	 */
+	readonly blockingJobIds: readonly string[]
+	/**
+	 * The ownership classification of each blocker, positionally
+	 * aligned with `blockingJobIds`.
+	 */
+	readonly blockingOwnershipClasses: readonly ContainmentOwnershipClass[]
+	/**
+	 * The total number of `containment_failed` entries observed in the
+	 * authority input, regardless of ownership. This is the DENOMINATOR
+	 * the blocking set is a subset of — it distinguishes "43 entries
+	 * exist, 7 of which are owned by this session" from "43 entries
+	 * exist and all 43 block".
+	 */
+	readonly totalContainmentFailureEntries: number
+	/**
+	 * The number of entries excluded because their owner was a
+	 * DIFFERENT session (proved foreign).
+	 */
+	readonly foreignOwnerEntriesExcluded: number
+	/**
+	 * The boundary at which the set was computed. One of:
+	 *   - `c10_completion_attempt`   — the immediate C10 barrier
+	 *   - `deferred_c10_reevaluation` — the deferred C10 re-evaluation
+	 *   - `q5_deferred_handoff`      — the Q5 deferred-handoff path
+	 *   - `commit_boundary`           — the final admission revalidation
+	 */
+	readonly boundary: "c10_completion_attempt" | "deferred_c10_reevaluation" | "q5_deferred_handoff" | "commit_boundary"
+}
+
+/**
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01).
+ *
+ * Captured at the CONTROLLER'S TERMINAL-STATE PUBLICATION seam — the
+ * point where `SdkController.updateBackgroundCommandState` writes the
+ * per-job terminal reason into `backgroundCommandJobStates` (the map
+ * the C10 classifier reads).
+ *
+ * This is the LINK record: it establishes WHY the controller retained
+ * `containment_failed`, and which owner session the entry is filed
+ * under. Without it the ledger shows a blocker with no provenance.
+ */
+export interface BackgroundJobLivenessAuthorityContainmentTerminalStatePublishedRecord {
+	readonly event: "containment_terminal_state_published"
+	readonly capturedAt: number
+	readonly managerInstance: string | null
+	readonly hostInstance: string | null
+	/** The job id (the key in the controller's terminal-state map). */
+	readonly jobId: string
+	/**
+	 * The published terminal reason. `containment_failed` is the
+	 * load-bearing value; the other terminal reasons are recorded too
+	 * so the ledger can prove a CLEAN terminal was NOT what blocked.
+	 */
+	readonly publishedState:
+		| "running"
+		| "exited"
+		| "cancelled"
+		| "deadline_exceeded"
+		| "spawn_failed"
+		| "containment_failed"
+		| "terminal"
+	/**
+	 * The owner session id the entry was filed under. `null` when the
+	 * owner was never recorded (UNKNOWN owner → the classifier fails
+	 * closed).
+	 */
+	readonly ownerSessionId: string | null
+	/**
+	 * Whether the published state is a containment failure — the
+	 * boolean form of the predicate the C10 classifier applies.
+	 */
+	readonly isContainmentFailure: boolean
 }
 
 // -----------------------------------------------------------------------------

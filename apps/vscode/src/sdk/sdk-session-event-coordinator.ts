@@ -27,7 +27,16 @@ import type {
 } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
-import { getDiagnosticHostId, getDiagnosticManagerId } from "./background-job-liveness-authority"
+import {
+	type ContainmentOwnershipClass,
+	// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01): the
+	// containment-ledger capture seam. It records the EXACT blocking
+	// job id set (not just a count) and the per-blocker ownership
+	// classification, reusing the ALREADY-EVALUATED classifier output.
+	captureBackgroundJobLivenessAuthorityRecord,
+	getDiagnosticHostId,
+	getDiagnosticManagerId,
+} from "./background-job-liveness-authority"
 import { type BackgroundOwnerCorrelationActiveJob, captureBackgroundOwnerCorrelationRecord } from "./background-owner-correlation"
 import {
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY:
@@ -754,6 +763,71 @@ interface DeferredContinuation {
  * at most ONE pending completion per coordinator instance.
  */
 /**
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01).
+ *
+ * The detail the shared owner-scoped containment classifier records
+ * AS IT CLASSIFIES. It is a WRITE-ONLY accumulator from the
+ * classifier's perspective and has NO effect on the classifier's
+ * returned value — the semantic behavior is UNCHANGED.
+ */
+interface ContainmentLedgerDetail {
+	/** The total number of `containment_failed` entries observed. */
+	totalContainmentFailureEntries: number
+	/** The number of entries excluded because their owner was foreign. */
+	foreignOwnerEntriesExcluded: number
+	/** The ownership class of each observed containment-failure entry. */
+	ownershipClassesByJobId: Map<string, ContainmentOwnershipClass>
+}
+
+/**
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01).
+ *
+ * Classify the OWNERSHIP of one containment-failure entry relative to
+ * the consulting session. This mirrors the shared classifier's
+ * fail-closed posture exactly:
+ *
+ *   - owner map absent → `owner_map_absent` (blocks)
+ *   - owner not recorded → `unknown_owner` (blocks)
+ *   - owner == active → `matching_owner` (blocks)
+ *   - owner != active → `foreign_owner` (does NOT block)
+ *
+ * PURE: no state mutation, no side effects. It is a FREE FUNCTION so
+ * the classifier can call it without a member lookup, and so the
+ * diagnostic companion and the classifier share ONE implementation.
+ */
+/**
+ * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01).
+ *
+ * Create an empty detail accumulator for the shared owner-scoped
+ * containment classifier to fill as it classifies.
+ */
+function newContainmentLedgerDetail(): ContainmentLedgerDetail {
+	return {
+		totalContainmentFailureEntries: 0,
+		foreignOwnerEntriesExcluded: 0,
+		ownershipClassesByJobId: new Map(),
+	}
+}
+
+function classifyContainmentOwnershipClass(
+	jobOwners: Record<string, string | undefined> | undefined,
+	jobId: string,
+	activeSessionId: string,
+): ContainmentOwnershipClass {
+	if (!jobOwners) {
+		// The owner map is not wired: the entry cannot be proven
+		// foreign, so it is RETAINED (fail closed).
+		return "owner_map_absent"
+	}
+	const ownerSessionId = jobOwners[jobId]
+	if (ownerSessionId === undefined) {
+		// UNKNOWN owner: fail closed.
+		return "unknown_owner"
+	}
+	return ownerSessionId === activeSessionId ? "matching_owner" : "foreign_owner"
+}
+
+/**
  * ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01:
  *
  * Closed enum for the typed host-owned reason a deferred
@@ -1026,11 +1100,21 @@ export class SdkSessionEventCoordinator {
 	 *   owned by `sessionId` (empty when the commit is admissible).
 	 */
 	private unresolvedContainmentFailuresAtCommitBoundary(sessionId: string): string[] {
-		return this.unresolvedContainmentFailuresForOwner(
+		const containmentLedgerDetailCommit = newContainmentLedgerDetail()
+		const unresolvedAtCommit = this.unresolvedContainmentFailuresForOwner(
 			this.options.getBackgroundCommandJobStates?.(),
 			this.options.getBackgroundCommandJobOwners?.(),
 			sessionId,
+			containmentLedgerDetailCommit,
 		)
+		// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01
+		// (CLCR01): capture the EXACT blocking job id set and
+		// each blocker's ownership class at the commit boundary.
+		// This is the LAST authoritative read before the commit,
+		// so it is the record that proves whether the failure
+		// was still unresolved at admission time.
+		this.captureContainmentLedgerBlockingSet(sessionId, "commit_boundary", unresolvedAtCommit, containmentLedgerDetailCommit)
+		return unresolvedAtCommit
 	}
 
 	/**
@@ -1091,6 +1175,24 @@ export class SdkSessionEventCoordinator {
 		jobStates: Record<string, string> | undefined,
 		jobOwners: Record<string, string | undefined> | undefined,
 		activeSessionId: string,
+		/**
+		 * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01):
+		 * OPTIONAL detail accumulator. When supplied, the classifier
+		 * fills it with the OWNERSHIP CLASSIFICATION of every
+		 * containment-failure entry it observed, plus the total
+		 * population and the number excluded as provably foreign.
+		 *
+		 * This keeps the classifier the SINGLE containment predicate
+		 * (exactly ONE comparison against the `containment_failed`
+		 * state, exactly ONE definition) while letting the diagnostic
+		 * ledger capture the EXACT blocking set and its per-entry
+		 * ownership class WITHOUT re-deriving the classification.
+		 *
+		 * The accumulator is WRITE-ONLY from the classifier's
+		 * perspective and has NO effect on the returned value: the
+		 * semantic behavior of the classifier is UNCHANGED.
+		 */
+		ledgerDetail?: ContainmentLedgerDetail,
 	): string[] {
 		// The authority input is ABSENT: there is no per-job
 		// classification to consult, so nothing blocks. This is
@@ -1103,6 +1205,18 @@ export class SdkSessionEventCoordinator {
 			.filter(([jobId, reason]) => {
 				if (reason !== "containment_failed") {
 					return false
+				}
+				// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01):
+				// Record the total population and the per-entry ownership
+				// class as the entries are classified. This is a pure
+				// observation of the SAME decision the filter makes.
+				if (ledgerDetail) {
+					ledgerDetail.totalContainmentFailureEntries += 1
+					const ownershipClass = classifyContainmentOwnershipClass(jobOwners, jobId, activeSessionId)
+					ledgerDetail.ownershipClassesByJobId.set(jobId, ownershipClass)
+					if (ownershipClass === "foreign_owner") {
+						ledgerDetail.foreignOwnerEntriesExcluded += 1
+					}
 				}
 				if (!jobOwners) {
 					// The owner map is not wired: preserve the
@@ -1118,6 +1232,88 @@ export class SdkSessionEventCoordinator {
 				return ownerSessionId === activeSessionId
 			})
 			.map(([jobId]) => jobId)
+	}
+
+	/**
+	 * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01).
+	 *
+	 * The DIAGNOSTIC COMPANION to `unresolvedContainmentFailuresForOwner`.
+	 *
+	 * The shared classifier answers a yes/no question: "which job ids
+	 * block?" This helper answers the FOLLOW-UP question the
+	 * containment ledger must be able to answer: "WHY does each one
+	 * block, and what is the full population it was drawn from?"
+	 *
+	 * It does NOT re-derive the classification — it asks the SHARED
+	 * classifier for the blocking set and collects the ownership
+	 * classes the classifier recorded into the detail accumulator
+	 * during that very computation. The classifier therefore remains
+	 * the SINGLE containment predicate: exactly ONE definition and
+	 * exactly ONE comparison against the `containment_failed` state.
+	 *
+	 * PURE: no state mutation, no diagnostic side effects, no provider
+	 * call, no additional process signal.
+	 */
+	private buildContainmentLedgerRecord(
+		blockingJobIds: readonly string[],
+		detail: ContainmentLedgerDetail,
+	): {
+		readonly blockingJobIds: string[]
+		readonly blockingOwnershipClasses: ContainmentOwnershipClass[]
+		readonly totalContainmentFailureEntries: number
+		readonly foreignOwnerEntriesExcluded: number
+	} {
+		const blockingOwnershipClasses: ContainmentOwnershipClass[] = []
+		for (const jobId of blockingJobIds) {
+			blockingOwnershipClasses.push(detail.ownershipClassesByJobId.get(jobId) ?? "unknown_owner")
+		}
+		return {
+			blockingJobIds: [...blockingJobIds],
+			blockingOwnershipClasses,
+			totalContainmentFailureEntries: detail.totalContainmentFailureEntries,
+			foreignOwnerEntriesExcluded: detail.foreignOwnerEntriesExcluded,
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01).
+	 *
+	 * Capture the containment-ledger JOIN record at a completion-hold
+	 * boundary.
+	 *
+	 * The record names the EXACT blocking job id set (previously only
+	 * a COUNT reached the flight recorder) and the ownership class of
+	 * each blocker, so an operator can join the C10 blockers back to
+	 * the per-job `containment_failure_classified` root-cause records
+	 * emitted by the `CommandJobManager`.
+	 *
+	 * Every value is ALREADY EVALUATED: the classification is derived
+	 * from the same authority inputs the production classifier reads,
+	 * and no additional process signal or provider call is issued.
+	 * The capture is a complete no-op when the BJLA seam is OFF.
+	 *
+	 * @param activeSessionId the session whose jobs were in scope.
+	 * @param boundary which hold boundary produced the set.
+	 */
+	private captureContainmentLedgerBlockingSet(
+		activeSessionId: string,
+		boundary: "c10_completion_attempt" | "deferred_c10_reevaluation" | "q5_deferred_handoff" | "commit_boundary",
+		blockingJobIds: readonly string[],
+		detail: ContainmentLedgerDetail,
+	): void {
+		const ledger = this.buildContainmentLedgerRecord(blockingJobIds, detail)
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "containment_ledger_blocking_set",
+			capturedAt: Date.now(),
+			managerInstance: null,
+			hostInstance: getDiagnosticHostId(this.options.getActiveSessionHost?.()?.sdkHost),
+			activeSessionId,
+			blockingJobIds: ledger.blockingJobIds,
+			blockingOwnershipClasses: ledger.blockingOwnershipClasses,
+			totalContainmentFailureEntries: ledger.totalContainmentFailureEntries,
+			foreignOwnerEntriesExcluded: ledger.foreignOwnerEntriesExcluded,
+			boundary,
+		})
 	}
 
 	/**
@@ -1384,10 +1580,23 @@ export class SdkSessionEventCoordinator {
 			// revalidation (R4) consult, so the Q5 and C10 paths can
 			// no longer drift apart. The semantics are UNCHANGED.
 			const jobOwners = this.options.getBackgroundCommandJobOwners?.()
+			const containmentLedgerDetailQ5 = newContainmentLedgerDetail()
 			const failedContainmentJobIds = this.unresolvedContainmentFailuresForOwner(
 				jobStates,
 				jobOwners,
 				activeSession.sessionId,
+				containmentLedgerDetailQ5,
+			)
+
+			// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01
+			// (CLCR01): capture the EXACT blocking job id set and
+			// each blocker's ownership class at the Q5
+			// deferred-handoff boundary.
+			this.captureContainmentLedgerBlockingSet(
+				activeSession.sessionId,
+				"q5_deferred_handoff",
+				failedContainmentJobIds,
+				containmentLedgerDetailQ5,
 			)
 			if (failedContainmentJobIds.length > 0) {
 				Logger.warn(
@@ -2431,10 +2640,23 @@ export class SdkSessionEventCoordinator {
 		// helper as the immediate C10 barrier (Site A) and the Q5 path
 		// (Site C): a FOREIGN owner's failure does not block, an
 		// UNKNOWN owner fails closed.
+		const containmentLedgerDetailDeferredC10 = newContainmentLedgerDetail()
 		const unresolvedContainmentFailuresForDeferredC10 = this.unresolvedContainmentFailuresForOwner(
 			this.options.getBackgroundCommandJobStates?.(),
 			this.options.getBackgroundCommandJobOwners?.(),
 			activeSession.sessionId,
+			containmentLedgerDetailDeferredC10,
+		)
+
+		// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01
+		// (CLCR01): capture the EXACT blocking job id set and
+		// each blocker's ownership class at the deferred C10
+		// re-evaluation boundary.
+		this.captureContainmentLedgerBlockingSet(
+			activeSession.sessionId,
+			"deferred_c10_reevaluation",
+			unresolvedContainmentFailuresForDeferredC10,
+			containmentLedgerDetailDeferredC10,
 		)
 		if (unresolvedContainmentFailuresForDeferredC10.length > 0) {
 			Logger.warn(
@@ -4479,30 +4701,19 @@ export class SdkSessionEventCoordinator {
 							// OWNED BY THE ACTIVE SESSION block, a
 							// FOREIGN owner's failure does not, and an
 							// UNKNOWN owner fails closed.
+							const containmentLedgerDetailA = newContainmentLedgerDetail()
 							const unresolvedContainmentFailuresForC10 = this.unresolvedContainmentFailuresForOwner(
 								this.options.getBackgroundCommandJobStates?.(),
 								this.options.getBackgroundCommandJobOwners?.(),
 								activeSession.sessionId,
+								containmentLedgerDetailA,
 							)
 
-							// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
-							// The C10 COMPLETION ATTEMPT boundary. Capture
-							// ALL the hold predicates production just
-							// evaluated, plus the exact conjunct that
-							// decided the hold.
-							//
-							// Every value below is an ALREADY-EVALUATED
-							// production local — no provider is invoked a
-							// second time for diagnostics.
-							//
-							// The `pendingPromptAuthorityUnknown` /
-							// `pendingPromptsKnown` / `activeNotifyCount` /
-							// `perJobOutstandingNotifyWork` conjuncts are
-							// folded into `outstandingAutonomousWork` by
-							// production. Their individual values are
-							// captured so the operator can tell WHICH
-							// sub-conjunct held — not merely that the
-							// aggregate was true.
+							// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01
+							// (CLCR01): capture the EXACT blocking job id set (not
+							// just the count) and each blocker's ownership class at the
+							// C10 completion-attempt boundary. Reuses the
+							// already-evaluated authority inputs — no extra process
 							const c10HoldConjuncts = {
 								outstandingAutonomousWork: outstandingAutonomousWork,
 								ownerStillRunningForC10: ownerStillRunningForC10,
@@ -4557,6 +4768,19 @@ export class SdkSessionEventCoordinator {
 										.join(","),
 								},
 							})
+
+							// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01
+							// (CLCR01): capture the EXACT blocking job id set (not just
+							// the count) and each blocker's ownership class at the C10
+							// completion-attempt boundary. Reuses the already-evaluated
+							// authority inputs — no extra process signal, no provider
+							// call, no protocol field.
+							this.captureContainmentLedgerBlockingSet(
+								activeSession.sessionId,
+								"c10_completion_attempt",
+								unresolvedContainmentFailuresForC10,
+								containmentLedgerDetailA,
+							)
 
 							if (
 								outstandingAutonomousWork ||

@@ -771,7 +771,23 @@ describe("ACT-CLINEMM-P0-CONTAINMENT-FAILURE-C10-AUTHORITY-REPRO01 / RED-03 C10 
 		// repaired contract requires its PRESENCE.
 		const barrierIdx = coordinatorSource.indexOf("const heldObligationForC10 =")
 		expect(barrierIdx).toBeGreaterThan(-1)
-		const barrierBlock = coordinatorSource.slice(barrierIdx, barrierIdx + 2400)
+		// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01): the
+		// barrier slice is now anchored on the METHOD BOUNDARY rather
+		// than on an arbitrary character width, for the SAME reason the
+		// sibling re-evaluation assertion below already uses that
+		// technique: the barrier block legitimately grew when the
+		// containment-ledger capture was added to it, and a fixed
+		// character width would silently stop covering the predicate.
+		//
+		// A boundary-anchored slice is STRICTLY STRONGER than the
+		// fixed-width slice it replaces: it covers the whole block
+		// instead of an arbitrary prefix of it.
+		const barrierMethodIdx = coordinatorSource.lastIndexOf("\n\tprivate ", barrierIdx)
+		const barrierMethodEndIdx = coordinatorSource.indexOf("\n\tprivate ", barrierIdx)
+		const barrierBlock = coordinatorSource.slice(
+			barrierMethodIdx > -1 ? barrierMethodIdx : barrierIdx,
+			barrierMethodEndIdx > barrierIdx ? barrierMethodEndIdx : undefined,
+		)
 		expect(barrierBlock).toContain("unresolvedContainmentFailuresForOwner")
 		expect(barrierBlock).toContain("unresolvedContainmentFailuresForC10.length > 0")
 		// The Q5 path DOES consult it, and FAILS CLOSED.
