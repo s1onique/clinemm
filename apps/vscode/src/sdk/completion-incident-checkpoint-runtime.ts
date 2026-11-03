@@ -173,14 +173,56 @@ function buildBoundedCheckpoint(maxBytes: number): {
 	}
 	// Even the anomalous capsules alone do not fit. Keep only the
 	// most recent one and report the loss.
+	//
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION02:
+	// The single-capsule fallback MUST ALSO satisfy the byte bound.
+	// The previous implementation returned that fallback WITHOUT
+	// checking its final serialized size, so a single oversized
+	// capsule was written to disk OVER the 512-KiB bound — the very
+	// limit the bounded builder exists to enforce. The fallback now
+	// verifies its size and, when even one capsule is too large,
+	// sheds that capsule's RECORDS until it fits (or until nothing
+	// remains). The shed records are reported as dropped evidence.
 	const kept = anomalous.slice(-1)
 	const droppedAnomalous = anomalous.slice(0, -1)
 	droppedRecords += droppedAnomalous.reduce((sum, c) => sum + c.records.length, 0)
 	const totalDropped = dropped + droppedAnomalous.length
-	const minimal = withTruncationStats(kept, totalDropped, droppedRecords)
+	let minimal = withTruncationStats(kept, totalDropped, droppedRecords)
+	let minimalBytes = utf8ByteLength(JSON.stringify(minimal))
+	if (minimalBytes > maxBytes && kept.length > 0) {
+		// Shed the retained capsule's records, newest first, until the
+		// serialized form fits the bound.
+		const retained = kept[0]
+		if (!retained) {
+			return {
+				checkpoint: minimal,
+				bytes: minimalBytes,
+				droppedCapsules: totalDropped,
+				droppedRecords,
+			}
+		}
+		const retainedRecords = [...retained.records]
+		while (retainedRecords.length > 0) {
+			const candidateRecords = retainedRecords.slice(0, -1)
+			const shed = retainedRecords.length - candidateRecords.length
+			const candidate = withTruncationStats(
+				[{ ...retained, records: candidateRecords }],
+				totalDropped,
+				droppedRecords + shed,
+			)
+			const size = utf8ByteLength(JSON.stringify(candidate))
+			if (size <= maxBytes) {
+				minimal = candidate
+				minimalBytes = size
+				droppedRecords += shed
+				break
+			}
+			retainedRecords.length = candidateRecords.length
+		}
+	}
 	return {
 		checkpoint: minimal,
-		bytes: utf8ByteLength(JSON.stringify(minimal)),
+		bytes: minimalBytes,
 		droppedCapsules: totalDropped,
 		droppedRecords,
 	}

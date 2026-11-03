@@ -141,6 +141,30 @@ export interface CompletionIncidentBundleSummary {
 	 */
 	readonly taskId: string | undefined | "UNOBSERVED"
 	/**
+	 * The DIAGNOSTIC barrier id of the completion lifecycle this
+	 * summary describes.
+	 *
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION02:
+	 * A task can go through SEVERAL completion lifecycles. Each
+	 * lifecycle is a distinct barrier obligation, keyed by
+	 * `(sessionId, taskId, epoch)`. The `barrierId` identifies WHICH
+	 * lifecycle the summary describes, so two summaries for the SAME
+	 * task are never confused with one another.
+	 *
+	 * `UNOBSERVED` only for the bundle-wide overview, which is NOT an
+	 * incident conclusion.
+	 */
+	readonly barrierId: string | "UNOBSERVED"
+	/**
+	 * The epoch of the completion lifecycle this summary describes.
+	 *
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION02:
+	 * The epoch is the lifecycle discriminator WITHIN a task. It
+	 * travels with the summary so an operator can see WHICH attempt
+	 * concluded and which one is still open.
+	 */
+	readonly epoch: number | "UNOBSERVED"
+	/**
 	 * The capture verdict for THIS incident.
 	 *
 	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
@@ -213,17 +237,37 @@ function toJsonl(rows: readonly unknown[]): string {
 }
 
 /**
- * Group the records into INCIDENTS, keyed by the causal identity of
- * the task capsule the record belongs to.
+ * Group the records into COMPLETION LIFECYCLES, keyed by the
+ * diagnostic barrier id.
  *
- * The capsule key is the task id (with `"(none)"` for the
- * task-less capsule), exactly as the recorder keys it. Two records
- * belong to the SAME incident iff they belong to the same capsule.
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION02:
+ * The previous implementation grouped by `taskId` ONLY. That is
+ * too coarse: a SINGLE task can go through SEVERAL completion
+ * lifecycles (each a distinct barrier obligation, keyed by
+ * `(sessionId, taskId, epoch)`), and a task-scoped group mixes them.
+ *
+ * Consider one task:
+ *
+ *   epoch 10 → the completion COMMITs
+ *   epoch 11 → the completion is HELD
+ *
+ * Grouping by task produced ONE summary that selected the LAST
+ * commit/withhold anywhere in the task — so the held epoch 11
+ * inherited epoch 10's `committed` outcome. That is the SAME
+ * wrong-terminal-outcome defect CORRECTION01 fixed ACROSS tasks,
+ * reintroduced WITHIN one task.
+ *
+ * The barrier id is the LIFECYCLE key. It is minted by the recorder
+ * and is stable across the whole lifecycle (registration →
+ * re-evaluation → clearance → completion) while a NEW epoch mints
+ * a NEW id. Records without a barrier id fall back to the task key
+ * so a malformed capture still groups deterministically instead of
+ * collapsing every record into one bucket.
  */
-function groupRecordsByIncident(records: readonly CompletionIncidentRecord[]): Map<string, CompletionIncidentRecord[]> {
+function groupRecordsByLifecycle(records: readonly CompletionIncidentRecord[]): Map<string, CompletionIncidentRecord[]> {
 	const grouped = new Map<string, CompletionIncidentRecord[]>()
 	for (const record of records) {
-		const key = record.taskId ?? "(none)"
+		const key = record.barrierId || `task:${record.taskId ?? "(none)"}`
 		const bucket = grouped.get(key)
 		if (bucket) {
 			bucket.push(record)
@@ -235,11 +279,19 @@ function groupRecordsByIncident(records: readonly CompletionIncidentRecord[]): M
 }
 
 /**
- * Build ONE incident-scoped summary from the records of ONE incident.
+ * Build ONE LIFECYCLE-scoped summary from the records of ONE
+ * completion lifecycle.
  *
  * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
  * The summary is scoped to the incident's OWN records. Another
  * task's completion can never satisfy this incident's terminality.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION02:
+ * The summary is scoped to ONE completion LIFECYCLE. Another
+ * lifecycle of the SAME task can never satisfy this lifecycle's
+ * terminality either. The `records` passed in are already the
+ * lifecycle's OWN records, so every fact below is derived from a
+ * single barrier obligation.
  */
 function buildIncidentSummary(
 	taskId: string | undefined,
@@ -253,6 +305,11 @@ function buildIncidentSummary(
 	// delivery outcome is not a barrier outcome.
 	const barrierRecord = [...records].reverse().find((r) => isBarrierStage(r.stage))
 	// The last record that established a commit (or its withholding).
+	//
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION02:
+	// This lookup is scoped to THIS lifecycle's records only, so a
+	// commit from an EARLIER lifecycle of the same task can never
+	// satisfy this lifecycle's terminality.
 	const commitRecord = [...records].reverse().find((r) => r.outcome === "committed" || r.outcome === "withheld")
 
 	const completionCommitted = commitRecord ? commitRecord.outcome === "committed" : ("UNOBSERVED" as const)
@@ -264,6 +321,13 @@ function buildIncidentSummary(
 				epoch: barrierRecord.markerIdentity.epoch,
 			}
 		: ("UNOBSERVED" as const)
+
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION02:
+	// The lifecycle identity travels WITH the summary. The barrier id
+	// is the diagnostic lifecycle key; the epoch is the lifecycle
+	// discriminator within the task.
+	const barrierId = records.find((r) => r.barrierId)?.barrierId ?? UNOBSERVED
+	const epoch = records.length > 0 ? records[records.length - 1]?.epoch : ("UNOBSERVED" as const)
 
 	if (completionCommitted === "UNOBSERVED") {
 		notes.push("No completion commit or withhold was observed in this incident's captured evidence.")
@@ -293,6 +357,8 @@ function buildIncidentSummary(
 
 	return {
 		taskId,
+		barrierId,
+		epoch,
 		status,
 		lastObservedPhase: phaseRecord?.phase ?? UNOBSERVED,
 		lastPhaseWriter: phaseRecord?.phaseWriter ?? UNOBSERVED,
@@ -305,7 +371,8 @@ function buildIncidentSummary(
 }
 
 /**
- * Build an INDEPENDENT summary for EVERY retained incident.
+ * Build an INDEPENDENT summary for EVERY retained completion
+ * LIFECYCLE.
  *
  * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION01:
  * The previous implementation produced ONE bundle-wide summary that
@@ -318,16 +385,26 @@ function buildIncidentSummary(
  * Each retained incident now gets its own summary. An unrelated
  * task's completion can never satisfy another incident's
  * terminality.
+ *
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01-CORRECTION02:
+ * The grouping is now by COMPLETION LIFECYCLE (`barrierId`), not by
+ * task. A task that went through several completion attempts now
+ * yields one summary PER attempt, and each attempt keeps its OWN
+ * terminal outcome. A later lifecycle never inherits an earlier
+ * lifecycle's commit.
  */
 export function buildCompletionIncidentBundleSummaries(
 	records: readonly CompletionIncidentRecord[],
 ): CompletionIncidentBundleSummary[] {
-	const grouped = groupRecordsByIncident(records)
+	const grouped = groupRecordsByLifecycle(records)
 	const summaries: CompletionIncidentBundleSummary[] = []
-	for (const [key, incidentRecords] of grouped) {
-		const taskId = key === "(none)" ? undefined : key
+	for (const [, lifecycleRecords] of grouped) {
+		// The task id is taken from the RECORDS, not from the group
+		// key: the group key is the lifecycle's barrier id, and a
+		// task-less capsule still reports `taskId: undefined`.
+		const taskId = lifecycleRecords.find((r) => r.taskId !== undefined)?.taskId
 		summaries.push(
-			buildIncidentSummary(taskId, incidentRecords, {
+			buildIncidentSummary(taskId, lifecycleRecords, {
 				evidenceLoss: hasCompletionIncidentEvidenceLoss(),
 			}),
 		)
@@ -364,7 +441,7 @@ export function buildCompletionIncidentBundleSummary(
 		)
 		for (const incident of perIncident) {
 			notes.push(
-				`Incident ${incident.taskId ?? "(none)"}: status=${incident.status}, completionCommitted=${String(incident.completionCommitted)}, lastBarrierOutcome=${incident.lastBarrierOutcome}.`,
+				`Incident ${incident.taskId ?? "(none)"} (epoch ${String(incident.epoch)}): status=${incident.status}, completionCommitted=${String(incident.completionCommitted)}, lastBarrierOutcome=${incident.lastBarrierOutcome}.`,
 			)
 		}
 	}
@@ -384,6 +461,10 @@ export function buildCompletionIncidentBundleSummary(
 
 	return {
 		taskId: UNOBSERVED,
+		// The overview spans EVERY retained lifecycle, so it has no
+		// single lifecycle identity of its own.
+		barrierId: UNOBSERVED,
+		epoch: UNOBSERVED,
 		status,
 		lastObservedPhase: phaseRecord?.phase ?? UNOBSERVED,
 		lastPhaseWriter: phaseRecord?.phaseWriter ?? UNOBSERVED,
