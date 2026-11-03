@@ -4,6 +4,16 @@ import {
 	isBcbObservationUnavailableCaptureEnabled,
 	recordBcbObservationUnavailableCapture,
 } from "@shared/bcb-observation-unavailable-capture"
+import {
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01: the bounded causal
+	// flight recorder. It captures the DECISION FACTS at the actual
+	// barrier decision boundaries — reusing the already-evaluated
+	// production locals so NO provider is invoked a second time for
+	// diagnostics.
+	type CompletionIncidentIdentity,
+	recordCompletionIncident,
+	setCompletionIncidentCoordinatorInstanceId,
+} from "@shared/completion-incident-flight-recorder"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import { refreshClineRecommendedModels } from "@/core/controller/models/refreshClineRecommendedModels"
 import type { StateManager } from "@/core/storage/StateManager"
@@ -1126,6 +1136,75 @@ export class SdkSessionEventCoordinator {
 		// The option is required; do not fall back to a default-
 		// Authorize. Tests must inject a provider.
 		this.getElmCompletionAuthorityDecision = options.getElmCompletionAuthorityDecision
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01: publish a
+		// DIAGNOSTIC-ONLY coordinator instance identity so the
+		// flight recorder can correlate records across the barrier
+		// lifecycle. This id NEVER participates in the runtime
+		// identity model, the marker, the epoch, or any protocol.
+		setCompletionIncidentCoordinatorInstanceId(`coord-${++SdkSessionEventCoordinator.coordinatorInstanceCounter}`)
+	}
+
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+	 * Process-local monotonic counter backing the diagnostic
+	 * coordinator instance id. Diagnostic only.
+	 */
+	private static coordinatorInstanceCounter = 0
+
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+	 * Capture one causal record at a decision boundary.
+	 *
+	 * This is a thin, allocation-cheap wrapper over the shared
+	 * recorder. It exists so the production call sites read as
+	 * "this boundary produced a fact" and so the identity plumbing
+	 * (sessionId / taskId / epoch) is uniform across every site.
+	 *
+	 * The recorder itself is a complete no-op when the diagnostic is
+	 * disabled, so this method is safe to call unconditionally.
+	 */
+	private captureIncident(input: {
+		readonly stage: Parameters<typeof recordCompletionIncident>[0]["stage"]
+		readonly outcome: string
+		readonly sessionId: string
+		readonly taskId: string | undefined
+		readonly epoch: number
+		readonly predicates?: Parameters<typeof recordCompletionIncident>[0]["predicates"]
+		readonly markerIdentity?: CompletionIncidentIdentity
+		readonly activeIdentity?: CompletionIncidentIdentity
+		readonly phaseWriter?: string
+		readonly phase?: Parameters<typeof recordCompletionIncident>[0]["phase"]
+		readonly detail?: Parameters<typeof recordCompletionIncident>[0]["detail"]
+	}): void {
+		recordCompletionIncident(input)
+	}
+
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+	 * Build the ACTIVE identity triple (the currently active session /
+	 * task / epoch). Returns `undefined` when there is no active
+	 * session — the caller then reports the absence explicitly rather
+	 * than fabricating an identity.
+	 */
+	private activeIncidentIdentity(sessionId: string | undefined): CompletionIncidentIdentity | undefined {
+		if (!sessionId) {
+			return undefined
+		}
+		return {
+			sessionId,
+			taskId: this.options.getTask?.()?.taskId,
+			epoch: this.options.messageTranslatorState.getMinter().epoch,
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+	 * The live epoch at the current re-evaluation boundary. Used by
+	 * the identity-mismatch captures so the ACTIVE identity carries
+	 * the epoch production actually compared against.
+	 */
+	private currentEpochAtReevaluation(): number {
+		return this.options.messageTranslatorState.getMinter().epoch
 	}
 
 	/**
@@ -1532,6 +1611,21 @@ export class SdkSessionEventCoordinator {
 					"A-03",
 				),
 			)
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The FINAL AUTHORITY boundary — the Elm decision
+			// that admits (or withholds) the completion commit.
+			this.captureIncident({
+				stage: "completion_authority",
+				outcome: "authorized",
+				sessionId: sessionId ?? "(none)",
+				taskId: this.options.getTask?.()?.taskId,
+				epoch: turnSeq,
+				activeIdentity: this.activeIncidentIdentity(sessionId ?? undefined),
+				phaseWriter: writerId,
+				predicates: {
+					elmDecision: "authorize",
+				},
+			})
 			return true
 		}
 		if (decision.kind === "hold") {
@@ -1556,6 +1650,23 @@ export class SdkSessionEventCoordinator {
 			Logger.warn(
 				`[SdkController] Elm completion-authority returned HOLD at writerId=${writerId} (reason=${decision.reason}); suppressing commit effect`,
 			)
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The FINAL AUTHORITY boundary — Elm HELD the
+			// completion. The hold REASON is captured so the
+			// operator sees why the commit was withheld.
+			this.captureIncident({
+				stage: "completion_authority",
+				outcome: "withheld",
+				sessionId: sessionId ?? "(none)",
+				taskId: this.options.getTask?.()?.taskId,
+				epoch: turnSeq,
+				activeIdentity: this.activeIncidentIdentity(sessionId ?? undefined),
+				phaseWriter: writerId,
+				predicates: {
+					elmDecision: "hold",
+					elmReason: decision.reason,
+				},
+			})
 			return false
 		}
 		// failure: per ACT §3, no silent TS fallback. Suppress the
@@ -1581,6 +1692,22 @@ export class SdkSessionEventCoordinator {
 		Logger.warn(
 			`[SdkController] Elm completion-authority returned FAILURE at writerId=${writerId} (classification=${decision.classification}); suppressing commit effect (no silent TS fallback)`,
 		)
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+		// The FINAL AUTHORITY boundary — Elm FAILED. The
+		// classification is captured.
+		this.captureIncident({
+			stage: "completion_authority",
+			outcome: "failed",
+			sessionId: sessionId ?? "(none)",
+			taskId: this.options.getTask?.()?.taskId,
+			epoch: turnSeq,
+			activeIdentity: this.activeIncidentIdentity(sessionId ?? undefined),
+			phaseWriter: writerId,
+			predicates: {
+				elmDecision: "failure",
+				elmClassification: decision.classification,
+			},
+		})
 		return false
 	}
 
@@ -1829,6 +1956,18 @@ export class SdkSessionEventCoordinator {
 		const marker = this.deferredCompletionBarrier
 		if (!marker) {
 			recordMarkerMissing()
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The marker was ABSENT at re-evaluation. There is
+			// nothing to compare — the absence itself is the
+			// fact. No identity is fabricated.
+			this.captureIncident({
+				stage: "barrier_reevaluation",
+				outcome: "marker_missing",
+				sessionId: "(none)",
+				taskId: this.options.getTask?.()?.taskId,
+				epoch: this.options.messageTranslatorState.getMinter().epoch,
+				activeIdentity: undefined,
+			})
 			return
 		}
 		recordMarkerPresent()
@@ -1856,6 +1995,29 @@ export class SdkSessionEventCoordinator {
 			// call also records `markerClearedForMissingSession`
 			// and sets `lastStopReason = "active_session_missing"`.
 			recordActiveSessionMissing()
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The marker was CLEARED because there is no active
+			// session. The MARKER identity is captured (the
+			// session that held the obligation) alongside the
+			// ABSENCE of an active identity. The two are
+			// deliberately different fields so an operator can
+			// see which session's obligation was dropped.
+			this.captureIncident({
+				stage: "marker_clearance",
+				outcome: "session_missing",
+				sessionId: marker.sessionId,
+				taskId: marker.taskId,
+				epoch: marker.epoch,
+				markerIdentity: {
+					sessionId: marker.sessionId,
+					taskId: marker.taskId,
+					epoch: marker.epoch,
+				},
+				activeIdentity: undefined,
+				predicates: {
+					sessionMatched: sessionMatched,
+				},
+			})
 			this.deferredCompletionBarrier = undefined
 			this.bcbHoldResumablePublished = false
 			return
@@ -1863,6 +2025,32 @@ export class SdkSessionEventCoordinator {
 		recordActiveSessionPresent()
 		if (marker.sessionId !== activeSession.sessionId) {
 			recordSessionMismatch()
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The marker was CLEARED by a SESSION MISMATCH.
+			// BOTH identities are captured: the marker's
+			// session and the ACTIVE session. A boolean
+			// mismatch counter alone cannot say which
+			// session held the obligation.
+			this.captureIncident({
+				stage: "marker_clearance",
+				outcome: "session_mismatch",
+				sessionId: marker.sessionId,
+				taskId: marker.taskId,
+				epoch: marker.epoch,
+				markerIdentity: {
+					sessionId: marker.sessionId,
+					taskId: marker.taskId,
+					epoch: marker.epoch,
+				},
+				activeIdentity: {
+					sessionId: activeSession.sessionId,
+					taskId: this.options.getTask?.()?.taskId,
+					epoch: this.currentEpochAtReevaluation(),
+				},
+				predicates: {
+					sessionMatched: sessionMatched,
+				},
+			})
 			this.deferredCompletionBarrier = undefined
 			this.bcbHoldResumablePublished = false
 			return
@@ -1870,6 +2058,28 @@ export class SdkSessionEventCoordinator {
 		const taskId = this.options.getTask?.()?.taskId
 		if (marker.taskId !== taskId) {
 			recordTaskMismatch()
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The marker was CLEARED by a TASK MISMATCH. Both
+			// the marker's task and the active task are
+			// captured so the operator can attribute the
+			// mismatch to a specific task pair.
+			this.captureIncident({
+				stage: "marker_clearance",
+				outcome: "task_mismatch",
+				sessionId: marker.sessionId,
+				taskId: marker.taskId,
+				epoch: marker.epoch,
+				markerIdentity: {
+					sessionId: marker.sessionId,
+					taskId: marker.taskId,
+					epoch: marker.epoch,
+				},
+				activeIdentity: {
+					sessionId: activeSession.sessionId,
+					taskId: taskId,
+					epoch: this.currentEpochAtReevaluation(),
+				},
+			})
 			this.deferredCompletionBarrier = undefined
 			this.bcbHoldResumablePublished = false
 			return
@@ -1877,6 +2087,29 @@ export class SdkSessionEventCoordinator {
 		const currentEpoch = this.options.messageTranslatorState.getMinter().epoch
 		if (marker.epoch !== currentEpoch) {
 			recordEpochMismatch()
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The marker was CLEARED by an EPOCH MISMATCH.
+			// Both the marker's epoch and the live epoch are
+			// captured — this is the "did that phase survive a
+			// session switch without its original completion
+			// obligation?" question.
+			this.captureIncident({
+				stage: "marker_clearance",
+				outcome: "epoch_mismatch",
+				sessionId: marker.sessionId,
+				taskId: marker.taskId,
+				epoch: marker.epoch,
+				markerIdentity: {
+					sessionId: marker.sessionId,
+					taskId: marker.taskId,
+					epoch: marker.epoch,
+				},
+				activeIdentity: {
+					sessionId: activeSession.sessionId,
+					taskId: taskId,
+					epoch: currentEpoch,
+				},
+			})
 			this.deferredCompletionBarrier = undefined
 			this.bcbHoldResumablePublished = false
 			return
@@ -1939,6 +2172,32 @@ export class SdkSessionEventCoordinator {
 		// fact, then the production check uses the same const.
 		if (ownerStillRunning) {
 			recordOwnerStillRunning()
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The re-evaluation HELD here. Capture the exact
+			// branch and the predicate responsible, using the
+			// SAME already-evaluated production locals the
+			// production check used (§11 invariant).
+			this.captureIncident({
+				stage: "early_return",
+				outcome: "held",
+				sessionId: activeSession.sessionId,
+				taskId,
+				epoch: marker.epoch,
+				markerIdentity: {
+					sessionId: marker.sessionId,
+					taskId: marker.taskId,
+					epoch: marker.epoch,
+				},
+				activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+				predicates: {
+					ownerStillRunning: ownerStillRunning,
+					pendingPromptAuthorityUnknown: pendingPromptAuthorityUnknown,
+					pendingPromptsKnown: pendingPromptsKnown,
+					activeNotifyCount: activeNotifyCount,
+					perJobOutstandingNotifyWork: perJobOutstandingNotifyWork,
+					outstandingAutonomousWork: outstandingAutonomousWork,
+				},
+			})
 			return
 		}
 		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
@@ -2097,6 +2356,32 @@ export class SdkSessionEventCoordinator {
 			// check and the record*() share the SAME fact (§11
 			// invariant).
 			recordOutstandingAutonomousWork()
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The re-evaluation HELD here. Capture the exact
+			// branch and the predicate responsible, using the
+			// SAME already-evaluated production locals the
+			// production check used (§11 invariant).
+			this.captureIncident({
+				stage: "early_return",
+				outcome: "held",
+				sessionId: activeSession.sessionId,
+				taskId,
+				epoch: marker.epoch,
+				markerIdentity: {
+					sessionId: marker.sessionId,
+					taskId: marker.taskId,
+					epoch: marker.epoch,
+				},
+				activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+				predicates: {
+					outstandingAutonomousWork: outstandingAutonomousWork,
+					pendingPromptAuthorityUnknown: pendingPromptAuthorityUnknown,
+					pendingPromptsKnown: pendingPromptsKnown,
+					activeNotifyCount: activeNotifyCount,
+					perJobOutstandingNotifyWork: perJobOutstandingNotifyWork,
+					ownerStillRunning: ownerStillRunning,
+				},
+			})
 			return
 		}
 		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
@@ -2155,6 +2440,32 @@ export class SdkSessionEventCoordinator {
 			Logger.warn(
 				`[SdkController] outstanding obligations resolved for session ${activeSession.sessionId} but an unresolved containment failure remains (jobs=${unresolvedContainmentFailuresForDeferredC10.join(",")}); holding the deferred completion (CFC10AR01 barrier)`,
 			)
+			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+			// The deferred re-evaluation HELD on an unresolved
+			// containment failure. The marker is PRESERVED (not
+			// cleared) — this is a hold, not a clearance.
+			this.captureIncident({
+				stage: "early_return",
+				outcome: "held",
+				sessionId: activeSession.sessionId,
+				taskId,
+				epoch: marker.epoch,
+				markerIdentity: {
+					sessionId: marker.sessionId,
+					taskId: marker.taskId,
+					epoch: marker.epoch,
+				},
+				activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+				predicates: {
+					outstandingAutonomousWork: outstandingAutonomousWork,
+					ownerStillRunning: ownerStillRunning,
+					heldObligation: heldObligation,
+					unresolvedContainmentFailureCount: unresolvedContainmentFailuresForDeferredC10.length,
+				},
+				detail: {
+					holdReason: "unresolved_containment_failure",
+				},
+			})
 			return
 		}
 
@@ -2163,6 +2474,33 @@ export class SdkSessionEventCoordinator {
 		Logger.warn(
 			`[SdkController] outstanding obligations resolved; releasing held completion for session ${activeSession.sessionId} (epoch=${marker.epoch})`,
 		)
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+		// The marker is CLEARED BY RELEASE. The original hold
+		// is linked to the authoritative completion: the
+		// predicate values that were true at hold time are
+		// recorded again here as FALSE (they were re-evaluated
+		// by production just above), so the timeline shows the
+		// hold → release transition for the SAME barrier.
+		this.captureIncident({
+			stage: "marker_clearance",
+			outcome: "released",
+			sessionId: activeSession.sessionId,
+			taskId,
+			epoch: marker.epoch,
+			markerIdentity: {
+				sessionId: marker.sessionId,
+				taskId: marker.taskId,
+				epoch: marker.epoch,
+			},
+			activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+			predicates: {
+				outstandingAutonomousWork: outstandingAutonomousWork,
+				ownerStillRunning: ownerStillRunning,
+				heldObligation: heldObligation,
+				unconsumedOwnedTerminalResultCount: unconsumedOwnedTerminalResultCount,
+				unresolvedContainmentFailureCount: unresolvedContainmentFailuresForDeferredC10.length,
+			},
+		})
 		this.deferredCompletionBarrier = undefined
 		this.bcbHoldResumablePublished = false
 		// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
@@ -2239,6 +2577,25 @@ export class SdkSessionEventCoordinator {
 				"A-04",
 			),
 		)
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+		// The completion COMMITTED. This is the authoritative
+		// end of the barrier lifecycle — the record that links
+		// the original hold to the authoritative completion.
+		this.captureIncident({
+			stage: "completion_authority",
+			outcome: "committed",
+			sessionId: activeSession.sessionId,
+			taskId,
+			epoch: marker.epoch,
+			markerIdentity: {
+				sessionId: marker.sessionId,
+				taskId: marker.taskId,
+				epoch: marker.epoch,
+			},
+			activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+			phaseWriter: "session-event-turn-complete-completed",
+			phase: "completed",
+		})
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 		this.bcbHoldResumablePublished = false
 		recordLifecycleTransitionTrace(
@@ -2472,6 +2829,37 @@ export class SdkSessionEventCoordinator {
 		// captures each short-circuit branch with the same
 		// §11 invariant (local const + record-after).
 		recordEnqueueIfHeldEntered()
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+		// The CONTINUATION ELIGIBILITY boundary. Capture WHY the
+		// bounded coalesced continuation is or is not eligible —
+		// including the "not eligible" reasons, which are the
+		// ones an operator most needs.
+		this.captureIncident({
+			stage: "continuation",
+			outcome: !this.options.enqueueCompletionContinuation
+				? "no_callback"
+				: unconsumedOwnedTerminalResultsForC10 <= 0
+					? "not_eligible_no_unconsumed_terminal"
+					: !this.deferredCompletionBarrier
+						? "not_eligible_no_marker"
+						: "eligible",
+			sessionId: activeSessionId,
+			taskId,
+			epoch: this.options.messageTranslatorState.getMinter().epoch,
+			markerIdentity: this.deferredCompletionBarrier
+				? {
+						sessionId: this.deferredCompletionBarrier.sessionId,
+						taskId: this.deferredCompletionBarrier.taskId,
+						epoch: this.deferredCompletionBarrier.epoch,
+					}
+				: undefined,
+			activeIdentity: this.activeIncidentIdentity(activeSessionId),
+			predicates: {
+				hasEnqueueCallback: this.options.enqueueCompletionContinuation !== undefined,
+				unconsumedOwnedTerminalResultsForC10: unconsumedOwnedTerminalResultsForC10,
+				hasBarrierMarker: this.deferredCompletionBarrier !== undefined,
+			},
+		})
 		if (!this.options.enqueueCompletionContinuation) {
 			return Promise.resolve({ kind: "no_callback" })
 		}
@@ -2791,6 +3179,34 @@ export class SdkSessionEventCoordinator {
 		// the fingerprint in `clearCompletionContinuationSentForTesting`.
 		this.lastCompletionContinuationHeldSetSorted = nextSortedHeld
 		recordEnqueueCompletionContinuationInvoked()
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+		// The CONTINUATION boundary — the enqueue ATTEMPT.
+		// Eligibility and the held set are captured from the
+		// already-evaluated production locals.
+		this.captureIncident({
+			stage: "continuation",
+			outcome: "enqueue_attempted",
+			sessionId: activeSessionId,
+			taskId,
+			epoch,
+			markerIdentity: this.deferredCompletionBarrier
+				? {
+						sessionId: this.deferredCompletionBarrier.sessionId,
+						taskId: this.deferredCompletionBarrier.taskId,
+						epoch: this.deferredCompletionBarrier.epoch,
+					}
+				: undefined,
+			activeIdentity: this.activeIncidentIdentity(activeSessionId),
+			predicates: {
+				unconsumedOwnedTerminalResultsForC10: unconsumedOwnedTerminalResultsForC10,
+				heldJobIdsCount: heldJobIds.length,
+				dedupeSuppressed: false,
+			},
+			detail: {
+				continuationSessionEpoch: continuationSessionEpoch,
+				heldJobIdsCount: heldJobIds.length,
+			},
+		})
 		return this.options
 			.enqueueCompletionContinuation({
 				sessionId: activeSessionId,
@@ -2798,6 +3214,25 @@ export class SdkSessionEventCoordinator {
 				heldJobIds,
 			})
 			.then((outcome) => {
+				// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+				// The DELIVERY OUTCOME of the bounded coalesced
+				// continuation. This answers "why did automatic
+				// continuation not run?" directly.
+				this.captureIncident({
+					stage: "continuation",
+					outcome: outcome.kind,
+					sessionId: activeSessionId,
+					taskId,
+					epoch,
+					predicates: {
+						unconsumedOwnedTerminalResultsForC10: unconsumedOwnedTerminalResultsForC10,
+						heldJobIdsCount: heldJobIds.length,
+					},
+					detail: {
+						continuationSessionEpoch: continuationSessionEpoch,
+						heldJobIdsCount: heldJobIds.length,
+					},
+				})
 				if (outcome.kind === "delivered") {
 					return { kind: "delivered" as const, heldJobIds, continuationSessionEpoch }
 				}
@@ -4050,6 +4485,79 @@ export class SdkSessionEventCoordinator {
 								activeSession.sessionId,
 							)
 
+							// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+							// The C10 COMPLETION ATTEMPT boundary. Capture
+							// ALL the hold predicates production just
+							// evaluated, plus the exact conjunct that
+							// decided the hold.
+							//
+							// Every value below is an ALREADY-EVALUATED
+							// production local — no provider is invoked a
+							// second time for diagnostics.
+							//
+							// The `pendingPromptAuthorityUnknown` /
+							// `pendingPromptsKnown` / `activeNotifyCount` /
+							// `perJobOutstandingNotifyWork` conjuncts are
+							// folded into `outstandingAutonomousWork` by
+							// production. Their individual values are
+							// captured so the operator can tell WHICH
+							// sub-conjunct held — not merely that the
+							// aggregate was true.
+							const c10HoldConjuncts = {
+								outstandingAutonomousWork: outstandingAutonomousWork,
+								ownerStillRunningForC10: ownerStillRunningForC10,
+								heldObligationForC10: heldObligationForC10,
+								suppressOriginatingCompletion: suppressOriginatingCompletion,
+								unresolvedContainmentFailureCount: unresolvedContainmentFailuresForC10.length,
+							} as const
+							const c10HoldReason = suppressOriginatingCompletion
+								? "suppress_originating_completion"
+								: unresolvedContainmentFailuresForC10.length > 0
+									? "unresolved_containment_failure"
+									: ownerStillRunningForC10
+										? "owner_still_running"
+										: heldObligationForC10
+											? "held_obligation"
+											: outstandingAutonomousWork
+												? "outstanding_autonomous_work"
+												: "none"
+							this.captureIncident({
+								stage: "completion_attempt",
+								outcome:
+									outstandingAutonomousWork ||
+									ownerStillRunningForC10 ||
+									heldObligationForC10 ||
+									suppressOriginatingCompletion ||
+									unresolvedContainmentFailuresForC10.length > 0
+										? "held"
+										: "not_held",
+								sessionId: activeSession.sessionId,
+								taskId: this.options.getTask?.()?.taskId,
+								epoch: this.options.messageTranslatorState.getMinter().epoch,
+								activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+								predicates: {
+									pendingPromptAuthorityUnknown: pendingPromptAuthorityUnknown,
+									pendingPromptsKnown: pendingPromptsKnown,
+									activeNotifyCount: activeNotifyCount,
+									perJobOutstandingNotifyWork: perJobOutstandingNotifyWork,
+									perJobSuppressOriginatingCompletion: perJobSuppressOriginatingCompletion,
+									outstandingAutonomousWork: outstandingAutonomousWork,
+									ownerStillRunningForC10: ownerStillRunningForC10,
+									unconsumedOwnedTerminalResultsForC10: unconsumedOwnedTerminalResultsForC10,
+									unconsumedOwnedTerminalJobIdsCount: unconsumedOwnedTerminalJobIdsForC10.length,
+									heldObligationForC10: heldObligationForC10,
+									suppressOriginatingCompletion: suppressOriginatingCompletion,
+									unresolvedContainmentFailureCount: unresolvedContainmentFailuresForC10.length,
+								},
+								detail: {
+									holdReason: c10HoldReason,
+									heldConjuncts: Object.entries(c10HoldConjuncts)
+										.filter(([, value]) => value === true || (typeof value === "number" && value > 0))
+										.map(([name]) => name)
+										.join(","),
+								},
+							})
+
 							if (
 								outstandingAutonomousWork ||
 								ownerStillRunningForC10 ||
@@ -4096,6 +4604,48 @@ export class SdkSessionEventCoordinator {
 									deferredAt: Date.now(),
 									...(preservedReason ? { reason: preservedReason } : {}),
 								}
+
+								// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+								// The BCB REGISTRATION boundary. Capture the
+								// session/task/epoch identity the marker was
+								// registered under, the reason it was
+								// registered, and the phase writer that owns
+								// the resulting `resumable` publication.
+								//
+								// The identity triple below is the EXACT triple
+								// written into the production marker — the
+								// diagnostic `barrierId` is separate and never
+								// enters this marker.
+								this.captureIncident({
+									stage: "barrier_registration",
+									outcome: "registered",
+									sessionId: _bcbCurrentSessionId,
+									taskId: _bcbCurrentTaskId,
+									epoch: _bcbCurrentEpoch,
+									markerIdentity: {
+										sessionId: _bcbCurrentSessionId,
+										taskId: _bcbCurrentTaskId,
+										epoch: _bcbCurrentEpoch,
+									},
+									activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+									predicates: {
+										holdReason: c10HoldReason,
+										outstandingAutonomousWork: outstandingAutonomousWork,
+										ownerStillRunningForC10: ownerStillRunningForC10,
+										heldObligationForC10: heldObligationForC10,
+										suppressOriginatingCompletion: suppressOriginatingCompletion,
+										unresolvedContainmentFailureCount: unresolvedContainmentFailuresForC10.length,
+										sameIdentityAsPreviousMarker: _bcbSameIdentity,
+									},
+									phaseWriter: "session-event-bcb-hold-resumable",
+									phase: "resumable",
+									detail: {
+										holdReason: c10HoldReason,
+										preservedPreviousReason: preservedReason ?? "none",
+										unconsumedOwnedTerminalResultsForC10: unconsumedOwnedTerminalResultsForC10,
+										unconsumedOwnedTerminalJobIdsCount: unconsumedOwnedTerminalJobIdsForC10.length,
+									},
+								})
 								// ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01
 								// (PTWCR01C01 -- B1: the BCB-HOLD TERMINAL-PHASE
 								// CONVERGENCE).
@@ -4166,6 +4716,33 @@ export class SdkSessionEventCoordinator {
 								// taskId / epoch), i.e. the SAME obligation.
 								if (preservedReason !== "observation_unavailable") {
 									this.bcbHoldResumablePublished = true
+									// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+									// The BCB-HOLD PHASE PUBLICATION. This is the
+									// phase write that leaves the task in the
+									// "Paused" state the operator sees. The
+									// writer identity is captured so "who last
+									// wrote the task phase" is answerable.
+									this.captureIncident({
+										stage: "barrier_registration",
+										outcome: "held_phase_published",
+										sessionId: activeSession.sessionId,
+										taskId: this.options.getTask?.()?.taskId,
+										epoch: this.options.messageTranslatorState.getMinter().epoch,
+										markerIdentity: {
+											sessionId: _bcbCurrentSessionId,
+											taskId: _bcbCurrentTaskId,
+											epoch: _bcbCurrentEpoch,
+										},
+										activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+										phaseWriter: "session-event-bcb-hold-resumable",
+										phase: "resumable",
+										predicates: {
+											holdReason: c10HoldReason,
+										},
+										detail: {
+											holdReason: c10HoldReason,
+										},
+									})
 									this.options.setTurnPhase?.("resumable", undefined, "session-event-bcb-hold-resumable")
 								}
 								// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01:
@@ -4522,6 +5099,20 @@ export class SdkSessionEventCoordinator {
 										"A-04",
 									),
 								)
+								// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+								// The DIRECT (Site A) completion commit — the
+								// authoritative end of the barrier lifecycle
+								// when no deferral was involved.
+								this.captureIncident({
+									stage: "completion_authority",
+									outcome: "committed",
+									sessionId: activeSession.sessionId,
+									taskId: this.options.getTask?.()?.taskId,
+									epoch: this.options.messageTranslatorState.getMinter().epoch,
+									activeIdentity: this.activeIncidentIdentity(activeSession.sessionId),
+									phaseWriter: "session-event-turn-complete-completed",
+									phase: "completed",
+								})
 								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 								this.bcbHoldResumablePublished = false
 								recordLifecycleTransitionTrace(

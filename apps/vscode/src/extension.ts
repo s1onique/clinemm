@@ -21,6 +21,11 @@ import { dumpExtensionSideElmAuthorityCounters } from "@/sdk/completion-authorit
 import { setCompletionContinuationControlElmProductionKernelPath } from "@/sdk/completion-continuation-control-elm"
 import { dumpExtensionSideCompletionContinuationDeliveryCounters } from "@/sdk/completion-continuation-delivery-runtime-host"
 import { dumpExtensionSideCompletionContinuationUpstreamCounters } from "@/sdk/completion-continuation-upstream-runtime-host"
+import { dumpCompletionIncidentBundle, resolveSourceCommitForIncidentBundle } from "@/sdk/completion-incident-bundle-runtime"
+import {
+	checkpointCompletionIncidentCapsules,
+	restoreCompletionIncidentCapsules,
+} from "@/sdk/completion-incident-checkpoint-runtime"
 import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
 import { setDeferredCompletionBarrierElmProductionKernelPath } from "@/sdk/deferred-completion-barrier-elm"
 import {
@@ -30,6 +35,7 @@ import {
 	applyCancelLivenessDiagnosticProfile,
 	applyCompletionContinuationDeliveryDiagnosticProfile,
 	applyCompletionContinuationUpstreamDiagnosticProfile,
+	applyCompletionIncidentFlightRecorderDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
 	applyExtensionHostAllocationProfilerProfile,
 	applyExtensionHostCpuProfilerProfile,
@@ -143,6 +149,19 @@ export async function reportRolloutActivation(input: RolloutBundleActivation): P
 // This method is called when the VS Code extension is activated.
 // NOTE: This is VS Code specific - services that should be registered
 // for all-platform should be registered in common.ts.
+/**
+ * ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+ * The extension context retained for the extension-host SHUTDOWN
+ * checkpoint. The `deactivate` hook has no context parameter, so the
+ * context captured at activation is used to persist the completion
+ * incident capsules on shutdown.
+ *
+ * The checkpoint is FIRE-AND-FORGET: `deactivate` never awaits it in
+ * a way that could block the host, and a failure is counted and
+ * reported rather than thrown.
+ */
+let completionIncidentCheckpointContext: { globalStorageUri: { fsPath: string } } | undefined
+
 export async function activate(context: vscode.ExtensionContext) {
 	const activationStartTime = performance.now()
 
@@ -376,6 +395,31 @@ export async function activate(context: vscode.ExtensionContext) {
 	// SdkController construction guarantees the seam is armed
 	// BEFORE the first CommandJobManager.finalize /
 	// BackgroundNotifyCoordinator.consumeTerminal / etc.
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
+	// Arm the completion-incident causal flight recorder at the SAME
+	// EARLIEST initialization seam, BEFORE SdkController construction.
+	// The helper flips the module seam idempotently based STRICTLY on
+	// the dogfood profile: dogfood -> ON, public -> OFF. There is NO
+	// env override and NO workspace toggle — the recorder is a
+	// dogfood-only diagnostic whose evidence is exported by the
+	// `cline.debug.dumpCompletionIncidentBundle` command.
+	const completionIncidentActivation = applyCompletionIncidentFlightRecorderDiagnosticProfile(isDogfoodRuntime(process.env))
+	Logger.log(
+		`[CIFR] profile activation: enabled=${completionIncidentActivation.enabled} ` +
+			`flipped=${completionIncidentActivation.flipped} source=${completionIncidentActivation.source}`,
+	)
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01: restore the
+	// capsules checkpointed by the previous session (task switch /
+	// shutdown) so an anomalous capsule the operator was still
+	// investigating survives the extension-host restart. The restore
+	// is bounded by the recorder's own caps and NEVER throws.
+	void restoreCompletionIncidentCapsules(context).then((restored) => {
+		if (restored) {
+			Logger.log("[CIFR] restored the completion-incident checkpoint")
+		}
+	})
+	completionIncidentCheckpointContext = context
+
 	applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION02-DOGFOOD-DIAGNOSTIC-GATE-AND-ARTIFACT-BINDING:
@@ -1177,6 +1221,29 @@ ${ctx.cellJson || "{}"}
 				}.`,
 			)
 		}),
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01: the ONE-command
+		// incident-bundle export. Writes manifest.json + the per-source
+		// JSONL files + summary.json into
+		// <globalStorageUri>/completion-incident-<timestamp>/.
+		// Unconditional (an operator must always be able to inspect
+		// whatever was captured); dump != clear (the recorders are NOT
+		// reset by this command).
+		vscode.commands.registerCommand(commands.DumpCompletionIncidentBundle, async () => {
+			try {
+				const bundleDir = await dumpCompletionIncidentBundle(context, {
+					extensionVersion: ExtensionRegistryInfo.version,
+					sourceCommit: await resolveSourceCommitForIncidentBundle(),
+					captureProfiles: [isDogfoodRuntime(process.env) ? "dogfood" : "public"],
+				})
+				Logger.log(`[CIFR] completion incident bundle: ${bundleDir}`)
+				void vscode.window.showInformationMessage(`Completion incident bundle: → ${bundleDir}.`)
+			} catch (err) {
+				Logger.error("[CIFR] completion incident bundle dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Completion incident bundle dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
 		vscode.commands.registerCommand(commands.DumpBcbObservationUnavailableCapture, async () => {
 			try {
 				// ACT-CLINEMM-BCB-CAPTURE-ACTIVATION01: surface the
@@ -1725,6 +1792,18 @@ async function getBinaryLocation(name: string): Promise<string> {
 
 // This method is called when your extension is deactivated
 export async function deactivate() {
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01: checkpoint the
+	// completion-incident capsules on extension-host shutdown so an
+	// anomalous capsule survives the restart. The write is
+	// FIRE-AND-FORGET and its failure is counted (and reported in the
+	// bundle manifest), never thrown into the shutdown path.
+	if (completionIncidentCheckpointContext) {
+		void checkpointCompletionIncidentCapsules(completionIncidentCheckpointContext).then((result) => {
+			if (!result.succeeded) {
+				Logger.warn(`[CIFR] completion-incident checkpoint failed: ${result.error ?? "unknown"}`)
+			}
+		})
+	}
 	// Dispose Non-VSCode-specific services
 	try {
 		await tearDown()

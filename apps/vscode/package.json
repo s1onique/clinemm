@@ -237,6 +237,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpCompletionIncidentBundle",
+				"title": "Cline: Dump Completion Incident Bundle",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.debug.dumpWCarrierTrace",
 				"title": "Cline Debug: Dump W Carrier Trace",
 				"category": "Cline"

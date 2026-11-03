@@ -118,6 +118,7 @@ import {
 	recordSendThrew,
 	recordSessionIdMismatch,
 } from "./completion-continuation-delivery-runtime"
+import { checkpointCompletionIncidentCapsules } from "./completion-incident-checkpoint-runtime"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import { setAgentTurnDoneSemanticTrigger } from "./continuation-cardinality-authority.runtime-capture"
 import {
@@ -5542,6 +5543,19 @@ export class Controller {
 	 * replace it.
 	 */
 	async showTaskWithId(taskId: string): Promise<TaskResponse> {
+		// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01: checkpoint the
+		// completion-incident capsules on a TASK SWITCH, so the
+		// evidence of the task the user is LEAVING is persisted before
+		// the new task becomes active.
+		//
+		// The write is FIRE-AND-FORGET: it is never awaited on the
+		// task-switch path, so a slow or failing disk can NEVER block
+		// the switch. A failure is counted and reported in the bundle
+		// manifest rather than thrown.
+		void checkpointCompletionIncidentCapsules(this.context).catch(() => {
+			// The runtime already records the failure; the task switch
+			// MUST NOT be affected by a checkpoint problem.
+		})
 		const historyItem = this.cloud.isCloudSessionId(taskId)
 			? await this.cloud.openCloudTask(taskId)
 			: await this.taskControl.showTaskWithId(taskId)

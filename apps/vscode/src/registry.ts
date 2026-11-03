@@ -61,6 +61,18 @@ const ClineCommands = {
 	// module + the production recorder call MUST be removed TOGETHER.
 	ToggleBcbObservationUnavailableCapture: prefix + ".debug.toggleBcbObservationUnavailableCapture",
 	DumpBcbObservationUnavailableCapture: prefix + ".debug.dumpBcbObservationUnavailableCapture",
+	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01: the ONE-command
+	// incident-bundle export. Unconditional (an operator must always
+	// be able to inspect whatever was captured), dump != clear. The
+	// bundle is written to
+	// <globalStorageUri>/completion-incident-<timestamp>/ and contains
+	// manifest.json + the per-source JSONL files + summary.json.
+	// REMOVAL_TRIGGER: first of (a) the incident class is diagnosed
+	// from a single dump, (b) CAPTURE_INSUFFICIENT, (c) successor
+	// evidence supersedes it. On removal, this registry entry + the
+	// package.json declaration + the extension.ts handler + the bundle
+	// runtime MUST be removed TOGETHER.
+	DumpCompletionIncidentBundle: prefix + ".debug.dumpCompletionIncidentBundle",
 	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
 	// Debug commands for the bounded, model-agnostic model behavior flight
 	// recorder. Default OFF in every build. The toggle flips a

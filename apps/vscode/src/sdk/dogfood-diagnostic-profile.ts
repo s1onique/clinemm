@@ -133,6 +133,10 @@ import {
 	enableBcbObservationUnavailableCapture,
 } from "@shared/bcb-observation-unavailable-capture"
 import {
+	isCompletionIncidentFlightRecorderEnabled as _isCompletionIncidentFlightRecorderEnabled,
+	setCompletionIncidentFlightRecorderEnabled,
+} from "@shared/completion-incident-flight-recorder"
+import {
 	disableTurnStateWriterProvenanceDiagnostic,
 	enableTurnStateWriterProvenanceDiagnostic,
 	isTurnStateWriterProvenanceDiagnosticEnabled,
@@ -2046,4 +2050,64 @@ export function applyCancelLivenessDiagnosticProfile(isDogfood: boolean): {
 
 function _isCancelLivenessDiagnosticEnabledForActivation(): boolean {
 	return isCancelLivenessDiagnosticEnabled()
+}
+
+// ============================================================================
+// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01 — central dogfood profile
+// resolver for the completion-incident causal flight recorder.
+//
+// CONTRACT (mirrors EHLOOP / CCARD / BJLA / BOCOR / TSWPD / BCAPT01;
+// no env override layer):
+//
+//   - There is NO new env var. NO override matrix. NO parser.
+//     The diagnostic is enabled STRICTLY by the central dogfood
+//     profile:
+//       isDogfood === true  -> recorder ON
+//       isDogfood === false -> recorder OFF (public default)
+//   - The module seam is
+//     @shared/completion-incident-flight-recorder#setCompletionIncidentFlightRecorderEnabled.
+//   - The activation helper is called from extension.ts:activate
+//     (sibling to the existing EHLOOP / BJLA / BOCOR / CCARD /
+//     TSWPD / BCAPT01 activations); there is exactly ONE production
+//     activation path.
+//
+// HONEST STOP RULE (mirrors EHLOOP / CCARD / BJLA / BOCOR):
+//   Once the incident class is diagnosable from a single dump AND
+//   the bundle is qualified on a LIVE incident, OR the diagnostic
+//   is classified CAPTURE_INSUFFICIENT, this resolver + the
+//   recorder module + the bundle runtime + the Command Palette
+//   registration + the registry entry + the package.json command
+//   declaration MUST be removed TOGETHER.
+// ============================================================================
+
+/**
+ * THE single production activation helper for the completion-incident
+ * causal flight recorder. Called from `extension.ts:activate`; there
+ * is exactly ONE production activation path, no copied orchestration
+ * in tests.
+ *
+ * Mirrors the EHLOOP / CCARD / BJLA / BOCOR pattern: enable/disable
+ * is strictly:
+ *
+ *   isDogfood === true  -> ON
+ *   isDogfood === false -> OFF
+ *
+ * No new env knob. No parser. No override matrix.
+ */
+export function applyCompletionIncidentFlightRecorderDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+	readonly source: "profile-on" | "profile-off"
+} {
+	const was = _isCompletionIncidentFlightRecorderEnabled()
+	const should = isDogfood
+	if (should && !was) {
+		setCompletionIncidentFlightRecorderEnabled(true)
+		return { enabled: true, flipped: true, source: "profile-on" }
+	}
+	if (!should && was) {
+		setCompletionIncidentFlightRecorderEnabled(false)
+		return { enabled: false, flipped: true, source: "profile-off" }
+	}
+	return { enabled: should, flipped: false, source: should ? "profile-on" : "profile-off" }
 }
