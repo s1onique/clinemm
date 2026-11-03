@@ -30853,3 +30853,110 @@ was recorded for terminal cleanup and **CORR03 was not reopened**:
 **Evidence**
 
 - `docs/acts/ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01/REPORT.md`
+
+---
+
+# ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01-CORRECTION01-SUCCESSOR-CONTRACT — HALT_SUCCESSOR_CONTRACT_FALSE_CARDINALITY — 2026-11-03
+
+**Status:** documentation-only bounded correction of the recon's **proposed, unimplemented** successor
+contract. **PRODUCTION_DELTA: ZERO** — no runtime, recorder, normalizer, React, Elm, protobuf, wire
+contract or test implementation was created, modified or deleted; no captured command was executed or
+replayed; no stash was touched; no branch, push or install. The recon's own measured findings, its
+conformance gates, its privacy assessment and its **`PASS_RECON_WITH_GAPS`** verdict are **unchanged**.
+
+```text
+ACT_ID: ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01-CORRECTION01-SUCCESSOR-CONTRACT
+TYPE: CORRECTION (bounded contract repair of a proposed successor)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01)
+VERDICT: HALT_SUCCESSOR_CONTRACT_FALSE_CARDINALITY
+PRODUCTION_DELTA: ZERO
+ENTRY_HEAD: 3b9c9f59ac70484399c09c395b6920a794c6e22a
+ENTRY_TREE: 08dd02a580d0c394e3dced5d859769e0171a34c3
+BRANCH: main (no ACT branch created)
+WORKTREES: unchanged   STASHES_TOUCHED: 0
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO
+RECON_VERDICT: PASS_RECON_WITH_GAPS (UNCHANGED)
+ABLATION_CLASSIFICATION: HYPOTHESIS_ONLY (relabelled from "executed ablation")
+SUCCESSOR_CONTRACT: CORRECTED — NOT YET IMPLEMENTABLE
+REVIEW_ROUNDS: none further unless new P0 evidence appears
+```
+
+**What was wrong, established against the production source at `ENTRY_HEAD`.**
+
+**P0-A — false cardinality.** The recon proposed *"one exit-status scalar per `run_commands`
+invocation"*. But `createShellTool` returns
+`AgentTool<RunCommandsInput, ToolOperationResult[]>` (`sdk/packages/core/src/extensions/tools/definitions.ts:742`)
+and `executeShellCommands` executes the array with
+`Promise.all(commands.map(async (command, commandIndex) => …))` (`:284-285`), so
+**`1 toolCallId → N command executions → N potentially different outcomes`**. `ToolOperationResult`
+(`sdk/packages/core/src/extensions/tools/types.ts:27-38`) has **no `commandIndex` field** — the array is
+positional — while the plan slot and the `emitUpdate` envelope carry `commandIndex`
+(`definitions.ts:285`, `:320`, `:341`, `:432`). A single scalar cannot represent a mixed batch.
+
+**P0-B — false observation time.** In background mode the tool returns the `RUNNING` handoff
+(`status:"running"`, `jobId`) **before** the process's terminal status exists
+(`apps/vscode/src/sdk/vscode-run-commands-tool.ts:1808-1816`); the terminal class is observed later
+via `start.terminalPromise.then(...)` (`:1851-1855`), resolved by `CommandJobManager.finalize()`
+(`apps/vscode/src/sdk/command-job-manager.ts:2450`, terminal state at `:2557-2571`). `tool_finish`
+therefore **cannot truthfully carry** a terminal exit code that has not yet been observed.
+
+**P0-C — the ablation was counterfactual, not executed.** The recon's §7.2 table's **Full** row reads
+`answerable / answerable / answerable`, while §7.1 establishes that for **this** capture Q2 and Q3 are
+both `CAPTURE_INSUFFICIENT`. The table is a **necessity argument**, relabelled **`HYPOTHESIS_ONLY`**;
+it does not establish that the specimen supports the ablation.
+
+**The recon's central finding is CONFIRMED and STRENGTHENED.** The full collapse chain is now
+established, not just the `definitions.ts:366` step: a per-command failure is **caught inside**
+`executeShellCommands` and returned as `success:false` **inside the array**
+(`definitions.ts:357-392`); `createTool` is a **pure passthrough**
+(`sdk/packages/shared/src/tools/create.ts:110-158`); the runtime stores the array with **no `isError`**
+(`sdk/packages/agents/src/agent-runtime.ts:4729`); and the boundary collapses to one boolean
+(`agent-runtime.ts:4857`, `outcome: result.isError ? "error" : "success"`). Hence **949/949
+`run_commands` recorded `outcome:"success"`** — a per-command failure never reaches the boundary at
+all.
+
+**Corrected successor contract** (`ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01`, still
+**default-OFF**, still **no public wire change**, still **no new process monitor**):
+
+| Requirement | Corrected contract |
+|---|---|
+| Command cardinality | Preserve `commandIndex` and the **individual** command outcome — one entry per executed command, never a collapsed scalar |
+| Foreground | Exact exit code **where observed**; explicit **`unknown`** otherwise |
+| Background handoff | `RUNNING` is **nonterminal** — never recorded as a process success |
+| Background completion | Capture the **eventual authoritative result**, even though it arrives **after** the tool call returned |
+| Correlation | Exact `(session, toolCallId, commandIndex) → jobId` where established; **no timestamp joins** |
+| Terminal taxonomy | `exited` / `cancelled` / `deadline_exceeded` / `spawn_failed` / `containment_failed` / `unknown`, kept distinct |
+| Recorder | Default-**OFF**, **no execution-semantic delta**, privacy-safe |
+| Proof | Real-seam **RED→GREEN**, **mixed-command controls**, **delayed-completion controls**, **necessity ablation executed** against captured evidence |
+
+**The observation boundary is NOT preordained.** `tool_finish` fires once per tool call and cannot
+carry per-command cardinality or a not-yet-observed background terminal status; the per-command
+execution seam can carry cardinality but not the background terminal class; the manager seam
+(`finalize` / `terminalPromise`) carries the terminal class but fires after the tool call returned.
+**Whether an existing event suffices, or an additional internal recorder event is required, is to be
+established by the implementation ACT at the real seam** — it is preordained neither way. Any such
+event is **internal**; the public wire contract is unchanged.
+
+**Causal claim NARROWED.** The recon's "not looping" now reads: the trace **rules out substantial
+identical-call repetition** (948/949 distinct fingerprints, max repeat 2, `hard`×0); it **does not**
+rule out **semantic cycling through different commands**, and **no claim** is made about the agent's
+strategy quality.
+
+**Not reopened:** the capture analysis, the byte-for-byte capture verification, the conformance gates,
+the privacy assessment, the `PARTIAL` completeness verdict, the 949/949 all-success finding, the
+Q1/Q2/Q3 answers, the `BASELINE_FAILURE` classification of
+`command-job-manager.owner-session-id.test.ts` (environmental — the sandbox denies `kill(-pgid,0)`
+with `EPERM`), and the `PASS_RECON_WITH_GAPS` verdict of the recon.
+
+**Next cursor.** One bounded correction to the bridge contract, then implementation once the
+cardinality and temporal-observation problems are resolved. **No further review round unless new P0
+evidence appears.** The **orthogonally larger but free** win — running the existing independent
+evaluator against the capture's workspace — still requires **no production change at all** and makes
+Q3 answerable by composition today; it is **not** blocked by this correction.
+
+**Evidence**
+
+- `docs/acts/ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01/CORRECTION01-SUCCESSOR-CONTRACT.md`
+- `docs/acts/ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01/REPORT.md` — §0, §4 D1, §7.2, §9, §10, §11
+  as corrected by CORRECTION01

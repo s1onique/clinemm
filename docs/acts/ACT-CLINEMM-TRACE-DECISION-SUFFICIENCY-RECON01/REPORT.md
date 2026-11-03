@@ -5,6 +5,26 @@
 **Branch:** existing `main` (no ACT branch created)
 **Production delta:** ZERO. No runtime, React, Elm, protobuf, public wire contract, tracing recorder or test implementation was modified.
 
+> **CORRECTION01 — `ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01-CORRECTION01-SUCCESSOR-CONTRACT.md`**
+> (documentation-only; zero production delta; this recon's measured findings, conformance gates,
+> privacy assessment and `PASS_RECON_WITH_GAPS` verdict are **unchanged**).
+>
+> CORRECTION01 repairs **two** things in this report:
+>
+> 1. **§7.2** — the necessity table is a **`HYPOTHESIS_ONLY`** necessity argument, **not** an executed
+>    ablation of this specimen (its "Full" row is a hypothetical configuration this capture was never
+>    in).
+> 2. **§11** — the proposed successor contract asserted a **false cardinality** (one exit-status
+>    scalar per *invocation*, when one invocation executes **N commands**) and a **false observation
+>    time** (a background job's terminal status is observed **after** `tool_finish`). The corrected
+>    contract is in **CORRECTION01 §4**; disposition **`HALT_SUCCESSOR_CONTRACT_FALSE_CARDINALITY`**.
+>
+> A related causal claim is **narrowed** (§4 D1): the trace rules out substantial *identical-call
+> repetition*, not *semantic cycling through different commands*.
+>
+> **§0's central finding — that the exit status is observed by the production seam and then
+> discarded at the trace boundary — is CONFIRMED and unchanged.**
+
 ---
 
 ## 0. Terminal verdict
@@ -16,6 +36,13 @@
 > *What is the smallest additional observation, if any, that would change our ability to decide whether a long-running ClineMM agent is productively solving its task?*
 
 **One scalar per `run_commands` invocation: the process exit status** (`exitCode`, plus `state` for the background class) — carried on the **existing** `tool_finish` event, correlated by the **already-existing** `toolCallId`.
+
+> **CORRECTION01 (`ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01-CORRECTION01-SUCCESSOR-CONTRACT.md`):
+> the sentence above is superseded. The correct unit is **per command**, not per invocation, and the
+> background terminal result arrives **after** `tool_finish`. The corrected contract is in
+> **CORRECTION01 §4**; the disposition is **`HALT_SUCCESSOR_CONTRACT_FALSE_CARDINALITY`**. The
+> paragraph below — the *finding* that the exit status is observed and then discarded at the trace
+> boundary — is **unchanged and confirmed**.
 
 That is the whole answer. The production authority that already observes it exists and is already correlated; the fact is simply **dropped at the trace boundary**. No new process monitor, no new identity namespace, no new event kind, and no new runtime observation boundary is required.
 
@@ -256,7 +283,7 @@ By tool: `ok|run_commands` 949, `ok|command_status` 31, `ok|editor` 26, `ok|read
 
 ### 4.6 The discriminators, applied
 
-**D1 — Repetition is not necessarily looping.** 949 `run_commands` calls produced **948 distinct argument fingerprints**; exactly one fingerprint recurred (twice). The production detector agreed (`soft` ×1, `hard` ×0, both on `command_status`, not `run_commands`). **This is activity, not repetition, and not looping.** High iteration count alone proves nothing here.
+**D1 — Repetition is not necessarily looping.** 949 `run_commands` calls produced **948 distinct argument fingerprints**; exactly one fingerprint recurred (twice). The production detector agreed (`soft` ×1, `hard` ×0, both on `command_status`, not `run_commands`). **This is activity, not repetition.** High iteration count alone proves nothing here. **CORRECTION01 (narrowing): this rules out substantial *identical-call repetition* only. It does NOT rule out *semantic cycling through different commands*, and no claim is made about the agent's strategy quality.**
 
 **D2 — Tool success is not command success.** **Confirmed and decisive.** `tool_finish.outcome` is computed at `agent-runtime.ts:4857` as `result.isError ? "error" : "success"`. `result.isError` is set by the SDK shell wrapper at `definitions.ts:366-372` when a `CommandExitError` is caught. A `CommandExitError` carries `exitCode` (`bash.ts:444-452`), **but only the boolean `isError` crosses the boundary — the exit-code value never does.** Consequently `outcome: "success"` proves *"the executor returned without throwing"* and **does not prove `exitCode == 0`**. Empirically: **949/949 `run_commands` succeeded**, yet **the trace contains no exit-code-like key at all** (a scan of every payload key in all 7 902 records for `/exit|code|signal|job|process|status|state/i` returned the **empty set**), and **0 records carry a `jobId`**.
 
@@ -420,19 +447,28 @@ model-behavior-trace-runtime.ts:327 ─▶ recorder.record("tool_finish", …)
 
 ### 7.2 Necessity discriminator — offline evidence ablation
 
+> **CORRECTION01 (`ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01-CORRECTION01-SUCCESSOR-CONTRACT.md`):
+> the table below is a `HYPOTHESIS_ONLY` necessity argument, NOT an executed ablation of this
+> specimen.** Its **Full** row is a *hypothetical* configuration in which Q2 and Q3 are answerable;
+> §7.1 establishes that for **this** capture both are `CAPTURE_INSUFFICIENT`. The table becomes an
+> executed ablation only once process outcomes are actually captured and the proposed discriminator
+> is exercised against real evidence. See CORRECTION01 §3 and §5.4.
+
 Purely offline: each evidence category is removed from the analysis; no source mutation, no model replay.
 
 | Configuration | Q1 activity | Q2 execution success | Q3 correctness |
 |---|---|---|---|
-| **Full** | answerable | answerable | answerable |
+| **Full** *(hypothetical — NOT this specimen)* | answerable | answerable | answerable |
 | **− Process result** | answerable | **`CAPTURE_INSUFFICIENT`** | answerable |
 | **− Workspace checkpoint** | answerable | answerable | **`CAPTURE_INSUFFICIENT`** |
 | **− Independent acceptance** | answerable | answerable | **`CAPTURE_INSUFFICIENT`** |
 | **− Activity** | **unanswerable** | answerable | answerable |
 
-**Each category is load-bearing.** Removing process results kills exactly Q2; removing the workspace checkpoint or the independent acceptance result kills exactly Q3. Removing activity kills exactly Q1.
+**Classification: `HYPOTHESIS_ONLY` (necessity argument), not `EXECUTED_ABLATION`.**
 
-**The specimen supports the ablation.** It is not a fabricated success.
+The argument each row makes is about **necessity**: *if* a category were present, removing it would
+kill exactly one decision. It does **not** establish that this specimen exhibits that
+configuration — it does not, for Q2 or Q3.
 
 ### 7.3 What this establishes
 
@@ -522,7 +558,7 @@ Ranked by decision improved ÷ cost. "New runtime instrumentation necessary?" is
 
 | Rank | Candidate | Decision improved | Current authoritative producer | Missing correlation / measurement | Privacy risk | Semantic-change risk | Effort | **New runtime instrumentation necessary?** |
 |---:|---|---|---|---|---|---|---|---|
-| **1** | **Command-process outcome trace bridge** | **Q2 — "is execution succeeding?"** | `CommandJobManager.finalize` (`:2450`) and `VscodeTerminalProcess.getCompletionDetails()` (`:611`) | The exit status is **observed then discarded** at `definitions.ts:366`. Background additionally lacks a `toolCallId ↔ jobId` join. | **Low** — status codes only; no text, no argv | **Low** — one additive field on an existing event; read-only | **Small** | **YES — but bounded to a record/encode change, not a new monitor.** The producer already exists. |
+| **1** | **Command-process outcome trace bridge** | **Q2 — "is execution succeeding?"** | `CommandJobManager.finalize` (`:2450`) and `VscodeTerminalProcess.getCompletionDetails()` (`:611`) | The exit status is **observed then discarded** at `definitions.ts:366`. Background additionally lacks a `toolCallId ↔ jobId` join. **CORRECTION01: the observation is per *command*, and the background terminal result arrives after `tool_finish`.** | **Low** — status codes only; no text, no argv | **Low** — read-only, additive recording; **CORRECTION01: the observation boundary is not preordained (CORRECTION01 §4.1)** | **Small** | **YES — but bounded to a record/encode change, not a new monitor.** The producer already exists. |
 | 2 | External progress / acceptance milestones | Q3 — "is correctness improving?" | `scripts/evaluate-agent-fixture.ts` (already complete) | The evaluator must be **run** against the capture's workspace. Nothing is missing in production. | Low (already privacy-designed) | **None** — offline | Very low | **NO** — composition only |
 | 3 | Exact execution-to-tool correlation (`toolCallId ↔ jobId`) | Attribution of a process outcome to the exact tool call | `jobId` is already minted by the manager and already **model-visible** (`vscode-run-commands-tool.ts:1810`) | The join is **model-mediated only**; it is never recorded | Low | Low | Small | **Folded into #1** — the same bridge carries both |
 | 4 | Workspace checkpoints at declared lifecycle boundaries | D3 — retained progress over time | `edit_checkpoint_observation` producer exists | Checkpoints exist only at dump time; the *measurement time* must not be conflated with task-completion time | Low | Low | Medium | **NO** — needs a trigger, not a new authority |
@@ -570,7 +606,7 @@ Ranked by decision improved ÷ cost. "New runtime instrumentation necessary?" is
 
 **Why not `NO_NEW_INSTRUMENTATION_NEEDED`:** Q3 is answerable today by offline composition, but **Q2 is not** — the exit status is observed in production and then **discarded** at the trace boundary. One bounded recording change closes it.
 
-**Why not `CAPTURE_INSUFFICIENT`:** the required specimen was found and **verified byte-for-byte** against the frozen identity, and it supported every executed gate and the full ablation.
+**Why not `CAPTURE_INSUFFICIENT`:** the required specimen was found and **verified byte-for-byte** against the frozen identity, and it supported every executed gate. **CORRECTION01: the ablation in §7.2 is a `HYPOTHESIS_ONLY` necessity argument, not an executed ablation of this specimen — it is not counted as a supporting gate.**
 
 **Why not `HALT_CONTRACT_VIOLATION`:** no new privacy, completeness or provenance violation was established. The adapter reported `PARTIAL` for the truncated specimen; privacy filtering held at every depth.
 
@@ -582,18 +618,25 @@ Ranked by decision improved ÷ cost. "New runtime instrumentation necessary?" is
 
 ### `ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01`
 
+> **CORRECTION01 (`ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01-CORRECTION01-SUCCESSOR-CONTRACT.md`):
+> the contract below was CORRECTED. The original proposal — *"one exit-status scalar on the existing
+> `tool_finish` event"* — is **not implementable**: `tool_finish` fires **once per tool call** while
+> **N command outcomes** exist, and it fires **before** a background job's terminal status does.
+> The corrected contract is in **CORRECTION01 §4** and is normative where it differs from this
+> table. Disposition: **`HALT_SUCCESSOR_CONTRACT_FALSE_CARDINALITY`**.
+
 | Field | Value |
 |---|---|
-| **Source seam** | `apps/vscode/src/sdk/vscode-run-commands-tool.ts` — the point where the exit status is already known: `:716` (foreground, `completionDetails.exitCode`) and `:1859/:1878` (background, `start.state` + `start.exitCode`). The recording boundary itself is `sdk/packages/agents/src/agent-runtime.ts:4849` (`observeToolBoundary("finish", …)`), which already carries the correlated `toolCallId`. |
-| **Missing fact** | The process **exit status** of a `run_commands` invocation: the exit code value, the terminal class (`exited` / `deadline_exceeded` / `cancelled` / `spawn_failed` / `containment_failed` / `unknown`), and — background only — the `jobId`. |
-| **Exact identity & lifecycle** | The `toolCallId` is minted by the runtime and **already pairs start↔finish by construction** (`agent-runtime.ts:4508-4509`). The background `jobId` is minted by `CommandJobManager` and already **model-visible** (`:1810`). The join is therefore `toolCallId → jobId`, both already-existing identifiers — **no new identity namespace is required**. For foreground there is **no** `jobId`: the record must carry the exit code and an explicit `unknown` when shell integration did not report one (`VscodeTerminalProcess.ts:374-381`). |
-| **RED reproduction** | With the bridge absent, `tool_finish` for a `run_commands` call carries **no** exit-status field. A RED witness: run a command that exits non-zero (and one that is killed by a signal), assert the recorded `tool_finish` carries the exit code — today it carries only `outcome:"error"`, and `outcome:"success"` is indistinguishable from a silent no-op. This is directly observable in the specimen: **949/949 `run_commands` are `outcome:"success"`, and the trace contains no exit-code-like key at all.** |
-| **Necessity / ablation** | Established in §7.2: removing the process-result category changes Q2 from *answerable* to **`CAPTURE_INSUFFICIENT`**, and changes nothing else. **This is the only category whose removal changes exactly one decision.** |
-| **Conservation tests** | (a) The recorder's disabled path performs **no** extra work and **no** extra `await` (the existing `agent-runtime.ts:4515-4521` discipline — fingerprint awaited only when the sink returns a promise); (b) **no** change to tool execution, exit-code semantics, approval, compaction policy or loop-detector behaviour; (c) the recorded exit code **equals** the value the process actually produced — verified against `CommandExitError.exitCode` and `CommandJobSnapshot.exitCode`; (d) a job returning `RUNNING` is **never** recorded as a process success — its terminal fact arrives later, and an interim record must say *"running, not yet terminal"*, never *"success"*; (e) `containment_failed` is preserved distinctly and **never** collapsed into `exited`. |
-| **OFF-path neutrality** | The bridge is **default-OFF** like the recorder itself. With tracing off, the tool's execution order and result are **byte-identical** to today. The bridge is a *record/encode* change at an existing observation boundary — **no new process monitor, no new event kind, no new timer, no new state, no new public field on any wire contract.** |
-| **Privacy limits** | Exit code, terminal class and `jobId` only. **No** command text, **no** argv, **no** stdout/stderr, **no** environment, **no** absolute path. `jobId` is a manager-minted opaque id (already model-visible), not a path. The existing fail-closed allowlist in `normalize-agent-trace.ts` must be extended to permit the new keys **explicitly** — an unfamiliar key still does not escape. A `process` family with a real producer may then exist for the first time; its `FAMILY_KEYS` entry is currently intentionally empty (`:1063-1066`). |
+| **Source seam** | `apps/vscode/src/sdk/vscode-run-commands-tool.ts` — the point where the exit status is already known: `:716` (foreground, `completionDetails.exitCode`) and `:1859/:1878` (background, `start.state` + `start.exitCode`). The recording boundary itself is `sdk/packages/agents/src/agent-runtime.ts:4849` (`observeToolBoundary("finish", …)`), which already carries the correlated `toolCallId`. **CORRECTION01: this boundary fires once per tool call and cannot carry per-command cardinality or a background terminal status — see CORRECTION01 §4.1.** |
+| **Missing fact** | The process **exit status** of a `run_commands` invocation: the exit code value, the terminal class (`exited` / `deadline_exceeded` / `cancelled` / `spawn_failed` / `containment_failed` / `unknown`), and — background only — the `jobId`. **CORRECTION01: per *command*, not per invocation — one `run_commands` call may execute N commands with N different outcomes (`definitions.ts:284-285`, `Promise.all`).** |
+| **Exact identity & lifecycle** | The `toolCallId` is minted by the runtime and **already pairs start↔finish by construction** (`agent-runtime.ts:4508-4509`). The background `jobId` is minted by `CommandJobManager` and already **model-visible** (`:1810`). The join is therefore `toolCallId → jobId`, both already-existing identifiers — **no new identity namespace is required**. For foreground there is **no** `jobId`: the record must carry the exit code and an explicit `unknown` when shell integration did not report one (`VscodeTerminalProcess.ts:374-381`). **CORRECTION01: the correlation key is `(session, toolCallId, commandIndex) → jobId` where established — never a timestamp join.** |
+| **RED reproduction** | With the bridge absent, `tool_finish` for a `run_commands` call carries **no** exit-status field. A RED witness: run a command that exits non-zero (and one that is killed by a signal), assert the recorded `tool_finish` carries the exit code — today it carries only `outcome:"success"` (a per-command failure is caught inside `executeShellCommands` and never reaches the boundary — CORRECTION01 §2.3), so `outcome:"success"` is indistinguishable from a silent no-op. This is directly observable in the specimen: **949/949 `run_commands` are `outcome:"success"`, and the trace contains no exit-code-like key at all.** **CORRECTION01: the RED must also include a MIXED-COMMAND control (two commands, different outcomes) and a DELAYED-COMPLETION control (background `RUNNING`, terminal result later).** |
+| **Necessity / ablation** | §7.2: removing the process-result category changes Q2 from *answerable* to **`CAPTURE_INSUFFICIENT`**, and changes nothing else. **This is the only category whose removal changes exactly one decision.** **CORRECTION01: this is a `HYPOTHESIS_ONLY` necessity argument, NOT an executed ablation of the specimen (§7.2). It becomes an executed ablation only once process outcomes are captured.** |
+| **Conservation tests** | (a) The recorder's disabled path performs **no** extra work and **no** extra `await` (the existing `agent-runtime.ts:4515-4521` discipline — fingerprint awaited only when the sink returns a promise); (b) **no** change to tool execution, exit-code semantics, approval, compaction policy or loop-detector behaviour; (c) the recorded exit code **equals** the value the process actually produced — verified against `CommandExitError.exitCode` and `CommandJobSnapshot.exitCode`; (d) a job returning `RUNNING` is **never** recorded as a process success — its terminal fact arrives later, and an interim record must say *"running, not yet terminal"*, never *"success"*; (e) `containment_failed` is preserved distinctly and **never** collapsed into `exited`. **CORRECTION01: add (f) per-command cardinality is preserved — a mixed-outcome batch yields distinct per-command entries, never one collapsed scalar; (g) `unknown` is preserved distinctly and never collapsed into `0`.** |
+| **OFF-path neutrality** | The bridge is **default-OFF** like the recorder itself. With tracing off, the tool's execution order and result are **byte-identical** to today. The bridge is a *record/encode* change — **no new process monitor, no new timer, no new state, no new public field on any wire contract.** **CORRECTION01: "no new event kind" is NOT guaranteed.** Because `tool_finish` is closed before a background job's terminal status exists, an **additional internal trace event** may be required to carry the eventual authoritative result. Whether an existing event suffices is to be established **at the real seam** by the implementation ACT — see CORRECTION01 §4.1. Any additional event is **internal to the recorder**; the public wire contract is unchanged either way. |
+| **Privacy limits** | Exit code, terminal class, `commandIndex` and `jobId` only. **No** command text, **no** argv, **no** stdout/stderr, **no** environment, **no** absolute path. `jobId` is a manager-minted opaque id (already model-visible), not a path. The existing fail-closed allowlist in `normalize-agent-trace.ts` must be extended to permit the new keys **explicitly** — an unfamiliar key still does not escape. A `process` family with a real producer may then exist for the first time; its `FAMILY_KEYS` entry is currently intentionally empty (`:1063-1066`). |
 | **Removal conditions** | Any temporary diagnostic (e.g. a temporary log of the raw exit code during bring-up) must be removed at the end of the successor ACT, must never be enabled by default, and must never write to the trace, the recorder or any production state outside the recorder's own bounded ring. |
-| **Why bounded to one causal purpose** | The successor has exactly one causal purpose: **record the process exit status that the production seam already observes, correlated by the identity that already exists.** It changes no decision semantics, no tool behaviour and no lifecycle authority. |
+| **Why bounded to one causal purpose** | The successor has exactly one causal purpose: **record the process exit status that the production seam already observes, correlated by the identity that already exists.** It changes no decision semantics, no tool behaviour and no lifecycle authority. **CORRECTION01: the observation boundary is NOT preordained — the seam is to be established at the real production boundary (§4.1), within the constraints above (default-OFF, no execution-semantic delta, no public wire change, no new process monitor).** |
 
 ### 11.1 The orthogonally larger but *free* win (no successor required)
 
