@@ -562,6 +562,7 @@ export type {
 	ModelBehaviorTraceEditCheckpointObservation,
 	ModelBehaviorTraceEditCheckpointTarget,
 	ModelBehaviorTraceEditCheckpointTargetState,
+	ModelBehaviorTraceAbortOrigin,
 	ModelBehaviorTraceEditDestinationScope,
 	ModelBehaviorTraceEditFailureCategory,
 	ModelBehaviorTraceEditFileMutation,
@@ -582,7 +583,9 @@ export type {
 	ModelBehaviorTraceProcessTerminalState,
 	ModelBehaviorTraceRecord,
 	ModelBehaviorTraceRecorderOptions,
+	ModelBehaviorTraceRequestOutcome,
 	ModelBehaviorTraceSink,
+	ModelBehaviorTraceTerminalPath,
 	ModelBehaviorTraceToolCategory,
 	ModelBehaviorTraceTruncation,
 	ModelBehaviorTraceWorkspaceIdentity,
@@ -603,6 +606,7 @@ export {
 	estimateRecordBytes,
 	hmacSha256,
 	MODEL_BEHAVIOR_TRACE_MAX_BYTES,
+	MODEL_BEHAVIOR_TRACE_MAX_ERROR_MESSAGE_LENGTH,
 	MODEL_BEHAVIOR_TRACE_MAX_RECORDS,
 	MODEL_BEHAVIOR_TRACE_PATH_SCOPE_UNVERIFIED,
 	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
@@ -614,6 +618,7 @@ export {
 	normalizeTraceArguments,
 	normalizeTraceArgumentsAsync,
 	sanitizePayload,
+	sanitizeTraceErrorMessage,
 } from "./runtime/model-behavior-trace";
 export type {
 	ModelBehaviorWireReasoningObservation,

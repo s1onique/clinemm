@@ -39,7 +39,7 @@
  * boundary), which separate rings cannot provide.
  */
 
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, rename, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { captureEditCheckpoint, resetEditCheckpointRegistry } from "@cline/core"
 import {
@@ -50,6 +50,12 @@ import {
 	type ModelBehaviorTraceSink,
 	registerModelBehaviorWireReasoningObserver,
 } from "@cline/shared"
+import {
+	captureSdkAbortCauseSnapshot,
+	getSdkAbortCauseSnapshots,
+	observeSdkAbortCauseRecord,
+	setSdkAbortCauseRecordProvider,
+} from "./sdk-abort-cause-retention"
 
 /**
  * The dump filename under `context.globalStorageUri`.
@@ -88,6 +94,11 @@ const recorder = new ModelBehaviorTraceRecorder()
 export function getModelBehaviorTraceRecorder(): ModelBehaviorTraceRecorder {
 	return recorder
 }
+
+// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the retention layer reads the
+// recorder's records; it does NOT own them. The provider is installed once,
+// here, so there is exactly one source of truth for the record stream.
+setSdkAbortCauseRecordProvider(() => recorder.getRecords())
 
 /**
  * True when the recorder is armed.
@@ -243,18 +254,34 @@ export function recordModelBehaviorTrace(
 	event: ModelBehaviorTraceEvent,
 	observation: ModelBehaviorTraceObservation,
 ): ModelBehaviorTraceRecord | undefined {
-	return recorder.record(
+	const record = recorder.record(
 		event,
 		{
 			...(observation.sessionId !== undefined ? { sessionId: observation.sessionId } : {}),
 			...(observation.taskId !== undefined ? { taskId: observation.taskId } : {}),
 			...(observation.runId !== undefined ? { runId: observation.runId } : {}),
 			...(observation.iteration !== undefined ? { iteration: observation.iteration } : {}),
+			// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the per-model-request
+			// correlation id, so a provider-terminal record joins to the
+			// provider's own request identity instead of by timestamp.
+			...(observation.modelRequestId !== undefined ? { modelRequestId: observation.modelRequestId } : {}),
 			...(observation.providerId !== undefined ? { providerId: observation.providerId } : {}),
 			...(observation.modelId !== undefined ? { modelId: observation.modelId } : {}),
 		},
 		observation.payload as Record<string, unknown>,
 	)
+	// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the retention layer consumes
+	// the SAME record the recorder just produced. There is no second
+	// emitter and no second tracing framework — the retention is a
+	// CONSUMER of the existing record stream.
+	//
+	// The recorder is consulted at observation time, so when tracing is OFF
+	// `record` is `undefined` and BOTH the observer and the snapshot
+	// capture are no-ops. The disabled path therefore performs NO
+	// diagnostic I/O at all.
+	observeSdkAbortCauseRecord(record)
+	captureSdkAbortCauseSnapshot(record)
+	return record
 }
 
 /**
@@ -434,6 +461,16 @@ export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
 	},
 	onRunTerminated: (observation) => {
 		recordModelBehaviorTrace("run_terminated", observation)
+	},
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+	 *
+	 * The abort-ORIGIN channel. It is recorded as an ordinary trace event
+	 * kind so the existing recorder, the existing dump command and the
+	 * existing normalizer all carry it without any new protocol.
+	 */
+	onRunAbortRequested: (observation) => {
+		recordModelBehaviorTrace("run_abort_requested", observation)
 	},
 }
 
@@ -840,11 +877,86 @@ export async function dumpModelBehaviorTrace(context: ModelBehaviorTraceContext)
 }
 
 /**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * Test seam for the abnormal-terminal snapshot export.
+ *
+ * The exported `dumpSdkAbortCauseSnapshots` is the production entry point;
+ * this alias exists so a test can import it without depending on the
+ * module's other side effects. Production code calls the exported name.
+ */
+export const _dumpSdkAbortCauseSnapshots = dumpSdkAbortCauseSnapshots
+
+/**
  * The recorded records, oldest first. Exposed for tests and for the
  * comparator's in-process use.
  */
 export function getModelBehaviorTraceRecords(): readonly ModelBehaviorTraceRecord[] {
 	return recorder.getRecords()
+}
+
+/**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * The dump filename for the abnormal-terminal snapshots.
+ *
+ * It lives next to the trace dump under `context.globalStorageUri`, so the
+ * operator finds both artifacts in ONE place.
+ */
+export const SDK_ABORT_CAUSE_DUMP_FILE = "sdk-abort-cause-snapshots.json"
+
+/**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * Write the retained abnormal-terminal snapshots to disk.
+ *
+ * The artifact is ONE self-contained JSON document holding, per abnormal
+ * run, the correlated provider-request / abort-origin / run-terminal
+ * evidence — so an analyst does NOT have to reconstruct the event
+ * chronology by hand from the flat trace ring.
+ *
+ * Guarantees:
+ *   - LOCAL ONLY. Nothing is uploaded.
+ *   - The file is written with RESTRICTED permissions (0o600) because the
+ *     artifact may contain error text.
+ *   - Writing is ATOMIC (write to a temp file, then rename), so a reader
+ *     never observes a half-written artifact.
+ *   - When there is nothing to write, the file is NOT created — the absence
+ *     of the artifact means "no abnormal termination was observed", which is
+ *     itself a fact an operator needs.
+ *
+ * Never throws: a dump failure must never affect the runtime.
+ */
+export async function dumpSdkAbortCauseSnapshots(
+	context: ModelBehaviorTraceContext,
+): Promise<{ filePath: string; snapshotCount: number } | undefined> {
+	try {
+		const snapshots = getSdkAbortCauseSnapshots()
+		if (snapshots.length === 0) {
+			return undefined
+		}
+		const dir = context.globalStorageUri.fsPath
+		await mkdir(dir, { recursive: true })
+		const filePath = join(dir, SDK_ABORT_CAUSE_DUMP_FILE)
+		const payload = {
+			kind: "sdk_abort_cause_snapshots",
+			schemaVersion: 1,
+			dumpedAt: new Date().toISOString(),
+			snapshotCount: snapshots.length,
+			snapshots,
+		}
+		// Atomic write: a reader never sees a partial artifact.
+		const tempPath = `${filePath}.tmp`
+		await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, {
+			encoding: "utf8",
+			mode: 0o600,
+		})
+		await rename(tempPath, filePath)
+		return { filePath, snapshotCount: snapshots.length }
+	} catch {
+		// Failure isolation: a dump failure must never affect the runtime.
+		return undefined
+	}
 }
 
 /**

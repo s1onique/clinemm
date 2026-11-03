@@ -182,6 +182,10 @@ export function createIsolatedModelBehaviorTraceSink(
 		onCompactionDiagnostics: safe,
 		onCompactionCompleted: safe,
 		onRunTerminated: safe,
+		// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the abort-ORIGIN channel.
+		// It is forwarded like every other channel so the origin is not lost
+		// when a host installs the isolated sink.
+		onRunAbortRequested: safe,
 	};
 }
 

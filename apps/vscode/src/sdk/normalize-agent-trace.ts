@@ -151,6 +151,10 @@ const NATIVE_FAMILY: Readonly<Record<string, PortableEventFamily>> = {
 	compaction_diagnostics: "context",
 	compaction_completed: "context",
 	run_terminated: "run",
+	// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the abort-ORIGIN event. It
+	// belongs to the `run` family: it describes the run's termination, not
+	// the model request itself.
+	run_abort_requested: "run",
 }
 
 /** The ClineMM `evidenceBoundary` -> portable evidence-quality mapping. */

@@ -21,6 +21,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { AgentRuntime } from "@cline/agents";
+import type { AgentRuntimeAbortOrigin } from "@cline/agents";
 import { createAgentRuntime } from "@cline/agents";
 import {
 	type AgentConfig,
@@ -50,10 +51,13 @@ import {
 	type Message,
 	type MessageWithMetadata,
 	type ModelBehaviorTraceSink,
+	type ModelBehaviorTraceRequestOutcome,
+	type ModelBehaviorTraceTerminalPath,
 	type ModelInfo,
 	mergeModelOptions,
 	modelSupportsImageInput,
 	modelSupportsToolCalling,
+	sanitizeTraceErrorMessage,
 	type ToolCallRecord,
 	usesImageGenerationOperation,
 } from "@cline/shared";
@@ -493,10 +497,37 @@ export class SessionRuntime {
 
 	/** Stable run id for the active run. */
 	private activeRunId: string | null = null;
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the LAST KNOWN model request
+	 * id for the active run, learned from the observation channel.
+	 *
+	 * It is ABSENT (never synthesized) when no model request was observed,
+	 * so the run-terminal payload can say "no request was observed" instead
+	 * of implying one.
+	 */
+	private lastKnownModelRequestId: string | undefined;
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the OBSERVED outcome of the
+	 * last known model request.
+	 *
+	 * `undefined` means NO terminal provider event was observed — which the
+	 * run-terminal payload reports as `in_flight_at_run_end` rather than as
+	 * a provider failure.
+	 */
+	private lastKnownRequestOutcome: ModelBehaviorTraceRequestOutcome | undefined;
 	/** True while a run is in flight. `canStartRun()` is the negation. */
 	private running = false;
 	/** True once `abort()` has been requested for the active run. */
 	private abortRequested = false;
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the ORIGIN of the pending
+	 * abort request.
+	 *
+	 * It is retained so a DEFERRED abort (one requested before the runtime
+	 * reached `run-started`, and forwarded later at that existing lifecycle
+	 * boundary) still reports the origin the ORIGINAL caller declared.
+	 */
+	private abortOrigin: AgentRuntimeAbortOrigin = "explicit_abort_request";
 	/** Last abort reason requested for the active run. */
 	private abortReason: string | undefined;
 	/** Reference to the current run's `AgentRuntime` so `abort` can forward. */
@@ -555,6 +586,18 @@ export class SessionRuntime {
 		// when neither supplies one the runtime is observationally inert.
 		this.modelBehaviorTraceSink =
 			deps.modelBehaviorTraceSink ?? config.modelBehaviorTraceSink;
+		// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the orchestrator wraps the
+		// sink so it can learn the LAST KNOWN model request id and its
+		// outcome from the SAME observation channel the runtime already
+		// emits. There is no second emitter: the wrapper delegates to the
+		// real sink and only records two scalars for the run-terminal
+		// payload.
+		//
+		// The wrapper is only installed when a sink exists, so an
+		// observationally-inert runtime stays inert.
+		this.modelBehaviorTraceSink = this.wrapTraceSinkForRunTerminalFacts(
+			this.modelBehaviorTraceSink,
+		);
 		this.createAgentRuntimeImpl =
 			deps.createAgentRuntimeImpl ?? createAgentRuntime;
 
@@ -843,7 +886,21 @@ export class SessionRuntime {
 		this.activeRuntime?.notifyPendingUserMessage();
 	}
 
-	abort(reason?: unknown): void {
+	/**
+	 * Request that the active run be aborted.
+	 *
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: `origin` declares WHICH
+	 * production seam requested the termination. It is forwarded to the
+	 * agent runtime, which records it as the abort-ORIGIN event.
+	 *
+	 * The default is `explicit_abort_request`: this method is the public
+	 * abort API, so a caller that does not declare an origin is — by
+	 * definition — a host / caller request.
+	 */
+	abort(
+		reason?: unknown,
+		origin: AgentRuntimeAbortOrigin = "explicit_abort_request",
+	): void {
 		const message =
 			typeof reason === "string"
 				? reason
@@ -854,6 +911,7 @@ export class SessionRuntime {
 						: String(reason);
 		this.abortRequested = true;
 		this.abortReason = message;
+		this.abortOrigin = origin;
 		if (this.activeRunPromise) {
 			/**
 			 * Why this exists in hub mode:
@@ -903,7 +961,7 @@ export class SessionRuntime {
 			 */
 			void this.activeRunPromise.catch(() => {});
 		}
-		this.activeRuntime?.abort(message);
+		this.activeRuntime?.abort(message, origin);
 	}
 
 	/** Shut the session down after any active run drains. */
@@ -1398,7 +1456,7 @@ export class SessionRuntime {
 			// requested during finite startup and forward it at that existing lifecycle
 			// boundary instead of adding a second initialization-cancellation path.
 			if (event.type === "run-started" && this.abortRequested) {
-				runtime.abort(this.abortReason);
+				runtime.abort(this.abortReason, this.abortOrigin);
 			}
 			runHealth?.observe(event);
 			this.handleRuntimeEvent(event);
@@ -1994,19 +2052,112 @@ export class SessionRuntime {
 	 *                 — it must remain terminal so the user can intervene.
 	 */
 	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+	 *
+	 * Wrap the observation sink so the orchestrator can learn the LAST KNOWN
+	 * model request id and its OBSERVED outcome.
+	 *
+	 * This is a DELEGATING wrapper, not a second emitter: every channel is
+	 * forwarded to the real sink unchanged, and the wrapper only reads two
+	 * scalars out of the model-request observations for the run-terminal
+	 * payload.
+	 *
+	 * The wrapper is installed only when a sink exists. When it is absent,
+	 * the runtime is observationally inert and the last-known facts stay
+	 * `undefined` — which the run-terminal payload reports as
+	 * "not observed", never as "no request was made".
+	 */
+	private wrapTraceSinkForRunTerminalFacts(
+		sink: ModelBehaviorTraceSink | undefined,
+	): ModelBehaviorTraceSink | undefined {
+		if (!sink) {
+			return undefined;
+		}
+		const observe = (
+			observation: {
+				modelRequestId?: string;
+				payload: Readonly<Record<string, unknown>>;
+			},
+			outcome: ModelBehaviorTraceRequestOutcome | undefined,
+		): void => {
+			if (observation.modelRequestId !== undefined) {
+				this.lastKnownModelRequestId = observation.modelRequestId;
+			}
+			this.lastKnownRequestOutcome = outcome;
+		};
+		return {
+			...sink,
+			onModelRequestStart: sink.onModelRequestStart
+				? (observation) => {
+						observe(observation, undefined);
+						sink.onModelRequestStart?.(observation);
+					}
+				: undefined,
+			onModelRequestFinish: sink.onModelRequestFinish
+				? (observation) => {
+						observe(observation, "completed");
+						sink.onModelRequestFinish?.(observation);
+					}
+				: undefined,
+			onModelRequestError: sink.onModelRequestError
+				? (observation) => {
+						observe(observation, "provider_error");
+						sink.onModelRequestError?.(observation);
+					}
+				: undefined,
+			onModelRequestAbort: sink.onModelRequestAbort
+				? (observation) => {
+						observe(observation, "caller_cancelled");
+						sink.onModelRequestAbort?.(observation);
+					}
+				: undefined,
+		};
+	}
+
+	/**
 	 * ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the RUN TERMINATION
 	 * boundary to the read-only observation sink.
+	 *
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the payload now carries the
+	 * ERROR IDENTITY and the TERMINAL PATH of the run boundary.
+	 *
+	 * Before this ACT the payload was only `{finishReason, durationMs,
+	 * iterations}`, so a run that ended `aborted` was indistinguishable
+	 * between an explicit cancel, a bounded-recovery controlled stop and a
+	 * provider failure — the three produce the same terminal status.
+	 *
+	 * The `terminalPath` says WHICH production path produced the result:
+	 *   - `resolved_run_result`  — the run returned a result object,
+	 *   - `caught_exception`     — the run threw and this boundary caught it,
+	 *   - `controlled_stop`      — the run ended via a controlled-stop path,
+	 *   - `observed_cancellation`— the run ended because an abort was seen.
 	 */
 	private observeRunTerminated(
 		finishReason: AgentFinishReason,
 		durationMs: number,
 		iterations: number,
+		terminal?: {
+			status?: string;
+			error?: unknown;
+			terminalPath?: ModelBehaviorTraceTerminalPath;
+			lastKnownModelRequestId?: string;
+			lastKnownRequestOutcome?: ModelBehaviorTraceRequestOutcome;
+		},
 	): void {
 		const handler = this.modelBehaviorTraceSink?.onRunTerminated;
 		if (!handler) {
 			return;
 		}
 		try {
+			const errorName =
+				terminal?.error instanceof Error &&
+				typeof terminal.error.name === "string" &&
+				terminal.error.name.length > 0
+					? terminal.error.name
+					: undefined;
+			const errorMessage = sanitizeTraceErrorMessage(
+				terminal?.error instanceof Error ? terminal.error.message : undefined,
+			);
 			handler({
 				...(this.config.sessionId ? { sessionId: this.config.sessionId } : {}),
 				...(this.conversation.getConversationId()
@@ -2021,6 +2172,20 @@ export class SessionRuntime {
 					finishReason,
 					durationMs,
 					iterations,
+					// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the terminal
+					// status and the error identity.
+					...(terminal?.status !== undefined ? { status: terminal.status } : {}),
+					...(errorName !== undefined ? { errorName } : {}),
+					...(errorMessage !== undefined ? { errorMessage } : {}),
+					...(terminal?.terminalPath !== undefined
+						? { terminalPath: terminal.terminalPath }
+						: {}),
+					...(terminal?.lastKnownModelRequestId !== undefined
+						? { lastKnownModelRequestId: terminal.lastKnownModelRequestId }
+						: {}),
+					...(terminal?.lastKnownRequestOutcome !== undefined
+						? { lastKnownRequestOutcome: terminal.lastKnownRequestOutcome }
+						: {}),
 				},
 			});
 		} catch {
@@ -2061,7 +2226,10 @@ export class SessionRuntime {
 			role: "user",
 			content: [{ type: "text", text: message }],
 		});
-		this.activeRuntime?.abort(message);
+		// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the loop-detector hard
+		// escalation declares its OWN origin, so it is distinguishable from
+		// an explicit user cancel in the retained evidence.
+		this.activeRuntime?.abort(message, "loop_detector_escalation");
 	}
 
 	/**
@@ -2138,7 +2306,13 @@ export class SessionRuntime {
 					role: "user",
 					content: [{ type: "text", text: outcome.message }],
 				});
-				this.activeRuntime?.abort(outcome.reason ?? outcome.message);
+				// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the mistake tracker's
+				// stop action is a RUNTIME-controlled stop, distinct from an
+				// explicit user cancel.
+				this.activeRuntime?.abort(
+					outcome.reason ?? outcome.message,
+					"runtime_controlled_stop",
+				);
 			}
 		});
 	}
@@ -2179,10 +2353,35 @@ export class SessionRuntime {
 		// boundary — the production finish reason plus the run's active
 		// duration. This is what lets the offline analysis answer "did the
 		// task actually converge, and how long did it take?".
+		//
+		// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the terminal status, the
+		// error identity and the terminal path are reported alongside it, so
+		// the retained evidence distinguishes an explicit cancel from a
+		// controlled stop from a provider failure.
+		const terminalPath: ModelBehaviorTraceTerminalPath = thrownError
+			? "caught_exception"
+			: runResult?.status === "aborted"
+				? "observed_cancellation"
+				: "resolved_run_result";
+		const terminalError =
+			thrownError ??
+			(runResult?.status === "failed" ? runResult.error : undefined) ??
+			(runResult?.status === "aborted" ? runResult.error : undefined);
 		this.observeRunTerminated(
 			finishReason,
 			durationMs,
 			runResult?.iterations ?? 0,
+			{
+				...(runResult?.status !== undefined ? { status: runResult.status } : {}),
+				...(terminalError !== undefined ? { error: terminalError } : {}),
+				terminalPath,
+				...(this.lastKnownModelRequestId !== undefined
+					? { lastKnownModelRequestId: this.lastKnownModelRequestId }
+					: {}),
+				...(this.lastKnownRequestOutcome !== undefined
+					? { lastKnownRequestOutcome: this.lastKnownRequestOutcome }
+					: {}),
+			},
 		);
 		if (thrownError) {
 			throw thrownError;

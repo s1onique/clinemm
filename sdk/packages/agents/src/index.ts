@@ -44,6 +44,7 @@ export { createTool } from "@cline/shared";
 export type {
 	AgentEventListener,
 	AgentRunInput,
+	AgentRuntimeAbortOrigin,
 	AgentRuntimeConfig,
 	AgentRuntimeConfigWithModel,
 	AgentRuntimeConfigWithProvider,

@@ -65,6 +65,10 @@ import {
 import { dumpExtensionSideLifecycleClearSnapshot } from "@/sdk/lifecycle-clear-recorder-runtime-host"
 import {
 	dumpModelBehaviorTrace,
+	// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the abnormal-terminal
+	// snapshot export. It rides on the EXISTING dump command — there is no
+	// new command and no new public API.
+	dumpSdkAbortCauseSnapshots,
 	installModelBehaviorWireReasoningObserver,
 	isModelBehaviorTraceEnabled,
 	syncModelBehaviorTraceEnabled,
@@ -1160,13 +1164,27 @@ ${ctx.cellJson || "{}"}
 		vscode.commands.registerCommand(commands.DumpModelBehaviorTrace, async () => {
 			try {
 				const result = await dumpModelBehaviorTrace(context)
+				// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the abnormal-terminal
+				// snapshots are written by the SAME command and land next to the
+				// trace dump, so the operator finds both artifacts in one place
+				// and does NOT have to reconstruct the event chronology by hand
+				// from the flat trace ring.
+				//
+				// There is NO new command and NO new public API: the retention
+				// rides on the EXISTING operator surface.
+				const abortCause = await dumpSdkAbortCauseSnapshots(context)
+				const abortCauseNote = abortCause
+					? ` | ${abortCause.snapshotCount} abnormal-terminal snapshot(s) -> ${abortCause.filePath}`
+					: ""
 				if (result.recordCount === 0) {
-					void vscode.window.showInformationMessage(`Model behavior trace: NO_CAPTURE \u2192 ${result.filePath}`)
+					void vscode.window.showInformationMessage(
+						`Model behavior trace: NO_CAPTURE \u2192 ${result.filePath}${abortCauseNote}`,
+					)
 					return
 				}
 				const truncation = result.truncated ? ` (TRUNCATED: ${result.droppedCount} record(s) dropped from the ring)` : ""
 				void vscode.window.showInformationMessage(
-					`Model behavior trace: ${result.recordCount} record(s)${truncation} \u2192 ${result.filePath}`,
+					`Model behavior trace: ${result.recordCount} record(s)${truncation} \u2192 ${result.filePath}${abortCauseNote}`,
 				)
 			} catch (err) {
 				Logger.error("[MBT] dump failed", err)

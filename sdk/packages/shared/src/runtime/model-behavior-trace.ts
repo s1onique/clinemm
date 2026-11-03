@@ -79,6 +79,24 @@ export interface ModelBehaviorTraceIdentity {
 	readonly runId?: string;
 	/** Agent iteration number, when the producer knows it. */
 	readonly iteration?: number;
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+	 *
+	 * The per-model-REQUEST correlation id.
+	 *
+	 * The runtime already mints ONE id per issued model request
+	 * (`agent-runtime.ts`) and places it into the request metadata bag, from
+	 * where the provider layer reads it (`ai-sdk.ts` reads
+	 * `metadata.modelRequestId`) and the task-lifecycle telemetry channel
+	 * already carries it. Before this ACT the trace records did NOT carry it,
+	 * so a provider-terminal record could not be joined to the provider's own
+	 * request identity by anything other than a timestamp.
+	 *
+	 * It is DISTINCT from the AI SDK `callId` and from any provider HTTP
+	 * request id: those are separate identities and are never conflated
+	 * with this one.
+	 */
+	readonly modelRequestId?: string;
 	/** Configured provider id, when known. */
 	readonly providerId?: string;
 	/** Configured model id, when known. */
@@ -217,6 +235,19 @@ export type ModelBehaviorTraceEvent =
 	| "loop_verdict"
 	| "compaction_diagnostics"
 	| "compaction_completed"
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+	 *
+	 * A TERMINATION was INITIATED — this is the ORIGIN event, observed at
+	 * the seam where the abort is actually requested, NOT a retrospective
+	 * inference from a terminal `status`.
+	 *
+	 * Before this ACT there was no origin evidence at all: `status="aborted"`
+	 * was indistinguishable between an explicit user cancel, a
+	 * recovery-budget controlled stop, a loop-detector hard escalation and
+	 * a session disposal.
+	 */
+	| "run_abort_requested"
 	| "run_terminated";
 
 /**
@@ -660,6 +691,85 @@ export type ModelBehaviorTraceEditApplicationOutcome =
 	| "rejected"
 	| "failed"
 	| "timed_out";
+
+/**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * WHO initiated a termination.
+ *
+ * This is observed at the seam where the abort is actually REQUESTED, never
+ * inferred afterwards from a terminal status. The set is deliberately
+ * restricted to the origins the runtime can actually observe at a real
+ * production seam — a classification the runtime cannot determine reliably
+ * is NOT defined here, because a fabricated origin is worse than an absent
+ * one.
+ *
+ * - `explicit_abort_request`    — an abort was requested through the public
+ *                                 `abort()` API by a host / caller.
+ * - `runtime_controlled_stop`    — the runtime itself stopped the run through
+ *                                 a controlled-stop path (e.g. the bounded
+ *                                 recovery budget, or a hook requesting a
+ *                                 stop). This is DISTINCT from an explicit
+ *                                 cancel.
+ * - `loop_detector_escalation`   — the production loop detector escalated.
+ * - `session_disposal`           — the session was disposed / shut down.
+ * - `provider_exception`         — a provider failure terminated the run.
+ * - `unknown`                    — the origin could not be determined.
+ */
+export type ModelBehaviorTraceAbortOrigin =
+	| "explicit_abort_request"
+	| "runtime_controlled_stop"
+	| "loop_detector_escalation"
+	| "session_disposal"
+	| "provider_exception"
+	| "unknown";
+
+/**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * WHICH production path produced the SDK run-terminal result.
+ *
+ * - `resolved_run_result`      — the run returned a result object.
+ * - `caught_exception`         — the run threw and the boundary caught it.
+ * - `controlled_stop`          — the run ended via a controlled-stop path.
+ * - `observed_cancellation`    — the run ended because an abort was observed.
+ */
+export type ModelBehaviorTraceTerminalPath =
+	| "resolved_run_result"
+	| "caught_exception"
+	| "controlled_stop"
+	| "observed_cancellation";
+
+/**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * The OBSERVED outcome of a provider request.
+ *
+ * The distinction between `completed` and the terminal failures matters:
+ * a clean provider finish reason is not necessarily available when a request
+ * throws or is cancelled, and that absence must be preserved rather than
+ * filled in.
+ *
+ * - `completed`                 — the provider stream finished normally.
+ * - `provider_error`            — the provider reported a terminal error.
+ * - `stream_error`              — the stream failed after it had started.
+ * - `timeout`                   — a native timeout aborted the request.
+ * - `caller_cancelled`          — the caller cancelled the request.
+ * - `in_flight_at_run_end`      — NO terminal provider event was observed
+ *                                before the run ended. This is an
+ *                                OBSERVATIONAL classification, not a
+ *                                provider fault.
+ * - `terminal_event_unobserved` — the request was observed to end but no
+ *                                terminal provider event was seen.
+ */
+export type ModelBehaviorTraceRequestOutcome =
+	| "completed"
+	| "provider_error"
+	| "stream_error"
+	| "timeout"
+	| "caller_cancelled"
+	| "in_flight_at_run_end"
+	| "terminal_event_unobserved";
 
 /**
  * The provenance of a recorded fact.
@@ -1730,6 +1840,9 @@ export class ModelBehaviorTraceRecorder {
 				...(identity.iteration !== undefined
 					? { iteration: identity.iteration }
 					: {}),
+				...(identity.modelRequestId !== undefined
+					? { modelRequestId: identity.modelRequestId }
+					: {}),
 				...(identity.providerId !== undefined
 					? { providerId: identity.providerId }
 					: {}),
@@ -2024,6 +2137,93 @@ function sanitizePayloadValue(value: unknown): unknown {
 }
 
 /**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * The maximum retained length of a sanitized error message.
+ */
+export const MODEL_BEHAVIOR_TRACE_MAX_ERROR_MESSAGE_LENGTH = 240;
+
+/**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * Patterns whose CONTENT is replaced before a message is retained.
+ *
+ * An error message is attacker-adjacent content: a provider can echo a
+ * credential back inside an error string. The retained artifact must not
+ * become a credential exfiltration channel, so known credential shapes are
+ * replaced with a shape-preserving marker BEFORE the message is bounded.
+ *
+ * The marker preserves the SHAPE (`[REDACTED:...]`) so an analyst can still
+ * see that a secret was present without learning its value.
+ */
+const SECRET_MESSAGE_PATTERNS: ReadonlyArray<{
+	readonly label: string;
+	readonly pattern: RegExp;
+}> = [
+	// `Authorization: Bearer <token>` / `api-key: <value>` style headers.
+	{
+		label: "authorization",
+		pattern: /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi,
+	},
+	{
+		label: "api_key",
+		pattern: /\b(?:api[_-]?key|apikey|secret[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|private[_-]?key|password|passwd)\b\s*[:=]\s*["']?([^\s"',;}]{4,})/gi,
+	},
+	// `sk-...` / `sk-ant-...` style vendor key prefixes.
+	{ label: "vendor_key", pattern: /\b(?:sk|pk|rk|key|ghp|gho|xox[baprs])[-_][A-Za-z0-9_-]{8,}\b/g },
+	// A JWT (three base64url segments separated by dots).
+	{
+		label: "jwt",
+		pattern: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b/g,
+	},
+	// A `Cookie:` / `Set-Cookie:` header value.
+	{
+		label: "cookie",
+		pattern: /\b(?:set-)?cookie\b\s*[:=]\s*[^\n]{4,}/gi,
+	},
+];
+
+/**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * Produce a BOUNDED, SECRET-SCRUBBED, single-line error message suitable
+ * for retention in a diagnostic artifact.
+ *
+ * Guarantees:
+ *   - credential-shaped content is REPLACED, never truncated away and never
+ *     retained;
+ *   - the result is bounded to `maxLength` characters and carries an
+ *     explicit truncation marker when it was cut;
+ *   - control characters (including newlines) are collapsed so the value
+ *     cannot forge additional artifact lines;
+ *   - a non-string input yields `undefined` rather than a guessed string.
+ *
+ * This is the ONLY sanctioned way for the SDK to place an error message into
+ * a trace payload.
+ */
+export function sanitizeTraceErrorMessage(
+	value: unknown,
+	maxLength: number = MODEL_BEHAVIOR_TRACE_MAX_ERROR_MESSAGE_LENGTH,
+): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+	const limit = Math.max(16, maxLength);
+	let scrubbed = value.replace(/[\r\n\t\v\f]+/g, " ");
+	for (const { label, pattern } of SECRET_MESSAGE_PATTERNS) {
+		scrubbed = scrubbed.replace(pattern, `[REDACTED:${label}]`);
+	}
+	// A residual `Bearer <token>` whose token was too short to match the
+	// pattern above is still scrubbed by the generic credential rule, but a
+	// bare high-entropy token that survived both is dropped with the
+	// surrounding assignment.
+	if (scrubbed.length <= limit) {
+		return scrubbed;
+	}
+	return `${scrubbed.slice(0, limit)}…[TRUNCATED:${scrubbed.length}]`;
+}
+
+/**
  * Classify the evidence boundary implied by the available identities.
  *
  * A record with no session/task/run identity cannot be correlated to a
@@ -2305,6 +2505,17 @@ export interface ModelBehaviorTraceSink {
 	onCompactionCompleted?: (observation: ModelBehaviorTraceObservation) => void;
 	/** The run terminated. */
 	onRunTerminated?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+	 *
+	 * A TERMINATION was INITIATED. This is the abort-ORIGIN channel.
+	 *
+	 * The payload carries the observed origin classification, the initiating
+	 * component, a bounded sanitized reason, and — when known — the
+	 * `modelRequestId` of the request that was in flight at the moment the
+	 * termination was requested.
+	 */
+	onRunAbortRequested?: (observation: ModelBehaviorTraceObservation) => void;
 }
 
 /**
@@ -2318,6 +2529,13 @@ export interface ModelBehaviorTraceObservation {
 	readonly taskId?: string;
 	readonly runId?: string;
 	readonly iteration?: number;
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+	 *
+	 * The per-model-request correlation id. See
+	 * {@link ModelBehaviorTraceIdentity.modelRequestId}.
+	 */
+	readonly modelRequestId?: string;
 	readonly providerId?: string;
 	readonly modelId?: string;
 	readonly payload: Readonly<Record<string, unknown>>;

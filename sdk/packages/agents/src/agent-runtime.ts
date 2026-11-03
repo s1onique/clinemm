@@ -55,6 +55,7 @@ import {
 	mergeModelOptions,
 	normalizeJsonLikeStringsForSchema,
 	omitUndefinedValues,
+	sanitizeTraceErrorMessage,
 	TASK_CANCELLED_EVENT,
 	TASK_FIRST_CHUNK_RECEIVED_EVENT,
 	TASK_MAX_TOKENS_RECOVERY_EVENT,
@@ -492,6 +493,33 @@ const DEFAULT_USAGE: AgentUsage = {
 	cacheReadTokens: 0,
 	cacheWriteTokens: 0,
 };
+
+/**
+ * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+ *
+ * WHO initiated a run termination.
+ *
+ * The origin is declared by the seam that requests the abort, because that
+ * seam is the only party that knows which production path initiated it. It
+ * is NEVER inferred afterwards from the terminal status.
+ *
+ * The set is restricted to origins the runtime can observe at a REAL
+ * production seam. A classification the runtime cannot determine reliably is
+ * not defined, because a fabricated origin is worse than an absent one.
+ */
+export type AgentRuntimeAbortOrigin =
+	/** A host / caller requested the abort through the public API. */
+	| "explicit_abort_request"
+	/** The runtime itself stopped the run (bounded recovery, hook stop). */
+	| "runtime_controlled_stop"
+	/** The production loop detector escalated to a hard stop. */
+	| "loop_detector_escalation"
+	/** The session was disposed / shut down. */
+	| "session_disposal"
+	/** A provider failure terminated the run. */
+	| "provider_exception"
+	/** The origin could not be determined. */
+	| "unknown";
 
 function createMessage(
 	role: AgentMessage["role"],
@@ -1097,7 +1125,23 @@ export class AgentRuntime {
 		this.modelSteerController?.abort();
 	}
 
-	abort(reason?: unknown): void {
+	/**
+	 * Request that the active run be aborted.
+	 *
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: `origin` declares WHO is
+	 * requesting the termination.
+	 *
+	 * The origin is declared by the CALLER because the caller is the only
+	 * party that knows which production seam initiated the termination. It
+	 * is NOT inferred afterwards from the terminal status: a run that ends
+	 * `aborted` looks identical from the outside whether it was cancelled
+	 * by the operator, stopped by the bounded-recovery policy, escalated by
+	 * the loop detector, or torn down by a session disposal.
+	 *
+	 * When the caller does not declare an origin, the origin is recorded as
+	 * `unknown` — an absent observation is never back-filled with a guess.
+	 */
+	abort(reason?: unknown, origin?: AgentRuntimeAbortOrigin): void {
 		if (!this.abortController) {
 			return;
 		}
@@ -1112,6 +1156,13 @@ export class AgentRuntime {
 		this.captureTaskLifecycle(TASK_CANCELLED_EVENT, {
 			error: abortError,
 		});
+		// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the ORIGIN event.
+		//
+		// It is emitted at the seam where the termination is INITIATED, so
+		// the retained evidence says who asked for the termination and not
+		// merely that the run ended abnormally. The event is fire-and-forget
+		// and failure-isolated: it cannot influence the abort.
+		this.observeRunAbortRequested(origin ?? "unknown", abortError);
 		this.abortController.abort(abortError);
 	}
 
@@ -3225,6 +3276,14 @@ export class AgentRuntime {
 		// before the model could even propose a recovery — which
 		// is exactly the wrong direction.
 		if (this.recoverySecondStage.kind === "terminating") {
+			// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the bounded-recovery
+			// controlled-stop ORIGIN. It is a RUNTIME-initiated termination
+			// and is DISTINCT from an explicit user cancel, even though both
+			// produce the same terminal `status`.
+			this.observeRunAbortRequested(
+				"runtime_controlled_stop",
+				"bounded_recovery_exhausted",
+			);
 			throw new ControlledStopError("bounded_recovery_exhausted");
 		}
 		// Surface the typed reason in `state.lastError` so any
@@ -3261,6 +3320,17 @@ export class AgentRuntime {
 			// at the REAL request boundary. An abort is reported as an abort
 			// (not an error) so the offline analysis can distinguish "the
 			// model failed" from "the operator cancelled".
+			//
+			// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the payload now also
+			// carries the concrete error identity (name + BOUNDED SANITIZED
+			// message) and the OBSERVED request outcome. Without the error
+			// name, two different provider failures that share a coarse
+			// `errorClass` were indistinguishable in the retained evidence.
+			//
+			// The outcome is derived from what was actually observed AT THIS
+			// SEAM: a provider throw before the stream opened is
+			// `provider_error`; a throw DURING the stream is `stream_error`.
+			// Nothing is inferred from the absence of a finish record.
 			this.observeModelRequestFailure(
 				this.isAbortError(error) ? "abort" : "error",
 				{
@@ -3268,6 +3338,7 @@ export class AgentRuntime {
 					requestDurationMs: getTaskLifecycleDurationMs(),
 					errorClass: classifyProviderError(error),
 					...(this.isAbortError(error) ? { aborted: true } : {}),
+					...this.describeObservedProviderError(error, phase),
 				},
 			);
 			throw error;
@@ -3299,6 +3370,11 @@ export class AgentRuntime {
 			}
 			// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: same boundary as above, for
 			// a failure that occurred DURING the stream.
+			//
+			// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the concrete error
+			// identity and the observed outcome are added here too. A
+			// mid-stream failure is `stream_error`, never `provider_error`,
+			// and a clean provider finish reason is NOT fabricated for it.
 			this.observeModelRequestFailure(
 				this.isAbortError(error) ? "abort" : "error",
 				{
@@ -3307,10 +3383,55 @@ export class AgentRuntime {
 					errorClass: classifyProviderError(error),
 					firstChunkObserved: receivedFirstChunk,
 					...(this.isAbortError(error) ? { aborted: true } : {}),
+					...this.describeObservedProviderError(error, phase),
 				},
 			);
 			throw error;
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+	 *
+	 * Describe the OBSERVED provider error identity for the trace payload.
+	 *
+	 * - `errorName`    — the concrete error class name (e.g. `APICallError`),
+	 *                   which distinguishes failures that share a coarse
+	 *                   `errorClass`.
+	 * - `errorMessage` — a BOUNDED, SECRET-SCRUBBED, single-line message.
+	 *                   A provider can echo a credential inside an error
+	 *                   string, so the message is sanitized through the
+	 *                   shared sanitizer before it is retained.
+	 * - `requestOutcome` — the OBSERVED outcome, derived from the phase the
+	 *                   failure was observed at:
+	 *                     - an abort error            -> `caller_cancelled`
+	 *                     - before the stream opened  -> `provider_error`
+	 *                     - during the stream         -> `stream_error`
+	 *
+	 * The outcome is NEVER `completed` and NEVER `in_flight_at_run_end`:
+	 * this seam observed a terminal failure.
+	 */
+	private describeObservedProviderError(
+		error: unknown,
+		phase: string,
+	): Record<string, unknown> {
+		const errorName =
+			error instanceof Error && typeof error.name === "string" && error.name.length > 0
+				? error.name
+				: undefined;
+		const errorMessage = sanitizeTraceErrorMessage(
+			error instanceof Error ? error.message : undefined,
+		);
+		const requestOutcome = this.isAbortError(error)
+			? "caller_cancelled"
+			: phase === "provider_request_started"
+				? "provider_error"
+				: "stream_error";
+		return {
+			...(errorName !== undefined ? { errorName } : {}),
+			...(errorMessage !== undefined ? { errorMessage } : {}),
+			requestOutcome,
+		};
 	}
 
 	private captureTaskLifecycleFailure(
@@ -3378,6 +3499,7 @@ export class AgentRuntime {
 		sessionId?: string;
 		runId?: string;
 		iteration?: number;
+		modelRequestId?: string;
 		providerId?: string;
 		modelId?: string;
 	} {
@@ -3387,6 +3509,18 @@ export class AgentRuntime {
 				: {}),
 			...(this.state.runId ? { runId: this.state.runId } : {}),
 			...(this.state.iteration > 0 ? { iteration: this.state.iteration } : {}),
+			// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the per-model-request
+			// correlation id.
+			//
+			// The id is already minted per issued model request and already
+			// travels to the provider layer in the request metadata. Carrying
+			// it on the observation is what lets a provider-terminal record
+			// be joined to the provider's own request identity by an EXACT
+			// key instead of by timestamp proximity.
+			//
+			// It is ABSENT (never synthesized) when no model request has been
+			// issued yet in this runtime.
+			...(this.modelRequestId ? { modelRequestId: this.modelRequestId } : {}),
 			...(this.getTelemetryProviderId()
 				? { providerId: this.getTelemetryProviderId() }
 				: {}),
@@ -3487,6 +3621,56 @@ export class AgentRuntime {
 			sink.onModelRequestFinish({
 				...this.modelBehaviorTraceIdentity(),
 				payload,
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01.
+	 *
+	 * Report the ORIGIN of a termination to the read-only observation sink.
+	 *
+	 * This is the abort-initiation seam. The payload carries:
+	 *   - `abortOrigin`       — the declared origin classification,
+	 *   - `initiator`         — the component that requested the termination,
+	 *   - `abortReason`       — a BOUNDED, SECRET-SCRUBBED reason,
+	 *   - `abortErrorName`    — the concrete error class name, when the
+	 *                            reason was an error.
+	 *
+	 * The `modelRequestId` of the request that was in flight at the moment
+	 * the termination was requested rides on the observation identity, which
+	 * is what binds the origin to the request it interrupted.
+	 *
+	 * Fire-and-forget and failure-isolated.
+	 */
+	private observeRunAbortRequested(
+		origin: AgentRuntimeAbortOrigin,
+		reason: unknown,
+	): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onRunAbortRequested) {
+			return;
+		}
+		try {
+			const abortReason = sanitizeTraceErrorMessage(
+				reason instanceof Error ? reason.message : reason,
+			);
+			const abortErrorName =
+				reason instanceof Error &&
+				typeof reason.name === "string" &&
+				reason.name.length > 0
+					? reason.name
+					: undefined;
+			sink.onRunAbortRequested({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					abortOrigin: origin,
+					initiator: "agent_runtime",
+					...(abortReason !== undefined ? { abortReason } : {}),
+					...(abortErrorName !== undefined ? { abortErrorName } : {}),
+				},
 			});
 		} catch {
 			// Failure isolation.
@@ -5562,6 +5746,11 @@ export class AgentRuntime {
 		if (control.reason) {
 			this.state.lastError = control.reason;
 		}
+		// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the controlled-stop
+		// ORIGIN. This is a runtime-initiated termination, and it is
+		// DISTINCT from an explicit user cancel — the two produce the same
+		// terminal `status` but a different cause.
+		this.observeRunAbortRequested("runtime_controlled_stop", control.reason);
 		throw new ControlledStopError(control.reason);
 	}
 }
