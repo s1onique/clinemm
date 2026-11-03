@@ -1,0 +1,25 @@
+=== commands:null (OBSERVED) ===
+  raw        = {"commands":null}
+  normalized = {"commands":null}
+  same object reference after normalization? true
+  validation = ✖ Invalid input: expected array, received null |   → at commands
+=== missing commands ===
+  raw        = {}
+  normalized = {}
+  same object reference after normalization? true
+  validation = ✖ Invalid input: expected array, received undefined |   → at commands
+=== empty array ===
+  raw        = {"commands":[]}
+  normalized = {"commands":[]}
+  same object reference after normalization? true
+  validation = ✖ Too small: expected array to have >=1 items |   → at commands
+=== literal string "null" ===
+  raw        = {"commands":"null"}
+  normalized = {"commands":"null"}
+  same object reference after normalization? true
+  validation = ✖ Invalid input: expected array, received string |   → at commands
+=== valid ===
+  raw        = {"commands":["printf 'ok\\n'"]}
+  normalized = {"commands":["printf 'ok\\n'"]}
+  same object reference after normalization? true
+  validation = ACCEPTED

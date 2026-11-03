@@ -1,0 +1,58 @@
+ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 — LIVE CHRONOLOGY (2026-11-02)
+capture root: /Volumes/UserData/Users/chistyakov/.vscodium-polyc/user-data/User/globalStorage/s1onique.clinemm
+taskId: 1793622032977_lx6t7 epoch: 16
+NOTE: derived by re-reading the supplied historical captures; no event was recreated.
+
+--- w-carrier-trace.jsonl : runtime_w_observe (iteration boundaries) ---
+  2026-11-02T12:46:27.673000Z  iter=217  runtimeW=310228  prev=309555
+  2026-11-02T12:46:35.142000Z  iter=218  runtimeW=310532  prev=310228
+  2026-11-02T12:46:43.046000Z  iter=219  runtimeW=311062  prev=310532
+  2026-11-02T12:46:51.131000Z  iter=220  runtimeW=311400  prev=311062
+  2026-11-02T12:46:58.675000Z  iter=221  runtimeW=312502  prev=311400
+  2026-11-02T12:47:03.724000Z  iter=222  runtimeW=313132  prev=312502
+  2026-11-02T12:47:12.034000Z  iter=223  runtimeW=313405  prev=313132
+  2026-11-02T12:47:16.471000Z  iter=224  runtimeW=313625  prev=313405
+
+--- post-terminal-authority-diagnostic-extension.jsonl : terminal transition ---
+  capturedAt      = 2026-11-02T12:47:16.524000Z
+  stateVersion    = 68611
+  runtimeStatus   = aborted
+  shadowStatus    = aborted
+  shadowRecoveryState = idle
+  legacyPhase     = awaiting_followup
+  taskHeaderPresentation = {"phase": "awaiting_followup", "source": "host", "seq": 68610}
+  taskTelemetry.outcome  = {"succeeded": 206, "failed": 16, "pending": 0, "unknown": 0}
+  taskTelemetry.recoveryBudgetFailures = 2
+  taskTelemetry.toolCalls = 222
+
+--- post-terminal-authority-diagnostic-webview.jsonl : last transcript message ---
+  capturedAt = 2026-11-02T12:46:58.825000Z
+  legacyPhase = streaming
+  messageTail = {"ts": 17163, "type": "say", "say": "api_req_started", "partial": false, "seq": 68581, "epoch": 16}
+
+--- turn-state-writer-provenance.jsonl : epoch 16 writes ---
+   2026-11-02T12:20:32.953000Z controller-epoch-transition-reseed requested= {"phase": "idle"} committed= {"phase": "idle", "seq": 65090}
+   2026-11-02T12:20:33.493000Z task-start-init-task requested= {"phase": "streaming"} committed= {"phase": "streaming", "seq": 65093}
+   2026-11-02T12:47:16.483000Z session-event-turn-complete-resumable-straggler-preserve requested= {"phase": "awaiting_followup"} committed= {"phase": "awaiting_followup", "seq": 68610}
+
+--- task-header-selector-input-capture.jsonl : last 2 ---
+   2026-11-02T12:47:16.525000Z canonicalShadowPhase= completed currentLegacyPhase= awaiting_followup selectedPhase= awaiting_followup selectedSource= host
+   2026-11-02T12:47:16.574000Z canonicalShadowPhase= completed currentLegacyPhase= awaiting_followup selectedPhase= awaiting_followup selectedSource= host
+
+--- cancel-liveness-diagnostic.json ---
+{
+  "dumpedAt": "2026-11-02T12:50:49.530Z",
+  "counters": {
+    "cancelRequestCalls": 0,
+    "cancelAcceptedCalls": 0,
+    "abortInvokedCalls": 0,
+    "abortCompletedCalls": 0,
+    "cancelPublishedCalls": 0,
+    "byActiveSession": {},
+    "overflowed": 0,
+    "pendingAbortOverflowed": 0
+  }
+}
+
+--- background-owner-correlation.jsonl (decision) ---
+   {"currentPhase": "streaming", "candidatePhase": "awaiting_followup", "guardAvailable": true, "guardResult": false, "activeJobs": [], "pendingPromptCount": 0, "activeNotifyCount": 0, "outstandingAutonomousWork": false, "candidateWriterId": "session-event-turn-complete-resumable-straggler-preserve"}

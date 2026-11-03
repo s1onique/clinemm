@@ -1,0 +1,259 @@
+ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 — EXECUTABLE GATES
+recorded_at: 2026-11-03T01:13:14Z
+head: 251779fdf80a9782e00ddf12996813433c7a7bbb
+branch: main
+
+### G1 — ACT production-seam tests (core)
+(node:51127) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:51144) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51143) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts (9 tests) 14ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/null-runcommands-abort-recon01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+stdout | src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D5_RECOVERY_BUDGET_THRESHOLD_IS_BISECTED
+[ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01] identical-null-call cardinality → finishReason: 1:completed, 2:completed, 3:completed, 4:aborted, 5:aborted, 6:aborted, 7:aborted
+
+ ✓ src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts (4 tests) 31ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+ Test Files  2 passed (2)
+      Tests  13 passed (13)
+   Start at  04:13:14
+   Duration  2.43s (transform 2.79s, setup 0ms, import 4.41s, tests 45ms, environment 0ms)
+
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/null-runcommands-abort-recon01.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts.
+EXIT_CODE=0
+### G2 — existing @cline/agents recovery suites
+(node:51937) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents
+
+(node:51955) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51957) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51954) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51952) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51956) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51953) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51958) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/runtime/recovery/fingerprint.test.ts (13 tests) 3ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/fingerprint.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/runtime/recovery/recovery-privacy.test.ts (5 tests) 4ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/recovery-privacy.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/runtime/recovery/tracker.test.ts (39 tests) 8ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/tracker.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/runtime/recovery/failure-classifier.test.ts (44 tests) 6ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/failure-classifier.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/runtime/recovery/runtime-outcome-adapter.test.ts (16 tests) 3ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/runtime-outcome-adapter.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/agent-runtime.recovery-qualification.test.ts (22 tests) 60ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/agent-runtime.recovery-qualification.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/agent-runtime.second-stage-recovery.test.ts (22 tests) 67ms
+
+ Test Files  7 passed (7)
+      Tests  161 passed (161)
+   Start at  04:13:27
+   Duration  1.77s (transform 2.68s, setup 0ms, import 4.16s, tests 152ms, environment 0ms)
+
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/agent-runtime.second-stage-recovery.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async Promise.all (index 6)
+    at Pool.cancel (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3509:3)
+    at Pool.close (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3516:3)
+    at async Promise.all (index 0) {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/fingerprint.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/recovery-privacy.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/tracker.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/failure-classifier.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/runtime/recovery/runtime-outcome-adapter.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/agent-runtime.recovery-qualification.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/agent-runtime.second-stage-recovery.test.ts.
+EXIT_CODE=0
+src/extensions/context/compaction.test.ts(351,43): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'number | undefined'.
+src/extensions/context/compaction.working-context-ratio.test.ts(164,3): error TS2322: Type '(context: { messages: Message[]; }) => { messages?: Message[] | undefined; systemPrompt?: string | undefined; } | undefined' is not assignable to type 'ContextPipelinePrepareTurn'.
+  Type '{ messages?: Message[] | undefined; systemPrompt?: string | undefined; } | undefined' is not assignable to type 'Promise<ContextPipelinePrepareTurnResult | undefined>'.
+    Type 'undefined' is not assignable to type 'Promise<ContextPipelinePrepareTurnResult | undefined>'.
+src/extensions/tools/definitions.test.ts(877,24): error TS2322: Type '{ command: string; args: string[]; }' is not assignable to type 'string'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(63,74): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; env?: Record<string, string> | undefined; envSemantics?: "complete" | "overlay" | undefined; }' is not assignable to parameter of type 'SpawnConfig'.
+  Types of property 'env' are incompatible.
+    Type 'Record<string, string> | undefined' is not assignable to type 'Record<string, string>'.
+      Type 'undefined' is not assignable to type 'Record<string, string>'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(123,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(209,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(229,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(248,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(267,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(289,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(307,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(333,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.test.ts(274,22): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/extensions/tools/executors/bash.supervised.test.ts(282,22): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/hub/server/hub-trace-cardinality-discriminator.c2-4-fork-upstream-corr01.test.ts(233,20): error TS2493: Tuple type '[]' of length '0' has no element at index '1'.
+src/hub/server/hub-trace-cardinality-discriminator.c2-4-fork-upstream-corr01.test.ts(249,6): error TS2352: Conversion of type 'undefined' to type '{ context?: { type?: string | undefined; } | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/hub/server/hub-trace-cardinality-discriminator.c2-4-fork-upstream-corr01.test.ts(249,11): error TS2493: Tuple type '[]' of length '0' has no element at index '2'.
+src/runtime/command-policy/command-execution-plan.test.ts(592,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+  Types of property 'mode' are incompatible.
+    Type 'string' is not assignable to type 'CommandHostMode'.
+src/runtime/command-policy/command-execution-plan.test.ts(607,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+  Types of property 'mode' are incompatible.
+    Type 'string' is not assignable to type 'CommandHostMode'.
+src/runtime/command-policy/command-execution-plan.test.ts(628,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+  Types of property 'mode' are incompatible.
+    Type 'string' is not assignable to type 'CommandHostMode'.
+src/runtime/command-policy/parser-helper/runtime.real-binary.test.ts(181,24): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+  Property 'cmd' does not exist on type '{ readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt; }'.
+src/runtime/command-policy/parser-helper/runtime.real-binary.test.ts(198,36): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+  Property 'cmd' does not exist on type '{ readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt; }'.
+src/runtime/command-policy/parser-provenance.test.ts(74,3): error TS2578: Unused '@ts-expect-error' directive.
+src/runtime/command-policy/parser-provenance.test.ts(79,4): error TS2353: Object literal may only specify known properties, and 'parserResult' does not exist in type 'EvaluateCommandRiskInput'.
+src/runtime/command-policy/path-authority.temporary-external.test.ts(56,2): error TS2304: Cannot find name 'mkdirSync'.
+src/runtime/command-policy/path-authority.temporary-external.test.ts(57,2): error TS2304: Cannot find name 'mkdirSync'.
+src/runtime/command-policy/structured-command-risk.cd-cwd-authority.test.ts(360,20): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+  Property 'cmd' does not exist on type '{ readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt; }'.
+src/runtime/command-policy/structured-command-risk.find-quoted-pattern.test.ts(493,38): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+  Property 'cmd' does not exist on type '{ readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt; }'.
+src/runtime/observability/model-behavior-trace.test.ts(144,28): error TS2339: Property 'contextWindow' does not exist on type '{ modelMaxInputTokens: number; }'.
+src/runtime/observability/model-behavior-trace.test.ts(146,12): error TS2339: Property 'userContextCeiling' does not exist on type '{ modelMaxInputTokens: number; }'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(29,2): error TS2322: Type '{}' is not assignable to type 'never'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(29,32): error TS2344: Type 'typeof SessionRuntime' does not satisfy the constraint '(...args: any) => any'.
+  Type 'typeof SessionRuntime' provides no match for the signature '(...args: any): any'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(37,3): error TS2698: Spread types may only be created from object types.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(38,18): error TS2344: Type 'typeof SessionRuntime' does not satisfy the constraint '(...args: any) => any'.
+  Type 'typeof SessionRuntime' provides no match for the signature '(...args: any): any'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(73,20): error TS2345: Argument of type '{ hooks: { onToolRuntimeOutcome: (ctx: AgentToolRuntimeOutcomeHookContext) => void; }; }' is not assignable to parameter of type 'undefined'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(103,20): error TS2345: Argument of type '{ hooks: { onToolRuntimeOutcome: () => never; }; }' is not assignable to parameter of type 'undefined'.
+src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts(209,4): error TS2353: Object literal may only specify known properties, and 'enableTools' does not exist in type 'AgentConfig'.
+src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts(345,5): error TS2353: Object literal may only specify known properties, and 'enableTools' does not exist in type 'AgentConfig'.
+src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts(405,5): error TS2353: Object literal may only specify known properties, and 'enableTools' does not exist in type 'AgentConfig'.
+src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts(448,5): error TS2353: Object literal may only specify known properties, and 'enableTools' does not exist in type 'AgentConfig'.
+[0m[31merror[0m[2m:[0m "[1mtsc[0m" exited with code 2
+EXIT_CODE=2
+
+### G3 — @cline/core typecheck (bun tsc -p tsconfig.dev.json --noEmit)
+total TS diagnostics: 40
+attributable to this ACT's files: 0
+(the 40 are PRE-EXISTING; baseline before the ACT's fix was 41, of which 1 was the ACT's own TS4104, now fixed)
+EXIT_CODE=2
+
+### G4 — bun run build:sdk (repo root)
+EXIT_CODE=1
+reason: tsc stage fails on PRE-EXISTING missing type packages (lucide-react, mermaid, @shadcn/react/message-scroller, @langfuse/core, @opentelemetry/context-async-hooks).
+        The bun.mts bundle stage SUCCEEDED (gitignored sdk/packages/llms/dist refreshed). This ACT adds no production source.
+
+### G5 — bun install --cache-dir /tmp/buntmp (repo root)
+EXIT_CODE=0
+121 packages installed; bun.lock UNCHANGED.
+repaired a PRE-EXISTING stale install: @jerome-benoit/sap-ai-provider 4.8.0 -> 5.0.3 (the v4 package does not export the /v4 subpath that sdk/packages/llms/src/providers/vendors/community.ts:33 imports,
+which made EVERY core test that transitively imports @cline/llms fail to load — including session-runtime-orchestrator.test.ts — before this ACT).

@@ -1,0 +1,55 @@
+(node:49291) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:49310) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49309) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C2 input-shape authority > T1_VALID_ARRAY_ACCEPTED_AND_EXECUTED 9ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C2 input-shape authority > T2_COMMANDS_NULL_REJECTED_BEFORE_EXECUTION 2ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C2 input-shape authority > T3_MISSING_COMMANDS_REJECTED 1ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C2 input-shape authority > T4_EMPTY_ARRAY_REJECTED 1ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C2 input-shape authority > T5_ALTERNATE_SHAPE_REJECTED_BY_PRODUCTION_PREAPPROVAL_SCHEMA 1ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C2 input-shape authority > T6_MALFORMED_JSON_REJECTED_WITH_PARSE_PROVENANCE 1ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C2 input-shape authority > T6B_LITERAL_STRING_NULL_IS_DISTINCT_FROM_JSON_NULL 0ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C3 runtime lifecycle > T7_TWO_CONSECUTIVE_NULL_CALLS__DOES_NOT_ABORT_THE_RUN 1ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / C3 runtime lifecycle > T8_VALID_THEN_TWO_NULL_CALLS__EARLIER_SUCCESS_PRESERVED 1ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/null-runcommands-abort-recon01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+stdout | src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D5_RECOVERY_BUDGET_THRESHOLD_IS_BISECTED
+[ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01] identical-null-call cardinality → finishReason: 1:completed, 2:completed, 3:completed, 4:aborted, 5:aborted, 6:aborted, 7:aborted
+
+ ✓ src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D1_D4_TWO_CONSECUTIVE_NULL_CALLS__RUN_COMPLETES_NOT_ABORTS 16ms
+ ✓ src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D4_VALID_CONTROL__A_VALID_CALL_INSTEAD_PREVENTS_THE_FAILURE 2ms
+ ✓ src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D2_SINGLE_NULL_CALL__ALSO_DOES_NOT_ABORT 2ms
+ ✓ src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D5_RECOVERY_BUDGET_THRESHOLD_IS_BISECTED 9ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+ Test Files  2 passed (2)
+      Tests  13 passed (13)
+   Start at  04:12:35
+   Duration  2.35s (transform 2.48s, setup 0ms, import 4.26s, tests 46ms, environment 0ms)
+
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/null-runcommands-abort-recon01.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts.

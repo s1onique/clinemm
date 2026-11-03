@@ -1,0 +1,39 @@
+ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 — ORCHESTRATOR-LEVEL CAUSAL DISCRIMINATOR
+
+evidence_class: SYNTHETIC_REAL
+seam: real SessionRuntime (sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts)
+       -> real AgentRuntime (sdk/packages/agents/src/agent-runtime.ts)
+       -> real production run_commands schema (RunCommandsInputSchema)
+       -> real createTool-generated validateInput
+       -> real MistakeTracker + LoopDetectionTracker + recovery tracker
+provider: deterministic scripted fixture (NOT live)
+
+Intervention: vary ONLY the number of identical {commands:null} run_commands calls.
+Observation: the runtime terminal finishReason.
+
+[ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01] identical-null-call cardinality → finishReason: 1:completed, 2:completed, 3:completed, 4:aborted, 5:aborted, 6:aborted, 7:aborted
+
+ ✓ src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D1_D4_TWO_CONSECUTIVE_NULL_CALLS__RUN_COMPLETES_NOT_ABORTS 16ms
+
+Threshold table (from red-witness.txt):
+  1 identical null call -> completed
+  2 identical null calls -> completed   <-- THE INCIDENT'S CARDINALITY
+  3 identical null calls -> completed   (recovery latch ARMED: Trigger C exact_only_capped)
+  4 identical null calls -> aborted     (recovery latch TERMINATING -> ControlledStopError("bounded_recovery_exhausted") -> status="aborted")
+  5,6,7 identical null calls -> aborted
+
+Mechanism (source):
+  sdk/packages/agents/src/agent-runtime.ts:5127-5145  exact-only budget increment + Trigger C arm
+  sdk/packages/agents/src/agent-runtime.ts:5186-5195  armed -> terminating transition
+  sdk/packages/agents/src/agent-runtime.ts:3227-3229  next model-stream entry throws ControlledStopError("bounded_recovery_exhausted")
+  sdk/packages/agents/src/agent-runtime.ts:1983-1985  catch -> status = "aborted"
+
+LIVE corroboration (2026-11-02 capture):
+  shadowRecoveryState = "idle" at the terminal transition
+  recoveryBudgetFailures frozen at 2 across the terminal transition
+  => the recovery latch was NOT armed, consistent with the incident's cardinality of 2.
+
+NEGATIVE CONTROLS:
+  1 null call   -> completed (D2)
+  2 valid calls -> completed, 2 commands executed (D4)
+  valid + 2 null calls -> completed, earlier success preserved (T8)
