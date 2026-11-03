@@ -1,0 +1,11 @@
+# ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 — evidence manifest
+EVIDENCE_HEAD=5a1702c2d7a3bbdd752f233526d49016640ed42d
+BRANCH=main
+ENTRY_HEAD=251779fdf80a9782e00ddf12996813433c7a7bbb
+
+# path  byte_size  sha256  evidence_class  source_head  capture_scope
+factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01/input-shape-authority.txt  1066  a7d08db32c54e220e56dd6367d798e9c3047c4905113c743a846cfba41c4afa4  REAL_PRODUCTION_SEAM  5a1702c2d7a3bbdd752f233526d49016640ed42d  production schema + normalization + validator
+factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01/red-witness.txt  6762  aca360fcd8758d6e11e5cf22eed49654701369b45b0f0c42bac35562f5caf27f  SYNTHETIC_REAL  5a1702c2d7a3bbdd752f233526d49016640ed42d  real AgentRuntime + real SessionRuntime + scripted provider
+factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01/orchestrator-discriminator.txt  2359  5faf56aac7ca18707fc0a1a5dbf478c0418203a4d295929a17805310c8be8fa7  SYNTHETIC_REAL  5a1702c2d7a3bbdd752f233526d49016640ed42d  cardinality -> finishReason bisection 1..7
+factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01/live-chronology.txt  3327  3db38f6076046fa02ba823df2a8372f48378079f5f778381b33a7968bb2f1c01  REAL  5a1702c2d7a3bbdd752f233526d49016640ed42d  frozen 2026-11-02 incident captures
+factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01/gates.txt  30678  def77078403be730ffdacc325b0e5a8d3ef1b5cfab4f60814fd1466e670fe772  REAL  5a1702c2d7a3bbdd752f233526d49016640ed42d  all executed commands + exit codes

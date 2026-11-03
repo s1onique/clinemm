@@ -525,7 +525,10 @@ ENTRY_HEAD:
 251779fdf80a9782e00ddf12996813433c7a7bbb
 
 EVIDENCE_HEAD:
-<final HEAD — see factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01/MANIFEST.sha256>
+5a1702c2d7a3bbdd752f233526d49016640ed42d
+(bound via factory/acts/ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01/MANIFEST.sha256;
+ the manifest itself is committed as the follow-up artifact commit below
+ this head, and records the byte size + sha256 of every retained artifact)
 
 BRANCH:
 main
