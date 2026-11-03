@@ -101,6 +101,7 @@ export type {
 export {
 	buildClineSystemPrompt as getClineDefaultSystemPrompt,
 	buildSdkErrorProperties,
+	type CommandExecutionPlan,
 	ContributionRegistry,
 	captureSdkError,
 	createClineTelemetryServiceConfig,
@@ -118,7 +119,6 @@ export {
 	parseUserCommandEnvelope,
 	registerDisposable,
 	SDK_ERROR_TELEMETRY_EVENT,
-	type CommandExecutionPlan,
 	stripUtf8Bom,
 } from "@cline/shared";
 export * from "@cline/shared/storage";
@@ -396,6 +396,24 @@ export {
 	updateMcpSettingsFile,
 	updateMcpSettingsFileSync,
 } from "./extensions/mcp";
+// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01: the narrow bridge
+// that carries the EXISTING command-execution authorities' terminal facts
+// into the EXISTING centralized flight recorder.
+export {
+	type CommandProcessObservationFacts,
+	type CommandProcessObservationIdentity,
+	reportCommandProcessObservation,
+} from "./extensions/tools/executors/command-process-observation";
+// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the edit
+// CHECKPOINT seam. The host calls `captureEditCheckpoint` at an operator
+// checkpoint or immediately before a trace dump, so the retained-change
+// classification rests on an ACTUAL filesystem observation rather than on
+// the last post-write read-back.
+export {
+	captureEditCheckpoint,
+	getEditCheckpointRegistry,
+	resetEditCheckpointRegistry,
+} from "./extensions/tools/executors/edit-observation";
 export {
 	type AgentTask,
 	AgentTeam,
@@ -517,6 +535,16 @@ export {
 	type TempAuthorityEvidence,
 } from "./runtime/command-policy";
 export { buildCommandExecutionPlan } from "./runtime/command-policy/command-execution-plan";
+export {
+	type EvaluateCommandRiskInput,
+	evaluateCommandRisk,
+	type RiskDecision,
+} from "./runtime/command-policy/command-risk";
+export type {
+	TemporaryExternalPathAuthority,
+	WorkspacePathAuthorityEvidence,
+	WorkspacePathOperandEvidence,
+} from "./runtime/command-policy/path-authority-evidence";
 // ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
 // REALPATH_WORKSPACE_CONFINEMENT:
 //
@@ -534,21 +562,11 @@ export { buildCommandExecutionPlan } from "./runtime/command-policy/command-exec
 // gets this split right; this correction aligns the top-level barrel
 // with that sub-index and the canonical definitions.
 export {
-	buildPathAuthorityEvidence,
 	type BuildPathEvidenceOptions,
 	type BuildPathEvidenceResult,
+	buildPathAuthorityEvidence,
 	safeRealpathSync,
 } from "./runtime/command-policy/path-authority-evidence-builder";
-export type {
-	TemporaryExternalPathAuthority,
-	WorkspacePathAuthorityEvidence,
-	WorkspacePathOperandEvidence,
-} from "./runtime/command-policy/path-authority-evidence";
-export {
-	evaluateCommandRisk,
-	type EvaluateCommandRiskInput,
-	type RiskDecision,
-} from "./runtime/command-policy/command-risk";
 // V2 structured-classifier types (ParsedShell, ShellDialect,
 // StructuredAnalysis, etc.) are DELIBERATELY NOT re-exported from the
 // public `@cline/core` index. They live in the internal
@@ -613,16 +631,6 @@ export {
 	createTeamName,
 	DefaultRuntimeBuilder,
 } from "./runtime/orchestration/runtime-builder";
-// ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01: the edit
-// CHECKPOINT seam. The host calls `captureEditCheckpoint` at an operator
-// checkpoint or immediately before a trace dump, so the retained-change
-// classification rests on an ACTUAL filesystem observation rather than on
-// the last post-write read-back.
-export {
-	captureEditCheckpoint,
-	getEditCheckpointRegistry,
-	resetEditCheckpointRegistry,
-} from "./extensions/tools/executors/edit-observation";
 export {
 	OAuthReauthRequiredError,
 	type RuntimeOAuthResolution,
@@ -1003,23 +1011,23 @@ export {
 export type { SessionManifest } from "./session/models/session-manifest";
 export type { SessionRow } from "./session/models/session-row";
 export * from "./session/search";
+export {
+	__resetActiveListSessionsCallerForTests,
+	__resetSessionListingDiagnosticSinkForTests,
+	consumeActiveListSessionsCaller,
+	getSessionListingDiagnosticSink,
+	peekActiveListSessionsCaller,
+	runInListSessionsCallerContext,
+	SessionListingCallerClass,
+	type SessionListingCallerClassValue,
+	type SessionListingDiagnosticSink,
+	setSessionListingDiagnosticSink,
+} from "./session/services/session-listing-diagnostic-sink";
 export type {
 	CreateRootSessionWithArtifactsInput,
 	RootSessionArtifacts,
 } from "./session/services/session-service";
 export { CoreSessionService } from "./session/services/session-service";
-export {
-	SessionListingCallerClass,
-	type SessionListingCallerClassValue,
-	consumeActiveListSessionsCaller,
-	getSessionListingDiagnosticSink,
-	peekActiveListSessionsCaller,
-	runInListSessionsCallerContext,
-	setSessionListingDiagnosticSink,
-	type SessionListingDiagnosticSink,
-	__resetActiveListSessionsCallerForTests,
-	__resetSessionListingDiagnosticSinkForTests,
-} from "./session/services/session-listing-diagnostic-sink";
 export type {
 	CoreSessionCheckpointSnapshot,
 	CoreSessionSnapshot,
@@ -1103,7 +1111,6 @@ export {
 // the production budget resolver + ceiling sanitizer so the host can resolve
 // the SAME effective input budget the compaction policy applies.
 export { normalizeUserContextCeiling } from "./extensions/context/compaction-shared";
-export { resolveModelBehaviorTraceBudget } from "./runtime/observability/model-behavior-trace";
 export { summarizeConversation } from "./extensions/context/summarize-conversation";
 export {
 	CLINE_PLUGIN_RUNTIME_DIR_ENV,
@@ -1154,10 +1161,10 @@ export {
 	resolveToolClientType,
 	type ShellExecutor,
 	type ShellExecutorOptions,
-	spawnSupervisableShellCommand,
 	type StructuredCommandInput,
 	StructuredCommandInputSchema,
 	type SupervisableShellProcess,
+	spawnSupervisableShellCommand,
 	TEAM_TOOL_NAMES,
 	type ToolCatalogEntry,
 	type ToolClientType,
@@ -1167,7 +1174,10 @@ export {
 	ToolPresets,
 	truncateCommandOutput,
 } from "./extensions/tools";
-
+export { createHubPluginCommandsApi } from "./hub/client/plugin-commands";
+export * from "./remote/remote-environments";
+export { ensureLoginShellPath } from "./remote/shell-path";
+export { resolveModelBehaviorTraceBudget } from "./runtime/observability/model-behavior-trace";
 // ACT-CLINEMM-COMMAND-SANDBOX-BACKEND-ABSTRACTION01:
 // sandbox backend abstraction (experimental, DEFAULT_OFF).
 export {
@@ -1176,19 +1186,12 @@ export {
 } from "./runtime/sandbox/canonical-paths";
 export {
 	DEFAULT_READONLY_ALLOW,
-	SAFE_ENVIRONMENT_BASELINE,
-	SECRET_BLOCKLIST,
 	getEnvironmentSemantics,
 	isSecretShapedEnvName,
 	materializeEnvironment,
+	SAFE_ENVIRONMENT_BASELINE,
+	SECRET_BLOCKLIST,
 } from "./runtime/sandbox/environment";
-export { noSandboxBackend } from "./runtime/sandbox/no-sandbox-backend";
-export {
-	DEFAULT_SANDBOX_MODE,
-	getSandboxBackend,
-	readExperimentalSandboxOptIn,
-	type SandboxBackendOptIn,
-} from "./runtime/sandbox/sandbox-backend";
 // ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
 // Re-export the Seatbelt backend's diagnostic observer setter from
 // its source module so the ClineMM policy seam can install a JSONL
@@ -1203,7 +1206,6 @@ export {
 // would add a one-shot await on the first prepare() and is
 // rejected on latency grounds. The ClineMM VSCode boot path
 // already loads seatbelt-backend.ts eagerly in practice.
-export { setSeatbeltDiagnosticObserver } from "./runtime/sandbox/macos/seatbelt-backend";
 // Test-only: the diagnostic observer accessor + Seatbelt singleton
 // + substrate probe are re-exported so apps/vscode vitest suites
 // can construct fixtures. They are NOT used by production callers
@@ -1214,7 +1216,15 @@ export {
 	probeSeatbeltAvailability,
 	SANDBOX_EXEC_PATH,
 	SeatbeltSandboxBackendExperimental,
+	setSeatbeltDiagnosticObserver,
 } from "./runtime/sandbox/macos/seatbelt-backend";
+export { noSandboxBackend } from "./runtime/sandbox/no-sandbox-backend";
+export {
+	DEFAULT_SANDBOX_MODE,
+	getSandboxBackend,
+	readExperimentalSandboxOptIn,
+	type SandboxBackendOptIn,
+} from "./runtime/sandbox/sandbox-backend";
 export type {
 	CommandCapability,
 	CommandInvocation,
@@ -1227,9 +1237,6 @@ export type {
 	SandboxPreparedInvocation,
 } from "./runtime/sandbox/types";
 export { SandboxError } from "./runtime/sandbox/types";
-export { createHubPluginCommandsApi } from "./hub/client/plugin-commands";
-export * from "./remote/remote-environments";
-export { ensureLoginShellPath } from "./remote/shell-path";
 export { isClineAccountFeatureEnabled } from "./services/feature-flags/cline-account-feature-flags";
 export {
 	applyClineFeaturedModels,

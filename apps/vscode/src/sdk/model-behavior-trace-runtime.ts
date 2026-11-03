@@ -409,6 +409,20 @@ export const modelBehaviorTraceSink: ModelBehaviorTraceSink = {
 	onEditCheckpointObservation: (observation) => {
 		recordModelBehaviorTrace("edit_checkpoint_observation", observation)
 	},
+	/**
+	 * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+	 *
+	 * ONE command's genuine process outcome, observed at the authority that
+	 * owns the process.
+	 *
+	 * The payload is ALREADY privacy-safe by construction (the producer
+	 * carries only structural scalars), and the recorder's fail-closed
+	 * sanitizer runs over it again on the way in — so an unexpected field
+	 * injected by a producer is still dropped.
+	 */
+	onProcessObservation: (observation) => {
+		recordModelBehaviorTrace("process_observation", observation)
+	},
 	onLoopVerdict: (observation) => {
 		recordModelBehaviorTrace("loop_verdict", observation)
 	},

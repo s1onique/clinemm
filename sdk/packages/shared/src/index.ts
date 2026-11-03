@@ -546,6 +546,10 @@ export {
 	setStartingConnectorInstance,
 	withHubLauncherIdentity,
 } from "./runtime/hub-daemon-env";
+export {
+	ensureLoopbackProxyBypass,
+	LOOPBACK_NO_PROXY_HOSTS,
+} from "./runtime/loopback-proxy-bypass";
 // ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: the centralized, bounded,
 // model-agnostic flight recorder and its SDK observation sink.
 export type {
@@ -573,6 +577,9 @@ export type {
 	ModelBehaviorTraceIdentity,
 	ModelBehaviorTraceModelConfig,
 	ModelBehaviorTraceObservation,
+	ModelBehaviorTraceProcessExecutionMode,
+	ModelBehaviorTraceProcessObservation,
+	ModelBehaviorTraceProcessTerminalState,
 	ModelBehaviorTraceRecord,
 	ModelBehaviorTraceRecorderOptions,
 	ModelBehaviorTraceSink,
@@ -581,6 +588,8 @@ export type {
 	ModelBehaviorTraceWorkspaceIdentity,
 } from "./runtime/model-behavior-trace";
 export {
+	COMMAND_PROCESS_OBSERVATION_INDEX_METADATA_KEY,
+	COMMAND_PROCESS_OBSERVATION_SINK_METADATA_KEY,
 	canonicalizeTraceValue,
 	categorizeTraceTool,
 	classifyEvidenceBoundary,
@@ -618,10 +627,6 @@ export {
 	registerModelBehaviorWireReasoningObserver,
 	unregisterModelBehaviorWireReasoningObserver,
 } from "./runtime/model-wire-reasoning";
-export {
-	ensureLoopbackProxyBypass,
-	LOOPBACK_NO_PROXY_HOSTS,
-} from "./runtime/loopback-proxy-bypass";
 export {
 	disableCurrentDirectoryExecutableSearch,
 	NO_DEFAULT_CURRENT_DIRECTORY_IN_EXE_PATH_ENV,
@@ -714,6 +719,5 @@ export * from "./team";
 export { createTool } from "./tools/create";
 export * from "./types";
 export { AUTH_ERROR_PATTERNS, isLikelyAuthError } from "./types/auth";
-export { initVcr } from "./vcr";
-
 export * from "./ux-verifier";
+export { initVcr } from "./vcr";

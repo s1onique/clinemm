@@ -19,6 +19,7 @@ import {
 	CommandExitError,
 	createShellTool,
 	MAX_COMMAND_OUTPUT_CHARS,
+	reportCommandProcessObservation,
 	type ShellExecutor,
 	type StructuredCommandInput,
 	truncateCommandOutput,
@@ -463,6 +464,16 @@ export async function executeForeground(
 	abortSignal?: AbortSignal,
 	foregroundCommands?: SdkForegroundCommandCoordinator,
 	terminalProfileId?: string,
+	/**
+	 * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+	 *
+	 * The established trace-observation channel from the tool context. It
+	 * carries the runtime-owned sink + identity + the command's positional
+	 * index. The foreground terminal's completion details are the ONLY
+	 * authority for this command's process outcome, so the observation is
+	 * reported HERE — at the boundary where the exit code is first known.
+	 */
+	observationMetadata?: Record<string, unknown>,
 ): Promise<string> {
 	const terminalCommand = formatCommandForTerminal(command)
 
@@ -675,6 +686,47 @@ export async function executeForeground(
 			}
 
 			const completionDetails = process.getCompletionDetails?.()
+
+			// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01:
+			//
+			// The terminal's completion details are the ONLY authority for
+			// this command's PROCESS outcome, so the observation is
+			// reported HERE — at the boundary where the exit code first
+			// becomes known.
+			//
+			// The classification is EXACTLY the distinction the source can
+			// make:
+			//
+			//   - terminal closed mid-command → `unknown` (no exit code was
+			//     observed, and the command did NOT exit cleanly);
+			//   - completion could not be observed → `unknown` (the command
+			//     may still be running; it is NOT an exit);
+			//   - an exit code was observed  → `exited` with that EXACT
+			//     code;
+			//   - completion observed but no exit code → `unknown` with NO
+			//     exit code (never 0).
+			//
+			// A synthesized `CommandExitError(1)` is NOT process evidence:
+			// the `1` in those two branches is a wrapper convention, not an
+			// observed exit code, so it is NEVER reported as one.
+			const observedExitCode = completionDetails?.exitCode
+			const foregroundTerminalState = completionDetails?.terminalClosed
+				? "unknown"
+				: completionDetails?.unobservedCommand
+					? "unknown"
+					: observedExitCode !== undefined && observedExitCode !== null
+						? "exited"
+						: "unknown"
+			reportCommandProcessObservation(
+				observationMetadata,
+				{
+					terminalState: foregroundTerminalState,
+					exitCode: foregroundTerminalState === "exited" ? observedExitCode : undefined,
+					signal: completionDetails?.signal ?? undefined,
+				},
+				"foreground",
+				"foreground_terminal_completion",
+			)
 
 			// A terminal closed mid-command has no exit code and no reliable output —
 			// whatever the command was doing (e.g. running a test suite) was interrupted,
@@ -966,6 +1018,38 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					...(start.exitCode !== undefined ? { exitCode: start.exitCode } : {}),
 					terminalExecutionMode: "backgroundExec",
 				})
+				// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01:
+				//
+				// The SYNCHRONOUS terminal observation for a background
+				// command that finished within the wait budget.
+				//
+				// `manager.start()` returns the manager's authoritative
+				// terminal snapshot in this case, so the process outcome
+				// IS known here and is reported exactly once.
+				//
+				// The exit code is carried ONLY when the manager actually
+				// observed one. A synthesized `CommandExitError(1)` later
+				// in this function is a wrapper convention and is NEVER
+				// reported as a process exit code.
+				if (start.state !== "running") {
+					reportCommandProcessObservation(
+						context.metadata,
+						{
+							terminalState: start.state as
+								| "exited"
+								| "cancelled"
+								| "deadline_exceeded"
+								| "spawn_failed"
+								| "containment_failed"
+								| "unknown",
+							exitCode: start.exitCode,
+							signal: start.signal,
+							jobId: start.jobId,
+						},
+						"background",
+						"background_job_manager_terminal",
+					)
+				}
 				// Combine stderr into stdout for the model-facing terminal
 				// result so diagnostics written to stderr are not silently
 				// lost. Mirrors the bash executor's combineOutput behavior.
@@ -1805,6 +1889,96 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					// command-job-manager.ts:1986-2010. The release is a
 					// no-op when no caller signal was attached.
 					manager.releaseForegroundAbortOwnership(start.jobId)
+					// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01:
+					//
+					// The NONTERMINAL handoff. The manager owns the process
+					// tree and the eventual terminal fact, so the process
+					// outcome is NOT yet known here.
+					//
+					// The observation is `running` — NEVER a success and
+					// NEVER an exit code. The terminal observation arrives
+					// LATER, possibly long after this tool call has
+					// returned.
+					reportCommandProcessObservation(
+						context.metadata,
+						{
+							terminalState: "running",
+							jobId: start.jobId,
+						},
+						"background",
+						"background_job_manager_handoff",
+					)
+					// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01:
+					//
+					// The DELAYED terminal observation for a background
+					// command whose execution outlives its tool call.
+					//
+					// The manager's `terminalPromise` resolves from the
+					// authoritative `finalize()` boundary, which is where
+					// the REAL exit code and the exact terminal class
+					// (exited / cancelled / deadline_exceeded /
+					// spawn_failed / containment_failed) are known —
+					// INDEPENDENTLY of whether the model ever polls
+					// `command_status`.
+					//
+					// The owner identity is captured HERE, at the LAUNCH,
+					// from the tool context that started the job. It is
+					// NEVER reconstructed from the currently-active
+					// session when terminality occurs, so a session switch
+					// cannot misattribute the terminal fact.
+					//
+					// The observation is fire-and-forget: it MUST NOT add
+					// an `await` to the command execution path.
+					//
+					// The launch-time owner identity is bound to a CONST
+					// here. `start` is a mutable binding, so TypeScript
+					// cannot narrow it inside this deferred callback; the
+					// const also makes the "the terminal fact belongs to
+					// the job that was launched HERE" invariant explicit
+					// and immune to any later reassignment of `start`.
+					const launchedJobId = start.jobId
+					void start.terminalPromise.then(async () => {
+						try {
+							const status = await manager.status({ jobId: launchedJobId, waitMs: 0 })
+							if (!status.ok) {
+								// The job's terminal record evaporated before
+								// the fact could be read. The terminal class is
+								// UNKNOWN — never invented, never "exited".
+								reportCommandProcessObservation(
+									context.metadata,
+									{ terminalState: "unknown", jobId: launchedJobId },
+									"background",
+									"background_job_manager_terminal",
+								)
+								return
+							}
+							const snapshot = status.snapshot
+							reportCommandProcessObservation(
+								context.metadata,
+								{
+									terminalState: snapshot.state as
+										| "running"
+										| "exited"
+										| "cancelled"
+										| "deadline_exceeded"
+										| "spawn_failed"
+										| "containment_failed"
+										| "unknown",
+									// The REAL observed exit code — absent when
+									// the process authority did not report one.
+									// It is NEVER defaulted to 0.
+									exitCode: snapshot.exitCode,
+									signal: snapshot.signal,
+									jobId: launchedJobId,
+								},
+								"background",
+								"background_job_manager_terminal",
+							)
+						} catch {
+							// Failure isolation: a failed observation never
+							// affects command execution.
+						}
+					})
 					const runningPayload = {
 						status: "running" as const,
 						jobId: start.jobId,
@@ -1856,6 +2030,13 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// Terminal path. Preserve existing CommandExitError so the
 				// SDK wrapper records the existing telemetry; for success,
 				// return stdout as before.
+				//
+				// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01: the
+				// fast path's terminal observation was already reported
+				// SYNCHRONOUSLY from `start` (the manager's authoritative
+				// terminal snapshot), so NO second terminal observation is
+				// emitted here — a duplicate terminal record for the same
+				// execution would violate the cardinality contract.
 				if (start.state === "exited" && start.exitCode === 0) {
 					return combinedOutput
 				}
@@ -1919,6 +2100,25 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					options.backgroundNotifyCoordinator?.releaseReservation(permitId)
 					permitId = undefined
 				}
+				// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01:
+				//
+				// A command that FAILED TO LAUNCH is NOT an exited
+				// subprocess. When `manager.start()` itself throws, no
+				// process was ever spawned, so the observation is
+				// `spawn_failed` with NO exit code.
+				//
+				// The exit code is NEVER synthesized from the wrapper
+				// error: a `CommandExitError(1)` thrown by the fast path
+				// carries a wrapper convention, not an observed exit code,
+				// and it is NOT reported as one.
+				if (start === undefined) {
+					reportCommandProcessObservation(
+						context.metadata,
+						{ terminalState: "spawn_failed" },
+						"background",
+						"background_job_manager_launch",
+					)
+				}
 				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 				// on any thrown error (CommandExitError, spawn_failed,
 				// etc.) the background command is no longer in-flight.
@@ -1967,6 +2167,10 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			context.signal,
 			options.foregroundCommands,
 			profileId,
+			// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01: the
+			// foreground terminal's completion details are the ONLY
+			// authority for this command's process outcome.
+			context.metadata,
 		)
 	}
 }

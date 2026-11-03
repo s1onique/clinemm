@@ -176,6 +176,16 @@ export {
 	type SupervisableShellProcess,
 	spawnSupervisableShellCommand,
 } from "../../../../sdk/packages/core/src/extensions/tools/executors/bash"
+// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01: the narrow bridge
+// that carries the EXISTING command-execution authorities' terminal facts
+// into the EXISTING centralized flight recorder. Re-exported from the real
+// SDK source so the host executor's observation path is the production one
+// under vitest.
+export {
+	type CommandProcessObservationFacts,
+	type CommandProcessObservationIdentity,
+	reportCommandProcessObservation,
+} from "../../../../sdk/packages/core/src/extensions/tools/executors/command-process-observation"
 export { createEditorExecutor } from "../../../../sdk/packages/core/src/extensions/tools/executors/editor"
 // ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
 // structural input-shape probe needs `normalizeRunCommandsInput` from

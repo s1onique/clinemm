@@ -7,6 +7,7 @@
 import {
 	type AgentTool,
 	type AgentToolContext,
+	COMMAND_PROCESS_OBSERVATION_INDEX_METADATA_KEY,
 	type CommandExecutionPlanEntry,
 	createTool,
 	getDefaultShell,
@@ -50,6 +51,7 @@ import {
 	type ReadFilesInput,
 	ReadFilesInputSchema,
 	ReadFilesInputUnionSchema,
+	type RunCommandsInput,
 	RunCommandsInputSchema,
 	type SearchCodebaseInput,
 	SearchCodebaseInputSchema,
@@ -59,7 +61,6 @@ import {
 	type StructuredCommandInput,
 	type SubmitInput,
 	SubmitInputSchema,
-	type RunCommandsInput,
 } from "./schemas";
 import type {
 	ApplyPatchExecutor,
@@ -204,7 +205,9 @@ async function executeShellCommands(
 	// present (synthetic transport compatibility path).
 	const plan = context.commandExecutionPlan;
 	const planEntries = plan?.commands ?? null;
-	let perCommandCaps: ReadonlyArray<InternalExecutionCapability | undefined> | null = null;
+	let perCommandCaps: ReadonlyArray<
+		InternalExecutionCapability | undefined
+	> | null = null;
 	if (planEntries !== null) {
 		const correlation = correlateExecutionPlan(commands, planEntries);
 		if (!correlation.ok) {
@@ -275,123 +278,155 @@ async function executeShellCommands(
 	//
 	// On mismatch: FAIL CLOSED -- throw BEFORE any manager.start call.
 	// -------------------------------------------------------------------------
-	if (perCommandCaps === null && context.perCommandExecutionCapability !== undefined) {
+	if (
+		perCommandCaps === null &&
+		context.perCommandExecutionCapability !== undefined
+	) {
 		throw new Error(
 			`per_command_execution_capability_requires_correlated_plan: perCommandExecutionCapability kind=${JSON.stringify(context.perCommandExecutionCapability.kind)} requires a successfully correlated per-command execution plan; the per-command channel is only legal when a plan is present`,
-		)
+		);
 	}
 
 	return Promise.all(
-		commands.map(async (command, commandIndex): Promise<ToolOperationResult> => {
-			const startedAt = Date.now();
-			const query = formatRunCommandQueryPreview(command);
-			try {
-				// ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
-				// when a per-command plan is present, the per-command
-				// capability is the EXACT entry capability (or undefined).
-				// MUST NOT fall back to the tool-call
-				// context.executionCapability when a plan exists -- that
-				// would recreate the leak.
-				//
-				// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
-				// CORRECTION01 (typed-channel separation):
-				// The per-command channel is the ONLY path that may carry
-				// real authority-bearing capabilities (e.g.
-				// `filesystem-create-only`). The channel separation is
-				// enforced at the TYPE SYSTEM, not via a cast:
-				//   `executionCapability`              -> factory-binding-probe only
-				//   `perCommandExecutionCapability`   -> full InternalExecutionCapability
-				// When the plan is present, we STAMP the per-command
-				// field and CLEAR the legacy field, without an
-				// `as AgentToolContext` cast.
-				//
-				// The runtime guard at the top of this function
-				// (real_execution_capability_requires_per_command_plan)
-				// has already enforced that the legacy
-				// `context.executionCapability` is either undefined or
-				// `factory-binding-probe` when no plan is present; here,
-				// when a plan IS present, the per-command field IS the
-				// authority-bearing channel.
-				const perCommandContext: AgentToolContext =
-					perCommandCaps !== null
+		commands.map(
+			async (command, commandIndex): Promise<ToolOperationResult> => {
+				const startedAt = Date.now();
+				const query = formatRunCommandQueryPreview(command);
+				try {
+					// ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+					// when a per-command plan is present, the per-command
+					// capability is the EXACT entry capability (or undefined).
+					// MUST NOT fall back to the tool-call
+					// context.executionCapability when a plan exists -- that
+					// would recreate the leak.
+					//
+					// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+					// CORRECTION01 (typed-channel separation):
+					// The per-command channel is the ONLY path that may carry
+					// real authority-bearing capabilities (e.g.
+					// `filesystem-create-only`). The channel separation is
+					// enforced at the TYPE SYSTEM, not via a cast:
+					//   `executionCapability`              -> factory-binding-probe only
+					//   `perCommandExecutionCapability`   -> full InternalExecutionCapability
+					// When the plan is present, we STAMP the per-command
+					// field and CLEAR the legacy field, without an
+					// `as AgentToolContext` cast.
+					//
+					// The runtime guard at the top of this function
+					// (real_execution_capability_requires_per_command_plan)
+					// has already enforced that the legacy
+					// `context.executionCapability` is either undefined or
+					// `factory-binding-probe` when no plan is present; here,
+					// when a plan IS present, the per-command field IS the
+					// authority-bearing channel.
+					const perCommandContext: AgentToolContext =
+						perCommandCaps !== null
+							? {
+									...context,
+									executionCapability: undefined,
+									perCommandExecutionCapability: perCommandCaps[commandIndex],
+								}
+							: context;
+					// ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01: keep upstream's
+					// commandIndex+query envelope on emitUpdate (PR #13547 stream
+					// run-command output) and STACK it on top of the ClineMM
+					// per-command authority binding. Order matters: the per-command
+					// capability is stamped FIRST so the executor receives the
+					// authority-bearing context; the emitUpdate envelope is then
+					// applied so the runtime still tags streamed output with the
+					// command index and query preview.
+					const commandContext: AgentToolContext = context.emitUpdate
 						? {
-								...context,
-								executionCapability: undefined,
-								perCommandExecutionCapability: perCommandCaps[commandIndex],
+								...perCommandContext,
+								emitUpdate: (update) => {
+									const payload =
+										update &&
+										typeof update === "object" &&
+										!Array.isArray(update)
+											? (update as Record<string, unknown>)
+											: { update };
+									context.emitUpdate?.({
+										...payload,
+										commandIndex,
+										query,
+									});
+								},
 							}
-						: context;
-				// ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01: keep upstream's
-				// commandIndex+query envelope on emitUpdate (PR #13547 stream
-				// run-command output) and STACK it on top of the ClineMM
-				// per-command authority binding. Order matters: the per-command
-				// capability is stamped FIRST so the executor receives the
-				// authority-bearing context; the emitUpdate envelope is then
-				// applied so the runtime still tags streamed output with the
-				// command index and query preview.
-				const commandContext: AgentToolContext = context.emitUpdate
-					? {
-							...perCommandContext,
-							emitUpdate: (update) => {
-								const payload =
-									update && typeof update === "object" && !Array.isArray(update)
-										? (update as Record<string, unknown>)
-										: { update };
-								context.emitUpdate?.({
-									...payload,
-									commandIndex,
-									query,
-								});
-							},
-						}
-					: perCommandContext;
-				const output = await withTimeout(
-					executor(command, cwd, commandContext),
-					timeoutMs,
-					`Command timed out after ${timeoutMs}ms`,
-				);
-				return {
-					query,
-					result: output,
-					success: true,
-				};
-			} catch (error) {
-				if (error instanceof TimeoutError) {
-					captureRunCommandsTimeoutFromContext(telemetry, context, {
-						effectiveTimeoutMs: error.timeoutMs,
-						timeoutSource,
-						commandCount: commands.length,
-						durationMs: Date.now() - startedAt,
-					});
-				}
-				if (error instanceof CommandExitError) {
+						: perCommandContext;
+					// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01:
+					// Stamp the command's POSITIONAL index into the per-command
+					// context metadata.
+					//
+					// The executor is the ONLY layer that knows the genuine
+					// process outcome (the foreground terminal's completion
+					// details, or the background job manager's terminal fact),
+					// but it receives only the command, the cwd, and the tool
+					// context — it cannot tell command 0 from command 1 in a
+					// batch. This stamp carries the positional index down so
+					// the observation can be correlated by
+					// `(sessionId, toolCallId, commandIndex)`.
+					//
+					// The value is a NUMBER (a positional index), never a command
+					// string, so it adds no privacy surface. The stamp is
+					// metadata-only: it does NOT change the executor's behavior,
+					// the result array, the execution order, or the timeout
+					// semantics.
+					const indexedContext: AgentToolContext = {
+						...commandContext,
+						metadata: {
+							...(commandContext.metadata ?? {}),
+							[COMMAND_PROCESS_OBSERVATION_INDEX_METADATA_KEY]: commandIndex,
+						},
+					};
+					const output = await withTimeout(
+						executor(command, cwd, indexedContext),
+						timeoutMs,
+						`Command timed out after ${timeoutMs}ms`,
+					);
 					return {
 						query,
-						result: error.output,
-						error: error.message,
+						result: output,
+						success: true,
+					};
+				} catch (error) {
+					if (error instanceof TimeoutError) {
+						captureRunCommandsTimeoutFromContext(telemetry, context, {
+							effectiveTimeoutMs: error.timeoutMs,
+							timeoutSource,
+							commandCount: commands.length,
+							durationMs: Date.now() - startedAt,
+						});
+					}
+					if (error instanceof CommandExitError) {
+						return {
+							query,
+							result: error.output,
+							error: error.message,
+							success: false,
+						};
+					}
+					// R3 (upstream tool-execution semantics): a TERMINATED command
+					// (signal) is a first-class failure, distinct from an ordinary
+					// non-zero exit. It carries the partial output and must be
+					// reported as `success: false` — never as a silent success.
+					if (error instanceof CommandTerminationError) {
+						return {
+							query,
+							result: error.output,
+							error: error.message,
+							success: false,
+						};
+					}
+					const msg = formatError(error);
+					return {
+						query,
+						result: "",
+						error: `Command failed: ${msg}`,
 						success: false,
 					};
 				}
-				// R3 (upstream tool-execution semantics): a TERMINATED command
-				// (signal) is a first-class failure, distinct from an ordinary
-				// non-zero exit. It carries the partial output and must be
-				// reported as `success: false` — never as a silent success.
-				if (error instanceof CommandTerminationError) {
-					return {
-						query,
-						result: error.output,
-						error: error.message,
-						success: false,
-					};
-				}
-				const msg = formatError(error);
-				return {
-					query,
-					result: "",
-					error: `Command failed: ${msg}`,
-					success: false,
-				};
-			}
-		}),
+			},
+		),
 	);
 }
 
@@ -407,7 +442,12 @@ async function executeShellCommands(
 // fail the entire tool call closed (no manager.start calls).
 // --------------------------------------------------------------------------
 type CorrelationResult =
-	| { ok: true; perCommandCapabilities: ReadonlyArray<InternalExecutionCapability | undefined> }
+	| {
+			ok: true;
+			perCommandCapabilities: ReadonlyArray<
+				InternalExecutionCapability | undefined
+			>;
+	  }
 	| { ok: false; reason: string };
 function correlateExecutionPlan(
 	executableCommands: ReadonlyArray<string | StructuredCommandInput>,
@@ -754,60 +794,62 @@ export function createShellTool(
 			: () => configShell ?? getDefaultShell(process.platform);
 	const describe = () => buildRunCommandsDescription(resolveShell(), isWindows);
 
-	const tool = createTool<typeof RunCommandsInputSchema, ToolOperationResult[]>({
-		name: "run_commands",
-		description: describe(),
-		// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: pass the Zod
-		// schema (not the pre-converted JSON schema) so `createTool`
-		// auto-generates a `validateInput` method that rejects
-		// schema-invalid input BEFORE `requestToolApproval`. This
-		// preserves the strict canonical schema for both the
-		// model-facing display (JSON schema) and the runtime
-		// input check.
-		inputSchema: RunCommandsInputSchema,
-		timeoutMs: timeoutMs * 2,
-		retryable: false,
-		maxRetries: 0,
-		execute: async (input, context) => {
-			const commands = coalesceAdjacentStringHeredocs(
-				normalizeRunCommandsInput(input),
-			);
+	const tool = createTool<typeof RunCommandsInputSchema, ToolOperationResult[]>(
+		{
+			name: "run_commands",
+			description: describe(),
+			// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: pass the Zod
+			// schema (not the pre-converted JSON schema) so `createTool`
+			// auto-generates a `validateInput` method that rejects
+			// schema-invalid input BEFORE `requestToolApproval`. This
+			// preserves the strict canonical schema for both the
+			// model-facing display (JSON schema) and the runtime
+			// input check.
+			inputSchema: RunCommandsInputSchema,
+			timeoutMs: timeoutMs * 2,
+			retryable: false,
+			maxRetries: 0,
+			execute: async (input, context) => {
+				const commands = coalesceAdjacentStringHeredocs(
+					normalizeRunCommandsInput(input),
+				);
 
-			// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
-			// The notifyOnCompletion flag is opt-in (default false)
-			// and lives on the top-level input. The ShellExecutor
-			// signature does not accept per-invocation flags, so we
-			// thread the intent through the typed AgentToolContext
-			// metadata slot (host-attached; trusted because the
-			// host owns the executor). Only propagate when the
-			// caller explicitly opted in — absent / false is the
-			// same as "no metadata entry" so fire-and-forget
-			// callers do not see any delta. The fork's
-			// createVscodeShellExecutor reads this field and
-			// registers a notification marker at the
-			// background-handoff seam.
-			const rawInput = input as { notifyOnCompletion?: unknown } | null;
-			const notifyOnCompletion = rawInput?.notifyOnCompletion === true;
-			const nextContext = notifyOnCompletion
-				? {
-						...context,
-						metadata: {
-							...(context.metadata ?? {}),
-							notifyOnCompletion: true,
-						},
-					}
-				: context;
+				// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+				// The notifyOnCompletion flag is opt-in (default false)
+				// and lives on the top-level input. The ShellExecutor
+				// signature does not accept per-invocation flags, so we
+				// thread the intent through the typed AgentToolContext
+				// metadata slot (host-attached; trusted because the
+				// host owns the executor). Only propagate when the
+				// caller explicitly opted in — absent / false is the
+				// same as "no metadata entry" so fire-and-forget
+				// callers do not see any delta. The fork's
+				// createVscodeShellExecutor reads this field and
+				// registers a notification marker at the
+				// background-handoff seam.
+				const rawInput = input as { notifyOnCompletion?: unknown } | null;
+				const notifyOnCompletion = rawInput?.notifyOnCompletion === true;
+				const nextContext = notifyOnCompletion
+					? {
+							...context,
+							metadata: {
+								...(context.metadata ?? {}),
+								notifyOnCompletion: true,
+							},
+						}
+					: context;
 
-			return executeShellCommands(commands, {
-				executor,
-				cwd,
-				context: nextContext,
-				timeoutMs,
-				timeoutSource,
-				telemetry: config.telemetry,
-			});
+				return executeShellCommands(commands, {
+					executor,
+					cwd,
+					context: nextContext,
+					timeoutMs,
+					timeoutSource,
+					telemetry: config.telemetry,
+				});
+			},
 		},
-	});
+	);
 
 	if (typeof configShell === "function") {
 		// The runtime rebuilds tool definitions from this property for every

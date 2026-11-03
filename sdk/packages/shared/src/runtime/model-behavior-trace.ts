@@ -196,6 +196,24 @@ export type ModelBehaviorTraceEvent =
 	 * authority for a retained-change classification.
 	 */
 	| "edit_checkpoint_observation"
+	/**
+	 * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+	 *
+	 * ONE command's genuine PROCESS outcome, observed at the authority that
+	 * actually owns the process — NOT at the tool-call boundary.
+	 *
+	 * A `run_commands` invocation executes N commands CONCURRENTLY and
+	 * returns N positional results. `tool_finish` carries ONE aggregate
+	 * outcome for the whole tool call, so a batch whose command 0 exits 0 and
+	 * whose command 1 exits 3 is INDISTINGUISHABLE at the trace boundary.
+	 * This event restores the per-command cardinality: one observation per
+	 * command, correlated by `(sessionId, toolCallId, commandIndex)`.
+	 *
+	 * A background command produces a NONTERMINAL `running` observation at
+	 * the handoff and its authoritative terminal observation LATER — possibly
+	 * after the enclosing `tool_finish`. The two are distinct records.
+	 */
+	| "process_observation"
 	| "loop_verdict"
 	| "compaction_diagnostics"
 	| "compaction_completed"
@@ -1182,6 +1200,144 @@ export const EDIT_OBSERVATION_WORKSPACE_METADATA_KEY =
 	"__clineModelBehaviorTraceWorkspace";
 
 /**
+ * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+ *
+ * The tool-context metadata key that carries the trace sink into the
+ * COMMAND EXECUTOR.
+ *
+ * This is the SAME established channel the edit instrumentation uses
+ * (`EDIT_OBSERVATION_SINK_METADATA_KEY`): the runtime stamps the sink onto
+ * every `AgentToolContext`'s metadata, so the executor can reach the
+ * observation channel WITHOUT changing the public `ShellExecutor` signature
+ * and WITHOUT adding a public protocol field.
+ *
+ * The command executor is the ONLY layer that knows the true process
+ * outcome: the foreground executor owns the VS Code terminal's completion
+ * details, and the background executor owns the `CommandJobManager` that
+ * supervises the process tree. Neither fact is reachable from the tool-call
+ * boundary.
+ */
+export const COMMAND_PROCESS_OBSERVATION_SINK_METADATA_KEY =
+	"__clineModelBehaviorTraceSink";
+
+/**
+ * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+ *
+ * The tool-context metadata key that carries the PER-COMMAND positional
+ * identity into the command executor.
+ *
+ * `executeShellCommands` fans out over the command array CONCURRENTLY and
+ * knows each command's POSITIONAL index; the executor receives only the
+ * command, the cwd, and the tool context. Without this stamp the executor
+ * cannot tell command 0 from command 1 in a batch, so the per-command
+ * correlation key `(sessionId, toolCallId, commandIndex)` cannot be formed.
+ *
+ * The value is a plain NUMBER — the positional index of the command within
+ * its `run_commands` batch. It is NOT a model-provided value and it is NOT
+ * a command string.
+ */
+export const COMMAND_PROCESS_OBSERVATION_INDEX_METADATA_KEY =
+	"__clineCommandProcessObservationIndex";
+
+/**
+ * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+ *
+ * The TERMINAL CLASS of one observed command process.
+ *
+ * These are the classes the source authorities can actually distinguish.
+ * The set is deliberately CLOSED so an unknown class cannot be invented:
+ *
+ *   - `running`            — a background handoff; the terminal outcome is
+ *                            not yet observed. NOT a success.
+ *   - `exited`             — a real process terminal observation. The exit
+ *                            code is carried ONLY when it was actually
+ *                            observed; its absence means "unknown", never 0.
+ *   - `cancelled`          — a host-owned cancellation outcome.
+ *   - `deadline_exceeded`  — the host execution deadline was reached.
+ *   - `spawn_failed`       — no successful process spawn.
+ *   - `containment_failed` — the terminal containment invariant failed.
+ *   - `unknown`            — a required terminal fact could not be
+ *                            established (e.g. shell integration reported no
+ *                            exit code, or the terminal closed mid-command).
+ */
+export type ModelBehaviorTraceProcessTerminalState =
+	| "running"
+	| "exited"
+	| "cancelled"
+	| "deadline_exceeded"
+	| "spawn_failed"
+	| "containment_failed"
+	| "unknown";
+
+/**
+ * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+ *
+ * The EXECUTION MODE of one observed command.
+ *
+ * `foreground` — the command ran in the host's shared terminal and its
+ * completion was observed through shell integration.
+ *
+ * `background` — the command was handed to the supervised job manager,
+ * which owns the process tree and the eventual terminal fact.
+ */
+export type ModelBehaviorTraceProcessExecutionMode =
+	| "foreground"
+	| "background";
+
+/**
+ * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+ *
+ * The privacy-safe payload of ONE process observation.
+ *
+ * Every field is a STRUCTURAL scalar. There is deliberately no field for a
+ * command string, an argument array, stdout, stderr, an environment
+ * variable, an absolute path, or any raw tool output: the observation
+ * describes the PROCESS OUTCOME, never its content.
+ */
+export interface ModelBehaviorTraceProcessObservation {
+	/** The tool call that launched the command. */
+	readonly toolCallId: string;
+	/** The positional index of the command within its tool-call batch. */
+	readonly commandIndex: number;
+	/** The execution mode the command ran under. */
+	readonly executionMode: ModelBehaviorTraceProcessExecutionMode;
+	/**
+	 * The observed terminal class. `running` means the terminal outcome is
+	 * not yet known; it is NEVER a success.
+	 */
+	readonly terminalState: ModelBehaviorTraceProcessTerminalState;
+	/**
+	 * The ACTUAL observed process exit code.
+	 *
+	 * Present ONLY when the process authority reported one. An absent exit
+	 * code means "not observed" — it is NEVER equivalent to 0, and it is
+	 * NEVER inferred from a tool-wrapper error.
+	 */
+	readonly exitCode?: number;
+	/**
+	 * The termination signal, when the process authority reported one.
+	 */
+	readonly signal?: string;
+	/**
+	 * The background job identity, for a background command whose job id
+	 * was established. This binds the originating command to the manager's
+	 * eventual terminal state.
+	 */
+	readonly jobId?: string;
+	/**
+	 * The provenance of the observation. `REAL_PRODUCTION_SEAM` means the
+	 * fact was read from the authority that owns the process.
+	 */
+	readonly provenance?: ModelBehaviorTraceEvidenceProvenance;
+	/**
+	 * A bounded structural label describing WHICH authority produced the
+	 * observation (e.g. `foreground_terminal_completion`,
+	 * `background_job_manager`). Never a command, a path, or output.
+	 */
+	readonly source?: string;
+}
+
+/**
  * The workspace identity the host hands down to the executor.
  *
  * Only the paths are carried — the executor is responsible for reducing
@@ -1779,6 +1935,8 @@ export class ModelBehaviorTraceRecorder {
 const FORBIDDEN_PAYLOAD_KEYS = new Set([
 	"apikey",
 	"api_key",
+	"args",
+	"argv",
 	"auth",
 	"authorization",
 	"body",
@@ -2121,6 +2279,22 @@ export interface ModelBehaviorTraceSink {
 	onEditCheckpointObservation?: (
 		observation: ModelBehaviorTraceObservation,
 	) => void;
+	/**
+	 * ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01.
+	 *
+	 * ONE command's genuine process outcome was observed at the authority
+	 * that owns the process.
+	 *
+	 * The payload carries the per-command positional identity, the observed
+	 * terminal class, and — ONLY when actually observed — the process exit
+	 * code. It NEVER carries the command text, its arguments, stdout,
+	 * stderr, environment values, absolute paths, or raw tool output.
+	 *
+	 * A background command produces a `running` observation at the handoff
+	 * and its terminal observation later, possibly after the enclosing
+	 * `tool_finish`.
+	 */
+	onProcessObservation?: (observation: ModelBehaviorTraceObservation) => void;
 	/** The production loop detector returned a verdict. */
 	onLoopVerdict?: (observation: ModelBehaviorTraceObservation) => void;
 	/** The production compaction resolver produced its diagnostics. */

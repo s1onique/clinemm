@@ -1,4 +1,108 @@
+# ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01 — PASS_STRUCTURAL_VERIFIED — 2026-11-03
+
+**Status:** bounded production implementation + causal qualification, CLOSED on the existing `main` branch. The
+privacy-preserving bridge from ClineMM's EXISTING command-execution authorities into its EXISTING centralized
+model-behavior flight recorder is IMPLEMENTED, at the real seams. **No new process monitor was written; the command
+executor was NOT rewritten; no approval, shell execution, background-job containment, command-policy, React, Elm,
+task-header state, completion authority, model-facing result, public protobuf or wire schema was changed.** The
+protected stash and all unrelated worktrees are intact; no push, no install, no VSIX.
+
+```text
+ACT_ID: ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01
+TYPE: IMPLEMENTATION (+ causal qualification)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01-CORRECTION01-SUCCESSOR-CONTRACT)
+VERDICT: PASS_STRUCTURAL_VERIFIED
+ENTRY_HEAD: baa66a6860a0f79ddedd6d37f18e1fcc71528323
+ENTRY_TREE: bd1b7d2c67b822b1c257d2983c4c53afacad7f22
+BRANCH: main (no ACT branch created)
+WORKTREES: unchanged (4)   STASHES_TOUCHED: 0 (protected stash INTACT)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO
+RED: REPRODUCED (3 per-command assertions + 1 delayed-terminal, at the real seams)
+ABLATION_CLASSIFICATION: EXECUTED (over CAPTURED process evidence — NOT HYPOTHESIS_ONLY)
+INSTALLED_DOGFOOD: NOT PERFORMED (no live qualification claimed)
+EVIDENCE: docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/{REPORT.md,evidence/process-observation-excerpt.jsonl}
+```
+
+**The defect this closes.** `run_commands` executes N commands CONCURRENTLY and returns N POSITIONAL results, but
+the recorder observed only `tool_finish.outcome` — ONE aggregate for the whole tool call. A batch whose command 0
+exited 0 and whose command 1 exited 3 was INDISTINGUISHABLE at the trace boundary: the individual process results
+were LOST. The historical specimen recorded 949/949 `run_commands` finishes reporting success and ZERO process exit
+codes. Separately, a background command that outlived its tool call produced **no eventual terminal fact at all**.
+
+**The bridge.** The repository ALREADY had the observation channel — the agent runtime stamps the trace sink and
+the correlation identity onto `AgentToolContext.metadata` (`agent-runtime.ts:3602-3609`). The bridge REUSES that
+channel and adds exactly ONE thing it was missing: the per-command positional index, stamped by
+`executeShellCommands` into the per-command context metadata. **No new global correlation registry was introduced.**
+
+| Layer | Production seam | What it now reports |
+|---|---|---|
+| Core SDK | `executeShellCommands` (`definitions.ts`) | the per-command `commandIndex` |
+| Core SDK | **NEW** `executors/command-process-observation.ts` | the single narrow reporting channel |
+| VSCode host | `executeForeground` → `process.getCompletionDetails()` | the observed exit code, or explicit `unknown` |
+| VSCode host | `CommandJobManager.start()` / `.finalize()` | the nonterminal `running` handoff and the AUTHORITATIVE eventual terminal fact |
+| Recorder | `process_observation` (the portable `process` family's FIRST native producer) | per-command terminal class + the ACTUAL observed exit code |
+
+**Real captured evidence** (`evidence/process-observation-excerpt.jsonl`, SHA-256
+`42e611b7ce89dd18b79520da55dc157672c974d9f0bb5bceeedc084b84a1d7c7`): a mixed batch under ONE `toolCallId` with TWO
+distinct `commandIndex` values and TWO distinct exit codes (0 and 3); and a background job whose NONTERMINAL
+`running` handoff was followed **284 ms later — after the enclosing tool call had returned** — by the authoritative
+`exited` fact with the REAL exit code 7, bound to the SAME `jobId` and `toolCallId`.
+
+**Conservation.** An exit code is carried ONLY when the process authority reported one; an absent code means
+"unknown", NEVER 0, and is NEVER synthesized from a wrapper error (the foreground `CommandExitError(1)` convention is
+not process evidence). A `running` handoff is NEVER a success. A pre-execution rejection is `spawn_failed`, never an
+exited subprocess. A containment failure is never collapsed into a clean exit. The fast path reports synchronously
+and does NOT also attach a delayed listener, so a delivered-twice callback cannot create two terminal records.
+
+**Necessity, EXECUTED.** Over CAPTURED process evidence: with the new category present, Q2 is answerable per command
+(`exited_0`, `exited_nonzero_3`, `running`, `unknown`); removing ONLY that category makes the exact
+process-success classification **`CAPTURE_INSUFFICIENT`** while the tool-activity sequence stays fully observable —
+and the aggregate tool outcome STILL reads `success`, which is precisely the defect the bridge removes. Restoring
+the records makes Q2 answerable again.
+
+**Trace-OFF neutrality.** Zero recorder events while disabled; byte-identical tool results ON vs OFF; an identical
+execution-ORDER witness (`acquire → run`), which comparing returned bytes alone would not have proven; no added
+`await` on the disabled path; public default OFF, dogfood implicit ON and dogfood explicit OFF unchanged. Toggling
+OFF during an active job leaves the capture explicitly PARTIAL (the `running` handoff is never restated as a
+success); toggling ON after the handoff emits the terminal fact without manufacturing the missing handoff.
+
+**Privacy.** The recorder's fail-closed sanitizer remains the inbound gate and the portable per-family ALLOWLIST the
+outbound gate. The G9 adversaries (`command`, `args`, `stdout`, `stderr`, nested `env`, an absolute path, an unknown
+nested object) never reach the portable output. Two forbidden-key additions were required and made — `args` and
+`argv` — closing a real (if narrow) hole the gate exposed.
+
+**Backward compatibility.** A frozen PRE-bridge fixture keeps its original counts; `byFamily.process` is absent; no
+pre-bridge record carries a process fact. **The historical 949 `run_commands` finishes are NOT retroactively
+reinterpreted as 949 successful processes**, and the historical specimen was never modified.
+
+**Gates.** 3 + 12 + 8 + 18 focused tests PASS; 120 PASS across the ten trace suites. `sdk/packages/shared` and
+`apps/vscode` typecheck with **0 errors**; `sdk/packages/core` shows **40** errors — IDENTICAL to the stashed
+baseline. Biome clean on all 12 changed files. `bun run build:sdk` and `bun esbuild.mjs` exit 0. `git diff --check`
+clean. The full `apps/vscode` vitest failing-file SET is **identical** with the change stashed and with it
+applied — **23 files each, zero new, zero removed**. That comparison is made by BATCHING the suite, because
+the pre-existing vitest worker-teardown `EPERM: operation not permitted, kill` fault (which originates in
+pre-existing test files and reproduces with the change fully stashed) aborts a whole-suite run before its
+summary and makes a single total non-deterministic. One file appeared only in the with-change batch
+(`sdk-session-event-coordinator.test.ts`); it was then measured directly, in isolation, three times on EACH
+tree and failed identically (`2 failed | 27 passed`) every time on both — a deterministic PRE-EXISTING
+failure the batch marker had missed, not a regression. The 23 files and the 40 core typecheck diagnostics are
+pre-existing environmental/baseline failures, independently reproduced.
+
+**Limitations.** No installed-dogfood qualification (no VSIX installed, no live extension-host run) — hence
+`PASS_STRUCTURAL_VERIFIED`, not `PASS_LIVE_QUALIFIED`. The historical specimen was not re-captured. The background
+witnesses use the documented Seatbelt break-glass and a pinned POSIX shell because the headless harness resolves
+neither; both substitute only the sandbox backend and the shell path, never the supervision, the wait budget, the
+terminal transition, or the exit code.
+
+**Hard stops.** `HALT_RED_NOT_REPRODUCED`, `HALT_CORRELATION_UNPROVEN`, `HALT_EXECUTION_SEMANTIC_DELTA`,
+`HALT_TRACE_OFF_DELTA`, `HALT_FALSE_TERMINALITY`, `HALT_EXIT_PROVENANCE_FALSE`, `HALT_PRIVACY` and
+`HALT_UNEXPECTED_DIRT` were all NOT triggered.
+
+---
+
 # ACT-CLINEMM-UPSTREAM-LIVE-HUB-CROSSCLIENT-QUALIFICATION01 — PASS_PARTIAL_LIVE_PENDING — 2026-11-03
+
 
 **Status:** C0 + C1 executed; **C2–C5 NOT EXECUTED**. Verdict **`PASS_PARTIAL_LIVE_PENDING`** with the explicit
 ACT-mandated label **`VS_CODE_INTEROP_NOT_EXECUTED`**. This is a read-only topology qualification: **no production

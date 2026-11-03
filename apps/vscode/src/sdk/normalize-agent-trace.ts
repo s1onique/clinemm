@@ -143,6 +143,10 @@ const NATIVE_FAMILY: Readonly<Record<string, PortableEventFamily>> = {
 	edit_failure: "workspace",
 	edit_write_verification: "workspace",
 	edit_checkpoint_observation: "workspace",
+	// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01: the FIRST native
+	// producer for the `process` family. Before this event the family had
+	// NO native producer and its absence was reported as unavailable.
+	process_observation: "process",
 	loop_verdict: "run",
 	compaction_diagnostics: "context",
 	compaction_completed: "context",
@@ -537,7 +541,28 @@ const FAMILY_ALLOWED_KEYS: Readonly<Record<PortableEventFamily, readonly string[
 		"executionInvoked",
 		"outputSizeChars",
 	],
-	process: [],
+	process: [
+		// ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01: the
+		// per-command process-outcome allowlist. Every entry is a
+		// STRUCTURAL scalar — the positional index, the observed terminal
+		// class, the ACTUAL observed exit code, and the opaque
+		// correlation identifiers.
+		//
+		// There is deliberately NO key for a command string, an argument
+		// array, stdout, stderr, an environment value, an absolute path,
+		// or raw tool output: those are forbidden keys AND are absent
+		// from this allowlist, so they cannot escape even if a producer
+		// injected one.
+		"toolCallId",
+		"commandIndex",
+		"executionMode",
+		"terminalState",
+		"exitCode",
+		"signal",
+		"jobId",
+		"provenance",
+		"source",
+	],
 	workspace: [
 		"toolCallId",
 		"toolName",
