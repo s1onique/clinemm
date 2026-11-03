@@ -36,8 +36,20 @@
  *      category from.
  *
  * The ablation is then run over that real capture, and the real capture is
- * ALSO written to the ACT's evidence directory so the claim is source-bound
+ * ALSO committed to the ACT's evidence directory so the claim is source-bound
  * to a committed artifact.
+ *
+ * A NOTE ON THE COMMITTED ARTIFACT
+ * --------------------------------
+ * The committed artifact
+ * (`docs/acts/.../evidence/real-process-capture.jsonl`) is a STABLE snapshot.
+ * The test does **NOT** rewrite it: a real capture carries real timestamps,
+ * a real trace id and a real job id, so regenerating it on every run would
+ * make the committed artifact — and the SHA-256 the report binds to it —
+ * unstable. The test READS the committed artifact and asserts that it has the
+ * same SEMANTIC shape as a freshly-produced real capture: the same events, in
+ * the same order, with the same per-command terminal classes and the same
+ * observed exit code. Only the volatile scalars differ.
  *
  * The authored fixture from BRIDGE01 is RETAINED in
  * `command-process-outcome-portable-normalizer01.test.ts` as a SYNTHETIC
@@ -76,8 +88,8 @@ vi.mock("@/utils/shell", () => ({
 	getShellForProfile: () => (process.platform === "win32" ? "cmd.exe" : "/bin/sh"),
 }))
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
+import { existsSync, readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { type AgentToolContext, ModelBehaviorTraceRecorder } from "@cline/shared"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
@@ -355,21 +367,46 @@ describe("necessity ablation over a REAL source-bound recorder capture (CORRECTI
 		expect(q2.perCommand.get(0)).toBe("exited_nonzero_7")
 	})
 
-	it("the REAL capture is SOURCE-BOUND: it is written to the ACT evidence directory", async () => {
+	it("the REAL capture is SOURCE-BOUND: the committed artifact exists and has the same SEMANTIC shape", async () => {
 		if (!isPosix) {
 			return
 		}
 		const { jsonl } = await captureRealRunCommands()
 
-		const target = resolve(
+		const committed = resolve(
 			process.cwd(),
 			"../../docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/evidence/real-process-capture.jsonl",
 		)
-		mkdirSync(dirname(target), { recursive: true })
-		writeFileSync(target, `${jsonl}\n`, "utf8")
 
-		// The committed artifact holds the SAME bytes the ablation ran over.
-		const written = readFileSync(target, "utf8")
-		expect(written).toBe(`${jsonl}\n`)
+		// The COMMITTED artifact is a stable, hand-verified snapshot. It is
+		// NOT rewritten by the test run: a capture carries real timestamps and
+		// real job ids, so regenerating it on every run would make the
+		// committed artifact — and the SHA-256 the report binds to it —
+		// unstable. The committed file is therefore only READ here.
+		expect(existsSync(committed)).toBe(true)
+		const committedJsonl = readFileSync(committed, "utf8")
+
+		// The committed artifact carries the SAME SEMANTIC CONTENT as a fresh
+		// real capture: the same events, in the same order, with the same
+		// per-command terminal classes. Only the volatile scalars (the
+		// timestamps, the trace id, the job id) differ.
+		const shapeOf = (text: string): string[] =>
+			parseNativeTrace(text).records.map(
+				(record) =>
+					`${record.event}:${String((record.payload as Record<string, unknown>).commandIndex ?? "-")}:${String(
+						(record.payload as Record<string, unknown>).terminalState ?? "-",
+					)}:${String((record.payload as Record<string, unknown>).exitCode ?? "-")}`,
+			)
+		expect(shapeOf(committedJsonl)).toEqual(shapeOf(jsonl))
+
+		// The committed artifact is the one the report's §8.1 describes: the
+		// tool-activity events AND the process events, with the `running`
+		// handoff BEFORE the `tool_finish` and the terminal fact AFTER it.
+		const committedRecords = parseNativeTrace(committedJsonl).records
+		const events = committedRecords.map((record) => record.event)
+		expect(events).toEqual(["tool_start", "process_observation", "tool_finish", "process_observation"])
+		expect((committedRecords[1]?.payload as Record<string, unknown>).terminalState).toBe("running")
+		expect((committedRecords[3]?.payload as Record<string, unknown>).terminalState).toBe("exited")
+		expect((committedRecords[3]?.payload as Record<string, unknown>).exitCode).toBe(7)
 	})
 })

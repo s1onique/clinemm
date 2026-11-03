@@ -170,9 +170,18 @@ produces a **real, source-bound capture**:
    string — the recorder's output, **not** an authored array — is what the
    normalizer parses and what the ablation removes a category from.
 
-The capture is then **written to the ACT evidence directory**, so the claim is
+The capture is then **committed to the ACT evidence directory**, so the claim is
 bound to a committed artifact:
 `docs/acts/ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01/evidence/real-process-capture.jsonl`.
+
+The committed artifact is a **stable snapshot**. The witness **reads** it and
+asserts that it has the same **semantic shape** as a freshly-produced real
+capture — the same events, in the same order, with the same per-command
+terminal classes and the same observed exit code; only the volatile scalars
+(timestamps, trace id, job id) differ. The witness does **not** rewrite it,
+because a real capture carries volatile values and regenerating it on every
+run would make the committed artifact — and the SHA-256 the report binds to
+it — unstable.
 
 ### 2.3 The real capture, as committed
 

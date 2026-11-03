@@ -347,6 +347,13 @@ process events, in the **observed** order: the `running` handoff precedes the
 `tool_finish`, and the authoritative terminal fact arrives **after** the tool
 call returned, carrying the **real** exit code (7) the process produced.
 
+The committed artifact is a **stable snapshot**: the witness reads it and
+asserts that it has the same **semantic shape** as a freshly-produced real
+capture (the same events, in the same order, with the same per-command
+terminal classes and the same observed exit code — only the volatile
+timestamps, trace id and job id differ). The witness does **not** rewrite it,
+so the SHA-256 bound to it below stays valid.
+
 | Phase | Q2 (exact process-success classification) | Tool-activity sequence |
 |---|---|---|
 | **BASELINE** (process records present) | **ANSWERABLE** — `exited_nonzero_7` | observable — `tool_start:run_commands`, `tool_finish:run_commands` |
@@ -551,20 +558,28 @@ exit, so the exact process-success classification is genuinely
 | `evidence/process-observation-excerpt.jsonl` | SHA-256 `42e611b7ce89dd18b79520da55dc157672c974d9f0bb5bceeedc084b84a1d7c7` |
 | `sdk/packages/shared/src/runtime/model-behavior-trace.ts` | blob `ef771a755ce7af400a69a2908e94995c00c30409` |
 | `sdk/packages/shared/src/index.ts` | blob `2171f79515d177826af87c5493b0ff9d9675cdce` |
-| `sdk/packages/core/src/extensions/tools/definitions.ts` | blob `99348796e16d4a839aeb6cbb85aca48dc0075e2f` |
-| `sdk/packages/core/src/extensions/tools/executors/command-process-observation.ts` | blob `67a486b9840cc18f8d4a534ba56f06f238ec0aff` |
-| `sdk/packages/core/src/extensions/tools/command-process-observation.test.ts` | blob `888469ba27182e335e35408e2bf4d6c03b0678c6` |
+| `sdk/packages/core/src/extensions/tools/definitions.ts` | blob `d8a54ac7c4fe6ee966af0b137588ec02f7a54047` **(CORRECTION01)** |
+| `sdk/packages/core/src/extensions/tools/executors/command-process-observation.ts` | blob `e985505491c4eadd956d4dd44c3817458e3465f9` **(CORRECTION01)** |
+| `sdk/packages/core/src/extensions/tools/command-process-observation.test.ts` | blob `e244e413b16b508c0b2390c7f3fc7ef098166e9a` **(CORRECTION01)** |
 | `sdk/packages/core/src/index.ts` | blob `120f8bbefc233cca128375c0f9df58978eadda4b` |
 | `apps/vscode/src/sdk/vscode-run-commands-tool.ts` | blob `e35ab341ce83c2731895fceee7be7b5ade65afc9` |
 | `apps/vscode/src/sdk/model-behavior-trace-runtime.ts` | blob `467d1636587258bd7c8fc104e1df455e4b1b1196` |
 | `apps/vscode/src/sdk/normalize-agent-trace.ts` | blob `453749413e5b9153084635193bce1fe9f35ed59d` |
 | `apps/vscode/src/test/cline-core-vitest-stub.ts` | blob `78bd38d6d40c30b2193dde2a21692ae2d0b25feb` |
-| `apps/vscode/src/sdk/__tests__/command-process-outcome-trace-bridge01.test.ts` | blob `37097899b1f93cd930f1a3276510240b4a37aef3` |
-| `apps/vscode/src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts` | blob `ef84ae938532916d9fc4cd9d6f2487b26e5d187e` |
+| `apps/vscode/src/sdk/__tests__/command-process-outcome-trace-bridge01.test.ts` | blob `570c234abf8c5e2c11d7a98b2e3918b9068c109b` **(CORRECTION01)** |
+| `apps/vscode/src/sdk/__tests__/command-process-outcome-portable-normalizer01.test.ts` | blob `1ac851aeed6be985e17912d348fd0bc766299dc2` **(CORRECTION01)** |
 | `docs/.../evidence/process-observation-excerpt.jsonl` | blob `d005e96ee8bf6f41c517ec1787acc9e146452f9b` |
+| **`docs/.../evidence/real-process-capture.jsonl`** | SHA-256 `fda2f9ec22baa337bcfdeb52c80f358941a32c91fb069a8c694e8753d5eb33d4` / blob `293e5773def360c5e36d24c0f7e9131648589c42` **(CORRECTION01)** |
+| **`apps/vscode/src/sdk/__tests__/command-process-outcome-real-capture-ablation01.test.ts`** | blob `642d08c1868248b9e0d945236730b072ba8f5ebd` **(CORRECTION01)** |
+| **`docs/.../CORRECTION01-EVIDENCE-PROVENANCE-AND-OFF-PATH-DELTA.md`** | blob `49110aec34cf7c862481393cf3d0dd08ef5b9729` **(CORRECTION01)** |
 
 **`SUBJECT_HEAD`:** the implementation and focused tests are committed on the
 existing `main` branch (§14). **No future commit SHA is predicted here.**
+
+> **CORRECTION01.** The rows marked **(CORRECTION01)** are the state of those
+> artifacts as committed in `4c7c1afb2` (the CORRECTION01 commit, parent
+> `d46e33530`). The unmarked rows are unchanged from BRIDGE01 and still
+> carry their BRIDGE01 blob ids.
 
 These blob ids are the FINAL state of each source artifact as committed; the
 `REPORT.md` itself is the only file whose blob id changes after this table is
@@ -577,11 +592,18 @@ source edit, so the table is self-consistent with the committed tree.
 
 1. **No installed-dogfood qualification.** The structural gates pass against
    the production seams, but no VSIX was installed and no live extension-host
-   run was performed. The verdict is therefore `PASS_STRUCTURAL_VERIFIED`,
-   not `PASS_LIVE_QUALIFIED`.
+   run was performed. The verdict is therefore `PASS_STRUCTURAL_VERIFIED`
+   (→ `PASS_STRUCTURAL_VERIFIED_CORRECTION01`), not `PASS_LIVE_QUALIFIED`.
+   Per the reviewer's instruction, installed-dogfood qualification is
+   authorized **directly** once the CORRECTION01 proofs are established.
 2. **The historical specimen was not re-captured.** The frozen pre-bridge
    capture was preserved untouched, as required. The fresh evidence in §7 is
    from controlled production-seam runs, not from an installed dogfood session.
+3. **(CORRECTION01) The real ablation capture exercises the BACKGROUND path.**
+   That is deliberate — the background path is the one that produces a
+   *delayed* terminal fact, which is what the ablation needs to demonstrate.
+   The FOREGROUND path's real capture is `evidence/process-observation-excerpt.jsonl`
+   (§7) and its witnesses are G2/G4/G5 in the bridge suite.
 
 ---
 
@@ -615,7 +637,9 @@ source edit, so the table is self-consistent with the committed tree.
 - **Conservation gates:** PASS.
 - **Executed ablation:** PASS — removing only the process category makes the
   exact process-success classification `CAPTURE_INSUFFICIENT` while the
-  tool-activity sequence stays observable.
+  tool-activity sequence stays observable. **(CORRECTION01)** This now runs
+  over the **real** recorder's own output (§8.1), not over an authored
+  fixture.
 
 ### Verdict
 
@@ -635,14 +659,25 @@ HALT_UNEXPECTED_DIRT            = NOT TRIGGERED
 ABLATION_CLASSIFICATION         = EXECUTED (not HYPOTHESIS_ONLY)
 INSTALLED_DOGFOOD               = NOT PERFORMED
 VERDICT                         = PASS_STRUCTURAL_VERIFIED
+
+--- CORRECTION01 ---
+CORRECTION_PARENT_HEAD          = d46e33530a04fedfd7744ff440ae22073046d4a8
+REVIEW_VERDICT_ADDRESSED        = HALT_EVIDENCE_PROVENANCE_AND_OFF_PATH_DELTA
+P0_1_EVIDENCE_PROVENANCE        = FIXED (ablation over REAL recorder output; authored fixture RETAINED as SYNTHETIC CONTROL)
+P0_2_OFF_PATH_CONTEXT_DELTA     = FIXED (stamp CONDITIONAL on the channel being PRESENT; witnesses DISCRIMINATE)
+P2_HYGIENE                      = FIXED (git diff --check clean)
+HALT_EVIDENCE_PROVENANCE        = NOT TRIGGERED
+HALT_OFF_PATH_DELTA             = NOT TRIGGERED
+INSTALLED_DOGFOOD               = NOT PERFORMED (authorized directly as the next step)
+VERDICT                         = PASS_STRUCTURAL_VERIFIED_CORRECTION01
 ```
 
-**`PASS_STRUCTURAL_VERIFIED`**
+**`PASS_STRUCTURAL_VERIFIED_CORRECTION01`**
 
-The implementation, the focused tests, this report, and the evidence excerpt
-are committed on the existing `main` branch. `.factory/epic-board.md` is
-updated once at terminal closure and committed with the closure. No push, no
-install, no VSIX.
+The implementation, the focused tests, this report, the correction report and
+the evidence artifacts are committed on the existing `main` branch.
+`.factory/epic-board.md` is updated once at terminal closure and committed
+with the closure. No push, no install, no VSIX.
 
 3. **Foreground terminal-closed and unobserved commands are `unknown`, not a
    distinct class.** The source authority cannot distinguish them from each
