@@ -198,26 +198,313 @@ typedef struct {
 static volatile sig_atomic_t g_shutdown = 0;
 static void on_sig(int s) { (void)s; g_shutdown = 1; }
 
-static ssize_t write_all(int fd, const char *buf, size_t n) {
+// =============================================================================
+// ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01
+// Bounded AF_UNIX request/response transport primitives.
+//
+// THE DEFECT THIS REPAIRS
+//
+//   The pre-repair helper used an UNBOUNDED blocking read() and an
+//   UNBOUNDED blocking write() on every accepted connection, and the
+//   accept loop called handle_connection() SYNCHRONOUSLY. A single
+//   client that connected and then sent an incomplete frame (or stopped
+//   reading its response) therefore monopolized the entire service:
+//   every subsequent request -- including `health`, `client.open`,
+//   `process-group.terminate-owned` and `helper.restart` -- was never
+//   serviced, while the helper process stayed alive and looked
+//   healthy to launchd.
+//
+// THE REPAIR
+//
+//   1. An ABSOLUTE, per-connection receive deadline is established once
+//      when the connection is accepted. It is measured on
+//      CLOCK_MONOTONIC and it NEVER resets: a slow-trickle client that
+//      sends one byte per second consumes exactly the same finite
+//      budget as a completely silent client.
+//
+//   2. The accepted socket is switched to O_NONBLOCK, and both the
+//      receive and the response paths use poll(2) with the REMAINING
+//      budget. There is no unbounded blocking syscall anywhere on the
+//      accepted-connection path.
+//
+//   3. The response path has its OWN independent deadline, armed at
+//      WRITE TIME. A peer that stops reading its response can therefore
+//      no longer move the indefinite block from read() to write(). The
+//      deadline bounds the TRANSPORT WRITE only: it is NOT a bound on
+//      method execution, so a legitimately long-running method still
+//      gets to deliver its response.
+//
+//   4. Every read outcome is CLASSIFIED (FRAME_COMPLETE,
+//      FRAME_INCOMPLETE_EOF, FRAME_RECEIVE_TIMEOUT,
+//      FRAME_RECEIVE_ERROR, FRAME_OVERSIZE). Only a COMPLETE frame
+//      ever reaches method dispatch, so a timed-out request can never
+//      allocate a client token, register a process group, or invoke any
+//      method-specific side effect.
+//
+// BOUNDS
+//
+//   MAX_FRAME_RECEIVE_MS and MAX_FRAME_RESPONSE_MS are compile-time
+//   constants. They are deliberately NOT configurable through the
+//   wire protocol: an untrusted client must never be able to extend
+//   its own service-occupancy budget.
+//
+//   The receive budget (2000 ms) is strictly below the TypeScript
+//   client's default response timeout (5000 ms, tools/macos-host-helper/
+//   client.ts), so a legitimate client always observes either a
+//   correlated response or a clean disconnect strictly inside its own
+//   timeout.
+//
+//   These deadlines bound FRAME RECEPTION and RESPONSE WRITING only.
+//   They do NOT bound method execution: a legitimately long-running
+//   method (e.g. tart.preflight) keeps its own independent timeout
+//   contract. See the method-execution audit in the ACT report.
+// =============================================================================
+
+// Receive budget for ONE accepted connection's request frame.
+#define MAX_FRAME_RECEIVE_MS 2000
+
+// Write budget for ONE accepted connection's response frame.
+#define MAX_FRAME_RESPONSE_MS 2000
+
+// Upper bound on a single poll(2) wait. poll(2) takes a millisecond
+// timeout; we always pass the REMAINING budget, so this only matters
+// as a sanity clamp. The deadline remains absolute in user space.
+#define MAX_POLL_SLICE_MS 1000
+
+// Classification of a frame-reception attempt.
+typedef enum {
+  FRAME_COMPLETE = 0,     // A full newline-terminated frame was read.
+  FRAME_INCOMPLETE_EOF,   // Peer closed before the newline arrived.
+  FRAME_RECEIVE_TIMEOUT,  // The absolute receive deadline expired.
+  FRAME_RECEIVE_ERROR,    // A hard socket error occurred.
+  FRAME_OVERSIZE          // The frame exceeded MAX_FRAME without a newline.
+} frame_status_t;
+
+// Absolute monotonic deadline, in milliseconds.
+typedef struct {
+  int64_t at_ms;
+} deadline_t;
+
+// Monotonic milliseconds since an arbitrary origin. CLOCK_MONOTONIC
+// does not advance while the system is suspended and is immune to
+// wall-clock adjustments, so a slow-trickle client cannot extend its
+// budget by moving the system clock.
+static int64_t monotonic_now_ms(void) {
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 0;
+  return (int64_t)ts.tv_sec * 1000 + (int64_t)(ts.tv_nsec / 1000000);
+}
+
+// Establish an absolute deadline `budget_ms` from now. The deadline is
+// computed ONCE and never recomputed from a partial-progress point.
+static deadline_t deadline_in(int64_t budget_ms) {
+  deadline_t d;
+  d.at_ms = monotonic_now_ms() + budget_ms;
+  return d;
+}
+
+// Milliseconds remaining until `d`, clamped to [0, MAX_POLL_SLICE_MS].
+// Returns 0 when the deadline has already passed.
+static int deadline_remaining_ms(deadline_t d) {
+  int64_t now = monotonic_now_ms();
+  int64_t rem = d.at_ms - now;
+  if (rem <= 0) return 0;
+  if (rem > MAX_POLL_SLICE_MS) return MAX_POLL_SLICE_MS;
+  return (int)rem;
+}
+
+static int deadline_expired(deadline_t d) {
+  return monotonic_now_ms() >= d.at_ms;
+}
+
+// Put a descriptor into nonblocking mode. Returns 0 on success.
+static int set_nonblocking(int fd) {
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0) return -1;
+  if ((flags & O_NONBLOCK) != 0) return 0;
+  return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
+
+// Bounded response writer.
+//
+// Writes the whole buffer using nonblocking write(2) + poll(2) against
+// an ABSOLUTE deadline. Handles short writes, EINTR, EAGAIN/EWOULDBLOCK
+// and hard errors. Never blocks indefinitely and never silently
+// truncates a valid response: if the deadline expires the caller
+// closes the connection and the transport failure is recorded.
+//
+// Returns the number of bytes written, or -1 on a hard failure, or -2
+// when the response deadline expired (so the caller can distinguish a
+// deadline expiry from a peer-side error).
+static ssize_t write_all_bounded(int fd, const char *buf, size_t n, deadline_t d) {
   size_t off = 0;
   while (off < n) {
+    if (deadline_expired(d)) return -2;
     ssize_t w = write(fd, buf + off, n - off);
-    if (w < 0) { if (errno == EINTR) continue; return -1; }
-    off += (size_t)w;
+    if (w > 0) {
+      off += (size_t)w;
+      continue;
+    }
+    if (w == 0) {
+      // A zero-length write on a nonblocking socket means the peer
+      // stopped reading and the kernel cannot make progress. Wait for
+      // writability until the deadline, then give up.
+      struct pollfd pfd;
+      pfd.fd = fd;
+      pfd.events = POLLOUT;
+      pfd.revents = 0;
+      int rem = deadline_remaining_ms(d);
+      if (rem <= 0) return -2;
+      int pr = poll(&pfd, 1, rem);
+      if (pr < 0) {
+        if (errno == EINTR) continue;
+        return -1;
+      }
+      if (pr == 0) return -2; // deadline expired
+      continue;
+    }
+    // w < 0
+    if (errno == EINTR) continue;
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      struct pollfd pfd;
+      pfd.fd = fd;
+      pfd.events = POLLOUT;
+      pfd.revents = 0;
+      int rem = deadline_remaining_ms(d);
+      if (rem <= 0) return -2;
+      int pr = poll(&pfd, 1, rem);
+      if (pr < 0) {
+        if (errno == EINTR) continue;
+        return -1;
+      }
+      if (pr == 0) return -2; // deadline expired
+      continue;
+    }
+    return -1;
   }
   return (ssize_t)off;
 }
 
-static ssize_t read_frame(int fd, char *buf, size_t cap) {
+// The response deadline for the connection currently being served.
+//
+// ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01 (review): the
+// response deadline is established AT WRITE TIME, not at accept time.
+//
+// Rationale: the response deadline bounds the TRANSPORT WRITE, i.e.
+// "how long may we spend pushing this response into the peer's socket
+// buffer". It is NOT a bound on the connection's total lifetime and it
+// is NOT a bound on method execution.
+//
+// The first cut of this repair established the response deadline when
+// the connection was accepted. That was WRONG: a legitimately
+// long-running method (tart.preflight runs Tart with a 30 s and a
+// 60 s budget; tart.testbed.run has its own multi-stage deadlines)
+// would finish its work long after the 2 s response deadline had
+// expired, and its perfectly valid response would then be DROPPED by
+// write_all_bounded().
+//
+// Establishing the deadline at write time keeps the load-bearing
+// guarantee exactly: a peer that stops reading its response can no
+// longer block the service indefinitely, while a slow-but-legitimate
+// handler still gets to deliver its response.
+//
+// The response deadline is a single global because the helper is
+// single-threaded and serves one connection at a time; it is set
+// immediately before the dispatch and consumed by the response writer.
+static deadline_t g_response_deadline;
+
+// Shared response writer used by EVERY response path (respond_ok,
+// respond_err, the testbed/tart envelopes, the PGID envelopes and the
+// helper.restart envelope). Bounded by the response deadline that is
+// established when the response is about to be written.
+static ssize_t write_all(int fd, const char *buf, size_t n) {
+  // A zero budget means "no response deadline was established" (e.g.
+//  // a response written outside the connection lifecycle). Establish
+  // one lazily so the write is still bounded.
+  // Arm the response deadline for THIS write. This bounds the time
+  // spent pushing the response into the peer's socket buffer, which is
+  // exactly the thing that must not be unbounded. It deliberately does
+  // NOT bound the method execution that preceded it.
+  g_response_deadline = deadline_in(MAX_FRAME_RESPONSE_MS);
+  return write_all_bounded(fd, buf, n, g_response_deadline);
+}
+
+// Bounded frame reader.
+//
+// Reads one newline-delimited frame into `buf` using nonblocking
+// read(2) + poll(2) against the ABSOLUTE receive deadline `d`.
+//
+// The deadline is established ONCE per accepted connection and is
+// NEVER extended by partial progress, so a slow-trickle client cannot
+// hold the service longer than a silent one.
+//
+// On FRAME_COMPLETE, *out_len is the number of bytes read INCLUDING
+// the terminating newline (matching the pre-repair contract).
+static frame_status_t read_frame_bounded(int fd, char *buf, size_t cap,
+                                         size_t *out_len, deadline_t d) {
   size_t off = 0;
-  while (off < cap) {
-    ssize_t r = read(fd, buf + off, 1);
-    if (r == 0) return (ssize_t)off;
-    if (r < 0) { if (errno == EINTR) continue; return -1; }
-    if (buf[off] == '\n') return (ssize_t)(off + 1);
-    off++;
+  for (;;) {
+    // Drain whatever is already buffered before waiting again.
+    for (;;) {
+      if (off >= cap) {
+        // No newline within MAX_FRAME bytes: the frame is oversized.
+        *out_len = off;
+        return FRAME_OVERSIZE;
+      }
+      ssize_t r = read(fd, buf + off, cap - off);
+      if (r > 0) {
+        // Scan the newly received bytes for the frame terminator.
+        for (ssize_t i = 0; i < r; i++) {
+          if (buf[off + (size_t)i] == '\n') {
+            *out_len = off + (size_t)i + 1;
+            return FRAME_COMPLETE;
+          }
+        }
+        off += (size_t)r;
+        continue;
+      }
+      if (r == 0) {
+        // Peer closed. If we already have a complete frame we would
+        // have returned above, so this is an incomplete frame.
+        *out_len = off;
+        return FRAME_INCOMPLETE_EOF;
+      }
+      // r < 0
+      if (errno == EINTR) continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK) break; // need to wait
+      *out_len = off;
+      return FRAME_RECEIVE_ERROR;
+    }
+
+    // No more buffered bytes: wait for readability with the REMAINING
+    // budget. The deadline is absolute, so this wait shrinks over time
+    // and the total receive time is bounded by the budget.
+    int rem = deadline_remaining_ms(d);
+    if (rem <= 0) {
+      *out_len = off;
+      return FRAME_RECEIVE_TIMEOUT;
+    }
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    int pr = poll(&pfd, 1, rem);
+    if (pr < 0) {
+      if (errno == EINTR) continue;
+      *out_len = off;
+      return FRAME_RECEIVE_ERROR;
+    }
+    if (pr == 0) {
+      // poll(2) timed out. Distinguish "the deadline expired" from
+      // "we were merely woken up early".
+      if (deadline_expired(d)) {
+        *out_len = off;
+        return FRAME_RECEIVE_TIMEOUT;
+      }
+      continue;
+    }
+    // POLLIN (or POLLHUP) -- loop back and read.
   }
-  return -2;
 }
 
 // Skip whitespace; return advanced pointer.
@@ -3041,9 +3328,61 @@ trunc:
 
 static void handle_connection(int cfd) {
   char buf[MAX_FRAME + 1];
-  ssize_t n = read_frame(cfd, buf, MAX_FRAME);
-  if (n == -2) { respond_err(cfd, "OVERSIZE"); close(cfd); return; }
-  if (n <= 0) { close(cfd); return; }
+  size_t n = 0;
+
+  // ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01:
+  //
+  // 1. Switch the accepted socket to nonblocking mode. Every I/O on
+  //    this descriptor from here on is bounded by a deadline.
+  //
+  // 2. Establish the ABSOLUTE receive deadline ONCE. It is never
+  //    recomputed from a partial-progress point, so a slow-trickle
+  //    client consumes the same finite budget as a silent one.
+  //
+  // 3. The response path has its OWN independent deadline, armed at
+  //    write time (see write_all). A peer that stops reading its
+  //    response therefore cannot move the indefinite block from the
+  //    receive path to the response path, while a legitimately
+  //    long-running method still gets to deliver its response.
+  if (set_nonblocking(cfd) != 0) {
+    // Without O_NONBLOCK the deadline cannot be enforced. Fail closed
+    // and close: never serve a connection whose I/O we cannot bound.
+    close(cfd);
+    return;
+  }
+  deadline_t receive_deadline = deadline_in(MAX_FRAME_RECEIVE_MS);
+
+  frame_status_t st = read_frame_bounded(cfd, buf, MAX_FRAME, &n, receive_deadline);
+  switch (st) {
+    case FRAME_COMPLETE:
+      break;
+    case FRAME_OVERSIZE:
+      // The pre-repair contract answered OVERSIZE for a frame that
+      // exceeded MAX_FRAME without a newline. Preserve it.
+      respond_err(cfd, "OVERSIZE");
+      close(cfd);
+      return;
+    case FRAME_INCOMPLETE_EOF:
+      // The peer closed before the newline arrived. There is no usable
+      // request_id, so no correlated response is emitted: fail closed
+      // and close. (Conservation note: the pre-repair helper also
+      // closed silently on EOF without a response.)
+      close(cfd);
+      return;
+    case FRAME_RECEIVE_TIMEOUT:
+      // The absolute receive deadline expired. No complete, validated
+      // frame was received, so NO method dispatch happens and NO
+      // method-specific side effect is possible. TRANSPORT_TIMEOUT is
+      // not an AUTHORIZATION_FAILURE and never allocates a client
+      // token or registers a process group.
+      close(cfd);
+      return;
+    case FRAME_RECEIVE_ERROR:
+    default:
+      close(cfd);
+      return;
+  }
+
   buf[n - 1] = 0;
 
   kv_t kvs[MAX_KEYS];
