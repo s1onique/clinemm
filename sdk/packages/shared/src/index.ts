@@ -521,6 +521,15 @@ export {
 	resolveClineAppUrl,
 	resolveClineEnvironment,
 } from "./runtime/cline-environment";
+// ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01: the single
+// canonical resolver for the trusted host-helper AF_UNIX endpoint.
+// Shared so the VS Code adapter and the SDK Seatbelt backend can
+// never disagree about where the endpoint lives.
+export {
+	HOST_HELPER_SOCKET_ENV_VAR,
+	HOST_HELPER_SOCKET_HOME_RELATIVE_PATH,
+	resolveHostHelperSocketPath,
+} from "./runtime/host-helper-socket";
 export type {
 	ConnectorCliLaunchSpec,
 	ConnectorInstanceRef,
@@ -553,6 +562,7 @@ export {
 // ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: the centralized, bounded,
 // model-agnostic flight recorder and its SDK observation sink.
 export type {
+	ModelBehaviorTraceAbortOrigin,
 	ModelBehaviorTraceBudgetSource,
 	ModelBehaviorTraceDump,
 	ModelBehaviorTraceEditApplication,
@@ -562,7 +572,6 @@ export type {
 	ModelBehaviorTraceEditCheckpointObservation,
 	ModelBehaviorTraceEditCheckpointTarget,
 	ModelBehaviorTraceEditCheckpointTargetState,
-	ModelBehaviorTraceAbortOrigin,
 	ModelBehaviorTraceEditDestinationScope,
 	ModelBehaviorTraceEditFailureCategory,
 	ModelBehaviorTraceEditFileMutation,

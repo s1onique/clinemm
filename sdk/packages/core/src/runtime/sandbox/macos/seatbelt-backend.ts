@@ -37,6 +37,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 
+import {
+	HOST_HELPER_SOCKET_ENV_VAR,
+	resolveHostHelperSocketPath,
+} from "@cline/shared";
+
 import { canonicalizeSandboxRoot } from "../canonical-paths";
 import { materializeEnvironment, getEnvironmentSemantics } from "../environment";
 import {
@@ -521,61 +526,94 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			// `SSH_AUTH_SOCK`). This eliminates divergence between the
 			// profile path-literal and the runtime connect(2) target.
 			let hostHelperCanonicalSocketPath: string | undefined;
-			const hostHelperRaw = process.env.CLINEMM_HOST_HELPER_SOCKET;
-			if (
-				typeof hostHelperRaw === "string" &&
-				hostHelperRaw.length > 0
-			) {
-				let hhCanonical: string;
-				try {
-					hhCanonical = canonicalizeSandboxRoot(hostHelperRaw);
-				} catch (cause) {
-					throw new SandboxError(
-						`Seatbelt: failed to canonicalize CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hostHelperRaw)}`,
-						{
-							backendId: SEATBELT_BACKEND_ID,
-							reason: "canonicalization-failed",
-							cause,
-						},
-					);
-				}
-				let hhSt;
-				try {
-					hhSt = lstatSync(hhCanonical);
-				} catch (cause) {
-					throw new SandboxError(
-						`Seatbelt: CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hhCanonical)} not accessible for type check`,
-						{
-							backendId: SEATBELT_BACKEND_ID,
-							reason: "canonicalization-failed",
-							cause,
-						},
-					);
-				}
-				const hhIsSocket = (hhSt.mode & 0o170000) === 0o140000;
-				if (!hhIsSocket) {
-					throw new SandboxError(
-						`Seatbelt: CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hhCanonical)} is not an AF_UNIX socket (mode=${hhSt.mode.toString(8)}); host-helper authority requires a real Unix-domain socket`,
-						{
-							backendId: SEATBELT_BACKEND_ID,
-							reason: "canonicalization-failed",
-						},
-					);
-				}
-				hostHelperCanonicalSocketPath = hhCanonical;
-				// Reintroduce CLINEMM_HOST_HELPER_SOCKET via the existing
-				// allow-list path so the child inherits the endpoint.
-				if (
-					cap.environment.mode === "sanitized" &&
-					!cap.environment.allow.includes("CLINEMM_HOST_HELPER_SOCKET")
-				) {
-					effectiveEnvironmentCapability = {
-						mode: "sanitized",
-						allow: [
-							...cap.environment.allow,
-							"CLINEMM_HOST_HELPER_SOCKET",
-						],
-					};
+			// ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01: use
+			// the SHARED canonical resolver (env override, then the
+			// installer's `$HOME/.clinemm/host-helper.sock` default) so
+			// this seam and the VS Code adapter (`resolveLiveHelperOwnedPgidProvider`)
+			// can never disagree about where the endpoint lives.
+			//
+			// Why this matters: the GUI launchd domain that starts VS Code /
+			// VSCodium does NOT export `CLINEMM_HOST_HELPER_SOCKET`. With
+			// an env-only read, the sandboxed child got no AF_UNIX rule
+			// for the helper endpoint and no endpoint in its environment,
+			// so the sandboxed child could not reach the helper either.
+			//
+			// ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01
+			// — NETWORK-DENY GATE (load-bearing):
+			//
+			// The `$HOME` fallback makes the endpoint resolve in EVERY
+			// environment, not only where the env var was exported. That
+			// turned the host-helper authority into an UNCONDITIONAL
+			// grant, which contradicted the capability's own network
+			// decision: a `network: "deny"` capability emitted
+			// `(allow network-outbound (remote unix-socket ...))`,
+			// granting exactly the outbound network the capability
+			// denied. It also broke the pre-existing deny contract
+			// asserted by `seatbelt-ssh-agent-authority.test.ts`
+			// ("deny mode: profile contains NO AF_UNIX socket rules").
+			//
+			// The correct gate is the capability's network mode, mirroring
+			// the ssh-agent's capability-driven gating
+			// (`sshAuthenticationAuthority.mode === "agent"`). When the
+			// capability denies network, the child cannot reach the
+			// helper ANYWAY, so emitting the rule grants authority that
+			// can never be exercised while weakening the profile's deny
+			// semantics. The helper fallback in that mode is reached from
+			// the EXTENSION HOST (not the sandboxed child), so the
+			// EPERM repair is unaffected by this gate: the extension
+			// host's `resolveLiveHelperOwnedPgidProvider()` resolves the
+			// endpoint independently of this sandbox profile.
+			if (cap.network !== "deny") {
+				const hostHelperRaw = resolveHostHelperSocketPath();
+				if (typeof hostHelperRaw === "string" && hostHelperRaw.length > 0) {
+					let hhCanonical: string;
+					try {
+						hhCanonical = canonicalizeSandboxRoot(hostHelperRaw);
+					} catch (cause) {
+						throw new SandboxError(
+							`Seatbelt: failed to canonicalize CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hostHelperRaw)}`,
+							{
+								backendId: SEATBELT_BACKEND_ID,
+								reason: "canonicalization-failed",
+								cause,
+							},
+						);
+					}
+					let hhSt;
+					try {
+						hhSt = lstatSync(hhCanonical);
+					} catch (cause) {
+						throw new SandboxError(
+							`Seatbelt: CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hhCanonical)} not accessible for type check`,
+							{
+								backendId: SEATBELT_BACKEND_ID,
+								reason: "canonicalization-failed",
+								cause,
+							},
+						);
+					}
+					const hhIsSocket = (hhSt.mode & 0o170000) === 0o140000;
+					if (!hhIsSocket) {
+						throw new SandboxError(
+							`Seatbelt: CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hhCanonical)} is not an AF_UNIX socket (mode=${hhSt.mode.toString(8)}); host-helper authority requires a real Unix-domain socket`,
+							{
+								backendId: SEATBELT_BACKEND_ID,
+								reason: "canonicalization-failed",
+							},
+						);
+					}
+					hostHelperCanonicalSocketPath = hhCanonical;
+					// Reintroduce CLINEMM_HOST_HELPER_SOCKET via the existing
+					// allow-list path so the child inherits the endpoint.
+					if (
+						cap.environment.mode === "sanitized" &&
+						!cap.environment.allow.includes("CLINEMM_HOST_HELPER_SOCKET")
+					) {
+						effectiveEnvironmentCapability = {
+							mode: "sanitized",
+							allow: [...cap.environment.allow, "CLINEMM_HOST_HELPER_SOCKET"],
+						};
+					}
 				}
 			}
 
@@ -585,22 +623,19 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			// observer sees canonicalized paths) and BEFORE profile
 			// generation. Best-effort; observer exceptions do not affect
 			// command semantics.
-			safeInvokeObserver(
-				diagnosticObserver?.onPrepareInput,
-				{
-					capability: {
-						...cap,
-						readonlyRoots,
-						writableRoots,
-						tempRoot,
-						createOnlyRoots,
-						cwd,
-						denyReadSubpaths,
-						environment: effectiveEnvironmentCapability,
-					},
-					command: cmd,
+			safeInvokeObserver(diagnosticObserver?.onPrepareInput, {
+				capability: {
+					...cap,
+					readonlyRoots,
+					writableRoots,
+					tempRoot,
+					createOnlyRoots,
+					cwd,
+					denyReadSubpaths,
+					environment: effectiveEnvironmentCapability,
 				},
-			);
+				command: cmd,
+			});
 
 			try {
 				// 2) Generate the SBPL profile.
@@ -623,9 +658,7 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				// 3) Allocate a sandbox-private temp dir for the profile
 				//    file. Distinct from `tempRoot`.
 				try {
-					profileDir = mkdtempSync(
-						join(tmpdir(), PROFILE_TEMP_DIR_PREFIX),
-					);
+					profileDir = mkdtempSync(join(tmpdir(), PROFILE_TEMP_DIR_PREFIX));
 				} catch (cause) {
 					throw new SandboxError(
 						"Seatbelt: failed to create profile temp dir",
@@ -655,23 +688,37 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				}
 
 				// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
-			// Diagnostic observer seam 2/3 — onProfileWritten.
-			// Fired AFTER the profile is on disk; the SHA-256 is
-			// computed on the bytes we just wrote. The observer
-			// receives profilePath so it can re-read the file
-			// independently if needed. Best-effort; failures here
-			// do not affect the prepared invocation.
-			safeInvokeObserver(
-				diagnosticObserver?.onProfileWritten,
-				{
+				// Diagnostic observer seam 2/3 — onProfileWritten.
+				// Fired AFTER the profile is on disk; the SHA-256 is
+				// computed on the bytes we just wrote. The observer
+				// receives profilePath so it can re-read the file
+				// independently if needed. Best-effort; failures here
+				// do not affect the prepared invocation.
+				safeInvokeObserver(diagnosticObserver?.onProfileWritten, {
 					profilePath: profilePath!,
 					...computeProfileFingerprint(profilePath!, profile),
-				},
-			);
+				});
 
-			// 4) Materialize the environment.
+				// 4) Materialize the environment.
+				//
+				// ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01: the
+				// allow-list grant in `materializeEnvironment` only carries a
+				// variable that is ALSO present in `parentEnv`. The extension
+				// host's own environment does not carry
+				// `CLINEMM_HOST_HELPER_SOCKET` (the GUI launchd domain does
+				// not export it), so the sandboxed child would receive the
+				// allow-list NAME without the endpoint VALUE and could not
+				// connect to the helper. Seed the resolved endpoint into the
+				// parent-env view so the child inherits the VALUE.
+				const parentEnvForChild: NodeJS.ProcessEnv =
+					hostHelperCanonicalSocketPath === undefined
+						? process.env
+						: {
+								...process.env,
+								[HOST_HELPER_SOCKET_ENV_VAR]: hostHelperCanonicalSocketPath,
+							};
 				materialized = materializeEnvironment(effectiveEnvironmentCapability, {
-					parentEnv: process.env,
+					parentEnv: parentEnvForChild,
 					// Synthetic TMPDIR is only set when the capability
 					// provides a tempRoot. Synthetic HOME is intentionally
 					// omitted in Wave-1 — see recon final-assessment.md
@@ -727,12 +774,11 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			// Fired BEFORE return. The prepared invocation includes
 			// the exact profilePath the executor will pass to
 			// sandbox-exec via args[1] (= "-f" + profilePath).
-			safeInvokeObserver(
-				diagnosticObserver?.onInvocationPrepared,
-				{ prepared },
-			);
+			safeInvokeObserver(diagnosticObserver?.onInvocationPrepared, {
+				prepared,
+			});
 
 			return prepared;
 		},
-	});
-
+	},
+);

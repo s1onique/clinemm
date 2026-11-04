@@ -1,0 +1,24 @@
+
+=== CASE R1_RED_env_unbound (helper=false) ===
+  leader_pid=69762 leader_ppid=69760
+  victim stdout: "READY"
+  DIRECT kill(-69762, SIGTERM) => EPERM kill() failed: EPERM: Operation not permitted
+  group_alive_after_direct_term = true
+  HELPER_FALLBACK_USED: not_attempted
+  PRIMARY_PGID_POSTCONDITION: alive
+  reclaim terminate: {"version":1,"request_id":"act01-q-3-1793818687783","ok":true,"result":"TERMINATED_KILL"}
+  final cleanup reclaimed=true
+  RESIDUAL_CONTROLLED_VICTIMS_AFTER_CASE = 0
+
+=== CASE R1_GREEN_repaired (helper=true) ===
+  leader_pid=69898 leader_ppid=69760
+  victim stdout: "READY"
+  DIRECT kill(-69898, SIGTERM) => EPERM kill() failed: EPERM: Operation not permitted
+  group_alive_after_direct_term = true
+  reclaim terminate: {"version":1,"request_id":"act01-q-7-1793818692003","ok":true,"result":"TERMINATED_KILL"}
+  HELPER_FALLBACK_USED: recovered
+  PRIMARY_PGID_POSTCONDITION: gone
+  RESIDUAL_CONTROLLED_VICTIMS_AFTER_CASE = 0
+
+RESULT {"red":{"pgid":69762,"directErrno":"EPERM","survived":true},"green":{"pgid":69898,"directErrno":"EPERM","survived":false}}
+=== DONE ===

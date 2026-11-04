@@ -31239,4 +31239,87 @@ Q3 answerable by composition today; it is **not** blocked by this correction.
 
 - `docs/acts/ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01/CORRECTION01-SUCCESSOR-CONTRACT.md`
 - `docs/acts/ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01/REPORT.md` — §0, §4 D1, §7.2, §9, §10, §11
+
+## ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01 — PASS_CORRECTION_WITH_ONE_NEW_FIX — 2026-11-04
+
+**Status:** one bounded correction pass over the EPERM repair. The proven production fix is **preserved**; the unsafe
+in-suite regression test is **removed**; a **genuine regression introduced by the prior repair** is **found and fixed**; the
+ACT-owned changes are **committed** and the VSIX is **rebuilt bound to the committed HEAD**. No architectural change, no new
+helper architecture, no speculative review cycle. **Installation remains with the operator.**
+
+```text
+ACT_ID: ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01
+TYPE: CORRECTION
+EPIC: EPIC-CLINEMM-TRUSTED-HOST-HELPER / BACKGROUND-EXEC-CONTAINMENT
+VERDICT: PASS_CORRECTION_WITH_ONE_NEW_FIX
+ENTRY_HEAD: 1d29f449a8dcade24c4136a1cbab89c69ac27dbe
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO
+RED: PRESERVED (the live ablation EVIDENCE from the parent ACT is unchanged and archived)
+NEW_FIX: seatbelt-backend.ts — host-helper authority gated on the capability's network mode
+REGRESSIONS_INTRODUCED: 0   REGRESSIONS_FIXED: 1
+RESIDUAL_GROUPS: inventoried (6, all ACT-owned); reclaim BLOCKED by the same substrate; operator command recorded
+```
+
+**The reviewer's P0 findings — all resolved.**
+
+1. **The unsafe regression test is gone from the default suite.** The removed
+   `command-job-manager.host-helper-live-ablation01.test.ts` asserted the **pre-repair** resolver contract (so it could
+   never pass against the repaired code), awaited `manager.cancel()` with **no bounded escape** on the no-helper branch,
+   spawned a **detached infinite-loop** shell with no guaranteed cleanup, and reported `SKIP` via `console.warn` + `return`
+   — which Vitest records as a **PASSING** test, not a skipped one. It is replaced by
+   `command-job-manager.host-helper-endpoint-resolution.test.ts`: a bounded, deterministic, **process-free** witness (7
+   passed / 7) that pins the **repaired** contract and creates **no OS process** (it uses the canonical `spawnFactory`
+   seam). The live ablation itself is preserved as an **opt-in operator-run probe**
+   (`apps/vscode/scripts/host-helper-live-ablation.probe.ts`, not a `.test.ts`, therefore not discovered by any default
+   suite) with a hard deadline on every blocking await, tracked-and-reclaimed spawned processes, and **distinct non-zero
+   exit codes** for an unsuitable substrate / missing helper / deadline / regression — so it can never report a pass it did
+   not earn.
+2. **Residual process groups inventoried and reclaim attempted.** Six groups (42882, 49687, 52855, 26400, 44308, 44537),
+   each identified by **full command line + start time**, never by a stale PID; all confirmed ACT-owned; no non-ACT process
+   was signalled. Reclaim was attempted through every authorised route: direct `kill(-pgid)` (EPERM), helper-mediated
+   (`DENY_OWNERSHIP` — correct, the peer is neither leader nor leader's parent), `launchctl bootstrap` (I/O error),
+   `launchctl submit` (no-op), `sandbox-exec` (`sandbox_apply: Operation not permitted`), `SIGHUP`/`SIGTERM` (EPERM).
+   **Both helper ownership rules were PROVEN LIVE on this host** (`peer_pid == leader_ppid` → `TERMINATED_KILL`;
+   `peer_pid == pgid == leader_pid` → `register ok`), which isolates the `DENY_OWNERSHIP` responses to a property of
+   **those groups** (their leader's parent is a stuck process, or init), not a broken helper. Reclamation therefore
+   requires an **unsandboxed operator Terminal**; the exact identity-verified command is recorded in the report §3.3. This
+   correction left **no new residual group**.
+3. **Focused tests and typechecks pass**, with pre-existing failures distinguished by an **exact baseline-vs-after diff of
+   the failing-test identifier set** (not by count): `sdk/packages/shared` full suite **559 passed / 0 failed**;
+   `sdk/packages/core` sandbox suite **3 failed | 132 passed | 28 skipped** vs. baseline **3 failed | 130 passed | 28
+   skipped** — **identical failure set, +2 net-new passing**; `apps/vscode` full vitest **69 failures — IDENTICAL set**,
+   zero added, zero removed (all pre-existing Seatbelt-substrate / vitest-worker-teardown-`EPERM` artefacts);
+   `apps/vscode` `check-types` **exit 0**; `sdk/packages/shared` `typecheck` **exit 0**; `sdk/packages/core` `typecheck`
+   **40 errors — IDENTICAL baseline set**, none in an ACT-owned file; `apps/vscode` `lint` **exit 0** (2703 files).
+4. **Committed and rebuilt.** The prior artifact `clinemm-act01.vsix`
+   (SHA-256 `39932d6de931181779955477e8f145a6a043d4932d18afa0cfb9000981b30b36`) was built from a **dirty worktree** and is
+   **superseded** by the commit-bound package. The committed HEAD and the new artifact SHA-256 are recorded in the report.
+
   as corrected by CORRECTION01
+
+
+**The new fix — a REAL regression the prior repair introduced (found by the focused-test pass).** The `$HOME` fallback tier
+that made the EPERM repair work also made the host-helper AF_UNIX authority **unconditional**: a `network: "deny"`
+capability then emitted `(allow network-outbound (remote unix-socket (path-literal "…/host-helper.sock")))` — granting
+exactly the outbound network the capability had denied — and it broke the pre-existing deny contract asserted by
+`seatbelt-ssh-agent-authority.test.ts` ("deny mode: profile contains NO AF_UNIX socket rules"). The fix gates the
+host-helper endpoint resolution on `cap.network !== "deny"`, mirroring the ssh-agent's existing **capability-driven** gating
+(`sshAuthenticationAuthority.mode === "agent"`). **The EPERM repair is unaffected**: the helper fallback is driven from the
+**extension host**, whose endpoint resolution is independent of the sandboxed child's profile, and a network-denied child
+could not reach the helper anyway. Two new tests pin the gate in both directions (deny → no AF_UNIX rule; allow → the
+exact-socket AF_UNIX rule pair is present).
+
+**Not reopened, not claimed.** No descendant-escape (`setsid`) fix; no owner-death reaper (the helper still cannot reclaim a
+group whose owner peer is gone — that is the natural subject of the separate follow-up ACT, and this correction does not
+weaken the helper's authority model); no installed-extension dogfood (installation is the operator's step); no
+architectural change.
+
+**Evidence**
+
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01/01-residual-group-inventory.txt`
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01/02-reclaim-attempts.txt`
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01/03-helper-ownership-control.txt`
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01/04-report.md`
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01/` — the parent ACT's live ablation evidence
+  (preserved unchanged)

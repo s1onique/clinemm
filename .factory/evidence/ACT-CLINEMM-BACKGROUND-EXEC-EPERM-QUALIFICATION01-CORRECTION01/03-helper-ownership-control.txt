@@ -1,0 +1,18 @@
+=== ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01 ===
+=== 03-helper-ownership-control.txt ===
+
+PURPOSE: prove that the host helper IS reachable and DOES grant authority when
+         the ownership proof is satisfied. This isolates the residual-group
+         DENY_OWNERSHIP responses to a property of THOSE GROUPS (their leader
+         parents are stuck / init), not to a broken helper.
+
+--- RULE (a): peer_pid == leader_ppid ---
+RULE_A peer_pid=54330 victim_pgid=54331 victim_ppid=54330
+RULE_A_REGISTER={"version":1,"request_id":"act01-corr-a-2-1793821622545","job_token":"b67ceb9f17070bad17e92609c6e5932b","active_job_count":1,"active_client_count":15,"ok":true}
+RULE_A_TERMINATE={"version":1,"request_id":"act01-corr-a-3-1793821622546","ok":true,"result":"TERMINATED_KILL"}
+
+--- RULE (b): peer_pid == pgid == leader_pid ---
+(a setsid-d shell EXECs the client, so the client pid IS the group leader pid)
+54522
+RULE_B_CLIENT_PID=54522 target_pgid=54522
+RULE_B_REGISTER={"version":1,"request_id":"act01-corr-rb-2-1793821624768","job_token":"d80a426115faeb5dc6c56af5a403b16a","active_job_count":1,"active_client_count":15,"ok":true}

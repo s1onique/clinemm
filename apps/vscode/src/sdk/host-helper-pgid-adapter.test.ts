@@ -144,9 +144,40 @@ describe("HostHelperPgidProvider (review-correction02)", () => {
 		).resolves.toBeUndefined()
 	})
 
-	it("resolveLiveHelperOwnedPgidProvider returns undefined when env unset (non-macOS path)", () => {
+	// ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01: the resolver
+	// now uses the SHARED canonical tiering (env override, then the
+	// installer default `$HOME/.clinemm/host-helper.sock`), so "env unset"
+	// alone no longer yields `undefined` on a host that HAS a home dir.
+	// `undefined` is now reserved for the genuinely-unresolvable case:
+	// no env override AND no home directory.
+	it("resolveLiveHelperOwnedPgidProvider returns undefined when neither env nor home resolves", () => {
+		const originalHome = process.env.HOME
 		delete process.env.CLINEMM_HOST_HELPER_SOCKET
-		expect(resolveLiveHelperOwnedPgidProvider()).toBeUndefined()
+		delete process.env.HOME
+		try {
+			expect(resolveLiveHelperOwnedPgidProvider()).toBeUndefined()
+		} finally {
+			if (originalHome !== undefined) process.env.HOME = originalHome
+		}
+	})
+
+	// ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01: the REAL
+	// extension-host shape. The GUI launchd domain that starts VS Code /
+	// VSCodium does NOT export CLINEMM_HOST_HELPER_SOCKET (verified live
+	// via `launchctl print gui/501` and `launchctl getenv`). Under the
+	// pre-repair env-only resolution this yielded `undefined`, the helper
+	// was never registered, and the EPERM fallback was unreachable.
+	it("resolveLiveHelperOwnedPgidProvider resolves the endpoint when env is absent but HOME is present", () => {
+		const originalHome = process.env.HOME
+		delete process.env.CLINEMM_HOST_HELPER_SOCKET
+		process.env.HOME = "/Users/someone"
+		try {
+			const provider = resolveLiveHelperOwnedPgidProvider()
+			expect(provider).toBeDefined()
+			expect(provider).toBeInstanceOf(HostHelperPgidProvider)
+		} finally {
+			if (originalHome !== undefined) process.env.HOME = originalHome
+		}
 	})
 
 	it("resolveLiveHelperOwnedPgidProvider returns a HostHelperPgidProvider when env set", () => {

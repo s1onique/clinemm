@@ -1,0 +1,61 @@
+=== ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01 / 00-entry-identity.txt ===
+
+ENTRY_HEAD   = 1d29f449a8dcade24c4136a1cbab89c69ac27dbe
+ENTRY_TREE   = clean (git status --short empty at entry; only ACT-owned files changed now)
+BRANCH       = main
+WORKTREE_STATUS = 4 modified + 3 untracked (ACT-owned only)
+
+OS_VERSION       = macOS Sonoma 14.7.4 (23H420)
+ARCHITECTURE     = arm64
+NODE_VERSION      = v26.0.0 (/opt/homebrew/bin/node)
+BUN_VERSION       = v1.3.13 (~/.bun/bin/bun)
+VSCODE_OR_CODIUM_VERSION = VSCodium (installed extension id s1onique.clinemm-4.1.16-5a1c485cb-5e505e855)
+INSTALLED_CLINEMM_VERSION = 4.1.16-5a1c485cb-5e505e855
+INSTALLED_BUNDLE_SHA256    = 4a860df9e311e43a87c81249a8ed72c9ac6a96844af8d2043549821ef803f069
+
+--- NATIVE HELPER (installed, unmodified by this ACT) ---
+HELPER_LABEL         = io.clinemm.host-helper
+HELPER_DOMAIN        = gui/501   (user/501 -> "Could not find service")
+HELPER_PID           = 42547     (launchd on-demand; NOT running at entry, spawned on first connect)
+HELPER_UID           = 501
+HELPER_EXECUTABLE    = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+HELPER_SIZE          = 54264
+HELPER_SHA256        = ccd5257402745b4e8940dda9a5d020f09984063aea26ca5c1561a4b492d6366c
+HELPER_BUILD_ID      = 85a87a825c9050768e471cb2a1799c5be811dc1197e984918aa169e453bd5b8e
+HELPER_SOCKET        = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+HELPER_SOCKET_PERMISSIONS = srw------- (0600), owner uid 501
+HELPER_PROTOCOL_VERSION = 1
+
+CLASSIFICATION = HELPER_READY
+  health  : {"ok":true,"service":"clinemm-host-helper","uid":501}
+  client.open / process-group.register-owned / client.close : all OK
+  DENY taxonomy observed: DENY_LEADER_NOT_FOUND, DENY_OWNERSHIP, BAD_REQUEST, DENY_PEER_MISMATCH
+
+NOTE on build_id drift: the INSTALLED helper (85a87a82...) differs from a fresh
+source build (f727e702...). The installed binary is FUNCTIONAL and
+wire-compatible with the production client (proved live above), so this is
+NOT the defect under investigation and was deliberately left untouched.
+
+--- GUI launchd DOMAIN ENVIRONMENT (the load-bearing observation) ---
+$ launchctl print gui/501 | sed -n '/environment = {/,/}/p'
+        environment = {
+                DISPLAY => /private/tmp/com.apple.launchd.ypdW8WH4hC/org.xquartz:0
+                SSH_AUTH_SOCK => /private/tmp/com.apple.launchd.sPj1j10A3V/Listeners
+        }
+$ launchctl getenv CLINEMM_HOST_HELPER_SOCKET
+        <empty>            <-- NOT exported into the GUI domain
+
+=> The VS Code / VSCodium extension host is started by the GUI launchd
+   domain, which does NOT export CLINEMM_HOST_HELPER_SOCKET.
+
+--- SUBJECT ARTIFACTS (built from this ACT's source) ---
+BUNDLE_PATH     = apps/vscode/dist/extension.js
+BUNDLE_SIZE     = 27734903
+BUNDLE_SHA256   = a2a9a6d8ef201a0d6e0e24ca6d2ecd1b7aa8373b3c97974c86a678d2cd437918
+VSIX_PATH       = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-act01.vsix
+VSIX_SIZE       = 65239878
+VSIX_SHA256     = 39932d6de931181779955477e8f145a6a043d4932d18afa0cfb9000981b30b36
+
+NOTE: the VSIX was NOT installed. Per operator instruction the extension is
+dogfooded manually. The installed extension remains byte-identical to the
+pre-ACT build (4a860df9...), verified after the (EPERM-failed) install attempt.

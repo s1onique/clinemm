@@ -797,6 +797,96 @@ describe("SeatbeltSandboxBackendExperimental — CORRECTION01: synthesized temp 
 	});
 });
 
+// =============================================================================
+// ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01
+//
+// The host-helper endpoint resolution gained a `$HOME` fallback tier
+// (so the EPERM repair works in the real extension host, whose GUI
+// launchd domain does NOT export `CLINEMM_HOST_HELPER_SOCKET`).
+//
+// The fallback makes the endpoint resolve in EVERY environment, which
+// turned the host-helper AF_UNIX authority into an UNCONDITIONAL grant
+// — contradicting a capability whose own `network` decision is `deny`.
+// A `network: "deny"` capability emitted
+// `(allow network-outbound (remote unix-socket ...))`, i.e. it granted
+// exactly the outbound network the capability denied.
+//
+// The gate is the capability's network mode, mirroring the ssh-agent's
+// capability-driven gating (`sshAuthenticationAuthority.mode ===
+// "agent"`). The EPERM repair is unaffected: the helper fallback is
+// driven from the EXTENSION HOST, whose provider resolution is
+// independent of this sandbox profile.
+// =============================================================================
+describe("SeatbeltSandboxBackendExperimental — host-helper network-deny gate (ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01)", () => {
+	it("emits NO host-helper AF_UNIX rule when the capability denies network", async () => {
+		const fixture = buildFixture();
+		try {
+			const cap: CommandCapability = {
+				readonlyRoots: [fixture.inside],
+				writableRoots: [fixture.inside],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				cwd: fixture.inside,
+			};
+			const cmd: CommandInvocation = {
+				executable: "/usr/bin/env",
+				args: [],
+				cwd: fixture.inside,
+				env: {},
+			};
+
+			const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+				capability: cap,
+				command: cmd,
+			});
+			const profileContent = readFileSync(prepared.args[1], "utf8");
+			// The deny contract: no AF_UNIX socket authority at all.
+			expect(profileContent).not.toContain("AF_UNIX");
+			expect(profileContent).not.toContain("unix-socket");
+		} catch (cause) {
+			cleanupFixture(fixture.root);
+			throw cause;
+		}
+		cleanupFixture(fixture.root);
+	});
+
+	it("emits the host-helper AF_UNIX rule when the capability allows network", async () => {
+		const fixture = buildFixture();
+		try {
+			const cap: CommandCapability = {
+				readonlyRoots: [fixture.inside],
+				writableRoots: [fixture.inside],
+				network: "allow",
+				environment: { mode: "sanitized", allow: [] },
+				cwd: fixture.inside,
+			};
+			const cmd: CommandInvocation = {
+				executable: "/usr/bin/env",
+				args: [],
+				cwd: fixture.inside,
+				env: {},
+			};
+
+			const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+				capability: cap,
+				command: cmd,
+			});
+			const profileContent = readFileSync(prepared.args[1], "utf8");
+			// With network allowed, the helper endpoint authority IS
+			// granted (this is the repair's purpose: the sandboxed
+			// child must be able to reach the helper endpoint).
+			expect(profileContent).toContain("(allow system-socket");
+			expect(profileContent).toContain("(socket-domain AF_UNIX))");
+			expect(profileContent).toContain("(allow network-outbound");
+			expect(profileContent).toContain("(remote unix-socket (path-literal ");
+		} catch (cause) {
+			cleanupFixture(fixture.root);
+			throw cause;
+		}
+		cleanupFixture(fixture.root);
+	});
+});
+
 describe("SeatbeltSandboxBackendExperimental — non-darwin fail-closed", () => {
 	it.runIf(process.platform !== "darwin")(
 		"isAvailable() returns false on non-darwin",

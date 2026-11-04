@@ -1,0 +1,29 @@
+=== ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01 ===
+=== 02-reclaim-attempts.txt ===
+
+--- (A) DIRECT kill FROM THE EXTENSION-HOST PROCESS TREE ---
+(the IDE Chromium-zygote sandbox denies ALL signal delivery from this tree)
+
+pgid=42882 : identity-verified (cmd contains the ACT victim signature) -> kill -TERM -- -42882 : zsh:kill:1: kill -42882 failed: operation not permitted
+pgid=49687 : identity-verified (cmd contains the ACT victim signature) -> kill -TERM -- -49687 : zsh:kill:1: kill -49687 failed: operation not permitted
+pgid=52855 : identity-verified (cmd contains the ACT victim signature) -> kill -TERM -- -52855 : zsh:kill:1: kill -52855 failed: operation not permitted
+pgid=26400 : identity-verified (cmd contains the ACT victim signature) -> kill -TERM -- -26400 : zsh:kill:1: kill -26400 failed: operation not permitted
+pgid=44308 : identity-verified (cmd contains the ACT victim signature) -> kill -TERM -- -44308 : zsh:kill:1: kill -44308 failed: operation not permitted
+pgid=44537 : identity-verified (cmd contains the ACT victim signature) -> kill -TERM -- -44537 : zsh:kill:1: kill -44537 failed: operation not permitted
+
+--- (B) HELPER-MEDIATED RECLAIM (the only unsandboxed signer) ---
+(ownership proof: peer_pid == leader_ppid || peer_pid == pgid; helper.c:2669)
+
+peer_pid=52923
+pgid=42882 register={"ok":false,"error":"DENY_OWNERSHIP"}
+pgid=49687 register={"ok":false,"error":"DENY_OWNERSHIP"}
+pgid=52855 register={"ok":false,"error":"DENY_OWNERSHIP"}
+pgid=26400 register={"ok":false,"error":"DENY_OWNERSHIP"}
+pgid=44308 register={"ok":false,"error":"DENY_OWNERSHIP"}
+pgid=44537 register={"ok":false,"error":"DENY_OWNERSHIP"}
+
+--- (C) CONTROL: BOTH OWNERSHIP RULES PROVEN LIVE ---
+(a) peer_pid == leader_ppid: a node client spawned a detached victim, then registered+terminated it
+(b) peer_pid == pgid:        a setsid-d shell exec-ed the client, so client pid == pgid == leader
+
+client.open / register-owned / terminate-owned / client.close all OK (see 03 below).

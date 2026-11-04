@@ -1,0 +1,6 @@
+providerPresent=true
+jobId=cmd_mw2h2erhxnbusuqi pgid=56855
+cancel RESOLVED after 12086ms
+TERMINAL survived=false state=removed
+RESULT {"pgid":56855,"survived":false}
+=== DONE ===

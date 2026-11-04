@@ -30,6 +30,8 @@
 
 import { createConnection, type Socket } from "node:net"
 
+import { resolveHostHelperSocketPath } from "@cline/shared"
+
 import type { HelperOwnedPgidProvider } from "./command-job-manager"
 
 export interface HelperWireClientOptions {
@@ -355,7 +357,22 @@ export class HostHelperPgidProvider implements HelperOwnedPgidProvider {
  * then runs the pre-ACT direct-kill path.
  */
 export function resolveLiveHelperOwnedPgidProvider(): HelperOwnedPgidProvider | undefined {
-	const socketPath = process.env.CLINEMM_HOST_HELPER_SOCKET
+	// ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01: use the
+	// SHARED canonical resolver (env override, then the installer's
+	// `$HOME/.clinemm/host-helper.sock` default) instead of reading the
+	// env var alone.
+	//
+	// Why this matters: the GUI launchd domain that starts VS Code /
+	// VSCodium does NOT export `CLINEMM_HOST_HELPER_SOCKET` (verified
+	// live via `launchctl print gui/501` and `launchctl getenv`). The
+	// env-only form therefore resolved NO path inside the real
+	// extension host, so this factory returned `undefined`, the
+	// manager never registered the owned PGID with the helper, and the
+	// EPERM fallback was unreachable -- leaving the owned process group
+	// alive (orphan) after cancellation. See
+	// `sdk/packages/shared/src/runtime/host-helper-socket.ts` for the
+	// full rationale and the live evidence.
+	const socketPath = resolveHostHelperSocketPath()
 	if (typeof socketPath !== "string" || socketPath.length === 0) {
 		return undefined
 	}

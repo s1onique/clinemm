@@ -1,0 +1,21 @@
+=== ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01 ===
+=== 01-residual-group-inventory.txt ===
+
+PROBE: every candidate is identified by FULL command line + start time.
+      No process is signalled by a stale PID alone.
+
+--- (A) THE FIVE RESIDUAL GROUPS REPORTED BY THE PRIOR ACT ---
+42882     1 42882      0   501 Wed Nov  4 21:38:32 2026     /bin/sh -c trap '' TERM; while :; do sleep 0.2; done
+49687 49676 49687      0   501 Wed Nov  4 21:46:01 2026     /bin/bash -c trap '' TERM; (trap '' TERM; while :; do sleep 0.2; done) & wait
+52855 52841 52855      0   501 Wed Nov  4 21:48:19 2026     /bin/bash -c trap '' TERM; (trap '' TERM; while :; do sleep 0.2; done) & wait
+26400 26399 26400      0   501 Wed Nov  4 22:15:55 2026     /bin/sh -c trap "" TERM; while :; do sleep 0.2; done
+44308 44307 44308      0   501 Wed Nov  4 21:41:02 2026     /bin/sh -c trap "" TERM; while :; do sleep 0.2; done
+44537 44535 44537      0   501 Wed Nov  4 21:41:19 2026     /bin/sh -c trap "" TERM; while :; do sleep 0.2; done
+
+--- (B) THEIR PARENTS (the "authorized owner peers") ---
+1     0     1 Wed Nov  4 14:01:21 2026     (launchd)
+49676 49674 49674 Wed Nov  4 21:46:00 2026     bun /tmp/clinemm-act-01-red/ablation-direct.ts
+52841     1 52838 Wed Nov  4 21:48:18 2026     bun /tmp/clinemm-act-01-red/ablation2.ts
+26399 26272 26271 Wed Nov  4 22:15:55 2026     /opt/homebrew/Cellar/node/26.0.0/bin/node -e const {spawn}=require("child_process");const c=spawn("/bin/sh",["-c","trap \"\" TERM; while :; do sleep 0.2; done"],{detached:true,stdio:"ignore"});setTimeout(()=>{try{process.kill(-c.pid,"SIGTERM");console.log("OK")}catch(e){console.log(e.code)}},400);
+44307 44276 44271 Wed Nov  4 21:41:02 2026     /opt/homebrew/Cellar/node/26.0.0/bin/node -e const {spawn}=require("child_process");const c=spawn("/bin/sh",["-c","trap \"\" TERM; while :; do sleep 0.2; done"],{detached:true,stdio:"ignore"});setTimeout(()=>{try{process.kill(-c.pid,"SIGTERM");console.log("OK")}catch(e){console.log(e.code)}},400);
+44535 44512 44508 Wed Nov  4 21:41:19 2026     /opt/homebrew/Cellar/node/26.0.0/bin/node -e const {spawn}=require("child_process");const c=spawn("/bin/sh",["-c","trap \"\" TERM; while :; do sleep 0.2; done"],{detached:true,stdio:"ignore"});setTimeout(()=>{try{process.kill(-c.pid,"SIGTERM");console.log("OK")}catch(e){console.log(e.code)}},400);

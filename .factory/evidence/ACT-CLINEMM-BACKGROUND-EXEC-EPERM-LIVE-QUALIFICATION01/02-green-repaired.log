@@ -1,0 +1,7 @@
+envVarPresent=false HOME=/Volumes/UserData/Users/chistyakov
+providerPresent=true
+jobId=cmd_mw2hsa7ys93ds8n9 pgid=9095
+cancel RESOLVED after 12291ms
+TERMINAL survived=false
+RESULT {"pgid":9095,"survived":false}
+=== DONE ===
