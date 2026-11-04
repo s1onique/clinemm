@@ -20,8 +20,17 @@ INSTALL_PATH="$INSTALL_DIR/clinemm-host-helper"
 SOCKET="$HOME/.clinemm/host-helper.sock"
 ARTIFACT="$REPO/tools/macos-host-helper/native/helper"
 
+# The build_id is DERIVED FROM THE COMMITTED SOURCE BYTES and is therefore
+# stable across rebuilds. It is the authoritative artifact identity.
 EXPECT_BUILD_ID=585ef8cb29cb2cff695a090c5c81c7cab4958e07f6e7383cf40da0613e958052
-EXPECT_SHA256=659776b680a6faaf133789150d57098d20e299291fe692df20b9ffd4cd4d3fc9
+
+# The binary SHA-256 is NOT byte-reproducible: `codesign -s -` embeds a
+# per-signing identifier, so every rebuild produces a different SHA-256
+# from identical source. (This is the PRE-EXISTING build mechanism's
+# behaviour, unchanged by this ACT.) Therefore:
+#   * capture the SHA-256 of the artifact you are ABOUT to install, and
+#   * verify THAT value after the install.
+# Do NOT treat any hard-coded SHA as a gate.
 EXPECT_SIZE=106896
 
 # The previously verified (known-good) binary, for bounded rollback.
@@ -118,10 +127,18 @@ codesign --verify --strict helper && echo CODESIGN_OK
 shasum -a 256 helper | awk '{print $1}'
 ```
 
-**Gate:** the SHA-256 must be `EXPECT_SHA256`
-(`659776b6...`) and the embedded build_id printed by `build.sh` must be
-`EXPECT_BUILD_ID` (`585ef8cb...`). A different value means the working
-tree is not at the committed source; stop.
+**Gate:** the embedded build_id printed by `build.sh` MUST be
+`EXPECT_BUILD_ID` (`585ef8cb...`). This value is derived from the
+committed source bytes, so it is the authoritative check that the
+artifact was built from the committed source. A different build_id
+means the working tree is not at the committed source; stop.
+
+Record the artifact SHA-256 for the install step:
+
+```bash
+ARTIFACT_SHA=$(shasum -a 256 "$ARTIFACT" | awk '{print $1}')
+echo "ARTIFACT_SHA256=$ARTIFACT_SHA"
+```
 
 ---
 
@@ -145,12 +162,14 @@ mv -f "$INSTALL_DIR/.clinemm-host-helper.new.$$" "$INSTALL_PATH"
 
 # Verify the INSTALLED artifact (not the repo copy).
 codesign --verify --strict "$INSTALL_PATH" && echo "installed CODESIGN_OK"
-shasum -a 256 "$INSTALL_PATH"
+INSTALLED_SHA=$(shasum -a 256 "$INSTALL_PATH" | awk '{print $1}')
+echo "INSTALLED_SHA256=$INSTALLED_SHA"
 codesign -dvv "$INSTALL_PATH" 2>&1 | grep Identifier
 ```
 
-**Gate:** the installed SHA-256 must be `EXPECT_SHA256`. If not, restore
-from the rollback copy and stop.
+**Gate:** the installed SHA-256 MUST equal `$ARTIFACT_SHA` captured in
+section 3 (the binary is copied byte-for-byte, so it must match
+exactly). If it does not, restore from the rollback copy and stop.
 
 **Do NOT** touch the plist. The label, the socket path, the socket mode
 (`SockPathMode 384` = 0600), the user-level privilege boundary and the

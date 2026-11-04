@@ -28,6 +28,27 @@ FINAL_TREE=697a944cebeb7542267a091a6445c5546c5b11f9
 HELPER_BUILD_ID=585ef8cb29cb2cff695a090c5c81c7cab4958e07f6e7383cf40da0613e958052
 HELPER_BINARY_PATH=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
 HELPER_BINARY_BYTES=106896
-HELPER_BINARY_SHA256=659776b680a6faaf133789150d57098d20e299291fe692df20b9ffd4cd4d3fc9
+HELPER_BINARY_SHA256=4c5b8947ebdfa92b62d471ff885f9ff9f64e473cb58d8728c1dbe6030e765f8d
 HELPER_CODESIGN_IDENTIFIER=helper
 HELPER_CODESIGN_VERIFY=PASS
+
+## ARTIFACT SHA-256 REPRODUCIBILITY (measured)
+
+The binary SHA-256 is NOT byte-reproducible: `codesign -s -` (the
+pre-existing ad-hoc signing step in build.sh) embeds a per-signing
+identifier, so two builds from byte-identical source differ:
+
+    build1 = 5eba38724636ad91cbaf2bf4359d55adec75d5aa2c4d552bc62ccaf516fb4803
+    build2 = e9d52d36eee379567edc114419588c2febe2e9e556b392adb99b95866bb1dc94
+
+The build_id IS stable across rebuilds because it is computed from the
+source bytes (sha256(ABI_VERSION || helper.c)), and is the authoritative
+artifact identity:
+
+    SOURCE_BUILD_ID = 585ef8cb29cb2cff695a090c5c81c7cab4958e07f6e7383cf40da0613e958052
+    EMBEDDED_BUILD_ID = 585ef8cb29cb2cff695a090c5c81c7cab4958e07f6e7383cf40da0613e958052
+    MATCH = true
+
+SOURCE_HEAD = 757da08801a1b14bb87ebcd410e967eccb34b030 (the source commit)
+FINAL_HEAD  = 43f6b22ab694449d5708da930bb7d325a386a061 (adds evidence/report only;
+              no native source or build input changed)
