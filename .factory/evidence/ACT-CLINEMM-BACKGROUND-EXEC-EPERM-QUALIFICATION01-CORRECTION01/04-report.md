@@ -276,15 +276,52 @@ by an exact **baseline-vs-after diff of the failing-test identifier set**, not b
 ## 6. Commit-bound artifact
 
 ```
-COMMITTED_HEAD = (recorded below after the commit)
-VSIX_PATH      = dist/clinemm-act01-correction01.vsix
-VSIX_SHA256    = (recorded below after the build)
+COMMITTED_HEAD = c415e74210a46978035d4cae71ce10c2fd8c619f
+PARENT_HEAD    = 1d29f449a8dcade24c4136a1cbab89c69ac27dbe
+BRANCH         = main
+WORKTREE       = CLEAN at build time (the bundle is bound to this HEAD)
+
+VSIX_PATH   = dist/clinemm-act01-correction01.vsix
+VSIX_SIZE   = 65239878 bytes
+VSIX_SHA256 = 27bf1af14f47c59a41e10fb9d5b83aa4446833efc2b3664699017c9502fd9d83
+
+BUNDLE_PATH   = apps/vscode/dist/extension.js
+BUNDLE_SIZE   = 27734903 bytes
+BUNDLE_SHA256 = a2a9a6d8ef201a0d6e0e24ca6d2ecd1b7aa8373b3c97974c86a678d2cd437918
+```
+
+**Build chain (all EXIT=0):**
+
+| Step | Command | Result |
+|---|---|---|
+| 1 | `bun run build:production` (webview + esbuild --production) | exit 0 |
+| 2 | `vsce package --out dist/clinemm-act01-correction01.vsix --no-dependencies` | exit 0 — `DONE Packaged: … (682 files, 62.22 MB)` |
+| 3 | `vsce package` runs `vscode:prepublish` → `bun run package` → protos + `check-types` + `build:webview` + `lint` + `esbuild --production` | exit 0 (lint: 2703 files, no fixes) |
+
+**Artifact-content verification (the packaged artifact really carries the fix):**
+
+```
+$ unzip -p dist/clinemm-act01-correction01.vsix extension/dist/extension.js > extension.js
+$ grep -c 'clinemm/host-helper.sock'  extension.js   -> 1   # the $HOME default tier literal
+$ grep -c 'CLINEMM_HOST_HELPER_SOCKET' extension.js   -> 3   # the env override tier
 ```
 
 The prior artifact `clinemm-act01.vsix`
 (SHA-256 `39932d6de931181779955477e8f145a6a043d4932d18afa0cfb9000981b30b36`) was built
 from a **dirty worktree** and is **SUPERSEDED** by this correction's commit-bound
 package.
+
+> Note on the bundle hash: `BUNDLE_SHA256` is **identical** to the prior ACT's
+> (`a2a9a6d8…`). This was **verified empirically**, not assumed: rebuilding the bundle
+> with the network-deny gate reverted produces the **same** hash, because the Seatbelt
+> backend lives in the separate `@cline/core` SDK package (consumed via its compiled
+> `dist/`), **not** in the extension's `apps/vscode/dist/extension.js`. The gate is
+> therefore a **SDK-package** change, and the extension bundle is unaffected by it — which
+> is exactly why the EPERM repair (which lives in the bundle) is preserved byte-for-byte
+> while the deny contract is restored in the SDK.
+>
+> The **VSIX hashes DIFFER** (`39932d6d…` vs `27bf1af1…`) because the prior VSIX embedded
+> a **dirty-worktree** tree; that difference is exactly the defect this correction closes.
 
 **Installation remains with the operator.** This correction did not install anything.
 

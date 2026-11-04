@@ -31294,7 +31294,22 @@ RESIDUAL_GROUPS: inventoried (6, all ACT-owned); reclaim BLOCKED by the same sub
    **40 errors — IDENTICAL baseline set**, none in an ACT-owned file; `apps/vscode` `lint` **exit 0** (2703 files).
 4. **Committed and rebuilt.** The prior artifact `clinemm-act01.vsix`
    (SHA-256 `39932d6de931181779955477e8f145a6a043d4932d18afa0cfb9000981b30b36`) was built from a **dirty worktree** and is
-   **superseded** by the commit-bound package. The committed HEAD and the new artifact SHA-256 are recorded in the report.
+   **superseded** by the commit-bound package:
+
+   ```
+   COMMITTED_HEAD = c415e74210a46978035d4cae71ce10c2fd8c619f
+   PARENT_HEAD    = 1d29f449a8dcade24c4136a1cbab89c69ac27dbe
+   BRANCH         = main
+   WORKTREE       = CLEAN at build time
+   VSIX_PATH      = dist/clinemm-act01-correction01.vsix
+   VSIX_SIZE      = 65239878 bytes
+   VSIX_SHA256    = 27bf1af14f47c59a41e10fb9d5b83aa4446833efc2b3664699017c9502fd9d83
+   BUNDLE_SHA256  = a2a9a6d8ef201a0d6e0e24ca6d2ecd1b7aa8373b3c97974c86a678d2cd437918
+BUNDLE_SIZE    = 27734903 bytes
+   ```
+
+   The packaged artifact's bundle was re-extracted and verified to carry the fix (the `.clinemm/host-helper.sock` default
+   tier literal and the `CLINEMM_HOST_HELPER_SOCKET` override tier are both present in the shipped `extension.js`).
 
   as corrected by CORRECTION01
 
