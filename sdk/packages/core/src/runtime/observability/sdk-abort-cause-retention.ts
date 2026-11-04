@@ -222,24 +222,6 @@ const runStates = new Map<string, RunRequestState>()
 const MAX_RUN_STATES = 32
 
 /**
- * Derive the key that binds a record to a run.
- *
- * The `runId` is the authoritative key. When it is absent, the
- * session-scoped fallback is used. A record with NEITHER is NOT admitted to
- * any snapshot: an unbound record cannot be attributed to a run and must not
- * be guessed into one.
- */
-function runKeyOf(record: ModelBehaviorTraceRecord): string | undefined {
-	if (record.runId) {
-		return `run:${record.runId}`
-	}
-	if (record.sessionId) {
-		return `session:${record.sessionId}`
-	}
-	return undefined
-}
-
-/**
  * ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01 — CORRECTION01.
  *
  * The scope a snapshot collects evidence from.
