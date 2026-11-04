@@ -610,8 +610,27 @@ export interface BackgroundJobLivenessAuthorityContainmentTerminalStatePublished
 //   (3) successor evidence supersedes the protected recorder.
 // -----------------------------------------------------------------------------
 
-/** Schema version of the companion provenance artifact. */
-export const BACKGROUND_JOB_LIVENESS_AUTHORITY_PROVENANCE_SCHEMA_VERSION = 1
+/**
+ * Schema version of the companion provenance artifact.
+ *
+ * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01
+ * bumped this from 1 to 2 because the MEANING of the existing
+ * `omittedBlockingJobIds` field changed:
+ *
+ *   - v1: `omittedBlockingJobIds` carried the EXACT, COMPLETE list of
+ *     omitted identities (unbounded — a 10,000-id blocking set retained
+ *     all 9,936 omitted identities).
+ *   - v2: `omittedBlockingJobIds` carries at most
+ *     `bounds.maxOmittedBlockingJobIds` (default 8) SAMPLED omitted
+ *     identities. The accompanying `omittedBlockingJobCount` is EXACT,
+ *     and `omittedBlockingJobIdsComplete` states whether the sample
+ *     represents the full omitted set.
+ *
+ * The ORIGINAL `background-job-liveness-authority.jsonl` format is
+ * UNCHANGED by this version bump — it is the COMPANION artifact schema
+ * that advanced.
+ */
+export const BACKGROUND_JOB_LIVENESS_AUTHORITY_PROVENANCE_SCHEMA_VERSION = 2
 
 /**
  * The availability classification of one required piece of evidence.
@@ -740,11 +759,32 @@ export interface BackgroundJobLivenessAuthorityProvenanceBlockingSet {
 	/** The number of blocking job ids actually RETAINED. */
 	readonly retainedBlockingJobCount: number
 	/**
-	 * The EXACT job ids that were omitted by the size bound. When the
-	 * set is not truncated this is empty. A truncated set is never
-	 * presented as complete.
+	 * The EXACT number of job ids that were omitted by the size bound
+	 * (`originalBlockingJobCount - retainedBlockingJobCount`). This count
+	 * is ALWAYS exact, even when the omitted IDENTITIES are only sampled.
+	 */
+	readonly omittedBlockingJobCount: number
+	/**
+	 * A BOUNDED SAMPLE of the job ids that were omitted by the size
+	 * bound.
+	 *
+	 * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01:
+	 * this array carries AT MOST `bounds.maxOmittedBlockingJobIds`
+	 * (default 8) identities. It is NOT the complete omitted set unless
+	 * `omittedBlockingJobIdsComplete` is true.
+	 *
+	 * The identities are REAL — they are taken verbatim from the omitted
+	 * range of the original record. An identity is NEVER synthesized to
+	 * fill a missing set.
 	 */
 	readonly omittedBlockingJobIds: readonly string[]
+	/**
+	 * Whether `omittedBlockingJobIds` represents the COMPLETE omitted
+	 * set. True when every omitted identity is represented (including the
+	 * non-truncated case, where there are zero omitted identities); false
+	 * when the omitted identities are only SAMPLED.
+	 */
+	readonly omittedBlockingJobIdsComplete: boolean
 	/**
 	 * The lifecycle correlation to a task/epoch is NOT observable from
 	 * the original BJLA record. The relationship is classified as
@@ -777,6 +817,20 @@ export interface BackgroundJobLivenessAuthorityProvenanceCoverage {
 	 * `JOIN_INCOMPLETE`, not `JOIN_COMPLETE`.
 	 */
 	readonly blockingSetMembershipAvailability: BackgroundJobLivenessAuthorityProvenanceAvailability
+	/**
+	 * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01.
+	 *
+	 * WHERE this job's identity is retained:
+	 *
+	 *   - `RETAINED_PRINCIPAL` — the identity is in the snapshot's
+	 *     retained principal blocking set.
+	 *   - `OMITTED_SAMPLE`    — the identity was omitted by the size
+	 *     bound but is still present in the BOUNDED omitted-id sample.
+	 *   - `OMITTED_IDENTITY_DISCARDED` — the identity was omitted by
+	 *     the size bound and is NO LONGER retained in any form. Only the
+	 *     exact omitted COUNT survives for it.
+	 */
+	readonly blockingSetMembershipSource: "RETAINED_PRINCIPAL" | "OMITTED_SAMPLE" | "OMITTED_IDENTITY_DISCARDED"
 	/** The originally observed postcondition, verbatim. Null when unavailable. */
 	readonly postcondition: BackgroundJobLivenessAuthorityContainmentFailureClassifiedRecord["postcondition"] | null
 	/** The originally observed OS errno, verbatim. Null when unavailable. */
@@ -796,8 +850,23 @@ export interface BackgroundJobLivenessAuthorityProvenanceLoss {
 	readonly protectedJobEvictions: number
 	/** Individual protected RECORDS (failure / publication) evicted. */
 	readonly protectedRecordEvictions: number
-	/** Blocking-set snapshots evicted by the session capacity bound. */
+	/**
+	 * Blocking-set snapshots evicted by the session capacity bound.
+	 *
+	 * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01:
+	 * this counter is reserved for evidence lost because of a DISTINCT
+	 * session exceeding the capacity. Replacing an older observation for
+	 * the SAME session is SUPERSESSION (counted separately below), NOT a
+	 * distinct-session eviction.
+	 */
 	readonly blockingSetEvictions: number
+	/**
+	 * Blocking-set observations SUPERSEDED by a newer nonempty observation
+	 * for the SAME session. A supersession is NOT a loss of a distinct
+	 * session — the session itself remains retained with its latest
+	 * evidence.
+	 */
+	readonly blockingSetSupersessions: number
 	/** Blocking-set snapshots truncated by the per-set size bound. */
 	readonly blockingSetTruncations: number
 }
@@ -830,6 +899,12 @@ export interface BackgroundJobLivenessAuthorityProvenanceSnapshot {
 		readonly maxProtectedJobs: number
 		readonly maxProtectedBlockingSessions: number
 		readonly maxBlockingSetJobIds: number
+		/**
+		 * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01:
+		 * the bound on the OMITTED-identity SAMPLE carried by each
+		 * retained blocking-set snapshot.
+		 */
+		readonly maxOmittedBlockingJobIds: number
 	}
 }
 
@@ -856,10 +931,25 @@ const DEFAULT_MAX_PROTECTED_BLOCKING_SESSIONS = 4
 
 /**
  * How many blocking job ids a SINGLE retained blocking-set snapshot may
- * carry. An unusually large set is reported as TRUNCATED with the exact
- * omitted ids — never presented as complete.
+ * carry as its PRINCIPAL retained set. An unusually large set is
+ * reported as TRUNCATED — never presented as complete.
  */
 const DEFAULT_MAX_BLOCKING_SET_JOB_IDS = 64
+
+/**
+ * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01.
+ *
+ * How many OMITTED blocking job ids a single retained blocking-set
+ * snapshot may carry as a SAMPLE.
+ *
+ * The predecessor retained EVERY omitted identity, which made the
+ * protected store's identity payload UNBOUNDED: a 10,000-id blocking set
+ * retained 64 principal identities plus 9,936 omitted identities. The
+ * exact omitted COUNT is still reported; only the omitted IDENTITIES are
+ * sampled, and `omittedBlockingJobIdsComplete` states honestly whether
+ * the sample is the whole omitted set.
+ */
+const DEFAULT_MAX_OMITTED_BLOCKING_JOB_IDS = 8
 
 /**
  * The protected provenance bounds. Every field is OPTIONAL so a test
@@ -870,6 +960,7 @@ export interface BackgroundJobLivenessAuthorityProvenanceBounds {
 	readonly maxProtectedJobs?: number
 	readonly maxProtectedBlockingSessions?: number
 	readonly maxBlockingSetJobIds?: number
+	readonly maxOmittedBlockingJobIds?: number
 }
 
 /**
@@ -880,12 +971,14 @@ interface ResolvedProvenanceBounds {
 	maxProtectedJobs: number
 	maxProtectedBlockingSessions: number
 	maxBlockingSetJobIds: number
+	maxOmittedBlockingJobIds: number
 }
 
 let provenanceBounds: ResolvedProvenanceBounds = {
 	maxProtectedJobs: DEFAULT_MAX_PROTECTED_JOBS,
 	maxProtectedBlockingSessions: DEFAULT_MAX_PROTECTED_BLOCKING_SESSIONS,
 	maxBlockingSetJobIds: DEFAULT_MAX_BLOCKING_SET_JOB_IDS,
+	maxOmittedBlockingJobIds: DEFAULT_MAX_OMITTED_BLOCKING_JOB_IDS,
 }
 
 // -----------------------------------------------------------------------------
@@ -908,8 +1001,14 @@ interface ProtectedJobEntry {
 const protectedJobs = new Map<string, ProtectedJobEntry>()
 
 /**
- * The retained blocking-set snapshots, oldest first. Bounded by
- * `maxProtectedBlockingSessions`.
+ * The retained blocking-set snapshots, LEAST-recently-observed session
+ * first. Bounded by `maxProtectedBlockingSessions` DISTINCT sessions.
+ *
+ * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01:
+ * the collection is UNCHANGED in kind — one bounded array, no new map,
+ * index or generic retention manager. What changed is the RETENTION
+ * POLICY applied to it: ONE latest nonempty snapshot per DISTINCT
+ * `activeSessionId`, ordered by most-recent observation.
  */
 const protectedBlockingSets: BackgroundJobLivenessAuthorityProvenanceBlockingSet[] = []
 
@@ -917,7 +1016,21 @@ const provenanceLoss = {
 	protectedJobEvictions: 0,
 	protectedRecordEvictions: 0,
 	blockingSetEvictions: 0,
+	blockingSetSupersessions: 0,
 	blockingSetTruncations: 0,
+}
+
+/**
+ * The session-identity key used for the DISTINCT-session retention
+ * policy.
+ *
+ * The EXACT `activeSessionId` from the production record is used. A
+ * null (unknown) session identity is preserved EXPLICITLY under a
+ * dedicated key — it is never fabricated into another session's bucket
+ * and never conflated with a real session identity.
+ */
+function blockingSetSessionKey(activeSessionId: string | null): string {
+	return activeSessionId === null ? " __UNKNOWN_SESSION__" : `s:${activeSessionId}`
 }
 
 /**
@@ -964,11 +1077,25 @@ function enforceProtectedJobCapacity(): void {
 
 /**
  * Retain a NONEMPTY blocking-set snapshot, bounded by size and by the
- * session capacity.
+ * DISTINCT-session capacity.
  *
  * EMPTY blocking sets are NOT retained: they carry no membership and
  * therefore no provenance. This mirrors the flight recorder's
  * "anomalous only" policy.
+ *
+ * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01:
+ *
+ *   P0 — the OMITTED identities are a BOUNDED SAMPLE, not the whole
+ *   omitted set. The exact omitted COUNT is preserved. The sample is
+ *   flagged incomplete so a bounded sample is never described as the
+ *   full omitted set.
+ *
+ *   P1 — retention is per DISTINCT session. A newer nonempty observation
+ *   for an already-retained session REPLACES that session's previous
+ *   snapshot (a SUPERSESSION) and moves the session to the
+ *   most-recently-observed end. Only the arrival of an UNSEEN session
+ *   beyond the capacity evicts the least-recently-observed distinct
+ *   session.
  */
 function retainBlockingSet(record: BackgroundJobLivenessAuthorityContainmentLedgerBlockingSetRecord): void {
 	if (record.blockingJobIds.length === 0) return
@@ -981,9 +1108,15 @@ function retainBlockingSet(record: BackgroundJobLivenessAuthorityContainmentLedg
 	}
 	const retainedIds = record.blockingJobIds.slice(0, retainedCount)
 	const retainedClasses = record.blockingOwnershipClasses.slice(0, retainedCount)
-	const omitted = truncated ? record.blockingJobIds.slice(retainedCount) : []
+	// The EXACT omitted count, always.
+	const omittedCount = originalCount - retainedCount
+	// The BOUNDED omitted-identity sample. The identities are taken
+	// verbatim from the omitted range — never synthesized.
+	const omittedSample = truncated
+		? record.blockingJobIds.slice(retainedCount, retainedCount + provenanceBounds.maxOmittedBlockingJobIds)
+		: []
 
-	protectedBlockingSets.push({
+	const snapshot: BackgroundJobLivenessAuthorityProvenanceBlockingSet = {
 		activeSessionId: record.activeSessionId,
 		boundary: record.boundary,
 		blockingJobIds: retainedIds,
@@ -994,10 +1127,24 @@ function retainBlockingSet(record: BackgroundJobLivenessAuthorityContainmentLedg
 		truncated,
 		originalBlockingJobCount: originalCount,
 		retainedBlockingJobCount: retainedCount,
-		omittedBlockingJobIds: omitted,
+		omittedBlockingJobCount: omittedCount,
+		omittedBlockingJobIds: omittedSample,
+		omittedBlockingJobIdsComplete: omittedSample.length === omittedCount,
 		taskEpochCorrelation: "UNOBSERVED",
-	})
+	}
 
+	// P1 — replace the SAME session's previous observation (supersession),
+	// or append a previously unseen session.
+	const sessionKey = blockingSetSessionKey(record.activeSessionId)
+	const existingIndex = protectedBlockingSets.findIndex((s) => blockingSetSessionKey(s.activeSessionId) === sessionKey)
+	if (existingIndex >= 0) {
+		protectedBlockingSets.splice(existingIndex, 1)
+		provenanceLoss.blockingSetSupersessions += 1
+	}
+	protectedBlockingSets.push(snapshot)
+
+	// Only an insertion BEYOND the distinct-session capacity evicts the
+	// least-recently-observed distinct session.
 	while (protectedBlockingSets.length > provenanceBounds.maxProtectedBlockingSessions) {
 		protectedBlockingSets.shift()
 		provenanceLoss.blockingSetEvictions += 1
@@ -1053,6 +1200,12 @@ function captureProvenanceRecord(record: BackgroundJobLivenessAuthorityRecord): 
  * blocking-set snapshot — including the jobs whose failure evidence is
  * missing. A missing record is reported as missing; it is NEVER
  * evidence of a successful cleanup.
+ *
+ * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01:
+ * the coverage also carries the SAMPLED omitted identities, marked
+ * `OMITTED_SAMPLE`, so an operator can tell a job whose identity is
+ * still known from one whose identity was discarded entirely (the latter
+ * is not enumerated at all — only the exact omitted COUNT survives).
  */
 function computeCoverage(): BackgroundJobLivenessAuthorityProvenanceCoverage[] {
 	const coverage: BackgroundJobLivenessAuthorityProvenanceCoverage[] = []
@@ -1072,6 +1225,30 @@ function computeCoverage(): BackgroundJobLivenessAuthorityProvenanceCoverage[] {
 				failureRecordAvailability: failureRecord ? "JOIN_COMPLETE" : "UNAVAILABLE_FROM_TRACE",
 				terminalPublicationAvailability: publicationRecord ? "JOIN_COMPLETE" : "UNAVAILABLE_FROM_TRACE",
 				blockingSetMembershipAvailability: set.truncated ? "JOIN_INCOMPLETE" : "JOIN_COMPLETE",
+				blockingSetMembershipSource: "RETAINED_PRINCIPAL",
+				postcondition: failureRecord ? failureRecord.postcondition : null,
+				osErrorCode: failureRecord ? failureRecord.osErrorCode : null,
+				containmentFailed: failureRecord ? failureRecord.containmentFailed : null,
+				ownerSessionId: failureRecord ? failureRecord.ownerSessionId : null,
+			})
+		}
+		// The SAMPLED omitted identities are known, so they get a
+		// coverage entry too — explicitly marked as OMITTED so a
+		// partial retained set is never reported as complete.
+		for (const jobId of set.omittedBlockingJobIds) {
+			const entry = protectedJobs.get(jobId)
+			const failureRecord = entry?.failureRecord ?? null
+			const publicationRecord = entry?.terminalPublicationRecord ?? null
+			coverage.push({
+				jobId,
+				activeSessionId: set.activeSessionId,
+				boundary: set.boundary,
+				blockingJobIds: [...set.blockingJobIds],
+				ownershipClass: "unknown_owner",
+				failureRecordAvailability: failureRecord ? "JOIN_COMPLETE" : "UNAVAILABLE_FROM_TRACE",
+				terminalPublicationAvailability: publicationRecord ? "JOIN_COMPLETE" : "UNAVAILABLE_FROM_TRACE",
+				blockingSetMembershipAvailability: "JOIN_INCOMPLETE",
+				blockingSetMembershipSource: "OMITTED_SAMPLE",
 				postcondition: failureRecord ? failureRecord.postcondition : null,
 				osErrorCode: failureRecord ? failureRecord.osErrorCode : null,
 				containmentFailed: failureRecord ? failureRecord.containmentFailed : null,
@@ -1122,6 +1299,7 @@ export function clearBackgroundJobLivenessAuthorityProvenanceStore(): void {
 	provenanceLoss.protectedJobEvictions = 0
 	provenanceLoss.protectedRecordEvictions = 0
 	provenanceLoss.blockingSetEvictions = 0
+	provenanceLoss.blockingSetSupersessions = 0
 	provenanceLoss.blockingSetTruncations = 0
 }
 
@@ -1138,6 +1316,7 @@ export function setBackgroundJobLivenessAuthorityProvenanceBounds(
 			maxProtectedJobs: DEFAULT_MAX_PROTECTED_JOBS,
 			maxProtectedBlockingSessions: DEFAULT_MAX_PROTECTED_BLOCKING_SESSIONS,
 			maxBlockingSetJobIds: DEFAULT_MAX_BLOCKING_SET_JOB_IDS,
+			maxOmittedBlockingJobIds: DEFAULT_MAX_OMITTED_BLOCKING_JOB_IDS,
 		}
 	} else {
 		provenanceBounds = {
@@ -1147,6 +1326,10 @@ export function setBackgroundJobLivenessAuthorityProvenanceBounds(
 				Math.floor(bounds.maxProtectedBlockingSessions ?? provenanceBounds.maxProtectedBlockingSessions),
 			),
 			maxBlockingSetJobIds: Math.max(0, Math.floor(bounds.maxBlockingSetJobIds ?? provenanceBounds.maxBlockingSetJobIds)),
+			maxOmittedBlockingJobIds: Math.max(
+				0,
+				Math.floor(bounds.maxOmittedBlockingJobIds ?? provenanceBounds.maxOmittedBlockingJobIds),
+			),
 		}
 	}
 	enforceProtectedJobCapacity()
