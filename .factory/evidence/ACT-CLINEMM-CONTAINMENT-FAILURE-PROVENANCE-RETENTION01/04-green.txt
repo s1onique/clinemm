@@ -1,0 +1,15 @@
+ ✓ src/sdk/__tests__/cfpr01-sample-artifact.gen.test.ts (1 test) 13ms
+ ✓ src/sdk/__tests__/background-job-liveness-authority.bclas04.test.ts (2 tests) 32ms
+ ✓ src/sdk/__tests__/background-job-liveness-authority.bclas02.test.ts (1 test) 31ms
+ ✓ src/sdk/__tests__/background-job-liveness-authority.bclas01.test.ts (2 tests) 33ms
+ ✓ src/sdk/__tests__/background-job-liveness-authority.bclas03.test.ts (1 test) 58ms
+ ✓ src/sdk/__tests__/background-job-liveness-authority.bclas05.test.ts (1 test) 60ms
+ ✓ src/sdk/__tests__/background-job-liveness-authority.bclas06.test.ts (2 tests) 208ms
+ ✓ src/sdk/__tests__/containment-failure-provenance-retention01.cfpr01.test.ts (17 tests) 72ms
+ ✓ src/sdk/__tests__/containment-ledger-causal-recon01.clcr01.test.ts (20 tests) 70ms
+ ✓ src/sdk/__tests__/containment-failure-c10-authority-repair01.cfc10ar01.test.ts (25 tests) 152ms
+ ✓ src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts (19 tests) 157ms
+ ✓ src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts (11 tests) 1382ms
+ ✓ src/sdk/__tests__/premature-handoff-containment-failure01.phcf01.test.ts (10 tests) 186ms
+ Test Files  13 passed (13)
+      Tests  112 passed (112)

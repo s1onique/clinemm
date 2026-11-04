@@ -1,3 +1,97 @@
+# ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 — PASS_STRUCTURAL_READY_FOR_LIVE — 2026-11-04
+
+**Status:** bounded diagnostic-only protected provenance retention, CLOSED on the existing `main` branch. A containment
+failure's ORIGINAL causal evidence now SURVIVES the ordinary 256-record BJLA FIFO wrap, so a later C10 completion
+barrier that holds on that job can be joined back to its original cleanup verdict and OS errno from a SINGLE BJLA dump.
+**No process termination, no job-state change, no containment-classification change, no continuation-scheduling change,
+no task-completion change, no new process signal, no new public API, no wire/protocol field, no new environment toggle,
+no TaskHeader change, and no new Command Palette command.** The protected stash and all unrelated worktrees are intact;
+no push, no install, no VSIX.
+
+```text
+ACT_ID: ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01
+TYPE: Evidence acquisition / retention (diagnostics only)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 and ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01)
+VERDICT: PASS_STRUCTURAL_READY_FOR_LIVE
+ENTRY_HEAD: 75b8c6f8ae279c4bc5118c065bcb80f754ef6314
+ENTRY_TREE: a93be231b132e626c534dc6b29a7e63828199c47
+BRANCH: main (no ACT branch created)
+WORKTREES: unchanged (3)   STASHES_TOUCHED: 0 (protected stash INTACT)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO
+RED: REPRODUCED (14-test suite failed against the untouched tree — the protected store did not exist)
+ABLATION_CLASSIFICATION: NOT_PERFORMED_NOT_REQUIRED (diagnostics-only; no repair attempted — the 3-leg ablation is recorded)
+INSTALLED_DOGFOOD: NOT PERFORMED (no live qualification claimed; LIVE procedure documented)
+EVIDENCE: docs/acts/ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01/REPORT.md
+```
+
+**The defect that was closed.** The ordinary BJLA FIFO is bounded at 256 records. A containment failure is classified
+**ONCE**, at the moment the manager evaluates the terminal postcondition. After 256 further unrelated lifecycle events
+the ORIGINAL kernel verdict, the OS errno and the launch-time owner are EVICTED — the C10 blocking set still names the
+job id, but *why* the job is in the containment ledger is no longer recoverable from ANY dump. The 2026-11-04 LIVE
+capture showed this as `0/4` original failure records retained for the four C10 blockers.
+
+**The intervention.** A bounded, diagnostic-only PROTECTED PROVENANCE STORE inside the EXISTING BJLA capture module,
+fed from the SAME single capture seam (`captureBackgroundJobLivenessAuthorityRecord`) — so the three causal PRODUCERS
+(`command-job-manager.ts`, `SdkController.ts`, `sdk-session-event-coordinator.ts`) are BYTE-FOR-BYTE UNCHANGED. The store
+retains, per exact `jobId`: the ORIGINAL `containment_failure_classified` observation and the ASSOCIATED
+`containment_terminal_state_published` record (only when the published state is `containment_failed`), plus the most
+recent NONEMPTY C10 blocking-set snapshots.
+
+**Bounds (proposed defaults accepted).** `MAX_PROTECTED_JOBS = 128`, `MAX_PROTECTED_BLOCKING_SESSIONS = 4` (matching
+the flight recorder's existing "last four anomalous captures" retention policy), `MAX_BLOCKING_SET_JOB_IDS = 64`. The
+ordinary **256-record FIFO is UNCHANGED**. On overflow the OLDEST protected job is evicted deterministically (the NEWEST
+relevant evidence survives) and the loss is COUNTED; an oversized blocking set is TRUNCATED with the EXACT omitted job
+ids reported — a truncated set is never presented as complete. There is NO unbounded tombstone map and NO secondary index.
+
+**The dump contract.** `cline.debug.dumpBackgroundJobLivenessAuthority` now writes the ORIGINAL
+`background-job-liveness-authority.jsonl` (format and consumers unchanged) PLUS the companion
+`background-job-liveness-authority.provenance.json`. The companion carries `protectedJobs`, `blockingSets`, `coverage`,
+`loss` and the capture `generation`. Each coverage entry classifies the availability of the original failure record, the
+controller terminal publication and the blocking-set membership as `JOIN_COMPLETE` / `JOIN_INCOMPLETE` /
+`UNAVAILABLE_FROM_TRACE`. **Dump != clear**; repeated dumps are byte-identical when no new events occur. A missing record
+is NEVER evidence of a successful cleanup.
+
+**Proof.** A focused 17-test suite (`containment-failure-provenance-retention01.cfpr01.test.ts`) drives the REAL
+`CommandJobManager` (through the documented `terminalPostconditionProbe` seam), the REAL
+`SdkSessionEventCoordinator` C10 completion-attempt boundary, and the REAL dump adapter. RED: `14 failed (14)`. GREEN:
+`17 passed (17)`. Adjacent BJLA (BCLAS01–06) / CLCR01 / CFC10A01 / CFC10AR01 / PHCF01 / PCPC01: `112 passed (112)` across 13 files.
+Typecheck `bun run check-types` EXIT 0. Biome lint+format clean. Full-suite baseline comparison: **IDENTICAL_FAILURE_SET**
+(16 pre-existing macOS Seatbelt/sandbox-environment failures in BOTH the ACT-owned run and the untouched-baseline run).
+**ACT-owned failures: 0.**
+
+**Necessity / ablation (3 legs).** ABLATED (protected capacity 0) → the original provenance DISAPPEARS after FIFO
+eviction. RETAINED (capacity 128) → the SAME evidence SURVIVES. CAPTURE DISABLED → the production outcome is IDENTICAL.
+The necessary intervention is **retaining evidence**, not changing the safety policy. The ablation never disables
+containment enforcement.
+
+**What is deliberately NOT claimed.** The four LIVE blockers from the 2026-11-04 capture (`cmd_mw2gknnryrnqwcmw`,
+`cmd_mw2h9j8n9ncptte7`, `cmd_mw2hb1nm5rp9fr8j`, `cmd_mw2hcxbjse0zbl22`) keep their `UNAVAILABLE_FROM_TRACE` status; their
+original postconditions and OS errors are NOT reconstructed and `substrate_alive` / `substrate_eperm` / a later successful
+cleanup are NOT inferred. A `JOIN_COMPLETE` job-level join does NOT prove the process group is currently alive or gone. The
+task is NOT declared `CAPTURE_SUFFICIENT` — the flight-recorder and process-liveness evidence have independent coverage.
+
+**LIVE status: NOT PERFORMED.** No VSIX was built and nothing was installed. `PASS_STRUCTURAL_READY_FOR_LIVE` means the
+capability is READY TO BE QUALIFIED, not that it has been qualified. The LIVE procedure, the artifact-identity template
+(`DOGFOOD_SOURCE_HEAD` / `extension_version` / `vsix_path` / `vsix_size_bytes` / `vsix_sha256` /
+`installed_extension_version`), the join procedure and the `PASS_LIVE_JOIN` / `CAPTURE_INSUFFICIENT` /
+`LIVE_UNOBSERVABLE` / `HALT_PRODUCTION_DELTA` classification are documented in
+`.factory/evidence/ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01/08-live-qualification.md`. LIVE acceptance
+requires at least one actual C10 blocker whose original failure evidence WOULD have aged beyond the ordinary FIFO but
+remains present in protected retention; a short run that never exercises FIFO eviction is partial qualification only.
+
+**Files changed (ACT-owned only).** `apps/vscode/src/sdk/background-job-liveness-authority.ts` (+563/-1),
+`apps/vscode/src/sdk/background-job-liveness-authority-runtime.ts` (+27/-3), `apps/vscode/src/extension.ts` (+3/-2),
+`apps/vscode/src/sdk/__tests__/containment-failure-provenance-retention01.cfpr01.test.ts` (NEW),
+`apps/vscode/src/sdk/__tests__/cfpr01-sample-artifact.gen.test.ts` (NEW), plus the report and the evidence directory.
+
+**Removal trigger.** The first of: (1) the containment failure's root cause is isolated; (2) the LIVE capture remains
+insufficient and this recorder cannot safely close the gap; (3) successor evidence supersedes the protected recorder. Do NOT
+remove the recorder before a required bounded repair has been LIVE-qualified. The EXISTING BJLA ring, its 256-record bound,
+the dump command and `background-job-liveness-authority.jsonl` are NOT part of this ACT and survive the removal.
+
+---
+
 # ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 — PASS_RECON — 2026-11-03
 
 **Status:** bounded source reconnaissance + ONE targeted causal-evidence extension, CLOSED on the existing `main` branch. The

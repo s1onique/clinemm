@@ -38,9 +38,21 @@
 
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { getBackgroundJobLivenessAuthorityCaptureRecords } from "./background-job-liveness-authority"
+import {
+	getBackgroundJobLivenessAuthorityCaptureRecords,
+	getBackgroundJobLivenessAuthorityProvenanceSnapshot,
+} from "./background-job-liveness-authority"
 
 const DUMP_FILE = "background-job-liveness-authority.jsonl"
+
+/**
+ * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 (CFPR01).
+ *
+ * The COMPANION provenance artifact. It sits NEXT TO the original JSONL
+ * (which keeps its exact format and consumers) and carries the
+ * protected retention that survives the ordinary 256-record FIFO wrap.
+ */
+const PROVENANCE_DUMP_FILE = "background-job-liveness-authority.provenance.json"
 
 /**
  * Narrow structural type for the bits of vscode.ExtensionContext the
@@ -73,7 +85,7 @@ async function ensureDirectory(pathname: string): Promise<void> {
  */
 export async function dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic(
 	context: BackgroundJobLivenessAuthorityDiagnosticContext,
-): Promise<{ file: string; recordCount: number }> {
+): Promise<{ file: string; recordCount: number; provenanceFile: string }> {
 	const records = getBackgroundJobLivenessAuthorityCaptureRecords()
 	const dir = context.globalStorageUri.fsPath
 	await ensureDirectory(dir)
@@ -87,5 +99,17 @@ export async function dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic(
 	} else {
 		await writeFile(file, jsonl + "\n", "utf8")
 	}
-	return { file, recordCount: records.length }
+	// ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 (CFPR01):
+	// the COMPANION provenance artifact. It is written UNCONDITIONALLY
+	// (the operator must be able to inspect whatever was captured even
+	// after the diagnostic was disabled) and it does NOT clear the
+	// protected store (dump != clear).
+	//
+	// The serialization is STABLE: the snapshot contains no wall-clock
+	// timestamp of its own, so repeated dumps with no new events produce
+	// byte-identical artifacts.
+	const provenanceFile = join(dir, PROVENANCE_DUMP_FILE)
+	const provenance = getBackgroundJobLivenessAuthorityProvenanceSnapshot()
+	await writeFile(provenanceFile, `${JSON.stringify(provenance, null, 2)}\n`, "utf8")
+	return { file, recordCount: records.length, provenanceFile }
 }

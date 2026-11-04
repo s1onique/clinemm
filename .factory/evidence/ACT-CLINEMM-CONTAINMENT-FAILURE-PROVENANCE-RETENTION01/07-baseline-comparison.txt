@@ -1,0 +1,59 @@
+ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 — BASELINE COMPARISON
+
+METHOD
+------
+The full vitest suite was run TWICE against the SAME machine:
+  (A) the ACT-owned tree (ENTRY_HEAD 75b8c6f8 + the 4 ACT files), and
+  (B) the UNTOUCHED baseline (the 4 ACT files stashed away, so the tree
+      was byte-identical to ENTRY_HEAD 75b8c6f8).
+Both runs used the identical command:
+  bun x vitest run --config vitest.config.ts
+
+RESULT — THE FAILURE SETS ARE IDENTICAL
+---------------------------------------
+  ACT-owned run : 16 failing FILES
+  Baseline run  : 16 failing FILES
+  diff of (file, failing-test-count) tuples: IDENTICAL_FAILURE_SET
+
+The 16 failing files and their per-file failure counts (IDENTICAL in both runs):
+
+  darwin-seatbelt-safe-yolo-yolo-qualification01.c1-qualify.test.ts                      10 tests |  4 failed
+  extension-host-termination-authority01.termination-authority.test.ts                  58 tests | 13 failed
+  darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts              14 tests | 11 failed
+  command-job-manager.sandbox-integration.test.ts                                      18 tests |  2 failed
+  post-run-completion-authority-reevaluation01-correction01-precheck-liveness.pcrl01.test.ts  5 tests | 3 failed
+  host-blocked-outcome-consumer-probe01.hbocp01.test.ts                                  6 tests |  1 failed
+  continuation-pathological-corpus01.swcm04.test.ts                                    16 tests | 11 failed
+  host-blocked-outcome-lifecycle-owner01.hbclo01.test.ts                                7 tests |  5 failed
+  darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts                              8 tests |  2 failed
+  c10-filter-ablation01.baseline.test.ts                                                3 tests |  2 failed
+  long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts               5 tests |  1 failed
+  task-terminal-divergence-red01.tdd-red01.test.ts                                     14 tests |  3 failed
+  sdk-session-event-coordinator.test.ts                                                29 tests |  2 failed
+  vscode-run-commands-tool.background-state.test.ts                                     6 tests |  6 failed
+  host-blocked-outcome-publication01.hbop01.test.ts                                     12 tests |  8 failed
+  command-job-manager.owner-session-id.test.ts                                           9 tests |  7 failed
+
+  ACT-OWNED FAILURES: 0
+  (No ACT-owned file appears in the failure set, and no failure count moved.)
+
+  These are PRE-EXISTING macOS Seatbelt / sandbox environment artifacts of
+  this host, NOT regressions introduced by this ACT. The comparison above
+  is the evidence: the same failures occur with the ACT completely absent.
+
+TYPECHECK
+---------
+  `bun run check-types` (apps/vscode)
+    = bun run protos && bunx tsc --noEmit && bun run check-types:compat
+      && cd webview-ui && bunx tsc --noEmit
+  EXIT = 0
+  BASELINE DIAGNOSTICS : none (the untouched baseline is also clean)
+  ACT-OWNED DIAGNOSTICS : none
+
+BIOME (lint + format)
+---------------------
+  `bun x biome check --config-path ./biome.jsonc --no-errors-on-unmatched
+      --files-ignore-unknown=true --diagnostic-level=error --semicolons=as-needed`
+    over all 5 ACT-owned source files:
+  "Checked 5 files in 28ms. No fixes applied."   (exit 0)
+  ACT-OWNED DIAGNOSTICS : none

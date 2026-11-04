@@ -69,7 +69,16 @@ export function isBackgroundJobLivenessAuthorityCaptureEnabled(): boolean {
 }
 
 export function setBackgroundJobLivenessAuthorityCaptureEnabled(enabled: boolean): void {
-	captureEnabled = Boolean(enabled)
+	const next = Boolean(enabled)
+	// ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 (CFPR01):
+	// the capture GENERATION advances every time the seam is ARMED, so
+	// a dump can distinguish "capture was never armed in this process"
+	// from "capture was armed and observed nothing". The generation is
+	// diagnostic-only; it never feeds back into the runtime.
+	if (next && !captureEnabled) {
+		captureGeneration += 1
+	}
+	captureEnabled = next
 }
 
 /**
@@ -546,6 +555,107 @@ export interface BackgroundJobLivenessAuthorityContainmentTerminalStatePublished
 }
 
 // -----------------------------------------------------------------------------
+// ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 (CFPR01)
+// Protected provenance store.
+//
+// WHY THIS EXISTS
+// ---------------
+// The ordinary BJLA ring is a 256-record FIFO. A containment failure is
+// classified ONCE, at the moment the manager evaluates the terminal
+// postcondition. Every later unrelated lifecycle event pushes the ring
+// forward. After 256 more events the ORIGINAL failure observation — the
+// kernel verdict, the OS errno, the launch-time owner — has been
+// EVICTED and is gone.
+//
+// When a later C10 completion barrier then holds on that job, the
+// blocking set still names the job id, but the REASON the job is in the
+// containment ledger is no longer recoverable from the dump.
+//
+// This store keeps the load-bearing evidence OUTSIDE the ordinary FIFO:
+//
+//   - the ORIGINAL `containment_failure_classified` observation, keyed
+//     by exact jobId;
+//   - the ASSOCIATED `containment_terminal_state_published` record,
+//     but ONLY when the published state is `containment_failed`;
+//   - the most recent NONEMPTY `containment_ledger_blocking_set`
+//     snapshots, so the same dump can answer "was this job a blocker,
+//     and for which session?".
+//
+// TRUST BOUNDING
+// --------------
+//   - Diagnostic ONLY. A protected record NEVER becomes production
+//     authority: nothing reads it back into the runtime. It is a
+//     write-only capture that is serialized by the dump.
+//   - Default off. The store is fed exclusively by
+//     `captureBackgroundJobLivenessAuthorityRecord`, which is a
+//     complete no-op when `captureEnabled` is false. When disabled
+//     there is NO protected-record insertion, NO map mutation, NO
+//     identity allocation attributable to this feature, and NO
+//     process or runtime-state change.
+//   - Immutable observations. The ORIGINAL failure observation is
+//     never overwritten by a later publication or an unrelated
+//     lifecycle event. Null and unavailable fields are preserved
+//     exactly as captured; nothing is reconstructed from later
+//     runtime state.
+//   - Bounded. Every collection has an explicit cap and an explicit
+//     loss counter. A truncated capture is REPORTED, never presented
+//     as complete.
+//   - Read-only w.r.t. production. No process signal, no job state
+//     mutation, no ownership change.
+//
+// REMOVAL_TRIGGER (per ACT sec 12): the first of
+//   (1) the containment failure's root cause is isolated,
+//   (2) the LIVE capture remains insufficient and this recorder cannot
+//       safely close the gap,
+//   (3) successor evidence supersedes the protected recorder.
+// -----------------------------------------------------------------------------
+
+/** Schema version of the companion provenance artifact. */
+export const BACKGROUND_JOB_LIVENESS_AUTHORITY_PROVENANCE_SCHEMA_VERSION = 1
+
+/**
+ * The availability classification of one required piece of evidence.
+ *
+ *   - `JOIN_COMPLETE`        — the record IS retained and the join
+ *                               succeeded.
+ *   - `JOIN_INCOMPLETE`      — the recorder can PROVE the record is
+ *                               present but the join could not be
+ *                               completed (e.g. a truncated blocking
+ *                               set omitted the job id).
+ *   - `UNAVAILABLE_FROM_TRACE` — the record is NOT retained and the
+ *                               recorder cannot prove WHY (it was never
+ *                               captured, or it was evicted and the
+ *                               specific eviction is not attributable).
+ */
+export type BackgroundJobLivenessAuthorityProvenanceAvailability = "JOIN_COMPLETE" | "JOIN_INCOMPLETE" | "UNAVAILABLE_FROM_TRACE"
+
+/**
+ * The protected per-job provenance entry.
+ *
+ * `failureRecord` is the ORIGINAL immutable observation. It is null
+ * only when the job never produced a containment-failure record (for
+ * example a job that was published `containment_failed` without a
+ * matching classification in this capture).
+ */
+export interface BackgroundJobLivenessAuthorityProvenanceJob {
+	/** The exact job id — the join key for every other record. */
+	readonly jobId: string
+	/**
+	 * The ORIGINAL `containment_failure_classified` observation,
+	 * preserved exactly as captured. Null when unavailable.
+	 */
+	readonly failureRecord: BackgroundJobLivenessAuthorityContainmentFailureClassifiedRecord | null
+	/**
+	 * The ASSOCIATED `containment_terminal_state_published` record —
+	 * retained ONLY when the published state was `containment_failed`.
+	 * Null when unavailable.
+	 */
+	readonly terminalPublicationRecord: BackgroundJobLivenessAuthorityContainmentTerminalStatePublishedRecord | null
+	/** When this protected entry was first created. */
+	readonly capturedAt: number
+}
+
+// -----------------------------------------------------------------------------
 // Bounded ring
 // -----------------------------------------------------------------------------
 
@@ -555,6 +665,12 @@ let bufferSize = DEFAULT_BUFFER_SIZE
 /**
  * Append one record to the ring. Bounded FIFO eviction. No-op when
  * the capture seam is OFF (default).
+ *
+ * ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 (CFPR01):
+ * the protected provenance store is fed from this same seam, so it is
+ * armed and disarmed together with the ring. The ordinary 256-record
+ * FIFO is UNCHANGED — the protected store is a SEPARATE, independently
+ * bounded collection.
  */
 export function captureBackgroundJobLivenessAuthorityRecord(record: BackgroundJobLivenessAuthorityRecord): void {
 	if (!captureEnabled) return
@@ -562,6 +678,7 @@ export function captureBackgroundJobLivenessAuthorityRecord(record: BackgroundJo
 	if (buffer.length > bufferSize) {
 		buffer.shift()
 	}
+	captureProvenanceRecord(record)
 }
 
 /**
@@ -591,5 +708,450 @@ export function setBackgroundJobLivenessAuthorityCaptureBufferSize(size: number)
 	bufferSize = clamped
 	if (buffer.length > bufferSize) {
 		buffer.length = bufferSize
+	}
+}
+
+/**
+ * A retained C10 blocking-set snapshot.
+ *
+ * The snapshot preserves the source identity of the original record.
+ * It does NOT invent a task id or an epoch the original BJLA record
+ * does not carry; the relationship to a task/epoch is UNOBSERVED.
+ */
+export interface BackgroundJobLivenessAuthorityProvenanceBlockingSet {
+	/** The session whose jobs were in scope for the consultation. */
+	readonly activeSessionId: string | null
+	/** The boundary at which the set was computed. */
+	readonly boundary: BackgroundJobLivenessAuthorityContainmentLedgerBlockingSetRecord["boundary"]
+	/** The retained blocking job ids. */
+	readonly blockingJobIds: readonly string[]
+	/** The ownership class of each RETAINED job id, positionally aligned. */
+	readonly blockingOwnershipClasses: readonly ContainmentOwnershipClass[]
+	/** The denominator: total `containment_failed` entries observed. */
+	readonly totalContainmentFailureEntries: number
+	/** The number of entries excluded because their owner was foreign. */
+	readonly foreignOwnerEntriesExcluded: number
+	/** When this snapshot was captured. */
+	readonly capturedAt: number
+	/** True iff the original blocking set did not fit whole. */
+	readonly truncated: boolean
+	/** The number of blocking job ids in the ORIGINAL record. */
+	readonly originalBlockingJobCount: number
+	/** The number of blocking job ids actually RETAINED. */
+	readonly retainedBlockingJobCount: number
+	/**
+	 * The EXACT job ids that were omitted by the size bound. When the
+	 * set is not truncated this is empty. A truncated set is never
+	 * presented as complete.
+	 */
+	readonly omittedBlockingJobIds: readonly string[]
+	/**
+	 * The lifecycle correlation to a task/epoch is NOT observable from
+	 * the original BJLA record. The relationship is classified as
+	 * unobserved rather than invented.
+	 */
+	readonly taskEpochCorrelation: "UNOBSERVED"
+}
+
+/**
+ * The coverage classification for ONE retained blocking job.
+ */
+export interface BackgroundJobLivenessAuthorityProvenanceCoverage {
+	/** The blocking job id. */
+	readonly jobId: string
+	/** The blocking-set snapshot this coverage entry was derived from. */
+	readonly activeSessionId: string | null
+	/** The boundary the blocking set was computed at. */
+	readonly boundary: BackgroundJobLivenessAuthorityContainmentLedgerBlockingSetRecord["boundary"]
+	/** The EXACT blocking-set membership this coverage entry describes. */
+	readonly blockingJobIds: readonly string[]
+	/** The ownership class of THIS blocking job, as classified by production. */
+	readonly ownershipClass: ContainmentOwnershipClass
+	/** Availability of the ORIGINAL failure record. */
+	readonly failureRecordAvailability: BackgroundJobLivenessAuthorityProvenanceAvailability
+	/** Availability of the controller terminal publication. */
+	readonly terminalPublicationAvailability: BackgroundJobLivenessAuthorityProvenanceAvailability
+	/**
+	 * Availability of the blocking-set membership itself. When the
+	 * blocking set was truncated, a job that was OMITTED is
+	 * `JOIN_INCOMPLETE`, not `JOIN_COMPLETE`.
+	 */
+	readonly blockingSetMembershipAvailability: BackgroundJobLivenessAuthorityProvenanceAvailability
+	/** The originally observed postcondition, verbatim. Null when unavailable. */
+	readonly postcondition: BackgroundJobLivenessAuthorityContainmentFailureClassifiedRecord["postcondition"] | null
+	/** The originally observed OS errno, verbatim. Null when unavailable. */
+	readonly osErrorCode: ContainmentOsErrorCode
+	/** The structured failure reason, verbatim. Null when unavailable. */
+	readonly containmentFailed: BackgroundJobLivenessAuthorityContainmentFailureClassifiedRecord["containmentFailed"] | null
+	/** The launch-time owner session, verbatim. Null when unavailable. */
+	readonly ownerSessionId: string | null
+}
+
+/**
+ * The EXPLICIT retention-loss accounting. A truncated capture is
+ * reported, never silently presented as complete.
+ */
+export interface BackgroundJobLivenessAuthorityProvenanceLoss {
+	/** Protected JOB entries evicted by the protected-job capacity bound. */
+	readonly protectedJobEvictions: number
+	/** Individual protected RECORDS (failure / publication) evicted. */
+	readonly protectedRecordEvictions: number
+	/** Blocking-set snapshots evicted by the session capacity bound. */
+	readonly blockingSetEvictions: number
+	/** Blocking-set snapshots truncated by the per-set size bound. */
+	readonly blockingSetTruncations: number
+}
+
+/**
+ * The companion provenance artifact. This is the EXACT shape the dump
+ * writes to `background-job-liveness-authority.provenance.json`.
+ */
+export interface BackgroundJobLivenessAuthorityProvenanceSnapshot {
+	readonly schemaVersion: number
+	/** Whether the capture seam was armed when the snapshot was taken. */
+	readonly captureEnabled: boolean
+	/**
+	 * The capture GENERATION — a monotonically increasing counter that
+	 * changes whenever the capture seam is (re-)armed. It lets an
+	 * operator distinguish a capture-disabled or post-restart gap from
+	 * a capture that simply observed nothing.
+	 */
+	readonly captureGeneration: number
+	/** The protected per-job provenance entries, oldest first. */
+	readonly protectedJobs: readonly BackgroundJobLivenessAuthorityProvenanceJob[]
+	/** The retained blocking-set snapshots, oldest first. */
+	readonly blockingSets: readonly BackgroundJobLivenessAuthorityProvenanceBlockingSet[]
+	/** The per-blocking-job coverage classification. */
+	readonly coverage: readonly BackgroundJobLivenessAuthorityProvenanceCoverage[]
+	/** The explicit retention-loss accounting. */
+	readonly loss: BackgroundJobLivenessAuthorityProvenanceLoss
+	/** The bounds that were in force when the snapshot was taken. */
+	readonly bounds: {
+		readonly maxProtectedJobs: number
+		readonly maxProtectedBlockingSessions: number
+		readonly maxBlockingSetJobIds: number
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Bounds
+// -----------------------------------------------------------------------------
+
+/**
+ * How many protected JOB entries are retained. Generous for the last
+ * four anomalous task captures' worth of containment failures, small
+ * enough that the extension host cannot be exhausted.
+ */
+const DEFAULT_MAX_PROTECTED_JOBS = 128
+
+/**
+ * How many recent NONEMPTY blocking-set snapshots are retained.
+ *
+ * Matches the flight recorder's existing retention policy: the last
+ * FOUR anomalous task captures are retained even after newer tasks
+ * become active, so the incident under investigation is still present
+ * at dump time.
+ */
+const DEFAULT_MAX_PROTECTED_BLOCKING_SESSIONS = 4
+
+/**
+ * How many blocking job ids a SINGLE retained blocking-set snapshot may
+ * carry. An unusually large set is reported as TRUNCATED with the exact
+ * omitted ids — never presented as complete.
+ */
+const DEFAULT_MAX_BLOCKING_SET_JOB_IDS = 64
+
+/**
+ * The protected provenance bounds. Every field is OPTIONAL so a test
+ * can override only the bound it exercises; an omitted field keeps its
+ * current value.
+ */
+export interface BackgroundJobLivenessAuthorityProvenanceBounds {
+	readonly maxProtectedJobs?: number
+	readonly maxProtectedBlockingSessions?: number
+	readonly maxBlockingSetJobIds?: number
+}
+
+/**
+ * The RESOLVED bounds — every field is always present. This is the
+ * shape the store enforces against.
+ */
+interface ResolvedProvenanceBounds {
+	maxProtectedJobs: number
+	maxProtectedBlockingSessions: number
+	maxBlockingSetJobIds: number
+}
+
+let provenanceBounds: ResolvedProvenanceBounds = {
+	maxProtectedJobs: DEFAULT_MAX_PROTECTED_JOBS,
+	maxProtectedBlockingSessions: DEFAULT_MAX_PROTECTED_BLOCKING_SESSIONS,
+	maxBlockingSetJobIds: DEFAULT_MAX_BLOCKING_SET_JOB_IDS,
+}
+
+// -----------------------------------------------------------------------------
+// State
+// -----------------------------------------------------------------------------
+
+interface ProtectedJobEntry {
+	failureRecord: BackgroundJobLivenessAuthorityContainmentFailureClassifiedRecord | null
+	terminalPublicationRecord: BackgroundJobLivenessAuthorityContainmentTerminalStatePublishedRecord | null
+	capturedAt: number
+}
+
+/**
+ * The protected job map, keyed by EXACT jobId.
+ *
+ * The Map preserves insertion order, which gives the deterministic
+ * oldest-first eviction policy for free. There is NO tombstone map and
+ * NO secondary index: an evicted job is removed entirely.
+ */
+const protectedJobs = new Map<string, ProtectedJobEntry>()
+
+/**
+ * The retained blocking-set snapshots, oldest first. Bounded by
+ * `maxProtectedBlockingSessions`.
+ */
+const protectedBlockingSets: BackgroundJobLivenessAuthorityProvenanceBlockingSet[] = []
+
+const provenanceLoss = {
+	protectedJobEvictions: 0,
+	protectedRecordEvictions: 0,
+	blockingSetEvictions: 0,
+	blockingSetTruncations: 0,
+}
+
+/**
+ * The capture generation. Bumped every time the capture seam is
+ * ARMED, so a dump can distinguish "capture was never armed" from
+ * "capture was armed and observed nothing".
+ */
+let captureGeneration = 0
+
+/**
+ * Ensure a protected job entry exists for `jobId` without evicting
+ * anything. Returns the entry.
+ */
+function ensureProtectedJobEntry(jobId: string, capturedAt: number): ProtectedJobEntry {
+	const existing = protectedJobs.get(jobId)
+	if (existing) return existing
+	const entry: ProtectedJobEntry = { failureRecord: null, terminalPublicationRecord: null, capturedAt }
+	protectedJobs.set(jobId, entry)
+	return entry
+}
+
+/**
+ * Apply the deterministic protected-job capacity bound.
+ *
+ * Policy: evict the OLDEST protected job entry (by insertion order)
+ * until the store fits the bound. The NEWEST relevant evidence is
+ * always preserved, and every eviction is counted explicitly.
+ */
+function enforceProtectedJobCapacity(): void {
+	while (protectedJobs.size > provenanceBounds.maxProtectedJobs) {
+		const oldestKey = protectedJobs.keys().next()
+		if (oldestKey.done) break
+		const evicted = protectedJobs.get(oldestKey.value)
+		protectedJobs.delete(oldestKey.value)
+		provenanceLoss.protectedJobEvictions += 1
+		if (evicted?.failureRecord) {
+			provenanceLoss.protectedRecordEvictions += 1
+		}
+		if (evicted?.terminalPublicationRecord) {
+			provenanceLoss.protectedRecordEvictions += 1
+		}
+	}
+}
+
+/**
+ * Retain a NONEMPTY blocking-set snapshot, bounded by size and by the
+ * session capacity.
+ *
+ * EMPTY blocking sets are NOT retained: they carry no membership and
+ * therefore no provenance. This mirrors the flight recorder's
+ * "anomalous only" policy.
+ */
+function retainBlockingSet(record: BackgroundJobLivenessAuthorityContainmentLedgerBlockingSetRecord): void {
+	if (record.blockingJobIds.length === 0) return
+
+	const originalCount = record.blockingJobIds.length
+	const retainedCount = Math.min(originalCount, provenanceBounds.maxBlockingSetJobIds)
+	const truncated = retainedCount < originalCount
+	if (truncated) {
+		provenanceLoss.blockingSetTruncations += 1
+	}
+	const retainedIds = record.blockingJobIds.slice(0, retainedCount)
+	const retainedClasses = record.blockingOwnershipClasses.slice(0, retainedCount)
+	const omitted = truncated ? record.blockingJobIds.slice(retainedCount) : []
+
+	protectedBlockingSets.push({
+		activeSessionId: record.activeSessionId,
+		boundary: record.boundary,
+		blockingJobIds: retainedIds,
+		blockingOwnershipClasses: retainedClasses,
+		totalContainmentFailureEntries: record.totalContainmentFailureEntries,
+		foreignOwnerEntriesExcluded: record.foreignOwnerEntriesExcluded,
+		capturedAt: record.capturedAt,
+		truncated,
+		originalBlockingJobCount: originalCount,
+		retainedBlockingJobCount: retainedCount,
+		omittedBlockingJobIds: omitted,
+		taskEpochCorrelation: "UNOBSERVED",
+	})
+
+	while (protectedBlockingSets.length > provenanceBounds.maxProtectedBlockingSessions) {
+		protectedBlockingSets.shift()
+		provenanceLoss.blockingSetEvictions += 1
+	}
+}
+
+/**
+ * Feed the protected store from the capture seam.
+ *
+ * Called ONLY from `captureBackgroundJobLivenessAuthorityRecord`, i.e.
+ * only when the capture seam is armed. The store never sees a record
+ * while capture is OFF, so there is NO protected-record insertion, NO
+ * map mutation and NO identity allocation attributable to this feature
+ * in the default-off configuration.
+ */
+function captureProvenanceRecord(record: BackgroundJobLivenessAuthorityRecord): void {
+	switch (record.event) {
+		case "containment_failure_classified": {
+			const entry = ensureProtectedJobEntry(record.jobId, record.capturedAt)
+			// The ORIGINAL failure observation is never overwritten by a
+			// later publication or an unrelated lifecycle event.
+			if (!entry.failureRecord) {
+				entry.failureRecord = record
+			}
+			enforceProtectedJobCapacity()
+			return
+		}
+		case "containment_terminal_state_published": {
+			// Only a `containment_failed` publication is associated with
+			// a containment failure. A clean terminal publication is
+			// NOT retained here — it is not containment provenance.
+			if (record.publishedState !== "containment_failed") return
+			const entry = ensureProtectedJobEntry(record.jobId, record.capturedAt)
+			if (!entry.terminalPublicationRecord) {
+				entry.terminalPublicationRecord = record
+			}
+			enforceProtectedJobCapacity()
+			return
+		}
+		case "containment_ledger_blocking_set": {
+			retainBlockingSet(record)
+			return
+		}
+		default:
+			return
+	}
+}
+
+/**
+ * Compute the per-blocking-job coverage classification.
+ *
+ * A coverage entry exists for EVERY blocking job named by a retained
+ * blocking-set snapshot — including the jobs whose failure evidence is
+ * missing. A missing record is reported as missing; it is NEVER
+ * evidence of a successful cleanup.
+ */
+function computeCoverage(): BackgroundJobLivenessAuthorityProvenanceCoverage[] {
+	const coverage: BackgroundJobLivenessAuthorityProvenanceCoverage[] = []
+	for (const set of protectedBlockingSets) {
+		for (let i = 0; i < set.blockingJobIds.length; i += 1) {
+			const jobId = set.blockingJobIds[i]
+			const ownershipClass = set.blockingOwnershipClasses[i] ?? "unknown_owner"
+			const entry = protectedJobs.get(jobId)
+			const failureRecord = entry?.failureRecord ?? null
+			const publicationRecord = entry?.terminalPublicationRecord ?? null
+			coverage.push({
+				jobId,
+				activeSessionId: set.activeSessionId,
+				boundary: set.boundary,
+				blockingJobIds: [...set.blockingJobIds],
+				ownershipClass,
+				failureRecordAvailability: failureRecord ? "JOIN_COMPLETE" : "UNAVAILABLE_FROM_TRACE",
+				terminalPublicationAvailability: publicationRecord ? "JOIN_COMPLETE" : "UNAVAILABLE_FROM_TRACE",
+				blockingSetMembershipAvailability: set.truncated ? "JOIN_INCOMPLETE" : "JOIN_COMPLETE",
+				postcondition: failureRecord ? failureRecord.postcondition : null,
+				osErrorCode: failureRecord ? failureRecord.osErrorCode : null,
+				containmentFailed: failureRecord ? failureRecord.containmentFailed : null,
+				ownerSessionId: failureRecord ? failureRecord.ownerSessionId : null,
+			})
+		}
+	}
+	return coverage
+}
+
+/**
+ * Bounded, read-only view of the protected provenance store.
+ *
+ * The returned snapshot is a fresh object graph; mutating it cannot
+ * affect the store. The dump serializes this and does NOT clear it
+ * (dump != clear).
+ */
+export function getBackgroundJobLivenessAuthorityProvenanceSnapshot(): BackgroundJobLivenessAuthorityProvenanceSnapshot {
+	const jobs: BackgroundJobLivenessAuthorityProvenanceJob[] = []
+	for (const [jobId, entry] of protectedJobs) {
+		jobs.push({
+			jobId,
+			failureRecord: entry.failureRecord,
+			terminalPublicationRecord: entry.terminalPublicationRecord,
+			capturedAt: entry.capturedAt,
+		})
+	}
+	return {
+		schemaVersion: BACKGROUND_JOB_LIVENESS_AUTHORITY_PROVENANCE_SCHEMA_VERSION,
+		captureEnabled: captureEnabled,
+		captureGeneration,
+		protectedJobs: jobs,
+		blockingSets: protectedBlockingSets.map((s) => ({ ...s })),
+		coverage: computeCoverage(),
+		loss: { ...provenanceLoss },
+		bounds: { ...provenanceBounds },
+	}
+}
+
+/**
+ * Test-only: clear the protected provenance store. Production code
+ * never calls this; the dump command does NOT clear the store (dump !=
+ * clear contract).
+ */
+export function clearBackgroundJobLivenessAuthorityProvenanceStore(): void {
+	protectedJobs.clear()
+	protectedBlockingSets.length = 0
+	provenanceLoss.protectedJobEvictions = 0
+	provenanceLoss.protectedRecordEvictions = 0
+	provenanceLoss.blockingSetEvictions = 0
+	provenanceLoss.blockingSetTruncations = 0
+}
+
+/**
+ * Test-only: override the protected provenance bounds. Passing
+ * `undefined` restores the production defaults. An omitted field keeps
+ * its current value.
+ */
+export function setBackgroundJobLivenessAuthorityProvenanceBounds(
+	bounds: BackgroundJobLivenessAuthorityProvenanceBounds | undefined,
+): void {
+	if (!bounds) {
+		provenanceBounds = {
+			maxProtectedJobs: DEFAULT_MAX_PROTECTED_JOBS,
+			maxProtectedBlockingSessions: DEFAULT_MAX_PROTECTED_BLOCKING_SESSIONS,
+			maxBlockingSetJobIds: DEFAULT_MAX_BLOCKING_SET_JOB_IDS,
+		}
+	} else {
+		provenanceBounds = {
+			maxProtectedJobs: Math.max(0, Math.floor(bounds.maxProtectedJobs ?? provenanceBounds.maxProtectedJobs)),
+			maxProtectedBlockingSessions: Math.max(
+				0,
+				Math.floor(bounds.maxProtectedBlockingSessions ?? provenanceBounds.maxProtectedBlockingSessions),
+			),
+			maxBlockingSetJobIds: Math.max(0, Math.floor(bounds.maxBlockingSetJobIds ?? provenanceBounds.maxBlockingSetJobIds)),
+		}
+	}
+	enforceProtectedJobCapacity()
+	while (protectedBlockingSets.length > provenanceBounds.maxProtectedBlockingSessions) {
+		protectedBlockingSets.shift()
+		provenanceLoss.blockingSetEvictions += 1
 	}
 }

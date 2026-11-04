@@ -1419,9 +1419,10 @@ ${ctx.cellJson || "{}"}
 		// CAPTURE_INSUFFICIENT.
 		vscode.commands.registerCommand(commands.DumpBackgroundJobLivenessAuthority, async () => {
 			try {
-				const { file, recordCount } = await dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic(context)
+				const { file, recordCount, provenanceFile } =
+					await dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic(context)
 				void vscode.window.showInformationMessage(
-					`Background job liveness authority diagnostic: ${recordCount} record${recordCount === 1 ? "" : "s"} → ${file}.`,
+					`Background job liveness authority diagnostic: ${recordCount} record${recordCount === 1 ? "" : "s"} → ${file} (+ ${provenanceFile}).`,
 				)
 			} catch (err) {
 				Logger.error("[BJLA] dump failed", err)

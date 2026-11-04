@@ -1,0 +1,90 @@
+{
+  "jobId": "cmd_mw2lnwa99yi28t0e",
+  "ordinaryFifoStillContainsFailureRecord": false,
+  "companionProvenanceContainsFailureRecord": true,
+  "ordinaryJsonlRecordCount": 256,
+  "provenanceArtifact": {
+    "schemaVersion": 1,
+    "captureEnabled": true,
+    "captureGeneration": 1,
+    "protectedJobs": [
+      {
+        "jobId": "cmd_mw2lnwa99yi28t0e",
+        "failureRecord": {
+          "event": "containment_failure_classified",
+          "capturedAt": 1793825964087,
+          "managerInstance": "M1",
+          "hostInstance": null,
+          "jobId": "cmd_mw2lnwa99yi28t0e",
+          "ownerSessionId": "session-1793817350459",
+          "pid": 4242,
+          "pgid": 4242,
+          "postcondition": "eperm",
+          "osErrorCode": "EPERM",
+          "containmentFailed": "substrate_eperm",
+          "jobState": "containment_failed"
+        },
+        "terminalPublicationRecord": {
+          "event": "containment_terminal_state_published",
+          "capturedAt": 1793825964087,
+          "managerInstance": null,
+          "hostInstance": null,
+          "jobId": "cmd_mw2lnwa99yi28t0e",
+          "publishedState": "containment_failed",
+          "ownerSessionId": "session-1793817350459",
+          "isContainmentFailure": true
+        },
+        "capturedAt": 1793825964087
+      }
+    ],
+    "blockingSets": [
+      {
+        "activeSessionId": "session-1793817350459",
+        "boundary": "c10_completion_attempt",
+        "blockingJobIds": [
+          "cmd_mw2lnwa99yi28t0e"
+        ],
+        "blockingOwnershipClasses": [
+          "matching_owner"
+        ],
+        "totalContainmentFailureEntries": 4,
+        "foreignOwnerEntriesExcluded": 0,
+        "capturedAt": 1793825964087,
+        "truncated": false,
+        "originalBlockingJobCount": 1,
+        "retainedBlockingJobCount": 1,
+        "omittedBlockingJobIds": [],
+        "taskEpochCorrelation": "UNOBSERVED"
+      }
+    ],
+    "coverage": [
+      {
+        "jobId": "cmd_mw2lnwa99yi28t0e",
+        "activeSessionId": "session-1793817350459",
+        "boundary": "c10_completion_attempt",
+        "blockingJobIds": [
+          "cmd_mw2lnwa99yi28t0e"
+        ],
+        "ownershipClass": "matching_owner",
+        "failureRecordAvailability": "JOIN_COMPLETE",
+        "terminalPublicationAvailability": "JOIN_COMPLETE",
+        "blockingSetMembershipAvailability": "JOIN_COMPLETE",
+        "postcondition": "eperm",
+        "osErrorCode": "EPERM",
+        "containmentFailed": "substrate_eperm",
+        "ownerSessionId": "session-1793817350459"
+      }
+    ],
+    "loss": {
+      "protectedJobEvictions": 0,
+      "protectedRecordEvictions": 0,
+      "blockingSetEvictions": 0,
+      "blockingSetTruncations": 0
+    },
+    "bounds": {
+      "maxProtectedJobs": 128,
+      "maxProtectedBlockingSessions": 4,
+      "maxBlockingSetJobIds": 64
+    }
+  }
+}

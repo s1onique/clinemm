@@ -1,0 +1,4 @@
+TypeError: clearBackgroundJobLivenessAuthorityProvenanceStore is not a function. (In 'clearBackgroundJobLivenessAuthorityProvenanceStore()', 'clearBackgroundJobLivenessAuthorityProvenanceStore' is undefined)
+TypeError: clearBackgroundJobLivenessAuthorityProvenanceStore is not a function. (In 'clearBackgroundJobLivenessAuthorityProvenanceStore()', 'clearBackgroundJobLivenessAuthorityProvenanceStore' is undefined)
+ Test Files  1 failed (1)
+      Tests  14 failed (14)

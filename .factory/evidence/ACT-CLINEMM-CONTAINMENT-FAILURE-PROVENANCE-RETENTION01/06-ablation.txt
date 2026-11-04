@@ -1,0 +1,74 @@
+ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 — NECESSITY / ABLATION (ACT sec 9)
+
+The intervention is RETAINING EVIDENCE. It is NOT a safety-policy change.
+The ablation below disables ONLY the DIAGNOSTIC retention. Containment
+ENFORCEMENT is untouched in every arm: the job still reaches
+`containment_failed` identically.
+
+The three arms are the three tests CFPR01-15, CFPR01-16, CFPR01-17 in
+apps/vscode/src/sdk/__tests__/containment-failure-provenance-retention01.cfpr01.test.ts
+
+--------------------------------------------------------------------------------
+LEG 1 — ABLATED (protected capacity 0): the original provenance DISAPPEARS
+--------------------------------------------------------------------------------
+  CFPR01-15
+  - The REAL CommandJobManager classifies a containment failure through the
+    documented `terminalPostconditionProbe` seam (postcondition "eperm",
+    osErrorCode "EPERM").
+  - PRODUCTION outcome: `containment_failed`  (UNCHANGED by the ablation)
+  - 300 ordinary BJLA lifecycle events follow.
+  - The ordinary 256-record FIFO no longer contains the failure record.
+  - The protected store is EMPTY: snapshot.protectedJobs.length === 0
+  - The loss is REPORTED: snapshot.loss.protectedJobEvictions > 0
+  => RESULT: with the protected retention removed, the original provenance is
+     GONE — not merely moved somewhere else.
+
+--------------------------------------------------------------------------------
+LEG 2 — RETAINED (protected capacity 128): the SAME evidence SURVIVES
+--------------------------------------------------------------------------------
+  CFPR01-16
+  - Identical REAL seam, identical probe, identical 300 ordinary events.
+  - PRODUCTION outcome: `containment_failed`  (UNCHANGED)
+  - The ordinary FIFO no longer contains the failure record.
+  - The protected store DOES: entry.failureRecord.postcondition === "eperm"
+                                              entry.failureRecord.osErrorCode === "EPERM"
+  => RESULT: with the protected retention enabled, the same evidence survives.
+
+--------------------------------------------------------------------------------
+LEG 3 — DIAGNOSTIC CAPTURE DISABLED: production behaviour UNCHANGED
+--------------------------------------------------------------------------------
+  CFPR01-17
+  - The BJLA capture seam is OFF (the DEFAULT-OFF, non-dogfood posture).
+  - PRODUCTION outcome: `containment_failed`  (IDENTICAL to the capture-ON arm)
+  - manager.status() still reports `containment_failed`.
+  - NOTHING was retained: protectedJobs.length === 0, blockingSets.length === 0
+  - snapshot.captureEnabled === false
+  => RESULT: turning the diagnostic off changes nothing about containment.
+
+--------------------------------------------------------------------------------
+PROOF THAT THE ABLATION IS NOT A PRODUCTION-DELTA
+--------------------------------------------------------------------------------
+  - `git diff` touches ONLY:
+      apps/vscode/src/sdk/background-job-liveness-authority.ts
+      apps/vscode/src/sdk/background-job-liveness-authority-runtime.ts
+      apps/vscode/src/extension.ts
+    plus the new test files. NO change to:
+      - command-job-manager.ts            (no process.kill / killpg / shell probe)
+      - SdkController.ts                   (no backgroundCommandJobStates mutation)
+      - sdk-session-event-coordinator.ts   (no BCB predicate / Elm authority change)
+      - dogfood-diagnostic-profile.ts      (no new env toggle — the EXISTING
+                                             captureEnabled seam is reused)
+      - proto / wire / webview / TaskHeader (NO new public API or field)
+  - The protected store introduces NO process signal: CFPR01-14 asserts the
+    source contains no `process.kill(`, no `killpg`, no `child_process`,
+    no `execSync`/`spawnSync`.
+  - The ordinary 256-record FIFO bound is UNCHANGED: CFPR01-13 asserts the
+    ring length is exactly 256 after 1000 ordinary events.
+
+--------------------------------------------------------------------------------
+CONCLUSION
+--------------------------------------------------------------------------------
+  The ONLY difference between the ablated and retained arms is WHETHER THE
+  ORIGINAL DIAGNOSTIC EVIDENCE IS KEPT. The safety policy, the job state,
+  the ownership map, the continuation scheduling and the task completion
+  semantics are byte-for-byte identical in every arm.
