@@ -1,0 +1,13 @@
+H1H2={
+  "marker": "RECON01_H1H2",
+  "ppid": 34160,
+  "ppid_cmd": null,
+  "clineMmProfileNetworkDenied": false,
+  "clineMmProfileWriteDenied": "EPERM",
+  "probeChild": "ERR_EPERM",
+  "killChild": "ERR_EPERM",
+  "killChildK": "ERR_EPERM",
+  "probeSelf": "OK_EXISTS",
+  "probeHelper": "ERR_EPERM",
+  "killHelper": "ERR_EPERM"
+}

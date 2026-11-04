@@ -31509,3 +31509,157 @@ and **no rebuild was performed**.
 - The four unrelated dirty native-helper files (`tools/macos-host-helper/native/build.sh`,
   `helper.c`, `helper.test.ts`, `tart-testbed-run.test.ts`) — left unstaged in the working tree.
 
+## ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01 — CAPTURE_INSUFFICIENT — 2026-11-04
+
+**Scope: RECON + bounded causal probe.** No production implementation. The installed LaunchAgent
+plist was **not** modified, reinstalled, or restarted by the ACT itself.
+
+### The verdict, and why it is not a `SELECT_*`
+
+The RED **is** reproduced (EPERM, live, at the real production seam, in the exact E1 direction).
+What could **not** be obtained is the **discriminating measurement** that separates H1 from H2,
+because the authoring substrate makes it structurally impossible:
+
+- every process this ACT controls sits under **two stacked sandboxes** — the extension host's
+  Chromium zygote sandbox **and** the ClineMM Seatbelt profile;
+- macOS forbids nesting a second Seatbelt profile: `sandbox-exec` returns
+  `sandbox_apply: Operation not permitted` (rc=71) — proven with `bun`, `node`, and the
+  production vitest path, and corroborated by `/usr/bin/log` refusing to run
+  ("Cannot run while sandboxed");
+- every launchd-mutation verb is denied from the sandbox (`submit`, `bootstrap`, `setenv`,
+  `kickstart -k`, `kill`), and `osascript`/`ssh` are denied too;
+- the installed LaunchAgent's wire contract has **no method that runs an arbitrary command**.
+
+So **P1** (current profile) and **P2** (narrow candidate profile) are **`LIVE_UNOBSERVABLE`**
+here, and **Decision A's precondition ("P0 signals successfully") cannot be evaluated at all**,
+because the agent's own shell *is* the production Background Exec command.
+
+### The substrate inversion (P0 == P3)
+
+The ACT's plan assumed an independent Terminal. It is not one:
+
+```
+ps -o pid,ppid,command -p $PPID
+ 913  803  VSCodium Helper (Plugin) … --enable-sandbox      <- the extension host
+echo $TMPDIR
+/private/var/folders/0g/…/T/clinemm-sandbox-temp-<rand>      <- ClineMM Seatbelt tempRoot
+```
+
+Every `run_commands` invocation is a real `CommandJobManager.start()` -> Seatbelt ->
+`/usr/bin/sandbox-exec` -> kernel execution. **P0 and P3 are one observation**, and that
+observation is:
+
+```
+signalAttempt: { signal:"SIGTERM", target:"child-pid", ok:false,
+                 errnoCode:"EPERM", errnoMessage:"kill EPERM", syscall:"kill" }
+childExitedOnOwn:true, childExitCode:0, childStillAliveAfter:false,
+childAliveProbeErrno:"ESRCH"
+```
+
+### Evidence that the ClineMM profile IS applied (and is the H2 candidate)
+
+The write-grant set measured from the production command matches the profile generator
+**exactly** — `/private/tmp` OK, workspace OK, `~/Library/Caches/go-build` OK;
+`~/.clinemm`, `~/Documents`, `~/Downloads`, `~/Desktop`, `~/Library/Preferences`,
+`~/Library/Application Support`, `/private/var/folders/.../T` all **EPERM**; `/etc/master.passwd`
+**EACCES**. The signal signature is exactly `(self allowed, everything else EPERM)`:
+`kill(0,0)`=OK, `kill(childPid)`=EPERM, `kill(-childPgid,0)`=EPERM, `kill(ppid,0)`=EPERM,
+`kill(1,0)`=EPERM. Current rule: `(allow signal (target self))` (`seatbelt-profile.ts:700`).
+
+The candidate profile `(allow signal (target same-sandbox))` was generated with the **production
+generator** (signal-rule-only delta, `DIFF_ONLY_SIGNAL=true`, sha256
+`5a718c4c6228596fe7ca2affde833386327f393f98f8c61cbc0f728dc6bba276`) and was **NOT** applied.
+Its semantics on Sonoma 14.7.4 are **not** assumed.
+
+### E1 reproduced in this ACT's own test run
+
+```
+[vitest-pool]: Failed to terminate forks worker … Error: kill EPERM
+  at ChildProcess.kill (node:internal/child_process:535:26)
+  at ForksPoolWorker.stop (…/vitest/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+```
+
+— i.e. **actor 3** (Vitest's own worker-pool teardown inside the sandbox), not
+`CommandJobManager.terminateTree()`.
+
+### Two NEW production defects found (more urgent than the EPERM question)
+
+- **R1 (HIGH)** — the Seatbelt profile grants
+  `(allow network-outbound (remote unix-socket (path-literal "<helper.sock>")))` but **never**
+  `network-inbound`. Measured: the host helper accepts the connection and **its reply never
+  arrives**. A sandboxed command therefore **cannot use the host helper at all** — masked today
+  only because the helper is driven from the (non-Seatbelt) extension host.
+- **R2 (HIGH)** — the helper's accept loop is **single-threaded** with a **blocking,
+  timeout-less** `read_frame` (`helper.c:211`, `helper.c:3576`). One stalled client wedges the
+  **whole service**: every later client gets `ECONNREFUSED`.
+- **R3 (MEDIUM)** — the profile grants no `network-inbound` at all, so no AF_UNIX peer
+(ssh-agent, helper) can complete a round trip from inside a sandboxed command.
+
+### SERVICE-WEDGE INCIDENT (operator action required)
+
+While probing P4 the ACT sent the existing, fixed, sealed-argv `tart.preflight` method; the
+helper then stopped accepting connections permanently (helper log frozen at 16 lines; listener
+backlog ~130 unread frames; FD 4 = the accepted connection with a peer socket that has no
+owning process). **The installed helper `io.clinemm.host-helper` (pid 42547) is currently
+wedged** and the extension host's EPERM fallback is unavailable until it is restarted.
+
+**Remediation (one command, from an UNSANDBOXED Terminal — the registration is unchanged):**
+
+```bash
+launchctl kickstart -k gui/$(id -u)/io.clinemm.host-helper
+launchctl print gui/$(id -u)/io.clinemm.host-helper | grep -E 'state|pid'
+printf '{"version":1,"request_id":"probe","method":"health"}\n' | nc -U ~/.clinemm/host-helper.sock
+```
+
+Every sandboxed self-heal attempt was denied by the substrate
+(`launchctl kickstart -k` -> "Operation not permitted"; `launchctl kill` -> "Not privileged to
+signal service"; `kill -0 42547` -> "operation not permitted"). The helper's own
+`helper.restart` method is unreachable while wedged — which is itself the defect (R2).
+
+### Security conservation
+
+`Workspace filesystem`, `Read restrictions`, `Network deny`, `Process execution`, `Environment`,
+`Credentials`, `Execution approval`, `Timeout`, `Ownership`, `Output` — **all CONSERVED**. The
+installed profile was not modified. No broad `(allow signal)` was granted. No generic execution
+or signal RPC was added. The 10 forbidden anti-shell keys are untouched.
+
+### Repository delta (recon-only)
+
+- NEW `apps/vscode/src/sdk/recon01-background-exec-launchd-boundary.probe.test.ts` — a bounded,
+  DEFAULT_OFF diagnostic fixture driving the **real** `CommandJobManager.start()` -> Seatbelt ->
+  `sandbox-exec` -> kernel seam, capturing the live profile bytes and the in-sandbox
+  child-signal errno. It **skips** in this substrate (nested `sandbox-exec` denied) — and that
+  skip is the evidence for the structural ceiling. Retained as the successor's RED harness.
+- NEW `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01/` — report + 5 raw
+  artefacts + the prepared probe fixtures.
+- **NO production source change.** `seatbelt-profile.ts`, `seatbelt-backend.ts`,
+  `command-job-manager.ts`, `host-helper-pgid-adapter.ts`, `helper.c` and the LaunchAgent plist
+  are byte-identical to ENTRY_HEAD. No VSIX was built or installed.
+
+```
+ENTRY_HEAD       = 36f3a23882d31ab91a5ba760e97632633a6bc440
+ENTRY_TREE       = 23e0df51d1050f42ab3a5e769b30dc3454f4d912
+FINAL_HEAD       = 36f3a23882d31ab91a5ba760e97632633a6bc440   (unchanged — recon-only)
+BRANCH           = main
+WORKTREE_AT_EXIT = 1 new untracked diagnostic test file + 1 new evidence dir
+NEW_CONTROLLED_ORPHANS = 0
+PREEXISTING_ORPHANS    = 9 vitest forks + 7 bun vitest + 6 sandbox-temp shells (UNCHANGED, untouched)
+H1 = NOT ELIMINATED (Chromium layer denies it independently — prior ACT T2, no Seatbelt involved)
+H2 = NOT ELIMINATED (mechanistically confirmed; experimentally unconfirmed — P2 unobservable)
+H3 = the only hypothesis consistent with all observations
+H4 = ELIMINATED (bounded non-Vitest probe reproduces the same EPERM)
+H5 = CONFIRMED and stronger than stated (helper is not a safe execution boundary as-is)
+```
+
+### Successor (frozen, not implemented)
+
+`ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02` — recon-only; run four
+commands from an **unsandboxed Terminal** (baseline / current profile / candidate profile /
+foreign-process negative control) and apply a fixed interpretation table that selects exactly
+one of Decision A / B / C. The probe, the negative-control fixture and both profile files are
+already prepared. If a launch boundary is selected, the helper's blocking defects (R1/R2) must
+be fixed **first**; `execute(command, cwd, env)` must **not** be added to the existing helper.
+
+**Protected state — untouched, never restored, staged, or committed:**
+
+- `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.

@@ -1,0 +1,18 @@
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*)
+(allow file-write*
+  (subpath "/private/tmp/clinemm-recon01-ws")
+  (subpath "/private/tmp/clinemm-recon01-tmp")
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/tmp"))
+(allow file-write*
+  (subpath "/Volumes/UserData/Users/chistyakov/Library/Caches/go-build"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)

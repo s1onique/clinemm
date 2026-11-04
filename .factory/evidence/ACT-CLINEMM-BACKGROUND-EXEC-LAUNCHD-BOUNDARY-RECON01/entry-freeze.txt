@@ -1,0 +1,57 @@
+ACT                = ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01
+CLASSIFICATION     = RECON + BOUNDED CAUSAL PROBE (no production implementation)
+ENTRY_HEAD         = 36f3a23882d31ab91a5ba760e97632633a6bc440
+ENTRY_TREE         = 23e0df51d1050f42ab3a5e769b30dc3454f4d912
+BRANCH             = main
+WORKTREE_AT_ENTRY  = CLEAN (git status --short empty)
+STASH_AT_ENTRY     = stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime)...
+                     (PRESERVED, never popped)
+OS                 = macOS Sonoma 14.7.4 (23H420), arm64
+KERNEL             = Darwin 23.6.0 (arm64)
+NODE               = v26.0.0 (/opt/homebrew/bin/node)
+BUN                = 1.3.14 ($HOME/.bun/bin/bun)
+UID                = 501 (chistyakov)
+LAUNCHD_DOMAIN     = gui/501 [100019]
+
+INSTALLED EXTENSION
+  host            = VSCodium (Codium) at /Applications/VSCodium.app
+  main pid        = 803
+  extension host  = 913  "VSCodium Helper (Plugin)" --type=utility
+                    --utility-sub-type=node.mojom.NodeService
+                    --service-sandbox-type=none --enable-sandbox
+                    (Chromium zygote sandbox ACTIVE; NOT ClineMM-Seatbelt-sandboxed:
+                     its TMPDIR is /var/folders/.../T/, NOT clinemm-sandbox-temp-*)
+  user-data-dir   = /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data
+  extensions-dir  = /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions
+
+INSTALLED NATIVE HELPER
+  label           = io.clinemm.host-helper   (per-user LaunchAgent, gui/501)
+  plist           = /Volumes/UserData/Users/chistyakov/Library/LaunchAgents/io.clinemm.host-helper.plist
+  binary          = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  binary sha256   = ccd5257402745b4e8940dda9a5d020f09984063aea26ca5c1561a4b492d6366c
+  binary bytes    = 54264
+  socket          = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock (mode 0600)
+  log             = /Volumes/UserData/Users/chistyakov/Library/Logs/clinemm-host-helper.log
+  pid at entry    = 42547 (state=running, launchctl "active count = 1")
+  NOTE            = the plist was NOT modified and NOT reinstalled by this ACT.
+                    See final-report.md §7 for a SERVICE-WEDGE INCIDENT this ACT
+                    caused and the single operator command that restores it.
+
+PRE-EXISTING ORPHAN BASELINE (captured BEFORE any probe)
+  file           = /tmp/clinemm-recon01-pre-orphans.txt (33 lines incl. system agents)
+  vitest forks   = 9 orphaned vitest fork workers (PPID=1)
+  bun vitest     = 7 orphaned bun-based vitest workers (PPID=1)
+  stray shells   = /bin/sh .../clinemm-sandbox-temp-*/{leader.sh,v.sh,c.sh} (PPID=1)
+  other          = timeout/bun ablation probes from prior ACTs
+  => PRE-EXISTING, NOT ACT-OWNED. Not touched (no broad process cleanup).
+
+SECURITY SUBSTRATE (measured, not assumed)
+  authoring shell = ClineMM Seatbelt-sandboxed (TMPDIR=.../clinemm-sandbox-temp-<rand>,
+                  fresh per command) AND inherits the extension host's Chromium
+                  zygote sandbox.
+  nested sandbox-exec from the authoring shell = DENIED
+                  "sandbox-exec: sandbox_apply: Operation not permitted" (rc=71)
+  /usr/bin/log from the authoring shell      = DENIED "log: Cannot run while sandboxed"
+  launchctl submit/bootstrap/setenv/kickstart -k = DENIED (Operation not permitted)
+  launchctl print / getenv                   = ALLOWED (read-only)
+  osascript Terminal                          = DENIED (File permission error -54)
