@@ -1,0 +1,17 @@
+# GREEN -- exact RED replay against the CORRECTED binary (committed HEAD 757da0880)
+
+LIFECYCLE_EVIDENCE {"startedAt":"2026-11-04T23:19:56.448Z","totalMs":5122,"mode":"auto","fixture":{"pid":66627,"startIdentity":"1793834395.966190","binarySha256":"a30d4384cbf32d82085420b65f146b4dcf4d8e461b69c3820c84b8086aef2ad3","buildId":"585ef8cb29cb2cff695a090c5c81c7cab4958e07f6e7383cf40da0613e958052","socketPath":"/tmp/clinemm-helper-lifecycle-mw2qomda-cozwu7/helper.sock"},"clientA":{"connected":true,"response":null,"error":null,"closedByPeer":true,"elapsedMs":2001},"clientB":{"connected":true,"response":"{\"version\":1,\"request_id\":\"client-b-health\",\"ok\":true,\"service\":\"clinemm-host-helper\",\"pid\":66627,\"uid\":501,\"build_id\":\"585ef8cb29cb2cff695a090c5c81c7cab4958e07f6e7383cf40da0613e958052\",\"active_client_count\":0,\"active_job_count\":0}","error":null,"closedByPeer":false,"elapsedMs":8},"helperAliveAtTimeout":true,"watchdog":{"residualPid":66627,"residualAlive":true,"escalationAttempted":true,"escalationError":"SIGKILL:EPERM","socketReclaimed":true,"fixtureReclaimed":true,"cleanupVerified":false}}
+
+FRAME_TIMEOUT_OBSERVED=true   (A closed at 2001 ms; deadline 2000 ms)
+CLIENT_A_CLOSED=true
+CLIENT_B_HEALTH_OK=true
+CLIENT_B_CORRELATION_VALID=true  (request_id=client-b-health)
+HELPER_PROCESS_RESTARTED=false   (response pid 66627 == fixture pid 66627)
+RESIDUAL_TEST_PROCESSES=334      (substrate kill EPERM; see 06-residue.txt)
+
+MEASURED: A released after 2001 ms; B served 8 ms later.
+BOUND: A remaining receive budget + B normal processing + scheduler margin.
+
+# DISCRIMINATION PROOF
+Running the SAME fixture in red mode against the FIXED binary FAILS (0 pass, 1 fail).
+The fixture therefore discriminates pre-repair vs post-repair in both directions.

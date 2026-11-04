@@ -1,0 +1,39 @@
+# SUBSTRATE BOUNDARY + RESIDUE
+
+## Measured from the ClineMM Background Exec sandbox
+touch ~/.clinemm/bin/.probe            -> Operation not permitted
+touch ~/Library/LaunchAgents/.probe    -> Operation not permitted
+connect() ~/.clinemm/host-helper.sock  -> ENOENT (also via a /tmp symlink)
+kill -TERM <own child>                 -> EPERM
+posix_spawn("/bin/ps")                 -> EPERM
+launchctl print gui/501/... (read-only) -> OK (state=running pid=51192)
+
+=> The installed qualification gate CANNOT be executed from this substrate.
+=> Per the ACT's own constraint, the verdict is READY_FOR_OPERATOR_QUALIFICATION.
+=> NO live deployment was performed or claimed.
+
+## Installed service state (UNCHANGED by this ACT)
+PID 51192, pre-repair binary, sha256 ccd52574..., embedded build_id 85a87a82...
+lsof: PID 51192 holds the production socket on FD 3 (listener) and FD 4 (the
+accepted, stalled connection) -- the exact E1 evidence.
+helper log: 17 x '[helper] launch_activate_socket activated_fd=3 cnt=1'
+(consistent with the repeated kickstart -kp restarts in E1).
+No legitimate helper-owned job is active: no Tart VM, no registered PGID,
+capability table empty (active_client_count=0, active_job_count=0).
+
+## RESIDUE
+NEW_ORPHAN_PROCESSES=334 (isolated test helpers, PPID 1)
+PREEXISTING_ORPHANS=0 isolated test helpers at ACT entry
+  Cause: the sandbox cannot kill its own children (EPERM).
+  Impact: NONE on the production service -- each holds only its own deleted
+  /tmp/clinemm-helper-lifecycle-*/ socket; lsof confirms PID 51192 is the only
+  holder of the production socket.
+  Cleanup: the operator command in OPERATOR-QUALIFICATION.md section 1 matches
+  the EXACT repo-tree command line, so it cannot touch the installed service.
+
+## GUARANTEES
+FRAME_RECEPTION_BOUNDED=true
+RESPONSE_WRITING_BOUNDED=true
+METHOD_EXECUTION_BOUNDED=true (pre-existing contracts, unchanged)
+ARBITRARY_CLIENT_FLOOD_RESISTANCE=NOT CLAIMED (single-threaded, sequential; per-client
+  cost is bounded, aggregate admission rate is not)

@@ -1,0 +1,16 @@
+# RED -- two-client fixture against the PRE-REPAIR binary
+
+MODE=red  (CLINEMM_HELPER_LIFECYCLE_MODE=red)
+
+LIFECYCLE_EVIDENCE {"startedAt":"2026-11-04T22:55:46.293Z","totalMs":9598,"mode":"red","fixture":{"pid":59662,"startIdentity":"1793832945.839953","binaryPath":"/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper","binarySha256":"9f45e3da248ba42f05dad987a9a209a575947537d561aa144db23b222a93b65c","buildId":"f727e7029b14aace5367e42252072d8010761462aff3cba6232f8ef43443a10b","socketPath":"/tmp/clinemm-helper-lifecycle-mw2ptjfz-z4bvla/helper.sock"},"clientA":{"connected":true,"response":null,"error":"STILL_OPEN","closedByPeer":false,"elapsedMs":3502},"clientB":{"connected":true,"response":null,"error":"TIMEOUT","closedByPeer":false,"elapsedMs":3002},"helperAliveAtTimeout":true,"watchdog":{"residualPid":59662,"residualStartIdentity":"1793832945.839953","residualAlive":true,"escalationAttempted":true,"escalationError":"SIGKILL:EPERM","socketReclaimed":true,"fixtureReclaimed":true,"cleanupVerified":false}}
+
+RED_REPRODUCED=true
+CLIENT_A_ACCEPTED=true
+CLIENT_A_FRAME_INCOMPLETE=true
+CLIENT_B_HEALTH_TIMED_OUT=true
+ISOLATED_HELPER_ALIVE_AT_TIMEOUT=true
+WATCHDOG_CLEANUP_VERIFIED=PARTIAL (socket+fixture reclaimed; process cleanup blocked by substrate EPERM; exact residual identity reported)
+
+# CAUSAL DISCRIMINATOR
+H1_INCOMPLETE_FRAME_BLOCKING=CONFIRMED
+H2_HANDLER_EXECUTION_BLOCKING=NOT the cause (client B never reached dispatch)

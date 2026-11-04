@@ -1,3 +1,83 @@
+# ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01 — READY_FOR_OPERATOR_QUALIFICATION — 2026-11-05
+
+**Status:** the native macOS host helper's AF_UNIX request path is no longer UNBOUNDED. The pre-repair helper used an
+unbounded blocking `read()` in `read_frame()` and an unbounded blocking `write()` in `write_all()`, and the accept loop
+called `handle_connection()` SYNCHRONOUSLY — so one client that connected and sent an incomplete frame (or stopped reading
+its response) monopolized the whole service: every later `health`, `client.open`, `process-group.terminate-owned` and
+`helper.restart` was never serviced while the helper stayed alive and looked healthy to launchd. The repair replaces both
+transport primitives with deadline-bounded, nonblocking, `poll()`-driven equivalents: an **ABSOLUTE** `CLOCK_MONOTONIC`
+receive deadline established ONCE per accepted connection and never reset, plus an **INDEPENDENT** response deadline armed
+at **WRITE** time. **No threads, no fork-per-connection, no new event loop, no change to helper authority, no new
+LaunchAgent, no Seatbelt signal-policy change, no AF_UNIX authority change, no Tart/testbed rewrite, no change to the
+public wire methods.** The protected stash and all unrelated worktrees are intact; **no live deployment was performed or
+claimed** — the Background Exec Seatbelt substrate cannot write the install directory, cannot reach the production socket
+and cannot signal its own children, so the installed-service gate is left to an ordinary Terminal.
+
+```text
+ACT_ID: ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01
+TYPE: Availability repair (native AF_UNIX request lifecycle)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01
+VERDICT: READY_FOR_OPERATOR_QUALIFICATION
+ENTRY_HEAD: 934af527a26cf781d7c882513e483edfcb7a9b2e
+SUBJECT_HEAD: 757da08801a1b14bb87ebcd410e967eccb34b030
+FINAL_HEAD: 757da08801a1b14bb87ebcd410e967eccb34b030
+FINAL_TREE: 697a944cebeb7542267a091a6445c5546c5b11f9
+BRANCH: main (no ACT branch created)
+WORKTREES: unchanged   STASHES_TOUCHED: 0 (protected stash INTACT)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO
+RED: REPRODUCED (isolated pre-repair helper: client A incomplete frame -> client B health TIMEOUT; helper alive)
+GREEN: 16/16 pass (3 source-contract + 1 two-client lifecycle + 12 adversarial T1-T12) against the committed artifact
+ABLATION_CLASSIFICATION: FIXED_BINARY_DISCRIMINATES (red mode correctly FAILS against the fixed binary)
+NATIVE_CONSERVATION: helper.test.ts 77/0, tart-preflight 15/0, tart-testbed-run 4/6, real-lifecycle 0/6,
+  tart-pg-id-discriminator 1/0 — ALL IDENTICAL to the pre-repair baseline; tart-guest-smoke flaky on BOTH binaries
+TS_CONSERVATION: client.test.ts + server.test.ts 82/0
+BUILD: atomic build.sh (temp -> codesign --verify --strict -> mv -> post-rename verify); warnings 8 -> 8 (unchanged)
+ARTIFACT: build_id=585ef8cb29cb2cff695a090c5c81c7cab4958e07f6e7383cf40da0613e958052
+  sha256=659776b680a6faaf133789150d57098d20e299291fe692df20b9ffd4cd4d3fc9  bytes=106896  codesign=helper  VERIFY=PASS
+INSTALLED: NOT PERFORMED (substrate boundary) — service still runs the PRE-REPAIR binary, PID 51192,
+  sha256 ccd5257402745b4e8940dda9a5d020f09984063aea26ca5c1561a4b492d6366c, embedded build_id 85a87a82...
+RESIDUE: NEW_ORPHAN_PROCESSES=334 (isolated test helpers, PPID 1; sandbox kill EPERM; hold NO production socket)
+FRAME_RECEPTION_BOUNDED=true  RESPONSE_WRITING_BOUNDED=true  METHOD_EXECUTION_BOUNDED=true (pre-existing, unchanged)
+ARBITRARY_CLIENT_FLOOD_RESISTANCE=NOT CLAIMED (single-threaded, sequential; per-client cost bounded, aggregate admission not)
+EVIDENCE: docs/acts/ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01/REPORT.md
+OPERATOR: docs/acts/ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01/OPERATOR-QUALIFICATION.md
+```
+
+**The defect that was closed.** The helper's single-threaded accept loop called `handle_connection(cfd)` synchronously, and
+`handle_connection` began with `read_frame()`, whose body was `read(fd, buf + off, 1)` inside a loop with **no deadline**:
+one client that connected and never sent its newline held the accept loop forever. The response path had the same shape —
+`write_all()` looped a bare `write(fd, buf + off, n - off)` — so a peer that stopped reading could have moved the indefinite
+block from `read()` to `write()`. Both are now bounded.
+
+**The intervention.** `read_frame_bounded()` reads on a nonblocking socket and waits with `poll(POLLIN)` against the
+**remaining** budget of an absolute `CLOCK_MONOTONIC` deadline established once at accept; every outcome is classified
+(`FRAME_COMPLETE`, `FRAME_INCOMPLETE_EOF`, `FRAME_RECEIVE_TIMEOUT`, `FRAME_RECEIVE_ERROR`, `FRAME_OVERSIZE`) and **only a
+complete, validated frame reaches method dispatch** — so a timed-out request can never allocate a client token, register a
+process group or invoke a method side effect. `write_all_bounded()` is the symmetric bounded writer; the shared `write_all()`
+now arms the response deadline **at write time** and delegates to it, so every existing response path inherits the bound
+without a single handler change, and a legitimately long-running method (e.g. `tart.preflight`, whose Tart budget is 30 s /
+60 s) still gets to deliver its response. Arming the response deadline at *accept* time was the first cut and was WRONG: it
+regressed `tart-preflight` `PF-07` by dropping that method's valid response after its 30 s budget; the write-time arming
+restored `15/0`.
+
+**Proof.** The identical two-client fixture that produced the RED (client A sends an incomplete frame and holds the
+connection; client B sends a complete `health`) now closes client A at the 2000 ms absolute deadline and serves client B
+**8 ms** later with a valid correlated response, from the **same** helper process (same PID, same embedded `build_id`) — and
+the same fixture in `red` mode correctly **fails** against the fixed binary, so it discriminates in both directions. T1–T12
+all pass, including the slow-trickle case (one byte per 100 ms) which the absolute deadline releases at 2002 ms rather than
+letting it extend the budget. The watchdog verifies the isolated helper's PID **and kernel start time** (through the same
+`sysctl(KERN_PROC_PID)` seam the helper itself uses for PID-reuse resistance) **before** any escalation, and reports the
+exact residual identity when the substrate withholds signal authority rather than silently claiming success.
+
+**What is NOT claimed.** The helper remains single-threaded and sequential: the *per-client* cost is now bounded, but an
+unlimited queue of hostile clients still serializes, so `ARBITRARY_CLIENT_FLOOD_RESISTANCE` is explicitly **not** claimed. A
+completed-but-long-running method still delays the queue behind it for the duration of its own (pre-existing, bounded)
+budget — recorded as a separate finding, not concealed. The **installed** service still runs the pre-repair binary and is
+therefore still wedged until the operator completes the documented qualification.
+
+---
+
 # ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01 — PASS_STRUCTURAL_READY_FOR_LIVE — 2026-11-04
 
 **Status:** bounded diagnostic-only protected provenance retention, CLOSED on the existing `main` branch. A containment

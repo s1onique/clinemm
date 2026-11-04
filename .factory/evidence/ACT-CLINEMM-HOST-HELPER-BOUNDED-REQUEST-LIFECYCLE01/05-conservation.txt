@@ -1,0 +1,44 @@
+# CONSERVATION -- protocol / authentication / ownership
+
+## Native helper suite (live helper over the real AF_UNIX socket)
+bun test helper.test.ts  ->  77 pass / 0 fail  (399 expect calls)
+  baseline: 77 pass / 0 fail   => IDENTICAL
+
+Covers: health envelope + request_id echo + build_id + active counts;
+client.open 32-hex opaque token + kernel peer identity; client.close slot reclaim;
+process-group.register-owned / terminate-owned / release-owned; helper.restart;
+FOREIGN-UID denial; UNREGISTERED-PGID denial; STALE-TOKEN denial;
+PID/start-time reuse protection; exact request_id round-trip (incl. embedded NUL,
+surrogate pairs); malformed + forbidden envelope keys.
+
+## TypeScript client/server suites
+bun test client.test.ts server.test.ts  ->  82 pass / 0 fail  (219 expect calls)
+
+## Native integration suites: baseline vs post-repair
+tart-preflight.test.ts            baseline 15/0  post 15/0  IDENTICAL
+tart-testbed-run.test.ts          baseline 4/6   post 4/6   IDENTICAL (pre-existing TART_CLONE_FAILED)
+real-lifecycle-correction01.test.ts baseline 0/6   post 0/6   IDENTICAL (same cause)
+tart-pg-id-discriminator.test.ts   baseline 1/0   post 1/0   IDENTICAL
+tart-guest-smoke.test.ts          baseline 24/2,23/3,21/5  post 23/3,21/5  FLAKY ON BOTH
+
+tart-guest-smoke flakiness: the failing SET differs on every run, INCLUDING
+runs of the unmodified baseline binary. GS-13b over 5 runs per binary:
+  baseline:    pass pass FAIL pass pass  (4/5)
+  post-repair: pass pass pass pass pass (5/5)
+The post-repair binary is at least as stable. ENVIRONMENTAL, not a regression.
+
+## TRANSPORT_TIMEOUT != AUTHORIZATION_FAILURE
+A timed-out frame never reaches parse_envelope and never reaches method dispatch,
+so it cannot allocate a client token, register a process group, or invoke any
+method side effect. T12 proves the capability surface still works after timeouts.
+
+## Authority conservation
+same UID; same socket path; same 0600 mode; same gui/501 domain; same
+launch_activate_socket("Listener") + fail-closed fallback matrix; same peer
+authentication (LOCAL_PEERPID/LOCAL_PEERCRED); same opaque tokens; same PGID
+ownership checks; same PID start-time reuse protection; same method whitelist;
+same closed-envelope parser; same single-process ownership tables.
+NO threads, NO fork-per-connection, NO shared-memory token tables, NO IPC
+ownership replication, NO second helper process, NO new event loop, NO change to
+helper authority, NO new LaunchAgent, NO root daemon, NO Seatbelt signal-policy
+change, NO network-inbound grant, NO AF_UNIX authority change, NO Tart rewrite.

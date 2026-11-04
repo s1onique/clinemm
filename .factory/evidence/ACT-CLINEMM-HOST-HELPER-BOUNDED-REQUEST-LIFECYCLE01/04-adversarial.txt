@@ -1,0 +1,22 @@
+# ADVERSARIAL MATRIX T1-T12 (isolated helper; never the installed service)
+
+T1  connect + zero bytes          -> PASS (closed 2003 ms; subsequent health OK)
+T2  partial JSON, no newline      -> PASS (closed 2003 ms; no response synthesized)
+T3  one byte / 100 ms trickle     -> PASS (closed 2002 ms; ABSOLUTE deadline not extended)
+T4  complete valid health         -> PASS (version/ok/request_id/service/pid/uid/64-hex build_id intact)
+T5  complete frame + EOF          -> PASS (raw client write(2)+shutdown(SHUT_WR) -> ok:true)
+T6  EOF before complete frame     -> PASS (no "ok":true; helper healthy afterwards)
+T7  oversized frame               -> PASS (OVERSIZE preserved; helper survived)
+T8  malformed complete JSON       -> PASS (ok:false + existing parser error)
+T9  client disconnects in response-> PASS (bounded failure; helper survived)
+T10 complete request, peer stops reading -> PASS (bounded response path)
+T11 three sequential stalled clients     -> PASS (6007 ms ~ 3 x 2000 ms)
+T12 valid request after timeouts  -> PASS (health + client.open 32-hex token + client.close)
+
+SUITE RESULT: 16 pass / 0 fail (3 source-contract + 1 two-client lifecycle + 12 adversarial)
+
+# MEASUREMENT ARTIFACT (recorded, not concealed)
+T5/T6 cannot be observed through the Node/Bun socket API on macOS AF_UNIX:
+Bun's socket.end() does not deliver a pending write followed by a FIN the way
+the POSIX syscall sequence does. Verified IDENTICAL on the pre-repair baseline
+binary and on the post-repair binary. The raw C client drives these two cases.
