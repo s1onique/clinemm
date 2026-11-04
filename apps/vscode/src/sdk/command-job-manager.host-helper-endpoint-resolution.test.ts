@@ -28,9 +28,16 @@
  * The live ablation EVIDENCE itself is preserved (it is real and
  * load-bearing) and lives in
  * `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01/`.
- * The LIVE PROBE ITSELF is preserved as an opt-in, operator-run tool at
- * `apps/vscode/scripts/host-helper-live-ablation.probe.ts` — it is NOT
- * part of any default test suite.
+ *
+ * There is NO live probe. The opt-in operator-run probe that briefly
+ * accompanied this witness was REMOVED (CORRECTION02): it spawned a
+ * nested detached infinite-loop child with no guaranteed cleanup, awaited
+ * a child close without bound, observed a different process group than the
+ * one it cancelled, and relied on promise deadlines that do not cancel the
+ * underlying process operations. It advertised an unsandboxed execution
+ * environment, which contradicts the EPERM substrate the ablation requires.
+ * The archived evidence above is the sole surviving record of the
+ * real-kernel ablation.
  *
  * WHAT THIS FILE DOES INSTEAD
  * ---------------------------

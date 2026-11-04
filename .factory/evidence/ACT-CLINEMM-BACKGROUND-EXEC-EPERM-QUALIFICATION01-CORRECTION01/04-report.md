@@ -7,8 +7,10 @@
 The reviewer's P0 findings are all addressed:
 
 1. The unsafe live-ablation test is **removed from the default suite** and replaced by a
-   bounded, process-free regression witness. The live ablation itself is preserved as an
-   opt-in, operator-run probe with hard deadlines and guaranteed reclamation.
+   bounded, process-free regression witness. The live ablation **evidence** is preserved
+   (archived under the parent ACT's evidence directory); the opt-in operator-run probe that
+   CORRECTION01 introduced alongside it was **removed in CORRECTION02** because it was
+   itself unsafe.
 2. The residual process groups are **inventoried with verified identity**. Reclamation was
    attempted through every authorised route and is **BLOCKED BY THE SAME SUBSTRATE UNDER
    INVESTIGATION** — the exact, documented reason is given below, together with the precise
@@ -71,20 +73,26 @@ bounded, deterministic, **process-free** witness that pins the **repaired** cont
 **Result: 7 passed / 7.**
 
 
-The live ablation was preserved as `apps/vscode/scripts/host-helper-live-ablation.probe.ts`
-— **not** a `.test.ts`, therefore **not discovered by any default suite**. It is an
-operator-run tool that fixes every defect above:
+The live ablation **EVIDENCE** is preserved unchanged under
+`.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01/` — it is real
+and load-bearing.
 
-* it asserts the **repaired** contract, never the old one;
-* **every** await that can block is wrapped in `withDeadline(...)` — there is no code path
-  in the file that can await indefinitely;
-* **every** spawned process is tracked in a `spawned` set and reclaimed in a `finally`
-  block, through the helper first (the only unsandboxed signer) with a direct-kill
-  fallback;
-* an unsuitable substrate exits with a **distinct non-zero status** (2 = substrate, 3 =
-  no helper, 4 = deadline, 5 = regression) and a loud reason — it never reports a pass it
-  did not earn;
-* it prints a machine-readable `RESULT {...}` summary for archiving.
+**There is no live probe.** The opt-in operator-run probe
+(`apps/vscode/scripts/host-helper-live-ablation.probe.ts`) that CORRECTION01 introduced
+alongside this witness was **removed in CORRECTION02** and is **not** replaced by another
+live probe. It was itself unsafe:
+
+* it spawned a **nested detached infinite-loop child** that was not registered for
+  guaranteed cleanup;
+* the **substrate probe had an unbounded child-close await**;
+* `runArm()` observed a **different process group** from the one `cancelViaManager()`
+  cancelled;
+* its **promise deadlines did not cancel the underlying process operations**; and
+* it advertised an **unsandboxed execution environment**, which contradicts the required
+  EPERM substrate.
+
+The archived real-kernel ablation evidence and the seven passing, process-free regression
+tests are the surviving record.
 
 ---
 

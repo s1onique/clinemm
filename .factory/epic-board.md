@@ -31270,11 +31270,17 @@ RESIDUAL_GROUPS: inventoried (6, all ACT-owned); reclaim BLOCKED by the same sub
    — which Vitest records as a **PASSING** test, not a skipped one. It is replaced by
    `command-job-manager.host-helper-endpoint-resolution.test.ts`: a bounded, deterministic, **process-free** witness (7
    passed / 7) that pins the **repaired** contract and creates **no OS process** (it uses the canonical `spawnFactory`
-   seam). The live ablation itself is preserved as an **opt-in operator-run probe**
-   (`apps/vscode/scripts/host-helper-live-ablation.probe.ts`, not a `.test.ts`, therefore not discovered by any default
-   suite) with a hard deadline on every blocking await, tracked-and-reclaimed spawned processes, and **distinct non-zero
-   exit codes** for an unsuitable substrate / missing helper / deadline / regression — so it can never report a pass it did
-   not earn.
+   seam). The live ablation **EVIDENCE** is preserved unchanged under
+   `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01/`.
+   **There is NO live probe**: the opt-in operator-run probe introduced by CORRECTION01
+   (`apps/vscode/scripts/host-helper-live-ablation.probe.ts`) was **removed in CORRECTION02**
+   and is **not** replaced by another live probe. It was itself unsafe — a nested detached
+   infinite-loop child not registered for guaranteed cleanup, an unbounded child-close await in
+   the substrate probe, `runArm()` observing a different process group than the one
+   `cancelViaManager()` cancelled, promise deadlines that do not cancel the underlying process
+   operations, and an advertised unsandboxed execution environment that contradicts the
+   required EPERM substrate. The archived evidence plus the seven passing, process-free
+   regression tests are the surviving record.
 2. **Residual process groups inventoried and reclaim attempted.** Six groups (42882, 49687, 52855, 26400, 44308, 44537),
    each identified by **full command line + start time**, never by a stale PID; all confirmed ACT-owned; no non-ACT process
    was signalled. Reclaim was attempted through every authorised route: direct `kill(-pgid)` (EPERM), helper-mediated
@@ -31338,3 +31344,74 @@ architectural change.
 - `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01/04-report.md`
 - `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01/` — the parent ACT's live ablation evidence
   (preserved unchanged)
+
+---
+
+## ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION02 — P0 safety removal of the live probe
+
+**Scope: P0 safety removal only.** No production change, no architectural change.
+
+**Removed** `apps/vscode/scripts/host-helper-live-ablation.probe.ts` (the optional, operator-run
+live probe introduced by CORRECTION01). It is **not** replaced by another live probe, and no
+process-supervision infrastructure was added.
+
+**Why it was unsafe** (all five findings confirmed by reading the committed file):
+
+1. `substrateIsEpermAffected()` spawned a **nested detached infinite-loop child** that was not
+   registered for guaranteed cleanup.
+2. The same substrate probe had an **unbounded child-close await** (`probe.on("close", …)` with
+   no deadline).
+3. `runArm()` spawned its victim in its own process group, while `cancelViaManager()` cancelled
+   a **different** group — so the arm observed a group the cancel never touched.
+4. The `withDeadline(...)` promise deadlines **do not cancel the underlying process operations**.
+5. The header advertised an **unsandboxed execution environment**, which contradicts the
+   required EPERM substrate the ablation depends on.
+
+**Preserved unchanged:**
+
+- the archived real-kernel ablation evidence under
+  `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01/` (7 files, byte-identical);
+- the seven passing, process-free regression tests in
+  `apps/vscode/src/sdk/command-job-manager.host-helper-endpoint-resolution.test.ts`;
+- the production EPERM fix, the Seatbelt network-deny gate, the helper protocol, and the native
+  helper — **all untouched** (no change under `sdk/`, no change to the adapter or the Seatbelt backend).
+
+**Documentation updated** (only the three places that advertised the probe as executable):
+`.factory/epic-board.md`, the CORRECTION01 correction report §1/§2.2, and the regression-witness
+file header. Each now states there is **NO live probe** and records the removal reason.
+
+**Focused verification**
+
+```
+FOCUSED_REGRESSION   = 7 passed / 7   (command-job-manager.host-helper-endpoint-resolution.test.ts)
+TYPECHECK            = PASS (bun run check-types, exit 0)
+LINT                 = PASS (biome check, 1 file, no fixes)
+BROADER_SDK_SUITE    = 14 failed | 5 passed (19 files); 66 failed | 234 passed (300 tests)
+BASELINE_VS_AFTER    = IDENTICAL failing-test identifier set (66 = 66) — ZERO regressions introduced
+```
+
+The 66 broader-suite failures are **pre-existing** (Seatbelt / live-sandbox tests that require
+real macOS sandbox privileges unavailable in this environment). They were proven pre-existing by
+an exact baseline-vs-after diff of the failing-test identifier set — not by count — with the
+pristine HEAD sources restored in place for the baseline run.
+
+**Artifact identity: PRESERVED — no rebuild.**
+
+```
+VSIX_PATH      = dist/clinemm-act01-correction01.vsix
+VSIX_SIZE      = 65239878 bytes
+VSIX_SHA256    = 27bf1af14f47c59a41e10fb9d5b83aa4446833efc2b3664699017c9502fd9d83
+BUNDLE_SHA256  = a2a9a6d8ef201a0d6e0e24ca6d2ecd1b7aa8373b3c97974c86a678d2cd437918
+```
+
+**Packaged VSIX contents did NOT change.** The probe was never packaged: `apps/vscode/.vscodeignore`
+contains `scripts/**`, and the committed artifact's bundle and file listing contain **zero**
+references to `live-ablation`. The established artifact identity is therefore preserved verbatim
+and **no rebuild was performed**.
+
+**Protected state — untouched, never restored, staged, or committed:**
+
+- `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.
+- The four unrelated dirty native-helper files (`tools/macos-host-helper/native/build.sh`,
+  `helper.c`, `helper.test.ts`, `tart-testbed-run.test.ts`) — left unstaged in the working tree.
+
