@@ -31935,3 +31935,160 @@ be fixed **first**; `execute(command, cwd, env)` must **not** be added to the ex
 **Protected state — untouched, never restored, staged, or committed:**
 
 - `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.
+
+---
+
+## ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02 — READY_FOR_OPERATOR_PROBES — 2026-11-05
+
+**Purpose:** obtain the four real-kernel measurements (A/B/C/D) that RECON01 proved are
+`LIVE_UNOBSERVABLE` from the IDE substrate, and select exactly one architecture.
+Recon-only. **No production source change.**
+
+**Verdict: `READY_FOR_OPERATOR_PROBES`.** The A/B/C/D measurements were **not** obtained by the
+agent, and no live result is claimed. The agent's command substrate **is** a ClineMM Background
+Exec command: it runs inside the ClineMM Seatbelt profile *and* inherits the VSCodium extension
+host's Chromium zygote sandbox, so a nested `sandbox-exec` is denied there
+(`sandbox_apply: Operation not permitted`, rc=71) and every `launchctl` mutation verb plus
+`osascript Terminal` is denied as well. The ACT charter forbids the agent from circumventing its
+own sandbox to obtain these measurements, so they must come from the operator's independent,
+unsandboxed Terminal.
+
+### What this ACT completed (everything not requiring the independent Terminal)
+
+- **Entry freeze** — `ENTRY_HEAD = 014d045a1f501eec1f3c046f2fe55c782322122c`, branch `main`,
+  worktree CLEAN at entry, `stash@{0}` preserved (never popped / dropped / reapplied).
+- **Fixture freeze re-verified** — RECON01's profiles and fixtures are byte-identical to the
+  frozen artefacts. Candidate SHA-256 = `5a718c4c6228596fe7ca2affde833386327f393f98f8c61cbc0f728dc6bba276`
+  (matches); current = `80b0caf181cd5d3ead4e0eb606e0e638f9b4f1d77aa34452a88d60ab0d1acb30`.
+  The profile diff is **signal-rule-only**:
+  `- (allow signal (target self))` / `+ (allow signal (target same-sandbox))`.
+  Both RECON01 fixtures audited for safety: **no defect found**; both have independent
+  lifetime bounds (child self-exits at 4000 ms, foreign control at 9000 ms).
+- **E3 located and evaluated** — the inherited-host evidence is
+  `.factory/evidence/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/` (2026-09-16):
+  - **T1** (host → a **plain unsandboxed** Node child, **no ClineMM profile applied**):
+    `KILL_PGID_SIGTERM=ERR_EPERM`, child output stayed `READY\nALIVE\nALIVE\n…`.
+  - **T2** (child → its **own grandchild**): `CHILD_KILL=ERR_EPERM` → the denial is **inherited**
+    by descendants.
+  - **This ACT** (2026-11-05): the D2 fixture was pointed once at a benign, self-owned plain
+    `node` sibling to validate the fixture → `signalErrno=EPERM`, `foreignAliveAfter=true`,
+    `foreignReceivedSIGTERM=false`, target self-exited, `ps` → `NO_RESIDUAL`.
+  - **Caveat, recorded not hidden:** the 2026-09-16 runs executed inside the VSCodium
+    extension-host substrate, so the inherited Chromium layer and any ClineMM layer were stacked.
+    The "no additional profile" claim rests on the T1 fixture being a plain `node -e` child with
+    no `sandbox-exec` invocation, corroborated by the contemporaneous finding that `sandbox-exec`
+    could not apply in that substrate at all. Per the ACT charter this is treated as **strong
+    supporting evidence, NOT uncontested causal proof**. The A/B/C/D matrix remains decisive.
+  - Reinforced by `ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01`:
+    `EXTENSION_HOST_KILL=EPERM`, `HOST_HELPER_KILL=EPERM` — the trusted host helper did **not**
+    escape the restriction either.
+- **Operator harness built and safety-audited** —
+  `.factory/evidence/…-RECON02/operator-probes.sh`. Runs A/B/C/D; verifies `node` resolves, both
+  profiles are readable, the candidate SHA-256 matches, the diff is signal-only, `sandbox-exec`
+  can apply here (i.e. the operator is **not** already sandboxed), creates
+  `/private/tmp/clinemm-recon01-{tmp,ws}` at mode `700` and uses the former as `TMPDIR`; captures
+  stdout / stderr / exit status / timestamps **separately** per probe; verifies cleanup after
+  **every** probe; aborts on any residual `CLINEMM_RECON0*`. It **never** uses `pkill`, `killall`
+  or a process-group sweep, and only ever signals a PID it created (for probe D, one it verified
+  by `ps` — exact `foreign.mjs` path **and** current UID — immediately beforehand).
+- **One new bounded fixture** — `probe-fixtures/foreign-signal-attempt.mjs` (the D2 initiator).
+  Performs **exactly one** `process.kill(foreignPid, "SIGTERM")` from inside the candidate
+  Seatbelt instance. Never sweeps groups; never signals its own descendants. Syntax-checked with
+  `node --check` and behaviour-validated against a benign self-owned target (zero leakage).
+- **§11 source reconnaissance completed** —
+  - *Profile-generation authority*: `sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:700`
+    — `generateSeatbeltProfile()` emits the literal `"(allow signal (target self))"`; it is the
+    **only** signal rule in the profile. `seatbelt-backend.ts:642` calls it and prefixes the
+    command with `["/usr/bin/sandbox-exec","-f",<profile-path>]`.
+  - *Exact spawn boundary*: `sdk/packages/core/src/extensions/tools/executors/bash.ts:1005-1015`
+    — `spawn(..., { detached: !isWindows })`, so the child becomes its own process-group leader
+    (PGID == childPid), which is exactly the group `terminateTree()` signals via
+    `process.kill(-childPid, sig)`. Driven by `apps/vscode/src/sdk/command-job-manager.ts`
+    `CommandJobManager.start()` → `prepare()` → `spawnSupervisableShellCommand()`.
+  - *Where the inherited restriction enters*: the **supervisor** (the extension host) is **not**
+    under the ClineMM profile — it is under Chromium `--enable-sandbox`, and every descendant
+    inherits it. `bash.ts:1119-1131` `signalGroup()` maps failures to `EPERM`/`ESRCH`/`OTHER`;
+    `bash.ts:1095-1108` `probePgidExists()` treats EPERM as "group still exists", so an EPERM
+    never short-circuits the wait and always burns the full grace window; `bash.ts:1074`
+    `process.kill(-childPid,"SIGKILL")` is subject to the **same** restriction.
+  - *Existing opt-in production-seam facility*:
+    `apps/vscode/src/sdk/recon01-background-exec-launchd-boundary.probe.test.ts` — a bounded
+    DEFAULT_OFF diagnostic driving the **real** seam; it skips in this substrate (nested
+    `sandbox-exec` denied) and is the correct RED harness for a future implementation ACT, but it
+    cannot itself produce the A/B/C/D matrix.
+  - *Controlled independent launch experiment without widening privileged RPC*: **it already
+    exists** — `tools/macos-host-helper/native/helper.c:3027+` implements
+    `process-group.terminate-owned` over a PGID the helper previously **accepted** via
+    `process-group.register-owned` (`helper.c:2878+`), with an ownership-token check, a SIGTERM
+    grace then SIGKILL, and a PGID-existence probe; exposed by
+    `apps/vscode/src/sdk/host-helper-pgid-adapter.ts` over the AF_UNIX wire protocol
+    (`tools/macos-host-helper/protocol.ts:249/257/264`). A successor can therefore compose the
+    launch context and the validated Seatbelt rule **without** adding an unrestricted
+    `execute(command,cwd,env)` method and **without** a new service.
+    **Caveat (RECON01 §6/R1–R3):** the Seatbelt profile grants `network-outbound` to the helper
+    socket but **never** `network-inbound`, and the helper's accept loop is single-threaded with an
+    unbounded blocking `read_frame` (`helper.c:211`, `:3576`). The helper's bounded
+    request-framing/response-writing paths were repaired by
+    `ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01` and the installed helper is healthy
+    (pid 62790), but the sandboxed-client → helper AF_UNIX round trip still needs an explicit
+    measurement before it is relied on.
+
+### Security conservation (re-verified this ACT)
+
+`DIFF_ONLY_SIGNAL = true` — the two profiles are byte-identical outside the single signal line.
+Filesystem write grants, read authority, `(deny network*)`, `(allow process-exec)` and
+`(allow process-fork)` are all **CONSERVED**. Host helper, LaunchAgent plist and installed VSIX
+are **UNCHANGED** (helper pid 62790, never restarted / modified / signalled / health-probed; no
+`bootstrap`/`bootout`/`kickstart`/`submit`). No credential, shell-execution or process-ownership
+change. Process-ownership denial is **PENDING probe D** — the mandatory security gate.
+
+### Operator action required
+
+Run, **from an independent unsandboxed Terminal** (NOT VSCodium, NOT an integrated terminal, NOT
+Background Exec):
+
+```bash
+cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+bash .factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02/operator-probes.sh
+cat .factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02/raw/summary.txt
+```
+
+Then apply the frozen decision map in `causal-decision.md`:
+
+| A | B | C | D | Verdict |
+|---|---|---|---|---|
+| Success | EPERM | Success | EPERM | `SELECT_SEATBELT_SIGNAL_REPAIR` |
+| Success | EPERM | EPERM | not needed | `SELECT_COMPOSED_BOUNDARY_REPAIR` (candidate insufficient) |
+| Success | Success | Success | EPERM | `SELECT_LAUNCHAGENT_EXECUTION_BOUNDARY` |
+| EPERM | any | any | any | `HALT_BASELINE_INVALID` |
+| Success | EPERM | Success | **signal allowed** | `HALT_UNSAFE_SIGNAL_SCOPE` |
+| Success | EPERM | ESRCH | any | invalid child-lifecycle observation (one bounded repetition) |
+
+**`C` succeeding in the Terminal is NOT `C` succeeding under VSCodium** — the inherited Chromium
+sandbox is a separate authority and is demonstrated to deny the same operation independently.
+
+### Repository delta (recon-only)
+
+- NEW `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02/` —
+  operator harness, the D2 fixture, operator instructions, entry identity, causal decision,
+  cleanup verification, and the four probe slots.
+- **NO production source change.** `seatbelt-profile.ts`, `seatbelt-backend.ts`, `bash.ts`,
+  `command-job-manager.ts`, `vscode-session-host.ts`, `host-helper-pgid-adapter.ts`, `helper.c`
+  and `protocol.ts` are byte-identical to ENTRY_HEAD. No VSIX built or installed.
+- The board entry itself is the only other tracked change.
+
+```
+ENTRY_HEAD       = 014d045a1f501eec1f3c046f2fe55c782322122c
+BRANCH           = main
+WORKTREE_AT_EXIT = 1 new evidence dir (untracked -> committed) + this board entry
+NEW_ORPHANS      = 0 (agent-substrate phase; operator phase pending)
+PREEXISTING_ORPHANS = 9 vitest forks + 7 bun vitest + 6 sandbox-temp shells (UNCHANGED, untouched)
+H1 = NOT ELIMINATED (inherited Chromium layer denies it independently; E3 located, caveated)
+H2 = NOT ELIMINATED (mechanistically confirmed; experimentally unconfirmed — A/B/C/D pending)
+H3 = still the only hypothesis consistent with all observations
+DECISION         = DEFERRED — requires the operator's A/B/C/D matrix
+```
+
+**Protected state — untouched, never restored, staged, or committed:**
+
+- `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.

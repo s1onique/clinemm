@@ -1,0 +1,9 @@
+{
+  "probeId": "PENDING_OPERATOR_EXECUTION",
+  "status": "NOT_EXECUTED",
+  "reason": "The agent's command substrate is itself a ClineMM Background Exec command inside the ClineMM Seatbelt profile and the inherited VSCodium Chromium zygote sandbox. Nested sandbox-exec is denied there (sandbox_apply: Operation not permitted, rc=71), so probes A/B/C/D cannot be produced by the agent. The ACT charter forbids circumventing the agent's own sandbox. These measurements must be produced by the operator's independent, unsandboxed Terminal using operator-probes.sh.",
+  "harness": "operator-probes.sh",
+  "rawOutputDir": "raw/",
+  "operatorInstructions": "OPERATOR-INSTRUCTIONS.md",
+  "decisionMap": "causal-decision.md#the-decisive-experiment-awaiting-operator-execution"
+}

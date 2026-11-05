@@ -1,0 +1,210 @@
+ACT                = ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02
+CLASSIFICATION     = RECON + LIVE CAUSAL DISCRIMINATION (no production implementation)
+ENTRY_HEAD         = 014d045a1f501eec1f3c046f2fe55c782322122c
+ENTRY_TREE         = (same as ENTRY_HEAD — worktree was CLEAN at entry)
+BRANCH             = main
+WORKTREE_AT_ENTRY  = CLEAN (git status --short empty)
+STASH_AT_ENTRY     = stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime):
+                      separate REARM lifetime from STALL lifetime at BCB re-registration
+                      (PRESERVED, never popped / dropped / reapplied)
+OS                 = macOS Sonoma 14.7.4 (23H420), arm64
+KERNEL             = Darwin 23.6.0 (arm64)
+NODE               = v26.0.0 (/opt/homebrew/bin/node)
+UID                = 501 (chistyakov)
+HOST_HELPER        = io.clinemm.host-helper, pid 62790, state=running, active count = 1
+                     (NOT restarted, NOT modified, NOT signalled by this ACT)
+LAUNCHAGENT        = /Volumes/UserData/Users/chistyakov/Library/LaunchAgents/io.clinemm.host-helper.plist
+                     (UNCHANGED — no bootstrap / bootout / kickstart / submit performed)
+
+PRODUCTION SOURCE DELTA = NONE
+  - sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts   UNCHANGED
+  - sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts  UNCHANGED
+  - sdk/packages/core/src/extensions/tools/executors/bash.ts         UNCHANGED
+  - apps/vscode/src/sdk/command-job-manager.ts                      UNCHANGED
+  - apps/vscode/src/sdk/vscode-session-host.ts                      UNCHANGED
+  - apps/vscode/src/sdk/host-helper-pgid-adapter.ts                 UNCHANGED
+  - tools/macos-host-helper/native/helper.c                         UNCHANGED
+  - tools/macos-host-helper/protocol.ts                             UNCHANGED
+
+PREPARED FIXTURE SOURCES (RECON01, unmodified, reused verbatim)
+  current-production-profile.sb
+    sha256 = 80b0caf181cd5d3ead4e0eb606e0e638f9b4f1d77aa34452a88d60ab0d1acb30
+  candidate-profile-same-sandbox.sb
+    sha256 = 5a718c4c6228596fe7ca2affde833386327f393f98f8c61cbc0f728dc6bba276
+  probe-fixtures/probe.mjs    (RECON01, unmodified)
+  probe-fixtures/foreign.mjs  (RECON01, unmodified)
+
+NEW IN THIS ACT (evidence + bounded test fixture only, no production source)
+  probe-fixtures/foreign-signal-attempt.mjs
+    — the D2 negative-control initiator. Performs EXACTLY ONE
+      process.kill(foreignPid, "SIGTERM") against a PID the operator has
+      verified by `ps`, from inside the candidate Seatbelt instance.
+      It never sweeps process groups and never signals its own descendants.
+  operator-probes.sh
+    — the operator harness. Runs A/B/C/D, enforces bounded process
+      lifetimes, verifies cleanup after each probe, and aborts on the
+      first gate failure.
+
+SUBSTRATE MEASUREMENT (why the agent CANNOT execute the probes)
+  The agent's `run_commands` shell IS a ClineMM Background Exec command:
+  it runs inside the ClineMM Seatbelt profile AND inherits the VSCodium
+  extension host's Chromium zygote sandbox.
+    - nested `sandbox-exec` from this substrate -> DENIED
+      "sandbox-exec: sandbox_apply: Operation not permitted" (rc=71)
+      [RECON01 §4.2; independently corroborated by
+       "/usr/bin/log: Cannot run while sandboxed"]
+    - `osascript Terminal`                  -> DENIED (File permission error -54)
+    - `launchctl submit/bootstrap/setenv/kickstart` -> DENIED
+  Therefore probes A/B/C/D CANNOT be executed by the agent. Only the
+  operator's independent Terminal can produce the four measurements.
+  The agent MUST NOT attempt to circumvent its own sandbox to obtain them.
+
+PRE-EXISTING ORPHAN RESIDUE (historical; recorded, NOT cleaned)
+  /tmp/clinemm-recon01-pre-orphans.txt (33 lines, captured 2026-11-05 00:56)
+  — 9 orphaned vitest fork workers (PPID=1)
+  — 7 orphaned bun-based vitest workers (PPID=1)
+  — stray /bin/sh clinemm-sandbox-temp-* shells (PPID=1)
+  — prior-ACT timeout/bun ablation probes
+  These are separate historical residue. This ACT performs NO machine-wide
+  process cleanup. NEW_ORPHANS must be ZERO.
+
+INHERITED-HOST EVIDENCE (E3) — located and evaluated in this ACT
+  Source: .factory/evidence/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/
+          (2026-09-16) and .factory/acts/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01.md
+
+  T1 (host -> plain UNSANDBOXED Node child; NO ClineMM profile applied):
+      PARENT_PID=17761
+      PARENT_PPID=17757 -> whose parent was PID 25108 =
+        "VSCodium Helper (Plugin) --enable-sandbox" (the Cline extension host)
+      CHILD_PID=17849 (plain `node`, detached, own pgid)
+      PROBE_BEFORE=EXISTS_DENIED_EPERM
+      KILL_PGID_SIGTERM=ERR_EPERM
+      PROBE_AFTER_TERM=EXISTS_DENIED_EPERM
+      CHILD_OUTPUT_AFTER_TERM="READY\nALIVE\nALIVE\n..."   <- child kept running
+      PROBE_FINAL=EXISTS_DENIED_EPERM
+    => The inherited Chromium sandbox denies signalling a descendant even
+       with NO additional ClineMM Seatbelt profile in force.
+
+  T2 (child -> its OWN grandchild):
+      CHILD_KILL=ERR_EPERM
+      PROBE=GONE_EPERM
+    => The denial is INHERITED by descendants.
+
+  CAVEAT (recorded, not hidden): the T1/T2 runs were executed from inside
+  the VSCodium extension-host substrate, so the inherited Chromium layer
+  and any ClineMM layer were stacked. The "no additional profile" claim
+  is supported by the T1 fixture being a plain `node -e` child with no
+  `sandbox-exec` invocation, and by the contemporaneous observation that
+  `sandbox-exec` could not apply in that substrate at all. This ACT
+  therefore treats E3 as STRONG SUPPORTING EVIDENCE, NOT as uncontested
+  causal proof, exactly as the ACT charter requires. The A/B/C/D matrix
+  remains the decisive measurement.
+
+  COUNTER-CONTEXT (RECON01, 2026-11-05): in the production Background Exec
+  substrate the ClineMM Seatbelt profile IS applied (nested sandbox-exec is
+  denied there, i.e. the profile is already in force), and the observed
+  signature is exactly `self allowed, everything else EPERM`:
+      kill(0,0)          = OK
+      kill(childPid)     = EPERM
+      kill(-childPgid,0) = EPERM
+      kill(ppid,0)       = EPERM
+      kill(1,0)          = EPERM
+  That signature is consistent with BOTH layers being present, which is why
+  A/B/C/D from an independent Terminal is the only way to separate them.
+
+  NEW EVIDENCE COLLECTED BY THIS ACT (2026-11-05, agent substrate):
+  The D2 fixture was exercised ONCE against a benign, self-owned, plain
+  `node` target (NOT the foreign fixture, NOT any unrelated process) to
+  validate the fixture's JSON emission and alive-detection logic:
+
+      FOREIGN_SIGNAL_RESULT_JSON={"marker":"CLINEMM_RECON02_FOREIGN_SIGNAL_ATTEMPT",
+        "parentPid":14341,"parentPpid":14299,"foreignPid":14301,
+        "foreignPidSource":"operator-verified argv",
+        "signalAttempt":{"signal":"SIGTERM","target":"foreign-pid","ok":false,
+          "errnoCode":"EPERM","errnoMessage":"kill EPERM","syscall":"kill"},
+        "signalErrno":"EPERM","foreignAliveBefore":true,"foreignAliveAfter":true,
+        "foreignReceivedSIGTERM":false,"foreignSignalLogTail":"MARKER\n"}
+
+  This is a FOURTH, independent confirmation of the E3 inherited-host
+  signature: from inside the agent's ClineMM-Seatbelt + Chromium-sandboxed
+  substrate, a SIGTERM aimed at a PLAIN UNSANDBOXED sibling target is
+  denied with EPERM, and the target survives (foreignAliveAfter=true,
+  foreignReceivedSIGTERM=false).
+  It validates: (a) the D2 fixture emits well-formed JSON with all required
+  fields; (b) EPERM is correctly classified as "alive but unsignalable"
+  rather than "gone"; (c) no ACT-owned process leaked (target self-exited;
+  post-run `ps` showed NO_RESIDUAL).
+  It does NOT substitute for probe D: that probe must run from an
+  INDEPENDENT Terminal so that the ONLY authority in play is the candidate
+  Seatbelt profile.
+
+SOURCE RECONNAISSANCE (ACT §11) — the exact seams
+  Profile-generation authority
+    sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:700
+      -> generateSeatbeltProfile() emits the literal line
+         "(allow signal (target self))" inside the "Process / signal
+         allowances" block. This is the ONLY signal rule in the profile.
+    sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts:642
+      -> SeatbeltSandboxBackend.prepare() calls generateSeatbeltProfile()
+         and writes the bytes to a private profile temp dir; the returned
+         prepared invocation prefixes the command with
+         ["/usr/bin/sandbox-exec", "-f", <profile-path>].
+
+  Exact command-spawn boundary
+    sdk/packages/core/src/extensions/tools/executors/bash.ts:1005-1015
+      -> spawn(config.executable, config.args, { cwd, env, stdio,
+         detached: !isWindows, windowsHide: true })
+      -> the detached child becomes its own process-GROUP leader
+         (PGID == childPid), which is the group that terminateTree()
+         later signals with process.kill(-childPid, sig).
+    apps/vscode/src/sdk/command-job-manager.ts
+      -> CommandJobManager.start() -> backend.prepare() ->
+         spawnSupervisableShellCommand() (the seam RECON01 exercised LIVE).
+
+  Where the inherited host restriction enters
+    The supervisor that performs the signalling (the extension host) is NOT
+    under the ClineMM Seatbelt profile — it is under the Chromium
+    `--enable-sandbox` zygote sandbox. Both the extension host AND every
+    descendant it spawns inherit that authority.
+    bash.ts:1119-1131 signalGroup() maps process.kill(-childPid, sig)
+    failures to "EPERM" / "ESRCH" / "OTHER"; bash.ts:1095-1108
+    probePgidExists() treats EPERM as "group still exists", so an EPERM
+    never short-circuits the wait and always burns the full grace window.
+    bash.ts:1074 process.kill(-childPid, "SIGKILL") is the fallback and
+    is subject to the SAME authority restriction.
+
+  Existing opt-in test facility at the production seam
+    apps/vscode/src/sdk/recon01-background-exec-launchd-boundary.probe.test.ts
+      — a bounded DEFAULT_OFF diagnostic that drives the REAL
+      CommandJobManager.start() -> Seatbelt -> sandbox-exec -> kernel seam
+      and captures the live profile bytes plus the in-sandbox signal errno.
+      It skips itself when the substrate cannot apply a nested sandbox
+      (which is exactly this ACT's substrate), so it is the correct RED
+      harness for a future implementation ACT — but it cannot itself
+      produce the A/B/C/D matrix.
+
+  Controlled independent launch experiment without expanding privileged RPC
+    YES, and it already exists:
+      - tools/macos-host-helper/native/helper.c:3027+ implements
+        `process-group.terminate-owned`: it terminates a PGID that the
+        helper has previously ACCEPTED via `process-group.register-owned`
+        (helper.c:2878+), with an ownership-token check, a SIGTERM grace
+        then SIGKILL, and a PGID-existence probe. This is an existing
+        NARROW, ownership-gated signalling primitive — NOT a general
+        command runner.
+      - apps/vscode/src/sdk/host-helper-pgid-adapter.ts exposes exactly
+        that surface over the AF_UNIX wire protocol
+        (tools/macos-host-helper/protocol.ts:249/257/264).
+      - Therefore a successor can test "the host-side launch context plus
+        the validated Seatbelt signal rule together" by reusing the
+        EXISTING register-owned/terminate-owned pair — with NO new
+        unrestricted execute(command,cwd,env) method and NO new service.
+      - CAVEAT already measured by RECON01 §6/R1-R3: the Seatbelt profile
+        grants `network-outbound` to the helper socket but NEVER
+        `network-inbound`, and the helper's accept loop is single-threaded
+        with an unbounded blocking read_frame (helper.c:211, :3576). The
+        helper's bounded request-framing/response-writing paths were
+        repaired by ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01
+        and the installed helper is healthy (pid 62790), but the
+        sandboxed-client -> helper AF_UNIX round trip still needs an
+        explicit measurement before it is relied on.

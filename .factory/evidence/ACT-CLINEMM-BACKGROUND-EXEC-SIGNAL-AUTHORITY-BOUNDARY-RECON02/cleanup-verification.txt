@@ -1,0 +1,96 @@
+ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02
+CLEANUP VERIFICATION (agent-substrate phase — operator probes PENDING)
+
+STATUS: PARTIAL — the A/B/C/D operator probes have NOT been executed.
+        This file records the cleanup verification that IS observable from
+        the agent substrate, plus the cleanup contract the operator harness
+        enforces for the pending probes.
+
+--- AGENT-SUBSTRATE OBSERVATIONS (2026-11-05) -------------------------------
+
+1. D2 FIXTURE SELF-TEST
+   A single, benign, self-owned plain-`node` target was started and the
+   RECON02 D2 fixture was pointed at it to validate the fixture's JSON
+   emission and alive-detection logic. No unrelated process was signalled.
+
+     target pid                = 14301
+     signalAttempt.ok          = false
+     signalErrno               = EPERM
+     foreignAliveBefore        = true
+     foreignAliveAfter         = true
+     foreignReceivedSIGTERM    = false
+     target self-exited        = yes (9 s bounded lifetime)
+     post-run ps               = NO_RESIDUAL
+
+   Note: the EPERM above is the EXPECTED result for the agent substrate
+   (inherited Chromium + ClineMM Seatbelt). It is recorded here as a
+   fixture-behaviour check, NOT as probe D. Probe D must run from an
+   independent Terminal where the candidate Seatbelt profile is the ONLY
+   authority in play.
+
+2. ACT-OWNED RESIDUAL CHECK (after all agent-substrate activity)
+     ps -Ao pid,ppid,pgid,command | grep -E 'CLINEMM_RECON0[12]' | grep -v grep
+     => NONE
+
+   NEW_ORPHANS_ZERO = true (for the agent-substrate phase)
+
+3. PRE-EXISTING ORPHAN RESIDUE (historical; NOT created, NOT cleaned)
+     baseline file = /tmp/clinemm-recon01-pre-orphans.txt (33 lines)
+       - 9 orphaned vitest fork workers (PPID=1)
+       - 7 orphaned bun-based vitest workers (PPID=1)
+       - stray /bin/sh clinemm-sandbox-temp-* shells (PPID=1)
+       - prior-ACT timeout/bun ablation probes
+     These belong to earlier ACTs. This ACT performs NO machine-wide process
+     cleanup and NO broad pkill / killall / process-group sweep.
+
+4. HOST SURFACES UNTOUCHED
+     installed host helper pid = 62790, state = running, active count = 1
+       -> NOT restarted, NOT modified, NOT signalled, NOT even health-probed
+          over the AF_UNIX socket (the socket is left completely alone)
+     LaunchAgent plist = UNCHANGED
+       -> no bootstrap / bootout / kickstart / submit / setenv performed
+     installed VSIX = UNCHANGED
+       -> no build, no package, no install
+
+--- OPERATOR-PROBE CLEANUP CONTRACT (enforced by operator-probes.sh) -------
+
+The harness guarantees, and verifies after every probe:
+
+  * A: the child self-exits after 4000 ms; the parent waits at most 6000 ms
+       and then SIGKILLs its own child. The harness then re-checks `ps` for
+       any residual CLINEMM_RECON01_SIGNAL_PROBE process and ABORTS if one
+       remains.
+  * B: same bounded child lifetime and same post-probe residual check.
+  * C: same bounded child lifetime and same post-probe residual check.
+  * D: the foreign fixture is started by the harness shell, OUTSIDE any
+       tested Seatbelt instance, and self-exits after 9000 ms. The harness
+       verifies the PID by `ps` (exact `foreign.mjs` path + current UID)
+       BEFORE the single signal attempt, and REFUSES to signal an
+       unverified PID. A watchdog only observes; it never signals the
+       foreign process. The harness then waits for the foreign fixture to
+       exit using a **BOUNDED poll** (150 ticks x 0.1 s = up to 15 s), NOT
+       an unbounded `wait` — if the control does not exit inside that
+       window the harness aborts with HALT_UNSAFE_FIXTURE. It then
+       re-checks `ps` for residual CLINEMM_RECON01_FOREIGN_CONTROL.
+       (The bounded-wait pattern was validated in isolation against both a
+       fast-exiting child and a 9 s-lifetime child before adoption.)
+  * FINAL: a last `ps` sweep for CLINEMM_RECON0* must be empty, else the
+       harness aborts with HALT_UNSAFE_FIXTURE.
+
+  The harness NEVER uses pkill, killall, or a process-group sweep. It only
+  ever signals a PID it created, and (for probe D) one it has verified by
+  `ps` immediately beforehand.
+
+--- GATES (current status) ---------------------------------------------------
+
+  A_EXECUTED                    PENDING (operator)
+  B_EXECUTED                    PENDING (operator)
+  C_EXECUTED                    PENDING (operator)
+  D_EXECUTED                    PENDING (operator)
+  A_B_C_D_INTERPRETED           PENDING (operator)
+  CONTROLLED_CHILDREN_REAPED    PENDING (operator)
+  FOREIGN_CONTROL_REAPED        PENDING (operator)
+  NEW_ORPHANS_ZERO              TRUE for the agent-substrate phase
+  PRODUCTION_SOURCE_UNCHANGED   TRUE
+  INSTALLED_HELPER_UNCHANGED    TRUE
+  LAUNCHAGENT_UNCHANGED         TRUE
