@@ -21,6 +21,18 @@
 #   R5  kill(pid,0) => EPERM is UNVERIFIABLE, never "cleaned up".
 #   R6  The decision table may NOT select an architecture from
 #       Terminal-only measurements.
+#   R7  The foreign pid is extracted from the FOREIGN_READY marker with an
+#       ANCHORED expression and is proven to be the Node CHILD of the
+#       deadline supervisor before any signal is attempted. The previous
+#       greedy parse captured the "pid=" inside "ppid=" and therefore
+#       signalled the SUPERVISOR: the resulting EPERM was real but said
+#       nothing about the intended foreign process, so the measurement was
+#       INVALID, not a qualified "denied". The argv check now requires
+#       argv[0] to BE the Node executable running the fixture.
+#
+# P1 HARNESS CORRECTION (this revision):
+#   The P0 run produced a D measurement that was INVALID for the reason
+#   described in R7. A/B/C remain valid evidence. Only probe D is re-run.
 #
 # Usage:
 #   bash operator-probes.sh
@@ -351,8 +363,14 @@ FOREIGN_SUP_PID=$!
 echo "FOREIGN_SUPERVISOR_PID=$FOREIGN_SUP_PID"
 
 # The fixture's real pid is read from its own FOREIGN_READY marker, which
-# the fixture prints as "FOREIGN_READY pid=<n> ...". This is the pid the
-# harness will verify and (from inside the sandbox) attempt to signal.
+# the fixture prints as "FOREIGN_READY pid=<n> ppid=<m> marker=...".
+# This is the pid the harness will verify and (from inside the sandbox)
+# attempt to signal.
+#
+# R7: the extraction is ANCHORED. A greedy ".*pid=([0-9]+)" would match the
+# "pid=" inside "ppid=" and yield the SUPERVISOR's pid, so the harness would
+# signal the supervisor and record a legitimate-looking EPERM for a process
+# that was never actually tested.
 FOREIGN_PID=""
 READY=0
 for _ in $(seq 1 $(( DEADLINE_FOREIGN_START * 10 ))); do
@@ -365,7 +383,7 @@ if [ "$READY" -ne 1 ]; then
 	reap_bounded "$FOREIGN_SUP_PID" 5 "foreign.mjs" "" || true
 	exit "$EXIT_PROBE_INVALID"
 fi
-FOREIGN_PID="$(grep -m1 'FOREIGN_READY' "$FOREIGN_LOG" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p')"
+FOREIGN_PID="$(grep -m1 'FOREIGN_READY' "$FOREIGN_LOG" | extract_foreign_pid)"
 if [ -z "$FOREIGN_PID" ]; then
 	echo "PROBE D: could not determine the foreign fixture pid from its READY marker"
 	reap_bounded "$FOREIGN_SUP_PID" 5 "foreign.mjs" "" || true
@@ -374,13 +392,16 @@ fi
 echo "FOREIGN_PID=$FOREIGN_PID"
 
 
-# ---- R2 + R4: identity verification before ANY signal is attempted -------
+# ---- R7 + R2 + R4: identity verification before ANY signal is attempted -----
 FOREIGN_ARGV="$(ps_argv_of "$FOREIGN_PID")"
 FOREIGN_LSTART="$(ps_lstart_of "$FOREIGN_PID")"
 FOREIGN_UID_NUM="$(ps_uid_of "$FOREIGN_PID")"
+FOREIGN_ACTUAL_PPID="$(ps_ppid_of "$FOREIGN_PID")"
 OPERATOR_UID_NUM="$(id -u)"
 {
 	echo "FOREIGN_PID=$FOREIGN_PID"
+	echo "FOREIGN_SUPERVISOR_PID=$FOREIGN_SUP_PID"
+	echo "FOREIGN_ACTUAL_PPID=$FOREIGN_ACTUAL_PPID"
 	echo "FOREIGN_ARGV=$FOREIGN_ARGV"
 	echo "FOREIGN_LSTART=$FOREIGN_LSTART"
 	echo "FOREIGN_UID_NUM=$FOREIGN_UID_NUM"
@@ -388,13 +409,52 @@ OPERATOR_UID_NUM="$(id -u)"
 	echo "FOREIGN_LOG_HEAD:"; cat "$FOREIGN_LOG"
 } > "$OUT/probe-d.identity.txt"
 
-# Exact executable/argv identity: the foreign fixture path must be present.
-case "$FOREIGN_ARGV" in
-	*"$EV1/probe-fixtures/foreign.mjs"*) : ;;
-	*)
-		echo "HALT_UNSAFE_FIXTURE: foreign PID argv does not match the foreign fixture — refusing to signal"
+# R7: the target MUST be the Node child of the deadline supervisor — not the
+# supervisor itself, and not an unrelated process. Signalling the supervisor
+# would produce a plausible EPERM while the intended foreign process was
+# never signalled at all.
+FOREIGN_OWNERSHIP="$(classify_foreign_ownership "$FOREIGN_PID" "$FOREIGN_SUP_PID" "$FOREIGN_ACTUAL_PPID")"
+echo "FOREIGN_OWNERSHIP=$FOREIGN_OWNERSHIP"
+if [ "$FOREIGN_OWNERSHIP" != "OWNED" ]; then
+	case "$FOREIGN_OWNERSHIP" in
+		IS_SUPERVISOR)
+			echo "HALT_UNSAFE_FIXTURE: the extracted foreign PID ($FOREIGN_PID) IS the deadline supervisor ($FOREIGN_SUP_PID) — the marker parse is wrong; refusing to signal"
+			;;
+		NOT_CHILD)
+			echo "HALT_UNSAFE_FIXTURE: the extracted foreign PID ($FOREIGN_PID) is not a child of the deadline supervisor ($FOREIGN_SUP_PID) (observed ppid=$FOREIGN_ACTUAL_PPID) — refusing to signal"
+			;;
+		*)
+			echo "HALT_UNSAFE_FIXTURE: could not establish ownership of the foreign PID ($FOREIGN_PID) — refusing to signal"
+			;;
+	esac
+	reap_bounded "$FOREIGN_PID" "$DEADLINE_REAP" "foreign.mjs" "$FOREIGN_LSTART" || true
+	reap_bounded "$FOREIGN_SUP_PID" "$DEADLINE_REAP" "foreign.mjs" "" || true
+	exit "$EXIT_HALT_UNSAFE_FIXTURE"
+fi
+echo "FOREIGN_OWNERSHIP_VERIFIED=true"
+
+# R7: exact executable/argv identity. The target must BE the Node process
+# that RUNS the foreign fixture — argv[0] is the Node executable and the
+# fixture is a script argument. A plain substring test would also accept the
+# deadline supervisor, whose command line merely mentions the fixture path.
+FOREIGN_ARGV_CLASS="$(classify_foreign_argv "$FOREIGN_ARGV" "$NODE" "$EV1/probe-fixtures/foreign.mjs")"
+echo "FOREIGN_ARGV_CLASS=$FOREIGN_ARGV_CLASS"
+case "$FOREIGN_ARGV_CLASS" in
+	FIXTURE_NODE) : ;;
+	NOT_NODE)
+		echo "HALT_UNSAFE_FIXTURE: foreign PID argv[0] is not the Node executable — refusing to signal"
+		echo "  observed argv: $FOREIGN_ARGV"
 		reap_bounded "$FOREIGN_PID" "$DEADLINE_REAP" "foreign.mjs" "$FOREIGN_LSTART" || true
-		exit "$EXIT_HALT_UNSAFE_FIXTURE" ;;
+		reap_bounded "$FOREIGN_SUP_PID" "$DEADLINE_REAP" "foreign.mjs" "" || true
+		exit "$EXIT_HALT_UNSAFE_FIXTURE"
+		;;
+	*)
+		echo "HALT_UNSAFE_FIXTURE: foreign PID argv does not run the foreign fixture under Node — refusing to signal"
+		echo "  observed argv: $FOREIGN_ARGV"
+		reap_bounded "$FOREIGN_PID" "$DEADLINE_REAP" "foreign.mjs" "$FOREIGN_LSTART" || true
+		reap_bounded "$FOREIGN_SUP_PID" "$DEADLINE_REAP" "foreign.mjs" "" || true
+		exit "$EXIT_HALT_UNSAFE_FIXTURE"
+		;;
 esac
 echo "FOREIGN_ARGV_VERIFIED=true"
 
@@ -578,6 +638,10 @@ DECISION="$(classify_decision "$A_VERDICT" "$B_VERDICT" "$C_VERDICT" "$D_VERDICT
 	echo "C_VERDICT=$C_VERDICT"
 	echo ""
 	echo "D_FOREIGN_PID=$FOREIGN_PID"
+	echo "D_FOREIGN_SUPERVISOR_PID=$FOREIGN_SUP_PID"
+	echo "D_FOREIGN_ACTUAL_PPID=$FOREIGN_ACTUAL_PPID"
+	echo "D_FOREIGN_OWNERSHIP=$FOREIGN_OWNERSHIP"
+	echo "D_FOREIGN_ARGV_CLASS=$FOREIGN_ARGV_CLASS"
 	echo "D_FOREIGN_ARGV=$FOREIGN_ARGV"
 	echo "D_FOREIGN_LSTART=$FOREIGN_LSTART"
 	echo "D_FOREIGN_UID_NUM=$FOREIGN_UID_NUM"

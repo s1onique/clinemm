@@ -281,6 +281,99 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# R7: anchored foreign-pid extraction (greedy-pid regression).
+#
+# The P0 run produced an INVALID probe-D measurement because the marker was
+# parsed with a GREEDY sed that captured the "pid=" inside "ppid=" and
+# therefore signalled the deadline SUPERVISOR instead of the foreign Node
+# process. The EPERM was real but proved nothing about the intended target.
+#
+# These tests pin the anchored extraction and pin the two ownership gates
+# that make that failure impossible to reproduce silently.
+# ---------------------------------------------------------------------------
+READY_LINE='FOREIGN_READY pid=7283 ppid=7264 marker=CLINEMM_RECON01_FOREIGN_CONTROL'
+is "extract_foreign_pid returns the TARGET pid, not the supervisor pid" \
+   "7283" "$(extract_foreign_pid "$READY_LINE")"
+
+# The greedy form that caused the invalid measurement, asserted directly so
+# the regression can never be reintroduced unnoticed.
+GREEDY_PID="$(printf '%s\n' "$READY_LINE" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p')"
+if [ "$GREEDY_PID" = "7283" ]; then
+	bad "the greedy parse is known to be wrong (it yields the supervisor pid)" \
+	    "7264" "$GREEDY_PID"
+else
+	ok "the greedy parse is known to be wrong (it yields $GREEDY_PID, not 7283)"
+fi
+
+# A line that does not carry the marker shape must yield NOTHING, never a
+# partially-matched number.
+is "extract_foreign_pid ignores a line without the marker" \
+   "" "$(extract_foreign_pid 'FOREIGN_READY pid=7283 ppid=7264 marker=SOMETHING_ELSE')"
+is "extract_foreign_pid ignores an unrelated line" \
+   "" "$(extract_foreign_pid 'deadline-supervisor.py: TARGET_EXITED pid=7283')"
+is "extract_foreign_pid ignores an empty line" \
+   "" "$(extract_foreign_pid '')"
+
+# The harness pipes the marker line on STDIN. The helper MUST accept that
+# form as well as the argument form, otherwise the anchored parse silently
+# yields nothing and probe D would abort for the wrong reason.
+is "extract_foreign_pid reads the marker from stdin" \
+   "7283" "$(printf '%s\n' "$READY_LINE" | extract_foreign_pid)"
+is "extract_foreign_pid reads the marker from stdin (grep pipeline form)" \
+   "7283" "$(printf '%s\n' "$READY_LINE" | grep -m1 'FOREIGN_READY' | extract_foreign_pid)"
+
+# Ownership: the extracted pid must be a CHILD of the supervisor.
+is "ownership: a child of the supervisor is OWNED" \
+   "OWNED" "$(classify_foreign_ownership 7283 7264 7264)"
+is "ownership: the supervisor itself is rejected" \
+   "IS_SUPERVISOR" "$(classify_foreign_ownership 7264 7264 7264)"
+is "ownership: an unrelated process is rejected" \
+   "NOT_CHILD" "$(classify_foreign_ownership 7283 7264 999)"
+is "ownership: an unobservable ppid is UNKNOWN" \
+   "UNKNOWN" "$(classify_foreign_ownership 7283 7264 '')"
+
+# argv identity: the target must BE the Node process running the fixture.
+# The supervisor's argv merely MENTIONS the fixture in a trailing argument.
+FIXTURE="/path/to/foreign.mjs"
+SUP_ARGV="/Library/Developer/CommandLineTools/Python3.framework/Python deadline-supervisor.py 15 env TMPDIR=/private/tmp/x /opt/homebrew/bin/node $FIXTURE"
+NODE_ARGV="/opt/homebrew/bin/node $FIXTURE"
+is "argv: the supervisor's argv is NOT the fixture node process" \
+   "NOT_NODE" "$(classify_foreign_argv "$SUP_ARGV" "/opt/homebrew/bin/node" "$FIXTURE")"
+is "argv: the real node fixture process is accepted" \
+   "FIXTURE_NODE" "$(classify_foreign_argv "$NODE_ARGV" "/opt/homebrew/bin/node" "$FIXTURE")"
+is "argv: a node process running another script is rejected" \
+   "NOT_FIXTURE" "$(classify_foreign_argv "/opt/homebrew/bin/node /path/to/other.mjs" "/opt/homebrew/bin/node" "$FIXTURE")"
+is "argv: an empty argv is rejected" \
+   "NOT_NODE" "$(classify_foreign_argv "" "/opt/homebrew/bin/node" "$FIXTURE")"
+# The node executable may be rendered by ps as the resolved Cellar path while
+# the harness resolved the symlink; the basename comparison must accept it.
+is "argv: a resolved node path is accepted against the symlink path" \
+   "FIXTURE_NODE" "$(classify_foreign_argv "/opt/homebrew/Cellar/node/26.0.0/bin/node $FIXTURE" "/opt/homebrew/bin/node" "$FIXTURE")"
+
+# The operator harness must not contain the greedy parse any more, and it
+# must use the anchored helper plus the ownership gate.
+if grep -q 's/\.\*pid=' "$HERE/operator-probes.sh"; then
+	bad "operator harness contains no greedy pid parse" "absent" "present"
+else
+	ok "operator harness contains no greedy pid parse"
+fi
+if grep -q 'extract_foreign_pid' "$HERE/operator-probes.sh"; then
+	ok "operator harness uses the anchored extract_foreign_pid helper"
+else
+	bad "operator harness uses the anchored extract_foreign_pid helper" "present" "absent"
+fi
+if grep -q 'classify_foreign_ownership' "$HERE/operator-probes.sh"; then
+	ok "operator harness enforces the foreign-ownership gate"
+else
+	bad "operator harness enforces the foreign-ownership gate" "present" "absent"
+fi
+if grep -q 'classify_foreign_argv' "$HERE/operator-probes.sh"; then
+	ok "operator harness enforces the node-argv gate"
+else
+	bad "operator harness enforces the node-argv gate" "present" "absent"
+fi
+
+# ---------------------------------------------------------------------------
 # R6 wiring: the operator harness MUST NOT let the environment manufacture
 # the production-context gate. The value is hard-coded in the harness.
 # ---------------------------------------------------------------------------

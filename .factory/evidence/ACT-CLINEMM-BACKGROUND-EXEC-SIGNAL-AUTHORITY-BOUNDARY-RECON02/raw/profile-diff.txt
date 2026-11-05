@@ -1,0 +1,11 @@
+--- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01/current-production-profile.sb	2026-11-05 01:14:17
++++ /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01/candidate-profile-same-sandbox.sb	2026-11-05 01:14:17
+@@ -2,7 +2,7 @@
+ (deny default)
+ (allow process-exec)
+ (allow process-fork)
+-(allow signal (target self))
++(allow signal (target same-sandbox))
+ (allow sysctl-read)
+ (allow mach-lookup)
+ (allow file-read*)

@@ -32165,3 +32165,102 @@ Recorded in `cleanup-verification.txt`.
 - `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.
 - Installed host helper (pid 62790), the LaunchAgent plist, the installed VSIX and RECON01's
   archived evidence — all unchanged.
+
+---
+
+## ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02 — P1 HARNESS CORRECTION — 2026-11-05
+
+**Verdict: `PASS_A_B_C / INVALID_D`.** The operator executed the A/B/C/D matrix from an independent
+Terminal (macOS Sonoma 14.7.4 / Darwin 23.6.0 arm64, Node v26.0.0), **not** from Background Exec
+and **not** from VSCodium. **No production source change.** The RECON01 profiles and fixtures are
+still byte-identical to their frozen SHA-256 values.
+
+### The adjudicated matrix
+
+| Probe | Context | Observed | Assessment |
+|---|---|---|---|
+| A | Independent Terminal, no Seatbelt | SIGTERM delivered; child exited | **PASS** |
+| B | Independent Terminal, current `(target self)` | `EPERM`; child self-exited | **PASS** |
+| C | Independent Terminal, candidate `(target same-sandbox)` | SIGTERM delivered; child exited | **PASS** |
+| D | Candidate profile vs controlled foreign target | `EPERM`, **wrong PID targeted** | **INVALID** |
+
+### What the evidence establishes
+
+1. **Seatbelt policy is an independent cause of `EPERM`.** B fails and C succeeds with exactly one
+   profile-rule difference (`(allow signal (target self))` →
+   `(allow signal (target same-sandbox))`). The profile rule — not the inherited Chromium
+   authority — is the discriminating variable. The candidate rule is the same one used by Codex's
+   Seatbelt base policy and by the Anthropic Sandbox Runtime.
+2. **The candidate permits controlled child termination**, measured on the real kernel outside
+   VSCodium.
+
+### What the evidence does NOT establish
+
+**Foreign-process isolation is still unmeasured.** Probe D signalled PID `7264` — the Python
+deadline **supervisor** — instead of PID `7283`, the foreign **Node.js** process:
+
+```
+FOREIGN_SUPERVISOR_PID=7264
+FOREIGN_PID=7264
+FOREIGN_READY pid=7283 ppid=7264 marker=CLINEMM_RECON01_FOREIGN_CONTROL
+```
+
+**Root cause — greedy PID parsing.** `operator-probes.sh` extracted the target with
+
+```
+sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p'
+```
+
+The leading `.*` is greedy, so it matched the **last** `pid=` substring on the line — the `pid=`
+inside `ppid=7264`. The identity check passed anyway because the supervisor's own command line
+contains the fixture path as a trailing argument. `D_CLASSIFICATION=DENIED_EXPECTED` therefore
+described the supervisor, not the intended foreign process: the `EPERM` was real but proved
+nothing about foreign isolation.
+
+### The P1 correction (rule R7) — one surgical change, then re-measure D
+
+Three gates, all of which independently reject the supervisor and accept the real Node child:
+
+1. **`extract_foreign_pid`** — the marker is parsed with an **anchored** expression, so the pid is
+   bound to the field that actually carries it.
+2. **`classify_foreign_ownership`** — the target must not be the supervisor itself, and its
+   observed `ppid` must equal the supervisor's pid.
+3. **`classify_foreign_argv`** — `argv[0]` must **BE** the Node executable running the fixture, not
+   a process that merely mentions the fixture path in a trailing argument.
+
+Implemented in `harness-lib.sh` (`ps_ppid_of`, `extract_foreign_pid`,
+`classify_foreign_ownership`, `classify_foreign_argv`), `operator-probes.sh` (probe-D target
+selection and gates) and `harness-regression-test.sh`.
+
+**LIVE verification of the correction** (real supervisor + real Node foreign process):
+
+| | old greedy parse | new anchored parse |
+|---|---|---|
+| target pid | `66133` (== supervisor) | `66167` (== the Node child) |
+| ownership gate | `IS_SUPERVISOR` → **REJECT** | `OWNED` → accept |
+| argv gate | `NOT_NODE` → **REJECT** | `FIXTURE_NODE` → accept |
+
+### Process-free regression tests
+
+`harness-regression-test.sh` — **127 assertions, 0 failures** (up from 107). The new R7 block
+pins the anchored parse, asserts the **greedy form is known-wrong**, covers the stdin form of the
+helper, and asserts the ownership and argv gates reject the supervisor and accept the Node child.
+
+### Next action
+
+**Re-run the corrected operator harness to re-measure D only.** A/B/C are valid evidence and need
+not be repeated. If D returns `EPERM` against the real foreign Node PID, the candidate rule is
+**QUALIFIED standalone** and Gate 1 closes. Then — and only then — run **one small
+production-boundary experiment** to establish whether Chromium inheritance also blocks the
+candidate. That is far smaller than implementing a LaunchAgent command runner.
+
+**Not done, deliberately:** the helper was not restarted, ClineMM was not rebuilt, and no
+architecture review was opened.
+
+### Protected state — untouched, never restored, staged, or committed:
+
+- `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.
+- Installed host helper (pid 62790), the LaunchAgent plist, the installed VSIX and RECON01's
+  archived evidence — all unchanged.
+- The P0 `raw/` evidence is preserved verbatim; the correction is recorded alongside it rather
+  than overwriting it.

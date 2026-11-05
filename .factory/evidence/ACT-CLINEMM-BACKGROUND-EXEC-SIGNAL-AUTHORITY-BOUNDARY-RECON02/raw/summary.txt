@@ -1,0 +1,44 @@
+A_SIGNAL_OK=true
+A_SIGNAL_ERRNO=null
+A_CHILD_GOT_SIGTERM=1
+A_CHILD_ALIVE_AFTER=false
+A_CHILD_PID=6177
+A_PARENT_PID=6170
+A_VERDICT=SUCCESS
+
+B_SIGNAL_OK=false
+B_SIGNAL_ERRNO=EPERM
+B_CHILD_GOT_SIGTERM=0
+B_CHILD_SELF_EXIT=1
+B_CHILD_ALIVE_AFTER=false
+B_CHILD_PID=6303
+B_PARENT_PID=6282
+B_VERDICT=EPERM
+
+C_SIGNAL_OK=true
+C_SIGNAL_ERRNO=null
+C_CHILD_GOT_SIGTERM=1
+C_CHILD_ALIVE_AFTER=false
+C_CHILD_PID=7169
+C_PARENT_PID=7148
+C_VERDICT=SUCCESS
+
+D_FOREIGN_PID=7264
+D_FOREIGN_ARGV=/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02/probe-fixtures/deadline-supervisor.py 15 env TMPDIR=/private/tmp/clinemm-recon01-tmp /opt/homebrew/bin/node /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01/probe-fixtures/foreign.mjs
+D_FOREIGN_LSTART=Thu Nov  5 14:31:19 2026
+D_FOREIGN_UID_NUM=501
+D_SIGNAL_OK=false
+D_SIGNAL_ERRNO=EPERM
+D_FOREIGN_ALIVE_AFTER=true
+D_FOREIGN_RECEIVED_SIGTERM=false
+D_CLASSIFICATION=DENIED_EXPECTED
+D_FOREIGN_REAP_STATE=GONE
+D_VERDICT=DENIED
+
+PRODUCTION_CONTEXT_EVIDENCE=NO
+DECISION=READY_FOR_OPERATOR_PROBES
+
+NOTE: A/B/C/D are TERMINAL measurements. They QUALIFY the candidate
+      Seatbelt signal rule but do NOT observe the inherited
+      VSCodium/Chromium authority. Per R6 they may not select a
+      production-only or composed architecture on their own.

@@ -13,7 +13,65 @@ VSCodium, NOT from a VSCodium integrated terminal, NOT via `osascript`.
 
 ---
 
-## 0. Before you start
+## 0. P1 correction — the previous probe D measurement was INVALID
+
+The P0 harness run produced this matrix:
+
+| Probe | Observed | Assessment |
+|---|---|---|
+| A — no Seatbelt | SIGTERM delivered; child exited | **PASS** |
+| B — current `(target self)` | `EPERM`; child self-exited | **PASS** |
+| C — candidate `(target same-sandbox)` | SIGTERM delivered; child exited | **PASS** |
+| D — foreign-process control | `EPERM`, but the WRONG PID was targeted | **INVALID** |
+
+Probe D signalled PID `7264`, the Python deadline **supervisor**, instead of
+PID `7283`, the actual foreign **Node.js** process:
+
+```
+FOREIGN_SUPERVISOR_PID=7264
+FOREIGN_PID=7264
+FOREIGN_READY pid=7283 ppid=7264 marker=CLINEMM_RECON01_FOREIGN_CONTROL
+```
+
+The cause was a **greedy** marker parse:
+
+```bash
+sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p'     # matches the "pid=" inside "ppid="
+```
+
+The `.*` is greedy, so it matched the `pid=` suffix of `ppid=7264`. The
+identity check then passed anyway, because the supervisor's own command line
+contains the path to `foreign.mjs` as a trailing argument.
+
+`D_CLASSIFICATION=DENIED_EXPECTED` is therefore **not** authoritative evidence
+that the intended foreign process was protected. The EPERM was real, but it
+described a different process.
+
+**What is established:** Seatbelt policy is an independent cause of `EPERM`
+(B fails, C succeeds, differing only in the profile rule), and the candidate
+permits controlled child termination. **What is not established:** foreign
+process isolation.
+
+**What changed in the harness (R7):**
+
+1. The marker is parsed with an **anchored** expression, so the pid is bound
+   to the field that actually carries it.
+2. The target must be proven to be the **Node child** of the deadline
+   supervisor: it must not be the supervisor itself, and its observed `ppid`
+   must equal the supervisor's pid.
+3. The argv check must prove that **argv[0] IS the Node executable** running
+   the fixture — not a process that merely mentions the fixture path in a
+   trailing argument.
+
+**Operator action:** re-run the harness. **A/B/C do not need to be repeated** —
+they are valid evidence and repeating them is only a consistency check. The
+harness runs all four anyway; the point is that only **D** is a new
+measurement. If D again targets the supervisor, the harness now **halts with
+`HALT_UNSAFE_FIXTURE`** instead of recording a misleading denial.
+
+---
+
+## 0.1 Before you start
 
 Do **not** run this from ClineMM Background Exec. Do not run it from a
 VSCodium integrated terminal. Do not nest `sandbox-exec` inside the IDE
@@ -60,6 +118,10 @@ It takes roughly 30–45 seconds.
   `CLINEMM_RECON0*` process.
 * Never uses `pkill`, `killall`, or a process-group sweep. It only ever signals
   a PID it created and, for probe D, verified by `ps`.
+* **Before signalling in probe D**, proves the target is the Node child of the
+  deadline supervisor (anchored marker parse + observed `ppid` + `argv[0]` is
+  the Node executable). If any of those fail it halts with
+  `HALT_UNSAFE_FIXTURE` and signals nothing.
 
 ### Bounds (no probe can leak)
 
@@ -90,6 +152,33 @@ whose fixture exits nonzero is rejected even if it printed a complete-looking
 payload. For manual review, the same fields are available in the raw JSON
 files together with `childStillAliveAfter` / `foreignAliveAfter` and the
 `CHILD_GOT_SIGTERM` / `FOREIGN_GOT_SIGTERM` markers inside the child output.
+
+### 2.1 Probe D MUST be sanity-checked before it is believed
+
+A `DENIED_EXPECTED` classification is only meaningful if the harness
+signalled the **intended** process. Check `raw/probe-d.identity.txt`:
+
+```
+FOREIGN_PID=<the node pid>
+FOREIGN_SUPERVISOR_PID=<the supervisor pid>
+FOREIGN_ACTUAL_PPID=<must equal FOREIGN_SUPERVISOR_PID>
+FOREIGN_OWNERSHIP=OWNED
+FOREIGN_ARGV_CLASS=FIXTURE_NODE
+FOREIGN_ARGV=<must begin with the node executable and carry foreign.mjs>
+```
+
+All of the following must hold:
+
+* `FOREIGN_PID` != `FOREIGN_SUPERVISOR_PID`;
+* `FOREIGN_ACTUAL_PPID` == `FOREIGN_SUPERVISOR_PID`;
+* `FOREIGN_OWNERSHIP` == `OWNED`;
+* `FOREIGN_ARGV_CLASS` == `FIXTURE_NODE`.
+
+If `FOREIGN_PID` equals `FOREIGN_SUPERVISOR_PID`, the marker parse regressed
+to the greedy form and the measurement is **INVALID** regardless of what the
+classification says. The harness now refuses to reach that state — it halts
+with `HALT_UNSAFE_FIXTURE` before signalling — but the raw identity file is
+the authoritative record to inspect.
 
 ---
 

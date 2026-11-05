@@ -8,13 +8,29 @@
 
 ## Status
 
-**`READY_FOR_OPERATOR_PROBES`**
+**`READY_FOR_OPERATOR_PROBES` — A/B/C MEASURED (PASS), D INVALID**
 
-The four real-kernel measurements (A / B / C / D) have **not** been executed.
-They cannot be executed by the agent: the agent's command substrate is itself
-a ClineMM Background Exec command running inside the ClineMM Seatbelt profile
-*and* inheriting the VSCodium extension host's Chromium zygote sandbox. A
-nested `sandbox-exec` there is denied (`sandbox_apply: Operation not
+The four real-kernel measurements were executed by the operator from an
+independent Terminal (not from VSCodium), on macOS Sonoma 14.7.4
+(Darwin 23.6.0, arm64), Node v26.0.0.
+
+* **A** — PASS. No Seatbelt: SIGTERM delivered, child exited.
+* **B** — PASS. Current `(target self)`: `EPERM`, child self-exited.
+* **C** — PASS. Candidate `(target same-sandbox)`: SIGTERM delivered, child
+  exited.
+* **D** — **INVALID**. The EPERM was real but was delivered against the
+  deadline **supervisor** instead of the intended foreign Node process, because
+  the marker was parsed with a greedy expression that captured the `pid=`
+  inside `ppid=`.
+
+Consequence: the candidate rule is **not yet qualified standalone**. Foreign-
+process isolation remains unmeasured, and the mandatory security gate is
+still open. The harness was corrected (R7) and only **D** must be re-measured.
+
+The measurements cannot be executed by the agent: the agent's command substrate
+is itself a ClineMM Background Exec command running inside the ClineMM Seatbelt
+profile *and* inheriting the VSCodium extension host's Chromium zygote sandbox.
+A nested `sandbox-exec` there is denied (`sandbox_apply: Operation not
 permitted`, rc=71), and every `launchctl` mutation verb plus `osascript
 Terminal` is denied as well. The ACT charter explicitly forbids the agent
 from circumventing its own sandbox to obtain these measurements.
@@ -40,6 +56,9 @@ the independent Terminal:
    enters, the existing opt-in production-seam test facility, and the existing
    narrow, ownership-gated host-side primitive that a successor can reuse
    without expanding privileged RPC authority.
+8. **Executed the A/B/C/D matrix from the independent Terminal**, adjudicated
+   each probe, and corrected the harness where the D measurement was invalid
+   (R7).
 
 ---
 
@@ -96,14 +115,79 @@ the inherited layer while leaving the ClineMM layer as the single variable.
 
 ---
 
-## The decisive experiment (awaiting operator execution)
+## The decisive experiment (operator execution — A/B/C measured, D INVALID)
 
-| Probe | Context | Child SIGTERM | Foreign SIGTERM | Cleanup |
-|---|---|---|---|---|
-| A | Independent Terminal, no Seatbelt | *pending* | — | *pending* |
-| B | Independent Terminal, current profile | *pending* | — | *pending* |
-| C | Independent Terminal, candidate profile | *pending* | — | *pending* |
-| D | Candidate profile vs controlled foreign target | — | *pending* | *pending* |
+| Probe | Context | Child SIGTERM | Foreign SIGTERM | Cleanup | Verdict |
+|---|---|---|---|---|---|
+| A | Independent Terminal, no Seatbelt | delivered | — | clean | **PASS** |
+| B | Independent Terminal, current profile | `EPERM` (child self-exited) | — | clean | **PASS** |
+| C | Independent Terminal, candidate profile | delivered | — | clean | **PASS** |
+| D | Candidate profile vs controlled foreign target | — | `EPERM` **against the wrong PID** | clean | **INVALID** |
+
+The run substrate was macOS Sonoma 14.7.4 (Darwin 23.6.0, arm64), Node
+v26.0.0, launched from an independent Terminal (not from VSCodium).
+
+### What the A/B/C result establishes
+
+**Seatbelt policy is an independent cause of `EPERM`.** B fails and C succeeds
+with exactly one profile-rule difference:
+
+```
+- (allow signal (target self))
++ (allow signal (target same-sandbox))
+```
+
+The current profile denies the controlled child signal; the candidate permits
+it, and the child received SIGTERM and exited. This is a **valid kernel
+measurement**, taken outside VSCodium, and it isolates the profile rule as the
+discriminating variable rather than the inherited Chromium authority.
+
+The candidate rule is also the rule used by Codex's Seatbelt base policy and by
+the Anthropic Sandbox Runtime, so it is not an ad-hoc invention.
+
+### What the D result does NOT establish
+
+The D measurement is **INVALID** and must not be read as "foreign-process
+isolation proven". The harness signalled PID `7264` — the Python deadline
+**supervisor** — instead of PID `7283`, the foreign **Node.js** process:
+
+```
+FOREIGN_SUPERVISOR_PID=7264
+FOREIGN_PID=7264
+FOREIGN_READY pid=7283 ppid=7264 marker=CLINEMM_RECON01_FOREIGN_CONTROL
+```
+
+Root cause: a **greedy** marker parse
+(`sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p'`) matched the `pid=` suffix inside
+`ppid=7264`. The identity check then passed anyway, because the supervisor's
+command line contains the fixture path as a trailing argument.
+
+The `EPERM` was genuine, but it described the supervisor, not the intended
+foreign process. `D_CLASSIFICATION=DENIED_EXPECTED` is therefore not
+authoritative evidence about foreign-process isolation.
+
+### P1 harness correction (R7) — the smallest next action
+
+The harness was corrected so this failure cannot recur silently:
+
+1. **Anchored marker parse** — `extract_foreign_pid` binds the pid to the
+   field that carries it.
+2. **Ownership gate** — the target must not be the supervisor itself, and its
+   observed `ppid` must equal the supervisor's pid (`classify_foreign_ownership`).
+3. **argv gate** — `argv[0]` must BE the Node executable running the fixture,
+   not a process that merely mentions the fixture path
+   (`classify_foreign_argv`).
+
+Each gate independently rejects the supervisor and accepts the real Node child.
+This was verified LIVE against a real supervisor + real Node foreign process:
+the old parse selected the supervisor (`IS_SUPERVISOR`, `NOT_NODE`) while the
+corrected parse selected the Node child (`OWNED`, `FIXTURE_NODE`).
+
+`harness-regression-test.sh` grew from 107 to **127** process-free assertions,
+including one that pins the anchored parse and one that asserts the greedy
+form is known-wrong.
+
+**A/B/C remain valid evidence. Only D is re-measured.**
 
 ### Decision map (CORRECTED — P0 HARNESS CORRECTION, rule R6)
 
@@ -178,7 +262,7 @@ The candidate profile differs from the current production profile by
 | LaunchAgent | **UNCHANGED** | no bootstrap / bootout / kickstart / submit |
 | User credentials | **UNCHANGED** | no `denyReadSubpaths` change |
 | Shell execution | **UNCHANGED** | no new unsandboxed execution method introduced |
-| Process ownership | **PENDING probe D** | must be denied |
+| Process ownership | **PENDING probe D (re-measure)** | must be denied; the previous D attempt signalled the supervisor and proved nothing |
 
 `C` succeeding in the Terminal is **not** `C` succeeding under VSCodium.
 The inherited Chromium sandbox is a separate authority and is demonstrated to
@@ -188,16 +272,32 @@ deny the same operation independently.
 
 ## Remaining unobservables
 
-1. Whether the current `target self` rule is **independently** sufficient to
-   cause the production EPERM (probe B answers this).
-2. Whether `(allow signal (target same-sandbox))` is accepted by Sonoma
-   14.7.4 and actually widens the scope to owned descendants (probe C).
-3. Whether the widened scope is safely confined — i.e. whether it still
-   denies a same-UID foreign process (probe D, the mandatory gate).
-4. Whether the inherited VSCodium sandbox would *still* deny the operation
-   after the profile is corrected. **This cannot be answered from an
+1. ~~Whether the current `target self` rule is **independently** sufficient to
+   cause the production EPERM (probe B answers this).~~ **ANSWERED by B**:
+   `EPERM` — the current profile denies the controlled child signal.
+2. ~~Whether `(allow signal (target same-sandbox))` is accepted by Sonoma
+   14.7.4 and actually widens the scope to owned descendants (probe C).~~
+   **ANSWERED by C**: accepted, and the child received SIGTERM and exited.
+3. **OPEN** — whether the widened scope is safely confined, i.e. whether it
+   still denies a same-UID foreign process (probe D, the mandatory gate). The
+   previous D attempt was invalid because it signalled the supervisor; the
+   corrected harness must re-measure it.
+4. **OPEN** — whether the inherited VSCodium sandbox would *still* deny the
+   operation after the profile is corrected. **This cannot be answered from an
    independent Terminal**; it requires the corrected execution path to be
    exercised at the production seam.
+
+### The next action, in order
+
+1. **Re-run the corrected operator harness** to re-measure **D only**. A/B/C
+   are valid evidence and need not be repeated. This is the whole of the
+   immediate work: one surgical correction, then one harness run.
+2. If D returns `EPERM` against the real foreign Node PID, the candidate rule
+   is **QUALIFIED standalone** and the ACT's Gate 1 is closed.
+3. Then — and only then — run **one small production-boundary experiment** to
+   establish whether Chromium inheritance also blocks the candidate. That is
+   far smaller than implementing a LaunchAgent command runner, and the
+   successor architecture is selected from its outcome, not in advance.
 
 ---
 

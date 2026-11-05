@@ -1,0 +1,4 @@
+FOREIGN_PID=7264
+FOREIGN_ARGV=/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02/probe-fixtures/deadline-supervisor.py 15 env TMPDIR=/private/tmp/clinemm-recon01-tmp /opt/homebrew/bin/node /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01/probe-fixtures/foreign.mjs
+FOREIGN_LSTART=Thu Nov  5 14:31:19 2026
+FOREIGN_REAP_STATE=GONE

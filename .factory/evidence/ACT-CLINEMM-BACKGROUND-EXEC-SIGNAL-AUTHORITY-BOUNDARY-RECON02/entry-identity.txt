@@ -46,6 +46,39 @@ P0 HARNESS CORRECTION (2026-11-05) — bounded, recon-only
   The RECON01 fixtures and profiles are UNCHANGED and still byte-identical
   to their frozen SHA-256 values.
 
+P1 HARNESS CORRECTION (2026-11-05) — bounded, recon-only
+  The operator harness was corrected again after the P0 run produced an
+  INVALID probe-D measurement. No production source was touched.
+
+  R7 (three gates):
+    1. extract_foreign_pid      — ANCHORED marker parse. The greedy
+       `s/.*pid=\([0-9]*\).*/\1/p` captured the "pid=" inside "ppid=" and
+       returned the deadline SUPERVISOR's pid instead of the foreign Node
+       process's pid.
+    2. classify_foreign_ownership — the target must not be the supervisor
+       itself and its observed ppid must equal the supervisor's pid.
+    3. classify_foreign_argv    — argv[0] must BE the Node executable that
+       runs the fixture, not a process that merely mentions the fixture
+       path in a trailing argument.
+
+  Implemented in:
+    harness-lib.sh                    (extract_foreign_pid,
+                                      classify_foreign_ownership,
+                                      classify_foreign_argv, ps_ppid_of)
+    harness-regression-test.sh        (107 -> 127 process-free assertions)
+    operator-probes.sh                (probe D target selection + gates)
+
+  The RECON01 fixtures and profiles are STILL unchanged and byte-identical
+  to their frozen SHA-256 values.
+
+  LIVE VERIFICATION of the correction (real supervisor + real Node child):
+    old greedy parse -> pid 66133 (== supervisor)
+                        ownership IS_SUPERVISOR, argv NOT_NODE   -> REJECTED
+    new anchored parse -> pid 66167 (== the Node child)
+                        ownership OWNED, argv FIXTURE_NODE       -> ACCEPTED
+
+  No production source file was modified by this ACT.
+
 NEW IN THIS ACT (evidence + bounded test fixture only, no production source)
   probe-fixtures/foreign-signal-attempt.mjs
     — the D2 negative-control initiator. Performs EXACTLY ONE

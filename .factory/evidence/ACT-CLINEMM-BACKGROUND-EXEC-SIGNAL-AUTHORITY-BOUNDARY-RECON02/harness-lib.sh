@@ -22,6 +22,14 @@
 #       is NEVER treated as "cleaned up" / "gone".
 #   R6  The decision table NEVER selects a production-only repair or a
 #       composed architecture from Terminal-only measurements.
+#   R7  The foreign pid is extracted from the FOREIGN_READY marker with an
+#       ANCHORED expression, and it is proven to be the Node child of the
+#       deadline supervisor BEFORE any signal is attempted. A greedy parse
+#       that captures the "pid=" inside "ppid=" targets the SUPERVISOR and
+#       produces a legitimate-looking EPERM for a process that was never
+#       tested. The argv check must additionally prove that argv[0] IS the
+#       Node executable running the fixture, not a process that merely
+#       mentions the fixture path in a trailing argument.
 #
 # This file must be SOURCEABLE and must not have side effects when sourced.
 # =============================================================================
@@ -74,6 +82,153 @@ json_num() {
 ps_uid_of() {
 	[ -z "${1:-}" ] && return 0
 	ps -o uid= -p "$1" 2>/dev/null | tr -d '[:space:]'
+}
+
+# ---------------------------------------------------------------------------
+# ps_ppid_of <pid> -> the numeric parent-pid column, or "" if the pid is gone.
+#
+# Used to prove that a controlled foreign target is DIRECTLY owned by the
+# expected supervisor. Without this check a probe can signal the supervisor
+# and believe it signalled the target.
+# ---------------------------------------------------------------------------
+ps_ppid_of() {
+	[ -z "${1:-}" ] && return 0
+	ps -o ppid= -p "$1" 2>/dev/null | tr -d '[:space:]'
+}
+
+# ---------------------------------------------------------------------------
+# R7: anchored foreign-pid extraction from the FOREIGN_READY marker.
+#
+# extract_foreign_pid [line] -> the pid, or "" if the line does not
+# match the expected marker shape exactly.
+#
+# The marker line may be supplied as an ARGUMENT or on STDIN, so the helper
+# can be used either as
+#     extract_foreign_pid "$line"
+# or as
+#     grep -m1 FOREIGN_READY "$log" | extract_foreign_pid
+# Both forms are used by the harness and by the regression suite.
+#
+# WHY THIS IS ANCHORED (P1 harness correction):
+#   The fixture prints
+#       FOREIGN_READY pid=<n> ppid=<m> marker=CLINEMM_RECON01_FOREIGN_CONTROL
+#   A GREEDY sed such as
+#       sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p'
+#   matches the LAST "pid=" substring on the line, which is the "pid=" inside
+#   "ppid=" — so it yields the SUPERVISOR's pid instead of the target's pid.
+#   Signalling the supervisor then produces a legitimate-looking EPERM while
+#   the real foreign process was never targeted. The measurement is invalid
+#   and MUST NOT be reported as "foreign isolation proven".
+#
+#   The anchored form binds the pid to the field that actually carries it.
+# ---------------------------------------------------------------------------
+readonly RECON02_FOREIGN_MARKER="CLINEMM_RECON01_FOREIGN_CONTROL"
+
+extract_foreign_pid() {
+	local line="${1:-}"
+	if [ -z "$line" ]; then
+		# No argument: consume exactly one line from stdin.
+		IFS= read -r line || true
+	fi
+	[ -n "$line" ] || return 0
+	printf '%s\n' "$line" | sed -nE \
+		"s/^FOREIGN_READY pid=([0-9]+) ppid=[0-9]+ marker=${RECON02_FOREIGN_MARKER}\$/\\1/p" |
+		head -n1
+}
+
+# ---------------------------------------------------------------------------
+# R7: the pid reported by the marker must be the CHILD of the supervisor.
+#
+# classify_foreign_ownership <foreign_pid> <supervisor_pid> <observed_ppid>
+#
+# Prints one of:
+#   OWNED        foreign_pid != supervisor_pid AND observed_ppid == supervisor_pid
+#   IS_SUPERVISOR foreign_pid == supervisor_pid (the parse regressed)
+#   NOT_CHILD    observed_ppid != supervisor_pid
+#   UNKNOWN      insufficient information
+#
+# The caller MUST refuse to signal on anything other than OWNED.
+# ---------------------------------------------------------------------------
+classify_foreign_ownership() {
+	local foreign_pid="${1:-}" sup_pid="${2:-}" observed_ppid="${3:-}"
+
+	if [ -z "$foreign_pid" ] || [ -z "$sup_pid" ]; then
+		echo "UNKNOWN"
+		return 0
+	fi
+	if [ "$foreign_pid" = "$sup_pid" ]; then
+		echo "IS_SUPERVISOR"
+		return 0
+	fi
+	if [ -z "$observed_ppid" ]; then
+		echo "UNKNOWN"
+		return 0
+	fi
+	if [ "$observed_ppid" = "$sup_pid" ]; then
+		echo "OWNED"
+		return 0
+	fi
+	echo "NOT_CHILD"
+}
+
+# ---------------------------------------------------------------------------
+# R7: the foreign target must be the Node process that RUNS the fixture.
+#
+# classify_foreign_argv <argv> <node_executable> <fixture_path>
+#
+# The argv of the real foreign target begins with the Node executable and
+# carries the fixture path as a script argument:
+#
+#     /opt/homebrew/bin/node /path/to/foreign.mjs
+#
+# The argv of the DEADLINE SUPERVISOR merely mentions both, as trailing
+# arguments:
+#
+#     .../Python .../deadline-supervisor.py 15 env TMPDIR=... \
+#         /opt/homebrew/bin/node /path/to/foreign.mjs
+#
+# A substring test ("the fixture path appears anywhere") therefore accepts
+# the supervisor. This check requires the Node executable to be the argv[0]
+# and the fixture to be a following argument.
+#
+# Prints one of:
+#   FIXTURE_NODE  the argv is the expected "node <fixture>" shape
+#   NOT_NODE      argv[0] is not the Node executable
+#   NOT_FIXTURE   the fixture path is not an argument of that Node process
+# ---------------------------------------------------------------------------
+classify_foreign_argv() {
+	local argv="${1:-}" node_exe="${2:-}" fixture="${3:-}"
+	local first rest
+
+	[ -n "$argv" ] || { echo "NOT_NODE"; return 0; }
+	[ -n "$node_exe" ] || { echo "NOT_NODE"; return 0; }
+	[ -n "$fixture" ] || { echo "NOT_FIXTURE"; return 0; }
+
+	# argv[0] must be the node executable. ps renders the resolved path, so
+	# compare the BASENAME as well as the full path.
+	first="${argv%% *}"
+	case "$first" in
+		"$node_exe") : ;;
+		*)
+			local first_base="${first##*/}"
+			local node_base="${node_exe##*/}"
+			case "$node_base" in
+				"") echo "NOT_NODE"; return 0 ;;
+			esac
+			case "$first_base" in
+				"$node_base") : ;;
+				*) echo "NOT_NODE"; return 0 ;;
+			esac
+			;;
+	esac
+
+	# The fixture must be a SCRIPT ARGUMENT of that node process, i.e. it
+	# must appear after argv[0] as a standalone word.
+	rest="${argv#* }"
+	case " $rest " in
+		*" $fixture "*) echo "FIXTURE_NODE"; return 0 ;;
+	esac
+	echo "NOT_FIXTURE"
 }
 
 # ---------------------------------------------------------------------------
