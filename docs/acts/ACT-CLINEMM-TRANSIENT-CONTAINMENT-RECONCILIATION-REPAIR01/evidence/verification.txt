@@ -184,6 +184,19 @@ METHOD
   `stash@{0}` = the pre-existing protected stash
   (`WIP on main: d46223b51 ...`), unchanged.
 
+  SUPERSEDED FIRST ATTEMPT (recorded so it cannot be mistaken for the
+  baseline). The baseline was FIRST attempted in a temporary detached
+  worktree at the exact ENTRY_HEAD commit. That attempt was INVALID: a
+  fresh worktree does not contain the gitignored, pre-built SDK
+  `dist/` outputs, so every suite failed to load with
+  `Cannot find package '@cline/agents'` and the sweep wrote
+  `0 assertions`. That worktree was removed with
+  `git worktree remove --force` and the baseline was re-run in the MAIN
+  tree via the stash method above, which produced the authoritative
+  260-assertion result recorded below. The `0 assertions` output of the
+  superseded attempt is NOT the baseline and was never used for any
+  comparison.
+
 RESULT
 
   ENTRY assertions  : 260   {passed: 225, failed: 35}
