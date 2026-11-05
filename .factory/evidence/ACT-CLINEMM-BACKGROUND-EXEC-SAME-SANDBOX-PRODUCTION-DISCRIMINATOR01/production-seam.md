@@ -78,9 +78,13 @@ The extension host is launched as:
 with `CLINEMM_RUNTIME_PROFILE=dogfood` and `CLINE_DATA_DIR=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data` in the launch environment, and the utility (extension-host) child carries `--service-sandbox-type=none --enable-sandbox` (the Chromium zygote sandbox IS active on the extension host).
 
 The extension host's `TMPDIR` is the SYSTEM per-user temp root
-(`/var/folders/.../T/`), NOT a `clinemm-sandbox-temp-*` directory — proving the
-extension host is NOT itself inside a ClineMM Seatbelt profile, i.e. it
-inherits the Chromium authority without the ClineMM authority.
+(`/var/folders/.../T/`), NOT a `clinemm-sandbox-temp-*` directory — showing the
+extension host is NOT itself inside a ClineMM Seatbelt profile.
+
+**INFERRED** (not measured by this ACT): the extension host therefore
+inherits the Chromium authority without the ClineMM authority. This is the
+LEADING EXPLANATION; an environment path does NOT establish the effective
+kernel sandbox policy, so it is not proven causal identity.
 
 **INFERRED** (not measured by this ACT): the composition of the Chromium
 zygote sandbox with the ClineMM Seatbelt profile is what the live

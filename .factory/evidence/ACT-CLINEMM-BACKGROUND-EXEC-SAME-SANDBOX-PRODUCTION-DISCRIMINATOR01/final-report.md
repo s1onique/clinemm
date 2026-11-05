@@ -2,6 +2,7 @@
 
 **ACT:** `ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01`
 **Status:** `PASS_STRUCTURAL_ONLY` — code complete, artifact built and identity-verified, live installed-extension measurement NOT executed (operator required).
+**Review outcome (2026-11-05):** `PASS_STRUCTURAL_ONLY` accepted; one bounded **P1** fixture correction applied (see §3.3). No architecture selected. No further review cycle required.
 
 ---
 
@@ -33,15 +34,21 @@ What IS delivered and verified:
    byte-identical bundle SHA-256.
 5. The finite parent/child fixture was validated: it reproduces the RED
    `EPERM` signal AND is orphan-safe (independent 4s self-exit deadline;
-   `ESRCH` afterwards).
+   `ESRCH` afterwards). Its pre-signal PGID observations were removed by
+   the P1 correction (§3.3) so that the SIGTERM attempt can no longer race
+   the child's 4-second lifetime.
 6. A new, decisive piece of `LIVE` evidence was obtained: the **real**
    dogfood extension host's own live profile was captured from the system
    temp root, proving (a) the real host DOES apply the ClineMM Seatbelt
    profile, (b) it uses the ORIGINAL `(allow signal (target self))` rule,
    and (c) its `TMPDIR` is the SYSTEM per-user root — i.e. the extension
-   host is NOT itself inside a ClineMM Seatbelt profile and therefore
-   inherits ONLY the Chromium zygote authority. That is precisely the
-   composition the candidate must be tested against.
+   host is NOT itself inside a ClineMM Seatbelt profile. The **leading
+   explanation** is therefore that it inherits the Chromium zygote
+   authority — precisely the composition the candidate must be tested
+   against. (Scope limit, review of 2026-11-05: an environment path does
+   NOT establish the effective kernel sandbox policy, so "inherits ONLY
+   the Chromium zygote authority" is `INFERRED`, not proven causal
+   identity.)
 
 **No architecture is selected.** `SELECT_SEATBELT_SIGNAL_REPAIR` and
 `SELECT_COMPOSED_BOUNDARY_REPAIR` both remain open, and the evidence
@@ -106,6 +113,65 @@ Both GREEN. Existing regression suites GREEN (40 profile + 25 backend).
 parent/child Node probe reusing the RECON01/RECON02 behaviour, emitting
 the §6 evidence shape as `SAME_SANDBOX_RESULT_JSON=<json>`.
 
+#### P1 correction (review of 2026-11-05) — in-process PGID observation removed
+
+The fixture originally performed TWO sequential synchronous `/bin/ps`
+observations (each with a 2-second timeout) in the **pre-signal** path:
+one for the parent's PGID and one for the child's. The child has an
+independent 4-second self-exit deadline.
+
+Worst case: `2 × 2000ms = 4000ms` — exactly the child's entire lifetime.
+The SIGTERM could therefore be attempted only AFTER the child had already
+exited, producing an inconclusive `ESRCH` that cannot discriminate
+`SELECT_SEATBELT_SIGNAL_REPAIR` from `SELECT_COMPOSED_BOUNDARY_REPAIR`.
+This is a REAL risk in the production context, where the profile's
+`(allow process-exec)` can permit `/bin/ps` (it is only *denied* in the
+agent's own substrate, where the failure is fast).
+
+**Fix applied once:** both PGID observations were removed from the
+pre-signal path. `observePgid()` and the `execFileSync` import were
+deleted; `parentPgid` and `childPgid` are now always `null`. The
+authoritative PGID inspection is delegated to the independent Terminal
+(`OPERATOR-INSTRUCTIONS.md` step 5).
+
+Verified after the correction:
+
+| Property | Result |
+|---|---|
+| SIGTERM attempted ~50ms after `CHILD_READY` (was up to 4000ms) | PASS — margin 3948ms vs the 4s lifetime |
+| Residual `/bin/ps` / `observePgid` / `execFileSync` references | NONE (comments only) |
+| `node --check` syntax | OK |
+| Result JSON shape | Unchanged (`parentPgid`/`childPgid` present, `null`) |
+| RED behaviour in the agent substrate | Unchanged: `EPERM`, `childSelfExited=true`, `childStillAliveAfter=false`, `ESRCH`, no orphan |
+| Total runtime | Unchanged (~4.1s, bounded by the child's self-exit) |
+
+```
+FIXTURE_SHA256_BEFORE = 018a005ee0e6f1b260d2c3d77013300908212bf214c71c33cb412808b50e82c4  (5765 bytes)
+FIXTURE_SHA256_AFTER  = 857209dcb78154ad69c2101573159db8e0e63fe8c8de04f49562d8d7c064497a  (6135 bytes)
+```
+
+**The VSIX does NOT need rebuilding.** The fixture is loaded from the
+repository at runtime (it is a probe fixture, not bundled code), so the
+already-verified diagnostic VSIX remains valid and its recorded bundle
+SHA-256 is unchanged.
+
+### 3.4 Review-driven operational corrections
+
+Two operational safeguards were added to `OPERATOR-INSTRUCTIONS.md` by the
+same review:
+
+1. **Step 2a** — fully close the existing dogfood VSCodium instance
+   before launching with the diagnostic environment variables, and verify
+   the extension host's own environment actually carries the opt-in. A
+   still-running first instance can cause a subsequent launch to inherit
+   the OLD environment (no opt-in), which would silently produce a RED
+   misread. Also verify the loaded bundle SHA-256 is the diagnostic one,
+   not merely a separate writable test installation.
+2. **Step 6** — restore the normal extension after **ANY** terminal
+   outcome, including `CAPTURE_INSUFFICIENT`, `HALT_DIAGNOSTIC_NOT_APPLIED`,
+   `HALT_UNSAFE_SIGNAL_SCOPE` and an aborted probe — not only after
+   Case A or Case B.
+
 ## 4. Artifact identity
 
 ```
@@ -134,8 +200,10 @@ the system temp root while the production extension was running:
 
 It contains `(allow signal (target self))` — the ORIGINAL production
 rule — and the extension host's `TMPDIR` is the system per-user root
-(not a `clinemm-sandbox-temp-*` dir), proving the extension host is not
-itself ClineMM-Seatbelt-sandboxed.
+(not a `clinemm-sandbox-temp-*` dir), showing the extension host is not
+itself ClineMM-Seatbelt-sandboxed. ("Inherits ONLY the Chromium zygote
+authority" is the leading explanation, `INFERRED` — see the scope limit
+in §1.6.)
 
 `LIVE` (agent substrate) — the finite fixture's RED:
 
@@ -155,9 +223,11 @@ production-seam RED.
 * Whether H2 (Seatbelt rule alone) or H3 (both authorities) is the
   production cause (`INFERRED` — H1 and H2 are each supported; H3 is not
   excluded).
-* Candidate PGIDs in the production context (`LIVE_UNOBSERVABLE` from
-  inside the sandbox — `/bin/ps` is denied there; the independent
-  Terminal must observe them from the recorded PIDs).
+* Candidate PGIDs in the production context — after the P1 correction the
+  fixture makes NO in-process PGID observation, so `parentPgid`/`childPgid`
+  are always `null`. The independent Terminal is the authoritative PGID
+  inspector, from the recorded PIDs (`OPERATOR-INSTRUCTIONS.md` step 5).
+  The PGIDs are not load-bearing for the causal decision.
 
 ## 7. Next action
 
@@ -179,6 +249,30 @@ Then **REMOVE** the diagnostic per `diagnostic-contract.md`
 
 ## 8. Repository safety
 
+### 8.1 Worktree state classification
+
+**`DIRTY_PREEXISTING_EXEMPT`** — the worktree is NOT clean, and the
+previous report's "clean" characterisation was inaccurate.
+
+```bash
+git status --short | wc -l
+# 30 entries at the time of this correction:
+#   24 -> .factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02/raw/*
+#         (PRE-EXISTING dirty evidence from the RECON02 ACT — NOT created by this ACT)
+#    6 -> .factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01/*
+#         (THIS ACT's evidence, including the P1 fixture correction)
+```
+
+The classification is `DIRTY_PREEXISTING_EXEMPT` **assuming those 24
+pre-existing RECON02 files remain unchanged**. They were not modified by
+this ACT; the exemption must be re-verified before closure.
+
+The *build* was performed in a separate detached clean worktree at exact
+HEAD (`scripts/build-dogfood-vsix.py`), so the artifact is unaffected by
+the main worktree's dirt.
+
+### 8.2 Other safety properties
+
 * `stash@{0}` (the protected historical stash) was NEVER popped or
   modified; it is preserved.
 * The pre-existing RECON02 evidence dirt was NOT modified — it was
@@ -193,3 +287,4 @@ Then **REMOVE** the diagnostic per `diagnostic-contract.md`
   service change.
 * The historical native-helper files were NOT restored.
 * No new orphan process was created by this ACT.
+

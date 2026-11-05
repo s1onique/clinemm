@@ -1,0 +1,77 @@
+P1 FIXTURE CORRECTION EVIDENCE
+==============================
+ACT:      ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01
+SOURCE:   review of 2026-11-05 (P1 finding: PGID inspection can race the
+          child's four-second lifetime)
+CLASSIFICATION: STRUCTURAL (fixture-only correction)
+
+--- THE FINDING ---
+The diagnostic fixture performed TWO synchronous `/bin/ps` observations in
+the PRE-SIGNAL path (one for the parent's PGID, one for the child's). Each
+had a 2-second timeout. The child has an independent 4-second self-exit
+deadline.
+
+Worst case: 2 x 2000ms = 4000ms = the child's ENTIRE lifetime.
+=> The SIGTERM could be attempted only AFTER the child had already exited,
+   yielding an inconclusive ESRCH that cannot discriminate
+   SELECT_SEATBELT_SIGNAL_REPAIR from SELECT_COMPOSED_BOUNDARY_REPAIR.
+
+This is a REAL production risk: the generated profile contains
+`(allow process-exec)`, so `/bin/ps` may be PERMITTED there. (It is only
+*denied* in the agent's own substrate, where the failure is fast.)
+
+--- THE FIX (applied once) ---
+Removed BOTH PGID observations from the pre-signal path:
+  - deleted the `observePgid()` function
+  - deleted the `execFileSync` import
+  - deleted `result.childPgid = observePgid(childPid);`
+  - `parentPgid` and `childPgid` are now always `null`
+The authoritative PGID inspection is delegated to the independent Terminal
+(OPERATOR-INSTRUCTIONS.md step 5).
+
+--- FIXTURE IDENTITY ---
+PATH            = .factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01/probe-fixtures/same-sandbox-probe.mjs
+SHA256_BEFORE   = 018a005ee0e6f1b260d2c3d77013300908212bf214c71c33cb412808b50e82c4
+SIZE_BEFORE     = 5765 bytes
+SHA256_AFTER    = 857209dcb78154ad69c2101573159db8e0e63fe8c8de04f49562d8d7c064497a
+SIZE_AFTER      = 6135 bytes
+
+--- VERIFICATION ---
+node --check (syntax)                              : OK
+Residual observePgid / execFileSync / /bin/ps calls : NONE (comment text only)
+SIGTERM attempted after CHILD_READY                 : ~52 ms (was up to 4000 ms)
+Margin vs the child's 4 s self-exit lifetime        : 3948 ms
+Result JSON shape                                   : UNCHANGED
+  (marker, parentPid, childPid, parentPgid=null, childPgid=null, childReady,
+   profileApplied, signalAttempt{ok,errnoCode}, childReceivedSigterm,
+   childExited, childStillAliveAfter, parentPpid, childExitCode,
+   childExitSignal, childSelfExited, childOut, childAliveProbeErrno)
+Total runtime                                       : ~4.1 s (bounded by the child's self-exit)
+
+--- RED BEHAVIOUR PRESERVED (agent substrate, post-correction) ---
+{
+  "marker": "CLINEMM_SAME_SANDBOX_PRODUCTION_DISCRIMINATOR01",
+  "childReady": true,
+  "signalAttempt": { "ok": false, "errnoCode": "EPERM",
+                      "errnoMessage": "kill EPERM", "syscall": "kill" },
+  "childReceivedSigterm": false,
+  "childExited": true,
+  "childExitCode": 0,
+  "childSelfExited": true,
+  "childStillAliveAfter": false,
+  "childAliveProbeErrno": "ESRCH"
+}
+=> Same RED signal, same errno, same correlated child self-exit, same clean
+   cleanup (no orphan) as the pre-correction run.
+
+--- ARTIFACT IMPACT ---
+NONE. The fixture is loaded from the repository at runtime (it is a probe
+fixture, not bundled code), so the diagnostic VSIX does NOT need rebuilding.
+The already-verified VSIX and bundle SHA-256 remain valid:
+  VSIX_SHA256  = 16f5962428fb7c9039d33dffc28b7d664b9a4674d6526d625ee0c4829db8e568
+  BUNDLE_SHA256= f183358f96fdc043f3677b11491c16051ceeae05f83bc17241d393f311da31f1
+
+--- STRUCTURAL GATES ---
+No production source file was modified by this correction.
+Re-verified after the fix: 67 passed (57 SDK + 10 host), 19 skipped.
+See structural-tests.txt.

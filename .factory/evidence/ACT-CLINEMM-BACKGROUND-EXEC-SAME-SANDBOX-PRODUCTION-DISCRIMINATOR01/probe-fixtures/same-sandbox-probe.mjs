@@ -11,7 +11,8 @@
  * PARENT behavior:
  *   1. Starts ONE Node child.
  *   2. Observes a unique `CHILD_READY` marker.
- *   3. Records PID, PPID and PGID when observable.
+ *   3. Records PID and PPID. PGIDs are NOT observed in-process — see the
+ *      PGID NOTE below.
  *   4. Attempts `process.kill(childPid, "SIGTERM")` EXACTLY ONCE.
  *   5. Records `signalAttempt.ok` and the actual errno.
  *   6. Observes whether the child received SIGTERM.
@@ -34,7 +35,7 @@
  *
  * Exit status is NOT authoritative. Parse SAME_SANDBOX_RESULT_JSON.
  */
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 
 const MARKER = "CLINEMM_SAME_SANDBOX_PRODUCTION_DISCRIMINATOR01";
 const CHILD_LIFETIME_MS = 4000;
@@ -46,30 +47,30 @@ function log(...parts) {
 }
 
 /**
- * Best-effort PGID observation. On darwin the child's process group is
- * observable via `ps`; a failure here is recorded as LIVE_UNOBSERVABLE
- * rather than invented.
+ * PGID NOTE (P1 CORRECTION — review of 2026-11-05)
+ * ----------------------------------------------------
+ * In-process PGID observation was REMOVED from the pre-signal path.
  *
- * NOTE: `/bin/ps` may itself be denied by the Seatbelt profile (it is
- * NOT in the profile's allow-list for `process-exec` of every helper
- * binary). When that happens the PGID fields stay `null` and the
- * independent Terminal performs the authoritative PGID check AFTER the
- * job completes. The PGID fields are NOT load-bearing for the causal
- * decision: the decision rests on the signal errno + the correlated
- * child delivery/exit evidence.
+ * Rationale: the parent's SIGTERM attempt is the load-bearing
+ * measurement. The child has an independent 4-second self-exit
+ * deadline. Each `/bin/ps` observation was given a 2-second timeout,
+ * so TWO sequential observations could consume the child's ENTIRE
+ * 4-second lifetime before the SIGTERM was even attempted. Under a
+ * profile where `/bin/ps` is permitted but slow, the SIGTERM would
+ * then be delivered to an already-exited child and the attempt would
+ * report `ESRCH` — an INCONCLUSIVE result that cannot discriminate
+ * `SELECT_SEATBELT_SIGNAL_REPAIR` from `SELECT_COMPOSED_BOUNDARY_REPAIR`.
+ *
+ * The PGID fields are NOT load-bearing for the causal decision: the
+ * decision rests on the signal errno plus the correlated child
+ * delivery/exit evidence. The independent Terminal performs the
+ * authoritative PGID inspection AFTER the job completes, using the
+ * recorded PIDs (see `OPERATOR-INSTRUCTIONS.md` step 5).
+ *
+ * `parentPgid` and `childPgid` are therefore always `null` in this
+ * result. `null` means "not observed in-process" — it is NOT a claim
+ * that the PGID is unknown to the kernel.
  */
-function observePgid(pid) {
-	try {
-		const out = execFileSync("/bin/ps", ["-o", "pgid=", "-p", String(pid)], {
-			encoding: "utf8",
-			timeout: 2000,
-		});
-		const parsed = Number.parseInt(out.trim(), 10);
-		return Number.isInteger(parsed) ? parsed : null;
-	} catch {
-		return null;
-	}
-}
 
 if (process.argv.includes("--child")) {
 	log(`CHILD_READY pid=${process.pid} ppid=${process.ppid} marker=${MARKER}`);
@@ -122,7 +123,7 @@ if (process.argv.includes("--child")) {
 		marker: MARKER,
 		parentPid: process.pid,
 		childPid: childPid ?? null,
-		parentPgid: observePgid(process.pid),
+		parentPgid: null,
 		childPgid: null,
 		childReady: false,
 		profileApplied: null,
@@ -144,7 +145,6 @@ if (process.argv.includes("--child")) {
 	const ready = await waitForReady(3000);
 	result.childReady = ready;
 	if (ready) {
-		result.childPgid = observePgid(childPid);
 		try {
 			process.kill(childPid, "SIGTERM");
 			result.signalAttempt = { ok: true, errnoCode: null };

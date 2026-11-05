@@ -3,6 +3,28 @@ STRUCTURAL TEST RESULTS
 CLASSIFICATION: STRUCTURAL (process-free)
 HEAD: cfd81f35594a759e185da97834923450f4ba8e9b
 
+--- RE-VERIFICATION AFTER THE P1 FIXTURE CORRECTION (review of 2026-11-05) ---
+The P1 correction touched ONLY the evidence fixture
+(`.factory/evidence/.../probe-fixtures/same-sandbox-probe.mjs`) and the
+evidence documents. NO production source file was modified, so the
+structural gates are unaffected. Re-run for confirmation:
+
+--- SDK: seatbelt-same-sandbox-discriminator01.test.ts + regressions ---
+ ✓ src/runtime/sandbox/macos/seatbelt-same-sandbox-discriminator01.test.ts
+ ✓ src/runtime/sandbox/macos/seatbelt-profile.test.ts
+ ✓ src/runtime/sandbox/macos/seatbelt-backend.test.ts
+ Test Files  3 passed (3)
+      Tests  57 passed | 19 skipped (76)
+
+--- HOST: same-sandbox-production-discriminator01.policy.test.ts ---
+ ✓ src/sdk/__tests__/same-sandbox-production-discriminator01.policy.test.ts (10 tests)
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+
+=> 67 passed (57 + 10), 19 skipped — IDENTICAL to the pre-correction count.
+   The reported "67 passed" figure is confirmed.
+
+--- ORIGINAL RUN (recorded at the diagnostic source head) ---
 --- SDK: seatbelt-same-sandbox-discriminator01.test.ts (T1,T2,T3,T4,T5,T6,T7,T8,T9) ---
  ✓ src/runtime/sandbox/macos/seatbelt-same-sandbox-discriminator01.test.ts (11 tests) 8ms
  Test Files  1 passed (1)

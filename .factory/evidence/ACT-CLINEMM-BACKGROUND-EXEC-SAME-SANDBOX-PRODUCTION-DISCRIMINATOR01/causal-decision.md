@@ -59,9 +59,13 @@ Two load-bearing facts follow:
   application step is NOT the obstacle.
 * The extension host's `TMPDIR` is the **system** per-user temp root,
   NOT a `clinemm-sandbox-temp-*` directory. Therefore the extension host
-  is **NOT** inside a ClineMM Seatbelt profile. It inherits ONLY the
-  Chromium zygote sandbox authority, and adds the ClineMM authority
-  itself. That is exactly the composition this ACT must test.
+  is **NOT** inside a ClineMM Seatbelt profile. The **leading
+  explanation** is that it inherits the Chromium zygote sandbox
+  authority, and adds the ClineMM authority itself — that is exactly the
+  composition this ACT must test.
+  **Scope limit (review of 2026-11-05):** an environment path does NOT
+  establish the effective kernel sandbox policy, so this is `INFERRED`,
+  not proven causal identity.
 
 ### 3. The diagnostic is DEFAULT_OFF and signal-only (`STRUCTURAL`)
 
@@ -96,6 +100,18 @@ childAliveProbeErrno= ESRCH
 The SAME fixture, the SAME child-directed `SIGTERM`, the SAME `EPERM`,
 and a CLEAN exit with NO orphan. The child has an independent 4-second
 self-exit deadline, so a denied signal cannot leak a process.
+
+**P1 correction applied (review of 2026-11-05).** The fixture's two
+pre-signal `/bin/ps` PGID observations were removed. They could consume the
+child's entire 4-second lifetime (2 × 2000ms) before the SIGTERM was
+attempted, turning the measurement into an inconclusive `ESRCH`.
+`parentPgid`/`childPgid` are now always `null`; the independent Terminal
+is the authoritative PGID inspector. The SIGTERM is now attempted ~52ms
+after `CHILD_READY` (3948ms margin). The RED above was re-verified
+unchanged after the correction.
+Fixture SHA-256 (post-correction) =
+`857209dcb78154ad69c2101573159db8e0e63fe8c8de04f49562d8d7c064497a`.
+See `fixture-p1-correction.txt`.
 
 ### 5. The artifact is built, identity-verified, and carries the diagnostic (`STRUCTURAL` + `LIVE` install)
 
@@ -158,9 +174,12 @@ result — so no candidate measurement was attempted from here.
    that qualification was measured in an independent Terminal, not in
    the inherited context).
 3. The candidate job's exact parent/child PGIDs in the production
-   context — `/bin/ps` is denied inside the Seatbelt profile, so PGID
-   observation is `LIVE_UNOBSERVABLE` from inside the sandbox and must
-   be done by the independent Terminal from the recorded PIDs.
+   context. After the P1 correction the fixture does NOT attempt any
+   in-process PGID observation, so `parentPgid`/`childPgid` are always
+   `null` ("not observed in-process"). The authoritative PGID inspection
+   is the independent Terminal's, from the recorded PIDs
+   (`OPERATOR-INSTRUCTIONS.md` step 5). The PGIDs are not load-bearing for
+   the causal decision.
 
 ---
 

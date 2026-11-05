@@ -40,8 +40,14 @@ What IS known (STRUCTURAL / LIVE on the production host):
      - uses the ORIGINAL "(allow signal (target self))" rule, and
      - has the extension host's TMPDIR = the SYSTEM per-user temp root
        (NOT a clinemm-sandbox-temp-* dir) => the extension host itself is
-       NOT inside a ClineMM Seatbelt profile; it inherits ONLY the Chromium
-       zygote sandbox authority.
+       NOT inside a ClineMM Seatbelt profile.
+
+   SCOPE LIMIT (review of 2026-11-05): the TMPDIR observation shows the
+   extension host is not launched under a ClineMM Seatbelt profile. It is
+   the LEADING EXPLANATION that the extension host therefore inherits only
+   the Chromium zygote sandbox authority — but an environment path does NOT
+   establish the effective KERNEL sandbox policy. This is INFERRED, not
+   proven causal identity, and it is recorded as such.
 
 2. The candidate profile for the SAME capability snapshot was generated
    and diffed (see profile-diff.txt):

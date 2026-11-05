@@ -3,6 +3,22 @@
 **ACT:** `ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01`
 **Status:** `CODE COMPLETE — LIVE MEASUREMENT NOT EXECUTED`
 **Diagnostic source head:** `cfd81f35594a759e185da97834923450f4ba8e9b`
+**Fixture SHA-256 (P1-corrected):** `857209dcb78154ad69c2101573159db8e0e63fe8c8de04f49562d8d7c064497a`
+
+> **P1 CORRECTION APPLIED (review of 2026-11-05).** The probe fixture's
+> in-process PGID observations were removed from the pre-signal path.
+> Previously two sequential `/bin/ps` calls (2s timeout each) could consume
+> the child's ENTIRE 4-second self-exit lifetime before the SIGTERM was
+> attempted, producing an inconclusive `ESRCH`. The SIGTERM is now attempted
+> ~50ms after `CHILD_READY` regardless of `/bin/ps` behaviour.
+> `parentPgid` and `childPgid` are always `null` in the result.
+> **The independent Terminal is now the authoritative PGID inspector**
+> (Step 5). The fixture is loaded from the repository at runtime, so this
+> correction does NOT require rebuilding the already-verified VSIX.
+>
+> **Two operational safeguards were added by the same review** — see
+> Step 2a (fully close the existing instance first) and Step 6 (restore the
+> normal extension after ANY terminal outcome).
 
 ---
 
@@ -85,6 +101,51 @@ export CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND='["/bin/bash","-c","/opt/homebre
 Do NOT disable the Chromium sandbox and do NOT change any VSCodium launch
 flag other than the two `--*-dir` paths above.
 
+## Step 2a — FULLY CLOSE the existing dogfood instance FIRST
+
+> **Added by the review of 2026-11-05. Do not skip this.**
+
+VS Code documents that a subsequent instance can inherit the FIRST running
+instance's environment instead of the launching shell's environment. If the
+existing dogfood VSCodium (PID 90006) is still running when you execute
+Step 2, the new launch may reuse the OLD process — whose environment does
+NOT carry `CLINEMM_DIAG_SAME_SANDBOX_SIGNAL`. The diagnostic would then
+never arm, the profile would keep `(allow signal (target self))`, and the
+run would be misread as a RED.
+
+Before Step 2:
+
+```bash
+# 1. Quit VSCodium COMPLETELY (Cmd-Q in the GUI, or:)
+osascript -e 'quit app "VSCodium"'
+
+# 2. Confirm no VSCodium / extension-host process remains.
+pgrep -fl 'VSCodium|extensionHost|extension-host' || echo "none running"
+```
+
+Wait for `pgrep` to return **no** matching processes. Only then run Step 2.
+
+Verify the new instance actually carries the opt-in:
+
+```bash
+# The extension host's own PID and environment, from the Terminal:
+pgrep -fl 'extensionHost|extension-host'
+ps -Eww -p <extension-host-pid> | tr ' ' '\n' | grep CLINEMM_DIAG
+```
+
+Both `CLINEMM_DIAG_SAME_SANDBOX_SIGNAL=1` and
+`CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND=...` MUST be present. If they are
+not, the run is invalid — restart cleanly.
+
+Also confirm the **diagnostic bundle** is the one that got loaded, not
+merely a separate writable test installation:
+
+```bash
+shasum -a 256 \
+  /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-cfd81f355/dist/extension.js
+# MUST equal f183358f96fdc043f3677b11491c16051ceeae05f83bc17241d393f311da31f1
+```
+
 ## Step 3 — capture the profile identity
 
 The Seatbelt backend writes each profile to a private temp dir. From an
@@ -126,7 +187,7 @@ SAME_SANDBOX_RESULT_JSON={...}
 That JSON is the authoritative result. Save it verbatim to
 `raw/live-command-result.json`.
 
-## Step 5 — independent cleanup verification
+## Step 5 — independent cleanup verification AND authoritative PGID inspection
 
 From the independent Terminal, using the exact child PID from the result:
 
@@ -140,16 +201,64 @@ Interpret per the charter: `ESRCH` = absent; `EPERM` = existence cannot
 be excluded (`CLEANUP_UNVERIFIED`); PID/identity mismatch = the current
 process is not the original target.
 
+> **The Terminal is the ONLY authoritative PGID inspector.** The fixture
+> no longer observes PGIDs in-process (see the P1 correction note at the
+> top): `parentPgid` and `childPgid` are always `null` in
+> `SAME_SANDBOX_RESULT_JSON`, which means "not observed in-process" — it
+> is NOT a claim that the PGID is unknown to the kernel.
+>
+> The PGID values are NOT load-bearing for the causal decision (the
+> decision rests on the signal errno plus the correlated child
+> delivery/exit evidence), but capture them here for the record:
+>
+> ```bash
+> PARENT_PID=<parentPid>
+> CHILD_PID=<childPid>
+> ps -o pid=,ppid=,pgid=,lstart=,command= -p "$PARENT_PID"
+> ps -o pid=,ppid=,pgid=,lstart=,command= -p "$CHILD_PID"
+> ```
+>
+> Record the observed `pgid` values in the result notes. Because the
+> child is spawned `detached`, the child's PGID is normally its own PID;
+> confirm that rather than assume it.
+
 The fixture's child has an INDEPENDENT 4-second self-exit deadline, so a
 denied signal cannot leave an orphan. If the child survives that
 deadline, report `HALT_NEW_ORPHAN` and do NOT launch another fixture.
 
-## Step 6 — restore
+## Step 6 — restore the normal extension (after ANY outcome)
 
-After Case A or Case B is established, the diagnostic must be REMOVED
-(see `diagnostic-contract.md` §Removal inventory) and a NORMAL extension
-artifact rebuilt + reinstalled. The currently installed diagnostic
-artifact must NOT be left in place with the diagnostic armed.
+> **Added by the review of 2026-11-05.** Restore the normal extension
+> after **any** terminal outcome — including `CAPTURE_INSUFFICIENT`,
+> `HALT_DIAGNOSTIC_NOT_APPLIED`, `HALT_UNSAFE_SIGNAL_SCOPE`, an aborted
+> probe, or an inconclusive/garbled result. **Not only after Case A or
+> Case B.** The diagnostic must never be left installed with the
+> diagnostic armed.
+
+Remove the diagnostic artifact:
+
+```bash
+VSC=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm
+CODIUM=/Applications/VSCodium.app/Contents/Resources/app/bin/codium
+"$CODIUM" --uninstall-extension s1onique.clinemm \
+  --user-data-dir "$VSC/user-data" --extensions-dir "$VSC/extensions"
+```
+
+Then rebuild and reinstall a NORMAL artifact (a normal extension artifact
+is built by the normal dogfood pipeline at the current HEAD; see
+`build-identity.txt` for the pipeline used, and `diagnostic-contract.md`
+§Removal inventory for the exact source changes to revert FIRST).
+
+Verify the restored install is NOT the diagnostic:
+
+```bash
+grep -c 'CLINEMM_DIAG_SAME_SANDBOX_SIGNAL' \
+  "$VSC/extensions/s1onique.clinemm-<normal-version>/dist/extension.js"
+# MUST be 0
+```
+
+The currently installed diagnostic artifact must NOT be left in place with
+the diagnostic armed.
 
 ---
 
