@@ -51,6 +51,39 @@ import {
 	type SandboxBackendResolver,
 } from "./sandbox-policy"
 
+/**
+ * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+ * (TCRR01): the bounded pending reconciliation for ONE job.
+ *
+ * This is PRIVATE manager state. It is NOT a diagnostic record and
+ * NOT a source of authority for release - it is the retained
+ * IDENTITY of the original owned process group plus the schedule
+ * bookkeeping needed to re-probe it a bounded number of times.
+ *
+ * Every field is required for the reconciliation to be authorized:
+ *
+ *   - `jobId`             - the original job identity.
+ *   - `pgid`             - the ORIGINAL owned PGID.
+ *   - `ownerSessionId`   - the launch-time owner.
+ *   - `reconciledState`  - the ORIGINAL intended terminal class that
+ *                          the containment failure overwrote.
+ *   - `containmentFailed`- the ORIGINAL failure classification.
+ *
+ * A pending reconciliation is DROPPED (never acted upon) when the
+ * job's authoritative identity is no longer retained, when the
+ * attempt budget or the observation horizon is exhausted, or when
+ * the manager is disposed.
+ */
+interface PendingContainmentReconciliation {
+	readonly jobId: string
+	readonly pgid: number
+	readonly ownerSessionId: string | undefined
+	readonly reconciledState: Exclude<CommandJobState, "running" | "containment_failed" | "spawn_failed">
+	readonly containmentFailed: "substrate_alive" | "substrate_eperm" | "substrate_unknown"
+	readonly registeredAtMs: number
+	attempts: number
+}
+
 export type CommandJobState =
 	| "running"
 	| "exited"
@@ -484,6 +517,51 @@ export interface CommandJobManagerOptions {
 	 * compiling unchanged.
 	 */
 	terminalPostconditionProbe?: (pgid: number) => TerminalPostconditionProbeResult
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): the bounded late-reconciliation schedule.
+	 *
+	 * When a job's SYNCHRONOUS finalization probe proves that its
+	 * OWNED process group was NOT gone (`alive` / `eperm` /
+	 * `unknown`), the manager registers a BOUNDED pending
+	 * reconciliation for that job and re-probes the SAME original
+	 * PGID on a fixed schedule. Only a fresh `gone` (ESRCH) verdict
+	 * authorizes the reconciliation; every other verdict leaves the
+	 * containment obligation unresolved.
+	 *
+	 * The schedule is deliberately tiny and bounded:
+	 *
+	 *   - `enabled`        - master switch (default: true).
+	 *   - `maxAttempts`    - finite attempt budget per job.
+	 *   - `horizonMs`      - bounded observation horizon per job.
+	 *   - `intervalMs`     - delay between re-probes.
+	 *
+	 * The defaults cover the OBSERVED N1 transient duration with
+	 * reasonable tolerance: the NEPCR01 real-process reproduction
+	 * measured the transient survivor leaving the owned group
+	 * within roughly a second of the shell's natural exit.
+	 *
+	 * There is NO unbounded per-job polling loop: the attempt
+	 * budget and the horizon are both hard stops, and when they
+	 * are exhausted the containment obligation stays unresolved
+	 * (fail-closed). No new recurring process signals are issued.
+	 *
+	 * Production callers MUST NOT supply this - it exists so the
+	 * focused suite can drive the schedule deterministically.
+	 */
+	containmentReconciliation?: {
+		readonly enabled?: boolean
+		readonly maxAttempts?: number
+		readonly horizonMs?: number
+		readonly intervalMs?: number
+	}
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): hard cap on simultaneously pending
+	 * reconciliations. Bounded so a burst of failed jobs cannot
+	 * grow the pending map without limit.
+	 */
+	maxPendingReconciliations?: number
 }
 
 /**
@@ -703,6 +781,70 @@ export type CommandJobLifecycleEventInput =
 			readonly jobState: "containment_failed"
 			readonly tsMs: number
 	  }
+	| {
+			/**
+			 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+			 * (TCRR01): the LATER, AUTHORITATIVE reconciliation of a
+			 * historical containment failure.
+			 *
+			 * SEMANTICS (distinct from every other lifecycle event):
+			 *
+			 * The ORIGINAL `command_job_containment_failed` event remains
+			 * historically valid forever - it is never erased, never
+			 * re-emitted, and the runtime incident counter is NOT
+			 * incremented again. This event is a NEW fact: a FRESH
+			 * production postcondition probe of the ORIGINAL owned PGID
+			 * returned `gone` (ESRCH), so the containment obligation for
+			 * this job is now RESOLVED.
+			 *
+			 * It is NOT a terminal transition: the terminal-transition
+			 * promise is NOT resolved a second time, the active-job
+			 * cardinality is NOT decremented again, and no second
+			 * model-visible terminal result is produced.
+			 */
+			readonly event: "command_job_containment_reconciled"
+			readonly jobId: string
+			/**
+			 * The ORIGINAL owned PGID that was proven `gone`. The numeric
+			 * identity of the group at launch time - NOT a fresh, guessed,
+			 * or current-session PGID.
+			 */
+			readonly pgid: number
+			/**
+			 * The LAUNCH-TIME owner session id, preserved verbatim through
+			 * the reconciliation so the owner-scoped C10 classifier can
+			 * attribute the release to the same owner that filed the
+			 * original failure.
+			 */
+			readonly ownerSessionId?: string
+			/**
+			 * The ORIGINAL intended terminal outcome that the containment
+			 * failure overwrote (`exited` / `cancelled` /
+			 * `deadline_exceeded`). Preserved so the reconciliation does
+			 * NOT indiscriminately publish `exited`.
+			 */
+			readonly reconciledState: Exclude<CommandJobState, "running" | "containment_failed" | "spawn_failed">
+			/**
+			 * The ORIGINAL failure classification
+			 * (`substrate_alive` / `substrate_eperm` / `substrate_unknown`).
+			 * Preserved for the causal record; the reconciliation does NOT
+			 * rewrite the original classification.
+			 */
+			readonly containmentFailed: "substrate_alive" | "substrate_eperm" | "substrate_unknown"
+			/**
+			 * The OS errno that produced the `gone` verdict. `ESRCH` for
+			 * the production classifier; `null` for a legacy string-form
+			 * probe seam that supplied no errno.
+			 */
+			readonly osErrorCode: string | null
+			/**
+			 * How many bounded re-probes were performed before this
+			 * reconciliation succeeded (1-based).
+			 */
+			readonly attempt: number
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
 
 export type CommandJobLifecycleEvent =
 	| {
@@ -854,6 +996,78 @@ export type CommandJobLifecycleEvent =
 			readonly tsMs: number
 			readonly activeCommandJobs: number
 	  }
+	| {
+			/**
+			 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+			 * (TCRR01): the LATER, AUTHORITATIVE reconciliation of a
+			 * historical containment failure.
+			 *
+			 * SEMANTICS (distinct from every other lifecycle event):
+			 *
+			 * The ORIGINAL `command_job_containment_failed` event remains
+			 * historically valid forever - it is never erased, never
+			 * re-emitted, and the runtime incident counter is NOT
+			 * incremented again. This event is a NEW fact: a FRESH
+			 * production postcondition probe of the ORIGINAL owned PGID
+			 * returned `gone` (ESRCH), so the containment obligation for
+			 * this job is now RESOLVED.
+			 *
+			 * It is NOT a terminal transition: the terminal-transition
+			 * promise is NOT resolved a second time, the active-job
+			 * cardinality is NOT decremented again, and no second
+			 * model-visible terminal result is produced.
+			 */
+			readonly event: "command_job_containment_reconciled"
+			readonly jobId: string
+			/**
+			 * The ORIGINAL owned PGID that was proven `gone`. The numeric
+			 * identity of the group at launch time - NOT a fresh, guessed,
+			 * or current-session PGID.
+			 */
+			readonly pgid: number
+			/**
+			 * The LAUNCH-TIME owner session id, preserved verbatim through
+			 * the reconciliation so the owner-scoped C10 classifier can
+			 * attribute the release to the same owner that filed the
+			 * original failure.
+			 */
+			readonly ownerSessionId?: string
+			/**
+			 * The ORIGINAL intended terminal outcome that the containment
+			 * failure overwrote (`exited` / `cancelled` /
+			 * `deadline_exceeded`). Preserved so the reconciliation does
+			 * NOT indiscriminately publish `exited`.
+			 */
+			readonly reconciledState: Exclude<CommandJobState, "running" | "containment_failed" | "spawn_failed">
+			/**
+			 * The ORIGINAL failure classification
+			 * (`substrate_alive` / `substrate_eperm` / `substrate_unknown`).
+			 * Preserved for the causal record; the reconciliation does NOT
+			 * rewrite the original classification.
+			 */
+			readonly containmentFailed: "substrate_alive" | "substrate_eperm" | "substrate_unknown"
+			/**
+			 * The OS errno that produced the `gone` verdict. `ESRCH` for
+			 * the production classifier; `null` for a legacy string-form
+			 * probe seam that supplied no errno.
+			 */
+			readonly osErrorCode: string | null
+			/**
+			 * How many bounded re-probes were performed before this
+			 * reconciliation succeeded (1-based).
+			 */
+			readonly attempt: number
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			/**
+			 * The live ownership gauge, injected by the emitter exactly as
+			 * it is for every other lifecycle event. The reconciliation is
+			 * NOT a terminal transition, so this gauge is UNCHANGED by the
+			 * reconciliation itself (the job left the active map at
+			 * finalize time, long before the reconciliation).
+			 */
+			readonly activeCommandJobs: number
+	  }
 
 /**
  * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
@@ -927,6 +1141,27 @@ export const MAX_TERMINAL_JOBS = 128
 
 /** SIGTERM grace before SIGKILL. Matches the bash executor's `5_000` watchdog. */
 export const TERM_GRACE_MS = 5_000
+
+/**
+ * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+ * (TCRR01): the bounded late-reconciliation schedule defaults.
+ *
+ * `DEFAULT_RECONCILIATION_MAX_ATTEMPTS` x `DEFAULT_RECONCILIATION_INTERVAL_MS`
+ * is the observation horizon: 20 attempts at 250ms = 5s. The NEPCR01
+ * real-process N1 case observed the transient descendant leaving the
+ * owned group well inside this window, and the N2 persistent-descendant
+ * control stays alive across it (so it exhausts the budget and remains
+ * blocked).
+ */
+export const DEFAULT_RECONCILIATION_MAX_ATTEMPTS = 20
+export const DEFAULT_RECONCILIATION_INTERVAL_MS = 250
+export const DEFAULT_RECONCILIATION_HORIZON_MS = 5_000
+
+/**
+ * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+ * (TCRR01): hard cap on simultaneously pending reconciliations.
+ */
+export const MAX_PENDING_RECONCILIATIONS = 64
 
 /** Stable, opaque job id. Format: `cmd_<base36>`. */
 function generateJobId(): string {
@@ -1235,6 +1470,40 @@ export class CommandJobManager {
 	 */
 	private readonly terminalTransitions = new Map<string, Promise<TerminalTransition>>()
 
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): the pending late reconciliations, keyed by jobId.
+	 *
+	 * Bounded by `maxPendingReconciliations`: the map is a hard cap,
+	 * not an unbounded per-job polling registry. When the cap is
+	 * reached the OLDEST pending entry is dropped WITHOUT being
+	 * reconciled - its containment obligation simply remains
+	 * unresolved (fail-closed).
+	 */
+	private readonly pendingReconciliations = new Map<string, PendingContainmentReconciliation>()
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): the live reconciliation timers. Held in a SET so
+	 * `dispose()` can cancel every one of them explicitly (no timer
+	 * survives manager disposal).
+	 */
+	private readonly reconciliationTimers = new Set<NodeJS.Timeout>()
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): the bounded reconciliation schedule configuration.
+	 */
+	private readonly reconciliationEnabled: boolean
+	private readonly reconciliationMaxAttempts: number
+	private readonly reconciliationHorizonMs: number
+	private readonly reconciliationIntervalMs: number
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): the hard cap on simultaneously pending
+	 * reconciliations. Bounded so a burst of failed jobs cannot
+	 * grow the pending map without limit.
+	 */
+	private readonly maxPendingReconciliations: number
+
 	private readonly maxTerminalJobs: number
 	private readonly maxExecutionDeadlineMs: number
 	private readonly maxWaitBudgetMs: number
@@ -1346,6 +1615,14 @@ export class CommandJobManager {
 		this.onRuntimeError = options.onRuntimeError
 		this.onCommandJobLifecycle = options.onCommandJobLifecycle
 		this.terminalPostconditionProbe = options.terminalPostconditionProbe ?? defaultTerminalPostconditionProbe
+		// ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+		// (TCRR01): wire the bounded late-reconciliation schedule.
+		const reconciliation = options.containmentReconciliation ?? {}
+		this.reconciliationEnabled = reconciliation.enabled ?? true
+		this.reconciliationMaxAttempts = Math.max(1, reconciliation.maxAttempts ?? DEFAULT_RECONCILIATION_MAX_ATTEMPTS)
+		this.reconciliationHorizonMs = Math.max(0, reconciliation.horizonMs ?? DEFAULT_RECONCILIATION_HORIZON_MS)
+		this.reconciliationIntervalMs = Math.max(1, reconciliation.intervalMs ?? DEFAULT_RECONCILIATION_INTERVAL_MS)
+		this.maxPendingReconciliations = Math.max(1, options.maxPendingReconciliations ?? MAX_PENDING_RECONCILIATIONS)
 	}
 
 	/**
@@ -1358,6 +1635,173 @@ export class CommandJobManager {
 	 * classified event and any thrown error is caught + logged
 	 * — a sink bug must never poison the manager's runtime path.
 	 */
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): register the BOUNDED pending reconciliation for a
+	 * job whose SYNCHRONOUS finalization probe proved the owned
+	 * process group was NOT gone.
+	 *
+	 * ELIGIBILITY (fail-closed on every exclusion):
+	 *
+	 *   - the reconciliation schedule is enabled,
+	 *   - the ORIGINAL PGID is POSITIVELY identified (no
+	 *     `pgid_unset`; a malformed identity is never reconciled),
+	 *   - the job's stable identity (`jobId`) is known,
+	 *   - the original failure classification is one of the
+	 *     substrate classes (NOT `pgid_unset`), and
+	 *   - the original INTENDED terminal outcome is a class that
+	 *     can be restored (`exited` / `cancelled` /
+	 *     `deadline_exceeded`) - `spawn_failed` is NEVER
+	 *     transformed into a clean outcome.
+	 *
+	 * The pending entry retains the ORIGINAL job id, manager
+	 * identity (implicitly, this manager instance), owner session
+	 * id, PGID and failure classification. A reused PGID that
+	 * currently reports `alive` / `eperm` remains blocked - the
+	 * numeric match alone never authorizes a release.
+	 */
+	private registerPendingContainmentReconciliation(
+		job: CommandJob,
+		pgid: number,
+		reconciledState: Exclude<CommandJobState, "running" | "containment_failed" | "spawn_failed">,
+		containmentFailed: "substrate_alive" | "substrate_eperm" | "substrate_unknown",
+	): void {
+		if (!this.reconciliationEnabled) return
+		if (!Number.isInteger(pgid) || pgid <= 0) return
+		if (typeof job.id !== "string" || job.id.length === 0) return
+		// Bound the pending map. The OLDEST entry is dropped WITHOUT
+		// reconciliation: its containment obligation simply stays
+		// unresolved (fail-closed).
+		while (this.pendingReconciliations.size >= this.maxPendingReconciliations) {
+			const oldest = this.pendingReconciliations.keys().next()
+			if (oldest.done) break
+			this.pendingReconciliations.delete(oldest.value)
+		}
+		this.pendingReconciliations.set(job.id, {
+			jobId: job.id,
+			pgid,
+			ownerSessionId: job.ownerSessionId,
+			reconciledState,
+			containmentFailed,
+			registeredAtMs: Date.now(),
+			attempts: 0,
+		})
+		this.scheduleContainmentReconciliationTick(job.id)
+	}
+
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): schedule the next bounded re-probe for a job.
+	 *
+	 * The timer is retained in `reconciliationTimers` so `dispose()`
+	 * can cancel it explicitly. A tick that finds no pending entry
+	 * (already reconciled, evicted, or disposed) is a NO-OP.
+	 */
+	private scheduleContainmentReconciliationTick(jobId: string): void {
+		if (!this.pendingReconciliations.has(jobId)) return
+		const timer = setTimeout(() => {
+			this.reconciliationTimers.delete(timer)
+			this.runContainmentReconciliationTick(jobId)
+		}, this.reconciliationIntervalMs)
+		// Do NOT keep the Node event loop alive for a background
+		// reconciliation probe.
+		timer.unref?.()
+		this.reconciliationTimers.add(timer)
+	}
+
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): one bounded re-probe of the ORIGINAL owned PGID.
+	 *
+	 * Only a fresh `gone` verdict authorizes the reconciliation.
+	 * `alive` / `eperm` / `unknown` / a throwing probe leave the
+	 * containment obligation unresolved and consume one attempt.
+	 *
+	 * When the attempt budget OR the observation horizon is
+	 * exhausted, the pending entry is DROPPED WITHOUT a clean
+	 * transition: the containment failure is retained and the
+	 * obligation stays unresolved. A retry timeout is NOT evidence
+	 * of process-group survival and is NOT reported as such.
+	 */
+	private runContainmentReconciliationTick(jobId: string): void {
+		const pending = this.pendingReconciliations.get(jobId)
+		if (!pending) return
+		const elapsedMs = Date.now() - pending.registeredAtMs
+		if (pending.attempts >= this.reconciliationMaxAttempts || elapsedMs > this.reconciliationHorizonMs) {
+			// Budget / horizon exhausted: retain the containment failure.
+			this.pendingReconciliations.delete(jobId)
+			return
+		}
+		pending.attempts += 1
+		let postcondition: TerminalPostcondition
+		let osErrorCode: string | null = null
+		try {
+			const probeResult = this.terminalPostconditionProbe(pending.pgid)
+			if (typeof probeResult === "string") {
+				postcondition = probeResult
+			} else {
+				postcondition = probeResult.postcondition
+				osErrorCode = probeResult.osErrorCode ?? null
+			}
+		} catch {
+			// Probe unavailable: remain blocked, consume one attempt.
+			postcondition = "unknown"
+		}
+		if (postcondition !== "gone") {
+			this.scheduleContainmentReconciliationTick(jobId)
+			return
+		}
+		this.applyContainmentReconciliation(pending, osErrorCode)
+	}
+
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): apply the authoritative reconciliation.
+	 *
+	 * The canonical manager state for the job moves from
+	 * `containment_failed` back to the ORIGINAL intended terminal
+	 * class, and a NEW lifecycle event announces the reconciliation.
+	 *
+	 * WHAT THIS DELIBERATELY DOES NOT DO:
+	 *
+	 *   - it does NOT resolve the terminal-transition promise again
+	 *     (no second terminal transition, no second model-visible
+	 *     terminal result),
+	 *   - it does NOT re-enter `reportRuntimeError` (the incident
+	 *     counter is NOT incremented again),
+	 *   - it does NOT decrement the active-job cardinality again
+	 *     (the job left the active map at finalize time),
+	 *   - it does NOT erase the ORIGINAL `containment_failed`
+	 *     event or its historical classification.
+	 *
+	 * IDEMPOTENCE: the pending entry is removed BEFORE the event
+	 * is emitted, so a duplicate `gone` observation can never
+	 * produce a second reconciliation.
+	 */
+	private applyContainmentReconciliation(pending: PendingContainmentReconciliation, osErrorCode: string | null): void {
+		if (!this.pendingReconciliations.has(pending.jobId)) return
+		this.pendingReconciliations.delete(pending.jobId)
+		const job = this.terminal.get(pending.jobId)
+		if (!job) return
+		// The canonical manager state moves back to the ORIGINAL
+		// intended terminal class - never to a blanket `exited`.
+		job.state = pending.reconciledState
+		// The historical failure latch is RETAINED so the original
+		// classification stays readable out-of-band.
+		this.emitCommandJobLifecycle({
+			event: "command_job_containment_reconciled",
+			jobId: pending.jobId,
+			pgid: pending.pgid,
+			ownerSessionId: pending.ownerSessionId,
+			reconciledState: pending.reconciledState,
+			containmentFailed: pending.containmentFailed,
+			osErrorCode,
+			attempt: pending.attempts,
+			jobState: pending.reconciledState,
+			tsMs: Date.now(),
+		})
+	}
+
 	private emitCommandJobLifecycle(event: CommandJobLifecycleEventInput): void {
 		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
 		// BJLA diagnostic — LA1 discriminator. When the lifecycle
@@ -2893,6 +3337,30 @@ export class CommandJobManager {
 				tsMs: Date.now(),
 			})
 		}
+		// ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+		// (TCRR01): register the BOUNDED pending reconciliation.
+		//
+		// The ORIGINAL classification above stays historically valid
+		// forever - this is NOT a retroactive correction. The
+		// reconciliation is a SEPARATE, LATER authoritative fact: a
+		// fresh production postcondition probe of the ORIGINAL
+		// owned PGID may prove the group `gone`.
+		//
+		// ELIGIBILITY: the failure class must NOT be `pgid_unset`
+		// (a malformed process identity can never be reconciled),
+		// the PGID must be POSITIVELY identified, and the
+		// original INTENDED terminal class must be restorable
+		// (`spawn_failed` is never transformed into a clean
+		// outcome).
+		if (
+			typeof savedPgid === "number" &&
+			savedPgid > 0 &&
+			job.terminationFailed !== undefined &&
+			job.terminationFailed !== "pgid_unset" &&
+			(state === "exited" || state === "cancelled" || state === "deadline_exceeded")
+		) {
+			this.registerPendingContainmentReconciliation(job, savedPgid, state, job.terminationFailed)
+		}
 		// Resolve the terminal-transition promise with the captured
 		// flag. This is the single source of truth for the
 		// >0->0 transition identity; the runner reads the flag
@@ -3515,6 +3983,16 @@ export class CommandJobManager {
 		this.terminal.clear()
 		this.terminalOrder.length = 0
 		this.exitTransitions.clear()
+		// ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+		// (TCRR01): cancel every pending reconciliation timer and
+		// drop the pending entries. NO reconciliation may fire after
+		// manager disposal - a disposed manager must not mutate
+		// state or publish events after its lifetime ends.
+		for (const timer of this.reconciliationTimers) {
+			clearTimeout(timer)
+		}
+		this.reconciliationTimers.clear()
+		this.pendingReconciliations.clear()
 		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
 		// BJLA diagnostic — capture `manager_dispose_end` AFTER both
 		// maps were cleared. Lets the post-capture correlation prove

@@ -1,0 +1,49 @@
+{
+  "act": "ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01",
+  "shortName": "TCRR01",
+  "entryHead": "d03d475e1f4ab064ea123eb464b59a4f2b112176",
+  "entryTree": "bc16cc846080e7bc98221a6020822ac7d746acb8",
+  "subjectHead": null,
+  "subjectTree": null,
+  "note": "subjectHead/subjectTree are filled in after the ACT-scoped commit is created.",
+  "productionFiles": [
+    "apps/vscode/src/sdk/command-job-manager.ts",
+    "apps/vscode/src/sdk/SdkController.ts"
+  ],
+  "testFiles": [
+    "apps/vscode/src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts",
+    "apps/vscode/src/sdk/__tests__/transient-containment-reconciliation-repair01.controller.tcrr01.test.ts",
+    "apps/vscode/src/sdk/__tests__/transient-containment-reconciliation-repair01.helpers.tcrr01.ts",
+    "apps/vscode/src/sdk/__tests__/transient-containment-reconciliation-repair01.red-only.tcrr01.test.ts",
+    "apps/vscode/src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts"
+  ],
+  "configFiles": [
+    "apps/vscode/vitest.config.ts"
+  ],
+  "evidenceFiles": [
+    "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/evidence/production-seam-map.md",
+    "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/evidence/red-reproduction.txt",
+    "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/evidence/reconciliation-timeline.jsonl",
+    "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/evidence/ablation-results.txt",
+    "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/evidence/adversarial-results.txt",
+    "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/evidence/verification.txt",
+    "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/evidence/artifact-identity.json",
+    "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/REPORT.md"
+  ],
+  "newLifecycleEvent": "command_job_containment_reconciled",
+  "reconciliationDefaults": {
+    "maxAttempts": 20,
+    "intervalMs": 250,
+    "horizonMs": 5000,
+    "maxPendingReconciliations": 64
+  },
+  "conservationInvariant": "CLEAN_TERMINAL => authoritative owned primary PGID gone",
+  "evidenceClasses": {
+    "realProcess": ["NEPCR01 N1/N2", "TCRR01 G1/G2"],
+    "syntheticReal": [
+      "TCRR01 G3-G18",
+      "TCRR01 controller suite",
+      "TCRR01 ablations"
+    ]
+  }
+}

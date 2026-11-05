@@ -1,0 +1,191 @@
+ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01 (TCRR01)
+ADVERSARIAL SAFETY RESULTS
+============================
+
+Evidence class: SYNTHETIC_REAL (with REAL_PROCESS for the kernel fact)
+
+THE CONSERVATION GATE
+---------------------
+
+  CLEAN_TERMINAL
+    => authoritative owned primary PGID gone
+
+A clean terminal may be published ONLY on a valid later `gone`
+observation. The repair never weakens this: the SYNCHRONOUS
+finalization gate is untouched, and the reconciliation re-uses the SAME
+`terminalPostconditionProbe` seam and the SAME fail-closed classifier.
+
+------------------------------------------------------------------------
+ADVERSARIAL CASES (all in the focused suite)
+------------------------------------------------------------------------
+
+G4  later `eperm`
+    -> `reconciliationEvents` = 0
+    -> controller projection stays "containment_failed"
+    -> C10 blocking set still `[jobId]`
+    PASS: EPERM is NEVER reinterpreted as gone.
+
+G5  later `alive`
+    -> `reconciliationEvents` = 0
+    -> projection stays "containment_failed"
+    -> C10 blocking set still `[jobId]`
+    PASS: a live group remains blocked.
+
+G6  later unknown errno
+    -> `reconciliationEvents` = 0
+    -> projection stays "containment_failed"
+    -> C10 blocking set still `[jobId]`
+    PASS: an unknown errno fails closed.
+
+G7  original PGID missing (`pgid_unset`)
+    -> `reconciliationEvents` = 0
+    -> projection stays "containment_failed"
+    -> C10 blocking set still `[jobId]`
+    PASS: a malformed process identity is NEVER reconciled. No guessed
+    PID, no fresh current-session identity.
+
+G8  foreign owner
+    -> the foreign job IS reconciled (its OWN group is proven gone)
+    -> but the ACTIVE owner's blocking set never contained it
+    -> `blockingSet(OWNER)` = []
+    PASS: a foreign owner's failure cannot release the active owner's
+    barrier (and the owner identity is preserved verbatim through the
+    reconciliation).
+
+G9  unknown owner
+    -> projection stays "containment_failed"
+    -> `blockingSet(OWNER)` = `[jobId]` (fail closed)
+    PASS: an unknown owner is retained as blocking.
+
+G10 duplicate `gone` evidence
+    -> exactly ONE `command_job_containment_reconciled` event
+    -> exactly ONE `command_job_containment_failed` event
+    -> ZERO `command_job_terminal_committed` events
+    PASS: idempotent. The pending entry is removed BEFORE the event is
+    emitted, so a duplicate `gone` can never produce a second
+    reconciliation, a second terminal transition or a second terminal
+    receipt.
+
+G11 delayed older terminal publication
+    -> the reconciled projection is "exited"
+    -> a DELAYED stale `containment_failed` publication is REFUSED
+    -> the projection is STILL "exited"
+    -> C10 blocking set still []
+    PASS: causal ordering holds. A stale publication cannot overwrite a
+    newer authoritative reconciliation.
+
+G12 manager disposal
+    -> the pending reconciliation timer is cancelled
+    -> NO event is published after disposal (the event count is
+       unchanged across a wait window)
+    -> `reconciliationEvents` = 0
+    PASS: no later mutation, no timer leak. `dispose()` explicitly
+    clears every reconciliation timer and the pending map.
+
+G13 retry exhaustion
+    -> `reconciliationEvents` = 0
+    -> projection stays "containment_failed"
+    -> C10 blocking set still `[jobId]`
+    -> the ORIGINAL `command_job_containment_failed` event remains
+    PASS: a retry timeout does NOT infer a clean transition and is NOT
+    reported as confirmed process-group survival.
+
+G14 multiple concurrent failed jobs
+    -> the reconciled job leaves the blocking set
+    -> the unresolved job remains in it
+    -> exactly ONE reconciliation event across both jobs
+    PASS: independent outcomes, bounded resources.
+
+G15 another C10 obligation remains
+    -> the reconciled job left the blocking set
+    -> the OTHER job still holds the completion
+    PASS: completion stays held while another obligation remains.
+
+G17 original containment incident
+    -> the original `command_job_containment_failed` event is still in
+       the stream with `jobState: "containment_failed"` and
+       `containmentFailed: "substrate_alive"`
+    -> the reconciliation is a SEPARATE event carrying the SAME
+       original classification
+    PASS: the historical failure remains observable. The classification
+    is never rewritten.
+
+G18 no duplicate terminal receipt / cardinality
+    -> exactly ONE `command_job_containment_failed`
+    -> ZERO `command_job_terminal_committed`
+    -> exactly ONE `command_job_containment_reconciled`
+    -> the reconciliation event carries `activeCommandJobs: 0` (the job
+       left the active map at finalize time)
+    PASS: no duplicate terminal receipt and no second cardinality
+    decrement.
+
+------------------------------------------------------------------------
+CRITICAL SAFETY TEST -- N2 PERSISTENT DESCENDANT (REAL_PROCESS)
+------------------------------------------------------------------------
+
+Case: `G2 -- a persistent descendant keeps the owned group alive and is
+NEVER reconciled`
+
+Setup: a 30-second descendant in the ORIGINAL owned PGID; the shell
+exits naturally; the reconciliation schedule is given a finite budget
+(`maxAttempts: 4`, `horizonMs: 1200`, `intervalMs: 100`) and the
+observation window extends well beyond it.
+
+Result:
+  * `descendantIdentityVerified` = true (the descendant is positively
+    identified as a member of the ORIGINAL PGID)
+  * `immediateLiveness` = "alive" (kernel truth at the finalize
+    boundary)
+  * the manager's production terminal state = "containment_failed"
+  * `laterLiveness` = "alive" (the group is demonstrably alive AFTER the
+    descendant's own lifetime would have to be re-checked)
+  * `reconciliation` = undefined
+  * `reconciliationEvents(events)` = length 0
+  * `terminalCommits` = 0
+  * `containmentFailures` = 1 (the ORIGINAL incident is retained)
+
+  After the FULL reconciliation observation horizon:
+    -> no reconciled clean terminal
+    -> the controller retains `containment_failed`
+    -> C10 remains HELD
+
+PASS: `HALT_UNSAFE_CONTAINMENT_RELEASE` is NOT triggered. The
+persistent-descendant control is conserved.
+
+------------------------------------------------------------------------
+NON-RELEASE FACTORS (structurally impossible to satisfy)
+------------------------------------------------------------------------
+
+The following can NEVER release a containment obligation, because the
+reconciliation requires a fresh `gone`/ESRCH verdict from the
+production postcondition probe of the ORIGINAL owned PGID:
+
+  root process exited               -> no `gone` certificate
+  active manager map empty           -> no `gone` certificate
+  child stdio closed                 -> no `gone` certificate
+  historical job older than timeout  -> no `gone` certificate
+  EPERM from kill(-pgid, 0)          -> classified `eperm`, blocked
+  unknown postcondition              -> classified `unknown`, blocked
+  empty ps membership                -> NOT consulted by production
+  unmatched jobId                    -> the pending entry is keyed by
+                                         jobId; a non-matching entry is
+                                         never reconciled
+  unknown owner                      -> fail closed
+  stale session or task epoch        -> the launch-time owner id is
+                                         preserved verbatim
+
+The `ps`-membership snapshot is a READ-ONLY DIAGNOSTIC in the NEPCR01
+observation harness only. The PRODUCTION reconciliation never consults
+it; it consults `process.kill(-pgid, 0)` through the existing
+`defaultTerminalPostconditionProbe` seam.
+
+PRIMARY-PGID INVARIANT
+----------------------
+
+The repair does NOT broaden the claim. It proves the disappearance of
+the PRIMARY OWNED PROCESS GROUP (the original PGID) and nothing more.
+It does NOT claim that no descendant escaped into another group - that
+would require independent evidence the ACT does not provide. The
+invariant statement is unchanged:
+
+  CLEAN_TERMINAL => authoritative owned primary PGID gone

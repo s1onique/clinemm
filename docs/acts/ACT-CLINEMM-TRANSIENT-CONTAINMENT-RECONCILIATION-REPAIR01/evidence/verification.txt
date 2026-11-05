@@ -1,0 +1,298 @@
+ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01 (TCRR01)
+VERIFICATION LOG
+=================
+
+ENTRY_HEAD: d03d475e1f4ab064ea123eb464b59a4f2b112176
+ENTRY_TREE: bc16cc846080e7bc98221a6020822ac7d746acb8
+
+SUBJECT_HEAD: (recorded after the ACT-scoped commit)
+SUBJECT_TREE: (recorded after the ACT-scoped commit)
+
+Toolchain: Bun 1.4.2 (package manager + task runner), Node >=22 (runtime).
+Working directory for all commands: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+------------------------------------------------------------------------
+0. ENTRY IDENTITY
+------------------------------------------------------------------------
+
+  $ git rev-parse HEAD
+  d03d475e1f4ab064ea123eb464b59a4f2b112176
+  $ git rev-parse HEAD^{tree}
+  bc16cc846080e7bc98221a6020822ac7d746acb8
+
+The initial worktree was clean apart from the protected stash
+(`stash@{1}` in the final numbering) and two pre-existing worktrees
+(`clinemm-m31-action-first`, `clinemm-m31-bounded`). Both were
+preserved throughout.
+
+------------------------------------------------------------------------
+1. FOCUSED GREEN GATE
+------------------------------------------------------------------------
+
+  $ cd apps/vscode && bun x vitest run \
+      src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts \
+      src/sdk/__tests__/transient-containment-reconciliation-repair01.controller.tcrr01.test.ts
+
+  ✓ src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts (2 tests) 10248ms
+      ✓ G1 — a transient descendant's owned PGID becomes gone and the containment obligation is reconciled  2671ms
+      ✓ G2 — a persistent descendant keeps the owned group alive and is NEVER reconciled  7573ms
+
+   Test Files  2 passed (2)
+        Tests  26 passed (26)
+
+  RESULT: 26/26 PASS.
+
+  The `[vitest-pool]: Failed to terminate forks worker ... kill EPERM`
+  teardown notice is the KNOWN SUBSTRATE artifact (the Seatbelt profile
+  denies signals to other processes). The runner still exits 0 and the
+  test report is written in full.
+
+------------------------------------------------------------------------
+2. TYPE CHECK
+------------------------------------------------------------------------
+
+  $ cd apps/vscode && bun run check-types
+  $ bun run protos && bunx tsc --noEmit && bun run check-types:compat \
+      && cd webview-ui && bunx tsc --noEmit
+
+  RESULT: exit 0 — clean. No diagnostics.
+
+  `git status --porcelain` after the run showed NO generated-file drift
+  (the proto codegen output was byte-identical to the committed tree).
+
+------------------------------------------------------------------------
+3. BIOME (no new diagnostics)
+------------------------------------------------------------------------
+
+  $ cd apps/vscode && bunx biome check \
+      src/sdk/command-job-manager.ts src/sdk/SdkController.ts \
+      src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts \
+      src/sdk/__tests__/transient-containment-reconciliation-repair01.controller.tcrr01.test.ts \
+      src/sdk/__tests__/transient-containment-reconciliation-repair01.helpers.tcrr01.ts \
+      src/sdk/__tests__/transient-containment-reconciliation-repair01.red-only.tcrr01.test.ts \
+      src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts
+
+  One formatter error was found in the new controller test and FIXED
+  (`biome format --write`). After the fix the tree is clean:
+
+    Checked 7 files ... Found 2 warnings. Found 16 infos.
+
+  The ENTRY_HEAD baseline for the three shared files reports the SAME
+  18 diagnostics (2 warnings + 16 infos) at the same rule ids and the
+  same files. Machine comparison of the normalised (file, rule) sets:
+
+    ENTRY diagnostics: 18   SUBJECT diagnostics: 18
+    ADDED  : []
+    REMOVED: []
+    IDENTICAL
+
+  => NO NEW DIAGNOSTICS. The remaining findings are the ENTRY_HEAD
+  baseline (pre-existing `noNonNullAssertion`, `noAssignInExpressions`,
+  `noImplicitAnyLet` and `noUnusedPrivateClassMembers` warnings/infos);
+  only their line numbers shifted because this ACT adds code.
+
+------------------------------------------------------------------------
+4. NEPCR01 (P1 collateral) AND THE REAPING-RACE WITNESS
+------------------------------------------------------------------------
+
+  $ cd apps/vscode && bun x vitest run \
+      src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts
+
+  ✓ src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts (11 tests) 70573ms
+      ✓ N1: natural exit with a transient descendant reproduces the containment_failed boundary
+      ✓ N2: persistent descendant keeps the owned group demonstrably alive across the observation window
+      ✓ N3: shell waits for the same descendant -> gone postcondition and clean terminal
+      ✓ C1: explicit cancel terminates the owned tree -> gone postcondition and clean cancelled terminal
+      ✓ C2: execution deadline terminates the owned tree -> gone postcondition and clean deadline_exceeded terminal
+      ✓ CONTRAST: stdio-inheriting descendant delays the exit promise, and the residual group is reaped within a bounded window
+
+   Test Files  1 passed (1)
+        Tests  11 passed (11)
+
+  RESULT: 11/11 PASS.
+
+  WITNESS IDENTITY (the P1 evidence-writer defect):
+
+  $ shasum -a 256 docs/acts/.../NEPCR01/evidence/reaping-race-witness.json
+  BEFORE the default run:
+    723ba36deb14a0f513af02fab6d7895367884807a7a164a5dd74ddce4d917bd2
+  AFTER the default run:
+    723ba36deb14a0f513af02fab6d7895367884807a7a164a5dd74ddce4d917bd2
+
+  The captured witness (witness_count=1, trial_count=40) is UNCHANGED
+  after a default run. The defect (the default teardown overwriting the
+  opt-in witness with `writeReapingRaceWitnessArtifact([], [])`) is
+  closed.
+
+  DIRECT CONFIRMATION OF THE P1 DEFECT (observed during the ENTRY_HEAD
+  baseline sweep): the ENTRY_HEAD run of the SAME default suite DID
+  overwrite the witness:
+
+    before the ENTRY_HEAD run:  723ba36deb14a0f513af02fab6d7895367884807a7a164a5dd74ddce4d917bd2
+    after  the ENTRY_HEAD run:  595373f38bf440ab8106395018b30eb734196354eaca5d1b7ec3550280df7591
+    diff: 4 insertions(+), 668 deletions(-)   (the witness was emptied)
+
+  The file was restored with `git checkout --` after the baseline sweep.
+  The fixed subject tree leaves it byte-identical.
+
+------------------------------------------------------------------------
+5. ADJACENT CONTAINMENT / C10 SWEEP -- EXACT ENTRY_HEAD-vs-SUBJECT DELTA
+------------------------------------------------------------------------
+
+WHY A PER-FILE SWEEP
+
+The broad Vitest sweep cannot complete on this substrate: the Seatbelt
+profile denies signals to other processes, so Vitest's worker teardown
+reports `kill EPERM` and the runner aborts before writing a report. The
+substrate-stable equivalent is a PER-FILE sweep that runs each suite in
+its OWN vitest process, writes a JSON report per file, and then compares
+the ENTRY_HEAD baseline against the subject head by EXACT test id.
+
+The 24 files are the ACT's named adjacent suites: NEPCR01, CLCR01,
+CFC10A01, CFC10AR01, PHCF01, PCPC01 (x2), BJLA, BCTCP01 (x2),
+BTCONT01, BCNT01, BNAEC01, BNCA-ablation (x2), BCCA, H03, HTEC01,
+RCNC02, ACL01, CommandJobManager, CommandJobManager sandbox
+integration, and the background-state runner suite.
+
+(`background-command-notify-authority-cutover04.bnacut04.test.ts` does
+not exist at ENTRY_HEAD and is reported MISSING by both sweeps — it is
+not a regression.)
+
+METHOD
+
+  * SUBJECT run: the working tree with this ACT applied.
+  * ENTRY_HEAD run: the same working tree with the four tracked ACT
+    files temporarily reverted via
+    `git stash push -- <paths>` (the new, untracked ACT test files
+    stayed in place), then restored via `git stash pop`.
+
+  The protected stash was preserved throughout. Before the baseline
+  sweep: `stash@{0}` = TCRR01 temporary; `stash@{1}` = the pre-existing
+  protected stash. After `git stash pop stash@{0}`:
+  `stash@{0}` = the pre-existing protected stash
+  (`WIP on main: d46223b51 ...`), unchanged.
+
+RESULT
+
+  ENTRY assertions  : 260   {passed: 225, failed: 35}
+  SUBJECT assertions: 260   {passed: 225, failed: 35}
+
+  only in ENTRY : 0
+  only in SUBJECT: 0
+  COMMON test ids: 260
+  STATUS CHANGES : 0
+  IDENTICAL
+
+  => The EXACT per-test-id delta between ENTRY_HEAD and the subject head
+  is ZERO. No adjacent suite changed status in either direction.
+
+The 35 failures are IDENTICAL at ENTRY_HEAD and at the subject head, and
+are the known Seatbelt-substrate failures:
+
+   1  src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts
+   8  src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+   2  src/sdk/command-job-manager.sandbox-integration.test.ts
+  18  src/sdk/command-job-manager.test.ts
+   6  src/sdk/vscode-run-commands-tool.background-state.test.ts
+  ----
+  35  TOTAL (identical at ENTRY_HEAD and at the subject head)
+
+The `command-job-manager.test.ts` count of 18 is the known
+Seatbelt-related set: it is byte-for-byte the same set at ENTRY_HEAD.
+
+All other adjacent suites are fully GREEN at BOTH heads:
+NEPCR01 (11), CLCR01 (20), CFC10A01 (19), CFC10AR01 (25), PHCF01 (10),
+PCPC01 (11), PCPC01-no-overclaim (11), BJLA (2), BCTCP01 multi-job (5),
+BCTCP01 composition (1), BTCONT01 (10), BNAEC01 (19), BNCA-ablation (2),
+BNCA-C10-framework-ablation (2), H03 (32), HTEC01 (11), RCNC02 (7).
+
+------------------------------------------------------------------------
+6. SCOPE REVIEW -- REVERTED NON-ACT ARTIFACT DRIFT
+------------------------------------------------------------------------
+
+Running the NEPCR01 suite regenerates the NEPCR01 evidence artifacts
+(`experiment-matrix.json`, `natural-exit-observations.jsonl`,
+`process-membership.jsonl`) with fresh wall-clock timestamps. Those
+files belong to a DIFFERENT ACT and are NOT ACT-owned by TCRR01, so
+they were restored to their committed state:
+
+  $ git checkout -- docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/{experiment-matrix.json,natural-exit-observations.jsonl,process-membership.jsonl}
+
+The drift was confirmed to be TIMING-ONLY before reverting: with the
+timestamps normalized, the only two differing fields in
+`experiment-matrix.json` were `termination_to_gone_ms`
+(29420 -> 29430 and 28848 -> 28822) — pure wall-clock jitter on the
+same kernel outcomes. No semantic change.
+
+------------------------------------------------------------------------
+7. RED-ONLY WITNESS
+------------------------------------------------------------------------
+
+`apps/vscode/src/sdk/__tests__/transient-containment-reconciliation-repair01.red-only.tcrr01.test.ts`
+asserts the DEFECT (the containment obligation stays stuck). It is
+EXPECTED TO FAIL against the repaired production code and is therefore
+EXCLUDED from normal Vitest discovery via
+`apps/vscode/vitest.config.ts`. It is retained as the executable RED
+witness.
+
+It was executed explicitly at BOTH heads (using a temporary config that
+re-declares `include` and removes only the TCRR01 red-only entry from
+the base `exclude`; the temporary config was deleted afterwards):
+
+  AT ENTRY_HEAD (production reverted via `git stash push -- <2 prod files>`):
+
+    ✓ src/sdk/__tests__/transient-containment-reconciliation-repair01.red-only.tcrr01.test.ts (1 test) 5181ms
+        ✓ RED-01/02/03 — the transient group becomes gone but the containment obligation stays stuck  5179ms
+     Test Files  1 passed (1)
+          Tests  1 passed (1)
+
+  AT THE REPAIRED HEAD (production restored via `git stash pop`):
+
+    × RED-01/02/03 — the transient group becomes gone but the containment obligation stays stuck 3686ms
+    FAIL  src/sdk/__tests__/...red-only.tcrr01.test.ts > TCRR01 RED — the historical containment failure is never reconciled
+    AssertionError: expected 'exited' to be 'containment_failed' // Object.is equality
+     Test Files  1 failed (1)
+          Tests  1 failed (1)
+
+  => The witness PASSES at ENTRY_HEAD and FAILS at the repaired head
+  with exactly the expected inverted assertion. It genuinely discriminates
+  the defect and is not a vacuous test.
+
+  The protected stash was restored after each revert
+  (`stash@{0}` = the pre-existing protected stash, unchanged).
+
+------------------------------------------------------------------------
+8. PROTECTED STATE PRESERVED
+------------------------------------------------------------------------
+
+  $ git stash list
+  stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration
+
+  The pre-existing protected stash is UNCHANGED (it was `stash@{1}`
+  during the baseline sweep and returned to `stash@{0}` after
+  `git stash pop stash@{0}`).
+
+  $ git worktree list
+  <repo>            d03d475e1 [main]
+  <repo>-m31-action-first  38e726c45 [experiment/m31-action-first]
+  <repo>-m31-bounded       0366ea506 (detached HEAD)
+
+  Both pre-existing worktrees are preserved. The temporary
+  `/tmp/tcrr01-entry-wt` worktree (created for the first baseline
+  attempt and found to lack the built SDK `dist/` outputs) was removed
+  with `git worktree remove --force`; the baseline was then re-run in
+  the main tree via the stash method above.
+
+------------------------------------------------------------------------
+9. LIVE INSTALLED-VSIX QUALIFICATION -- PENDING
+------------------------------------------------------------------------
+
+The LIVE qualification (build an exact-head VSIX, install it into a
+real VS Code instance, and exercise the transient-descendant scenario
+end-to-end through the installed extension) is NOT yet performed. It
+requires the ACT-scoped commit to exist first so the packaged artifact
+matches the exact subject head.
+
+STATUS: PENDING — the exact-head commit, package, install and LIVE run
+are the remaining steps. All non-LIVE verification above is complete and
+green.

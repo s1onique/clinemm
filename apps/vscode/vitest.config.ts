@@ -87,6 +87,17 @@ export default defineConfig({
 		// streams isolated.
 		exclude: [
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
+			// ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01 (TCRR01):
+			// the RED-ONLY witness. This file ASSERTS THE DEFECT (the
+			// historical containment obligation stays stuck after the owned
+			// PGID is independently observed gone). It is EXPECTED TO PASS
+			// against the UNMODIFIED ENTRY_HEAD production code and
+			// EXPECTED TO FAIL once the repair is applied - because the
+			// repair closes the very defect it asserts. It is therefore
+			// NOT part of the post-repair GREEN gate; it is retained as
+			// the executable RED witness and can be run explicitly
+			// against a reverted production tree (see the file's header).
+			"src/sdk/__tests__/transient-containment-reconciliation-repair01.red-only.tcrr01.test.ts",
 			// ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 BOUNDED CORRECTION:
 			// real LocalRuntimeHost + real PendingPromptsController +
 			// real drain + real runTurn re-entry for the queue-mechanics

@@ -1,0 +1,140 @@
+ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01 (TCRR01)
+RED REPRODUCTION EVIDENCE
+===========================
+
+Evidence class: REAL_PROCESS
+ENTRY_HEAD: d03d475e1f4ab064ea123eb464b59a4f2b112176
+ENTRY_TREE: bc16cc846080e7bc98221a6020822ac7d746acb8
+
+Method
+------
+The RED was reproduced by running the ACT's focused suites against the
+UNMODIFIED ENTRY_HEAD production code. The production sources
+(`apps/vscode/src/sdk/command-job-manager.ts` and
+`apps/vscode/src/sdk/SdkController.ts`) were temporarily reverted to
+ENTRY_HEAD via `git stash push -- <paths>`; the test files (which are
+new, untracked files) remained. The protected `stash@{0}` was restored
+with `git stash pop` immediately afterwards and the stash list was
+verified unchanged.
+
+Two suites were run:
+
+  1. `src/sdk/__tests__/transient-containment-repair01.red.tcrr01.test.ts`
+     — the RED harness. It compiles against ENTRY_HEAD (it references
+     ONLY production APIs that exist at ENTRY_HEAD) and asserts the
+     OBSERVED STUCK state.
+
+  2. `src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts`
+     — the GREEN suite. Its G1 case asserts the RECONCILED state.
+
+------------------------------------------------------------------------
+RED-01 / RED-02 / RED-03 — the historical failure is never reconciled
+------------------------------------------------------------------------
+
+Command:
+  cd apps/vscode && bun x vitest run \
+    src/sdk/__tests__/transient-containment-repair01.red.tcrr01.test.ts
+
+Output (ENTRY_HEAD):
+  ✓ src/sdk/__tests__/transient-containment-repair01.red.tcrr01.test.ts (1 test) 5205ms
+    ✓ RED-01/02/03 — the transient group becomes gone but the containment obligation stays stuck 5202ms
+
+  Test Files  1 passed (1)
+       Tests  1 passed (1)
+
+Interpretation: the harness PASSES at ENTRY_HEAD because it asserts the
+DEFECT, i.e. the historical `containment_failed` obligation is STUCK.
+The specific facts it establishes (each an assertion in the harness):
+
+  * The owned process group was ALIVE at the finalize boundary
+    (`immediate.liveness === "alive"`), and the descendant was
+    POSITIVELY IDENTIFIED as a member of the ORIGINAL PGID
+    (`descendantIdentityVerified === true`).
+
+  * The manager's own production classification was
+    `containment_failed` (the SYNCHRONOUS finalization probe was NOT
+    `gone`).
+
+  * After the descendant exited naturally, the READ-ONLY harness
+    independently observed the ORIGINAL PGID become `gone`
+    (`later.liveness === "gone"`) — the kernel fact required for the
+    reconciliation is AVAILABLE.
+
+  * NO later authoritative observation was ever produced by the
+    manager: exactly ONE `command_job_primary_group_cleanup` event
+    exists in the whole lifecycle stream. At ENTRY_HEAD the manager has
+    no late-reconciliation path at all, so the historical failure is
+    never re-examined.
+
+  * The manager's canonical terminal state was STILL
+    `containment_failed` (`manager.status(...).snapshot.state`).
+
+  * The controller's per-job projection was STILL `containment_failed`
+    (RED-02): the projection is written once by the runner's terminal
+    publication and is never revisited.
+
+  * The shared owner-scoped C10 blocking set still contained the job
+    (RED-03): `blockingSet === [started.jobId]`. The completion is held
+    INDEFINITELY.
+
+------------------------------------------------------------------------
+GREEN G1 — the repair assertion FAILS at ENTRY_HEAD
+------------------------------------------------------------------------
+
+Command:
+  cd apps/vscode && bun x vitest run \
+    src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts
+
+Output (ENTRY_HEAD):
+  × G1 — a transient descendant's owned PGID becomes gone and the containment obligation is reconciled 2684ms
+  ✓ G2 — a persistent descendant keeps the owned group alive and is NEVER reconciled  7599ms
+
+  FAIL  src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts > TCRR01 — REAL_PROCESS: N1 transient descendant reconciles > G1 ...
+  AssertionError: expected undefined to be defined
+
+  Test Files  1 failed | 1 passed (2)
+       Tests  1 failed | 1 passed (2)
+
+Interpretation:
+  * G1 FAILS at ENTRY_HEAD with `expected undefined to be defined` —
+    the `command_job_containment_reconciled` event does not exist
+    because the ENTRY_HEAD manager has no reconciliation path. This is
+    the load-bearing RED.
+
+  * G2 (the N2 persistent-descendant safety control) PASSES at
+    ENTRY_HEAD **and** after the repair. That is exactly the required
+    shape: the safety control is invariant across the repair, and the
+    RED is specific to the N1 transient case.
+
+------------------------------------------------------------------------
+Precise source failure
+------------------------------------------------------------------------
+
+The RED is caused by the ABSENCE of a late-authoritative-observation
+path, not by a wrong classification:
+
+  * `CommandJobManager.finalize()` (`command-job-manager.ts:2501` at
+    ENTRY_HEAD) performs EXACTLY ONE synchronous postcondition probe
+    and classifies the job `containment_failed` when it is not `gone`.
+    There is no second probe, no pending-reconciliation record, and no
+    re-examination of the ORIGINAL PGID after the supervisor's exit
+    boundary.
+
+  * `SdkController.updateBackgroundCommandState()` writes the per-job
+    projection ONCE per terminal publication and never revisits it.
+
+  * `SdkSessionEventCoordinator.unresolvedContainmentFailuresForOwner()`
+    therefore keeps seeing `containment_failed` for the job forever,
+    and the deferred C10 re-evaluation holds the completion.
+
+SUBSTRATE NOTE
+--------------
+The host's Seatbelt profile denies signals to other processes (the
+Vitest worker's own teardown reports `kill EPERM`), so a LIVE group
+yields `eperm` rather than `alive` at the production probe. BOTH are
+non-`gone` and BOTH produce the same `containment_failed` terminal
+state and the same safety hold. The causal discrimination above uses
+the READ-ONLY observation harness (kernel-truth liveness + process
+membership), not the production label, so the conclusion is
+substrate-independent. This is the same substrate fact the NEPCR01
+CORRECTION01 recorded; no termination-efficacy claim is made from it.

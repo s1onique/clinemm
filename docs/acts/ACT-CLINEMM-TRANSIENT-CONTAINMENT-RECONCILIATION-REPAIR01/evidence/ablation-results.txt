@@ -1,0 +1,143 @@
+ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01 (TCRR01)
+ABLATION / CAUSAL-DISCRIMINATOR RESULTS
+========================================
+
+Evidence class: SYNTHETIC_REAL
+All cases drive the REAL production `CommandJobManager` and the REAL
+production `SdkController.updateBackgroundCommandState` /
+`publishContainmentReconciliation` methods.
+
+The chain under test has exactly three load-bearing links:
+
+  (1) the manager's LATE re-probe of the ORIGINAL owned PGID,
+  (2) the manager -> controller PUBLICATION of the reconciled outcome,
+  (3) the controller's EXISTING deferred-completion RE-EVALUATION
+      trigger.
+
+Each ablation removes ONE link and shows the RED failure returns. That
+is the necessity proof.
+
+------------------------------------------------------------------------
+DISCRIMINATOR A -- OBSERVATION ONLY
+------------------------------------------------------------------------
+
+Case: `DISCRIMINATOR A -- observation only: the kernel absence is
+established but the controller still blocks`
+
+Setup: the reconciliation schedule is DISABLED (`enabled: false`), so no
+later observation is produced, while the scripted probe WOULD report
+`gone` for any later call.
+
+Result:
+  * `reconciliationEvents(events)` -> length 0
+  * `controller.backgroundCommandJobStates[jobId]` -> "containment_failed"
+  * `blockingSet(controller, OWNER)` -> `[jobId]`   (C10 STILL BLOCKED)
+
+Interpretation: a fresh kernel observation ALONE is insufficient. Its
+result must reach the existing authority through the publication path.
+This is the causal discriminator that rules out "just probe again" as
+the repair.
+
+------------------------------------------------------------------------
+DISCRIMINATOR B -- PROJECTION ONLY (the unsafe update, test-local)
+------------------------------------------------------------------------
+
+Case: `DISCRIMINATOR B -- projection only: an unconditional ledger clear
+WOULD release an unproven group`
+
+Setup: the later probe keeps reporting `alive`; the reconciliation
+budget is exhausted; NO reconciliation event exists. The test then
+performs the UNSAFE projection-only update (clearing the projection
+WITHOUT a matching later `gone` certificate) in an ISOLATED, test-local
+copy of the projection map.
+
+Result:
+  * `reconciliationEvents(events)` -> length 0   (no `gone` certificate)
+  * the test-local unsafe projection yields `blockingSet == []`
+    -> completion WOULD be incorrectly released
+  * the REAL production projection still yields `blockingSet == [jobId]`
+    -> the real repair is fail-closed
+
+Interpretation: an unconditional ledger-clearing fix is UNSAFE. It
+would release a group whose survival is UNPROVEN. This is why the
+production path is gated on a matching authoritative `gone` certificate.
+NO production path performs the unsafe update.
+
+------------------------------------------------------------------------
+ABLATION-01 -- DISABLE LATER RE-PROBING
+------------------------------------------------------------------------
+
+Case: `ABLATION-01 -- disable later re-probing: the original N1 failure
+stays stuck`
+
+Setup: `containmentReconciliation: { enabled: false }`.
+
+Result:
+  * `reconciliationEvents(events)` -> length 0
+  * `controller.backgroundCommandJobStates[jobId]` -> "containment_failed"
+  * `blockingSet(controller, OWNER)` -> `[jobId]`   (C10 STILL BLOCKED)
+
+Interpretation: removing link (1) restores the EXACT RED. The late
+re-probe is NECESSARY.
+
+------------------------------------------------------------------------
+ABLATION-02 -- DISABLE RECONCILIATION PUBLICATION
+------------------------------------------------------------------------
+
+Case: `ABLATION-02 -- disable reconciliation publication: the manager
+observes gone but the controller still blocks`
+
+Setup: the manager DOES observe `gone` and DOES publish the
+`command_job_containment_reconciled` event (link (1) intact). A
+CONTROLLER that is never told about it is then driven directly with the
+pre-reconciliation `containment_failed` publication.
+
+Result:
+  * `reconciliationEvents(events)` -> length 1   (the manager observed gone)
+  * `unnotified.backgroundCommandJobStates[jobId]` -> "containment_failed"
+  * `blockingSet(unnotified, OWNER)` -> `[jobId]`   (C10 STILL BLOCKED)
+
+Interpretation: removing link (2) restores the RED. The publication is
+NECESSARY.
+
+------------------------------------------------------------------------
+ABLATION-03 -- DISABLE RE-EVALUATION TRIGGER
+------------------------------------------------------------------------
+
+Case: `ABLATION-03 -- without the re-evaluation trigger, a reconciled
+projection alone does not release a held marker`
+
+Setup: the projection IS reconciled (links (1) and (2) intact) and the
+held deferred C10 marker is modelled faithfully: the barrier releases
+the marker iff the shared owner-scoped classifier reports NO unresolved
+containment failure for the active session.
+
+Result:
+  * WITH the trigger: the barrier is consulted with the RECONCILED
+    projection -> the shared classifier reports no blockers -> the held
+    marker is RELEASED, and
+    `controller.sessionEvents.reevaluateDeferredCompletionBarrier` was
+    called.
+  * WITHOUT the trigger: the barrier is never consulted -> the held
+    marker STAYS HELD even though the projection was reconciled.
+  * WITH the trigger AND the STALE projection: the shared classifier
+    reports the job as blocking -> the marker stays HELD. That is
+    exactly the RED.
+
+Interpretation: removing link (3) restores the RED. A reconciled
+PROJECTION alone does not release a held marker; the existing C10/Elm
+authority decides. The repair therefore reuses the existing trigger
+rather than inventing a completion coordinator.
+
+------------------------------------------------------------------------
+SUMMARY
+------------------------------------------------------------------------
+
+  ABLATION                        OBSERVES gone   PUBLISHES   RE-EVALUATES   C10 RELEASED
+  ABLATION-01 (no re-probe)       no               no          no             NO
+  ABLATION-02 (no publication)    yes              no          no             NO
+  ABLATION-03 (no re-eval)        yes              yes         no             NO
+  FULL REPAIR                     yes              yes         yes            YES (if all
+                                                                                other gates pass)
+
+Every link is NECESSARY. Removing any one of them restores the RED.

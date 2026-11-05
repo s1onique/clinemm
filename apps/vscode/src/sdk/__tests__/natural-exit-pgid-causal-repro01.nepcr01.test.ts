@@ -973,10 +973,20 @@ describe("ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01 / real-process causal rep
 		// Emit the machine-readable evidence artifacts from the records
 		// this suite actually produced.
 		writeEvidenceArtifacts(records)
-		// CORRECTION01 (P0-2): emit the reaping-race per-trial ledger so
-		// the default suite ALSO records whether the race was observed.
-		// The witness list is derived from the same trials, so it cannot
-		// disagree with the ledger.
-		writeReapingRaceWitnessArtifact([], [])
+		// ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+		// (TCRR01 -- P1 evidence-writer cleanup):
+		//
+		// The previous code wrote an EMPTY reaping-race artifact here
+		// (`writeReapingRaceWitnessArtifact([], [])`) with the intent of
+		// recording "the race was not observed in the default suite".
+		// That was a DEFECT: this teardown runs in EVERY suite
+		// invocation, so a default run OVERWROTE an existing, genuinely
+		// captured opt-in witness artifact with an empty one. The
+		// opt-in capture (`CLINEMM_NEPCR01_REAPING_WITNESS=1`) owns the
+		// artifact; the default suite must not touch it.
+		//
+		// The per-trial opt-in witness and its bounded execution
+		// contract are UNCHANGED: the opt-in trial writes the artifact
+		// from its OWN witnesses and trials.
 	}, 30_000)
 })

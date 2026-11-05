@@ -1361,6 +1361,29 @@ export class Controller {
 	 * NOT published to the webview (no protocol field added).
 	 */
 	private backgroundCommandJobOwners: Record<string, string | undefined> = {}
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): the jobs whose containment failure has been
+	 * RECONCILED by a later authoritative `gone` observation.
+	 *
+	 * This is NOT a second job-state map - it is a causal
+	 * ORDERING marker. It answers exactly one question:
+	 * "has a LATER authoritative fact already superseded this
+	 * job's terminal projection?"
+	 *
+	 * It exists so a DELAYED, STALE `containment_failed`
+	 * publication (the runner's terminal-promise microtask,
+	 * or any other late writer) CANNOT overwrite the newer
+	 * reconciled projection and resurrect a containment
+	 * obligation that has already been authoritatively
+	 * resolved.
+	 *
+	 * Entries are removed when the job's projection is
+	 * overwritten by a NEWER terminal publication for the same
+	 * job, so the set cannot grow without bound across a long
+	 * session.
+	 */
+	private readonly reconciledBackgroundCommandJobs = new Set<string>()
 	private pendingClineAuthRetryPrompt?: string
 	private pendingStartRetry?: StartRetry
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
@@ -6041,6 +6064,13 @@ export class Controller {
 				return
 			}
 			this.backgroundCommandJobStates[taskId] = "running"
+			// A fresh start for this jobId restarts the causal
+			// ordering: any prior reconciliation marker is stale.
+			// The marker set is READ/WRITTEN defensively so a host that
+			// does not install the TCRR01 reconciliation marker is
+			// unaffected (the optional-chaining keeps the pre-TCRR01
+			// behaviour exactly).
+			this.reconciledBackgroundCommandJobs?.delete(taskId)
 			// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
 			// (PHCF17): record the launch-time owner of the job.
 			// The start-side publication is the EARLIEST point at
@@ -6051,12 +6081,51 @@ export class Controller {
 				this.backgroundCommandJobOwners[taskId] = ownerSessionId
 			}
 		} else if (!running && taskId !== undefined) {
+			// ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+			// (TCRR01 -- CAUSAL ORDERING / G11): a DELAYED, STALE
+			// terminal publication must NOT overwrite a newer
+			// reconciled projection.
+			//
+			// The reconciliation is the LATER authoritative fact, so
+			// when this job has already been reconciled, a late
+			// `containment_failed` publication is REFUSED. Without this
+			// guard the projection could flip back to
+			// `containment_failed` and re-block the completion that the
+			// reconciliation had already released.
+			//
+			// The guard is NARROW: it only refuses a publication for a
+			// job that is already marked reconciled AND whose
+			// publication carries the pre-reconciliation containment
+			// class.
+			//
+			// The reconciled marker is RETAINED (not cleared) by a
+			// reconciled publication: it is the causal-ordering proof
+			// that the LATER authoritative fact has already superseded
+			// this job's pre-reconciliation containment class. Clearing
+			// it on the reconciled write would re-open the exact hole
+			// the guard exists to close: a DELAYED stale
+			// `containment_failed` publication could then land and
+			// overwrite the reconciled projection.
+			//
+			// The marker is dropped only when a job is REUSED for a
+			// fresh start (the running publication), which is the only
+			// way the causal ordering can legitimately restart.
+			const publishedTerminalState = terminalState ?? "terminal"
+			if (
+				publishedTerminalState === "containment_failed" &&
+				// The marker set is READ defensively: a host that does not
+				// install the TCRR01 reconciliation marker simply has no
+				// reconciled job to protect, so the guard is inert rather
+				// than throwing.
+				this.reconciledBackgroundCommandJobs?.has(taskId) === true
+			) {
+				return
+			}
 			// Per-job terminal — the runner's load-bearing signal
 			// for multi-job sessions. The value of
 			// `terminalState` is the exact reason; if absent
 			// (legacy caller), fall back to "terminal" (the
 			// pre-correction01 projection value).
-			const publishedTerminalState = terminalState ?? "terminal"
 			this.backgroundCommandJobStates[taskId] = publishedTerminalState
 			// ACT-CLINEMM-P0-PREMATURE-HANDOFF-CONTAINMENT-FAILURE01
 			// (PHCF17): the terminal publication carries the same
@@ -6305,11 +6374,55 @@ export class Controller {
 			// same code path the SdkController uses, without
 			// reaching into the private SdkController class.
 			recordTerminalReceiptFromLifecycle(this.backgroundNotifyCoordinator, event)
+			// ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+			// (TCRR01): the LATER, AUTHORITATIVE reconciliation.
+			if (event.event === "command_job_containment_reconciled") {
+				this.publishContainmentReconciliation(event)
+			}
 		} catch (e) {
 			Logger.warn(
 				`[SdkController] Failed to forward lifecycle event ${event.event} (jobId=${event.jobId}): ${e instanceof Error ? e.message : String(e)}`,
 			)
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01
+	 * (TCRR01): publish the LATER, AUTHORITATIVE reconciliation.
+	 *
+	 * The manager proved the ORIGINAL owned PGID `gone` with a
+	 * fresh production postcondition probe. That is a NEW
+	 * authoritative fact - it does NOT erase the historical
+	 * `containment_failed` observation, but it DOES resolve the
+	 * CURRENT containment obligation.
+	 *
+	 * The publication goes through the EXISTING per-job
+	 * projection path (`updateBackgroundCommandState`), which
+	 * preserves the launch-time owner identity and calls
+	 * `maybeReevaluateDeferredContinuation` ->
+	 * `reevaluateDeferredCompletionBarrier()`. The shared
+	 * owner-scoped containment classifier then observes a
+	 * non-`containment_failed` projection for this job and
+	 * stops blocking on it. Every OTHER completion gate is
+	 * untouched.
+	 *
+	 * The job is marked as reconciled BEFORE the publication so a
+	 * DELAYED, STALE `containment_failed` publication for the same
+	 * job cannot overwrite this newer authoritative state (G11).
+	 */
+	private publishContainmentReconciliation(
+		event: Extract<CommandJobLifecycleEvent, { event: "command_job_containment_reconciled" }>,
+	): void {
+		this.reconciledBackgroundCommandJobs?.add(event.jobId)
+		void this.updateBackgroundCommandState(false, event.jobId, event.reconciledState, undefined, event.ownerSessionId).catch(
+			(error) => {
+				Logger.warn(
+					`[SdkController] Failed to publish containment reconciliation for job ${event.jobId}: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				)
+			},
+		)
 	}
 
 	/**
