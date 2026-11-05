@@ -5,8 +5,15 @@ VERIFICATION LOG
 ENTRY_HEAD: d03d475e1f4ab064ea123eb464b59a4f2b112176
 ENTRY_TREE: bc16cc846080e7bc98221a6020822ac7d746acb8
 
-SUBJECT_HEAD: 03f2e8d00ecf521c1691dd6e7f3a961d51971884
-SUBJECT_TREE: 67252a539e78d68d27667de041cf7c3cc0e4cba3
+SUBJECT_HEAD: c9296c3cd8befc871d6807fe9715c7c2704984f2
+SUBJECT_TREE: f48c92b685806a181b115018c5d88a02d6b8c5cb
+
+The ACT is two scoped commits:
+  03f2e8d00ecf521c1691dd6e7f3a961d51971884  tree 67252a539e78d68d27667de041cf7c3cc0e4cba3
+    the production repair + focused tests + the first evidence set
+  c9296c3cd8befc871d6807fe9715c7c2704984f2  tree f48c92b685806a181b115018c5d88a02d6b8c5cb
+    the installed-VSIX LIVE qualification harness + the .vscodeignore
+    packaging fix + the final evidence
 
 Toolchain: Bun 1.4.2 (package manager + task runner), Node >=22 (runtime).
 Working directory for all commands: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
