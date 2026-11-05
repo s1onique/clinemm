@@ -3,8 +3,8 @@
   "shortName": "TCRR01",
   "entryHead": "d03d475e1f4ab064ea123eb464b59a4f2b112176",
   "entryTree": "bc16cc846080e7bc98221a6020822ac7d746acb8",
-  "subjectHead": "c9296c3cd8befc871d6807fe9715c7c2704984f2",
-  "subjectTree": "f48c92b685806a181b115018c5d88a02d6b8c5cb",
+  "subjectHead": "05c5c055438e838d14ae40e76512e724739c519b",
+  "subjectTree": "af34dd59d0b3e10c76adc3474443e90aa702db3a",
   "subjectCommits": [
     {
       "head": "03f2e8d00ecf521c1691dd6e7f3a961d51971884",
@@ -15,6 +15,11 @@
       "head": "c9296c3cd8befc871d6807fe9715c7c2704984f2",
       "tree": "f48c92b685806a181b115018c5d88a02d6b8c5cb",
       "subject": "test(containment): add the installed-VSIX LIVE qualification for TCRR01"
+    },
+    {
+      "head": "05c5c055438e838d14ae40e76512e724739c519b",
+      "tree": "af34dd59d0b3e10c76adc3474443e90aa702db3a",
+      "subject": "docs(containment): record the final TCRR01 subject head and LIVE qualification result"
     }
   ],
   "note": "The ACT-scoped commits contain ONLY the ACT-owned files listed below.",
