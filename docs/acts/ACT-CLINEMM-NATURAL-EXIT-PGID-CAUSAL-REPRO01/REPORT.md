@@ -41,10 +41,13 @@ ENTRY_HEAD:
 b344741921bfe92a804bf3738f799aed123f7cac
 
 SUBJECT_HEAD:
-84e94151023365949a7e9ef176aa7eb29571d221 (this commit)
+the ACT commit on `main` that adds this report + the evidence directory
+  (discover with: `git log --oneline -- docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/`)
+  The identity is recorded in the commit itself; it is intentionally not
+  hardcoded here because writing the SHA into the file changes the SHA.
 
 SUBJECT_TREE:
-0a579bcd46d5b30c9ee1fe0003e2a825b483e0b3
+`git rev-parse HEAD^{tree}` at the ACT commit (same note as SUBJECT_HEAD)
 
 ENTRY_TREE:
 5fc7cba53d2f56b0e2cd9ede03713a9665022264
