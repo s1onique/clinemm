@@ -31778,9 +31778,6 @@ and **no rebuild was performed**.
 **Protected state — untouched, never restored, staged, or committed:**
 
 - `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.
-- The four unrelated dirty native-helper files (`tools/macos-host-helper/native/build.sh`,
-  `helper.c`, `helper.test.ts`, `tart-testbed-run.test.ts`) — left unstaged in the working tree.
-
 ## ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01 — CAPTURE_INSUFFICIENT — 2026-11-04
 
 **Scope: RECON + bounded causal probe.** No production implementation. The installed LaunchAgent
@@ -31935,9 +31932,6 @@ be fixed **first**; `execute(command, cwd, env)` must **not** be added to the ex
 **Protected state — untouched, never restored, staged, or committed:**
 
 - `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.
-
----
-
 ## ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02 — READY_FOR_OPERATOR_PROBES — 2026-11-05
 
 **Purpose:** obtain the four real-kernel measurements (A/B/C/D) that RECON01 proved are
@@ -32092,3 +32086,75 @@ DECISION         = DEFERRED — requires the operator's A/B/C/D matrix
 **Protected state — untouched, never restored, staged, or committed:**
 
 - `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.
+
+---
+
+## ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02 — P0 HARNESS CORRECTION — 2026-11-05
+
+**Verdict unchanged: `READY_FOR_OPERATOR_PROBES`.** The A/B/C/D measurements were NOT executed and
+no live result is claimed. The agent's command substrate is itself a ClineMM Background Exec command
+(inside the ClineMM Seatbelt profile AND inheriting the VSCodium Chromium zygote sandbox), so a
+nested `sandbox-exec` is denied there (`sandbox_apply: Operation not permitted`, rc=71). The live
+probes were **not** run from Background Exec. **No production source change.** The RECON01 profiles
+and fixtures are byte-identical to their frozen SHA-256 values.
+
+### The P0 that was corrected
+
+1. **Probe D failed OPEN.** On a successful foreign SIGTERM — and on `ESRCH` — the harness printed a
+   HALT message and then **continued to exit 0**. It now exits **nonzero** for every invalid
+   outcome: `UNSAFE_SIGNAL` -> 4 (`HALT_UNSAFE_SIGNAL_SCOPE`), `ESRCH` / missing evidence /
+   unexpected errno / target-did-not-survive -> 3. The controlled fixture cleanup is completed
+   **before** the nonzero exit, so the failure path cannot leak a fixture.
+2. **Residual checks could not observe anything.** They scanned the whole process table for the
+   marker `CLINEMM_RECON01_SIGNAL_PROBE` — a `console.log` constant that never appears in the
+   child's argv. **Empirically confirmed during the correction**: a live probe child was running
+   while the marker scan returned empty, i.e. the harness reported a false "zero residual".
+   Replaced by **verified PID + exact executable/argv identity + start identity** (`ps lstart`).
+3. **No execution deadlines.** `run_probe` executed synchronously with no timeout and the watchdog
+   was a logging timer. Now every probe runs under a **real deadline** enforced by
+   `probe-fixtures/deadline-supervisor.py`, which forks the target and exits 137 when the budget
+   expires. The unbounded `wait` path is removed; the only remaining `wait` is on an
+   already-confirmed-dead supervisor.
+4. **Ownership check was wrong.** It matched `id -un` (the username) **anywhere in the command
+   line** — and the fixture path contains the username, so it passed for the wrong reason. Now the
+   **numeric** `uid=` column from `ps` is compared to `id -u`.
+5. **`kill(pid, 0)` returning EPERM was conflated with "gone".** EPERM now classifies as
+   **UNVERIFIABLE**, which is never reported as cleaned up. The liveness classifier is also
+   shell-independent (bash says "No such process", zsh says "no such process") and falls back to
+   `ps` for the authoritative answer.
+6. **The decision table selected architectures from Terminal-only evidence.** Corrected to a
+   **two-gate** table: a Terminal-only matrix **QUALIFIES** the candidate Seatbelt signal rule and
+   yields `READY_FOR_OPERATOR_PROBES`; an architecture may only be selected with a **separate
+   production-seam observation** for the same candidate rule. The R6 invariant is asserted
+   exhaustively across all 32 input combinations.
+
+### Process-free regression tests
+
+`harness-regression-test.sh` — **92 assertions, 0 failures**, covering harness JSON parsing,
+exit-status propagation, probe-D fail-closed classification, the two-gate decision table (including
+the R6 invariant), PID/argv/start-identity verification, the numeric-UID rule, the
+GONE-vs-UNVERIFIABLE distinction, and the real deadline mechanism (a hanging target must hit the
+deadline rather than hang the suite).
+
+### Design note — why the deadline supervisor does not use `setsid`
+
+The first draft launched each probe in its own session via `os.setsid()`. That was **measured to
+be wrong**: in this substrate the resulting group is unsignalable (`kill -KILL -<pgid>` ->
+`Operation not permitted`), and a plain bash background job shares the harness's own group, so a
+group kill would have killed the **harness itself**. The shipped supervisor instead **forks without
+`setsid()`**, staying in the harness's session so the deadline kill is permitted in an unsandboxed
+Terminal, and it **always exits 137** when the budget expires — so the deadline fires even where
+signalling is denied and the harness can never hang.
+
+### Correction-test residue (disclosed, self-clearing)
+
+Nine `sleep 300` stand-ins used to prove the deadline were orphaned (PPID=1) because the agent's
+sandbox denies every signal outside the harness's own group. Each has an independent 300 s lifetime
+and exits on its own; each deadline assertion run adds one. The harness itself produced **no**
+residual in the same window. Recorded in `cleanup-verification.txt`.
+
+### Protected state — untouched, never restored, staged, or committed:
+
+- `stash@{0}` (`WIP on main: d46223b51 …`) — intact at its original position and content.
+- Installed host helper (pid 62790), the LaunchAgent plist, the installed VSIX and RECON01's
+  archived evidence — all unchanged.

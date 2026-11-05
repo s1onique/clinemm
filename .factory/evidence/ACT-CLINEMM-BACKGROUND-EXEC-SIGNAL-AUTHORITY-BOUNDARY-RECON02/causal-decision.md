@@ -105,16 +105,53 @@ the inherited layer while leaving the ClineMM layer as the single variable.
 | C | Independent Terminal, candidate profile | *pending* | — | *pending* |
 | D | Candidate profile vs controlled foreign target | — | *pending* | *pending* |
 
-### Decision map (frozen before execution)
+### Decision map (CORRECTED — P0 HARNESS CORRECTION, rule R6)
+
+**R6 — a Terminal-only matrix QUALIFIES the candidate Seatbelt signal rule;
+it does NOT select an architecture.**
+
+The A/B/C/D matrix is measured in an independent Terminal. That Terminal has
+**no inherited VSCodium/Chromium authority**, so a Terminal result cannot
+observe whether the production execution path benefits from the candidate
+rule. Selecting `SELECT_SEATBELT_SIGNAL_REPAIR`,
+`SELECT_COMPOSED_BOUNDARY_REPAIR` or `SELECT_LAUNCHAGENT_EXECUTION_BOUNDARY`
+from Terminal-only measurements would be an inference-to-proof promotion.
+
+Therefore the decision table has **two gates**:
+
+**Gate 1 — Terminal qualification** (no production-context evidence):
 
 | A | B | C | D | Verdict |
 |---|---|---|---|---|
-| Success | EPERM | Success | EPERM | `SELECT_SEATBELT_SIGNAL_REPAIR` |
-| Success | EPERM | EPERM | not needed | `SELECT_COMPOSED_BOUNDARY_REPAIR` (candidate insufficient) |
-| Success | Success | Success | EPERM | `SELECT_LAUNCHAGENT_EXECUTION_BOUNDARY` |
-| EPERM | any | any | any | `HALT_BASELINE_INVALID` |
-| Success | EPERM | Success | **signal allowed** | `HALT_UNSAFE_SIGNAL_SCOPE` |
-| Success | EPERM | ESRCH | any | invalid child-lifecycle observation (one bounded repetition) |
+| Success | EPERM | Success | denied (EPERM) | `READY_FOR_OPERATOR_PROBES` — the candidate rule is **QUALIFIED standalone**; the production context is still unobserved |
+| Success | EPERM | EPERM | denied (EPERM) | `READY_FOR_OPERATOR_PROBES` — the candidate rule is **INSUFFICIENT standalone** |
+| Success | Success | Success | denied (EPERM) | `READY_FOR_OPERATOR_PROBES` — the current rule did not reproduce the denial here |
+| EPERM / ESRCH / invalid | any | any | any | `HALT_BASELINE_INVALID` |
+| Success | any | any | **signal allowed** | `HALT_UNSAFE_SIGNAL_SCOPE` |
+| Success | any | any | ESRCH / missing evidence / unexpected errno | `CAPTURE_INSUFFICIENT` |
+
+**Gate 2 — architecture selection** (ONLY with production-context evidence
+that the same candidate rule was exercised at the real production seam):
+
+| A | B | C | D | Verdict |
+|---|---|---|---|---|
+| Success | EPERM | Success | denied (EPERM) | `SELECT_SEATBELT_SIGNAL_REPAIR` |
+| Success | EPERM | EPERM | denied (EPERM) | `SELECT_COMPOSED_BOUNDARY_REPAIR` |
+| Success | Success | Success | denied (EPERM) | `SELECT_LAUNCHAGENT_EXECUTION_BOUNDARY` |
+| EPERM / ESRCH / invalid | any | any | any | `HALT_BASELINE_INVALID` |
+| Success | any | any | **signal allowed** | `HALT_UNSAFE_SIGNAL_SCOPE` |
+| Success | any | any | ESRCH / missing evidence / unexpected errno | `CAPTURE_INSUFFICIENT` |
+
+The implementation of this table is `classify_decision()` in
+`harness-lib.sh`; it is asserted exhaustively by
+`harness-regression-test.sh` (the R6 invariant test proves that with
+`production_context_evidence = NO` **no** architecture token is ever
+produced across all 32 input combinations).
+
+`operator-probes.sh` sets `PRODUCTION_CONTEXT_EVIDENCE=NO` by default and
+only honours an operator-supplied `RECON02_PRODUCTION_CONTEXT_EVIDENCE=YES`
+when a separate production-seam observation for the same candidate rule has
+been recorded.
 
 ---
 

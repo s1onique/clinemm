@@ -34,6 +34,18 @@ PREPARED FIXTURE SOURCES (RECON01, unmodified, reused verbatim)
   probe-fixtures/probe.mjs    (RECON01, unmodified)
   probe-fixtures/foreign.mjs  (RECON01, unmodified)
 
+P0 HARNESS CORRECTION (2026-11-05) — bounded, recon-only
+  The operator harness was corrected for a P0. No production source was
+  touched. The seven corrections (R1..R6) are listed in
+  OPERATOR-INSTRUCTIONS.md and implemented in:
+    harness-lib.sh                    (new — pure, process-free helpers)
+    harness-regression-test.sh        (new — 92 process-free assertions)
+    probe-fixtures/deadline-supervisor.py (new — real deadline enforcement)
+    operator-probes.sh                (corrected)
+
+  The RECON01 fixtures and profiles are UNCHANGED and still byte-identical
+  to their frozen SHA-256 values.
+
 NEW IN THIS ACT (evidence + bounded test fixture only, no production source)
   probe-fixtures/foreign-signal-attempt.mjs
     — the D2 negative-control initiator. Performs EXACTLY ONE

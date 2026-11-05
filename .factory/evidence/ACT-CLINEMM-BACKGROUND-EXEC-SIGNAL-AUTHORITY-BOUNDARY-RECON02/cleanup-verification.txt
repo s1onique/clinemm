@@ -52,6 +52,56 @@ STATUS: PARTIAL — the A/B/C/D operator probes have NOT been executed.
      installed VSIX = UNCHANGED
        -> no build, no package, no install
 
+--- P0 HARNESS CORRECTION (2026-11-05) ------------------------------------
+
+The operator harness was corrected for a P0. The cleanup contract is now:
+
+  * Residual verification is by VERIFIED PID + EXACT executable/argv identity
+    + START IDENTITY (`ps lstart`). The previous marker-based whole-table
+    scan is REMOVED: it searched for `CLINEMM_RECON01_SIGNAL_PROBE`, a
+    `console.log` constant that never appears in the child's argv, so it
+    could not observe any process and reported a false "zero residual".
+    This was empirically confirmed during the correction: a live probe child
+    was running while the marker scan returned empty.
+  * Every probe runs under a REAL deadline enforced by
+    `probe-fixtures/deadline-supervisor.py`, which forks the target and
+    exits 137 when the budget expires. There is no unbounded `wait`.
+  * `kill(pid,0)` => EPERM is UNVERIFIABLE, never "cleaned up".
+  * Ownership is compared numerically (`ps uid=` vs `id -u`).
+  * Probe D fails closed with a NONZERO exit, and the controlled fixture
+    cleanup is completed BEFORE that nonzero exit.
+
+CORRECTION-TEST RESIDUE (created by THIS correction's own verification, in
+the agent's sandboxed substrate — recorded honestly, NOT swept):
+
+  During the deadline-mechanism verification, NINE `sleep 300` stand-ins were
+  orphaned (PPID=1) because the agent's sandbox DENIES every signal to a
+  process outside the harness's own group. Each deadline verification run
+  adds one, because the `sleep 300` stand-in cannot be killed here:
+
+    pid 53736  /bin/sleep 300   (PPID=1, PGID 53720)
+    pid 55657  /bin/sleep 300   (PPID=1, PGID 55647)
+    pid 57465  /bin/sleep 300   (PPID=1, PGID 57453)
+    pid 64038  /bin/sleep 300   (PPID=1)
+    pid 66529  /bin/sleep 300   (PPID=1)
+    pid 69754  /bin/sleep 300   (PPID=1)
+    + 3 further identical stand-ins from the final repeated regression runs
+      (the deadline assertion runs once per suite invocation)
+
+  This is bounded and self-clearing: every one of them has an INDEPENDENT
+  300 s lifetime and exits on its own. The harness itself produced NO
+  residual in the same window (`ps` showed NONE for
+  operator-probes / deadline-supervisor / probe.mjs / foreign.mjs).
+
+  These are NOT harness behaviour — they are an artifact of proving the
+  deadline in a substrate where SIGKILL is denied. Both have an INDEPENDENT
+  300 s lifetime and expire on their own. The operator's unsandboxed
+  Terminal does not have this restriction: there the supervisor's SIGKILL
+  succeeds and no orphan is created.
+
+  This residue is DISCLOSED, not hidden. It is distinct from the historical
+  orphan baseline and from any operator-run residual.
+
 --- OPERATOR-PROBE CLEANUP CONTRACT (enforced by operator-probes.sh) -------
 
 The harness guarantees, and verifies after every probe:
@@ -80,6 +130,9 @@ The harness guarantees, and verifies after every probe:
   The harness NEVER uses pkill, killall, or a process-group sweep. It only
   ever signals a PID it created, and (for probe D) one it has verified by
   `ps` immediately beforehand.
+
+  (Corrected: the residual checks are now PID + argv + start-identity based
+   rather than marker based — see the P0 section above.)
 
 --- GATES (current status) ---------------------------------------------------
 

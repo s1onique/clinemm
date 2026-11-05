@@ -99,16 +99,25 @@ Copy the four outcomes into this table:
 | C | Independent Terminal, candidate profile | | — | |
 | D | Candidate profile vs controlled foreign target | — | | |
 
-Then apply the ACT's causal table:
+Then apply the ACT's causal table. Note the **two gates** (R6):
+
+**Gate 1 — Terminal qualification** (what the harness prints as `DECISION`):
 
 | A | B | C | D | Verdict |
 |---|---|---|---|---|
-| Success | EPERM | Success | EPERM | `SELECT_SEATBELT_SIGNAL_REPAIR` |
-| Success | EPERM | EPERM | not needed | `SELECT_COMPOSED_BOUNDARY_REPAIR` (candidate insufficient) |
-| Success | Success | Success | EPERM | `SELECT_LAUNCHAGENT_EXECUTION_BOUNDARY` |
-| EPERM | any | any | any | `HALT_BASELINE_INVALID` |
-| Success | EPERM | Success | **signal allowed** | `HALT_UNSAFE_SIGNAL_SCOPE` |
-| Success | EPERM | ESRCH | any | invalid child-lifecycle observation — repeat once |
+| Success | EPERM | Success | denied (EPERM) | `READY_FOR_OPERATOR_PROBES` — candidate rule QUALIFIED standalone |
+| Success | EPERM | EPERM | denied (EPERM) | `READY_FOR_OPERATOR_PROBES` — candidate rule INSUFFICIENT standalone |
+| Success | Success | Success | denied (EPERM) | `READY_FOR_OPERATOR_PROBES` — current rule did not reproduce the denial |
+| EPERM / ESRCH / invalid | any | any | any | `HALT_BASELINE_INVALID` |
+| Success | any | any | **signal allowed** | `HALT_UNSAFE_SIGNAL_SCOPE` |
+| Success | any | any | ESRCH / missing evidence / unexpected errno | `CAPTURE_INSUFFICIENT` |
+
+**Gate 2 — architecture selection** requires a **separate production-seam
+observation** for the same candidate rule. Only then may the verdict become
+`SELECT_SEATBELT_SIGNAL_REPAIR`, `SELECT_COMPOSED_BOUNDARY_REPAIR` or
+`SELECT_LAUNCHAGENT_EXECUTION_BOUNDARY`. The harness never selects an
+architecture on Terminal-only evidence; it prints
+`READY_FOR_OPERATOR_PROBES` and says so.
 
 **Important:** a successful C in the Terminal is **not** a successful C under
 VSCodium. The inherited Chromium sandbox is a separate authority. See
