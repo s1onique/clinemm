@@ -3,6 +3,8 @@
 **Short name:** TCRR01
 **ENTRY_HEAD:** `d03d475e1f4ab064ea123eb464b59a4f2b112176`
 **ENTRY_TREE:** `bc16cc846080e7bc98221a6020822ac7d746acb8`
+**SUBJECT_HEAD:** `03f2e8d00ecf521c1691dd6e7f3a961d51971884`
+**SUBJECT_TREE:** `67252a539e78d68d27667de041cf7c3cc0e4cba3`
 
 ---
 
@@ -125,5 +127,12 @@ See `evidence/verification.txt` for the full log.
   exact.
 - `command-job-manager.test.ts` has 18 Seatbelt-related failures that are
   **identical at ENTRY_HEAD**; they are not caused by this ACT.
-- LIVE installed-VSIX qualification is pending the exact-head
-  commit/package/install (see `evidence/verification.txt`).
+- A **GUI-driven** LIVE qualification is not possible on this substrate:
+  every VS Code GUI process is killed with `SIGSEGV` by the Seatbelt
+  profile. This is demonstrated for the branded VS Code, for the
+  harness-downloaded VS Code, AND for the project's own sanctioned debug
+  harness, so it is a substrate limitation rather than an ACT defect.
+  The LIVE-equivalent qualification was therefore performed against the
+  **packaged, installed** artifact itself (the `CommandJobManager` class
+  that ships inside the installed VSIX, driven with real child processes
+  against the real kernel probe): see `evidence/verification.txt` §9c.

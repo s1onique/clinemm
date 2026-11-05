@@ -3,9 +3,9 @@
   "shortName": "TCRR01",
   "entryHead": "d03d475e1f4ab064ea123eb464b59a4f2b112176",
   "entryTree": "bc16cc846080e7bc98221a6020822ac7d746acb8",
-  "subjectHead": null,
-  "subjectTree": null,
-  "note": "subjectHead/subjectTree are filled in after the ACT-scoped commit is created.",
+  "subjectHead": "03f2e8d00ecf521c1691dd6e7f3a961d51971884",
+  "subjectTree": "67252a539e78d68d27667de041cf7c3cc0e4cba3",
+  "note": "The ACT-scoped commit contains ONLY the ACT-owned files listed below.",
   "productionFiles": [
     "apps/vscode/src/sdk/command-job-manager.ts",
     "apps/vscode/src/sdk/SdkController.ts"
@@ -18,7 +18,11 @@
     "apps/vscode/src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts"
   ],
   "configFiles": [
-    "apps/vscode/vitest.config.ts"
+    "apps/vscode/vitest.config.ts",
+    "apps/vscode/.vscodeignore"
+  ],
+  "qualificationHarnesses": [
+    "apps/vscode/src/dev/debug-harness/live-installed-vsix-qualification.tcrr01.mjs"
   ],
   "evidenceFiles": [
     "docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/evidence/production-seam-map.md",

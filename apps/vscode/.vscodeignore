@@ -17,6 +17,13 @@ node_modules/
 webview-ui/node_modules/**
 testing-platform/node_modules/**
 standalone/**/node_modules/**
+# Bun's global install cache lives at the repo root (.bun-install/) and is
+# gitignored, but it was still being swept into the VSIX. Its entries include
+# editor backup files (e.g. `README.md~`) that the packaging secret scanner
+# cannot read, which aborted `vsce package` with EISDIR. Nothing in the cache
+# is needed at runtime — the bundled `dist/extension.js` carries the code.
+**/.bun-install/**
+**/*~
 src/**
 standalone/**
 # Build/dev tooling and inputs — bundled into dist/extension.js, not needed in the VSIX.

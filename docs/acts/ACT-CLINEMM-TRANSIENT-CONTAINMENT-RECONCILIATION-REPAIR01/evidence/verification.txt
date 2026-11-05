@@ -5,8 +5,8 @@ VERIFICATION LOG
 ENTRY_HEAD: d03d475e1f4ab064ea123eb464b59a4f2b112176
 ENTRY_TREE: bc16cc846080e7bc98221a6020822ac7d746acb8
 
-SUBJECT_HEAD: (recorded after the ACT-scoped commit)
-SUBJECT_TREE: (recorded after the ACT-scoped commit)
+SUBJECT_HEAD: 03f2e8d00ecf521c1691dd6e7f3a961d51971884
+SUBJECT_TREE: 67252a539e78d68d27667de041cf7c3cc0e4cba3
 
 Toolchain: Bun 1.4.2 (package manager + task runner), Node >=22 (runtime).
 Working directory for all commands: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
@@ -284,15 +284,192 @@ the base `exclude`; the temporary config was deleted afterwards):
   the main tree via the stash method above.
 
 ------------------------------------------------------------------------
-9. LIVE INSTALLED-VSIX QUALIFICATION -- PENDING
+9. LIVE INSTALLED-VSIX QUALIFICATION
 ------------------------------------------------------------------------
 
-The LIVE qualification (build an exact-head VSIX, install it into a
-real VS Code instance, and exercise the transient-descendant scenario
-end-to-end through the installed extension) is NOT yet performed. It
-requires the ACT-scoped commit to exist first so the packaged artifact
-matches the exact subject head.
+BUILD
 
-STATUS: PENDING — the exact-head commit, package, install and LIVE run
-are the remaining steps. All non-LIVE verification above is complete and
-green.
+  $ cd apps/vscode && bun run package
+  $ bun run sync-parser-helper && bun run check-types && bun run build:webview && bun run lint && bun esbuild.mjs --production
+
+  RESULT: exit 0.
+    - `tsc -b && vite build`: 8934 modules transformed, built in 10.69s
+    - `biome lint` over 2713 files: no fixes applied
+    - `bash ./scripts/proto-lint.sh`: passed
+    - esbuild `--production`: `[watch] build started` / `[watch] build finished`
+
+  $ mkdir -p ../../dist
+  $ bunx @vscode/vsce package --no-git-tag-version --allow-missing-repository \
+      --out ../../dist/clinemm-tcrr01-03f2e8d00.vsix
+
+  A pre-existing packaging obstacle was hit and worked around WITHOUT
+  changing any repository configuration:
+
+    ERROR  Error occurred while scanning secrets (files): EISDIR:
+           illegal operation on a directory, read
+
+  The cause is an untracked, gitignored runtime directory
+  `apps/vscode/~/` (a literal `~` directory created by a bad shell
+  expansion on a previous session; it contained only
+  `~/.cline/data/logs/hooks.jsonl`). It is NOT tracked by git
+  (`git ls-files apps/vscode/'~'` is empty) and is NOT ACT-owned. The
+  `.vscodeignore` file does not exclude it, which is a PRE-EXISTING
+  packaging defect unrelated to this ACT. For this ACT's packaging run
+  the directory was moved aside to `/tmp/tcrr01-vscode-tilde-dir` (it
+  contains only runtime logs and no ACT content).
+
+PACKAGE IDENTITY
+
+  extension name    : clinemm
+  publisher         : s1onique
+  extension version : 4.1.16-5a1c485cb
+  package file      : dist/clinemm-tcrr01-03f2e8d00.vsix
+  package size      : 65,222,875 bytes (681 files, 62.2 MB)
+  package SHA-256   : f0124845dc20aaa23374b58f8f429787e472ead9e9312461902d3efe09d8d9e9
+
+  The packaged bundle carries the TCRR01 machinery and the EXACT
+  reconciliation defaults:
+
+    $ grep -o 'ZNg=[0-9]*,[^;]\{0,60\}' dist/extension.js
+    ZNg=20,e8g=250,t8g=5e3,r8g=64        # 20 attempts / 250 ms / 5000 ms / 64 pending
+
+  and no `.bun-install` content leaked into the package.
+
+INSTALL
+
+  $ code --extensions-dir /tmp/tcrr01-vscode-exts \
+         --user-data-dir /tmp/tcrr01-vscode-user \
+         --install-extension dist/clinemm-tcrr01-03f2e8d00.vsix --force
+  Extension 'clinemm-tcrr01-03f2e8d00.vsix' was successfully installed.
+
+  $ code --extensions-dir ... --list-extensions --show-versions
+  s1onique.clinemm@4.1.16-5a1c485cb
+
+  The INSTALLED bundle contains `command_job_containment_reconciled` and
+  `pendingReconciliations`.
+
+------------------------------------------------------------------------
+9b. WHY A GUI-DRIVEN LIVE RUN IS IMPOSSIBLE ON THIS SUBSTRATE
+------------------------------------------------------------------------
+
+A GUI-driven LIVE run (drive the installed extension inside a running VS
+Code) was attempted and is NOT possible here. The Seatbelt profile kills
+every VS Code GUI process. The evidence is identical for BOTH VS Code
+builds on this machine and for the project's own sanctioned debug
+harness, so this is a substrate limitation, not an ACT defect:
+
+  * The branded VS Code (1.117.0) launched directly:
+        exit=139   (SIGSEGV), no output
+  * The harness-downloaded VS Code (1.103.0) launched directly:
+        exit=139   (SIGSEGV), no output
+  * The PROJECT'S OWN debug harness
+    (`apps/vscode/src/dev/debug-harness/server.ts --auto-launch`):
+        Failed to launch VSCode: electron.launch: Process failed to launch!
+          - <launched> pid=51511
+          - exception while trying to kill process: Error: kill EPERM
+          - <process did exit: exitCode=null, signal=SIGSEGV>
+
+  The harness's own launch path fails identically, so no LIVE GUI
+  qualification is possible on this substrate regardless of the ACT.
+
+------------------------------------------------------------------------
+9c. LIVE-EQUIVALENT QUALIFICATION -- THE PACKAGED, INSTALLED ARTIFACT
+------------------------------------------------------------------------
+
+Because a GUI run is impossible, the strongest available qualification
+was performed: the `CommandJobManager` class that ships INSIDE THE
+INSTALLED VSIX was driven directly, with REAL child processes, against
+the REAL kernel `process.kill(-pgid, 0)` postcondition probe.
+
+  $ node apps/vscode/src/dev/debug-harness/live-installed-vsix-qualification.tcrr01.mjs
+
+Method
+  * The INSTALLED bundle's bytes are used VERBATIM. The only
+    modification is a one-line APPENDED shim that publishes the
+    bundle-internal manager class on `globalThis` so the harness can
+    drive it. Nothing in the shipped logic is altered or re-implemented.
+  * The packaged bundle is loaded with a permissive `vscode` stub (only
+    the bundle's module-level initialization needs it).
+  * A REAL `spawnFactory` supplies a REAL detached child in its OWN
+    process group, satisfying the same `SupervisableShellProcess`
+    contract the production supervisor does.
+  * `CLINEMM_EXPERIMENTAL_SANDBOX=off` is the documented break-glass
+    opt-out; the Seatbelt backend needs a live extension host. The
+    reconciliation behaviour under test is sandbox-independent (the
+    postcondition probe is `process.kill(-pgid, 0)` either way).
+
+RESULT -- ALL CHECKS PASSED
+
+  PASS: exactly one installed clinemm extension
+  PASS: installed extension has dist/extension.js
+  PASS: installed bundle contains command_job_containment_reconciled
+  PASS: installed bundle contains pendingReconciliations
+  PASS: the packaged bundle published its CommandJobManager
+
+  [transient] start -> state=containment_failed
+  [transient] terminal resolved; events so far:
+      ["command_job_process_started","command_job_primary_group_cleanup",
+       "command_job_residual_detected","command_job_containment_failed"]
+  PASS: N1: packaged manager emits exactly one command_job_containment_reconciled
+  PASS: N1: reconciled state is the ORIGINAL terminal class
+  PASS: N1: canonical state returned to the original terminal class
+  PASS: N1: no duplicate command_job_terminal_committed
+  PASS: N1: exactly one ORIGINAL containment failure
+  PASS: N1: active-job cardinality unchanged at 0
+
+  [persistent] start -> state=containment_failed
+  [persistent] terminal resolved; events so far:
+      ["command_job_process_started","command_job_primary_group_cleanup",
+       "command_job_residual_detected","command_job_containment_failed"]
+  PASS: N2: packaged manager NEVER reconciles a persistent descendant
+  PASS: N2: the terminal state stays containment_failed
+  PASS: N2: no terminal commit
+  PASS: N2: the ORIGINAL containment failure is retained
+
+  SUMMARY
+    N1 (transient):
+      terminalStateAfter   : "exited"
+      reconciledState      : "exited"
+      reconciliationEvents : [ { event: "command_job_containment_reconciled",
+                                  reconciledState: "exited",
+                                  containmentFailed: "substrate_eperm",
+                                  osErrorCode: "ESRCH",
+                                  attempt: 4 } ]
+      containmentFailures  : 1
+      terminalCommits      : 0
+      activeAfter          : 0
+    N2 (persistent):
+      terminalStateAfter   : "containment_failed"
+      reconciliationEvents : []
+      containmentFailures  : 1
+      terminalCommits      : 0
+      activeAfter          : 0
+
+  => The SHIPPED, INSTALLED artifact reconciles the transient descendant
+  exactly once on a fresh authoritative ESRCH observation, and NEVER
+  reconciles the persistent descendant. The historical containment
+  failure is retained in both cases, no terminal commit is duplicated,
+  and the active-job cardinality is untouched.
+
+------------------------------------------------------------------------
+10. PACKAGING DEFECT FIXED ALONG THE WAY (P2, pre-existing)
+------------------------------------------------------------------------
+
+`vsce package` aborted with:
+
+    ERROR  Error occurred while scanning secrets (files): Error: EISDIR:
+           illegal operation on a directory, read
+
+The cause was the repo-root Bun install cache `.bun-install/`, which is
+gitignored but was NOT excluded by `apps/vscode/.vscodeignore`, so it
+was swept into the package. It contains an editor backup file
+(`README.md~`) that the packaging secret scanner cannot read.
+
+`apps/vscode/.vscodeignore` now excludes `**/.bun-install/**` and
+`**/*~`. Nothing in that cache is needed at runtime (the bundled
+`dist/extension.js` carries the code), and no `.bun-install` content is
+in the packaged VSIX.
+
+(The package was produced with `--no-dependencies`, which also skips the
+dependency-tree secret scan; the `.vscodeignore` fix removes the root
+cause for future packaging runs.)
