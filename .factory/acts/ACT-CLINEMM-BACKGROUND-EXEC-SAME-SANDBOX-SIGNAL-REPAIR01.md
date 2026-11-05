@@ -137,3 +137,45 @@ Background Exec, the installed permanent build live GREEN, the Vitest worker
 teardown measurement, and the wider orphan-process question remain open live
 qualification items. The permanent source repair remains accepted. The live
 verdict remains `NOT_QUALIFIED_FROM_THIS_SUBSTRATE`.
+
+## P1 contract adjustment and live qualification attempt (2026-11-05)
+
+The Factory review of `df48090f0` returned `C1: GO` with **one P1**: the
+foreign negative control's success criterion demanded `signalAttempt.errnoCode
+== EPERM`, but the corrected fixture deliberately refuses to attempt SIGTERM
+when the signal-zero probe returns `EPERM`, so it emits `HALT_UNSAFE_FIXTURE`
+instead. The bounded adjustment recognises a **separately labelled non-delivery
+authorization denial** and rewrites the foreign-denial gate as two mutually
+exclusive shapes, requiring the reported shape to match what actually
+happened. The anti-control runner now **machine-checks** the non-delivery
+shape and rejects the misrepresented one. The new check found a real gap on
+first run (the PGID fixture did not label its own `EPERM` refusal, 9/10),
+which was fixed; anti-controls are back to **10/10 PASS** and the classifier
+contract remains **7/7 PASS**.
+
+The live qualification procedure was then executed in the runbook order.
+
+**Verdict: `CAPTURE_INSUFFICIENT`.** `PASS_LIVE_PERMANENT_REPAIR` is NOT
+claimed; `FAIL_LIVE_REPAIR` is NOT assigned.
+
+**The blocking defect is the artifact identity, not the repair.** The installed
+extension directory `s1onique.clinemm-4.1.16-5a1c485cb-1f456b971` predates the
+permanent repair commit `d038b1e00` and still carries the retired diagnostic
+gate. The live Seatbelt profile — captured **live**, because the profile file
+is deleted after use — contains `(allow signal (target self))`, the **pre-repair**
+rule, reproduced twice. The on-disk `dist/clinemm-signal-repair01.vsix` IS
+correct (`e35de822…`, `same-sandbox`, zero retired markers) but cannot be
+installed from the agent substrate, whose Seatbelt write roots exclude the
+dogfood extensions directory.
+
+Phases 2, 4 and 6 were therefore all measured against the **pre-repair**
+profile. Phase 4 and Phase 5 both refused **safely** with
+`HALT_UNSAFE_FIXTURE` and **zero** destructive signals; cleanup verified
+`GONE` with no orphans; the Phase 6 worker was verified gone by exact PID +
+argv + start identity with 0 orphans left by this run.
+
+**Operator action required:** install the VSIX from an ordinary unsandboxed
+Terminal, reload only the dogfood window, and re-measure. The broader
+orphan-process question remains **open**.
+
+Full detail: `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01/LIVE-QUALIFICATION-ATTEMPT01.md`.

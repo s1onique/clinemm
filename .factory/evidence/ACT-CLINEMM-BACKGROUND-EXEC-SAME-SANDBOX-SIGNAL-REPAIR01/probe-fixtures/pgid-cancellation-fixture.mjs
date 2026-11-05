@@ -126,6 +126,21 @@ if (antiControlName) {
 				groupOwnershipHeld,
 				expected: control.expected,
 			},
+			// P1 CONTRACT ADJUSTMENT (bounded, 2026-11-05): a separately
+			// labelled NON-DELIVERY authorization denial.  Null unless the
+			// signal-zero probe was denied with EPERM, in which case NO signal
+			// was attempted at all.
+			authorizationDenial:
+				authorization.reason === "target-unsignalable:EPERM"
+					? {
+							outcome: "AUTHORIZATION_DENIED_EPERM",
+							source: "kill(pid, 0) — non-delivery authorization probe",
+							deliversSignal: false,
+							signalAttempted: false,
+							errnoCode: "EPERM",
+							reason: authorization.reason,
+						}
+					: null,
 			signalAttempt: {
 				ok: allowed,
 				skipped: !allowed,
@@ -176,6 +191,10 @@ if (process.argv.includes("--child")) {
 		childUid: uid,
 		childLifetimeMs: CHILD_LIFETIME_MS,
 		signalAttempt: null,
+		// P1 CONTRACT ADJUSTMENT: a separately labelled NON-DELIVERY
+		// authorization denial.  Null unless the signal-zero probe was denied
+		// with EPERM, in which case NO signal was attempted at all.
+		authorizationDenial: null,
 		preSignalIdentityCheck: null,
 		groupStateBefore: null,
 		groupStateAfter: null,
@@ -215,6 +234,21 @@ if (process.argv.includes("--child")) {
 			: authorization.reason
 		result.identityMismatchReasons = authorization.mismatchReasons
 		result.signalAttempt = { ok: false, skipped: true, target: `-${pgid}` }
+		// P1 CONTRACT ADJUSTMENT (bounded, 2026-11-05): when the gate refuses
+		// because the signal-zero authorization probe was denied with EPERM, NO
+		// group-directed signal was attempted.  The denial is reported under its
+		// own, separately labelled NON-DELIVERY field so it is never misread as
+		// an attempted SIGTERM that returned EPERM.
+		if (authorization.reason === "target-unsignalable:EPERM") {
+			result.authorizationDenial = {
+				outcome: "AUTHORIZATION_DENIED_EPERM",
+				source: "kill(pid, 0) — non-delivery authorization probe",
+				deliversSignal: false,
+				signalAttempted: false,
+				errnoCode: "EPERM",
+				reason: authorization.reason,
+			}
+		}
 	} else {
 		try {
 			process.kill(-pgid, "SIGTERM")

@@ -1,0 +1,7 @@
+LIVE_PROFILE_SIGNAL_RULE_OBSERVED=(allow signal (target self))
+EXPECTED_PERMANENT_RULE=(allow signal (target same-sandbox))
+OBSERVED_RUN_ID=signal-exact-1793898271
+DOGFOOD_MAIN_PID=77086
+DOGFOOD_EXTENSION_HOST_PID=77158
+INSTALLED_DIR_SUFFIX=1f456b971
+NOTE=the installed bundle predates the permanent repair commit d038b1e00

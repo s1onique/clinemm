@@ -1,0 +1,15 @@
+VITEST_WORKER_TEARDOWN_OBSERVATION
+==============================
+SUITE=src/runtime/sandbox/macos/seatbelt-same-sandbox-signal-repair01.test.ts
+SUITE_RESULT=11 passed / 1 file passed
+VITEST_EXIT_CODE=0
+OBSERVED_WORKER_PID=8859
+OBSERVED_WORKER_START_IDENTITY=Thu Nov  5 23:42:02 2026
+OBSERVED_WORKER_ARGV=/opt/homebrew/Cellar/node/26.0.0/bin/node ... vitest/dist/workers/forks.js
+WORKER_ALIVE_AFTER_RUN=false
+TEARDOWN_MESSAGE_PRESENT=true (1 occurrence of 'Failed to terminate forks worker')
+TEARDOWN_MESSAGE_ERRNO=EPERM
+INTERPRETATION=the pre-repair '(allow signal (target self))' rule denies the SIGTERM at teardown,
+  so vitest reports a teardown failure; the worker nevertheless exits and no orphan survives.
+ORPHANS_LEFT_BY_THIS_RUN=0
+PRE_EXISTING_ORPHANED_WORKERS_ON_HOST=27 (all started before this qualification run)

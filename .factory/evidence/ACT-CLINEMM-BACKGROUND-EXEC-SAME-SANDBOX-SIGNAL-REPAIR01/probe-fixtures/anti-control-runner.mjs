@@ -122,6 +122,45 @@ for (const name of scenarios) {
 				)
 			}
 		}
+
+		// P1 CONTRACT ADJUSTMENT (bounded, 2026-11-05) — machine-checked.
+		//
+		// When the gate refuses because the signal-zero authorization probe
+		// returned EPERM, NO signal was attempted.  The result must therefore
+		// carry the separately labelled NON-DELIVERY authorization denial and
+		// must NOT claim that a SIGTERM was attempted and returned EPERM.
+		//
+		// Asserting this here prevents the qualification from being able to
+		// satisfy its success criterion by misreporting the outcome.
+		if (reason.includes("target-unsignalable")) {
+			const denial = payload.authorizationDenial
+			if (!denial) {
+				failures.push(`${label}:expected a separately labelled authorizationDenial`)
+			} else {
+				if (denial.outcome !== "AUTHORIZATION_DENIED_EPERM") {
+					failures.push(`${label}:authorizationDenial.outcome != AUTHORIZATION_DENIED_EPERM`)
+				}
+				if (denial.deliversSignal !== false) {
+					failures.push(`${label}:authorizationDenial.deliversSignal must be false`)
+				}
+				if (denial.signalAttempted !== false) {
+					failures.push(`${label}:authorizationDenial.signalAttempted must be false`)
+				}
+				if (denial.errnoCode !== "EPERM") {
+					failures.push(`${label}:authorizationDenial.errnoCode != EPERM`)
+				}
+			}
+			// The misrepresented shape — an "attempted SIGTERM" with errno EPERM
+			// — must be ABSENT, because no signal was attempted.
+			if (payload.signalAttempt?.skipped !== true) {
+				failures.push(`${label}:expected signalAttempt.skipped=true (no signal attempted)`)
+			}
+			if (payload.signalAttempt?.errnoCode !== undefined && payload.signalAttempt?.errnoCode !== null) {
+				failures.push(
+					`${label}:signalAttempt.errnoCode must be null when no signal was attempted, got ${payload.signalAttempt?.errnoCode}`,
+				)
+			}
+		}
 	}
 
 	cases.push({

@@ -199,3 +199,107 @@ can manufacture the unsafe states.
 
 The destructive measurements must be run from the installed dogfood ClineMM
 Background Exec path, where the process table is observable.
+
+---
+
+# P1 Contract Adjustment — 2026-11-05
+
+**Authority:** the Factory review of `df48090f0` (verdict `C1: GO`, one P1
+qualification-contract mismatch). The review authorised the smallest bounded
+adjustment and explicitly directed: *do not misrepresent a non-delivery
+authorization denial as an attempted SIGTERM returning `EPERM`*.
+
+**Production source:** UNCHANGED. No production file was touched. The
+adjustment is confined to the qualification fixtures, the anti-control runner,
+the runbook contract, and the evidence artifacts.
+
+## The defect
+
+The runbook required the foreign measurement to satisfy:
+
+```text
+signalAttempt.ok = false
+signalAttempt.errnoCode = EPERM
+foreignAliveAfter = true
+foreignReceivedSIGTERM = false
+```
+
+But the corrected fixture **deliberately refuses to attempt SIGTERM at all**
+when the preliminary `kill(pid, 0)` returns `EPERM`. It emits
+`HALT_UNSAFE_FIXTURE` and signals nothing.
+
+That is the SAFE behaviour, but the contract as written could only be
+satisfied by misreporting the outcome: there is no "attempted SIGTERM that
+returned `EPERM`" to observe, because no SIGTERM was ever issued.
+
+Apple's `kill(2)` documentation confirms that signal zero checks existence and
+signalling permission **without delivering a signal**. The fixture already
+labelled that probe `authorizationCheck` with `deliversSignal: false`; the
+contract simply had not caught up with it.
+
+## The adjustment
+
+The authorization denial is now reported under its **own, separately labelled,
+non-delivery** field:
+
+```json
+"authorizationDenial": {
+  "outcome": "AUTHORIZATION_DENIED_EPERM",
+  "source": "kill(pid, 0) — non-delivery authorization probe",
+  "deliversSignal": false,
+  "signalAttempted": false,
+  "errnoCode": "EPERM"
+}
+```
+
+The runbook's foreign-denial gate now has **two mutually exclusive acceptable
+shapes**, and requires that the reported shape matches what actually happened:
+
+| Shape | Meaning | Required fields |
+| --- | --- | --- |
+| **(a)** attempted delivery | the SIGTERM really was issued and really returned `EPERM` | `signalAttempt.ok == false`, `signalAttempt.skipped == false`, `signalAttempt.errnoCode == "EPERM"`, `authorizationDenial` absent |
+| **(b)** non-delivery denial | the signal-zero probe was denied, so SIGTERM was **never attempted** | `authorizationDenial.outcome == "AUTHORIZATION_DENIED_EPERM"`, `authorizationDenial.deliversSignal == false`, `authorizationDenial.signalAttempted == false`, `authorizationDenial.errnoCode == "EPERM"`, `signalAttempt.skipped == true`, `signalAttempt.errnoCode` absent, `destructiveSignalsIssued` empty |
+
+Shape **(b)** is the SAFE behaviour and is the expected result whenever the
+signal-zero probe is denied before the attempt. Reporting shape (b) as shape
+(a) is a misrepresentation and is a FAILURE.
+
+**In BOTH shapes**, target identity and survival are independently verified:
+argv, UID and process start identity must match, `foreignAliveAfter == true`,
+and `foreignReceivedSIGTERM == false`.
+
+## Files changed
+
+| File | Change |
+| --- | --- |
+| `probe-fixtures/foreign-signal-attempt.mjs` | `authorizationDenial` added to the result schema; `applyAuthorizationDenial()` helper labels the non-delivery denial on both the production and the `--anti-control` path |
+| `probe-fixtures/pgid-cancellation-fixture.mjs` | the same separately labelled `authorizationDenial` on the production and the `--anti-control` path, so the group-directed refusal is labelled the same way |
+| `probe-fixtures/anti-control-runner.mjs` | **machine-checks** the shape (b) contract for every `target-unsignalable` refusal, and rejects the misrepresented shape (a) |
+| `QUALIFICATION-RUNBOOK.md` | the foreign-denial gate rewritten as the two-shape contract |
+
+## Verification
+
+The new machine check found a real gap on first run: the PGID fixture did not
+label its own EPERM refusal, so the anti-control run failed with
+`pgid:expected a separately labelled authorizationDenial` (9/10). That gap was
+fixed, and the run was re-executed:
+
+```text
+[anti-control] PASS stale-pid — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS missing-identity — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS expired-target — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS changed-argv — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS unreadable-metadata — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS changed-start-identity — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS changed-uid — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS changed-pgid — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS eperm-target — foreign=HALT_UNSAFE_FIXTURE pgid=HALT_UNSAFE_FIXTURE
+[anti-control] PASS healthy — foreign=none pgid=none
+```
+
+```text
+ANTI_CONTROL_RESULT_JSON ... "total":10,"passed":10,"failed":0,
+"processFree":true,"verdict":"PASS_ANTI_CONTROLS"
+```
+
+The classifier contract matrix remains 7/7 PASS.

@@ -100,6 +100,10 @@ const result = {
 	expectedIdentity: { argv: null, uid: null, startIdentity: null },
 	identityObservation: null,
 	authorizationCheck: null,
+	// P1 CONTRACT ADJUSTMENT: a separately labelled NON-DELIVERY authorization
+	// denial.  Null unless the signal-zero probe was denied with EPERM, in
+	// which case NO signal was attempted at all.
+	authorizationDenial: null,
 	signalAttempt: null,
 	signalErrno: null,
 	signalDelivered: false,
@@ -115,6 +119,59 @@ const result = {
 function emitAndExit(code) {
 	console.log(`FOREIGN_SIGNAL_RESULT_JSON=${JSON.stringify(result)}`)
 	process.exit(code)
+}
+
+/**
+ * P1 CONTRACT ADJUSTMENT (bounded, 2026-11-05).
+ *
+ * The runbook previously required `signalAttempt.ok == false` with errno
+ * `EPERM`.  That contract misrepresented what the fixture does: when the
+ * preliminary signal-zero probe returns EPERM, the gate REFUSES to attempt
+ * SIGTERM at all.  No SIGTERM is ever issued, so there is no "attempted
+ * SIGTERM that returned EPERM" to report.
+ *
+ * The authorization denial is therefore reported under its OWN, separately
+ * labelled field, which is explicitly a NON-DELIVERY result:
+ *
+ *   authorizationDenial = {
+ *     outcome:         "AUTHORIZATION_DENIED_EPERM",
+ *     source:          "kill(pid, 0) — non-delivery authorization probe",
+ *     deliversSignal:  false,
+ *     signalAttempted: false,
+ *     errnoCode:       "EPERM",
+ *   }
+ *
+ * `signalAttempt` remains `ok:false, skipped:true` and carries NO errno,
+ * because no signal was attempted.  The adjudication contract accepts EITHER
+ * of two mutually exclusive shapes, and requires that the reported shape
+ * matches what actually happened:
+ *
+ *   (a) an ATTEMPTED delivery  -> signalAttempt.ok == false AND
+ *                                   signalAttempt.errnoCode == "EPERM" AND
+ *                                   signalAttempt.skipped == false
+ *   (b) a NON-DELIVERY denial  -> authorizationDenial.outcome ==
+ *                                   "AUTHORIZATION_DENIED_EPERM" AND
+ *                                   authorizationDenial.deliversSignal ==
+ *                                   false AND
+ *                                   signalAttempt.skipped == true AND
+ *                                   signalAttempt.errnoCode == null
+ *
+ * Shape (b) is the SAFE behaviour and is the expected result whenever the
+ * signal-zero probe is denied before the attempt.  Shape (a) is only
+ * legitimate if the SIGTERM was really issued and really returned EPERM.
+ * Reporting (b) as (a) is a misrepresentation and is a FAILURE.
+ */
+function applyAuthorizationDenial(target, reason) {
+	if (reason === "target-unsignalable:EPERM") {
+		target.authorizationDenial = {
+			outcome: "AUTHORIZATION_DENIED_EPERM",
+			source: "kill(pid, 0) — non-delivery authorization probe",
+			deliversSignal: false,
+			signalAttempted: false,
+			errnoCode: "EPERM",
+			reason,
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +206,9 @@ if (isAntiControl) {
 	if (!authorization.allowed) {
 		result.halt = "HALT_UNSAFE_FIXTURE"
 		result.signalAttempt = { signal: "SIGTERM", target: "foreign-pid", ok: false, skipped: true }
+		// P1 CONTRACT ADJUSTMENT: label the non-delivery authorization denial
+		// with the same shape the production path emits.
+		applyAuthorizationDenial(result, authorization.reason)
 	} else {
 		// The sink RECORDS the attempt; it never delivers a real signal.
 		control.signalRecorder.deliver(result.foreignPid, "SIGTERM")
@@ -221,6 +281,10 @@ if (!authorization.allowed) {
 	result.identityMismatchReasons = authorization.mismatchReasons
 	// NOTHING is signalled on the halt path.
 	result.signalAttempt = { signal: "SIGTERM", target: "foreign-pid", ok: false, skipped: true }
+	// P1 CONTRACT ADJUSTMENT: the non-delivery authorization denial is
+	// labelled separately, so it is never misread as an attempted SIGTERM
+	// that returned EPERM.  See `applyAuthorizationDenial`.
+	applyAuthorizationDenial(result, authorization.reason)
 	emitAndExit(3)
 }
 

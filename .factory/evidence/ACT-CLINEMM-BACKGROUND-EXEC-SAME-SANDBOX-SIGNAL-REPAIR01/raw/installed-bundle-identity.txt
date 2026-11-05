@@ -1,0 +1,6 @@
+INSTALLED_BUNDLE=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-1f456b971/dist/extension.js
+INSTALLED_BUNDLE_SHA256=7aba56e769d322adb420f79f5c161e5bd4abb260761ff25a4ba73ace3e1fd0f9
+VSIX_BUNDLE_SHA256=e35de822bec46b697fad7e651206d73124796b2179c2e6a25a083adced6a8a66
+VSIX=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-signal-repair01.vsix
+VSIX_SHA256=f638ff5ed0bb631c0f347b8e2ee9a4d5a8af9fb651769fa345665d037cce3d81
+MATCHES_EXPECTED=false

@@ -32480,6 +32480,54 @@ not observable by `ps` (`EPERM` on every process-table observation) and `kill(pi
 issued, verified against a live target whose log recorded no `FOREIGN_GOT_SIGTERM`. That is the
 correct behaviour and it is precisely why the anti-controls are PROCESS-FREE.
 
+### P1 contract adjustment + live qualification attempt (2026-11-05)
+
+The Factory review of `df48090f0` returned `C1: GO` with **one P1**: the foreign negative control's
+success criterion demanded `signalAttempt.errnoCode == EPERM`, but the corrected fixture deliberately
+refuses to attempt SIGTERM when the signal-zero probe returns `EPERM`, so it emits
+`HALT_UNSAFE_FIXTURE` instead. The bounded adjustment recognises a **separately labelled non-delivery
+authorization denial** (`authorizationDenial.outcome == "AUTHORIZATION_DENIED_EPERM"`,
+`deliversSignal: false`, `signalAttempted: false`) and rewrites the foreign-denial gate as two
+mutually exclusive shapes — (a) an attempted delivery that returned `EPERM`, and (b) a non-delivery
+denial — requiring the reported shape to match what actually happened. The anti-control runner now
+**machine-checks** shape (b) and rejects the misrepresented shape (a). The new check found a real
+gap on first run (the PGID fixture did not label its own EPERM refusal, 9/10) which was fixed;
+anti-controls are back to **10/10 PASS**, classifier contract **7/7 PASS**.
+
+The live qualification procedure was then executed in the runbook order. **Verdict:
+`CAPTURE_INSUFFICIENT`.** `PASS_LIVE_PERMANENT_REPAIR` is NOT claimed and `FAIL_LIVE_REPAIR` is NOT
+assigned.
+
+| Phase | Gate | Result |
+| --- | --- | --- |
+| 0a | anti-controls / classifier contract | **PASS** 10/10, 7/7 |
+| 0 | preflight | **PASS** — dogfood main=77086, extension-host=77158 |
+| 1 | installed artifact identity | **FAIL** — installed `7aba56e7…` ≠ required `e35de822…` |
+| 1 | **loaded** artifact identity | **FAIL** — live profile carries `(allow signal (target self))` |
+| 2 | production GREEN through Background Exec | **NOT_REACHABLE** |
+| 3 | observer correlation | **CAPTURE_INSUFFICIENT** — mechanism proven, permanent profile never generated |
+| 4 | PGID cancellation | **HALT_UNSAFE_FIXTURE** — safe refusal, zero destructive signals |
+| 5 | foreign-process denial | **HALT_UNSAFE_FIXTURE** — safe refusal, zero destructive signals; cleanup PASS, no orphans |
+| 6 | Vitest fork-worker teardown | **FAIL** — teardown message present; exact worker identity verified gone, 0 orphans |
+
+**The blocking defect is the artifact identity, not the repair.** The installed extension directory
+`s1onique.clinemm-4.1.16-5a1c485cb-1f456b971` **predates** the permanent repair commit `d038b1e00`
+and still carries the retired `CLINEMM_DIAG_SAME_SANDBOX_SIGNAL` gate and the pre-repair
+`signalTarget` selector. The Seatbelt profile is deleted after use, so it was captured **LIVE**
+during a Background Exec command and contains `(allow signal (target self))` — the **pre-repair**
+rule — reproduced twice. This is exactly the check the review demanded: a matching on-disk VSIX is
+**not** sufficient by itself. The on-disk `dist/clinemm-signal-repair01.vsix` IS correct
+(`e35de822…`, `same-sandbox`, zero retired markers), but it cannot be installed from the agent
+substrate because the substrate's Seatbelt write roots exclude the dogfood extensions directory
+(`mkdir`/`touch`/`cp` → `EPERM`; `sandbox-exec` itself is denied, rc=71) — the same ceiling already
+recorded in `raw/substrate-limitation.txt` §4.
+
+**Consequence.** Phases 2, 4 and 6 were all measured against the **pre-repair** profile. A
+production GREEN would have measured the wrong build and dressed the result up as the permanent
+repair; the artifact-identity gate is what prevented that false GREEN. **Operator action required:**
+install the VSIX from an ordinary unsandboxed Terminal, reload only the dogfood window, then
+re-measure. The broader orphan-process question remains **open**.
+
 ### Evidence
 
 - ACT body: `.factory/acts/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01.md`
@@ -32487,8 +32535,14 @@ correct behaviour and it is precisely why the anti-controls are PROCESS-FREE.
   (`final-report.md`, `structural-tests.txt`, `build-identity.txt`,
   `operator-script.sh` — QUARANTINED tombstone, `QUALIFICATION-RUNBOOK.md`,
   `operator-qualification.sh`, `probe-fixtures/`, `P0-SIGNAL-TARGET-SAFETY-CORRECTION.md`,
+  `LIVE-QUALIFICATION-ATTEMPT01.md`,
   `raw/red-control-target-self.result.json`, `raw/substrate-limitation.txt`,
-  `raw/anti-controls.jsonl`, `raw/classifier-contract.jsonl`)
-- Source head: `d038b1e00fddcd8e25dc3df0333c101acaab60a9`
+  `raw/anti-controls.jsonl`, `raw/classifier-contract.jsonl`,
+  `raw/qualification-summary.json`, `raw/installed-bundle-identity.txt`,
+  `raw/live-profile-rule-observation.txt`, `raw/pgid.result.json`,
+  `raw/foreign.result.json`, `raw/vitest.stdout`,
+  `raw/vitest-teardown-identity.txt`, `raw/dogfood-instance-identity.txt`)
+- Source head: `d038b1e00fddcd8e25dc3df0333c101acaab60a9` (permanent repair, preserved)
+- Qualification head: `df48090f00eb16e2b5c37df747d60c47df4689d2` (safety correction)
 
 **No claim is made that the broader orphan-process problem is fixed.**

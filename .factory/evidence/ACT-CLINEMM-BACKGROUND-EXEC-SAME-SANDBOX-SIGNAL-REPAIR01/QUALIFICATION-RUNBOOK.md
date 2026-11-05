@@ -233,11 +233,46 @@ anchored to exactly what `foreign-start` observed, with no shell-quoting
 ambiguity. Save the tool output containing `FOREIGN_SIGNAL_RESULT_JSON=...` to
 `raw/foreign.result.json`.
 
-The foreign-denial gate is:
+The foreign-denial gate has TWO mutually exclusive acceptable shapes. Exactly
+one of them must hold, and the reported shape must match what actually
+happened.
 
-* `signalAttempt.ok == false` with errno `EPERM`;
+**Shape (a) — an ATTEMPTED delivery was denied.** The SIGTERM really was
+issued and really returned `EPERM`:
+
+* `signalAttempt.ok == false`;
+* `signalAttempt.skipped == false`;
+* `signalAttempt.errnoCode == "EPERM"`; and
+* `authorizationDenial` is absent.
+
+**Shape (b) — a NON-DELIVERY authorization denial.** The preliminary
+signal-zero probe (`kill(pid, 0)`) was denied with `EPERM`, so the fixture
+**refused to attempt SIGTERM at all** and signalled nothing:
+
+* `authorizationDenial.outcome == "AUTHORIZATION_DENIED_EPERM"`;
+* `authorizationDenial.deliversSignal == false`;
+* `authorizationDenial.signalAttempted == false`;
+* `authorizationDenial.errnoCode == "EPERM"`;
+* `signalAttempt.ok == false` with `signalAttempt.skipped == true` and
+  `signalAttempt.errnoCode` absent; and
+* `destructiveSignalsIssued` is EMPTY.
+
+Shape (b) is the SAFE behaviour and is the expected result whenever the
+signal-zero probe is denied before the attempt. It must NOT be reported as
+shape (a): there is no "attempted SIGTERM that returned `EPERM`" in that case.
+Reporting shape (b) as shape (a) is a misrepresentation and is a FAILURE.
+
+In BOTH shapes, independently verified target identity and survival are
+required:
+
+* the target identity was verified (argv, UID, process start identity) and
+  matched;
 * `foreignAliveAfter == true`; and
 * `foreignReceivedSIGTERM == false`.
+
+The anti-control runner machine-checks shape (b) for the `eperm-target`
+scenario, so a qualification run cannot satisfy this gate by misreporting the
+outcome.
 
 **Signal-time identity gate (added by the bounded P0 correction).** The
 fixture REQUIRES the expected target identity (argv, uid, process start
