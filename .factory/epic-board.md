@@ -32442,14 +32442,53 @@ authority for terminating owned processes outside this sandbox. A successful `ki
 **not** prove successful `kill(-pgid)` or complete descendant cleanup — those are qualified
 separately (items 2–4 above).
 
+### Bounded P0 signal-target safety correction (2026-11-05)
+
+The Factory review of correction `c0e5fb3ea` returned
+`PASS_WITH_BOUNDED_P0_REMAINDER` with `HALT_UNSAFE_SIGNAL_TARGET` for the foreign and PGID
+measurements. Three signal-target safety defects were corrected **inside this ACT** — no new ACT,
+no architecture revisit, **no production source change** (`git diff 487a80ef7 -- sdk/ apps/` is
+empty).
+
+| Defect | Correction |
+| --- | --- |
+| **P0-1** — the foreign fixture signalled a bare numeric PID with no signal-time identity revalidation, so a stale/reused PID could hit an unrelated process | Expected target identity (argv, UID, process start identity) is now REQUIRED and is re-verified IMMEDIATELY before the attempt through a shared fail-closed gate; a non-mutating signal-zero (`kill(pid, 0)`) authorization check runs first, labelled `deliversSignal: false`; any missing/unreadable/changed field emits `HALT_UNSAFE_FIXTURE` and signals nothing |
+| **P0-2** — the PGID fixture captured the child's identity at spawn time but group-signalled without revalidating that the child still owned the group | The child's PID, **process-group id**, argv, UID and start identity are re-verified immediately before `kill(-pgid, SIGTERM)`, and the OBSERVED pgid must still equal the pgid captured at spawn time; any missing/unreadable/changed field emits `HALT_UNSAFE_FIXTURE` and signals nothing; every `ps` observation now has a finite 2-second timeout |
+| **P0-3** — `operator-qualification.sh` string-matched `kill -0` output and promoted an empty or FAILED `ps` lookup to `GONE` | Classification now uses the ACTUAL errno from the Node runtime: only `ESRCH` yields `GONE`; `EPERM` and every other errno yield `UNVERIFIABLE`; a failed process-table observation never overrides `EPERM` |
+
+**Process-free anti-controls — 10/10 PASS.** They drive the REAL fixture code paths in their
+`--anti-control` mode against a synthetic process table (identity observation injected, signal sink
+recorded), so no real process is observed or signalled. Asserted: `stale-pid`, `missing-identity`,
+`expired-target`, `changed-argv`, `unreadable-metadata`, `changed-start-identity`, `changed-uid`,
+`changed-pgid`, `eperm-target` — each must yield `HALT_UNSAFE_FIXTURE` with **zero** destructive
+signals — plus a `healthy` CONTROL that must yield exactly one signal, so the anti-controls cannot
+pass vacuously.
+
+The `eperm-target` anti-control initially FAILED and exposed a **real remaining defect**: the gate
+permitted a destructive attempt against a target that existed but was not signalable. The gate now
+refuses with `target-unsignalable:EPERM`.
+
+**Classifier contract matrix — 7/7 PASS.** Proves the P0-3 table against every
+errno/observation combination, including the two cases the old code got wrong (`EPERM` + failed
+lookup, and `EPERM` + empty lookup). The defect was reproduced directly: with `kill -0` returning
+`EPERM` and the `ps` lookup failing, the OLD implementation returned `GONE` and the NEW one returns
+`UNVERIFIABLE`.
+
+**Substrate note.** In the agent substrate used to author this correction, a fixture-spawned child is
+not observable by `ps` (`EPERM` on every process-table observation) and `kill(pid, 0)` also returns
+`EPERM`. The corrected fixtures therefore FAIL CLOSED there — `HALT_UNSAFE_FIXTURE`, no signal
+issued, verified against a live target whose log recorded no `FOREIGN_GOT_SIGTERM`. That is the
+correct behaviour and it is precisely why the anti-controls are PROCESS-FREE.
+
 ### Evidence
 
 - ACT body: `.factory/acts/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01.md`
 - Evidence: `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01/`
   (`final-report.md`, `structural-tests.txt`, `build-identity.txt`,
   `operator-script.sh` — QUARANTINED tombstone, `QUALIFICATION-RUNBOOK.md`,
-  `operator-qualification.sh`, `probe-fixtures/`,
-  `raw/red-control-target-self.result.json`, `raw/substrate-limitation.txt`)
+  `operator-qualification.sh`, `probe-fixtures/`, `P0-SIGNAL-TARGET-SAFETY-CORRECTION.md`,
+  `raw/red-control-target-self.result.json`, `raw/substrate-limitation.txt`,
+  `raw/anti-controls.jsonl`, `raw/classifier-contract.jsonl`)
 - Source head: `d038b1e00fddcd8e25dc3df0333c101acaab60a9`
 
 **No claim is made that the broader orphan-process problem is fixed.**

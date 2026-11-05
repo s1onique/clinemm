@@ -41,6 +41,7 @@ FOREIGN_LOG="$RAW/foreign-target.log"
 FOREIGN_PID_FILE="$RAW/foreign-target.pid"
 FOREIGN_LSTART_FILE="$RAW/foreign-target.lstart"
 FOREIGN_ARGV_FILE="$RAW/foreign-target.argv"
+FOREIGN_UID_FILE="$RAW/foreign-target.uid"
 
 mkdir -p "$RAW"
 
@@ -78,21 +79,21 @@ read_uid() {
 }
 
 process_state() {
-	# EPERM is existence-without-signal-authority, NOT absence. `ps` is the
-	# authoritative observation fallback because it can read the process table
-	# without signal permission.
-	local out rc
-	out="$(kill -0 "$1" 2>&1)" && { echo ALIVE; return 0; }
-	rc=$?
-	if printf '%s' "$out" | grep -qiE 'no such process|not exist'; then
-		echo GONE
-		return 0
-	fi
-	if [ -n "$(read_argv "$1")" ]; then
-		echo UNVERIFIABLE
-	else
-		echo GONE
-	fi
+	# SAFETY CORRECTION (2026-11-05): classify with the ACTUAL errno from the
+	# Node runtime instead of string-matching `kill -0` output.
+	#
+	# The previous implementation promoted an EMPTY `ps` lookup to GONE.  That
+	# is unsound: `kill -0` failing with EPERM means "the process EXISTS but we
+	# may not signal it", and a FAILED process-table observation carries no
+	# information at all.  The contract is:
+	#
+	#   ESRCH -> GONE           (the ONLY thing that establishes absence)
+	#   EPERM -> UNVERIFIABLE   (exists, not signalable; never absence)
+	#   other -> UNVERIFIABLE
+	#   rc=0  -> ALIVE
+	#
+	# A failed process-table observation must NEVER override EPERM.
+	"$NODE" "$FIX/classify-process-state.mjs" "$1" 2>/dev/null || echo UNVERIFIABLE
 }
 
 preflight() {
@@ -101,6 +102,8 @@ preflight() {
 	require_file "$FIX/pgid-cancellation-fixture.mjs"
 	require_file "$FIX/foreign-target-fixture.mjs"
 	require_file "$FIX/foreign-signal-attempt.mjs"
+	require_file "$FIX/target-identity.mjs"
+	require_file "$FIX/classify-process-state.mjs"
 	require_file "$CODIUM"
 	require_dir "$USER_DATA"
 	require_dir "$EXTENSIONS"
@@ -201,7 +204,10 @@ foreign_start() {
 	[ "$actual" = "$pid" ] || fail "foreign marker pid $actual != supervisor-recorded pid $pid"
 	read_lstart "$pid" > "$FOREIGN_LSTART_FILE"
 	read_argv "$pid" > "$FOREIGN_ARGV_FILE"
+	read_uid "$pid" > "$FOREIGN_UID_FILE"
 	[ -s "$FOREIGN_LSTART_FILE" ] || fail "could not capture foreign target start identity"
+	[ -s "$FOREIGN_ARGV_FILE" ] || fail "could not capture foreign target argv identity"
+	[ -s "$FOREIGN_UID_FILE" ] || fail "could not capture foreign target uid identity"
 	grep -q "$FIX/foreign-target-fixture.mjs" "$FOREIGN_ARGV_FILE" || fail "foreign target argv identity mismatch"
 	note "foreign target started: pid=$pid (finite 12s lifetime)"
 }
@@ -213,13 +219,19 @@ foreign_stop() {
 	[ "$pid" -gt 1 ] 2>/dev/null || fail "invalid foreign target pid"
 	state="$(process_state "$pid")"
 	if [ "$state" = "ALIVE" ]; then
-		local current_lstart current_argv expected_lstart expected_argv
+		local current_lstart current_argv current_uid expected_lstart expected_argv expected_uid
 		expected_lstart="$(cat "$FOREIGN_LSTART_FILE" 2>/dev/null || true)"
 		expected_argv="$(cat "$FOREIGN_ARGV_FILE" 2>/dev/null || true)"
+		expected_uid="$(cat "$FOREIGN_UID_FILE" 2>/dev/null || true)"
 		current_lstart="$(read_lstart "$pid")"
 		current_argv="$(read_argv "$pid")"
+		current_uid="$(read_uid "$pid")"
+		[ -n "$expected_lstart" ] || fail "foreign target start identity was never recorded; refusing to signal"
+		[ -n "$expected_argv" ] || fail "foreign target argv was never recorded; refusing to signal"
+		[ -n "$expected_uid" ] || fail "foreign target uid was never recorded; refusing to signal"
 		[ -n "$current_lstart" ] && [ "$current_lstart" = "$expected_lstart" ] || fail "foreign target start identity changed; refusing to signal"
 		[ -n "$current_argv" ] && [ "$current_argv" = "$expected_argv" ] || fail "foreign target argv changed; refusing to signal"
+		[ -n "$current_uid" ] && [ "$current_uid" = "$expected_uid" ] || fail "foreign target uid changed; refusing to signal"
 		kill -TERM "$pid" 2>/dev/null || true
 		for i in $(seq 1 60); do
 			[ "$(process_state "$pid")" = "GONE" ] && break
@@ -228,7 +240,7 @@ foreign_stop() {
 	fi
 	state="$(process_state "$pid")"
 	[ "$state" = "GONE" ] || fail "foreign target was not verifiably gone (state=$state)"
-	rm -f "$FOREIGN_PID_FILE" "$FOREIGN_LSTART_FILE" "$FOREIGN_ARGV_FILE"
+	rm -f "$FOREIGN_PID_FILE" "$FOREIGN_LSTART_FILE" "$FOREIGN_ARGV_FILE" "$FOREIGN_UID_FILE"
 	note "foreign target cleanup PASS: pid=$pid is gone"
 }
 

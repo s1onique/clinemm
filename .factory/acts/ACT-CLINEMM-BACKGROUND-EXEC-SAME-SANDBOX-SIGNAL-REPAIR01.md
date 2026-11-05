@@ -95,3 +95,45 @@ Commits `d038b1e00` and `487a80ef7` are preserved. The live verdict remains
 `NOT_QUALIFIED_FROM_THIS_SUBSTRATE` until the installed permanent build passes
 the bounded production GREEN and the separate PGID, foreign-process, and
 Vitest-teardown measurements.
+
+## Bounded P0 signal-target safety correction (2026-11-05)
+
+The Factory review of correction `c0e5fb3ea` returned
+`PASS_WITH_BOUNDED_P0_REMAINDER` with `HALT_UNSAFE_SIGNAL_TARGET` for the
+foreign and PGID measurements. Three signal-target safety defects were
+corrected **inside this ACT**, with **no new ACT**, **no architecture
+revisit**, and **no production source change**.
+
+| Defect | Correction |
+| --- | --- |
+| P0-1 — the foreign fixture signalled a bare numeric PID with no signal-time identity revalidation, so a stale or reused PID could hit an unrelated process | The expected target identity (argv, UID, process start identity) is now REQUIRED and is re-verified immediately before the attempt through a shared fail-closed gate; a non-mutating signal-zero (`kill(pid, 0)`) authorization check runs first and is labelled `deliversSignal: false`; any missing/unreadable/changed field emits `HALT_UNSAFE_FIXTURE` and signals nothing |
+| P0-2 — the PGID fixture captured the child's identity at spawn time but group-signalled without revalidating that the child still owned the group | The child's PID, process-group id, argv, UID and start identity are re-verified immediately before `kill(-pgid, SIGTERM)`, and the observed pgid must still equal the pgid captured at spawn time; any missing/unreadable/changed field emits `HALT_UNSAFE_FIXTURE` and signals nothing; every `ps` observation now has a finite 2-second timeout |
+| P0-3 — `operator-qualification.sh` classified a process by string-matching `kill -0` output and promoted an empty or FAILED `ps` lookup to `GONE` | Classification now uses the actual errno from the Node runtime: only `ESRCH` yields `GONE`; `EPERM` and every other errno yield `UNVERIFIABLE`; a failed process-table observation never overrides `EPERM` |
+
+**Process-free anti-controls** were added and executed. They drive the real
+fixture code paths against a synthetic process table, injecting the identity
+observation and recording the signal sink, so no real process is observed or
+signalled. Ten scenarios are asserted: `stale-pid`, `missing-identity`,
+`expired-target`, `changed-argv`, `unreadable-metadata`,
+`changed-start-identity`, `changed-uid`, `changed-pgid`, `eperm-target`, and
+a `healthy` control. The first nine must each produce `HALT_UNSAFE_FIXTURE`
+with **zero** destructive signals; the control must produce exactly one, so
+the anti-controls cannot pass vacuously.
+
+The `eperm-target` anti-control initially FAILED and exposed a real remaining
+defect — the gate permitted a destructive attempt against a target that
+existed but was not signalable. The gate now refuses with
+`target-unsignalable:EPERM`.
+
+A separate machine-checkable contract matrix
+(`classify-process-state.mjs --contract`) proves the P0-3 classification
+table, including the two cases the old code got wrong.
+
+Full detail, files changed, and verified output:
+`.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01/P0-SIGNAL-TARGET-SAFETY-CORRECTION.md`.
+
+**What this correction does NOT claim.** The production GREEN through
+Background Exec, the installed permanent build live GREEN, the Vitest worker
+teardown measurement, and the wider orphan-process question remain open live
+qualification items. The permanent source repair remains accepted. The live
+verdict remains `NOT_QUALIFIED_FROM_THIS_SUBSTRATE`.
