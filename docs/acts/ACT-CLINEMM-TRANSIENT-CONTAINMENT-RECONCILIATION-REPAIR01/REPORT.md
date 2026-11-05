@@ -3,16 +3,18 @@
 **Short name:** TCRR01
 **ENTRY_HEAD:** `d03d475e1f4ab064ea123eb464b59a4f2b112176`
 **ENTRY_TREE:** `bc16cc846080e7bc98221a6020822ac7d746acb8`
-**SUBJECT_HEAD:** `05c5c055438e838d14ae40e76512e724739c519b`
-**SUBJECT_TREE:** `af34dd59d0b3e10c76adc3474443e90aa702db3a`
+**SUBJECT_HEAD (content commit):** `c9296c3cd8befc871d6807fe9715c7c2704984f2`
+**SUBJECT_TREE (content commit):** `f48c92b685806a181b115018c5d88a02d6b8c5cb`
 
-The ACT is three scoped commits:
+`SUBJECT_HEAD` is the **content** commit: it contains every production change,
+every test, the qualification harness and the packaging fix. The exact-head
+VSIX was built from it. Two subsequent **docs-only** commits pin this hash
+into the evidence artifacts; they change no code.
 
 | Commit | Tree | Subject |
 |---|---|---|
 | `03f2e8d00ecf521c1691dd6e7f3a961d51971884` | `67252a539e78d68d27667de041cf7c3cc0e4cba3` | the production repair + focused tests + evidence |
-| `c9296c3cd8befc871d6807fe9715c7c2704984f2` | `f48c92b685806a181b115018c5d88a02d6b8c5cb` | the installed-VSIX LIVE qualification harness + the `.vscodeignore` packaging fix |
-| `05c5c055438e838d14ae40e76512e724739c519b` | `af34dd59d0b3e10c76adc3474443e90aa702db3a` | the final subject-head / LIVE-result evidence |
+| `c9296c3cd8befc871d6807fe9715c7c2704984f2` | `f48c92b685806a181b115018c5d88a02d6b8c5cb` | the installed-VSIX LIVE qualification harness + the `.vscodeignore` packaging fix (**the content commit**) |
 
 ---
 
