@@ -325,6 +325,16 @@
 		// `bun run test:vitest`) breaks the leak while leaving every
 		// vitest, bun, and integration test harness unaffected.
 		"src/sdk/__tests__/seatbelt-network-live-downstream-recon01.c1-observer.test.ts",
+		// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01:
+		// The same-stub-import exclusion as the Seatbelt observer test
+		// above. This test imports `../../test/cline-core-vitest-stub`
+		// to reach the REAL Seatbelt authorization slot (the stub
+		// re-exports raw SDK source from `sdk/packages/core/...`),
+		// which pulls the entire SDK source tree into the apps/vscode
+		// compilation unit under rootDir `.` — producing TS6059 noise.
+		// Excluding the test-only consumer breaks the leak; every vitest,
+		// bun, and integration harness is unaffected.
+		"src/sdk/__tests__/same-sandbox-production-discriminator01.policy.test.ts",
 		// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 /
 		// CCCL01-E2E: end-to-end REAL-host sentinel witness. Imports
 		// `@cline-internal/core/runtime/host/local-runtime-host`

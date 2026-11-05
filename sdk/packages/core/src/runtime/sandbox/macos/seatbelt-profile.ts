@@ -215,37 +215,38 @@ const ALWAYS_WRITABLE_TEMP_SUBPATHS: readonly string[] = Object.freeze(
  * introspection. This mirrors the `ALWAYS_WRITABLE_TEMP_SUBPATHS`
  * precedent (T1..T9 in `seatbelt-profile.test.ts`).
  */
-const ALWAYS_WRITABLE_GO_BUILD_CACHE_SUBPATHS: readonly string[] = Object.freeze(
-	(() => {
-		try {
-			// CORRECTION01 (load-bearing change): canonicalize the
-			// EXISTING trusted ancestor (`<HOME>/Library/Caches`)
-			// and append the FIXED leaf `go-build` — NOT
-			// `realpathSync(${homedir()}/Library/Caches/go-build)`.
-			// Reason: Go itself creates the leaf directory on first
-			// use via `os.MkdirAll(dir, 0o777)` in
-			// `cmd/go/internal/cache/default.go`, after computing
-			// `os.UserCacheDir() + "/go-build"`. Canonicalizing the
-			// full leaf fails with ENOENT on a fresh user account,
-			// which would silently drop the rule — meaning Go's
-			// first use would itself be denied, exactly the
-			// contract defect this ACT was created to fix.
-			//
-			// We do NOT hard-code `/Users/...` or `/private/var/...`
-			// — the canonical HOME-derived path is the only correct
-			// identity under macOS volume aliasing.
-			const canonicalCachesParent = realpathSync(
-				`${homedir()}/Library/Caches`,
-			);
-			return [`${canonicalCachesParent}/go-build`];
-		} catch {
-			// realpathSync fails when the trusted ancestor itself
-			// is unavailable. Return an empty array — no Go-cache
-			// rule is emitted. See failure-scope above.
-			return [];
-		}
-	})(),
-);
+const ALWAYS_WRITABLE_GO_BUILD_CACHE_SUBPATHS: readonly string[] =
+	Object.freeze(
+		(() => {
+			try {
+				// CORRECTION01 (load-bearing change): canonicalize the
+				// EXISTING trusted ancestor (`<HOME>/Library/Caches`)
+				// and append the FIXED leaf `go-build` — NOT
+				// `realpathSync(${homedir()}/Library/Caches/go-build)`.
+				// Reason: Go itself creates the leaf directory on first
+				// use via `os.MkdirAll(dir, 0o777)` in
+				// `cmd/go/internal/cache/default.go`, after computing
+				// `os.UserCacheDir() + "/go-build"`. Canonicalizing the
+				// full leaf fails with ENOENT on a fresh user account,
+				// which would silently drop the rule — meaning Go's
+				// first use would itself be denied, exactly the
+				// contract defect this ACT was created to fix.
+				//
+				// We do NOT hard-code `/Users/...` or `/private/var/...`
+				// — the canonical HOME-derived path is the only correct
+				// identity under macOS volume aliasing.
+				const canonicalCachesParent = realpathSync(
+					`${homedir()}/Library/Caches`,
+				);
+				return [`${canonicalCachesParent}/go-build`];
+			} catch {
+				// realpathSync fails when the trusted ancestor itself
+				// is unavailable. Return an empty array — no Go-cache
+				// rule is emitted. See failure-scope above.
+				return [];
+			}
+		})(),
+	);
 
 /**
  * Escape a string for safe embedding into SBPL between double quotes.
@@ -506,11 +507,15 @@ function buildWriteRule(
  * lets Apple mktemp(1) succeed (mkstemp + chmod) while denying
  * overwrite / unlink / rename-from-existing of an existing sentinel.
  */
-function buildCreateOnlyAllowRule(createOnlyRoots: readonly string[] | undefined): string {
+function buildCreateOnlyAllowRule(
+	createOnlyRoots: readonly string[] | undefined,
+): string {
 	if (!createOnlyRoots || createOnlyRoots.length === 0) {
 		return "";
 	}
-	const subpaths = createOnlyRoots.map((p) => `(subpath "${escapeSbplString(p)}")`);
+	const subpaths = createOnlyRoots.map(
+		(p) => `(subpath "${escapeSbplString(p)}")`,
+	);
 	return `(allow file-write-create\n  ${subpaths.join("\n  ")})`;
 }
 
@@ -606,8 +611,13 @@ function buildNetworkRule(network: CommandCapability["network"]): string {
  *   - host-helper authority (buildHostHelperSocketRules, ACT-CLINEMM-
  *     MACOS-TRUSTED-HOST-HELPER01)
  */
-function buildExactSocketRulePair(canonicalSocketPath: string | undefined): string {
-	if (typeof canonicalSocketPath !== "string" || canonicalSocketPath.length === 0) {
+function buildExactSocketRulePair(
+	canonicalSocketPath: string | undefined,
+): string {
+	if (
+		typeof canonicalSocketPath !== "string" ||
+		canonicalSocketPath.length === 0
+	) {
 		return "";
 	}
 	const escaped = escapeSbplString(canonicalSocketPath);
@@ -628,7 +638,9 @@ function buildExactSocketRulePair(canonicalSocketPath: string | undefined): stri
  * caller is the Seatbelt backend, which is the only place that knows
  * the canonicalized socket path.
  */
-function buildSshAgentSocketRules(canonicalSocketPath: string | undefined): string {
+function buildSshAgentSocketRules(
+	canonicalSocketPath: string | undefined,
+): string {
 	return buildExactSocketRulePair(canonicalSocketPath);
 }
 
@@ -646,7 +658,9 @@ function buildSshAgentSocketRules(canonicalSocketPath: string | undefined): stri
  * ssh-agent authority — a single path-literal network-outbound filter
  * scoped to the canonical vnode.
  */
-function buildHostHelperSocketRules(canonicalSocketPath: string | undefined): string {
+function buildHostHelperSocketRules(
+	canonicalSocketPath: string | undefined,
+): string {
 	return buildExactSocketRulePair(canonicalSocketPath);
 }
 
@@ -680,16 +694,46 @@ function buildHostHelperSocketRules(canonicalSocketPath: string | undefined): st
  *                       Emits the same exact-socket rule pair as
  *                       ssh-agent. When omitted, no host-helper
  *                       rules are emitted.
+ * @param options.signalTarget  ACT-CLINEMM-BACKGROUND-EXEC-SAME-
+ *                       SANDBOX-PRODUCTION-DISCRIMINATOR01: the SBPL
+ *                       `signal` target selector. DEFAULT (`"self"`)
+ *                       emits the ORIGINAL production rule
+ *                       `(allow signal (target self))` byte-for-byte.
+ *                       `"same-sandbox"` emits
+ *                       `(allow signal (target same-sandbox))` and is
+ *                       reachable ONLY through the private, DEFAULT_OFF,
+ *                       one-shot diagnostic authorization installed by
+ *                       the Seatbelt backend. It is NOT a public API:
+ *                       no capability field, no protocol field, no user
+ *                       setting carries it.
  */
+export type SeatbeltSignalTarget = "self" | "same-sandbox";
+
 export function generateSeatbeltProfile(
 	capability: CommandCapability,
 	options: {
 		readonly denyReadSubpaths?: readonly string[];
 		readonly sshAgentCanonicalSocketPath?: string;
 		readonly hostHelperCanonicalSocketPath?: string;
+		/**
+		 * ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01.
+		 * See the doc comment above. The DEFAULT MUST remain `"self"` —
+		 * the default profile bytes are load-bearing production
+		 * behavior and are asserted byte-for-byte by the default-off
+		 * regression test.
+		 */
+		readonly signalTarget?: SeatbeltSignalTarget;
 	} = {},
 ): string {
 	const denyRead = options.denyReadSubpaths ?? [];
+	// DEFAULT_OFF: absent => `"self"` => the original production rule.
+	// Only the private diagnostic authorization can select anything
+	// else, and it can only do so for ONE exact command identity.
+	const signalTarget: SeatbeltSignalTarget = options.signalTarget ?? "self";
+	const signalRule =
+		signalTarget === "same-sandbox"
+			? "(allow signal (target same-sandbox))"
+			: "(allow signal (target self))";
 
 	const lines: string[] = [
 		"(version 1)",
@@ -697,7 +741,7 @@ export function generateSeatbeltProfile(
 		// Process / signal allowances — required for ANY process to run.
 		"(allow process-exec)",
 		"(allow process-fork)",
-		"(allow signal (target self))",
+		signalRule,
 		"(allow sysctl-read)",
 		"(allow mach-lookup)",
 		// CORRECTION01 (P0-1): Read permission — broad allow with
@@ -713,7 +757,7 @@ export function generateSeatbeltProfile(
 			capability.createOnlyRoots,
 		),
 		// File metadata read for path resolution (stat, lstat).
-		"(allow file-read-metadata (subpath \"/\"))",
+		'(allow file-read-metadata (subpath "/"))',
 	];
 	const networkRule = buildNetworkRule(capability.network);
 	if (networkRule) {
@@ -733,5 +777,3 @@ export function generateSeatbeltProfile(
 	}
 	return lines.join("\n") + "\n";
 }
-
-

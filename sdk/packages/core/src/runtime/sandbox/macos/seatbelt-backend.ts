@@ -43,7 +43,10 @@ import {
 } from "@cline/shared";
 
 import { canonicalizeSandboxRoot } from "../canonical-paths";
-import { materializeEnvironment, getEnvironmentSemantics } from "../environment";
+import {
+	materializeEnvironment,
+	getEnvironmentSemantics,
+} from "../environment";
 import {
 	SANDBOX_EXEC_PATH,
 	probeSeatbeltAvailability,
@@ -53,7 +56,7 @@ import {
 // fixtures (the apps/vscode vitest stub re-exports the Seatbelt
 // module wholesale). The values are immutable platform constants;
 // no additional SDK surface is added.
-export { probeSeatbeltAvailability, SANDBOX_EXEC_PATH }
+export { probeSeatbeltAvailability, SANDBOX_EXEC_PATH };
 import { generateSeatbeltProfile } from "./seatbelt-profile";
 import type {
 	CommandCapability,
@@ -152,6 +155,170 @@ export function getSeatbeltDiagnosticObserver():
 	return diagnosticObserver;
 }
 
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01:
+// PRIVATE, DEFAULT-OFF, ONE-SHOT signal-rule substitution.
+//
+// PURPOSE
+// TEMPORARY diagnostic mechanism whose ONLY effect is to select
+// `(allow signal (target same-sandbox))` instead of
+// `(allow signal (target self))` for exactly ONE command invocation
+// whose canonical identity has been pre-registered by trusted
+// extension-host code. It exists to discriminate whether the ClineMM
+// Seatbelt signal rule is sufficient under the inherited VSCodium
+// Chromium sandbox.
+//
+// SECURITY CONTRACT (all clauses are load-bearing):
+//
+//  1. DEFAULT_OFF. With no authorization installed, the generated
+//     profile is byte-for-byte identical to the original production
+//     generator output.
+//  2. EXPLICIT OPT-IN. Only the trusted host-side code path
+//     (`apps/vscode/src/sdk/sandbox-policy.ts`) can install an
+//     authorization. Untrusted command text, command arguments, or
+//     `run_commands` environment variables CANNOT: the authorization
+//     is installed by the extension host BEFORE the command runs, and
+//     it is matched against a canonical command identity (the
+//     executable + the full argv), not against a marker that appears
+//     anywhere in the command.
+//  3. SINGLE-WORKLOAD SCOPE. The authorization is consumed by the
+//     FIRST matching prepare() call and then revoked. A subsequent
+//     job — even one with the same command — reverts to the original
+//     rule.
+//  4. ONE RULE ONLY. The substitution changes exactly one profile
+//     line. Filesystem, network, environment, socket and cwd rules
+//     are untouched; the backend still runs the command through
+//     `/usr/bin/sandbox-exec -f <profile>`.
+//  5. NO PUBLIC API. The authorization slot is module-private to
+//     this file. It is NOT exported through `@cline/core`'s public
+//     barrel, is NOT a capability field, is NOT a protocol field, and
+//     is NOT a user setting.
+//  6. NOT A SANDBOX BYPASS. The prepared invocation is unchanged in
+//     every respect except the single signal-rule line in the
+//     generated profile.
+//
+// REMOVAL: the successor ACT authorized by this experiment deletes
+// this whole block plus the `signalTarget` option in
+// `seatbelt-profile.ts` and restores the original production rule.
+// ---------------------------------------------------------------------------
+
+/**
+ * The canonical identity of a command invocation, as observed by the
+ * Seatbelt backend at prepare() time.
+ *
+ * `argv` is the FULL argument vector of the command the executor is
+ * about to spawn (for the production Background Exec path this is
+ * `["-c", "<the full command text>"]` for `/bin/bash`). Matching is
+ * exact and whole-array, so a command that merely CONTAINS the
+ * diagnostic marker as an argument, in stdout, or in the environment
+ * does NOT match.
+ */
+export type SeatbeltSignalRuleAuthorizationIdentity = {
+	readonly executable: string;
+	readonly argv: readonly string[];
+};
+
+/**
+ * A one-shot authorization. `consume` MUST return `true` at most
+ * once for any given authorization instance; the host installs a
+ * fresh instance per diagnostic run.
+ */
+type SignalRuleAuthorization = {
+	readonly identity: SeatbeltSignalRuleAuthorizationIdentity;
+	readonly consume: () => boolean;
+};
+
+/**
+ * Module-private slot. `undefined` means "no authorization armed" —
+ * the DEFAULT. A single module-global slot is used (rather than an
+ * unbounded map) so that at most ONE authorization can be pending at
+ * any time; arming a second one REPLACES the first, so a stale
+ * authorization can never accumulate authority.
+ */
+let pendingSignalRuleAuthorization: SignalRuleAuthorization | undefined;
+
+/**
+ * Arm a one-shot signal-rule substitution for ONE exact command
+ * identity.
+ *
+ * TRUSTED-CALLER ONLY. This is exported from this module so the
+ * ClineMM-side host policy seam can install it; it is deliberately
+ * NOT re-exported from the `@cline/core` public barrel.
+ *
+ * The authorization is consumed by the FIRST `prepare()` whose
+ * command identity matches EXACTLY. Any other prepare() — an
+ * unrelated command, a command whose argv merely contains the
+ * marker, or a command with a different executable — is unaffected.
+ */
+export function armSeatbeltSignalRuleAuthorization(
+	identity: SeatbeltSignalRuleAuthorizationIdentity,
+): void {
+	pendingSignalRuleAuthorization = {
+		identity: {
+			executable: identity.executable,
+			argv: [...identity.argv],
+		},
+		consume: (() => {
+			let consumed = false;
+			return () => {
+				if (consumed) return false;
+				consumed = true;
+				return true;
+			};
+		})(),
+	};
+}
+
+/**
+ * Clear any pending authorization. Used by tests and by the removal
+ * path. Safe to call when nothing is armed.
+ */
+export function clearSeatbeltSignalRuleAuthorization(): void {
+	pendingSignalRuleAuthorization = undefined;
+}
+
+/**
+ * Test/diagnostic accessor: the currently pending authorization, or
+ * `undefined`. Read-only.
+ */
+export function getSeatbeltSignalRuleAuthorization():
+	| SeatbeltSignalRuleAuthorizationIdentity
+	| undefined {
+	return pendingSignalRuleAuthorization?.identity;
+}
+
+/**
+ * Resolve the signal rule for ONE prepare() call.
+ *
+ * Returns `"same-sandbox"` ONLY when an authorization is pending AND
+ * the command identity matches exactly AND the authorization has not
+ * been consumed yet. In every other case the ORIGINAL production
+ * rule (`"self"`) is selected.
+ *
+ * The authorization is CONSUMED here (before the profile is written)
+ * so that a single authorization can never widen more than one
+ * invocation, even if the profile write subsequently fails.
+ */
+function resolveSignalTargetForInvocation(
+	cmd: CommandInvocation,
+): "self" | "same-sandbox" {
+	const auth = pendingSignalRuleAuthorization;
+	if (!auth) return "self";
+	const matchesExecutable = auth.identity.executable === cmd.executable;
+	const matchesArgv =
+		auth.identity.argv.length === cmd.args.length &&
+		auth.identity.argv.every((arg, i) => arg === cmd.args[i]);
+	if (!matchesExecutable || !matchesArgv) return "self";
+	// Consume exactly once. A second prepare() with the same identity
+	// reverts to the original rule.
+	if (!auth.consume()) return "self";
+	// One-shot: the authorization is spent whether or not the profile
+	// write succeeds. A failed write MUST NOT leave a live
+	// authorization behind (fail-closed).
+	pendingSignalRuleAuthorization = undefined;
+	return "same-sandbox";
+}
+
 /**
  * Compute SHA-256 of the profile bytes AND extract the network rule
  * line. This is forensically useful to discriminate "profile says
@@ -161,9 +328,7 @@ function computeProfileFingerprint(
 	profilePath: string,
 	profile: string,
 ): { sha256: string; networkRule: string | undefined } {
-	const sha256 = createHash("sha256")
-		.update(profile, "utf8")
-		.digest("hex");
+	const sha256 = createHash("sha256").update(profile, "utf8").digest("hex");
 	const networkRuleMatch = profile.match(/^\((allow|deny) network\*\)$/m);
 	const networkRule = networkRuleMatch ? networkRuleMatch[0] : undefined;
 	// The SHA-256 is computed on the bytes we just wrote. The
@@ -207,8 +372,8 @@ function safeInvokeObserver<A>(
  *
  * Stateless and immutable: can be reused across calls.
  */
-export const SeatbeltSandboxBackendExperimental: SandboxBackend =
-	Object.freeze({
+export const SeatbeltSandboxBackendExperimental: SandboxBackend = Object.freeze(
+	{
 		id: SEATBELT_BACKEND_ID,
 
 		async isAvailable(): Promise<boolean> {
@@ -639,6 +804,13 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 
 			try {
 				// 2) Generate the SBPL profile.
+				//
+				// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01:
+				// the signal target is resolved from the PRIVATE, DEFAULT_OFF,
+				// one-shot authorization slot. Absent an authorization (the
+				// production default) this is `"self"`, which reproduces the
+				// original profile bytes exactly.
+				const signalTarget = resolveSignalTargetForInvocation(cmd);
 				const profile = generateSeatbeltProfile(
 					{
 						...cap,
@@ -652,6 +824,7 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 						denyReadSubpaths,
 						sshAgentCanonicalSocketPath,
 						hostHelperCanonicalSocketPath,
+						signalTarget,
 					},
 				);
 

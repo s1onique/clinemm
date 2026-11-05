@@ -1234,6 +1234,21 @@ export {
 	SeatbeltSandboxBackendExperimental,
 	setSeatbeltDiagnosticObserver,
 } from "./runtime/sandbox/macos/seatbelt-backend";
+// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01:
+// TEMPORARY diagnostic-only export, in the SAME shape as the
+// `setSeatbeltDiagnosticObserver` precedent above. It is NOT a
+// product option, user setting, protocol field, wire method, or
+// capability variant: it arms a ONE-SHOT, DEFAULT_OFF, exact-command
+// signal-rule substitution used only by the one diagnostic workload.
+// The successor ACT authorized by the experiment DELETES this export,
+// the backing module functions, and the `signalTarget` profile option
+// together.
+export {
+	armSeatbeltSignalRuleAuthorization,
+	clearSeatbeltSignalRuleAuthorization,
+	getSeatbeltSignalRuleAuthorization,
+	type SeatbeltSignalRuleAuthorizationIdentity,
+} from "./runtime/sandbox/macos/seatbelt-backend";
 export { noSandboxBackend } from "./runtime/sandbox/no-sandbox-backend";
 export {
 	DEFAULT_SANDBOX_MODE,

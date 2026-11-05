@@ -62,6 +62,7 @@ import { createWriteStream, existsSync, mkdirSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import {
+	armSeatbeltSignalRuleAuthorization,
 	type CommandCapability,
 	getSandboxBackend,
 	SAFE_ENVIRONMENT_BASELINE,
@@ -83,6 +84,142 @@ import {
  * executor to the abstraction's internal probes.
  */
 export type SandboxBackendResolver = (mode: SandboxMode) => Promise<SandboxBackend | undefined>
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01:
+// TRUSTED HOST-SIDE OPT-IN GATE for the one-shot signal-rule substitution.
+//
+// AUTHORITY MODEL (the load-bearing part of this ACT):
+//
+//  * The opt-in is controlled by THIS module — trusted extension-host
+//    code — reading a dedicated environment variable that the
+//    operator sets in the extension host's launch environment.
+//  * The opt-in does NOT trust command text, command arguments, stdout,
+//    or the `run_commands` environment. It only trusts the extension
+//    host's OWN process environment (which the operator controls by
+//    launching the editor).
+//  * The opt-in is bound to ONE EXACT command identity: the exact
+//    executable and the exact full argv of the diagnostic fixture. A
+//    command that merely mentions the marker in an argument, in its
+//    output, or in its environment does NOT activate the substitution.
+//  * The authorization is ONE-SHOT: it is consumed by the first
+//    matching `prepare()` and then revoked.
+//
+// REMOVAL: this whole block, the SDK-side authorization slot, and the
+// `signalTarget` profile option are deleted together by the successor
+// ACT. Nothing here is a product surface.
+// ---------------------------------------------------------------------------
+
+/**
+ * The marker embedded in the diagnostic fixture's argv. It is used
+ * ONLY to describe the fixture identity — the opt-in NEVER scans
+ * command text for it.
+ */
+export const CLINEMM_SAME_SANDBOX_DISCRIMINATOR_MARKER = "CLINEMM_SAME_SANDBOX_PRODUCTION_DISCRIMINATOR01" as const
+
+/**
+ * The environment variable that arms the diagnostic.
+ *
+ * It is NOT sufficient on its own: the exact command identity must
+ * ALSO match. See {@link resolveSameSandboxDiagnosticOptIn}.
+ */
+const SAME_SANDBOX_DIAGNOSTIC_ENV_VAR = "CLINEMM_DIAG_SAME_SANDBOX_SIGNAL" as const
+
+/**
+ * The resolved state of the host-side diagnostic opt-in.
+ *
+ * `armed: false` is the DEFAULT and produces byte-for-byte identical
+ * production behavior.
+ */
+export type SameSandboxDiagnosticOptIn = {
+	readonly armed: boolean
+	/** The exact executable that must match, e.g. `/bin/bash`. */
+	readonly executable: string
+	/** The exact full argv that must match. */
+	readonly argv: readonly string[]
+}
+
+/**
+ * Resolve the host-side diagnostic opt-in.
+ *
+ * Returns `armed: false` unless ALL of the following hold:
+ *
+ *  1. `CLINEMM_DIAG_SAME_SANDBOX_SIGNAL` is exactly `"1"` or
+ *     `"true"` (exact match; fail-closed on typos).
+ *  2. The Seatbelt experimental sandbox is the active mode (the
+ *     diagnostic is meaningless without the Seatbelt profile).
+ *  3. The runtime profile is the closed `dogfood` runtime identity
+ *     (`CLINEMM_RUNTIME_PROFILE=dogfood`), so a public install can
+ *     never arm this diagnostic.
+ *  4. The exact command identity is present in
+ *     `CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND` as a JSON array of
+ *     `[executable, ...argv]` — the operator states the canonical
+ *     identity of the ONE fixture the extension host may execute.
+ *
+ * The opt-in does NOT inspect the command that is about to run. It
+ * only states which identity is permitted. The SDK backend performs
+ * the exact match against the actual invocation.
+ */
+export function resolveSameSandboxDiagnosticOptIn(env: NodeJS.ProcessEnv = process.env): SameSandboxDiagnosticOptIn {
+	const raw = env[SAME_SANDBOX_DIAGNOSTIC_ENV_VAR]
+	if (raw !== "1" && raw !== "true") {
+		return { armed: false, executable: "", argv: [] }
+	}
+	// The diagnostic is only meaningful when the Seatbelt profile is
+	// the one that will be generated. Read the sandbox selector from
+	// the SAME injected env so the gate is a pure function of `env`.
+	let sandboxMode: SandboxMode | undefined
+	try {
+		sandboxMode = resolveExperimentalSandboxMode(env)
+	} catch {
+		// An unrecognized `CLINEMM_EXPERIMENTAL_SANDBOX` value is a
+		// fail-closed configuration error in the production path; the
+		// diagnostic gate simply refuses to arm.
+		return { armed: false, executable: "", argv: [] }
+	}
+	if (sandboxMode !== "seatbelt-experimental") {
+		return { armed: false, executable: "", argv: [] }
+	}
+	// Closed runtime identity: a PUBLIC install can never arm this.
+	if (env.CLINEMM_RUNTIME_PROFILE !== "dogfood") {
+		return { armed: false, executable: "", argv: [] }
+	}
+	// The operator states the EXACT permitted identity as JSON.
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(env.CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND ?? "")
+	} catch {
+		return { armed: false, executable: "", argv: [] }
+	}
+	if (!Array.isArray(parsed) || parsed.length < 1) {
+		return { armed: false, executable: "", argv: [] }
+	}
+	if (!parsed.every((part) => typeof part === "string" && part.length > 0)) {
+		return { armed: false, executable: "", argv: [] }
+	}
+	const [executable, ...argv] = parsed as string[]
+	return { armed: true, executable, argv }
+}
+
+/**
+ * Arm the one-shot signal-rule substitution for the diagnostic
+ * fixture, IF AND ONLY IF the trusted host-side opt-in resolves to
+ * `armed: true`.
+ *
+ * Returns `true` when the authorization was armed.
+ *
+ * Called from the extension host's trusted boot path (see
+ * `extension.ts`). It is a no-op in the DEFAULT case.
+ */
+export function armSameSandboxDiagnosticIfOptedIn(env: NodeJS.ProcessEnv = process.env): boolean {
+	const optIn = resolveSameSandboxDiagnosticOptIn(env)
+	if (!optIn.armed) return false
+	armSeatbeltSignalRuleAuthorization({
+		executable: optIn.executable,
+		argv: optIn.argv,
+	})
+	return true
+}
 
 // ---------------------------------------------------------------------------
 // ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
@@ -294,8 +431,8 @@ if (_diagObserver) {
  * Mapping it to Seatbelt would create a false alias and a silent
  * escape hatch via `CLINE_SANDBOX=0`.
  */
-export function resolveExperimentalSandboxMode(): SandboxMode | undefined {
-	const raw = process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+export function resolveExperimentalSandboxMode(env: NodeJS.ProcessEnv = process.env): SandboxMode | undefined {
+	const raw = env.CLINEMM_EXPERIMENTAL_SANDBOX
 
 	if (process.platform !== "darwin") {
 		if (raw === undefined || raw === "") {
