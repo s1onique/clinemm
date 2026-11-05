@@ -1,0 +1,41 @@
+CLEANUP VERIFICATION
+====================
+CLASSIFICATION: NOT_EXECUTED (for the candidate job) — LIVE (for the agent-substrate RED)
+
+CANDIDATE JOB
+-------------
+NOT_EXECUTED. No candidate job ran in the installed extension, so there
+is no candidate parent/child PID to verify.
+
+AGENT-SUBSTRATE RED FIXTURE
+----------------------------
+The finite fixture ran in the agent substrate (raw/red-agent-substrate.result.json):
+  parentPid      = 82981
+  childPid       = 82991
+  childReady     = true
+  childExited    = true
+  childSelfExited= true
+  childStillAliveAfter = false
+  childAliveProbeErrno = ESRCH
+
+The child's INDEPENDENT 4-second self-exit deadline guaranteed
+termination even though the parent's SIGTERM was denied with EPERM. The
+final liveness probe returned ESRCH => the target is absent. No orphan
+was created by this ACT.
+
+NEW ORPHAN PROCESSES CREATED BY THIS ACT: NONE.
+
+HISTORICAL RESIDUE: pre-existing orphan processes from earlier ACTs are
+separate residue. This ACT did NOT touch them and did NOT perform any
+broad process cleanup.
+
+INDEPENDENT TERMINAL CLEANUP VERIFICATION (required for the candidate job)
+---------------------------------------------------------------------------
+Use the EXACT childPid from the candidate's SAME_SANDBOX_RESULT_JSON, and
+verify PID, PPID, PGID, lstart, UID and command identity. kill(pid, 0)
+from a SANDBOXED process is NOT accepted as cleanup proof.
+
+  ESRCH        -> target absent (subject to identity validity)
+  EPERM        -> existence cannot be excluded => CLEANUP_UNVERIFIED
+  identity
+  mismatch     -> the current process is not the original target

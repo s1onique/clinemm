@@ -1,0 +1,40 @@
+STRUCTURAL TEST RESULTS
+======================
+CLASSIFICATION: STRUCTURAL (process-free)
+HEAD: cfd81f35594a759e185da97834923450f4ba8e9b
+
+--- SDK: seatbelt-same-sandbox-discriminator01.test.ts (T1,T2,T3,T4,T5,T6,T7,T8,T9) ---
+ ✓ src/runtime/sandbox/macos/seatbelt-same-sandbox-discriminator01.test.ts (11 tests) 8ms
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+
+--- SDK regression: seatbelt-profile.test.ts ---
+ ✓ src/runtime/sandbox/macos/seatbelt-profile.test.ts (40 tests) 5ms
+ Test Files  1 passed (1)
+      Tests  40 passed (40)
+
+--- SDK regression: seatbelt-backend.test.ts ---
+ ✓ src/runtime/sandbox/macos/seatbelt-backend.test.ts (25 tests | 19 skipped) 10ms
+ Test Files  1 passed (1)
+      Tests  6 passed | 19 skipped (25)
+Tests closed successfully but something prevents Vite server from exiting
+
+--- HOST: same-sandbox-production-discriminator01.policy.test.ts (T2,T4 + fail-closed) ---
+ ✓ src/sdk/__tests__/same-sandbox-production-discriminator01.policy.test.ts (10 tests) 3ms
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+
+--- TARGETED TYPECHECK ---
+sdk/packages/core: bun run typecheck -> 40 pre-existing baseline errors (IDENTICAL count before and after this ACT; 0 in any touched file)
+apps/vscode:       bun run check-types -> exit 0 (IDENTICAL to the pristine baseline)
+
+--- LINT ---
+sdk/packages/core (4 touched files): 2 errors + 3 infos — IDENTICAL to the pristine baseline (all in pre-existing code)
+apps/vscode       (4 touched files): 2 infos — IDENTICAL to the pristine baseline
+=> this ACT introduces ZERO new typecheck errors and ZERO new lint findings.
+
+--- KNOWN SUBSTRATE ARTIFACT (NOT a test failure) ---
+Vitest reports: [vitest-pool] Failed to terminate forks worker ... Error: kill EPERM
+This is the ACCEPTED E1 substrate behavior (ForksPoolWorker.stop() -> EPERM) reproduced in
+the agent sandbox. It is the defect under investigation, NOT a failure of any test above.
+All suites above report PASSED.

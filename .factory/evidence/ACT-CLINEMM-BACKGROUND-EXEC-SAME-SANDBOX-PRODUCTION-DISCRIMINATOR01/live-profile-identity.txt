@@ -1,0 +1,61 @@
+LIVE PROFILE IDENTITY
+=====================
+CLASSIFICATION: NOT_EXECUTED
+
+The exact final profile written by SeatbeltBackend.prepare() for the
+candidate job could not be captured by the agent: no candidate job ran
+in the installed extension.
+
+What IS known (STRUCTURAL / LIVE on the production host):
+
+1. The REAL dogfood extension host's live profile WAS captured from the
+   system temp root while the production extension was running:
+
+     /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/
+       clinemm-sandbox-profile-LiZbKs/profile-a385e0b4535d.sb
+
+   Its content (the CURRENT production profile, ORIGINAL rule):
+
+     (version 1)
+     (deny default)
+     (allow process-exec)
+     (allow process-fork)
+     (allow signal (target self))          <-- ORIGINAL PRODUCTION RULE
+     (allow sysctl-read)
+     (allow mach-lookup)
+     (allow file-read*)
+     (deny file-read* (subpath ".../.ssh/id_rsa"))
+     (deny file-read* (subpath ".../.ssh/id_ed25519"))
+     (deny file-read* (subpath ".../.gnupg/private-keys-v1.d"))
+     (allow file-write* (subpath ".../Projects/SPbNIX/clinemm"))
+     (allow file-write* (subpath ".../clinemm-sandbox-temp-UYLIWp"))
+     (allow file-write* (literal "/dev/null") (literal "/dev/tty") (subpath "/private/tmp"))
+     (allow file-write* (subpath ".../Library/Caches/go-build"))
+     (allow file-read-metadata (subpath "/"))
+     (deny network*)
+
+   This PROVES the real extension host:
+     - DOES apply the ClineMM Seatbelt profile (the profile exists on disk
+       and the command ran under it), and
+     - uses the ORIGINAL "(allow signal (target self))" rule, and
+     - has the extension host's TMPDIR = the SYSTEM per-user temp root
+       (NOT a clinemm-sandbox-temp-* dir) => the extension host itself is
+       NOT inside a ClineMM Seatbelt profile; it inherits ONLY the Chromium
+       zygote sandbox authority.
+
+2. The candidate profile for the SAME capability snapshot was generated
+   and diffed (see profile-diff.txt):
+     BASELINE_SHA256 = dbc384d69dd6e667df43ce9fe3e0d28ac555ab1645b437d13f4cf0c33d6959da
+     CANDIDATE_SHA256 = 3fd4c2cd74540eb2438cc696aaec55be869725671caa88c5206937f08476ef06
+     DIFFERING_LINE_COUNT = 1
+     DIFF line 4: "(allow signal (target self))" -> "(allow signal (target same-sandbox))"
+
+   NOTE: the runtime-generated production profile hash will NOT equal the
+   frozen RECON01 hashes (80b0caf1... / 5a718c4c...) because runtime
+   capabilities and paths differ; the E3 hashes identify the RECON01
+   profiles only.
+
+Still to capture (operator): PROFILE_PATH, PROFILE_SHA256,
+PROFILE_SIGNAL_RULE (must be exactly one same-sandbox rule, zero
+self-only rules), SANDBOX_EXEC_EXECUTABLE, SANDBOX_EXEC_ARGS,
+PREPARED_CWD.

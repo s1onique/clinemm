@@ -1,0 +1,26 @@
+{
+  "classification": "NOT_EXECUTED",
+  "reason": "The live installed-extension Background Exec measurement was NOT executed by the agent. The agent's run_commands substrate is itself a ClineMM Seatbelt-sandboxed Background Exec command, and nested sandbox-exec is denied there ('sandbox-exec: sandbox_apply: Operation not permitted', rc=71). A VSCodium extension host launched from that substrate cannot apply ANY Seatbelt profile, so the candidate rule would never reach the kernel. Additionally the VSCodium extensions directory (~/.vscodium-clinemm/extensions) is outside the agent's Seatbelt writable roots, so the diagnostic VSIX cannot be installed into the running dogfood instance. The diagnostic VSIX WAS built, installed into a writable extensions dir, and its bundle SHA-256 verified identical; only the GUI launch + measurement require the operator.",
+  "operatorInstructions": "OPERATOR-INSTRUCTIONS.md",
+  "expectedResultShape": {
+    "marker": "CLINEMM_SAME_SANDBOX_PRODUCTION_DISCRIMINATOR01",
+    "parentPid": null,
+    "childPid": null,
+    "parentPgid": null,
+    "childPgid": null,
+    "childReady": false,
+    "profileApplied": null,
+    "signalAttempt": { "ok": null, "errnoCode": null },
+    "childReceivedSigterm": null,
+    "childExited": null,
+    "childStillAliveAfter": null
+  },
+  "redAgentSubstrate": "raw/red-agent-substrate.result.json",
+  "liveCommandJobId": null,
+  "liveParentPid": null,
+  "liveChildPid": null,
+  "liveSignalResult": null,
+  "liveChildReceivedSigterm": null,
+  "liveChildExit": null,
+  "liveJobTerminalState": null
+}

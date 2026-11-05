@@ -1,0 +1,74 @@
+BASELINE_SHA256=dbc384d69dd6e667df43ce9fe3e0d28ac555ab1645b437d13f4cf0c33d6959da
+CANDIDATE_SHA256=3fd4c2cd74540eb2438cc696aaec55be869725671caa88c5206937f08476ef06
+BASELINE_LINES=30
+CANDIDATE_LINES=30
+DIFFERING_LINE_COUNT=1
+DIFF line 4: "(allow signal (target self))"  ->  "(allow signal (target same-sandbox))"
+BASELINE_EQUALS_DEFAULT_OPTION=true
+NO_BROAD_SIGNAL_RULE=true
+CANDIDATE_RULE_OCCURRENCES=1
+BASELINE_RULE_OCCURRENCES_IN_CANDIDATE=0
+
+=== FULL BASELINE PROFILE (same capability, default signalTarget) ===
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*)
+(deny file-read* (subpath "/private/tmp/clinemm-conservation-secret"))
+(allow file-write*
+  (subpath "/private/tmp/clinemm-conservation-rw")
+  (subpath "/private/tmp/clinemm-conservation-tmp")
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/tmp"))
+(allow file-write*
+  (subpath "/Volumes/UserData/Users/chistyakov/Library/Caches/go-build"))
+(allow file-write-create
+  (subpath "/private/tmp/clinemm-conservation-create"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)
+(allow system-socket
+  (socket-domain AF_UNIX))
+(allow network-outbound
+  (remote unix-socket (path-literal "/private/tmp/com.apple.launchd.abc/Listeners")))
+(allow system-socket
+  (socket-domain AF_UNIX))
+(allow network-outbound
+  (remote unix-socket (path-literal "/private/tmp/clinemm-conservation-helper.sock")))
+
+
+=== FULL CANDIDATE PROFILE (same capability, signalTarget=same-sandbox) ===
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*)
+(deny file-read* (subpath "/private/tmp/clinemm-conservation-secret"))
+(allow file-write*
+  (subpath "/private/tmp/clinemm-conservation-rw")
+  (subpath "/private/tmp/clinemm-conservation-tmp")
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/tmp"))
+(allow file-write*
+  (subpath "/Volumes/UserData/Users/chistyakov/Library/Caches/go-build"))
+(allow file-write-create
+  (subpath "/private/tmp/clinemm-conservation-create"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)
+(allow system-socket
+  (socket-domain AF_UNIX))
+(allow network-outbound
+  (remote unix-socket (path-literal "/private/tmp/com.apple.launchd.abc/Listeners")))
+(allow system-socket
+  (socket-domain AF_UNIX))
+(allow network-outbound
+  (remote unix-socket (path-literal "/private/tmp/clinemm-conservation-helper.sock")))
+

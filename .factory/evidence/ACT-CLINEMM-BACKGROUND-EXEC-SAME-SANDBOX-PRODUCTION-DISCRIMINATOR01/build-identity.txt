@@ -1,0 +1,46 @@
+BUILD_IDENTITY
+=============
+CLASSIFICATION: STRUCTURAL (artifact identity) — LIVE (installation into a writable extensions dir)
+
+DOGFOOD_SOURCE_HEAD   = cfd81f35594a759e185da97834923450f4ba8e9b
+DOGFOOD_VERSION       = 4.1.16-5a1c485cb-cfd81f355
+SOURCE_VERSION        = 4.1.16-5a1c485cb
+VSIX_PATH             = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-5a1c485cb-cfd81f355.vsix
+VSIX_SIZE             = 49544306
+VSIX_SHA256           = 16f5962428fb7c9039d33dffc28b7d664b9a4674d6526d625ee0c4829db8e568
+BUNDLE_SHA256         = f183358f96fdc043f3677b11491c16051ceeae05f83bc17241d393f311da31f1
+                       (= extension/dist/extension.js extracted from the VSIX)
+INSTALLED_DIAGNOSTIC_VERSION = 4.1.16-5a1c485cb-cfd81f355
+INSTALL_VERIFIED_SHA256 = f183358f96fdc043f3677b11491c16051ceeae05f83bc17241d393f311da31f1
+                       (installed into a writable extensions dir; byte-identical to the VSIX bundle)
+ELM_VERSION           = 0.19.2
+ELM_BIN               = /opt/homebrew/bin/elm
+ELM_BIN_SHA256        = 3e65ac3e2817b89530775fc6664bc20fd7e7c5cd041bbb09eba5722a1037dc8b
+SKIP_TYPECHECK        = false
+BUILD_PIPELINE        = scripts/build-dogfood-vsix.py (detached clean worktree at exact HEAD)
+BUILD_ENV_OVERRIDES   = TMPDIR=/private/tmp/clinemm-act-build
+                         BUN_TMPDIR=/private/tmp/clinemm-act-build
+                         BUN_INSTALL_CACHE_DIR=/private/tmp/clinemm-act-build/bun-cache
+                         ELM_HOME=/private/tmp/clinemm-act-build/elm-home
+                       (These exist ONLY because the agent's own Seatbelt substrate
+                        denies ~/.bun/install/cache and ~/.elm/0.19.2/packages/lock.
+                        They do NOT affect the produced artifact.)
+
+DIAGNOSTIC_OPTIN_CONTRACT
+=========================
+CLINEMM_DIAG_SAME_SANDBOX_SIGNAL=1
+CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND='["/bin/bash","-c","<exact command text>"]'
+CLINEMM_RUNTIME_PROFILE=dogfood          (already set by the dogfood launcher)
+CLINEMM_EXPERIMENTAL_SANDBOX unset/""/"seatbelt"   (default => seatbelt-experimental)
+
+DIAGNOSTIC CODE PRESENT IN THE INSTALLED BUNDLE (verified by grep on the EXTRACTED extension.js):
+  "CLINEMM_DIAG_SAME_SANDBOX_SIGNAL"        occurrences = 2
+  "armSeatbeltSignalRuleAuthorization"      occurrences = 1
+  "target same-sandbox"                     occurrences = 1
+  "(allow signal (target self))"            PRESENT (the DEFAULT-OFF production rule)
+
+DEFAULT_OFF CONFIRMED IN THE BUNDLE
+====================================
+The bundled generator still contains the literal "(allow signal (target self))"
+as the default branch; the candidate rule is reachable ONLY through the
+private one-shot authorization slot.
