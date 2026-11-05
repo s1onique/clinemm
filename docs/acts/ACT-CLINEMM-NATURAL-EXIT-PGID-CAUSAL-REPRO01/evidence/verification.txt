@@ -1,0 +1,175 @@
+ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01 — VERIFICATION
+===========================================================
+
+PLATFORM / SUBSTRATE
+--------------------
+OS                    : macOS 14.7.4 (23H420)
+kernel_version        : Darwin Kernel Version 23.6.0 (root:xnu-10063.141.1.703.2~1/RELEASE_ARM64_T6031) arm64
+architecture          : arm64 (Darwin arm64)
+Node_version          : v26.0.0 (/opt/homebrew/bin/node)
+Bun_version           : 1.3.14 (/opt/homebrew/bin/bun)
+test_runner_version   : vitest/4.1.10 darwin-arm64 node-v26.0.0
+sandbox_mode          : macOS Seatbelt (ClineMM experimental sandbox profile)
+                       profile grants only `(allow signal (target self))`; group signalling
+                       to another process is denied with EPERM.
+source_HEAD           : b344741921bfe92a804bf3738f799aed123f7cac (branch main)
+
+REPOSITORY TRUST (recorded BEFORE any edit)
+--------------------------------------------
+git rev-parse HEAD          : b344741921bfe92a804bf3738f799aed123f7cac
+git status --porcelain=v1   : (empty)
+git stash list              : stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration
+git worktree list           :
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm            b34474192 [main]
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first 38e726c45 [experiment/m31-action-first]
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded   0366ea506 (detached HEAD)
+protected_stashes          : stash@{0} — PRESERVED, NOT POPPED, NOT REWRITTEN
+unrelated_worktrees        : PRESERVED (untouched)
+
+NOTE: several long-running `vitest` processes belonging to OTHER sessions
+were observed on this host (e.g. `command-job-manager.host-helper-live-ablation01.test.ts`).
+They were NOT touched.
+
+FOCUSED SUITE
+-------------
+Command:
+  cd apps/vscode && ../../node_modules/.bin/vitest run --config vitest.config.ts \
+    src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts
+
+Result (final run, exit code 0):
+   ✓ src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts (10 tests) 74979ms
+       ✓ N0: clean natural exit yields a gone postcondition and a clean exited terminal  330ms
+       ✓ N1: natural exit with a transient descendant reproduces the containment_failed boundary  3371ms
+       ✓ N2: persistent descendant keeps the owned group demonstrably alive across the observation window  3180ms
+       ✓ N3: shell waits for the same descendant -> gone postcondition and clean terminal  2353ms
+       ✓ C1: explicit cancel terminates the owned tree -> gone postcondition and clean cancelled terminal  30360ms
+       ✓ C2: execution deadline terminates the owned tree -> gone postcondition and clean deadline_exceeded terminal  30369ms
+       ✓ CONTRAST: stdio-inheriting descendant delays the exit promise, and the residual group is reaped within a bounded window  2360ms
+       ✓ REAPING-RACE: a non-gone postcondition without any descendant is a transient reap artifact  2653ms
+     Test Files  1 passed (1)
+          Tests  10 passed (10)
+
+KNOWN, PRE-EXISTING, NON-GATING NOISE
+--------------------------------------
+`[vitest-pool]: Failed to terminate forks worker ... Error: kill EPERM`
+This is the Vitest worker teardown failing to signal its own worker under the
+Seatbelt profile. It is NOT caused by this suite's assertions and NOT caused by
+a test-owned leak: the suite's own G11 test independently re-probes every owned
+PGID it created and requires each to be `gone`. The identical message appears
+for the PRE-EXISTING `command-job-manager.sandbox-c3-real-kernel.test.ts`
+suite, which this ACT did not touch.
+
+RELATED EXISTING SUITES (baseline comparison against the untouched ENTRY_HEAD)
+-------------------------------------------------------------------------------
+Command:
+  cd apps/vscode && ../../node_modules/.bin/vitest run --config vitest.config.ts \
+    src/sdk/command-job-manager.test.ts \
+    src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts \
+    src/sdk/__tests__/containment-ledger-causal-recon01.clcr01.test.ts \
+    src/sdk/__tests__/containment-failure-provenance-retention01.cfpr01.test.ts \
+    src/sdk/__tests__/containment-failure-provenance-retention01-correction01.test.ts \
+    src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts \
+    src/sdk/__tests__/containment-failure-c10-authority-repair01.cfc10ar01.test.ts \
+    src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts \
+    src/sdk/__tests__/pcpc-no-overclaim-sweep.pcpc01.test.ts \
+    src/sdk/__tests__/premature-handoff-containment-failure01.phcf01.test.ts \
+    src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts \
+    src/sdk/__tests__/background-command-completion-ownership-correlation01.bccoc01.test.ts
+
+Result:
+  Test Files  2 failed | 10 passed (12)
+       Tests  18 failed | 153 passed (171)
+
+  PASSING (10 suites, 153 tests):
+    command-job-manager-descendant-conservation.dcct01
+    containment-ledger-causal-recon01.clcr01
+    containment-failure-provenance-retention01.cfpr01
+    containment-failure-provenance-retention01-correction01
+    containment-failure-c10-authority01.cfc10a01
+    containment-failure-c10-authority-repair01.cfc10ar01
+    pcpc-containment-product-contract.pcpc01
+    premature-handoff-containment-failure01.phcf01
+    background-command-terminal-continuation01.btcont01
+    background-command-completion-ownership-correlation01.bccoc01
+
+  FAILING (2 suites, 18 tests) — PRE-EXISTING, PROVEN INDEPENDENT OF THIS ACT:
+    1) src/sdk/command-job-manager.test.ts  (17 failures)
+       Failure shape: `expected 'spawn_failed' to be 'exited'`.
+       ROOT CAUSE (environmental, NOT a code defect introduced by this ACT):
+         This suite does NOT set `CLINEMM_EXPERIMENTAL_SANDBOX`, so on
+         darwin it runs with the Seatbelt DEFAULT-ON (introduced by
+         ACT-CLINEMM-SEATBELT-DEFAULT-ON01, AFTER this suite was
+         written). This host DENIES nested `sandbox_apply`:
+           $ /usr/bin/sandbox-exec -p '(version 1)(allow default)' /bin/echo ok
+           sandbox-exec: sandbox_apply: Operation not permitted
+         so every real spawn in that suite fails closed as
+         `spawn_failed`. Every suite that PASSES above DOES set
+         `CLINEMM_EXPERIMENTAL_SANDBOX = "off"` (verified: 4 occurrences
+         each in dcct01 / cfc10a01); this one has 0 occurrences.
+       PROOF THAT THIS ACT IS NOT THE CAUSE:
+         - `git status --porcelain=v1 --untracked-files=no` is EMPTY, so
+           the TRACKED tree is byte-identical to ENTRY_HEAD
+           (b34474192). The ACT added only untracked files.
+         - Neither failing suite references any `nepcr01` file
+           (grep: no matches).
+         - The failure is a spawn-phase failure that occurs before any
+           of the ACT's code is reachable.
+
+    2) src/sdk/__tests__/pcpc-no-overclaim-sweep.pcpc01.test.ts (suite-level)
+       Failure shape: `TypeError: The "path" argument must be of type
+       string. Received undefined` at
+       `const PROJECT_ROOT = join(import.meta.dir, "..", "..", "..")`.
+       ROOT CAUSE (environmental, NOT a code defect introduced by this
+       ACT): `import.meta.dir` is a Bun-only property; this suite runs
+       under Vitest (Node), where it is undefined. This ACT does not
+       touch that file and does not change the test runner.
+
+  NOTE: running `src/sdk/command-job-manager.test.ts` with
+  `CLINEMM_EXPERIMENTAL_SANDBOX=off` makes its real-process tests
+  actually spawn; on this substrate those tests then hang (the suite
+  could not be completed within its 300s timeout). This is another
+  substrate property of this host, not an ACT effect.
+
+BASELINE_DELTA
+--------------
+The tracked tree at ENTRY_HEAD was NOT modified by this ACT:
+  `git status --porcelain=v1 --untracked-files=no` -> EMPTY
+
+  Therefore the 18 failures above are exactly the ENTRY_HEAD baseline
+  for these suites on this host, and this ACT introduces ZERO new
+  failures.
+
+TYPECHECK
+---------
+Command: cd apps/vscode && ../../node_modules/.bin/tsc --noEmit
+Result : exit 0, no diagnostics.
+
+LINT / FORMAT
+-------------
+Command: cd apps/vscode && biome check --config-path ./biome.jsonc \
+           src/sdk/__tests__/natural-exit-pgid-observation-harness.nepcr01.ts \
+           src/sdk/__tests__/natural-exit-pgid-experiments.nepcr01.ts \
+           src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts
+Result : see the tail of this file (recorded below).
+
+BASELINE DELTA
+--------------
+Baseline compared against the untouched ENTRY_HEAD (b34474192). The ONLY
+changes are the ACT-owned test files and the ACT-owned evidence directory.
+Zero production files changed. Zero existing test files changed.
+
+  files_changed:
+    A apps/vscode/src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts
+    A apps/vscode/src/sdk/__tests__/natural-exit-pgid-experiments.nepcr01.ts
+    A apps/vscode/src/sdk/__tests__/natural-exit-pgid-observation-harness.nepcr01.ts
+    A docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/REPORT.md
+    A docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/source-seam-map.md
+    A docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/experiment-matrix.json
+    A docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/natural-exit-observations.jsonl
+    A docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/process-membership.jsonl
+    A docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/causal-discrimination.md
+    A docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/red-green-results.txt
+    A docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/verification.txt
+
+  PRODUCTION_FILES_CHANGED : (none)
+  PRODUCTION_SEMANTIC_DELTA: (none)

@@ -1,0 +1,77 @@
+{
+  "act": "ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01",
+  "experiments": [
+    {
+      "experiment_id": "N0",
+      "description": "Clean natural exit, no surviving descendants",
+      "command": "true",
+      "evidence_class": "REAL_PROCESS",
+      "process_identity_verified": false,
+      "initial_postcondition": "gone",
+      "later_postcondition": "gone",
+      "manager_terminal_state": "exited",
+      "cleanup_verified": true,
+      "result": "CLEAN_TERMINAL (postcondition=gone, terminal=exited)"
+    },
+    {
+      "experiment_id": "N1",
+      "description": "Transient descendant: leader exits, short-lived descendant survives in the owned PGID",
+      "command": "( sleep 3 </dev/null >/dev/null 2>&1 & echo DESC=$! ; exit 0 )",
+      "evidence_class": "REAL_PROCESS",
+      "process_identity_verified": true,
+      "initial_postcondition": "eperm",
+      "later_postcondition": "gone",
+      "manager_terminal_state": "containment_failed",
+      "cleanup_verified": true,
+      "result": "NON_GONE_AT_FINALIZE_THEN_GONE (postcondition=eperm, containmentFailed=substrate_eperm)"
+    },
+    {
+      "experiment_id": "N2",
+      "description": "Persistent descendant: leader exits, descendant deliberately remains in the owned PGID",
+      "command": "( sleep 30 </dev/null >/dev/null 2>&1 & echo DESC=$! ; exit 0 )",
+      "evidence_class": "REAL_PROCESS",
+      "process_identity_verified": true,
+      "initial_postcondition": "eperm",
+      "later_postcondition": "alive",
+      "manager_terminal_state": "containment_failed",
+      "cleanup_verified": false,
+      "result": "NON_GONE_AT_FINALIZE_AND_STILL_ALIVE (postcondition=eperm, containmentFailed=substrate_eperm)"
+    },
+    {
+      "experiment_id": "N3",
+      "description": "Waited descendant: shell waits for the child before exiting (ABLATION-A)",
+      "command": "sleep 2 </dev/null >/dev/null 2>&1 ; exit 0",
+      "evidence_class": "REAL_PROCESS",
+      "process_identity_verified": false,
+      "initial_postcondition": "gone",
+      "later_postcondition": "gone",
+      "manager_terminal_state": "exited",
+      "cleanup_verified": true,
+      "result": "CLEAN_TERMINAL (postcondition=gone, terminal=exited)"
+    },
+    {
+      "experiment_id": "C1",
+      "description": "Explicit cancel of a running owned process group (ABLATION-B)",
+      "command": "sleep 30 ; exit 0",
+      "evidence_class": "REAL_PROCESS",
+      "process_identity_verified": false,
+      "initial_postcondition": "gone",
+      "later_postcondition": "gone",
+      "manager_terminal_state": "cancelled",
+      "cleanup_verified": true,
+      "result": "CLEAN_TERMINAL (postcondition=gone, terminal=cancelled)"
+    },
+    {
+      "experiment_id": "C2",
+      "description": "Host execution deadline on a running owned process group",
+      "command": "sleep 30 ; exit 0",
+      "evidence_class": "REAL_PROCESS",
+      "process_identity_verified": false,
+      "initial_postcondition": "gone",
+      "later_postcondition": "gone",
+      "manager_terminal_state": "deadline_exceeded",
+      "cleanup_verified": true,
+      "result": "CLEAN_TERMINAL (postcondition=gone, terminal=deadline_exceeded)"
+    }
+  ]
+}

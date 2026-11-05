@@ -1,3 +1,110 @@
+# ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01 — PASS_CAUSAL_REPRO — 2026-11-05
+
+**Status:** bounded real-process causal REPRODUCTION only, CLOSED on the existing `main` branch. The natural-exit
+`containment_failed` boundary is REPRODUCED on the REAL production path, and the mechanism is causally
+DISCRIMINATED as **TWO** distinct causes. **No production file was changed. No process-supervisor behavior was changed.
+No `terminateTree()` change. No automatic PGID cleanup on natural exit. No retry or delay in `finalize()`. No
+containment-ledger clearing. No TaskHeader / Elm / BCB-predicate change. No new public protocol field. No new
+general-purpose telemetry. No VSIX.** The protected stash and all unrelated worktrees are intact; no push, no install.
+
+```text
+ACT_ID: ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01
+TYPE: Causal reproduction / discrimination (diagnosis only — repair NOT authorized)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01-CORRECTION01)
+VERDICT: PASS_CAUSAL_REPRO
+ENTRY_HEAD: b344741921bfe92a804bf3738f799aed123f7cac
+BRANCH: main (no ACT branch created)
+WORKTREES: unchanged (3)   STASHES_TOUCHED: 0 (protected stash INTACT)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   PRODUCTION_FILES_CHANGED: 0
+RED: REPRODUCED (real production manager + real production supervisor + real default postcondition probe)
+GREEN: 10/10 pass in the focused REAL_PROCESS suite; 153/171 in the adjacent suites, with the 18 failures proven
+        to be the UNTOUCHED ENTRY_HEAD baseline on this host (Seatbelt default-ON spawn failures + one Bun-only
+        `import.meta.dir` misuse). ACT-owned failures: 0.
+TYPECHECK: tsc --noEmit EXIT 0   LINT: biome 0 errors
+EVIDENCE: docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/REPORT.md
+```
+
+**The question that was open.** The 2026-11-04 LIVE incident recorded 39 C10 containment blockers whose jobs had
+naturally exited and were classified `containment_failed` with `substrate_alive`. The LIVE evidence establishes the
+BOUNDARY but contains NO later process-group observation, so it cannot say what happened to those groups afterwards.
+Three candidate mechanisms were open: transient group survival, persistent descendants, and a leader/reaping race.
+
+**What the real production path does.** `CommandJobManager.finalize()` probes the owned PGID synchronously via
+`defaultTerminalPostconditionProbe()` (`process.kill(-pgid, 0)`). A non-`gone` verdict latches
+`containmentFailed = substrate_*` and OVERWRITES the terminal state with `containment_failed`, withholding
+`command_job_terminal_committed`. The natural-exit path performs **NO group-level termination** before that probe —
+unlike the explicit paths, where `terminateTree()` waits for the OWNED GROUP TO BE GONE first.
+
+**The measured supervisor semantics (previously assumed).** The supervisor's `exit` promise resolves on the child's
+`close` event — i.e. **root exit AND stdio drained**. It is NOT a root-exit boundary and NOT a whole-group boundary.
+Measured: a descendant that INHERITS the stdout pipe delays the resolution to T+3012ms (its own lifetime); a
+descendant that REDIRECTS its stdio lets it resolve at T+12ms, with the group still alive. That single fact is what
+makes the natural-exit failure observable.
+
+**Mechanism 1 — TRANSIENT_PGID_SURVIVAL_CONFIRMED (Case A).** With a short-lived descendant that redirects its stdio:
+root exit observed -> supervisor exit resolves at T+~6ms -> finalize probes the ORIGINAL PGID -> NON-`gone` ->
+`containment_failed` published -> the SAME original PGID is later observed GONE **with no intervention**. At the probe
+boundary the group contained a **positively identified** live descendant whose `pgid` equalled the ORIGINAL owned PGID
+and whose `ppid` was already 1 (the leader had exited and the descendant had been reparented to init). The original
+`alive` observation was therefore TRUE at probe time; it became STALE as a later completion blocker.
+
+**Mechanism 2 — EXIT_REAPING_RACE_CONFIRMED (Case C).** With **no descendant at all** (plain foreground `true`), the
+production postcondition was still non-`gone` in some trials, and the group became gone within a bounded window with NO
+intervention and NO live member. Direct 5-trial measurement (real production supervisor, descendant lifetime already
+elapsed at exit resolution): 2 of 5 trials read `EPERM` (the kernel still held the process-group entry) at the exact
+moment the exit promise resolved, and `ESRCH` ~26ms later. The kernel's process-group teardown simply lags the
+supervisor's completion boundary.
+
+**Because two mechanisms are demonstrated, the classification is MULTIPLE_CAUSAL_MECHANISMS (Case D).** They are
+separated by PROCESS IDENTITY, not by chronology: Mechanism 1 has a LIVE identified member in the original PGID at the
+probe; Mechanism 2 has NO live member at all.
+
+**The safety control (N2) still holds.** A deliberately persistent descendant leaves the owned group demonstrably ALIVE
+across the bounded observation window, with the residual positively identified in the ORIGINAL PGID. The existing safety
+hold is doing real work and must not be weakened for that case.
+
+**Ablations.** ABLATION-A (N1 vs N3): the only difference is whether the shell WAITS for the child — waiting yields
+`gone`/`exited`, non-waiting yields NON-`gone`/`containment_failed`; exit SEQUENCING is necessary for Mechanism 1.
+ABLATION-B (N1 vs C1): explicit termination runs `terminateTree()` first, which waits for group-gone BEFORE the probe,
+so cancel/deadline are structurally clean and their semantics are unchanged. ABLATION-C: the SAME original PGID is
+observed at the immediate and later boundaries with per-member start identities, so PID/PGID reuse is never promoted into
+causal identity.
+
+**RED-03 — the stale ledger is a CONSEQUENCE, not the cause.** When N1 establishes "initial `containment_failed` -> later
+group gone", the manager's ORIGINAL record is NOT retroactively cleared: it still reports `containment_failed` and the
+original containment verdict. The historical classification therefore CONTINUES to block completion, independently of
+whether the group later disappears.
+
+**What is deliberately NOT claimed.** The LIVE incident's 39 blockers are NOT reclassified: the LIVE evidence has no
+later PGID observation, so it cannot separate Mechanism 1 from Mechanism 2 for that set, and the historical PGIDs are
+NOT retroactively called gone. The `alive` observation is NOT declared false — it was true at probe time. No repair is
+selected or authorized. The `gone`-only clean-terminal invariant is NOT weakened.
+
+**Substrate note (read before comparing labels).** The ClineMM Seatbelt profile grants only `(allow signal (target
+self))`, so on this host `process.kill(-pgid, 0)` returns `EPERM` for a live group where the LIVE host returned rc=0
+(`alive`). BOTH are non-`gone`, produce the IDENTICAL `containment_failed` terminal state and the IDENTICAL safety hold.
+The causal discrimination here is grounded in READ-ONLY kernel-truth liveness plus process membership (with start
+identities), NOT in the label, and is therefore substrate-independent. The production probe's EPERM/unknown handling
+remains fail-closed and unchanged.
+
+**Successor recommendation (exactly one).** Mixed mechanisms -> **narrow first intervention with conservation of the
+others**. Investigate **Mechanism 2 (the leader/reaping race) FIRST**, because it is the only case where the non-`gone`
+postcondition is produced for a group with NO live member — the case where the safety hold has nothing to protect and
+where a bounded quiescence/reconciliation at the supervisor's authoritative completion boundary is the natural target.
+Conservation requirements: N1 (live descendant) and N2 (persistent descendant) must BOTH still classify
+`containment_failed`; the `gone`-only clean-terminal invariant must NOT be weakened; `terminateTree()`, cancellation and
+deadline semantics must be unchanged; EPERM and unknown must remain fail-closed. The successor ACT must follow
+REAL/LIVE failure -> boundary classification -> RED reproduction -> causal discriminator -> necessity/ablation -> bounded
+repair -> adversarial conservation tests -> exact-head artifact -> LIVE qualification.
+
+**Files changed (ACT-owned only).** `apps/vscode/src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts`
+(NEW), `apps/vscode/src/sdk/__tests__/natural-exit-pgid-experiments.nepcr01.ts` (NEW),
+`apps/vscode/src/sdk/__tests__/natural-exit-pgid-observation-harness.nepcr01.ts` (NEW), plus this board entry, the
+report and the evidence directory. **ZERO production files changed; ZERO existing test files changed.**
+
+---
+
 # ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01 — READY_FOR_OPERATOR_QUALIFICATION — 2026-11-05
 
 **Status:** the native macOS host helper's AF_UNIX request path is no longer UNBOUNDED. The pre-repair helper used an

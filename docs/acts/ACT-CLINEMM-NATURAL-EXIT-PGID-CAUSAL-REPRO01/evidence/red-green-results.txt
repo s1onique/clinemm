@@ -1,0 +1,128 @@
+ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01 — RED / GREEN RESULTS
+===================================================================
+
+RED stop rule: "If the actual target natural-exit classification cannot be
+reproduced: HALT_RED_NOT_REPRODUCED."
+
+The target DID reproduce. The RED is preserved as an EXECUTABLE, PASSING
+witness (the ACT's stop rule forbids retaining an intentionally failing
+test in the default suite).
+
+--------------------------------------------------------------------------
+RED-01 — Natural exit leaves a live group
+--------------------------------------------------------------------------
+REPRODUCED: YES.
+
+Test: "N1: natural exit with a transient descendant reproduces the
+       containment_failed boundary"
+
+Exact observation (REAL_PROCESS, production manager + production
+supervisor, production default postcondition probe):
+
+  command            : ( sleep 3 </dev/null >/dev/null 2>&1 & echo DESC=$! ; exit 0 )
+  rootPid == pgid    : the supervisor spawns with `detached: true`, so the
+                       shell IS the process-group leader (pgid === pid).
+  root exit          : the shell exits immediately (`exit 0`).
+  supervisor exit    : resolves at T+~6ms — the descendant redirects its
+                       stdio, so it does NOT hold the supervisor's stdout
+                       pipe open; the `close` event fires at once.
+  finalize entered   : the manager's exitTransition -> finalize(job,
+                       "exited") runs synchronously on the `close` event.
+  postcondition      : NON-`gone`.
+                       On the LIVE host: "alive" (rc=0).
+                       On THIS host:     "eperm" (EPERM) — the ClineMM
+                       Seatbelt profile allows only `(allow signal
+                       (target self))`, so the group exists but is not
+                       signalable. See evidence/source-seam-map.md §7.
+  osErrorCode        : EPERM (this host) / null (LIVE host).
+  manager terminal   : containment_failed
+  containmentFailed  : substrate_eperm (this host) / substrate_alive (LIVE)
+  later observation  : the SAME original PGID is observed GONE within the
+                       bounded window, with NO intervention.
+  cleanup            : verified_absent
+
+Why the original `alive` observation was TRUE (not false):
+  the group contained a POSITIVELY IDENTIFIED live descendant whose
+  `pgid` equalled the ORIGINAL owned PGID.
+
+Measured membership at the finalize boundary (REAL kernel read):
+
+  {
+    "pid": 95915,
+    "ppid": 1,
+    "pgid": 95913,          <- the ORIGINAL owned PGID
+    "stat": "",
+    "startIdentity": "Thu Nov  5 03:12:59 2026",
+    "command": "sleep 20"
+  }
+
+  `ppid: 1` shows the leader had already exited and the descendant had
+  been reparented to init — the group outlived its leader.
+
+--------------------------------------------------------------------------
+RED-02 — Transient versus persistent group
+--------------------------------------------------------------------------
+DETERMINED: YES.
+
+  N1 (transient, `sleep 3`)  -> later_postcondition = "gone"
+  N2 (persistent, `sleep 30`) -> later_postcondition = "alive"
+                                cleanup_verified = false
+                                residual member positively identified in
+                                the ORIGINAL PGID
+
+Both rely on REAL observations, not on the passage of time: the
+observation harness polls the ORIGINAL PGID's errno and reads the
+group's live membership from the kernel.
+
+--------------------------------------------------------------------------
+RED-03 — Historical ledger and C10
+--------------------------------------------------------------------------
+APPLICABLE: YES (N1 establishes "initial containment_failed -> later
+group gone").
+
+Test: "RED-03: the historical containment_failed record is NOT cleared
+       when the group later disappears"
+
+Determination: the manager's ORIGINAL record is NOT retroactively
+converted to a clean terminal. After the group is independently observed
+gone, the manager still reports:
+  managerTerminalState : containment_failed
+  containmentFailed    : substrate_eperm (this host)
+  productionPostcondition : the non-`gone` value captured at finalize
+
+=> The historical classification CONTINUES to block completion. The stale
+ledger is a CONSEQUENCE of the lifecycle defect, not its cause.
+
+--------------------------------------------------------------------------
+ADDITIONAL WITNESS — RED-04 (leader/reaping race, Case C)
+--------------------------------------------------------------------------
+REPRODUCED: YES (a SECOND, distinct mechanism).
+
+Test: "REAPING-RACE: a non-gone postcondition without any descendant is
+       a transient reap artifact"  (8 trials, plain `true`, no descendant)
+
+Direct measurement (real production supervisor, 5 trials, workload
+`( sleep 1 & echo DESC=$! ; exit 0 )`; the supervisor's exit promise
+resolved at T+1012..T+1024ms, i.e. AFTER the descendant had exited):
+
+  trial | postcondition AT the supervisor exit resolution | ~26ms later
+  ------+--------------------------------------------------+------------
+   #0   | ESRCH (gone)                                    | ESRCH
+   #1   | ESRCH (gone)                                    | ESRCH
+   #2   | EPERM (group entry still present)               | ESRCH (gone)
+   #3   | EPERM (group entry still present)               | ESRCH (gone)
+   #4   | ESRCH (gone)                                    | ESRCH
+
+=> A non-`gone` postcondition can occur for a group with NO live member
+   at all. The mechanism is the kernel's process-group teardown lagging
+   behind the supervisor's exit promise — NOT a surviving descendant.
+
+--------------------------------------------------------------------------
+GREEN — the default suite is green
+--------------------------------------------------------------------------
+  Test Files  1 passed (1)
+       Tests  10 passed (10)
+
+No intentionally failing diagnostic assertion is retained. The RED
+phenomenon is preserved as a PASSING witness with the observed behavior
+asserted explicitly.
