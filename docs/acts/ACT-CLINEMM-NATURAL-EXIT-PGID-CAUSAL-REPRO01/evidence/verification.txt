@@ -152,6 +152,31 @@ Command: cd apps/vscode && biome check --config-path ./biome.jsonc \
            src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts
 Result : see the tail of this file (recorded below).
 
+REPOSITORY IDENTITY (final)
+---------------------------
+ENTRY_HEAD  : b344741921bfe92a804bf3738f799aed123f7cac
+ENTRY_TREE  : 5fc7cba53d2f56b0e2cd9ede03713a9665022264
+SUBJECT_HEAD: 4cb372ef75e0d7114eccd4efba537db0f20e2073
+SUBJECT_TREE: 9b4514a810ba028bb5b34dd66cb9e36d50df8af2
+BRANCH      : main
+working_tree: CLEAN (`git status --porcelain=v1 --untracked-files=all` -> empty)
+protected_stashes: stash@{0} INTACT (not popped, not rewritten, not dropped)
+unrelated_worktrees: INTACT (3 total, untouched)
+PRODUCTION_FILES_CHANGED: 0
+  (verified: `git diff --name-only ENTRY_HEAD..SUBJECT_HEAD` over
+   apps/vscode/src/sdk/command-job-manager.ts,
+   sdk/packages/core/src/extensions/tools/executors/bash.ts,
+   apps/vscode/src/sdk/background-job-liveness-authority.ts,
+   apps/vscode/src/sdk/background-notify-coordinator.ts
+   -> EMPTY)
+
+PROCESS LEAK CHECK (post-run, independent of the suite's own G11 assertion)
+---------------------------------------------------------------------------
+Every owned PGID recorded in the committed evidence was re-probed with
+`process.kill(-pgid, 0)`:
+  owned pgids: [32039, 32048, 32479, 32916, 33072, 38570]
+  LEAKED     : NONE (all ESRCH)
+
 BASELINE DELTA
 --------------
 Baseline compared against the untouched ENTRY_HEAD (b34474192). The ONLY

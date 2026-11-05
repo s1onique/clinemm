@@ -41,7 +41,13 @@ ENTRY_HEAD:
 b344741921bfe92a804bf3738f799aed123f7cac
 
 SUBJECT_HEAD:
-(see §Repository identity — the ACT-owned commit)
+4cb372ef75e0d7114eccd4efba537db0f20e2073
+
+SUBJECT_TREE:
+9b4514a810ba028bb5b34dd66cb9e36d50df8af2
+
+ENTRY_TREE:
+5fc7cba53d2f56b0e2cd9ede03713a9665022264
 
 WORKTREE:
 clean (ACT-owned files only)
