@@ -17,13 +17,28 @@ node_modules/
 webview-ui/node_modules/**
 testing-platform/node_modules/**
 standalone/**/node_modules/**
-# Bun's global install cache lives at the repo root (.bun-install/) and is
-# gitignored, but it was still being swept into the VSIX. Its entries include
-# editor backup files (e.g. `README.md~`) that the packaging secret scanner
-# cannot read, which aborted `vsce package` with EISDIR. Nothing in the cache
-# is needed at runtime — the bundled `dist/extension.js` carries the code.
+# Bun's global install cache and editor backup files are never needed at
+# runtime — the bundled `dist/extension.js` carries the code.
+#
+# `**/*~` matches editor backup FILES (e.g. `README.md~`). It does NOT match
+# the contents of a literal `~` DIRECTORY, so `**/~/**` is needed as well to
+# keep scratch dirs such as `apps/vscode/~/` out of the package.
+#
+# NOTE: these rules only match paths INSIDE this package directory. They do
+# NOT (and structurally cannot) exclude the repo-root `.bun-install/`: when
+# `vsce package` is run without `--no-dependencies`, `npm list --parseable`
+# reports the monorepo root as a dependency root, so vsce globs the WHOLE
+# repo and relativizes entries to `../../.bun-install/...`. Those paths sit
+# outside this package root and no `.vscodeignore` pattern can match them.
+# The real defence is `--no-dependencies`, which every canonical packaging
+# path in this repo already uses:
+#   - scripts/build_dogfood_vsix_lib.py  (vsce_package)
+#   - apps/vscode/scripts/publish-marketplace.mjs
+# See docs/acts/ACT-CLINEMM-TRANSIENT-CONTAINMENT-RECONCILIATION-REPAIR01/
+# for the verified root-cause analysis.
 **/.bun-install/**
 **/*~
+**/~/**
 src/**
 standalone/**
 # Build/dev tooling and inputs — bundled into dist/extension.js, not needed in the VSIX.

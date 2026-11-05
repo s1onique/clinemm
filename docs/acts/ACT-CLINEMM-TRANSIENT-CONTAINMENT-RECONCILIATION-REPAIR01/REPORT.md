@@ -7,14 +7,28 @@
 **SUBJECT_TREE (content commit):** `f48c92b685806a181b115018c5d88a02d6b8c5cb`
 
 `SUBJECT_HEAD` is the **content** commit: it contains every production change,
-every test, the qualification harness and the packaging fix. The exact-head
-VSIX was built from it. Two subsequent **docs-only** commits pin this hash
-into the evidence artifacts; they change no code.
+every test, the qualification harness and the `.vscodeignore` hardening.
+The exact-head VSIX was built from it. Two subsequent **docs-only** commits
+pin this hash into the evidence artifacts; they change no code.
 
 | Commit | Tree | Subject |
 |---|---|---|
 | `03f2e8d00ecf521c1691dd6e7f3a961d51971884` | `67252a539e78d68d27667de041cf7c3cc0e4cba3` | the production repair + focused tests + evidence |
-| `c9296c3cd8befc871d6807fe9715c7c2704984f2` | `f48c92b685806a181b115018c5d88a02d6b8c5cb` | the installed-VSIX LIVE qualification harness + the `.vscodeignore` packaging fix (**the content commit**) |
+| `c9296c3cd8befc871d6807fe9715c7c2704984f2` | `f48c92b685806a181b115018c5d88a02d6b8c5cb` | the installed-VSIX LIVE qualification harness + the `.vscodeignore` hardening (**the content commit**) |
+
+> **Note on the packaging obstacle.** The `vsce package` EISDIR abort that
+> surfaced during this ACT is a **pre-existing, substrate-level** packaging
+> defect whose real root cause is that `vsce` was invoked **without**
+> `--no-dependencies`: `npm list --parseable` then reports the monorepo root
+> as a dependency root, so vsce globs the entire repository and produces
+> 2,754 out-of-root **directory** entries that the secretlint engine cannot
+> read. `.vscodeignore` patterns are rooted at `apps/vscode` and cannot match
+> those `../../...` paths, so the committed `.vscodeignore` rules are
+> defence-in-depth for in-root copies rather than the fix for that abort.
+> The repo's canonical packaging paths (`scripts/build_dogfood_vsix_lib.py`,
+> `apps/vscode/scripts/publish-marketplace.mjs`) already pass
+> `--no-dependencies` and were never affected. Full derivation in
+> `evidence/verification.txt` §9–§10.
 
 ---
 

@@ -333,15 +333,41 @@ BUILD
     ERROR  Error occurred while scanning secrets (files): EISDIR:
            illegal operation on a directory, read
 
-  The cause is an untracked, gitignored runtime directory
-  `apps/vscode/~/` (a literal `~` directory created by a bad shell
-  expansion on a previous session; it contained only
-  `~/.cline/data/logs/hooks.jsonl`). It is NOT tracked by git
-  (`git ls-files apps/vscode/'~'` is empty) and is NOT ACT-owned. The
-  `.vscodeignore` file does not exclude it, which is a PRE-EXISTING
-  packaging defect unrelated to this ACT. For this ACT's packaging run
-  the directory was moved aside to `/tmp/tcrr01-vscode-tilde-dir` (it
-  contains only runtime logs and no ACT content).
+  ROOT CAUSE (verified by direct inspection of `vsce ls` output and of
+  `@vscode/vsce` 3.9.2 source):
+
+    vsce's `collectAllFiles` globs `**` over every directory returned by
+    `npm list --production --parseable --depth=99999`. Under Bun's
+    workspace layout that command reports the MONOREPO ROOT as a
+    dependency root, so vsce globs the entire repository and relativizes
+    the results against `apps/vscode`. Entries therefore land OUTSIDE the
+    package root, e.g. `../../.bun-install/...`, `../../.claude/skills/...`,
+    `../cli/node_modules/...`.
+
+    Measured on this checkout:
+      - package list entries              : 205,885
+      - of those, DIRECTORY entries       :   2,754  (all begin with `..`)
+      - e.g. `../../.claude/skills/tuistory`, `../../.agents/skills/*`,
+        `../cli/node_modules/zod`, `../../node_modules/node_modules`
+
+    vsce hands each entry's `localPath` to the secretlint engine, which
+    `readFile`s it. Reading a DIRECTORY raises EISDIR, which is the
+    observed abort.
+
+    The `.vscodeignore` file CANNOT fix this: its patterns are rooted at
+    `apps/vscode`, and the offending paths begin with `..`. Verified
+    directly against minimatch with vsce's own option set:
+      minimatch("../../.bun-install/...", "**/.bun-install/**") === false
+      minimatch("../../.claude/skills/tuistory", "**/.bun-install/**") === false
+      minimatch("../../.claude/skills/tuistory", "**/*~")           === false
+
+    The actual defence is `--no-dependencies`, which makes
+    `getDependencies()` return `[cwd]` only, so nothing outside the
+    package root is ever globbed. Every canonical packaging path in this
+    repo already passes it:
+      - scripts/build_dogfood_vsix_lib.py  -> vsce_package()
+      - apps/vscode/scripts/publish-marketplace.mjs
+    The successful canonical packaging run used `--no-dependencies`.
 
 PACKAGE IDENTITY
 
@@ -477,7 +503,7 @@ RESULT -- ALL CHECKS PASSED
   and the active-job cardinality is untouched.
 
 ------------------------------------------------------------------------
-10. PACKAGING DEFECT FIXED ALONG THE WAY (P2, pre-existing)
+10. PACKAGING DEFECT CHARACTERIZED ALONG THE WAY (P2, pre-existing)
 ------------------------------------------------------------------------
 
 `vsce package` aborted with:
@@ -485,16 +511,29 @@ RESULT -- ALL CHECKS PASSED
     ERROR  Error occurred while scanning secrets (files): Error: EISDIR:
            illegal operation on a directory, read
 
-The cause was the repo-root Bun install cache `.bun-install/`, which is
-gitignored but was NOT excluded by `apps/vscode/.vscodeignore`, so it
-was swept into the package. It contains an editor backup file
-(`README.md~`) that the packaging secret scanner cannot read.
+VERIFIED ROOT CAUSE (see section above for the full derivation): vsce was
+invoked WITHOUT `--no-dependencies`. `npm list --parseable` then reports
+the monorepo root as a dependency root, so vsce globs the whole repo and
+relativizes entries against `apps/vscode`. 2,754 of the resulting 205,885
+package-list entries are DIRECTORIES living OUTSIDE the package root
+(`../../.claude/skills/...`, `../cli/node_modules/...`, ...). The
+secretlint engine `readFile`s each entry; reading a directory raises
+EISDIR.
 
-`apps/vscode/.vscodeignore` now excludes `**/.bun-install/**` and
-`**/*~`. Nothing in that cache is needed at runtime (the bundled
-`dist/extension.js` carries the code), and no `.bun-install` content is
-in the packaged VSIX.
+The repo's canonical packaging paths were never affected — both already
+pass `--no-dependencies`:
+  - scripts/build_dogfood_vsix_lib.py -> vsce_package()
+  - apps/vscode/scripts/publish-marketplace.mjs
 
-(The package was produced with `--no-dependencies`, which also skips the
-dependency-tree secret scan; the `.vscodeignore` fix removes the root
-cause for future packaging runs.)
+`apps/vscode/.vscodeignore` now also excludes `**/.bun-install/**` and
+`**/*~`. These rules are a belt-and-braces measure for in-root copies
+(e.g. the untracked `apps/vscode/~/` scratch directory, which is NOT in
+the shipped VSIX). They are explicitly NOT the fix for the EISDIR abort:
+`.vscodeignore` patterns are rooted at `apps/vscode` and therefore cannot
+match the `../../...` paths that actually abort the scan (verified against
+minimatch with vsce's own option set — all such matches return false).
+The comment committed in `.vscodeignore` was corrected to state this
+verified fact rather than the earlier, incorrect `README.md~` diagnosis.
+
+No `.bun-install` content is in the packaged VSIX, and the packaged
+artifact's SHA-256 is unchanged by this correction.

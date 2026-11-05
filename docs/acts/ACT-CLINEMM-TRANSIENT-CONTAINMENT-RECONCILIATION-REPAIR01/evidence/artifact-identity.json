@@ -5,7 +5,7 @@
   "entryTree": "bc16cc846080e7bc98221a6020822ac7d746acb8",
   "subjectHead": "c9296c3cd8befc871d6807fe9715c7c2704984f2",
   "subjectTree": "f48c92b685806a181b115018c5d88a02d6b8c5cb",
-  "subjectHeadMeaning": "The CONTENT commit: the commit that contains every production change, every test, the qualification harness and the packaging fix. Two subsequent docs-only commits pin this hash into the evidence artifacts; they change no code. The exact-head VSIX was built from this commit.",
+  "subjectHeadMeaning": "The CONTENT commit: the commit that contains every production change, every test, the qualification harness and the .vscodeignore hardening. Two subsequent docs-only commits pin this hash into the evidence artifacts; they change no code. The exact-head VSIX was built from this commit.",
   "subjectCommits": [
     {
       "head": "03f2e8d00ecf521c1691dd6e7f3a961d51971884",
@@ -17,7 +17,7 @@
       "head": "c9296c3cd8befc871d6807fe9715c7c2704984f2",
       "tree": "f48c92b685806a181b115018c5d88a02d6b8c5cb",
       "subject": "test(containment): add the installed-VSIX LIVE qualification for TCRR01",
-      "role": "the qualification harness + the .vscodeignore packaging fix (the CONTENT commit)"
+      "role": "the qualification harness + the .vscodeignore hardening (the CONTENT commit)"
     }
   ],
   "note": "The ACT-scoped commits contain ONLY the ACT-owned files listed below.",
