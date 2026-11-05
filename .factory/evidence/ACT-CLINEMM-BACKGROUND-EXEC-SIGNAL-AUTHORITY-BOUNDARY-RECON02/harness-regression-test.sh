@@ -39,10 +39,12 @@ echo "--- JSON parsing ---"
 J_EPERM='{"marker":"CLINEMM_RECON01_SIGNAL_PROBE","parentPid":15406,"childPid":15410,"signalAttempt":{"signal":"SIGTERM","target":"child-pid","ok":false,"errnoCode":"EPERM","errnoMessage":"kill EPERM","syscall":"kill"},"signalErrno":"EPERM","childExitedOnOwn":true,"childExitCode":0,"childStillAlive":false,"childStillAliveAfter":false,"cleanup":"child-exited-no-cleanup-needed","childReady":true,"childAliveProbeErrno":"ESRCH"}'
 J_OK='{"parentPid":99,"childPid":100,"signalAttempt":{"signal":"SIGTERM","target":"child-pid","ok":true},"signalErrno":null,"childExitedOnOwn":true,"childExitCode":0,"childStillAlive":false,"childStillAliveAfter":false,"childReady":true}'
 
-is "json_bool parses a true value"               "true"  "$(json_bool "$J_OK" ok)"
-is "json_bool parses a false value"              "false" "$(json_bool "$J_EPERM" ok)"
-is "json_bool parses childReady=true"            "true"  "$(json_bool "$J_OK" childReady)"
-is "json_bool parses childStillAliveAfter=false" "false" "$(json_bool "$J_OK" childStillAliveAfter)"
+is "json_bool parses a true value"               "true"  "$(json_bool "$J_OK" childReady)"
+is "json_bool parses a false value"              "false" "$(json_bool "$J_OK" childStillAliveAfter)"
+is "json_bool_nested parses signalAttempt.ok=true"  "true"  "$(json_bool_nested "$J_OK" signalAttempt ok)"
+is "json_bool_nested parses signalAttempt.ok=false" "false" "$(json_bool_nested "$J_EPERM" signalAttempt ok)"
+is "json_bool_nested ignores an unrelated top-level ok" "false" "$(json_bool_nested '{"ok":true,"signalAttempt":{"ok":false}}' signalAttempt ok)"
+is "json_bool_nested returns empty for absent object"   ""    "$(json_bool_nested "$J_OK" noSuchObject ok)"
 is "json_str parses signalErrno=EPERM"           "EPERM" "$(json_str "$J_EPERM" signalErrno)"
 is "json_str returns empty for JSON null"        ""      "$(json_str "$J_OK" signalErrno)"
 is "json_num parses childPid"                    "100"   "$(json_num "$J_OK" childPid)"
@@ -69,6 +71,41 @@ is "D: target did not survive      => INVALID_ALIVE" \
    "INVALID_ALIVE"    "$(classify_probe_d false EPERM false false present)"
 is "D: target received SIGTERM     => INVALID_RECEIVED" \
    "INVALID_RECEIVED" "$(classify_probe_d false EPERM true true present)"
+is "D: missing signal ok           => INVALID_EVIDENCE" \
+   "INVALID_EVIDENCE" "$(classify_probe_d '' EPERM true false present)"
+is "D: unrecognized signal ok      => INVALID_EVIDENCE" \
+   "INVALID_EVIDENCE" "$(classify_probe_d 1 EPERM true false present)"
+is "D: missing alive-after         => INVALID_EVIDENCE" \
+   "INVALID_EVIDENCE" "$(classify_probe_d false EPERM '' false present)"
+is "D: missing received-SIGTERM    => INVALID_EVIDENCE" \
+   "INVALID_EVIDENCE" "$(classify_probe_d false EPERM true '' present)"
+is "D: unrecognized received value => INVALID_EVIDENCE" \
+   "INVALID_EVIDENCE" "$(classify_probe_d false EPERM true 0 present)"
+
+# ---------------------------------------------------------------------------
+# Real shell-to-classifier wiring for probe D: the JSON booleans are parsed
+# by the same helpers the operator harness uses, then passed to the same
+# classifier. This catches the original "grep count 0/1" defect because the
+# parser now yields the JSON boolean itself.
+# ---------------------------------------------------------------------------
+echo "--- R1: shell-to-classifier wiring for probe D ---"
+J_D_DENIED='{"signalAttempt":{"signal":"SIGTERM","target":"foreign-pid","ok":false,"errnoCode":"EPERM"},"signalErrno":"EPERM","foreignAliveAfter":true,"foreignReceivedSIGTERM":false}'
+J_D_RECEIVED='{"signalAttempt":{"signal":"SIGTERM","target":"foreign-pid","ok":false,"errnoCode":"EPERM"},"signalErrno":"EPERM","foreignAliveAfter":true,"foreignReceivedSIGTERM":true}'
+J_D_SUCCEEDED='{"signalAttempt":{"signal":"SIGTERM","target":"foreign-pid","ok":true},"signalErrno":null,"foreignAliveAfter":true,"foreignReceivedSIGTERM":false}'
+J_D_MISSING_RECEIVED='{"signalAttempt":{"signal":"SIGTERM","target":"foreign-pid","ok":false,"errnoCode":"EPERM"},"signalErrno":"EPERM","foreignAliveAfter":true,"foreignReceivedSIGTERM":null}'
+
+D_WIRE_OK="$(json_bool_nested "$J_D_DENIED" signalAttempt ok)"
+D_WIRE_ERR="$(json_str "$J_D_DENIED" signalErrno)"
+D_WIRE_ALIVE="$(json_bool "$J_D_DENIED" foreignAliveAfter)"
+D_WIRE_RECEIVED="$(json_bool "$J_D_DENIED" foreignReceivedSIGTERM)"
+is "D wiring: denied payload parses to DENIED_EXPECTED" "DENIED_EXPECTED" \
+   "$(classify_probe_d "$D_WIRE_OK" "$D_WIRE_ERR" "$D_WIRE_ALIVE" "$D_WIRE_RECEIVED" present)"
+is "D wiring: received=true payload parses to INVALID_RECEIVED" "INVALID_RECEIVED" \
+   "$(classify_probe_d "$(json_bool_nested "$J_D_RECEIVED" signalAttempt ok)" "$(json_str "$J_D_RECEIVED" signalErrno)" "$(json_bool "$J_D_RECEIVED" foreignAliveAfter)" "$(json_bool "$J_D_RECEIVED" foreignReceivedSIGTERM)" present)"
+is "D wiring: signalAttempt.ok=true payload parses to UNSAFE_SIGNAL" "UNSAFE_SIGNAL" \
+   "$(classify_probe_d "$(json_bool_nested "$J_D_SUCCEEDED" signalAttempt ok)" "$(json_str "$J_D_SUCCEEDED" signalErrno)" "$(json_bool "$J_D_SUCCEEDED" foreignAliveAfter)" "$(json_bool "$J_D_SUCCEEDED" foreignReceivedSIGTERM)" present)"
+is "D wiring: null received field parses to INVALID_EVIDENCE" "INVALID_EVIDENCE" \
+   "$(classify_probe_d "$(json_bool_nested "$J_D_MISSING_RECEIVED" signalAttempt ok)" "$(json_str "$J_D_MISSING_RECEIVED" signalErrno)" "$(json_bool "$J_D_MISSING_RECEIVED" foreignAliveAfter)" "$(json_bool "$J_D_MISSING_RECEIVED" foreignReceivedSIGTERM)" present)"
 
 # ---------------------------------------------------------------------------
 echo "--- R1: probe D exit-status propagation ---"
@@ -209,35 +246,53 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-echo "--- R3: the deadline mechanism is real and bounded ---"
-# The supervisor must exist and be runnable, and a hanging target must hit
-# the deadline instead of hanging the harness. This test spawns only the
-# supervisor and a short-lived sleep; it signals nothing and waits with a
-# hard outer timeout so the regression suite itself can never hang.
-SUP_DIR="$HERE"
-if [ -r "$SUP_DIR/probe-fixtures/deadline-supervisor.py" ] && [ -r "$RECON02_PY" ]; then
+# R3 deadline contract is verified by the OPERATOR harness only.
+#
+# This default regression suite is PROCESS-FREE. The earlier live deadline
+# test spawned `/bin/sleep 300`; in a sandbox that denies signalling, the
+# target became an orphan (PPID=1), so the suite was not process-free and
+# violated the zero ACT-owned residual requirement. The live deadline test is
+# therefore an operator-only gate and is intentionally absent here.
+#
+# The process-free contract asserted here is that the supervisor source exists,
+# is readable, and is invoked by the harness with a bounded deadline. It does
+# not execute any target.
+# ---------------------------------------------------------------------------
+SUP_FILE="$HERE/$RECON02_SUPERVISOR"
+if [ -r "$SUP_FILE" ] && [ -r "$RECON02_PY" ]; then
 	ok "deadline supervisor and python3 are present"
-	DL_OUT="$(mktemp -d)"
-	if command -v timeout >/dev/null 2>&1; then
-		timeout 30 bash -c "
-			HERE='$SUP_DIR'; export RECON02_EVIDENCE_DIR=\"\$HERE\"
-			source \"\$HERE/harness-lib.sh\"
-			run_with_deadline T 2 '$DL_OUT/t.stdout' '$DL_OUT/t.stderr' /bin/sleep 300
-		" > "$DL_OUT/run.log" 2>&1
-		RC=$?
-		if [ "$RC" -eq 124 ]; then
-			bad "a hanging target hits the deadline (no hang)" "timeout before 30s" "TIMED OUT"
-		else
-			ok "a hanging target hits the deadline (no hang)"
-		fi
-		DL_CODE="$(cat "$DL_OUT/t.exit_code" 2>/dev/null || echo none)"
-		is "hanging target records EXIT_DEADLINE_EXCEEDED" "$EXIT_DEADLINE_EXCEEDED" "$DL_CODE"
-	else
-		bad "timeout(1) is available for the bounded deadline test" "present" "missing"
-	fi
-	rm -rf "$DL_OUT"
 else
 	bad "deadline supervisor and python3 are present" "present" "missing"
+fi
+if grep -q 'run_with_deadline "\$id" "\$deadline"' "$HERE/operator-probes.sh"; then
+	ok "operator harness invokes run_with_deadline for each probe"
+else
+	bad "operator harness invokes run_with_deadline for each probe" "run_with_deadline invocation" "not found"
+fi
+if grep -q 'DEADLINE_EXCEEDED' "$SUP_FILE"; then
+	ok "deadline supervisor enforces the EXIT_DEADLINE_EXCEEDED contract"
+else
+	bad "deadline supervisor enforces the EXIT_DEADLINE_EXCEEDED contract" "EXIT_DEADLINE_EXCEEDED" "not found"
+fi
+if grep -qE '^[[:space:]]*run_with_deadline[^|;]*sleep[[:space:]]+300' "$HERE/harness-regression-test.sh"; then
+	bad "default regression suite contains no live sleep 300 target" "absent" "present"
+else
+	ok "default regression suite contains no live sleep 300 target"
+fi
+
+# ---------------------------------------------------------------------------
+# R6 wiring: the operator harness MUST NOT let the environment manufacture
+# the production-context gate. The value is hard-coded in the harness.
+# ---------------------------------------------------------------------------
+if grep -q '^PRODUCTION_CONTEXT_EVIDENCE="NO"$' "$HERE/operator-probes.sh"; then
+	ok "operator harness hard-codes PRODUCTION_CONTEXT_EVIDENCE=NO"
+else
+	bad "operator harness hard-codes PRODUCTION_CONTEXT_EVIDENCE=NO" "PRODUCTION_CONTEXT_EVIDENCE=\"NO\"" "not found"
+fi
+if grep -q 'RECON02_PRODUCTION_CONTEXT_EVIDENCE' "$HERE/operator-probes.sh"; then
+	bad "operator harness has no production-evidence environment override" "absent" "present"
+else
+	ok "operator harness has no production-evidence environment override"
 fi
 
 # ---------------------------------------------------------------------------

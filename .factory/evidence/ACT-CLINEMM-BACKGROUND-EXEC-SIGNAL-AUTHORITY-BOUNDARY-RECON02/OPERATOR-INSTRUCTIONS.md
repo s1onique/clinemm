@@ -81,10 +81,15 @@ cat raw/summary.txt
 `raw/probe-{a,b,c}.result.json` and `raw/probe-d.result.json`; the raw
 stdout/stderr are in `raw/probe-*.stdout` / `raw/probe-*.stderr`.
 
-**The parent's exit code is not authoritative.** Parse `PROBE_RESULT_JSON` /
-`FOREIGN_SIGNAL_RESULT_JSON` and use the `signalAttempt.ok`, `signalErrno`,
-`childStillAliveAfter` / `foreignAliveAfter` and the `CHILD_GOT_SIGTERM` /
-`FOREIGN_GOT_SIGTERM` markers inside the child output.
+**The harness's own summary is authoritative.** It parses
+`PROBE_RESULT_JSON` / `FOREIGN_SIGNAL_RESULT_JSON` and classifies every
+probe from the JSON booleans themselves: `signalAttempt.ok` is the primary
+signal result, `signalErrno` classifies only a failed attempt, and
+`foreignReceivedSIGTERM` is the JSON boolean (not a marker count). A probe
+whose fixture exits nonzero is rejected even if it printed a complete-looking
+payload. For manual review, the same fields are available in the raw JSON
+files together with `childStillAliveAfter` / `foreignAliveAfter` and the
+`CHILD_GOT_SIGTERM` / `FOREIGN_GOT_SIGTERM` markers inside the child output.
 
 ---
 
@@ -115,9 +120,11 @@ Then apply the ACT's causal table. Note the **two gates** (R6):
 **Gate 2 — architecture selection** requires a **separate production-seam
 observation** for the same candidate rule. Only then may the verdict become
 `SELECT_SEATBELT_SIGNAL_REPAIR`, `SELECT_COMPOSED_BOUNDARY_REPAIR` or
-`SELECT_LAUNCHAGENT_EXECUTION_BOUNDARY`. The harness never selects an
-architecture on Terminal-only evidence; it prints
-`READY_FOR_OPERATOR_PROBES` and says so.
+`SELECT_LAUNCHAGENT_EXECUTION_BOUNDARY`. This Terminal-only harness hard-codes
+`PRODUCTION_CONTEXT_EVIDENCE=NO`; there is no environment override, so it can
+never select an architecture. It prints `READY_FOR_OPERATOR_PROBES` and says
+so. Architecture selection is performed separately, from real production
+evidence.
 
 **Important:** a successful C in the Terminal is **not** a successful C under
 VSCodium. The inherited Chromium sandbox is a separate authority. See

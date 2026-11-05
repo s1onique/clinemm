@@ -71,13 +71,12 @@ The operator harness was corrected for a P0. The cleanup contract is now:
   * Probe D fails closed with a NONZERO exit, and the controlled fixture
     cleanup is completed BEFORE that nonzero exit.
 
-CORRECTION-TEST RESIDUE (created by THIS correction's own verification, in
+CORRECTION-TEST RESIDUE (created by the EARLIER correction verification, in
 the agent's sandboxed substrate — recorded honestly, NOT swept):
 
-  During the deadline-mechanism verification, NINE `sleep 300` stand-ins were
-  orphaned (PPID=1) because the agent's sandbox DENIES every signal to a
-  process outside the harness's own group. Each deadline verification run
-  adds one, because the `sleep 300` stand-in cannot be killed here:
+  The earlier deadline-mechanism verification spawned NINE `sleep 300`
+  stand-ins that were orphaned (PPID=1) because the agent's sandbox DENIES
+  every signal to a process outside the harness's own group:
 
     pid 53736  /bin/sleep 300   (PPID=1, PGID 53720)
     pid 55657  /bin/sleep 300   (PPID=1, PGID 55647)
@@ -88,19 +87,14 @@ the agent's sandboxed substrate — recorded honestly, NOT swept):
     + 3 further identical stand-ins from the final repeated regression runs
       (the deadline assertion runs once per suite invocation)
 
-  This is bounded and self-clearing: every one of them has an INDEPENDENT
-  300 s lifetime and exits on its own. The harness itself produced NO
-  residual in the same window (`ps` showed NONE for
-  operator-probes / deadline-supervisor / probe.mjs / foreign.mjs).
-
-  These are NOT harness behaviour — they are an artifact of proving the
-  deadline in a substrate where SIGKILL is denied. Both have an INDEPENDENT
-  300 s lifetime and expire on their own. The operator's unsandboxed
-  Terminal does not have this restriction: there the supervisor's SIGKILL
-  succeeds and no orphan is created.
-
-  This residue is DISCLOSED, not hidden. It is distinct from the historical
-  orphan baseline and from any operator-run residual.
+  FINAL OPERATOR-HARNESS CORRECTION (2026-11-05): the live `/bin/sleep 300`
+  deadline test has been REMOVED from the default regression suite. The suite
+  is process-free again; it asserts the deadline CONTRACT (supervisor present,
+  harness invokes `run_with_deadline`, supervisor enforces `DEADLINE_EXCEEDED`)
+  without executing any target. The live deadline behaviour is an operator-only
+  gate and MUST NOT be executed from Background Exec. No further `sleep 300`
+  stand-ins were created by the final correction, and the process table showed
+  no `/bin/sleep 300` residual after the final regression run.
 
 --- OPERATOR-PROBE CLEANUP CONTRACT (enforced by operator-probes.sh) -------
 

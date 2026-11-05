@@ -225,7 +225,7 @@ fi
 
 A_JSON="$(cat "$OUT/probe-a.result.json")"
 A_ERR="$(json_str "$A_JSON" signalErrno)"
-A_OK="$(json_bool "$A_JSON" ok)"
+A_OK="$(json_bool_nested "$A_JSON" signalAttempt ok)"
 A_READY="$(json_bool "$A_JSON" childReady)"
 A_ALIVE_AFTER="$(json_bool "$A_JSON" childStillAliveAfter)"
 A_CHILD_PID="$(json_num "$A_JSON" childPid)"
@@ -275,7 +275,7 @@ fi
 
 B_JSON="$(cat "$OUT/probe-b.result.json")"
 B_ERR="$(json_str "$B_JSON" signalErrno)"
-B_OK="$(json_bool "$B_JSON" ok)"
+B_OK="$(json_bool_nested "$B_JSON" signalAttempt ok)"
 B_READY="$(json_bool "$B_JSON" childReady)"
 B_ALIVE_AFTER="$(json_bool "$B_JSON" childStillAliveAfter)"
 B_CHILD_PID="$(json_num "$B_JSON" childPid)"
@@ -313,7 +313,7 @@ fi
 
 C_JSON="$(cat "$OUT/probe-c.result.json")"
 C_ERR="$(json_str "$C_JSON" signalErrno)"
-C_OK="$(json_bool "$C_JSON" ok)"
+C_OK="$(json_bool_nested "$C_JSON" signalAttempt ok)"
 C_READY="$(json_bool "$C_JSON" childReady)"
 C_ALIVE_AFTER="$(json_bool "$C_JSON" childStillAliveAfter)"
 C_CHILD_PID="$(json_num "$C_JSON" childPid)"
@@ -440,14 +440,21 @@ fi
 echo "FOREIGN_CONTROL_REAPED=true"
 
 # ---- R1: classify the evidence; fail closed ------------------------------
+# A nonzero probe execution status invalidates the measurement even when
+# a complete-looking payload was printed before the failure.
 D_EVIDENCE="absent"
-[ -n "$D_JSON" ] && D_EVIDENCE="present"
-D_OK=""; D_ERR=""; D_ALIVE_AFTER=""; D_GOT_TERM="0"
-if [ "$D_EVIDENCE" = "present" ]; then
-	D_OK="$(json_bool "$D_JSON" ok)"
+D_OK=""; D_ERR=""; D_ALIVE_AFTER=""; D_GOT_TERM=""
+if [ "$D_RC" != "0" ]; then
+	echo "PROBE D INVALID: fixture execution failed (exit=$D_RC)"
+	printf '%s\n' "$D_RAW"
+	exit "$EXIT_PROBE_INVALID"
+fi
+if [ -n "$D_JSON" ]; then
+	D_EVIDENCE="present"
+	D_OK="$(json_bool_nested "$D_JSON" signalAttempt ok)"
 	D_ERR="$(json_str "$D_JSON" signalErrno)"
 	D_ALIVE_AFTER="$(json_bool "$D_JSON" foreignAliveAfter)"
-	D_GOT_TERM="$(grep -c 'FOREIGN_GOT_SIGTERM' <<< "$D_JSON" || true)"
+	D_GOT_TERM="$(json_bool "$D_JSON" foreignReceivedSIGTERM)"
 	echo "$D_JSON"
 fi
 
@@ -496,16 +503,34 @@ esac
 say "SUMMARY"
 
 # Map the raw probe outcomes onto the decision vocabulary.
-case "$A_OK" in true) A_VERDICT="SUCCESS" ;; *) A_VERDICT="INVALID" ;; esac
-case "$B_ERR" in
-	EPERM) B_VERDICT="EPERM" ;;
-	"")   B_VERDICT="INVALID" ;;
-	*)    B_VERDICT="SUCCESS" ;;
+# signalAttempt.ok is the primary result: a successful process.kill() has
+# signalErrno=null, so errno alone cannot distinguish success from invalid
+# evidence. The errno is used only to classify a FAILED attempt.
+case "$A_OK" in
+	true) A_VERDICT="SUCCESS" ;;
+	*)    A_VERDICT="INVALID" ;;
 esac
-case "$C_ERR" in
-	EPERM) C_VERDICT="EPERM" ;;
-	"")   C_VERDICT="INVALID" ;;
-	*)    C_VERDICT="SUCCESS" ;;
+case "$B_OK" in
+	true) B_VERDICT="SUCCESS" ;;
+	false)
+		case "$B_ERR" in
+			EPERM) B_VERDICT="EPERM" ;;
+			ESRCH) B_VERDICT="ESRCH" ;;
+			*)    B_VERDICT="INVALID" ;;
+		esac
+		;;
+	*) B_VERDICT="INVALID" ;;
+esac
+case "$C_OK" in
+	true) C_VERDICT="SUCCESS" ;;
+	false)
+		case "$C_ERR" in
+			EPERM) C_VERDICT="EPERM" ;;
+			ESRCH) C_VERDICT="ESRCH" ;;
+			*)    C_VERDICT="INVALID" ;;
+		esac
+		;;
+	*) C_VERDICT="INVALID" ;;
 esac
 case "$D_CLASS" in
 	DENIED_EXPECTED) D_VERDICT="DENIED" ;;
@@ -518,10 +543,11 @@ esac
 # observe the inherited VSCodium/Chromium authority, so it cannot select
 # a production-only repair or a composed architecture.
 #
-# PRODUCTION_CONTEXT_EVIDENCE is "YES" only if a separate, production-seam
-# observation has been recorded for the same candidate rule. This harness
-# NEVER sets it to YES: the Terminal run is not production context.
-PRODUCTION_CONTEXT_EVIDENCE="${RECON02_PRODUCTION_CONTEXT_EVIDENCE:-NO}"
+# PRODUCTION_CONTEXT_EVIDENCE is deliberately hard-coded to NO. This is a
+# Terminal-only harness: the operator's environment MUST NOT be able to
+# manufacture the second evidence gate. Architecture selection happens in
+# a separate production-seam exercise with real production evidence.
+PRODUCTION_CONTEXT_EVIDENCE="NO"
 
 DECISION="$(classify_decision "$A_VERDICT" "$B_VERDICT" "$C_VERDICT" "$D_VERDICT" "$PRODUCTION_CONTEXT_EVIDENCE")"
 

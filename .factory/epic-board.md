@@ -32130,11 +32130,16 @@ and fixtures are byte-identical to their frozen SHA-256 values.
 
 ### Process-free regression tests
 
-`harness-regression-test.sh` — **92 assertions, 0 failures**, covering harness JSON parsing,
-exit-status propagation, probe-D fail-closed classification, the two-gate decision table (including
-the R6 invariant), PID/argv/start-identity verification, the numeric-UID rule, the
-GONE-vs-UNVERIFIABLE distinction, and the real deadline mechanism (a hanging target must hit the
-deadline rather than hang the suite).
+`harness-regression-test.sh` — **107 assertions, 0 failures**, covering harness JSON parsing
+(including nested `signalAttempt.ok`), exit-status propagation, probe-D fail-closed classification,
+the **real shell-to-classifier wiring** for probe D, the two-gate decision table (including the R6
+invariant and the absence of a production-evidence environment override), PID/argv/start-identity
+verification, the numeric-UID rule, and the GONE-vs-UNVERIFIABLE distinction.
+
+The deadline contract is asserted **without executing a target**: the supervisor must be present and
+readable, the operator harness must invoke `run_with_deadline`, and the supervisor must enforce
+`DEADLINE_EXCEEDED`. The live deadline test (which used to spawn `/bin/sleep 300`) is an
+**operator-only gate** and is intentionally absent from the default sandbox-compatible suite.
 
 ### Design note — why the deadline supervisor does not use `setsid`
 
@@ -32146,12 +32151,14 @@ group kill would have killed the **harness itself**. The shipped supervisor inst
 Terminal, and it **always exits 137** when the budget expires — so the deadline fires even where
 signalling is denied and the harness can never hang.
 
-### Correction-test residue (disclosed, self-clearing)
+### Correction-test residue (historical, disclosed; no longer reproduced)
 
-Nine `sleep 300` stand-ins used to prove the deadline were orphaned (PPID=1) because the agent's
-sandbox denies every signal outside the harness's own group. Each has an independent 300 s lifetime
-and exits on its own; each deadline assertion run adds one. The harness itself produced **no**
-residual in the same window. Recorded in `cleanup-verification.txt`.
+Nine `sleep 300` stand-ins used by the **earlier** correction to prove the deadline were orphaned
+(PPID=1) because the agent's sandbox denies every signal outside the harness's own group. Each has
+an independent 300 s lifetime and exits on its own. The **final operator-harness correction removes
+that live test from the default regression suite**, so the suite is process-free again and no
+further stand-ins are created. The final regression run produced **no** `/bin/sleep 300` residual.
+Recorded in `cleanup-verification.txt`.
 
 ### Protected state — untouched, never restored, staged, or committed:
 

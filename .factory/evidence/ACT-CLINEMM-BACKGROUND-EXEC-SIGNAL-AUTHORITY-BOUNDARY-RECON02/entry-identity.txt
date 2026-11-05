@@ -39,7 +39,7 @@ P0 HARNESS CORRECTION (2026-11-05) — bounded, recon-only
   touched. The seven corrections (R1..R6) are listed in
   OPERATOR-INSTRUCTIONS.md and implemented in:
     harness-lib.sh                    (new — pure, process-free helpers)
-    harness-regression-test.sh        (new — 92 process-free assertions)
+    harness-regression-test.sh        (new — 107 process-free assertions)
     probe-fixtures/deadline-supervisor.py (new — real deadline enforcement)
     operator-probes.sh                (corrected)
 

@@ -38,12 +38,27 @@ readonly EXIT_DEADLINE_EXCEEDED=5
 
 # ---------------------------------------------------------------------------
 # JSON field extraction (process-free; operates on a string).
-# json_bool <json> <key>  -> "true" | "false" | "" (absent)
+# json_bool <json> <key>  -> "true" | "false" | "" (absent or not a JSON boolean)
 # json_str  <json> <key>  -> string value, "" for JSON null, "" if absent
 # json_num  <json> <key>  -> digits, "" if absent
+#
+# json_bool_nested <json> <object-key> <key>
+#   -> "true" | "false" | "" (absent, null, or not a JSON boolean)
+#
+# The nested form is required for fixture fields such as
+# signalAttempt.ok: the bare "ok" key would otherwise match an unrelated
+# top-level field and could silently classify a failed signal attempt as
+# successful.
 # ---------------------------------------------------------------------------
 json_bool() {
 	printf '%s' "$1" | grep -o "\"$2\":\(true\|false\)" | head -1 | cut -d: -f2
+}
+json_bool_nested() {
+	local json="$1" object_key="$2" key="$3"
+	local object
+	object="$(printf '%s' "$json" | grep -o "\"$object_key\":{[^}]*}" | head -1)"
+	[ -n "$object" ] || return 0
+	json_bool "$object" "$key"
 }
 json_str() {
 	printf '%s' "$1" | grep -o "\"$2\":\"[^\"]*\"" | head -1 | cut -d'"' -f4
@@ -191,13 +206,18 @@ assert_gone() {
 # classify_probe_d <signal_ok> <signal_errno> <foreign_alive_after>
 #                  <foreign_received_sigterm> <evidence_present>
 #
+# Every input must be present and correctly typed. Only the exact JSON
+# booleans "true"/"false" are accepted for signal_ok, foreign_alive_after,
+# and foreign_received_sigterm. Empty or unknown values fail closed as
+# INVALID_EVIDENCE.
+#
 # Prints one of:
 #   DENIED_EXPECTED   signal denied, errno EPERM, target survived, no SIGTERM
 #   UNSAFE_SIGNAL      the candidate signaled the foreign process
 #   INVALID_ESRCH      ESRCH — the target had already exited (race)
 #   INVALID_ERRNO      an errno other than EPERM was observed
 #   INVALID_ALIVE      the signal was denied but the target did not survive
-#   INVALID_EVIDENCE   the evidence payload is missing or incomplete
+#   INVALID_EVIDENCE   the evidence payload is missing, incomplete, or invalid
 #   INVALID_RECEIVED   the foreign target reported receiving SIGTERM
 # ---------------------------------------------------------------------------
 classify_probe_d() {
@@ -207,6 +227,18 @@ classify_probe_d() {
 		echo "INVALID_EVIDENCE"
 		return 0
 	fi
+	case "$ok" in
+		true|false) : ;;
+		*) echo "INVALID_EVIDENCE"; return 0 ;;
+	esac
+	case "$alive_after" in
+		true|false) : ;;
+		*) echo "INVALID_EVIDENCE"; return 0 ;;
+	esac
+	case "$received" in
+		true|false) : ;;
+		*) echo "INVALID_EVIDENCE"; return 0 ;;
+	esac
 	if [ "$ok" = "true" ]; then
 		echo "UNSAFE_SIGNAL"
 		return 0

@@ -146,12 +146,14 @@ The implementation of this table is `classify_decision()` in
 `harness-lib.sh`; it is asserted exhaustively by
 `harness-regression-test.sh` (the R6 invariant test proves that with
 `production_context_evidence = NO` **no** architecture token is ever
-produced across all 32 input combinations).
+produced across all 32 input combinations). The same suite asserts that the
+operator harness hard-codes `PRODUCTION_CONTEXT_EVIDENCE=NO` and contains no
+environment override for it.
 
-`operator-probes.sh` sets `PRODUCTION_CONTEXT_EVIDENCE=NO` by default and
-only honours an operator-supplied `RECON02_PRODUCTION_CONTEXT_EVIDENCE=YES`
-when a separate production-seam observation for the same candidate rule has
-been recorded.
+`operator-probes.sh` HARD-CODES `PRODUCTION_CONTEXT_EVIDENCE=NO`. The Terminal-only
+harness cannot observe the production seam, and its environment MUST NOT be
+able to manufacture the second evidence gate. Architecture selection is
+performed separately, when a real production-seam observation exists.
 
 ---
 
