@@ -71,3 +71,27 @@ for terminating owned processes outside this sandbox.
 
 A successful `kill(childPid)` does NOT prove successful `kill(-pgid)` or
 complete descendant cleanup. Those are qualified separately.
+
+## Qualification procedure correction (2026-11-05)
+
+The original `operator-script.sh` is **quarantined** and exits 127. The
+Factory review rejected it with `HALT_UNSAFE_OPERATOR_QUALIFICATION` because it
+ran the claimed production GREEN from an ordinary Terminal, quit VSCodium
+application-wide, launched an unbounded detached child and an unsandboxed
+foreign target, killed a PID without a fresh identity check, and continued
+after prerequisite failures.
+
+The authoritative bounded procedure is
+`.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01/QUALIFICATION-RUNBOOK.md`
+plus `operator-qualification.sh` in the same directory. It targets only the
+isolated dogfood VSCodium instance, routes every production measurement through
+the installed ClineMM Background Exec path, correlates the exact command /
+`prepareCallId` / profile hash / `sandbox-exec` argv through the existing
+Seatbelt JSONL observer, uses finite fixtures with independent lifetimes,
+distinguishes `EPERM` from `ESRCH`, and performs only identity-checked cleanup.
+
+No production source change is authorized by this qualification correction.
+Commits `d038b1e00` and `487a80ef7` are preserved. The live verdict remains
+`NOT_QUALIFIED_FROM_THIS_SUBSTRATE` until the installed permanent build passes
+the bounded production GREEN and the separate PGID, foreign-process, and
+Vitest-teardown measurements.

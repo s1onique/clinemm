@@ -32398,8 +32398,28 @@ predecessor ACT's OPERATOR-INSTRUCTIONS already recorded.
 4. Residual-process counts after group cancellation.
 5. The foreign-process denial control under the REPAIRED profile.
 
-`operator-script.sh` in the ACT's evidence directory performs exactly these measurements and is
-fail-closed. It must be run from an ordinary Terminal.
+`operator-script.sh` in the ACT's evidence directory is **QUARANTINED and MUST NOT BE
+RUN**. The 2026-11-05 Factory review rejected it with
+`HALT_UNSAFE_OPERATOR_QUALIFICATION`: the purported production GREEN ran from an
+ordinary Terminal rather than the installed ClineMM Background Exec path; the
+procedure quit VSCodium application-wide and could close unrelated PolyC/MTS
+instances; it used unreliable generic extension-host process matching; it
+launched an unbounded detached child and an unsandboxed foreign target; it
+killed a recorded PID without a fresh identity check; and it continued after
+prerequisite failures instead of failing closed.
+
+The bounded replacement is `QUALIFICATION-RUNBOOK.md` plus
+`operator-qualification.sh`. It targets only the isolated dogfood VSCodium
+instance, routes every production measurement through the installed Background
+Exec path, correlates the exact command / `prepareCallId` / profile hash /
+`sandbox-exec` argv through the existing Seatbelt JSONL observer, uses finite
+fixtures with independent lifetimes, distinguishes `EPERM` from `ESRCH`, and
+performs only identity-checked cleanup. It does not repeat RECON02 and does not
+open another architecture review.
+
+The live verdict remains `NOT_QUALIFIED_FROM_THIS_SUBSTRATE` until the
+installed permanent build produces the production GREEN and the separate PGID,
+foreign-process, and Vitest-teardown measurements pass.
 
 ### Correction to the predecessor ACT
 
@@ -32426,7 +32446,9 @@ separately (items 2–4 above).
 
 - ACT body: `.factory/acts/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01.md`
 - Evidence: `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01/`
-  (`final-report.md`, `structural-tests.txt`, `build-identity.txt`, `operator-script.sh`,
+  (`final-report.md`, `structural-tests.txt`, `build-identity.txt`,
+  `operator-script.sh` — QUARANTINED tombstone, `QUALIFICATION-RUNBOOK.md`,
+  `operator-qualification.sh`, `probe-fixtures/`,
   `raw/red-control-target-self.result.json`, `raw/substrate-limitation.txt`)
 - Source head: `d038b1e00fddcd8e25dc3df0333c101acaab60a9`
 

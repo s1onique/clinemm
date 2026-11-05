@@ -279,9 +279,20 @@ qualified by this ACT:
 4. Residual-process counts after group cancellation.
 5. The foreign-process denial control under the REPAIRED profile.
 
-`operator-script.sh` in this directory performs exactly these
-measurements. Run it from an ordinary Terminal (not from inside the
-agent substrate).
+`operator-script.sh` in this directory is **QUARANTINED and MUST NOT BE
+RUN**. The 2026-11-05 Factory review rejected it with
+`HALT_UNSAFE_OPERATOR_QUALIFICATION`: it ran the claimed production GREEN from
+an ordinary Terminal, quit VSCodium application-wide, launched an unbounded
+detached child and an unsandboxed foreign target, killed a PID without a fresh
+identity check, and continued after prerequisite failures.
+
+The bounded replacement is `QUALIFICATION-RUNBOOK.md` plus
+`operator-qualification.sh`. The replacement routes every production
+measurement through the installed ClineMM Background Exec path, targets only
+the isolated dogfood VSCodium instance, uses finite fixtures with independent
+lifetimes, distinguishes `EPERM` from `ESRCH`, and performs only
+identity-checked cleanup. Until that procedure completes, the live verdict
+remains `NOT_QUALIFIED_FROM_THIS_SUBSTRATE`.
 
 ## 6. Load-bearing limitation
 
