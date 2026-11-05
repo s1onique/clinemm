@@ -1,0 +1,154 @@
+ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01
+STRUCTURAL TEST EVIDENCE
+========================
+Source head: d038b1e00fddcd8e25dc3df0333c101acaab60a9
+
+NEW TEST SUITE
+--------------
+sdk/packages/core/src/runtime/sandbox/macos/seatbelt-same-sandbox-signal-repair01.test.ts
+11 tests — ALL GREEN.
+
+  R1a  the profile carries the permanent same-sandbox rule EXACTLY ONCE
+  R1b  the rule is UNCONDITIONAL — no opt-in gate changes it
+  R2a  the retired one-shot diagnostic surface is GONE
+  R2b  the generator no longer accepts a signalTarget option
+  R3a  the repair changes EXACTLY ONE profile line vs the pre-repair baseline
+  R3b  filesystem / network / socket rules are byte-for-byte CONSERVED
+  R4   the signal grant stays SCOPED — no blanket (allow signal)
+  R5   prepare() still runs through sandbox-exec and keeps (deny default)
+  R6   the grant is SANDBOX-SCOPED — no foreign-target signal rule exists
+  R7   prepare() is IDEMPOTENT — the second invocation keeps the same rule
+  R9   the read-only diagnostic observer seam is unchanged and DEFAULT_OFF
+
+R3a is the load-bearing conservation test. It asserts that the generated
+profile differs from the pre-repair baseline in EXACTLY ONE line and that
+the differing line is the signal rule.
+
+REGRESSION RUNS — BASELINE vs. CHANGE
+-------------------------------------
+SDK sandbox suite (sdk/packages/core, src/runtime/sandbox/), SAME
+test-file set in both runs:
+
+  BASELINE (original code; the repair changes stashed)
+    Tests       5 failed |  12 passed | 19 skipped  (36)   [same-file-set run]
+    Tests       6 failed | 133 passed | 24 skipped (163)   [full directory run]
+
+  WITH THE REPAIR
+    Tests       5 failed |  23 passed | 19 skipped  (36)   [same-file-set run]
+    Tests       7 failed | 143 passed | 24 skipped (174)   [full directory run]
+
+The 5 failures in the SAME-FILE-SET comparison are IDENTICAL in both runs
+and are pre-existing substrate artifacts, NOT regressions:
+
+  1. seatbelt-backend.test.ts — host-helper AF_UNIX rule
+     EOPNOTSUPP: lstat on the real ~/.clinemm/host-helper.sock
+     (the agent substrate cannot lstat a Unix socket).
+  2. seatbelt-backend.test.ts — synthesized-temp-root cleanup
+     cross-file ordering artifact: the ssh-agent authority test mutates
+     process.env.SSH_AUTH_SOCK in the same worker.
+     REPRODUCED WITH THE REPAIR'S TEST FILE REMOVED.
+  3. seatbelt-availability.test.ts — the sandbox-exec availability probe
+     cannot nest a sandbox (rc=71).
+  4-5. seatbelt-ssh-agent-authority.test.ts (x2) — the ssh-agent socket
+     canonicalization hits the same EOPNOTSUPP.
+
+Each of these was independently re-run with the repair's source changes
+STASHED (git stash push on the four changed/added SDK files) and produced
+the identical failure.
+
+TYPECHECK
+---------
+apps/vscode (tsc --noEmit)
+    0 errors.
+
+sdk/packages/core (tsc -p tsconfig.dev.json --noEmit)
+    BEFORE: 40 errors
+    AFTER : 40 errors
+    diff of the sorted diagnostic sets: EMPTY (no new typecheck errors).
+    Zero sandbox/seatbelt diagnostics after the change.
+
+LINT
+----
+sdk/packages/core, changed file set (biome check)
+    BASELINE: 6 errors, 3 infos
+    AFTER   : 2 errors, 3 infos   (Biome auto-fix repaired 4 in the
+                                   code this ACT touched)
+New test file alone: clean.
+apps/vscode changed files (biome lint --diagnostic-level=error): clean.
+
+PACKAGED ARTIFACT VERIFICATION
+-------------------------------
+dist/clinemm-signal-repair01.vsix
+    size   = 65225301 bytes
+    sha256 = f638ff5ed0bb631c0f347b8e2ee9a4d5a8af9fb651769fa345665d037cce3d81
+
+bundle (extension/dist/extension.js extracted from the VSIX)
+    sha256 = e35de822bec46b697fad7e651206d73124796b2179c2e6a25a083adced6a8a66
+
+installed copy (.tmp-vsix-ext/s1onique.clinemm-4.1.16-5a1c485cb/dist/extension.js)
+    sha256 = e35de822bec46b697fad7e651206d73124796b2179c2e6a25a083adced6a8a66
+    (byte-identical to the VSIX bundle)
+
+bundle content:
+    $ grep -o 'allow signal (target [a-z-]*)' dist/extension.js | sort | uniq -c
+          2 allow signal (target same-sandbox)
+
+    removed-diagnostic markers (each MUST be 0):
+      CLINEMM_DIAG_SAME_SANDBOX_SIGNAL              0
+      armSeatbeltSignalRuleAuthorization            0
+      clearSeatbeltSignalRuleAuthorization          0
+      getSeatbeltSignalRuleAuthorization            0
+      SeatbeltSignalTarget                          0
+
+REAL PRODUCTION BACKEND OUTPUT
+------------------------------
+Driven through the compiled SDK's real
+SeatbeltSandboxBackendExperimental.prepare() — the exact code path the
+extension host uses:
+
+    SIGNAL_RULE          = (allow signal (target same-sandbox))
+    SAME_SANDBOX_COUNT   = 1
+    SELF_COUNT           = 0
+    BLANKET_SIGNAL_COUNT = 0
+    SANDBOX_EXEC         = /usr/bin/sandbox-exec
+    SANDBOX_EXEC_ARGS    = ["-f", "<profile>.sb", "/bin/bash", ...]
+
+REMOVAL INVENTORY — VERIFIED ABSENT FROM SOURCE
+-------------------------------------------------
+$ grep -rn 'armSeatbeltSignalRuleAuthorization|clearSeatbeltSignalRuleAuthorization|\
+getSeatbeltSignalRuleAuthorization|SeatbeltSignalRuleAuthorizationIdentity|\
+resolveSignalTargetForInvocation|SeatbeltSignalTarget|armSameSandboxDiagnosticIfOptedIn|\
+resolveSameSandboxDiagnosticOptIn|CLINEMM_SAME_SANDBOX_DISCRIMINATOR_MARKER' \
+  sdk/packages apps/vscode/src --include='*.ts' --include='*.tsx'
+
+    (no source hits — only the sdk/packages/core/dist/*.d.ts build output,
+     which is regenerated by `bun run build:sdk`, and the two removal-marker
+     comments in apps/vscode/src/sdk/sandbox-policy.ts that document the
+     removal.)
+
+DELETED FILES
+-------------
+  sdk/packages/core/src/runtime/sandbox/macos/seatbelt-same-sandbox-discriminator01.test.ts
+  apps/vscode/src/sdk/__tests__/same-sandbox-production-discriminator01.policy.test.ts
+
+Both asserted that the TEMPORARY diagnostic existed. Neither is part of
+the default suite any more, and no intentionally failing test was left
+behind.
+
+SECURITY CONSERVATION SUMMARY
+------------------------------
+    Filesystem write grants        CONSERVED (byte-for-byte)
+    Read authority                 CONSERVED (byte-for-byte)
+    Network                        CONSERVED (byte-for-byte)
+    Host-helper socket rules       CONSERVED (byte-for-byte)
+    SSH-agent socket rules         CONSERVED (byte-for-byte)
+    Environment capability         CONSERVED (unchanged allow-list)
+    Canonical cwd                  CONSERVED (unchanged path)
+    Broad (allow signal)           ABSENT (no blanket grant)
+    Foreign-target signal rule     ABSENT
+    process-group ownership        UNCHANGED (helper protections intact)
+    Default sandbox policy         ONLY the signal rule changed
+    Launch path                    STILL /usr/bin/sandbox-exec -f <profile>
+    Diagnostic env gates            REMOVED (both)
+    Diagnostic one-shot budget      REMOVED
+    Diagnostic public exports       REMOVED

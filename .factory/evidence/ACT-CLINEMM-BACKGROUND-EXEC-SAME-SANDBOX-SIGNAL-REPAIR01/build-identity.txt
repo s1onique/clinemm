@@ -1,0 +1,32 @@
+BUILD IDENTITY
+=============
+SOURCE_HEAD      = d038b1e00fddcd8e25dc3df0333c101acaab60a9
+SOURCE_SHORT     = d038b1e00
+VSIX_PATH        = dist/clinemm-signal-repair01.vsix
+VSIX_SIZE        = 65225301
+VSIX_SHA256      = f638ff5ed0bb631c0f347b8e2ee9a4d5a8af9fb651769fa345665d037cce3d81
+BUNDLE_SHA256    = e35de822bec46b697fad7e651206d73124796b2179c2e6a25a083adced6a8a66
+                   (= extension/dist/extension.js extracted from the VSIX)
+INSTALLED_DIR    = .tmp-vsix-ext/s1onique.clinemm-4.1.16-5a1c485cb
+INSTALLED_SHA256 = e35de822bec46b697fad7e651206d73124796b2179c2e6a25a083adced6a8a66
+                   (byte-identical to the VSIX bundle)
+
+BUILD PIPELINE (equivalent to scripts/build-dogfood-vsix.py D05-D07)
+  1. bun run protos                 (apps/vscode)
+  2. bun run build                  (apps/vscode/webview-ui)
+  3. bun run sync-parser-helper     (apps/vscode)
+  4. bun esbuild.mjs --production   (apps/vscode)
+  5. vsce package --no-dependencies
+
+The build ran against a CLEAN tree (git status --porcelain = 0) at the
+source head above.
+
+NOTE: the canonical dogfood pipeline (scripts/build-dogfood-vsix.py) was
+NOT used because it performs a fresh `bun install --frozen-lockfile` in a
+detached worktree, and the native better-sqlite3 rebuild fails in the
+agent substrate: node-gyp cannot detect Xcode (the CLT receipts are not
+installed for this volume; the SDK headers are readable but the receipt
+check is not, and `DEVELOPER_DIR` does not bypass it). This is a
+BUILD-ENVIRONMENT limitation of the agent substrate, not a code defect.
+The build above performs the SAME pipeline steps against the SAME clean
+HEAD.

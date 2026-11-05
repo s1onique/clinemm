@@ -1,0 +1,43 @@
+SUBSTRATE LIMITATION EVIDENCE
+================================
+Recorded: 2026-11-05T18:06:24Z
+
+--- 1. nested sandbox-exec is denied regardless of profile content ---
+$ /usr/bin/sandbox-exec -p '(version 1)(allow default)' /bin/echo X
+sandbox-exec: sandbox_apply: Operation not permitted
+rc=71
+
+$ /usr/bin/sandbox-exec -f /private/tmp/same-sb.sb /bin/echo OK   # profile has (allow signal (target same-sandbox))
+sandbox-exec: sandbox_apply: Operation not permitted
+rc=71
+
+--- 2. the Chromium host sandbox is the source of the denial ---
+renderer seatbelt-client:
+--seatbelt-client=87
+
+--- 3. the GUI cannot launch from the substrate ---
+$ /Applications/VSCodium.app/Contents/MacOS/VSCodium --no-sandbox --user-data-dir=<tmp> ...
+   -> process exits immediately; no extension host starts; user-data dir stays empty.
+
+$ node src/dev/debug-harness/server.ts --skip-build --auto-launch   (harness)
+   -> harness starts; the Electron debugee dies with EXC_BAD_ACCESS / SIGSEGV /
+      KERN_INVALID_ADDRESS at 0x0000000000000010 (DiagnosticReports/Electron-*.ips),
+      and Playwright reports: "exception while trying to kill process: Error: kill EPERM".
+
+--- 4. the dogfood extensions dir is outside the substrate write roots ---
+$ touch ~/.vscodium-clinemm/extensions/.probe
+   -> touch: cannot touch '/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/.probe': Operation not permitted
+$ touch ~/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-1f456b971/dist/.probe
+   -> touch: cannot touch '/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-1f456b971/dist/.probe': Operation not permitted
+
+--- 5. the substrate write root (from the live profile) ---
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb:(allow file-write*
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb-  (subpath "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm")
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb-  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-0SksmJ")
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb-  (literal "/dev/null")
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb-  (literal "/dev/tty")
+--
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb:(allow file-write*
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb-  (subpath "/Volumes/UserData/Users/chistyakov/Library/Caches/go-build"))
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb-(allow file-read-metadata (subpath "/"))
+/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-RIT3qS/profile-dd2364141359.sb-(allow network*)

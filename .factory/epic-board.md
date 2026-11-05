@@ -32264,3 +32264,170 @@ architecture review was opened.
   archived evidence — all unchanged.
 - The P0 `raw/` evidence is preserved verbatim; the correction is recorded alongside it rather
   than overwriting it.
+
+## ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01 — REPAIR_IMPLEMENTED_AND_STRUCTURALLY_QUALIFIED — 2026-11-05
+
+**Purpose:** implement the bounded permanent Seatbelt signal-rule repair selected by
+`SELECT_SEATBELT_SIGNAL_REPAIR`, remove the temporary diagnostic in full, preserve and correct
+the production evidence, and qualify the repair at the real production seam.
+
+**Verdict: `REPAIR_IMPLEMENTED_AND_STRUCTURALLY_QUALIFIED` — live GREEN at the production
+seam `NOT_QUALIFIED_FROM_THIS_SUBSTRATE`.** The repair itself is complete and verified in the
+packaged artifact. The single outstanding qualification (a GREEN child-directed SIGTERM at the
+real VSCodium extension-host seam with the repaired profile) is blocked by a **substrate
+ceiling**, reproduced three independent ways below — it is NOT a code defect.
+
+### The production change — EXACTLY ONE profile line
+
+```
+- (allow signal (target self))
++ (allow signal (target same-sandbox))
+```
+
+Permanent and **unconditional**. The original rule permitted a sandboxed workload to signal only
+itself, so a Background Exec workload could not terminate a child it had spawned: the child is a
+distinct sandbox session and the signal was denied with `EPERM`. This matches the Seatbelt
+policies used by the OpenAI Codex sandbox and the Anthropic Sandbox Runtime, both of which allow
+`(allow signal (target same-sandbox))`.
+
+### Removal inventory — executed in full
+
+| File | Change |
+|---|---|
+| `sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts` | `SeatbeltSignalTarget` type, the `signalTarget` option and the `signalRule` selector removed; the permanent rule is an inline constant. |
+| `sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts` | The entire one-shot authorization block removed (`SeatbeltSignalRuleAuthorizationIdentity`, `SignalRuleAuthorization`, `pendingSignalRuleAuthorization`, `arm…`/`clear…`/`getSeatbeltSignalRuleAuthorization`, `resolveSignalTargetForInvocation`, and the `signalTarget` option passed to `generateSeatbeltProfile`). |
+| `sdk/packages/core/src/index.ts` | The temporary barrel export removed. |
+| `apps/vscode/src/sdk/sandbox-policy.ts` | The entire `CLINEMM_DIAG_SAME_SANDBOX_SIGNAL` / `CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND` gate removed, with the `armSeatbeltSignalRuleAuthorization` import. |
+| `apps/vscode/src/extension.ts` | The `armSameSandboxDiagnosticIfOptedIn` import and its activation-time call removed. |
+| `apps/vscode/src/test/cline-core-vitest-stub.ts` | The authorization re-exports and the type re-export removed. |
+| `apps/vscode/tsconfig.json` | The test-only exclusion entry removed. |
+| `sdk/packages/core/src/runtime/sandbox/macos/seatbelt-same-sandbox-discriminator01.test.ts` | DELETED (asserted the diagnostic existed). |
+| `apps/vscode/src/sdk/__tests__/same-sandbox-production-discriminator01.policy.test.ts` | DELETED (asserted the diagnostic existed). |
+
+**Preserved:** the probe fixture
+`.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01/probe-fixtures/same-sandbox-probe.mjs`
+and every raw evidence artefact.
+
+### Live evidence at the production seam
+
+The agent's `run_commands` substrate **is** the production seam — it is a ClineMM Background Exec
+command whose parent is the VSCodium extension host:
+
+```
+/bin/zsh <pid>                                     (the Background Exec command)
+  -> VSCodium Helper (Plugin) ... node.mojom.NodeService   (extension host)
+    -> /Applications/VSCodium.app/Contents/MacOS/VSCodium  (main)
+```
+
+- **RED control, REPRODUCED** (`raw/red-control-target-self.result.json`): `signalAttempt.ok=false`,
+  `errnoCode=EPERM`, `childReceivedSigterm=false`, `childSelfExited=true`,
+  `childAliveProbeErrno=ESRCH`, no orphan. Same fixture, same child-directed SIGTERM, same errno as
+  the accepted RECON01 production-seam RED.
+- **Observer correlation VERIFIED**: the live host's `CLINEMM_CAPTURE_SANDBOX=1` JSONL records
+  `prepareCallId=215`, `profilePath=…/profile-7590a56b7d88.sb`,
+  `sha256=8ef18d93604a3de5b94ee4034fe9400e4bef910bae229779f0b953336da2774f`; an independent
+  `shasum -a 256` of that file yields the **identical** digest, and its content is
+  `(allow signal (target self))`. The observer's `prepareCallId` / `profilePath` / `sha256` / `argv`
+  correlate exactly with the profile the kernel consumed.
+- **GREEN: `NOT_QUALIFIED_FROM_THIS_SUBSTRATE`** — see the substrate ceiling below.
+- **Foreign-process denial control**: EPERM, `foreignAliveAfter=true`,
+  `foreignReceivedSIGTERM=false` — the foreign process was NOT signalled. *Scope limit:* measured
+  under the ORIGINAL rule (the repaired profile cannot be applied from this substrate); the
+  structural argument for the repaired rule is in `structural-tests.txt`.
+- **The REAL production backend emits the permanent rule**: driving the compiled SDK's real
+  `SeatbeltSandboxBackendExperimental.prepare()` yields
+  `SIGNAL_RULE=(allow signal (target same-sandbox))`, `SAME_SANDBOX_COUNT=1`, `SELF_COUNT=0`,
+  `BLANKET_SIGNAL_COUNT=0`, `SANDBOX_EXEC=/usr/bin/sandbox-exec`.
+
+### Packaged artifact
+
+```
+VSIX_PATH        = dist/clinemm-signal-repair01.vsix
+VSIX_SIZE        = 65225301 bytes
+VSIX_SHA256      = f638ff5ed0bb631c0f347b8e2ee9a4d5a8af9fb651769fa345665d037cce3d81
+BUNDLE_SHA256    = e35de822bec46b697fad7e651206d73124796b2179c2e6a25a083adced6a8a66
+INSTALLED_SHA256 = e35de822bec46b697fad7e651206d73124796b2179c2e6a25a083adced6a8a66  (byte-identical)
+```
+
+The bundle carries `allow signal (target same-sandbox)` ×2 and **zero** traces of the removed
+diagnostic (`CLINEMM_DIAG_SAME_SANDBOX_SIGNAL`, `arm…`/`clear…`/`getSeatbeltSignalRuleAuthorization`,
+`SeatbeltSignalTarget` — all 0).
+
+### Structural qualification
+
+- New suite `sdk/packages/core/src/runtime/sandbox/macos/seatbelt-same-sandbox-signal-repair01.test.ts`
+  — **11 tests, all green** (R1 permanent-and-unconditional, R2 diagnostic-surface-gone,
+  R3 one-line conservation, R4 no blanket grant, R5 no sandbox bypass, R6 sandbox-scoped,
+  R7 idempotence, R9 observer unchanged). R3a asserts the profile differs from the pre-repair
+  baseline in **EXACTLY ONE line** and that the differing line is the signal rule.
+- SDK sandbox suite, **same test-file set**: BASELINE 5 failed / 12 passed vs. WITH THE REPAIR
+  5 failed / 23 passed. The 5 failures are **identical in both runs** and are pre-existing substrate
+  artifacts (Unix-socket `lstat` → `EOPNOTSUPP`; a cross-file `SSH_AUTH_SOCK` ordering artifact
+  reproduced with this ACT's test file removed; the `sandbox-exec` availability probe's nested
+  sandbox rc=71). Each was re-verified with the repair's changes **stashed**.
+- `apps/vscode` typecheck: **0 errors**. `sdk/packages/core` typecheck: **40 before, 40 after,
+  byte-identical diagnostic sets** (`diff` clean) — zero new typecheck errors.
+- Lint: SDK changed file set 6 → 2 errors (Biome auto-fixed 4 in the code this ACT touched); the
+  new test file is lint-clean; the `apps/vscode` changed files are lint-clean.
+
+### The substrate ceiling (why GREEN is not qualified here)
+
+Three independent reproductions, all substrate-level:
+
+1. Installing the repaired VSIX into `~/.vscodium-clinemm/extensions` → `EPERM: operation not
+   permitted, mkdir …/extensions/.<uuid>` — the dogfood extensions dir is outside the agent
+   substrate's write roots (the live profile grants `file-write*` on the repo and the temp root only).
+2. Launching a NEW VSCodium against a repo-local (writable) extensions dir holding the repaired
+   VSIX → the process exits immediately; no extension host starts; the user-data dir stays empty.
+3. Launching the debug harness with `--extensionDevelopmentPath=apps/vscode` (which loads the
+   repaired `dist/extension.js` verbatim) → the harness starts, but its Electron debugee dies with
+   `EXC_BAD_ACCESS` / `SIGSEGV` / `KERN_INVALID_ADDRESS`, and Playwright reports
+   `exception while trying to kill process: Error: kill EPERM`.
+
+Underlying ceiling: **nested `sandbox-exec` is denied regardless of profile content** —
+`/usr/bin/sandbox-exec -p '(version 1)(allow default)' /bin/echo X` → `sandbox_apply: Operation not
+permitted` (rc=71). The denial is the Chromium host sandbox (`--seatbelt-client=87` on the
+renderer), NOT the ClineMM Seatbelt profile. This independently reproduces the two ceilings the
+predecessor ACT's OPERATOR-INSTRUCTIONS already recorded.
+
+### Live qualification still outstanding
+
+1. GREEN child-directed SIGTERM at the real extension-host seam with the repaired profile.
+2. `kill(-pgid)` (process-group) cancellation under the repaired profile.
+3. Real Vitest fork-worker termination under the repaired profile.
+4. Residual-process counts after group cancellation.
+5. The foreign-process denial control under the REPAIRED profile.
+
+`operator-script.sh` in the ACT's evidence directory performs exactly these measurements and is
+fail-closed. It must be run from an ordinary Terminal.
+
+### Correction to the predecessor ACT
+
+`ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01`'s `HALT_DIAGNOSTIC_NOT_APPLIED`
+classification was **ERRONEOUS** and is corrected here: that report inspected the profile temp
+directories for `target same-sandbox` AFTER the job had completed and the backend's cleanup hook had
+already removed the profile, and it compared against a diagnostic build that was not the installed
+build. The verbatim erroneous artefacts are preserved as
+`live-command-result.SUPERSEDED-HALT-DIAGNOSTIC-NOT-APPLIED.json` and
+`live-profile-identity.SUPERSEDED-HALT-DIAGNOSTIC-NOT-APPLIED.txt`; the corrected classification is
+in `live-command-result.json` (`SUPERSEDED_BY_SELECT_SEATBELT_SIGNAL_REPAIR`).
+
+### Load-bearing limitation
+
+`same-sandbox` is a SANDBOX-SCOPED permission, **not** an ownership-token check. It permits
+signalling any process in the SAME sandbox session; it does **not** prove the target is a
+descendant of the caller. The existing host-helper ownership protections
+(`process-group.register-owned` / `process-group.terminate-owned`) are **UNCHANGED** and remain the
+authority for terminating owned processes outside this sandbox. A successful `kill(childPid)` does
+**not** prove successful `kill(-pgid)` or complete descendant cleanup — those are qualified
+separately (items 2–4 above).
+
+### Evidence
+
+- ACT body: `.factory/acts/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01.md`
+- Evidence: `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01/`
+  (`final-report.md`, `structural-tests.txt`, `build-identity.txt`, `operator-script.sh`,
+  `raw/red-control-target-self.result.json`, `raw/substrate-limitation.txt`)
+- Source head: `d038b1e00fddcd8e25dc3df0333c101acaab60a9`
+
+**No claim is made that the broader orphan-process problem is fixed.**
