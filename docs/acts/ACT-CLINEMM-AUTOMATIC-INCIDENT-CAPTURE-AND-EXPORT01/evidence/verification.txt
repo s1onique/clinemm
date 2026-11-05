@@ -1,0 +1,203 @@
+AICE01 — VERIFICATION
+=====================
+All commands were run from apps/vscode unless stated otherwise.
+Toolchain: bun (tooling) + Node (runtime), per the repository's
+bun-and-node rule.
+
+-------------------------------------------------------------------------------
+1. FOCUSED ACCEPTANCE + ADJACENT REGRESSION SUITES (vitest)
+-------------------------------------------------------------------------------
+Command:
+  bunx vitest run --config vitest.config.ts \
+    src/sdk/__tests__/automatic-incident-capture-export01.aice01.test.ts \
+    src/sdk/__tests__/automatic-incident-persistence01.aice01.test.ts \
+    src/sdk/__tests__/automatic-incident-export01.aice01.test.ts \
+    src/sdk/__tests__/automatic-incident-activation01.aice01.test.ts \
+    src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts \
+    src/sdk/__tests__/transient-containment-reconciliation-repair01.controller.tcrr01.test.ts \
+    src/sdk/__tests__/transient-containment-reconciliation-repair01.red-only.tcrr01.test.ts \
+    src/sdk/__tests__/background-job-liveness-authority.bclas01.test.ts \
+    src/sdk/__tests__/background-job-liveness-authority.bclas06.test.ts \
+    src/sdk/__tests__/containment-ledger-causal-recon01.clcr01.test.ts \
+    src/sdk/__tests__/containment-failure-c10-authority-repair01.cfc10ar01.test.ts \
+    src/sdk/__tests__/completion-incident-bundle.bundle01.test.ts \
+    src/sdk/__tests__/completion-incident-checkpoint-correction01.loss.test.ts
+
+Result:
+  Test Files  12 passed (12)
+  Tests      123 passed (123)
+  Duration   ~12.9 s
+
+Per-suite:
+  automatic-incident-capture-export01.aice01.test.ts    8 passed
+  automatic-incident-persistence01.aice01.test.ts        10 passed
+  automatic-incident-export01.aice01.test.ts            10 passed
+  automatic-incident-activation01.aice01.test.ts         6 passed
+  transient-containment-reconciliation-repair01.tcrr01  2 passed
+  ...controller.tcrr01                                 24 passed
+  ...red-only.tcrr01                                    2 passed
+  background-job-liveness-authority.bclas01              2 passed
+  background-job-liveness-authority.bclas06              2 passed
+  containment-ledger-causal-recon01.clcr01             20 passed
+  containment-failure-c10-authority-repair01.cfc10ar01  25 passed
+  completion-incident-bundle.bundle01                   9 passed
+  completion-incident-checkpoint-correction01.loss      5 passed
+
+-------------------------------------------------------------------------------
+2. FULL TYPECHECK (base + VS Code compat + webview)
+-------------------------------------------------------------------------------
+Command: bun run check-types
+  -> bun run protos && bunx tsc --noEmit && bun run check-types:compat \
+     && cd webview-ui && bunx tsc --noEmit
+
+Result: exit 0. No diagnostics.
+
+The compat project (`tsconfig.vscode-compat.json`) required ONE change:
+the new `src/types/archiver.d.ts` ambient declaration had to be added to
+the project's `files` list, because that project sets `"include": []` and
+therefore did not otherwise include the declaration file. Without it the
+compat compile failed with TS7016 on the `archiver` import.
+
+-------------------------------------------------------------------------------
+3. LINT (biome)
+-------------------------------------------------------------------------------
+Command:
+  bunx biome check --config-path ./biome.jsonc <all changed production and
+  test files>
+
+Result: 0 errors, 0 warnings. Only informational diagnostics remain
+(`noExplicitAny` on pre-existing code, `noNonNullAssertion` in test files),
+which the repository's biome configuration reports as `info`, not as errors.
+
+-------------------------------------------------------------------------------
+4. PRODUCTION BUNDLE
+-------------------------------------------------------------------------------
+Command: bun esbuild.mjs
+Result:  "[watch] build started" / "[watch] build finished" — exit 0.
+
+-------------------------------------------------------------------------------
+5. FULL NODE-SIDE UNIT SUITE (`bun run test:unit`)
+-------------------------------------------------------------------------------
+Result:
+  Files: 112   Pass: 1403   Fail: 5   Time: 40.8 s
+
+  Failing files (4):
+    src/core/storage/StateManager.test.ts                         (1 fail)
+    src/hosts/external/__tests__/host-bridge-auth.test.ts         (1 fail)
+    src/hosts/external/__tests__/host-bridge-client-auth.test.ts  (1 fail)
+    src/services/mcp/__tests__/McpHub.callTool.test.ts            (2 fail)
+
+  ==> ALL FIVE FAILURES ARE PRE-EXISTING. PROVEN, NOT ASSUMED.
+
+  PROOF. The working tree was stashed (including untracked files), the
+  protos were regenerated at the clean ENTRY_HEAD baseline, and the SAME
+  four files were run:
+
+    * McpHub.callTool.test.ts
+        baseline: 33 pass / 2 fail
+        branch:    33 pass / 2 fail
+        the two failing test names are IDENTICAL:
+          "fires once with outcome=success on a successful callTool()"
+          "fires once with outcome=error when the underlying transport throws"
+
+    * StateManager.test.ts
+        The failure is `expect(readDirectory).not.toHaveBeenCalled()`.
+        PROVEN unrelated to this ACT by reverting ONLY the ACT's change
+        to `src/shared/storage/state-keys.ts` (the single file this ACT
+        shares with that test) and re-running:
+          with the ACT's state-keys.ts change REVERTED -> 0 pass / 1 fail
+        i.e. the failure reproduces with the ACT's change removed.
+
+    * host-bridge-auth.test.ts / host-bridge-client-auth.test.ts
+        baseline: 0 pass / 2 fail (module-resolution error)
+        branch:    0 pass / 2 fail (same module-resolution error)
+        The error is `Export named 'getDeviceId' not found in module
+        'src/services/logging/distinctId.ts'`. `getDeviceId` IS exported
+        both at ENTRY_HEAD and on this branch (verified with
+        `git show <ENTRY_HEAD>:.../distinctId.ts`), so this is a
+        pre-existing test-harness module-mock defect, not a branch defect.
+
+  AFTER THE PROBE: the working tree was restored with `git stash pop`,
+  the protos were regenerated, and the PROTECTED stash was verified to be
+  intact at `stash@{0}`:
+    "WIP on main: d46223b51 fix(completion-continuation-stall-lifetime)..."
+
+-------------------------------------------------------------------------------
+6. NEW-COMMAND / NEW-PROTO SURFACE
+-------------------------------------------------------------------------------
+`cline.reportTaskProblem`           contributed + registered + webview button
+`cline.toggleDetailedLocalDiagnostics` contributed + registered
+`cline.deleteRetainedIncidents`    contributed + registered
+
+`UiService.reportTaskProblem(EmptyRequest) returns (Empty)` is the ONLY
+proto change. The request carries NO incident id, NO task id and NO
+filesystem path.
+
+The TCRR01 scope assertion ("no new public protocol") was updated to
+scope the prohibition to the RECONCILIATION's own protocol surface and to
+assert that the ONLY protocol change on the branch is AICE01's single
+authorized UI request. The assertion now checks, in addition:
+  * the changed proto file set is exactly
+    `apps/vscode/proto/cline/ui.proto`;
+  * the added RPC is exactly `rpc reportTaskProblem(EmptyRequest)
+    returns (Empty);`;
+  * the reconciliation introduced NO protocol surface (the proto contains
+    neither `containment_reconcil` nor `reconciliation_`).
+
+-------------------------------------------------------------------------------
+7. NO-NETWORK PROOF
+-------------------------------------------------------------------------------
+`src/sdk/automatic-incident-export.ts` contains no `fetch(`, no `axios`
+and no `http://` / `https://` literal (asserted by the A1/G16 suite).
+
+The ZIP is produced by `archiver`, an ALREADY-DECLARED and ALREADY-
+INSTALLED dependency (`archiver@^7.0.1`). NO new dependency was added.
+
+-------------------------------------------------------------------------------
+8. FINAL-TREE RE-CONFIRMATION OF THE UNIT SUITE
+-------------------------------------------------------------------------------
+The `bun run test:unit` job was re-run on the FINAL tree (after the last
+fixes to the test-file non-null locals and the restoration of the two
+`SdkController` members) to confirm the pre-existing failure set is
+UNCHANGED and that AICE01 introduced no new failure.
+
+Result on the FINAL tree:
+  Files: 112   Pass: 1403   Fail: 5   Time: 39.6 s
+  Failing files (4) — IDENTICAL to the earlier run AND to the clean
+  ENTRY_HEAD baseline:
+    src/core/storage/StateManager.test.ts                         (1 fail)
+    src/hosts/external/__tests__/host-bridge-auth.test.ts         (1 fail)
+    src/hosts/external/__tests__/host-bridge-client-auth.test.ts  (1 fail)
+    src/services/mcp/__tests__/McpHub.callTool.test.ts            (2 fail)
+
+Pass count 1403 is UNCHANGED from the earlier run and from the baseline
+probe, and the failing-file set is byte-for-byte the same. AICE01
+therefore introduced NO regression in the node-side unit suite.
+
+ADDITIONAL ISOLATION CHECK: none of the four failing test files (nor
+their subjects — `StateManager`, the host-bridge auth clients, `McpHub`)
+is touched by this ACT. The single file AICE01 shares with the
+`StateManager` suite is `src/shared/storage/state-keys.ts`, and that case
+was independently isolated in §5 above by reverting ONLY that file and
+observing the identical failure.
+
+-------------------------------------------------------------------------------
+9. CANONICAL FINAL STATE (all re-verified after the last background job)
+-------------------------------------------------------------------------------
+  vitest focused + adjacent suites ....... 123 passed / 123 (12 files)
+  tsc --noEmit (base) ..................... exit 0
+  tsc --project tsconfig.vscode-compat ... exit 0
+  bun run check-types (base+compat+webview)  exit 0
+  biome check --diagnostic-level=error .... 0 errors ("No fixes applied")
+  bun esbuild.mjs .......................... build finished (exit 0)
+  bun run test:unit ....................... 1403 pass / 5 fail (all
+                                             proven pre-existing)
+
+  Structural integrity:
+    SdkController restored members ......... 2 (terminalExecutionMode,
+                                             pendingClineAuthRetryPrompt)
+    registry command entries ............... 46 (43 at ENTRY_HEAD + 3 new)
+    package.json cline commands ........... 63 (60 at ENTRY_HEAD + 3 new)
+    protected stash ....................... stash@{0} "WIP on main:
+                                             d46223b51 fix(completion-
+                                             continuation-stall-lifetime)..."

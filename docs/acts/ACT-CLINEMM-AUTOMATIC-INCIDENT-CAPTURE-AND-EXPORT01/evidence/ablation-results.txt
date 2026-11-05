@@ -1,0 +1,106 @@
+AICE01 — ABLATION RESULTS
+=========================
+The ACT requires the capture to have ZERO state-semantic delta when it is
+DISARMED. The ablation is exercised by the real production suites.
+
+-------------------------------------------------------------------------------
+ABLATION-1 — the capture is DISARMED
+-------------------------------------------------------------------------------
+Seam: setAutomaticIncidentCaptureEnabled(false)
+
+The seam is exercised by the REAL production suites, not only by a mock:
+
+  * `automatic-incident-capture-export01.aice01.test.ts`
+      "G18 — the diagnostic being OFF produces ZERO state-semantic delta"
+      This test drives the REAL CommandJobManager through the REAL
+      reconciliation lifecycle with the capture disarmed, and compares the
+      resulting state projection against the same run with the capture
+      enabled. The two projections are IDENTICAL.
+
+  * `automatic-incident-activation01.aice01.test.ts`
+      "G24 — a DISARMED capture produces ZERO state and ZERO allocation"
+      The capture entry point returns `undefined` and no incident is
+      registered, so NOTHING is allocated and NOTHING is retained.
+
+Result: PASS. No completion, containment, C10 or Elm semantics change when
+the capture is disarmed.
+
+-------------------------------------------------------------------------------
+ABLATION-2 — the capture DEPTH is `minimal` (the PUBLIC default)
+-------------------------------------------------------------------------------
+Seam: applyAutomaticIncidentCaptureDiagnosticProfile({ isDogfood: false,
+userOptedIn: false }) -> mode = "minimal"
+
+The minimal depth:
+  * still OPENS an incident (the public build preserves a minimal local
+    incident summary automatically);
+  * retains only the MINIMAL detail allowlist
+    (holdReason, unresolvedContainmentFailureCount, unconsumedTerminalCount,
+    ownerStillRunning, heldObligation, remainingBlockingJobCount);
+  * DROPS every other detail key (drop, not redact);
+  * does NOT retain the reconciliation timeline;
+  * retains the causal identity, the stage/outcome verdicts, the
+    blocking-set identity and the per-job coverage verdicts.
+
+Proven by `automatic-incident-activation01.aice01.test.ts`:
+  "G21 — the MINIMAL depth DROPS the non-allowlisted detail keys"
+  "G21 — the MINIMAL depth does NOT retain the reconciliation timeline"
+
+-------------------------------------------------------------------------------
+ABLATION-3 — the capture DEPTH is `detailed` (DEVELOPER)
+-------------------------------------------------------------------------------
+Seam: applyAutomaticIncidentCaptureDiagnosticProfile({ isDogfood: true }) or
+{ userOptedIn: true } -> mode = "detailed"
+
+The detailed depth additionally retains the per-key detail map and the
+reconciliation timeline.
+
+Proven by `automatic-incident-activation01.aice01.test.ts`:
+  "G20 — the DEVELOPER depth retains the detail map and the timeline"
+
+-------------------------------------------------------------------------------
+ABLATION-4 — the RECONCILIATION DIAGNOSTIC is OFF
+-------------------------------------------------------------------------------
+Seam: applyReconciliationDiagnosticCaptureProfile(false)
+
+The reconciliation diagnostic sink is separate from the terminal lifecycle
+events. With it OFF, the reconciliation's state semantics are unchanged;
+only the diagnostic evidence is not recorded. The TCRR01 suites
+(transient-containment-reconciliation-repair01.tcrr01,
+....controller.tcrr01, ....red-only.tcrr01) all pass unchanged.
+
+-------------------------------------------------------------------------------
+ABLATION-5 — the PERSISTENCE write fails
+-------------------------------------------------------------------------------
+Seam: a missing directory, an unwritable path, a corrupt artifact.
+
+Proven by `automatic-incident-persistence01.aice01.test.ts`:
+  "A6 — a write into a MISSING directory fails WITHOUT throwing"
+  "A6 — a write into an unwritable path fails WITHOUT throwing"
+  "A6 — a corrupt artifact is SKIPPED and reported honestly"
+
+The persistence layer NEVER throws into the production path: every failure
+is REPORTED in the result object and COUNTED in the loss accounting. A
+failing disk can never affect task execution.
+
+-------------------------------------------------------------------------------
+ABLATION-6 — the STALE-SNAPSHOT path
+-------------------------------------------------------------------------------
+Seam: an older snapshot arriving after a newer one was written.
+
+Proven by `automatic-incident-persistence01.aice01.test.ts`:
+  "A5 — an older snapshot finishing late NEVER overwrites a newer one"
+  "A5 — an adopted stale incident is REJECTED by the revision check"
+
+The on-disk MONOTONIC REVISION GUARD reads the persisted revision BEFORE
+the write and refuses an older snapshot.
+
+-------------------------------------------------------------------------------
+ABLATION-7 — the EXPORT's unsafe-path rejection
+-------------------------------------------------------------------------------
+Proven by `automatic-incident-export01.aice01.test.ts`:
+  "A8 — unsafe archive paths are REJECTED"
+
+`../escape.json`, `/etc/passwd`, `nested/file.json`, `C:\\windows\\system32`,
+the empty string and a NUL-bearing name are ALL rejected. Only a flat,
+relative, normalized name is accepted.

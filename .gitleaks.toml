@@ -121,3 +121,33 @@ regexes = [
 paths = [
   '''\.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01/.*\.ips$''',
 ]
+
+# ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01) privacy
+# sentinels. The incident-export acceptance suite deliberately injects
+# strings that LOOK like credentials and command payloads so it can prove
+# that NONE of them reaches the produced ZIP:
+#
+#   apiKey: "sk-sentinel-APIKEY-9f3a2b"
+#   password: "hunter2-sentinel-PASSWORD-4c7d1e"
+#   gitRemoteCredential: "https://sentinel-user:sentinel-TOKEN@github.com/..."
+#
+# These are synthetic local sentinels generated in the test file itself.
+# They are NOT credentials: they are never transmitted, they are bound to
+# a temporary directory that is deleted after the test, and they exist
+# SOLELY to be asserted absent from the decompressed archive. The
+# `sk-` prefix and the URL userinfo shape are what make the sentinel
+# recognizable to the privacy allowlist, so removing them would defeat
+# the test. Allowlisted narrowly, following the established
+# ACT-specific scoped pattern, so the pre-commit gate does not block
+# legitimate privacy evidence preservation.
+[[allowlists]]
+description = "ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 privacy-export test sentinels (synthetic local markers, not credentials)"
+targetRules = ["generic-api-key"]
+regexes = [
+  '''sk-sentinel-APIKEY-[0-9a-f]+''',
+  '''hunter2-sentinel-PASSWORD-[0-9a-f]+''',
+  '''sentinel-user:sentinel-TOKEN@github\.com''',
+]
+paths = [
+  '''apps/vscode/src/sdk/__tests__/automatic-incident-export01\.aice01\.test\.ts$''',
+]

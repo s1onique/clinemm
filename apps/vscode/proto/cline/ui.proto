@@ -306,4 +306,12 @@ service UiService {
 
   // Tracks intent signals before task creation or first model activity
   rpc trackIntent(IntentEvent) returns (Empty);
+
+  // ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+  // Report a task problem. The webview sends NO parameters and NO
+  // filesystem path: the extension host resolves the ACTIVE task's
+  // retained incident through its own authority, shows the privacy-safe
+  // preview, opens the native Save dialog and writes the diagnostic
+  // ZIP. Nothing is uploaded.
+  rpc reportTaskProblem(EmptyRequest) returns (Empty);
 }

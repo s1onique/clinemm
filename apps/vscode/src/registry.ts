@@ -18,34 +18,34 @@ const prefix = name === CLINEMM_DEFAULT_PACKAGE_NAME || name === CLINE_DEFAULT_P
  * In production, all commands are registered under "cline" for consistency.
  */
 const ClineCommands = {
-	PlusButton: prefix + ".plusButtonClicked",
-	McpButton: prefix + ".mcpButtonClicked",
-	MarketplaceButton: prefix + ".marketplaceButtonClicked",
-	SettingsButton: prefix + ".settingsButtonClicked",
-	HistoryButton: prefix + ".historyButtonClicked",
-	AccountButton: prefix + ".accountButtonClicked",
-	WorktreesButton: prefix + ".worktreesButtonClicked",
-	TerminalOutput: prefix + ".addTerminalOutputToChat",
-	AddToChat: prefix + ".addToChat",
-	FixWithCline: prefix + ".fixWithCline",
-	ExplainCode: prefix + ".explainCode",
-	ImproveCode: prefix + ".improveCode",
-	FocusChatInput: prefix + ".focusChatInput",
-	Walkthrough: prefix + ".openWalkthrough",
-	GenerateCommit: prefix + ".generateGitCommitMessage",
-	AbortCommit: prefix + ".abortGitCommitMessage",
+	PlusButton: `${prefix}.plusButtonClicked`,
+	McpButton: `${prefix}.mcpButtonClicked`,
+	MarketplaceButton: `${prefix}.marketplaceButtonClicked`,
+	SettingsButton: `${prefix}.settingsButtonClicked`,
+	HistoryButton: `${prefix}.historyButtonClicked`,
+	AccountButton: `${prefix}.accountButtonClicked`,
+	WorktreesButton: `${prefix}.worktreesButtonClicked`,
+	TerminalOutput: `${prefix}.addTerminalOutputToChat`,
+	AddToChat: `${prefix}.addToChat`,
+	FixWithCline: `${prefix}.fixWithCline`,
+	ExplainCode: `${prefix}.explainCode`,
+	ImproveCode: `${prefix}.improveCode`,
+	FocusChatInput: `${prefix}.focusChatInput`,
+	Walkthrough: `${prefix}.openWalkthrough`,
+	GenerateCommit: `${prefix}.generateGitCommitMessage`,
+	AbortCommit: `${prefix}.abortGitCommitMessage`,
 	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
 	// Debug commands for the post-terminal authority diagnostic. Not user-facing;
 	// only the dump command should ever be invoked (the toggle is implicit
 	// through `vscode.commands.executeCommand` from the debug harness).
-	TogglePostTerminalAuthorityDiagnostic: prefix + ".debug.togglePostTerminalAuthorityDiagnostic",
-	DumpPostTerminalAuthorityDiagnostic: prefix + ".debug.dumpPostTerminalAuthorityDiagnostic",
+	TogglePostTerminalAuthorityDiagnostic: `${prefix}.debug.togglePostTerminalAuthorityDiagnostic`,
+	DumpPostTerminalAuthorityDiagnostic: `${prefix}.debug.dumpPostTerminalAuthorityDiagnostic`,
 	// ACT-CLINEMM-TURNSTATE-WRITER-PROVENANCE-COMMAND-SURFACE01:
 	// Debug commands for the legacy TurnState writer-provenance diagnostic.
 	// Default off. The toggle flips a workspace-state flag and the dump
 	// serializes the bounded ring to <globalStorageUri>/turn-state-writer-provenance.jsonl.
-	ToggleTurnStateWriterProvenanceDiagnostic: prefix + ".debug.toggleTurnStateWriterProvenanceDiagnostic",
-	DumpTurnStateWriterProvenanceDiagnostic: prefix + ".debug.dumpTurnStateWriterProvenanceDiagnostic",
+	ToggleTurnStateWriterProvenanceDiagnostic: `${prefix}.debug.toggleTurnStateWriterProvenanceDiagnostic`,
+	DumpTurnStateWriterProvenanceDiagnostic: `${prefix}.debug.dumpTurnStateWriterProvenanceDiagnostic`,
 	// ACT-CLINEMM-BCB-CAPTURE01: debug commands for the BCB
 	// observation-unavailable decision-boundary capture. Default
 	// off. The toggle flips a workspace-state flag (`bcbObsCapEnabled`)
@@ -59,8 +59,8 @@ const ClineCommands = {
 	// this registry entry + the package.json declarations + the
 	// extension.ts handlers + the diagnostic module + the runtime
 	// module + the production recorder call MUST be removed TOGETHER.
-	ToggleBcbObservationUnavailableCapture: prefix + ".debug.toggleBcbObservationUnavailableCapture",
-	DumpBcbObservationUnavailableCapture: prefix + ".debug.dumpBcbObservationUnavailableCapture",
+	ToggleBcbObservationUnavailableCapture: `${prefix}.debug.toggleBcbObservationUnavailableCapture`,
+	DumpBcbObservationUnavailableCapture: `${prefix}.debug.dumpBcbObservationUnavailableCapture`,
 	// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01: the ONE-command
 	// incident-bundle export. Unconditional (an operator must always
 	// be able to inspect whatever was captured), dump != clear. The
@@ -72,7 +72,28 @@ const ClineCommands = {
 	// evidence supersedes it. On removal, this registry entry + the
 	// package.json declaration + the extension.ts handler + the bundle
 	// runtime MUST be removed TOGETHER.
-	DumpCompletionIncidentBundle: prefix + ".debug.dumpCompletionIncidentBundle",
+	// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+	// The ONE-CLICK USER-FACING incident export. The command resolves
+	// the ACTIVE task's retained incident through the HOST's authority,
+	// shows a concise privacy-safe preview, opens the NATIVE Save
+	// dialog and writes a single diagnostic ZIP. NOTHING is uploaded.
+	//
+	// The two existing developer dump commands below are NOT replaced:
+	// they remain operational and keep their output contracts.
+	ReportTaskProblem: `${prefix}.reportTaskProblem`,
+	// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+	// the user-facing CONSENT and RETENTION controls.
+	//
+	// `ToggleDetailedLocalDiagnostics` flips the user's EXPLICIT opt-in
+	// to the DETAILED capture depth. The MINIMAL capture is always
+	// armed; this only raises the depth.
+	//
+	// `DeleteRetainedIncidents` removes every retained incident from
+	// memory AND from disk. It is distinct from the export, which
+	// never deletes.
+	ToggleDetailedLocalDiagnostics: `${prefix}.toggleDetailedLocalDiagnostics`,
+	DeleteRetainedIncidents: `${prefix}.deleteRetainedIncidents`,
+	DumpCompletionIncidentBundle: `${prefix}.debug.dumpCompletionIncidentBundle`,
 	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
 	// Debug commands for the bounded, model-agnostic model behavior flight
 	// recorder. Default OFF in every build. The toggle flips a
@@ -80,8 +101,8 @@ const ClineCommands = {
 	// already-running sessions are affected for subsequent events); the
 	// dump serializes the centralized ring to
 	// <globalStorageUri>/model-behavior-trace.jsonl and never clears it.
-	ToggleModelBehaviorTrace: prefix + ".debug.toggleModelBehaviorTrace",
-	DumpModelBehaviorTrace: prefix + ".debug.dumpModelBehaviorTrace",
+	ToggleModelBehaviorTrace: `${prefix}.debug.toggleModelBehaviorTrace`,
+	DumpModelBehaviorTrace: `${prefix}.debug.dumpModelBehaviorTrace`,
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// (twenty-ninth-pass) — debug dump command for the temporary
 	// Q1..Q4 W-carrier trace observer. The dump is unconditional
@@ -89,13 +110,13 @@ const ClineCommands = {
 	// after the diagnostic was disabled); the toggle is implicit
 	// via the central dogfood diagnostic profile + `CLINEMM_W_TRACE`
 	// env override (no workspace toggle needed for this ACT).
-	DumpWCarrierTrace: prefix + ".debug.dumpWCarrierTrace",
+	DumpWCarrierTrace: `${prefix}.debug.dumpWCarrierTrace`,
 	// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
 	// Debug commands for the temporary host-ownership diagnostic. Default
 	// off. The toggle flips a workspace-state flag; the dump serializes
 	// the bounded ring to <globalStorageUri>/host-ownership-diagnostic.jsonl.
-	ToggleHostOwnershipDiagnostic: prefix + ".debug.toggleHostOwnershipDiagnostic",
-	DumpHostOwnershipDiagnostic: prefix + ".debug.dumpHostOwnershipDiagnostic",
+	ToggleHostOwnershipDiagnostic: `${prefix}.debug.toggleHostOwnershipDiagnostic`,
+	DumpHostOwnershipDiagnostic: `${prefix}.debug.dumpHostOwnershipDiagnostic`,
 	// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01:
 	// Debug commands for the bounded TaskHeader selector-input diagnostic.
 	// Default off (env var gate). The dump serializes the bounded ring
@@ -103,8 +124,8 @@ const ClineCommands = {
 	// REMOVAL_TRIGGER: first successful LIVE binding of
 	// PUBLICATION_SHADOW_BINDING + LOCAL_SHADOW_TURNSEQ for a
 	// recurrence, OR CAPTURE_INSUFFICIENT.
-	DumpTaskHeaderSelectorInputDiagnostic: prefix + ".debug.dumpTaskHeaderSelectorInputDiagnostic",
-	ClearTaskHeaderSelectorInputDiagnostic: prefix + ".debug.clearTaskHeaderSelectorInputDiagnostic",
+	DumpTaskHeaderSelectorInputDiagnostic: `${prefix}.debug.dumpTaskHeaderSelectorInputDiagnostic`,
+	ClearTaskHeaderSelectorInputDiagnostic: `${prefix}.debug.clearTaskHeaderSelectorInputDiagnostic`,
 	// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 	// Debug dump command for the bounded Background Owner Correlation
 	// (BOCOR) diagnostic at the Q5 done-without-completion boundary.
@@ -117,7 +138,7 @@ const ClineCommands = {
 	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER: first
 	// successful LIVE binding of the LIVE cause (OC1/OC2/OC3) AND
 	// qualification of the bounded repair, OR CAPTURE_INSUFFICIENT.
-	DumpBackgroundOwnerCorrelation: prefix + ".debug.dumpBackgroundOwnerCorrelation",
+	DumpBackgroundOwnerCorrelation: `${prefix}.debug.dumpBackgroundOwnerCorrelation`,
 	// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
 	// Debug dump command for the bounded Background Job Liveness
 	// Authority (BJLA) diagnostic at the CommandJob lifecycle
@@ -130,7 +151,7 @@ const ClineCommands = {
 	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER: first
 	// successful LIVE classification AND qualification of the
 	// bounded repair, OR CAPTURE_INSUFFICIENT.
-	DumpBackgroundJobLivenessAuthority: prefix + ".debug.dumpBackgroundJobLivenessAuthority",
+	DumpBackgroundJobLivenessAuthority: `${prefix}.debug.dumpBackgroundJobLivenessAuthority`,
 	// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
 	// Debug dump command for the bounded Continuation Cardinality
 	// Authority (CCARD) diagnostic at the autonomous-turn boundary
@@ -146,7 +167,7 @@ const ClineCommands = {
 	// cardinality seam mechanically identified AND ablation returns
 	// cardinality to 1, OR CAPTURE_INSUFFICIENT, OR
 	// HALT_RED_NOT_REPRODUCED, OR successor evidence supersedes it.
-	DumpContinuationCardinalityAuthority: prefix + ".debug.dumpContinuationCardinalityAuthority",
+	DumpContinuationCardinalityAuthority: `${prefix}.debug.dumpContinuationCardinalityAuthority`,
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-AUTHORITY-COUNTER-DUMP01:
 	// Debug dump command for the SYNCHRONOUS REAL Elm authority
 	// runtime counter snapshot. Unconditional (operator can always
@@ -159,7 +180,7 @@ const ClineCommands = {
 	// PASS_LIVE_ELM_AUTHORITY with operator-rendered 1:1 live
 	// correspondence AND the cause is RED on HOLD/FAILURE for
 	// operator review, OR successor evidence supersedes.
-	DumpCompletionAuthorityElmAuthority: prefix + ".debug.dumpCompletionAuthorityElmAuthority",
+	DumpCompletionAuthorityElmAuthority: `${prefix}.debug.dumpCompletionAuthorityElmAuthority`,
 	// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION01-LIVE-CALLBACK-OUTCOME:
 	// Debug dump command for the LIVE callback-outcome counter
 	// snapshot. Mirrors the CCARD / SHADOW / ELM-AUTHORITY dump
@@ -174,7 +195,7 @@ const ClineCommands = {
 	// REMOVAL_TRIGGER: first of (a) root cause isolated, (b)
 	// capture insufficient (successor counter design required), (c)
 	// successor evidence supersedes.
-	DumpCompletionContinuationDelivery: prefix + ".debug.dumpCompletionContinuationDelivery",
+	DumpCompletionContinuationDelivery: `${prefix}.debug.dumpCompletionContinuationDelivery`,
 	// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR:
 	// Debug dump command for the LIVE upstream-discriminator
 	// counter snapshot (U0..U11 first-divergence counters).
@@ -190,7 +211,7 @@ const ClineCommands = {
 	// REMOVAL_TRIGGER: first of (a) root cause isolated, (b)
 	// capture insufficient (successor counter design required), (c)
 	// successor evidence supersedes.
-	DumpCompletionContinuationUpstream: prefix + ".debug.dumpCompletionContinuationUpstream",
+	DumpCompletionContinuationUpstream: `${prefix}.debug.dumpCompletionContinuationUpstream`,
 	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
 	// Dump command for the EHLOOP01 (Extension Host Hotloop) counter
 	// diagnostic. Mirrors the BJLA / BOCOR / CCARD dump pattern:
@@ -204,7 +225,7 @@ const ClineCommands = {
 	// hot-loop repair GREEN on LIVE qualification, OR
 	// CAPTURE_INSUFFICIENT, OR HALT_CAUSE_NOT_ESTABLISHED, OR
 	// successor evidence supersedes it.
-	DumpExtensionHostHotloopDiagnostic: prefix + ".debug.dumpExtensionHostHotloopDiagnostic",
+	DumpExtensionHostHotloopDiagnostic: `${prefix}.debug.dumpExtensionHostHotloopDiagnostic`,
 	// ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01: dump command for
 	// the cancel-liveness counter diagnostic (H-A vs H-B vs H-C vs
 	// Healthy discriminator). Mirrors the EHLOOP / CCARD / BJLA /
@@ -218,7 +239,7 @@ const ClineCommands = {
 	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER: discriminated
 	// boundary confirmed + fix GREEN on LIVE qualification, OR
 	// CAPTURE_INSUFFICIENT.
-	DumpCancelLivenessDiagnostic: prefix + ".debug.dumpCancelLivenessDiagnostic",
+	DumpCancelLivenessDiagnostic: `${prefix}.debug.dumpCancelLivenessDiagnostic`,
 	// ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01 — CALLER-REASON DISCRIMINATOR.
 	// Dump command for the lifecycle-clear recorder. Mirrors the
 	// CCARD / CCDO / CCDSO / CCNTUP / EHLOOP / ELM-SHADOW / ELM-AUTHORITY
@@ -233,7 +254,7 @@ const ClineCommands = {
 	// (c) successor evidence supersedes. On removal, this registry entry +
 	// the package.json declaration + the extension.ts handler + the host
 	// dump runtime + the production recorder MUST be removed TOGETHER.
-	DumpLifecycleClear: prefix + ".debug.dumpLifecycleClear",
+	DumpLifecycleClear: `${prefix}.debug.dumpLifecycleClear`,
 	// ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-DUMP-COMMAND-SURFACE01:
 	// Debug dump command for the MYC prime live diagnostic. Mirrors
 	// the CCARD / CCDO / CCDSO / CCNTUP / EHLOOP / ELM-SHADOW /
@@ -253,10 +274,10 @@ const ClineCommands = {
 	// supersedes it. On removal, this registry entry + the package.json
 	// declaration + the extension.ts handler + the host dump runtime
 	// MUST be removed TOGETHER.
-	DumpMycPrimeLiveDiagnostic: prefix + ".debug.dumpMycPrimeLiveDiagnostic",
-	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
-	JupyterExplainCell: prefix + ".jupyterExplainCell",
-	JupyterImproveCell: prefix + ".jupyterImproveCell",
+	DumpMycPrimeLiveDiagnostic: `${prefix}.debug.dumpMycPrimeLiveDiagnostic`,
+	JupyterGenerateCell: `${prefix}.jupyterGenerateCell`,
+	JupyterExplainCell: `${prefix}.jupyterExplainCell`,
+	JupyterImproveCell: `${prefix}.jupyterImproveCell`,
 }
 
 /**
@@ -264,7 +285,7 @@ const ClineCommands = {
  * These should match the name + view IDs defined in package.json.
  */
 const ClineViewIds = {
-	Sidebar: name + ".SidebarProvider",
+	Sidebar: `${name}.SidebarProvider`,
 }
 
 /**
@@ -272,7 +293,7 @@ const ClineViewIds = {
  * registered for the current host.
  */
 export const ExtensionRegistryInfo = {
-	id: publisher + "." + name,
+	id: `${publisher}.${name}`,
 	name,
 	version,
 	publisher,

@@ -1,3 +1,113 @@
+# ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01 — PASS_EVIDENCE_PROVENANCE_CORRECTION — 2026-11-06
+
+**Status:** P0 EVIDENCE-PROVENANCE CORRECTION, on the existing `main` branch. The AICE01 review
+(`HALT_EVIDENCE_PROVENANCE_INTEGRITY`) accepted the delivered functionality but raised four P0
+**evidence-integrity** defects in the diagnostic report: the feature compiled and the tests passed,
+but the report could assert things that never happened. This correction closes ALL FOUR plus the one
+non-blocking P1. **No production state-machine semantic was changed** — the completion semantics, the
+containment semantics, the C10 barrier semantics, the TCRR01 reconciliation semantics and the CFPR01
+protected retention semantics are all unchanged. **No new dependency. No new process probe. No new
+telemetry subsystem. No env-var override matrix.** No VSIX was produced; the LIVE VSCodium
+qualification remains the operator step after the commit.
+
+```text
+ACT_ID: ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01
+TYPE: P0 evidence-provenance correction (+ one non-blocking P1)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (correction of ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01)
+VERDICT: PASS_EVIDENCE_PROVENANCE_CORRECTION
+PREDECESSOR_VERDICT: HALT_EVIDENCE_PROVENANCE_INTEGRITY (all four P0 + the P1 now closed)
+ENTRY_HEAD: c69d22a287adb40f13a901e6e0eee21daaefabaf
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+RED: all four P0 defects reproduced (evidence/red-reproduction-correction01.txt)
+GREEN: 26/26 pass in the correction suite; 155/155 across 10 focused+adjacent suites
+NO-REGRESSION: full vitest run twice (pre-correction vs corrected) -> BYTE-IDENTICAL failing-file
+        sets; +26 passing tests, 0 new failures
+TYPECHECK: tsc --noEmit EXIT 0 | tsc -p tsconfig.vscode-compat.json EXIT 0 | webview tsc EXIT 0
+LINT: biome 0 errors on the 8 touched files
+BUNDLE: bun esbuild.mjs EXIT 0 -> dist/extension.js 57,567,039 bytes
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01/CORRECTION01.md
+        + .../evidence/verification-correction01.txt
+        + .../evidence/red-reproduction-correction01.txt
+```
+
+**P0-1 — the reconciliation publication was recorded BEFORE publication happened, and was attributed
+to the ACTIVE task.** `publishContainmentReconciliation` called
+`captureControllerReconciliationPublication(event)` before it even issued the asynchronous
+`updateBackgroundCommandState`, so the diagnostic asserted `controller_reconciliation_published`
+regardless of whether the update committed. Worse, the capture selected its incident with
+`getAutomaticIncidentForTask(this.task?.taskId)` — the ACTIVE task — so a reconciliation for task A
+arriving while task B was in the foreground was attributed to task B's incident, silently corrupting
+whichever incident happened to be in the foreground. **REPAIRED:** the capture now happens AT the
+authoritative publication boundary (after the update resolves, or after it rejects — in which case the
+FAILURE is recorded, never a successful publication); the incident is resolved through the NEW
+`getAutomaticIncidentForOwnerJob({ ownerSessionId, jobId })`, which binds on the ORIGINAL event
+identity (the job must be in the incident's blocking set AND the incident's session must match the
+event's owner session); and the `controllerPublication` coverage field advances ONLY on a successful
+publication. Production semantics are unchanged: the reconciled job is still marked before the
+publication (G11) and the lifecycle handler is still fire-and-forget.
+
+**P0-2 — the per-job coverage asserted observations that never occurred.** `advanceCoverage` advanced
+`terminalPublication` to `OBSERVED` on `completion_held`, `held_phase_published`,
+`stalled_no_progress` and `completion_committed` — none of which observe the job's own terminal-state
+publication. Separately, the reconciliation recorder emits a `stage` field but the join read
+`event`/`outcome`, so both lookups fell through to their fallbacks and `reconciliationTerminalOutcome`
+became the literal `"OBSERVED"` for EVERY record — including a registration or an ordinary probe
+attempt. The per-job observation also used `additions.find(...)` (the FIRST record for the job), so a
+later exhaustion/resolution record was discarded, and the timeline was appended once PER OBSERVED JOB,
+so a two-job incident received every record twice. **REPAIRED:** only
+`containment_failure_published` advances `terminalPublication`; the join reads the `stage` field and
+derives the semantics from it (registration -> registration only; attempt -> attempts only; resolved /
+exhausted / cancelled -> terminal outcome); the per-job observation aggregates EVERY record for the job;
+and the timeline is appended exactly ONCE per join. The coverage is additionally advanced from the
+ORIGINAL boundary detail rather than the depth-restricted copy, so the public per-job coverage verdict
+no longer depends on the capture depth.
+
+**P0-3 — the ZIP did not actually join the protected containment provenance.** The export passed
+`containmentProvenance: { status: persisted ? "available" : "unavailable" }`, where `persisted` meant
+"an automatic incident snapshot exists on disk" — a statement about a DIFFERENT artifact with a
+DIFFERENT lifetime than the CFPR01 protected store. The report could therefore claim availability
+while carrying NO protected records. **REPAIRED:** the new
+`src/sdk/automatic-incident-containment-provenance.ts` reads the REAL protected store through the
+production reader (`getBackgroundJobLivenessAuthorityProvenanceSnapshot`) and joins it against the
+incident's EXACT blocking job ids: both records retained -> `JOIN_COMPLETE`; one -> `JOIN_INCOMPLETE`;
+neither -> `UNAVAILABLE_FROM_TRACE`; and when NO blocking job has any retained record the whole block is
+`UNAVAILABLE_FROM_TRACE` with an explicit reason. The executable test DECOMPRESSES the produced ZIP and
+asserts the original blocking-job evidence is present.
+
+**P0-4 — reconciliation evidence could be lost despite successful automatic capture.** The
+reconciliation sink forwards observations asynchronously; the join updated the in-memory incident but
+never persisted it, so an exhaustion that was the last relevant event before an extension-host crash
+was missing from the persisted artifact (which is the export source). The persistence layer reports
+failures through `{ succeeded: false }` and NEVER rejects, but the production callers only observed
+rejected promises, so a failed write was silently ignored. The export also read the persisted artifact
+unconditionally, so an OLDER persisted revision could replace a NEWER in-memory snapshot. **REPAIRED:**
+the incident manager exposes a `setAutomaticIncidentDurabilityHook` seam invoked after EVERY
+state-changing mutation (the host installs it at activation); every production caller now inspects the
+`{ succeeded: false }` result and logs the failure; and `readPersistedAutomaticIncident` compares the
+persisted revision with the in-memory revision and falls back to the in-memory snapshot when the
+persisted artifact is older.
+
+**P1 (non-blocking) — the explicit public-user opt-in did not arm the reconciliation sink.**
+`applyReconciliationDiagnosticCaptureProfile` considered only `isDogfood`, so a PUBLIC user who opted
+in to detailed local diagnostics got the `detailed` DEPTH but an EMPTY reconciliation timeline — the
+opt-in contradicted the advertised behaviour. **REPAIRED:** the resolver now honours the explicit
+public-user opt-in as well. The opt-in is the EXISTING persisted user setting
+(`clineDetailedLocalDiagnosticsEnabled`) — not an env override, not a new matrix.
+
+**NO-REGRESSION PROOF.** Because the AICE01 sources were untracked at ENTRY_HEAD, the full node-side
+vitest suite was run TWICE against the same working tree: once with the correction applied and once
+with the correction reverted hunk-by-hunk. The failing-file sets are BYTE-IDENTICAL (61 failed files,
+165 failed tests in BOTH runs); the correction contributed +26 passing tests and ZERO new failures. The
+61 pre-existing failures are unrelated: they are (a) suites importing `bun:test`, which CANNOT run
+under vitest by the repository's `bun:test` XOR `mocha` rule, and (b) suites that scrape unrelated
+production source text (e.g. `derive-origin-precedence.test.ts` -> "deriveOrigin not found in source").
+
+**LIVE VSCODIUM QUALIFICATION IS STILL PENDING.** No installed-VSCodium LIVE qualification was
+performed as part of this correction. The next operator step is exactly what the reviewer prescribed:
+commit this correction, then proceed directly to VSIX LIVE qualification.
+
 # ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01 — PASS_EVIDENCE_CORRECTION — 2026-11-05
 
 **Status:** EVIDENCE-CONTRACT CORRECTION ONLY, on the existing `main` branch. The 2026-11-05 review

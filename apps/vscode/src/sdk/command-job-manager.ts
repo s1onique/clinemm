@@ -43,6 +43,7 @@ import type { RuntimeErrorIncident } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { captureBackgroundJobLivenessAuthorityRecord, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
+import { captureReconciliationDiagnostic } from "./reconciliation-diagnostic-capture"
 import {
 	buildExperimentalReconCapability,
 	defaultSandboxBackendResolver,
@@ -1666,16 +1667,75 @@ export class CommandJobManager {
 		reconciledState: Exclude<CommandJobState, "running" | "containment_failed" | "spawn_failed">,
 		containmentFailed: "substrate_alive" | "substrate_eperm" | "substrate_unknown",
 	): void {
-		if (!this.reconciliationEnabled) return
-		if (!Number.isInteger(pgid) || pgid <= 0) return
-		if (typeof job.id !== "string" || job.id.length === 0) return
+		// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+		// DIAGNOSTIC-ONLY observation of the registration decision.
+		//
+		// The skip reasons were previously UNOBSERVABLE: a support
+		// engineer could not tell "the reconciliation was disabled" from
+		// "the PGID was never identified" from "the pending map was
+		// full". Every branch below now records WHY it did not
+		// register. The capture is a complete no-op when the
+		// diagnostic sink is disarmed, and it never changes the
+		// decision itself.
+		if (!this.reconciliationEnabled) {
+			captureReconciliationDiagnostic({
+				stage: "reconciliation_skipped",
+				jobId: job.id ?? "",
+				ownerSessionId: job.ownerSessionId,
+				originalPgid: Number.isInteger(pgid) && pgid > 0 ? pgid : undefined,
+				originalFailure: containmentFailed,
+				skipReason: "disabled",
+				policy: this.reconciliationPolicySnapshot(),
+			})
+			return
+		}
+		if (!Number.isInteger(pgid) || pgid <= 0) {
+			captureReconciliationDiagnostic({
+				stage: "reconciliation_skipped",
+				jobId: job.id ?? "",
+				ownerSessionId: job.ownerSessionId,
+				originalFailure: containmentFailed,
+				skipReason: "pgid_unset",
+				policy: this.reconciliationPolicySnapshot(),
+			})
+			return
+		}
+		if (typeof job.id !== "string" || job.id.length === 0) {
+			captureReconciliationDiagnostic({
+				stage: "reconciliation_skipped",
+				jobId: "",
+				ownerSessionId: job.ownerSessionId,
+				originalPgid: pgid,
+				originalFailure: containmentFailed,
+				skipReason: "job_id_missing",
+				policy: this.reconciliationPolicySnapshot(),
+			})
+			return
+		}
 		// Bound the pending map. The OLDEST entry is dropped WITHOUT
 		// reconciliation: its containment obligation simply stays
 		// unresolved (fail-closed).
 		while (this.pendingReconciliations.size >= this.maxPendingReconciliations) {
 			const oldest = this.pendingReconciliations.keys().next()
 			if (oldest.done) break
+			// AICE01: the dropped entry's reconciliation is CAPACITY
+			// EXCEEDED, not "never happened". The dropped job's
+			// obligation still stays unresolved (fail-closed) — only
+			// the diagnostic record is added.
+			const dropped = this.pendingReconciliations.get(oldest.value)
 			this.pendingReconciliations.delete(oldest.value)
+			if (dropped) {
+				captureReconciliationDiagnostic({
+					stage: "reconciliation_cancelled",
+					jobId: dropped.jobId,
+					ownerSessionId: dropped.ownerSessionId,
+					originalPgid: dropped.pgid,
+					originalFailure: dropped.containmentFailed,
+					attempt: dropped.attempts,
+					skipReason: "capacity_exceeded",
+					policy: this.reconciliationPolicySnapshot(),
+				})
+			}
 		}
 		this.pendingReconciliations.set(job.id, {
 			jobId: job.id,
@@ -1686,7 +1746,38 @@ export class CommandJobManager {
 			registeredAtMs: Date.now(),
 			attempts: 0,
 		})
+		// AICE01: the registration is now OBSERVABLE. The record
+		// carries the ORIGINAL PGID, the ORIGINAL failure
+		// classification, the launch-time owner and the bounded
+		// policy that was in force.
+		captureReconciliationDiagnostic({
+			stage: "reconciliation_registered",
+			jobId: job.id,
+			ownerSessionId: job.ownerSessionId,
+			originalPgid: pgid,
+			originalFailure: containmentFailed,
+			restoredTerminalClass: reconciledState,
+			policy: this.reconciliationPolicySnapshot(),
+		})
 		this.scheduleContainmentReconciliationTick(job.id)
+	}
+
+	/**
+	 * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+	 * The bounded reconciliation policy in force. Diagnostic only.
+	 */
+	private reconciliationPolicySnapshot(): {
+		readonly enabled: boolean
+		readonly maxAttempts: number
+		readonly horizonMs: number
+		readonly intervalMs: number
+	} {
+		return {
+			enabled: this.reconciliationEnabled,
+			maxAttempts: this.reconciliationMaxAttempts,
+			horizonMs: this.reconciliationHorizonMs,
+			intervalMs: this.reconciliationIntervalMs,
+		}
 	}
 
 	/**
@@ -1730,6 +1821,29 @@ export class CommandJobManager {
 		if (pending.attempts >= this.reconciliationMaxAttempts || elapsedMs > this.reconciliationHorizonMs) {
 			// Budget / horizon exhausted: retain the containment failure.
 			this.pendingReconciliations.delete(jobId)
+			// AICE01: the exhaustion was previously SILENT. A support
+			// engineer could not distinguish "the budget ran out" from
+			// "the reconciliation never ran". The record carries the
+			// exact reason, the attempts consumed and the ORIGINAL PGID.
+			//
+			// The exhaustion is NOT evidence that the process group is
+			// still alive: it proves only that the observation window
+			// closed.
+			captureReconciliationDiagnostic({
+				stage: "reconciliation_exhausted",
+				jobId: pending.jobId,
+				ownerSessionId: pending.ownerSessionId,
+				originalPgid: pending.pgid,
+				originalFailure: pending.containmentFailed,
+				restoredTerminalClass: pending.reconciledState,
+				attempt: pending.attempts,
+				elapsedMs,
+				exhaustionReason:
+					pending.attempts >= this.reconciliationMaxAttempts
+						? "attempt_budget_exhausted"
+						: "observation_horizon_exceeded",
+				policy: this.reconciliationPolicySnapshot(),
+			})
 			return
 		}
 		pending.attempts += 1
@@ -1747,6 +1861,22 @@ export class CommandJobManager {
 			// Probe unavailable: remain blocked, consume one attempt.
 			postcondition = "unknown"
 		}
+		// AICE01: the attempt is now OBSERVABLE. The record carries
+		// ONLY the values the SCHEDULED probe already produced — this
+		// capture issues NO additional process signal of any kind.
+		captureReconciliationDiagnostic({
+			stage: "reconciliation_attempt",
+			jobId: pending.jobId,
+			ownerSessionId: pending.ownerSessionId,
+			originalPgid: pending.pgid,
+			originalFailure: pending.containmentFailed,
+			restoredTerminalClass: pending.reconciledState,
+			attempt: pending.attempts,
+			elapsedMs,
+			postcondition,
+			osErrorCode,
+			policy: this.reconciliationPolicySnapshot(),
+		})
 		if (postcondition !== "gone") {
 			this.scheduleContainmentReconciliationTick(jobId)
 			return
@@ -1788,6 +1918,28 @@ export class CommandJobManager {
 		job.state = pending.reconciledState
 		// The historical failure latch is RETAINED so the original
 		// classification stays readable out-of-band.
+		//
+		// AICE01: the RESOLVED outcome is now OBSERVABLE. The
+		// `command_job_containment_reconciled` lifecycle event already
+		// announces the resolution; this diagnostic record carries the
+		// SAME facts in the incident-scoped timeline so a support
+		// report can correlate them without replaying the event bus.
+		//
+		// It is a SEPARATE, guarded sink — the terminal lifecycle
+		// events and their consumer counts are untouched.
+		captureReconciliationDiagnostic({
+			stage: "reconciliation_resolved",
+			jobId: pending.jobId,
+			ownerSessionId: pending.ownerSessionId,
+			originalPgid: pending.pgid,
+			originalFailure: pending.containmentFailed,
+			restoredTerminalClass: pending.reconciledState,
+			attempt: pending.attempts,
+			elapsedMs: Date.now() - pending.registeredAtMs,
+			postcondition: "gone",
+			osErrorCode,
+			policy: this.reconciliationPolicySnapshot(),
+		})
 		this.emitCommandJobLifecycle({
 			event: "command_job_containment_reconciled",
 			jobId: pending.jobId,
@@ -3992,6 +4144,24 @@ export class CommandJobManager {
 			clearTimeout(timer)
 		}
 		this.reconciliationTimers.clear()
+		// AICE01: the DISPOSAL of a pending reconciliation was
+		// previously silent. A support engineer could not tell "the
+		// manager was disposed" from "the reconciliation exhausted".
+		// The record is captured BEFORE the pending map is cleared so
+		// the ORIGINAL PGID and the attempts consumed are preserved.
+		for (const pending of this.pendingReconciliations.values()) {
+			captureReconciliationDiagnostic({
+				stage: "reconciliation_cancelled",
+				jobId: pending.jobId,
+				ownerSessionId: pending.ownerSessionId,
+				originalPgid: pending.pgid,
+				originalFailure: pending.containmentFailed,
+				restoredTerminalClass: pending.reconciledState,
+				attempt: pending.attempts,
+				elapsedMs: Date.now() - pending.registeredAtMs,
+				policy: this.reconciliationPolicySnapshot(),
+			})
+		}
 		this.pendingReconciliations.clear()
 		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
 		// BJLA diagnostic — capture `manager_dispose_end` AFTER both

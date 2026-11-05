@@ -142,6 +142,14 @@ import {
 	isTurnStateWriterProvenanceDiagnosticEnabled,
 } from "@shared/turn-state-writer-provenance"
 import { Logger } from "@/shared/services/Logger"
+// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01): the
+// automatic incident capture seam and the reconciliation diagnostic
+// seam.
+import {
+	isAutomaticIncidentCaptureEnabled,
+	setAutomaticIncidentCaptureEnabled,
+	setAutomaticIncidentCaptureMode,
+} from "./automatic-incident-capture"
 import {
 	isBackgroundJobLivenessAuthorityCaptureEnabled as _isBackgroundJobLivenessAuthorityCaptureEnabled,
 	setBackgroundJobLivenessAuthorityCaptureEnabled,
@@ -172,6 +180,10 @@ import {
 } from "./extension-host-hotloop-diagnostic"
 import { applyExtensionHostQueueLogPolicy } from "./extension-host-queue-log-policy"
 import { applyExtensionHostTerminationAuthorityPolicy } from "./extension-host-termination-authority"
+import {
+	isReconciliationDiagnosticCaptureEnabled,
+	setReconciliationDiagnosticCaptureEnabled,
+} from "./reconciliation-diagnostic-capture"
 import {
 	isTaskHeaderSelectorInputCaptureEnabled as _isTaskHeaderSelectorInputCaptureEnabled,
 	setTaskHeaderSelectorInputCaptureEnabled,
@@ -2110,4 +2122,118 @@ export function applyCompletionIncidentFlightRecorderDiagnosticProfile(isDogfood
 		return { enabled: false, flipped: true, source: "profile-off" }
 	}
 	return { enabled: should, flipped: false, source: should ? "profile-on" : "profile-off" }
+}
+
+/**
+ * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+ * the central dogfood profile resolver for the AUTOMATIC INCIDENT
+ * CAPTURE seam.
+ *
+ * CONTRACT - frozen in this ACT (mirrors CIFR / BJLA / CCARD; no env
+ * override layer):
+ *
+ *   - There is NO new env var. NO override matrix. NO parser.
+ *   - The capture is armed in EVERY build. The ACT requires the
+ *     PUBLIC build to "automatically preserve a minimal local incident
+ *     summary", so arming is NOT dogfood-gated.
+ *   - The DEPTH is what differs:
+ *       - PUBLIC (`isDogfood === false`, no opt-in) -> `minimal`:
+ *         the causal identity, the stage/outcome verdicts, the
+ *         blocking-set identity, the counters and the per-job
+ *         coverage verdicts.
+ *       - DEVELOPER (`isDogfood === true` or the user opted in) ->
+ *         `detailed`: additionally the per-key detail map and the
+ *         reconciliation timeline.
+ *   - The module seams are `./automatic-incident-capture.ts`'s
+ *     `setAutomaticIncidentCaptureEnabled` and
+ *     `setAutomaticIncidentCaptureMode`. The resolver arms them
+ *     idempotently.
+ *   - The activation helper is called from `extension.ts:activate`
+ *     (sibling to the existing CIFR / BJLA activations); there is
+ *     exactly ONE production activation path.
+ */
+export function applyAutomaticIncidentCaptureDiagnosticProfile(input: {
+	readonly isDogfood: boolean
+	readonly userOptedIn: boolean
+}): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+	readonly mode: "minimal" | "detailed"
+	readonly source: "profile-on" | "profile-off" | "user-opt-in"
+} {
+	const was = _isAutomaticIncidentCaptureEnabled()
+	// The capture is ALWAYS armed: the public build must preserve a
+	// minimal local incident summary automatically.
+	const should = true
+	const mode: "minimal" | "detailed" = input.isDogfood || input.userOptedIn ? "detailed" : "minimal"
+	setAutomaticIncidentCaptureMode(mode)
+	if (should && !was) {
+		setAutomaticIncidentCaptureEnabled(true)
+		return { enabled: true, flipped: true, mode, source: input.isDogfood ? "profile-on" : "user-opt-in" }
+	}
+	if (!should && was) {
+		setAutomaticIncidentCaptureEnabled(false)
+		return { enabled: false, flipped: true, mode, source: "profile-off" }
+	}
+	return {
+		enabled: should,
+		flipped: false,
+		mode,
+		source: should ? (input.isDogfood ? "profile-on" : "user-opt-in") : "profile-off",
+	}
+}
+
+/**
+ * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+ * the central dogfood profile resolver for the RECONCILIATION
+ * DIAGNOSTIC CAPTURE seam.
+ *
+ * The reconciliation timeline is DETAILED forensic evidence: it
+ * carries the original PGID, the per-attempt verdicts and the
+ * exhaustion reason. It is therefore developer-grade and is armed
+ * by the central dogfood profile - never by a new env override
+ * matrix and never by an env var.
+ *
+ * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01
+ * (P1 — PUBLIC OPT-IN):
+ *
+ * The pre-correction resolver considered ONLY `isDogfood`. The
+ * ADVERTISED behaviour is that a PUBLIC user can opt in to detailed
+ * local diagnostics, and the incident manager honours that opt-in by
+ * raising the capture DEPTH to `detailed` — but the reconciliation
+ * SINK was never armed, so the detailed depth produced an incident
+ * with an EMPTY reconciliation timeline. The opt-in therefore
+ * contradicted the advertised behaviour.
+ *
+ * The resolver now honours the EXPLICIT public-user opt-in as well.
+ * The opt-in is a persisted, user-visible setting
+ * (`clineDetailedLocalDiagnosticsEnabled`) — NOT an env override and
+ * NOT a new matrix — so this stays within the ACT's constraints.
+ */
+export function applyReconciliationDiagnosticCaptureProfile(
+	isDogfood: boolean,
+	userOptedIn = false,
+): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
+	const was = _isReconciliationDiagnosticCaptureEnabled()
+	const should = isDogfood || userOptedIn
+	if (should && !was) {
+		setReconciliationDiagnosticCaptureEnabled(true)
+		return { enabled: true, flipped: true }
+	}
+	if (!should && was) {
+		setReconciliationDiagnosticCaptureEnabled(false)
+		return { enabled: false, flipped: true }
+	}
+	return { enabled: should, flipped: false }
+}
+
+function _isAutomaticIncidentCaptureEnabled(): boolean {
+	return isAutomaticIncidentCaptureEnabled()
+}
+
+function _isReconciliationDiagnosticCaptureEnabled(): boolean {
+	return isReconciliationDiagnosticCaptureEnabled()
 }

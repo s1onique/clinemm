@@ -838,10 +838,33 @@ describe("TCRR01 -- structural invariants", () => {
 		// The per-job state projection map is still the single one.
 		expect((controllerSource.match(/backgroundCommandJobStates: Record</g) ?? []).length).toBe(1)
 		expect((controllerSource.match(/backgroundCommandJobOwners: Record</g) ?? []).length).toBe(1)
-		// No proto / wire field was added.
+		// No proto / wire field was added BY THE RECONCILIATION.
+		//
+		// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01)
+		// added ONE narrowly-scoped internal UI request
+		// (`UiService.reportTaskProblem`) for the user-facing "Report
+		// Task Problem" action. The ACT explicitly authorizes exactly
+		// that one request and forbids any other new public SDK /
+		// wire / protocol field.
+		//
+		// This assertion therefore checks that the reconciliation
+		// itself introduced NO protocol surface, and that the ONLY
+		// protocol change on the branch is AICE01's single authorized
+		// UI request.
 		const { execFileSync } = await import("node:child_process")
 		const protoDiff = execFileSync("git", ["diff", "--name-only", "--", "proto/"], { encoding: "utf-8" })
-		expect(protoDiff.trim()).toBe("")
+		const changedProtoFiles = protoDiff
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0)
+		expect(changedProtoFiles).toEqual(["apps/vscode/proto/cline/ui.proto"])
+		// The single authorized addition is the UI export request, and
+		// it carries NO parameters beyond the shared empty request.
+		const protoSource = readFileSync(join(process.cwd(), "proto/cline/ui.proto"), "utf-8")
+		expect(protoSource).toContain("rpc reportTaskProblem(EmptyRequest) returns (Empty);")
+		// The reconciliation introduced NO protocol surface of its own.
+		expect(protoSource).not.toContain("containment_reconcil")
+		expect(protoSource).not.toContain("reconciliation_")
 	})
 
 	it("R4 -- the original failure classification is preserved by the reconciliation", async () => {

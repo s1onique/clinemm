@@ -1,0 +1,122 @@
+AICE01 — RED REPRODUCTION AT ENTRY_HEAD
+========================================
+ENTRY_HEAD : c69d22a287adb40f13a901e6e0eee21daaefabaf
+ENTRY_TREE : 7d1c52ca216cc5212c670d3af5c1c30c3770ffa0
+
+Each RED gap below was reproduced by READING THE ENTRY_HEAD SOURCE (the
+pre-change tree), not by asserting an absence at the post-change tree.
+
+-------------------------------------------------------------------------------
+RED-01 — "No incident-scoped artifact or identity exists at the C10 hold"
+-------------------------------------------------------------------------------
+SEAM: apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+      apps/vscode/src/sdk/SdkController.ts
+
+At ENTRY_HEAD the C10 hold boundary published a PHASE and computed a
+blocking job set, but retained NO incident-scoped record of:
+
+  * the causal identity of the hold (session / task / epoch / barrier),
+  * the exact blocking job id set (only a COUNT survived),
+  * the per-job reconciliation outcome,
+  * the "the host observed this" facts at all.
+
+The only artifact was a FLAT checkpoint (completion-incident capsules) whose
+records were bounded per-capsule and carried no incident identity. The
+CIFR per-capsule bounds protected that capsule's records; the demonstrated
+defect was the ABSENCE of an incident-scoped capture at the authoritative
+hold, not simple in-memory FIFO eviction.
+
+-------------------------------------------------------------------------------
+RED-02 — "No reconciliation registration / attempt / exhaustion evidence"
+-------------------------------------------------------------------------------
+SEAM: apps/vscode/src/sdk/command-job-manager.ts
+
+At ENTRY_HEAD the transient-containment reconciliation (TCRR01) recovered the
+canonical job state, but recorded NO diagnostic evidence of:
+
+  * that a reconciliation had been REGISTERED for a job,
+  * how many ATTEMPTS it made,
+  * whether it RESOLVED, was EXHAUSTED, or was CANCELLED,
+  * the per-attempt verdict.
+
+The reconciliation's own lifecycle event (`command_job_containment_reconciled`)
+was published only on the SUCCESSFUL terminal path. A registration that
+exhausted its budget produced NO incident-scoped evidence at all: the
+exhaustion was indistinguishable from "never happened".
+
+-------------------------------------------------------------------------------
+RED-03 — "Restart restores only a flat checkpoint, not an addressable incident"
+-------------------------------------------------------------------------------
+SEAM: apps/vscode/src/sdk/completion-incident-checkpoint-runtime.ts
+      apps/vscode/src/shared/completion-incident-flight-recorder.ts
+
+At ENTRY_HEAD the restart path restored a flat list of per-capsule records.
+There was:
+
+  * NO incident identity to address a restored record by,
+  * NO incident-scoped directory on disk,
+  * NO durable index mapping an incident id to its artifact,
+  * NO way for a user to reach "the incident for THIS task" after a restart.
+
+-------------------------------------------------------------------------------
+RED-04 — "No user-facing report command or export path"
+-------------------------------------------------------------------------------
+SEAM: apps/vscode/package.json (contributes.commands)
+      apps/vscode/src/registry.ts (ExtensionRegistryInfo.commands)
+      apps/vscode/src/extension.ts (vscode.commands.registerCommand)
+      apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx
+
+At ENTRY_HEAD:
+
+  * `cline.reportTaskProblem` did NOT exist as a contributed command,
+  * it did NOT exist in the command registry,
+  * NO extension-host handler produced an incident report,
+  * NO webview action could reach the extension host for a report,
+  * there was NO ZIP export of any kind.
+
+The two EXISTING developer dump commands
+(`cline.debug.dumpCompletionIncidentBundle` and
+`cline.debug.dumpBackgroundJobLivenessAuthority`) remained operational and
+were NOT replaced by this ACT — they keep their output contracts. They are
+developer diagnostics, not a user-facing one-click local report.
+
+-------------------------------------------------------------------------------
+RED-05 — "The public build opens NO incident at all"
+-------------------------------------------------------------------------------
+SEAM: apps/vscode/src/extension.ts (activation)
+      apps/vscode/src/sdk/dogfood-diagnostic-profile.ts (profile resolver)
+
+At ENTRY_HEAD the automatic incident capture was armed ONLY by the central
+dogfood profile:
+
+    applyAutomaticIncidentCaptureDiagnosticProfile({
+        isDogfood,          // false in a public build
+        userOptedIn: false, // hard-coded
+    })
+
+With `should = isDogfood || userOptedIn`, a PUBLIC build evaluated to
+`should === false` and every capture entry point was a complete no-op.
+The ACT requires the public build to "automatically preserve a minimal
+local incident summary"; at ENTRY_HEAD the public build preserved NOTHING.
+
+-------------------------------------------------------------------------------
+RED-06 — "The captured incident is not durable at the authoritative event"
+-------------------------------------------------------------------------------
+SEAM: apps/vscode/src/sdk/SdkController.ts
+
+At ENTRY_HEAD the persistence call (`persistAutomaticIncident`) was reached
+ONLY from the task-switch / deactivate path. An incident that was opened at
+the C10 hold and then followed by an extension-host exit was NOT on disk:
+the evidence existed only in the (lost) process memory. The durable index
+and the per-incident atomic write did not exist.
+
+-------------------------------------------------------------------------------
+RED-07 — "The exported detail is not allowlisted"
+-------------------------------------------------------------------------------
+SEAM: apps/vscode/src/sdk/automatic-incident-export.ts
+
+At ENTRY_HEAD the exporter's `sanitizeDetail` retained EVERY primitive value
+of the observation detail map, subject only to a length cap. Any key that
+a future boundary added to the detail map would be exported automatically.
+A strict KEY allowlist (drop, not redact) did not exist, so an unexpected
+payload could leak into a user-shared report.

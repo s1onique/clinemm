@@ -1,0 +1,187 @@
+AICE01-CORRECTION01 — VERIFICATION
+=================================
+All commands were run from apps/vscode unless stated otherwise.
+Toolchain: bun (tooling) + Node (runtime), per the repository's
+bun-and-node rule.
+
+The AICE01 sources were UNTRACKED in git at ENTRY_HEAD, so there is no
+committed predecessor tree to diff against. The RED reproduction below is
+therefore a VERBATIM replay of the pre-correction logic (the code the
+reviewer quoted), and the GREEN evidence is the correction suite itself.
+
+-------------------------------------------------------------------------------
+1. RED REPRODUCTION (all four P0 defects)
+-------------------------------------------------------------------------------
+File: evidence/red-reproduction-correction01.txt
+
+  RED-1  advanceCoverage promoted completion_held / held_phase_published /
+         stalled_no_progress / completion_committed to
+         terminalPublication=OBSERVED.  NONE of those observe the job's own
+         terminal-state publication.
+  RED-2  the join's terminal-outcome fallback (`?? "OBSERVED"`) asserted a
+         TERMINAL reconciliation outcome for a mere REGISTRATION.
+  RED-3  the export derived containmentProvenance.status from the incident's
+         OWN PERSISTENCE, claiming "available" while the protected CFPR01
+         store held nothing for the blocking job.
+  RED-4  the export read the persisted artifact unconditionally, so an OLDER
+         persisted revision could replace a NEWER in-memory snapshot.
+
+-------------------------------------------------------------------------------
+2. THE CORRECTION SUITE (GREEN)
+-------------------------------------------------------------------------------
+Command:
+  bunx vitest run --config vitest.config.ts \
+    src/sdk/__tests__/automatic-incident-correction01.aice01.test.ts
+
+Result:
+  Test Files  1 passed (1)
+  Tests      26 passed (26)
+  Duration   ~2.3 s
+
+Per-assertion:
+  P0-1a  a reconciliation for task A is NEVER attributed to task B's incident
+  P0-1b  a reconciliation whose OWNER does not match the incident is NOT joined
+  P0-1c  a job that is NOT in the incident's blocking set resolves to no incident
+  P0-1d  a FAILED publication does NOT advance the controller-publication coverage
+  P0-1e  a SUCCESSFUL publication DOES advance the controller-publication coverage
+  P0-2a  a completion hold does NOT assert that the job's terminal state was published
+  P0-2b  the held phase / stall / completion commit do NOT assert a terminal publication
+  P0-2c  the containment-failure publication DOES assert the terminal publication
+  P0-2d  a REGISTRATION does NOT assert a terminal reconciliation outcome
+  P0-2e  an ordinary ATTEMPT does NOT assert a terminal reconciliation outcome
+  P0-2f  an EXHAUSTION DOES assert the terminal reconciliation outcome
+  P0-2g  the join reads the `stage` field, not the `event` / `outcome` fields
+  P0-2h  a joined record is NOT duplicated for a MULTI-JOB incident
+  P0-2i  the join is IDEMPOTENT across repeated calls
+  P0-3a  the reader reports UNAVAILABLE_FROM_TRACE when the protected store holds
+         NO record for the blocking job
+  P0-3b  the reader JOIN_COMPLETEs when the protected store holds BOTH records
+  P0-3c  a record for a DIFFERENT job is NEVER joined
+  P0-3d  the EXPORTED ZIP contains the original blocking-job evidence
+         (the ZIP is written and DECOMPRESSED; the assertion inspects the
+         artifact a support engineer actually receives)
+  P0-3e  the EXPORTED ZIP reports UNAVAILABLE_FROM_TRACE when the source
+         evidence is absent, even though the incident IS persisted
+  P0-4a  a terminal reconciliation observation is PERSISTED, not only held in memory
+  P0-4b  the persisted artifact carries the terminal exhaustion outcome
+  P0-4c  a persistence result of `{ succeeded: false }` is REPORTED, never swallowed
+  P0-4d  an OLDER persisted revision never replaces a NEWER in-memory snapshot
+         during export
+  P1a    the opt-in arms the sink even in a PUBLIC (non-dogfood) build
+  P1b    a PUBLIC build with NO opt-in leaves the sink disarmed
+  P1c    the dogfood profile still arms the sink
+
+-------------------------------------------------------------------------------
+3. FOCUSED + ADJACENT REGRESSION SUITES (vitest)
+-------------------------------------------------------------------------------
+Command:
+  bunx vitest run --config vitest.config.ts \
+    src/sdk/__tests__/automatic-incident-correction01.aice01.test.ts \
+    src/sdk/__tests__/automatic-incident-capture-export01.aice01.test.ts \
+    src/sdk/__tests__/automatic-incident-export01.aice01.test.ts \
+    src/sdk/__tests__/automatic-incident-persistence01.aice01.test.ts \
+    src/sdk/__tests__/automatic-incident-activation01.aice01.test.ts \
+    src/sdk/__tests__/transient-containment-reconciliation-repair01.controller.tcrr01.test.ts \
+    src/sdk/__tests__/containment-failure-provenance-retention01.cfpr01.test.ts \
+    src/sdk/__tests__/containment-failure-provenance-retention01-correction01.test.ts \
+    src/sdk/__tests__/containment-ledger-causal-recon01.clcr01.test.ts \
+    src/sdk/__tests__/containment-failure-c10-authority01.cfc10a01.test.ts
+
+Result:
+  Test Files  10 passed (10)
+  Tests      155 passed (155)
+  Duration   ~9.8 s
+
+Per-suite:
+  automatic-incident-correction01.aice01.test.ts                  26 passed
+  automatic-incident-capture-export01.aice01.test.ts              8 passed
+  automatic-incident-export01.aice01.test.ts                     10 passed
+  automatic-incident-persistence01.aice01.test.ts                10 passed
+  automatic-incident-activation01.aice01.test.ts                  6 passed
+  transient-containment-reconciliation-repair01.controller.tcrr01 24 passed
+  containment-failure-provenance-retention01.cfpr01.test.ts      17 passed
+  ...containment-failure-provenance-retention01-correction01      15 passed
+  containment-ledger-causal-recon01.clcr01.test.ts               20 passed
+  containment-failure-c10-authority01.cfc10a01.test.ts           19 passed
+
+-------------------------------------------------------------------------------
+4. FULL NODE-SIDE VITEST SUITE — NO REGRESSION
+-------------------------------------------------------------------------------
+The full suite was run TWICE against the SAME working tree: once with the
+correction applied, and once with the correction REVERTED (the pre-correction
+logic restored hunk-by-hunk). The failing-file sets are BYTE-IDENTICAL.
+
+  PRE-CORRECTION baseline (correction suite excluded):
+    Test Files  61 failed | 450 passed | 6 skipped (517)
+    Tests      165 failed | 5640 passed | 56 skipped (5861)
+
+  WITH the correction:
+    Test Files  61 failed | 451 passed | 6 skipped (518)
+    Tests      165 failed | 5666 passed | 56 skipped (5887)
+
+  Diff of the failing-file sets:
+    $ diff baseline.fails corrected.fails
+    (no output — IDENTICAL)
+
+  Delta:
+    +26 passing tests  (exactly the correction suite)
+    +1 passing test file
+     0 new failures
+     0 newly-failing suites
+
+  The 61 pre-existing failures are unrelated to this correction. They fall
+  into two documented classes:
+    (a) suites that import `bun:test` and therefore CANNOT run under vitest
+        (the repository rule is `bun:test` XOR `mocha`; the bun-side suites
+        run under `bun run test:unit`), and
+    (b) suites that scrape unrelated production source text (e.g.
+        `derive-origin-precedence.test.ts` -> "deriveOrigin not found in
+        source").
+
+-------------------------------------------------------------------------------
+5. TYPECHECKS
+-------------------------------------------------------------------------------
+  bunx tsc --noEmit                                  EXIT 0 (no diagnostics)
+  bunx tsc --project tsconfig.vscode-compat.json --noEmit
+                                                      EXIT 0 (no diagnostics)
+  cd webview-ui && bunx tsc --noEmit                 EXIT 0 (no diagnostics)
+
+-------------------------------------------------------------------------------
+6. LINT
+-------------------------------------------------------------------------------
+Command:
+  bunx biome lint --config-path ./biome.jsonc --no-errors-on-unmatched \
+    --files-ignore-unknown=true --diagnostic-level=error <the 8 touched files>
+
+Result:
+  Checked 8 files in 266ms. No fixes applied.
+  0 errors
+
+-------------------------------------------------------------------------------
+7. PRODUCTION BUNDLE BUILD
+-------------------------------------------------------------------------------
+Command:
+  bun esbuild.mjs
+
+Result:
+  [watch] build started
+  [watch] build finished
+
+  dist/extension.js    57,567,039 bytes
+
+Bundle content verification:
+  $ grep -c "getAutomaticIncidentForOwnerJob" dist/extension.js
+  3
+  $ grep -c "UNAVAILABLE_FROM_TRACE" dist/extension.js
+  34
+
+Both the P0-1 owner/job resolver and the P0-3 source-bound provenance
+classification are present in the production bundle.
+
+-------------------------------------------------------------------------------
+8. WHAT WAS NOT VERIFIED
+-------------------------------------------------------------------------------
+No installed-VSCodium LIVE qualification was performed. The correction is
+source-level; the LIVE qualification is the next operator step after the
+commit, exactly as the reviewer required ("commit, and proceed directly to
+VSIX LIVE qualification").

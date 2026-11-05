@@ -111,6 +111,16 @@ const GLOBAL_STATE_FIELDS = {
 	cloudSessionStatuses: { default: {} as RememberedCloudStatuses },
 	// Path to worktree that should auto-open Cline sidebar when launched
 	worktreeAutoOpenPath: { default: undefined as string | undefined },
+	// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+	// the user's EXPLICIT OPT-IN to DETAILED local diagnostics.
+	//
+	// The MINIMAL incident capture is ALWAYS armed (the public build
+	// must preserve a minimal local incident summary automatically).
+	// This flag only raises the DEPTH to `detailed`, which additionally
+	// retains the per-key detail map and the reconciliation timeline.
+	//
+	// The default is FALSE: the detailed depth is opt-in, never assumed.
+	clineDetailedLocalDiagnosticsEnabled: { default: false as boolean },
 } satisfies FieldDefinitions
 
 // Fields that map directly to ApiHandlerOptions in @shared/api.ts

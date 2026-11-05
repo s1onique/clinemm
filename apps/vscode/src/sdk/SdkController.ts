@@ -92,6 +92,16 @@ import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
 import { buildActivityPublicationV1Record } from "./activity-publication-v1"
 import { AuthService, LogoutReason } from "./auth-service"
+// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01): the
+// automatic, incident-scoped capture manager. The controller uses it
+// to preserve the reconciliation publication boundary.
+import {
+	captureAutomaticIncident,
+	getAutomaticIncidentExtensionHostInstanceId,
+	getAutomaticIncidentForOwnerJob,
+	getAutomaticIncidents,
+} from "./automatic-incident-capture"
+import { persistAutomaticIncident } from "./automatic-incident-persistence"
 // ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01): the
 // containment-ledger capture seam. Records WHY the controller
 // retained a `containment_failed` terminal projection and WHICH
@@ -2791,6 +2801,21 @@ export class Controller {
 			stateManager: this.stateManager,
 			getTask: () => this.task,
 			postStateToWebview: () => this.postStateToWebview(),
+			// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+			// make the captured incident DURABLE at the authoritative
+			// boundary that produced it — not only at a task switch or a
+			// deactivation.
+			//
+			// The write is FIRE-AND-FORGET: a slow or failing disk can
+			// NEVER block task execution, and a failure is counted rather
+			// than thrown.
+			persistIncident: (incident) => {
+				void persistAutomaticIncident(this.context, incident).catch((error) => {
+					Logger.warn(
+						`[AICE01] could not persist the incident ${incident.incidentId}: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				})
+			},
 			setTurnPhase: (phase, anchorTs, writerId) =>
 				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			getTurnPhase: () => this.turnStateTracker.currentPhase,
@@ -5585,6 +5610,21 @@ export class Controller {
 			// The runtime already records the failure; the task switch
 			// MUST NOT be affected by a checkpoint problem.
 		})
+		// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+		// persist the incident-scoped artifacts on a TASK SWITCH, so the
+		// incident the user is LEAVING is preserved before the new task
+		// becomes active.
+		//
+		// The writes are FIRE-AND-FORGET and are serialized PER INCIDENT
+		// by the persistence layer, so an older snapshot can never
+		// overwrite a newer one. A failure is counted and reported; it
+		// NEVER blocks the switch.
+		for (const incident of getAutomaticIncidents()) {
+			void persistAutomaticIncident(this.context, incident).catch(() => {
+				// The runtime already records the failure; the task
+				// switch MUST NOT be affected by a persistence problem.
+			})
+		}
 		const historyItem = this.cloud.isCloudSessionId(taskId)
 			? await this.cloud.openCloudTask(taskId)
 			: await this.taskControl.showTaskWithId(taskId)
@@ -6414,15 +6454,145 @@ export class Controller {
 		event: Extract<CommandJobLifecycleEvent, { event: "command_job_containment_reconciled" }>,
 	): void {
 		this.reconciledBackgroundCommandJobs?.add(event.jobId)
-		void this.updateBackgroundCommandState(false, event.jobId, event.reconciledState, undefined, event.ownerSessionId).catch(
+		// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01
+		// (P0-1 — PUBLICATION ORDERING):
+		//
+		// The pre-correction code captured the reconciliation
+		// publication BEFORE the asynchronous state update was even
+		// issued, and the capture therefore asserted
+		// `controller_reconciliation_published` regardless of whether
+		// the update succeeded. A failed update left the diagnostic
+		// claiming a publication that never happened.
+		//
+		// The capture now happens AT the authoritative publication
+		// boundary: after `updateBackgroundCommandState` resolves
+		// successfully, or after it rejects (in which case the
+		// FAILURE is recorded instead of the success).
+		//
+		// The production semantics are UNCHANGED: the reconciled job is
+		// still marked before the publication so a DELAYED, STALE
+		// `containment_failed` publication cannot overwrite this newer
+		// authoritative state (G11), and the publication is still
+		// fire-and-forget from the lifecycle handler's perspective.
+		void this.updateBackgroundCommandState(false, event.jobId, event.reconciledState, undefined, event.ownerSessionId).then(
+			() => {
+				// The reconciled projection REACHED the controller state.
+				this.captureControllerReconciliationPublication(event, "controller_reconciliation_published")
+			},
 			(error) => {
 				Logger.warn(
 					`[SdkController] Failed to publish containment reconciliation for job ${event.jobId}: ${
 						error instanceof Error ? error.message : String(error)
 					}`,
 				)
+				// The publication FAILED. The diagnostic records the
+				// failure — it never records a successful publication
+				// for a state update that did not commit.
+				this.captureControllerReconciliationPublication(
+					event,
+					"controller_reconciliation_publication_failed",
+					error instanceof Error ? error.message : String(error),
+				)
 			},
 		)
+	}
+
+	/**
+	 * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01
+	 * (P0-1 — PUBLICATION IDENTITY AND ORDERING):
+	 *
+	 * Capture the controller publication of a reconciliation.
+	 *
+	 * The publication is observed at the controller boundary, which is
+	 * the ONLY place that knows whether the reconciled projection
+	 * actually reached the controller state.
+	 *
+	 * IDENTITY: the incident is resolved from the ORIGINAL event's
+	 * owner session id and job id — NEVER from the ACTIVE task. The
+	 * pre-correction code resolved the incident with
+	 * `getAutomaticIncidentForTask(this.task?.taskId)`, so a
+	 * reconciliation for task A that arrived while task B was active
+	 * was attributed to task B's incident. That silently corrupted
+	 * the evidence of whichever task happened to be in the foreground.
+	 *
+	 * ORDERING: this method is called AFTER the authoritative
+	 * publication boundary — with `outcome` describing what actually
+	 * happened. A failed publication records the FAILURE, never a
+	 * successful publication.
+	 */
+	private captureControllerReconciliationPublication(
+		event: Extract<CommandJobLifecycleEvent, { event: "command_job_containment_reconciled" }>,
+		outcome: "controller_reconciliation_published" | "controller_reconciliation_publication_failed",
+		failureReason?: string,
+	): void {
+		try {
+			const ownerSessionId = event.ownerSessionId
+			const incident = getAutomaticIncidentForOwnerJob({ ownerSessionId, jobId: event.jobId })
+			if (!incident) {
+				// No incident owns this job under this owner session.
+				// The observation is DROPPED rather than attributed to
+				// an unrelated task's incident.
+				return
+			}
+			const published = outcome === "controller_reconciliation_published"
+			const captured = captureAutomaticIncident({
+				identity: {
+					sessionId: incident.identity.sessionId,
+					taskId: incident.identity.taskId,
+					epoch: incident.identity.epoch,
+					barrierId: incident.identity.barrierId,
+					coordinatorInstanceId: incident.identity.coordinatorInstanceId,
+					extensionHostInstanceId: getAutomaticIncidentExtensionHostInstanceId(),
+				},
+				stage: "controller_reconciliation_published",
+				outcome,
+				detail: {
+					jobId: event.jobId,
+					originalPgid: event.pgid,
+					originalFailure: event.containmentFailed,
+					restoredTerminalClass: event.reconciledState,
+					attempt: event.attempt,
+					osErrorCode: event.osErrorCode ?? "none",
+					stateBefore: "containment_failed",
+					stateAfter: event.reconciledState,
+					// The publication verdict is carried explicitly so the
+					// exported report can distinguish "published" from
+					// "publication failed".
+					publicationOutcome: outcome,
+					...(failureReason !== undefined ? { publicationFailureReason: failureReason } : {}),
+				},
+			})
+			// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+			// make the incident DURABLE at this authoritative boundary.
+			// The write is FIRE-AND-FORGET.
+			//
+			// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01
+			// (P0-4 — DURABILITY): the persistence layer reports failures
+			// through `{ succeeded: false }` and NEVER rejects. The
+			// pre-correction code only handled the REJECTED promise, so
+			// a `{ succeeded: false }` result was silently ignored and
+			// the loss was never accounted for.
+			if (captured) {
+				void persistAutomaticIncident(this.context, captured)
+					.then((result) => {
+						if (!result.succeeded) {
+							Logger.warn(
+								`[AICE01] could not persist the incident ${captured.incidentId}: ${result.error ?? "unknown error"}`,
+							)
+						}
+					})
+					.catch((error) => {
+						Logger.warn(
+							`[AICE01] could not persist the incident ${captured.incidentId}: ${
+								error instanceof Error ? error.message : String(error)
+							}`,
+						)
+					})
+			}
+		} catch {
+			// A diagnostic capture failure MUST NOT interrupt task
+			// execution.
+		}
 	}
 
 	/**

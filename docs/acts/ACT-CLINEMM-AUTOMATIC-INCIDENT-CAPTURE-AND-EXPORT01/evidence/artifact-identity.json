@@ -1,0 +1,39 @@
+{
+  "act": "ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01",
+  "shortName": "AICE01",
+  "entryHead": "c69d22a287adb40f13a901e6e0eee21daaefabaf",
+  "entryTree": "7d1c52ca216cc5212c670d3af5c1c30c3770ffa0",
+  "entryAncestorExpected": "014d045a1",
+  "entryAncestorVerified": true,
+  "worktreeCleanAtEntry": true,
+  "protectedStashPreserved": true,
+  "newProductionModules": [
+    "apps/vscode/src/sdk/automatic-incident-capture.ts",
+    "apps/vscode/src/sdk/automatic-incident-persistence.ts",
+    "apps/vscode/src/sdk/automatic-incident-export.ts",
+    "apps/vscode/src/sdk/automatic-incident-export-runtime.ts",
+    "apps/vscode/src/sdk/automatic-incident-build-identity.ts",
+    "apps/vscode/src/sdk/automatic-incident-consent.ts",
+    "apps/vscode/src/sdk/reconciliation-diagnostic-capture.ts",
+    "apps/vscode/src/core/controller/ui/reportTaskProblem.ts"
+  ],
+  "newAcceptanceSuites": [
+    "apps/vscode/src/sdk/__tests__/automatic-incident-capture-export01.aice01.test.ts",
+    "apps/vscode/src/sdk/__tests__/automatic-incident-persistence01.aice01.test.ts",
+    "apps/vscode/src/sdk/__tests__/automatic-incident-export01.aice01.test.ts",
+    "apps/vscode/src/sdk/__tests__/automatic-incident-activation01.aice01.test.ts"
+  ],
+  "newUserSurface": [
+    "apps/vscode/webview-ui/src/components/chat/task-header/buttons/ReportTaskProblemButton.tsx"
+  ],
+  "newCommands": [
+    "cline.reportTaskProblem",
+    "cline.toggleDetailedLocalDiagnostics",
+    "cline.deleteRetainedIncidents"
+  ],
+  "newProtoRpcs": [
+    "UiService.reportTaskProblem(EmptyRequest) returns (Empty)"
+  ],
+  "newDependency": null,
+  "reusedDependency": "archiver@^7.0.1 (already declared and installed)"
+}

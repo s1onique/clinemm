@@ -1,0 +1,29 @@
+RED REPRODUCTION — ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01
+
+The AICE01 sources were UNTRACKED in git, so there is no committed baseline to diff
+against. This file reproduces the PRE-CORRECTION logic VERBATIM (the code the
+reviewer quoted) and shows the synthetic-to-proven promotion it produced.
+
+Every defect below is reproduced by the GREEN assertions in
+src/sdk/__tests__/automatic-incident-correction01.aice01.test.ts.
+
+=== RED-1 — advanceCoverage promoted non-terminal stages to terminalPublication=OBSERVED ===
+  stage=completion_held        -> terminalPublication=OBSERVED  <<< SYNTHETIC (no terminal publication was observed)
+  stage=held_phase_published   -> terminalPublication=OBSERVED  <<< SYNTHETIC (no terminal publication was observed)
+  stage=stalled_no_progress    -> terminalPublication=OBSERVED  <<< SYNTHETIC (no terminal publication was observed)
+  stage=completion_committed   -> terminalPublication=OBSERVED  <<< SYNTHETIC (no terminal publication was observed)
+
+=== RED-2 — the join's terminal-outcome fallback promoted EVERY record to a terminal outcome ===
+  record.stage=reconciliation_registered
+  pre-correction outcome                = reconciliation_observed
+  pre-correction reconciliationTerminalOutcome = OBSERVED   <<< asserts a TERMINAL outcome for a mere REGISTRATION
+  pre-correction advanced terminal coverage = true
+
+=== RED-3 — the export derived containment provenance availability from incident PERSISTENCE ===
+  incident persisted on disk      = true
+  protected CFPR01 records present = false
+  pre-correction containmentProvenance.status = "available"   <<< CLAIMS availability it cannot back
+
+=== RED-4 — the export let an OLDER persisted revision replace a NEWER in-memory snapshot ===
+  persisted revision = 3, in-memory revision = 7
+  pre-correction export source = persisted artifact (unconditionally)   <<< exports the WEAKER snapshot

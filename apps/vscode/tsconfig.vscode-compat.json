@@ -73,7 +73,8 @@
 		}
 	},
 	"files": [
-		"src/extension.ts"
+		"src/extension.ts",
+		"src/types/archiver.d.ts"
 	],
 	"include": [],
 	"exclude": []

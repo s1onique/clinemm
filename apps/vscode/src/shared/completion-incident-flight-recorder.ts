@@ -482,6 +482,31 @@ function mintBarrierId(input: CompletionIncidentRecordInput): string {
 }
 
 /**
+ * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+ * Read (or mint) the diagnostic barrier id for ONE lifecycle.
+ *
+ * The automatic incident capture uses the SAME lifecycle id the
+ * recorder uses, so the incident timeline and the causal flight
+ * recorder timeline correlate without minting a competing identity.
+ *
+ * The id is DIAGNOSTIC ONLY. It never enters the runtime identity
+ * model, the marker, the epoch or any protocol.
+ */
+export function getCompletionIncidentBarrierId(input: {
+	readonly sessionId: string
+	readonly taskId: string | undefined
+	readonly epoch: number
+}): string {
+	return mintBarrierId({
+		stage: "completion_attempt",
+		outcome: "barrier_id_probe",
+		sessionId: input.sessionId,
+		taskId: input.taskId,
+		epoch: input.epoch,
+	})
+}
+
+/**
  * Append a record to its task capsule, applying the per-capsule ring
  * bound.
  */

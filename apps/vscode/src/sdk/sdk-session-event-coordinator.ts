@@ -11,6 +11,8 @@ import {
 	// production locals so NO provider is invoked a second time for
 	// diagnostics.
 	type CompletionIncidentIdentity,
+	getCompletionIncidentBarrierId,
+	getCompletionIncidentCoordinatorInstanceId,
 	recordCompletionIncident,
 	setCompletionIncidentCoordinatorInstanceId,
 } from "@shared/completion-incident-flight-recorder"
@@ -27,6 +29,16 @@ import type {
 } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
+import {
+	// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+	// the automatic, incident-scoped capture manager. It preserves
+	// the evidence WHEN THE AUTHORITATIVE EVENT OCCURS — not when
+	// the user eventually requests a dump.
+	type AutomaticIncident,
+	type AutomaticIncidentStage,
+	captureAutomaticIncident,
+	getAutomaticIncidentExtensionHostInstanceId,
+} from "./automatic-incident-capture"
 import {
 	type ContainmentOwnershipClass,
 	// ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01 (CLCR01): the
@@ -151,6 +163,22 @@ export interface SdkSessionEventCoordinatorOptions {
 	getTask: () => TaskProxy | undefined
 	postStateToWebview: () => Promise<void>
 	stateManager?: StateManager
+	/**
+	 * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+	 * persist ONE captured incident IMMEDIATELY, at the authoritative
+	 * boundary that produced it.
+	 *
+	 * WHY THIS OPTION EXISTS:
+	 *   The incident must be DURABLE at the moment it is opened, not
+	 *   only at a task switch or a deactivation. If the extension host
+	 *   exits while a task is held, the evidence of the hold would be
+	 *   lost — which is exactly the RED-03 defect this ACT closes.
+	 *
+	 *   The hook is FIRE-AND-FORGET by contract: a slow or failing
+	 *   disk can NEVER block task execution, and a failure is counted
+	 *   rather than thrown.
+	 */
+	persistIncident?: (incident: AutomaticIncident) => void
 	translateSessionEvent?: (event: CoreSessionEvent, state: MessageTranslatorState) => TranslationResult
 	isClineFreeModel?: () => Promise<boolean>
 	/**
@@ -1373,6 +1401,67 @@ export class SdkSessionEventCoordinator {
 		readonly detail?: Parameters<typeof recordCompletionIncident>[0]["detail"]
 	}): void {
 		recordCompletionIncident(input)
+	}
+
+	/**
+	 * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+	 * Capture ONE automatic-incident observation at an authoritative
+	 * production boundary.
+	 *
+	 * The capture is a complete no-op when the diagnostic is
+	 * disarmed, and it NEVER changes the production decision. It is
+	 * the ONLY place where the coordinator writes into the incident
+	 * manager.
+	 */
+	private captureAutomaticIncident(input: {
+		readonly stage: AutomaticIncidentStage
+		readonly outcome: string
+		readonly sessionId: string
+		readonly taskId: string | undefined
+		readonly epoch: number
+		readonly barrierId?: string
+		readonly detail?: Readonly<Record<string, string | number | boolean | readonly string[] | undefined>>
+		readonly phase?: TurnPhase
+		readonly blockingJobIds?: readonly string[]
+		readonly reconciliation?: unknown
+	}): void {
+		const incident = captureAutomaticIncident({
+			identity: {
+				sessionId: input.sessionId,
+				taskId: input.taskId,
+				epoch: input.epoch,
+				barrierId: input.barrierId ?? "UNOBSERVED",
+				coordinatorInstanceId: getCompletionIncidentCoordinatorInstanceId(),
+				extensionHostInstanceId: getAutomaticIncidentExtensionHostInstanceId(),
+			},
+			stage: input.stage,
+			outcome: input.outcome,
+			detail: input.detail,
+			phase: input.phase,
+			blockingJobIds: input.blockingJobIds,
+			reconciliation: input.reconciliation,
+		})
+		// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+		// make the incident DURABLE AT THE AUTHORITATIVE BOUNDARY that
+		// produced it, not only at a task switch or a deactivation.
+		//
+		// The hook is FIRE-AND-FORGET: it can never block or fail the
+		// production path.
+		if (incident) {
+			try {
+				this.options.persistIncident?.(incident)
+			} catch {
+				// A persistence failure MUST NOT interrupt task execution.
+			}
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+	 * The diagnostic barrier id of the current lifecycle.
+	 */
+	private currentBarrierId(sessionId: string, taskId: string | undefined, epoch: number): string {
+		return getCompletionIncidentBarrierId({ sessionId, taskId, epoch })
 	}
 
 	/**
@@ -2658,10 +2747,61 @@ export class SdkSessionEventCoordinator {
 			unresolvedContainmentFailuresForDeferredC10,
 			containmentLedgerDetailDeferredC10,
 		)
+		// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+		// the C10 RE-EVALUATION observation. This is the record that
+		// answers "which C10 re-evaluation was requested after the
+		// reconciliation, and what were the ACTUAL remaining
+		// blockers?" — the exact gap the 2026-11-05 LIVE incident
+		// could not close.
+		//
+		// The remaining blockers are the ALREADY-EVALUATED production
+		// values; no additional process inspection happens here.
+		this.captureAutomaticIncident({
+			stage: "c10_reevaluated",
+			outcome: "c10_reevaluated",
+			sessionId: activeSession.sessionId,
+			taskId,
+			epoch: marker.epoch,
+			barrierId: this.currentBarrierId(activeSession.sessionId, taskId, marker.epoch),
+			detail: {
+				remainingBlockingJobCount: unresolvedContainmentFailuresForDeferredC10.length,
+				unconsumedTerminalCount: unconsumedOwnedTerminalResultCount,
+				ownerStillRunning,
+				heldObligation,
+				outstandingAutonomousWork,
+			},
+			blockingJobIds: unresolvedContainmentFailuresForDeferredC10,
+		})
 		if (unresolvedContainmentFailuresForDeferredC10.length > 0) {
 			Logger.warn(
 				`[SdkController] outstanding obligations resolved for session ${activeSession.sessionId} but an unresolved containment failure remains (jobs=${unresolvedContainmentFailuresForDeferredC10.join(",")}); holding the deferred completion (CFC10AR01 barrier)`,
 			)
+			// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01
+			// (AICE01): the AUTOMATIC incident capture at the
+			// authoritative C10 hold.
+			//
+			// This is the ACT's core requirement: the evidence is
+			// preserved WHEN THE HOLD HAPPENS, not when the user
+			// eventually asks for a dump. The capture is a complete
+			// no-op when the diagnostic is disarmed, and it NEVER
+			// changes the hold decision.
+			this.captureAutomaticIncident({
+				stage: "completion_held",
+				outcome: "unresolved_containment_failure",
+				sessionId: activeSession.sessionId,
+				taskId,
+				epoch: marker.epoch,
+				barrierId: this.currentBarrierId(activeSession.sessionId, taskId, marker.epoch),
+				detail: {
+					holdReason: "unresolved_containment_failure",
+					unresolvedContainmentFailureCount: unresolvedContainmentFailuresForDeferredC10.length,
+					unconsumedTerminalCount: unconsumedOwnedTerminalResultCount,
+					ownerStillRunning,
+					heldObligation,
+					outstandingAutonomousWork,
+				},
+				blockingJobIds: unresolvedContainmentFailuresForDeferredC10,
+			})
 			// ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01:
 			// The deferred re-evaluation HELD on an unresolved
 			// containment failure. The marker is PRESERVED (not
@@ -2867,6 +3007,22 @@ export class SdkSessionEventCoordinator {
 			// mint a coordinator-local completionId for this C10 event.
 			// Monotonic, per-coordinator-instance. One C10 -> one completionId.
 			completionId: `completion-${activeSession.sessionId}-${++this.nextCompletionCommitEventId}`,
+		})
+		// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+		// the TERMINAL outcome. The incident's capture lifecycle
+		// closes here: the report can now state that the completion
+		// committed rather than leaving it UNOBSERVED.
+		this.captureAutomaticIncident({
+			stage: "completion_committed",
+			outcome: "completion_committed",
+			sessionId: activeSession.sessionId,
+			taskId: this.options.getTask?.()?.taskId,
+			epoch: marker.epoch,
+			barrierId: this.currentBarrierId(activeSession.sessionId, this.options.getTask?.()?.taskId, marker.epoch),
+			phase: "completed",
+			detail: {
+				commitOrigin: "deferred_continuation",
+			},
 		})
 		// ACT-CLINEMM-ELMIZE-P0-TASK-HEADER-TERMINAL-CONVERGENCE01:
 		// publication is the consistency boundary (ACT §C7). The
@@ -4965,6 +5121,29 @@ export class SdkSessionEventCoordinator {
 										},
 										detail: {
 											holdReason: c10HoldReason,
+										},
+									})
+									// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01
+									// (AICE01): preserve the resulting PHASE
+									// AUTHORITY in the automatic incident. The
+									// phase is what the user actually sees
+									// ("Paused"), so it is part of the
+									// incident's human-readable summary.
+									this.captureAutomaticIncident({
+										stage: "held_phase_published",
+										outcome: "held_phase_published",
+										sessionId: activeSession.sessionId,
+										taskId: this.options.getTask?.()?.taskId,
+										epoch: this.options.messageTranslatorState.getMinter().epoch,
+										barrierId: this.currentBarrierId(
+											activeSession.sessionId,
+											this.options.getTask?.()?.taskId,
+											this.options.messageTranslatorState.getMinter().epoch,
+										),
+										phase: "resumable",
+										detail: {
+											holdReason: c10HoldReason,
+											phaseWriter: "session-event-bcb-hold-resumable",
 										},
 									})
 									this.options.setTurnPhase?.("resumable", undefined, "session-event-bcb-hold-resumable")

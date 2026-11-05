@@ -237,6 +237,21 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.reportTaskProblem",
+				"title": "ClineMM: Report Task Problem",
+				"category": "ClineMM"
+			},
+			{
+				"command": "cline.toggleDetailedLocalDiagnostics",
+				"title": "ClineMM: Toggle Detailed Local Diagnostics",
+				"category": "ClineMM"
+			},
+			{
+				"command": "cline.deleteRetainedIncidents",
+				"title": "ClineMM: Delete Retained Incident Reports",
+				"category": "ClineMM"
+			},
+			{
 				"command": "cline.debug.dumpCompletionIncidentBundle",
 				"title": "Cline: Dump Completion Incident Bundle",
 				"category": "Cline"

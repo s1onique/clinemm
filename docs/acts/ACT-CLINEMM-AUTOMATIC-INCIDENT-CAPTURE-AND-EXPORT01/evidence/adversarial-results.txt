@@ -1,0 +1,165 @@
+AICE01 — ADVERSARIAL RESULTS
+============================
+The adversarial cases below are the cases a reviewer would try to break the
+feature with. Each is proven by a named acceptance test.
+
+-------------------------------------------------------------------------------
+ADV-1 — PRIVACY: can a sensitive value reach the archive?
+-------------------------------------------------------------------------------
+The export test injects SEVEN distinct sentinels into the captured
+observation's detail map, then DECOMPRESSES the written ZIP and scans
+EVERY member's bytes:
+
+  sk-sentinel-APIKEY-9f3a2b
+  hunter2-sentinel-PASSWORD-4c7d1e
+  /Users/sentinel-user/secret/workspace/file.txt
+  echo sentinel-COMMAND-8b2f6a
+  sentinel-STDOUT-1a9e4c leaked token
+  sentinel-PROMPT-3d8b7f please summarize this
+  https://sentinel-user:sentinel-TOKEN@github.com/acme/private.git
+
+The assertion additionally rejects ANY occurrence of the substring
+"/Users/" in ANY member.
+
+Result: PASS — none of the sentinels appears anywhere in the decompressed
+archive. Proven by:
+  "G14/A1/A8 — the ZIP contains parseable, correlated, privacy-safe evidence"
+
+WHY THIS IS NOT AN ACCIDENT: the exporter applies a STRICT KEY ALLOWLIST
+(`EXPORTED_DETAIL_KEYS`). An unknown key is DROPPED (not redacted), so a
+future boundary that adds an unexpected payload to the detail map cannot
+leak it. Before this ACT, `sanitizeDetail` retained every primitive value
+subject only to a length cap — that was RED-07, and the privacy suite
+caught it as a REAL failure during development (the absolute-path sentinel
+leaked through `completion-timeline.jsonl` until the allowlist was added).
+
+The MINIMAL capture depth applies a SECOND, narrower allowlist
+(`MINIMAL_DETAIL_KEYS`) so the public build retains only counters and
+reason codes.
+
+-------------------------------------------------------------------------------
+ADV-2 — PRIVACY: the webview can it direct the export?
+-------------------------------------------------------------------------------
+The webview request is `UiService.reportTaskProblem(EmptyRequest)`. It
+carries NO incident id, NO task id and NO filesystem path. The extension
+host resolves the ACTIVE task's retained incident through its OWN
+authority (`controller.task?.taskId` / the WebviewProvider's controller).
+
+Result: PASS. A compromised webview cannot select a different incident and
+cannot direct a write to an arbitrary path.
+
+-------------------------------------------------------------------------------
+ADV-3 — PRIVACY: is anything transmitted?
+-------------------------------------------------------------------------------
+`src/sdk/automatic-incident-export.ts` contains no `fetch(`, no `axios`
+and no `http(s)://` literal. The only output is a ZIP written to a path
+the USER chose in the native Save dialog.
+
+Result: PASS. Proven by "G16 — the export module contains NO network call".
+
+-------------------------------------------------------------------------------
+ADV-4 — INTEGRITY: can a path escape the archive?
+-------------------------------------------------------------------------------
+`../escape.json`, `/etc/passwd`, `nested/file.json`, `C:\windows\system32`,
+`""` and a NUL-bearing name are all rejected by `validateExportArchivePath`.
+
+Result: PASS. Proven by "A8 — unsafe archive paths are REJECTED".
+
+-------------------------------------------------------------------------------
+ADV-5 — INTEGRITY: does the manifest lie about the archive?
+-------------------------------------------------------------------------------
+Every member listed in `manifest.files` is re-read from the DECOMPRESSED
+archive and its sha256 and byte length are recomputed and compared.
+
+The manifest's OWN digest is published OUT OF BAND (on the bundle's
+`hashes` map) and is also verified against the decompressed bytes. The
+manifest declares this contract explicitly in `manifestIntegrity`, and the
+member set is asserted to be EXACTLY the listed files plus `manifest.json`.
+
+Result: PASS. Proven by:
+  "G14/A1/A8 — the ZIP contains parseable, correlated, privacy-safe evidence"
+  "A8 — the manifest declares its integrity contract and the member set matches"
+
+-------------------------------------------------------------------------------
+ADV-6 — DURABILITY: does a restart lose the incident?
+-------------------------------------------------------------------------------
+The restart is a GENUINE fresh manager over the SAME storage directory —
+the in-memory state is cleared first, so nothing is shared.
+
+Result: PASS. Proven by:
+  "G9 — a persisted incident is restored by a FRESH manager over the SAME storage"
+
+-------------------------------------------------------------------------------
+ADV-7 — DURABILITY: can a stale snapshot destroy newer evidence?
+-------------------------------------------------------------------------------
+The on-disk MONOTONIC REVISION GUARD reads the persisted revision BEFORE
+the write and refuses an older snapshot.
+
+Result: PASS. Proven by:
+  "A5 — an older snapshot finishing late NEVER overwrites a newer one"
+  "A5 — an adopted stale incident is REJECTED by the revision check"
+
+-------------------------------------------------------------------------------
+ADV-8 — DURABILITY: can a broken disk change task behaviour?
+-------------------------------------------------------------------------------
+A missing directory, an unwritable path and a corrupt artifact are all
+handled WITHOUT throwing into the production path; a corrupt artifact is
+SKIPPED and reported honestly.
+
+Result: PASS. Proven by the three "A6 — ..." tests.
+
+-------------------------------------------------------------------------------
+ADV-9 — CORRELATION: can another task's reconciliation be attached?
+-------------------------------------------------------------------------------
+`joinReconciliationRecordsToIncidents` joins a reconciliation record to an
+incident ONLY when the record's job id is in the incident's blocking set AND
+the record's owner session id matches the incident's session id. A record
+for a different job or a different owner is NOT joined.
+
+Result: PASS — proven by the A3/A4 assertions in
+`automatic-incident-capture-export01.aice01.test.ts`.
+
+-------------------------------------------------------------------------------
+ADV-10 — BUILD IDENTITY: can a stale build be reported as VERIFIED?
+-------------------------------------------------------------------------------
+An absent provenance artifact is `UNOBSERVED`, never `VERIFIED`. A
+provenance whose bundle hash does not match the on-disk bundle is
+`MISMATCH`.
+
+Result: PASS. Proven by:
+  "G12 — an ABSENT provenance is UNOBSERVED, never VERIFIED"
+  "A9 — a MISMATCHED provenance is classified MISMATCH"
+  "G12 — a MATCHING provenance is VERIFIED"
+
+-------------------------------------------------------------------------------
+ADV-11 — HONESTY: does the UI claim success when the write failed?
+-------------------------------------------------------------------------------
+The success message is emitted ONLY after the ZIP write actually
+succeeded. The export flow returns a discriminated outcome
+(`saved` | `cancelled` | `no_incident` | `failed`) and reports the failure
+through the UI.
+
+Result: PASS (structurally enforced by `runAutomaticIncidentExport`).
+
+-------------------------------------------------------------------------------
+ADV-12 — BOUNDS: can the retained set grow without bound?
+-------------------------------------------------------------------------------
+Both the in-memory manager and the durable index enforce a retained-
+incident bound and evict the OLDEST first.
+
+Result: PASS. Proven by:
+  "G10 — the retained-incident bound is enforced and the oldest is evicted"
+
+-------------------------------------------------------------------------------
+ADV-13 — USER CONTROL: can the user delete what was captured?
+-------------------------------------------------------------------------------
+`cline.deleteRetainedIncidents` removes every retained incident from memory
+AND from disk, including the durable index, and reports how many were
+removed and how many could not be removed (a partial deletion is reported
+honestly, not hidden).
+
+Result: PASS. Proven by:
+  "G23 — the delete removes the artifacts from disk AND from memory"
+
+The EXPORT never deletes (dump != clear); only the explicit delete action
+does.

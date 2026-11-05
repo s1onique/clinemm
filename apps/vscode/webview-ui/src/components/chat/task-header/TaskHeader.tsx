@@ -18,6 +18,7 @@ import CopyTaskButton from "./buttons/CopyTaskButton"
 import DeleteTaskButton from "./buttons/DeleteTaskButton"
 import NewTaskButton from "./buttons/NewTaskButton"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
+import ReportTaskProblemButton from "./buttons/ReportTaskProblemButton"
 import ContextWindow from "./ContextWindow"
 import { highlightText } from "./Highlights"
 import TaskHeaderTelemetry from "./TaskHeaderTelemetry"
@@ -284,6 +285,11 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							{isTaskExpanded && (
 								<div className="mt-1 flex justify-end cursor-pointer opacity-80 gap-2 mx-2">
 									<CopyTaskButton className={BUTTON_CLASS} taskText={task.text} />
+									{/* ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
+									    The ONE-CLICK "Report Task Problem" action. It is
+									    always discoverable in the expanded task header, so
+									    the user can reach it while the task is `Paused`. */}
+									<ReportTaskProblemButton className={BUTTON_CLASS} />
 									<DeleteTaskButton
 										className={BUTTON_CLASS}
 										taskId={currentTaskItem?.id}
