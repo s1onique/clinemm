@@ -4,6 +4,27 @@
 **Status:** `PASS_STRUCTURAL_ONLY` — code complete, artifact built and identity-verified, live installed-extension measurement NOT executed (operator required).
 **Review outcome (2026-11-05):** `PASS_STRUCTURAL_ONLY` accepted; one bounded **P1** fixture correction applied (see §3.3). No architecture selected. No further review cycle required.
 
+> ## CORRECTION (successor ACT)
+>
+> **The verdict below is SUPERSEDED.** The production discriminator is
+> **CLOSED** with **`SELECT_SEATBELT_SIGNAL_REPAIR`**.
+>
+> The earlier `HALT_DIAGNOSTIC_NOT_APPLIED` classification recorded in
+> `live-command-result.json` was **ERRONEOUS**: it inspected the profile
+> temp directories for `target same-sandbox` AFTER the job had completed
+> and the backend's cleanup hook had already removed the profile. The
+> verbatim erroneous artifacts are preserved as
+> `live-command-result.SUPERSEDED-HALT-DIAGNOSTIC-NOT-APPLIED.json` and
+> `live-profile-identity.SUPERSEDED-HALT-DIAGNOSTIC-NOT-APPLIED.txt`.
+>
+> The successor ACT
+> **`ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01`**
+> implements the bounded permanent repair, removes the temporary
+> diagnostic, and re-qualifies the repair at the real production seam.
+>
+> The document below is retained **verbatim** as the historical state at
+> the close of this ACT.
+
 ---
 
 ## 1. Executive summary

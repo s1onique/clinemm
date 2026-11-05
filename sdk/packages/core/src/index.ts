@@ -1178,6 +1178,7 @@ export { createHubPluginCommandsApi } from "./hub/client/plugin-commands";
 export * from "./remote/remote-environments";
 export { ensureLoginShellPath } from "./remote/shell-path";
 export { resolveModelBehaviorTraceBudget } from "./runtime/observability/model-behavior-trace";
+export type { SdkAbortCauseSnapshot } from "./runtime/observability/sdk-abort-cause-retention";
 // ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the bounded, local-only
 // abnormal-terminal retention. It lives beside the runtime observability
 // layer because the SDK owns the run-terminal and provider-request
@@ -1188,12 +1189,11 @@ export {
 	getLatestSdkAbortCauseSnapshot,
 	getSdkAbortCauseSnapshots,
 	observeSdkAbortCauseRecord,
-	setSdkAbortCauseRecordProvider,
 	SDK_ABORT_CAUSE_MAX_EVENTS_PER_SNAPSHOT,
-	SDK_ABORT_CAUSE_MAX_SNAPSHOTS,
 	SDK_ABORT_CAUSE_MAX_SNAPSHOT_BYTES,
+	SDK_ABORT_CAUSE_MAX_SNAPSHOTS,
+	setSdkAbortCauseRecordProvider,
 } from "./runtime/observability/sdk-abort-cause-retention";
-export type { SdkAbortCauseSnapshot } from "./runtime/observability/sdk-abort-cause-retention";
 // ACT-CLINEMM-COMMAND-SANDBOX-BACKEND-ABSTRACTION01:
 // sandbox backend abstraction (experimental, DEFAULT_OFF).
 export {
@@ -1233,21 +1233,6 @@ export {
 	SANDBOX_EXEC_PATH,
 	SeatbeltSandboxBackendExperimental,
 	setSeatbeltDiagnosticObserver,
-} from "./runtime/sandbox/macos/seatbelt-backend";
-// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01:
-// TEMPORARY diagnostic-only export, in the SAME shape as the
-// `setSeatbeltDiagnosticObserver` precedent above. It is NOT a
-// product option, user setting, protocol field, wire method, or
-// capability variant: it arms a ONE-SHOT, DEFAULT_OFF, exact-command
-// signal-rule substitution used only by the one diagnostic workload.
-// The successor ACT authorized by the experiment DELETES this export,
-// the backing module functions, and the `signalTarget` profile option
-// together.
-export {
-	armSeatbeltSignalRuleAuthorization,
-	clearSeatbeltSignalRuleAuthorization,
-	getSeatbeltSignalRuleAuthorization,
-	type SeatbeltSignalRuleAuthorizationIdentity,
 } from "./runtime/sandbox/macos/seatbelt-backend";
 export { noSandboxBackend } from "./runtime/sandbox/no-sandbox-backend";
 export {

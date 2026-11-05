@@ -1,0 +1,136 @@
+LIVE PROFILE IDENTITY
+=====================
+CLASSIFICATION: HALT_DIAGNOSTIC_NOT_APPLIED (Case D)
+SUPERSEDES: the earlier NOT_EXECUTED classification. The Step 4 diagnostic
+command WAS executed and produced an authoritative SAME_SANDBOX_RESULT_JSON
+(saved verbatim to raw/live-command-result.json), but the candidate profile
+was NOT applied to that job, so the run cannot discriminate the two
+candidate repairs. See "WHY THE DIAGNOSTIC WAS NOT APPLIED" below.
+
+--- STEP 4 RESULT (authoritative; raw/live-command-result.json) ---
+parentPid            = 41078
+childPid             = 41092
+childReady           = true
+signalAttempt        = { ok: true, errnoCode: null }
+childReceivedSigterm = true
+childExited          = true
+childExitCode        = 0
+childSelfExited      = true
+childStillAliveAfter = false
+childAliveProbeErrno = ESRCH
+parentPgid / childPgid = null  ("not observed in-process" per P1 correction)
+
+--- STEP 3: PROFILE IDENTITY ---
+PROFILE_DIRS_INSPECTED = /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-*
+PROFILES_WITH_SAME_SANDBOX_RULE = 0   (grep -rl 'target same-sandbox' => 0 matches)
+ALL_OBSERVED_PROFILES_SIGNAL_RULE = (allow signal (target self))
+  e.g. clinemm-sandbox-profile-PmtHZT/profile-e27e112b981d.sb  (newest at run time)
+       clinemm-sandbox-profile-TLSEnO/profile-e008769e58fd.sb
+       clinemm-sandbox-profile-ja1yrf/profile-820498848f12.sb
+       clinemm-sandbox-profile-AnWKwJ/profile-e66a02546fb1.sb
+       clinemm-sandbox-profile-g0CW7a/profile-7169f997c849.sb
+       clinemm-sandbox-profile-kinhiG/profile-b7f92ded70b0.sb
+       clinemm-sandbox-profile-sCW31p/profile-a617030b96b3.sb
+       clinemm-sandbox-profile-EK6EPe/profile-26b934635dde.sb
+       clinemm-sandbox-profile-Pn1C0F/profile-d459dfbafe49.sb
+       clinemm-sandbox-profile-eOw9uk/profile-784e06652441.sb
+PROFILE_SHA256 (newest observed, PmtHZT/profile-e27e112b981d.sb)
+                 = c5fd7a88efa1d757a225198120fa8c79d7f026fe8adcb9b6af27fd216df7534d
+PROFILE_SIGNAL_RULE = (allow signal (target self))
+CANDIDATE_RULE_PRESENT = NO
+DIAGNOSTIC_APPLIED = NO
+
+--- WHY THE DIAGNOSTIC WAS NOT APPLIED ---
+(a) OPT-IN ENV ABSENT. No running VSCodium main process (PIDs 65124, 96498)
+    carries CLINEMM_DIAG_SAME_SANDBOX_SIGNAL or
+    CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND. Only unrelated vars are present:
+    CLINEMM_RUNTIME_PROFILE, CLINEMM_MYC_PRIME_DIAG, CLINEMM_PTAD,
+    CLINEMM_DIAG_INPUT_SHAPE_V2, CLINEMM_DIAG_TERMINATION_AUTHORITY,
+    CLINEMM_DIAG_ACTIVITY_STATE_V1.
+(b) WRONG BUNDLE INSTALLED. Installed extension:
+      /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/
+        s1onique.clinemm-4.1.16-5a1c485cb-1f456b971/dist/extension.js
+      bundle sha256 = 7aba56e769d322adb420f79f5c161e5bd4abb260761ff25a4ba73ace3e1fd0f9
+    Expected diagnostic bundle sha256 =
+      f183358f96fdc043f3677b11491c16051ceeae05f83bc17241d393f311da31f1
+    => installed build is NOT the identity-verified diagnostic build.
+(c) EXPECTED DIAGNOSTIC VSIX IS PRESENT AND UNMODIFIED:
+      dist/clinemm-4.1.16-5a1c485cb-cfd81f355.vsix
+      size   = 49544306 bytes
+      sha256 = 16f5962428fb7c9039d33dffc28b7d664b9a4674d6526d625ee0c4829db8e568
+    (matches OPERATOR-INSTRUCTIONS.md Step 1)
+
+--- STEP 5: CLEANUP VERIFICATION (independent, from the shell) ---
+PARENT_PID=41078
+  ps -o pid=,ppid=,pgid=,lstart=,command= -p 41078  => no output, rc=1 (GONE)
+CHILD_PID=41092
+  ps -o pid=,ppid=,pgid=,lstart=,command= -p 41092  => no output, rc=1 (GONE)
+  kill -0 41092 => "kill 41092 failed: no such process", rc=1
+  => ESRCH = child ABSENT. CLEANUP VERIFIED. No orphan left behind.
+PGID: not observable after the fact (both PIDs already reaped).
+  Not load-bearing for the causal decision.
+
+--- HISTORICAL CONTEXT (retained from the NOT_EXECUTED file) ---
+The exact final profile written by SeatbeltBackend.prepare() for the
+candidate job could not be captured by the agent: no candidate job ran
+in the installed extension.
+
+What IS known (STRUCTURAL / LIVE on the production host):
+
+1. The REAL dogfood extension host's live profile WAS captured from the
+   system temp root while the production extension was running:
+
+     /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/
+       clinemm-sandbox-profile-LiZbKs/profile-a385e0b4535d.sb
+
+   Its content (the CURRENT production profile, ORIGINAL rule):
+
+     (version 1)
+     (deny default)
+     (allow process-exec)
+     (allow process-fork)
+     (allow signal (target self))          <-- ORIGINAL PRODUCTION RULE
+     (allow sysctl-read)
+     (allow mach-lookup)
+     (allow file-read*)
+     (deny file-read* (subpath ".../.ssh/id_rsa"))
+     (deny file-read* (subpath ".../.ssh/id_ed25519"))
+     (deny file-read* (subpath ".../.gnupg/private-keys-v1.d"))
+     (allow file-write* (subpath ".../Projects/SPbNIX/clinemm"))
+     (allow file-write* (subpath ".../clinemm-sandbox-temp-UYLIWp"))
+     (allow file-write* (literal "/dev/null") (literal "/dev/tty") (subpath "/private/tmp"))
+     (allow file-write* (subpath ".../Library/Caches/go-build"))
+     (allow file-read-metadata (subpath "/"))
+     (deny network*)
+
+   This PROVES the real extension host:
+     - DOES apply the ClineMM Seatbelt profile (the profile exists on disk
+       and the command ran under it), and
+     - uses the ORIGINAL "(allow signal (target self))" rule, and
+     - has the extension host's TMPDIR = the SYSTEM per-user temp root
+       (NOT a clinemm-sandbox-temp-* dir) => the extension host itself is
+       NOT inside a ClineMM Seatbelt profile.
+
+   SCOPE LIMIT (review of 2026-11-05): the TMPDIR observation shows the
+   extension host is not launched under a ClineMM Seatbelt profile. It is
+   the LEADING EXPLANATION that the extension host therefore inherits only
+   the Chromium zygote sandbox authority — but an environment path does NOT
+   establish the effective KERNEL sandbox policy. This is INFERRED, not
+   proven causal identity, and it is recorded as such.
+
+2. The candidate profile for the SAME capability snapshot was generated
+   and diffed (see profile-diff.txt):
+     BASELINE_SHA256 = dbc384d69dd6e667df43ce9fe3e0d28ac555ab1645b437d13f4cf0c33d6959da
+     CANDIDATE_SHA256 = 3fd4c2cd74540eb2438cc696aaec55be869725671caa88c5206937f08476ef06
+     DIFFERING_LINE_COUNT = 1
+     DIFF line 4: "(allow signal (target self))" -> "(allow signal (target same-sandbox))"
+
+   NOTE: the runtime-generated production profile hash will NOT equal the
+   frozen RECON01 hashes (80b0caf1... / 5a718c4c...) because runtime
+   capabilities and paths differ; the E3 hashes identify the RECON01
+   profiles only.
+
+Still to capture (operator): PROFILE_PATH, PROFILE_SHA256,
+PROFILE_SIGNAL_RULE (must be exactly one same-sandbox rule, zero
+self-only rules), SANDBOX_EXEC_EXECUTABLE, SANDBOX_EXEC_ARGS,
+PREPARED_CWD.

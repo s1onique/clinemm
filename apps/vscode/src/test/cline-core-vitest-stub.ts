@@ -263,21 +263,14 @@ export {
 	SAFE_ENVIRONMENT_BASELINE,
 	SECRET_BLOCKLIST,
 } from "../../../../sdk/packages/core/src/runtime/sandbox/environment"
-export type { SeatbeltSignalRuleAuthorizationIdentity } from "../../../../sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend"
 // ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
 // Re-export the Seatbelt singleton + substrate probe + diagnostic
 // observer setter + accessor so the apps/vscode vitest suites (which
 // alias `@cline/core` to this stub) can construct the REAL backend
 // in tests. The SDK source IS the production code path; this is
 // purely a resolution bridge.
-// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01:
-// the TEMPORARY, DEFAULT_OFF one-shot signal-rule authorization. Same
-// resolution-bridge rationale as the observer setter above.
 export {
-	armSeatbeltSignalRuleAuthorization,
-	clearSeatbeltSignalRuleAuthorization,
 	getSeatbeltDiagnosticObserver,
-	getSeatbeltSignalRuleAuthorization,
 	probeSeatbeltAvailability,
 	SANDBOX_EXEC_PATH,
 	SeatbeltSandboxBackendExperimental,

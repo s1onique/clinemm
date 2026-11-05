@@ -20,14 +20,13 @@ import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-
+import type { CommandCapability } from "../types";
 import {
 	ALWAYS_WRITABLE_LITERALS,
 	ALWAYS_WRITABLE_SYSTEM_SUBPATHS,
 	escapeSbplString,
 	generateSeatbeltProfile,
 } from "./seatbelt-profile";
-import type { CommandCapability } from "../types";
 
 function sha256(s: string): string {
 	return createHash("sha256").update(s, "utf8").digest("hex");
@@ -123,10 +122,15 @@ describe("generateSeatbeltProfile", () => {
 		expect(p).toContain("(deny default)");
 		expect(p).toContain("(allow process-exec)");
 		expect(p).toContain("(allow process-fork)");
-		expect(p).toContain("(allow signal (target self))");
+		// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01:
+		// the permanent production signal rule. See the generator's
+		// doc comment for the live production evidence.
+		expect(p).toContain("(allow signal (target same-sandbox))");
+		expect(p).not.toContain("(allow signal (target self))");
+		expect(p).not.toContain("(allow signal)");
 		expect(p).toContain("(allow sysctl-read)");
 		expect(p).toContain("(allow mach-lookup)");
-		expect(p).toContain("(allow file-read-metadata (subpath \"/\"))");
+		expect(p).toContain('(allow file-read-metadata (subpath "/"))');
 	});
 
 	it("emits (allow file-read*) when no deny-read subpaths are provided", () => {
@@ -245,9 +249,7 @@ describe("generateSeatbeltProfile", () => {
 			expect(p).toContain("(socket-domain AF_UNIX))");
 			// path-literal (NOT subpath) is the AF_UNIX remote-endpoint filter.
 			expect(p).toContain("(allow network-outbound");
-			expect(p).toContain(
-				`(remote unix-socket (path-literal "${CANONICAL}"))`,
-			);
+			expect(p).toContain(`(remote unix-socket (path-literal "${CANONICAL}"))`);
 			// NEGATIVE: subpath is the filesystem primitive, must NOT be used for sockets.
 			expect(p).not.toMatch(/\(remote unix-socket \(subpath/);
 		});
@@ -316,7 +318,7 @@ describe("generateSeatbeltProfile", () => {
 	//   T5..T9) conservation: reads, ssh-agent, determinism, network, deny-after-allow
 	// ===============================================================
 	describe("ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01: explicit /tmp compatibility grant", () => {
-		it("T1 RED→GREEN: profile grants (subpath \"<canonical /tmp>\") for BSD mktemp + literal /tmp compatibility", () => {
+		it('T1 RED→GREEN: profile grants (subpath "<canonical /tmp>") for BSD mktemp + literal /tmp compatibility', () => {
 			const canonicalTmp = (() => {
 				try {
 					return realpathSync("/tmp");
@@ -425,9 +427,7 @@ describe("generateSeatbeltProfile", () => {
 			});
 			expect(p).toContain("(allow system-socket");
 			expect(p).toContain("(socket-domain AF_UNIX))");
-			expect(p).toContain(
-				`(remote unix-socket (path-literal "${CANONICAL}"))`,
-			);
+			expect(p).toContain(`(remote unix-socket (path-literal "${CANONICAL}"))`);
 		});
 
 		it("T7 conservation: profile remains deterministic after temp-subpath addition", () => {
@@ -481,4 +481,3 @@ describe("generateSeatbeltProfile", () => {
 		});
 	});
 });
-

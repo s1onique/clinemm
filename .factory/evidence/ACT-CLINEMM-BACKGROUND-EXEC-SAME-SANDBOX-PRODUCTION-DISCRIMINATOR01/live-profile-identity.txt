@@ -1,7 +1,76 @@
 LIVE PROFILE IDENTITY
 =====================
-CLASSIFICATION: NOT_EXECUTED
+CLASSIFICATION: HALT_DIAGNOSTIC_NOT_APPLIED (Case D)
+SUPERSEDES: the earlier NOT_EXECUTED classification. The Step 4 diagnostic
+command WAS executed and produced an authoritative SAME_SANDBOX_RESULT_JSON
+(saved verbatim to raw/live-command-result.json), but the candidate profile
+was NOT applied to that job, so the run cannot discriminate the two
+candidate repairs. See "WHY THE DIAGNOSTIC WAS NOT APPLIED" below.
 
+--- STEP 4 RESULT (authoritative; raw/live-command-result.json) ---
+parentPid            = 41078
+childPid             = 41092
+childReady           = true
+signalAttempt        = { ok: true, errnoCode: null }
+childReceivedSigterm = true
+childExited          = true
+childExitCode        = 0
+childSelfExited      = true
+childStillAliveAfter = false
+childAliveProbeErrno = ESRCH
+parentPgid / childPgid = null  ("not observed in-process" per P1 correction)
+
+--- STEP 3: PROFILE IDENTITY ---
+PROFILE_DIRS_INSPECTED = /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-profile-*
+PROFILES_WITH_SAME_SANDBOX_RULE = 0   (grep -rl 'target same-sandbox' => 0 matches)
+ALL_OBSERVED_PROFILES_SIGNAL_RULE = (allow signal (target self))
+  e.g. clinemm-sandbox-profile-PmtHZT/profile-e27e112b981d.sb  (newest at run time)
+       clinemm-sandbox-profile-TLSEnO/profile-e008769e58fd.sb
+       clinemm-sandbox-profile-ja1yrf/profile-820498848f12.sb
+       clinemm-sandbox-profile-AnWKwJ/profile-e66a02546fb1.sb
+       clinemm-sandbox-profile-g0CW7a/profile-7169f997c849.sb
+       clinemm-sandbox-profile-kinhiG/profile-b7f92ded70b0.sb
+       clinemm-sandbox-profile-sCW31p/profile-a617030b96b3.sb
+       clinemm-sandbox-profile-EK6EPe/profile-26b934635dde.sb
+       clinemm-sandbox-profile-Pn1C0F/profile-d459dfbafe49.sb
+       clinemm-sandbox-profile-eOw9uk/profile-784e06652441.sb
+PROFILE_SHA256 (newest observed, PmtHZT/profile-e27e112b981d.sb)
+                 = c5fd7a88efa1d757a225198120fa8c79d7f026fe8adcb9b6af27fd216df7534d
+PROFILE_SIGNAL_RULE = (allow signal (target self))
+CANDIDATE_RULE_PRESENT = NO
+DIAGNOSTIC_APPLIED = NO
+
+--- WHY THE DIAGNOSTIC WAS NOT APPLIED ---
+(a) OPT-IN ENV ABSENT. No running VSCodium main process (PIDs 65124, 96498)
+    carries CLINEMM_DIAG_SAME_SANDBOX_SIGNAL or
+    CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND. Only unrelated vars are present:
+    CLINEMM_RUNTIME_PROFILE, CLINEMM_MYC_PRIME_DIAG, CLINEMM_PTAD,
+    CLINEMM_DIAG_INPUT_SHAPE_V2, CLINEMM_DIAG_TERMINATION_AUTHORITY,
+    CLINEMM_DIAG_ACTIVITY_STATE_V1.
+(b) WRONG BUNDLE INSTALLED. Installed extension:
+      /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/
+        s1onique.clinemm-4.1.16-5a1c485cb-1f456b971/dist/extension.js
+      bundle sha256 = 7aba56e769d322adb420f79f5c161e5bd4abb260761ff25a4ba73ace3e1fd0f9
+    Expected diagnostic bundle sha256 =
+      f183358f96fdc043f3677b11491c16051ceeae05f83bc17241d393f311da31f1
+    => installed build is NOT the identity-verified diagnostic build.
+(c) EXPECTED DIAGNOSTIC VSIX IS PRESENT AND UNMODIFIED:
+      dist/clinemm-4.1.16-5a1c485cb-cfd81f355.vsix
+      size   = 49544306 bytes
+      sha256 = 16f5962428fb7c9039d33dffc28b7d664b9a4674d6526d625ee0c4829db8e568
+    (matches OPERATOR-INSTRUCTIONS.md Step 1)
+
+--- STEP 5: CLEANUP VERIFICATION (independent, from the shell) ---
+PARENT_PID=41078
+  ps -o pid=,ppid=,pgid=,lstart=,command= -p 41078  => no output, rc=1 (GONE)
+CHILD_PID=41092
+  ps -o pid=,ppid=,pgid=,lstart=,command= -p 41092  => no output, rc=1 (GONE)
+  kill -0 41092 => "kill 41092 failed: no such process", rc=1
+  => ESRCH = child ABSENT. CLEANUP VERIFIED. No orphan left behind.
+PGID: not observable after the fact (both PIDs already reaped).
+  Not load-bearing for the causal decision.
+
+--- HISTORICAL CONTEXT (retained from the NOT_EXECUTED file) ---
 The exact final profile written by SeatbeltBackend.prepare() for the
 candidate job could not be captured by the agent: no candidate job ran
 in the installed extension.

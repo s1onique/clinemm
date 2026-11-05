@@ -81,7 +81,6 @@ import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
-import { armSameSandboxDiagnosticIfOptedIn } from "@/sdk/sandbox-policy"
 import { setTaskHeaderElmProductionKernelPath } from "@/sdk/task-header-elm-shadow"
 import {
 	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
@@ -183,24 +182,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	// never the `vscode` API, so `vscode` is not imported into the
 	// SDK capture code.
 	configureDogfoodCaptureStorage(context.globalStorageUri.fsPath)
-
-	// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01:
-	// Arm the ONE-SHOT, DEFAULT_OFF Seatbelt signal-rule substitution for
-	// the single diagnostic fixture, at the EARLIEST initialization seam
-	// (before any command can be executed).
-	//
-	// The gate lives in `@/sdk/sandbox-policy` and is TRUSTED host-side
-	// code: it requires the closed `dogfood` runtime identity, the
-	// Seatbelt sandbox mode, AND an operator-stated EXACT command
-	// identity. Command text / arguments / stdout / the run_commands
-	// environment CANNOT arm it. In the DEFAULT case (no env opt-in) this
-	// is a no-op and the generated profile is byte-for-byte identical to
-	// the original production output.
-	//
-	// REMOVAL: this call, the policy helper, the SDK-side authorization
-	// slot, and the `signalTarget` profile option are deleted together by
-	// the successor ACT.
-	armSameSandboxDiagnosticIfOptedIn(process.env)
 
 	// ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01: arm the MYC
 	// prime live diagnostic (M knob) at the EARLIEST initialization

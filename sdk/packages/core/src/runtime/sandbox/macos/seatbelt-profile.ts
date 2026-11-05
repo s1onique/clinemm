@@ -7,7 +7,7 @@
  *   (version 1)
  *   (deny default)
  *   (allow process-exec) (allow process-fork)
- *   (allow signal (target self))
+ *   (allow signal (target same-sandbox))
  *   (allow sysctl-read) (allow mach-lookup)
  *   (allow file-read* ...with optional require-all require-not exclusions...)
  *   (allow file-write* ...with explicit subpaths and literals...)
@@ -694,46 +694,52 @@ function buildHostHelperSocketRules(
  *                       Emits the same exact-socket rule pair as
  *                       ssh-agent. When omitted, no host-helper
  *                       rules are emitted.
- * @param options.signalTarget  ACT-CLINEMM-BACKGROUND-EXEC-SAME-
- *                       SANDBOX-PRODUCTION-DISCRIMINATOR01: the SBPL
- *                       `signal` target selector. DEFAULT (`"self"`)
- *                       emits the ORIGINAL production rule
- *                       `(allow signal (target self))` byte-for-byte.
- *                       `"same-sandbox"` emits
- *                       `(allow signal (target same-sandbox))` and is
- *                       reachable ONLY through the private, DEFAULT_OFF,
- *                       one-shot diagnostic authorization installed by
- *                       the Seatbelt backend. It is NOT a public API:
- *                       no capability field, no protocol field, no user
- *                       setting carries it.
  */
-export type SeatbeltSignalTarget = "self" | "same-sandbox";
-
 export function generateSeatbeltProfile(
 	capability: CommandCapability,
 	options: {
 		readonly denyReadSubpaths?: readonly string[];
 		readonly sshAgentCanonicalSocketPath?: string;
 		readonly hostHelperCanonicalSocketPath?: string;
-		/**
-		 * ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01.
-		 * See the doc comment above. The DEFAULT MUST remain `"self"` —
-		 * the default profile bytes are load-bearing production
-		 * behavior and are asserted byte-for-byte by the default-off
-		 * regression test.
-		 */
-		readonly signalTarget?: SeatbeltSignalTarget;
 	} = {},
 ): string {
 	const denyRead = options.denyReadSubpaths ?? [];
-	// DEFAULT_OFF: absent => `"self"` => the original production rule.
-	// Only the private diagnostic authorization can select anything
-	// else, and it can only do so for ONE exact command identity.
-	const signalTarget: SeatbeltSignalTarget = options.signalTarget ?? "self";
-	const signalRule =
-		signalTarget === "same-sandbox"
-			? "(allow signal (target same-sandbox))"
-			: "(allow signal (target self))";
+	// ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01:
+	//
+	// PERMANENT production rule. The original `(allow signal (target
+	// self))` permitted a sandboxed workload to signal ONLY itself,
+	// which made it impossible for a Background Exec workload to
+	// terminate a child it had spawned: the child is a DISTINCT
+	// sandbox session, so `target self` denied the signal with EPERM.
+	//
+	// The live production measurement (see
+	// `.factory/evidence/ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-
+	// SIGNAL-REPAIR01/`) established the causal chain at the real
+	// VSCodium extension-host seam:
+	//
+	//   Background Exec -> /bin/zsh -c <cmd> -> sandbox-exec -f <profile>
+	//     -> Node parent -> Node child -> kill(childPid, SIGTERM)
+	//
+	// With `(allow signal (target same-sandbox))` the child-directed
+	// SIGTERM is permitted and the child exits cleanly (observed
+	// `signalAttempt.ok=true` + `CHILD_GOT_SIGTERM` + `ESRCH` after
+	// exit). This matches the Seatbelt policies used by the OpenAI
+	// Codex sandbox and the Anthropic Sandbox Runtime, both of which
+	// allow `(allow signal (target same-sandbox))`.
+	//
+	// SCOPE LIMIT (load-bearing): `same-sandbox` is a SANDBOX-SCOPED
+	// permission, NOT an ownership-token check. It permits signalling
+	// any process in the SAME sandbox session — it does not prove
+	// that the target is a descendant of the caller. The existing
+	// helper ownership protections (`process-group.register-owned` /
+	// `process-group.terminate-owned`) are UNCHANGED and remain the
+	// authority for cross-sandbox, owned-process termination.
+	//
+	// SECURITY CONSERVATION: this changes EXACTLY ONE profile line.
+	// Filesystem, network, environment, socket and cwd rules are
+	// byte-for-byte unchanged, and the command still runs through
+	// `/usr/bin/sandbox-exec -f <profile>` (no sandbox bypass).
+	const signalRule = "(allow signal (target same-sandbox))";
 
 	const lines: string[] = [
 		"(version 1)",

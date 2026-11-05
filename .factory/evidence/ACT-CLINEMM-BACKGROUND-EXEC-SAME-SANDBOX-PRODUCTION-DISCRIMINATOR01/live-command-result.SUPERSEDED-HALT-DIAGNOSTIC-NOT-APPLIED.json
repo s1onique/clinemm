@@ -1,0 +1,48 @@
+{
+  "classification": "HALT_DIAGNOSTIC_NOT_APPLIED",
+  "case": "D",
+  "reason": "The Step 4 diagnostic command WAS executed (Background Exec / run_commands substrate) and produced an authoritative SAME_SANDBOX_RESULT_JSON with signalAttempt.ok=true and childReceivedSigterm=true. HOWEVER the candidate Seatbelt rule was NOT applied to that job: every generated profile under /private/var/folders/*/*/T/clinemm-sandbox-profile-* still contains the ORIGINAL '(allow signal (target self))' rule, and 'target same-sandbox' appears in ZERO profiles. The opt-in env (CLINEMM_DIAG_SAME_SANDBOX_SIGNAL / _COMMAND) is absent from every running VSCodium main process, and the INSTALLED extension is build -1f456b971 (bundle sha256 7aba56e7...), NOT the identity-verified diagnostic build -cfd81f355 (bundle sha256 f183358f...). The measured signal delivery therefore characterises the pre-existing (allow signal (target self)) behaviour and CANNOT discriminate SELECT_SEATBELT_SIGNAL_REPAIR from SELECT_COMPOSED_BOUNDARY_REPAIR.",
+  "operatorInstructions": "OPERATOR-INSTRUCTIONS.md",
+  "liveCommandJobId": "background run_commands job (completed)",
+  "liveParentPid": 41078,
+  "liveChildPid": 41092,
+  "liveSignalResult": { "ok": true, "errnoCode": null },
+  "liveChildReceivedSigterm": true,
+  "liveChildExit": { "childExited": true, "childExitCode": 0, "childSelfExited": true, "childStillAliveAfter": false, "childAliveProbeErrno": "ESRCH" },
+  "liveJobTerminalState": "completed",
+  "liveResultVerbatim": "raw/live-command-result.json",
+  "profileIdentity": "live-profile-identity.txt",
+  "cleanupVerification": {
+    "parentPid": 41078,
+    "parentState": "GONE (ps rc=1)",
+    "childPid": 41092,
+    "childState": "GONE (kill -0 => ESRCH, rc=1)",
+    "cleanupVerified": true,
+    "orphanLeftBehind": false
+  },
+  "profileSignalRule": "(allow signal (target self))",
+  "candidateRulePresent": false,
+  "diagnosticApplied": false,
+  "expectedResultShape": {
+    "marker": "CLINEMM_SAME_SANDBOX_PRODUCTION_DISCRIMINATOR01",
+    "parentPid": null,
+    "childPid": null,
+    "parentPgid": null,
+    "childPgid": null,
+    "childReady": false,
+    "profileApplied": null,
+    "signalAttempt": { "ok": null, "errnoCode": null },
+    "childReceivedSigterm": null,
+    "childExited": null,
+    "childStillAliveAfter": null
+  },
+  "redAgentSubstrate": "raw/red-agent-substrate.result.json",
+  "nextOperatorSteps": [
+    "Step 1: install dist/clinemm-4.1.16-5a1c485cb-cfd81f355.vsix and verify bundle sha256 = f183358f96fdc043f3677b11491c16051ceeae05f83bc17241d393f311da31f1",
+    "Step 2a: FULLY quit every running VSCodium (no extension-host may survive) so the new instance cannot inherit the old environment",
+    "Step 2: relaunch with CLINEMM_RUNTIME_PROFILE=dogfood, CLINEMM_DIAG_SAME_SANDBOX_SIGNAL=1 and the EXACT CLINEMM_DIAG_SAME_SANDBOX_SIGNAL_COMMAND JSON array",
+    "Verify the extension host's own environment carries both vars before issuing the command",
+    "Step 3/4/5: re-capture profile identity, re-run the ONE command, re-verify cleanup",
+    "Step 6: restore the normal extension after ANY outcome"
+  ]
+}

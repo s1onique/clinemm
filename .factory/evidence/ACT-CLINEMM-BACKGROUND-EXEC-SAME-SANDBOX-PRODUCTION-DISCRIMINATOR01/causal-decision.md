@@ -3,6 +3,24 @@
 **ACT:** `ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-PRODUCTION-DISCRIMINATOR01`
 **Diagnostic source head:** `cfd81f35594a759e185da97834923450f4ba8e9b`
 
+> ## CORRECTION (successor ACT)
+>
+> **The verdict below (`PASS_STRUCTURAL_ONLY`, "no architecture is
+> selected") is SUPERSEDED.** The production discriminator is **CLOSED**
+> with **`SELECT_SEATBELT_SIGNAL_REPAIR`**.
+>
+> The successor ACT
+> **`ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01`**
+> implements the bounded permanent repair
+> (`(allow signal (target self))` → `(allow signal (target same-sandbox))`),
+> removes the temporary diagnostic, and re-qualifies the repair at the
+> real production seam.
+>
+> The document below is retained **verbatim** as the historical state at
+> the close of this ACT. See
+> `../ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01/` for the
+> authoritative successor evidence.
+
 ---
 
 ## Verdict
