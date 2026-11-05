@@ -1,0 +1,143 @@
+ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01 — VERIFICATION
+=========================================================================
+Evidence-contract correction only. No production repair, no production
+semantic change, no VSIX, no install, no push.
+
+PLATFORM / SUBSTRATE
+--------------------
+OS                    : macOS 14.7.4 (23H420)
+kernel_version        : Darwin Kernel Version 23.6.0 (root:xnu-10063.141.1.703.2~1/RELEASE_ARM64_T6031) arm64
+architecture          : arm64 (Darwin arm64)
+Bun_version           : 1.3.13 (/Volumes/UserData/Users/chistyakov/.bun/bin/bun)
+test_runner_version   : vitest/4.1.10 darwin-arm64
+sandbox_mode          : macOS Seatbelt (ClineMM experimental sandbox profile)
+                       profile grants only `(allow signal (target self))`; group signalling
+                       to another process is denied with EPERM.
+source_HEAD           : e94bbcf518f6bfcc44a96ee44b4b6b1ec3666b4c (branch main)
+
+REPOSITORY TRUST (recorded BEFORE any edit)
+--------------------------------------------
+git rev-parse HEAD          : e94bbcf518f6bfcc44a96ee44b4b6b1ec3666b4c
+git status --porcelain=v1   : (empty)
+git stash list              : stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration
+git worktree list           :
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm            e94bbcf51 [main]
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first 38e726c45 [experiment/m31-action-first]
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded 0366ea506 (detached HEAD)
+protected_stashes          : stash@{0} — PRESERVED, NOT POPPED, NOT REWRITTEN
+unrelated_worktrees        : PRESERVED (untouched)
+
+SUBSTRATE SIGNAL-CAPABILITY PROBE (the P0-1 substrate fact)
+-------------------------------------------------------------
+Direct probe against a real, privately-owned process group:
+
+    group probe (0):                    EPERM
+    group SIGTERM:                      EPERM
+    group probe after SIGTERM (0):      EPERM
+    direct child SIGKILL:               EPERM      <-- even the DIRECT child
+    group probe after child SIGKILL:    EPERM
+    signal self (0):                    rc=0
+    signal own pgroup (0):              rc=0
+
+=> No termination signal can be delivered to another process on this host.
+   The cancel/deadline CONTROLS therefore CANNOT prove effective
+   termination here, and the corrected contract reports
+   CAPTURE_INSUFFICIENT_SUBSTRATE instead of claiming it.
+
+REAPING-RACE WINDOW MEASUREMENT (the P0-2 mechanism location)
+---------------------------------------------------------------
+Real production supervisor (`spawnSupervisableShellCommand`), 40 trials,
+1ms sampling after the supervisor's exit promise resolves:
+
+    FIRST-GONE DELAYS(ms): 3,5,5,5,4,7,7,5,4,6,5,7,6,5,5,6,5,6,6,5,6,6,6,5,7,6,5,5,5,5,5,6,7,5,5,5,5,4,5
+    SAMPLED: {"eperm":215,"gone":7785}
+
+=> The owned group is reaped 3-7ms after the supervisor's exit boundary.
+   Probing AT that boundary yields EPERM (group still exists) in 79/80
+   trials. The production CommandJobManager's own probe lands a few ms
+   later (after the teardown) and observes `gone` in 60/60 manager-path
+   trials. This is why the ORIGINAL eight-trial assertion was vacuous:
+   it could not see the race it claimed to guard.
+
+FOCUSED SUITE — DEFAULT (deterministic)
+----------------------------------------
+Command:
+  cd apps/vscode && bun x vitest run \
+    src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts
+
+Result (exit code 0):
+   ✓ N0: clean natural exit yields a gone postcondition and a clean exited terminal
+   ✓ N1: natural exit with a transient descendant reproduces the containment_failed boundary
+   ✓ N2: persistent descendant keeps the owned group demonstrably alive across the observation window
+   ✓ N3: shell waits for the same descendant -> gone postcondition and clean terminal
+   ✓ C1: explicit cancel terminates the owned tree -> gone postcondition and clean cancelled terminal
+   ✓ C2: execution deadline terminates the owned tree -> gone postcondition and clean deadline_exceeded terminal
+   ✓ CONTRAST: stdio-inheriting descendant delays the exit promise, and the residual group is reaped within a bounded window
+   ✓ REAPING-RACE: a non-gone postcondition without any descendant is a transient reap artifact
+   ✓ REAPING-RACE WITNESS: a real non-gone -> gone witness is observed with no surviving live member (skipped: opt-in)
+   ✓ RED-03: the historical containment_failed record is NOT cleared when the group later disappears
+   ✓ G11: every owned group created by this suite is absent at the end
+
+   Test Files  1 passed (1)
+        Tests  11 passed (11)
+
+N1 and N2 evidence is PRESERVED and unchanged.
+
+FOCUSED SUITE — OPT-IN WITNESS REPRODUCTION (bounded)
+------------------------------------------------------
+Command:
+  cd apps/vscode && CLINEMM_NEPCR01_REAPING_WITNESS=1 bun x vitest run \
+    src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts -t 'REAPING-RACE WITNESS'
+
+Result (exit code 0):
+   ✓ REAPING-RACE WITNESS: a real non-gone -> gone witness is observed with no surviving live member
+   Test Files  1 passed (1)
+        Tests  1 passed | 10 skipped (11)
+
+Observed witnesses (evidence/reaping-race-witness.json): 4 of 40 trials.
+Witness contract, all four:
+   boundaryPostcondition      = alive     (the group still existed at the exit boundary)
+   boundaryOsErrorCode        = EPERM     (the kernel still held the process-group entry)
+   liveMemberCountAtBoundary  = 0         (CONFIRMED absence of surviving live members)
+   laterLiveness              = gone      (the group disappeared on its own)
+   cleanupOutcome             = verified_absent
+   race_observed              = true on 40/40 trials
+
+The requirement is NOT in the default suite, so the default gate stays
+deterministic. Without the opt-in flag the test is SKIPPED, not failed.
+
+TERMINATION-EFFICACY MEASUREMENT (P0-1 result)
+-----------------------------------------------
+  Control  Request     Measured      Natural-end      Supervisor   Verdict
+                     terminationTo   prediction       verdict
+                     GoneMs
+  C1       +400 ms     29432 ms      29600 ms        eperm        unproven
+  C2       +1200 ms    28841 ms      28800 ms        eperm        unproven
+
+Both land on the request-relative natural-end prediction (168 ms and 41 ms
+of it) and the PRODUCTION supervisor reported `eperm`. The controls
+therefore prove eventual group absence and the terminal label, and
+explicitly DO NOT claim successful termination.
+
+TYPECHECK / LINT
+----------------
+  cd apps/vscode && bun x tsc --noEmit            -> EXIT 0
+  cd apps/vscode && bun x biome check <3 files>    -> 0 errors (12 pre-existing style infos,
+                                                      none in the corrected code paths)
+
+REPOSITORY DELTA
+----------------
+  MODIFIED apps/vscode/src/sdk/__tests__/natural-exit-pgid-causal-repro01.nepcr01.test.ts
+  MODIFIED apps/vscode/src/sdk/__tests__/natural-exit-pgid-experiments.nepcr01.ts
+  MODIFIED apps/vscode/src/sdk/__tests__/natural-exit-pgid-observation-harness.nepcr01.ts
+  MODIFIED docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/REPORT.md
+  NEW     docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/CORRECTION01.md
+  NEW     docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/verification-correction01.txt
+  NEW     docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/reaping-race-witness.json
+  MODIFIED docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/experiment-matrix.json
+  MODIFIED docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/natural-exit-observations.jsonl
+  MODIFIED docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/process-membership.jsonl
+
+  PRODUCTION_FILES_CHANGED = 0
+  PRODUCTION_SEMANTICS_CHANGED = none
+  VSIX_BUILT = NO   INSTALLED = NO   PUSHED = NO   BRANCH_CREATED = NO

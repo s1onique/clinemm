@@ -36,13 +36,16 @@
  * the stdio-inheriting variant to document why the two differ.
  */
 
+import { spawnSupervisableShellCommand } from "@cline/core"
 import type { CommandJobLifecycleEvent, CommandJobManager } from "../command-job-manager"
 import { CommandJobManager as RealCommandJobManager } from "../command-job-manager"
 import {
 	type GroupObservation,
 	observeGroup,
 	observeGroupUntilGone,
+	observeSignalCapability,
 	readDescendantPid,
+	type SignalCapability,
 } from "./natural-exit-pgid-observation-harness.nepcr01"
 
 export type ExperimentId = "N0" | "N1" | "N2" | "N3" | "C1" | "C2"
@@ -60,6 +63,44 @@ export type ExperimentRecord = {
 	readonly rootExitAtMs: number | undefined
 	readonly supervisorExitResolutionAtMs: number | undefined
 	readonly finalizeEnteredAtMs: number | undefined
+	/**
+	 * ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01 (P0-1):
+	 * the timestamp at which the host requested the termination (cancel
+	 * request or deadline expiry). `undefined` for natural exits.
+	 */
+	readonly terminationRequestedAtMs: number | undefined
+	/**
+	 * CORRECTION01 (P0-1): the timestamp at which the owned process group
+	 * was FIRST observed `gone` by the READ-ONLY harness. `undefined` when
+	 * the group was never observed gone within the observation window.
+	 */
+	readonly groupGoneAtMs: number | undefined
+	/**
+	 * CORRECTION01 (P0-1): the elapsed time from the termination REQUEST
+	 * to the group's observed disappearance. This is the ONLY quantity
+	 * that can distinguish "the supervisor terminated the group" from
+	 * "the workload finished on its own".
+	 */
+	readonly terminationToGoneMs: number | undefined
+	/**
+	 * CORRECTION01 (P0-1): the PRODUCTION supervisor's own termination
+	 * verdict, read from the `command_job_primary_group_probe` lifecycle
+	 * event (its `probeResult` is derived from the supervisor's
+	 * `TerminateTreeResult.treeTerminated`). `undefined` when the event
+	 * was not emitted (a natural exit performs no group termination).
+	 */
+	readonly supervisorTerminationProbe: "gone" | "alive" | "eperm" | "unknown" | undefined
+	/**
+	 * CORRECTION01 (P0-1): the timestamp of the supervisor's termination
+	 * probe event, when one was emitted.
+	 */
+	readonly supervisorTerminationProbeAtMs: number | undefined
+	/**
+	 * CORRECTION01 (P0-1): whether this substrate can deliver a real
+	 * termination signal to a foreign process group. Termination-efficacy
+	 * claims are only permitted on a `signal_capable` substrate.
+	 */
+	readonly signalCapability: SignalCapability
 	/** The PRODUCTION postcondition the manager classified. */
 	readonly productionPostcondition: string | undefined
 	/**
@@ -161,6 +202,15 @@ export async function runExperiment(opts: RunExperimentOptions): Promise<Experim
 	const managerInstance = nextManagerInstance()
 	const processStart = Date.now()
 	let supervisorExitResolutionAtMs: number | undefined
+	// CORRECTION01 (P0-1): the substrate's ability to deliver a real
+	// termination signal to a foreign process group. Measured ONCE per
+	// process; every termination-efficacy claim is gated on it.
+	const signalCapability = observeSignalCapability()
+	// CORRECTION01 (P0-1): the timestamp at which the host requested the
+	// termination (cancel request). The deadline path is recorded by the
+	// manager's own `command_job_termination_started` event, captured
+	// below from the lifecycle stream.
+	let terminationRequestedAtMs: number | undefined
 
 	const started = await manager.start({
 		command: opts.command,
@@ -188,6 +238,7 @@ export async function runExperiment(opts: RunExperimentOptions): Promise<Experim
 
 	if (opts.termination === "cancel") {
 		await new Promise((r) => setTimeout(r, opts.cancelAfterMs ?? 500))
+		terminationRequestedAtMs = Date.now()
 		await manager.cancel({ jobId: started.jobId })
 	}
 
@@ -198,6 +249,44 @@ export async function runExperiment(opts: RunExperimentOptions): Promise<Experim
 	const immediateObservation = observeGroup(pgid ?? -1, rootPid)
 	const { observations: laterObservations } = await observeGroupUntilGone(pgid ?? -1, rootPid, opts.observationWindowMs)
 	const finalObservation = laterObservations[laterObservations.length - 1] ?? immediateObservation
+
+	// CORRECTION01 (P0-1): the PRODUCTION supervisor's own termination
+	// verdict. `command_job_primary_group_probe` is emitted by
+	// `runTerminationSequence()` with `probeResult` derived from the
+	// supervisor's `TerminateTreeResult.treeTerminated` — it is the
+	// production authority on whether the termination actually worked.
+	const terminationProbeEvent = events.find((e) => e.event === "command_job_primary_group_probe")
+	const supervisorTerminationProbe =
+		terminationProbeEvent && terminationProbeEvent.event === "command_job_primary_group_probe"
+			? terminationProbeEvent.probeResult
+			: undefined
+	const supervisorTerminationProbeAtMs =
+		terminationProbeEvent && terminationProbeEvent.event === "command_job_primary_group_probe"
+			? terminationProbeEvent.tsMs
+			: undefined
+
+	// CORRECTION01 (P0-1): the deadline path never goes through the
+	// test-side cancel call, so its request time comes from the
+	// manager's OWN `command_job_termination_started` event.
+	if (opts.termination === "deadline" && terminationRequestedAtMs === undefined) {
+		const terminationStarted = events.find((e) => e.event === "command_job_termination_started")
+		if (terminationStarted && terminationStarted.event === "command_job_termination_started") {
+			terminationRequestedAtMs = terminationStarted.tsMs
+		}
+	}
+
+	// CORRECTION01 (P0-1): the timestamp at which the group was FIRST
+	// observed gone, and the elapsed time from the termination request to
+	// that disappearance. This interval is what distinguishes "the
+	// supervisor terminated the group" from "the workload ended by
+	// itself" — the latter is bounded below by the workload's own
+	// lifetime, which is far longer than any termination grace window.
+	const goneObservation = laterObservations.find((o) => o.liveness === "gone")
+	const groupGoneAtMs = goneObservation?.atMs
+	const terminationToGoneMs =
+		typeof terminationRequestedAtMs === "number" && typeof groupGoneAtMs === "number"
+			? groupGoneAtMs - terminationRequestedAtMs
+			: undefined
 
 	const stdoutTail = started.stdout.slice(-400)
 	const descendantPid = readDescendantPid(started.stdout)
@@ -250,6 +339,12 @@ export async function runExperiment(opts: RunExperimentOptions): Promise<Experim
 		rootExitAtMs: undefined,
 		supervisorExitResolutionAtMs,
 		finalizeEnteredAtMs: production.finalizeEntered,
+		terminationRequestedAtMs,
+		groupGoneAtMs,
+		terminationToGoneMs,
+		supervisorTerminationProbe,
+		supervisorTerminationProbeAtMs,
+		signalCapability,
 		productionPostcondition: production.postcondition,
 		productionOsErrorCode: immediateObservation.osErrorCode,
 		managerTerminalState,
@@ -263,6 +358,138 @@ export async function runExperiment(opts: RunExperimentOptions): Promise<Experim
 		result,
 		stdoutTail,
 		stderrTail: started.stderr.slice(-400),
+	}
+}
+
+/**
+ * ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01 (P0-2).
+ *
+ * ONE OBSERVED REAPING-RACE WITNESS.
+ *
+ * A witness is a REAL production execution in which:
+ *
+ *   1. the production supervisor's `exit` promise resolves (the
+ *      production completion boundary — the very promise the
+ *      `CommandJobManager` consumes),
+ *   2. the owned process group is STILL PRESENT at that instant
+ *      (the kernel has not yet completed the group teardown),
+ *   3. the group has NO surviving live member (so there is nothing to
+ *      protect — this is a REAP artifact, not a surviving descendant),
+ *   4. and the group then disappears WITHOUT any intervention.
+ *
+ * WHY THE WITNESS IS TAKEN AT THE SUPERVISOR BOUNDARY
+ * ----------------------------------------------------
+ *
+ * The production `CommandJobManager` attaches its exit transition
+ * AFTER several awaits (spawn, helper registration, lifecycle
+ * emission), so its own probe lands a few milliseconds LATER than the
+ * supervisor's exit boundary. Measured on this host, the group is
+ * reaped 3-7ms after the supervisor's exit promise resolves, so the
+ * manager's probe usually lands AFTER the teardown and observes
+ * `gone`.
+ *
+ * The mechanism under investigation is precisely the gap between the
+ * supervisor's exit boundary and the kernel's group teardown. The
+ * witness therefore probes AT that boundary — using the REAL
+ * production supervisor (`spawnSupervisableShellCommand`), the REAL
+ * production spawn shape, and the REAL production exit promise. No
+ * process supervision is simulated and no execution seam is replaced;
+ * only the READ-ONLY probe is moved to the boundary it is meant to
+ * characterise.
+ */
+export type ReapingRaceWitnessRecord = {
+	readonly jobId: string
+	readonly pgid: number | undefined
+	readonly rootPid: number | undefined
+	readonly supervisorExitResolutionAtMs: number
+	/** The production postcondition AT the supervisor exit boundary. */
+	readonly boundaryPostcondition: "gone" | "alive" | "eperm" | "unknown"
+	readonly boundaryOsErrorCode: string | null
+	/** The kernel-truth liveness at the boundary. */
+	readonly boundaryLiveness: "alive" | "gone" | "unknown"
+	readonly boundaryMemberCount: number
+	/** Live (non-zombie) members at the boundary. MUST be 0. */
+	readonly liveMemberCountAtBoundary: number
+	/** The group disappears on its own afterwards. */
+	readonly laterLiveness: "alive" | "gone" | "unknown"
+	readonly groupGoneAtMs: number | undefined
+	readonly cleanupOutcome: "verified_absent" | "residual_observed" | "unknown"
+	readonly observationTimeline: readonly {
+		readonly atMs: number
+		readonly liveness: string
+		readonly osErrorCode: string | null
+		readonly memberCount: number
+	}[]
+}
+
+let witnessCounter = 0
+
+/**
+ * Run ONE reaping-race witness trial against the REAL production
+ * supervisor and return the observation (which may or may not exhibit
+ * the race — the race is probabilistic).
+ */
+export async function runReapingRaceWitnessTrial(cwd: string): Promise<ReapingRaceWitnessRecord> {
+	// The REAL production supervisor. No seam is replaced.
+	const supervisor = spawnSupervisableShellCommand({
+		executable: "/bin/bash",
+		args: ["-lc", "true"],
+		cwd,
+		input: "",
+	} as unknown as Parameters<typeof spawnSupervisableShellCommand>[0])
+
+	const rootPid = supervisor.pid
+	const pgid = supervisor.pgid
+	witnessCounter += 1
+	const jobId = `nepcr01-reaping-witness-${witnessCounter}`
+
+	// Probe at the PRODUCTION exit boundary: the `.then()` continuation
+	// is the same microtask turn in which the manager's own transition
+	// runs, so this measures the boundary, not some later moment.
+	const boundary = await supervisor.exit.then(() => {
+		const probe = observeGroup(pgid ?? -1, rootPid)
+		return {
+			atMs: Date.now(),
+			probe,
+		}
+	})
+
+	// Let the kernel finish the teardown, WITHOUT intervening.
+	const { observations } = await observeGroupUntilGone(pgid ?? -1, rootPid, 2_000)
+	const finalObservation = observations[observations.length - 1] ?? boundary.probe
+	// The FIRST observation that reports `gone`. The boundary probe
+	// itself may already report `gone` (the group can be reaped within
+	// the same millisecond), so the elapsed window is measured from the
+	// boundary timestamp and is legitimately 0 in that case.
+	const goneObservation = observations.find((o) => o.liveness === "gone")
+
+	const liveMemberCountAtBoundary = boundary.probe.members.filter((m) => !m.stat.startsWith("Z")).length
+
+	return {
+		jobId,
+		pgid,
+		rootPid,
+		supervisorExitResolutionAtMs: boundary.atMs,
+		boundaryPostcondition:
+			boundary.probe.liveness === "gone" ? "gone" : boundary.probe.liveness === "alive" ? "alive" : "eperm",
+		boundaryOsErrorCode: boundary.probe.osErrorCode,
+		boundaryLiveness: boundary.probe.liveness,
+		boundaryMemberCount: boundary.probe.members.length,
+		liveMemberCountAtBoundary,
+		laterLiveness: finalObservation.liveness,
+		groupGoneAtMs: goneObservation?.atMs,
+		cleanupOutcome:
+			finalObservation.liveness === "gone"
+				? "verified_absent"
+				: finalObservation.liveness === "alive"
+					? "residual_observed"
+					: "unknown",
+		observationTimeline: observations.map((o) => ({
+			atMs: o.atMs,
+			liveness: o.liveness,
+			osErrorCode: o.osErrorCode,
+			memberCount: o.members.length,
+		})),
 	}
 }
 

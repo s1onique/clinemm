@@ -10,6 +10,17 @@
 
 ---
 
+> **CORRECTION01 — 2026-11-05 — EVIDENCE-CONTRACT CORRECTION ONLY.**
+>
+> `ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01` closed two P0
+> evidence-contract defects in the experiment suite raised by the 2026-11-05
+> review (`HALT_CAUSAL_EVIDENCE_OVERCLAIM`). It changed **NO production file**
+> and **NO production semantics**. The N1 and N2 evidence is preserved
+> unchanged. See [CORRECTION01](./CORRECTION01.md) for the full record, the
+> two corrected contracts, and the measurements that closed them.
+
+---
+
 ## Terminal report
 
 ```

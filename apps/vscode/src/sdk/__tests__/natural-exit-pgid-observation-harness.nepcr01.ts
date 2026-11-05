@@ -45,7 +45,7 @@
  * `/bin/bash -c`.
  */
 
-import { execFileSync } from "node:child_process"
+import { execFileSync, spawn } from "node:child_process"
 
 /**
  * Kernel-truth liveness of a process group, as observed READ-ONLY.
@@ -98,6 +98,106 @@ export function observeGroupLiveness(pgid: number): GroupProbeResult {
 		// returns EPERM only when the target process group exists.
 		if (code === "EPERM") return { liveness: "alive", osErrorCode: code }
 		return { liveness: "unknown", osErrorCode: typeof code === "string" ? code : null }
+	}
+}
+
+/**
+ * SIGNAL-CAPABILITY OF THE SUBSTRATE.
+ * ------------------------------------
+ * ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01 (P0-1).
+ *
+ * An experiment can only claim "the termination request actually
+ * terminated the owned process group" when the substrate is ABLE to
+ * deliver a termination signal to that group. On a host whose sandbox
+ * profile grants only `(allow signal (target self))`, EVERY signal aimed
+ * at another process — including a group's leader — fails with EPERM,
+ * so a group that later disappears may have disappeared on its own
+ * (workload completion) rather than because the supervisor terminated
+ * it.
+ *
+ * The distinction is decisive for the cancel/deadline CONTROLS: without
+ * it, a control that ends "clean" after ~the workload's natural lifetime
+ * is indistinguishable from a control that was genuinely terminated.
+ *
+ * This probe answers the question EMPIRICALLY, by attempting a real
+ * signal against a REAL process group that the probe itself created.
+ * It is destructive only of a process the probe owns (`sleep`), and it
+ * is confined to a private group so it can never touch a production
+ * owned group.
+ */
+export type SignalCapability =
+	/** The substrate delivered a real signal to a foreign process group. */
+	| "signal_capable"
+	/** The substrate refused the signal (EPERM) — termination cannot be proven. */
+	| "signal_denied"
+	/** The probe could not be performed at all. */
+	| "unknown"
+
+let signalCapabilityCache: SignalCapability | undefined
+
+/**
+ * Determine, ONCE per process, whether this substrate can deliver a
+ * termination signal to a process group it does not belong to.
+ *
+ * The probe spawns a detached `sleep` (its own process group), attempts
+ * `process.kill(-pgid, "SIGTERM")`, and classifies:
+ *
+ *   - rc=0            -> the signal was delivered -> "signal_capable"
+ *   - EPERM           -> the sandbox refused it          -> "signal_denied"
+ *   - any other errno -> the probe is inconclusive        -> "unknown"
+ *
+ * The probe child is always reaped (the group is left to exit on its
+ * own if the signal was refused), so it cannot leak.
+ */
+export function observeSignalCapability(): SignalCapability {
+	if (signalCapabilityCache) return signalCapabilityCache
+	try {
+		const child = spawn("/bin/sh", ["-c", "sleep 2"], { detached: true, stdio: "ignore" })
+		const pgid = child.pid
+		if (typeof pgid !== "number") {
+			signalCapabilityCache = "unknown"
+			return signalCapabilityCache
+		}
+		// Give the child time to establish its own process group.
+		const start = Date.now()
+		while (Date.now() - start < 1_000) {
+			// Busy-wait briefly; the child sets its own pgid synchronously
+			// during spawn on POSIX with `detached: true`.
+			try {
+				process.kill(-pgid, 0)
+				break
+			} catch (e) {
+				const code = (e as NodeJS.ErrnoException).code
+				if (code === "ESRCH") {
+					// The group is not observable yet (or is already gone).
+					// Give it one more scheduling slice before deciding.
+					if (Date.now() - start > 500) break
+				}
+				// EPERM means the group EXISTS but is not signalable.
+			}
+			break
+		}
+		try {
+			process.kill(-pgid, "SIGTERM")
+			signalCapabilityCache = "signal_capable"
+		} catch (e) {
+			const code = (e as NodeJS.ErrnoException).code
+			signalCapabilityCache = code === "EPERM" ? "signal_denied" : "unknown"
+		}
+		// Never leave the probe child behind: reap it explicitly. When the
+		// signal was refused, the child is still alive and MUST be killed
+		// — but that kill may itself be refused, in which case the
+		// `sleep 2` bounds its own lifetime.
+		try {
+			child.kill("SIGKILL")
+		} catch {
+			// Refused or already gone — the sleep self-terminates.
+		}
+		child.unref()
+		return signalCapabilityCache
+	} catch {
+		signalCapabilityCache = "unknown"
+		return signalCapabilityCache
 	}
 }
 

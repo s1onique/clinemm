@@ -1,3 +1,88 @@
+# ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01 — PASS_EVIDENCE_CORRECTION — 2026-11-05
+
+**Status:** EVIDENCE-CONTRACT CORRECTION ONLY, on the existing `main` branch. The 2026-11-05 review
+(`HALT_CAUSAL_EVIDENCE_OVERCLAIM`) accepted the causal reproduction but raised two P0 **evidence-contract** defects in the
+NEPCR01 experiment suite. This correction closes BOTH by fixing ONLY the experiment contract. **No production file was
+changed. No production semantic was changed. No `terminateTree()` change. No natural-exit cleanup change. No change to the
+`gone`-only clean-terminal invariant. No change to the `containment_failed` classification. No change to the historical
+ledger behaviour. No VSIX.** The N1 and N2 evidence is PRESERVED and unchanged. The protected stash and all unrelated
+worktrees are intact; no push, no install, no branch.
+
+```text
+ACT_ID: ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01
+TYPE: Evidence-contract correction (experiment contract only — production repair NOT authorized)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (correction of ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01)
+VERDICT: PASS_EVIDENCE_CORRECTION
+PREDECESSOR_VERDICT: PASS_CAUSAL_REPRO (unchanged — N1/N2 evidence preserved)
+ENTRY_HEAD: e94bbcf518f6bfcc44a96ee44b4b6b1ec3666b4c
+BRANCH: main (no ACT branch created)
+WORKTREES: unchanged (3)   STASHES_TOUCHED: 0 (protected stash INTACT)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   PRODUCTION_FILES_CHANGED: 0
+RED: the original contract's own evidence proves both defects (see below)
+GREEN: 11/11 pass in the focused REAL_PROCESS suite (default, deterministic); opt-in witness reproduction PASSES
+        with 4 OBSERVED witnesses in 40 bounded trials
+TYPECHECK: tsc --noEmit EXIT 0   LINT: biome 0 errors on the 3 touched test files
+EVIDENCE: docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/CORRECTION01.md
+        + docs/acts/ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01/evidence/verification-correction01.txt
+```
+
+**P0-1 — the cancel/deadline controls did not prove successful termination, and CANNOT on this substrate.** The review
+observed that C1 completed in 30,020 ms and C2 in 30,015 ms for a `sleep 30` workload cancelled at 400 ms / deadlined at
+1,200 ms — i.e. both ended at the workload's NATURAL end, and the suite treated the eventual `gone` postcondition as proof
+that `terminateTree()` terminated the group. The correction now CAPTURES the facts that distinguish the two: the actual
+termination REQUEST time (from the manager's OWN `command_job_termination_started` event for the deadline path), the
+group's first observed `gone` time, the elapsed interval between them, and the PRODUCTION supervisor's own termination
+verdict (from `command_job_primary_group_probe`, whose `probeResult` is derived from the supervisor's
+`TerminateTreeResult.treeTerminated`). It additionally measures the SUBSTRATE'S SIGNAL CAPABILITY empirically.
+
+**The substrate fact (measured, not assumed):** the ClineMM Seatbelt profile grants only `(allow signal (target self))`.
+A direct probe shows `process.kill(-pgid, SIGTERM)` -> EPERM, and even `child.kill("SIGKILL")` on the DIRECT child ->
+EPERM, while `process.kill(process.pid, 0)` and `process.kill(0, 0)` -> rc=0. **No termination signal can be delivered to
+another process on this host.** The corrected control therefore asserts EFFECTIVE TERMINATION only on a `signal_capable`
+substrate; on this one it reports `CAPTURE_INSUFFICIENT_SUBSTRATE` and asserts only the weaker, actually-provable facts
+(the terminal label and the eventual absence of the group), with the supervisor's verdict asserted to be NOT `gone`.
+Measured: C1 `terminationToGoneMs` = 29,432 ms and C2 = 28,841 ms, against request-relative natural-end predictions of
+29,600 ms and 28,800 ms — both landing on the natural end, with the production supervisor reporting `eperm` in both cases.
+The evidence artifact's `termination_efficacy` field now reads `"unproven"` instead of silently implying a clean
+termination. The deadline WAS enforced as a terminal CLASSIFICATION at 1,200 ms; it could not be enforced as a
+TERMINATION, because the substrate refuses the signal.
+
+**P0-2 — the reaping-race regression could pass without observing the race.** The review observed that the eight-trial
+test asserted only `laterLiveness === "gone"` and `cleanupOutcome === "verified_absent"`, so all eight trials could return
+`gone` immediately and the test would still pass. **The corrected default run's own per-trial ledger proves the vacuity:
+all 8 default trials recorded `post=gone errno=ESRCH race_observed=False` — the race was observed ZERO times.**
+
+**Where the race actually lives (measured).** The mechanism is the gap between the supervisor's exit boundary and the
+kernel's group teardown. With the REAL production supervisor and 1 ms sampling, the group is reaped **3-7 ms** after the
+supervisor's exit promise resolves (`FIRST-GONE DELAYS: 3,5,5,5,4,7,7,5,...`). Probing AT that boundary yields `EPERM`
+(the group still exists) in **79/80** trials; the production `CommandJobManager`'s own probe lands a few ms later — after
+the teardown — and observes `gone` in 60/60 manager-path trials. **That await gap is precisely why the original assertion
+was vacuous: it could not see the race it claimed to guard.**
+
+**The corrected contract.** (1) The DEFAULT suite states the conditional invariant explicitly — a trial that observed a
+non-`gone` production postcondition MUST have had no live member at that boundary (what makes it a reap artifact rather
+than a surviving descendant) and MUST have converged to `gone` — and writes the per-trial observed postcondition into the
+evidence artifact so a reader can see whether the race was observed. (2) The requirement that a witness ACTUALLY be
+observed lives in an OPT-IN BOUNDED reproduction (`CLINEMM_NEPCR01_REAPING_WITNESS=1`, at most 40 trials, a BOUNDED
+failure and never a hang), so the DEFAULT gate stays deterministic and non-flaky. The witness is taken at the SUPERVISOR's
+exit boundary — the production completion boundary the `CommandJobManager` itself consumes — using the REAL production
+supervisor, the REAL production spawn shape and the REAL production exit promise; no process supervision is simulated
+and no execution seam is replaced, only the READ-ONLY probe is moved to the boundary it characterises.
+
+**The preserved passing witness** (`evidence/reaping-race-witness.json`, 4 witnesses in 40 trials): `boundaryPostcondition`
+= `alive`, `boundaryOsErrorCode` = `EPERM`, `liveMemberCountAtBoundary` = **0** (confirmed absence of surviving live
+members), `laterLiveness` = `gone` (the group disappeared on its own), `cleanupOutcome` = `verified_absent`,
+`race_observed` = true on 40/40 trials.
+
+**Files changed (ACT-owned only).** The three NEPCR01 test-side modules
+(`natural-exit-pgid-causal-repro01.nepcr01.test.ts`, `natural-exit-pgid-experiments.nepcr01.ts`,
+`natural-exit-pgid-observation-harness.nepcr01.ts`), this board entry, `CORRECTION01.md`, the updated `REPORT.md`, the
+updated evidence artifacts, the NEW `evidence/reaping-race-witness.json` and the NEW
+`evidence/verification-correction01.txt`. **ZERO production files changed; ZERO production semantics changed.**
+
+---
+
 # ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01 — PASS_CAUSAL_REPRO — 2026-11-05
 
 **Status:** bounded real-process causal REPRODUCTION only, CLOSED on the existing `main` branch. The natural-exit

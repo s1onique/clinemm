@@ -11,6 +11,12 @@
       "later_postcondition": "gone",
       "manager_terminal_state": "exited",
       "cleanup_verified": true,
+      "termination_efficacy": "not_applicable",
+      "termination_requested_at_ms": null,
+      "group_gone_at_ms": 1793840378450,
+      "termination_to_gone_ms": null,
+      "supervisor_termination_probe": null,
+      "signal_capability": "signal_denied",
       "result": "CLEAN_TERMINAL (postcondition=gone, terminal=exited)"
     },
     {
@@ -23,6 +29,12 @@
       "later_postcondition": "gone",
       "manager_terminal_state": "containment_failed",
       "cleanup_verified": true,
+      "termination_efficacy": "not_applicable",
+      "termination_requested_at_ms": null,
+      "group_gone_at_ms": 1793840381499,
+      "termination_to_gone_ms": null,
+      "supervisor_termination_probe": null,
+      "signal_capability": "signal_denied",
       "result": "NON_GONE_AT_FINALIZE_THEN_GONE (postcondition=eperm, containmentFailed=substrate_eperm)"
     },
     {
@@ -35,6 +47,12 @@
       "later_postcondition": "alive",
       "manager_terminal_state": "containment_failed",
       "cleanup_verified": false,
+      "termination_efficacy": "not_applicable",
+      "termination_requested_at_ms": null,
+      "group_gone_at_ms": null,
+      "termination_to_gone_ms": null,
+      "supervisor_termination_probe": null,
+      "signal_capability": "signal_denied",
       "result": "NON_GONE_AT_FINALIZE_AND_STILL_ALIVE (postcondition=eperm, containmentFailed=substrate_eperm)"
     },
     {
@@ -47,6 +65,12 @@
       "later_postcondition": "gone",
       "manager_terminal_state": "exited",
       "cleanup_verified": true,
+      "termination_efficacy": "not_applicable",
+      "termination_requested_at_ms": null,
+      "group_gone_at_ms": 1793840386590,
+      "termination_to_gone_ms": null,
+      "supervisor_termination_probe": null,
+      "signal_capability": "signal_denied",
       "result": "CLEAN_TERMINAL (postcondition=gone, terminal=exited)"
     },
     {
@@ -59,6 +83,12 @@
       "later_postcondition": "gone",
       "manager_terminal_state": "cancelled",
       "cleanup_verified": true,
+      "termination_efficacy": "unproven",
+      "termination_requested_at_ms": 1793840387207,
+      "group_gone_at_ms": 1793840416629,
+      "termination_to_gone_ms": 29422,
+      "supervisor_termination_probe": "eperm",
+      "signal_capability": "signal_denied",
       "result": "CLEAN_TERMINAL (postcondition=gone, terminal=cancelled)"
     },
     {
@@ -71,6 +101,12 @@
       "later_postcondition": "gone",
       "manager_terminal_state": "deadline_exceeded",
       "cleanup_verified": true,
+      "termination_efficacy": "unproven",
+      "termination_requested_at_ms": 1793840417844,
+      "group_gone_at_ms": 1793840446684,
+      "termination_to_gone_ms": 28840,
+      "supervisor_termination_probe": "eperm",
+      "signal_capability": "signal_denied",
       "result": "CLEAN_TERMINAL (postcondition=gone, terminal=deadline_exceeded)"
     }
   ]
