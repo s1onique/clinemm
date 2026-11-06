@@ -1,0 +1,89 @@
+ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01 — SOURCE & ARTIFACT IDENTITY
+(all values captured dynamically; no predicted SHAs)
+
+ENTRY_HEAD   : c0cb2f6797e02fb1ff96672807b7fb8aae767959
+SUBJECT_HEAD : 85b4a6edc02a9b9546b5e159838bd32ff176dbf3
+FINAL_HEAD   : 85b4a6edc02a9b9546b5e159838bd32ff176dbf3
+BRANCH       : main
+
+WORKTREE_STATUS (FINAL_HEAD):
+    M .factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md
+    ?? .factory/evidence/ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01/
+  (the `M` line is a PRE-EXISTING, UNRELATED timestamp-only regeneration
+   from an earlier ACT — it was present before this ACT started, is NOT
+   ACT-owned, and was deliberately NOT staged and NOT modified.)
+
+PROTECTED STASH (preserved, untouched):
+    stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime):
+               separate REARM lifetime from STALL lifetime at BCB re-registration
+
+--------------------------------------------------------------------
+PRODUCTION DELTA (the ONLY production change of this ACT)
+--------------------------------------------------------------------
+FILE: apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+LINE: 3015  (inside `reevaluateDeferredCompletionBarrier`, at the deferred
+              C10 commit)
+DELTA: +53 lines (1 executable statement + 52 lines of rationale comment)
+
+        this.options.sessions.setRunning(false)
+
+TEST DELTA (new file):
+FILE: apps/vscode/src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts
+LINES: 509
+CASES: 6 (1 LIVE-sequence RED/GREEN + 2 direct-completion checks
+         + 1 NEGATIVE CONTROL + 2 CONSERVATION cases)
+
+--------------------------------------------------------------------
+EXECUTABLE ARTIFACT USED IN QUALIFICATION
+--------------------------------------------------------------------
+SOURCE_HEAD : 85b4a6edc02a9b9546b5e159838bd32ff176dbf3
+VERSION     : 4.1.16-5a1c485cb   (apps/vscode/package.json)
+BUILD_CMD   : cd apps/vscode && bun esbuild.mjs      (exit 0)
+ARTIFACT_PATH : /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/dist/extension.js
+BYTE_SIZE   : 57565832
+SHA256      : c7de458e386f2b9ec8bd520c17db1cd95d633eb39ac3501d271c1a415ad8c7a6
+
+  The artifact was REBUILT at FINAL_HEAD (the pre-commit artifact was
+  discarded and rebuilt; the SHA256 above is the FINAL_HEAD artifact).
+  INSTALLED_VERSION: NOT_EXECUTED — see live.txt.
+
+--------------------------------------------------------------------
+GATE RESULTS (all observed, exit codes recorded)
+--------------------------------------------------------------------
+GATE 1  focused RED→GREEN test
+        cd apps/vscode && bunx vitest run --config vitest.config.ts \
+          src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts
+        exit 0 — 6 passed
+        (RED witness with the single production line ablated: exit 1, 1 failed
+         / 5 passed — see red.txt)
+
+GATE 2  existing neighbouring compaction / lifecycle / BCB /
+        completion-authority regression suites (15 files)
+        exit 0 — 228 passed / 228
+        (see green.txt)
+
+GATE 3  typecheck of the affected package
+        cd apps/vscode && bunx tsc --noEmit -p tsconfig.json
+        exit 0 — no diagnostics
+
+GATE 4  lint + format (affected files)
+        cd apps/vscode && bunx biome lint   --config-path ./biome.jsonc ... \
+          src/sdk/sdk-session-event-coordinator.ts \
+          src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts
+        exit 0 — "Checked 2 files. No fixes applied."
+        cd apps/vscode && bunx biome format --config-path ./biome.jsonc ... <same files>
+        exit 0 — "Checked 2 files. No fixes applied."
+
+GATE 5  build gate
+        cd apps/vscode && bun esbuild.mjs
+        exit 0 — "[watch] build finished"
+
+GATE 6  full vitest sweep — REGRESSION DELTA vs the SAME baseline
+        baseline (production change stashed) : 63 files failed / 167 tests failed
+        with the repair applied            : 62 files failed / 166 tests failed
+        per-FILE diff  (only-in-mine)      : EMPTY  → no new failing file
+        per-TEST diff  (only-in-mine)      : EMPTY  → no new failing test
+        The single difference is this ACT's own new test file, which FAILS at
+        baseline (RED witness) and PASSES with the repair.
+        ⇒ ACT-owned diagnostics end at ZERO. The 62 remaining failing files
+          are PRE-EXISTING baseline failures, unrelated to this ACT.

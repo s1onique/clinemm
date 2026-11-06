@@ -32656,3 +32656,89 @@ re-measure. The broader orphan-process question remains **open**.
 - Qualification head: `df48090f00eb16e2b5c37df747d60c47df4689d2` (safety correction)
 
 **No claim is made that the broader orphan-process problem is fixed.**
+
+---
+
+## ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01 — PASS_STRUCTURAL_ONLY — 2026-11-06
+
+**Verdict: `PASS_STRUCTURAL_ONLY`.** One production statement changed
+(`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3015`). The
+installed-extension qualification was **NOT** executed (operator
+authorisation required; the constraints forbid mutating the operator's
+running extension).
+
+### The reported symptom and its cause
+
+The LIVE_UI_ONLY contradiction — TaskHeader `✓ Complete` + composer
+`Start New Task`, while manual compaction answers `Cannot compact while a
+response is in progress.` — was classified **`STALE_RUNTIME_BUSY`**.
+
+`SdkSessionEventCoordinator.reevaluateDeferredCompletionBarrier` commits
+the terminal `completed` phase (the phase the webview projects as
+`✓ Complete` / `Start New Task`) but performed **no running-state
+transition**. The immediate commit path performs that transition at the
+tail of the turn-complete block (`sdk-session-event-coordinator.ts:5882`),
+but the deferred branches `return` before reaching it (`:5457`). The
+host-owned BCB continuation is delivered through
+`sdkHost.send({ delivery: "queue" })` — NOT through `fireAndForgetSend` —
+so that turn has no send-settlement owner that could mark the session idle
+either. Net effect: `phase === "completed"` together with
+`isRunning === true`.
+
+Eliminated alternatives: `PREMATURE_UI_COMPLETE` (the commit is
+authorized and intended), `WRONG_COMPACTION_TARGET` (the task id IS the
+session id — `SdkController.ts:1275`), `TURN_SETTLEMENT_RACE` (the
+`turnGeneration` fence is intact and was exercised), and
+`DEFERRED_COMPLETION_PENDING` (the purple banner is a historical row; by
+release time the obligation is settled).
+
+### The repair
+
+    apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3015
+        this.options.sessions.setRunning(false)
+
+The SAME lifecycle transition the immediate commit path already uses,
+performed at the deferred commit site. The release is reachable only after
+every conservation predicate cleared and the completion authority
+authorizes, and it is identity-fenced on session id / task id / epoch.
+The compaction guard is **not** weakened — it still reads `isRunning`, and
+a genuinely running turn is still blocked.
+
+### Gates (all observed)
+
+- Focused RED→GREEN test: **exit 0**, 6 passed.
+- RED witness with the single production line ablated: **exit 1**, 1 failed
+  / 5 passed (the other five are the negative controls / conservation cases
+  and pass with AND without the repair).
+- Neighbouring regression suites (15 files): **exit 0**, 228 passed.
+- Typecheck `bunx tsc --noEmit -p tsconfig.json`: **exit 0**, no diagnostics.
+- Biome lint + format on the affected files: **exit 0**.
+- Build `bun esbuild.mjs`: **exit 0**.
+- Full vitest sweep, regression delta vs. the SAME baseline:
+  `only-in-mine` is **EMPTY** for both files and tests. The 62 remaining
+  failing files are **pre-existing** baseline failures, identical with and
+  without this ACT.
+
+### Source identity
+
+- ENTRY_HEAD `c0cb2f6797e02fb1ff96672807b7fb8aae767959`
+- FINAL_HEAD `85b4a6edc02a9b9546b5e159838bd32ff176dbf3`
+- Branch `main`
+- Artifact `apps/vscode/dist/extension.js`, 57565832 bytes,
+  SHA256 `c7de458e386f2b9ec8bd520c17db1cd95d633eb39ac3501d271c1a415ad8c7a6`,
+  rebuilt at FINAL_HEAD, **not installed**.
+
+### Evidence
+
+- `.factory/evidence/ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01/`
+  (`recon.md`, `red.txt`, `causality.md`, `green.txt`, `identity.txt`,
+  `live.txt`, `close.md`)
+
+### Remaining limits (P2, non-blocking)
+
+- No installed-extension qualification (`live.txt` = `NOT_EXECUTED`).
+- The pre-existing "a newer user turn starts inside the release window"
+  residue is unchanged and belongs to `PREMATURE_UI_COMPLETE`, not here.
+- The deferred-completion banner row is a historical row; it was
+  determined unrelated to the compaction rejection and deliberately not
+  changed.

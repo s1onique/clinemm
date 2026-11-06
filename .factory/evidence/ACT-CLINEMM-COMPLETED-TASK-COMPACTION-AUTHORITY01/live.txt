@@ -1,0 +1,67 @@
+ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01 — INSTALLED LIVE QUALIFICATION
+
+VERDICT: NOT_EXECUTED
+=> The closure verdict for this ACT is PASS_STRUCTURAL_ONLY.
+
+WHY NOT EXECUTED
+----------------
+The installed-extension qualification phase is DISTINCT from the unit
+tests and requires an OPERATOR-AUTHORISED installation plus a CONTROLLED
+task on the user's machine. This ACT's execution constraints state:
+
+  "Do not automatically mutate or replace the user's running extension."
+  "No automatic installation or disruption of the user's active ClineMM task."
+  "Do not start another review or diagnosis cycle merely because documentary
+   residue remains."
+
+The reported symptom was observed on 2026-11-05 on task 1793873645457_fg2wh.
+Reproducing it live requires the SAME deferred-completion / BCB-continuation
+chronology (a task-owned background command whose terminal result is held
+unconsumed, the host-owned coalesced continuation, and the deferred
+completion release) — i.e. the LIVE precondition of the defect. Driving that
+on the operator's installation would require installing a new build over the
+operator's active extension and running a real background-command task,
+which is exactly the disruption the constraints forbid without explicit
+operator authorisation. No such authorisation was provided to this ACT.
+
+NO MOCKED SDK EVENT SEQUENCE IS PROMOTED TO `LIVE` EVIDENCE. The reproduction
+in this ACT is classified `REAL_PRODUCTION_SEAM` (the real
+SdkSessionLifecycle + SdkSessionEventCoordinator + SdkCompactionCoordinator
+classes, driven through the actual production event sequence), NOT `LIVE`.
+
+WHAT A LIVE QUALIFICATION WOULD HAVE TO SHOW (ACT §9)
+----------------------------------------------------
+  1. a running task still rejects compaction               — covered by the
+     NEGATIVE CONTROL case (REAL_PRODUCTION_SEAM)
+  2. a truly completed, idle task permits compaction        — covered by the
+     RED-CONTINUATION case (REAL_PRODUCTION_SEAM)
+  3. a deferred-completion task cannot be compacted early   — covered by the
+     CONSERVATION case "a DEFERRED completion that is still HELD keeps
+     compaction blocked" (REAL_PRODUCTION_SEAM)
+  4. once all required execution settles, the UI and compaction
+     eligibility agree                                    — covered by the
+     RED-CONTINUATION case (the phase is "completed" AND the compaction
+     guard permits the task)
+  5. the selected task remains the compaction target         — NOT re-proven
+     by this ACT (the compaction target resolution was UNCHANGED by the
+     repair; the pre-existing "Target changed while waiting to compact"
+     fencing is covered by the existing suite
+     `sdk-compaction-coordinator.test.ts`)
+  6. a successful compacted transcript persists across reopen/resume
+     — NOT re-proven by this ACT (UNCHANGED code path; covered by the
+     existing suite `sdk-compaction-coordinator.restore-publication.test.ts`
+     and the pre-existing resume behaviour)
+  7. no duplicate completion or unwanted continuation occurs — covered
+     structurally by the BCB suites (BCB-01..BCB-31, "exactly one commit")
+     which PASS unchanged.
+
+ARTIFACT AVAILABLE FOR A MANUAL, OPERATOR-AUTHORISED INSTALLATION
+------------------------------------------------------------------
+See identity.txt for the FINAL_HEAD artifact path, byte size and SHA256.
+It was built and verified but NOT installed.
+
+SOURCE_IDENTITY_OF_THE_REPORTED_SYMPTOM
+----------------------------------------
+The 2026-11-05 screenshot remains evidence of the REPORTED SYMPTOM only.
+It is not evidence that a new build fixes it, and it is not re-used as
+proof of the repair.

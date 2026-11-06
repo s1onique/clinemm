@@ -1,0 +1,68 @@
+ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01 — RED witness
+==============================================================
+
+Command (run from apps/vscode):
+    bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts
+
+SOURCE: apps/vscode/src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts
+        (new file, added by this ACT)
+
+The run below was produced with the SINGLE production line of this ACT
+ABLATED — i.e. the deferred release's running-state transition was
+removed from apps/vscode/src/sdk/sdk-session-event-coordinator.ts:3015:
+
+        this.options.sessions.setRunning(false)   // ABLATED
+
+No other change was made. This is the NECESSITY / ABLATION witness:
+removing exactly this one line reproduces the LIVE symptom.
+
+The 5 PASSING cases are the NEGATIVE CONTROLS / CONSERVATION cases:
+they hold both with and without the repair, which proves the repair does
+not weaken them.
+
+RED verdict: RED_REPRODUCED
+(RED_REPRODUCED = the real production seam — real SdkSessionLifecycle +
+real SdkSessionEventCoordinator + real SdkCompactionCoordinator — produces
+the contradiction "phase === completed" together with
+"Cannot compact while a response is in progress.")
+
+------------------------------------------------------------------------
+(node:85906) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:85924) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts (6 tests | 1 failed) 15ms
+     ✓ RED: a task the UI presents as Complete must not be rejected by the real compaction guard 6ms
+     ✓ RED-DEFERRED: a DEFERRED completion that the UI presents as Complete must not be rejected by the real compaction guard 2ms
+     ✓ NEGATIVE CONTROL: a genuinely running turn stays blocked from compaction 0ms
+     ✓ CONSERVATION: a DEFERRED completion that is still HELD keeps compaction blocked 1ms
+     ✓ CONSERVATION: the release does NOT mark the session idle while the completion is still held 2ms
+     × RED-CONTINUATION: after the BCB continuation turn, a Complete task must be compactable 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts > ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01 — real production seam > RED-CONTINUATION: after the BCB continuation turn, a Complete task must be compactable
+AssertionError: expected [ Array(1) ] to not include 'Cannot compact while a response is in…'
+ ❯ src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts:506:41
+    504|
+    505|   // The contract: the completed, idle task MUST be compactable.
+    506|   expect(infoRows(h.appendAndEmit)).not.toContain(COMPACTION_TURN_RUNN…
+       |                                         ^
+    507|   expect(mockCreateContextCompactionPrepareTurn).toHaveBeenCalled()
+    508|  })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  10:55:45
+   Duration  2.59s (transform 1.71s, setup 2.01s, import 462ms, tests 15ms, environment 0ms)
+

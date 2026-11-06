@@ -1,0 +1,103 @@
+ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01 — GREEN witness
+================================================================
+
+SOURCE_HEAD: 85b4a6edc02a9b9546b5e159838bd32ff176dbf3
+Command (run from apps/vscode):
+    bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts \
+      src/sdk/sdk-compaction-coordinator.test.ts \
+      src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts \
+      src/sdk/sdk-compaction-coordinator.restore-publication.test.ts \
+      src/sdk/sdk-session-lifecycle.test.ts \
+      src/sdk/__tests__/background-completion-barrier01.bcb01.test.ts \
+      src/sdk/__tests__/background-completion-barrier01-correction01.bcb01-c.test.ts \
+      src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts \
+      src/sdk/__tests__/background-completion-barrier01-correction03.bcb01-c3.test.ts \
+      src/sdk/__tests__/background-completion-barrier01-correction04.bcb01-c4.test.ts \
+      src/sdk/__tests__/completion-authority-contract01.h03.test.ts \
+      src/sdk/__tests__/completion-authority-contract01.neg.h03.test.ts \
+      src/sdk/__tests__/completion-authority-contract01.chart02.h03.test.ts \
+      src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts \
+      src/sdk/__tests__/completion-presentation-contract01.cpc01.test.ts
+
+This is the REAL production seam:
+  * real `SdkSessionLifecycle`   (owns `activeSession.isRunning` + `turnGeneration`)
+  * real `SdkSessionEventCoordinator` (owns the BCB barrier and the `completed` commit)
+  * real `SdkCompactionCoordinator`    (owns the manual compaction guard)
+driven through the ACTUAL production event sequence — NOT through an
+injected `isRunning` / `turnPhase` fixture.
+
+------------------------------------------------------------------------
+(node:86807) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:86831) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86830) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86826) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86833) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86823) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86834) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86832) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86825) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86835) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86836) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86824) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86837) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86829) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:86827) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/__tests__/completion-authority-contract01.chart02.h03.test.ts (9 tests) 5ms
+ ✓ src/sdk/sdk-compaction-coordinator.test.ts (21 tests) 13ms
+ ✓ src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts (9 tests) 6ms
+ ✓ src/sdk/sdk-compaction-coordinator.restore-publication.test.ts (10 tests) 7ms
+stderr | src/sdk/__tests__/background-completion-barrier01-correction04.bcb01-c4.test.ts > BCB01-C4 — HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION closure > BCB-31: full live chronology — submit while J runs, J terminal, reevaluate fires continuation > fires exactly 1 continuation at the terminal-idle re-evaluation, none at submit time
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+ ✓ src/sdk/__tests__/background-completion-barrier01-correction03.bcb01-c3.test.ts (6 tests) 4ms
+ ✓ src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts (14 tests) 8ms
+ ✓ src/sdk/__tests__/completion-authority-contract01.neg.h03.test.ts (10 tests) 9ms
+stderr | src/sdk/__tests__/background-completion-barrier01-correction04.bcb01-c4.test.ts > BCB01-C4 — HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION closure > BCB-31: full live chronology — submit while J runs, J terminal, reevaluate fires continuation > fires exactly 1 continuation at the terminal-idle re-evaluation, none at submit time
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+ ✓ src/sdk/__tests__/completion-authority-contract01.h03.test.ts (32 tests) 12ms
+stderr | src/sdk/__tests__/background-completion-barrier01-correction01.bcb01-c.test.ts > BCB01-C — CORRECTION01 — second-conjunct enforcement > notify=true consumption barrier > BCB-13: 4 notify=true terminals + 0 consumed → HELD (second conjunct)
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+ ✓ src/sdk/__tests__/background-completion-barrier01-correction01.bcb01-c.test.ts (8 tests) 16ms
+ ✓ src/sdk/__tests__/completion-presentation-contract01.cpc01.test.ts (41 tests) 16ms
+stderr | src/sdk/__tests__/background-completion-barrier01.bcb01.test.ts > BCB01 — background-completion barrier over task-owned jobs > RED — notify=true jobs block completion > BCB-02: 1 notify=true running job → submit_and_exit blocked → drain → 1 commit
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+ ✓ src/sdk/__tests__/background-completion-barrier01-correction04.bcb01-c4.test.ts (5 tests) 143ms
+ ✓ src/sdk/__tests__/completed-task-compaction-authority01.ctca01.test.ts (6 tests) 14ms
+ ✓ src/sdk/sdk-session-lifecycle.test.ts (38 tests) 190ms
+ ✓ src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts (5 tests) 712ms
+       ✓ BCB-25: REAL integration — run_commands + command_status → barrier releases → exactly 1 commit  437ms
+ ✓ src/sdk/__tests__/background-completion-barrier01.bcb01.test.ts (14 tests) 1184ms
+       ✓ BCB-INT-01: real run_commands + CommandJobManager → barrier holds on running aggregate  1025ms
+
+ Test Files  15 passed (15)
+      Tests  228 passed (228)
+   Start at  10:55:58
+   Duration  4.54s (transform 27.62s, setup 39.60s, import 7.37s, tests 2.34s, environment 3ms)
+
