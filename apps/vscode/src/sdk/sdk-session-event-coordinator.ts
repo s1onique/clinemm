@@ -2960,6 +2960,59 @@ export class SdkSessionEventCoordinator {
 		})
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 		this.bcbHoldResumablePublished = false
+		// ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01 (CTCA01):
+		// THE RUNNING-STATE TRANSITION OF THE DEFERRED COMMIT.
+		//
+		// The immediate commit path performs the turn-end running-state
+		// transition at the bottom of the `turnComplete` block
+		// (`setRunning(false)`, ~L5829). The DEFERRED commit path has
+		// no such transition: it commits the terminal `completed` phase
+		// from `reevaluateDeferredCompletionBarrier`, which the
+		// webview projects as "✓ Complete" + "Start New Task".
+		//
+		// WITHOUT this transition the session keeps `isRunning === true`
+		// after the deferred completion has been committed, and every
+		// `isRunning` consumer then disagrees with the UI:
+		//
+		//   - the manual compaction guard rejects the task with
+		//     "Cannot compact while a response is in progress."
+		//     (the LIVE symptom),
+		//   - the passive rebuild scheduler never drains,
+		//   - provider / mode / terminal rebuilds are refused.
+		//
+		// WHY IT IS SAFE HERE (and not "just force isRunning = false"):
+		//
+		//   1. This branch is reached ONLY after EVERY conservation
+		//      predicate cleared: no running task-owned background job,
+		//      no queued prompt (and the pending-prompt authority was
+		//      AVAILABLE, not unknown), no active notify marker, no
+		//      unconsumed owned terminal result, no unresolved
+		//      containment failure, and no wake-driven ownership of the
+		//      terminal completion. The release therefore already
+		//      asserts "this session has no outstanding autonomous work".
+		//   2. The release is IDENTITY-FENCED: the marker must match
+		//      the active session id, the active task id and the
+		//      current epoch. A release for a replaced session / task /
+		//      epoch is discarded before reaching this line.
+		//   3. The transition is the SAME lifecycle transition the
+		//      immediate commit path uses
+		//      (`SdkSessionLifecycle.setRunning(false)`), so the
+		//      `onDidBecomeIdle` side effect (the rebuild scheduler's
+		//      drain trigger) fires exactly as it does for a
+		//      non-deferred turn end. No new state machine, no second
+		//      canonical authority.
+		//   4. The compaction guard itself is NOT weakened: it keeps
+		//      reading `isRunning`, and a genuinely running turn is
+		//      still `isRunning === true` (the deferred release is
+		//      unreachable while work is outstanding, and the release
+		//      path's own hold branches return BEFORE this line).
+		//
+		// The turn-identity / queued-turn handling is untouched: the
+		// lifecycle's `turnGeneration` fence (which protects a newer
+		// turn from a superseded turn's settlement) is not read or
+		// written here, and the release path's queued-prompt predicate
+		// still HOLDS the completion while any prompt is queued.
+		this.options.sessions.setRunning(false)
 		recordLifecycleTransitionTrace(
 			lifecycleTransitionTraceRecord(
 				this.lifecycleTraceContext(),
