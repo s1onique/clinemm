@@ -1,0 +1,27 @@
+=== ACT-CLINEMM-READ-RESULT-DEDUP-RECON-01 :: test gates ===
+date: 2026-11-13T23:36:16Z
+bun: 1.3.13  node: v26.0.0
+
+--- gate 1: existing production MessageBuilder suite ---
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/session/services/message-builder.test.ts (53 tests) 28ms
+
+ Test Files  1 passed (1)
+      Tests  53 passed (53)
+   Start at  02:36:16
+   Duration  351ms (transform 165ms, setup 0ms, import 227ms, tests 28ms, environment 0ms)
+
+exit=0
+
+--- gate 2: adjacent production suites ---
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/session/services/tool-result-cache.test.ts (8 tests) 9ms
+ ✓ src/extensions/tools/executors/file-read.test.ts (19 tests) 47ms
+ ✓ src/session/services/message-builder-recovery.test.ts (7 tests) 5ms
+
+ Test Files  3 passed (3)
+      Tests  34 passed (34)
+   Start at  02:36:16
+   Duration  323ms (transform 220ms, setup 0ms, import 432ms, tests 60ms, environment 0ms)
+
+exit=0

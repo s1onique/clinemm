@@ -1,0 +1,66 @@
+(node:38212) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:38229) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38228) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 1: two identical full-file reads — the later result may be compacted 3ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 2: three identical reads — earlier prefix preserved, no dangling references 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 3: same path, changed content — full new content retained 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 4: same bytes, different path — no cross-path deduplication 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 5: same path, different ranges — no unproven equivalence 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 6: same path/range, different contents — no deduplication 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 7: mixed batched reads — each member handled independently 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 8: partial/truncated reads — no false claim of complete-content identity 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix > case 9: failed or interrupted read — failure preserved, no reference to successful content 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix (part 2) > case 10: file edited between reads — the new read remains authoritative 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix (part 2) > case 11: rollback to older messages — no reference to removed future results 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix (part 2) > case 12: compaction removes the original result — reference resolved safely or falls back 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix (part 2) > case 13: session restored without transient caches — no dangling reference 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix (part 2) > case 14: cache entry expired or evicted — no reliance on unavailable content 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix (part 2) > case 15: images or non-text results — existing media semantics unchanged 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix (part 2) > case 16: budget truncation — no fabricated content coverage 0ms
+ ✓ src/probe/__act_readdedup__/matrix-probe.test.ts > adversarial matrix (part 2) > case 17: independent concurrent reads — stable correlation regardless of completion order 0ms
+stdout | src/probe/__act_readdedup__/conservation.test.ts > C6 — compaction conservation at the iteration-11 boundary > the candidate does not cross the compaction trigger earlier than production
+{
+  "tag": "C6-COMPACTION-CONSERVATION",
+  "effectiveCeiling": 96000,
+  "triggerRatio": 0.9,
+  "triggerTokens": 86400,
+  "armA": {
+    "preparedBytes": 182140,
+    "estimatedInputTokens": 60759,
+    "compactionTriggered": false,
+    "fullCopies": 1,
+    "staleMarkers": 2,
+    "compactReferences": 0
+  },
+  "armC": {
+    "preparedBytes": 182422,
+    "estimatedInputTokens": 60853,
+    "compactionTriggered": false,
+    "fullCopies": 1,
+    "staleMarkers": 0,
+    "compactReferences": 2
+  },
+  "deltaBytes": 282,
+  "deltaTokens": 94,
+  "prefixPreserved": {
+    "production": 26440,
+    "candidate": 181354
+  }
+}
+
+stdout | src/probe/__act_readdedup__/conservation.test.ts > C6 — compaction conservation at the iteration-11 boundary > arm B (128 KiB threshold predecessor) is reproduced for comparison
+{"tag":"C6-ARM-B-128K","preparedBytes":280012,"estimatedInputTokens":93034,"compactionTriggered":true,"staleMarkers":0}
+
+ ✓ src/probe/__act_readdedup__/conservation.test.ts > C6 — compaction conservation at the iteration-11 boundary > the candidate does not cross the compaction trigger earlier than production 9ms
+ ✓ src/probe/__act_readdedup__/conservation.test.ts > C6 — compaction conservation at the iteration-11 boundary > arm B (128 KiB threshold predecessor) is reproduced for comparison 3ms
+
+ Test Files  2 passed (2)
+      Tests  19 passed (19)
+   Start at  02:36:10
+   Duration  318ms (transform 281ms, setup 0ms, import 409ms, tests 19ms, environment 0ms)

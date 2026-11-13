@@ -1,0 +1,76 @@
+(node:38167) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:38185) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38186) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38187) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/probe/__act_readdedup__/integrated-probe.test.ts > REJECTED VARIANT — oldest-owner (fails C3, retained as evidence) > C1: the oldest-owner candidate stabilises the prefix too, but for the wrong reason 7ms
+ ✓ src/probe/__act_readdedup__/integrated-probe.test.ts > REJECTED VARIANT — oldest-owner (fails C3, retained as evidence) > C3: the oldest-owner candidate hides the NEWEST observation (rejected) 2ms
+stdout | src/probe/__act_readdedup__/adversarial-probe.test.ts > owner-aligned candidate — historical replay (C1–C3, C6) > FIRST-ANCHOR candidate: the provider prefix is fully preserved (C1)
+{
+  "tag": "FIRST-ANCHOR-HISTORICAL",
+  "armA": {
+    "iter10Bytes": 230149,
+    "iter11Bytes": 182140,
+    "prefixCommonMessages": 5,
+    "prefixCommonBytes": 26440,
+    "firstChangedIndex": 5,
+    "outdatedMarkers": 2
+  },
+  "firstAnchor": {
+    "iter10Bytes": 181354,
+    "iter11Bytes": 182422,
+    "prefixCommonMessages": 20,
+    "prefixCommonBytes": 181354,
+    "firstChangedIndex": null,
+    "outdatedMarkers": 0,
+    "compacted": 2,
+    "records": [
+      {
+        "toolUseId": "call_uwW1Y3r7ngJDGfz6Qwr9zcsc",
+        "referencesToolUseId": "call_9yjhf9dD5bMlM8OZA4YfKuXH",
+        "locator": "/Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.gitlab-ci.yml::full",
+        "contentBytes": 47777,
+        "contentSha256": "677121b6e1e7a5ddb6caf5f9fbf7ca938d734a521afaf53fdfe26d616653b358"
+      },
+      {
+        "toolUseId": "call_Ln0ZZ0vaDpxDHq7iO4gBrbHs",
+        "referencesToolUseId": "call_9yjhf9dD5bMlM8OZA4YfKuXH",
+        "locator": "/Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.gitlab-ci.yml::full",
+        "contentBytes": 47777,
+        "contentSha256": "677121b6e1e7a5ddb6caf5f9fbf7ca938d734a521afaf53fdfe26d616653b358"
+      }
+    ]
+  },
+  "prefixBytesPreservedRatio": 6.859077155824508
+}
+
+stdout | src/probe/__act_readdedup__/adversarial-probe.test.ts > owner-aligned candidate — historical replay (C1–C3, C6) > C3 trade-off: the first-anchor candidate keeps the ANCHOR's bytes, not the newest
+{"tag":"C3-TRADEOFF","anchorKeepsFullBytes":true,"newestIsReference":true,"newestMarkerText":"[same content as earlier read result call_9yjhf9dD5bMlM8OZA4YfKuXH] The read completed successfully and returned content identical to an earlier read result (the same paged window)."}
+
+stdout | src/probe/__act_readdedup__/adversarial-probe.test.ts > C6 — compaction conservation > the candidate does not trigger compaction earlier than production
+{"tag":"C6-COMPACTION","productionBytes":182140,"candidateBytes":182422,"deltaBytes":282,"productionOutdated":2,"candidateOutdated":0,"productionFullCopies":1,"candidateFullCopies":1,"candidateCompactReferences":2}
+
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > owner-aligned candidate — historical replay (C1–C3, C6) > C1/C6: the owner-aligned candidate preserves the historical prefix and reduces prepared bytes 7ms
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > owner-aligned candidate — historical replay (C1–C3, C6) > FIRST-ANCHOR candidate: the provider prefix is fully preserved (C1) 6ms
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > owner-aligned candidate — historical replay (C1–C3, C6) > C2: result identity — every tool_use_id keeps exactly one result 3ms
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > owner-aligned candidate — historical replay (C1–C3, C6) > C3: freshness — the owner-aligned candidate keeps the newest read's bytes 2ms
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > owner-aligned candidate — historical replay (C1–C3, C6) > C3 trade-off: the first-anchor candidate keeps the ANCHOR's bytes, not the newest 2ms
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > C4 — reference lifetime > the reference target is always present in the same provider-visible projection 3ms
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > C4 — reference lifetime > the reference target survives production's own stale-read rewrite 2ms
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > C4 — reference lifetime > the projection is a pure function of the canonical messages (no out-of-band store) 3ms
+ ✓ src/probe/__act_readdedup__/adversarial-probe.test.ts > C6 — compaction conservation > the candidate does not trigger compaction earlier than production 3ms
+stdout | src/probe/__act_readdedup__/overhead.test.ts > runtime overhead > the projection adds a bounded per-build cost
+{"tag":"RUNTIME-OVERHEAD","messages":30,"productionBuildMs":0.199,"candidateBuildMs":0.604,"addedMs":0.405,"overheadRatio":2.03}
+
+ ✓ src/probe/__act_readdedup__/overhead.test.ts > runtime overhead > the projection adds a bounded per-build cost 49ms
+
+ Test Files  3 passed (3)
+      Tests  12 passed (12)
+   Start at  02:36:09
+   Duration  379ms (transform 471ms, setup 0ms, import 678ms, tests 90ms, environment 0ms)

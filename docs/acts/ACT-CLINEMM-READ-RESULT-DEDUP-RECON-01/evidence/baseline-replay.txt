@@ -1,0 +1,71 @@
+(node:37958) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:37976) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37975) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | src/probe/__act_readdedup__/baseline-replay.test.ts > baseline replay — real production MessageBuilder > B2/B3/B4: at the iteration-11 boundary the 64 KiB policy rewrites exactly two historical results and breaks the prior prefix
+{
+  "tag": "BASELINE",
+  "prefixCommonMessages": 5,
+  "prefixCommonBytes": 26440,
+  "firstChangedIndex": 5,
+  "prepared10Messages": 20,
+  "prepared11Messages": 22,
+  "prepared10Bytes": 230149,
+  "prepared11Bytes": 182140,
+  "outdatedMarkersIter10": 0,
+  "outdatedMarkersIter11": 2,
+  "changedMsgBytesIter10": 52003,
+  "changedMsgBytesIter11": 3067,
+  "changedMsgShaIter10": "4729df20699012e91ea78fae9928d55fdadcd5bddafb5f11e05c5715cd720d6f",
+  "changedMsgShaIter11": "ce15f18577fca07f0f0eb6aef23199102961b9ac3d3bec5f691f8d3107e56ed6",
+  "changedMsgHasOutdatedIter11": true
+}
+
+ ✓ src/probe/__act_readdedup__/baseline-replay.test.ts > baseline replay — real production MessageBuilder > B1: three byte-identical .gitlab-ci.yml read results exist in the canonical transcript 3ms
+ ✓ src/probe/__act_readdedup__/baseline-replay.test.ts > baseline replay — real production MessageBuilder > B2/B3/B4: at the iteration-11 boundary the 64 KiB policy rewrites exactly two historical results and breaks the prior prefix 5ms
+stdout | src/probe/__act_readdedup__/candidate-probe.test.ts > candidate probe — historical replay > C1/C2/C6: the candidate preserves the historical prefix and compacts the duplicate reads
+{
+  "tag": "PREFIX-ORDERING-DIAGNOSTIC",
+  "productionFirstChangedIndex": 5,
+  "productionCommonMessages": 5,
+  "candidateFirstChangedIndex": 5,
+  "candidateCommonMessages": 5,
+  "candidateRestoresPrefix": false,
+  "productionOutdatedMarkersIter11": 2,
+  "candidateOutdatedMarkersIter11": 2
+}
+{
+  "tag": "CANDIDATE-HISTORICAL",
+  "armA": {
+    "bytes": 182140,
+    "messages": 22,
+    "outdatedMarkers": 2,
+    "prefixCommonMessages": 5,
+    "prefixCommonBytes": 26440,
+    "firstChangedIndex": 5
+  },
+  "armC": {
+    "bytes": 182140,
+    "messages": 22,
+    "compacted": 0,
+    "retained": 14,
+    "prefixCommonMessages": 5,
+    "prefixCommonBytes": 26440,
+    "firstChangedIndex": 5,
+    "candidateRestoresPrefix": false,
+    "records": []
+  },
+  "bytesSaved": 0
+}
+
+ ✓ src/probe/__act_readdedup__/candidate-probe.test.ts > candidate probe — historical replay > C1/C2/C6: the candidate preserves the historical prefix and compacts the duplicate reads 8ms
+
+ Test Files  2 passed (2)
+      Tests  3 passed (3)
+   Start at  02:36:06
+   Duration  323ms (transform 296ms, setup 0ms, import 423ms, tests 18ms, environment 0ms)
