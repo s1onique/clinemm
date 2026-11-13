@@ -1,0 +1,151 @@
+=== ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 — WITNESS CORRECTION ===
+scope: TEST FIXTURES + NEW WITNESS VERIFIER + REPORT ONLY.
+        NO production code was changed. helpers.ts is byte-unchanged.
+
+--- 1. THE DEFECT (confirmed by byte-comparison against the live transcript) ---
+
+Live transcript:
+  /Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/
+    1794593797996_r48lj/1794593797996_r48lj.messages.json
+  (58 messages, 18 run_commands tool calls, origin.version 4.1.16-5a1c485cb)
+
+The report claimed the 7 live-rejected calls were replayed "VERBATIM".
+Two fixtures had been RE-TRANSCRIBED BY HAND instead of copied, and drifted:
+
+  FIXTURE                                        LIVE MSG  DEFECT
+  LIVE_REJECTED_COMMANDS_KEYED[4] (find call)   18         lost 4 -not -path clauses
+                                                             (pg-index-diff,
+                                                              act-fm233-build-roz-p5-
+                                                              discriminator01, .helm,
+                                                              .kube, .vscode) and its
+                                                             "| sort | head -300" tail;
+                                                             replaced by an unrelated
+                                                             "-not -path '*/node_modules*'
+                                                              -type d | head -40"
+  LIVE_ACCEPTED_COMMAND_JSON_ARRAY              35         lost its "| head -150" tail and
+                                                             had single-backslash regex
+                                                             escapes where the live payload
+                                                             has double-backslash escapes
+
+  Byte-exact already: the 5 x "ls -la" commands-keyed fixtures and the
+  2 command-keyed fixtures (msgIdx 2 and 21).
+
+  LIVE msgIdx 18 tool_use.input.commands (the exact required fixture):
+  find /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak -maxdepth 2 -not -path '*/.git/*' -not -path '*/.pnpm-store*' -not -path '*/logs*' -not -path '*/profiles*' -not -path '*/pg-index-diff*' -not -path '*/.act-fm233-build-roz-p5-discriminator01*' -not -path '*/.helm' -not -path '*/.kube' -not -path '*/.vscode' -not -path '*/.act-fm233-build-roz-p5-discriminator01' | sort | head -300
+
+--- 2. WHY THE BEHAVIOURAL SUITE STAYED GREEN ---
+
+The drifted fixtures exercised the same argument SHAPE, so every behavioural
+assertion still passed. The drift was invisible to the behavioural suite.
+This is exactly why the "VERBATIM" prose claim needed an independent check.
+
+--- 3. THE FIX ---
+
+a) Fixtures moved to a dedicated module (NOT a .test.ts — importing a .test.ts
+   from another test file re-registers its describe/it blocks in the importing
+   suite and corrupts both suites' accounting):
+     sdk/packages/core/src/extensions/tools/flint-toolcall-red01-witness-fixtures.ts
+   The fixture strings were regenerated PROGRAMMATICALLY from the live
+   transcript (script-driven byte copy), not re-typed.
+
+b) New machine-checkable witness verifier:
+     sdk/packages/core/src/extensions/tools/flint-toolcall-red01-witness.test.ts
+   It reads the LIVE transcript from disk and asserts BYTE-EQUALITY between
+   every fixture constant and the corresponding live tool_use.input payload.
+   Resolution: CLINE_FLINT_WITNESS_TRANSCRIPT, else
+   ~/.vscodium-<profile>/cline-data/sessions/1794593797996_r48lj/.
+   When the transcript is absent the suite SKIPS (portable to CI);
+   when present it is a hard gate.
+
+c) Prose claims corrected: "VERBATIM" removed from REPORT.md and from the
+   test file header. New REPORT section 4a records the defect, the fix and
+   the negative control.
+
+--- 4. NEGATIVE CONTROL — the verifier is proven to catch the exact drift ---
+
+Re-injecting the msgIdx-18 drift into the fixture module:
+
+  x THE_REJECTED_CALLS_KEYED_BY_COMMANDS_MATCH_THE_LIVE_PAYLOADS_BYTE_FOR_BYTE
+  AssertionError: fixture 4 (live msgIdx 18) must equal the live payload
+  byte for byte: expected 'find /Volumes/UserData/Users/chistyak…' to be
+  'find /Volumes/UserData/Users/chistyak…'
+
+  ...while the behavioural suite stayed GREEN — confirming both that the
+  verifier is a real gate and that the behavioural suite alone was
+  insufficient. The drift was reverted immediately afterwards.
+
+--- 5. VERIFICATION ---
+
+--- focused suites (witness + new + predecessor + helpers) ---
+ ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts (4 tests) 22ms
+ ✓ src/extensions/tools/helpers.run-commands.test.ts (4 tests) 5ms
+ ✓ src/extensions/tools/flint-toolcall-red01.test.ts (20 tests) 21ms
+ ✓ src/extensions/tools/flint-toolcall-red01-correction01.test.ts (35 tests) 22ms
+ Test Files  4 passed (4)
+      Tests  63 passed (63)
+
+--- witness verifier SKIP path (transcript absent, e.g. CI) ---
+  Home=/tmp/nonexistent-home-for-skip-test
+  . src/extensions/tools/flint-toolcall-red01-witness.test.ts (4 tests | 4 skipped)
+  Test Files  1 skipped (1)
+       Tests  4 skipped (4)
+  => the committed suite stays green where the live transcript does not exist.
+
+--- @cline/agents ---
+  Test Files  32 passed (32) | Tests  578 passed (578)
+  (identical to the pre-correction baseline)
+
+--- @cline/shared ---
+  Test Files  43 passed | 1 skipped (44) | Tests  559 passed | 6 skipped (565)
+  (identical to the pre-correction baseline)
+
+--- @cline/core FULL suite — BASELINE vs POST-CHANGE ---
+  BASELINE (pristine HEAD, changes stashed):
+    Test Files  19 failed | 308 passed | 2 skipped (329)
+    Tests  113 failed | 4951 passed | 151 skipped (5215)
+  POST-CHANGE:
+    Test Files  19 failed | 309 passed | 2 skipped (330)
+    Tests  113 failed | 4955 passed | 151 skipped (5219)
+
+  Failing-FILE-SET diff (comm over sorted unique file lists):
+    NEW failures introduced (post minus baseline):  (empty)
+    failures FIXED     (baseline minus post):      (empty)
+  => ZERO REGRESSIONS. +1 test file, +4 passing tests (the witness verifier).
+  All 113 failing tests are pre-existing and unrelated (hub server, sandbox,
+  checkpoint hooks, plugins, cloud, seatbelt, git restore).
+
+--- @cline/vscode apps/vscode (vitest) — BASELINE vs POST-CHANGE ---
+  BASELINE (pristine HEAD, changes stashed):
+    failing FILES: 63
+  POST-CHANGE:
+    failing FILES: 62
+  Failing-FILE-SET diff (comm over sorted unique file lists):
+    NEW failures introduced (post minus baseline):  (empty)
+    baseline-only (flaky): src/sdk/__tests__/
+      tool-approval-authority-elm-interop-discriminator.tpaeid01.test.ts
+      -> PASSES 11/11 in isolation; pre-existing flaky, unrelated.
+  => ZERO REGRESSIONS.
+
+--- typecheck (@cline/core, tsconfig.dev.json) ---
+  errors mentioning "flint-toolcall": 0
+  => NO type errors in any ACT-owned or new file.
+
+--- lint + format (biome) ---
+  Checked 2 new files. No fixes applied.  EXIT 0
+
+--- production-code isolation ---
+  git diff --name-only | grep -vE 'docs/|\.test\.ts$'  ->  (none)
+  git diff --exit-code sdk/packages/core/src/extensions/tools/helpers.ts
+    -> helpers.ts UNCHANGED
+  => NO production code changed by this correction.
+
+--- packaged artifact (unchanged by this correction) ---
+  dist/clinemm-4.1.16-flint-red01-corr01-feffc821b.vsix
+  421e46dac263435debe1041b1197c03b03bdeae4f964e42667ce687b0bb77f40
+  => MATCHES the expected SHA-256.
+
+--- LIVE QUALIFICATION ---
+  NOT EXECUTED. The installed-extension qualification (VSCodium -> Install
+  from VSIX -> restart -> repeat the read-only Keycloak task) remains the
+  outstanding gate and is unaffected by this correction: the production
+  repair and the VSIX are unchanged.

@@ -24,8 +24,9 @@
  * which is direct behavioral evidence that the FLINT-TOOLCALL-RED-01
  * canonicalizer is active in the installed artifact.
  *
- * The 7 REJECTED calls are reproduced here VERBATIM (message indices 2,
- * 5, 8, 11, 14, 18, 21 of the transcript). Their live tool results were:
+ * The 7 REJECTED calls are reproduced here from the transcript (message
+ * indices 2, 5, 8, 11, 14, 18, 21 of the transcript). Their live tool
+ * results were:
  *
  *   `{"commands": "..."}`  ->  Invalid input for tool run_commands:
  *                              x Invalid input: expected array, received string
@@ -77,6 +78,12 @@ import type {
 import { resetSdkErrorRateLimiterForTests } from "@cline/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createShellTool } from "./definitions";
+import {
+	KEYCLOAK_ROOT,
+	LIVE_ACCEPTED_COMMAND_JSON_ARRAY,
+	LIVE_REJECTED_COMMAND_KEYED,
+	LIVE_REJECTED_COMMANDS_KEYED,
+} from "./flint-toolcall-red01-witness-fixtures";
 
 beforeEach(() => {
 	resetSdkErrorRateLimiterForTests();
@@ -143,44 +150,6 @@ function finalTextStep(): (
 		{ type: "finish", reason: "stop" },
 	];
 }
-
-// ---------------------------------------------------------------------------
-// LIVE evidence — the 7 REJECTED calls of session 1794593797996_r48lj
-// ---------------------------------------------------------------------------
-
-const KEYCLOAK_ROOT =
-	"/Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak";
-
-/**
- * The five `{"commands": "<shell text>"}` calls rejected in the live
- * session. They are reproduced VERBATIM from the transcript.
- */
-const LIVE_REJECTED_COMMANDS_KEYED: ReadonlyArray<Record<string, unknown>> = [
-	{ commands: `ls -la ${KEYCLOAK_ROOT}` },
-	{ commands: `ls -la ${KEYCLOAK_ROOT}` },
-	{ commands: `ls -la ${KEYCLOAK_ROOT}` },
-	{ commands: `ls -la ${KEYCLOAK_ROOT}` },
-	{
-		commands: `find ${KEYCLOAK_ROOT} -maxdepth 2 -not -path '*/.git/*' -not -path '*/.pnpm-store*' -not -path '*/logs*' -not -path '*/profiles*' -not -path '*/node_modules*' -type d | head -40`,
-	},
-];
-
-/**
- * The two `{"command": "<shell text>"}` calls rejected in the live session.
- * They are reproduced VERBATIM from the transcript.
- */
-const LIVE_REJECTED_COMMAND_KEYED: ReadonlyArray<Record<string, unknown>> = [
-	{ command: `ls -la ${KEYCLOAK_ROOT}` },
-	{ command: `git -C ${KEYCLOAK_ROOT} log --oneline -50` },
-];
-
-/**
- * The single ACCEPTED `{"command":"[\"...\"]"}` call of the live session.
- * It MUST keep working — this is the previously repaired shape.
- */
-const LIVE_ACCEPTED_COMMAND_JSON_ARRAY = {
-	command: `["wc -l ${KEYCLOAK_ROOT}/.gitlab-ci.yml", "grep -n '^\\\\- \\\\|^\\\\s*- name:\\\\|^stages:\\\\|^\\\\.\\\\|^jobs:\\\\|^\\\\s*[a-zA-Z_.-]*:' ${KEYCLOAK_ROOT}/.gitlab-ci.yml"]`,
-} as const;
 
 // ---------------------------------------------------------------------------
 // Runner — the REAL production `run_commands` tool (createShellTool)

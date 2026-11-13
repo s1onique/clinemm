@@ -25,6 +25,29 @@ The bounded repair is complete and GREEN at every gate, but the
 [LIVE QUALIFICATION](#8-live-qualification) below for the precise remaining
 limitation and why it was not closable here.
 
+### WITNESS CORRECTION (this revision)
+
+A review found that this report's "replayed **VERBATIM**" claim was
+**false**: two of the replayed fixtures had been re-transcribed by hand
+rather than copied from the live transcript, and had drifted. The drift
+was invisible to the behavioural suite because the drifted payloads still
+exercised the same argument *shape*.
+
+**The production repair was never in question** — `helpers.ts` is unchanged
+by this correction. What changed:
+
+* the drifted fixtures were regenerated programmatically from the live
+  transcript;
+* a **machine-checkable witness verifier** was added that reads the live
+  transcript and asserts byte-equality of every fixture (it is proven to
+  catch the exact drift via a negative control);
+* the "VERBATIM" prose claims were corrected.
+
+See [section 4a](#4a-witness-correction--the-exact-replay-claim-was-false)
+and `evidence/witness-correction01.txt`. **Zero regressions** were
+introduced: the `@cline/core` and `apps/vscode` failing-file sets are
+unchanged from the pre-correction baseline.
+
 ---
 
 ## 1. Entry state
@@ -125,7 +148,7 @@ authorization binding bound to the raw malformed input.
 
 `sdk/packages/core/src/extensions/tools/flint-toolcall-red01-correction01.test.ts`
 
-The seven live-rejected calls are replayed **VERBATIM** through the REAL
+The seven live-rejected calls are replayed through the REAL
 production path:
 
 * the REAL `createShellTool` factory,
@@ -151,6 +174,95 @@ The 5 failures are exactly the new-shape GREEN cases (GREEN1–GREEN4) plus
 the approval/executor alignment invariant that depends on them. All 26
 rejection cases and all 3 preserved-shape cases were GREEN before the
 repair, proving the RED is specific and not a blanket failure.
+
+## 4a. WITNESS CORRECTION — the exact-replay claim was FALSE
+
+> **Status: CORRECTED.** This section records a defect in the ORIGINAL
+> revision of this report and in the test fixtures it claimed to be backed by.
+> The **production repair was never in question** — only the fidelity of the
+> replayed witnesses.
+
+### 4a.1 The defect
+
+This report originally claimed that the seven live-rejected calls are
+replayed **VERBATIM** from the transcript. A review compared the committed
+fixtures against the live transcript `1794593797996_r48lj.messages.json`
+(byte for byte) and found that two fixtures had been **re-transcribed by
+hand instead of copied**, and had drifted:
+
+| Fixture | Live message | Defect |
+|---------|---------------|--------|
+| `LIVE_REJECTED_COMMANDS_KEYED[4]` (the `find` call) | index 18 | Lost four `-not -path` clauses (`pg-index-diff`, `act-fm233-build-roz-p5-discriminator01`, `.helm`, `.kube`, `.vscode`, `act-fm233-build-roz-p5-discriminator01`) **and** its `\| sort \| head -300` tail. It had been replaced by an unrelated `-not -path '*/node_modules*' -type d \| head -40` command. |
+| `LIVE_ACCEPTED_COMMAND_JSON_ARRAY` | index 35 | Lost its `\| head -150` tail **and** had single-backslash regex escapes where the live payload has double-backslash escapes. |
+
+The five `ls -la` fixtures and the two `command`-keyed fixtures were
+byte-exact.
+
+### 4a.2 Why the behavioural suite stayed GREEN
+
+The drifted fixtures exercised the same *argument shape* (`{"commands":
+"<shell text>"}` and `{"command": "<JSON array string>"}`), so every
+behavioural assertion still passed. The drift was therefore **invisible to
+the behavioural suite** — which is precisely why the "VERBATIM" prose claim
+carried the entire evidentiary weight and why that claim needed an
+independent check.
+
+### 4a.3 The fix
+
+1. **The fixtures were regenerated programmatically from the live
+   transcript**, not re-typed. The committed source is
+   `sdk/packages/core/src/extensions/tools/flint-toolcall-red01-witness-fixtures.ts`,
+   a dedicated module (not a `.test.ts`) so that the regression suite and
+   the new verifier consume ONE single source of truth. Importing a
+   `.test.ts` from another test file would re-register its `describe`/`it`
+   blocks in the importing suite.
+2. **A new machine-checkable witness verifier was added**:
+   `sdk/packages/core/src/extensions/tools/flint-toolcall-red01-witness.test.ts`.
+   It reads the LIVE transcript from disk and asserts **byte-equality**
+   between every fixture constant and the corresponding live
+   `tool_use.input` payload. A drifted fixture now fails loudly, naming the
+   message index and the expected live payload.
+3. **The prose claims were corrected.** "VERBATIM" was removed from this
+   report and from the test file's header comment; the accurate statement is
+   that the fixtures are *verified byte-equal against the live transcript by
+   the witness verifier*.
+
+### 4a.4 Portability of the verifier
+
+The transcript is a local artifact of a live session and is **not
+committed** (it lives in the user's VSCodium profile and embeds absolute
+paths from the original machine). The verifier therefore:
+
+* resolves the transcript via `CLINE_FLINT_WITNESS_TRANSCRIPT`, else
+  `~/.vscodium-<profile>/cline-data/sessions/1794593797996_r48lj/`;
+* **SKIPS** when the transcript is absent, so the committed suite stays
+  green on CI and on any other machine;
+* **FAILS** when the transcript IS present and a fixture has drifted.
+
+On the machine that produced the live evidence the transcript IS present,
+so the gate is live.
+
+### 4a.5 Negative control — the verifier is proven to catch drift
+
+Re-injecting the exact `find` drift described in 4a.1 into the fixture
+module produces:
+
+```
+ × THE_REJECTED_CALLS_KEYED_BY_COMMANDS_MATCH_THE_LIVE_PAYLOADS_BYTE_FOR_BYTE
+AssertionError: fixture 4 (live msgIdx 18) must equal the live payload byte for byte
+```
+
+while the behavioural suite remains GREEN — confirming both that the
+verifier is a real gate and that the behavioural suite alone was
+insufficient. The drift was reverted immediately afterwards.
+
+### 4a.6 Scope
+
+**No production code was changed by this correction.** The bounded repair
+in `helpers.ts` (`normalizeRunCommandsToolInput`) is unchanged; the
+correction is confined to the test fixtures, the new verifier, and this
+report.
+
 
 ## 5. BOUNDED REPAIR
 
@@ -218,6 +330,9 @@ the change and its evidence. **No other case was touched** — the remaining
 
 | Gate | Result | Evidence |
 |------|--------|----------|
+| **Live witness fidelity (this revision)** | **GREEN** — every replayed fixture is asserted **byte-equal** to the live transcript's `tool_use.input`. 4/4 in the new verifier; proven to catch the exact drift via a negative control | `evidence/witness-correction01.txt` §4–§5 |
+| **Zero regressions from the witness correction (this revision)** | **GREEN** — `@cline/core` failing-file set IDENTICAL to the pre-correction baseline (19 files / 113 tests before AND after); `apps/vscode` failing-file set has **no new** entries (63 → 62; the one delta is a pre-existing flaky that passes 11/11 in isolation) | `evidence/witness-correction01.txt` §5 |
+| **No production code changed by the witness correction (this revision)** | **CONFIRMED** — `helpers.ts` byte-unchanged; `git diff --name-only` contains no non-test, non-docs path | `evidence/witness-correction01.txt` §5 |
 | New exact-shape RED → GREEN | **GREEN** — 35/35 in the new suite; RED was 5 failed / 30 passed | `evidence/red-reproduction-correction01.txt`, `evidence/verification-correction01.txt` |
 | Existing 20 tests remain green | **GREEN** — `flint-toolcall-red01.test.ts` 20/20 | `evidence/verification-correction01.txt` |
 | Focused SDK typecheck | **NO ACT-OWNED DIAGNOSTICS** — `@cline/core` reports 40 errors before AND after (identical pre-existing baseline); **0** in ACT-owned files | `evidence/verification-correction01.txt` |
