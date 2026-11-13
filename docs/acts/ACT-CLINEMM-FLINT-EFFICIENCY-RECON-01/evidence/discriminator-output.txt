@@ -1,0 +1,147 @@
+== 1. SOURCE IDENTITY ==
+sessionId            : 1794599235421_7adcr
+origin               : {'source': 'vscode', 'mode': 'user', 'sessionId': '1794599235421_7adcr', 'version': '4.1.16-5a1c485cb'}
+updated_at           : 2026-11-13T20:10:08.194Z
+message count        : 106
+role counts          : {'user': 64, 'assistant': 42}
+block counts         : {'user/text': 2, 'assistant/thinking': 39, 'assistant/tool_use': 62, 'user/tool_result': 62, 'assistant/text': 1}
+session.json provider : openai-compatible
+session.json model    : flint:16gb
+session.json cwd      : /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak
+usage (provider)      : {"inputTokens": 1938032, "outputTokens": 6825, "cacheReadTokens": 1812756, "cacheWriteTokens": 0, "totalCost": 0}
+tokensIn/cacheReads   : 125276 / 1812756
+
+== 2. TOOL NAMES / ACCEPTED / REJECTED / ERROR CATEGORIES ==
+total tool_use blocks : 62
+tool name counts      : {'read_files': 36, 'shell': 3, 'run_commands': 22, 'submit_and_exit': 1}
+rejected calls        : 3
+error categories      : {'unknown_tool_name (AI_NoSuchToolError)': 3}
+  - msg  2 tool=shell        {"error":"Tool call shell was rejected before execution: AI_NoSuchToolError: Model tried to call unavailable tool 'shell'. Available tools: skills, read_files, search_cod
+  - msg  8 tool=shell        {"error":"Tool call shell was rejected before execution: AI_NoSuchToolError: Model tried to call unavailable tool 'shell'. Available tools: skills, read_files, search_cod
+  - msg 11 tool=shell        {"error":"Tool call shell was rejected before execution: AI_NoSuchToolError: Model tried to call unavailable tool 'shell'. Available tools: skills, read_files, search_cod
+
+== 3. DUPLICATE READS ==
+read entries          : 36
+distinct paths        : 21
+duplicate fingerprint groups (>1): 2
+  fp 9b827322a8bf x3: /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/README.md (None-None)
+  fp 3568e1aef44a x2: /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.helm/roz/values.yaml (None-None)
+paths read more than once:
+  x8 /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.gitlab-ci.yml
+  x5 /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.helm/roz/values.yaml
+  x4 /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/README.md
+  x2 /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.helm/roz/values-dev.yaml
+identical path+range repeated:
+  x3 /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/README.md [None:None]
+  x2 /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.helm/roz/values.yaml [None:None]
+
+== 4. TIMING (observable phases only) ==
+session wall clock    : 1372.5s (22.88 min)
+sum tool latency      : 4975 ms (5.0s)
+  read_files     n=36 sum=  2453ms median=   19ms max=  496ms
+  run_commands   n=22 sum=  2418ms median=   74ms max=  493ms
+  shell          n= 3 sum=    62ms median=   15ms max=   37ms
+  submit_and_exit n= 1 sum=    42ms median=   42ms max=   42ms
+captured model requests: 42
+
+ it req_ts                    clinemm_est_tok    bytes  msgs   gap_s  tool_s  model_s
+  1 2026-11-13T19:47:15.719000+00:00           5815    17444     2    6.13    0.03     6.10
+  2 2026-11-13T19:47:21.846000+00:00           9596    28786     4    2.66    0.99     1.68
+  3 2026-11-13T19:47:24.510000+00:00          13487    40460     6    3.98    0.02     3.96
+  4 2026-11-13T19:47:28.485000+00:00          17424    52271     8    3.98    0.07     3.91
+  5 2026-11-13T19:47:32.469000+00:00          18614    55840    10    2.46    0.26     2.20
+  6 2026-11-13T19:47:34.925000+00:00          21811    65433    12    3.89    0.07     3.82
+  7 2026-11-13T19:47:38.812000+00:00          24588    73763    14    3.38    0.01     3.36
+  8 2026-11-13T19:47:42.189000+00:00          27833    83498    16    5.04    0.04     5.00
+  9 2026-11-13T19:47:47.226000+00:00          28456    85367    18    1.15    0.07     1.08
+ 10 2026-11-13T19:47:48.373000+00:00          31091    93273    20    6.19    0.01     6.18
+ 11 2026-11-13T19:47:54.560000+00:00          34997   104989    22    4.77    0.01     4.76
+ 12 2026-11-13T19:47:59.331000+00:00          38407   115221    24    6.67    0.04     6.62
+ 13 2026-11-13T19:48:05.999000+00:00          42669   128005    26    7.61    0.04     7.56
+ 14 2026-11-13T19:48:13.605000+00:00          46366   139097    28    6.28    0.01     6.27
+ 15 2026-11-13T19:48:19.887000+00:00          49359   148076    30   19.68    0.18    19.50
+ 16 2026-11-13T19:48:39.567000+00:00          55000   164999    32    9.24    0.03     9.20
+ 17 2026-11-13T19:48:48.804000+00:00          55596   166786    34    1.03    0.01     1.02
+ 18 2026-11-13T19:48:49.838000+00:00          58760   176279    36    6.46    0.01     6.45
+ 19 2026-11-13T19:48:56.302000+00:00          62182   186546    38    7.25    0.01     7.25
+ 20 2026-11-13T19:49:03.555000+00:00          40978   122934    40   41.15    0.07    41.08
+ 21 2026-11-13T19:49:44.706000+00:00          44267   132799    42    7.61    0.03     7.58
+ 22 2026-11-13T19:49:52.315000+00:00          47556   142667    44   10.01    0.04     9.97
+ 23 2026-11-13T19:50:02.329000+00:00          50552   151656    46   11.53    0.08    11.45
+ 24 2026-11-13T19:50:13.859000+00:00          54468   163402    48   11.88    0.09    11.79
+ 25 2026-11-13T19:50:25.736000+00:00          57002   171004    50   12.50    0.04    12.46
+ 26 2026-11-13T19:50:38.238000+00:00          60676   182028    52   10.19    0.04    10.15
+ 27 2026-11-13T19:50:48.429000+00:00          61051   183152    54    1.90    0.01     1.89
+ 28 2026-11-13T19:50:50.331000+00:00          63968   191902    56   12.56    0.01    12.55
+ 29 2026-11-13T19:51:02.892000+00:00          66982   200945    58   20.79    0.06    20.73
+ 30 2026-11-13T19:51:23.679000+00:00          71645   214934    60  201.51    0.44   201.06
+ 31 2026-11-13T19:54:45.185000+00:00          75081   225241    62   46.06    0.39    45.68
+ 32 2026-11-13T19:55:31.249000+00:00          77760   233278    64   23.10    0.16    22.94
+ 33 2026-11-13T19:55:54.351000+00:00          80620   241860    66   27.22    0.41    26.81
+ 34 2026-11-13T19:56:21.570000+00:00          83460   250380    68   31.77    0.11    31.66
+ 35 2026-11-13T19:56:53.340000+00:00          85104   255310    70   21.65    0.18    21.47
+ 36 2026-11-13T19:57:14.993000+00:00          88882   266644    72   17.73    0.03    17.70
+ 37 2026-11-13T19:57:32.720000+00:00          91476   274428    74   24.72    0.50    24.22
+ 38 2026-11-13T19:57:57.439000+00:00          95619   286855    76   22.47    0.10    22.37
+ 39 2026-11-13T19:58:19.907000+00:00          99141   297422    78   40.23    0.08    40.15
+ 40 2026-11-13T19:59:00.136000+00:00         103516   310547    80  136.34    0.07   136.27
+ 41 2026-11-13T20:01:16.479000+00:00         112703   338108    82   74.93    0.09    74.84
+TOTAL request-gap      : 915.7s (tool 4.9s, model 910.8s)
+
+== 5. ADVERTISED TOOL INVENTORY vs UNKNOWN 'shell' ==
+advertised (9): ['cancel_command', 'command_status', 'editor', 'fetch_web_content', 'read_files', 'run_commands', 'search_codebase', 'skills', 'submit_and_exit']
+  'shell' advertised? False
+'shell' calls in transcript: 3
+  msg2 ts=1794599241827 input={"command": "ls -la /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak"}
+  msg8 ts=1794599248472 input={"command": "find /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.helm -type f | head -60"}
+  msg11 ts=1794599252427 input={"command": "ls -la /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.act-fm233-build-roz-p5-discriminator01
+advertised inventory stable across all captured requests: True
+
+== 6. PROVIDER-REPORTED vs CLINEMM-ESTIMATED TOKENS ==
+ClineMM tokensIn                        : 125276
+provider usage.inputTokens             : 1938032
+provider usage.cacheReadTokens         : 1812756
+provider usage.outputTokens            : 6825
+session cacheReads                     : 1812756
+cache share of billed input            : 0.9354
+final captured request ClineMM estimate : 114015 tokens (chars/3 estimator)
+
+== 7. MILESTONES ==
+earliest useful action (first tool call) : +6.2s from session start
+first model request                      : +0.1s
+last captured model request              : 2026-11-13T20:02:31.408000+00:00
+final assistant response                 : +456.7s AFTER last captured request
+  -> phase NOT attributable to any captured request: 456.7s (33.3% of wall clock)
+session completion (last message)        : +1372.5s
+TTFT                                    : UNAVAILABLE_FROM_TRACE
+prefill duration                        : UNAVAILABLE_FROM_TRACE
+
+== 8. OPERATING CEILING / AUTO-COMPACTION SETTINGS ==
+globalState.userContextCeiling : None -> mode AUTO (unset)
+globalState.useAutoCondense    : None -> enabled (SDK default true)
+planModeOpenAiModelInfo.contextWindow : 256000 -> effectiveMaxInputTokens=230400, trigger@0.9=207360
+actModeOpenAiModelInfo.contextWindow : 256000 -> effectiveMaxInputTokens=230400, trigger@0.9=207360
+
+== 8b. TOOL-RESULT VISIBILITY CAP (the measured ClineMM-controllable lever) ==
+total_read_calls                             : 36
+files_truncated_at_the_model_boundary        : 7
+redundant_reread_calls                       : 12
+redundant_reread_transcript_chars            : 159970
+redundant_reread_tokens                      : 53323
+cap                                          : 8000
+  source of the cap: sdk/packages/core/src/session/services/message-builder.ts
+    DEFAULT_MAX_TOOL_RESULT_CHARS = 8_000 -> truncateMiddleByChars (head+tail, middle elided)
+  file-read paging cap: sdk/packages/core/src/extensions/tools/executors/output-limits.ts
+    MAX_READ_LINES = 2_000, MAX_READ_OUTPUT_CHARS = 48_000
+
+== 9. DISCRIMINATOR ASSERTIONS ==
+[PASS] tool_use call count == 62
+[PASS] wall clock ~= 22m53s (1373s)
+[PASS] no schema-invalid tool calls
+[PASS] all rejections are unknown-tool 'shell'
+[PASS] 'shell' never advertised in any captured request
+[PASS] tool latency is <10% of wall clock
+[PASS] session provider == openai-compatible
+[PASS] session model == flint:16gb
+[PASS] tool-result cap is 8000 chars  (8000)
+[PASS] redundant re-reads detected  (12)

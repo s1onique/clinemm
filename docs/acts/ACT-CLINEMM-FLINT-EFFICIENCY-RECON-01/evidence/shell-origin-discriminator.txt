@@ -1,0 +1,87 @@
+# DISCRIMINATOR: origin of the wrong tool name 'shell'
+
+## Question
+Does the wrong 'shell' name originate in the RAW Kapitsa response, or in later ClineMM parsing?
+
+## Answer
+**RAW RESPONSE (model-generated). Not a ClineMM parsing artifact.**
+
+## Evidence 1 — the tool set ADVERTISED to the provider never contained 'shell'
+
+From the provider-request captures (the exact serialized AI SDK prompt sent to
+the provider), all 42 captured requests of this session advertised:
+
+```
+captured requests for this session: 42
+distinct advertised inventories: 1
+   ['cancel_command', 'command_status', 'editor', 'fetch_web_content', 'read_files', 'run_commands', 'search_codebase', 'skills', 'submit_and_exit']
+
+'shell' present in any advertised inventory: False
+
+=> The provider was told the tool names. It never received a tool named "shell".
+```
+
+## Evidence 2 — the error is raised by the AI SDK's own tool-call parser
+
+The message text comes verbatim from the 'ai' package:
+
+```
+$ grep -n "Model tried to call unavailable tool" .bun-install/install/cache/ai/7.0.65@@@1/dist/index.js
+403:    message = `Model tried to call unavailable tool '${toolName}'. ${availableTools === void 0 ? "No tools are available." : `Available tools: ${availableTools.join(", ")}.`}`
+
+$ sed -n "3856,3862p" .bun-install/install/cache/ai/7.0.65@@@1/dist/index.js   # parseToolCall
+    if (tools == null) {
+      if (toolCall.providerExecuted && toolCall.dynamic) {
+        return await refineParsedToolCallInput({
+          toolCall: await parseProviderExecutedDynamicToolCall(toolCall),
+          refineToolInput
+        });
+      }
+      throw new NoSuchToolError({ toolName: toolCall.toolName });
+    }
+    try {
+```
+
+`parseToolCall` compares the PROVIDER'S OWN `toolCall.toolName` against the advertised
+ToolSet and throws `NoSuchToolError` when the provider names a tool that was not
+advertised. The provider's streamed tool-call name is therefore the origin.
+
+## Evidence 3 — ClineMM does not rewrite tool names anywhere on the path
+
+```
+$ grep -rn "toolName" sdk/packages/llms/src/providers/ai-sdk.ts | grep -n "part.toolName"
+829:					toolName: part.toolName,
+846:					toolName: part.toolName,
+1638:						(part.toolName as string | undefined) ??
+1719:						(part.toolName as string | undefined) ??
+1791:						(part.toolName as string | undefined) ??
+
+$ grep -rn "toolName" sdk/packages/llms/src/providers/vendors/openai-compatible.ts   # (no matches)
+0
+0
+```
+
+The name flows provider -> `part.toolName` -> `toolName` -> the tool-call delta.
+No rename/mapping layer exists on the openai-compatible provider or in ai-sdk.ts.
+
+## Evidence 4 — the model self-corrected, proving it saw the advertised name
+
+```
+msg5   The shell tool is actually called `run_commands`. Let me use that.
+msg11  I need to use `run_commands`. Let me run find on .helm, and list other directories.
+msg14  The shell tool is named `run_commands`. Let me use that.
+```
+
+## Classification
+
+`RAW_RESPONSE_MODEL_GENERATED` — confirmed, not CAPTURE_INSUFFICIENT.
+
+## Limit of the claim (conservation)
+
+The RAW HTTP RESPONSE BODY was NOT captured (`CLINE_CAPTURE_WIRE` was off; there are
+zero `wire_request` captures for this session). What IS proven is:
+  * the provider received a 9-tool inventory that excluded `shell`;
+  * the provider returned a tool call NAMED `shell`;
+  * the AI SDK rejected it at parse time, before any ClineMM tool layer ran.
+Therefore the wrong name was produced by the model/provider, not by ClineMM parsing.
+No tool-name rewriting is proposed.

@@ -1,0 +1,19 @@
+# PROOF: the 8,000-char tool-result visibility cap caused the read-amplification
+
+Two views of the SAME read_files result for README.md:
+
+  * TRANSCRIPT view  = what the tool produced and ClineMM stored
+  * MODEL-BOUNDARY view = what the provider actually received
+
+MODEL-BOUNDARY view (capture iteration 3):
+  visible chars        : 7998
+  lines shown          : 152 of 345 (README.md is 345 lines on disk)
+  elided line spans    : [(83, 275)]
+  elided marker        : ...[truncated 6950 chars]...
+  marker position      : between line 82 and line 276
+
+TRANSCRIPT view (full, untruncated):
+  visible chars        : 14913
+  lines shown          : 345 of 345
+  elided lines         : NONE
+  truncation marker    : False

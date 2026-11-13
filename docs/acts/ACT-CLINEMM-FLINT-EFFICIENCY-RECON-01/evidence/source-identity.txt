@@ -1,0 +1,34 @@
+# RAW EVIDENCE IDENTITY VERIFICATION
+
+## Claim under test: "the completed live session transcript (reported as 62 calls, 22m53s)"
+
+### The two transcript copies on this machine
+
+```
+$ shasum -a 256 ~/Downloads/1794599235421_7adcr.messages.json ~/.vscodium-roz/cline-data/sessions/1794599235421_7adcr/1794599235421_7adcr.messages.json
+2ac7c782baeef2b7440a917c17ef5ffeca156a3b47cd545da1a74de5b4c3a8f2  /Volumes/UserData/Users/chistyakov/Downloads/1794599235421_7adcr.messages.json
+2ac7c782baeef2b7440a917c17ef5ffeca156a3b47cd545da1a74de5b4c3a8f2  /Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794599235421_7adcr/1794599235421_7adcr.messages.json
+```
+
+Both copies are BYTE-IDENTICAL (same SHA-256). This is a single session, not two.
+
+### Session identity (from the transcript itself)
+
+sessionId  : 1794599235421_7adcr
+origin     : {'source': 'vscode', 'mode': 'user', 'sessionId': '1794599235421_7adcr', 'version': '4.1.16-5a1c485cb'}
+updated_at : 2026-11-13T20:10:08.194Z
+messages   : 106
+
+### Session identity (from the session row)
+
+```
+session_id  : 1794599235421_7adcr
+source      : vscode
+provider    : openai-compatible
+model       : flint:16gb
+cwd         : /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak
+started_at  : 2026-11-13T19:47:15.533Z
+usage       : {"inputTokens": 1938032, "outputTokens": 6825, "cacheReadTokens": 1812756, "cacheWriteTokens": 0, "totalCost": 0}
+tokensIn    : 125276
+cacheReads  : 1812756
+```
