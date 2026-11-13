@@ -1,0 +1,31 @@
+=== INSTALLED-ARTIFACT VERIFICATION (behavioral, from the packaged bundle) ===
+
+Artifact: dist/clinemm-4.1.16-flint-red01-corr01-feffc821b.vsix
+Extracted to the VSIX extension/ layout; the canonicalizer was read out of the
+SHIPPED minified bundle (extension/dist/extension.js) and executed against the
+LIVE shapes plus the malformed-shape rejection matrix, with the strict
+RunCommandsInputSchema semantics applied after canonicalization.
+
+--- canonicalizer as shipped in the bundle ---
+function MXf(t){if(t===null||typeof t!="object"||Array.isArray(t))return t;let e=t,r=Object.keys(e);if(r.length!==1)return t;let n=r[0];if(n!=="command"&&n!=="commands")return t;let a=e[n];if(typeof a!="string")return t;let o=a.trim();if(o.length===0)return t;if(o.startsWith("[")){let s;try{s=JSON.parse(o)}catch{return t}if(!Array.isArray(s)||s.length===0||!s.every(c=>typeof c=="string"))return t;let u=Kur.shape.commands.safeParse(s);return u.success?{commands:u.data}:t}if(o.startsWith("{"))return t;let i=Kur.shape.commands.safeParse([a]);return i.success?{commands:i.data}:t}function OXf(t){return typeof t=="string"?[t]:Array.isArray(t)?t:"commands"in t?Array.isArray(t.commands)?t.commands:[t.commands]:"command"in t?"args"in t?[t]:[t.command]:"cmd"in t?[t.cmd]:[t]}function FXf(t){if(typeof t=="string")return t;let e=t.args??[];if(e.length===0)return t.command;let r=e.map(n=>/[\s"]/u.test(n)?JSON.stringify(n):n);return`${t.command} ${r.join(" ")}`}function NXf(t){let e=FXf(t);if(e.length<=qjn)return e;let r=e.length-qjn;return`${e.slice(0,qjn)} ... [command truncated: ${r} more chars; full command is in the tool call input]`}function QXf(t={}){return{name:LXf,manifest:{capabilities:["hooks"]},hooks:{beforeTool:e=>{if(e.tool.name!==W3.RUN_COMMANDS)return;let r;try{r=P1e(e.input)}catch{return}for(let n of r){let a=bXf(n);if(a)return iVf(t.telemetry,{tool_name:"run_commands",blocke
+
+--- behavioral result ---
+PASS  LIVE  #0  commands-string    expected=ACCEPT actual=ACCEPT
+PASS  LIVE  #1  command-string     expected=ACCEPT actual=ACCEPT
+PASS  LIVE  #11 command-jsonarray  expected=ACCEPT actual=ACCEPT
+PASS  LIVE  #5  commands-array     expected=ACCEPT actual=ACCEPT
+PASS  REJ   empty commands         expected=REJECT actual=REJECT
+PASS  REJ   whitespace commands    expected=REJECT actual=REJECT
+PASS  REJ   empty command          expected=REJECT actual=REJECT
+PASS  REJ   conflict cmd+cmds      expected=REJECT actual=REJECT
+PASS  REJ   unknown sibling        expected=REJECT actual=REJECT
+PASS  REJ   json object            expected=REJECT actual=REJECT
+PASS  REJ   malformed json         expected=REJECT actual=REJECT
+PASS  REJ   empty json array       expected=REJECT actual=REJECT
+PASS  REJ   non-string member      expected=REJECT actual=REJECT
+PASS  REJ   null member            expected=REJECT actual=REJECT
+PASS  REJ   commands null          expected=REJECT actual=REJECT
+PASS  REJ   commands empty array   expected=REJECT actual=REJECT
+
+PASS=16  FAIL=0
+INSTALLED ARTIFACT END-TO-END: GREEN

@@ -214,6 +214,218 @@ the change and its evidence. **No other case was touched** — the remaining
 | `notifyOnCompletion` preserved for canonical calls | `GREEN7_NOTIFY_ON_COMPLETION_IS_PRESERVED_FOR_CANONICAL_CALLS`. |
 | Per-command execution-plan correlation preserved | The canonicalizer preserves command ORDER and COUNT (verified by GREEN2/GREEN4 fanning out to the exact recorded command list), which is what `buildCommandExecutionPlan`'s cardinality check correlates. |
 
+## 7. GATES
+
+| Gate | Result | Evidence |
+|------|--------|----------|
+| New exact-shape RED → GREEN | **GREEN** — 35/35 in the new suite; RED was 5 failed / 30 passed | `evidence/red-reproduction-correction01.txt`, `evidence/verification-correction01.txt` |
+| Existing 20 tests remain green | **GREEN** — `flint-toolcall-red01.test.ts` 20/20 | `evidence/verification-correction01.txt` |
+| Focused SDK typecheck | **NO ACT-OWNED DIAGNOSTICS** — `@cline/core` reports 40 errors before AND after (identical pre-existing baseline); **0** in ACT-owned files | `evidence/verification-correction01.txt` |
+| Authorization regression | **NO REGRESSION** — `apps/vscode/src/sdk/__tests__` is BYTE-IDENTICAL to the pre-change baseline (53 failed files / 124 failed tests, both before and after) | `evidence/baseline-comparison.txt` |
+| No ACT-owned diagnostics | **CONFIRMED** — 0 typecheck errors and 0 biome lint errors in the three ACT-owned files | `evidence/verification-correction01.txt` |
+| Do not reopen known baseline failures | **RESPECTED** — no pre-existing failing test was modified; the only pre-existing test touched is the one whose assertion the new live evidence directly contradicts (5.4), and it was replaced with an equivalent-strength positive test | `evidence/baseline-comparison.txt` |
+| `git diff --check HEAD` | CLEAN | — |
+| biome `lint --diagnostic-level=error` | EXIT 0, 3 files checked | — |
+| biome `format` | clean, no changes required | — |
+| `@cline/agents` full suite | 578/578 pass | — |
+| `@cline/shared` full suite | 559/559 pass (6 skipped) | — |
+| `@cline/core` full suite | failing-file set IDENTICAL to baseline (19 files, all pre-existing), **+35 newly passing** | `evidence/baseline-comparison.txt` |
+
+### 7.1 Baseline-comparison method
+
+The three ACT-owned files were stashed with
+`git stash push -u -- <the three files>`, the SAME suites were re-run at the
+pristine HEAD `0b6ec51af`, and the stash was popped. The **protected
+`stash@{0}` was never popped by this ACT** and remains intact:
+
+```
+stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime):
+           separate REARM lifetime from STALL lifetime at BCB re-registration
+```
+
+One nuance worth recording: the baseline full-suite run showed one **extra**
+failing file (`src/tasks/agenda-task-manager.test.ts`) that the post-change
+run did not. That file PASSES in isolation (21/21, verified three times) and
+touches nothing in the `run_commands` path — it is a **flaky pre-existing**
+failure, not a regression. This ACT therefore introduces **zero** new
+failures.
+
+## 8. LIVE QUALIFICATION
+
+**Status: NOT PERFORMED in this ACT.**
+
+The live Flint/Kapitsa harness is an **external, operator-driven** setup: it
+is not present in this repository (no `kapitsa` reference exists anywhere in
+the tree), and the live qualification requires a model provider session
+driven through the installed VSCodium extension. This ACT could therefore
+package and install the artifact but could not itself drive the live model
+session.
+
+### 8.1 What IS verified about the installed artifact
+
+The packaged VSIX was opened and the **minified bundle inside it** was
+inspected for the new canonicalizer logic. The bundle contains the complete
+corrected contract (function `MXf` in `extension/dist/extension.js`):
+
+```js
+function MXf(t){
+  if(t===null||typeof t!=="object"||Array.isArray(t))return t;
+  let e=t,r=Object.keys(e);
+  if(r.length!==1)return t;                       // sole key required
+  let n=r[0];
+  if(n!=="command"&&n!=="commands")return t;       // NO generic key guessing
+  let a=e[n];
+  if(typeof a!=="string")return t;
+  let o=a.trim();
+  if(o.length===0)return t;                       // empty/whitespace rejected
+  if(o.startsWith("[")){                           // JSON-array decode (unchanged)
+    let s;try{s=JSON.parse(o)}catch{return t}
+    if(!Array.isArray(s)||s.length===0||!s.every(c=>typeof c==="string"))return t;
+    let u=Kur.shape.commands.safeParse(s);
+    return u.success?{commands:u.data}:t
+  }
+  if(o.startsWith("{"))return t;                  // NEW: JSON object guard
+  let i=Kur.shape.commands.safeParse([a]);         // NEW: one-element command list
+  return i.success?{commands:i.data}:t
+}
+```
+
+This is artifact-level proof that the repair is present in the **installed
+bundle**, not merely in `package.json`.
+
+### 8.2 Precise remaining limitation
+
+## 9. PACKAGE
+
+| Item | Value |
+|------|-------|
+| Source HEAD (exact) | `feffc821b76a1053e216f468bbd3c235dc57e1a6` |
+| Commit subject | `fix(run-commands): accept the two remaining Flint single-string argument shapes (FLINT-TOOLCALL-RED-01-CORRECTION01)` |
+| Extension version | `4.1.16-5a1c485cb` (unchanged — this ACT changes no versioning input) |
+| VSIX path | `dist/clinemm-4.1.16-flint-red01-corr01-feffc821b.vsix` |
+| VSIX bytes | `66154598` |
+| VSIX SHA-256 | `421e46dac263435debe1041b1197c03b03bdeae4f964e42667ce687b0bb77f40` |
+| Package command | `bunx --bun @vscode/vsce package --out ../../dist/clinemm-4.1.16-flint-red01-corr01-feffc821b.vsix --no-dependencies` (from `apps/vscode`, after `bun run build:webview` + `bun esbuild.mjs --production`) |
+| Package contents | 681 files, 63.09 MB; `extension/dist/extension.js` = 28,019,414 bytes |
+| Push / PR | **NONE** — no push, no PR created |
+| Branch | `main` (no ACT branch created) |
+| Unrelated work | **PRESERVED** — `.factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md` was modified by a test run (timestamp regeneration) and was deliberately **NOT** committed |
+| Protected stash | `stash@{0}` intact and untouched |
+
+### 9.1 Installed-artifact verification (not just `package.json`)
+
+The VSIX was extracted to the VSIX `extension/` layout and the **shipped
+minified bundle** was inspected. All six contract elements are present in
+`extension/dist/extension.js`:
+
+```
+  OK   sole-key guard
+  OK   no generic key guessing
+  OK   empty rejected
+  OK   JSON array decode (predecessor)
+  OK   JSON object guard (new)
+  OK   plain string -> 1-elem array (new)
+INSTALLED-ARTIFACT VERDICT: ALL PRESENT
+```
+
+The canonicalizer was then **executed** out of the shipped bundle against the
+LIVE shapes plus the malformed-shape rejection matrix, with the strict
+`RunCommandsInputSchema` semantics applied after canonicalization:
+
+```
+PASS  LIVE  #0  commands-string    expected=ACCEPT actual=ACCEPT
+PASS  LIVE  #1  command-string     expected=ACCEPT actual=ACCEPT
+PASS  LIVE  #11 command-jsonarray  expected=ACCEPT actual=ACCEPT
+PASS  LIVE  #5  commands-array     expected=ACCEPT actual=ACCEPT
+PASS  REJ   empty commands         expected=REJECT actual=REJECT
+PASS  REJ   whitespace commands    expected=REJECT actual=REJECT
+PASS  REJ   empty command          expected=REJECT actual=REJECT
+PASS  REJ   conflict cmd+cmds      expected=REJECT actual=REJECT
+PASS  REJ   unknown sibling        expected=REJECT actual=REJECT
+PASS  REJ   json object            expected=REJECT actual=REJECT
+PASS  REJ   malformed json         expected=REJECT actual=REJECT
+PASS  REJ   empty json array       expected=REJECT actual=REJECT
+PASS  REJ   non-string member      expected=REJECT actual=REJECT
+PASS  REJ   null member            expected=REJECT actual=REJECT
+PASS  REJ   commands null          expected=REJECT actual=REJECT
+PASS  REJ   commands empty array   expected=REJECT actual=REJECT
+
+PASS=16  FAIL=0
+INSTALLED ARTIFACT END-TO-END: GREEN
+```
+
+See `evidence/installed-artifact-verification.txt`.
+
+### 9.2 Installation into the live profile — BLOCKED BY THE ENVIRONMENT
+
+The artifact could **not** be installed into the live VSCodium profile
+(`~/.vscodium-cline/extensions`, `~/.vscodium-clinemm/extensions`) from
+this session: the extensions directories are **not writable** in this
+environment (`EPERM` on both `vsce --install-extension` and a direct
+directory creation), and only `/tmp` is writable under the account.
+
+The installation attempt was a **verified no-op** — nothing was damaged:
+
+* `~/.vscodium-cline/extensions/.obsolete` — intact, unmodified
+  (10,612 bytes, timestamp unchanged);
+* `extensions.json` — unchanged, still resolving to
+  `s1onique.clinemm 4.1.16-5a1c485cb-0b6ec51af`;
+* the previously installed extension directory — untouched.
+
+The operator must therefore perform the installation step (8.4). This is an
+environment limitation, not a defect in the artifact.
+
+## 10. CLOSURE
+
+**`LIVE_PARTIAL`.**
+
+* The bounded repair is **complete and GREEN at every gate**: RED → GREEN on
+  the exact live shapes, the predecessor's 20 tests green, no new failures
+  anywhere, no ACT-owned diagnostics, lint/format clean.
+* The packaged artifact is built at the exact commit HEAD, its identity is
+  recorded (bytes + SHA-256), and its **behavior was verified by executing
+  the shipped bundle** — 16/16 including all four live shapes.
+* The **live behavioral qualification is NOT done**: driving the read-only
+  Keycloak investigation through Flint on the newly installed VSIX requires
+  the external operator harness, and this environment additionally cannot
+  write to the extension profile. The precise remaining limitation is stated
+  in 8.2 and the operator steps in 8.4.
+
+**No unrelated refactoring was performed. No extra review cycle was opened.**
+
+
+The live behavioral qualification — driving the read-only Keycloak
+investigation through Flint on the newly installed VSIX and observing
+(i) tool-call shapes and acceptance counts, (ii) absence of schema errors,
+(iii) actual execution of approved commands, and (iv) task completion —
+**remains outstanding**. It requires the external operator harness.
+
+### 8.3 Predicted live outcome (to be confirmed by the operator)
+
+Given the repair, the 12 calls of the observed session would be expected to
+resolve as:
+
+| Shape | Calls | Before | After (expected) |
+|-------|-------|--------|------------------|
+| `{"commands":[...]}` | 4 | ACCEPTED | ACCEPTED (unchanged) |
+| `{"command":"[\"...\"]"}` | 1 | ACCEPTED | ACCEPTED (unchanged) |
+| `{"commands":"shell text"}` | 5 | REJECTED | **ACCEPTED** |
+| `{"command":"shell text"}` | 2 | REJECTED | **ACCEPTED** |
+| **Total** | **12** | **5 accepted / 7 rejected** | **12 accepted / 0 rejected** |
+
+This is a **prediction**, not live evidence. The ACT is therefore closed
+`LIVE_PARTIAL`, not `CLOSED_CLEAN`.
+
+### 8.4 What the operator must do to close it
+
+1. Install `dist/clinemm-4.1.16-flint-red01-corr01-feffc821b.vsix` into the
+   VSCodium profile used by the Flint/Kapitsa harness.
+2. Re-run the original **read-only** Keycloak investigation through Flint.
+3. Export the session transcript and confirm: no `Invalid input for tool
+   run_commands` results; the approved commands actually execute; the task
+   completes.
+
+
 * Empty / whitespace-only values are **rejected** (a blank is not a command).
 * A value starting with `[` is treated as a JSON-array candidate:
   malformed JSON, a non-array, an empty array, or any non-string member is
