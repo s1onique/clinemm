@@ -33,6 +33,30 @@ Two fixtures had been RE-TRANSCRIBED BY HAND instead of copied, and drifted:
   LIVE msgIdx 18 tool_use.input.commands (the exact required fixture):
   find /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak -maxdepth 2 -not -path '*/.git/*' -not -path '*/.pnpm-store*' -not -path '*/logs*' -not -path '*/profiles*' -not -path '*/pg-index-diff*' -not -path '*/.act-fm233-build-roz-p5-discriminator01*' -not -path '*/.helm' -not -path '*/.kube' -not -path '*/.vscode' -not -path '*/.act-fm233-build-roz-p5-discriminator01' | sort | head -300
 
+--- 1a. THE TRANSCRIPT EXISTS IN TWO COPIES — BOTH AGREE ---
+
+  A) /Volumes/UserData/Users/chistyakov/Downloads/1794593797996_r48lj.messages.json
+       sha256 a5c6d5e88f5eb17315bb08f7f307cd7333eae95597e12e95ba866d7d85be1ace
+       45 messages, 12 run_commands calls, updated_at 2026-11-13T18:18:06.266Z
+       -> this is the copy the REVIEW compared against.
+  B) /Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/
+       1794593797996_r48lj/1794593797996_r48lj.messages.json
+       sha256 0e6c64741c638fc487789a84aef39ed1a42db8ad8a6f52f72b66791bc70b2005
+       58 messages, 17 run_commands calls, updated_at 2026-11-13T18:18:43.387Z
+
+  Verified: (A)'s 45 messages are an EXACT PREFIX of (B)'s 58 messages
+  (element-wise JSON equality). Same sessionId, same origin.version
+  4.1.16-5a1c485cb. (B) is the SAME SESSION CONTINUED 37 seconds later.
+
+  Every witness payload is IDENTICAL in both copies — in particular
+  msgIdx 18 (the `find` call, len 397) and msgIdx 35 (the accepted JSON
+  array, len 253) are byte-identical across (A) and (B). The extra 5
+  calls in (B) occur at msgIdx 48/51/57, AFTER the witness set closes.
+
+  The witness verifier passes against BOTH copies:
+    default resolution (profile)            -> 4/4 passed
+    CLINE_FLINT_WITNESS_TRANSCRIPT=Downloads -> 4/4 passed
+
 --- 2. WHY THE BEHAVIOURAL SUITE STAYED GREEN ---
 
 The drifted fixtures exercised the same argument SHAPE, so every behavioural

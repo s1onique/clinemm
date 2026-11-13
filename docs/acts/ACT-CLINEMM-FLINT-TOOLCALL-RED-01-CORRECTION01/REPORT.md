@@ -198,6 +198,25 @@ hand instead of copied**, and had drifted:
 The five `ls -la` fixtures and the two `command`-keyed fixtures were
 byte-exact.
 
+### 4a.1a The transcript exists in two copies — and both agree
+
+| Copy | sha256 | messages | `run_commands` calls | `updated_at` |
+|------|--------|----------|----------------------|--------------|
+| `~/Downloads/1794593797996_r48lj.messages.json` (the copy the review compared against) | `a5c6d5e8…1ace` | 45 | 12 | `18:18:06.266Z` |
+| `~/.vscodium-roz/cline-data/sessions/1794593797996_r48lj/…messages.json` (live profile) | `0e6c6474…2005` | 58 | 17 | `18:18:43.387Z` |
+
+The Downloads copy's 45 messages are an **exact prefix** of the profile
+copy's 58 messages (element-wise JSON equality); same `sessionId`, same
+`origin.version` `4.1.16-5a1c485cb`. The profile copy is the **same
+session continued** 37 seconds later.
+
+Every witness payload is **byte-identical in both copies** — in particular
+message index 18 (the `find` call) and message index 35 (the accepted JSON
+array). The five extra calls in the profile copy occur at message indices
+48/51/57, i.e. *after* the witness set closes. The witness verifier passes
+against **both** copies (4/4 each).
+
+
 ### 4a.2 Why the behavioural suite stayed GREEN
 
 The drifted fixtures exercised the same *argument shape* (`{"commands":
