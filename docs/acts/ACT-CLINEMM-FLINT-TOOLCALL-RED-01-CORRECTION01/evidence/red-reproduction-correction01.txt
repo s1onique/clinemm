@@ -1,0 +1,140 @@
+(node:20803) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:20820) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/extensions/tools/flint-toolcall-red01-correction01.test.ts (35 tests | 5 failed) 22ms
+       × GREEN1_LIVE_COMMANDS_KEYED_STRING_IS_CANONICALIZED_AND_EXECUTED 10ms
+       × GREEN2_ALL_5_LIVE_COMMANDS_KEYED_STRINGS_ARE_ACCEPTED 1ms
+       × GREEN3_LIVE_COMMAND_KEYED_STRING_IS_CANONICALIZED_AND_EXECUTED 1ms
+       × GREEN4_BOTH_LIVE_COMMAND_KEYED_STRINGS_ARE_ACCEPTED 1ms
+       ✓ GREEN5_PREVIOUSLY_REPAIRED_COMMAND_JSON_ARRAY_SHAPE_STILL_WORKS 1ms
+       ✓ GREEN6_CANONICAL_COMMANDS_ARRAY_IS_UNCHANGED 0ms
+       ✓ GREEN7_NOTIFY_ON_COMPLETION_IS_PRESERVED_FOR_CANONICAL_CALLS 0ms
+       ✓ REJECTS_EMPTY_COMMANDS_STRING 0ms
+       ✓ REJECTS_WHITESPACE-ONLY_COMMANDS_STRING 0ms
+       ✓ REJECTS_EMPTY_COMMAND_STRING 0ms
+       ✓ REJECTS_WHITESPACE-ONLY_COMMAND_STRING 0ms
+       ✓ REJECTS_CONFLICTING_COMMAND_AND_COMMANDS_KEYS 0ms
+       ✓ REJECTS_CONFLICTING_COMMAND_STRING_AND_COMMANDS_ARRAY 0ms
+       ✓ REJECTS_UNKNOWN_SIBLING_KEY_WITH_COMMANDS_STRING 0ms
+       ✓ REJECTS_UNKNOWN_SIBLING_KEY_WITH_COMMAND_STRING 0ms
+       ✓ REJECTS_COMMANDS_STRING_WITH_NOTIFYONCOMPLETION_SIBLING 0ms
+       ✓ REJECTS_COMMAND_STRING_WITH_NOTIFYONCOMPLETION_SIBLING 0ms
+       ✓ REJECTS_COMMANDS_STRING_WITH_A_JSON_OBJECT_VALUE 0ms
+       ✓ REJECTS_COMMAND_STRING_WITH_A_JSON_OBJECT_VALUE 0ms
+       ✓ REJECTS_COMMANDS_STRING_WITH_MALFORMED_JSON 0ms
+       ✓ REJECTS_COMMANDS_STRING_WITH_AN_EMPTY_JSON_ARRAY 0ms
+       ✓ REJECTS_COMMANDS_STRING_WITH_A_JSON_ARRAY_OF_NON-STRINGS 0ms
+       ✓ REJECTS_COMMANDS_STRING_WITH_A_NESTED_JSON_ARRAY 0ms
+       ✓ REJECTS_COMMANDS_STRING_WITH_A_NULL_JSON_MEMBER 0ms
+       ✓ REJECTS_COMMANDS_NULL 0ms
+       ✓ REJECTS_COMMAND_NULL 0ms
+       ✓ REJECTS_COMMANDS_EMPTY_ARRAY 0ms
+       ✓ REJECTS_NON-STRING_COMMANDS_VALUE 0ms
+       ✓ REJECTS_NON-STRING_COMMAND_VALUE 0ms
+       ✓ REJECTS_CANONICAL_COMMANDS_WITH_UNKNOWN_SIBLING 0ms
+       ✓ REJECTS_BARE_ARRAY_INPUT 0ms
+       ✓ REJECTS_BARE_STRING_INPUT 0ms
+       ✓ NEVER_EXECUTES_SERIALIZED_JSON_AS_SHELL_CODE 0ms
+       × APPROVAL_PREVIEW_MATCHES_EXECUTOR_COMMANDS_EXACTLY 0ms
+       ✓ REJECTED_INPUT_PRODUCES_ZERO_APPROVALS_AND_ZERO_STARTS 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/tools/flint-toolcall-red01-correction01.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 > GREEN — the 7 live-rejected shapes are now accepted > GREEN1_LIVE_COMMANDS_KEYED_STRING_IS_CANONICALIZED_AND_EXECUTED
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/extensions/tools/flint-toolcall-red01-correction01.test.ts:303:27
+    301|    // The command that reaches the executor is the REAL command text,
+    302|    // never a serialized array.
+    303|    expect(probe.executed).toHaveLength(1);
+       |                           ^
+    304|    expect(probe.executed[0]!.command).toBe(`ls -la ${KEYCLOAK_ROOT}`);
+    305|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/extensions/tools/flint-toolcall-red01-correction01.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 > GREEN — the 7 live-rejected shapes are now accepted > GREEN2_ALL_5_LIVE_COMMANDS_KEYED_STRINGS_ARE_ACCEPTED
+AssertionError: payload 0: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/extensions/tools/flint-toolcall-red01-correction01.test.ts:322:48
+    320|     const probe = await drive([proposalFromJson(`g2-${index}`, capture…
+    321|
+    322|     expect(probe.executed, `payload ${index}`).toHaveLength(1);
+       |                                                ^
+    323|     expect(probe.executed[0]!.command, `payload ${index}`).toBe(
+    324|      captured.commands as string,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/extensions/tools/flint-toolcall-red01-correction01.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 > GREEN — the 7 live-rejected shapes are now accepted > GREEN3_LIVE_COMMAND_KEYED_STRING_IS_CANONICALIZED_AND_EXECUTED
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/extensions/tools/flint-toolcall-red01-correction01.test.ts:340:27
+    338|    ]);
+    339|
+    340|    expect(probe.executed).toHaveLength(1);
+       |                           ^
+    341|    expect(probe.executed[0]!.command).toBe(`ls -la ${KEYCLOAK_ROOT}`);
+    342|    expect(probe.approvals).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/extensions/tools/flint-toolcall-red01-correction01.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 > GREEN — the 7 live-rejected shapes are now accepted > GREEN4_BOTH_LIVE_COMMAND_KEYED_STRINGS_ARE_ACCEPTED
+AssertionError: payload 0: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/extensions/tools/flint-toolcall-red01-correction01.test.ts:353:48
+    351|     const probe = await drive([proposalFromJson(`g4-${index}`, capture…
+    352|
+    353|     expect(probe.executed, `payload ${index}`).toHaveLength(1);
+       |                                                ^
+    354|     expect(probe.executed[0]!.command, `payload ${index}`).toBe(
+    355|      captured.command as string,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/extensions/tools/flint-toolcall-red01-correction01.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 > security invariants > APPROVAL_PREVIEW_MATCHES_EXECUTOR_COMMANDS_EXACTLY
+TypeError: Cannot read properties of undefined (reading 'input')
+ ❯ src/extensions/tools/flint-toolcall-red01-correction01.test.ts:530:42
+    528|     const probe = await drive([proposalFromJson("align", captured)]);
+    529|
+    530|     const approved = probe.approvals[0]!.input as { commands: string[]…
+       |                                          ^
+    531|     expect(Array.isArray(approved.commands)).toBe(true);
+    532|     expect(probe.executed.map((e) => e.command)).toEqual(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 30 passed (35)
+   Start at  21:31:20
+   Duration  1.67s (transform 1.05s, setup 0ms, import 1.54s, tests 22ms, environment 0ms)
+

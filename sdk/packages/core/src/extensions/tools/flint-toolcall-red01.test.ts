@@ -398,10 +398,6 @@ describe("ACT-CLINEMM-FLINT-TOOLCALL-RED-01 / rejection matrix", () => {
 			input: { command: '["echo hello", null]' },
 		},
 		{
-			name: "bare command string is not reinterpreted",
-			input: { command: "echo hello" },
-		},
-		{
 			name: "canonical commands with unknown sibling",
 			input: { commands: ["echo hello"], timeout: 10 },
 		},
@@ -430,6 +426,27 @@ describe("ACT-CLINEMM-FLINT-TOOLCALL-RED-01 / rejection matrix", () => {
 			expect(outcome.failureClass).toBe("tool_input_invalid");
 		});
 	}
+
+	it("BARE_COMMAND_STRING_IS_NOW_ACCEPTED_AS_A_SINGLE_COMMAND", async () => {
+		// ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01: this shape was
+		// a REJECTION under the original narrow contract
+		// ("bare command string is not reinterpreted"). The second live
+		// session (`1794593797996_r48lj.messages.json`) proved it is a
+		// REAL, frequently emitted argument shape that the model expects
+		// to be executed — 2 of the 12 live calls used it and both were
+		// rejected. It is therefore now ACCEPTED and canonicalized to
+		// `{commands: ["<shell text>"]}`. The equivalent
+		// `commands`-keyed string is accepted too. The full corrected
+		// contract lives in `flint-toolcall-red01-correction01.test.ts`.
+		const probe = await drive([
+			proposalFromJson("bare-string", { command: "echo hello" }),
+		]);
+
+		expect(probe.executed).toHaveLength(1);
+		expect(probe.executed[0]!.command).toBe("echo hello");
+		expect(probe.approvals[0]!.input).toEqual({ commands: ["echo hello"] });
+		expect(probe.captured[0]!.outcome.kind).toBe("success");
+	});
 
 	it("NEVER_EXECUTES_SERIALIZED_JSON_AS_SHELL_CODE", async () => {
 		// The captured shape must NEVER reach the executor as serialized

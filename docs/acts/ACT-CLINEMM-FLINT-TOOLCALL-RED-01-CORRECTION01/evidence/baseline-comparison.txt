@@ -1,0 +1,27 @@
+=== BASELINE COMPARISON (pre-change vs post-change) ===
+
+Method: the three ACT-owned files were stashed with
+  git stash push -u -- <the three files>
+and the SAME suites were re-run at the pristine HEAD, then the stash
+was popped. The protected stash@{0} was never touched.
+
+--- @cline/core: src/extensions/tools + src/runtime/command-policy ---
+BASELINE (HEAD 0b6ec51af): Test Files  3 failed | 68 passed | 1 skipped (72) | Tests  6 failed | 1662 passed | 120 skipped (1788)
+POST-CHANGE:              Test Files  3 failed | 69 passed | 1 skipped (73) | Tests  6 failed | 1697 passed | 120 skipped (1823)
+  -> same 3 failing files / same 6 failing tests; +35 newly passing (the new suite).
+
+--- @cline/core FULL suite failing-file set diff ---
+baseline: 20 files, post-change: 19 files
+diff (baseline minus post-change):
+20d19
+< src/tasks/agenda-task-manager.test.ts
+
+  src/tasks/agenda-task-manager.test.ts appears in the BASELINE set only.
+  It PASSES in isolation (21/21, verified 3x) and is unrelated to the
+  run_commands input canonicalization. It is a FLAKY pre-existing failure.
+  => This ACT introduces ZERO new failures.
+
+--- apps/vscode src/sdk/__tests__ ---
+BASELINE (HEAD 0b6ec51af): Test Files  53 failed | 306 passed | 4 skipped (363) | Tests  124 failed | 3384 passed | 40 skipped (3548)
+POST-CHANGE:              Test Files  53 failed | 306 passed | 4 skipped (363) | Tests  124 failed | 3384 passed | 40 skipped (3548)
+  -> BYTE-IDENTICAL. Zero regressions.

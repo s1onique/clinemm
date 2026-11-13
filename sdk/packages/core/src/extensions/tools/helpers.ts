@@ -155,8 +155,8 @@ export function normalizeRunCommandsInput(
 }
 
 /**
- * ACT-CLINEMM-FLINT-TOOLCALL-RED-01 — bounded compatibility canonicalizer
- * for the `run_commands` tool input.
+ * ACT-CLINEMM-FLINT-TOOLCALL-RED-01(-CORRECTION01) — bounded compatibility
+ * canonicalizer for the `run_commands` tool input.
  *
  * ## Observed defect (REAL evidence)
  *
@@ -175,34 +175,64 @@ export function normalizeRunCommandsInput(
  *   Invalid input for tool run_commands: ✖ Unrecognized key: "command"
  *   ✖ Invalid input: expected array, received undefined → at commands
  *
+ * A SECOND live session (`1794593797996_r48lj.messages.json`, installed
+ * version `4.1.16-5a1c485cb-0b6ec51af`) confirmed that the repair above
+ * is active — the one `{"command":"[\"...\"]"}` call in that transcript
+ * was ACCEPTED and executed both commands — while exposing two
+ * ADDITIONAL single-string shapes that this canonicalizer deliberately
+ * left unchanged and the strict schema therefore rejected:
+ *
+ *   { "commands": "ls -la /path" }   → ✖ expected array, received string
+ *   { "command":  "ls -la /path" }   → ✖ Unrecognized key: "command"
+ *
+ * In that session 7 of the 12 `run_commands` calls used one of those two
+ * shapes and were rejected. The first rejection occurred at message
+ * index 2 — EARLY in the session — so the defect is not
+ * long-context-only: the model's argument formatting is inconsistent
+ * from the start of the session.
+ *
  * ## Why this canonicalizer exists (and why it is bounded)
  *
  * The generic, schema-driven compatibility step
  * (`normalizeJsonLikeStringsForSchema`) only rewrites values of DECLARED
  * properties. `command` is not a declared property of the strict
  * `RunCommandsInputSchema` (`additionalProperties: false`), so that step
- * is a no-op for this shape and the call is rejected.
+ * is a no-op for that shape and the call is rejected.
  *
- * This canonicalizer accepts EXACTLY ONE shape — the one confirmed in the
- * captured transcript:
+ * This canonicalizer accepts EXACTLY THREE shapes — the ones confirmed
+ * in the captured transcripts:
  *
- *   - the input is a plain object whose ONLY key is `command`;
- *   - the value of `command` is a string;
- *   - that string parses as JSON into an ARRAY;
- *   - every array member is a string;
- *   - the array is non-empty;
- *   - the array members satisfy the canonical `commands` element schema.
+ *   1. `{ "command": "<JSON array string>" }` → the decoded array
+ *      (the FLINT-TOOLCALL-RED-01 shape);
+ *   2. `{ "commands": "<shell text>" }` → a one-element command list
+ *      (the CORRECTION01 shape);
+ *   3. `{ "command": "<shell text>" }`  → a one-element command list
+ *      (the CORRECTION01 shape).
+ *
+ * In every case:
+ *
+ *   - the input is a plain object whose ONLY key is `command` or
+ *     `commands` — unknown/conflicting sibling keys are ambiguous and
+ *     are never guessed at;
+ *   - the value is a string;
+ *   - for the JSON-array form, the string parses as JSON into an ARRAY
+ *     whose every member is a string and which is non-empty;
+ *   - for the plain-string forms, the string is non-empty after
+ *     trimming (an empty or whitespace-only value is NOT a command);
+ *   - the resulting command list satisfies the canonical `commands`
+ *     element schema.
  *
  * Everything else is returned UNCHANGED so the strict schema rejects it
  * exactly as before. In particular this canonicalizer REJECTS:
  *
  *   - unknown/conflicting sibling keys (`{command, commands}`, `{command,
  *     timeout}`, ...) — ambiguous input is never guessed at;
- *   - a `command` value that is not a JSON array (a bare command string
- *     stays a bare command string; it is NOT the captured shape);
+ *   - empty / whitespace-only command strings;
  *   - a JSON array containing non-string members;
  *   - an empty array;
- *   - malformed JSON.
+ *   - malformed JSON;
+ *   - a JSON OBJECT value (only arrays are decoded; a serialized object
+ *     is never executed as shell text).
  *
  * ## Anti-shell invariant
  *
@@ -215,6 +245,14 @@ export function normalizeRunCommandsInput(
  * the canonical array is what the schema validates, what the approval
  * card previews, what the per-command authorization binding is built
  * from, and what the executor runs.
+ *
+ * ## Strict, unambiguous string interpretation
+ *
+ * A plain (non-JSON) string is interpreted as ONE complete shell command
+ * — never as a command list, never split on whitespace/newlines. The
+ * canonicalizer does NOT implement generic key guessing: the accepted
+ * keys are exactly `command` and `commands`, and only when they are the
+ * SOLE key of the input object.
  */
 export function normalizeRunCommandsToolInput(input: unknown): unknown {
 	if (input === null || typeof input !== "object" || Array.isArray(input)) {
@@ -222,48 +260,77 @@ export function normalizeRunCommandsToolInput(input: unknown): unknown {
 	}
 	const record = input as Record<string, unknown>;
 	const keys = Object.keys(record);
-	// ONLY the captured shape: a single `command` key and nothing else.
-	// Conflicting or unknown sibling keys are ambiguous and are rejected.
-	if (keys.length !== 1 || keys[0] !== "command") {
+	// ONLY the captured shapes: a single `command` or `commands` key and
+	// nothing else. Conflicting or unknown sibling keys are ambiguous and
+	// are rejected.
+	if (keys.length !== 1) {
 		return input;
 	}
-	const raw = record.command;
+	const key = keys[0]!;
+	if (key !== "command" && key !== "commands") {
+		return input;
+	}
+	const raw = record[key];
 	if (typeof raw !== "string") {
 		return input;
 	}
-	// Only a JSON-encoded ARRAY is the confirmed shape. A bare command
-	// string (e.g. "echo hello") is a different shape and must not be
-	// reinterpreted.
 	const trimmed = raw.trim();
-	if (!trimmed.startsWith("[")) {
+	// An empty (or whitespace-only) value is never a command. Rejecting it
+	// here keeps the strict schema's rejection message authoritative.
+	if (trimmed.length === 0) {
 		return input;
 	}
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(trimmed);
-	} catch {
-		// Malformed JSON is not a compatibility shape; let the strict
-		// schema produce the normal rejection.
+	// The JSON-encoded ARRAY form is decoded into its members. Only a
+	// value that STARTS with `[` is treated as a JSON array candidate: a
+	// plain shell command is never re-interpreted as serialized JSON.
+	if (trimmed.startsWith("[")) {
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(trimmed);
+		} catch {
+			// Malformed JSON is not a compatibility shape; let the strict
+			// schema produce the normal rejection.
+			return input;
+		}
+		if (!Array.isArray(parsed) || parsed.length === 0) {
+			return input;
+		}
+		// Every member must be a string: the captured payloads are arrays
+		// of complete shell command strings. A mixed/invalid member is
+		// rejected rather than coerced.
+		if (!parsed.every((member) => typeof member === "string")) {
+			return input;
+		}
+		// Validate the COMPLETE array against the canonical `commands`
+		// schema BEFORE canonicalization, so an invalid member can never
+		// reach validation, approval, or execution.
+		const validated = RunCommandsInputSchema.shape.commands.safeParse(parsed);
+		if (!validated.success) {
+			return input;
+		}
+		// Canonical shape. `notifyOnCompletion` is deliberately NOT
+		// carried over: the captured shape has `command` as its ONLY key,
+		// so any sibling flag would have been rejected above as ambiguous
+		// input.
+		return { commands: validated.data };
+	}
+	// A JSON OBJECT value is never a shell command. Without this guard the
+	// plain-string branch below would hand the serialized object text to
+	// the executor as shell code. Only arrays are decoded, and only a
+	// value that is NOT JSON-looking at all is treated as a plain command.
+	if (trimmed.startsWith("{")) {
 		return input;
 	}
-	if (!Array.isArray(parsed) || parsed.length === 0) {
-		return input;
-	}
-	// Every member must be a string: the captured payloads are arrays of
-	// complete shell command strings. A mixed/invalid member is rejected
-	// rather than coerced.
-	if (!parsed.every((member) => typeof member === "string")) {
-		return input;
-	}
-	// Validate the COMPLETE array against the canonical `commands` schema
-	// BEFORE canonicalization, so an invalid member can never reach
+	// The plain-string form: exactly ONE complete shell command. The
+	// string is validated against the canonical `commands` element schema
+	// BEFORE canonicalization, so an invalid command can never reach
 	// validation, approval, or execution.
-	const validated = RunCommandsInputSchema.shape.commands.safeParse(parsed);
+	const validated = RunCommandsInputSchema.shape.commands.safeParse([raw]);
 	if (!validated.success) {
 		return input;
 	}
 	// Canonical shape. `notifyOnCompletion` is deliberately NOT carried
-	// over: the captured shape has `command` as its ONLY key, so any
+	// over: the captured shape has the command key as its ONLY key, so any
 	// sibling flag would have been rejected above as ambiguous input.
 	return { commands: validated.data };
 }

@@ -1,0 +1,38 @@
+=== ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 — GREEN verification ===
+date: 2026-11-13T18:41:30Z
+source HEAD (pre-commit): 0b6ec51af57a13ab1d09a55eddde000d5b186e5f
+
+--- focused suites (new + predecessor + helpers) ---
+ ✓ src/extensions/tools/helpers.run-commands.test.ts (4 tests) 4ms
+ ✓ src/extensions/tools/flint-toolcall-red01.test.ts (20 tests) 17ms
+ ✓ src/extensions/tools/flint-toolcall-red01-correction01.test.ts (35 tests) 20ms
+ Test Files  3 passed (3)
+      Tests  59 passed (59)
+
+--- @cline/agents ---
+Test Files  32 passed (32) | Tests  578 passed (578)
+
+--- @cline/shared ---
+Test Files  43 passed | 1 skipped (44) | Tests  559 passed | 6 skipped (565)
+
+--- @cline/core FULL suite (post-change) ---
+Test Files  19 failed | 308 passed | 2 skipped (329) | Tests  113 failed | 4951 passed | 151 skipped (5215)
+Failing file set is IDENTICAL to the pre-change baseline (19 files, all pre-existing).
+See evidence/baseline-comparison.txt for the diff.
+
+--- @cline/vscode apps/vscode/src/sdk/__tests__ (post-change) ---
+Test Files  53 failed | 306 passed | 4 skipped (363) | Tests  124 failed | 3384 passed | 40 skipped (3548)
+Byte-identical to the pre-change baseline (53 files / 124 tests).
+
+--- typecheck (@cline/core, tsconfig.dev.json) ---
+total errors: 40
+errors in ACT-owned files: NONE
+
+--- lint (biome, --diagnostic-level=error) ---
+Checked 3 files. No fixes applied.  EXIT 0
+
+--- format (biome format) ---
+Checked 3 files. No fixes applied.  EXIT 0
+
+--- git diff --check HEAD ---
+CLEAN
