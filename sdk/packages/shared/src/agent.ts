@@ -611,6 +611,30 @@ export interface AgentTool<TInput = unknown, TOutput = unknown>
 	 * JSON schema may set it explicitly.
 	 */
 	validateInput?: (input: unknown) => void | string | Promise<void | string>;
+	/**
+	 * Optional tool-scoped input canonicalizer. Invoked by AgentRuntime
+	 * BEFORE `validateInput`, `beforeTool` hooks, approval, execution-plan
+	 * construction, and the executor. The returned value REPLACES the
+	 * runtime's `input`, so every downstream consumer (schema validation,
+	 * approval card, per-command authorization binding, executor) observes
+	 * exactly the same canonical input.
+	 *
+	 * ACT-CLINEMM-FLINT-TOOLCALL-RED-01: this seam exists because a
+	 * schema-level transform alone is NOT sufficient — `validateInput`
+	 * only reports acceptance/rejection and never rewrites the input the
+	 * runtime forwards. A compatibility repair that must keep the approval
+	 * preview and the per-command authorization binding aligned with the
+	 * executed command therefore has to canonicalize BEFORE validation.
+	 *
+	 * Authoring tools via `createTool({ inputSchema: zodSchema })` can
+	 * auto-generate this; tools that need a bounded compatibility shape
+	 * supply it explicitly.
+	 *
+	 * Contract: return the canonical input, or the input UNCHANGED when
+	 * the shape is not one this tool accepts. Throwing is treated as a
+	 * validation failure (no approval, no executor).
+	 */
+	normalizeInput?: (input: unknown) => unknown;
 }
 
 // =============================================================================

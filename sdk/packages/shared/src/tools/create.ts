@@ -106,6 +106,7 @@ export function createTool<TSchema extends z.ZodTypeAny, TOutput>(config: {
 	timeoutMs?: number;
 	retryable?: boolean;
 	maxRetries?: number;
+	normalizeInput?: AgentTool<z.infer<TSchema>, TOutput>["normalizeInput"];
 }): AgentTool<z.infer<TSchema>, TOutput>;
 export function createTool<TInput, TOutput>(config: {
 	name: string;
@@ -119,6 +120,7 @@ export function createTool<TInput, TOutput>(config: {
 	timeoutMs?: number;
 	retryable?: boolean;
 	maxRetries?: number;
+	normalizeInput?: AgentTool<TInput, TOutput>["normalizeInput"];
 }): AgentTool<TInput, TOutput> {
 	const inputSchema = normalizeToolInputSchema(
 		config.inputSchema instanceof z.ZodType
@@ -155,5 +157,6 @@ export function createTool<TInput, TOutput>(config: {
 		maxRetries: config.maxRetries ?? 3,
 		execute: config.execute,
 		validateInput,
+		normalizeInput: config.normalizeInput,
 	};
 }

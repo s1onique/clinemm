@@ -4420,6 +4420,50 @@ export class AgentRuntime {
 			input = normalizeJsonLikeStringsForSchema(input, tool.inputSchema);
 		}
 
+		// ACT-CLINEMM-FLINT-TOOLCALL-RED-01: tool-scoped input
+		// canonicalization runs AFTER the generic schema-driven
+		// normalization and BEFORE `validateInput`.
+		//
+		// Ordering is load-bearing:
+		//   - It must run before validation so the canonical shape is what
+		//     the schema validates.
+		//   - It must run before approval / execution-plan construction so
+		//     the approval card, the per-command authorization binding, and
+		//     the executor all observe the SAME canonical input. A
+		//     schema-level transform alone cannot achieve this, because
+		//     `validateInput` reports acceptance without rewriting the
+		//     input the runtime forwards.
+		//
+		// A throwing normalizer is treated as a validation failure: the
+		// call never reaches approval and never reaches the executor.
+		if (tool && !skipReason && typeof tool.normalizeInput === "function") {
+			let normalizationError: string | undefined;
+			try {
+				input = tool.normalizeInput(input);
+			} catch (error) {
+				normalizationError =
+					error instanceof Error
+						? error.message
+						: `Invalid input for tool ${toolCall.toolName}: ${String(error)}`;
+			}
+			if (
+				typeof normalizationError === "string" &&
+				normalizationError.length > 0
+			) {
+				skipReason = normalizationError;
+				const existingMeta =
+					toolCall.metadata &&
+					typeof toolCall.metadata === "object" &&
+					!Array.isArray(toolCall.metadata)
+						? (toolCall.metadata as Record<string, unknown>)
+						: {};
+				(toolCall as { metadata?: Record<string, unknown> }).metadata = {
+					...existingMeta,
+					inputParseError: normalizationError,
+				};
+			}
+		}
+
 		// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: validate input
 		// against the tool's own schema BEFORE any policy/approval/executor
 		// side effect. A schema-invalid model tool call must NEVER request

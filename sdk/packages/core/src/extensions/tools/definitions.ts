@@ -35,6 +35,7 @@ import {
 	getEditorSizeError,
 	getReadFileRangeError,
 	normalizeRunCommandsInput,
+	normalizeRunCommandsToolInput,
 	TimeoutError,
 	withTimeout,
 } from "./helpers";
@@ -839,6 +840,15 @@ export function createShellTool(
 			// model-facing display (JSON schema) and the runtime
 			// input check.
 			inputSchema: RunCommandsInputSchema,
+			// ACT-CLINEMM-FLINT-TOOLCALL-RED-01: bounded compatibility
+			// canonicalization for the CONFIRMED Flint shape
+			// `{command: "<JSON array string>"}`. It runs BEFORE schema
+			// validation, so the canonical `{commands: [...]}` is what the
+			// schema validates, what the approval card previews, what the
+			// per-command authorization binding is built from, and what the
+			// executor runs. Every other shape is left untouched and is
+			// rejected by the strict schema exactly as before.
+			normalizeInput: normalizeRunCommandsToolInput,
 			timeoutMs: timeoutMs * 2,
 			retryable: false,
 			maxRetries: 0,
