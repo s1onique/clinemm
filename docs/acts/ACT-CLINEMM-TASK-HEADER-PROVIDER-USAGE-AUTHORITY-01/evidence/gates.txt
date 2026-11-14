@@ -1,0 +1,35 @@
+ENTRY_HEAD=a02a040e143bccaabad1763ec2ae0fe5e0bdb139
+ENTRY_TREE=98778a442be674f2ed0b6140e8b890b80fc56010
+BRANCH=main
+REPOSITORY=s1onique/clinemm
+WORKTREE_AT_ENTRY=clean (no tracked or untracked files)
+PROTECTED_STASH=stash@{0} preserved unchanged (2026-10-25 18:11:13 +0300)
+INSTALLED_EXTENSION_OBSERVED=/Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions/s1onique.clinemm-4.1.16-8bcfda4ce
+
+GATE                                                                  COMMAND / EXIT
+Focused ContextWindow                                                bun run test -- src/components/chat/task-header/ContextWindow.test.tsx / 0 (19 pass)
+Focused TaskHeader                                                    bun run test -- src/components/chat/task-header/TaskHeader.test.tsx / 1 (pre-test dependency-resolution failure)
+Producer-consumer metrics                                              bun test src/shared/__tests__/getApiMetrics.test.ts / 0 (24 pass)
+Message translator                                                     bun run test:vitest -- src/sdk/message-translator.test.ts / 0 (189 pass)
+Webview TypeScript                                                    bunx tsc --noEmit / 0
+Extension TypeScript                                                   bunx tsc --noEmit / 0
+Biome ACT-owned files                                                 bunx biome check ... / 0
+Webview build                                                         bun run build / 0
+git diff --check                                                       clean / 0
+
+TaskHeader test limitation
+The exact requested command fails before test collection, in the unchanged installed dependency graph:
+  Cannot find module '.../node_modules/.bun/@react-aria+toggle@3.13.1+.../node_modules/react-aria/private/toggle/useToggle'
+  imported from '.../@react-aria/toggle/dist/import.mjs'
+This is unrelated to the ACT-owned files. No dependency or lockfile was changed. `bun install --frozen-lockfile`
+was attempted for environment repair but the installed Bun could not access its temp directory
+(PermissionDenied); no tracked dependency change was made.
+
+BUILD ARTIFACT
+apps/vscode/webview-ui/build/assets/index.js contains:
+  Provider-reported input for the last reported request
+  Next-request estimate (Estimated)
+  Context usage unavailable
+
+LIVE QUALIFICATION
+NOT EXECUTED. No extension replacement was performed. Live operator qualification remains pending.

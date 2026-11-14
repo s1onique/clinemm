@@ -1,0 +1,117 @@
+COMMAND: cd apps/vscode/webview-ui && bun run test -- src/components/chat/task-header/ContextWindow.test.tsx
+EXIT_CODE: 1
+
+EXPECTED (provider-first contract):
+- main used value: 68.9k
+- progress numerator: 68900
+- progress percentage: 26.914062500000004
+- source label: provider-reported input for the last reported request
+- W: separately labeled next-request estimate
+
+ACTUAL AT ENTRY:
+- main used value: 148.8k
+- progress numerator: 148800
+- progress percentage: 58.12500000000001
+- source label: current tokens used in this request
+
+FAILURE COUNT: 6
+   × Task header provider-usage authority > prefers provider-reported input from the last reported request and keeps the estimate separate 7ms
+     → expect(element).toHaveTextContent()
+
+Expected element to have text content:
+  26.914062500000004
+Received:
+  58.12500000000001
+   × Task header provider-usage authority > uses an explicitly labeled estimate when provider input is unavailable 4ms
+     → Unable to find an element with the title: /estimated next-request input/i.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"flex flex-col mt-1.5"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex gap-1 flex-row @max-xs:flex-col @max-xs:items-start items-center text-sm"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 flex-1 whitespace-nowrap"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"cursor-pointer text-sm"[39m
+            [33mtitle[39m=[32m"Current tokens used in this request"[39m
+          [36m>[39m
+            [0m85.5k[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex relative items-center gap-1 flex-1 w-full h-full"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"context-window-tooltip-content flex flex-col gap-2 bg-menu rounded shadow-sm z-100 w-60 p-1"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex flex-col w-full"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex justify-between items-center gap-1 cursor-pointer hover:bg-foreground/5 rounded p-0.5 transition-colors w-full"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"flex items-center gap-1"[39m
+                      [36m>[39m
+                        [36m<svg[39m
+                          [33maria-hidden[39m=[32m"true"[39m
+                          [33mclass[39m=[32m"lucide lucide-chevron-right"[39m
+                          [33mfill[39m=[32m"none"[39m
+                          [33mheight[39m=[32m"12"[39m
+                          [33mstroke[39m=[32m"currentColor"[39m
+                          [33mstroke-linecap[39m=[32m"round"[39m
+                          [33mstroke-linejoin[39m=[32m"round"[39m
+                          [33mstroke-width[39m=[32m"2"[39m
+                          [33mviewBox[39m=[32m"0 0 24 24"[39m
+                          [33mwidth[39m=[32m"12"[39m
+                          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                        [36m>[39m
+                          [36m<path[39m
+                            [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                          [36m/>[39m
+                        [36m</svg>[39m
+                        [36m<div[39m
+                          [33mclass[39m=[32m"font-semibold"[39m
+                        [36m>[39m
+                          [0mContext Window[0m
+                        [36m</div>[39m
+                      [36m</div>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"text-muted-foreground"[39m
+                      [36m>[39m
+                        [0m33.4%[0m
+                      [36m</div>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"relative w-full text-foreground context-window-progress brightness-100"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33maria-label[39m=[32m"Context window usage progress"[39m
+                    [33mrole[39m=[32m"progressbar"[39m
+                  [36m>[39m
+                    [0m33.3984375[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"cursor-pointer text-sm"[39m
+            [33mtitle[39m=[32m"Maximum context window size for this model"[39m
+          [36m>[39m
+            [0m256.0k[0m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<div>[39m
+          [0mCompact Task[0m

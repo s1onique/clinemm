@@ -2711,6 +2711,57 @@ describe("translateSessionEvent — agent_event usage", () => {
 			totalCost: 0.0112674,
 		})
 	})
+
+	it("keeps OpenAI-compatible cached input inclusive without double counting", () => {
+		const state = new MessageTranslatorState()
+		const result = translateSessionEvent(
+			{
+				type: "agent_event",
+				payload: {
+					sessionId: "session-1",
+					event: {
+						type: "usage",
+						inputTokens: 68_900,
+						outputTokens: 1_000,
+						cacheReadTokens: 64_766,
+						cacheWriteTokens: 0,
+					} as AgentEvent,
+				},
+			},
+			state,
+		)
+
+		const usage = JSON.parse(result.messages[0].text ?? "{}")
+		expect(usage.tokensIn + usage.cacheReads + usage.cacheWrites).toBe(68_900)
+		expect(usage.tokensIn).toBe(4_134)
+		expect(usage.cacheReads).toBe(64_766)
+	})
+
+	it("includes Anthropic uncached, cache-read, and cache-write buckets once", () => {
+		const state = new MessageTranslatorState()
+		const result = translateSessionEvent(
+			{
+				type: "agent_event",
+				payload: {
+					sessionId: "session-1",
+					event: {
+						type: "usage",
+						inputTokens: 68_900,
+						outputTokens: 1_000,
+						cacheReadTokens: 60_000,
+						cacheWriteTokens: 8_000,
+					} as AgentEvent,
+				},
+			},
+			state,
+		)
+
+		const usage = JSON.parse(result.messages[0].text ?? "{}")
+		expect(usage.tokensIn + usage.cacheReads + usage.cacheWrites).toBe(68_900)
+		expect(usage.tokensIn).toBe(900)
+		expect(usage.cacheReads).toBe(60_000)
+		expect(usage.cacheWrites).toBe(8_000)
+	})
 })
 
 // ---------------------------------------------------------------------------

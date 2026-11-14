@@ -1,7 +1,10 @@
+import type { ClineMessage } from "@shared/ExtensionMessage"
+import { getLastApiReqContextInputTokens } from "@shared/getApiMetrics"
 import { fireEvent, render, screen } from "@testing-library/react"
 import type { ButtonHTMLAttributes, PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import ContextWindow from "./ContextWindow"
+import { ContextWindowSummary } from "./ContextWindowSummary"
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeButton: ({ children, ...props }: PropsWithChildren<ButtonHTMLAttributes<HTMLButtonElement>>) => (
@@ -154,115 +157,175 @@ describe("ContextWindow occupancy projection", () => {
 	})
 })
 
+describe("Task header provider-usage authority", () => {
+	const P = 68_900
+	const W = 148_800
+	const CONTEXT = 256_000
+
+	it("prefers provider-reported input from the last reported request and keeps the estimate separate", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={W}
+				lastApiReqContextInputTokens={P}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P / CONTEXT) * 100))
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("68.9k")
+		expect(screen.getAllByText(/provider-reported input/i).length).toBeGreaterThan(0)
+		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("148.8k")
+		expect(screen.getAllByText(/estimated/i).length).toBeGreaterThan(0)
+		expect(screen.queryByTitle(/current tokens used in this request/i)).not.toBeInTheDocument()
+	})
+
+	it("uses an explicitly labeled estimate when provider input is unavailable", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={85_500}
+				lastApiReqContextInputTokens={undefined}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((85_500 / CONTEXT) * 100))
+		expect(screen.getByTitle(/estimated next-request input/i)).toHaveTextContent("85.5k")
+		expect(screen.getAllByText(/estimated/i).length).toBeGreaterThan(0)
+		expect(screen.queryByText(/provider-reported input/i)).not.toBeInTheDocument()
+	})
+
+	it("renders unavailable rather than fabricating zero when neither authority exists", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={null}
+				lastApiReqContextInputTokens={undefined}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByText(/context usage unavailable/i)).toBeInTheDocument()
+		expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
+	})
+
+	it("does not replace provider input with the estimate during unrelated telemetry updates", () => {
+		const { rerender } = render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={85_500}
+				lastApiReqContextInputTokens={P}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("68.9k")
+		rerender(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={W}
+				lastApiReqContextInputTokens={P}
+				useAutoCondense={false}
+			/>,
+		)
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("68.9k")
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P / CONTEXT) * 100))
+	})
+
+	it("does not synthesize a smaller provider count after compaction", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={30_000}
+				lastApiReqContextInputTokens={100_000}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("100.0k")
+		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("30.0k")
+		expect(screen.queryByTitle(/last reported request/i)).not.toHaveTextContent("30.0k")
+	})
+
+	it("rejects invalid provider input and falls back to a valid estimate", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={85_500}
+				lastApiReqContextInputTokens={Number.NaN}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByTitle(/estimated next-request input/i)).toHaveTextContent("85.5k")
+		expect(screen.queryByTitle(/last reported request/i)).not.toBeInTheDocument()
+	})
+})
+
+describe("ContextWindow provider-usage provenance", () => {
+	it("uses the latest eligible main-model usage row and ignores subagent aggregates", () => {
+		const messages: ClineMessage[] = [
+			{
+				ts: 1,
+				type: "say",
+				say: "api_req_started",
+				text: JSON.stringify({ tokensIn: 68_900, tokensOut: 1_000, cacheReads: 0, cacheWrites: 0 }),
+			},
+			{
+				ts: 2,
+				type: "say",
+				say: "subagent_usage",
+				text: JSON.stringify({ source: "subagents", tokensIn: 500_000, tokensOut: 1_000 }),
+			},
+		]
+		const providerInputTokens = getLastApiReqContextInputTokens(messages) || undefined
+		render(
+			<ContextWindow
+				contextWindow={256_000}
+				currentWorkingContextEstimate={148_800}
+				lastApiReqContextInputTokens={providerInputTokens}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("68.9k")
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((68_900 / 256_000) * 100))
+	})
+})
+
+describe("ContextWindowSummary usage-authority details", () => {
+	it("shows provider input and the next-request estimate as separate rows", () => {
+		render(
+			<ContextWindowSummary
+				contextWindow={256_000}
+				percentage={26.9140625}
+				providerInputTokens={68_900}
+				tokenUsed={68_900}
+				usageLabel="Provider-reported input"
+				usageTitle="Provider-reported input for the last reported request"
+				workingContextEstimate={148_800}
+			/>,
+		)
+
+		expect(screen.getByText("Last reported input:").parentElement).toHaveTextContent("68.9k")
+		expect(screen.getByText("Next-request estimate (Estimated):").parentElement).toHaveTextContent("148.8k")
+		expect(screen.getByText("Total:").parentElement).toHaveTextContent("256.0k")
+	})
+})
+
 // ============================================================================
-// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-// (twenty-first-pass, twenty-second-pass) — Boundary 5:
-// TaskHeader / ContextWindow consumes W
-// (currentWorkingContextEstimate) instead of P
-// (lastApiReqContextInputTokens) when W is defined.
-// When W is null, the bar is unavailable (NOT
-// silently replaced with P — P and W are explicitly
-// different authorities). When W is undefined, the
-// bar falls back to P (legacy / classic path).
-//
-// Reviewer (twenty-first-pass) verdict:
-//   PASS_WITH_ONE_P1_FIX.
-//   C1: GO_LIVE_QUALIFICATION after one bounded
-//   cleanup of the production delta.
-//
-// Reviewer (twenty-second-pass) P1 fix:
-//   The Math.round((numerator / contextWindow) *
-//   100) rounding is an UNRELATED presentation
-//   delta. Restore the raw ratio. The Boundary 5
-//   contract is only about NUMERATOR AUTHORITY
-//   (P -> W when defined), not percentage
-//   formatting.
-//
-// FACTORY CONSERVATION (twenty-second-pass):
-//   ONLY_NUMERATOR_AUTHORITY_CHANGES:
-//     P -> W
-//   PERCENTAGE_FORMATTING_SEMANTICS:
-//     PRESERVED
-//
-// Reviewer (twentieth-pass):
-//
-//   P = 364_900   (provider / last api_req_started
-//                  payload)
-//   W = 271_337   (runtime-published
-//                  currentWorkingContextEstimate;
-//                  deliberately distinct from the
-//                  legacy 264.3k screenshot evidence)
-//
-//   When W is defined, the bar numerator = W.
-//   When W is null, the bar is unavailable —
-//   do not silently substitute P.
-//   When W is undefined, the bar falls back to P
-//   (legacy / classic path).
-//   P provider metrics, H_b/H_a telemetry,
-//   Strategy-D, and getApiMetrics() are unchanged.
-//   Stale W reuse is FORBIDDEN.
-//
-// RED (this commit, entry HEAD):
-//
-//   Test 1: numerator for W=271_337 / P=364_900 →
-//     expected 135.6685 % (raw ratio)
-//     actual   182.45 % (current uses P)
-//     RED at entry.
-//
-//   Test 2: W=undefined / P=364_900 →
-//     expected: no progressbar
-//     actual:   progressbar shows 364_900
-//     RED at entry.
-//
-//   Test 3: no W, no P, no contextWindow → no bar
-//     GREEN at entry (already correct).
-//
-//   Test 4: NO_ESTIMATOR_RECOMPUTE conservation
-//     (no estimator imports in production code):
-//     GREEN at entry.
-//
-//   Test 5 (PRESERVED): legacy P-only path — W
-//     omitted (undefined), P provided, bar shows
-//     P-driven occupancy. RED at entry (current
-//     implementation does not accept the null
-//     sentinel).
-//
-// GREEN (twenty-first-pass): numerator = W when
-// W is defined; render null when W is null;
-// preserve the legacy undefined -> P fallback.
-//
-// LIVE QUALIFICATION (twenty-second-pass):
-//   PENDING. The post-compaction dogfood test
-//   below is RECLASSIFIED as
-//   COMPACTION_PRESENTATION_TRANSITION_TEST =
-//   SYNTHETIC_REAL / PASS (NOT live dogfood).
-//   Real compaction requires the next bounded
-//   cycle: install/build dogfood, reproduce one
-//   real compaction, capture
-//     captured runtime W = W1
-//     displayed numerator = W1
-//   before compaction,
-//   then
-//     captured runtime W = W2 (post-compaction)
-//     ExtensionState W = W2
-//     displayed numerator = W2
-//   before the next api_req_started.
-//   W2 != stale W1. Do NOT require W2 = 264.3k.
+// ACT-CLINEMM-TASK-HEADER-PROVIDER-USAGE-AUTHORITY-01
+// Provider-reported input (P) is the primary displayed authority. The
+// working-context estimate (W) remains visible only as a separately labeled
+// next-request estimate and is the fallback when P is unavailable.
 // ============================================================================
 
-describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextEstimate) instead of P (lastApiReqContextInputTokens)", () => {
+describe("ContextWindow provider-authority conservation", () => {
 	const P_SENTINEL = 364_900
 	const W_SENTINEL = 271_337
 
-	it("RED -> GREEN: W defined takes precedence over P (numerator = W / contextWindow)", () => {
-		// Authoritative W (runtime-published
-		// currentWorkingContextEstimate) takes
-		// precedence over the provider-derived P
-		// (lastApiReqContextInputTokens). Distinct
-		// truth domains — the runtime reflects the
-		// actual next-request prompt occupancy,
-		// while P is the disjoint sum of the last
-		// request's input tokens.
+	it("keeps provider input as the primary numerator while W is labeled separately", () => {
 		render(
 			<ContextWindow
 				contextWindow={200_000}
@@ -271,195 +334,37 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 				useAutoCondense={false}
 			/>,
 		)
-		// 271_337 / 200_000 = 1.356685 = 135.6685%
-		// (W can exceed the model window after a
-		//  compaction-aware redistribution; the bar
-		//  shows > 100% by design — the user gets an
-		//  honest "more than full" signal rather than
-		//  a clipped 100% that hides overflow).
-		//
-		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
-		// HEADER-TRANSPORT-REPAIR01 (twenty-second-
-		// pass): the percentage is the raw ratio
-		// (NOT pre-rounded). The mock Progress
-		// component in this test file displays
-		// `value` verbatim, so the assertion pins
-		// the raw float — see the
-		// "FACTORY CONSERVATION" note in
-		// ContextWindow.tsx for the rationale.
-		expect(screen.getByRole("progressbar")).toHaveTextContent(String((W_SENTINEL / 200_000) * 100))
-	})
 
-	it("RED -> GREEN: W defined, the displayed `used` value is W (not P)", () => {
-		// The "Xk / Yk" tooltip / value above the bar
-		// uses the same numerator — W, not P. Otherwise
-		// the bar would show "364.9k" while the
-		// progress is "271.3k" — a category error.
-		render(
-			<ContextWindow
-				contextWindow={200_000}
-				currentWorkingContextEstimate={W_SENTINEL}
-				lastApiReqContextInputTokens={P_SENTINEL}
-				useAutoCondense={false}
-			/>,
-		)
-		// The leading "Xk" token-element above the bar
-		// uses the `used` value with the
-		// `Current tokens used in this request` title.
-		// Both must show W (271,337), not P (364,900).
-		const usedElements = screen.getAllByTitle(/Current tokens used in this request/i)
-		expect(usedElements.length).toBeGreaterThan(0)
-		for (const el of usedElements) {
-			expect(el.textContent).toMatch(/271[,.]?337|271\.3k/i)
-		}
-	})
-
-	it("RED -> GREEN: W null (runtime-cleared) -> no bar (forbidden: silent P-as-W substitution)", () => {
-		// The runtime has emitted a no-W
-		// working-context-state-changed event OR
-		// the runtime is not yet active. Either
-		// way, the host-side carrier has emitted
-		// `null` for currentWorkingContextEstimate
-		// (the runtime-cleared sentinel — see
-		// apps/vscode/src/sdk/working-context-host-
-		// capture.ts twenty-first-pass). The bar
-		// must be UNAVAILABLE, not silently
-		// substituted with P. Reviewer:
-		// "P must not masquerade as W."
-		render(
-			<ContextWindow
-				contextWindow={200_000}
-				currentWorkingContextEstimate={null}
-				lastApiReqContextInputTokens={P_SENTINEL}
-				useAutoCondense={false}
-			/>,
-		)
-		expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
-	})
-
-	it("RED -> GREEN: W null (runtime-cleared) -> no W-token leaked into the displayed used value (forbidden: silent 364,900-as-W)", () => {
-		// Distinct from "no progressbar" — this pins
-		// the `used` value text to be ABSENT when W
-		// is `null`, so 364,900 cannot be shown as
-		// "current W tokens" by accident.
-		render(
-			<ContextWindow
-				contextWindow={200_000}
-				currentWorkingContextEstimate={null}
-				lastApiReqContextInputTokens={P_SENTINEL}
-				useAutoCondense={false}
-			/>,
-		)
-		const usedElements = screen.queryAllByTitle(/Current tokens used in this request/i)
-		// Either the element does not render at all
-		// (preferred — full null-fallback) OR it
-		// does not contain P. Both are acceptable;
-		// the invariant is "no 364,900 shown as W."
-		for (const el of usedElements) {
-			expect(el.textContent).not.toMatch(/364[,.]?900|364\.9k/i)
-		}
-	})
-
-	it("PRESERVED (GREEN at entry): no progressbar when contextWindow is 0", () => {
-		// Existing behavior — already correct, must
-		// not regress.
-		render(
-			<ContextWindow
-				contextWindow={0}
-				currentWorkingContextEstimate={W_SENTINEL}
-				lastApiReqContextInputTokens={P_SENTINEL}
-				useAutoCondense={false}
-			/>,
-		)
-		expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
-	})
-
-	it("PRESERVED (RED -> GREEN): legacy P-only path — W omitted, P provided, bar shows P-driven occupancy", () => {
-		// The legacy / classic / non-runtime path
-		// never emits W. The carrier is absent, so
-		// the projection helper emits `undefined`
-		// for currentWorkingContextEstimate on
-		// `ExtensionState`. TaskHeader passes the
-		// field through to ContextWindow, which
-		// treats `undefined` as the
-		// "legacy / never set" sentinel and falls
-		// back to P (lastApiReqContextInputTokens).
-		//
-		// Distinction:
-		//   currentWorkingContextEstimate === number
-		//     → runtime emitted W → use W
-		//   currentWorkingContextEstimate === null
-		//     → runtime emitted, W cleared →
-		//       render null (reviewer's B fallback)
-		//   currentWorkingContextEstimate === undefined
-		//     → carrier absent / legacy path →
-		//       use P (the only place where P
-		//       drives the bar)
-		//
-		// Implementation note: the prop accepts
-		// `number | null | undefined`. The test
-		// omits W entirely (undefined) for the
-		// legacy path.
-		render(
-			<ContextWindow
-				contextWindow={200_000}
-				// currentWorkingContextEstimate
-				// omitted (undefined) — legacy path.
-				lastApiReqContextInputTokens={P_SENTINEL}
-				useAutoCondense={false}
-			/>,
-		)
-		// 364_900 / 200_000 = 1.8245 = 182.45%.
-		// Raw ratio (NOT pre-rounded) — see the
-		// "FACTORY CONSERVATION" note in
-		// ContextWindow.tsx for the rationale.
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("364.9k")
+		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("271.3k")
 	})
 
-	it("COMPACTION_PRESENTATION_TRANSITION (SYNTHETIC_REAL / PASS): bar flips from W_before to W_after across a re-render — proves IF the webview receives W_after, ContextWindow updates", () => {
-		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
-		// HEADER-TRANSPORT-REPAIR01 (twenty-second-
-		// pass) — RECLASSIFIED:
-		//
-		//   COMPACTION_PRESENTATION_TRANSITION_TEST =
-		//     SYNTHETIC_REAL / PASS
-		//
-		// This is an extracted React projection test
-		// with synthetic W values. It is NOT a live
-		// dogfood test. It proves:
-		//
-		//   if the webview receives W_after,
-		//     ContextWindow updates from W_before to
-		//     W_after
-		//
-		// It does NOT prove the whole live chain:
-		//
-		//   real compaction
-		//   -> real prepareTurn W_after
-		//   -> AgentRuntime state/event
-		//   -> LocalRuntimeHost
-		//   -> SdkController capture
-		//   -> ExtensionState
-		//   -> React rerender
-		//
-		// The live qualification is PENDING and is
-		// the next bounded cycle (C1: GO_LIVE_
-		// QUALIFICATION, post twenty-second-pass).
-		//
-		// Bar numerator must follow W, not retain a
-		// stale value. Reviewer twentieth-pass:
-		// "Do not require the bar to equal 264.3k;
-		//  use the runtime-published W as the
-		//  oracle."
-		//
-		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
-		// HEADER-TRANSPORT-REPAIR01 (twenty-second-
-		// pass): raw percentage ratio (NOT pre-
-		// rounded) — see the "FACTORY CONSERVATION"
-		// note in ContextWindow.tsx.
-		const W_BEFORE = 380_000 // 380k before compaction
-		const W_AFTER = 90_000 // 90k after compaction
+	it("retains the last provider observation when the runtime clears W", () => {
+		render(
+			<ContextWindow
+				contextWindow={200_000}
+				currentWorkingContextEstimate={null}
+				lastApiReqContextInputTokens={P_SENTINEL}
+				useAutoCondense={false}
+			/>,
+		)
 
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("364.9k")
+		expect(screen.queryByText(/next-request estimate/i)).not.toBeInTheDocument()
+	})
+
+	it("preserves the legacy P-only path", () => {
+		render(<ContextWindow contextWindow={200_000} lastApiReqContextInputTokens={P_SENTINEL} useAutoCondense={false} />)
+
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("364.9k")
+	})
+
+	it("does not rescale the provider observation when W changes after compaction", () => {
+		const W_BEFORE = 380_000
+		const W_AFTER = 90_000
 		const { rerender } = render(
 			<ContextWindow
 				contextWindow={200_000}
@@ -468,11 +373,10 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 				useAutoCondense={false}
 			/>,
 		)
-		// 380_000 / 200_000 = 1.9 = 190% (raw ratio).
-		expect(screen.getByRole("progressbar")).toHaveTextContent(String((W_BEFORE / 200_000) * 100))
 
-		// Runtime publishes a fresh W_after event.
-		// The webview re-renders with the new prop.
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
+		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("380.0k")
+
 		rerender(
 			<ContextWindow
 				contextWindow={200_000}
@@ -481,29 +385,14 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 				useAutoCondense={false}
 			/>,
 		)
-		// 90_000 / 200_000 = 0.45 = 45% (raw ratio).
-		// The bar flipped from 190% to 45% — the
-		// compaction dropped W, and the bar reflects
-		// the new runtime-published value.
-		expect(screen.getByRole("progressbar")).toHaveTextContent(String((W_AFTER / 200_000) * 100))
 
-		// And: the displayed `used` value follows
-		// the same oracle — W_AFTER, not P.
-		const usedElements = screen.getAllByTitle(/Current tokens used in this request/i)
-		for (const el of usedElements) {
-			expect(el.textContent).toMatch(/90[,.]?000|90k|90\./i)
-		}
+		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("364.9k")
+		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("90.0k")
 	})
 
-	it("CONSERVATION (GREEN at entry): no estimator imports in ContextWindow production code", () => {
-		// No regression: ContextWindow must continue
-		// to NOT import W-recompute estimators.
-		// This is a static-file probe — the test
-		// reads the source and asserts no forbidden
-		// identifiers appear.
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
+	it("does not import or invoke an estimator in the presentation component", () => {
 		const fs = require("node:fs") as typeof import("node:fs")
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const path = require("node:path") as typeof import("node:path")
 		const file = fs.readFileSync(path.resolve(__dirname, "ContextWindow.tsx"), "utf8")
 		expect(file).not.toMatch(/estimateRequestInputTokens/)

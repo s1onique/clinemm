@@ -16,6 +16,54 @@ interface ContextWindowInfoProps {
 	size?: number
 }
 
+type ContextUsageSource = "provider" | "estimate"
+
+interface ContextUsageAuthority {
+	readonly value: number
+	readonly source: ContextUsageSource
+	readonly label: string
+	readonly title: string
+	readonly ariaLabel: string
+}
+
+/** A token count is usable only when it is finite and non-negative. */
+export function isValidContextTokenCount(value: number | null | undefined): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value >= 0
+}
+
+/**
+ * Selects the authoritative context-occupancy observation for presentation.
+ *
+ * Provider-reported input (P) is the observation of the last reported main
+ * request. The working-context estimate (W) is a prospective next-request
+ * estimate and is used only when P is unavailable. This selector never mixes,
+ * averages, rescales, or synthesizes the two authorities.
+ */
+export function selectContextUsageAuthority(input: {
+	readonly providerInputTokens?: number | null
+	readonly workingContextEstimate?: number | null
+}): ContextUsageAuthority | undefined {
+	if (isValidContextTokenCount(input.providerInputTokens)) {
+		return {
+			value: input.providerInputTokens,
+			source: "provider",
+			label: "Provider-reported input",
+			title: "Provider-reported input for the last reported request",
+			ariaLabel: "Provider-reported input for the last reported request",
+		}
+	}
+	if (isValidContextTokenCount(input.workingContextEstimate)) {
+		return {
+			value: input.workingContextEstimate,
+			source: "estimate",
+			label: "Estimated",
+			title: "Estimated next-request input",
+			ariaLabel: "Estimated next-request input",
+		}
+	}
+	return undefined
+}
+
 interface ContextWindowProgressProps extends ContextWindowInfoProps {
 	useAutoCondense: boolean
 	// ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01): provider-normalized
@@ -110,7 +158,7 @@ ConfirmationDialog.displayName = "ConfirmationDialog"
 
 const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 	contextWindow = 0,
-	lastApiReqContextInputTokens = 0,
+	lastApiReqContextInputTokens,
 	lastApiReqTotalTokens: _lastApiReqTotalTokens = 0,
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// (twenty-first-pass): W is the authoritative
@@ -157,89 +205,36 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 	}, [])
 
 	const tokenData = useMemo(() => {
-		if (!contextWindow) {
+		if (!isValidContextTokenCount(contextWindow) || contextWindow <= 0) {
 			return null
 		}
-		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-		// (twenty-first-pass) — Boundary 5 numerator
-		// precedence:
-		//
-		//   1. currentWorkingContextEstimate === number
-		//      → numerator = W (runtime-published
-		//        occupancy of the next request).
-		//   2. currentWorkingContextEstimate === undefined
-		//      → "never set / omitted". Legacy /
-		//        classic / pre-runtime path. Fall
-		//        back to P
-		//        (lastApiReqContextInputTokens) so
-		//        classic tasks keep working. The
-		//        carrier contract uses `undefined`
-		//        as the omission marker; the
-		//        production carrier assigns
-		//        `ExtensionState.currentWorkingContext
-		//        Estimate` explicitly to a number or
-		//        null at every runtime event, so
-		//        `undefined` only persists when the
-		//        carrier is absent (legacy path).
-		//   3. currentWorkingContextEstimate === null
-		//      → runtime is active but the latest
-		//        event carried no W. Reviewer
-		//        twentieth-pass fallback B: render
-		//        UNAVAILABLE. P must not masquerade
-		//        as W. P and W are explicitly
-		//        different authorities; silently
-		//        substituting the disjoint-sum P
-		//        for the runtime-published W would
-		//        recreate the semantic category
-		//        error this chain has been
-		//        eliminating.
-		//
-		// The previous ACT-CLINEMM-CONTEXT-
-		// ACCOUNTING-TRUTH01 (CORRECTION01) semantic
-		// (provider-normalized input tokens / window)
-		// is preserved for the legacy path. No
-		// estimator is used; transport-only.
-		let numerator: number
-		if (typeof currentWorkingContextEstimate === "number") {
-			numerator = currentWorkingContextEstimate
-		} else if (currentWorkingContextEstimate === null) {
-			// Reviewer's strict fallback B: when
-			// the runtime is active but W is
-			// explicitly cleared (no-W event), the
-			// bar is unavailable. P must not
-			// masquerade as W.
+		const authority = selectContextUsageAuthority({
+			providerInputTokens: lastApiReqContextInputTokens,
+			workingContextEstimate: currentWorkingContextEstimate,
+		})
+		if (!authority) {
 			return null
-		} else {
-			// `undefined` = "never set" (legacy /
-			// classic path / pre-runtime). Preserve
-			// the existing P-based bar so classic
-			// tasks keep working.
-			numerator = lastApiReqContextInputTokens
 		}
 		return {
-			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
-			// HEADER-TRANSPORT-REPAIR01 (twenty-second-
-			// pass): preserve the raw percentage ratio
-			// (NOT Math.round). The presentation-
-			// semantic / display-precision decision is
-			// a separate, evidence-backed concern and is
-			// NOT load-bearing for Boundary 5. The
-			// previous (c11 / c12 / c13) ratio was
-			// (lastApiReqContextInputTokens / context
-			// Window) * 100. Boundary 5 only changes the
-			// numerator authority (P -> W when defined);
-			// the ratio shape is preserved verbatim.
-			//
-			// FACTORY CONSERVATION (twenty-second-pass):
-			//   ONLY_NUMERATOR_AUTHORITY_CHANGES:
-			//     P -> W
-			//   PERCENTAGE_FORMATTING_SEMANTICS:
-			//     PRESERVED
-			percentage: (numerator / contextWindow) * 100,
+			percentage: (authority.value / contextWindow) * 100,
 			max: contextWindow,
-			used: numerator,
+			used: authority.value,
+			authority,
 		}
 	}, [contextWindow, lastApiReqContextInputTokens, currentWorkingContextEstimate])
+
+	const estimate = useMemo(
+		() =>
+			selectContextUsageAuthority({
+				providerInputTokens: undefined,
+				workingContextEstimate: currentWorkingContextEstimate,
+			}),
+		[currentWorkingContextEstimate],
+	)
+	const providerObservation = useMemo(
+		() => selectContextUsageAuthority({ providerInputTokens: lastApiReqContextInputTokens }),
+		[lastApiReqContextInputTokens],
+	)
 
 	const debounceCloseHover = useCallback((e: React.MouseEvent) => {
 		e.preventDefault()
@@ -274,16 +269,32 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 	}, [isOpened])
 
 	if (!tokenData) {
-		return null
+		return (
+			<div className="flex flex-col mt-1.5">
+				<div className="flex gap-1 flex-row @max-xs:flex-col @max-xs:items-start items-center text-sm">
+					<div
+						className="flex items-center gap-1.5 flex-1 whitespace-nowrap text-description"
+						title="No provider input or working-context estimate is available">
+						Context usage unavailable
+					</div>
+					<CompactTaskButton disabled={compactDisabled} onClick={handleCompactClick} />
+				</div>
+				{confirmationNeeded && <ConfirmationDialog onCancel={handleCancel} onConfirm={handleConfirm} />}
+			</div>
+		)
 	}
 
 	return (
 		<div className="flex flex-col mt-1.5" onMouseLeave={debounceCloseHover}>
 			<div className="flex gap-1 flex-row @max-xs:flex-col @max-xs:items-start items-center text-sm">
 				<div className="flex items-center gap-1.5 flex-1 whitespace-nowrap">
-					<span className="cursor-pointer text-sm" title="Current tokens used in this request">
+					<span
+						aria-label={tokenData.authority.ariaLabel}
+						className="cursor-pointer text-sm"
+						title={tokenData.authority.title}>
 						{formatTokenNumber(tokenData.used)}
 					</span>
+					<span className="text-xs text-description">{tokenData.authority.label}</span>
 					<div className="flex relative items-center gap-1 flex-1 w-full h-full" onMouseEnter={() => setIsOpened(true)}>
 						<HoverCard>
 							<HoverCardContent className="bg-menu rounded-xs shadow-sm">
@@ -292,9 +303,13 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 									cacheWrites={cacheWrites}
 									contextWindow={tokenData.max}
 									percentage={tokenData.percentage}
+									providerInputTokens={providerObservation?.value}
 									tokensIn={tokensIn}
 									tokensOut={tokensOut}
 									tokenUsed={tokenData.used}
+									usageLabel={tokenData.authority.label}
+									usageTitle={tokenData.authority.title}
+									workingContextEstimate={estimate?.value}
 								/>
 							</HoverCardContent>
 							<HoverCardTrigger asChild>

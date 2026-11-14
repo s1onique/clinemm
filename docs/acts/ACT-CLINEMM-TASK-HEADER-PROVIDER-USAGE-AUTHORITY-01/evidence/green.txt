@@ -1,0 +1,36 @@
+COMMAND: cd apps/vscode/webview-ui && bun run test -- src/components/chat/task-header/ContextWindow.test.tsx
+EXIT_CODE: 0
+RESULT: 1 test file passed; 19 tests passed
+
+COMMAND: cd apps/vscode && bun test src/shared/__tests__/getApiMetrics.test.ts
+EXIT_CODE: 0
+RESULT: 24 pass; 0 fail
+
+COMMAND: cd apps/vscode && bun run test:vitest -- src/sdk/message-translator.test.ts
+EXIT_CODE: 0
+RESULT: 1 test file passed; 189 tests passed
+
+DETERMINISTIC BENCHMARK FIXTURE:
+modelContextWindow=256000
+providerInputTokens=68900
+workingContextEstimate=148800
+observed main value: 68.9k
+observed progress: 26.914062500000004 (display rounds to 26.9%)
+observed source: Provider-reported input for the last reported request
+observed W detail: Next-request estimate (Estimated): 148.8k
+
+FALLBACK FIXTURE:
+providerInputTokens=unavailable
+workingContextEstimate=148800
+observed main value: 148.8k
+observed source: Estimated / Estimated next-request input
+observed provider claim: absent
+
+COMPACTION FIXTURE:
+previousProviderInputTokens=100000
+compactionEstimatedTokensAfter=30000
+newProviderUsage=unavailable
+observed main value: 100.0k
+observed source: Provider-reported input for the last reported request
+observed separate estimate: 30.0k
+fabricated P=30000: absent

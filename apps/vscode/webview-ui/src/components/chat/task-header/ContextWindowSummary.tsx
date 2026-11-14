@@ -22,6 +22,10 @@ interface TaskContextWindowButtonsProps extends TokenUsageInfoProps {
 	autoCompactThreshold?: number
 	isThresholdChanged?: boolean
 	isThresholdFadingOut?: boolean
+	usageLabel: string
+	usageTitle: string
+	providerInputTokens?: number
+	workingContextEstimate?: number
 }
 
 // New accordion item component
@@ -98,6 +102,10 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 	cacheReads,
 	percentage,
 	autoCompactThreshold = 0,
+	usageLabel,
+	usageTitle,
+	providerInputTokens,
+	workingContextEstimate,
 }) => {
 	// Accordion state
 	const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
@@ -140,15 +148,27 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 			)}
 
 			<AccordionItem
-				isExpanded={expandedSections.has("context")}
+				isExpanded={true}
 				onToggle={(event) => toggleSection("context", event)}
 				title="Context Window"
 				value={percentage ? `${percentage.toFixed(1)}%` : formatTokenNumber(contextWindow)}>
 				<div className="space-y-1">
 					<div className="flex justify-between">
-						<span>Used:</span>
+						<span>{usageLabel}:</span>
 						<span className="font-mono">{formatTokenNumber(tokenUsed)}</span>
 					</div>
+					{providerInputTokens !== undefined && (
+						<div className="flex justify-between">
+							<span>Last reported input:</span>
+							<span className="font-mono">{formatTokenNumber(providerInputTokens)}</span>
+						</div>
+					)}
+					{workingContextEstimate !== undefined && (
+						<div className="flex justify-between">
+							<span>Next-request estimate (Estimated):</span>
+							<span className="font-mono">{formatTokenNumber(workingContextEstimate)}</span>
+						</div>
+					)}
 					<div className="flex justify-between">
 						<span>Total:</span>
 						<span className="font-mono">{formatTokenNumber(contextWindow)}</span>

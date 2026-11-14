@@ -1,0 +1,40 @@
+ACT-CLINEMM-TASK-HEADER-PROVIDER-USAGE-AUTHORITY-01 — USAGE AUTHORITY MATRIX
+
+Authority meanings
+P = provider-reported input for the most recent eligible main-model usage event.
+    Normalized buckets are disjoint: tokensIn + cacheReads + cacheWrites.
+    Output tokens are excluded. No cross-request sum.
+W = runtime-published prospective working-context estimate.
+    Displayed only as an explicitly labeled next-request estimate; fallback when P is absent.
+B = prospective compaction budget.
+    UNCHANGED. No estimator, trigger, ceiling, summarizer, or compaction policy change.
+
+Presentation cases
+CASE                                      EXPECTED                                           STATUS
+P + W                                      P main value/percentage; W separate estimate      PASS
+P only                                     P main value/percentage                             PASS
+W only                                     W main value/percentage; label Estimated           PASS
+neither                                    Context usage unavailable; no zero fabricated       PASS
+invalid P (negative/NaN/Infinity)          reject P; use valid W or unavailable                PASS (NaN exercised)
+zero P                                     zero remains a numeric provider observation        PASS (contract preserved)
+P includes cached input                    inclusive once, no double count                     PASS
+large output tokens                        excluded from occupancy                             PASS
+request N+1 pending                        prior P remains labeled historical; W separate     PASS
+request N+1 usage arrives                  newest eligible P replaces prior P                 PASS
+older usage arrives late                   existing message ordering selects newest row      PASS
+automatic/manual/skipped/failed/cancelled  no compaction event creates provider usage          PASS
+compaction then new request                new provider row supersedes prior P                  PASS
+multiple compactions without request       prior genuine P unchanged; no ratio rescaling        PASS
+task switch                                active task message stream determines P             PASS (structural)
+task restored                              persisted task message stream may show historical P   PASS (structural)
+model switch                               no provider model identity in payload              LIMITATION (documented)
+legacy/classic task                        P-only path preserved                              PASS
+provider has no usage                      explicit Estimated W or unavailable                 PASS
+missing model capacity                     no progress percentage rendered                    PASS
+hover/accessibility                        source and temporal scope described                 PASS
+
+Provider accounting producer tests
+OpenAI-compatible: inputTokens=68900, cacheReadTokens=64766
+  normalized tokensIn=4134, cacheReads=64766, sum=68900 (not 133666)             PASS
+Anthropic-style: inputTokens=68900, cacheReadTokens=60000, cacheWriteTokens=8000
+  normalized tokensIn=900, cacheReads=60000, cacheWrites=8000, sum=68900          PASS
