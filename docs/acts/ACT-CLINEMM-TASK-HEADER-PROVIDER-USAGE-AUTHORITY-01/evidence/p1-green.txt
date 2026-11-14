@@ -1,0 +1,33 @@
+P1 BOUNDED CORRECTION GREEN — SUBJECT bbdccf8a2cd7f1467c3addda2c879928c5711056
+
+COMMAND: cd apps/vscode/webview-ui && bun run test -- src/components/chat/task-header/ContextWindow.test.tsx
+EXIT_CODE: 0
+RESULT: 21 passed (includes accordion expand -> collapse -> expand and observed-zero authority)
+
+COMMAND: cd apps/vscode && bun test src/shared/__tests__/getApiMetrics.test.ts
+EXIT_CODE: 0
+RESULT: 25 passed (includes observed zero vs absent observation)
+
+COMMAND: cd apps/vscode && bun run test:vitest -- src/sdk/message-translator.test.ts
+EXIT_CODE: 0
+RESULT: 189 passed
+
+COMMAND: cd apps/vscode/webview-ui && bunx tsc --noEmit
+EXIT_CODE: 0
+
+COMMAND: cd apps/vscode && bunx tsc --noEmit
+EXIT_CODE: 0
+
+COMMAND: cd apps/vscode && bunx biome check --config-path ./biome.jsonc <ACT-owned files>
+EXIT_CODE: 0
+RESULT: Checked 7 files; no fixes applied
+
+COMMAND: cd apps/vscode/webview-ui && bun run build
+EXIT_CODE: 0
+RESULT: 8935 modules transformed; built in 9.75s
+
+COMMAND: git diff --check
+EXIT_CODE: 0
+
+P1-A: context accordion starts expanded and can collapse and expand again.
+P1-B: getLastApiReqContextInputObservation returns {value: 0} for observed zero and undefined for no observation; ChatView uses optional value access, so zero remains a provider observation and absence remains absent.

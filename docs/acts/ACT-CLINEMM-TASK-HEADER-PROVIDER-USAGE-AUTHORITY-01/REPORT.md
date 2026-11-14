@@ -121,3 +121,44 @@ The webview production bundle was built and verified to contain the provider sou
 1. The historical P payload has no provider/model identity, so the UI cannot prove that P and the currently selected model share a denominator after a model switch. The ACT does not add a protocol field or telemetry subsystem.
 2. The requested TaskHeader focused test command is blocked by a pre-existing installed `react-aria` resolution defect; it fails before collection and is unrelated to the changed files.
 3. Installed live qualification did not occur; final closure is `PASS_STRUCTURAL_ONLY`.
+
+## Bounded P1 correction — reviewer disposition
+
+Reviewer disposition: `PASS_WITH_ONE_BOUNDED_P1_CORRECTION` with P1-A (forced-open context accordion) and P1-B (observed zero lost before the component).
+
+### P1-A — accordion correction
+
+`ContextWindowSummary` now initializes the context section expanded and binds `isExpanded` to its controlled `expandedSections` state. The focused interaction test proves expand → collapse → expand.
+
+### P1-B — zero-vs-absent correction
+
+`getLastApiReqContextInputObservation` is the presence-aware shared-helper seam:
+
+- observed numeric zero → `{ value: 0 }`
+- no eligible provider observation → `undefined`
+
+`ChatView` consumes `observation?.value` directly, so numeric zero remains provider-authoritative while absence remains absent. The legacy numeric `getLastApiReqContextInputTokens` remains available and returns `0` for backward compatibility.
+
+### P1 RED → GREEN
+
+- RED entry: `0c2012e015365b1347d0c9c8442ad81bb062e96c`
+- Accordion RED: 1 failed / 19 passed, exit `1`.
+- Zero-vs-absent RED: 24 pass / 1 fail, exit `1`.
+- GREEN subject: `bbdccf8a2cd7f1467c3addda2c879928c5711056`
+- ContextWindow/summary: 21/21 passed.
+- Metrics: 25/25 passed.
+- Translator: 189/189 passed.
+- Typechecks, Biome, webview build, and `git diff --check`: pass.
+
+### Exact-head package
+
+- VSIX: `dist/clinemm-4.1.16-bbdccf8a2.vsix`
+- Bytes: `65,316,266`
+- SHA-256: `3e83f57b03905c5423da70c5e210741657424abab94dcf56fb4a96f5da65fd3c`
+- Payload verified to contain the provider-authority, estimate, and unavailable labels.
+
+The repository's detached exact-head builder was attempted first but its mandatory frozen Bun install was blocked by the host's `PermissionDenied accessing temporary directory`. The package above was then produced from the clean exact committed tree using the installed lockfile-pinned `vsce` binary and the normal `vscode:prepublish` build. Full commands and identity are in `evidence/package.txt`.
+
+### Final qualification
+
+**PASS_STRUCTURAL_ONLY.** The two P1 defects are corrected, the package is exact-head and payload-verified, and the operator's installed extension was not replaced. Live Flint/Kapitsa provider qualification remains not executed; model-switch attribution remains explicitly qualified.

@@ -1,0 +1,7 @@
+LIVE QUALIFICATION
+
+NOT EXECUTED.
+
+Reason: the exact-head VSIX was built and payload-verified, but this correction did not replace the operator's installed extension. Therefore no Flint/Kapitsa provider request was run against this artifact. The live provider-usage correlation and display-rounding check remain unqualified.
+
+The residual model-switch attribution limitation also remains explicitly qualified: the existing historical provider payload carries no provider/model identity.

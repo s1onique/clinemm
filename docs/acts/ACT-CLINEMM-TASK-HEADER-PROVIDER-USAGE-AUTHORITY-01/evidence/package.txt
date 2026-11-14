@@ -1,0 +1,27 @@
+EXACT HEAD PACKAGE
+
+SOURCE_HEAD=bbdccf8a2cd7f1467c3addda2c879928c5711056
+SOURCE_TREE=d0cf79a369253c357b34c3e22099a12aeb8e4a4a
+SOURCE_VERSION=4.1.16-5a1c485cb
+ARTIFACT_FILENAME=clinemm-4.1.16-bbdccf8a2.vsix
+ARTIFACT_PATH=dist/clinemm-4.1.16-bbdccf8a2.vsix
+BYTES=65316266
+SHA256=3e83f57b03905c5423da70c5e210741657424abab94dcf56fb4a96f5da65fd3c
+VSCE_VERSION=lockfile-pinned apps/vscode/node_modules/.bin/vsce
+VSCE_COMMAND=./node_modules/.bin/vsce package --allow-package-all-secrets --no-dependencies --out ../../dist/clinemm-4.1.16-bbdccf8a2.vsix
+VSCE_EXIT=0
+PACKAGE_FILES=681
+
+PAYLOAD VERIFICATION
+extension/webview-ui/build/assets/index.js contains:
+  Provider-reported input for the last reported request
+  Next-request estimate (Estimated)
+  Context usage unavailable
+
+REPRODUCIBLE BUILDER ATTEMPT
+COMMAND: python3 scripts/build-dogfood-vsix.py --repo . --output-dir dist/dogfood --force
+EXIT_CODE: 2
+REASON: mandatory `bun install --frozen-lockfile` in the exact-head detached worktree failed on this host with `PermissionDenied accessing temporary directory`. No source/dependency/lockfile change was made. The artifact above was built from the clean exact committed source tree using the repository's installed lockfile-pinned vsce binary and the normal vscode:prepublish build.
+
+INSTALLATION
+NOT PERFORMED. The operator's installed extension was not replaced.

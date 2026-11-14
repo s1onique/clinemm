@@ -1,0 +1,16 @@
+P1 BOUNDED CORRECTION RED — ENTRY 0c2012e015365b1347d0c9c8442ad81bb062e96c
+
+P1-A Accordion discriminator
+COMMAND: cd apps/vscode/webview-ui && bun run test -- src/components/chat/task-header/ContextWindow.test.tsx
+EXIT_CODE: 1
+RESULT: 1 failed | 19 passed
+FAILED: ContextWindowSummary usage-authority details > expands, collapses, and expands the context details section
+CAUSE: ContextWindowSummary forced isExpanded={true}; the controlled context expansion state could not collapse the details.
+
+P1-B Zero-vs-absent discriminator
+COMMAND: cd apps/vscode && bun test src/shared/__tests__/getApiMetrics.test.ts
+EXIT_CODE: 1
+RESULT: 24 pass | 1 fail
+FAILED: distinguishes an observed zero input count from no provider observation
+ACTUAL: getLastApiReqContextInputTokens returned 0 for both an observed zero and no observation.
+CAUSE: the numeric helper had no presence channel, and ChatView coerced both with `|| undefined`.
