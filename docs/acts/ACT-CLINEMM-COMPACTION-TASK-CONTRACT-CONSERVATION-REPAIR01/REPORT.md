@@ -36,7 +36,9 @@ pass. Live installed behaviour is **not** claimed.
 | Branch | `main` |
 | Entry HEAD | `e854053b64c46e94a2d910775168406a56ea35f2` |
 | Entry tree | `b67fc243dfb530b12bbe04d4fda0e201e33717c3` |
-| Final HEAD | recorded in `evidence/identity.txt` after the local commit |
+| Source HEAD (the code commit that was built and packaged) | `fdc25745e1713647b3e81f1398ac07567e780934` |
+| Source tree | `d7eb149eeec8e3d984cdade2e9af7bf668a3dbfd` |
+| Final HEAD | the evidence commit that follows the source HEAD (see `evidence/identity.txt`) |
 | Worktree at entry | CLEAN apart from the 9 **untracked** predecessor recon documentation files |
 | `stash@{0}` | **PRESERVED VERBATIM**; stash count 1 |
 
@@ -210,7 +212,7 @@ protects the limit.
 | `sdk/packages/shared` typecheck | exit 0 |
 | `sdk/packages/agents` typecheck | exit 0 |
 | Existing focused suites | **275/275** — identical to the predecessor's baseline |
-| Combined focused suites (13 existing + 2 new) | **305/305** |
+| Combined focused suites (13 existing + 2 new) | **306/306** |
 | Biome lint + format (7 touched files) | exit 0, no fixes applied |
 | `git diff --check` | exit 0 |
 | SDK builds (`@cline/shared`, `@cline/agents`, `@cline/core`) | exit 0 |
@@ -222,10 +224,23 @@ failures. The ACT-owned suites are all GREEN.
 
 ### 1.11 Artifact identity
 
-See `evidence/package.txt`. The exact committed source was built and packaged
-with the existing repository scripts; the artifact path, byte size, SHA-256 and
-shipped-bundle verification are recorded there. The artifact was **not**
-installed over the operator's current ClineMM instance.
+| Item | Value |
+|---|---|
+| Source HEAD | `fdc25745e1713647b3e81f1398ac07567e780934` |
+| Source tree | `d7eb149eeec8e3d984cdade2e9af7bf668a3dbfd` |
+| Extension version | `4.1.16-5a1c485cb` |
+| Artifact | `dist/clinemm-4.1.16-fdc25745e.vsix` |
+| Bytes | 65,318,158 |
+| SHA-256 | `c69f26236a0f1a9a8d0de8a0b2f3ef6df4d46578ba9b96c55d88ac6051e2b46e` |
+| Packaged files | 681 |
+| Shipped-bundle verification | PASS — the packaged `extension/dist/extension.js` contains the contract marker, the section headings and the shared completion-reminder template |
+
+The exact committed source was built and packaged with the existing repository
+scripts (`build:webview`, `esbuild.mjs --production`, the lockfile-pinned
+`vsce`). The artifact was **not** installed over the operator's current
+ClineMM instance.
+
+Full detail: `evidence/package.txt`.
 
 ### 1.12 Live qualification
 

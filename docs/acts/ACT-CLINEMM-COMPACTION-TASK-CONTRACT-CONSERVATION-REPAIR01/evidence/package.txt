@@ -1,0 +1,50 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — EXACT HEAD PACKAGE
+====================================================================
+
+SOURCE_HEAD=fdc25745e1713647b3e81f1398ac07567e780934
+SOURCE_TREE=d7eb149eeec8e3d984cdade2e9af7bf668a3dbfd
+SOURCE_VERSION=4.1.16-5a1c485cb
+ARTIFACT_FILENAME=clinemm-4.1.16-fdc25745e.vsix
+ARTIFACT_PATH=dist/clinemm-4.1.16-fdc25745e.vsix
+BYTES=65318158
+SHA256=c69f26236a0f1a9a8d0de8a0b2f3ef6df4d46578ba9b96c55d88ac6051e2b46e
+VSCE_VERSION=lockfile-pinned apps/vscode/node_modules/.bin/vsce
+VSCE_COMMAND=./node_modules/.bin/vsce package --allow-package-all-secrets --no-dependencies --out ../../dist/clinemm-4.1.16-fdc25745e.vsix
+VSCE_EXIT=0
+PACKAGE_FILES=681
+
+BUILD COMMANDS (all from the exact committed source tree)
+-------------------------------------------------------
+  cd sdk/packages/shared && bun --production -F '@cline/shared' build   -> exit 0
+  cd sdk/packages/agents && bun --production -F '@cline/agents' build   -> exit 0
+  cd sdk/packages/core   && bun --production -F '@cline/core'   build   -> exit 0
+  cd apps/vscode && bun run build:webview                               -> exit 0
+  cd apps/vscode && bun esbuild.mjs --production                          -> exit 0
+  cd apps/vscode && ./node_modules/.bin/vsce package ...                  -> exit 0
+
+WORKTREE AT PACKAGE TIME
+-----------------------
+  git status --short  -> only the EXEMPT untracked predecessor recon directory
+  stash@{0}          -> PRESERVED VERBATIM
+
+PAYLOAD VERIFICATION (the packaged extension/dist/extension.js)
+-------------------------------------------------------
+  extension/dist/extension.js  28,026,985 bytes
+  'cline-task-contract:begin'                              occurrences: 1
+  'Active task contract (authoritative)'                   occurrences: 1
+  'Runtime completion obligation (runtime authority)'      occurrences: 1
+  'This run is not complete until you call one of these
+    terminal completion tools'                               occurrences: 2
+    (one = the producer template, one = the recogniser template)
+  => The carry-forward transformation and the shared completion-
+     reminder contract ARE present in the SHIPPED bundle.
+
+INSTALLATION
+------------
+  NOT PERFORMED. The operator's installed ClineMM instance was not replaced.
+
+REPRODUCIBLE BUILDER ATTEMPT
+------------------------
+  NOT EXECUTED in this run. The artifact above was built from the clean
+  exact committed source tree using the repository's installed
+  lockfile-pinned vsce binary and the normal vscode:prepublish build.

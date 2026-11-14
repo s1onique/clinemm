@@ -151,6 +151,49 @@ reverting the ACT's files and re-running the same commands: identical
 failures. The ACT-owned suites are all GREEN.
 
 --------------------------------------------------------------------------------
+GATE 14 -- FULL sdk/packages/core SUITE: FAILURES ARE PRE-EXISTING  [PASS]
+--------------------------------------------------------------------------------
+COMMAND (repaired source):
+  cd sdk/packages/core && bunx vitest run --config vitest.config.ts
+  RESULT: Test Files 34 failed | 295 passed | 3 skipped (333)
+          Tests  155 failed | 4956 passed | 165 skipped (5285)
+
+COMMAND (ENTRY BASELINE -- the ACT's changes reverted in place):
+  cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+    <the exact 34 failing files from the repaired run>
+  RESULT: Test Files 34 failed (34)
+          Tests  155 failed | 506 passed | 36 skipped (697)
+
+COMPARISON OF THE FAILING FILE SETS:
+  baseline failing files: 34
+  repaired failing files: 34
+  diff(baseline, repaired) -> EMPTY (the sets are IDENTICAL)
+  => The 34 failing files and the 155 failing tests are PRE-EXISTING at the
+     entry HEAD. The ACT introduces NO new failing test and fixes none of the
+     pre-existing ones (that would be unrelated cleanup, which is forbidden).
+
+  The failing files are unrelated to this ACT's seams (hub servers, mcp
+  clients, plugin sandboxes, seatbelt, checkpoint hooks, codex auth, remote
+  shell path, sandbox backends, session import, agenda tasks).
+
+--------------------------------------------------------------------------------
+GATE 15 -- EXACT-HEAD BUILD AND PACKAGE                              [PASS]
+--------------------------------------------------------------------------------
+  bun --production -F '@cline/shared' build   -> exit 0
+  bun --production -F '@cline/agents' build   -> exit 0
+  bun --production -F '@cline/core'   build   -> exit 0
+  cd apps/vscode && bun run build:webview      -> exit 0
+  cd apps/vscode && bun esbuild.mjs --production -> exit 0
+  cd apps/vscode && ./node_modules/.bin/vsce package ... -> exit 0
+  ARTIFACT  dist/clinemm-4.1.16-fdc25745e.vsix
+  BYTES     65318158
+  SHA256    c69f26236a0f1a9a8d0de8a0b2f3ef6df4d46578ba9b96c55d88ac6051e2b46e
+  SHIPPED-BUNDLE VERIFICATION: PASS (the packaged extension.js contains the
+  contract marker, the section headings and the shared reminder template)
+  INSTALLATION: NOT PERFORMED (the operator's instance was not replaced)
+  Detail: evidence/package.txt
+
+--------------------------------------------------------------------------------
 SUMMARY
 -------
 GATE                                                  RESULT
@@ -168,6 +211,8 @@ GATE                                                  RESULT
 11 No live provider requests                    PASS
 12 Canonical sessions not modified              PASS
 13 Pre-existing failures not ACT-owned           PASS
+14 Full core suite: failures pre-existing        PASS    identical file set
+15 Exact-head build + package                    PASS    see package.txt
 
 ACT-OWNED DIAGNOSTICS: 0.
 DEFAULT-SUITE INTENTIONAL RED: none left behind (the RED harness is now
