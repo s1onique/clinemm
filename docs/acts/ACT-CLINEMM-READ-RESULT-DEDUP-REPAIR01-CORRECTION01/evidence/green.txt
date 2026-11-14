@@ -1,0 +1,44 @@
+ACT-CLINEMM-READ-RESULT-DEDUP-REPAIR01-CORRECTION01 — GREEN gates
+
+Commands (from sdk/packages/core):
+  bunx vitest run --config vitest.config.ts src/session/services/message-builder.test.ts \
+    src/session/services/message-builder-read-dedup.test.ts \
+    src/session/services/message-builder-recovery.test.ts \
+    src/session/services/tool-result-cache.test.ts
+  bunx vitest run --config vitest.config.ts src/extensions/context/
+
+Results:
+  MessageBuilder + dedup + recovery + cache: 100/100 PASS, exit 0
+    message-builder.test.ts               53 tests PASS
+    message-builder-read-dedup.test.ts     32 tests PASS
+    message-builder-recovery.test.ts        7 tests PASS
+    tool-result-cache.test.ts               8 tests PASS
+  Compaction suites: 165/165 PASS, 1 skipped, exit 0
+
+Full core unit suite (bunx vitest run --config vitest.config.ts):
+  Entry f761fa682 baseline: 19 failed files | 113 failed | 4961 passed | 151 skipped
+  With the correction:      19 failed files | 113 failed | 4987 passed | 151 skipped
+  The 113 failures are identical pre-existing environment failures (macOS seatbelt
+  availability, workspace realpath authority, sandbox file permissions, and an
+  EPERM append to ~/.cline/data/logs/hooks.jsonl). They reproduce identically with the
+  correction stashed, so they are not caused by this ACT. The correction adds 26 passing
+  tests and zero regressions.
+
+Formatting/lint:
+  bunx --bun @biomejs/biome check --no-errors-on-unmatched --files-ignore-unknown=true \
+    sdk/packages/core/src/session/services/message-builder.ts \
+    sdk/packages/core/src/session/services/message-builder-read-dedup.test.ts
+  PASS, exit 0 ("Checked 2 files. No fixes applied.")
+
+Repository:
+  git diff --check
+  PASS, exit 0
+
+Typecheck (baseline comparison):
+  cd sdk/packages/core
+  bun tsc -p tsconfig.dev.json --noEmit
+  Exit 2 because the verified entry already carries 40 pre-existing diagnostics in
+  unrelated files. The entry (f761fa682) and current diagnostic sets are byte-identical
+  (diff empty). Diagnostics mentioning message-builder: 0. ACT-owned diagnostics: 0.
+
+No intentionally failing RED test remains in the default suite.

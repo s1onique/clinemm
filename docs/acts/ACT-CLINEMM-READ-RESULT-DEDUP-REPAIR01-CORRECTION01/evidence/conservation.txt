@@ -1,0 +1,92 @@
+ACT-CLINEMM-READ-RESULT-DEDUP-REPAIR01-CORRECTION01 — conservation
+
+Production change (one seam, no new persistence, no tool/authorization change):
+  MessageBuilder.projectDuplicateReadResults now splits each locator's read observations
+  into CONTIGUOUS RUNS of byte-identical content instead of grouping all observations that
+  ever shared a hash. Only the LAST run of a locator is current. Every earlier run holds
+  superseded content and is:
+    - never projected into a compact reference, and
+    - never shielded from the existing 64 KiB stale-read rewrite policy.
+  MessageBuilder.buildForApi additionally skips the anchor/reference shielding explicitly
+  for obsolete result ids, so the protection cannot be re-granted to superseded content.
+
+Freshness conservation (the corrected P0), verified through real MessageBuilder.buildForApi:
+  X -> X -> Y, 40,000-character payloads (two copies cross the 64 KiB threshold)
+    A (anchor X) -> "[outdated - see the latest file content]"
+    B (duplicate X) -> "[outdated - see the latest file content]"
+    C (newest Y) -> full 40,000-character Y payload
+    No "same content as earlier read result" marker survives, so nothing points at a
+    rewritten anchor.
+  X -> X -> Y across a sticky multi-build sequence on one builder instance:
+    Same result. The anchor is protected while the content is current and unprotected once
+    a later, different observation supersedes it.
+
+First-anchor deduplication is preserved for unchanged content:
+  X -> X -> X
+    A (anchor X) -> full 40,000-character X payload
+    B, C -> compact "[same content as earlier read result a]" references
+    No stale marker anywhere.
+  X -> Y -> X (conservative)
+    A (superseded X) -> "[outdated - see the latest file content]"
+    B (superseded Y) -> "[outdated - see the latest file content]"
+    C (newest X) -> full 40,000-character X payload
+    C does not claim identity with the superseded earlier X.
+
+Same path, different ranges:
+  /private/project/ranged.txt:1-10 and :11-20 with identical bytes are not aliased. The
+  range is part of the normalized locator key.
+
+Predecessor adversarial matrix (17/17) executed against the permanent implementation:
+  1  two identical full-file reads — later result compacted to a reference  PASS
+  2  three identical reads — stable prefix, no dangling reference          PASS
+  3  same path, changed content — full new content retained                 PASS
+  4  same bytes, different path — no cross-path deduplication               PASS
+  5  same path, different ranges — no unproven equivalence                 PASS
+  6  same path/range, different contents — no deduplication                 PASS
+  7  mixed batched reads — each member handled independently                PASS
+  8  partial/truncated reads — no false claim of complete-content identity  PASS
+  9  failed or interrupted read — failure preserved, never aliased         PASS
+  10 file edited between reads — the new read remains authoritative          PASS
+  10b superseded content reclaimed once the stale-read threshold is crossed PASS
+  11 rollback to older messages — no reference to removed future results    PASS
+  12 compaction removes the original result — reference resolves or falls
+     back to an explicit unavailable-content notice                          PASS
+  13 session restored without transient caches — no dangling reference       PASS
+  14 cache entry expired or evicted — projection stays a pure function of
+     the canonical messages                                                 PASS
+  15 images or non-text results — existing media semantics unchanged         PASS
+  16 budget truncation — no fabricated content coverage                     PASS
+  17 independent concurrent reads — one result per tool_use_id, canonical
+     order preserved, correlation deterministic                             PASS
+
+Final-projection anchor lifetime:
+  After aggregate budget processing, every emitted reference is checked against an earlier
+  real tool result in the same final projection. If the anchor was removed, truncated, or
+  rewritten, the reference is replaced by an explicit unavailable-content notice; no
+  dangling reference survives.
+
+Fixture-size correction (reviewer P1):
+  The synthetic historical fixture in message-builder-read-dedup.test.ts is
+  "  1 | fixture line\n" repeated 3,397 times plus "tail" = 64,547 characters / 64,547
+  UTF-8 bytes. The predecessor REPORT.md and evidence/conservation.txt labelled it
+  47,253 characters. The label in the test source is corrected to 64,547 and a permanent
+  assertion (DOCUMENTED_HISTORICAL_CONTENT_CHARS) now fails if the generated payload and
+  the documented size ever diverge again. The synthetic payload is intentionally larger
+  than the 64 KiB stale-read threshold so it exercises the same batching path as the
+  historical capture.
+
+Predecessor historical capture figures (22-message full transcript, not re-executed locally):
+  Previous prefix preserved: production 5 / 26,440 bytes vs proven candidate 20 / 181,354
+  Prepared bytes: 182,140 vs 182,422 (+282).
+  Estimated input tokens: 60,759 vs 60,853 (+94).
+  Full-content copies: 1 vs 1; compact references: 0 vs 2; stale markers: 2 vs 0.
+  Compaction trigger: neither arm crossed 86,400.
+  These predecessor figures describe the unchanged-content X -> X -> X sequence, which the
+  correction preserves exactly. The stale-content conservation defect they did not cover
+  is fixed and is covered by the three new RED->GREEN tests.
+
+Freshness/authorization:
+  The projection runs after canonical tool results exist. file-read.ts, tool execution,
+  permissions, filesystem authority, approval, and canonical persistence are unchanged.
+  No persistent reference store was introduced; the projection is a pure function of the
+  canonical messages within one build.

@@ -1,0 +1,14 @@
+ACT-CLINEMM-READ-RESULT-DEDUP-REPAIR01-CORRECTION01 — live qualification
+
+NOT_EXECUTED
+
+Reason: this run did not have an installed-extension Flint/Kapitsa qualification profile or
+permission to mutate the operator's installed extension profile. Structural production-seam
+evidence is recorded separately and is not promoted to live evidence.
+
+No Kapitsa cache-hit, wall-clock, or model-comprehension improvement is claimed.
+
+VSIX packaging is also NOT performed by this correction: the reviewer's closure instruction
+requires the freshness-conservation case to be green first and then authorizes packaging and
+live qualification as the next step. This correction stops at the green, committed,
+packaging-ready state and makes no artifact-identity, cache-hit, or latency claim.

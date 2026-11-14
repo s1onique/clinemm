@@ -80,6 +80,18 @@ interface DuplicateReadAnchor extends DuplicateReadCandidate {
 	contentBytes: number;
 }
 
+/**
+ * A contiguous run of read observations that saw byte-identical content at one
+ * locator without an intervening change. Only the last run of a locator is
+ * current; earlier runs hold superseded content.
+ */
+interface DuplicateReadRun {
+	locatorKey: string;
+	hash: string;
+	content: string;
+	resultIds: string[];
+}
+
 interface DuplicateReadReference {
 	anchorId: string;
 	text: string;
@@ -89,6 +101,12 @@ interface DuplicateReadProjection {
 	messages: Message[];
 	anchorIds: Set<string>;
 	referenceResultIds: Set<string>;
+	/**
+	 * Results whose content was superseded by a later, different read at the
+	 * same locator. These must not be shielded from the stale-read rewrite
+	 * policy: once newer content exists, the old bytes are obsolete.
+	 */
+	obsoleteResultIds: Set<string>;
 	references: DuplicateReadReference[];
 }
 
@@ -202,11 +220,23 @@ export class MessageBuilder {
 		this.reindex(messages);
 		const projection = this.projectDuplicateReadResults(messages);
 		this.commitOutdatedRewrites(messages);
+		// The anchor and its compact references are shielded from the stale-read
+		// rewrite policy so the provider prefix stays byte-stable. Superseded
+		// content is never shielded: once a later, different read established
+		// newer content at the same locator, the old bytes are obsolete and the
+		// existing stale-read policy must reclaim them. Freshness wins over
+		// prefix-cache preservation.
 		for (const anchorId of projection.anchorIds) {
+			if (projection.obsoleteResultIds.has(anchorId)) {
+				continue;
+			}
 			this.committedOutdatedRewrites.delete(anchorId);
 		}
-		for (const anchorId of projection.referenceResultIds) {
-			this.committedOutdatedRewrites.delete(anchorId);
+		for (const resultId of projection.referenceResultIds) {
+			if (projection.obsoleteResultIds.has(resultId)) {
+				continue;
+			}
+			this.committedOutdatedRewrites.delete(resultId);
 		}
 		const repairedMessages = this.addMissingToolResults(projection.messages);
 
@@ -353,14 +383,91 @@ export class MessageBuilder {
 	 * never mutated, and an anchor is never replaced because a later duplicate
 	 * arrived. The projection is deliberately conservative and declines any
 	 * result whose locator, completion, or text-only payload is ambiguous.
+	 *
+	 * Freshness takes precedence over prefix-cache preservation. When a later
+	 * read observes different content at the same locator, the earlier content
+	 * is superseded: it is neither projected into a reference nor shielded from
+	 * the stale-read rewrite policy, so the newest observation stays the single
+	 * visible source of truth.
 	 */
 	private projectDuplicateReadResults(
 		messages: Message[],
 	): DuplicateReadProjection {
-		const anchorsByLocatorAndHash = new Map<string, DuplicateReadAnchor[]>();
+		// Pass 1 — split every eligible read result per locator into contiguous
+		// runs of byte-identical content. A run is a maximal stretch of reads
+		// that observed the same bytes at the same locator without an
+		// intervening change.
+		//
+		// Only the LAST run of a locator is current. Every earlier run has been
+		// superseded by a later, different observation, so its content is
+		// obsolete: it must neither be projected into a compact reference nor be
+		// shielded from the stale-read rewrite policy. Freshness wins over
+		// prefix-cache preservation.
+		const runByResultId = new Map<string, number>();
+		const runs: DuplicateReadRun[] = [];
+		const runIndicesByLocator = new Map<string, number[]>();
+		const currentRunByLocator = new Map<string, number>();
+
+		for (const message of messages) {
+			if (!Array.isArray(message.content)) {
+				continue;
+			}
+			for (const block of message.content) {
+				if (block.type !== "tool_result") {
+					continue;
+				}
+				const candidate = this.toDuplicateReadCandidate(block);
+				if (!candidate) {
+					continue;
+				}
+				const currentRunIndex = currentRunByLocator.get(candidate.locatorKey);
+				if (
+					currentRunIndex !== undefined &&
+					runs[currentRunIndex].hash === candidate.hash &&
+					runs[currentRunIndex].content === candidate.content
+				) {
+					// Same bytes as the immediately preceding observation.
+					runs[currentRunIndex].resultIds.push(candidate.toolUseId);
+					runByResultId.set(candidate.toolUseId, currentRunIndex);
+					continue;
+				}
+				const runIndex = runs.length;
+				runs.push({
+					locatorKey: candidate.locatorKey,
+					hash: candidate.hash,
+					content: candidate.content,
+					resultIds: [candidate.toolUseId],
+				});
+				runByResultId.set(candidate.toolUseId, runIndex);
+				currentRunByLocator.set(candidate.locatorKey, runIndex);
+				let locatorRuns = runIndicesByLocator.get(candidate.locatorKey);
+				if (!locatorRuns) {
+					locatorRuns = [];
+					runIndicesByLocator.set(candidate.locatorKey, locatorRuns);
+				}
+				locatorRuns.push(runIndex);
+			}
+		}
+
+		// Results whose content was superseded by a later, different read at the
+		// same locator. They must not be shielded from the stale-read rewrite
+		// policy: once newer content exists, the old bytes are obsolete.
+		const obsoleteResultIds = new Set<string>();
+		for (const locatorRuns of runIndicesByLocator.values()) {
+			// Every run except the last one for this locator is superseded.
+			for (let index = 0; index < locatorRuns.length - 1; index++) {
+				for (const resultId of runs[locatorRuns[index]].resultIds) {
+					obsoleteResultIds.add(resultId);
+				}
+			}
+		}
+
+		// Pass 2 — project only the duplicates that belong to the current run of
+		// their locator. Everything else is left untouched so the stale-read
+		// rewrite policy can reclaim it.
+		const anchorsByRun = new Map<number, DuplicateReadAnchor>();
 		const duplicateAnchorIds = new Set<string>();
 		const referenceResultIds = new Set<string>();
-		const latestHashByLocator = new Map<string, string>();
 		const references: DuplicateReadReference[] = [];
 		let projected = false;
 
@@ -377,15 +484,16 @@ export class MessageBuilder {
 				if (!candidate) {
 					return block;
 				}
-				const anchorKey = `${candidate.locatorKey}\u0000${candidate.hash}`;
-				const anchors = anchorsByLocatorAndHash.get(anchorKey) ?? [];
-				const anchor = anchors.find(
-					(candidateAnchor) => candidateAnchor.content === candidate.content,
-				);
-				const latestHash = latestHashByLocator.get(candidate.locatorKey);
-				const changedSinceAnchor =
-					latestHash !== undefined && latestHash !== candidate.hash;
-				if (anchor && !changedSinceAnchor) {
+				const runIndex = runByResultId.get(candidate.toolUseId);
+				if (
+					runIndex === undefined ||
+					obsoleteResultIds.has(candidate.toolUseId)
+				) {
+					// Superseded content: never project, never protect.
+					return block;
+				}
+				const anchor = anchorsByRun.get(runIndex);
+				if (anchor) {
 					messageChanged = true;
 					duplicateAnchorIds.add(anchor.toolUseId);
 					referenceResultIds.add(block.tool_use_id);
@@ -400,15 +508,10 @@ export class MessageBuilder {
 					});
 					return reference;
 				}
-				if (anchor && changedSinceAnchor) {
-					latestHashByLocator.set(candidate.locatorKey, candidate.hash);
-				}
-				anchors.push({
+				anchorsByRun.set(runIndex, {
 					...candidate,
 					contentBytes: utf8ByteLength(candidate.content),
 				});
-				anchorsByLocatorAndHash.set(anchorKey, anchors);
-				latestHashByLocator.set(candidate.locatorKey, candidate.hash);
 				return block;
 			});
 			if (!messageChanged) {
@@ -422,6 +525,7 @@ export class MessageBuilder {
 			messages: projected ? nextMessages : messages,
 			anchorIds: duplicateAnchorIds,
 			referenceResultIds,
+			obsoleteResultIds,
 			references,
 		};
 	}

@@ -1,0 +1,45 @@
+ACT-CLINEMM-READ-RESULT-DEDUP-REPAIR01-CORRECTION01 — RED reproduction
+
+Entry source: f761fa68210e6d1ea195e130f5bc9503a6278eeb ("fix(core): deduplicate identical
+read results"), the commit under review.
+Protected stash: stash@{0} preserved unchanged.
+
+Defect under test (reviewer P0 "stale-content conservation"):
+  read A -> X
+  read B -> X   (byte-identical to A, becomes a compact reference to A)
+  read C -> Y   (the file changed; C is the newest observation)
+  With payloads large enough to cross the existing 64 KiB stale-rewrite threshold, the
+  pre-correction implementation kept A's and B's committed stale-rewrite decisions deleted,
+  so the obsolete X content stayed fully visible even though C established that Y is the
+  latest content.
+
+Production seam exercised:
+  Real MessageBuilder.buildForApi(), one builder instance, canonical messages in order.
+  No helper, stub, or re-implementation of the projection was used.
+
+RED command:
+  cd sdk/packages/core
+  bunx vitest run --config vitest.config.ts src/session/services/message-builder-read-dedup.test.ts
+
+RED result on f761fa682 (before the correction):
+  Test Files  1 failed (1)
+  Tests       3 failed | 29 passed (32)
+  Exit status: 1
+
+Failing tests (all three assert the same defect through the production seam):
+  x rewrites obsolete duplicate groups when a later read changed the content
+  x rewrites obsolete duplicate groups across a sticky multi-build sequence
+  x case 10b: superseded content is reclaimed once the stale-read threshold is crossed
+
+RED failure signature:
+  expected '[outdated - see the latest file content]' to be the 40,000-character X payload.
+  The obsolete X observations were never reclaimed.
+
+RED-1 baseline witness: the pre-repair baseline (bf486a47c) rewrites exactly the two
+  obsolete X observations to the 64 KiB stale marker and keeps the newest Y payload fully
+  visible. The correction restores that production behaviour.
+
+RED-2 control: the remaining 29 tests pass on f761fa682 as well, so the three failures
+  isolate the stale-content conservation defect and are not a blanket behaviour change.
+
+No raw provider request, credentials, or unredacted transcript was committed.
