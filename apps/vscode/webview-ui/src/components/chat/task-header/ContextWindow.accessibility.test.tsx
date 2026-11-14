@@ -101,7 +101,8 @@ describe("ContextWindow compact authority badge accessibility", () => {
 		expect(badge.tagName).toBe("BUTTON")
 		expect(badge).toHaveAttribute("type", "button")
 		expect(badge).toHaveAttribute("aria-label", PROVIDER_DESCRIPTION)
-		expect(badge).toHaveAttribute("title", PROVIDER_DESCRIPTION)
+		expect(badge).not.toHaveAttribute("title")
+		expect(badge).toHaveAccessibleName(PROVIDER_DESCRIPTION)
 		expect(badge.textContent?.trim()).toBe("Prv")
 	})
 

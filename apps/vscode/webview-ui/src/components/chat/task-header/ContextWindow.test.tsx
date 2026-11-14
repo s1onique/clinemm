@@ -281,7 +281,9 @@ describe("ContextWindow compact usage-authority label", () => {
 
 		const badge = screen.getByTestId("context-window-usage-authority")
 		expect(badge).toHaveTextContent("Prv")
-		expect(badge).toHaveAttribute("title", "Provider-reported input for the last reported request")
+		// The Radix tooltip is the only tooltip mechanism; a native `title`
+		// attribute would render a second, browser-native popup on hover.
+		expect(badge).not.toHaveAttribute("title")
 		expect(badge).toHaveAttribute("aria-label", "Provider-reported input for the last reported request")
 		expect(
 			screen.getByRole("button", {
@@ -302,7 +304,7 @@ describe("ContextWindow compact usage-authority label", () => {
 
 		const badge = screen.getByTestId("context-window-usage-authority")
 		expect(badge).toHaveTextContent("Est")
-		expect(badge).toHaveAttribute("title", "Estimated next-request input")
+		expect(badge).not.toHaveAttribute("title")
 		expect(badge).toHaveAttribute("aria-label", "Estimated next-request input")
 	})
 

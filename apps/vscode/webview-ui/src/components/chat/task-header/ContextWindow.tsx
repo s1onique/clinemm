@@ -302,7 +302,6 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 								aria-label={tokenData.authority.ariaLabel}
 								className="flex items-center border-0 bg-transparent p-0 text-xs text-description"
 								data-testid="context-window-usage-authority"
-								title={tokenData.authority.title}
 								type="button">
 								{tokenData.authority.source === "provider" ? "Prv" : "Est"}
 							</button>
