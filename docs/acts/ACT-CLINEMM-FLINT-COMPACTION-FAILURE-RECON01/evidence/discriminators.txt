@@ -27,6 +27,48 @@ PROBE A - COMPACTION POLICY REPLAY  (real resolver: compaction-shared.ts + compa
              REJECTED for this run: the ceiling that was active was the model's own 230400, and
              the observed trigger behaviour is consistent with it.
 
+  --------------------------------------------------------------------------
+  CORRECTION01 -- PROBE A FINDING WITHDRAWN (the trigger did NOT fire on the
+  request estimate; the comparison used the wrong quantity).
+  --------------------------------------------------------------------------
+  The trigger is not a constant. compaction.ts:417-437 computes
+      underestimateFactor = min(4, max(1, actualPreviousInputTokens / requestInputTokens))
+      maxInputTokens      = rawMaxInputTokens / underestimateFactor
+      requestTriggerTokens= maxInputTokens * COMPACTION_TRIGGER_RATIO
+      shouldCompact       = requestInputTokens >= requestTriggerTokens
+  where actualPreviousInputTokens is the PROVIDER'S actual count for the previous request
+  (agent-runtime.ts:3088) and requestInputTokens is the ESTIMATOR's count for the current one.
+
+  Recomputed with the real production resolver (probe:
+  zz-act-correction01-trigger.test.ts):
+    [PROBE1]  rawMax=230400 factor=1 maxInputTokens=230400.0 trigger=207360.0
+              W=93917 shouldCompact=false W/trigger=0.4529
+    [PROBE1b] boundaries=5 crossingTheProductionTrigger=0
+
+    boundary      W        P(prev)  factor  trigger    W/trigger  shouldCompact
+    attempt1/7    85546    63671    1.0     207360.0  0.4125      false
+    attempt2/22   87044    69557    1.0     207360.0  0.4198      false
+    attempt3/45   81367    59047    1.0     207360.0  0.3924      false
+    attempt4/46   93917    64957    1.0     207360.0  0.4529      false
+    attempt5/62   85686    64220    1.0     207360.0  0.4132      false
+
+  ZERO of the five boundaries crossed the production trigger. The parent's sentence "the three
+  observed compaction boundaries fired on the runtime's REQUEST ESTIMATE" is FALSE, and the
+  sentence "the observed trigger behaviour is consistent with it [the 230400 ceiling]" is not
+  supportable. The parent's framing compared PROVIDER counts (P) against an ESTIMATOR threshold;
+  the correct comparison is W against the scaled trigger.
+
+  underestimateFactor is 1.0 at every boundary precisely because the estimator OVER-counts in
+  this corpus (W/P = 1.223-1.358, i.e. W > P), so max(1, P/W) clamps to 1. That is consistent
+  with the parent's estimator-bias finding, but it means the trigger never fired on the
+  request-estimate path in this run.
+
+  H3 (incorrect effective context ceiling) remains REJECTED: the 96000 ceiling really was
+  inactive, and the effective ceiling really was 230400. What is now UNKNOWN is the route by
+  which compaction was actually INITIATED -- the shouldCompact evaluation is false at every
+  boundary, so the five summarizer requests came through a path this ACT did not trace. This
+  correction does not claim which path. See CORRECTION01.md section 7.
+
 PROBE B - SUMMARIZER OUTCOME CLASSIFICATION
 ------------------------------------------------------------------------------
   B.1 EXACT captured provider response was AVAILABLE for two attempts.
@@ -60,6 +102,49 @@ PROBE B - SUMMARIZER OUTCOME CLASSIFICATION
       responses carried 8192 tokens of text and were accepted. The synthetic control only
       establishes WHICH input class would produce the observed screenshot 'skipped' label:
       an EMPTY summarizer text, not a truncated one.
+
+  --------------------------------------------------------------------------
+  CORRECTION01 -- PROBE B REVISED. The last paragraph above is WRONG, and the
+  conclusion it supported is withdrawn.
+  --------------------------------------------------------------------------
+  The two `length` summarizer attempts did NOT have the same outcome:
+      attempt 3 (kap line 365) -> DISCARDED -> compaction-skipped  (the screenshot)
+      attempt 4 (kap line 367) -> ACCEPTED  -> persisted sidecar #3
+  Discriminator: the `previousSummary` block carried by attempt N+1. Fingerprints of the five
+  real captured summarizer requests (probe: zz-act-correction01-prevsummary.test.ts):
+      [PROBE5] ["none","a07d493872a96d79","5775aa10b4ee85c2","5775aa10b4ee85c2","6267387b0f89edf8"]
+  Attempts 3 and 4 carry the SAME previousSummary -> attempt 3's result was discarded. If it had
+  been accepted, attempt 4 would carry attempt 3's summary. Corroborated by the sidecar: its
+  metadata.summary is byte-identical to attempt 5's previousSummary body (1890 B), and its
+  updated_at (01:18:03.500Z) is attempt 4's boundary, not attempt 3's.
+
+  The parent's B.1 statement "text present and non-empty" for attempt 3 was NOT evidenced: the
+  Kapitsa log reports AGGREGATE output tokens only (text and reasoning are not separated), and
+  NO response-side capture exists on disk (all 622 captures are request-stage). The provider was
+  reasoning-enabled (providers.json openai-compatible.reasoning = {enabled:true, effort:"medium"}),
+  so the 8192-token output budget could be consumed entirely by reasoning, leaving the text
+  empty -- the exact mechanism compaction-shared.ts:30-34 and :807-812 document ("no summary
+  text ever arrives and compaction is skipped").
+
+  B.2's synthetic negative control is CORRECT and is now the LIVE classification, not merely a
+  characterisation. Driving the real production pipeline (probe: zz-act-correction01-skip.test.ts)
+  with reasoning + done{incompleteReason:"max_tokens"} and no text chunk:
+      [PROBE2-empty] result=undefined notices=[..., "auto-compaction-skipped:{...,"phase":"skipped",...}"]
+  and the control (same length class, non-empty text):
+      [PROBE2-nonempty] result=defined notices=[..., "auto-compacted:{...,"phase":"completed",...}"]
+  The discriminator is TEXT EMPTINESS, not the length finish itself.
+
+  CORRECTION01 -- the parent's absence-of-'compaction-skipped' argument is INVALID. The rendered
+  label comes from ClineCompactionInfo.status === "skipped", i.e. a say:"compaction" row whose
+  body is {"status":"skipped","mode":"auto"} (message-translator.ts:1461-1484 and :1501-1509;
+  CompactionRow.tsx:42-43). That body contains neither "compaction-skipped" nor "Compaction
+  skipped" (probe: zz-act-correction01-ui-producer.test.ts), so `grep -rl 'compaction-skipped'`
+  provably cannot find the row regardless of whether it existed. The divider is a transient
+  WEBVIEW PROJECTION: it is absent from the canonical transcript (0 of 207 messages carry
+  say:"compaction"), from the sidecar, and from the evaluation events -- for EVERY outcome.
+  The screenshot therefore belongs to THIS session (its 28:50 Working counter places it at
+  01:14:01Z, 170 s into the closed 01:11:11Z -> 01:16:18Z window containing attempt 3; the
+  256K session 1794619955958_0zlig did not start until 01:32:35Z).
 
   B.3 FALLBACK CONTRACT (verified in source, agentic-compaction.ts + compaction.ts:659-681).
       The agentic->basic fallback is a CATCH block, not a result-based branch:
@@ -119,12 +204,56 @@ PROBE D - CONTINUATION CONTRACT
   compaction, through the preserved tail. NO failing production-seam reproduction, therefore NO
   additional completion-instruction patch is warranted on the basis of this run.
 
+  --------------------------------------------------------------------------
+  CORRECTION01 -- PROBE D WITHDRAWN. tailCarriesIt is FALSE; the obligation did
+  NOT survive compaction.
+  --------------------------------------------------------------------------
+  The parent cited canonical indices 26-27 as the evidence for tail survival, but the sidecar's
+  source_message_count is 163 -- indices 26-27 lie INSIDE the compacted prefix
+  (canonical[0..162]) and cannot evidence survival in the preserved tail
+  (canonical[163..206]).
+
+  Recomputed with the REAL production projector against the REAL sidecar and transcript
+  (probe: zz-act-correction01-obligation.test.ts):
+      [PROBE3] cut=163 projectedLen=48 summaryCarriesIt=false
+               systemPromptCarriesIt=false prefixCarriesIt=true
+               tailCarriesIt=false carryingIndices=[1,27]
+  (projectedLen 48 = 4 + 44 reproduces Probe C exactly, so the projection is unchanged --
+  only the conclusion drawn from it changes.)
+
+      carrier                                      carries the instruction?
+      canonical[0..162]  (compacted prefix)       YES -- indices 1 and 27
+                                                   (plus an incidental tool-error string
+                                                    listing the available tools at 137)
+      canonical[163..206] (preserved tail)        no
+      sidecar messages[0].metadata.summary         no
+      sidecar system_prompt                        no
+      the 48-message projection sent to the provider   no
+
+  The tail hits at canonical 201 and 203 are the MODEL'S OWN THINKING TEXT ("...then submit via
+  submit_and_exit", "...and then call submit_and_exit with a summary") -- the model's DECISION,
+  not the carried OBLIGATION. Consequence is not obligation.
+
+  Independent confirmation from the captured post-compaction provider request
+  (cap_run_UyTw6PKK_47_*.provider-request.json, 3 messages, 01:18:03.567Z): the string
+  "not complete until" is ABSENT, and the only occurrence of submit_and_exit is inside the TOOL
+  SCHEMA description. The obligation instruction was not in the request the model received.
+
+  CONSEQUENCE: the parent's H6 classification ("Flint independently continues unnecessary
+  research", PRIMARY) rested on this probe. Its evidentiary basis is gone, so H6 is withdrawn as
+  a primary classification. The parent's summary-fidelity findings already showed the compaction
+  dropped the literal task question (Probe C.4); the completion obligation is the same class of
+  loss and is now established. H5 (misspelled-root propagation, 10 ENOENT reads, ~3.2 min
+  recovery cost) is UNCHANGED.
+
 CAUSAL DISCRIMINATION
 ------------------------------------------------------------------------------
-  H1 summarizer output truncated .............. PARTIALLY TRUE, NOT THE FAILURE CAUSE
-      Two of five summarizer responses were truncated at 8192 tokens (finish_reason=length).
-      But the truncated text was non-empty and was ACCEPTED, and the compaction SUCCEEDED
-      (sidecar persisted; next request used the projection). Truncation did not skip anything.
+  H1 summarizer output truncated .............. PARTIALLY TRUE, BUT THE CLASSIFICATION CHANGES
+      One of the two `length` responses was ACCEPTED (attempt 4: persisted sidecar #3); the
+      other was DISCARDED (attempt 3: compaction-skipped). "Both were accepted and truncation
+      skipped nothing" is false. Corrected: the summarizer's 8192-token budget was insufficient
+      for a reasoning-enabled provider, and on attempt 3 it produced NO usable text -> the
+      compaction was skipped -> the UI rendered "Compaction skipped".
   H2 agentic fallback fails .................. REJECTED (fallback path never entered)
   H3 incorrect effective context ceiling ...... REJECTED (Auto ceiling 230400; 96K was inactive)
   H4 context counter uses wrong authority .... REJECTED for the live path
@@ -139,16 +268,19 @@ CAUSAL DISCRIMINATION
       the literal task question. However the error ORIGINATED in the source prefix (279 prior
       occurrences, earliest at canonical idx 59) and the model recovered by using relative
       paths; the run still had the information needed to finish.
-  H6 Flint independently continues unnecessary research ... SUPPORTED (PRIMARY)
-      The completion obligation was present after compaction (Probe D); the evidence base was
-      already sufficient (the model's own idx-201/203 reasoning: 'I have a comprehensive
-      picture'); and the model still issued 8 further tool calls. This is model-generated
-      continuation behaviour.
+  H6 Flint independently continues unnecessary research ... WITHDRAWN AS PRIMARY
+      CORRECTION01: the evidentiary basis was Probe D, which is FALSE -- the completion
+      obligation did NOT survive compaction. The model's post-compaction behaviour is therefore
+      no longer evidence of "the model chose to continue when it was already done". The root
+      cause of the non-completion is OPEN and must be re-classified by a successor
+      investigation; no new live run is proposed here.
   H7 Kapitsa long-context latency dominates .. PARTIALLY TRUE BUT NOT THE FAILURE CAUSE
       Wall clock is 98.8% provider request elapsed (2621.9 s of 2653.8 s); tool execution is
       31.9 s (1.2%); UNATTRIBUTED_GAP = 0.0 s. The provider WAS the bottleneck in wall-clock
       terms, but latency did not cause the non-completion: the run was cut short by the USER
-      abort, and the model's own reasoning shows it was ready to synthesise well before the end.
+      abort. (CORRECTION01: "and the model's own reasoning shows it was ready to synthesise
+      well before the end" now carries the qualification that the reasoning may itself have
+      been produced WITHOUT the completion obligation -- see Probe D.)
 
 NECESSITY / ABLATION CHECK FOR THE ONE CANDIDATE REPAIR
 ------------------------------------------------------------------------------
@@ -167,3 +299,24 @@ NECESSITY / ABLATION CHECK FOR THE ONE CANDIDATE REPAIR
   change the observed non-completion, because in this run the truncated summaries WERE accepted
   and the continuation failed to finish for reasons unrelated to summary truncation (H6).
   => The repair is therefore NOT warranted by this evidence. No successor repair ACT is proposed.
+
+  --------------------------------------------------------------------------
+  CORRECTION01 -- NECESSITY / ABLATION CHECK REVISED. The DISPOSITION (not warranted
+  as a repair) is unchanged; its RATIONALE is not.
+  --------------------------------------------------------------------------
+  The parent's rationale was "the truncated summaries WERE accepted and the continuation failed
+  to finish for reasons unrelated to summary truncation (H6)". That rationale is withdrawn: one
+  truncation (attempt 3) was NOT accepted, and H6 is withdrawn as primary.
+
+  The candidate repair must now be re-evaluated against the EMPTY-OUTPUT mechanism rather than
+  against the parent's "truncation was accepted" premise. Two distinct repairs are
+  distinguishable and only the first is implied by this evidence:
+    (i)  reject a summarizer response that has NO usable text and fall back to the
+         deterministic basic strategy (this is the branch attempt 3 actually took, and it
+         left the transcript uncompacted and retried on the next iteration);
+    (ii) reject a `length`-truncated summarizer WHENEVER it is truncated, including the
+         non-empty case (attempt 4), which the parent's ablation described.
+  Repair (i) is the one this run evidences; repair (ii) is the parent's candidate and is NOT
+  evidenced by attempt 4 (which truncated at the same 8192 tokens and still produced a usable
+  summary). The parent's DISPOSITION -- no successor repair ACT proposed -- is preserved; the
+  candidate must be re-specified before it can be evaluated.

@@ -1,6 +1,39 @@
 # ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01 — REPORT
 
-**Primary verdict: `EXPECTED_ACCOUNTING_DIFFERENCE`**
+> ## ⚠️ SUPERSEDED IN PART — SEE `CORRECTION01.md`
+>
+> **This report's primary verdict `EXPECTED_ACCOUNTING_DIFFERENCE` and its
+> finding "no compaction was ever skipped in this session" are WITHDRAWN.**
+>
+> A bounded evidence correction (`CORRECTION01.md`, same directory) establishes:
+>
+> * the "Compaction skipped" screenshot **belongs to this session**
+>   (`1794617111057_i279p`), not to another one — its `28:50 Working` counter
+>   places it at 01:14:01Z, 170 s into the closed 01:11:11Z→01:16:18Z window
+>   that contains the **third** summarizer attempt;
+> * that third attempt was a **`compaction-skipped`**, not a success — the
+>   `previousSummary` carried by attempt 4 is byte-identical to attempt 3's,
+>   proving attempt 3's result was discarded;
+> * the rendered UI label ("Compaction skipped") is produced from a
+>   `{"status":"skipped"}` JSON payload, so `grep -rl 'compaction-skipped'`
+>   **cannot** establish that no skip was displayed — the inference this
+>   report relied on is invalid;
+> * the trigger accounting compared provider token counts (P) against an
+>   estimator threshold; on the production comparison (W vs. the scaled
+>   trigger), **no** boundary crossed the trigger;
+> * Probe D's "obligation survived via the preserved tail" is **false** — the
+>   cited indices 26–27 precede the cut at 163, and the obligation is absent
+>   from the tail, the summary, the system prompt, and the 48-message
+>   projection sent to the provider.
+>
+> **Unchanged:** the W/P estimator-bias analysis, the 8,192-token summarizer
+> cap, the no-fallback contract analysis, H5 (misspelled-root propagation,
+> 10 ENOENT reads, ≈3.2 min recovery cost), the wall-clock attribution, and
+> the manual-vs-basic compaction comparison. Read this report together with
+> `CORRECTION01.md`; where they conflict, **`CORRECTION01.md` governs**.
+
+**Primary verdict: `EXPECTED_ACCOUNTING_DIFFERENCE`** *(WITHDRAWN — see the
+correction banner above and `CORRECTION01.md` §7.3)*
 
 The W/P/B token-accounting difference is fully explained by valid accounting domains and **no
 accounting-contract defect reproduces**. The run's compaction behaviour was **correct**: all three

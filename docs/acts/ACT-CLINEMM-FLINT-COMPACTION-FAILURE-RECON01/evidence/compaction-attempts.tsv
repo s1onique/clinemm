@@ -12,7 +12,7 @@
 attempt	kap_line	summarizer_capture	capture_ts_utc	summarizer_req_P	summarizer_out_tok	provider_finish	compaction_mode	strategy_requested	strategy_executed	trigger_fired	summarizer_sent	summary_returned	parse_validation	basic_fallback	usable_result	state_persisted	next_request_uses_projection	next_main_msg_idx	next_main_msg_id	next_main_P	outcome
 1	321	cap_86d49c582868073a.ai_sdk_prompt.1.provider-request.json	2026-11-14T00:49:00.781Z	1844	4396	stop	auto	agentic	agentic	YES	YES	YES	PASS (non-empty text accepted; agentic-compaction.ts:202-220 checks only emptiness)	NOT RUN (no throw; agentic returned a result)	YES	YES (sidecar #1)	YES (next main request P drops 68859 -> 16769)	50	msg_sh7aUwYv	16769	SUCCESS
 2	339	cap_86d49c582868073a.ai_sdk_prompt.2.provider-request.json	2026-11-14T01:01:26.153Z	3100	5924	stop	auto	agentic	agentic	YES	YES	YES	PASS (non-empty text accepted)	NOT RUN	YES	YES (sidecar #2; later superseded by sidecar #3)	YES (next main request P drops 70499 -> 19804)	105	msg__vC70vLP	19804	SUCCESS
-3	365	cap_86d49c582868073a.ai_sdk_prompt.3.provider-request.json	2026-11-14T01:11:11.433Z	3139	8192	length	auto	agentic	agentic	YES	YES	YES (8192 tokens; finish_reason=length -> truncated, but text NON-empty)	PASS -- agentic-compaction.ts does NOT inspect incompleteReason; truncated text accepted	NOT RUN (no throw; result returned)	YES (summary text present)	NO (superseded by attempt 4)	NO (no projection applied between attempts 3 and 4)	160	msg_R54EA2v_P	75341	PARTIAL/TRUNCATED-BUT-ACCEPTED
+3	365	cap_86d49c582868073a.ai_sdk_prompt.3.provider-request.json	2026-11-14T01:11:11.433Z	3139	8192	length	auto	agentic	agentic	YES	YES	NO (CORRECTION01: the result was DISCARDED; see previousSummary identity chain)	FAIL -- the summarizer returned NO usable text; agentic-compaction.ts:203 rejects the empty summary and returns undefined	NOT RUN (no throw; the strategy returned undefined)	NO	NO	NO (no projection applied between attempts 3 and 4)	160	msg_R54EA2v_P	75341	SKIPPED (CORRECTION01: compaction-skipped, reason no_result; UI rendered "Compaction skipped")
 4	367	cap_86d49c582868073a.ai_sdk_prompt.4.provider-request.json	2026-11-14T01:16:18.638Z	3403	8192	length	auto	agentic	agentic	YES	YES	YES (8192 tokens; finish_reason=length -> truncated)	PASS (same gate as attempt 3)	NOT RUN	YES	YES (sidecar #3 = 1794617111057_i279p.compaction.json)	YES (next main request P drops 75341 -> 14670)	163	msg_HjuYBNHw	14670	SUCCESS (persisted) despite truncated summarizer output
 5	387	cap_86d49c582868073a.ai_sdk_prompt.5.provider-request.json	2026-11-14T01:29:27.714Z	2707	3870	cancelled	auto	agentic	agentic	YES	YES	NO (request cancelled by the user's abort at 01:29:27)	N/A (no response)	NOT RUN	NO	NO	NO				CANCELLED BY USER ABORT
 
@@ -22,8 +22,24 @@ attempt	kap_line	summarizer_capture	capture_ts_utc	summarizer_req_P	summarizer_o
 # NOTE on attempts 3 and 4 (finish_reason=length): Kapitsa truncated BOTH summarizer generations at exactly
 # 8192 output tokens = DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS (compaction-shared.ts:34). The upstream-reported
 # 1024-token limit cited in the ACT brief does NOT apply to this fork; the effective cap is 8192.
-# The truncated text was nevertheless non-empty and was accepted, so the compaction SUCCEEDED.
 #
-# NOTE: NO attempt produced 'compaction-skipped' in this session. There is no 'compaction-skipped' token
-# anywhere in this session's documents or in the profile tree. The screenshot observation of a skip
-# therefore belongs to a DIFFERENT session, not to 1794617111057_i279p.
+# CORRECTION01 (attempt 3): the two `length` attempts did NOT have the same outcome. Attempt 4 was
+# ACCEPTED and persisted (sidecar #3 = 1794617111057_i279p.compaction.json). Attempt 3 was NOT: the
+# `previousSummary` carried by attempt 4 is BYTE-IDENTICAL to the one carried by attempt 3 (sha
+# 5775aa10b4ee85c2, 3,831 B = attempt 2's persisted summary), which proves attempt 3's result was
+# DISCARDED. A discarded agentic result means the strategy returned undefined (empty summary text) ->
+# compaction.ts:802 emitted 'auto-compaction-skipped' (phase "skipped") -> the webview rendered
+# "Compaction skipped". The screenshot's 28:50 Working counter places it at 01:14:01Z, inside the
+# closed 01:11:11Z -> 01:16:18Z window that contains attempt 3.
+#
+# The parent's claim that attempt 3's text was "NON-empty" was never evidenced: the Kapitsa log reports
+# AGGREGATE output tokens only (text and reasoning are not separated) and no response-side capture
+# exists on disk. The provider was reasoning-enabled (providers.json openai-compatible.reasoning
+# enabled=true, effort=medium), so the 8,192-token budget could be consumed entirely by reasoning,
+# leaving the text empty -- the exact mechanism compaction-shared.ts:30-34 and :807-812 describe.
+#
+# CORRECTION01 (note below replaced): NO attempt produced a persisted 'compaction-skipped' token in this
+# session's artefacts, because the divider is a transient WEBVIEW PROJECTION. The rendered label comes
+# from ClineCompactionInfo.status === "skipped" (a {"status":"skipped","mode":"auto"} JSON payload),
+# NOT from the 'compaction-skipped' slug -- so `grep -rl 'compaction-skipped'` cannot establish that no
+# skip was displayed. Attempt 3 DID skip, and it belonged to THIS session.
