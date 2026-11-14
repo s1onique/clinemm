@@ -21,10 +21,13 @@ The bounded presentation repair is implemented and structurally qualified. Insta
 
 - `apps/vscode/webview-ui/src/components/chat/task-header/ContextWindow.tsx`
 - `apps/vscode/webview-ui/src/components/chat/task-header/ContextWindowSummary.tsx`
+- `apps/vscode/webview-ui/src/components/chat/ChatView.tsx` (P1-B: preserve observed zero)
+- `apps/vscode/src/shared/getApiMetrics.ts` (P1-B: presence-aware observation helper)
 
 Focused test files changed:
 
 - `apps/vscode/webview-ui/src/components/chat/task-header/ContextWindow.test.tsx`
+- `apps/vscode/src/shared/__tests__/getApiMetrics.test.ts`
 - `apps/vscode/src/sdk/message-translator.test.ts`
 
 No SDK runtime, agent runtime, estimator, compaction coordinator, protocol, dependency, lockfile, Elm source, or installed extension was changed.
@@ -114,7 +117,7 @@ Compaction fixture (prior P `100,000`, post-compaction W `30,000`, no new provid
 
 ## Artifact and live qualification
 
-The webview production bundle was built and verified to contain the provider source label, next-request estimate label, and unavailable state. No VSIX was produced in this bounded cycle. No extension installation was changed. Live Flint/Kapitsa operator smoke qualification remains pending and is explicitly unqualified.
+The webview production bundle was built and verified to contain the provider source label, next-request estimate label, and unavailable state. An exact-head VSIX was subsequently produced and payload-verified (see **Exact-head package** below). No extension installation was changed. Live Flint/Kapitsa operator smoke qualification remains pending and is explicitly unqualified.
 
 ## Remaining limitations
 
