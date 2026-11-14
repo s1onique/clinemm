@@ -1,0 +1,50 @@
+EXACT HEAD PACKAGE
+
+SOURCE_HEAD=281b379d016b9d692e94fd149ccee70fc51358cf
+SOURCE_TREE=18424d1c22d5b4fc8566b11300d80b3e7d8ea0af
+SOURCE_VERSION=4.1.16-281b379d0
+ARTIFACT_FILENAME=clinemm-4.1.16-281b379d0.vsix
+ARTIFACT_PATH=dist/clinemm-4.1.16-281b379d0.vsix
+BYTES=65332419
+SHA256=2a7bcd8ed02c85490a1515e93233085f2330b44bc77b41b703cd9932becfd518
+VSCE_VERSION=lockfile-pinned apps/vscode/node_modules/.bin/vsce (3.9.2)
+VSCE_COMMAND=./node_modules/.bin/vsce package --allow-package-all-secrets --no-dependencies --out ../../dist/clinemm-4.1.16-281b379d0.vsix
+VSCE_EXIT=0
+PACKAGE_FILES=681
+BUILD_COMMAND=apps/vscode `bun run package` (sync-parser-helper + check-types + build:webview + lint + esbuild --production)
+BUILD_EXIT=0
+
+EXACT-SOURCE BINDING
+The source tree was clean (`git status --short` empty) at SOURCE_HEAD when the
+SDK build (`bun run build:sdk`) and the VSIX packaging ran. The tree was
+re-verified clean and unchanged at SOURCE_HEAD after packaging.
+
+CORRECTION PAYLOAD VERIFICATION (unzipped artifact, semantic scan)
+The corrected provider-message codec is present in the shipped artifact:
+
+  case"image":return typeof t.image==="string"?{type:"image",data:t.image,mediaType:t.mediaType??"image/png"}:void 0
+
+Files carrying the FIXED (omit non-string) codec:
+  extension/dist/extension.js
+  extension/dist/plugin-runtime/node_modules/@cline/core/dist/index-hpv6827g.js
+  extension/dist/plugin-runtime/node_modules/@cline/core/dist/index-jzjcw0hd.js
+  extension/dist/plugin-runtime/node_modules/@cline/core/dist/index-2w3x3d59.js
+  extension/dist/plugin-runtime/node_modules/@cline/core/dist/index-jwmhjmzc.js
+  extension/dist/plugin-runtime/node_modules/@cline/core/dist/hub/index.js
+  extension/dist/plugin-runtime/node_modules/@cline/core/dist/hub/daemon/entry.js
+  extension/dist/plugin-runtime/node_modules/@cline/agents/dist/index.js
+  extension/dist/plugin-runtime/node_modules/@cline/shared/dist/index.browser.js
+
+Files carrying the BUGGY (empty image block) codec: NONE.
+A regex scan for `<var>.image==="string"?<var>.image:""` over every .js file
+in the artifact returned zero matches.
+
+The request-budget authority (`TaskContractBudgetError`) is present in the
+bundled extension (4 occurrences).
+
+INSTALLATION
+NOT PERFORMED. The operator's installed extension was not replaced.
+
+PUSH
+NOT PERFORMED. The commit is local only (3 commits ahead of origin/main).
+The protected stash (`stash@{0}: WIP on main: d46223b51 ...`) is intact.

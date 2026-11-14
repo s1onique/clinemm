@@ -1,0 +1,91 @@
+ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01-CORRECTION01 — GATES
+
+SCOPE
+Bounded correction of the provider-message codec extraction. No other
+change. Verified by `git show --stat HEAD`:
+  sdk/packages/shared/src/llms/request-budget.ts                        |  27 +-
+  sdk/packages/shared/src/llms/request-budget.test.ts                   | 268 +++++++++
+  sdk/packages/core/src/extensions/context/task-contract-budget-authority.test.ts | 97 ++++++++
+  3 files changed, 387 insertions(+), 5 deletions(-)
+
+UNCHANGED (empty diff vs HEAD~1 across all four):
+  sdk/packages/core/src/extensions/context/compaction.ts      (128K ceiling, summarizer)
+  sdk/packages/core/src/extensions/context/task-contract.ts   (fail-closed guard)
+  sdk/packages/agents/src/agent-runtime.ts                   (final-request check)
+  sdk/packages/shared/src/llms/tokens.ts                     (estimator)
+
+GATE 1 — non-string image semantics restored
+PASS. `toProviderVisibleMessages()` returns `undefined` for a non-string
+image, restoring the pre-repair contract captured verbatim from
+`sdk/packages/core/src/runtime/config/agent-message-codec.ts` at 477b09c83^.
+
+GATE 2 — independent regression cases (string / Uint8Array / ArrayBuffer / URL)
+PASS. New suite `sdk/packages/shared/src/llms/request-budget.test.ts`:
+  - string image emitted verbatim (default and explicit media type)
+  - Uint8Array / ArrayBuffer / URL image OMITTED, never an empty image block
+  - sibling parts preserved around an omitted image
+  - budget accounting: a string image is charged the flat per-image cost; an
+    omitted non-string image is charged NOTHING; an omitted image cannot flip
+    a fail-closed budget decision
+  9 tests, all passing.
+
+GATE 3 — self-referential parity test supplemented with pinned assertions
+PASS. The parity test (shared == core) is RETAINED — it still guards against
+a future DIVERGENT copy — and supplemented with cases pinned to the
+pre-repair contract in the core budget-authority suite, exercised through the
+production `agentMessagesToMessages()` codec. 4 new cases, all passing.
+
+GATE 4 — RED -> GREEN demonstrated (the new tests actually catch the defect)
+PASS.
+  With the defect reintroduced (shared converter emitting `data: ""`):
+    shared suite: 6 failed | 3 passed
+    core suite:   4 failed | 5 passed
+  With the correction applied:
+    shared suite: 9 passed
+    core suite:   9 passed
+  The parity test ("measures exactly the representation the provider receives")
+  stayed GREEN in the RED state, independently confirming that the shipped
+  parity test could not detect this defect.
+
+GATE 5 — focused tests re-run
+PASS.
+  sdk/packages/core  src/extensions/context/ + agent-message-codec + message-builder
+                    269 passed | 1 skipped (14 files)
+  sdk/packages/core  task-contract-budget-authority + agent-message-codec + compaction
+                    131 passed (3 files)
+  sdk/packages/agents agent-runtime.request-budget-authority + agent-runtime
+                    + agent-runtime.provider-form            163 passed (3 files)
+  sdk/packages/agents full suite                        581 passed (33 files)
+  sdk/packages/shared full suite                        568 passed | 6 skipped (45 files)
+  sdk/packages/shared request-budget + tokens             15 passed (2 files)
+
+GATE 6 — TypeScript checks
+PASS.
+  sdk/packages/shared  `bun tsc --noEmit`  exit 0
+  sdk/packages/agents  `bun tsc --noEmit`  exit 0
+  sdk/packages/core    `bun tsc --noEmit`  58 errors — IDENTICAL to the
+                       pre-correction baseline (verified by capturing the
+                       baseline from the stashed pre-correction tree and
+                       diffing the normalized diagnostic sets: IDENTICAL).
+                       None of the diagnostics are in the changed files.
+
+GATE 7 — no regression in the core package suite
+PASS. The core full suite reports 18 failed | 314 passed | 2 skipped (334
+files) both BEFORE and AFTER the correction. The 18 failing files (hub
+server, sqlite, git, sandbox/seatbelt, checkpoint, persistence) are
+pre-existing environment failures, verified by running the identical suite
+against the stashed pre-correction tree. No new failures introduced.
+
+GATE 8 — exact-source VSIX rebuilt and hashed
+PASS. See evidence/package.txt.
+  SOURCE_HEAD=281b379d016b9d692e94fd149ccee70fc51358cf
+  SOURCE_TREE=18424d1c22d5b4fc8566b11300d80b3e7d8ea0af
+  ARTIFACT=dist/clinemm-4.1.16-281b379d0.vsix
+  BYTES=65332419
+  SHA256=2a7bcd8ed02c85490a1515e93233085f2330b44bc77b41b703cd9932becfd518
+  The corrected codec is present in 9 bundled JS files; the buggy empty
+  image block is present in ZERO.
+
+GATE 9 — protected stash preserved, no push
+PASS. `stash@{0}: WIP on main: d46223b51 ...` intact. No push performed
+(3 commits ahead of origin/main, local only). Working tree clean.
