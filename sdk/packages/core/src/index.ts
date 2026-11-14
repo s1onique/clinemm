@@ -1121,6 +1121,7 @@ export {
 	extractActiveTaskContract,
 	renderTaskContractSection,
 	stripTaskContractSection,
+	TaskContractBudgetError,
 	TASK_CONTRACT_SECTION_HEADING,
 } from "./extensions/context/task-contract";
 export { summarizeConversation } from "./extensions/context/summarize-conversation";

@@ -910,9 +910,9 @@ export function createCompactionStateAwarePrepareTurn(input: {
 	/**
 	 * ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: an
 	 * additional ceiling on the effective request input limit, applied on top
-	 * of the model limit and the context window. Callers pass the user's
-	 * configured operating ceiling here; it may only REDUCE the operating
-	 * capacity, never expand it.
+	 * of the model limit and the context window. Production callers pass the
+	 * user's configured operating ceiling here; it may only REDUCE the
+	 * operating capacity, never expand it.
 	 */
 	maxRequestTokens?: number;
 }): ContextPipelinePrepareTurn {
@@ -926,17 +926,24 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		// limit resolvers the compaction budget machinery uses (model limit +
 		// context window), and then reduced — never expanded — by the
 		// caller's operating ceiling.
-		const contractBudget = {
-			maxRequestTokens: applyUserContextCeiling(
-				resolveEffectiveMaxInputTokens({
-					maxInputTokens: context.model.info?.maxInputTokens,
-					contextWindow: context.model.info?.contextWindow,
-				}),
-				input.maxRequestTokens,
-			),
-			systemPrompt: context.systemPrompt,
+		const contractMaxRequestTokens = applyUserContextCeiling(
+			resolveEffectiveMaxInputTokens({
+				maxInputTokens: context.model.info?.maxInputTokens,
+				contextWindow: context.model.info?.contextWindow,
+			}),
+			input.maxRequestTokens,
+		);
+		const contractBudget = (
+			systemPrompt: string,
+		): {
+			maxRequestTokens: number | undefined;
+			systemPrompt: string;
+			tools: readonly unknown[];
+		} => ({
+			maxRequestTokens: contractMaxRequestTokens,
+			systemPrompt,
 			tools: context.tools,
-		};
+		});
 		if (existingState && projectedMessages) {
 			// Re-compaction intentionally starts from the compacted projection plus
 			// canonical tail. This keeps automatic turns bounded without rebuilding a
@@ -956,13 +963,13 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				// persistence and before provider preparation. The canonical
 				// history is the only authority; a previous summary never
 				// becomes one.
+				const systemPrompt = result.systemPrompt ?? existingState.system_prompt;
 				const contracted = applyTaskContractToCompactedMessages(
 					result.messages,
 					context.messages,
-					contractBudget,
+					contractBudget(systemPrompt ?? context.systemPrompt),
 				);
 				const contractedMessages = contracted.messages;
-				const systemPrompt = result.systemPrompt ?? existingState.system_prompt;
 				const nextState = createSessionCompactionState({
 					sourceMessages: context.messages,
 					compactedMessages: contractedMessages,
@@ -987,7 +994,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			const restored = applyTaskContractToCompactedMessages(
 				projectedMessages,
 				context.messages,
-				contractBudget,
+				contractBudget(projectedSystemPrompt ?? context.systemPrompt),
 			);
 			return publishWorkingContextEstimate(
 				restored.messages,
@@ -1004,7 +1011,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			const contracted = applyTaskContractToCompactedMessages(
 				result.messages,
 				context.messages,
-				contractBudget,
+				contractBudget(result.systemPrompt ?? context.systemPrompt),
 			);
 			const contractedMessages = contracted.messages;
 			const nextState = createSessionCompactionState({

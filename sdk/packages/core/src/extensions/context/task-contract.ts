@@ -294,13 +294,35 @@ export interface TaskContractApplicationResult {
 	messages: MessageWithMetadata[];
 	/** Whether the contract was actually applied. */
 	applied: boolean;
-	/**
-	 * The reason the contract was NOT applied, when it was not. `undefined`
-	 * means it was applied (or there was nothing to apply).
-	 */
-	skippedReason?: "contract_exceeds_budget";
 	/** The estimated request-input tokens of the returned messages. */
 	estimatedRequestTokens: number;
+}
+
+/**
+ * Raised when the complete authoritative task contract cannot fit inside the
+ * effective request-input budget.
+ *
+ * This is deliberately a hard boundary rather than a "skip the contract"
+ * result. An un-contracted continuation can fit comfortably inside the
+ * provider context window while silently dropping the original objective,
+ * constraints, and completion obligation. The only safe alternatives are:
+ * deliver the complete contract, or stop before provider dispatch.
+ */
+export class TaskContractBudgetError extends Error {
+	readonly estimatedRequestTokens: number;
+	readonly maxRequestTokens: number;
+
+	constructor(input: {
+		estimatedRequestTokens: number;
+		maxRequestTokens: number;
+	}) {
+		super(
+			`Active task contract exceeds the effective request budget (${input.estimatedRequestTokens} > ${input.maxRequestTokens} estimated tokens)`,
+		);
+		this.name = "TaskContractBudgetError";
+		this.estimatedRequestTokens = input.estimatedRequestTokens;
+		this.maxRequestTokens = input.maxRequestTokens;
+	}
 }
 
 /**
@@ -321,12 +343,10 @@ export interface TaskContractApplicationResult {
  * ------
  * `maxRequestTokens` is the effective request input limit (the same limit the
  * compaction budget machinery uses). When the contracted request would exceed
- * it, the contract is NOT applied: mandatory instructions are never silently
- * truncated, and no oversized provider request is produced by this
- * transformation. The caller then faces the EXISTING explicit failure
- * boundary (the provider's context-window rejection -> the runtime's
- * single-shot overflow recovery -> a terminal error), rather than a silent
- * overrun.
+ * it, this function throws `TaskContractBudgetError` before any state can be
+ * persisted or any provider request can be dispatched. Mandatory instructions
+ * are never silently truncated and the continuation is never returned without
+ * the complete authoritative contract.
  *
  * Returns the input list unchanged when there is no `compaction_summary`
  * message to attach to or no active contract to carry.
@@ -396,16 +416,14 @@ export function applyTaskContractToCompactedMessages(
 		typeof options.maxRequestTokens === "number" &&
 		nextTokens > options.maxRequestTokens
 	) {
-		// The contracted request would exceed the effective limit. Do not
-		// truncate the mandatory instructions and do not hand back an
-		// oversized request: keep the un-contracted projection and let the
-		// existing explicit overflow boundary handle it.
-		return {
-			messages: [...compactedMessages],
-			applied: false,
-			skippedReason: "contract_exceeds_budget",
-			estimatedRequestTokens: baselineTokens,
-		};
+		// Fail closed. Returning the un-contracted projection here would let a
+		// valid-looking request continue after silently losing the original
+		// objective, constraints, and completion obligation. The caller must
+		// stop before sidecar persistence or provider dispatch instead.
+		throw new TaskContractBudgetError({
+			estimatedRequestTokens: nextTokens,
+			maxRequestTokens: options.maxRequestTokens,
+		});
 	}
 	return {
 		messages: nextMessages,

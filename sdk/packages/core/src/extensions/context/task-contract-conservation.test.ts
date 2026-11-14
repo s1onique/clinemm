@@ -36,6 +36,7 @@ import {
 	projectSessionCompactionState,
 	type SessionCompactionState,
 } from "../../session/models/session-compaction";
+import { TaskContractBudgetError } from "./task-contract";
 import { MessageBuilder } from "../../session/services/message-builder";
 import {
 	type ContextPipelinePrepareTurn,
@@ -186,8 +187,12 @@ type WrapperRun = {
 async function runWrapper(input: {
 	canonical: MessageWithMetadata[];
 	existingState?: SessionCompactionState;
-	compactResult?: { messages: MessageWithMetadata[] };
+	compactResult?: {
+		messages: MessageWithMetadata[];
+		systemPrompt?: string;
+	};
 	maxRequestTokens?: number;
+	systemPrompt?: string;
 }): Promise<WrapperRun> {
 	const compact = vi.fn(async () => {
 		if (!input.compactResult) {
@@ -211,7 +216,7 @@ async function runWrapper(input: {
 		parentAgentId: null,
 		iteration: 1,
 		abortSignal: new AbortController().signal,
-		systemPrompt: SYSTEM_PROMPT,
+		systemPrompt: input.systemPrompt ?? SYSTEM_PROMPT,
 		tools: [],
 		messages: input.canonical,
 		apiMessages: input.canonical,
@@ -492,66 +497,94 @@ describe("task contract conservation — budget", () => {
 		expect(providerText).toContain("submit_and_exit");
 	});
 
-	it("does not dispatch an oversized provider request when the contract exceeds the effective limit", async () => {
+	it("fails closed before persistence or provider dispatch when the contract exceeds the effective limit", async () => {
 		// A contract that genuinely exceeds the available request headroom must
-		// produce an explicit safe outcome, not a silently oversized request.
+		// stop the turn explicitly. Returning the small, otherwise-valid summary
+		// would silently discard the authoritative objective and obligation.
 		const hugeObjective = "objective:".padEnd(400_000, "x");
 		const canonical = [
 			userTurn(hugeObjective),
 			runtimeReminder(RUNTIME_COMPLETION_REMINDER),
 			assistantTurn("working"),
 		];
-		const { providerRequest } = await runWrapper({
-			canonical,
-			compactResult: agenticCompactionResult("summary", []),
-			maxRequestTokens: MODEL.info.maxInputTokens,
-		});
-		const estimate = estimateRequestInputTokens({
-			systemPrompt: SYSTEM_PROMPT,
-			messages: providerRequest,
-			tools: [],
-		});
-		// The returned request must NOT exceed the effective limit: the
-		// carry-forward is not applied when it would.
-		expect(estimate).toBeLessThanOrEqual(MODEL.info.maxInputTokens);
-		// The oversized mandatory instruction is not presented as a complete
-		// (partially applied) contract.
-		expect(providerVisibleText(providerRequest)).not.toContain(
-			hugeObjective.slice(0, 200),
-		);
+		await expect(
+			runWrapper({
+				canonical,
+				compactResult: agenticCompactionResult("summary", []),
+				maxRequestTokens: MODEL.info.maxInputTokens,
+			}),
+		).rejects.toBeInstanceOf(TaskContractBudgetError);
 	});
 
-	it("never relaxes the configured ceiling", async () => {
+	it("fails closed when the user ceiling is below model capacity", async () => {
 		const canonical = [
 			userTurn(ORIGINAL_USER_TASK),
 			runtimeReminder(RUNTIME_COMPLETION_REMINDER),
 			assistantTurn("working"),
 		];
-		// A ceiling far below the model's own limit: the carry-forward must
-		// not expand the operating capacity beyond the ceiling.
-		const { providerRequest } = await runWrapper({
-			canonical,
-			compactResult: agenticCompactionResult("summary", []),
+		const savedStates: SessionCompactionState[] = [];
+		const prepareTurn = createCompactionStateAwarePrepareTurn({
+			compact: async () => agenticCompactionResult("summary", []),
+			getState: () => undefined,
+			prepareApiMessages: async (messages) => messages,
+			saveState: (state) => {
+				savedStates.push(state);
+			},
 			maxRequestTokens: 10,
 		});
-		const estimate = estimateRequestInputTokens({
-			systemPrompt: SYSTEM_PROMPT,
-			messages: providerRequest,
+		await expect(
+			prepareTurn({
+				agentId: "agent-1",
+				conversationId: "conv-1",
+				parentAgentId: null,
+				iteration: 1,
+				abortSignal: new AbortController().signal,
+				systemPrompt: SYSTEM_PROMPT,
+				tools: [],
+				messages: canonical,
+				apiMessages: canonical,
+				model: MODEL,
+			}),
+		).rejects.toBeInstanceOf(TaskContractBudgetError);
+		expect(savedStates).toHaveLength(0);
+	});
+
+	it("budgets against the post-compaction system prompt rather than the pre-compaction prompt", async () => {
+		const canonical = [
+			userTurn(ORIGINAL_USER_TASK),
+			runtimeReminder(RUNTIME_COMPLETION_REMINDER),
+			assistantTurn("working"),
+		];
+		const finalSystemPrompt = `${SYSTEM_PROMPT}${"x".repeat(600)}`;
+		const baseline = agenticCompactionResult("summary", []);
+		const baselineTokens = estimateRequestInputTokens({
+			systemPrompt: finalSystemPrompt,
+			messages: baseline.messages,
 			tools: [],
 		});
-		// The carry-forward is skipped rather than dispatched over the
-		// ceiling: the returned request is the UN-contracted summary, so it
-		// carries no runtime obligation and is no larger than the baseline.
-		expect(providerVisibleText(providerRequest)).not.toContain(
-			"submit_and_exit",
-		);
-		const uncontracted = agenticCompactionResult("summary", []).messages;
-		const uncontractedTokens = estimateRequestInputTokens({
-			systemPrompt: SYSTEM_PROMPT,
-			messages: uncontracted,
+		const contractedTokens = estimateRequestInputTokens({
+			systemPrompt: finalSystemPrompt,
+			messages: agenticCompactionResult(
+				`${"summary".repeat(100)}`,
+				[],
+			).messages,
 			tools: [],
 		});
-		expect(estimate).toBeLessThanOrEqual(uncontractedTokens);
+		expect(contractedTokens).toBeGreaterThan(baselineTokens);
+
+		// The guard must use the prompt that will actually accompany the
+		// returned request. A pre-compaction prompt would understate the final
+		// request and admit an over-budget continuation.
+		await expect(
+			runWrapper({
+				canonical,
+				compactResult: {
+					...agenticCompactionResult("summary", []),
+					systemPrompt: finalSystemPrompt,
+				},
+				maxRequestTokens: baselineTokens + 1,
+			}),
+		).rejects.toBeInstanceOf(TaskContractBudgetError);
 	});
 });
 

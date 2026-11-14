@@ -6730,6 +6730,128 @@ describe("LocalRuntimeHost", () => {
 		);
 	});
 
+	it("fails closed through the production prepareTurn when the configured context ceiling cannot fit the task contract", async () => {
+		const sessionId = "sess-compaction-contract-ceiling";
+		const manifest = createManifest(sessionId);
+		const initialMessages: MessageWithMetadata[] = [
+			{
+				role: "user",
+				content: [
+					{
+						type: "text",
+						text: `<user_input mode="act">${"objective ".repeat(80_000)}</user_input>`,
+					},
+				],
+			},
+		];
+		const persistSessionCompactionState = vi.fn();
+		const sessionService = {
+			ensureSessionsDir: vi.fn().mockReturnValue("/tmp/sessions"),
+			createRootSessionWithArtifacts: vi.fn().mockResolvedValue({
+				manifestPath: "/tmp/manifest-compaction-contract-ceiling.json",
+				messagesPath: "/tmp/messages-compaction-contract-ceiling.json",
+				manifest,
+			}),
+			persistSessionMessages: vi.fn(),
+			persistSessionCompactionState,
+			updateSessionStatus: vi.fn().mockResolvedValue({ updated: true }),
+			writeSessionManifest: vi.fn(),
+			listSessions: vi.fn().mockResolvedValue([]),
+			deleteSession: vi.fn().mockResolvedValue({ deleted: true }),
+		};
+		const compact = vi.fn().mockResolvedValue({
+			messages: [
+				{
+					role: "user",
+					content: [{ type: "text", text: "Context summary:\n\nsummary" }],
+					metadata: {
+						kind: "compaction_summary",
+						displayRole: "system",
+						userRunSpan: 1,
+						summary: "summary",
+						details: { readFiles: [], modifiedFiles: [] },
+						tokensBefore: 1_000,
+						generatedAt: 1,
+					},
+				},
+			],
+		});
+		const createAgent = vi.fn().mockReturnValue({
+			run: vi.fn().mockResolvedValue(createResult()),
+			continue: vi.fn().mockResolvedValue(createResult()),
+			abort: vi.fn(),
+			subscribeEvents: vi.fn().mockReturnValue(() => {}),
+			canStartRun: vi.fn().mockReturnValue(true),
+			getAgentId: vi.fn().mockReturnValue("agent-root-1"),
+			getConversationId: vi.fn().mockReturnValue(sessionId),
+			prepareProviderMessagesForApi: vi.fn(
+				async (messages: MessageWithMetadata[]) => messages,
+			),
+			shutdown: vi.fn().mockResolvedValue(undefined),
+			getMessages: vi.fn().mockReturnValue(initialMessages),
+			messages: initialMessages,
+		});
+		const manager = new RuntimeHostUnderTest({
+			distinctId,
+			sessionService: sessionService as never,
+			runtimeBuilder: {
+				build: vi.fn().mockReturnValue({
+					tools: [],
+					shutdown: vi.fn(),
+				}),
+			} as never,
+			createAgent: createAgent as never,
+		});
+
+		try {
+			await manager.startSession(
+				normalizeStartInput({
+					config: createConfig({
+						sessionId,
+						compaction: {
+							enabled: true,
+							strategy: "basic",
+							userContextCeiling: 96_000,
+							compact,
+						},
+					}),
+					initialMessages,
+					interactive: true,
+				}),
+			);
+
+			const prepareTurn = createAgent.mock.calls[0]?.[0]?.prepareTurn;
+			expect(prepareTurn).toBeDefined();
+			expect(compact).not.toHaveBeenCalled();
+			expect(persistSessionCompactionState).not.toHaveBeenCalled();
+
+			await expect(
+				prepareTurn({
+					agentId: "agent-root-1",
+					conversationId: sessionId,
+					parentAgentId: null,
+					iteration: 1,
+					abortSignal: new AbortController().signal,
+					systemPrompt: "You are a test agent",
+					tools: [],
+					messages: initialMessages,
+					apiMessages: initialMessages,
+					model: {
+						id: "mock-model",
+						provider: "anthropic",
+						info: { id: "mock-model", maxInputTokens: 1_048_576 },
+					},
+				}),
+			).rejects.toThrow(
+				"Active task contract exceeds the effective request budget",
+			);
+
+			expect(persistSessionCompactionState).not.toHaveBeenCalled();
+		} finally {
+			await manager.dispose();
+		}
+	});
+
 	it("binds unowned initial compaction state to the started session", async () => {
 		const sessionId = "sess-compaction-initial";
 		const manifest = createManifest(sessionId);
@@ -7128,11 +7250,10 @@ describe("LocalRuntimeHost", () => {
 			},
 		);
 		expect((await summarized.runPrepareTurn())?.messages).toEqual([
-			{
+			expect.objectContaining({
 				role: "user",
-				content: "earlier summary",
-				metadata: { kind: "compaction_summary" },
-			},
+				metadata: expect.objectContaining({ kind: "compaction_summary" }),
+			}),
 			{ role: "user", content: "keep going" },
 		]);
 		expect(summarized.compact).not.toHaveBeenCalled();
@@ -7333,12 +7454,14 @@ describe("LocalRuntimeHost", () => {
 						info: { id: "mock-model", maxInputTokens: 100_000 },
 					},
 				}),
-			).resolves.toEqual({
-				messages: [
-					{ role: "user", content: "summary" },
-					{ role: "user", content: "next" },
-				],
-			});
+			).resolves.toEqual(
+				expect.objectContaining({
+					messages: [
+						{ role: "user", content: "summary" },
+						{ role: "user", content: "next" },
+					],
+				}),
+			);
 			expect(
 				createAgent.mock.results[0]?.value.prepareProviderMessagesForApi,
 			).toHaveBeenCalledWith([

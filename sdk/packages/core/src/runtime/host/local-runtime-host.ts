@@ -1055,6 +1055,11 @@ export class LocalRuntimeHost implements RuntimeHost {
 		const prepareTurn = createCompactionStateAwarePrepareTurn({
 			compact,
 			getState: () => activeSessionRef?.compactionState,
+			// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01:
+			// use the SAME configured operating ceiling as the compaction
+			// policy. The contract guard must never see a larger capacity than
+			// the provider request itself is allowed to use.
+			maxRequestTokens: configWithProvider.compaction?.userContextCeiling,
 			prepareApiMessages: (messages) => {
 				const agent = activeSessionRef?.agent;
 				if (!agent) {
