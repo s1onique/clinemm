@@ -33062,3 +33062,168 @@ Carry forward unchanged: R-02 (cloud start local gate), R-03 (file-read containm
 (sdk version floor), R-07 (stdio spawn authority unchanged — this ACT adds no stdio spawn on the
 VS Code side), R-08 (Hub is CLI-only), the MCP OAuth/redirect advisory (the seam performs no OAuth
 and no redirect), and the editor executor RED matrix.
+
+---
+
+# ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01 — PASS_STRUCTURAL_ONLY — 2026-11-15
+
+**Status:** one bounded P1 correction cycle closed; the installed-runtime and real-Codex-Desktop
+observations remain `LIVE_UNOBSERVABLE` on this host for **proven environment reasons**; the exact
+operator procedure that closes them is delivered.
+
+```text
+ACT_ID: ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01
+TYPE: bounded P1 transport/lifecycle correction + installed-runtime qualification
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (correction of ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01)
+VERDICT: PASS_STRUCTURAL_ONLY
+PREDECESSOR: ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 (PASS_STRUCTURAL_ONLY, cc6aa0987)
+ENTRY_HEAD: cc6aa0987c92c90fd3b3156552931bce12d1367e
+FINAL_HEAD: bbf8d7b6116d9f04023691e98dc91f5292046b50
+FINAL_TREE: 863d5128879c8c21bd71a278841e0037070f302f
+BRANCH: main (no ACT branch created)
+PUSHED: NO   RELEASED: NO   PUBLISHED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+CORRECTION_CYCLES: 1  (the charter's budget; not exceeded)
+TESTS: 50/50 PASS (4 files: 21 new QUAL01 + 21 RECON01 + 5 proxy + 3 production-shape)
+TYPECHECK: tsc --noEmit EXIT 0 | tsc -p tsconfig.vscode-compat.json EXIT 0
+LINT: biome EXIT 0 (14 control-seam files; 2821 files package-wide) | proto-lint EXIT 0
+WEBVIEW: EXIT 0 (built in 51.38s)
+BUNDLE: bun esbuild.mjs --production EXIT 0 -> dist/extension.js 28,047,098 bytes
+         sha256 63e79d80f3b216ad7009e1ed5ab8f1c0951d742a791fc95632b3e21b0cf6fa1b
+VSIX:    dist/clinemm-4.1.16-5a1c485cb-bbf8d7b6-mcp-readonly-qual01.vsix
+         65,335,668 bytes
+         sha256 7825199be6e0270dfd2c1fce0e090048e83c05385924954199fcdf5dd64333c5
+EMBEDDED_BUNDLE_MATCH: YES (the VSIX's extension/dist/extension.js has the SAME sha256)
+VSIX_INSTALL: EXIT 0 ("was successfully installed" -> disposable VSCodium 1.143.17232)
+REAL_CODEX_CLI: 0.167.0-alpha.4.1 — `codex mcp get/list/doctor` -> clinemm, enabled, stdio,
+                "MCP servers 1"
+LIVE_UNOBSERVABLE: (a) the installed extension host — Electron dies SIGSEGV (exit 139) from this
+                shell; (b) the Codex agent turn — every config-load path fails "Failed to
+                synchronize managed preferences" (Codex loads macOS MDM managed preferences; no
+                MDM domain exists on this host; STOCK Codex with NO MCP server fails identically)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01/
+```
+
+## C1 — The one bounded P1 correction (four defects, one cycle)
+
+**D1 — EXPLICIT INSTANCE OWNERSHIP.** The RECON01 server removed any pre-existing socket file
+UNCONDITIONALLY on start, and removed the socket + token UNCONDITIONALLY on cleanup. So a second
+instance silently REPLACED a live instance's socket and token (the first stayed alive but became
+unreachable, and the on-disk token matched no live bearer), and a foreign instance's `dispose()`
+DELETED another instance's live artifacts. **REPAIRED** with an on-disk owner record
+(`owner.json`: `instanceId`, `pid`, `startedAt`, non-reversible `tokenFingerprint`; mode 0600,
+written atomically). Acquisition succeeds only when there is NO record or the recorded owner is
+provably DEAD (`ESRCH` from `process.kill(pid, 0)`; `EPERM` counts as alive -> fail closed). A LIVE
+owner makes the start fail closed. Cleanup removes the socket + token ONLY when the on-disk record
+still carries THIS instance's id; otherwise it removes nothing and says so. `CLINEMM_CONTROL_SEAM_FORCE=1`
+is the only override, and it is an explicit operator act. Ownership is taken BEFORE the token is
+written and BEFORE a stale socket is unlinked, so a live owner's socket is never removed.
+
+**D2 — EVERY OUTSTANDING REQUEST IS SETTLED.** The RECON01 client pushed a resolver and never
+removed it unless a response arrived, so a socket close, a transport error, or a server that never
+answered left the promise PERMANENTLY UNRESOLVED and the proxy's MCP tool call hung forever.
+**REPAIRED**: the client settles every pending request on a response, on `close`, on `error`, on
+the peer's FIN, on a per-request timeout (10 s default, `unref()`'d), on `dispose()`, and
+immediately when the transport is already dead. The server's `dispose()` calls `end()` before
+`destroy()` so the peer sees a clean EOF.
+
+**D3 — BOUNDED NDJSON.** The server accumulated `buffer += chunk` with no bound, so a client that
+never sent a newline could make the extension host buffer without limit. **REPAIRED**: the
+accumulated line (including the incomplete tail) is bounded at 64 KiB and measured BEFORE parsing;
+oversized input is rejected with `control_seam_payload_too_large` and the connection is closed —
+never parsed, never authorized, never buffered further. The client's response buffer is bounded
+the same way.
+
+**D4 — VALIDATED OPT-IN RECORD.** The RECON01 seam treated "the file exists" as "the operator
+opted in", so a stray empty file, a failed write, or a truncated heredoc ENABLED a local listener.
+**REPAIRED**: the record is PARSED and must be a JSON object carrying the boolean `enabled: true`;
+`"true"`, `1`, `{}`, `[]`, `null`, empty and non-JSON all leave the seam OFF.
+
+**The two-operation read-only registry is PRESERVED**: `clinemm_capabilities` +
+`clinemm_get_run`, `mutating: false`, payload allow-list unchanged, `control-seam-authority.ts`
+byte-unchanged. `start_act`, `send_feedback`, `cancel_run`, transcript retrieval and tool approval
+do not exist.
+
+**Negative controls (REAL AF_UNIX transport, not mocks)**: concurrent instances (QL01), stale
+socket files (QL04), disconnected clients (QL10, QL13), oversized UNAUTHENTICATED input (QL14).
+All 21 new witnesses pass; the 21 RECON01 witnesses still pass unchanged (no regression).
+
+**Conservation.** Diff surface: 5 modified + 2 new files, ALL under
+`apps/vscode/src/sdk/control-seam/`. Zero changes under `proto/`, `package.json`, `registry.ts`,
+the shared barrels, `SdkController.ts`, the Elm arbiter, the BCB, C9/C10, the native editor, the
+approval gate, or session ownership. The upstream integration was NOT re-reviewed and the MCP
+control plane was NOT redesigned, per the charter.
+
+## C2 — Build and package
+
+All gates exit 0. The VSIX's embedded `extension/dist/extension.js` has the SAME sha256 as the
+qualified production bundle — the VSIX carries exactly the bundle that was qualified. **Packaging
+is not installation evidence** and is not treated as such.
+
+## C3 — Installed-runtime qualification: LIVE_UNOBSERVABLE (cause proven)
+
+The exact-head VSIX **installed successfully** into a disposable VSCodium instance. The installed
+extension host could not be observed: launching VSCodium from this agent shell exits immediately
+(the Electron binary dies with **SIGSEGV**, exit 139; the `codium` wrapper reports
+`_LSOpenURLsWithCompletionHandler() … error -54`), and no `exthost` log directory is ever created.
+This is NOT a product defect: other VSCodium instances launched OUTSIDE this shell ARE running on
+this host, and the operator's live instances are `EPERM`-protected from this agent (the install
+attempt into one failed with `EPERM` and changed nothing).
+
+**What IS proven on this host**, with the REAL production classes over the REAL AF_UNIX transport:
+the socket/token/owner permissions (`0700` dir, `0600` files); both read-only operations;
+foreign-session refusal; unauthorized refusal; a live concurrent instance being refused while the
+first instance's socket, token and owner record stay intact and serving; the opt-in validation
+failing closed on a malformed record in the production path; and ten reads producing
+byte-identical payloads with no session, run or task created.
+
+## C4 — Real Codex handshake: PARTIAL (cause proven)
+
+The **real** Codex CLI (0.167.0-alpha.4.1) registers, enables and resolves the `clinemm` MCP server
+through the documented configuration (`codex mcp add clinemm --env CLINE_DIR=… -- <bun>
+<proxy-main.ts>`; `codex mcp get` / `mcp list --json` / `codex doctor` -> "MCP servers 1"). The
+**real MCP stdio handshake** — the exact transport and protocol Codex Desktop uses — is PROVEN:
+tool discovery returns EXACTLY `["clinemm_capabilities","clinemm_get_run"]`; both calls succeed
+and return the runtime's own `sessionId`/`taskId`/`running`/`runtimeStatus`/`queuedPromptCount`/
+`runId`; foreign-session refusal returns `control_seam_foreign_session`; disconnected-instance
+failure returns `control_seam_no_instance` and **does not hang**; and no new agent execution
+occurs.
+
+The **Codex Desktop agent turn** is `LIVE_UNOBSERVABLE`: every Codex configuration-load path
+(`codex exec`, `thread/start`, `mcpServerStatus/list`, `config/mcpServer/reload`,
+`app-server --print-startup-config`) fails with *"Failed to synchronize managed preferences"*.
+Root cause proven from the binary's own strings (`codex_config::loader::macos`,
+`MdmManagedPreferences`): Codex loads **macOS MDM managed preferences**, and this host has no MDM
+domain (`defaults read com.apple.ManagedClient` -> "does not exist"; `/Library/Managed Preferences`
+absent). **A STOCK Codex with NO MCP server at all fails identically**, which proves the blocker is
+environmental and independent of ClineMM.
+
+**Status was NOT equated with the committed Elm UI projection.** The seam reads the canonical
+runtime snapshot chain (`VscodeSessionHost.runtimeSnapshot()` -> `ClineCore` ->
+`LocalRuntimeHost` -> `AgentRuntime.snapshot()`), holds NO subscription, and never reads the Elm
+arbiter closure. `running` (the host's `ActiveSession.isRunning` mirror) and `runtimeStatus` (the
+runtime snapshot's status) are two different producers, reported separately.
+
+## C5 — Verdict and successor gate
+
+**`PASS_STRUCTURAL_ONLY`.** Not `PASS_READONLY_LIVE`: the installed-instance binding and the real
+Codex Desktop agent-turn binding are unproven, and both are blocked by proven environment limits,
+not by thin capture. Not `HALT_<reason>`: no new P0 was demonstrated. Not
+`CAPTURE_INSUFFICIENT`: the evidence establishes the transport-level binding and every structural
+property; the charter directs `LIVE_UNOBSERVABLE` + an operator procedure for exactly this case.
+
+Risk register: **0 P0, 0 P1, 2 P2** — R-A (the AF_UNIX path-length constraint) and R-B (the
+`@modelcontextprotocol/sdk` version floor) are carried forward UNCHANGED from RECON01, along with
+R-02, R-03, R-07, R-08 and the MCP OAuth/redirect advisory.
+
+**THE SUCCESSOR GATE IS UNCHANGED.** The charter authorizes design of the first narrowly scoped
+mutation operation ONLY after `PASS_READONLY_LIVE`. This ACT did not reach it, so the
+mutation-operation design is **NOT authorized** by this ACT. The operator procedure in
+`.factory/evidence/ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01/OPERATOR-PROCEDURE.md` closes the gap;
+once the operator records the installed-instance observation and the real Codex Desktop handshake,
+the verdict can be re-evaluated as `PASS_READONLY_LIVE` — with separate approval, idempotency,
+session-fencing and partial-failure contracts, as RECON01 §C6.5 already specified.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01/`
+  00-identity.md, 01-correction.md, OPERATOR-PROCEDURE.md, 03-build-and-package.md,
+  04-live-qualification.md, 05-verdict.md, SHA256SUMS.txt
