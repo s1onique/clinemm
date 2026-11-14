@@ -9,6 +9,7 @@
  * Per-instance caches make this host state.
  */
 
+import { createHash } from "node:crypto";
 import {
 	type ContentBlock,
 	createMediaBudgetState,
@@ -65,6 +66,30 @@ interface ReadLocator {
 	path: string;
 	startLine: number | null;
 	endLine: number | null;
+}
+
+interface DuplicateReadCandidate {
+	toolUseId: string;
+	locatorKey: string;
+	locator: ReadLocator;
+	content: string;
+	hash: string;
+}
+
+interface DuplicateReadAnchor extends DuplicateReadCandidate {
+	contentBytes: number;
+}
+
+interface DuplicateReadReference {
+	anchorId: string;
+	text: string;
+}
+
+interface DuplicateReadProjection {
+	messages: Message[];
+	anchorIds: Set<string>;
+	referenceResultIds: Set<string>;
+	references: DuplicateReadReference[];
 }
 
 interface TruncationCandidate {
@@ -175,8 +200,15 @@ export class MessageBuilder {
 	buildForApi(messages: Message[]): Message[] {
 		this.recoveryNoticeBytes = 0;
 		this.reindex(messages);
+		const projection = this.projectDuplicateReadResults(messages);
 		this.commitOutdatedRewrites(messages);
-		const repairedMessages = this.addMissingToolResults(messages);
+		for (const anchorId of projection.anchorIds) {
+			this.committedOutdatedRewrites.delete(anchorId);
+		}
+		for (const anchorId of projection.referenceResultIds) {
+			this.committedOutdatedRewrites.delete(anchorId);
+		}
+		const repairedMessages = this.addMissingToolResults(projection.messages);
 
 		const prepared = repairedMessages.map((message) => {
 			if (!Array.isArray(message.content)) {
@@ -211,7 +243,11 @@ export class MessageBuilder {
 		});
 
 		const mediaLimited = this.applyMediaBudget(prepared);
-		return this.truncateToTotalTextBudget(mediaLimited);
+		const budgetLimited = this.truncateToTotalTextBudget(mediaLimited);
+		return this.removeDanglingDuplicateReadReferences(
+			budgetLimited,
+			projection.references,
+		);
 	}
 
 	private transformBlock(
@@ -309,6 +345,235 @@ export class MessageBuilder {
 		return nextContent === block.content
 			? block
 			: { ...block, content: nextContent };
+	}
+
+	/**
+	 * Projects byte-identical later read observations to compact references to
+	 * the first surviving anchor. This is append-only: canonical history is
+	 * never mutated, and an anchor is never replaced because a later duplicate
+	 * arrived. The projection is deliberately conservative and declines any
+	 * result whose locator, completion, or text-only payload is ambiguous.
+	 */
+	private projectDuplicateReadResults(
+		messages: Message[],
+	): DuplicateReadProjection {
+		const anchorsByLocatorAndHash = new Map<string, DuplicateReadAnchor[]>();
+		const duplicateAnchorIds = new Set<string>();
+		const referenceResultIds = new Set<string>();
+		const latestHashByLocator = new Map<string, string>();
+		const references: DuplicateReadReference[] = [];
+		let projected = false;
+
+		const nextMessages = messages.map((message) => {
+			if (!Array.isArray(message.content)) {
+				return message;
+			}
+			let messageChanged = false;
+			const content = message.content.map((block) => {
+				if (block.type !== "tool_result") {
+					return block;
+				}
+				const candidate = this.toDuplicateReadCandidate(block);
+				if (!candidate) {
+					return block;
+				}
+				const anchorKey = `${candidate.locatorKey}\u0000${candidate.hash}`;
+				const anchors = anchorsByLocatorAndHash.get(anchorKey) ?? [];
+				const anchor = anchors.find(
+					(candidateAnchor) => candidateAnchor.content === candidate.content,
+				);
+				const latestHash = latestHashByLocator.get(candidate.locatorKey);
+				const changedSinceAnchor =
+					latestHash !== undefined && latestHash !== candidate.hash;
+				if (anchor && !changedSinceAnchor) {
+					messageChanged = true;
+					duplicateAnchorIds.add(anchor.toolUseId);
+					referenceResultIds.add(block.tool_use_id);
+					const reference = this.toDuplicateReadReference(block, anchor);
+					const referenceText = reference.content[0];
+					references.push({
+						anchorId: anchor.toolUseId,
+						text:
+							typeof referenceText === "object" && referenceText.type === "text"
+								? referenceText.text
+								: "",
+					});
+					return reference;
+				}
+				if (anchor && changedSinceAnchor) {
+					latestHashByLocator.set(candidate.locatorKey, candidate.hash);
+				}
+				anchors.push({
+					...candidate,
+					contentBytes: utf8ByteLength(candidate.content),
+				});
+				anchorsByLocatorAndHash.set(anchorKey, anchors);
+				latestHashByLocator.set(candidate.locatorKey, candidate.hash);
+				return block;
+			});
+			if (!messageChanged) {
+				return message;
+			}
+			projected = true;
+			return { ...message, content };
+		});
+
+		return {
+			messages: projected ? nextMessages : messages,
+			anchorIds: duplicateAnchorIds,
+			referenceResultIds,
+			references,
+		};
+	}
+
+	private toDuplicateReadCandidate(
+		block: ToolResultContent,
+	): DuplicateReadCandidate | undefined {
+		if (
+			block.is_error === true ||
+			!this.isReadTool(this.resolveToolName(block))
+		) {
+			return undefined;
+		}
+		const parsed = this.toDuplicateReadParsedEntry(block.content);
+		if (!parsed) {
+			return undefined;
+		}
+		const locator = this.extractLocatorFromResultEntry(parsed.entry);
+		if (!locator) {
+			return undefined;
+		}
+		const payload = parsed.payload;
+		return {
+			toolUseId: block.tool_use_id,
+			locatorKey: this.toReadLocatorKey(locator),
+			locator,
+			content: payload,
+			hash: hashDuplicateReadPayload(payload),
+		};
+	}
+
+	private toDuplicateReadParsedEntry(
+		content: ToolResultContent["content"],
+	): { entry: Record<string, unknown>; payload: string } | undefined {
+		let entry: unknown;
+		if (typeof content === "string") {
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(content);
+			} catch {
+				return undefined;
+			}
+			if (!Array.isArray(parsed) || parsed.length !== 1) {
+				return undefined;
+			}
+			entry = parsed[0];
+		} else {
+			if (content.length !== 1 || !isStructuredToolResultEntry(content[0])) {
+				return undefined;
+			}
+			entry = content[0];
+		}
+		if (
+			entry === null ||
+			typeof entry !== "object" ||
+			(entry as { success?: unknown }).success !== true ||
+			(entry as { error?: unknown }).error !== undefined ||
+			typeof (entry as { result?: unknown }).result !== "string"
+		) {
+			return undefined;
+		}
+		const payload = (entry as { result: string }).result;
+		if (
+			payload.length === 0 ||
+			payload.includes(OUTDATED_FILE_CONTENT) ||
+			payload.includes("...[truncated")
+		) {
+			return undefined;
+		}
+		return { entry: entry as Record<string, unknown>, payload };
+	}
+
+	private removeDanglingDuplicateReadReferences(
+		messages: Message[],
+		references: DuplicateReadReference[],
+	): Message[] {
+		const availableAnchorIds = new Set<string>();
+		for (const message of messages) {
+			if (!Array.isArray(message.content)) {
+				continue;
+			}
+			for (const block of message.content) {
+				if (block.type !== "tool_result" || block.is_error === true) {
+					continue;
+				}
+				if (this.toDuplicateReadParsedEntry(block.content)) {
+					availableAnchorIds.add(block.tool_use_id);
+				}
+			}
+		}
+		let changed = false;
+		const nextMessages = messages.map((message) => {
+			if (!Array.isArray(message.content)) {
+				return message;
+			}
+			let messageChanged = false;
+			const content = message.content.map((block) => {
+				if (block.type !== "tool_result" || !Array.isArray(block.content)) {
+					return block;
+				}
+				const textEntry = block.content.find(
+					(entry) =>
+						entry.type === "text" &&
+						references.some((reference) => reference.text === entry.text),
+				);
+				if (!textEntry || textEntry.type !== "text") {
+					return block;
+				}
+				const anchorId = references.find(
+					(reference) => reference.text === textEntry.text,
+				)?.anchorId;
+				if (anchorId && availableAnchorIds.has(anchorId)) {
+					return block;
+				}
+				messageChanged = true;
+				return {
+					...block,
+					content: [
+						{
+							type: "text" as const,
+							text: "The read completed successfully, but its referenced duplicate content is unavailable in the final provider projection. This result must not be treated as a source of the missing content.",
+						},
+					],
+				};
+			});
+			if (!messageChanged) {
+				return message;
+			}
+			changed = true;
+			return { ...message, content };
+		});
+		return changed ? nextMessages : messages;
+	}
+
+	private toDuplicateReadReference(
+		block: ToolResultContent,
+		anchor: DuplicateReadAnchor,
+	): ToolResultContent {
+		const locator = anchor.locator;
+		const windowDescription = this.isFullFileRead(locator)
+			? "the same file window"
+			: `lines ${locator.startLine ?? 1}-${locator.endLine ?? "EOF"} of the same file`;
+		const text = `[same content as earlier read result ${anchor.toolUseId}] The read completed successfully and returned byte-identical content for ${windowDescription}. The referenced result remains the visible source of that content.`;
+		return {
+			...block,
+			content: [
+				{
+					type: "text",
+					text,
+				},
+			],
+		};
 	}
 
 	private reindex(messages: Message[]): void {
@@ -1765,6 +2030,10 @@ function collectNestedStringCandidates(
 			}
 		}
 	}
+}
+
+function hashDuplicateReadPayload(content: string): string {
+	return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 function deepCloneJsonLike(value: unknown): unknown {

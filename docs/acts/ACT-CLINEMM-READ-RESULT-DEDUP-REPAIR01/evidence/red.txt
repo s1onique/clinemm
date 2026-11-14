@@ -1,0 +1,29 @@
+ACT-CLINEMM-READ-RESULT-DEDUP-REPAIR01 — RED reproduction
+
+Entry source: bf486a47c11a1a80782d5d96df89c149fdcb2a50
+Transcript: 1794609208867_ks9o6.messages.json
+Transcript SHA-256: 02ba96fd27b7c6317d3444ca7c07e237860c99dd3b34eb9dc10ed273c0ab9e6d
+Historical duplicate payload: 47,253 characters / 47,777 UTF-8 bytes
+Historical payload SHA-256: 677121b6e1e7a5ddb6caf5f9fbf7ca938d734a521afaf53fdfe26d616653b358
+Historical canonical result messages: 8 / 27 / 29
+
+RED command:
+  cd sdk/packages/core
+  bunx vitest run --config vitest.config.ts src/session/services/message-builder-read-dedup.test.ts
+
+RED result (before production repair):
+  Test Files 1 failed (1)
+  Tests 1 failed | 1 passed (2)
+  Exit status: 1
+
+RED-1 baseline witness: PASS on unmodified production implementation.
+  - Exactly two historical full results were rewritten to the 64 KiB stale marker.
+  - The prior provider prefix broke at message index 5 (two messages remained common).
+  - The newest read retained its full returned bytes.
+  - Canonical history remained unchanged.
+
+RED-2 desired contract: FAIL on unmodified production implementation.
+  - Expected the first anchor and both later duplicates to remain stable.
+  - Actual: the earlier anchor was rewritten to the stale marker and the prefix broke.
+
+No raw provider request, Keycloak source, credentials, or unredacted transcript was committed.

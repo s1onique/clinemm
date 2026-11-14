@@ -1,0 +1,9 @@
+ACT-CLINEMM-READ-RESULT-DEDUP-REPAIR01 — live qualification
+
+NOT_EXECUTED
+
+Reason: this run did not have an installed-extension Flint/Kapitsa qualification profile or
+permission to mutate the operator's installed extension profile. Structural production-seam
+evidence is recorded separately and is not promoted to live evidence.
+
+No Kapitsa cache-hit, wall-clock, or model-comprehension improvement is claimed.

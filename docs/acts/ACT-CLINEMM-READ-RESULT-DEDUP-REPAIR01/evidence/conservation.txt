@@ -1,0 +1,55 @@
+ACT-CLINEMM-READ-RESULT-DEDUP-REPAIR01 — conservation and historical comparison
+
+Synthetic historical-shape replay through production MessageBuilder.buildForApi():
+  47,253-character successful structured read result, 3 identical reads.
+  Iteration 10: 4 provider messages.
+  Iteration 11: 8 provider messages.
+
+Candidate projection:
+  Previous provider prefix preserved: 4 messages / 68,335 bytes; no prior message changed.
+  Prepared request bytes: 69,249.
+  Estimated input tokens (bytes / 3): 23,083.
+  Full-content copies: 1.
+  Compact duplicate references: 2.
+  Historical stale markers: 0.
+  96K nominal trigger: 86,400 tokens; candidate estimate 23,083, not crossed.
+
+Predecessor historical capture figures (22-message full transcript, not re-executed locally):
+  Previous prefix preserved: production 5 / 26,440 bytes vs proven candidate 20 / 181,354 bytes.
+  Prepared bytes: 182,140 vs 182,422 (+282).
+  Estimated input tokens: 60,759 vs 60,853 (+94).
+  Full-content copies: 1 vs 1; compact references: 0 vs 2; stale markers: 2 vs 0.
+  Compaction trigger: neither arm crossed 86,400.
+
+The local synthetic replay proves the production-seam distinction and conservation shape. The full
+historical transcript/capture figures are retained as predecessor evidence, not presented as a
+fresh local run.
+
+Adversarial matrix covered by permanent tests:
+  1 two identical reads: one anchor, one reference
+  2 three identical reads: one anchor, two references, stable prefix
+  3 changed content: new content retained
+  4 different path: no cross-path alias
+  5 different range: no range alias
+  6 same locator/different bytes: independent content
+  7 mixed batch: no ambiguous batch projection
+  8 paged payload: marker says same file window, not complete file
+  9 failed read: failure preserved
+  10 changed-file observation: new content retained
+  11 rollback: no future reference emitted
+  12 compaction/anchor removal: final projection removes dangling reference
+  13 restoration: deterministic pure projection
+  14 cache expiry: no cache dependency
+  15 image/non-text: unchanged
+  16 budget truncation: reference emitted only while anchor content survives
+  17 concurrent ordering: canonical result order drives deterministic correlation
+  X->Y->X: later X is represented independently and does not reference earlier X
+
+Final-projection lifetime:
+  After aggregate budget processing, every emitted reference is checked against an earlier real
+  tool result in the same final projection. If the anchor was removed/truncated/re-written, the
+  reference is replaced by an explicit unavailable-content notice; no dangling reference survives.
+
+Freshness/authorization:
+  Projection runs after canonical tool results exist. file-read.ts, tool execution, permissions,
+  filesystem authority, approval, and canonical persistence are unchanged.

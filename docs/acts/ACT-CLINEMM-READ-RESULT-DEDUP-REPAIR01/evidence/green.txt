@@ -1,0 +1,27 @@
+ACT-CLINEMM-READ-RESULT-DEDUP-REPAIR01 — GREEN gates
+
+Commands (from sdk/packages/core):
+  bunx vitest run --config vitest.config.ts src/session/services/message-builder.test.ts src/session/services/message-builder-read-dedup.test.ts
+  bunx vitest run --config vitest.config.ts src/session/services/tool-result-cache.test.ts src/session/services/message-builder-recovery.test.ts src/extensions/tools/executors/file-read.test.ts
+  bunx vitest run --config vitest.config.ts src/extensions/context/compaction.test.ts src/extensions/context/compaction.working-context-ratio.test.ts
+
+Results:
+  MessageBuilder + dedup: 59/59 PASS, exit 0
+  Adjacent cache/recovery/file-read: 34/34 PASS, exit 0
+  Compaction suites: 115/115 PASS, exit 0
+  Combined focused suites: 93/93 PASS, exit 0
+
+Formatting/lint:
+  ../../../node_modules/.bin/biome check src/session/services/message-builder.ts src/session/services/message-builder-read-dedup.test.ts
+  PASS, exit 0
+
+Repository:
+  git diff --check
+  PASS, exit 0
+
+Typecheck:
+  ../../../node_modules/.bin/tsc -p tsconfig.dev.json --noEmit --pretty false
+  Exit 2 because the verified entry already has 67 pre-existing diagnostics in unrelated files.
+  The entry and current diagnostic sets are byte-identical; there are no ACT-owned diagnostics.
+
+No intentionally failing RED test remains in the default suite.
