@@ -1,7 +1,12 @@
 import { describe, it } from "bun:test"
 import { strict as assert } from "node:assert"
 import type { ClineMessage } from "../ExtensionMessage"
-import { getApiMetrics, getLastApiReqContextInputTokens, getLastApiReqTotalTokens } from "../getApiMetrics"
+import {
+	getApiMetrics,
+	getLastApiReqContextInputObservation,
+	getLastApiReqContextInputTokens,
+	getLastApiReqTotalTokens,
+} from "../getApiMetrics"
 
 describe("getApiMetrics", () => {
 	it("includes subagent_usage in aggregate totals", () => {
@@ -534,6 +539,23 @@ describe("getLastApiReqContextInputTokens", () => {
 		]
 
 		assert.equal(getLastApiReqContextInputTokens(messages), 0)
+	})
+
+	it("distinguishes an observed zero input count from no provider observation", () => {
+		const zeroUsage: ClineMessage[] = [
+			{
+				ts: 1,
+				type: "say",
+				say: "api_req_started",
+				text: JSON.stringify({ tokensIn: 0, tokensOut: 10, cacheReads: 0, cacheWrites: 0 }),
+			},
+		]
+		const noUsage: ClineMessage[] = []
+
+		assert.equal(getLastApiReqContextInputTokens(zeroUsage), 0)
+		assert.equal(getLastApiReqContextInputTokens(noUsage), 0)
+		assert.deepEqual(getLastApiReqContextInputObservation(zeroUsage), { value: 0 })
+		assert.equal(getLastApiReqContextInputObservation(noUsage), undefined)
 	})
 
 	it("returns 0 when the api_req_started payload has no tokensIn", () => {

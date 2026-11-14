@@ -108,7 +108,7 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 	workingContextEstimate,
 }) => {
 	// Accordion state
-	const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
+	const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["context"]))
 
 	const toggleSection = useCallback((section: string, event?: React.MouseEvent) => {
 		if (event) {
@@ -148,7 +148,7 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 			)}
 
 			<AccordionItem
-				isExpanded={true}
+				isExpanded={expandedSections.has("context")}
 				onToggle={(event) => toggleSection("context", event)}
 				title="Context Window"
 				value={percentage ? `${percentage.toFixed(1)}%` : formatTokenNumber(contextWindow)}>

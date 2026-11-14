@@ -1,5 +1,5 @@
 import type { ClineMessage } from "@shared/ExtensionMessage"
-import { getLastApiReqContextInputTokens } from "@shared/getApiMetrics"
+import { getLastApiReqContextInputObservation } from "@shared/getApiMetrics"
 import { fireEvent, render, screen } from "@testing-library/react"
 import type { ButtonHTMLAttributes, PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -264,6 +264,30 @@ describe("Task header provider-usage authority", () => {
 })
 
 describe("ContextWindow provider-usage provenance", () => {
+	it("preserves an observed zero provider input through the producer-consumer selector", () => {
+		const zeroUsage: ClineMessage[] = [
+			{
+				ts: 1,
+				type: "say",
+				say: "api_req_started",
+				text: JSON.stringify({ tokensIn: 0, tokensOut: 10, cacheReads: 0, cacheWrites: 0 }),
+			},
+		]
+		const providerInputTokens = getLastApiReqContextInputObservation(zeroUsage)?.value
+		render(
+			<ContextWindow
+				contextWindow={256_000}
+				currentWorkingContextEstimate={148_800}
+				lastApiReqContextInputTokens={providerInputTokens}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("0")
+		expect(screen.getByRole("progressbar")).toHaveTextContent("0")
+		expect(screen.queryByTitle(/estimated next-request input/i)).not.toBeInTheDocument()
+	})
+
 	it("uses the latest eligible main-model usage row and ignores subagent aggregates", () => {
 		const messages: ClineMessage[] = [
 			{
@@ -279,7 +303,7 @@ describe("ContextWindow provider-usage provenance", () => {
 				text: JSON.stringify({ source: "subagents", tokensIn: 500_000, tokensOut: 1_000 }),
 			},
 		]
-		const providerInputTokens = getLastApiReqContextInputTokens(messages) || undefined
+		const providerInputTokens = getLastApiReqContextInputObservation(messages)?.value
 		render(
 			<ContextWindow
 				contextWindow={256_000}
@@ -295,6 +319,30 @@ describe("ContextWindow provider-usage provenance", () => {
 })
 
 describe("ContextWindowSummary usage-authority details", () => {
+	it("expands, collapses, and expands the context details section", () => {
+		render(
+			<ContextWindowSummary
+				contextWindow={256_000}
+				percentage={26.9140625}
+				providerInputTokens={68_900}
+				tokenUsed={68_900}
+				usageLabel="Provider-reported input"
+				usageTitle="Provider-reported input for the last reported request"
+				workingContextEstimate={148_800}
+			/>,
+		)
+
+		const heading = screen.getByText("Context Window")
+		const details = screen.getByText("Last reported input:").parentElement
+		expect(details).toBeInTheDocument()
+
+		fireEvent.click(heading)
+		expect(screen.queryByText("Last reported input:")).not.toBeInTheDocument()
+
+		fireEvent.click(heading)
+		expect(screen.getByText("Last reported input:").parentElement).toBeInTheDocument()
+	})
+
 	it("shows provider input and the next-request estimate as separate rows", () => {
 		render(
 			<ContextWindowSummary

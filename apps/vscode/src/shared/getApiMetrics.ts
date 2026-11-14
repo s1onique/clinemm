@@ -161,6 +161,15 @@ export function getLastApiReqTotalTokens(messages: ClineMessage[]): number {
  *   message, or 0 if none found.
  */
 export function getLastApiReqContextInputTokens(messages: ClineMessage[]): number {
+	return getLastApiReqContextInputObservation(messages)?.value ?? 0
+}
+
+/**
+ * Gets the latest provider-normalized context-input observation while
+ * preserving the distinction between an observed numeric zero and no
+ * observation at all.
+ */
+export function getLastApiReqContextInputObservation(messages: ClineMessage[]): { value: number } | undefined {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i]
 		if (msg.type !== "say" || !msg.text) {
@@ -175,13 +184,13 @@ export function getLastApiReqContextInputTokens(messages: ClineMessage[]): numbe
 				const reads = typeof cacheReads === "number" ? cacheReads : 0
 				const writes = typeof cacheWrites === "number" ? cacheWrites : 0
 				const total = tokensIn + reads + writes
-				if (total > 0) {
-					return total
+				if (total >= 0) {
+					return { value: total }
 				}
 			} catch {
 				// Ignore JSON parse errors, continue searching
 			}
 		}
 	}
-	return 0
+	return undefined
 }

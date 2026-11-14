@@ -1,7 +1,7 @@
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineHookSequences } from "@shared/combineHookSequences"
-import { getApiMetrics, getLastApiReqContextInputTokens, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
+import { getApiMetrics, getLastApiReqContextInputObservation, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useMount } from "react-use"
@@ -130,7 +130,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	// `lastApiReqTotalTokens`, which sums input + output + cache activity and
 	// is suitable only for cost / activity telemetry, not for the bar.
 	const lastApiReqContextInputTokens = useMemo(
-		() => getLastApiReqContextInputTokens(modifiedMessages) || undefined,
+		() => getLastApiReqContextInputObservation(modifiedMessages)?.value,
 		[modifiedMessages],
 	)
 	const lastAppliedCheckpointRestoreSessionId = useRef<string | undefined>(checkpointRestoreInput?.sessionId)
