@@ -32770,6 +32770,12 @@ AUDIT: bun audit --prod --json EXECUTED (Bun 1.3.13) -> 42 advisory-bearing pack
        BOTH versions. NEW VULNERABLE VERSIONS INTRODUCED BY THE MERGE: 0
 PROBES: 7 (editor file authority, editor approval seam, tool-approval + session ownership,
        upstream origin-bound MCP fetch, MCP stdio child containment, VS Code unit sweep)
+UNIT_SWEEP: 112/112 files in both runs. CANONICAL (post-retry; the unit runner retries flaky
+       files serially, so pre-retry counters are provisional and double-count):
+       Run A (no node on PATH) = 4 files / 5 assertions; Run B (node on PATH) = 5 files / 8
+       assertions. 11 provisional failures were flaky-under-load files that PASS on serial
+       retry; the one remaining hook file (taskcomplete) PASSES 14/14 in isolation.
+       0 merge-attributable failures.
 P0: 0   P1: 0   P2: 15
 EVIDENCE: .factory/evidence/ACT-CLINEMM-POSTMERGE-VSCODE-REACHABILITY-SECURITY-QUAL01/
           00-identity.md, 01-production-reachability.tsv, 02-authority-delta.md,

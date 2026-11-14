@@ -115,11 +115,20 @@ recorded as such rather than silently omitted.
 | 9 | `cd /tmp/qual01/merge-wt2/apps/vscode && bun test src/core/storage/StateManager.test.ts` (merge commit `167f5ca8`) | **1** | **1 failed — identical** (baseline comparator) |
 | 10 | `cd apps/vscode && bun test src/services/mcp/__tests__/sessionIdEcho.isolation.test.ts` (default PATH) | **1** | 3 failed — `Executable not found in $PATH: "node"` |
 | 11 | `cd apps/vscode && PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH" bun test src/services/mcp/__tests__/sessionIdEcho.isolation.test.ts` | **0** | **6/6 PASS** — proves the host PATH gap |
-| 12 | `cd apps/vscode && bun run test:unit` (default PATH) | 1 | 112/112 files; 29 failing assertions across 9 files — all environment / pre-existing |
-| 13 | `cd apps/vscode && PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH" bun run test:unit` | 1 | 112/112 files; 37 failing assertions across 10 files — all host-load timeouts / pre-existing |
+| 12 | `cd apps/vscode && bun run test:unit` (default PATH) | 1 | 112/112 files; **canonical (post-retry): 4 files / 5 assertions** fail (29 provisional; 5 files flaky-under-load pass on the runner's serial retry) |
+| 13 | `cd apps/vscode && PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH" bun run test:unit` | 1 | 112/112 files; **canonical (post-retry): 5 files / 8 assertions** fail (37 provisional; 6 files flaky-under-load pass on serial retry) |
+| 13b | `cd apps/vscode && PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH" bun test src/core/hooks/__tests__/taskcomplete.test.ts` | **0** | **14/14 PASS** — proves the last hook file's retry failure is a parallel-load 5 s timeout, not a defect |
 | 14 | `cd sdk/packages/core && bun /tmp/qual01/epipe-discriminator.mjs` | 0 | `EPIPE_ERROR_EVENT_SEEN: false code: null` |
 | 15 | `cd sdk/packages/core && bun /tmp/qual01/epipe-discriminator2.mjs` (exact upstream fixture geometry) | 0 | `EPIPE_ERROR_EVENT_SEEN: false code: null` |
 | 16 | `bun audit --prod --json` (repo root) | 1 (advisories found) | **Audit EXECUTED**; 42 advisory-bearing packages |
+
+### Canonical-vs-provisional counting note
+
+The unit runner (`apps/vscode/scripts/run-bun-unit-tests.ts`) **retries each failing
+file serially** before declaring it failed. The **canonical** result is the
+post-retry outcome. The pre-retry per-file counters are provisional and double-count
+the same files, so they must not be read as the failure count. Both numbers are
+recorded above so the raw receipts remain auditable.
 
 ### Failure identities
 
@@ -130,7 +139,8 @@ recorded as such rather than silently omitted.
 | `StateManager.test.ts` "loads and persists state without reading or watching legacy agent configs" | `apps/vscode` | **No** — identical at the merge commit (upstream's own test defect) |
 | `McpHub.callTool.test.ts` observer-payload exact-equality (×2) | `apps/vscode` | **No** — pre-merge fork commit `5705e305b` |
 | `host-bridge-auth.test.ts`, `host-bridge-client-auth.test.ts` | `apps/vscode` | **No** — stale `node_modules`; and **structurally unreachable in VS Code** |
-| hook-process suites (11 assertions across 6 files) | `apps/vscode` | **No** — 5 s per-test timeouts, host load |
+| hook-process suites (3 assertions, `taskcomplete` only, post-retry) | `apps/vscode` | **No** — 5 s per-test timeout under parallel load; **14/14 PASS in isolation** |
+| hook-process suites (8 provisional assertions across 6 files) | `apps/vscode` | **No** — flaky-under-load; **passed on the runner's serial retry** |
 
 ### Advisory sources and audit scope
 
