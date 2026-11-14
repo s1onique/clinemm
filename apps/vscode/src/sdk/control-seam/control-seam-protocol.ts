@@ -36,6 +36,28 @@
 export const CONTROL_SEAM_PROTOCOL_VERSION = 1
 
 /**
+ * The maximum size of ONE NDJSON request line, in bytes.
+ *
+ * The RECON01 seam accumulated `buffer += chunk` with no bound, so a
+ * client that never sent a newline could make the extension host
+ * buffer an unbounded amount of data — a memory-exhaustion vector
+ * reachable by anything that can open the socket (which, because the
+ * socket is 0600 inside a 0700 directory, means the same user only;
+ * but the same user may run an unrelated process).
+ *
+ * A request line is a small JSON envelope. 64 KiB is three orders of
+ * magnitude more than any legitimate request needs (the largest
+ * legitimate field is the 64-hex-char bearer token), so the bound is
+ * generous for the protocol and tight for memory.
+ *
+ * The bound applies to the ACCUMULATED line, including a partial line
+ * that has not been terminated yet. A client that exceeds it is
+ * rejected and its connection is closed — the extension host never
+ * parses the payload, never authorizes it, and never leaks the bytes.
+ */
+export const CONTROL_SEAM_MAX_REQUEST_BYTES = 64 * 1024
+
+/**
  * The two read-only operations exposed by this ACT.
  *
  * `clinemm_capabilities` — describe what this seam can do. Contains NO
@@ -116,6 +138,11 @@ export const CONTROL_SEAM_ERROR_CODES = {
 	noActiveRun: "control_seam_no_active_run",
 	/** The client supplied a session id that is not the active one. */
 	foreignSession: "control_seam_foreign_session",
+	/**
+	 * The request line exceeded the protocol's byte bound. The
+	 * connection is closed after this response.
+	 */
+	payloadTooLarge: "control_seam_payload_too_large",
 	/** An internal failure. The message never carries task content. */
 	internal: "control_seam_internal",
 } as const

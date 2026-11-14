@@ -19,7 +19,35 @@
 import { readFileSync } from "node:fs"
 import { createConnection, type Socket } from "node:net"
 
-import { CONTROL_SEAM_PROTOCOL_VERSION, type ControlSeamOperationId, type ControlSeamResponse } from "./control-seam-protocol"
+import {
+	CONTROL_SEAM_ERROR_CODES,
+	CONTROL_SEAM_MAX_REQUEST_BYTES,
+	CONTROL_SEAM_PROTOCOL_VERSION,
+	type ControlSeamOperationId,
+	type ControlSeamResponse,
+	controlSeamError,
+} from "./control-seam-protocol"
+
+/**
+ * The default per-request timeout, in milliseconds.
+ *
+ * A control-seam read is a local socket round trip: it should take
+ * microseconds. The timeout exists so a LOST request can never leave
+ * an unresolved promise behind — not to make slow reads succeed.
+ */
+export const CONTROL_SEAM_DEFAULT_REQUEST_TIMEOUT_MS = 10_000
+
+/**
+ * One outstanding request.
+ *
+ * `clearTimer` lets the resolver disarm the timeout when the response
+ * arrives, so a settled request never leaves a live timer behind.
+ */
+interface PendingRequest {
+	readonly resolve: (response: ControlSeamResponse) => void
+	timer: NodeJS.Timeout | undefined
+	clearTimer: () => void
+}
 
 /**
  * Read the bearer token from disk.
@@ -61,15 +89,37 @@ export function encodeControlSeamRequest(input: { op: ControlSeamOperationId; to
  * The server answers each request line in order, so responses are
  * matched by arrival order. There is no multiplexing, no batching and
  * no streaming — the protocol does not have those.
+ *
+ * EVERY outstanding request is SETTLED. The RECON01 client pushed a
+ * resolver onto `pending` and never removed it unless a response
+ * arrived, so a socket close, a transport error, or a server that
+ * simply never answered left the promise PERMANENTLY UNRESOLVED — the
+ * awaiting caller hung forever, and the proxy's MCP tool call never
+ * returned. This client now settles every pending request on:
+ *
+ *   - a response arriving,
+ *   - the socket closing,
+ *   - a transport error,
+ *   - the per-request timeout elapsing.
  */
 export class ControlSeamClient {
 	private readonly token: string
+	private readonly requestTimeoutMs: number
 	private buffer = ""
-	private readonly pending: ((response: ControlSeamResponse) => void)[] = []
+	private readonly pending: PendingRequest[] = []
 	private writer: ((payload: string) => void) | undefined
+	private disposed = false
+	/**
+	 * Whether the attached transport is still usable.
+	 *
+	 * Starts `true` so a writer-only client (no socket) remains
+	 * usable; `attach()` flips it to `false` on close/error.
+	 */
+	private connected = true
 
-	constructor(token: string) {
+	constructor(token: string, options: { readonly requestTimeoutMs?: number } = {}) {
 		this.token = token
+		this.requestTimeoutMs = options.requestTimeoutMs ?? CONTROL_SEAM_DEFAULT_REQUEST_TIMEOUT_MS
 	}
 
 	/** Provide the byte sink. */
@@ -81,29 +131,133 @@ export class ControlSeamClient {
 	attach(socket: Socket): void {
 		socket.on("data", (chunk: Buffer) => {
 			this.buffer += chunk.toString("utf8")
+			// Bound the INCOMPLETE-line buffer: a peer that never sends
+			// a newline must not be able to grow this without limit.
+			if (Buffer.byteLength(this.buffer, "utf8") > CONTROL_SEAM_MAX_REQUEST_BYTES) {
+				this.buffer = ""
+				this.settleAll(
+					controlSeamError(
+						CONTROL_SEAM_ERROR_CODES.payloadTooLarge,
+						"control-seam response exceeded the protocol byte bound",
+					),
+				)
+				socket.destroy()
+				return
+			}
 			let newlineIndex = this.buffer.indexOf("\n")
 			while (newlineIndex >= 0) {
 				const line = this.buffer.slice(0, newlineIndex)
 				this.buffer = this.buffer.slice(newlineIndex + 1)
-				const resolver = this.pending.shift()
-				if (resolver) {
+				const pending = this.pending.shift()
+				if (pending) {
+					pending.clearTimer()
 					try {
-						resolver(JSON.parse(line) as ControlSeamResponse)
+						pending.resolve(JSON.parse(line) as ControlSeamResponse)
 					} catch {
-						resolver({ v: CONTROL_SEAM_PROTOCOL_VERSION, ok: false })
+						pending.resolve({ v: CONTROL_SEAM_PROTOCOL_VERSION, ok: false })
 					}
 				}
 				newlineIndex = this.buffer.indexOf("\n")
 			}
 		})
+		// A close or an error SETTLES every outstanding request. Without
+		// this, a client that loses the extension host mid-request waits
+		// forever.
+		socket.on("close", () => {
+			this.connected = false
+			this.settleAll(
+				controlSeamError(
+					CONTROL_SEAM_ERROR_CODES.internal,
+					"the control-seam connection closed before a response arrived",
+				),
+			)
+		})
+		socket.on("error", () => {
+			this.connected = false
+			this.settleAll(
+				controlSeamError(
+					CONTROL_SEAM_ERROR_CODES.internal,
+					"the control-seam connection failed before a response arrived",
+				),
+			)
+		})
+		// The peer's FIN (a clean half-close) is also a disconnect: the
+		// extension host can no longer answer, so the outstanding
+		// request must settle now rather than at the timeout.
+		socket.on("end", () => {
+			this.connected = false
+			this.settleAll(
+				controlSeamError(
+					CONTROL_SEAM_ERROR_CODES.internal,
+					"the control-seam connection ended before a response arrived",
+				),
+			)
+		})
 	}
 
-	/** Send one request and await its response. */
+	/**
+	 * Send one request and await its response.
+	 *
+	 * If the socket is already gone (closed or failed), the request
+	 * settles IMMEDIATELY with an error rather than being enqueued
+	 * against a dead transport.
+	 */
 	request(op: ControlSeamOperationId, sessionId?: string): Promise<ControlSeamResponse> {
+		if (this.disposed) {
+			return Promise.resolve(controlSeamError(CONTROL_SEAM_ERROR_CODES.internal, "the control-seam client is closed"))
+		}
+		if (!this.connected) {
+			return Promise.resolve(controlSeamError(CONTROL_SEAM_ERROR_CODES.internal, "the control-seam connection is not open"))
+		}
 		return new Promise<ControlSeamResponse>((resolve) => {
-			this.pending.push(resolve)
+			const pending: PendingRequest = {
+				resolve,
+				timer: undefined,
+				clearTimer: () => {
+					if (pending.timer) {
+						clearTimeout(pending.timer)
+						pending.timer = undefined
+					}
+				},
+			}
+			pending.timer = setTimeout(() => {
+				const index = this.pending.indexOf(pending)
+				if (index >= 0) {
+					this.pending.splice(index, 1)
+				}
+				pending.clearTimer()
+				resolve(controlSeamError(CONTROL_SEAM_ERROR_CODES.internal, "the control-seam request timed out"))
+			}, this.requestTimeoutMs)
+			// Never hold the process open for a pending request.
+			pending.timer.unref?.()
+			this.pending.push(pending)
 			this.writer?.(encodeControlSeamRequest({ op, token: this.token, sessionId }))
 		})
+	}
+
+	/**
+	 * Close the client and settle every outstanding request.
+	 *
+	 * Idempotent.
+	 */
+	dispose(): void {
+		if (this.disposed) {
+			return
+		}
+		this.disposed = true
+		this.settleAll(controlSeamError(CONTROL_SEAM_ERROR_CODES.internal, "the control-seam client was closed"))
+	}
+
+	/** Settle every outstanding request with the same response. */
+	private settleAll(response: ControlSeamResponse): void {
+		while (this.pending.length > 0) {
+			const pending = this.pending.shift()
+			if (!pending) {
+				break
+			}
+			pending.clearTimer()
+			pending.resolve(response)
+		}
 	}
 }
 

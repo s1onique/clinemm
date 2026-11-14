@@ -74,3 +74,55 @@ export function resolveControlSeamEnablement(
 	}
 	return { enabled: false, source: "default-off" }
 }
+
+/**
+ * The schema of the explicit opt-in record.
+ *
+ * The record is a JSON object with a single REQUIRED field:
+ *
+ *   { "enabled": true }
+ *
+ * `enabled` MUST be the boolean `true`. A string `"true"`, a number
+ * `1`, a missing field, an empty object, a JSON array, or a
+ * non-JSON file are all REJECTED.
+ *
+ * This validation exists because the RECON01 seam treated "the file
+ * exists" as "the operator opted in". A stray empty file — a failed
+ * write, a `touch` from a script, a truncated heredoc — therefore
+ * ENABLED a local listener. The opt-in must be an explicit, parsed,
+ * unambiguous statement of intent.
+ */
+export interface ControlSeamOptInRecord {
+	readonly enabled: true
+}
+
+/**
+ * Parse and validate the explicit opt-in record's CONTENTS.
+ *
+ * Returns the validated record, or `undefined` when the contents are
+ * not a well-formed, unambiguous opt-in. The caller treats
+ * `undefined` as "not opted in" and the seam stays OFF.
+ *
+ * This function does NO I/O — the caller reads the file and passes
+ * the raw contents in, so the validation stays pure and testable.
+ */
+export function parseControlSeamOptInRecord(rawContents: string): ControlSeamOptInRecord | undefined {
+	const trimmed = rawContents.trim()
+	if (trimmed.length === 0) {
+		return undefined
+	}
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(trimmed)
+	} catch {
+		return undefined
+	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		return undefined
+	}
+	const record = parsed as Record<string, unknown>
+	if (record.enabled !== true) {
+		return undefined
+	}
+	return { enabled: true }
+}

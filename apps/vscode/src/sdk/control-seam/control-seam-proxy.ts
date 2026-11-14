@@ -92,12 +92,15 @@ export function createControlSeamProxyServer(options: ControlSeamProxyOptions = 
 		}
 		try {
 			const client = new ControlSeamClient(token)
-			const response = new Promise<ControlSeamResponse>((resolve) => {
-				client.setWriter((payload) => socket.write(payload))
-				client.attach(socket)
-				client.request(op, sessionId).then(resolve)
-			})
-			return await response
+			client.setWriter((payload) => socket.write(payload))
+			client.attach(socket)
+			// ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01 (C1.2): the client
+			// settles every outstanding request on close / error /
+			// timeout, so a lost extension host can never leave this
+			// MCP tool call hanging forever.
+			const response = await client.request(op, sessionId)
+			client.dispose()
+			return response
 		} finally {
 			socket.destroy()
 		}
