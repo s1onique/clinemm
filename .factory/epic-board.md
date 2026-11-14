@@ -32768,9 +32768,16 @@ PUSHED: NO   INSTALLED: NO   NEW_DEPENDENCIES: 0   PRODUCTION_CHANGE: NONE
 AUDIT: bun audit --prod --json EXECUTED (Bun 1.3.13) -> 42 advisory-bearing packages; 41 UNCHANGED by
        the merge; 1 changed (@ai-sdk/provider-utils 5.0.27->5.0.72) and OUTSIDE its advisory range in
        BOTH versions. NEW VULNERABLE VERSIONS INTRODUCED BY THE MERGE: 0
+LIFECYCLE: 5 manifests repo-wide have lifecycle scripts: root `prepare: husky`,
+       apps/cli `prepack` (publish guard), sdk/packages/ui `prepack` (build). Neither extra
+       package is shipped in the VSIX (unzip grep -> 0) and prepack is pack-time only; the
+       apps/vscode manifest has NO lifecycle script, so none can run in the shipped runtime.
+       .vscodeignore:43 `standalone/**` independently corroborates the host-bridge exclusion.
 PROBES: 7 (editor file authority, editor approval seam, tool-approval + session ownership,
        upstream origin-bound MCP fetch, MCP stdio child containment, VS Code unit sweep)
-UNIT_SWEEP: 112/112 files in both runs. CANONICAL (post-retry; the unit runner retries flaky
+UNIT_SWEEP: 112/112 files in both runs (the Run-B wrapper's `timeout 1800` fired AFTER the
+       suite had written all 112 counter lines and its complete retry ledger, so the suite
+       itself completed). CANONICAL (post-retry; the unit runner retries flaky
        files serially, so pre-retry counters are provisional and double-count):
        Run A (no node on PATH) = 4 files / 5 assertions; Run B (node on PATH) = 5 files / 8
        assertions. 11 provisional failures were flaky-under-load files that PASS on serial

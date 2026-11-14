@@ -385,6 +385,17 @@ Provisional (pre-retry): 37 failing assertions across 10 files.
 (`hook-factory`, `taskcancel`, `taskresume`, `taskstart`, `user-prompt-submit`, plus
 the Run-A flaky set) **passed on serial retry**.
 
+> **Run-completion receipt.** The Run-B wrapper reported `deadline_exceeded` /
+> `SIGTERM` (the outer `timeout 1800` fired), but the run itself had already
+> completed: the output file contains **all 112 per-file counter lines**
+> (indices `1/112` … `112/112`, the last being
+> `[112/112] ok 6 pass / 0 fail src/utils/__tests__/git.test.ts`) **and** the
+> complete 10-entry retry ledger. The SIGTERM terminated the wrapper after the
+> suite had written its final output, not the suite itself.
+>
+> Run A (job `cmd_mwgxase0xb1i14zn`) exited **0** with the same 112/112 coverage and
+> its own 9-entry retry ledger.
+
 The runner's own retry ledger:
 
 ```

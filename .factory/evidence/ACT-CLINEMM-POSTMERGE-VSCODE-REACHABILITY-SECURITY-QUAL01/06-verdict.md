@@ -116,7 +116,7 @@ recorded as such rather than silently omitted.
 | 10 | `cd apps/vscode && bun test src/services/mcp/__tests__/sessionIdEcho.isolation.test.ts` (default PATH) | **1** | 3 failed — `Executable not found in $PATH: "node"` |
 | 11 | `cd apps/vscode && PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH" bun test src/services/mcp/__tests__/sessionIdEcho.isolation.test.ts` | **0** | **6/6 PASS** — proves the host PATH gap |
 | 12 | `cd apps/vscode && bun run test:unit` (default PATH) | 1 | 112/112 files; **canonical (post-retry): 4 files / 5 assertions** fail (29 provisional; 5 files flaky-under-load pass on the runner's serial retry) |
-| 13 | `cd apps/vscode && PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH" bun run test:unit` | 1 | 112/112 files; **canonical (post-retry): 5 files / 8 assertions** fail (37 provisional; 6 files flaky-under-load pass on serial retry) |
+| 13 | `cd apps/vscode && PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH" bun run test:unit` | 1 (suite) / wrapper `deadline_exceeded` (SIGTERM) | 112/112 files; **canonical (post-retry): 5 files / 8 assertions** fail (37 provisional; 6 files flaky-under-load pass on serial retry). The wrapper's `timeout 1800` fired **after** the suite wrote all 112 counter lines and its complete 10-entry retry ledger, so the suite itself completed |
 | 13b | `cd apps/vscode && PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH" bun test src/core/hooks/__tests__/taskcomplete.test.ts` | **0** | **14/14 PASS** — proves the last hook file's retry failure is a parallel-load 5 s timeout, not a defect |
 | 14 | `cd sdk/packages/core && bun /tmp/qual01/epipe-discriminator.mjs` | 0 | `EPIPE_ERROR_EVENT_SEEN: false code: null` |
 | 15 | `cd sdk/packages/core && bun /tmp/qual01/epipe-discriminator2.mjs` (exact upstream fixture geometry) | 0 | `EPIPE_ERROR_EVENT_SEEN: false code: null` |
@@ -156,6 +156,18 @@ recorded above so the raw receipts remain auditable.
 | New vulnerable versions introduced by the merge | **0** |
 | Cline Hub / Kanban WebSocket advisories | **None applicable** — the Hub WebSocket server is tree-shaken out of the VS Code bundle |
 | `bun audit fix` / `bun install` / automatic upgrades | **NOT RUN** (forbidden by the ACT) |
+
+### Packaging lifecycle scripts — corrected inventory
+
+A repository-wide scan found **five** manifests with lifecycle scripts, not three:
+the root `prepare: husky`, plus `apps/cli` `prepack: bun script/guard-direct-publish.ts`
+and `sdk/packages/ui` `prepack: bun run build`. **Neither additional package is shipped
+in the VSIX** (unzip grep → 0 entries) and `prepack` is a **pack-time** step, never an
+extension-runtime step. The `apps/vscode` manifest itself has **no** lifecycle script,
+so **no lifecycle script can execute in the shipped VS Code extension runtime**.
+
+The `apps/vscode/.vscodeignore:43` entry `standalone/**` **independently corroborates**
+the host-bridge exclusion already established by the bundle grep and the VSIX listing.
 
 ### Unexecuted / live-unobservable gates
 
