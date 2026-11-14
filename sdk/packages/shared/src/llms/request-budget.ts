@@ -189,11 +189,28 @@ function agentPartToContentBlock(
 			};
 		}
 		case "image":
-			return {
-				type: "image",
-				data: typeof part.image === "string" ? part.image : "",
-				mediaType: part.mediaType ?? "image/png",
-			};
+			// CONSERVATION (CORRECTION01): a NON-STRING image payload is
+			// OMITTED, not converted into an empty image block.
+			//
+			// `AgentImagePart.image` is `string | Uint8Array | ArrayBuffer |
+			// URL`, but only the base64 STRING form is representable in the
+			// provider-visible `ImageContent` shape. The pre-repair core codec
+			// returned `undefined` for every non-string form, and the part was
+			// then filtered out of the emitted content. Emitting
+			// `{ type: "image", data: "" }` instead would inject an EMPTY image
+			// block into a provider-bound request: the provider would receive a
+			// broken image, AND the flat per-image token cost
+			// (`ESTIMATED_TOKENS_PER_IMAGE`) would still be charged for it,
+			// changing image-token accounting. The 128K budget repair must not
+			// alter this pre-existing production behavior, so the omission
+			// semantics are preserved exactly.
+			return typeof part.image === "string"
+				? {
+						type: "image",
+						data: part.image,
+						mediaType: part.mediaType ?? "image/png",
+					}
+				: undefined;
 		case "file":
 			return { type: "file", path: part.path, content: part.content };
 		case "media":

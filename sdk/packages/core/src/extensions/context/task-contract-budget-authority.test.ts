@@ -403,6 +403,103 @@ describe("request-budget authority — projection parity with the provider codec
 			agentMessagesToMessages(messagesToAgentMessages(messages as any)),
 		);
 	});
+
+	// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01-CORRECTION01:
+	//
+	// The parity assertion above is SELF-REFERENTIAL and therefore cannot
+	// detect a defect in the shared projection itself: the core codec
+	// DELEGATES to `toProviderVisibleMessages`, so both sides always agree.
+	// It stayed green while the shared projection emitted EMPTY image blocks
+	// for non-string image payloads — a production regression that injected
+	// broken images into provider-bound requests and still charged the flat
+	// per-image token cost for them.
+	//
+	// The cases below are instead PINNED to the PRE-REPAIR production
+	// contract captured verbatim from this file's own codec at `477b09c83^`:
+	//
+	//   case "image":
+	//     return typeof part.image === "string"
+	//       ? { type: "image", data: part.image, mediaType: part.mediaType ?? "image/png" }
+	//       : undefined;
+	//
+	// The contract is: a STRING image is emitted verbatim; a NON-STRING
+	// image (`Uint8Array` | `ArrayBuffer` | `URL`) is OMITTED from the
+	// emitted content and contributes NO image-token cost.
+	it("emits a string image verbatim", () => {
+		const messages = agentMessagesToMessages([
+			{
+				id: "m1",
+				role: "user",
+				createdAt: 1,
+				content: [{ type: "image", image: "aGVsbG8=" }],
+			},
+		]);
+
+		expect(messages).toEqual([
+			{
+				role: "user",
+				content: [
+					{ type: "image", data: "aGVsbG8=", mediaType: "image/png" },
+				],
+			},
+		]);
+	});
+
+	it.each([
+		["Uint8Array", () => new Uint8Array([1, 2, 3, 4])],
+		["ArrayBuffer", () => new ArrayBuffer(8)],
+		["URL", () => new URL("https://example.com/cat.png")],
+	])("omits a %s image instead of emitting an empty image block", (_label, make) => {
+		const messages = agentMessagesToMessages([
+			{
+				id: "m1",
+				role: "user",
+				createdAt: 1,
+				content: [{ type: "image", image: make() }],
+			},
+		]);
+
+		expect(messages).toEqual([{ role: "user", content: [] }]);
+		expect(
+			messages.some((message) =>
+				Array.isArray(message.content) &&
+				message.content.some(
+					(block) => block.type === "image" && block.data === "",
+				),
+			),
+		).toBe(false);
+	});
+
+	it("charges no image-token cost for an omitted non-string image", () => {
+		const textOnly = {
+			id: "m1",
+			role: "user" as const,
+			createdAt: 1,
+			content: [{ type: "text" as const, text: "hello" }],
+		};
+		const baseline = estimateRequestInputTokens({
+			messages: agentMessagesToMessages([textOnly]),
+		});
+
+		const estimate = estimateRequestInputTokens({
+			messages: agentMessagesToMessages([
+				{
+					id: "m1",
+					role: "user",
+					createdAt: 1,
+					content: [
+						{ type: "text", text: "hello" },
+						{ type: "image", image: new Uint8Array([1, 2, 3, 4]) },
+					],
+				},
+			]),
+		});
+
+		// An omitted image is not billed at all. An empty image block would
+		// still be charged the flat per-image cost and would shift the
+		// provider-visible accounting.
+		expect(estimate).toBe(baseline);
+	});
 });
 
 // ---------------------------------------------------------------------------
