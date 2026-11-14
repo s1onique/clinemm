@@ -218,6 +218,16 @@ passes unchanged. The RECON01 suite's own `CS15` ("dispose() removes the socket
 AND the bearer token") still holds — it is now gated by ownership rather than
 by an unconditional delete.
 
+> **Note on a superseded RED receipt.** During development, QL10 failed once
+> ("the request never settled") against the pre-fix client: the `close` event
+> had already fired before the request was issued, so the resolver was queued
+> against a dead transport. The fix added the `connected` flag to
+> `ControlSeamClient`; a request against an already-dead transport now settles
+> immediately (QL10, QL13). A stale background job started at **02:06:51** —
+> before the fix was committed at **02:13:11** — still reports that earlier RED
+> result. **The authoritative receipt is the run against the committed HEAD
+> `8d823a94c`: 50/50 PASS, exit 0.**
+
 ---
 
 ## C1.6 Conservation — the exact diff surface
