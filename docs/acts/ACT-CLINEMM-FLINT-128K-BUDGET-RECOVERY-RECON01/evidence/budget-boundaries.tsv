@@ -1,0 +1,8 @@
+boundary	representation	messages	estimated_tokens	limit	classification	evidence_class	notes
+compaction_input	canonical MessageWithMetadata[] before sidecar	41 source prefix	125173 sidecar tokensBefore	128000	PRE_COMPACTION	REAL	sidecar metadata.tokensBefore
+first_rejection	compacted MessageWithMetadata[] with carried contract	45 projected	133487 replay / 133626 historical	128000	A1 BASE ALREADY OVER LIMIT	SYNTHETIC_REAL	real sidecar + real transcript; exact failing-run tool serialization unavailable
+first_rejection_without_contract	compacted MessageWithMetadata[] with carried contract section removed	45 projected	132950	128000	A1 BASE ALREADY OVER LIMIT	SYNTHETIC_REAL	4950 over limit before contract insertion
+first_rejection_contract_delta	contracted minus contracted-without-contract	45 projected	29	128000	IMMATERIAL	SYNTHETIC_REAL	idempotent contract replacement/serialization rounding; not cause
+first_rejection_provider_messages	MessageBuilder API-safe MessageWithMetadata[]	29	66059 including system+tools	128000	FITS UNDER LIMIT	SYNTHETIC_REAL	actual provider conversion removes large metadata/tool-result wrappers
+historical_last_success	P provider input for last successful request	3 provider messages	79460 P	128000	ACCEPTED	REAL	provider log and canonical metrics agree
+historical_matched_request_W_P	exact prior captured provider request (different session)	59 provider messages	W 91222 current estimator; P 75341	128000	CONSERVATIVE ESTIMATOR	REAL	ratio W/P 1.211; not the blocked candidate

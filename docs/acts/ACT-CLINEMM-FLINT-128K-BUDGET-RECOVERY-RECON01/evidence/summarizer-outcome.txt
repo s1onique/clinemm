@@ -1,0 +1,47 @@
+ACT-CLINEMM-FLINT-128K-BUDGET-RECOVERY-RECON01 — SUMMARIZER OUTCOME
+======================================================================
+
+CONCLUSION
+----------
+C1: PROVEN. The 16K summarizer generation completed with usable summary text.
+C2: PROVEN. The summary was valid but rejected by the subsequent task-contract
+    budget guard.
+C3: NOT PROVEN as the primary cause. The compacted continuation was oversized
+    under the guard's internal representation, but the same candidate's final
+    provider representation fit under 128K.
+C4: REJECTED. The approximately 11:47:56 request is the relevant summarizer.
+
+OBSERVED SUMMARIZER REQUEST
+----------------------------
+Provider log: prompt 1531 (cached 0), 9898 generated tokens, finish_reason stop.
+UTC correlation: between the 99864-token main request and the 19768-token first
+post-summary main request.
+Output cap observed: 9898 <= 16384. The exact wire max_tokens value and the
+reasoning/text split are UNAVAILABLE_FROM_TRACE.
+
+PERSISTENCE / IDENTITY
+----------------------
+Sidecar updated_at: 2026-11-14T08:47:56.201Z
+Sidecar source_message_count: 41
+Sidecar compacted message count: 8
+Summary text: 3688 characters; provider-visible summary content: 3706 characters
+Summary identity: persisted, complete task contract present exactly once
+First provider-visible continuation: canonical assistant message msg_ormeKzJD,
+metrics.inputTokens = 19768
+
+This proves more than a provider stop reason: the summary text was persisted,
+projected by the production sidecar, and used in the next provider request.
+
+CONTRACT PRESERVATION
+----------------------
+The persisted summary contains the complete user objective and runtime
+completion obligation under the authoritative task-contract section. The task
+contract was not lost by the successful 16K compaction.
+
+LIMITATION
+----------
+The current source default summary cap is 8192, while this live run used 16384.
+The exact source of that live override is UNAVAILABLE_FROM_TRACE. The current
+model metadata maxTokens=16384 does not by itself explain a 16384 cap under the
+current resolver, which only lowers the default. This does not affect the
+observed successful summarization or the later guard rejection.

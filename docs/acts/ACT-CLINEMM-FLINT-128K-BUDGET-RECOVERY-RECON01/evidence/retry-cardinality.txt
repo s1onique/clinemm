@@ -1,0 +1,60 @@
+ACT-CLINEMM-FLINT-128K-BUDGET-RECOVERY-RECON01 — RETRY CARDINALITY
+===================================================================
+
+CARDINALITY (REAL canonical transcript + provider log)
+------------------------------------------------------
+Guard evaluations: 12
+Guard throws: 12
+Actual new run attempts: 12 total; 1 initial successful run + 11 explicit user resumption runs
+Automatic retries: 0
+User-requested retries/resumptions: 11
+Provider dispatches after first rejection: 0
+Additional compaction attempts after first rejection: 0
+Sidecar writes after first rejection: 0
+Persisted error messages: 12
+UI-rendered error rows: 12 canonical error messages (the screenshot's count of 8 was not the persisted count)
+
+The twelve failures are NOT an internal infinite retry loop. Each is a distinct
+user-initiated [TASK RESUMPTION] run. This distinction is load-bearing: the
+runtime did not automatically retry the same deterministic failure.
+
+PROGRESS DISCRIMINATOR
+----------------------
+Each resumption adds:
+  1 user [TASK RESUMPTION] prompt (~248 estimated tokens in the projection)
+  1 runtime completion reminder (display-only carrier; 0 projection tokens)
+  1 persisted error row
+
+Historical estimates:
+  133626, 133904, 134152, 134400, 134647, 134895, 135143, 135390, 135638,
+  135886, 136133, 136381
+
+Source-equivalent replay:
+  133487, 133765, 134013, 134260, 134508, 134756, 135003, 135251, 135499,
+  135746, 135994, 136242
+
+For every boundary, persisted minus replay is a constant 139 or 140 tokens.
+This offset is attributable to the unavailable exact failing-run tool-schema
+serialization. The replay reproduces the same per-attempt growth sequence and
+the same accumulation mechanism.
+
+Total historical growth: 2755 tokens over 11 resumptions (247-248 per attempt).
+Total replay growth: 2755 tokens over 11 resumptions.
+No provider request, tool result, assistant response, or repeated compaction
+summary occurred between the failures.
+
+CANDIDATE HASH / STATE
+----------------------
+The compacted sidecar prefix identity was unchanged for all 12 attempts
+(source_message_count=41, source_prefix_hash unchanged). The complete task
+contract remained present exactly once. Only canonical resumption/error rows
+changed. The sidecar was not rewritten.
+
+RECOVERY VERDICT
+----------------
+Recovery itself is correctly bounded and user-distinguishable. The observed
+non-progress is a consequence of false rejection plus user-initiated retries,
+not a runtime recovery loop. A successor repair must not silently relax the
+task contract or dispatch an uncontracted request. If the UI offers an automatic
+resume action for this deterministic typed error, it must be bounded and must
+remain distinguishable from explicit user retry.

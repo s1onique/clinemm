@@ -1,0 +1,58 @@
+ACT-CLINEMM-FLINT-128K-BUDGET-RECOVERY-RECON01 — GATES
+=========================================================
+
+COMMANDS / EXIT CODES
+---------------------
+1. Repository identity and protection
+   git remote -v; git branch --show-current; git rev-parse HEAD;
+   git status --short --untracked-files=all; git stash list
+   Exit 0. Branch main, HEAD f4e22222e, clean worktree, stash@{0} preserved.
+
+2. Disposable production-seam witness
+   cd sdk/packages/core && "$HOME/.bun/bin/bun" x vitest run --config vitest.config.ts \
+     src/extensions/context/zz-act-flint128-recon.test.ts
+   Exit 0. Test Files 1 passed (1); Tests 4 passed (4).
+
+3. Focused permanent regression suites
+   cd sdk/packages/core && "$HOME/.bun/bin/bun" x vitest run --config vitest.config.ts \
+     src/extensions/context/task-contract-conservation.test.ts \
+     src/extensions/context/task-contract-conservation.historical.test.ts \
+     src/extensions/context/compaction.test.ts \
+     src/extensions/context/compaction.working-context-ratio.test.ts \
+     src/extensions/context/compaction.working-context-authority-publish.test.ts \
+     src/extensions/context/compaction.cut-snap-forward.test.ts \
+     src/runtime/orchestration/session-runtime-orchestrator.test.ts \
+     src/runtime/host/local-runtime-host.test.ts
+   Exit 0. Test Files 8 passed (8); Tests 340 passed (340).
+
+4. Disposable witness typecheck delta
+   cd sdk/packages/core && "$HOME/.bun/bin/bun" tsc -p tsconfig.dev.json --noEmit --pretty false
+   Exit 2 due to 40 pre-existing package diagnostics in unrelated files.
+   Zero diagnostics referenced zz-act-flint128-recon.test.ts.
+   The disposable witness was removed after evidence capture.
+
+5. Matched W/P recomputation
+   "$HOME/.bun/bin/bun" -e '<read exact prior captured provider request; call estimateRequestInputTokens>'
+   Exit 0. W=91222, P=75341, W/P=1.211 for the exact same prior request.
+
+6. Final documentation checks
+   git diff --check
+   Exit 0.
+
+7. Final protected-state check
+   git status --short --untracked-files=all; git stash list
+   Exit 0. Only this ACT's redacted documentation is untracked; stash@{0} unchanged.
+
+NOT EXECUTED
+------------
+Full @cline/core suite: NOT_EXECUTED (not required; known environment failures).
+Full Flint benchmark: NOT_EXECUTED (not authorized).
+Live provider dispatch of reconstructed candidate: NOT_EXECUTED (not authorized).
+VSIX package/replacement: NOT_EXECUTED (not authorized).
+Production repair: NOT_EXECUTED (recon only).
+
+NO ACT-OWNED DIAGNOSTICS
+------------------------
+Production TypeScript modified: NONE.
+Disposable probes retained: NONE.
+Raw sensitive evidence committed: NONE.

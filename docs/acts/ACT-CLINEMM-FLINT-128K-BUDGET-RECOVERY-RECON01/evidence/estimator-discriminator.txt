@@ -1,0 +1,60 @@
+ACT-CLINEMM-FLINT-128K-BUDGET-RECOVERY-RECON01 — ESTIMATOR DISCRIMINATOR
+============================================================================
+
+RESULT
+------
+The false rejection is caused by an authority/representation mismatch, not by an
+inaccurate standalone token estimator and not by mandatory contract overhead.
+
+Production guard input (REAL_PRODUCTION_SEAM):
+  systemPrompt + compacted MessageWithMetadata[] + tools
+  W_guard = 133487 (source-equivalent replay; historical 133626)
+
+Same logical candidate after production provider-message conversion:
+  systemPrompt + MessageBuilder.buildForApi(messages) -> AgentMessage[] + tools
+  W_provider = 66059
+
+Both values include the same final system prompt and the same nine recovered
+same-model tool schemas. The provider-message conversion reduced 45 internal
+messages to 29 provider messages by removing material the provider never sees:
+metadata envelopes, display-only fields, and tool-result wrappers not retained
+by the provider representation.
+
+A1 / A2 / A3 DISCRIMINATION
+--------------------------
+A1 baseline already exceeds limit: PROVEN.
+  Contract-stripped compacted baseline = 132950 > 128000 (4950 over).
+  The contract delta is only 29 tokens.
+A2 contract crosses limit: REJECTED.
+A3 neither exceeds limit: NOT the guard input.
+
+IDEMPOTENT CONTRACT PATH
+-------------------------
+The persisted summary already carried the complete authoritative task contract.
+applyTaskContractToCompactedMessages() did not duplicate it. The 29-token delta
+is deterministic replacement/serialization rounding, not contract growth.
+
+ESTIMATOR VS PROVIDER USAGE
+---------------------------
+Current estimator: ceil(JSON serialized bytes / 3), image-aware flat cost.
+This is deliberately conservative. An exact matched provider request from the
+predecessor historical session recomputed as:
+  W = 91222
+  P = 75341
+  W/P = 1.211
+This establishes conservative bias for that matched request. It does not measure
+the blocked candidate and was not used as a candidate ratio.
+
+SAFETY INTERPRETATION
+---------------------
+A naive replacement with the final representation alone would lose the
+conservative safety margin. The repaired accounting authority must:
+  1. measure the final provider-visible message representation;
+  2. preserve the same effective ceiling;
+  3. retain conservative treatment for images, tools, unusual tokenizers,
+     unknown tokenization, and missing provider usage;
+  4. fail closed when an authoritative final representation is unavailable;
+  5. use provider usage only when it belongs to the same logical request and
+     never subtract cached input or count it twice.
+
+No estimator calibration is implemented or recommended as a standalone fix.

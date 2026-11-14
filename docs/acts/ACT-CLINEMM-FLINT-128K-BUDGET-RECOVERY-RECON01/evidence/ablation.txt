@@ -1,0 +1,58 @@
+ACT-CLINEMM-FLINT-128K-BUDGET-RECOVERY-RECON01 — CAUSAL ABLATION
+===================================================================
+
+ONLY RELEVANT ABLATION EXECUTED: INTERNAL REPRESENTATION VS FINAL PROVIDER
+REPRESENTATION.
+
+A. Existing guard input
+   systemPrompt + 45 compacted MessageWithMetadata[] + tools
+   W = 133487
+   Decision: TaskContractBudgetError; zero provider dispatch; zero sidecar write.
+
+B. Same logical candidate after legitimate production provider-message conversion
+   systemPrompt + MessageBuilder.buildForApi(messages) -> 29 AgentMessage[] + tools
+   W = 66059
+   Decision under the same 128000 ceiling: fits.
+
+C. Restore original guard input
+   The original 133487 representation was restored by invoking the unchanged
+   production guard; the same typed error was reproduced.
+
+OTHER ABLATIONS DELIBERATELY NOT EXECUTED
+------------------------------------------
+Compaction target ablation: not needed. The actual compaction succeeded, the
+summary was persisted and consumed, and the contract was preserved. The decisive
+defect is the guard's representation authority.
+Recovery-loop ablation: not needed. The canonical transcript proves 12
+user-initiated resumptions and zero automatic retries. There was no internal
+non-progressing retry loop to ablate.
+
+CONTROLLED DELTAS
+----------------
+Contract removed from the same compacted summary: 133458 -> 132950 (still over
+128000). Contract is not the cause.
+Provider conversion applied without changing system prompt/tools: 133487 ->
+66059 (67428-token reduction). The reduction is structural metadata/
+wrapper removal in the production representation.
+Historical exact last successful request P=79460 was not compared with the
+rejected estimate as a ratio; they are different requests.
+
+INTERPRETATION
+--------------
+The failure is a false budget rejection under the production accounting contract:
+the guard's authority (internal MessageWithMetadata[]) is not the eligible
+provider request representation. This is not evidence that the provider would
+necessarily accept the request; provider token usage for the blocked candidate is
+UNAVAILABLE_FROM_TRACE. It is proof that the guard rejected before dispatch
+using a materially different, larger representation than the one the provider
+would receive.
+
+REPAIR CONTRACT (NOT IMPLEMENTED)
+---------------------------------
+Move the single authoritative budget decision to the existing final
+request-preparation boundary. The final operand must be the provider-visible
+request representation plus the final system prompt and tools. Preserve the same
+effective ceiling, conservative image/tool accounting, fail-closed behavior when
+the final representation cannot be produced, and complete task-contract
+preservation. Do not add a second estimator authority, do not strip the contract,
+do not raise the ceiling, and do not dispatch an uncontracted fallback.

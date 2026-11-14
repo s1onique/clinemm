@@ -1,0 +1,78 @@
+ACT-CLINEMM-FLINT-128K-BUDGET-RECOVERY-RECON01 — RED REPRODUCTION
+====================================================================
+
+VERDICT: RED REPRODUCED AT THE REAL PRODUCTION GUARD.
+Evidence class: SYNTHETIC_REAL (real transcript + real sidecar; exact failing-run
+provider request unavailable after capture cleanup).
+
+DISPOSABLE HARNESS (REMOVED AFTER EVIDENCE CAPTURE)
+----------------------------------------------------
+sdk/packages/core/src/extensions/context/zz-act-flint128-recon.test.ts
+
+Production seams exercised:
+  projectSessionCompactionState()
+  createCompactionStateAwarePrepareTurn()
+  applyTaskContractToCompactedMessages()
+  MessageBuilder.buildForApi()
+  messagesToAgentMessages()
+  estimateRequestInputTokens()
+
+No provider adapter was called and no network request was made.
+
+EXECUTION
+---------
+cd sdk/packages/core && "$HOME/.bun/bin/bun" x vitest run --config vitest.config.ts \
+  src/extensions/context/zz-act-flint128-recon.test.ts
+
+Result: Test Files 1 passed (1); Tests 4 passed (4); exit 0.
+
+FIRST REJECTED CANDIDATE
+------------------------
+Source compaction source-message count: 41
+Canonical messages before first rejection: 78
+Compacted/projected message count: 45
+Summary present: true
+Summary size: 3688 characters
+Runtime task-contract size: objective + completion obligation = 579 characters
+Effective ceiling: 128000
+Historical guard estimate: 133626
+Source-equivalent guard estimate: 133487 (139-token exact tool-schema offset)
+Baseline without carried contract: 132950
+Contract delta: 29
+Final provider-message estimate: 66059
+Provider dispatch count: 0
+Sidecar write count: 0
+
+Guard result: TaskContractBudgetError, maxRequestTokens=128000.
+State-aware wrapper result: same typed error, zero sidecar writes.
+
+THE 12 HISTORICAL REJECTIONS
+----------------------------
+The production projector + guard were replayed over the exact canonical prefix
+ending immediately before each persisted error row. All 12 estimates reproduced
+with a constant 139/140-token offset and identical growth:
+  historical: 133626 -> 136381 (+2755)
+  replay:    133487 -> 136242 (+2755)
+
+NEGATIVE CONTROLS OBSERVED
+--------------------------
+Contract fits under limit: production function returns accepted result in the
+existing permanent conservation suite (29 tests passed).
+Contract pushes over limit: TaskContractBudgetError; zero dispatch/persistence.
+Baseline already over limit: A1; zero dispatch/persistence.
+Final representation differs: 66059 < 128000 while guard input is 133487.
+User ceiling 128K vs model 256K: effective limit remains 128000.
+Missing provider usage: no P invented; unavailable values marked UNAVAILABLE.
+Already-contract-bearing summary: no duplication; contract delta 29.
+Failed compaction: no partial sidecar (existing permanent tests).
+Changed system prompt / tool inventory: final operands included by the guard.
+Cancelled request: existing permanent cancellation controls preserved.
+Different session: state keyed by exact sidecar/source identity.
+
+COMMAND / EXIT CODES
+--------------------
+Disposable witness: exit 0.
+Focused permanent suites: exit 0, 8 files / 340 tests.
+Core package typecheck: exit 2 due to 40 pre-existing baseline diagnostics;
+zero diagnostics referenced the disposable witness.
+git diff --check: pending final verification.

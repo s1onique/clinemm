@@ -1,0 +1,59 @@
+ACT-CLINEMM-FLINT-128K-BUDGET-RECOVERY-RECON01 — IDENTITY
+================================================================
+
+CLASSIFICATION
+-------------
+Primary verdict: HALT_FALSE_BUDGET_REJECTION
+Evidence class of the failing candidate reconstruction: SYNTHETIC_REAL
+Reason: the real canonical transcript and real persisted compaction sidecar were used, but the failing run's exact provider-request capture was absent after capture cleanup. The exact final tool-schema serialization was therefore unavailable. The reconstruction reproduced all 12 historical estimates with a constant 139-140 token offset and reproduced the production TaskContractBudgetError before provider dispatch.
+
+REPOSITORY
+----------
+Path: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+Remote: git@github.com:s1onique/clinemm.git
+Branch: main
+Entry HEAD: f4e22222e881748cb712c7cf4e7e0cd659a57ba8
+Expected budget-repair ancestor: b03d935cfd2834953c1ab0daa9067c26b753f141 (ancestor: YES)
+Expected task-header ancestor: f4e22222e881748cb712c7cf4e7e0cd659a57ba8 (HEAD: YES)
+Entry worktree: CLEAN, including untracked files.
+Protected stash: stash@{0} = 6c9f5493e8406caf3f11f729504f6fdfadf115c8; preserved verbatim.
+Final HEAD: f4e22222e881748cb712c7cf4e7e0cd659a57ba8
+Final tracked production changes: NONE.
+
+INSTALLED EXTENSION / SOURCE IDENTITY
+------------------------------------
+Installed directory:
+  /Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c
+Installed version: 4.1.16-5a1c485cb-e761cea8c
+Installed bundle SHA-256: 48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5
+Installed source stamp: e761cea8c
+Repository HEAD: f4e22222e
+Difference classification: NON-BUDGET. `git diff --name-only e761cea8c..f4e22222e` lists only the task-header ContextWindow component and its tests. The budget guard commit b03d935cf is already present in the installed source. The installed bundle contains the TaskContractBudgetError message, 58 userContextCeiling occurrences, and the TaskContractBudgetError symbol.
+
+FAILED SESSION
+-------------
+Session ID: 1794645443041_2y9gh
+Started: 2026-11-14T08:37:23.182Z
+Provider/model: openai-compatible / flint:16gb
+Workspace: private authentication-service repository (name redacted)
+Prompt class: read-only repository investigation (raw prompt omitted)
+User ceiling: 128000
+Model contextWindow: 256000
+Model maxTokens: 16384
+Canonical messages at final flush: 112
+Provider-visible successful responses before the boundary: 34 assistant responses with metrics
+Persisted budget-error rows: 12 (not 8)
+Evaluation iteration count: 24
+Final manifest status: idle
+
+ARTIFACT HASHES (SHA-256; local raw files remain outside the repository)
+--------------------------------------------------------------------------
+Canonical transcript: 4b6df2b894d54099c118f0a9cab043c16de65a841b821ecfa6ee2ac7106e3a18
+Compaction sidecar: ab51254955b3a73396a0889fdf1be69a7cd7670679bf155c29f26f804ac98cd6
+Session manifest: ae9a2f106c5ea9917123d173ae2c2c81c68d30acec1a0944e31f8e4e65cade5a
+Prior exact matched capture (different historical session): 3137ee244f44e28a9e04cb74aec7e611f2eb594393c256c9b4535d0c4e6128af
+
+PROTECTION / AUTHORIZATION
+--------------------------
+No production repair, compaction-policy change, provider/model reconfiguration, VSIX replacement, push, PR, stash mutation, full Flint benchmark, or network dispatch of the reconstructed candidate.
+No raw transcript, provider request, credential, system prompt, private path, or private repository excerpt is committed by this ACT.
