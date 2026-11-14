@@ -69,6 +69,8 @@ import { WorkspaceRootManager } from "@/core/workspace/WorkspaceRootManager"
 import { HostProvider } from "@/hosts/host-provider"
 import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import { ExtensionRegistryInfo } from "@/registry"
+import { ControlSeamRuntime, createControlSeamAuthority } from "@/sdk/control-seam/control-seam-runtime"
+import { ControlSeamServer } from "@/sdk/control-seam/control-seam-server"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { UrlContentFetcher } from "@/services/browser/UrlContentFetcher"
 import { CloudSessionsService } from "@/services/cloud/CloudSessionsService"
@@ -1252,6 +1254,20 @@ export class Controller {
 	// Debounces/coalesces postStateToWebview() calls — see StatePostDebouncer.
 	private static readonly STATE_POST_DEBOUNCE_MS = 50
 	private readonly statePostDebouncer: StatePostDebouncer
+	/**
+	 * ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01:
+	 * The embedded MCP control seam's extension-host listener.
+	 *
+	 * DEFAULT OFF. When off, this runtime owns NO socket, NO token
+	 * file, and NO listener — the disabled path has zero
+	 * task-state semantic delta by construction.
+	 *
+	 * The seam is READ-ONLY: it holds a projection of READ closures
+	 * over the controller's own session owner. It exposes exactly two
+	 * operations (`clinemm_capabilities`, `clinemm_get_run`) and has
+	 * no way to start, steer, or cancel a run.
+	 */
+	private readonly controlSeam: ControlSeamRuntime
 
 	/**
 	 * ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01:
@@ -3217,6 +3233,47 @@ export class Controller {
 		// Register the bridge as a session event listener
 		this.onSessionEvent(this.grpcBridge.createListener())
 
+		// ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01:
+		// arm the embedded MCP control seam.
+		//
+		// The seam is DEFAULT OFF. When off, `start()` resolves the
+		// enablement bit and returns WITHOUT creating a socket, a
+		// token file, or a listener — so the disabled path has zero
+		// task-state semantic delta.
+		//
+		// The authority is a projection of READ closures over this
+		// controller's OWN session owner (`this.sessions`) and the
+		// canonical runtime snapshot chain. It creates no session, no
+		// runtime, and no second `ClineCore`.
+		this.controlSeam = new ControlSeamRuntime(
+			new ControlSeamServer({
+				authority: createControlSeamAuthority({
+					readActiveSessionId: () => this.sessions?.getActiveSession()?.sessionId,
+					readActiveTaskId: () => this.task?.taskId,
+					readIsRunning: () => this.sessions?.getActiveSession()?.isRunning ?? false,
+					readQueuedPromptCount: () => this.sessions?.getActiveSession()?.queuedPromptCount ?? 0,
+					readRuntimeSnapshot: () => {
+						const active = this.sessions?.getActiveSession()
+						if (!active) {
+							return undefined
+						}
+						// The canonical chain: VscodeSessionHost.runtimeSnapshot()
+						// -> ClineCore.getActiveRuntimeSnapshot() ->
+						// LocalRuntimeHost.getActiveRuntimeSnapshot() ->
+						// AgentRuntime.snapshot().
+						const snapshot = active.sdkHost?.runtimeSnapshot?.(active.sessionId)
+						if (!snapshot) {
+							return undefined
+						}
+						return { status: snapshot.status, runId: snapshot.runId }
+					},
+				}),
+				extensionVersion: ExtensionRegistryInfo.version,
+				platform: process.platform,
+			}),
+		)
+		void this.controlSeam.start()
+
 		// Restore auth state from secrets on startup, then start the remote
 		// config polling timer (enterprise policy enforcement). The timer must
 		// start after auth is restored so remote config can identify the user's
@@ -3615,6 +3672,13 @@ export class Controller {
 		// a raw unsubscribe callback anywhere.
 		this.taskStateRuntimeEventsSubscription.dispose()
 		this.providerConfigStoreSubscription.dispose()
+		// ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01:
+		// stop the embedded MCP control seam BEFORE the session
+		// lifecycle is torn down below. The seam's dispose removes the
+		// AF_UNIX socket file and the bearer token file, so a
+		// deactivated extension host leaves NO reachable listener and
+		// NO credential on disk.
+		await this.controlSeam.dispose()
 		// Clear the remote config timer to prevent stale fetches
 		if (this.remoteConfigTimer) {
 			clearInterval(this.remoteConfigTimer)

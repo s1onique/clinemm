@@ -32881,3 +32881,184 @@ input: the MCP client + OAuth seam is the one reachable upstream surface where t
 (0 diff lines); the MCP stdio child containment is intact (SIGTERM->SIGKILL escalation at
 `client.ts:310-359`) with only a macOS fail-fast **latency** delta. Carry forward R-06, R-07,
 R-08 (do not audit the Hub as a VS Code surface), R-02 and R-03.
+
+# ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — PASS_STRUCTURAL_ONLY — 2026-11-15
+
+**Status:** Production-seam reconnaissance and bounded read-only proof for an embedded MCP control
+seam that lets an external client (Codex) OBSERVE the existing ClineMM VS Code runtime.
+**READ-ONLY by charter:** no mutating MCP operation was enabled; `start_act`, `send_feedback` and
+`cancel_run` do not exist. No push, no release, no VSIX produced/replaced/installed.
+
+```text
+ACT_ID: ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01
+TYPE: production-seam reconnaissance + bounded read-only proof
+EPIC: EPIC-CLINEMM-UPSTREAM-INTEGRATION
+WORKSTREAM: MCP control seam
+VERDICT: PASS_STRUCTURAL_ONLY
+PREDECESSOR_VERDICT: PASS_WITH_NONBLOCKING_RESIDUE (ACT-CLINEMM-POSTMERGE-VSCODE-REACHABILITY-SECURITY-QUAL01)
+ENTRY_HEAD: 2dcceb6d22f66ee724f1986f95f7a27502ba9d80
+ENTRY_TREE: 1678d92e540db7cba7cc117ef582f219415ad2b7
+BRANCH: main
+PUSHED: NO   INSTALLED: NO   NEW_DEPENDENCIES: 0   VSIX: NONE PRODUCED/REPLACED
+PRODUCTION_DIFF: apps/vscode/src/sdk/SdkController.ts (+64/-0, purely additive)
+                 + apps/vscode/src/sdk/control-seam/ (12 new files)
+PUBLIC_SURFACE_DELTA: 0 files under proto/, package.json, src/registry.ts, @cline/shared, @cline/core
+LABELS: STRUCTURAL | REAL_PRODUCTION_SEAM | LIVE: none claimed | NOT_EXECUTED | LIVE_UNOBSERVABLE
+P0: 0   P1: 0   P2: 2 (R-A AF_UNIX path-length constraint; R-B new server-side MCP surface on sdk@1.30.0)
+```
+
+## C1 — The real controller boundary (`STRUCTURAL` + `REAL_PRODUCTION_SEAM`)
+
+The runtime chain is `extension.ts:activate()` -> `Controller` (= `SdkController.ts:1151`) ->
+`SdkSessionLifecycle` (`sdk-session-lifecycle.ts:239`) -> `VscodeSessionHost`
+(`vscode-session-host.ts:274`) -> `ClineCore` (`ClineCore.ts:108`) -> `LocalRuntimeHost`
+(`local-runtime-host.ts:429`) -> `SessionRuntime` -> `AgentRuntime`.
+
+Six method families attributed to their owner, lifecycle, caller authorization and observable
+result (full table in the evidence):
+- **identity** — `SdkSessionLifecycle.getActiveSession()` (`:311`), `ActiveSession.sessionId`,
+  `.isRunning`, `.queuedPromptCount` (`cline-session-factory.ts:178-203`), `Controller.task?.taskId`.
+- **authoritative phase/completion** — `VscodeSessionHost.runtimeSnapshot()` (`:929`) ->
+  `ClineCore.getActiveRuntimeSnapshot` (`:712`) -> `LocalRuntimeHost.getActiveRuntimeSnapshot`
+  (`:1880`) -> `AgentRuntime.snapshot()`.
+- **events** — `subscribe` / `subscribeRuntimeEvents` / `subscribeRecoveryStateChange`
+  (`vscode-session-host.ts:882`, `:910`, `:892`).
+- **start** — `Controller.initTask` (`:4377`), `SdkTaskStartCoordinator.initTask`,
+  `VscodeSessionHost.start` (`:531`), `SdkSessionLifecycle.startNewSession` (`:444`).
+- **feedback** — `Controller.askResponse` (`:4982`), `VscodeSessionHost.send` (`:544`),
+  `pendingPrompts` (`:865`).
+- **cancel** — `Controller.cancelTask` (`:4720`), `SdkTaskControlCoordinator.cancelTask`,
+  `VscodeSessionHost.abort` (`:564`), `.stop` (`:580`), `.cancelBackgroundCommand` (`:637`).
+
+**Observation classes separated.** REQUEST-TIME (used by the seam), RUNTIME-EVENT (the canonical
+`AgentRuntimeEvent` stream — **not** used), COMMITTED-UI (`getStateToPostToWebview()` — **not**
+used). Request-time was chosen because it is lag-free, requires no subscription lifecycle, and
+cannot become a stale third authority. The seam deliberately reads `runtimeSnapshot()` DIRECTLY
+rather than the Elm arbiter closure, so the legacy fallback never enters the seam.
+
+**No second `ClineCore`.** The seam's module graph imports only `node:crypto`/`fs`/`net`/`path`
+plus its own modules; the controller wiring creates no host and calls no `create`.
+
+## C2 — MCP transport decision (`STRUCTURAL` + `REAL_PRODUCTION_SEAM`)
+
+**Chosen:** `Codex (MCP stdio client) -> local stdio MCP proxy -> AF_UNIX socket -> extension-host
+listener`. **Rejected with reasons:** direct stdio on the host (VS Code owns those fds); TCP
+(violates "no TCP exposure"); generic RPC framework (charter forbids it); the Hub WebSocket /
+`HubRuntimeHost` (tree-shaken out of the bundle, and R-08 says do not audit it as a VS Code
+surface); `McpHub` reuse (it is an MCP *client*; routing the seam through it would put a
+credential-bearing stdio-spawning client surface on the path); host-helper socket reuse (mixes two
+trust domains — the helper runs outside the IDE sandbox precisely to signal process groups, which
+a read-only observer does not need).
+
+All seven charter properties hold: default OFF (no build-profile tier — a developer build must
+not silently listen); AF_UNIX only (no INET bind exists in the code); `0700` dir + `0600` socket
+and token (re-asserted with `chmodSync` because `mkdir` honours the umask); explicit constant-time
+bearer authorization per request line; no credential/transcript in any log line (the 3 `Logger`
+calls carry only the source and the socket path); **0** files changed under `proto/`,
+`package.json`, `registry.ts` or any shared barrel; full cleanup on `Controller.dispose()` ->
+`tearDown()` -> `WebviewProvider.disposeAllInstances()`.
+
+**New finding (P2 R-A):** an AF_UNIX `sock_path` is 104 usable bytes on macOS, so a long
+`CLINE_DIR`/`TMPDIR` makes the listener impossible (`listen EINVAL`, measured at 125 bytes). The
+seam now fails closed with an actionable message BEFORE `listen()`.
+
+**Advisory delta (P2 R-B):** this ACT adds a server-side MCP surface on `@modelcontextprotocol/sdk@1.30.0`.
+The surface is a stdio server with **no OAuth, no redirect, no HTTP, no SSE** — none of the
+predecessor's client-side sub-cases are reachable through it — and it is default-off and local.
+R-06 itself is carried forward unchanged.
+
+## C3 — The bounded read-only proof (`REAL_PRODUCTION_SEAM`)
+
+Exactly two operations, both read-only: `clinemm_capabilities` (protocol version, the operation
+list, `readOnly: true`, host identity — **no session identity**) and `clinemm_get_run`
+(`{sessionId, taskId?, running, runtimeStatus?, queuedPromptCount, runId?}`).
+
+The exposure allow-list is enforced IN CODE: `isControlSeamRunIdentity()` rejects any key
+outside the six identity/status fields, and the server applies it on the way OUT, so a widened
+payload fails closed at the boundary.
+
+**The success criterion is met at the source/test seam:** PS03 asserts that an external client
+over a real AF_UNIX socket receives **the same record** the real `SdkSessionLifecycle` owns
+(`sessionId`, `isRunning`, `queuedPromptCount` read from `getActiveSession()`), with the
+authoritative `runtimeStatus`/`runId` read through the canonical snapshot chain.
+
+## C4 — Security and conservation (all seven PROVEN)
+
+1. **Disabled bridge -> zero task-state semantic delta** (CS04/CS05/CS06): no listener, no socket
+   file, no token file, no directory, no lifecycle touch, no event, no publication, no phase
+   change.
+2. **Unauthorized clients cannot read session information** (CS07/CS08/CS14/CS16/PX05): bearer
+   required, constant-time compared, refused before dispatch, non-informative error, per-start
+   random `0600` token, never logged.
+3. **A stale/foreign session id discloses nothing** (CS09/CS10): refused with a fixed code; the
+   response contains neither the echoed id nor the active id.
+4. **Repeated reads are idempotent** (CS11): three consecutive reads are byte-identical; the read
+   is a pure projection with no counter and no cache.
+5. **Bridge disconnect does not stop or change a run** (CS12/PS02): the seam holds no
+   abort/stop/cancel reference at all; after `socket.destroy()` the session is still owned and
+   still running.
+6. **Approval and cancellation paths unchanged** (diff surface): the entire production diff is
+   `SdkController.ts` (+64/-0) plus the new directory. Nothing under `src/core/`, `src/services/`,
+   `src/shared/`, `proto/` or `registry.ts` was touched.
+7. **No exposed operation can invoke run_commands / editor / file reads** (CS03/CS13/PX01): the
+   registry is a frozen literal whose type admits only `mutating: false`; the MCP server registers
+   exactly two tools; the payload allow-list rejects transcript/credential/config keys; the seam
+   imports no tool executor.
+
+**Conservation of the pre-existing semantics.** C9/C10 untouched (no `MessageTranslatorState`, no
+`BackgroundNotifyCoordinator`, no `command_status` consumption). BCB untouched. **Elm** untouched —
+the seam reads `runtimeSnapshot()` directly and holds **no** subscription, so it neither consumes
+the Elm arbiter selection nor perturbs the shadow's differential. Native editor untouched (its
+C/D/E RED matrix is unmodified and still reproduces as the predecessor recorded). Approval and
+session ownership untouched. **The one behavioural change in the whole diff:** the extension host
+*may* create an AF_UNIX socket + token file + private directory **only when explicitly enabled**;
+disabled it creates nothing.
+
+## C5 — Evidence (`STRUCTURAL` + `REAL_PRODUCTION_SEAM` + `NOT_EXECUTED` + `LIVE_UNOBSERVABLE`)
+
+Executed: `bunx vitest run src/sdk/control-seam/` -> **29/29 PASS** (3 files: 21 + 5 + 3);
+`bunx tsc --noEmit` -> **clean**; `biome check --diagnostic-level=error` -> **clean** (13 files);
+`bun esbuild.mjs` -> **build finished**; `grep -c 'ControlSeam' apps/vscode/dist/extension.js` ->
+**42**; `git diff --name-only -- proto/ package.json apps/vscode/package.json
+apps/vscode/src/registry.ts | wc -l` -> **0**.
+
+Negative controls: wrong token -> `control_seam_unauthorized`; empty token -> `control_seam_bad_request`;
+unknown op -> rejected at the decoder; version mismatch -> rejected at the decoder; malformed line
+-> rejected at the decoder; no active session -> `control_seam_no_active_run`; no installed
+instance -> `control_seam_no_instance`; wrong token at the MCP layer -> `control_seam_unauthorized`.
+
+**LIVE_UNOBSERVABLE:** no ClineMM extension is installed on this host, and the repository's debug
+harness could not launch Electron here (the child died with `SIGSEGV` under this sandbox; no
+residual process). The operator is running the live bundle manually.
+
+**Instrumentation discipline:** default-off, explicitly removable (delete the directory + the four
+`SdkController.ts` sites; no proto/command/registry/shared-barrel/state-key/migration to unwind),
+and zero state-semantic delta when disabled. REMOVAL_TRIGGER: first of (a) the successor
+mutation-control ACT lands, (b) `CAPTURE_INSUFFICIENT`, (c) successor evidence supersedes — on
+removal the directory, the four controller sites and this evidence MUST be removed TOGETHER.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01/`
+  00-identity.md, 01-controller-boundary.md, 02-transport-decision.md, 03-read-only-proof.md,
+  04-security-conservation.md, 05-evidence-closure.md, 06-verdict.md, SHA256SUMS.txt
+
+## Successor — the next mutation-control contract
+
+A separate ACT may authorize tightly scoped mutations on **the same seam** (same AF_UNIX transport,
+same default-off enablement, same bearer authorization). What this evidence already establishes:
+the observation seam is sound, the transport/trust boundary/cleanup need not be re-litigated, and
+the authority boundary is the right place to extend — adding a mutation means adding a closure
+that reaches an existing controller mutator, which is the explicit review signal.
+
+What the successor MUST re-open (not covered here): the **approval gate** (a mutation that
+bypasses `SdkInteractionCoordinator.handleRequestToolApproval` would be a P0); **session-ownership
+fences** on the mutation; **write idempotence** (C4.4 proves READ idempotence only); **partial-failure
+recovery** (C4.5 is a read property — a client dying mid-mutation must not leave a half-mutated
+run); the **Elm/BCB/C10 interaction** (a mutation that changes a phase must go through the Elm
+arbiter, which is a materially different contract); and the **live installed-instance
+observation**, which is a **precondition** — a mutation must not ship on a seam that has never been
+observed against a running extension.
+
+Carry forward unchanged: R-02 (cloud start local gate), R-03 (file-read containment gap), R-06
+(sdk version floor), R-07 (stdio spawn authority unchanged — this ACT adds no stdio spawn on the
+VS Code side), R-08 (Hub is CLI-only), the MCP OAuth/redirect advisory (the seam performs no OAuth
+and no redirect), and the editor executor RED matrix.
