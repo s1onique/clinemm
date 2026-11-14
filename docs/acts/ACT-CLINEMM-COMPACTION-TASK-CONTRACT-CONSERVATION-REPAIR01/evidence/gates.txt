@@ -164,10 +164,20 @@ COMMAND (ENTRY BASELINE -- the ACT's changes reverted in place):
   RESULT: Test Files 34 failed (34)
           Tests  155 failed | 506 passed | 36 skipped (697)
 
-COMPARISON OF THE FAILING FILE SETS:
+COMPARISON OF THE FAILING FILE SETS (paths only, i.e. lines beginning "src/"):
   baseline failing files: 34
   repaired failing files: 34
   diff(baseline, repaired) -> EMPTY (the sets are IDENTICAL)
+
+  NOTE ON THE RAW JOB OUTPUT: the baseline run's raw grep output also lists 3
+  NON-PATH SUMMARY LINES alongside the 34 paths, which can read as "37" if
+  they are counted blindly:
+      "      Tests  155 failed | 506 passed | 36 skipped (697)"
+      " Test Files  34 failed (34)"
+      "  ... Failed Tests 155 ..."   (a separator header)
+  These are vitest SUMMARY lines, not test files. Filtering to the "src/"
+  path prefix yields exactly 34 files in BOTH runs, with an EMPTY diff.
+  The failing-test COUNTS also match exactly: 155 failed in both.
   => The 34 failing files and the 155 failing tests are PRE-EXISTING at the
      entry HEAD. The ACT introduces NO new failing test and fixes none of the
      pre-existing ones (that would be unrelated cleanup, which is forbidden).
