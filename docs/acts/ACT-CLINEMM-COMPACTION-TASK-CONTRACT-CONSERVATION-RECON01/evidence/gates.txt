@@ -1,0 +1,191 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-RECON01 — EXECUTED GATES
+================================================================================
+
+All commands run from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm.
+Tooling = bun (1.3.14, /opt/homebrew/bin/bun). Runtime = node (v26.0.0).
+bun was NOT on the default PATH in the shell; it was resolved explicitly.
+
+--------------------------------------------------------------------------------
+GATE 1 — FOCUSED PRODUCTION COMPACTION SUITES                    [PASS]
+--------------------------------------------------------------------------------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/compaction.test.ts \
+  src/extensions/context/compaction.cut-snap-forward.test.ts \
+  src/session/models/session-compaction.test.ts \
+  src/extensions/context/budget-projection/project.test.ts \
+  src/extensions/context/summarize-conversation.test.ts \
+  src/extensions/context/compaction.working-context-authority-publish.test.ts \
+  src/extensions/context/compaction.working-context-ratio.test.ts \
+  src/extensions/context/compaction.real-producer-seam-red.test.ts \
+  src/extensions/context/compact-session-script.test.ts \
+  src/session/services/message-builder.test.ts \
+  src/session/services/message-builder-read-dedup.test.ts \
+  src/session/services/message-builder-recovery.test.ts \
+  src/session/user-run-messages.test.ts
+
+RESULT: Test Files 13 passed (13) | Tests 275 passed (275) | EXIT CODE 0
+
+  breakdown:
+    compaction.test.ts                                 112 passed
+    message-builder-read-dedup.test.ts                  35 passed
+    summarize-conversation.test.ts                       23 passed
+    session-compaction.test.ts                          12 passed
+    compaction.cut-snap-forward.test.ts                  7 passed
+    message-builder-recovery.test.ts                     7 passed
+    budget-projection/project.test.ts                   14 passed
+    message-builder.test.ts                             53 passed
+    user-run-messages.test.ts                            3 passed
+    compaction.working-context-authority-publish.test.ts  3 passed
+    compaction.working-context-ratio.test.ts              3 passed
+    compaction.real-producer-seam-red.test.ts             1 passed
+    compact-session-script.test.ts                       2 passed
+
+  These cover the production seams named by the ACT: agentic compaction, the
+  session-compaction projector, cut boundaries, summary-input budgeting, the
+  real-producer seam, and the provider-request preparation (message-builder).
+
+--------------------------------------------------------------------------------
+GATE 2 — DISPOSABLE RED REPRODUCTION HARNESS          [FAIL = EXPECTED RED]
+--------------------------------------------------------------------------------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/session/models/zz-act-contract-recon-red.test.ts
+
+RESULT: Tests 1 failed | 4 passed | EXIT CODE 1
+  The single failure is the RED-3 DESIRED-CONSERVATION assertion.
+  RED-1 (source integrity) and RED-2 (information loss) PASS.
+  => The RED is genuine, reproduced at the REAL projector boundary.
+  => Not HALT_RED_NOT_REPRODUCED.
+
+--------------------------------------------------------------------------------
+GATE 3 — DISPOSABLE LOSS-BOUNDARY HARNESS                        [PASS]
+--------------------------------------------------------------------------------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/zz-act-contract-recon-boundary.test.ts
+
+RESULT: Test Files 1 passed | Tests 9 passed (9) | EXIT CODE 0
+  Traced stages S1..S8 through the real production functions:
+  findCutIndex, findLatestSummaryIndex, extractFileOps,
+  buildAgenticSummaryInputBudget, serializeConversation, buildSummaryRequest,
+  projectSessionCompactionState, isTurnStartMessage.
+
+--------------------------------------------------------------------------------
+GATE 4 — DISPOSABLE CANDIDATE C1 PROBE + ABLATION                 [PASS]
+--------------------------------------------------------------------------------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/zz-act-contract-recon-probe.test.ts
+
+RESULT: Test Files 1 passed | Tests 4 passed (4) | EXIT CODE 0
+  A/B/C ablation, compaction-identity preservation, determinism.
+
+--------------------------------------------------------------------------------
+GATE 5 — DISPOSABLE ADVERSARIAL MATRIX                            [PASS]
+--------------------------------------------------------------------------------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/zz-act-contract-recon-adversarial.test.ts
+
+RESULT: Test Files 1 passed | Tests 21 passed (21) | EXIT CODE 0
+
+--------------------------------------------------------------------------------
+GATE 6 — ALL DISPOSABLE PROBES TOGETHER                   [FAIL = EXPECTED RED]
+--------------------------------------------------------------------------------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/session/models/zz-act-contract-recon-red.test.ts \
+  src/extensions/context/zz-act-contract-recon-boundary.test.ts \
+  src/extensions/context/zz-act-contract-recon-probe.test.ts \
+  src/extensions/context/zz-act-contract-recon-adversarial.test.ts
+
+RESULT: Test Files 1 failed | 3 passed (4) | Tests 1 failed | 38 passed (39)
+        EXIT CODE 1
+  The one failure is the RED-3 desired-conservation assertion.
+  38 of 39 disposable assertions pass.
+
+--------------------------------------------------------------------------------
+GATE 7 — FOCUSED TYPECHECK (sdk/packages/core)                    [PASS]
+--------------------------------------------------------------------------------
+cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit
+
+RESULT: EXIT CODE 2 (pre-existing baseline failures)
+  total diagnostics reported          40
+  ACT-OWNED diagnostics                 0   <-- REQUIRED TO BE ZERO
+  diagnostics in the production seams  0
+      (compaction-shared, agentic-compaction, session-compaction,
+       user-run-messages, compaction.ts, agent-runtime: NONE)
+  diagnostics in the disposable probes 0
+
+  The 40 diagnostics are PRE-EXISTING and lie in unrelated files:
+    src/extensions/context/compaction.test.ts                (1)
+    src/extensions/context/compaction.working-context-ratio.test.ts (1)
+    src/extensions/tools/definitions.test.ts                 (1)
+    src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts (8)
+    src/extensions/tools/executors/bash.supervised.test.ts   (2)
+    src/hub/server/hub-trace-cardinality-discriminator...    (1)
+    ... and others (40 total)
+  This ACT modified ZERO production TypeScript files.
+
+--------------------------------------------------------------------------------
+GATE 8 — DIFF CHECK                                                   [PASS]
+--------------------------------------------------------------------------------
+cd <repo root> && git diff --check
+RESULT: no output, EXIT CODE 0
+
+--------------------------------------------------------------------------------
+GATE 9 — WORKTREE / STASH PROTECTION                                [PASS]
+--------------------------------------------------------------------------------
+git status --short
+  ?? sdk/packages/core/src/extensions/context/zz-act-contract-recon-adversarial.test.ts
+  ?? sdk/packages/core/src/extensions/context/zz-act-contract-recon-boundary.test.ts
+  ?? sdk/packages/core/src/extensions/context/zz-act-contract-recon-core.ts
+  ?? sdk/packages/core/src/extensions/context/zz-act-contract-recon-probe.test.ts
+  ?? sdk/packages/core/src/session/models/zz-act-contract-recon-red.test.ts
+
+  => FIVE disposable probe files only, all UNTRACKED, all inside the
+     disposable naming convention (zz-act-contract-recon-*). They are removed
+     after evidence capture so that no failing RED test is left in the normal
+     suite.
+
+  git stash list | wc -l   -> 1
+  stash@{0} PRESERVED VERBATIM. Not popped, not applied, not dropped, not
+  rewritten.
+
+  Tracked production files modified: ZERO.
+  Unrelated files modified: ZERO.
+
+--------------------------------------------------------------------------------
+GATE 10 — NO LIVE PROVIDER REQUESTS                                [PASS]
+--------------------------------------------------------------------------------
+No live Flint / Kapitsa / OpenAI-compatible request was issued by this ACT.
+All provider evidence was READ from pre-existing captures on disk.
+The disposable harnesses perform NO network I/O and call NO tool executor:
+  - the RED harness calls the production projector and reads local files
+  - the boundary harness calls pure production functions
+  - the C1 harness calls buildSummaryMessage and the classifier
+  - the adversarial harness uses in-memory fixtures only
+No mutable global instrumentation was introduced.
+
+--------------------------------------------------------------------------------
+GATE 11 — CANONICAL SESSIONS NOT MODIFIED                         [PASS]
+--------------------------------------------------------------------------------
+The canonical transcript and the sidecar were read from a COPY at
+/tmp/act-contract-probe/. The operator-local originals under ~/Downloads were
+never written. The harness opens the copies read-only. The sidecar schema was
+asserted unchanged (7 keys) and no persisted session was created or modified.
+
+--------------------------------------------------------------------------------
+SUMMARY
+--------------------------------------------------------------------------------
+GATE                                                 RESULT
+---------------------------------------------------- ---------------------------
+1 focused production compaction suites (13 files)     PASS  275/275
+2 disposable RED reproduction                         FAIL (= the RED) 1/5
+3 disposable loss-boundary harness                    PASS    9/9
+4 disposable C1 probe + ablation                      PASS    4/4
+5 disposable adversarial matrix                       PASS   21/21
+6 all disposable probes together                     FAIL (= the RED) 38/39
+7 focused typecheck                                   PASS  0 ACT-owned diags
+8 git diff --check                                    PASS    exit 0
+9 worktree / stash protection                         PASS  stash intact
+10 no live provider requests                          PASS
+11 canonical sessions not modified                    PASS
+
+ACT-OWNED DIAGNOSTICS: 0 (the only failing assertions are the two intentional
+RED assertions, both in disposable files that are removed after capture).

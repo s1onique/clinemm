@@ -1,0 +1,79 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-RECON01 — EVIDENCE IDENTITY
+================================================================================
+
+REPOSITORY
+----------
+path            /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+remote (origin) git@github.com:s1onique/clinemm.git
+remote (upstream) https://github.com/cline/cline.git
+branch          main
+entry HEAD      e854053b64c46e94a2d910775168406a56ea35f2  (2026-11-14 09:08:16 +0300)
+                docs(task-header): reconcile report with exact-head package and P1 file set
+final HEAD      e854053b64c46e94a2d910775168406a56ea35f2  (UNCHANGED — recon only)
+worktree at entry   CLEAN (git status --short empty)
+stash count     1
+stash@{0}       PRESERVED VERBATIM (not popped/applied/dropped/rewritten):
+                WIP on main: d46223b51 fix(completion-continuation-stall-lifetime):
+                separate REARM lifetime from STALL lifetime at BCB re-registration
+unexpected tracked dirt   NONE observed (HALT_UNEXPECTED_TRACKED_DIRT not triggered)
+
+ANCESTRY OF EXPECTED PREDECESSORS (git merge-base --is-ancestor <c> HEAD)
+-------------------------------------------------------------------------
+753f4adad  fix(core): conserve cross-locator read freshness                ANCESTOR: YES
+a02a040e1  docs(clinemm): ACT-...-FLINT-COMPACTION-FAILURE-RECON01 CORRECTION01  ANCESTOR: YES
+e854053b6  docs(task-header): reconcile report with exact-head package...      ANCESTOR: YES
+(all three are ancestors of HEAD; e854053b6 IS HEAD)
+
+RUNTIME IDENTITY
+----------------
+node  v26.0.0   (/opt/homebrew/bin/node)
+bun   1.3.14    (/opt/homebrew/bin/bun)
+vitest v4.1.10  (workspace toolchain)
+NOTE: bun was NOT on the default PATH in this shell; it was resolved at
+      /opt/homebrew/bin/bun. Tooling = bun; runtime = node (VS Code extension host).
+
+AUTHORITATIVE INPUT ARTEFACTS (operator-local; NOT committed)
+--------------------------------------------------------------
+~/Downloads/1794617111057_i279p.messages.json
+  size    1199385
+  sha256  02c5a31231787330b7491646bb70cdf168f75fb9bc44c0a60b85140c8e9eff15
+  role    canonical transcript (207 messages, role=user/assistant only)
+~/Downloads/1794617111057_i279p.compaction.json
+  size    47556
+  sha256  2cba633cd2e1f27d0226338ffec862f5faf061c91d88d35fd5b006b24e84e8f7
+  role    persisted compaction sidecar (4 compacted messages)
+~/Downloads/cap_86d49c582868073a.ai_sdk_prompt.{1..5}.provider-request.json
+  role    the 5 captured AGENTIC SUMMARIZER provider requests (attempts 1..5)
+  sha256(attempt 1) 77841de80b1d69c156cd1ca6d63d228fc4d8215424e62ec10dc747ab01479073
+~/Downloads/cap_run_UyTw6PKK_47_ddab8816c434ffb1.ai_sdk_prompt.1.provider-request.json
+  role    the captured POST-COMPACTION MAIN provider request (iteration 47)
+  sha256  3137ee244f44e28a9e04cb74aec7e611f2eb594393c256c9b4535d0c4e6128af
+
+HASH IDENTITY CROSS-CHECK vs PRIOR ACT
+--------------------------------------
+The transcript and sidecar sha256 values are IDENTICAL to the values recorded in
+docs/acts/ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01/evidence/identity.txt
+(messages 02c5a312..., compaction 2cba633c...). The same evidence pair was
+therefore consumed by the parent ACT and by this ACT. No capture drift.
+
+SESSION IDENTITY (from the artefacts themselves)
+-------------------------------------------------
+conversation_id      1794617111057_i279p
+transcript.origin    {"source":"vscode","mode":"user","sessionId":"1794617111057_i279p",
+                      "version":"4.1.16-5a1c485cb"}
+transcript.agent     lead
+transcript.version   1
+transcript.updated_at 2026-11-14T01:30:23.535Z
+sidecar.updated_at   2026-11-14T01:18:03.500Z
+sidecar.source_message_count       163
+sidecar.source_prefix_hash         sha256:17bfe0d8c106bc588231570d2c6fb4e7f9af0e772592363dd54bb66c5ee02c90
+sidecar.source_last_message_key    id:msg_dPCWFjbg
+
+SECURITY / EVIDENCE HANDLING
+----------------------------
+No raw transcript, provider payload, system prompt, private repository source
+excerpt, credential or secret is committed by this ACT. Evidence files contain
+only structural indices, source roles, redacted obligation excerpts, SHA-256
+hashes, byte/token counts, test commands and exit statuses.
+The investigated Keycloak repository was NOT modified; it was read only through
+the captured transcript and provider captures already on disk.

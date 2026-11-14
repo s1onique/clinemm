@@ -1,0 +1,8 @@
+field	source_index	source_message_id	source_role	authority	source_span_bytes	source_span_sha256_16	active_at_cut_163	minimal_faithful_excerpt
+Objective	0	260c8d9a-be09-4a38-ac7b-1e53deed3705	user	user-authored	352	a2cbf8e09b3c8041	yes	What does this project do? + investigate README/structure/providers/CI/charts/git-history; explain purpose, subsystems, production behavior, deployment architecture, local dev workflow
+Constraints	0	260c8d9a-be09-4a38-ac7b-1e53deed3705	user	user-authored	352	a2cbf8e09b3c8041	yes	Do not modify any files.
+Scope	0	260c8d9a-be09-4a38-ac7b-1e53deed3705	user	user-authored	352	a2cbf8e09b3c8041	yes	Repository under test (path withheld: private Znanie/keycloak checkout); investigation sources: README, directory structure, provider sources, CI config, deployment charts, recent git history
+Deliverable	0	260c8d9a-be09-4a38-ac7b-1e53deed3705	user	user-authored	352	a2cbf8e09b3c8041	yes	An explanation of purpose, major subsystems, production behavior, deployment architecture, local development workflow
+Completion	1	msg_DuOUUe3v	user	RUNTIME-SYNTHETIC	227	be0529731b7919b3	yes	[SYSTEM] This run is not complete until you call one of these terminal completion tools: submit_and_exit... (owner: AgentRuntime.getCompletionToolReminderMessage, gated by completionPolicy.requireCompletionTool)
+Supersession/Amendment	26	37d3f323-cf3c-4ae1-9771-899faecc7286	user	user-authored	44	6ad503da2f23a35a	yes	Continue
+Completion(refresh)	27	msg_SLg3GrwG	user	RUNTIME-SYNTHETIC	227	be0529731b7919b3	yes	[SYSTEM] ... terminal completion tools: submit_and_exit ... (re-emitted at the second run boundary)

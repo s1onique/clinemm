@@ -1,0 +1,89 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-RECON01 — ABLATION (A / B / C)
+================================================================================
+
+HARNESS
+-------
+sdk/packages/core/src/extensions/context/zz-act-contract-recon-probe.test.ts
+(DISPOSABLE — removed from the repository after evidence capture)
+
+RUN COMMAND
+-----------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/zz-act-contract-recon-probe.test.ts
+
+RESULT: Test Files 1 passed | Tests 4 passed (4) | EXIT CODE 0
+Printed: [C1b] A_len=48 B_len=48 C_len=48 addedBytes=787 addedTokens=263
+         orphansA=0 orphansB=0
+
+THE THREE PROJECTIONS
+----------------------
+A — HISTORICAL BASELINE
+   Unmodified persisted sidecar + the REAL production projector
+   (`projectSessionCompactionState`). 48 messages.
+
+B — MINIMAL CARRY-FORWARD CANDIDATE
+   The SAME canonical transcript and the SAME sidecar, PLUS the disposable
+   contract-conservation projection: the reconstructed contract text appended
+   to the existing `compaction_summary` message produced by the existing
+   `buildSummaryMessage`. 48 messages. Nothing else differs.
+
+C — NEGATIVE CONTROL
+   B with ONLY the candidate carry-forward removed. This is byte-identical to A.
+
+--------------------------------------------------------------------------------
+REQUIRED MEASUREMENTS
+--------------------------------------------------------------------------------
+metric                                          A            B            C
+---------------------------------------------- ------------ ------------ ------------
+active task objective available                NO           YES          NO
+active completion obligation available         NO           YES          NO
+read-only constraint available                 NO           YES          NO
+later amendments respected                     n/a (no      YES (idx 26  n/a (no
+                                                contract     carried,      contract
+                                                carried)     user           carried)
+                                                             authority)
+tool pairing preserved                         PASS (0      PASS (0      PASS (0
+                                                orphans)     orphans)      orphans)
+canonical history changed                      NO           NO           NO
+added request tokens                           0            263          0
+reference/persistence changes                  NO           NO           NO
+provider-visible request valid                 PASS         PASS         PASS
+message count                                  48           48           48
+sidecar schema key count                       7            7            7
+
+Executor detail: the eight RED-2 assertions were run against A (all PASS, i.e.
+the loss is present), against B (the three obligation assertions flip to PASS),
+and against C (the loss returns).
+
+--------------------------------------------------------------------------------
+STRUCTURAL NECESSITY
+--------------------------------------------------------------------------------
+The ablation establishes STRUCTURAL necessity only:
+
+  A (no candidate)  -> the completion obligation is absent from the 48-message
+                       provider-visible continuation.
+  B (candidate)     -> the completion obligation is present and authoritative,
+                       with user authority separated from runtime authority.
+  C (candidate removed) -> the loss returns exactly.
+
+Since A and C differ from B by EXACTLY the candidate carry-forward and nothing
+else, and the obligation's presence/absence tracks that difference, the
+carry-forward is NECESSARY for the obligation to survive the observed
+compaction boundary. No other projection element affects it.
+
+This proves structural necessity. It does NOT prove behavioural benefit.
+
+--------------------------------------------------------------------------------
+WHAT THE ABLATION DOES NOT CLAIM
+--------------------------------------------------------------------------------
+- It does NOT claim that preserving the completion instruction would make
+  Flint finish faster or more reliably. No behavioural discriminator was
+  executed; none is authorized by this ACT (no new live Flint / Kapitsa run).
+- It does NOT claim any causal link to the observed 44-minute run. The run was
+  user-aborted with no terminal completion.
+- It does NOT claim that the objective was LOST. The objective was preserved
+  SEMANTICALLY by the generated summary. What was lost is the terminal-
+  completion obligation — and, as a strict authoritative-instruction matter,
+  the verbatim task text.
+- It does NOT qualify the basic-compaction path. The candidate was exercised
+  against the agentic path only.

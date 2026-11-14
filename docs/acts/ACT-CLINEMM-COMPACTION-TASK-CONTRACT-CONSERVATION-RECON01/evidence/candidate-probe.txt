@@ -1,0 +1,210 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-RECON01 — CANDIDATE C1 PROBE
+================================================================================
+
+CANDIDATE
+---------
+C1 — Existing-authority carry-forward.
+
+  Hypothesis: the active task contract can be reconstructed at compaction time
+  from the EXISTING canonical history, using the EXISTING production authority
+  classifier, and carried into the compacted continuation through an EXISTING
+  message mechanism — with NO new persistence format, NO second task-state
+  owner, and NO modification of canonical history.
+
+HARNESS (DISPOSABLE — removed from the repository after evidence capture)
+-------------------------------------------------------------------------
+sdk/packages/core/src/extensions/context/zz-act-contract-recon-core.ts
+  (shared disposable C1 core)
+sdk/packages/core/src/extensions/context/zz-act-contract-recon-probe.test.ts
+  (ablation + identity + determinism)
+sdk/packages/core/src/extensions/context/zz-act-contract-recon-adversarial.test.ts
+  (21-scenario adversarial matrix)
+
+RUN COMMAND
+-----------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/zz-act-contract-recon-probe.test.ts \
+  src/extensions/context/zz-act-contract-recon-adversarial.test.ts
+
+RESULT: Test Files 2 passed | Tests 25 passed (25) | EXIT CODE 0
+
+--------------------------------------------------------------------------------
+THE EXISTING AUTHORITY SOURCES C1 REUSES (no new state introduced)
+--------------------------------------------------------------------------------
+1. AUTHORITY CLASSIFIER — already in production:
+     sdk/packages/core/src/extensions/context/compaction-shared.ts:356
+       isTurnStartMessage(m)
+         -> true for USER-AUTHORED turn starts:
+            role === "user" AND metadata.userRunSpan !== 0
+            AND not a tool-result-only message AND not a compaction summary.
+     sdk/packages/core/src/session/user-run-messages.ts:133
+       getUserRunSpan(m) === 0
+         -> marks RUNTIME-SYNTHETIC user-role messages (completion reminders,
+            compaction notices, recovery notices, ...).
+
+   These two already exist and already decide, in production, which persisted
+   user-role messages count as user runs. C1 reuses that decision; it does not
+   invent a new classifier.
+
+2. RUNTIME CONTRACT OWNER — the completion obligation's true producer:
+     sdk/packages/agents/src/agent-runtime.ts:1726
+       getCompletionToolReminderMessage()
+         -> "[SYSTEM] This run is not complete until you call one of these
+             terminal completion tools: submit_and_exit. ..."
+     sdk/packages/agents/src/agent-runtime.ts:1828
+       injected ONCE PER RUN via addUserReminderMessage(...)
+         (metadata.userRunSpan = 0)
+     sdk/packages/agents/src/agent-runtime.ts:1959
+       re-injected ONLY when a turn ends with ZERO tool calls
+     sdk/packages/core/src/runtime/orchestration/runtime-builder.ts:882,919
+       completionPolicy.requireCompletionTool is set iff a registered tool has
+       lifecycle.completesRun === true
+
+   >>> FINDING: the completion obligation is NOT a user-authored instruction.
+       It is a RUNTIME-SYNTHESIZED message injected once per run. It is
+       therefore NOT re-emitted after a mid-run compaction, because the run has
+       not ended. This is the structural reason the obligation is lost.
+
+3. CARRY-FORWARD MECHANISM — already in production:
+     sdk/packages/core/src/extensions/context/compaction-shared.ts:869
+       buildSummaryMessage(...) — produces the `compaction_summary` message
+       whose metadata.kind === "compaction_summary".
+   C1 appends the reconstructed contract to the summary TEXT of that same
+   message. The message kind, the metadata shape, the sidecar schema and the
+   next-compaction `findLatestSummaryIndex` / `previousSummary` fold all keep
+   working unchanged (verified — see "IDENTITY" below).
+
+--------------------------------------------------------------------------------
+CONCEPTUAL CONTRACT FORMAT (probe format only; NOT an authorized production prompt)
+--------------------------------------------------------------------------------
+  ## Active task contract (authoritative)
+  ### Objective (user-authored)
+  <verbatim user task text from canonical index 0>
+  ### Later user instructions (most recent wins)
+  - <verbatim later user turn text>
+  ### Required completion (runtime contract)
+  <verbatim runtime completion-obligation text>
+
+  Authority is labelled explicitly per section. User text and runtime text are
+  NEVER merged into one authority class.
+
+--------------------------------------------------------------------------------
+MEASURED OUTPUT ON THE HISTORICAL SESSION
+--------------------------------------------------------------------------------
+[C1a] userObligations = [
+        {"k":"objective",  "i":0,  "a":"user",   "len":352},
+        {"k":"amendment", "i":26, "a":"user",   "len":44} ]
+       runtimeObligations = [
+        {"k":"completion","i":1,  "a":"runtime","len":227},
+        {"k":"completion","i":27, "a":"runtime","len":227} ]
+
+  The classifier correctly separates:
+    idx 0  (user task)        -> user authority, objective
+    idx 26 ("Continue")       -> user authority, amendment
+    idx 1  (completion)       -> RUNTIME authority (userRunSpan = 0)
+    idx 27 (completion)       -> RUNTIME authority (userRunSpan = 0)
+    assistant text            -> never promoted
+    tool output / file content-> never promoted
+
+  NOTE: idx 1 and idx 27 carry the SAME text (sha256 be0529731b7919b3, 227
+  bytes). C1 selects the most recent runtime completion carrier (idx 27), so
+  the contract is not duplicated.
+
+--------------------------------------------------------------------------------
+SIZE / BUDGET MEASUREMENT
+--------------------------------------------------------------------------------
+  added request bytes    787
+  added estimated tokens 263      (ceil(bytes/3), the production estimator's
+                                    CHARS_PER_TOKEN = 3 convention)
+
+  Context for the number:
+    sidecar summary text            1890 bytes
+    preserved tail                  44 messages
+    projected continuation          48 messages
+    sidecar metadata.tokensBefore   103,440 tokens
+    effective max input tokens      230,400
+    compaction trigger              207,360
+  => 263 tokens is ~0.11% of the 230,400-token ceiling and ~0.25% of the
+     103,440-token pre-compaction size. Bounded and negligible.
+
+  NO ARBITRARY FIXED-SIZE TRUNCATION: C1 carries the VERBATIM source text of
+  each active user turn and the verbatim runtime obligation. There is no
+  character cap and no truncation. The adversarial scenario "long original task:
+  no silent semantic truncation" asserts that a ~24 KB objective survives
+  INTACT. If the contract cannot be represented, the candidate is NOT
+  truncated — it is rejected by the caller's normal budget path (the compaction
+  budget projection already handles oversized inputs).
+
+--------------------------------------------------------------------------------
+IDENTITY / PERSISTENCE BEHAVIOUR (measured)
+--------------------------------------------------------------------------------
+  findLatestSummaryIndex(B)            === 0   (same as A)
+  findLatestSummaryIndex(A)            === 0
+  getCompactionSummaryMetadata(B[0])   !== undefined
+  B[0].metadata.summary                contains "Active task contract"
+  sidecar schema keys (A == B)         7 keys, unchanged:
+      conversation_id, messages, source_last_message_key,
+      source_message_count, source_prefix_hash, updated_at, version
+  => NO new persisted field. NO new protocol field. NO new session format.
+     The existing sidecar round-trip, the existing source-prefix hash and the
+     existing rejection-on-mismatch behaviour are all untouched.
+
+  DETERMINISM: the contract text is byte-stable. The summary MESSAGE as a
+  whole carries `metadata.generatedAt = Date.now()` (production behaviour in
+  buildSummaryMessage), so the determinism assertion compares the message with
+  that timestamp normalised, plus the contract text byte-for-byte.
+
+--------------------------------------------------------------------------------
+HARD PROPERTIES — REQUIRED
+--------------------------------------------------------------------------------
+  1 active user objective retained                        PASS (idx 0, verbatim)
+  2 mandatory read-only and scope constraints retained    PASS (idx 0, verbatim)
+  3 applicable completion requirement retained            PASS (runtime text)
+  4 later authoritative amendments respected               PASS (idx 26, verbatim)
+  5 explicit cancellations                                PASS (latest user turn wins)
+  6 original role/authority distinctions                  PASS (labelled sections)
+  7 existing tool-result correlation                      PASS (0 orphans, unchanged)
+  8 existing compaction identity + persistence behaviour   PASS (7 keys unchanged)
+
+HARD PROPERTIES — FORBIDDEN
+--------------------------------------------------------------------------------
+  execute or re-execute any tool                          NOT DONE (no tool calls)
+  restore stale task instructions as current              NOT DONE (latest wins)
+  promote assistant text into user authority              NOT DONE (verified)
+  promote repository content into instructions            NOT DONE (verified)
+  fabricate task progress                                 NOT DONE (no progress invented)
+  require a parallel state store                          NOT DONE (no new store)
+  modify permanent system prompts                         NOT DONE (system prompt untouched)
+  reintroduce the entire original transcript              NOT DONE (787 bytes, not 1.2 MB)
+
+--------------------------------------------------------------------------------
+DURABLE-AUTHORITY RECONNAISSANCE (existing sources inspected)
+--------------------------------------------------------------------------------
+candidate                            authoritative durable current safe bounded available compatible  verdict
+------------------------------------ --------------- ------- ------- ---- ------- ---------- --------- --------------------------------
+canonical first user turn (idx 0)     YES            YES     YES    YES  YES    YES       YES        VIABLE PRIMARY SOURCE
+canonical runtime reminder (idx 27)   YES(runtime)   YES     YES    YES  YES    YES       YES        VIABLE for the completion obligation
+user-run classifier (isTurnStart /    YES(n/a)       n/a     YES    YES  YES    YES       YES        VIABLE AUTHORITY SEPARATOR
+  getUserRunSpan)
+session manifest `prompt` field       PARTIAL        NO*    n/a    n/a   NO     NO*       NO         only the first prompt; not durable across
+                                                                                                  compaction; not available at the
+                                                                                                  compaction seam
+session manifest (other fields)       NO             NO     n/a    n/a   YES    YES       NO         status/provider/model/cwd only
+active task configuration              YES            n/a     n/a    n/a   NO     NO         NO         not persisted at the compaction seam
+existing system prompt                 NO             n/a     n/a    n/a   YES    YES       NO         contains no task contract (measured)
+previous compaction summary            NO             YES     PARTIAL YES  YES    YES       YES        carries the objective SEMANTICALLY but
+                                                                                                 NOT the completion obligation; and it is
+                                                                                                 the thing that propagated the loss
+compaction sidecar `messages`         NO             YES     PARTIAL n/a   YES    YES       NO         holds the lossy summary
+canonical transcript (whole)          NO             YES     YES    YES  NO     YES       YES        too large; used only via the classifier
+
+  * `session manifest.prompt` is written once at session start and is not a
+    compaction-scoped authority source; it also cannot express amendments.
+    The canonical transcript remains the authoritative durable source.
+
+  KEY DESIGN QUESTION ANSWERED:
+  "Can we reconstruct the active task contract from existing canonical history
+   at compaction time without introducing a new source of truth?"
+  >>> YES. The canonical transcript is durable, the authority classifier
+      already exists in production, and the reconstruction is a pure
+      transformation over existing data. No new source of truth is needed.

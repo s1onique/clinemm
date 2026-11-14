@@ -1,0 +1,159 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-RECON01 — RED REPRODUCTION
+================================================================================
+
+HARNESS (DISPOSABLE — removed from the repository after evidence capture)
+-------------------------------------------------------------------------
+sdk/packages/core/src/session/models/zz-act-contract-recon-red.test.ts
+  Exercises the REAL production projector
+  `projectSessionCompactionState` (sdk/packages/core/src/session/models/session-compaction.ts:168)
+  against the REAL persisted sidecar and the REAL canonical transcript of
+  session 1794617111057_i279p. No stubbing, no fabricated session.
+
+RUN COMMAND
+-----------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/session/models/zz-act-contract-recon-red.test.ts
+
+OVERALL RESULT
+--------------
+Test Files  1 failed | 1 passed
+Tests       1 failed | 4 passed
+EXIT CODE   1
+The single failure is EXACTLY the RED-3 desired-conservation assertion.
+RED-1 (source integrity) and RED-2 (information loss) both PASS, which is the
+required precondition: the loss is reproduced at the real projector boundary,
+not asserted from a substitute fixture.
+
+VERDICT: RED REPRODUCED (NOT HALT_RED_NOT_REPRODUCED)
+
+--------------------------------------------------------------------------------
+RED-1 — SOURCE INTEGRITY                                              [PASS]
+--------------------------------------------------------------------------------
+Production boundary exercised:
+  parseSessionCompactionState (session-compaction.ts:200)
+  projectSessionCompactionState (session-compaction.ts:168)
+
+Executed assertions (all PASS):
+  sidecar.conversation_id        === "1794617111057_i279p"
+  sidecar.source_message_count   === 163
+  sidecar.source_prefix_hash     === "sha256:17bfe0d8c106bc588231570d2c6fb4e7f9af0e772592363dd54bb66c5ee02c90"
+  sidecar.source_last_message_key=== "id:msg_dPCWFjbg"
+  canonicalMessages.length        === 207
+  canonicalMessages[162].id       === "msg_dPCWFjbg"   (boundary identity resolves)
+  sidecar.messages.length         === 4
+  projectSessionCompactionState(...) !== undefined
+  projected.length                === 48   (4 sidecar messages + 44 canonical tail)
+  re-projection byte-identical (deterministic)
+
+Result: CAPTURE_SUFFICIENT — the real conversation id, source count, source
+prefix hash, source boundary, last-message identity and a successful projection
+were all verified. No fabricated session was substituted.
+
+--------------------------------------------------------------------------------
+RED-2 — INFORMATION-LOSS REPRODUCTION                               [PASS]
+--------------------------------------------------------------------------------
+The eight required sub-assertions were evaluated SEPARATELY. Each is an
+independent assertion over the real projected continuation.
+
+  #  assertion                                                             result
+  -  --------------------------------------------------------------------- --------
+  1  original objective existed in the source prefix                       PASS
+  2  applicable completion obligation existed in the source prefix          PASS
+  3  original instruction carriers were removed by the cut                 PASS
+  4  summary did not preserve those specific obligations                   PASS
+  5  preserved tail did not preserve them                                  PASS
+  6  effective system prompt did not independently supply them              PASS
+  7  final provider-visible request did not contain an equivalent           PASS
+     authoritative instruction
+  8  completion tool remained available                                     PASS
+
+Detail:
+  (1)(2) prefix = canonical[0..162]; carries(OBJECTIVE)=true,
+       carries(COMPLETION)=true.
+  (3) objective carriers = [0]; completion carriers = [1, 27]; every carrier
+       index < cut(163). The preserved tail carries NEITHER marker.
+  (4) sidecar.messages[0].metadata.summary contains neither the objective
+       question nor the completion-obligation sentence. The summary preserves
+       the objective SEMANTICALLY ("Investigate what the Keycloak-based project
+       does and explain its purpose, major subsystems, production behavior,
+       deployment architecture, and local development workflow.") and preserves
+       the read-only constraint ("No files modified.") but contains NO
+       completion obligation in any form.
+  (5) projected[1..47] (the canonical tail) carries neither marker.
+  (6) transcript.system_prompt (4297 bytes) contains neither marker and does
+       NOT contain "Do not modify any files". The sidecar carries no
+       system_prompt at all (null).
+  (7) The captured post-compaction provider request
+       cap_run_UyTw6PKK_47_ddab8816c434ffb1.ai_sdk_prompt.1.provider-request.json
+       has exactly 3 messages: [user: "Context summary:...", assistant:
+       tool-call x2, tool: tool-result x2]. The string "not complete until" is
+       ABSENT. The only occurrence of "submit_and_exit" is as a TOOL SCHEMA
+       NAME in the tools array.
+  (8) tools = [skills, read_files, search_codebase, fetch_web_content, editor,
+       submit_and_exit, run_commands, command_status, cancel_command].
+       submit_and_exit IS advertised.
+
+  KEYWORD-IS-NOT-SUFFICIENT NOTE: assertion (4) was evaluated on SEMANTIC
+  preservation as well as literal duplication. The summary DID preserve the
+  objective's meaning; that is why the RED reports the objective as
+  "semantically preserved in the summary but absent as an authoritative
+  instruction in the projected continuation", and separately reports the
+  COMPLETION OBLIGATION as absent in every form (literal AND semantic).
+
+  TOOL-SCHEMA NOTE: assertion (8) passing does NOT weaken (7). The mere
+  presence of submit_and_exit in the tool schema is not evidence that the
+  instruction to finish the task survived; it is evidence only that the TOOL
+  remained callable.
+
+--------------------------------------------------------------------------------
+RED-3 — DESIRED CONSERVATION PROPERTY                              [FAILS = RED]
+--------------------------------------------------------------------------------
+Production boundary exercised: the same real projected continuation.
+
+Assertion: the active task contract MUST remain available to the continuing
+agent, i.e. the 48-message provider-visible projection must carry:
+  - the active user objective
+  - the active completion obligation
+  - the read-only constraint
+
+Executed result (printed by the harness):
+  [RED3] cut=163 original=207 projected=48
+         failures=["active objective not provider-visible",
+                    "active completion obligation not provider-visible",
+                    "read-only constraint not provider-visible"]
+
+AssertionError: expected [ …(3) ] to deeply equal []
+- Expected: []
++ Received: [
++   "active objective not provider-visible",
++   "active completion obligation not provider-visible",
++   "read-only constraint not provider-visible",
++ ]
+
+ORIGINAL / PROJECTED MESSAGE COUNTS
+  original canonical   207
+  source prefix        163   (compacted away)
+  preserved tail        44
+  sidecar messages       4
+  projected continuation 48   (4 + 44)
+
+TOOL-USE / RESULT PAIRING (measured on the 48-message projection)
+  orphaned tool_result blocks      0
+  verdict                          tool pairing INTACT in the baseline
+
+EXIT CODE: 1
+VERDICT:   RED REPRODUCED at the real projector / provider-preparation boundary.
+
+--------------------------------------------------------------------------------
+EVIDENCE CLASSIFICATION (mandatory distinction preserved)
+--------------------------------------------------------------------------------
+PROVEN:    A required instruction (the terminal-completion obligation) and the
+           authoritative user task text disappeared from the captured
+           provider-visible continuation.
+
+NOT PROVEN: That this disappearance caused Flint's subsequent refusal or
+           failure to finish. The run was USER-ABORTED with no terminal
+           completion; no behavioural discriminator was executed (none is
+           authorized by this ACT). The offline probe establishes message
+           preservation, instruction provenance, provider-request structure and
+           budget impact ONLY.

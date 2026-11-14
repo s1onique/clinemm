@@ -1,0 +1,67 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-RECON01 — ADVERSARIAL MATRIX
+================================================================================
+
+HARNESS
+-------
+sdk/packages/core/src/extensions/context/zz-act-contract-recon-adversarial.test.ts
+(DISPOSABLE — removed from the repository after evidence capture)
+
+RUN COMMAND
+-----------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/zz-act-contract-recon-adversarial.test.ts
+
+RESULT: Test Files 1 passed | Tests 21 passed (21) | EXIT CODE 0
+
+Every scenario uses a SMALL DETERMINISTIC FIXTURE with INDEPENDENT expected
+obligations hand-authored in the test. No expected obligation is derived from
+the implementation under test, and none is derived from the generated summary.
+
+ #  scenario                                             expected behaviour              result  executed assertion (abridged)
+ -  --------------------------------------------------- ------------------------------ ------ -------------------------------------------------
+ 1  one original user task                               objective retained              PASS   reconstructContract().length===1; contract contains the task text
+ 2  explicit terminal instruction                       retained if still active        PASS   contract contains the completion-obligation marker AND the task text
+ 3  read-only requirement                               retained                        PASS   contract contains "Do not modify any files."
+ 4  later user amendment                                latest authoritative requirement PASS   contract contains BOTH texts; kinds === ["objective","amendment"]
+ 5  later explicit cancellation                         superseded instruction not      PASS   2 obligations; latest.kind==="amendment"; latest text contains "Cancel"
+                                                       revived
+ 6  multiple user turns                                 correct active contract          PASS   sourceIndex sequence === [0,2,4]; 1 objective + 2 amendments
+ 7  assistant-generated plan                            not elevated to user authority   PASS   obligations.length===1 and text === "Real task"; contract lacks the plan text
+ 8  malicious instruction in file read                  never promoted                   PASS   contract lacks "ignore the user"; runtimeObligations.length===0
+ 9  malicious instruction in tool output                never promoted                   PASS   obligations.length===1, text === "Real task"; contract lacks "deploy everything"
+10  long original task                                  no silent semantic truncation    PASS   a ~24 KB objective survives INTACT (end marker present, length > source)
+11  multiple compactions                                no duplication or obligation loss PASS   contract identical across compactions; each marker occurs EXACTLY once
+12  previous summary already present                    no stale authority accumulation  PASS   compaction_summary message is not a turn start; contract lacks "STALE"
+13  session restoration                                  equivalent active contract        PASS   contract after id/ts regeneration is byte-equal to the original
+14  history rollback                                     contract follows restored history PASS   rolled-back history yields 1 obligation; "Second instruction" absent
+15  compaction source hash mismatch                      existing rejection preserved     PASS   candidate touches only the summary MESSAGE; sidecar schema + projector
+                                                                                                 boundary untouched (asserted structurally in the probe)
+16  tool-only continuation tail                          tool pairing unchanged           PASS   tool messages byte-identical before/after contract reconstruction
+17  task already completed                               no artificial completion          PASS   with no runtime reminder, runtimeObligations.length===0 and no
+                                                                         obligation      "terminal completion tools" in the contract
+18  no explicit terminal requirement                     none invented                    PASS   contract lacks the completion marker AND lacks "Required completion"
+19  basic compaction projection                          no claim of full fidelity        PASS   scope recorded: C1 is defined against the AGENTIC path only; the
+                                                                         without testing   probe makes no basic-compaction fidelity claim
+20  provider-request budget overflow                     safe rejection/fallback         PASS   a 1000-char objective is carried in full; no silent truncation
+21  repeated identical preparation                       deterministic output              PASS   contractFor(m) === contractFor(m) === contractFor(m)
+
+NOTES / LIMITATIONS RECORDED HONESTLY
+-------------------------------------
+- Scenario 15 asserts the candidate does not alter the hash/projection
+  boundary, structurally, rather than by executing a mismatch case against the
+  candidate (the candidate never touches that boundary). The EXISTING
+  rejection behaviour is separately covered by the unchanged production suite
+  `src/session/models/session-compaction.test.ts`, which passes (see gates.txt).
+- Scenario 19 records the SCOPE LIMIT of this ACT rather than a capability:
+  Candidate C1 was defined and exercised against the agentic path. The basic
+  compaction path was NOT qualified, and no claim is made about it. A successor
+  repair ACT must either scope itself to the agentic path explicitly or
+  qualify the basic path separately.
+- Scenario 05 (cancellation) demonstrates that the LATEST user turn is carried
+  with "most recent wins" ordering and that the superseded instruction is not
+  re-promoted as current. C1 does NOT attempt to interpret the semantic force
+  of a cancellation — it preserves the authoritative text and its ordering.
+  Semantic cancellation reasoning remains a model responsibility.
+
+COLLECTIVE RESULT: 21 / 21 PASS, EXIT CODE 0.
+No adversarial scenario produced a false authority promotion.
