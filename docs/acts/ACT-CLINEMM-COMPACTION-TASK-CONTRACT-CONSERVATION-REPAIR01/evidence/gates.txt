@@ -61,19 +61,36 @@ RESULT: Test Files 13 passed (13) | Tests 275 passed (275) | EXIT CODE 0
   => IDENTICAL to the predecessor's 275/275 baseline. No regression.
 
 --------------------------------------------------------------------------------
-GATE 4 — COMBINED FOCUSED SUITES (13 existing + 2 new)          [PASS]
+GATE 4 — COMBINED FOCUSED SUITES (13 existing + 2 task-contract files) [PASS]
 --------------------------------------------------------------------------------
-RESULT: Test Files 15 passed (15) | Tests 305 passed (305) | EXIT CODE 0
+RESULT: Test Files 15 passed (15) | Tests 307 passed (307) | EXIT CODE 0
+
+  The historical 305/306 discrepancy was caused by stale count text. The
+  correction changes the budget controls to explicit fail-closed assertions;
+  the reconciled current count is 307 = 275 existing focused tests + 30
+  task-contract tests + the LocalRuntimeHost production-ceiling regression.
 
 --------------------------------------------------------------------------------
-GATE 5 — SDK BUILDS                                               [PASS]
+GATE 5 — PRODUCTION-PATH + EXTENDED QUALIFICATION                [PASS]
+--------------------------------------------------------------------------------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  <18 focused / production-path files>
+
+RESULT: Test Files 18 passed (18) | Tests 419 passed (419) | EXIT CODE 0
+
+  Includes the LocalRuntimeHost production prepareTurn regression proving the
+  configured 96K user ceiling reaches the task-contract guard and that the
+  failure path performs zero compaction-sidecar writes.
+
+--------------------------------------------------------------------------------
+GATE 6 — SDK BUILDS                                               [PASS]
 --------------------------------------------------------------------------------
 bun --production -F '@cline/shared' build   -> exit 0
 bun --production -F '@cline/agents' build   -> exit 0
 bun --production -F '@cline/core'   build   -> exit 0
 
 --------------------------------------------------------------------------------
-GATE 6 — TYPECHECKS                                               [PASS]
+GATE 7 — TYPECHECKS                                               [PASS]
 --------------------------------------------------------------------------------
 cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit
   total diagnostics   40
@@ -86,19 +103,19 @@ cd sdk/packages/shared && bun tsc --noEmit                   -> exit 0
 cd sdk/packages/agents && bun tsc -p tsconfig.dev.json --noEmit -> exit 0
 
 --------------------------------------------------------------------------------
-GATE 7 — BIOME LINT AND FORMAT                                   [PASS]
+GATE 8 — BIOME LINT AND FORMAT                                   [PASS]
 --------------------------------------------------------------------------------
 bunx biome check <7 touched source/test files>
 RESULT: Checked 7 files. No fixes applied. | EXIT CODE 0
 
 --------------------------------------------------------------------------------
-GATE 8 — DIFF CHECK                                              [PASS]
+GATE 9 — DIFF CHECK                                              [PASS]
 --------------------------------------------------------------------------------
 git diff --check
 RESULT: no output | EXIT CODE 0
 
 --------------------------------------------------------------------------------
-GATE 9 — SOURCE / DIFF SCOPE AUDIT                               [PASS]
+GATE 10 — SOURCE / DIFF SCOPE AUDIT                               [PASS]
 --------------------------------------------------------------------------------
 Tracked production files modified (3):
   sdk/packages/shared/src/agents/index.ts
@@ -118,7 +135,7 @@ New files (3):
   No dependency updates. No lockfile changes.
 
 --------------------------------------------------------------------------------
-GATE 10 — WORKTREE / STASH PROTECTION                             [PASS]
+GATE 11 — WORKTREE / STASH PROTECTION                             [PASS]
 --------------------------------------------------------------------------------
 git stash list | wc -l  -> 1
 stash@{0} PRESERVED VERBATIM. Not popped, not applied, not dropped, not rewritten.
@@ -128,21 +145,21 @@ stash@{0} PRESERVED VERBATIM. Not popped, not applied, not dropped, not rewritte
    stash@{0} was never touched.)
 
 --------------------------------------------------------------------------------
-GATE 11 — NO LIVE PROVIDER REQUESTS                                [PASS]
+GATE 12 — NO LIVE PROVIDER REQUESTS                                [PASS]
 --------------------------------------------------------------------------------
 No live model request was issued by this ACT. No tool executor was invoked.
 The historical witness reads operator-local files only; the hermetic suite
 uses in-memory fixtures. No network I/O, no credential use.
 
 --------------------------------------------------------------------------------
-GATE 12 — CANONICAL SESSIONS NOT MODIFIED                         [PASS]
+GATE 13 — CANONICAL SESSIONS NOT MODIFIED                         [PASS]
 --------------------------------------------------------------------------------
 The canonical transcript and the sidecar under ~/Downloads were opened
 READ-ONLY. No persisted session was created or modified. The sidecar schema
 key set is asserted unchanged (6 keys without a conversation id, 7 with one).
 
 --------------------------------------------------------------------------------
-GATE 13 — PRE-EXISTING FAILURES ARE NOT ACT-OWNED                 [PASS]
+GATE 14 — PRE-EXISTING FAILURES ARE NOT ACT-OWNED                 [PASS]
 --------------------------------------------------------------------------------
 The sdk/packages/agents and sdk/packages/shared suites fail at the ENTRY
 HEAD with the same failures (the documented zod CJS/ESM pre-bundling issue:
@@ -151,7 +168,7 @@ reverting the ACT's files and re-running the same commands: identical
 failures. The ACT-owned suites are all GREEN.
 
 --------------------------------------------------------------------------------
-GATE 14 -- FULL sdk/packages/core SUITE: FAILURES ARE PRE-EXISTING  [PASS]
+GATE 15 -- FULL sdk/packages/core SUITE: FAILURES ARE PRE-EXISTING  [PASS]
 --------------------------------------------------------------------------------
 COMMAND (repaired source):
   cd sdk/packages/core && bunx vitest run --config vitest.config.ts
@@ -187,7 +204,7 @@ COMPARISON OF THE FAILING FILE SETS (paths only, i.e. lines beginning "src/"):
   shell path, sandbox backends, session import, agenda tasks).
 
 --------------------------------------------------------------------------------
-GATE 15 -- EXACT-HEAD BUILD AND PACKAGE                              [PASS]
+GATE 16 -- EXACT-HEAD BUILD AND PACKAGE                              [PASS]
 --------------------------------------------------------------------------------
   bun --production -F '@cline/shared' build   -> exit 0
   bun --production -F '@cline/agents' build   -> exit 0
@@ -195,11 +212,11 @@ GATE 15 -- EXACT-HEAD BUILD AND PACKAGE                              [PASS]
   cd apps/vscode && bun run build:webview      -> exit 0
   cd apps/vscode && bun esbuild.mjs --production -> exit 0
   cd apps/vscode && ./node_modules/.bin/vsce package ... -> exit 0
-  ARTIFACT  dist/clinemm-4.1.16-fdc25745e.vsix
-  BYTES     65318158
-  SHA256    c69f26236a0f1a9a8d0de8a0b2f3ef6df4d46578ba9b96c55d88ac6051e2b46e
-  SHIPPED-BUNDLE VERIFICATION: PASS (the packaged extension.js contains the
-  contract marker, the section headings and the shared reminder template)
+  ARTIFACT  dist/clinemm-4.1.16-b03d935cf.vsix
+  BYTES     65318140
+  SHA256    0444a80bd31961e89c0c672924e75c64b10b3094088580fc2653ce8f453ea013
+  SHIPPED-BUNDLE VERIFICATION: PASS (the packaged extension.js contains
+  TaskContractBudgetError, its fail-closed message and userContextCeiling)
   INSTALLATION: NOT PERFORMED (the operator's instance was not replaced)
   Detail: evidence/package.txt
 
@@ -209,20 +226,21 @@ SUMMARY
 GATE                                                  RESULT
 -----------------------------------------------------------
 1  RED reproduction (entry source)               FAIL (= the RED)  6/9
-2  GREEN (hermetic + historical)                 PASS              31/31
+2  GREEN (hermetic + historical)                 PASS              30/30
 3  Existing focused suites                      PASS            275/275
-4  Combined focused suites                      PASS            305/305
-5  SDK builds                                   PASS              3/3
-6  Typechecks                                   PASS   0 ACT-owned diagnostics
-7  Biome lint + format                          PASS              7/7 files
-8  git diff --check                             PASS
-9  Source / diff scope audit                    PASS
-10 Worktree / stash protection                  PASS        stash intact
-11 No live provider requests                    PASS
-12 Canonical sessions not modified              PASS
-13 Pre-existing failures not ACT-owned           PASS
-14 Full core suite: failures pre-existing        PASS    identical file set
-15 Exact-head build + package                    PASS    see package.txt
+4  Combined focused suites                      PASS            307/307
+5  Production-path + extended qualification      PASS            419/419
+6  SDK builds                                   PASS              3/3
+7  Typechecks                                   PASS   0 ACT-owned diagnostics
+8  Biome lint + format                          PASS              7/7 files
+9  git diff --check                             PASS
+10 Source / diff scope audit                    PASS
+11 Worktree / stash protection                  PASS        stash intact
+12 No live provider requests                    PASS
+13 Canonical sessions not modified              PASS
+14 Pre-existing failures not ACT-owned           PASS
+15 Full core suite: failures pre-existing        PASS    identical file set
+16 Exact-head build + package                    PASS    see package.txt
 
 ACT-OWNED DIAGNOSTICS: 0.
 DEFAULT-SUITE INTENTIONAL RED: none left behind (the RED harness is now

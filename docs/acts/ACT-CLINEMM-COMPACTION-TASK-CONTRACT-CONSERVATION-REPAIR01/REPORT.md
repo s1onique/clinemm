@@ -36,8 +36,8 @@ pass. Live installed behaviour is **not** claimed.
 | Branch | `main` |
 | Entry HEAD | `e854053b64c46e94a2d910775168406a56ea35f2` |
 | Entry tree | `b67fc243dfb530b12bbe04d4fda0e201e33717c3` |
-| Source HEAD (the code commit that was built and packaged) | `fdc25745e1713647b3e81f1398ac07567e780934` |
-| Source tree | `d7eb149eeec8e3d984cdade2e9af7bf668a3dbfd` |
+| Source HEAD (the code commit that was built and packaged) | `b03d935cfd2834953c1ab0daa9067c26b753f141` |
+| Source tree | `5eb2c8aab5275adc32af3754d92e43080fba73ba` |
 | Final HEAD | the evidence commit that follows the source HEAD (see `evidence/identity.txt`) |
 | Worktree at entry | CLEAN apart from the 9 **untracked** predecessor recon documentation files |
 | `stash@{0}` | **PRESERVED VERBATIM**; stash count 1 |
@@ -181,12 +181,11 @@ wrapper:
 | No infinite compaction retry | PASS |
 | No automatic relaxation of the configured ceiling | PASS |
 
-`HALT_CONTRACT_BUDGET` was **not** triggered: the existing explicit
-failure/retry boundary is sufficient. When the contracted request would exceed
-the effective limit the carry-forward is **not** applied (the instructions are
-either carried whole or not at all), and the runtime's existing single-shot
-overflow recovery — ending in a terminal `ContextWindowOverflowError` —
-protects the limit.
+`HALT_CONTRACT_BUDGET` is **closed by an explicit local failure**. When the
+complete contracted request would exceed the effective limit, preparation
+throws `TaskContractBudgetError` before sidecar persistence or provider
+dispatch. The runtime never continues with a valid-looking but
+un-contracted summary.
 
 ### 1.9 Persistence and tool-pair conservation
 
@@ -212,7 +211,7 @@ protects the limit.
 | `sdk/packages/shared` typecheck | exit 0 |
 | `sdk/packages/agents` typecheck | exit 0 |
 | Existing focused suites | **275/275** — identical to the predecessor's baseline |
-| Combined focused suites (13 existing + 2 new) | **306/306** |
+| Combined focused suites (13 existing + 2 task-contract files) | **307/307** |
 | Biome lint + format (7 touched files) | exit 0, no fixes applied |
 | `git diff --check` | exit 0 |
 | SDK builds (`@cline/shared`, `@cline/agents`, `@cline/core`) | exit 0 |
@@ -226,14 +225,14 @@ failures. The ACT-owned suites are all GREEN.
 
 | Item | Value |
 |---|---|
-| Source HEAD | `fdc25745e1713647b3e81f1398ac07567e780934` |
-| Source tree | `d7eb149eeec8e3d984cdade2e9af7bf668a3dbfd` |
+| Source HEAD | `b03d935cfd2834953c1ab0daa9067c26b753f141` |
+| Source tree | `5eb2c8aab5275adc32af3754d92e43080fba73ba` |
 | Extension version | `4.1.16-5a1c485cb` |
-| Artifact | `dist/clinemm-4.1.16-fdc25745e.vsix` |
-| Bytes | 65,318,158 |
-| SHA-256 | `c69f26236a0f1a9a8d0de8a0b2f3ef6df4d46578ba9b96c55d88ac6051e2b46e` |
+| Artifact | `dist/clinemm-4.1.16-b03d935cf.vsix` |
+| Bytes | 65,318,140 |
+| SHA-256 | `0444a80bd31961e89c0c672924e75c64b10b3094088580fc2653ce8f453ea013` |
 | Packaged files | 681 |
-| Shipped-bundle verification | PASS — the packaged `extension/dist/extension.js` contains the contract marker, the section headings and the shared completion-reminder template |
+| Shipped-bundle verification | PASS — the packaged `extension/dist/extension.js` contains `TaskContractBudgetError`, its fail-closed message and the `userContextCeiling` plumbing |
 
 The exact committed source was built and packaged with the existing repository
 scripts (`build:webview`, `esbuild.mjs --production`, the lockfile-pinned
@@ -261,10 +260,10 @@ See `evidence/live.txt`.
 3. **The basic-compaction path is not separately qualified.** The carry-forward
    is applied at the state-aware wrapper, which serves both strategies, but the
    permanent regression drives the Agentic path explicitly.
-4. **An oversized contract is not carried.** When the contract cannot fit
-   within the effective limit, the existing explicit overflow boundary takes
-   over and the contract is not carried in that turn. This is the honest
-   bounded behaviour; it is not silent truncation.
+4. **An oversized contract fails closed.** When the complete contract cannot
+   fit within the effective limit, preparation throws
+   `TaskContractBudgetError` before sidecar persistence or provider dispatch.
+   The turn does not continue with an un-contracted summary.
 5. **The completion-tool name set is explicit.** `submit_and_exit` is the
    recognised terminal completion tool. A future terminal tool must be added to
    the recognised set; until then its reminder is not promoted (fail-closed).

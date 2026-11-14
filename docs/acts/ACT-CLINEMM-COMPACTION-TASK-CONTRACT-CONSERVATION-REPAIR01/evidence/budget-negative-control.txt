@@ -49,32 +49,25 @@ OVERSIZED CONTRACT — REQUIRED BEHAVIOURS
   the EXISTING estimator (estimateRequestInputTokens) and compares it against
   the EXISTING effective limit (resolveEffectiveMaxInputTokens + the user
   operating ceiling, which may only REDUCE the limit). When the contracted
-  request would exceed that limit, the carry-forward is NOT applied:
+  request would exceed that limit, it throws TaskContractBudgetError:
 
-    - the mandatory instructions are never truncated — they are either
-      carried whole or not carried at all;
+    - the mandatory instructions are never truncated;
     - no oversized request is produced by the transformation;
     - the sidecar is not persisted with a partial contract;
     - the configured ceiling is never relaxed (applyUserContextCeiling can
       only lower the operating capacity);
-    - the runtime's EXISTING explicit failure boundary then applies: the
-      provider rejects the request, the runtime performs its single-shot
-      overflow recovery, and if it still overflows it raises
-      ContextWindowOverflowError (a terminal, explicit error — NOT a silent
-      dispatch and NOT an infinite retry loop).
+    - preparation fails before provider dispatch, so an un-contracted
+      summary can never be presented as a valid continuation.
 
-  The hermetic control "does not dispatch an oversized provider request when the
-  contract exceeds the effective limit" asserts that the returned request's
-  estimate is <= the effective limit and that the oversized objective is absent
-  (i.e. NOT presented as a partially applied contract).
+  The hermetic controls assert:
+    - oversized contract -> TaskContractBudgetError;
+    - user ceiling below model capacity -> TaskContractBudgetError and zero
+      sidecar writes;
+    - pre/post-compaction system prompt differences -> the final prompt is
+      used for the budget decision;
+    - the LocalRuntimeHost production prepareTurn receives the configured
+      96K user ceiling and writes no compaction sidecar when the guard fails.
 
-  The control "never relaxes the configured ceiling" asserts that with a ceiling
-  of 10 tokens the returned request is no larger than the UN-contracted
-  baseline and carries no runtime obligation — the ceiling is respected, not
-  expanded.
-
-  HALT_CONTRACT_BUDGET: NOT TRIGGERED.
-  The existing explicit failure/retry boundary is sufficient to protect BOTH the
-  request limit AND task-contract preservation without new machinery: the
-  contract is never partially applied, and an oversized request is never
-  silently dispatched.
+  HALT_CONTRACT_BUDGET: CLOSED BY AN EXPLICIT LOCAL FAILURE.
+  The correction no longer relies on provider overflow recovery to protect the
+  contract: an oversized contract fails before persistence or dispatch.

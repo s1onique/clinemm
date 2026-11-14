@@ -1,15 +1,15 @@
 ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — EXACT HEAD PACKAGE
 ====================================================================
 
-SOURCE_HEAD=fdc25745e1713647b3e81f1398ac07567e780934
-SOURCE_TREE=d7eb149eeec8e3d984cdade2e9af7bf668a3dbfd
+SOURCE_HEAD=b03d935cfd2834953c1ab0daa9067c26b753f141
+SOURCE_TREE=5eb2c8aab5275adc32af3754d92e43080fba73ba
 SOURCE_VERSION=4.1.16-5a1c485cb
-ARTIFACT_FILENAME=clinemm-4.1.16-fdc25745e.vsix
-ARTIFACT_PATH=dist/clinemm-4.1.16-fdc25745e.vsix
-BYTES=65318158
-SHA256=c69f26236a0f1a9a8d0de8a0b2f3ef6df4d46578ba9b96c55d88ac6051e2b46e
+ARTIFACT_FILENAME=clinemm-4.1.16-b03d935cf.vsix
+ARTIFACT_PATH=dist/clinemm-4.1.16-b03d935cf.vsix
+BYTES=65318140
+SHA256=0444a80bd31961e89c0c672924e75c64b10b3094088580fc2653ce8f453ea013
 VSCE_VERSION=lockfile-pinned apps/vscode/node_modules/.bin/vsce
-VSCE_COMMAND=./node_modules/.bin/vsce package --allow-package-all-secrets --no-dependencies --out ../../dist/clinemm-4.1.16-fdc25745e.vsix
+VSCE_COMMAND=./node_modules/.bin/vsce package --allow-package-all-secrets --no-dependencies --out ../../dist/clinemm-4.1.16-b03d935cf.vsix
 VSCE_EXIT=0
 PACKAGE_FILES=681
 
@@ -29,15 +29,12 @@ WORKTREE AT PACKAGE TIME
 
 PAYLOAD VERIFICATION (the packaged extension/dist/extension.js)
 -------------------------------------------------------
-  extension/dist/extension.js  28,026,985 bytes
-  'cline-task-contract:begin'                              occurrences: 1
-  'Active task contract (authoritative)'                   occurrences: 1
-  'Runtime completion obligation (runtime authority)'      occurrences: 1
-  'This run is not complete until you call one of these
-    terminal completion tools'                               occurrences: 2
-    (one = the producer template, one = the recogniser template)
-  => The carry-forward transformation and the shared completion-
-     reminder contract ARE present in the SHIPPED bundle.
+  extension/dist/extension.js  28,027,440 bytes
+  'TaskContractBudgetError'                                present
+  'Active task contract exceeds the effective request budget' present
+  'userContextCeiling'                                     present
+  => The fail-closed budget error, its message, and the effective
+     user-ceiling plumbing ARE present in the SHIPPED bundle.
 
 INSTALLATION
 ------------

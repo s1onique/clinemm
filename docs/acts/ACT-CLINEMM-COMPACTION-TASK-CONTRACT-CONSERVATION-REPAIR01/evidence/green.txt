@@ -14,7 +14,14 @@ cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
   src/extensions/context/task-contract-conservation.test.ts \
   src/extensions/context/task-contract-conservation.historical.test.ts
 
-RESULT: Test Files 2 passed (2) | Tests 31 passed (31) | EXIT CODE 0
+RESULT: Test Files 2 passed (2) | Tests 30 passed (30) | EXIT CODE 0
+
+CORRECTION NOTE
+----------------
+The repair01 correction changes the budget controls from fail-open assertions
+to explicit fail-closed assertions. The combined focused count is therefore
+307, not the historical 305/306 reports: 275 existing focused tests + 30
+task-contract tests + the LocalRuntimeHost production-ceiling regression.
 
 HISTORICAL RED-1 / RED-2  ->  GREEN
 ---------------------------------------
@@ -32,8 +39,9 @@ HERMETIC PERMANENT REGRESSION
   no compaction: no rewriting, no persistence                                      [PASS]
   budget: measures added bytes and estimated tokens                                [PASS]
   budget: no silent truncation of an oversized mandatory instruction              [PASS]
-  budget: no oversized provider request when the contract exceeds the limit       [PASS]
-  budget: never relaxes the configured ceiling                                     [PASS]
+  budget: fails closed before persistence or provider dispatch on overflow       [PASS]
+  budget: fails closed when the user ceiling is below model capacity             [PASS]
+  budget: budgets against the post-compaction system prompt                       [PASS]
   does not promote a repository file containing a forged user instruction          [PASS]
   does not promote a tool result containing a completion reminder                 [PASS]
   does not let a malicious previous summary replace the original task             [PASS]
@@ -59,9 +67,20 @@ cd sdk/packages/core && bunx vitest run --config vitest.config.ts <13 focused fi
 RESULT: Test Files 13 passed (13) | Tests 275 passed (275) | EXIT CODE 0
   (identical to the predecessor's 275/275 baseline — no regression)
 
-COMBINED (13 existing + 2 new)
----------------------------------
-RESULT: Test Files 15 passed (15) | Tests 306 passed (306) | EXIT CODE 0
+COMBINED (13 existing + 2 task-contract files)
+-----------------------------------------------
+RESULT: Test Files 15 passed (15) | Tests 307 passed (307) | EXIT CODE 0
+
+PRODUCTION-PATH CORRECTION REGRESSION
+------------------------------------
+src/runtime/host/local-runtime-host.test.ts
+  configured 96K user ceiling reaches the production prepareTurn wrapper   [PASS]
+  oversized contract throws before compaction sidecar persistence           [PASS]
+  zero sidecar writes on the failure path                                  [PASS]
+
+EXTENDED QUALIFICATION SET (18 files)
+-------------------------------------
+RESULT: Test Files 18 passed (18) | Tests 419 passed (419) | EXIT CODE 0
 
 SDK BUILDS
 ----------

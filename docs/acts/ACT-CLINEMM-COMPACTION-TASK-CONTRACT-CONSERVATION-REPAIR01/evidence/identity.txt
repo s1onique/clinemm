@@ -10,9 +10,9 @@ branch          main
 entry HEAD      e854053b64c46e94a2d910775168406a56ea35f2
                 docs(task-header): reconcile report with exact-head package and P1 file set
 entry tree      b67fc243dfb530b12bbe04d4fda0e201e33717c3
-source HEAD     fdc25745e1713647b3e81f1398ac07567e780934
-                fix(compaction): conserve the active task contract across Agentic compaction
-source tree     d7eb149eeec8e3d984cdade2e9af7bf668a3dbfd
+source HEAD     b03d935cfd2834953c1ab0daa9067c26b753f141
+                 fix(compaction): fail closed on task contract budget overflow
+source tree     5eb2c8aab5275adc32af3754d92e43080fba73ba
                 (the source HEAD that was built and packaged; the artifact
                  identity below is bound to THIS tree)
 final HEAD      the evidence commit that follows the source HEAD (this
