@@ -32742,3 +32742,129 @@ a genuinely running turn is still blocked.
 - The deferred-completion banner row is a historical row; it was
   determined unrelated to the compaction rejection and deliberately not
   changed.
+
+# ACT-CLINEMM-POSTMERGE-VSCODE-REACHABILITY-SECURITY-QUAL01 — PASS_WITH_NONBLOCKING_RESIDUE — 2026-11-15
+
+**Status:** Post-merge reachability + security qualification of the upstream merge in ClineMM's
+ACTUAL VS Code extension. This is a **qualification**, not another upstream integration and not a
+general review. **No production change.** No VSIX was produced, installed, or replaced. No push.
+
+```text
+ACT_ID: ACT-CLINEMM-POSTMERGE-VSCODE-REACHABILITY-SECURITY-QUAL01
+TYPE: post-merge reachability + security qualification
+EPIC: EPIC-CLINEMM-UPSTREAM-INTEGRATION
+WORKSTREAM: post-merge qualification
+VERDICT: PASS_WITH_NONBLOCKING_RESIDUE
+PREDECESSOR_VERDICT: PASS_NO_CHANGE_NEEDED (U03) / installed-extension dogfood RED 14/18 -> GREEN 18/18 (U04)
+ENTRY_HEAD: 08d8969e161f94e76c22165a0be1e1e36892d975
+FINAL_HEAD: 08d8969e161f94e76c22165a0be1e1e36892d975
+SOURCE_TREE: c0730c252b50cafd2d33393be021f8e668fcb9e6
+UPSTREAM_MERGE: 167f5ca8d639cc83c21ddf8e0d96369cfc319d0a (parents 265044bf37429cb3c48918eb7473e46cc3933964 + a6507a62a147db4a35e27f4294589742ccac5060)
+PRE_INTEGRATION_FORK: 265044bf37429cb3c48918eb7473e46cc3933964
+PROMOTED_ANCHOR: 251779fdf80a9782e00ddf12996813433c7a7bbb
+BRANCH: main
+HEAD_ADVANCE_SINCE_ANCHOR: 86 commits (fork-owned: compaction/budget, task-header, Flint, Seatbelt, BCB)
+PUSHED: NO   INSTALLED: NO   NEW_DEPENDENCIES: 0   PRODUCTION_CHANGE: NONE
+AUDIT: bun audit --prod --json EXECUTED (Bun 1.3.13) -> 42 advisory-bearing packages; 41 UNCHANGED by
+       the merge; 1 changed (@ai-sdk/provider-utils 5.0.27->5.0.72) and OUTSIDE its advisory range in
+       BOTH versions. NEW VULNERABLE VERSIONS INTRODUCED BY THE MERGE: 0
+PROBES: 7 (editor file authority, editor approval seam, tool-approval + session ownership,
+       upstream origin-bound MCP fetch, MCP stdio child containment, VS Code unit sweep)
+P0: 0   P1: 0   P2: 15
+EVIDENCE: .factory/evidence/ACT-CLINEMM-POSTMERGE-VSCODE-REACHABILITY-SECURITY-QUAL01/
+          00-identity.md, 01-production-reachability.tsv, 02-authority-delta.md,
+          03-dependencies-security.md, 04-adversarial-probes.md, 05-risk-register.md,
+          06-verdict.md, SHA256SUMS.txt
+```
+
+## Identity
+
+- Branch `main`; HEAD `08d8969e161f94e76c22165a0be1e1e36892d975`; tree
+  `c0730c252b50cafd2d33393be021f8e668fcb9e6`.
+- The upstream merge `167f5ca8d63…` and **both** of its parents remain reachable; no history was
+  rewritten. The merge is an ancestor of HEAD and is **not** among the 86 post-anchor commits.
+- Working tree clean at preflight; the protected stash (`stash@{0}`) and all four pre-existing
+  git worktrees were left untouched. Two disposable worktrees used for merge-commit baseline
+  comparisons were removed with `git worktree remove --force`.
+- Installed-extension identity is `LIVE_UNOBSERVABLE` (no VS Code installation on this host). The
+  repo-local build artifacts were recorded separately as **build** identity:
+  `dist/clinemm-4.1.16-281b379d0.vsix` SHA256
+  `2a7bcd8ed02c85490a1515e93233085f2330b44bc77b41b703cd9932becfd518`; `apps/vscode/dist/extension.js`
+  SHA256 `5fbef53e8063508d099d3ecd445c89cb731ffeffc7404ee7334f3e40a653a078`.
+  `build-provenance.json` is absent -> `UNOBSERVED`.
+
+## What the upstream merge can actually execute in the VS Code extension
+
+The merge touched 1,182 paths under `apps/vscode/` + `sdk/`. After tracing the actual
+message/authority flow, the reachable set is:
+
+- **REACHABLE_ACTIVE** — session lifecycle/start/control (**strengthened** by upstream), the
+  tool-approval gate (**unchanged**), the editor effective-destination authority
+  (**unchanged**), the MCP hub client (stdio spawn **unchanged**; `readResource` added but
+  MCP-server-scoped and not a model tool), remote-config/telemetry egress (existing),
+  ClineRules/skills/hook readers (existing).
+- **REACHABLE_GATED** — Cline Cloud sessions (feature flag **and** user opt-in **and** a
+  server-side entitlement check; all tools run in a remote sandbox with no local executors), the 8
+  new cloud gRPC RPCs (UI-gated; read-only + browser URL-open + one state write), MCP OAuth on
+  remote MCP servers (user-configured), MCP Apps (**dormant** in VS Code: never enabled, no
+  renderer), the agent-plugin MCP path.
+- **CLI_DESKTOP_ONLY** — the entire Hub subtree (daemon, WebSocket server, runtime/remote host),
+  the plugin loader / plugin runtime / plugin tools, the Host Bridge token machinery, the local
+  cloud dev server, cloud-handoff, session-import, team/multi-agent, worker-sandbox.
+
+Decisive structural evidence from the **shipped bundle**:
+
+- `grep -c 'HubRuntimeHost' apps/vscode/dist/extension.js` -> **0**
+- `grep -c 'hub-websocket-server|browser-websocket' …` -> **0**
+- `grep -c 'cline-hostbridge-token' …` -> **0**
+- VSIX contains **0** `extension/node_modules/**` entries and **no** `extension/standalone/**`
+- `backendMode: "local"` at `apps/vscode/src/sdk/vscode-session-host.ts:475` is the **only**
+  `backendMode` occurrence in `apps/vscode/src` -> the `auto`/hub-discovery branch is unreachable.
+
+## Historical three-case realpath RED — explicitly acknowledged, NOT reinterpreted
+
+`editor.realpath-authority.test.ts` **predates the merge** (`git cat-file -e 265044bf…:<path>`
+-> `EXISTS`). It was re-run and reproduces the accepted baseline **exactly**: cases **C**
+(absolute outside target), **D** (existing symlink escape), **E** (nonexistent descendant of an
+outside root) are RED; controls **A/B/F/H** PASS -> `Tests 3 failed | 4 passed (7)`.
+
+The merged runtime does **not** make it newly reachable or more consequential:
+
+- the merge diff for `editor.ts` is a single error-message hunk (no path-resolution change);
+- the merge did **not** touch `editor-path-authority.ts`, `editor-auto-approval-policy.ts`, or the
+  approval composition in `sdk-interaction-coordinator.ts`;
+- the compensating control is intact and GREEN: the editor effective-destination approval matrix is
+  **10/10 PASS**, and the policy maps `OUTSIDE`/`UNAVAILABLE` -> **ASK** (never ALLOW), so the
+  executor is not invoked without a user decision.
+
+=> **Pre-existing fork defect, unchanged and still compensated. Not an upstream regression.**
+
+## Risk disposition — 0 P0, 0 P1, 15 P2
+
+- **Accept** (pre-existing, unchanged, compensated): R-01 editor absolute-path executor gap;
+  R-04 session-ownership fencing (**upstream strengthening**); R-05 gRPC trust boundary
+  (`grpc-handler.ts` unmodified; +9 RPCs / -1 RPC); R-07 MCP stdio spawn authority unchanged;
+  R-08 Hub/Kanban WebSocket (CLI-only, not reachable); R-09 plugin loader (not called);
+  R-10 Host Bridge (standalone-only, not in the VSIX); R-12 MCP observer assertion drift
+  (pre-merge fork `5705e305b`); R-13 MCP stdio EPIPE fail-fast (identical at the merge commit;
+  macOS emits no EPIPE event -> latency only, containment intact); R-14 Bun 1.4.2 pin vs. 1.3.13
+  host; R-15 staging hostnames in the bundle.
+- **Successor** (bounded, non-blocking): **R-02** close the local gate on the cloud start path
+  (`newTask.ts:73`); **R-03** add realpath containment to the file-read path; **R-06** raise
+  `@modelcontextprotocol/sdk` to >=1.32.0 and adopt `createOriginBoundMcpHeadersFetch` in the VS
+  Code `McpHub` HTTP transport; **R-11** upstream-report the merge-added `StateManager.test.ts`
+  defect (reproduces identically at the merge commit).
+
+**No production change was made or is expected from this ACT.** No finding claims live
+exploitation; every reachable-behaviour statement rests on structural analysis, a synthetic
+probe against a real production function, or an existing production test seam.
+
+## Successor
+
+Proceed to `ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01`, using the confirmed boundaries as
+input: the MCP client + OAuth seam is the one reachable upstream surface where the merge
+*partially* mitigated an advisory (origin-bound fetch in the SDK path, **not** in the VS Code
+`McpHub` path — structurally established in C4 P3b); MCP stdio spawn authority is unchanged
+(0 diff lines); the MCP stdio child containment is intact (SIGTERM->SIGKILL escalation at
+`client.ts:310-359`) with only a macOS fail-fast **latency** delta. Carry forward R-06, R-07,
+R-08 (do not audit the Hub as a VS Code surface), R-02 and R-03.
