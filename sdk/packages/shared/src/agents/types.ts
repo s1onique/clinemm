@@ -710,6 +710,21 @@ export interface AgentPrepareTurnResult {
 	 * interface is the canonical host-facing contract.
 	 */
 	currentWorkingContextEstimate?: number;
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the EFFECTIVE
+	 * request-input ceiling the host enforces for this turn.
+	 *
+	 * Forwarded verbatim so the agent runtime can enforce the SAME ceiling
+	 * against the FINAL provider request — after the `beforeModel` hooks have
+	 * had the chance to replace the messages or the tool inventory. The
+	 * runtime never resolves, relaxes, or invents a limit of its own.
+	 *
+	 * ADDITIVE-OPTIONAL, mirroring
+	 * `AgentRuntimePrepareTurnResult.maxRequestTokens` in
+	 * sdk/packages/shared/src/agent.ts. A host that publishes no ceiling
+	 * leaves the runtime-side check disabled.
+	 */
+	maxRequestTokens?: number;
 }
 
 // =============================================================================

@@ -1,24 +1,19 @@
 import type { ToolResultContent } from "@cline/shared";
+import { toPersistedToolResultContent as sharedToPersistedToolResultContent } from "@cline/shared";
 
 /**
  * Preserve the runtime tool-output serialization used by canonical session
  * persistence. This intentionally remains internal to Core because the
  * historical codec accepts a wider runtime value set than the public
  * `ToolResultContent` type describes.
+ *
+ * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the implementation now
+ * lives in `@cline/shared` so the canonical provider-visible projection
+ * (`toProviderVisibleMessages`) and the session persistence path can never
+ * diverge. This module keeps the Core-local import path working.
  */
 export function toPersistedToolResultContent(
 	output: unknown,
 ): ToolResultContent["content"] {
-	if (typeof output === "string") {
-		return output;
-	}
-	if (Array.isArray(output)) {
-		// Structured local and provider tool outputs are persisted as arrays even
-		// when their entries are not media/text blocks (for example Cline
-		// ToolOperationResult objects and Anthropic web_search_result objects).
-		return output as ToolResultContent["content"];
-	}
-	// Keep this identical to the canonical AgentMessage codec. Undefined and
-	// circular values intentionally retain that codec's existing behavior.
-	return JSON.stringify(output) as ToolResultContent["content"];
+	return sharedToPersistedToolResultContent(output);
 }

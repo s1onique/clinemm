@@ -14,8 +14,11 @@ import type {
 	ToolResultContent,
 	ToolUseContent,
 } from "@cline/shared";
-import { EMPTY_CONTENT_TEXT } from "@cline/shared";
-import { toPersistedToolResultContent } from "../../session/persisted-tool-result-content";
+import {
+	EMPTY_CONTENT_TEXT,
+	toPersistedToolResultContent,
+	toProviderVisibleMessages,
+} from "@cline/shared";
 
 export function messageToAgentMessages(
 	message: MessageWithMetadata,
@@ -146,27 +149,13 @@ export function agentMessagesToMessagesWithMetadata(
 export function agentMessagesToMessages(
 	messages: readonly AgentMessage[],
 ): Message[] {
-	const out: Message[] = [];
-	for (const message of messages) {
-		const content = message.content
-			.map(agentPartToContentBlock)
-			.filter((block): block is ContentBlock => block !== undefined);
-		const role = message.role === "tool" ? "user" : message.role;
-		const previous = out[out.length - 1];
-		if (
-			role === "user" &&
-			content.length > 0 &&
-			content.every((block) => block.type === "tool_result") &&
-			previous?.role === "user" &&
-			Array.isArray(previous.content) &&
-			previous.content.every((block) => block.type === "tool_result")
-		) {
-			previous.content.push(...content);
-			continue;
-		}
-		out.push({ role, content });
-	}
-	return out;
+	// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the canonical
+	// provider-visible projection now lives in `@cline/shared`
+	// (`toProviderVisibleMessages`) so that the request-budget authority
+	// and the provider codec measure/emit the SAME representation. A
+	// divergent copy here would reintroduce exactly the authority-mismatch
+	// defect this repair exists to fix.
+	return toProviderVisibleMessages(messages);
 }
 
 function normalizeContentBlocks(content: Message["content"]): ContentBlock[] {

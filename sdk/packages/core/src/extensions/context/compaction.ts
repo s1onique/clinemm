@@ -1,4 +1,5 @@
 import { estimateRequestInputTokens } from "@cline/shared";
+import { resolveModelBehaviorTraceBudget } from "../../runtime/observability/model-behavior-trace";
 import { resolveConnectionProviderConfig } from "../../services/llms/handler-factory";
 import {
 	captureCompactionBudgetEmergency,
@@ -20,7 +21,6 @@ import type {
 	CoreSessionConfig,
 } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
-import { resolveModelBehaviorTraceBudget } from "../../runtime/observability/model-behavior-trace";
 import { runAgenticCompaction } from "./agentic-compaction";
 import { runBasicCompaction } from "./basic-compaction";
 import {
@@ -30,9 +30,9 @@ import {
 	DEFAULT_MAX_INPUT_TOKENS,
 	DEFAULT_PRESERVE_RECENT_TOKENS,
 	DEFAULT_TARGET_RATIO,
-	normalizeUserContextCeiling,
 	findLatestSummaryIndex,
 	MAX_INPUT_UNDERESTIMATE_FACTOR,
+	normalizeUserContextCeiling,
 	resolveEffectiveMaxInputTokens,
 } from "./compaction-shared";
 import { applyTaskContractToCompactedMessages } from "./task-contract";
@@ -119,6 +119,19 @@ export interface ContextPipelinePrepareTurnResult {
 	 * upstream `compact` returned a result.
 	 */
 	currentWorkingContextEstimate?: number;
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the EFFECTIVE
+	 * request-input ceiling this turn enforces.
+	 *
+	 * Published so the agent runtime can enforce the SAME ceiling against
+	 * the FINAL provider request — the one that includes any `beforeModel`
+	 * hook mutations. The runtime captures it verbatim and never resolves,
+	 * relaxes, or invents a limit of its own.
+	 *
+	 * ADDITIVE-OPTIONAL. A host that publishes no ceiling leaves the
+	 * runtime-side check disabled.
+	 */
+	maxRequestTokens?: number;
 }
 
 export type ContextPipelinePrepareTurn = (
@@ -397,7 +410,10 @@ export function createContextCompactionPrepareTurn(
 		// can trigger compaction even on a new session's system prompt/tools.
 		// Manual compaction and provider-confirmed overflow recovery still need
 		// a working budget, so only those modes use the default.
-		if (effectiveMode === "auto" && ceilingAdjustedMaxInputTokens === undefined) {
+		if (
+			effectiveMode === "auto" &&
+			ceilingAdjustedMaxInputTokens === undefined
+		) {
 			return undefined;
 		}
 		const rawMaxInputTokens =
@@ -897,6 +913,26 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		messages: CoreCompactionContext["messages"],
 	) => Promise<CoreCompactionContext["messages"]>;
 	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: an ISOLATED,
+	 * accounting-only provider projection used by the request-budget guard.
+	 *
+	 * The guard must measure the PROVIDER-VISIBLE representation of the
+	 * contracted candidate. It cannot use `prepareApiMessages` for that,
+	 * because the production `MessageBuilder` is STATEFUL: an extra,
+	 * accounting-only build would mutate its sticky cross-call state and
+	 * could change a LATER real build (stale-read rewriting decisions).
+	 *
+	 * This callback MUST therefore build the projection with a fresh,
+	 * short-lived builder that leaves the production builder untouched.
+	 *
+	 * When absent, the guard falls back to measuring the internal
+	 * representation — the conservative choice (it can only reject more,
+	 * never less).
+	 */
+	prepareBudgetAccountingMessages?: (
+		messages: CoreCompactionContext["messages"],
+	) => Promise<CoreCompactionContext["messages"]>;
+	/**
 	 * Persist a freshly-computed compaction state. `sourceMessages` are the
 	 * exact canonical messages the state's source-prefix hash was computed
 	 * over; hosts must validate projection against these rather than a
@@ -933,16 +969,59 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			}),
 			input.maxRequestTokens,
 		);
+		/**
+		 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the ISOLATED
+		 * accounting projection used both by the budget guard and by the
+		 * published working-context estimate.
+		 *
+		 * It MUST NOT use the long-lived production `MessageBuilder`: that
+		 * builder is STATEFUL, and an extra accounting-only build would
+		 * mutate its sticky cross-call state and could change a LATER real
+		 * build. When the host supplies the isolated projection it is used;
+		 * otherwise the production transform is used as a fallback (the
+		 * conservative choice — it can only over-count, never under-count).
+		 */
+		const budgetProjection = async (
+			messages: readonly CoreCompactionContext["messages"][number][],
+		): Promise<CoreCompactionContext["messages"]> => {
+			const project =
+				input.prepareBudgetAccountingMessages ?? input.prepareApiMessages;
+			return await project([...messages]);
+		};
 		const contractBudget = (
 			systemPrompt: string,
 		): {
 			maxRequestTokens: number | undefined;
 			systemPrompt: string;
 			tools: readonly unknown[];
+			providerMessages: (
+				messages: readonly CoreCompactionContext["messages"][number][],
+			) => Promise<readonly unknown[]>;
 		} => ({
 			maxRequestTokens: contractMaxRequestTokens,
 			systemPrompt,
 			tools: context.tools,
+			// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the guard
+			// measures the PROVIDER-VISIBLE representation of the candidate,
+			// produced by the runtime's provider-request transform. The
+			// transform is applied to the CONTRACTED list (the guard passes
+			// the list it is about to measure), so the measured shape is
+			// exactly the one the provider would receive.
+			//
+			// The projection is taken with the ISOLATED accounting builder
+			// (`prepareBudgetAccountingMessages`), NOT with
+			// `prepareApiMessages`. The production `MessageBuilder` is
+			// STATEFUL — an extra, accounting-only build on the long-lived
+			// production builder would mutate its sticky cross-call state
+			// and could change a LATER real build. The isolated builder
+			// produces the same projection while leaving the production
+			// builder untouched.
+			//
+			// The input list has NOT been through the provider transform
+			// before (it is the freshly-compacted candidate), so the
+			// provider-request preparation is never applied twice to the same
+			// input and the dispatched request is unchanged.
+			providerMessages: async (messages) => await budgetProjection(messages),
 		});
 		if (existingState && projectedMessages) {
 			// Re-compaction intentionally starts from the compacted projection plus
@@ -964,7 +1043,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				// history is the only authority; a previous summary never
 				// becomes one.
 				const systemPrompt = result.systemPrompt ?? existingState.system_prompt;
-				const contracted = applyTaskContractToCompactedMessages(
+				const contracted = await applyTaskContractToCompactedMessages(
 					result.messages,
 					context.messages,
 					contractBudget(systemPrompt ?? context.systemPrompt),
@@ -981,6 +1060,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					contractedMessages,
 					systemPrompt ?? context.systemPrompt,
 					context.tools,
+					contractMaxRequestTokens,
 				);
 			}
 			const projectedSystemPrompt =
@@ -991,7 +1071,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// persisted sidecar is NOT rewritten on read; only the projection
 			// the model receives is enriched. The raw projector remains a
 			// faithful projection of the sidecar.
-			const restored = applyTaskContractToCompactedMessages(
+			const restored = await applyTaskContractToCompactedMessages(
 				projectedMessages,
 				context.messages,
 				contractBudget(projectedSystemPrompt ?? context.systemPrompt),
@@ -1000,6 +1080,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				restored.messages,
 				projectedSystemPrompt ?? context.systemPrompt,
 				context.tools,
+				contractMaxRequestTokens,
 			);
 		}
 		const result = input.compact ? await input.compact(context) : undefined;
@@ -1008,7 +1089,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// the active task contract forward from the CANONICAL history into
 			// the freshly produced compaction summary, before persistence and
 			// before provider preparation.
-			const contracted = applyTaskContractToCompactedMessages(
+			const contracted = await applyTaskContractToCompactedMessages(
 				result.messages,
 				context.messages,
 				contractBudget(result.systemPrompt ?? context.systemPrompt),
@@ -1025,6 +1106,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				contractedMessages,
 				result.systemPrompt ?? context.systemPrompt,
 				context.tools,
+				contractMaxRequestTokens,
 			);
 		}
 		// No-compaction branch (producer-cadence GREEN;
@@ -1066,6 +1148,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			context.messages,
 			context.systemPrompt,
 			context.tools,
+			contractMaxRequestTokens,
 		);
 	};
 }
@@ -1088,11 +1171,29 @@ export function createCompactionStateAwarePrepareTurn(input: {
  * shape; W_after is the post-preparation occupancy for the next
  * provider request.
  */
-function publishWorkingContextEstimate(
+async function publishWorkingContextEstimate(
 	messages: CoreCompactionContext["messages"],
 	systemPrompt: string,
 	tools: readonly unknown[],
-): ContextPipelinePrepareTurnResult {
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the effective
+	 * request-input ceiling this turn enforces. Published so the agent
+	 * runtime can enforce the SAME ceiling against the FINAL provider
+	 * request — the one that includes any `beforeModel` hook mutations.
+	 */
+	maxRequestTokens?: number,
+): Promise<ContextPipelinePrepareTurnResult> {
+	// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: W keeps its
+	// EXISTING contract — the canonical estimator over the final internal
+	// request shape. The working-context estimate is a DISPLAY /
+	// occupancy signal with its own pinned contract
+	// (`compaction.working-context-authority-publish.test.ts`); changing
+	// its semantics is NOT part of this repair and would silently change
+	// the compaction trigger's relationship to W.
+	//
+	// The REQUEST-BUDGET AUTHORITY is a separate concern and is repaired
+	// in `applyTaskContractToCompactedMessages()`, which measures the
+	// provider-visible representation of the candidate.
 	return {
 		messages,
 		systemPrompt,
@@ -1101,6 +1202,7 @@ function publishWorkingContextEstimate(
 			messages,
 			tools,
 		}),
+		...(maxRequestTokens === undefined ? {} : { maxRequestTokens }),
 	};
 }
 
@@ -1149,11 +1251,18 @@ function publishWorkingContextEstimate(
  *   (P1_1 control asserted in
  *    compaction.working-context-authority-publish.test.ts:176).
  */
-function publishWorkingContextEstimateMetadataOnly(
+async function publishWorkingContextEstimateMetadataOnly(
 	messages: CoreCompactionContext["messages"],
 	systemPrompt: string,
 	tools: readonly unknown[],
-): ContextPipelinePrepareTurnResult {
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the effective
+	 * request-input ceiling this turn enforces. Published on the
+	 * metadata-only return as well, so the runtime-side final-request check
+	 * is active on EVERY prepare turn — not only on turns that compacted.
+	 */
+	maxRequestTokens?: number,
+): Promise<ContextPipelinePrepareTurnResult> {
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// tenth-pass: this metadata-only return sets ONLY
 	// `currentWorkingContextEstimate`; `messages` and
@@ -1173,12 +1282,14 @@ function publishWorkingContextEstimateMetadataOnly(
 	// equivalent to the pre-fix `return undefined` for
 	// projection purposes, but publishes W on every
 	// prepareTurn for the producer-cadence invariant).
+	const measuredMessages = messages;
 	return {
 		currentWorkingContextEstimate: estimateRequestInputTokens({
 			systemPrompt,
-			messages,
+			messages: measuredMessages,
 			tools,
 		}),
+		...(maxRequestTokens === undefined ? {} : { maxRequestTokens }),
 	};
 }
 

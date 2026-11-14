@@ -42,6 +42,7 @@ import type {
 	ToolRuntimeOutcome,
 } from "@cline/shared";
 import {
+	assertProviderRequestWithinBudget,
 	buildCompletionToolReminderMessage,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
@@ -64,6 +65,7 @@ import {
 	TASK_PROVIDER_STREAM_FAILED_EVENT,
 	TASK_PROVIDER_STREAM_STARTED_EVENT,
 	TOOL_REJECTION_SUFFIX,
+	toProviderVisibleMessages,
 	trimNonEmpty,
 } from "@cline/shared";
 import { nanoid } from "nanoid";
@@ -1024,6 +1026,20 @@ export class AgentRuntime {
 			| "exact_only_capped"
 			| "episode_exhausted";
 	} = { kind: "idle" };
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01 — the effective
+	 * request-input ceiling published by the host for the current turn.
+	 *
+	 * The host owns the model limit and the user's operating ceiling. It
+	 * publishes the resolved effective ceiling on the prepare-turn result so
+	 * the runtime can enforce it against the FINAL provider request — after
+	 * the `beforeModel` hooks have had the chance to replace the messages or
+	 * the tool inventory.
+	 *
+	 * `undefined` disables the runtime-side check (the pre-repair
+	 * behavior). It never expands a limit.
+	 */
+	private requestBudgetCeilingTokens: number | undefined;
 	/**
 	 * C1.4 snapshot of `recoverySecondStage.kind` taken BEFORE
 	 * the per-execution `applyRecoveryPostClassification` work
@@ -2776,6 +2792,37 @@ export class AgentRuntime {
 			}
 		}
 
+		// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01 — FINAL REQUEST
+		// BUDGET AUTHORITY.
+		//
+		// The `beforeModel` hooks above may REPLACE the request messages or the
+		// tool inventory. The request the host measured during `prepareTurn`
+		// is therefore not necessarily the request that is dispatched. The
+		// budget is enforced HERE — after every mutation, immediately before
+		// the request is issued — so the ceiling always applies to the request
+		// that actually leaves the process.
+		//
+		// The measurement uses the SAME conservative estimator as the
+		// compaction policy (`estimateRequestInputTokens`, 3 chars per token,
+		// flat per-image cost) over the PROVIDER-VISIBLE projection of the
+		// final messages. Provider-reported usage is never invented, cached
+		// usage is never counted twice, and nothing here relaxes the limit.
+		//
+		// The check FAILS CLOSED: an over-budget request throws
+		// `TaskContractBudgetError` before any provider dispatch and before
+		// any compaction sidecar write. The ceiling is supplied by the host
+		// (which owns the model limit and the user's operating ceiling); when
+		// the host supplies none, this check is disabled, exactly as before
+		// the repair.
+		if (typeof this.requestBudgetCeilingTokens === "number") {
+			assertProviderRequestWithinBudget({
+				systemPrompt: request.systemPrompt ?? "",
+				messages: toProviderVisibleMessages(request.messages),
+				tools: request.tools,
+				maxRequestTokens: this.requestBudgetCeilingTokens,
+			});
+		}
+
 		this.config.logger?.debug("Agent model request diagnostics", {
 			iteration: this.state.iteration,
 			providerId:
@@ -3958,6 +4005,10 @@ export class AgentRuntime {
 		options?: { overflowRecovery?: boolean },
 	): Promise<AgentModelRequest> {
 		if (!this.config.prepareTurn) {
+			// No host pipeline means no host ceiling. Clear any ceiling left
+			// over from a previous turn so a stale limit can never be applied
+			// to a request the host did not measure.
+			this.requestBudgetCeilingTokens = undefined;
 			return request;
 		}
 
@@ -4021,6 +4072,11 @@ export class AgentRuntime {
 			// for the contract.
 			const wBefore = this.state.currentWorkingContextEstimate;
 			this.state.currentWorkingContextEstimate = undefined;
+			// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the host
+			// published no ceiling for this turn, so there is no ceiling to
+			// enforce on the final request. Clearing it prevents a stale
+			// limit from a previous turn being applied here.
+			this.requestBudgetCeilingTokens = undefined;
 			// Emit if and only if the no-result case
 			// changed the field. The helper dedups
 			// internally.
@@ -4086,6 +4142,15 @@ export class AgentRuntime {
 		const wBefore = this.state.currentWorkingContextEstimate;
 		this.state.currentWorkingContextEstimate =
 			result.currentWorkingContextEstimate;
+		// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: capture the
+		// host-published effective request-input ceiling verbatim. The runtime
+		// enforces it against the FINAL provider request (after the
+		// `beforeModel` hooks), so a hook that replaces the messages or the
+		// tool inventory cannot escape the ceiling.
+		//
+		// Captured verbatim, exactly like W: the runtime never resolves,
+		// relaxes, or invents a limit of its own.
+		this.requestBudgetCeilingTokens = result.maxRequestTokens;
 		// PUBLICATION_BIND: emit iff the field actually
 		// changed (helper dedups). The await is awaited
 		// before the caller resumes; this guarantees that

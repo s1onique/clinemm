@@ -678,6 +678,19 @@ export interface AgentRuntimePrepareTurnContext {
 	 * can otherwise let the real context grow past the window without triggering.
 	 */
 	previousRequestInputTokens?: number;
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01 — the EFFECTIVE
+	 * request-input ceiling the host applies to this turn.
+	 *
+	 * The host (which owns the model limit and the user's operating ceiling)
+	 * resolves the effective ceiling and publishes it here so the runtime can
+	 * enforce it against the FINAL provider request — the one that includes
+	 * any `beforeModel` hook mutations.
+	 *
+	 * `undefined` means "no host ceiling" and disables the runtime-side
+	 * enforcement. It never EXPANDS a limit.
+	 */
+	maxRequestTokens?: number;
 	emitStatusNotice?: (
 		message: string,
 		metadata?: Record<string, unknown>,
@@ -714,6 +727,23 @@ export interface AgentRuntimePrepareTurnResult {
 	 * bounded repair.
 	 */
 	currentWorkingContextEstimate?: number;
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01 — the EFFECTIVE
+	 * request-input ceiling the host enforced for this turn.
+	 *
+	 * The runtime uses this value to re-check the FINAL provider request
+	 * AFTER the `beforeModel` hooks have run. Hooks may replace the request
+	 * messages or the tool inventory, so the request the host measured during
+	 * `prepareTurn` is not necessarily the request that is dispatched.
+	 *
+	 * Publishing the ceiling here keeps the ceiling's authority in the host
+	 * (which owns the model limit and the user's operating ceiling) while
+	 * letting the runtime enforce it on the request it is about to send.
+	 *
+	 * ADDITIVE-OPTIONAL. A host that omits it leaves the runtime-side check
+	 * disabled, which is the pre-repair behavior.
+	 */
+	maxRequestTokens?: number;
 }
 
 /**

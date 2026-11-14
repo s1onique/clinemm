@@ -38,16 +38,29 @@
  */
 
 import {
-	estimateRequestInputTokens,
+	estimateProviderRequestInputTokens,
 	isCompletionToolReminderMessage,
 	type MessageWithMetadata,
+	TaskContractBudgetError,
+	toProviderVisibleMessages,
 } from "@cline/shared";
+import { messagesToAgentMessages } from "../../runtime/config/agent-message-codec";
 import { getUserRunSpan } from "../../session/user-run-messages";
 import {
 	getCompactionSummaryMetadata,
 	isCompactionSummaryMessage,
 	isTurnStartMessage,
 } from "./compaction-shared";
+
+/**
+ * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01
+ *
+ * The budget error is DEFINED in `@cline/shared` so that the compaction
+ * pipeline (`@cline/core`) and the final model-request dispatch
+ * (`@cline/agents`) share ONE implementation of the budget decision. It is
+ * re-exported here so the existing core import path keeps working.
+ */
+export { TaskContractBudgetError } from "@cline/shared";
 
 /**
  * The section headings. They are a stable, greppable marker so a carried
@@ -299,33 +312,6 @@ export interface TaskContractApplicationResult {
 }
 
 /**
- * Raised when the complete authoritative task contract cannot fit inside the
- * effective request-input budget.
- *
- * This is deliberately a hard boundary rather than a "skip the contract"
- * result. An un-contracted continuation can fit comfortably inside the
- * provider context window while silently dropping the original objective,
- * constraints, and completion obligation. The only safe alternatives are:
- * deliver the complete contract, or stop before provider dispatch.
- */
-export class TaskContractBudgetError extends Error {
-	readonly estimatedRequestTokens: number;
-	readonly maxRequestTokens: number;
-
-	constructor(input: {
-		estimatedRequestTokens: number;
-		maxRequestTokens: number;
-	}) {
-		super(
-			`Active task contract exceeds the effective request budget (${input.estimatedRequestTokens} > ${input.maxRequestTokens} estimated tokens)`,
-		);
-		this.name = "TaskContractBudgetError";
-		this.estimatedRequestTokens = input.estimatedRequestTokens;
-		this.maxRequestTokens = input.maxRequestTokens;
-	}
-}
-
-/**
  * Apply the active task contract to a compacted message list, subject to an
  * explicit request-input budget.
  *
@@ -348,6 +334,24 @@ export class TaskContractBudgetError extends Error {
  * are never silently truncated and the continuation is never returned without
  * the complete authoritative contract.
  *
+ * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01 — BUDGET AUTHORITY
+ * ---------------------------------------------------------------------
+ * The budget is measured against the PROVIDER-VISIBLE representation of the
+ * request, not the internal `MessageWithMetadata[]` envelope form.
+ *
+ * The internal form carries metadata envelopes, display-only fields and
+ * tool-result wrappers that no provider ever receives. Measuring it rejected
+ * the historical Flint 128K candidate (internal 133,487 estimated tokens)
+ * even though every provider-visible form of the SAME logical request fitted
+ * comfortably under the 128,000 ceiling.
+ *
+ * `options.providerMessages` is the provider-prepared projection of the
+ * candidate messages, produced by the runtime's provider-request transform
+ * (`MessageBuilder.buildForApi` + the agent-message codec). It is OPTIONAL:
+ * when it is absent the guard falls back to measuring the internal
+ * representation, which is the conservative choice (it can only reject more,
+ * never less). When it IS present, it is the authority.
+ *
  * Returns the input list unchanged when there is no `compaction_summary`
  * message to attach to or no active contract to carry.
  */
@@ -360,16 +364,99 @@ export function applyTaskContractToCompactedMessages(
 		/** The final request shape estimator input. */
 		systemPrompt?: string;
 		tools?: readonly unknown[];
+		/**
+		 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01 — the
+		 * PROVIDER-VISIBLE projection of a candidate message list.
+		 *
+		 * The runtime's provider-request transform
+		 * (`MessageBuilder.buildForApi` + the agent-message codec) produces
+		 * the representation the provider actually receives. When supplied,
+		 * the guard measures THAT representation instead of the internal
+		 * envelope form, so the guard's authority matches the request that
+		 * would be dispatched.
+		 *
+		 * It is a FUNCTION of the candidate messages because the guard must
+		 * measure the CONTRACTED list: the contract is applied to the
+		 * summary before the projection is taken.
+		 *
+		 * When it is absent the guard measures the internal representation,
+		 * which is the conservative fallback (it can only reject more, never
+		 * less). A projection failure must NOT silently downgrade the
+		 * authority to the internal form when the provider form was
+		 * requested — the caller decides, by omitting the projection.
+		 */
+		providerMessages?: (
+			messages: readonly MessageWithMetadata[],
+		) => Promise<readonly unknown[]> | readonly unknown[];
 	} = {},
-): TaskContractApplicationResult {
-	const contract = extractActiveTaskContract(canonicalMessages);
-	const estimate = (messages: readonly MessageWithMetadata[]): number =>
-		estimateRequestInputTokens({
+): Promise<TaskContractApplicationResult> {
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01 — the budget
+	 * authority is the PROVIDER-VISIBLE representation when the runtime
+	 * supplies it, and the internal representation otherwise.
+	 *
+	 * `measure()` is ASYNC because the provider projection is produced by the
+	 * runtime's provider-request transform. The guard is therefore async from
+	 * this point on; every caller already awaits it inside an async
+	 * prepare-turn closure.
+	 */
+	const measure = async (
+		messages: readonly MessageWithMetadata[],
+	): Promise<number> => {
+		const providerMessages = options.providerMessages
+			? await options.providerMessages(messages)
+			: undefined;
+		if (!providerMessages) {
+			// No provider projection supplied: measure the internal
+			// representation. This is the conservative fallback (it can only
+			// reject more, never less).
+			return estimateProviderRequestInputTokens({
+				systemPrompt: options.systemPrompt ?? "",
+				messages,
+				tools: options.tools ?? [],
+			});
+		}
+		// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the provider
+		// projection is the API-safe INTERNAL form produced by the runtime's
+		// provider-request transform. The form the provider actually receives
+		// is that list passed through the agent-message codec
+		// (`messagesToAgentMessages` -> `toProviderVisibleMessages`), which
+		// drops the metadata envelope the provider never sees.
+		//
+		// Measuring the API-safe internal form would still count the
+		// metadata envelope — exactly the over-count this repair exists to
+		// remove. The projection therefore goes all the way to the
+		// provider-visible shape.
+		const providerVisible = toProviderVisibleMessages(
+			messagesToAgentMessages(providerMessages as MessageWithMetadata[]),
+		);
+		return estimateProviderRequestInputTokens({
 			systemPrompt: options.systemPrompt ?? "",
-			messages,
+			messages: providerVisible,
 			tools: options.tools ?? [],
 		});
-	const baselineTokens = estimate(compactedMessages);
+	};
+	return applyTaskContractWithMeasuredBudget({
+		compactedMessages,
+		canonicalMessages,
+		measure,
+		maxRequestTokens: options.maxRequestTokens,
+	});
+}
+
+/**
+ * The guard's decision body, split out so the asynchronous measurement can
+ * be shared by the synchronous-looking public entry point above.
+ */
+async function applyTaskContractWithMeasuredBudget(input: {
+	compactedMessages: readonly MessageWithMetadata[];
+	canonicalMessages: readonly MessageWithMetadata[];
+	measure: (messages: readonly MessageWithMetadata[]) => Promise<number>;
+	maxRequestTokens?: number;
+}): Promise<TaskContractApplicationResult> {
+	const { compactedMessages, canonicalMessages, measure } = input;
+	const contract = extractActiveTaskContract(canonicalMessages);
+	const baselineTokens = await measure(compactedMessages);
 	if (!contract.objective && !contract.runtimeCompletionObligation) {
 		return {
 			messages: [...compactedMessages],
@@ -411,10 +498,10 @@ export function applyTaskContractToCompactedMessages(
 		summaryMessage,
 		nextSummary,
 	);
-	const nextTokens = estimate(nextMessages);
+	const nextTokens = await measure(nextMessages);
 	if (
-		typeof options.maxRequestTokens === "number" &&
-		nextTokens > options.maxRequestTokens
+		typeof input.maxRequestTokens === "number" &&
+		nextTokens > input.maxRequestTokens
 	) {
 		// Fail closed. Returning the un-contracted projection here would let a
 		// valid-looking request continue after silently losing the original
@@ -422,7 +509,7 @@ export function applyTaskContractToCompactedMessages(
 		// stop before sidecar persistence or provider dispatch instead.
 		throw new TaskContractBudgetError({
 			estimatedRequestTokens: nextTokens,
-			maxRequestTokens: options.maxRequestTokens,
+			maxRequestTokens: input.maxRequestTokens,
 		});
 	}
 	return {

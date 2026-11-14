@@ -260,6 +260,14 @@ export {
 	type ReasoningLevel,
 	ReasoningLevelSchema,
 } from "./llms/reasoning-options";
+export {
+	assertProviderRequestWithinBudget,
+	estimateProviderRequestInputTokens,
+	type ProviderRequestBudgetInput,
+	TaskContractBudgetError,
+	toPersistedToolResultContent,
+	toProviderVisibleMessages,
+} from "./llms/request-budget";
 export { serializeAbortReason } from "./llms/requests";
 export {
 	CHARS_PER_TOKEN,

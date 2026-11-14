@@ -20,8 +20,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { AgentRuntime } from "@cline/agents";
-import type { AgentRuntimeAbortOrigin } from "@cline/agents";
+import type { AgentRuntime, AgentRuntimeAbortOrigin } from "@cline/agents";
 import { createAgentRuntime } from "@cline/agents";
 import {
 	type AgentConfig,
@@ -50,8 +49,8 @@ import {
 	type LoopDetectionConfig,
 	type Message,
 	type MessageWithMetadata,
-	type ModelBehaviorTraceSink,
 	type ModelBehaviorTraceRequestOutcome,
+	type ModelBehaviorTraceSink,
 	type ModelBehaviorTraceTerminalPath,
 	type ModelInfo,
 	mergeModelOptions,
@@ -77,6 +76,7 @@ import {
 	DEFAULT_MAX_TOOL_RESULT_CHARS,
 	getMessageBuilderOptionsFromEnv,
 	MessageBuilder,
+	type MessageBuilderOptions,
 } from "../../session/services/message-builder";
 import {
 	prepareToolResultPreview,
@@ -422,6 +422,14 @@ export class SessionRuntime {
 	// message builders and API-safe normalization.
 	readonly messageBuilder: MessageBuilder;
 	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the options used to
+	 * construct the production `messageBuilder`, retained so the
+	 * request-budget guard can construct an ISOLATED, short-lived builder
+	 * for accounting-only projections. The production builder is never used
+	 * for accounting because `buildForApi` carries sticky cross-call state.
+	 */
+	private readonly messageBuilderOptions: MessageBuilderOptions;
+	/**
 	 * Contribution registry that hosts extension-provided tools,
 	 * commands, message builders, and providers. Lazily initialized
 	 * on first run (parity with legacy `Agent.ensureExtensionsInitialized`
@@ -608,6 +616,18 @@ export class SessionRuntime {
 		const messageBuilderOptions = getMessageBuilderOptionsFromEnv();
 		this.maxCachedResultChars =
 			messageBuilderOptions.maxToolResultChars ?? DEFAULT_MAX_TOOL_RESULT_CHARS;
+		// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the builder
+		// options are retained so the request-budget guard can build an
+		// ISOLATED, short-lived `MessageBuilder` for accounting purposes.
+		//
+		// `MessageBuilder.buildForApi` is STATEFUL: it carries sticky
+		// cross-call state (`committedOutdatedRewrites`) and mutates it during
+		// each build. Re-using the long-lived production builder for an
+		// extra, accounting-only build could therefore change the result of a
+		// LATER real build (stale-read rewriting decisions). A fresh builder
+		// with the same options produces the same projection while leaving the
+		// production builder completely untouched.
+		this.messageBuilderOptions = messageBuilderOptions;
 		this.messageBuilder = new MessageBuilder({
 			...messageBuilderOptions,
 			getToolResultRecovery: (result) =>
@@ -1726,6 +1746,21 @@ export class SessionRuntime {
 						 * `AgentRuntimePrepareTurnResult` shape.
 						 */
 						currentWorkingContextEstimate?: number;
+						/**
+						 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the
+						 * EFFECTIVE request-input ceiling the host enforces for
+						 * this turn.
+						 *
+						 * Forwarded verbatim so the agent runtime can enforce the
+						 * SAME ceiling against the FINAL provider request — after
+						 * the `beforeModel` hooks have had the chance to replace
+						 * the messages or the tool inventory. The runtime never
+						 * resolves, relaxes, or invents a limit of its own.
+						 *
+						 * Additive-optional: a host that publishes no ceiling
+						 * leaves the runtime-side check disabled.
+						 */
+						maxRequestTokens?: number;
 				  }
 				| undefined
 		  >)
@@ -1778,6 +1813,18 @@ export class SessionRuntime {
 								result.currentWorkingContextEstimate,
 						}
 					: {}),
+				// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: forward
+				// the producer-published effective request-input ceiling
+				// verbatim. The agent runtime enforces it against the FINAL
+				// provider request — the one that includes any `beforeModel`
+				// hook mutations — so a hook that replaces the messages or the
+				// tool inventory cannot escape the ceiling.
+				//
+				// The runtime never resolves, relaxes, or invents a limit of its
+				// own; it captures exactly what the host published.
+				...(result.maxRequestTokens !== undefined
+					? { maxRequestTokens: result.maxRequestTokens }
+					: {}),
 			};
 		};
 	}
@@ -1806,6 +1853,42 @@ export class SessionRuntime {
 			providerMessages = await builder.build(providerMessages);
 		}
 		return this.messageBuilder.buildForApi(providerMessages);
+	}
+
+	/**
+	 * ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: an ISOLATED
+	 * accounting-only projection of a candidate message list.
+	 *
+	 * The request-budget guard must measure the PROVIDER-VISIBLE
+	 * representation of the candidate, not the internal envelope form. But
+	 * `MessageBuilder.buildForApi` is STATEFUL: it carries sticky cross-call
+	 * state (`committedOutdatedRewrites`) and mutates it during each build.
+	 * Calling the LONG-LIVED production builder an extra time purely for
+	 * accounting could therefore change the result of a LATER real build —
+	 * a semantic mutation of the dispatched request.
+	 *
+	 * This method therefore builds the projection with a FRESH, short-lived
+	 * `MessageBuilder` that carries the SAME options as the production
+	 * builder. The projection is identical to what the production builder
+	 * would produce for the same input, while the production builder's
+	 * state is left completely untouched.
+	 *
+	 * The extension message builders are NOT re-run here: they are already
+	 * applied by the caller before the guard measures the candidate, and
+	 * re-running them could duplicate their own semantic mutations.
+	 */
+	async prepareProviderMessagesForBudgetAccounting(
+		messages: MessageWithMetadata[],
+	): Promise<MessageWithMetadata[]> {
+		const accountingBuilder = new MessageBuilder({
+			...this.messageBuilderOptions,
+			// The production builder can serve cached tool results. The
+			// accounting builder deliberately does NOT: the guard must not
+			// mutate the tool-result cache, and the cache only ever SHRINKS a
+			// result, so omitting it keeps the accounting conservative.
+			getToolResultRecovery: undefined,
+		});
+		return accountingBuilder.buildForApi(messages);
 	}
 
 	private handleRuntimeEvent(event: AgentRuntimeEvent): void {
@@ -2174,7 +2257,9 @@ export class SessionRuntime {
 					iterations,
 					// ACT-CLINEMM-SDK-ABORT-CAUSE-RETENTION01: the terminal
 					// status and the error identity.
-					...(terminal?.status !== undefined ? { status: terminal.status } : {}),
+					...(terminal?.status !== undefined
+						? { status: terminal.status }
+						: {}),
 					...(errorName !== undefined ? { errorName } : {}),
 					...(errorMessage !== undefined ? { errorMessage } : {}),
 					...(terminal?.terminalPath !== undefined
@@ -2372,7 +2457,9 @@ export class SessionRuntime {
 			durationMs,
 			runResult?.iterations ?? 0,
 			{
-				...(runResult?.status !== undefined ? { status: runResult.status } : {}),
+				...(runResult?.status !== undefined
+					? { status: runResult.status }
+					: {}),
 				...(terminalError !== undefined ? { error: terminalError } : {}),
 				terminalPath,
 				...(this.lastKnownModelRequestId !== undefined

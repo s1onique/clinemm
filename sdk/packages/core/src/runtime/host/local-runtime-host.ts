@@ -1069,6 +1069,35 @@ export class LocalRuntimeHost implements RuntimeHost {
 				}
 				return agent.prepareProviderMessagesForApi(messages);
 			},
+			// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the request
+			// budget guard measures the provider-visible representation of the
+			// contracted candidate. It uses an ISOLATED, short-lived builder so
+			// the accounting projection cannot perturb the stateful production
+			// builder that produces the dispatched request.
+			//
+			// When the session runtime does not expose the isolated projection
+			// (older host shape, or a test double), the guard falls back to the
+			// production transform. When neither is available, the candidate is
+			// measured in its internal form. Both fallbacks are CONSERVATIVE:
+			// they can only over-count, never under-count, so the fail-closed
+			// invariant is preserved either way.
+			prepareBudgetAccountingMessages: async (messages) => {
+				const agent = activeSessionRef?.agent;
+				if (!agent) {
+					throw new Error(
+						"Compaction prepareTurn ran before the session runtime was created",
+					);
+				}
+				if (typeof agent.prepareProviderMessagesForBudgetAccounting === "function") {
+					return await agent.prepareProviderMessagesForBudgetAccounting(
+						messages,
+					);
+				}
+				if (typeof agent.prepareProviderMessagesForApi === "function") {
+					return await agent.prepareProviderMessagesForApi(messages);
+				}
+				return messages;
+			},
 			saveState: async (state, sourceMessages) => {
 				const activeSession = activeSessionRef;
 				if (!activeSession) return;
