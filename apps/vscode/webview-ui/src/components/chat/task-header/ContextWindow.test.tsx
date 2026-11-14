@@ -173,7 +173,7 @@ describe("Task header provider-usage authority", () => {
 		)
 
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P / CONTEXT) * 100))
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("68.9k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("68.9k")
 		expect(screen.getAllByText(/provider-reported input/i).length).toBeGreaterThan(0)
 		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("148.8k")
 		expect(screen.getAllByText(/estimated/i).length).toBeGreaterThan(0)
@@ -191,7 +191,7 @@ describe("Task header provider-usage authority", () => {
 		)
 
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((85_500 / CONTEXT) * 100))
-		expect(screen.getByTitle(/estimated next-request input/i)).toHaveTextContent("85.5k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("85.5k")
 		expect(screen.getAllByText(/estimated/i).length).toBeGreaterThan(0)
 		expect(screen.queryByText(/provider-reported input/i)).not.toBeInTheDocument()
 	})
@@ -220,7 +220,7 @@ describe("Task header provider-usage authority", () => {
 			/>,
 		)
 
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("68.9k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("68.9k")
 		rerender(
 			<ContextWindow
 				contextWindow={CONTEXT}
@@ -229,7 +229,7 @@ describe("Task header provider-usage authority", () => {
 				useAutoCondense={false}
 			/>,
 		)
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("68.9k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("68.9k")
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P / CONTEXT) * 100))
 	})
 
@@ -243,9 +243,9 @@ describe("Task header provider-usage authority", () => {
 			/>,
 		)
 
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("100.0k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("100.0k")
 		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("30.0k")
-		expect(screen.queryByTitle(/last reported request/i)).not.toHaveTextContent("30.0k")
+		expect(screen.getByTestId("context-window-used-tokens")).not.toHaveTextContent("30.0k")
 	})
 
 	it("rejects invalid provider input and falls back to a valid estimate", () => {
@@ -258,8 +258,91 @@ describe("Task header provider-usage authority", () => {
 			/>,
 		)
 
-		expect(screen.getByTitle(/estimated next-request input/i)).toHaveTextContent("85.5k")
-		expect(screen.queryByTitle(/last reported request/i)).not.toBeInTheDocument()
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("85.5k")
+		expect(screen.getByTestId("context-window-usage-authority")).toHaveTextContent("Est")
+		expect(screen.getByTestId("context-window-usage-authority")).not.toHaveTextContent("Prv")
+	})
+})
+
+describe("ContextWindow compact usage-authority label", () => {
+	const P = 68_900
+	const W = 148_800
+	const CONTEXT = 256_000
+
+	it("renders the compact provider abbreviation with the full description on hover", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={W}
+				lastApiReqContextInputTokens={P}
+				useAutoCondense={false}
+			/>,
+		)
+
+		const badge = screen.getByTestId("context-window-usage-authority")
+		expect(badge).toHaveTextContent("Prv")
+		expect(badge).toHaveAttribute("title", "Provider-reported input for the last reported request")
+		expect(badge).toHaveAttribute("aria-label", "Provider-reported input for the last reported request")
+		expect(
+			screen.getByRole("button", {
+				name: "Provider-reported input for the last reported request",
+			}),
+		).toBeInTheDocument()
+	})
+
+	it("renders the compact estimate abbreviation with the full description on hover", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={W}
+				lastApiReqContextInputTokens={undefined}
+				useAutoCondense={false}
+			/>,
+		)
+
+		const badge = screen.getByTestId("context-window-usage-authority")
+		expect(badge).toHaveTextContent("Est")
+		expect(badge).toHaveAttribute("title", "Estimated next-request input")
+		expect(badge).toHaveAttribute("aria-label", "Estimated next-request input")
+	})
+
+	it("keeps the compact header free of the full label text and leaves it in the expanded details", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={W}
+				lastApiReqContextInputTokens={P}
+				useAutoCondense={false}
+			/>,
+		)
+
+		// The compact badge shows only the abbreviation — the full description
+		// is not rendered as visible text next to the token count.
+		const badge = screen.getByTestId("context-window-usage-authority")
+		expect(badge.textContent?.trim()).toBe("Prv")
+		expect(badge.textContent).not.toMatch(/provider-reported input/i)
+		expect(badge.textContent).not.toMatch(/estimated/i)
+
+		// The full description is still available in the expanded context
+		// details.
+		expect(screen.getByText("Provider-reported input:")).toBeInTheDocument()
+	})
+
+	it("keeps the used-token accessibility label unchanged", () => {
+		render(
+			<ContextWindow
+				contextWindow={CONTEXT}
+				currentWorkingContextEstimate={W}
+				lastApiReqContextInputTokens={P}
+				useAutoCondense={false}
+			/>,
+		)
+
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveAttribute(
+			"aria-label",
+			"Provider-reported input for the last reported request",
+		)
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("68.9k")
 	})
 })
 
@@ -283,9 +366,10 @@ describe("ContextWindow provider-usage provenance", () => {
 			/>,
 		)
 
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("0")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("0")
 		expect(screen.getByRole("progressbar")).toHaveTextContent("0")
-		expect(screen.queryByTitle(/estimated next-request input/i)).not.toBeInTheDocument()
+		expect(screen.getByTestId("context-window-usage-authority")).toHaveTextContent("Prv")
+		expect(screen.getByTestId("context-window-usage-authority")).not.toHaveTextContent("Est")
 	})
 
 	it("uses the latest eligible main-model usage row and ignores subagent aggregates", () => {
@@ -313,7 +397,7 @@ describe("ContextWindow provider-usage provenance", () => {
 			/>,
 		)
 
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("68.9k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("68.9k")
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((68_900 / 256_000) * 100))
 	})
 })
@@ -384,7 +468,7 @@ describe("ContextWindow provider-authority conservation", () => {
 		)
 
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("364.9k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("364.9k")
 		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("271.3k")
 	})
 
@@ -399,7 +483,7 @@ describe("ContextWindow provider-authority conservation", () => {
 		)
 
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("364.9k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("364.9k")
 		expect(screen.queryByText(/next-request estimate/i)).not.toBeInTheDocument()
 	})
 
@@ -407,7 +491,7 @@ describe("ContextWindow provider-authority conservation", () => {
 		render(<ContextWindow contextWindow={200_000} lastApiReqContextInputTokens={P_SENTINEL} useAutoCondense={false} />)
 
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("364.9k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("364.9k")
 	})
 
 	it("does not rescale the provider observation when W changes after compaction", () => {
@@ -435,7 +519,7 @@ describe("ContextWindow provider-authority conservation", () => {
 		)
 
 		expect(screen.getByRole("progressbar")).toHaveTextContent(String((P_SENTINEL / 200_000) * 100))
-		expect(screen.getByTitle(/last reported request/i)).toHaveTextContent("364.9k")
+		expect(screen.getByTestId("context-window-used-tokens")).toHaveTextContent("364.9k")
 		expect(screen.getByText(/next-request estimate/i).parentElement).toHaveTextContent("90.0k")
 	})
 

@@ -3,6 +3,7 @@ import debounce from "debounce"
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Progress } from "@/components/ui/progress"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatLargeNumber as formatTokenNumber } from "@/utils/format"
 import CompactTaskButton from "./buttons/CompactTaskButton"
 import { ContextWindowSummary } from "./ContextWindowSummary"
@@ -291,10 +292,23 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 					<span
 						aria-label={tokenData.authority.ariaLabel}
 						className="cursor-pointer text-sm"
+						data-testid="context-window-used-tokens"
 						title={tokenData.authority.title}>
 						{formatTokenNumber(tokenData.used)}
 					</span>
-					<span className="text-xs text-description">{tokenData.authority.label}</span>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								aria-label={tokenData.authority.ariaLabel}
+								className="flex items-center border-0 bg-transparent p-0 text-xs text-description"
+								data-testid="context-window-usage-authority"
+								title={tokenData.authority.title}
+								type="button">
+								{tokenData.authority.source === "provider" ? "Prv" : "Est"}
+							</button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom">{tokenData.authority.title}</TooltipContent>
+					</Tooltip>
 					<div className="flex relative items-center gap-1 flex-1 w-full h-full" onMouseEnter={() => setIsOpened(true)}>
 						<HoverCard>
 							<HoverCardContent className="bg-menu rounded-xs shadow-sm">
