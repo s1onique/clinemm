@@ -1,0 +1,50 @@
+ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01 - IDENTITY
+======================================================================
+
+[repository]
+  toplevel            : /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+  remote origin       : git@github.com:s1onique/clinemm.git
+  branch              : main
+  HEAD                : 753f4adad282ad81384065cb9a1a057702ba6f61
+  HEAD subject        : fix(core): conserve cross-locator read freshness
+  predecessor expected: 753f4adad282ad81384065cb9a1a057702ba6f61
+  predecessor ancestor: YES
+  diff predecessor..HEAD: (none)
+  worktree tracked    : CLEAN
+  stash@{0}           : stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration
+  stash count         : 1
+
+[installed extension]
+  directory           : /Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.16-5a1c485cb-753f4adad
+  package.name        : clinemm
+  package.version     : 4.1.16-5a1c485cb-753f4adad
+  package.publisher   : s1onique
+  package.main        : ./dist/extension.js
+  version-embedded-commit: 753f4adad  (matches repo HEAD exactly)
+  -> installed runtime source == repo HEAD == expected predecessor
+
+[source files consumed]
+  ~/.vscodium-roz/cline-data/sessions/1794617111057_i279p/1794617111057_i279p.messages.json size=1199385   mtime=2026-11-14T01:30:23.542599Z sha256=02c5a31231787330
+  ~/.vscodium-roz/cline-data/sessions/1794617111057_i279p/1794617111057_i279p.compaction.json size=47556     mtime=2026-11-14T01:18:03.539594Z sha256=2cba633cd2e1f27d
+  ~/.vscodium-roz/cline-data/sessions/1794617111057_i279p/1794617111057_i279p.json size=2312      mtime=2026-11-14T01:31:29.301774Z sha256=0ec0a73841ee43de
+  ~/.cache/kapitsa/logs/serve-8000.log                                     size=90990     mtime=2026-11-14T01:55:51.602580Z sha256=b0ff7776eb01a747
+  ~/.vscodium-roz/cline-data/globalState.json                              size=2014      mtime=2026-11-14T01:44:56.262944Z sha256=e13a10d6e4ff8f03
+  ~/.vscodium-roz/cline-data/settings/models.json                          size=326       mtime=2026-11-13T08:51:37.755098Z sha256=4a5c283b079b2e96
+  ~/.vscodium-roz/cline-data/settings/providers.json                       size=1087      mtime=2026-11-13T09:01:22.750616Z sha256=c99acad4fc1a02db
+  ~/.vscodium-roz/cline-data/diagnostics/myc-evaluation/1794617111057_i279p/events.jsonl size=1294      mtime=2026-11-14T01:31:29.255813Z sha256=edca6d2f9c68800d
+  ~/.vscodium-roz/extensions/s1onique.clinemm-4.1.16-5a1c485cb-753f4adad/dist/extension.js size=27407264  mtime=2026-11-14T00:44:28.363268Z sha256=9f0fa35d85e46059
+
+[operator-local copies in ~/Downloads]
+  ~/Downloads/1794617111057_i279p.messages.json                            size=1199385   mtime=2026-11-14T01:30:28.280926Z sha256=02c5a31231787330
+  ~/Downloads/1794617111057_i279p.compaction.json                          size=47556     mtime=2026-11-14T01:30:34.203493Z sha256=2cba633cd2e1f27d
+  provider-request captures present : 89
+    session-correlated main captures : 71
+    uncorrelated summarizer captures: 5
+
+[kapitsa runtime]
+  process             : kapitsa serve --model flint:16gb
+  base url            : http://127.0.0.1:8000/v1  (providers.json openai-compatible)
+  engine context      : 262144 tokens (server log line 12)
+  client model metadata: contextWindow=256000, maxInputTokens=absent
+  userContextCeiling  : ABSENT from globalState.json -> Auto
+  compactionStrategy  : ABSENT from global-settings.json -> default 'agentic'

@@ -1,0 +1,87 @@
+# ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01 - EVENT TIMELINE
+# sources: canonical transcript (messages.json ts), Kapitsa serve-8000.log, provider-request captures
+# columns: seq	utc	wall_s_from_start	event	kap_line	iter	msg_idx	msg_id	P_prompt_tok	cached_tok	noncached_tok	out_tok	finish	prefill_ms	decode_ms	note
+seq	utc	wall_s	event	kap_line	iter	msg_idx	msg_id	P_prompt	cached	noncached	out	finish	prefill_ms	decode_ms	note
+1	2026-11-14T00:45:20.646000Z	9.358	MAIN_REQUEST	305	2	5	msg_MNiwO13p	10167	4058	6109	381	tool_calls	3667	2793	main model request | capture est=13370 msgCount=4
+2	2026-11-14T00:45:40.184000Z	28.896	MAIN_REQUEST	306	3	9	msg_XqYgjqsB	27059	10548	16511	444	tool_calls	14860	4401	main model request | capture est=34408 msgCount=6
+3	2026-11-14T00:45:53.989000Z	42.701	MAIN_REQUEST	307	4	13	msg_dIBAUlyO	33003	27503	5500	595	tool_calls	7773	5691	main model request | capture est=41157 msgCount=8
+4	2026-11-14T00:45:55.842000Z	44.554	MAIN_REQUEST	308	5	17	msg_h-RQciFh	34123	33598	525	76	tool_calls	1045	738	main model request | capture est=42715 msgCount=10
+5	2026-11-14T00:45:57.424000Z	46.136	MAIN_REQUEST	309	6	19	msg_kliTUMxL	34264	34199	65	135	tool_calls	216	1335	main model request | capture est=42994 msgCount=12
+6	2026-11-14T00:45:59.228000Z	47.94	MAIN_REQUEST	310	7	21	msg_fqwVaLTd	34464	34399	65	154	tool_calls	226	1546	main model request | capture est=43354 msgCount=14
+7	2026-11-14T00:46:00.111000Z	48.823	MAIN_REQUEST	311	8	23	msg_8AoTymaH	34683	34618	65	60	tool_calls	248	600	main model request | capture est=43778 msgCount=16
+8	2026-11-14T00:46:00.973000Z	49.685	MAIN_REQUEST	312	9	25	msg_R0mQJxfy	34808	34743	65	60	tool_calls	221	606	main model request | capture est=44046 msgCount=18
+9	2026-11-14T00:46:19.176000Z	67.888	MAIN_REQUEST	314	1	28	msg_YgIiY5m_	34942	34868	74	110	tool_calls	525	1032	main model request | capture est=44380 msgCount=22
+10	2026-11-14T00:46:26.749000Z	75.461	MAIN_REQUEST	315	2	30	msg_UZEZN7mK	37458	35052	2406	422	tool_calls	3234	4056	main model request | capture est=47499 msgCount=24
+11	2026-11-14T00:46:43.500000Z	92.212	MAIN_REQUEST	316	3	33	msg_LtbcmXIr	45441	37880	7561	208	tool_calls	14458	2196	main model request | capture est=57328 msgCount=26
+12	2026-11-14T00:46:55.261000Z	103.973	MAIN_REQUEST	317	4	37	msg_fgw_Jp9n	50219	45649	4570	66	tool_calls	10745	723	main model request | capture est=62857 msgCount=28
+13	2026-11-14T00:47:07.619000Z	116.331	MAIN_REQUEST	318	5	39	msg_HMmkOFN9	53998	50285	3713	188	tool_calls	9521	2789	main model request | capture est=66999 msgCount=30
+14	2026-11-14T00:47:52.760000Z	161.472	MAIN_REQUEST	319	6	42	msg_cVWN115T	63671	54186	9485	732	tool_calls	27257	17409	main model request | capture est=78369 msgCount=32
+15	2026-11-14T00:49:00.580000Z	229.292	MAIN_REQUEST	320	7	45	msg_NS9ST53i	68859	64403	4456	256	tool_calls	37731	29886	main model request | capture est=85546 msgCount=34
+16	(provider-log order only)		SUMMARIZER_REQUEST	321				1844	0	1844	4396	stop	5871	276681	summarizer (agentic) request
+17	2026-11-14T00:54:07.818000Z	536.53	MAIN_REQUEST	323	8	50	msg_sh7aUwYv	16769	3640	13129	340	tool_calls	17565	6677	main model request | capture est=22479 msgCount=5
+18	2026-11-14T00:54:18.777000Z	547.489	MAIN_REQUEST	324	9	53	msg_-H8Z1LJ0	19581	17109	2472	298	tool_calls	4473	6227	main model request | capture est=25327 msgCount=7
+19	2026-11-14T00:54:47.281000Z	575.993	MAIN_REQUEST	325	10	56	msg_gx2pOzNc	28920	19879	9041	536	tool_calls	17543	10771	main model request | capture est=35973 msgCount=9
+20	2026-11-14T00:55:29.212000Z	617.924	MAIN_REQUEST	326	11	59	msg_mS1-n7i2	38180	29456	8724	783	tool_calls	27059	14535	main model request | capture est=46841 msgCount=11
+21	2026-11-14T00:55:36.211000Z	624.923	MAIN_REQUEST	327	12	65	msg_KVa8fboC	40510	38963	1547	168	tool_calls	3677	3068	main model request | capture est=50133 msgCount=13
+22	2026-11-14T00:55:50.082000Z	638.794	MAIN_REQUEST	328	13	70	msg_d3GFrnmL	42020	40678	1342	522	tool_calls	3425	10385	main model request | capture est=52058 msgCount=15
+23	2026-11-14T00:56:19.949000Z	668.661	MAIN_REQUEST	329	14	74	msg_wt7RJPu-	50256	42542	7714	448	tool_calls	20143	9417	main model request | capture est=62693 msgCount=17
+24	2026-11-14T00:56:34.642000Z	683.354	MAIN_REQUEST	330	15	79	msg_wITcoiqD	53285	50704	2581	356	tool_calls	7375	7259	main model request | capture est=66315 msgCount=19
+25	2026-11-14T00:56:55.022000Z	703.734	MAIN_REQUEST	331	16	85	msg_CJzmSpGz	56077	53641	2436	596	tool_calls	7310	12937	main model request | capture est=69752 msgCount=21
+26	2026-11-14T00:57:13.024000Z	721.736	MAIN_REQUEST	332	17	90	msg_AfawrpYu	58922	56076	2846	387	tool_calls	9290	8610	main model request | capture est=73034 msgCount=23
+27	2026-11-14T00:58:57.234000Z	825.946	MAIN_REQUEST	333	18	93	msg_r0Q3oqhl	62134	58921	3213	3610	tool_calls	9852	94211	main model request | capture est=77037 msgCount=25
+28	2026-11-14T00:59:31.555000Z	860.267	MAIN_REQUEST	334	19	96	msg_f9igOCu_	68093	65744	2349	555	tool_calls	11963	22193	main model request | capture est=84259 msgCount=27
+29	2026-11-14T01:00:01.394000Z	890.106	MAIN_REQUEST	335	20	98	msg_Le9QvrQH	69557	68648	909	475	tool_calls	5618	24113	main model request | capture est=85828 msgCount=29
+30	2026-11-14T01:00:13.725000Z	902.437	MAIN_REQUEST	336	21	100	msg_d5iA58hs	70193	69556	637	117	tool_calls	4630	7514	main model request | capture est=86643 msgCount=31
+31	2026-11-14T01:01:25.868000Z	974.58	MAIN_REQUEST	337	22	102	msg_4gPPZoUG	70499	70310	189	952	tool_calls	1442	70391	main model request | capture est=87044 msgCount=33
+32	(provider-log order only)		SUMMARIZER_REQUEST	339				3100	0	3100	5924	stop	5401	110115	summarizer (agentic) request
+33	2026-11-14T01:03:47.745000Z	1116.457	MAIN_REQUEST	342	23	105	msg__vC70vLP	19804	3640	16164	243	tool_calls	21199	4566	main model request | capture est=25653 msgCount=13
+34	2026-11-14T01:04:20.140000Z	1148.852	MAIN_REQUEST	343	24	108	msg_TcQji10j	23582	20047	3535	1382	tool_calls	6040	26121	main model request | capture est=30399 msgCount=15
+35	2026-11-14T01:04:51.626000Z	1180.338	MAIN_REQUEST	344	25	111	msg_jw5bXKCd	30896	24964	5932	1093	tool_calls	10986	20259	main model request | capture est=39269 msgCount=17
+36	2026-11-14T01:04:55.573000Z	1184.285	MAIN_REQUEST	345	26	113	msg_Ls5rFM5C	32281	31989	292	175	tool_calls	700	3163	main model request | capture est=41061 msgCount=19
+37	2026-11-14T01:04:58.191000Z	1186.903	MAIN_REQUEST	346	27	116	msg_dK4hZiBE	32628	32456	172	112	tool_calls	487	2039	main model request | capture est=41670 msgCount=21
+38	2026-11-14T01:05:02.050000Z	1190.762	MAIN_REQUEST	347	28	118	msg_P1R5Vr0F	33942	32740	1202	68	tool_calls	2400	1153	main model request | capture est=43149 msgCount=23
+39	2026-11-14T01:05:35.816000Z	1224.528	MAIN_REQUEST	348	29	120	msg_0Z753DQ4	42218	34010	8208	781	tool_calls	18086	15544	main model request | capture est=51636 msgCount=25
+40	2026-11-14T01:05:46.967000Z	1235.679	MAIN_REQUEST	349	30	122	msg_tqDQVJpT	43128	42217	911	439	tool_calls	2083	8787	main model request | capture est=52998 msgCount=27
+41	2026-11-14T01:05:56.266000Z	1244.978	MAIN_REQUEST	350	31	124	msg_snJIOiy-	43635	43127	508	292	tool_calls	1284	5663	main model request | capture est=53821 msgCount=29
+42	2026-11-14T01:06:17.767000Z	1266.479	MAIN_REQUEST	351	32	126	msg_vKLYWBU0	44278	43927	351	1030	tool_calls	937	20479	main model request | capture est=54648 msgCount=31
+43	2026-11-14T01:06:37.158000Z	1285.87	MAIN_REQUEST	352	33	128	msg_Otl8jwMZ	45800	44277	1523	767	tool_calls	3689	15539	main model request | capture est=56479 msgCount=33
+44	2026-11-14T01:06:47.084000Z	1295.796	MAIN_REQUEST	353	34	130	msg_TcNLfGjE	46638	45799	839	388	tool_calls	2128	7719	main model request | capture est=57640 msgCount=35
+45	2026-11-14T01:07:07.361000Z	1316.073	MAIN_REQUEST	354	35	133	msg_GWb8fpnU	47180	47026	154	963	tool_calls	490	19639	main model request | capture est=58483 msgCount=37
+46	2026-11-14T01:07:14.250000Z	1322.962	MAIN_REQUEST	355	36	136	msg_MjY8lt5W	48191	48143	48	195	tool_calls	467	3909	main model request | capture est=60005 msgCount=39
+47	2026-11-14T01:07:15.216000Z	1323.928	MAIN_REQUEST	356	37	138	msg_HE36X092	48447	48386	61	32	tool_calls	319	588	main model request | capture est=60438 msgCount=41
+48	2026-11-14T01:07:31.826000Z	1340.538	MAIN_REQUEST	357	38	140	msg_XcCXr9Rq	48572	48479	93	744	tool_calls	324	15281	main model request | capture est=60659 msgCount=43
+49	2026-11-14T01:08:40.340000Z	1409.052	MAIN_REQUEST	358	39	142	msg_uPZCo5Zp	49373	49316	57	3221	tool_calls	289	68131	main model request | capture est=61723 msgCount=45
+50	2026-11-14T01:09:00.571000Z	1429.283	MAIN_REQUEST	359	40	144	msg_f04qMWh_	52994	49372	3622	480	tool_calls	9726	10439	main model request | capture est=66692 msgCount=47
+51	2026-11-14T01:09:11.711000Z	1440.423	MAIN_REQUEST	360	41	146	msg_wL1bhaHl	53565	53474	91	387	tool_calls	624	8720	main model request | capture est=67582 msgCount=49
+52	2026-11-14T01:09:39.722000Z	1468.434	MAIN_REQUEST	361	42	148	msg_aCR0kyLM	54740	53952	788	1086	tool_calls	2224	25420	main model request | capture est=68971 msgCount=51
+53	2026-11-14T01:10:15.773000Z	1504.485	MAIN_REQUEST	362	43	151	msg_qp83u2I6	56724	55826	898	1348	tool_calls	2862	33031	main model request | capture est=71396 msgCount=53
+54	2026-11-14T01:10:32.977000Z	1521.689	MAIN_REQUEST	363	44	154	msg_5JtU5P4K	59047	56723	2324	359	tool_calls	7700	9313	main model request | capture est=74075 msgCount=55
+55	2026-11-14T01:11:11.192000Z	1559.904	MAIN_REQUEST	364	45	157	msg_MAog9anW	64957	59406	5551	561	tool_calls	21276	16801	main model request | capture est=81367 msgCount=57
+56	(provider-log order only)		SUMMARIZER_REQUEST	365				3139	0	3139	8192	length	3805	140792	summarizer (agentic) request; output cap 8192 = DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS
+57	2026-11-14T01:16:18.537000Z	1867.249	MAIN_REQUEST	366	46	160	msg_R54EA2v_P	75341	65518	9823	3696	tool_calls	53419	108503	main model request | capture est=93917 msgCount=59
+58	(provider-log order only)		SUMMARIZER_REQUEST	367				3403	3138	265	8192	length	463	104382	summarizer (agentic) request; output cap 8192 = DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS
+59	2026-11-14T01:18:56.113000Z	2024.825	MAIN_REQUEST	370	47	163	msg_HjuYBNHw	14670	3640	11030	2395	tool_calls	11495	40216	main model request | capture est=19896 msgCount=3
+60	2026-11-14T01:19:10.412000Z	2039.124	MAIN_REQUEST	371	48	167	msg_Iwy8PLpT	18140	14669	3471	500	tool_calls	5587	8355	main model request | capture est=24627 msgCount=5
+61	2026-11-14T01:19:37.924000Z	2066.636	MAIN_REQUEST	372	49	170	msg_SXsHl90O	19564	18640	924	1514	tool_calls	1504	25908	main model request | capture est=26363 msgCount=7
+62	2026-11-14T01:20:16.914000Z	2105.626	MAIN_REQUEST	373	50	172	msg_etywsaMC	25672	19563	6109	1606	tool_calls	10000	28933	main model request | capture est=33431 msgCount=9
+63	2026-11-14T01:20:40.004000Z	2128.716	MAIN_REQUEST	374	51	174	msg_40EQIZmf	27961	27278	683	1180	tool_calls	1366	21665	main model request | capture est=36563 msgCount=11
+64	2026-11-14T01:20:55.732000Z	2144.444	MAIN_REQUEST	375	52	176	msg_aJUNH0F_	29350	29141	209	767	tool_calls	522	15129	main model request | capture est=38504 msgCount=13
+65	2026-11-14T01:21:13.346000Z	2162.058	MAIN_REQUEST	376	53	179	msg_0EaWmkx9	36885	30117	6768	112	tool_calls	15229	2117	main model request | capture est=47884 msgCount=15
+66	2026-11-14T01:21:57.402000Z	2206.114	MAIN_REQUEST	377	54	182	msg_GIgEM50I	46146	36997	9149	881	tool_calls	23317	20584	main model request | capture est=58935 msgCount=17
+67	2026-11-14T01:22:14.346000Z	2223.058	MAIN_REQUEST	378	55	186	msg_fIsybZ6z	47781	47027	754	486	tool_calls	2463	12299	main model request | capture est=60985 msgCount=19
+68	2026-11-14T01:22:41.180000Z	2249.892	MAIN_REQUEST	379	56	189	msg_mFC9j-xq	49251	48267	984	872	tool_calls	3913	22647	main model request | capture est=62861 msgCount=21
+69	2026-11-14T01:22:51.665000Z	2260.377	MAIN_REQUEST	380	57	192	msg_v0yHi3zG	51049	50123	926	248	tool_calls	3097	7206	main model request | capture est=64861 msgCount=23
+70	2026-11-14T01:23:17.962000Z	2286.674	MAIN_REQUEST	381	58	195	msg_cf4CJ5x1	53308	51297	2011	532	tool_calls	9648	16266	main model request | capture est=67597 msgCount=25
+71	2026-11-14T01:25:28.475000Z	2417.187	MAIN_REQUEST	382	59	198	msg_Z-fjCosr	55698	53840	1858	3554	tool_calls	8130	121933	main model request | capture est=70453 msgCount=27
+72	2026-11-14T01:26:57.404000Z	2506.116	MAIN_REQUEST	383	60	201	msg_-IP36q7a	60137	59252	885	2935	tool_calls	3803	84918	main model request | capture est=75787 msgCount=29
+73	2026-11-14T01:28:50.469000Z	2619.181	MAIN_REQUEST	384	61	203	msg_YOTScnTa	64220	60136	4084	3460	tool_calls	16548	96357	main model request | capture est=80754 msgCount=31
+74	2026-11-14T01:29:27.619000Z	2656.331	MAIN_REQUEST	385	62	205	msg_4g5QPUL7	67780	64219	3561	821	tool_calls	13916	23092	main model request | capture est=85686 msgCount=33
+75	(provider-log order only)		SUMMARIZER_REQUEST	387				2707	0	2707	3870	cancelled	2157	52147	summarizer (agentic) request
+
+# LEGEND
+#  P_prompt      = provider-reported prompt tokens (Kapitsa 'chat: prompt N'). Includes cached input; NEVER subtract cached.
+#  noncached    = P - cached (freshly prefilled tokens only)
+#  prefill_ms   = Kapitsa 'in N ms' for the prompt phase (template/tokenize + GPU start + GPU)
+#  decode_ms    = Kapitsa 'N tokens in M ms' for the generation phase
+#  MAIN_REQUEST rows carry the canonical transcript ts; SUMMARIZER_REQUEST rows are ordered only
+#  (Kapitsa logs completion order, not request start time).

@@ -1,0 +1,169 @@
+ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01 - EXECUTED DISCRIMINATORS
+==============================================================================
+
+All probes ran OFFLINE against the captured artifacts of session 1794617111057_i279p and the
+real production seams at repo HEAD 753f4adad. No live model request was issued. The probe file
+was a disposable Vitest file under sdk/packages/core/src/extensions/context/ and was DELETED after
+evidence capture (ACT-owned diagnostics = 0).
+
+PROBE A - COMPACTION POLICY REPLAY  (real resolver: compaction-shared.ts + compaction.ts)
+------------------------------------------------------------------------------
+  Input    : model metadata as configured for THIS run (contextWindow=256000, maxInputTokens
+             absent), userContextCeiling absent, COMPACTION_TRIGGER_RATIO=0.9,
+             DEFAULT_TARGET_RATIO=0.7, CONTEXT_WINDOW_INPUT_RATIO=0.9
+  Asserted : resolveEffectiveMaxInputTokens({contextWindow:256000}) === 230400
+             normalizeUserContextCeiling(undefined) === undefined
+             applyUserContextCeiling(230400, undefined) === 230400
+             applyUserContextCeiling(230400, 96000) === 96000   (counterfactual)
+             trigger (no ceiling) === 230400 * 0.9 === 207360
+             trigger (96K counterfactual) === 96000 * 0.9 === 86400
+  RESULT   : PASS - the policy reproduces. No HALT_POLICY_NOT_REPRODUCED.
+  Finding  : the 96000 ceiling was NOT active for this run. With the actual (Auto) ceiling the
+             trigger is 207360; the three observed compaction boundaries fired on the runtime's
+             REQUEST ESTIMATE, not on the provider count (68859 / 70499 / 75341 provider tokens).
+             A 96K ceiling would have produced trigger=86400, which is ABOVE all three observed
+             provider counts -- i.e. the 96K ceiling would not have changed WHERE the triggers
+             fired, only the target budget. Hypothesis H3 (incorrect effective ceiling) is
+             REJECTED for this run: the ceiling that was active was the model's own 230400, and
+             the observed trigger behaviour is consistent with it.
+
+PROBE B - SUMMARIZER OUTCOME CLASSIFICATION
+------------------------------------------------------------------------------
+  B.1 EXACT captured provider response was AVAILABLE for two attempts.
+      Kapitsa serve-8000.log lines 365 and 367 record, for the two summarizer requests of this
+      session, out=8192 tokens with finish_reason=length (raw). Normalized by the production
+      path: ai-sdk.ts mapFinishReason('length') -> 'max-tokens' -> compat.ts -> incompleteReason
+      = 'max_tokens'. HTTP-level response metadata (max_output_tokens as sent) is
+      UNAVAILABLE_FROM_TRACE -- the Kapitsa server log does not echo the request body's
+      max_tokens field, and no request-body capture for the summarizer path exists.
+      BUT the effective cap is independently established at 8192 = DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS
+      (compaction-shared.ts:34), because resolveSummaryMaxOutputTokens() returns
+      min(DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS, modelInfo.maxTokens) and the model reports no
+      maxTokens, so the default applies unchanged.
+      Production classification of that exact outcome:
+        - generateSummary() accumulates text and records incompleteReason='max_tokens'.
+        - agentic-compaction.ts:202-220 rejects ONLY when rawSummary.trim() === ''.
+          A length-truncated response with 8192 tokens of text is NON-EMPTY -> ACCEPTED.
+        - summarise-conversation.ts:163-172 (the CLI path, NOT this path) WOULD reject on
+          incompleteReason. The two paths differ; the extension used the agentic path.
+      RESULT: the captured `length` responses produce a VALID (accepted) summary, NOT a skip.
+      Verified end-to-end by observation: iteration 47's provider request (01:18:03.567Z, 3
+      messages) opens with 'Context summary: \n\n## Continuation Note ...', and the sidecar
+      (updated_at 01:18:03.500Z) carries the same summary.
+
+  B.2 SYNTHETIC NEGATIVE CONTROL (characterises the code, is NOT the live failure).
+      A synthetic {text:'', incompleteReason:'max_tokens'} response drives the real
+      agentic-compaction.ts rejection branch: rawSummary === '' -> log 'Skipped agentic
+      compaction: summarizer returned no summary text' -> return undefined -> compaction.ts
+      emits 'compaction-skipped' (reason 'no_result') and captureCompactionSkipped.
+      IMPORTANT: the live run did NOT produce an empty summarizer text. The live `length`
+      responses carried 8192 tokens of text and were accepted. The synthetic control only
+      establishes WHICH input class would produce the observed screenshot 'skipped' label:
+      an EMPTY summarizer text, not a truncated one.
+
+  B.3 FALLBACK CONTRACT (verified in source, agentic-compaction.ts + compaction.ts:659-681).
+      The agentic->basic fallback is a CATCH block, not a result-based branch:
+        - it fires ONLY if runBuiltinStrategy THROWS (and strategy==='agentic' and the error is
+          not a cancellation);
+        - it does NOT fire when the agentic strategy returns undefined (e.g. empty summary text,
+          budget exhaustion, cut index 0).
+      Consequence: an agentic attempt that returns undefined yields NO fallback, NO projection,
+      NO persisted state, and the canonical+projected histories are left UNCHANGED; the next
+      iteration re-evaluates the trigger and the attempt is retried.
+      In THIS run the fallback NEVER executed: no summarizer request errored. All five attempts
+      were 'stop' (2), 'length' (2) or 'cancelled' (1).
+      => H2 (agentic fallback fails) is REJECTED: the fallback path was never entered.
+
+PROBE C - SIDECAR PROJECTION AND RESTORATION
+------------------------------------------------------------------------------
+  C.1 Source-prefix identity: REPRODUCED for the shape, MISMATCHED for the exact hash.
+      createSessionCompactionState({sourceMessages: canonical, ...}) reproduced
+        source_message_count     = 163                       MATCH
+        source_last_message_key  = 'id:msg_dPCWFjbg'        MATCH
+        source_prefix_hash       = sha256:5bdb07bfb63d9a8f...  vs sidecar sha256:17bfe0d8...
+      MISMATCH. Cause (bounded, benign): the hash input includes `metrics` and `modelInfo`
+      (session-compaction.ts:92-104). The sidecar was written MID-RUN, when the prefix messages
+      carried the metrics as they were at that moment; the on-disk canonical transcript was
+      re-serialised AFTER the run with the final per-message metrics. The prefix CONTENT is
+      identical (message ids, roles, and content all line up, and msg_dPCWFjbg is at index 162),
+      but the persisted metrics differ, so the hash cannot be recomputed from the final file.
+      This is a KNOWN, DOCUMENTED property of the v2 hash (it covers 'durable metadata'), not a
+      defect introduced by this run. It does NOT affect the projection, because
+      projectSessionCompactionState() re-hashes the CURRENT canonical prefix and compares it to
+      the stored hash -- and the projection SUCCEEDED (see C.2).
+
+  C.2 Deterministic restoration: PASS.
+      projectSessionCompactionState(sidecar, canonical) returned a defined array; projecting
+      twice produced byte-identical JSON. Length = 4 (sidecar messages) + 44 (canonical tail
+      163..206) = 48. The first element is the compaction_summary message
+      (metadata.kind === 'compaction_summary'). The last element is canonical[206].
+
+  C.3 Tool-pair stability: PASS -- zero orphaned tool_result blocks in the projection (every
+      tool_result's tool_use_id has a matching tool_use).
+
+  C.4 User task objective: LOST from the projection.
+      The projected transcript does NOT contain the literal 'What does this project do?'.
+      Cause: the sidecar's compactedMessages REPLACE the entire 163-message prefix, and the
+      summary states the goal semantically ('Investigate the Keycloak-based project at ...')
+      without reproducing the literal question. Probe D shows the completion obligation was
+      preserved elsewhere, so this is a fidelity loss, not a contract break.
+
+PROBE D - CONTINUATION CONTRACT
+------------------------------------------------------------------------------
+  summaryCarriesIt      = false
+  tailCarriesIt         = true    <- the obligation survives via the preserved canonical tail
+  systemPromptCarriesIt = false   (system_prompt is 4297 chars; no 'submit_and_exit')
+  canonicalCarriesIt    = false   (canonical[0] is the raw question; the obligation is the
+                                    separate canonical[1], which lies inside the compacted prefix)
+  RESULT: the terminal-completion obligation was STILL AVAILABLE to the continuation after
+  compaction, through the preserved tail. NO failing production-seam reproduction, therefore NO
+  additional completion-instruction patch is warranted on the basis of this run.
+
+CAUSAL DISCRIMINATION
+------------------------------------------------------------------------------
+  H1 summarizer output truncated .............. PARTIALLY TRUE, NOT THE FAILURE CAUSE
+      Two of five summarizer responses were truncated at 8192 tokens (finish_reason=length).
+      But the truncated text was non-empty and was ACCEPTED, and the compaction SUCCEEDED
+      (sidecar persisted; next request used the projection). Truncation did not skip anything.
+  H2 agentic fallback fails .................. REJECTED (fallback path never entered)
+  H3 incorrect effective context ceiling ...... REJECTED (Auto ceiling 230400; 96K was inactive)
+  H4 context counter uses wrong authority .... REJECTED for the live path
+      W computed from the ACTUAL captured provider request is a stable 1.223-1.358 x P across
+      all 71 requests -- a constant 3-chars-per-token estimator bias, not a wrong authority.
+      (A 4.0x W/P figure appears ONLY if W is computed from the raw canonical transcript, which
+      is NOT the request the provider received: the provider request at the same boundary was
+      59 messages / 264,964 bytes vs the canonical 163 messages / 1,031,818 bytes.)
+  H5 compaction summary damages continuation .. SUPPORTED AS A CONTRIBUTOR, NOT THE ROOT CAUSE
+      The summary propagated the misspelled repository root ('chistryakov'), which caused 10
+      ENOENT reads and ~3.2 min / 4 requests of path rediscovery after the cut. It also dropped
+      the literal task question. However the error ORIGINATED in the source prefix (279 prior
+      occurrences, earliest at canonical idx 59) and the model recovered by using relative
+      paths; the run still had the information needed to finish.
+  H6 Flint independently continues unnecessary research ... SUPPORTED (PRIMARY)
+      The completion obligation was present after compaction (Probe D); the evidence base was
+      already sufficient (the model's own idx-201/203 reasoning: 'I have a comprehensive
+      picture'); and the model still issued 8 further tool calls. This is model-generated
+      continuation behaviour.
+  H7 Kapitsa long-context latency dominates .. PARTIALLY TRUE BUT NOT THE FAILURE CAUSE
+      Wall clock is 98.8% provider request elapsed (2621.9 s of 2653.8 s); tool execution is
+      31.9 s (1.2%); UNATTRIBUTED_GAP = 0.0 s. The provider WAS the bottleneck in wall-clock
+      terms, but latency did not cause the non-completion: the run was cut short by the USER
+      abort, and the model's own reasoning shows it was ready to synthesise well before the end.
+
+NECESSITY / ABLATION CHECK FOR THE ONE CANDIDATE REPAIR
+------------------------------------------------------------------------------
+  CANDIDATE: make the agentic compaction reject a truncated summarizer response
+  (incompleteReason === 'max_tokens'), i.e. treat a `length` finish as no usable result and
+  fall back to the deterministic basic strategy.
+  DISCRIMINATOR (distinguishes it from existing behaviour):
+    - EXISTING : a length-truncated summarizer is accepted; the compacted projection contains the
+      truncated summary; the next request shrinks (75341 -> 14670 in this run).
+    - REPAIRED : the length-truncated summarizer is rejected; the basic strategy runs; the next
+      request must STILL shrink, but the compacted transcript contains the deterministic
+      dropped-work summary instead of the model's note.
+    - A probe that asserts 'a length-truncated summarizer response yields a basic-compaction
+      projection' REDs on today's code and GREENs on the repair.
+  NECESSITY ASSESSMENT: this repair would change WHICH summary is used, but it would NOT
+  change the observed non-completion, because in this run the truncated summaries WERE accepted
+  and the continuation failed to finish for reasons unrelated to summary truncation (H6).
+  => The repair is therefore NOT warranted by this evidence. No successor repair ACT is proposed.

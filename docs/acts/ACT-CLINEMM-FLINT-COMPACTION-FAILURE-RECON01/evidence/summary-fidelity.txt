@@ -1,0 +1,154 @@
+ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01 - CONTINUATION SUMMARY FIDELITY
+==============================================================================
+
+Source of truth : sidecar 1794617111057_i279p.compaction.json (source_message_count=163,
+                  source_prefix_hash=sha256:17bfe0d8..., source_last_message_key=id:msg_dPCWFjbg)
+Compared against: canonical transcript messages[0..162] of the same session
+Project         : private Keycloak-based repository under <HOME>/Users/<USER>/Projects/<REPO> (private; not reproduced here)
+
+5.1 GROUNDEDNESS MATRIX
+------------------------------------------------------------------------------
+
+[Task objective]                    PRESERVED (semantically), NOT verbatim
+  The summary states the goal as 'Investigate the Keycloak-based project at ... ; no files
+  modified.' The literal first-turn text ('What does this project do?') is NOT reproduced.
+  The projection therefore loses the literal question but keeps its subject.
+
+[Read-only constraint]               PRESERVED
+  'no files modified' is stated in Goal and 'No files edited.' in Highlights;
+  metadata.details.modifiedFiles = [] (empty) corroborates it.
+
+[Canonical repository root]          WRONG in 8 of 11 listed paths (summarizer typo)
+  Correct root : <HOME>/Users/<USER>/Projects/<REPO>/keycloak
+  In summary   : <HOME>/Users/<MISSPELLED-USER>/Projects/<REPO>/keycloak   ('chistryakov')
+  PROVENANCE   : the typo is NOT a summarizer invention. The 163-message source prefix already
+                 contains 'chistryakov' 279 times (earliest at canonical idx 59, msg_mS1-n7i2).
+                 The summarizer faithfully copied an error already present in its input.
+
+[Completed work]                    SUPPORTED by prior tool results
+  Summary lists project structure, Helm charts (.helm/do, .helm/roz), CI, docker-compose, .env,
+  startup, README, .gitignore as read. All are present in the source prefix's read_files inputs.
+
+[Remaining work]                    ACTUALLY unfinished
+  'Complete .gitlab-ci.yml stage/job inspection and remaining CI reads.'
+  Cross-check: the source prefix still contains open CI reads (idx 201 sed -n 1630,1760p,
+  idx 203/205 username-path probes) and the model never produced a final synthesis.
+
+[Previously failed operations]       NOT falsely reported successful
+  The transcript contains two failed shell invocations (idx 163/167: 'zsh:1: unmatched "');
+  the summary does not claim those succeeded. It records 'Blocked: None confirmed' -- which is
+  about blockers, not about the failed commands. No false success is asserted.
+
+[File paths]                        MIXED (8 of 11 wrong-root, traceable to source)
+  'chistryakov' x 8 in summary; source prefix contains it 279 times.
+  '.gitignore_placeholder_never_used' x 1 in summary; source prefix contains it 3 times
+  (earliest at canonical idx 108, msg_TcQji10j) -> traceable to source, NOT invented.
+  metadata.details.readFiles lists 11 paths, 8 with the wrong root, 3 with the correct root.
+
+[Terminal completion obligation]     NOT in the summary; PRESENT elsewhere (see below)
+
+[Project findings]                   SUPPORTED by inspected content
+  Two Keycloak deployments (ROZ/roznanie.ru and DO/znanierussia.ru), keycloakx, profiler watcher,
+  external-secrets, ingress. All appear in the inspected Helm templates/values in the source prefix.
+
+[Tool-result references]             NO FABRICATED PROVENANCE
+  The summary cites concrete file paths that are all present in the source prefix's tool inputs.
+  No tool result is attributed to a tool call that did not happen.
+
+SEPARATION OF CAUSES
+------------------------------------------------------------------------------
+  Newly invented summary claims ................ NONE FOUND
+  Errors copied from prior model output ........ 'chistryakov' root typo (8x),
+                                                 '.gitignore_placeholder_never_used' (1x)
+  Incorrect tool results ........................ NONE FOUND in the summary
+  Information dropped during summarization ..... the literal task question; the exact username
+                                                 directory; the two failed shell invocations
+  Still available elsewhere in resumed context .. see PROBE D below
+
+5.2 PROGRESS CONSERVATION
+------------------------------------------------------------------------------
+
+  Tool calls before the sidecar cut (idx 0..162)   : 70
+  Tool calls after  the sidecar cut (idx 163..206)  : 44
+  Distinct read paths before                       : 12
+  Distinct read paths after                        : 18
+  Read paths REPEATED after compaction              : 5
+  Repeated commands (identical)                    : 1
+
+  The 5 repeated reads are NOT wasteful range reads. Every one of them uses the misspelled
+  'chistryakov' root and therefore FAILED:
+    <HOME>/Users/<MISSPELLED-USER>/Projects/<REPO>/keycloak/.helm/do/Chart.yaml
+    <HOME>/Users/<MISSPELLED-USER>/Projects/<REPO>/keycloak/.helm/do/values-dev.yaml
+    <HOME>/Users/<MISSPELLED-USER>/Projects/<REPO>/keycloak/.helm/do/values-prod.yaml
+    <HOME>/Users/<MISSPELLED-USER>/Projects/<REPO>/keycloak/.helm/do/values.yaml
+    <HOME>/Users/<MISSPELLED-USER>/Projects/<REPO>/keycloak/.helm/roz/Chart.yaml
+  Observed tool result for those reads:
+    "Error reading file: ENOENT: no such file or directory, stat '.../chistryakov/.../values.yaml'"
+  => FAILED ATTEMPTS CAUSED BY INCORRECT PATHS : 5 (all 5 repeated reads)
+
+  Recovery cost after the sidecar boundary (01:18:03 -> 01:21:13):
+    idx 172 01:20:16 read_files with the misspelled root  -> ENOENT on 10 paths
+    idx 174 01:20:40 pwd + ls of the home root -> path discovery
+    idx 176 01:20:55 pwd                                      -> path discovery
+    idx 179 01:21:13 re-read of the same values files with relative paths -> SUCCESS
+  ~3.2 minutes and 4 model requests spent rediscovering the repository root.
+
+  NEW USEFUL SOURCE COVERAGE after the cut: 18-12 = 6 additional distinct read paths
+  (.helm/roz/templates/*, .helm/do/templates/*, .roz-themes/.env, Chart.lock files, startup.sh,
+  CI sections 1-60/60-130/216-320/1630-1760). The continuation did NOT simply re-tread old ground.
+
+  WORK REPEATED AFTER COMPACTION: 1 command ('cat .helm/roz/values.yaml' at idx 176) and the
+  10 failed misspelled-path reads at idx 172. Both are consequences of the wrong root, not of a
+  stale-summary duplication of already-completed analysis.
+
+  TIME ON ADDITIONAL INVESTIGATION vs FINAL SYNTHESIS:
+    01:18:56 - 01:29:27 (post-cut)  = 631 s of the 2656 s session
+    of which the model explicitly said it had enough material:
+      idx 201 thinking: 'Now, the final deliverable. I think I should now write the comprehensive
+                        final summary of the investigation and submit it.'
+      idx 203 thinking: 'I now have a comprehensive picture. ... Now write the final answer:'
+    and yet it issued 8 further tool calls instead of synthesising.
+  => The continuation was ALREADY POSITIONED TO COMPLETE and chose to keep investigating.
+
+5.3 COMPLETION READINESS
+------------------------------------------------------------------------------
+
+  At the sidecar boundary (01:18:03) the original user requirements were ALREADY substantially
+  satisfied by observable evidence: the transcript already contained README, directory listing,
+  CI configuration, both Helm charts and their values/templates, docker-compose, .env, startup.sh
+  and recent git history. The model's own later reasoning confirms it ('I have a comprehensive
+  picture').
+
+  The continuation summary ENCOURAGES additional investigation ('Next: Complete .gitlab-ci.yml
+  stage/job inspection and remaining CI reads') rather than signalling completion.
+
+  CLASSIFICATION (per ACT section 5.3):
+    PRIMARY  : Model-generated continuation behaviour (H6).
+              The completion obligation was still reachable after compaction (PROBE D below), the
+              evidence base was already sufficient, and the model chose further investigation.
+    NOT the cause: compaction-induced information loss. The literal task question was dropped,
+              but the goal subject, the read-only constraint and the completion obligation all
+              remained reachable; and the model's own reasoning shows it knew it had enough.
+    NOT the cause: runtime completion-gating defect. No completion-gate event fired at all; the
+              run ended by user abort, not by a gate rejecting a finished answer.
+
+  REMAINING UNCERTAINTY: the model's internal decision process cannot be inferred from chronology
+  alone. The classification rests on the model's OWN recorded reasoning text (idx 201/203) plus the
+  observable absence of a completion attempt, not on an inference from timing.
+
+PROBE D - TERMINAL-COMPLETION OBLIGATION AFTER COMPACTION
+------------------------------------------------------------------------------
+
+  The obligation text is: '[SYSTEM] This run is not complete until you call one of these terminal
+  completion tools: submit_and_exit. ...'
+
+  summaryCarriesIt      : FALSE  (the persisted summary does not repeat it)
+  tailCarriesIt         : TRUE   (it is present in the preserved canonical tail -- canonical idx 26
+                          and 27 re-state it as 'Continue' + the obligation, and idx 163+ is the tail)
+  systemPromptCarriesIt : FALSE  (persisted system_prompt is 4297 chars; no 'submit_and_exit')
+  canonicalCarriesIt    : FALSE  (canonical[0] is the raw user question; the obligation is the
+                          separate message canonical[1], which lies INSIDE the compacted prefix)
+
+  CONCLUSION: the obligation survived the compaction through the preserved tail, NOT through the
+  summary and NOT through the system prompt. No additional completion-instruction patch is warranted
+  on the basis of this run.

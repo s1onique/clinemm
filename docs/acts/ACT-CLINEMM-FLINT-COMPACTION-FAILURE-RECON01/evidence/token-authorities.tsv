@@ -1,0 +1,129 @@
+# ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01 - TOKEN AUTHORITIES (W / P / B)
+#
+# W = working-context estimate. Authority = the ACTUAL provider request payload captured at the
+#      ai_sdk_prompt stage (systemPrompt + messages + tools), scored with the production estimator
+#      estimateRequestInputTokens (CHARS_PER_TOKEN = 3).
+# P = provider input tokens. Authority = Kapitsa 'chat: prompt N (cached M)'; identical to the
+#      canonical transcript's assistant metrics.inputTokens / cacheReadTokens (verified for 71/71).
+#      P INCLUDES cached input -- cached tokens are NEVER subtracted (the P_noncached column is
+#      informational only).
+# B = compaction budget. Authority = the compaction sidecar's metadata.tokensBefore, i.e. the
+#      production requestInputTokens recorded at the compaction boundary.
+#
+# A 'boundary' row is the MAIN request whose PRECEDING Kapitsa row is a summarizer request, i.e.
+# the request that TRIGGERED that compaction attempt. The P_at_compaction_boundary and
+# B_tokensBefore columns are populated only on those rows.
+# '-' means 'not applicable for this row'.
+#
+# columns: iter	W_est	P_prompt	P_cached	P_noncached	W_over_P	P_at_compaction_boundary	B_tokensBefore	B_over_P	boundary
+iter	W_est	P_prompt	P_cached	P_noncached	W_over_P	P_at_compaction_boundary	B_tokensBefore	B_over_P	boundary
+1	5815	3742	3741	1	1.554	-	-	-	-
+2	13370	10167	4058	6109	1.315	-	-	-	-
+3	34408	27059	10548	16511	1.272	-	-	-	-
+4	41157	33003	27503	5500	1.247	-	-	-	-
+5	42715	34123	33598	525	1.252	-	-	-	-
+6	42994	34264	34199	65	1.255	-	-	-	-
+7	43354	34464	34399	65	1.258	-	-	-	-
+8	43778	34683	34618	65	1.262	-	-	-	-
+9	44046	34808	34743	65	1.265	-	-	-	-
+1	44380	34942	34868	74	1.270	-	-	-	-
+2	47499	37458	35052	2406	1.268	-	-	-	-
+3	57328	45441	37880	7561	1.262	-	-	-	-
+4	62857	50219	45649	4570	1.252	-	-	-	-
+5	66999	53998	50285	3713	1.241	-	-	-	-
+6	78369	63671	54186	9485	1.231	-	-	-	-
+7	85546	68859	64403	4456	1.242	68859	103440	1.502	boundary#1 (summarizer line 321; trigger P=68859 -> next P=16769)
+8	22479	16769	3640	13129	1.341	-	-	-	-
+9	25327	19581	17109	2472	1.293	-	-	-	-
+10	35973	28920	19879	9041	1.244	-	-	-	-
+11	46841	38180	29456	8724	1.227	-	-	-	-
+12	50133	40510	38963	1547	1.238	-	-	-	-
+13	52058	42020	40678	1342	1.239	-	-	-	-
+14	62693	50256	42542	7714	1.247	-	-	-	-
+15	66315	53285	50704	2581	1.245	-	-	-	-
+16	69752	56077	53641	2436	1.244	-	-	-	-
+17	73034	58922	56076	2846	1.240	-	-	-	-
+18	77037	62134	58921	3213	1.240	-	-	-	-
+19	84259	68093	65744	2349	1.237	-	-	-	-
+20	85828	69557	68648	909	1.234	-	-	-	-
+21	86643	70193	69556	637	1.234	-	-	-	-
+22	87044	70499	70310	189	1.235	70499	103440	1.467	boundary#2 (summarizer line 339; trigger P=70499 -> next P=19804)
+23	25653	19804	3640	16164	1.295	-	-	-	-
+24	30399	23582	20047	3535	1.289	-	-	-	-
+25	39269	30896	24964	5932	1.271	-	-	-	-
+26	41061	32281	31989	292	1.272	-	-	-	-
+27	41670	32628	32456	172	1.277	-	-	-	-
+28	43149	33942	32740	1202	1.271	-	-	-	-
+29	51636	42218	34010	8208	1.223	-	-	-	-
+30	52998	43128	42217	911	1.229	-	-	-	-
+31	53821	43635	43127	508	1.233	-	-	-	-
+32	54648	44278	43927	351	1.234	-	-	-	-
+33	56479	45800	44277	1523	1.233	-	-	-	-
+34	57640	46638	45799	839	1.236	-	-	-	-
+35	58483	47180	47026	154	1.240	-	-	-	-
+36	60005	48191	48143	48	1.245	-	-	-	-
+37	60438	48447	48386	61	1.248	-	-	-	-
+38	60659	48572	48479	93	1.249	-	-	-	-
+39	61723	49373	49316	57	1.250	-	-	-	-
+40	66692	52994	49372	3622	1.258	-	-	-	-
+41	67582	53565	53474	91	1.262	-	-	-	-
+42	68971	54740	53952	788	1.260	-	-	-	-
+43	71396	56724	55826	898	1.259	-	-	-	-
+44	74075	59047	56723	2324	1.255	-	-	-	-
+45	81367	64957	59406	5551	1.253	64957	103440	1.592	boundary#3a ATTEMPT-ONLY (summarizer line 365; result superseded by attempt 4)
+46	93917	75341	65518	9823	1.247	75341	103440	1.373	boundary#3b PERSISTED SIDE CAR (summarizer line 367; trigger P=75341 -> next P=14670)
+47	19896	14670	3640	11030	1.356	-	-	-	-
+48	24627	18140	14669	3471	1.358	-	-	-	-
+49	26363	19564	18640	924	1.348	-	-	-	-
+50	33431	25672	19563	6109	1.302	-	-	-	-
+51	36563	27961	27278	683	1.308	-	-	-	-
+52	38504	29350	29141	209	1.312	-	-	-	-
+53	47884	36885	30117	6768	1.298	-	-	-	-
+54	58935	46146	36997	9149	1.277	-	-	-	-
+55	60985	47781	47027	754	1.276	-	-	-	-
+56	62861	49251	48267	984	1.276	-	-	-	-
+57	64861	51049	50123	926	1.271	-	-	-	-
+58	67597	53308	51297	2011	1.268	-	-	-	-
+59	70453	55698	53840	1858	1.265	-	-	-	-
+60	75787	60137	59252	885	1.260	-	-	-	-
+61	80754	64220	60136	4084	1.257	-	-	-	-
+62	85686	67780	64219	3561	1.264	67780	103440	1.526	boundary#4 ABORTED (summarizer line 387; cancelled by the user abort)
+
+# --- MATCHED-REQUEST DISCRIMINATOR (boundary #3b, the persisted sidecar) ---
+# W (actual provider request, iteration 46) : 93917   (capture estimateRequestInputTokens)
+# P (Kapitsa prompt, msg_R54EA2v_P)          : 75341
+# P cached                                  : 65518   (non-cache-read = 9823)
+# B (sidecar metadata.tokensBefore)         : 103440
+# W / P                                     : 1.247
+# B / P                                     : 1.373
+#
+# EXPLANATION of the W-vs-P gap (EXPECTED ACCOUNTING DIFFERENCE, not a defect):
+#   W scores the request the runtime built; P counts the tokens the provider's tokenizer produced.
+#   The estimator uses 3 chars/token, which over-counts by ~25% for this corpus (YAML/Go/Helm text).
+#   The ratio is stable across the whole run (min 1.223, max 1.358 over 71 requests) -- a constant
+#   estimator bias, not drift. B/P = 1.373 is the same bias measured at the compaction boundary.
+#   W and B are computed by the same estimator family, so they agree in units.
+#
+#   IMPORTANT: a W/P ratio near 4.0 appears ONLY if W is computed from the RAW CANONICAL
+#   TRANSCRIPT (343,940 est. tokens for the 163-message prefix). That is NOT the live W: the
+#   provider request at the same boundary was 59 messages / 264,964 bytes, not the canonical
+#   163 messages / 1,031,818 bytes. The provider request was already the compacted projection.
+#
+# --- BUDGET (B-policy) PROVENANCE, ACTUAL settings ---
+#   userContextCeiling      : ABSENT (Auto)  -> globalState.json has no 'userContextCeiling' key
+#   model metadata          : contextWindow=256000, maxInputTokens ABSENT (models.json + globalState)
+#   resolveEffectiveMaxInputTokens -> 256000 * CONTEXT_WINDOW_INPUT_RATIO(0.9) = 230400
+#   applyUserContextCeiling(230400, undefined) -> 230400 (Auto preserves the model limit exactly)
+#   maxInputTokens (effective)     = 230400
+#   COMPACTION_TRIGGER_RATIO       = 0.9  -> requestTriggerTokens = 207360
+#   requestTargetTokens (auto)     = floor(207360 * DEFAULT_TARGET_RATIO 0.7) = 145152
+#   inputBudgetSource              = context_window_derived (model reported no maxInputTokens)
+#
+#   THE OPERATOR'S 96000 CEILING WAS NOT ACTIVE. Had it been set, the effective ceiling would have
+#   been 96000 and the trigger 86400 -- still ABOVE all three observed trigger provider counts
+#   (68859, 70499, 75341), so a 96K ceiling would NOT have moved WHERE the triggers fired, only
+#   the target budget. The observed triggers fired on the runtime's REQUEST ESTIMATE crossing the
+#   threshold, not on the provider count.
+#
+#   PROBE A (policy replay, real resolver) reproduced: effective ceiling 230400, trigger 207360,
+#   target 145152, and the 96K counterfactual (ceiling 96000, trigger 86400).

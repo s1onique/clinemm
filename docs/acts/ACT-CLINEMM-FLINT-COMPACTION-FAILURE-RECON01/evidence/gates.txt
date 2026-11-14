@@ -1,0 +1,85 @@
+ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01 - EXECUTED GATES
+======================================================================
+
+[1] FOCUSED VITEST SUITES (existing tests, no modification)
+    cwd: sdk/packages/core
+    cmd: <repo>/node_modules/.bin/vitest run --config vitest.config.ts \
+           src/extensions/context/compaction.test.ts \
+           src/extensions/context/compaction.working-context-authority-publish.test.ts \
+           src/extensions/context/compaction.working-context-ratio.test.ts \
+           src/extensions/context/compaction.cut-snap-forward.test.ts \
+           src/extensions/context/summarize-conversation.test.ts \
+           src/session/models/session-compaction.test.ts \
+           src/session/services/message-builder.test.ts \
+           src/session/services/message-builder-read-dedup.test.ts
+
+    RESULT: Test Files 8 passed (8) | Tests 248 passed (248) | Duration 1.68s
+    EXIT: 0
+
+    Coverage mapping to the ACT's required areas:
+      compaction policy and budget resolution ... compaction.test.ts (112 tests)
+      agentic compaction ....................... compaction.test.ts
+      basic compaction ......................... compaction.test.ts
+      session compaction state and restoration .. session-compaction.test.ts (12 tests)
+      MessageBuilder projection ................ message-builder.test.ts (53),
+                                                message-builder-read-dedup.test.ts (35)
+      working-context estimate publication ...... compaction.working-context-authority-publish.test.ts (3)
+      compaction cut-snap ....................... compaction.cut-snap-forward.test.ts (7)
+      continuation/summary contract ............ summarize-conversation.test.ts (23)
+
+[2] DISPOSABLE PROBE SUITE (temporary file; DELETED after evidence capture)
+    file: sdk/packages/core/src/extensions/context/zz-act-recon-probe.test.ts
+    result: 10 tests, 7 passed / 3 failed.
+      The 3 failures were ASSERTION defects in the probe's own expectations, not production
+      failures, and each one produced a finding that is recorded in the evidence:
+        (a) source_prefix_hash recompute != sidecar hash
+            -> recorded in discriminators.txt as Probe C.1 (mid-run vs post-run metrics in the
+               hash input; the projection itself succeeded).
+        (b) 'What does this project do?' absent from the projection
+            -> recorded in discriminators.txt as Probe C.4 (fidelity loss, not a contract break).
+        (c) agentic compaction with an unreachable provider -> network timeout
+            -> expected offline behaviour; the summarizer-outcome classification was completed
+               with the CAPTURED provider response instead (Probe B.1), which is the stronger
+               evidence class anyway.
+    FILE REMOVED: `rm -f src/extensions/context/zz-act-recon-probe.test.ts`
+    Post-removal check: `git status --short` shows ONLY the new
+    docs/acts/ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01/ directory. Zero tracked source
+    modifications. ACT-OWNED DIAGNOSTICS = 0 (no mutable diagnostic globals were added; no
+    diagnostics were left in the tree; the probe never touched production state semantics).
+
+[3] FOCUSED TYPECHECK
+    cwd: sdk/packages/core
+    cmd: bun run typecheck
+    RESULT: exit 2, 40 pre-existing `error TS` diagnostics.
+    BASELINE ATTRIBUTION: this ACT modified ZERO TypeScript files.
+      `git status --short -- sdk/ apps/` -> empty
+      `git diff --name-only HEAD -- sdk/packages/core/src/runtime/command-policy/ \
+         sdk/packages/core/src/runtime/observability/ sdk/packages/core/src/runtime/orchestration/`
+        -> empty
+    All 40 diagnostics are therefore PRE-EXISTING AT HEAD 753f4adad, in test files unrelated to
+    compaction (path-authority.temporary-external.test.ts,
+    structured-command-risk.cd-cwd-authority.test.ts,
+    structured-command-risk.find-quoted-pattern.test.ts,
+    model-behavior-trace.test.ts,
+    session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts,
+    session-runtime.model-behavior-trace.test.ts).
+    NOTE: model-behavior-trace.test.ts diagnostics reference `contextWindow` /
+    `userContextCeiling` on the budget-provenance type -- the same seam this ACT inspected. They
+    are a pre-existing type-narrowing defect in that test file, NOT caused by this ACT, and they
+    do not affect any runtime path (the production resolver
+    resolveModelBehaviorTraceBudget is exercised by compaction.test.ts, which passes).
+    ACT-OWNED TYPE ERRORS = 0.
+
+[4] git diff --check
+    cmd: git diff --check
+    RESULT: no output, exit 0 (no whitespace errors).
+
+[5] WORKTREE / STASH PROTECTION
+    git status --short  -> only "?? docs/acts/ACT-CLINEMM-FLINT-COMPACTION-FAILURE-RECON01/"
+    git stash list     -> stash@{0}: WIP on main: d46223b51 ... (UNCHANGED, count = 1)
+    No push, no PR, no stash manipulation, no dependency upgrade, no installed-extension change.
+
+[6] FULL SUITE DELIBERATELY NOT RUN
+    The ACT is a reconnaissance task; the required gates are the focused compaction /
+    projection / working-context suites, all of which pass. Running the entire core suite was
+    explicitly out of scope for a docs-only recon.
