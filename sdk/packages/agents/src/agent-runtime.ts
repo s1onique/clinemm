@@ -42,6 +42,7 @@ import type {
 	ToolRuntimeOutcome,
 } from "@cline/shared";
 import {
+	buildCompletionToolReminderMessage,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,
@@ -1728,9 +1729,13 @@ export class AgentRuntime {
 		if (terminalToolNames.length === 0) {
 			return undefined;
 		}
-		return `[SYSTEM] This run is not complete until you call one of these terminal completion tools: ${terminalToolNames.join(
-			", ",
-		)}. Continue working if requirements are not met. If the task is complete, call the appropriate terminal completion tool now.`;
+		// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: the
+		// reminder text is rendered by the SHARED contract module so the
+		// compaction task-contract conservation path can recognise this exact
+		// runtime obligation by template equality instead of by broad string
+		// guessing. The rendered text is byte-identical to the previous
+		// inline template.
+		return buildCompletionToolReminderMessage(terminalToolNames);
 	}
 
 	private getCompletionReminderMessages(): string[] {

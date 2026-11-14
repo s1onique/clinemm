@@ -35,6 +35,7 @@ import {
 	MAX_INPUT_UNDERESTIMATE_FACTOR,
 	resolveEffectiveMaxInputTokens,
 } from "./compaction-shared";
+import { applyTaskContractToCompactedMessages } from "./task-contract";
 
 export interface ContextPipelinePrepareTurnInput {
 	agentId: string;
@@ -906,12 +907,36 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		state: SessionCompactionState,
 		sourceMessages: CoreCompactionContext["messages"],
 	) => void | Promise<void>;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: an
+	 * additional ceiling on the effective request input limit, applied on top
+	 * of the model limit and the context window. Callers pass the user's
+	 * configured operating ceiling here; it may only REDUCE the operating
+	 * capacity, never expand it.
+	 */
+	maxRequestTokens?: number;
 }): ContextPipelinePrepareTurn {
 	return async (context) => {
 		const existingState = input.getState?.();
 		const projectedMessages = existingState
 			? projectSessionCompactionState(existingState, context.messages)
 			: undefined;
+		// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01:
+		// the effective request input limit, resolved with the SAME existing
+		// limit resolvers the compaction budget machinery uses (model limit +
+		// context window), and then reduced — never expanded — by the
+		// caller's operating ceiling.
+		const contractBudget = {
+			maxRequestTokens: applyUserContextCeiling(
+				resolveEffectiveMaxInputTokens({
+					maxInputTokens: context.model.info?.maxInputTokens,
+					contextWindow: context.model.info?.contextWindow,
+				}),
+				input.maxRequestTokens,
+			),
+			systemPrompt: context.systemPrompt,
+			tools: context.tools,
+		};
 		if (existingState && projectedMessages) {
 			// Re-compaction intentionally starts from the compacted projection plus
 			// canonical tail. This keeps automatic turns bounded without rebuilding a
@@ -925,39 +950,72 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					})
 				: undefined;
 			if (result?.messages) {
+				// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01:
+				// carry the active task contract forward from the CANONICAL
+				// history into the freshly produced compaction summary, before
+				// persistence and before provider preparation. The canonical
+				// history is the only authority; a previous summary never
+				// becomes one.
+				const contracted = applyTaskContractToCompactedMessages(
+					result.messages,
+					context.messages,
+					contractBudget,
+				);
+				const contractedMessages = contracted.messages;
 				const systemPrompt = result.systemPrompt ?? existingState.system_prompt;
 				const nextState = createSessionCompactionState({
 					sourceMessages: context.messages,
-					compactedMessages: result.messages,
+					compactedMessages: contractedMessages,
 					conversationId: context.conversationId,
 					systemPrompt,
 				});
 				await input.saveState?.(nextState, context.messages);
 				return publishWorkingContextEstimate(
-					result.messages,
+					contractedMessages,
 					systemPrompt ?? context.systemPrompt,
 					context.tools,
 				);
 			}
 			const projectedSystemPrompt =
 				result?.systemPrompt ?? existingState.system_prompt;
-			return publishWorkingContextEstimate(
+			// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01:
+			// provider-visible restoration for a historical sidecar that was
+			// written before this repair and therefore lacks the contract. The
+			// persisted sidecar is NOT rewritten on read; only the projection
+			// the model receives is enriched. The raw projector remains a
+			// faithful projection of the sidecar.
+			const restored = applyTaskContractToCompactedMessages(
 				projectedMessages,
+				context.messages,
+				contractBudget,
+			);
+			return publishWorkingContextEstimate(
+				restored.messages,
 				projectedSystemPrompt ?? context.systemPrompt,
 				context.tools,
 			);
 		}
 		const result = input.compact ? await input.compact(context) : undefined;
 		if (result?.messages) {
+			// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: carry
+			// the active task contract forward from the CANONICAL history into
+			// the freshly produced compaction summary, before persistence and
+			// before provider preparation.
+			const contracted = applyTaskContractToCompactedMessages(
+				result.messages,
+				context.messages,
+				contractBudget,
+			);
+			const contractedMessages = contracted.messages;
 			const nextState = createSessionCompactionState({
 				sourceMessages: context.messages,
-				compactedMessages: result.messages,
+				compactedMessages: contractedMessages,
 				conversationId: context.conversationId,
 				systemPrompt: result.systemPrompt,
 			});
 			await input.saveState?.(nextState, context.messages);
 			return publishWorkingContextEstimate(
-				result.messages,
+				contractedMessages,
 				result.systemPrompt ?? context.systemPrompt,
 				context.tools,
 			);

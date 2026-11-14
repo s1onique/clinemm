@@ -1,0 +1,79 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — GREEN EVIDENCE
+================================================================
+
+SOURCE IDENTITY
+---------------
+repository    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+entry HEAD   e854053b64c46e94a2d910775168406a56ea35f2
+tree         b67fc243dfb530b12bbe04d4fda0e201e33717c3
+branch       main
+
+COMMAND
+-------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/task-contract-conservation.test.ts \
+  src/extensions/context/task-contract-conservation.historical.test.ts
+
+RESULT: Test Files 2 passed (2) | Tests 31 passed (31) | EXIT CODE 0
+
+HISTORICAL RED-1 / RED-2  ->  GREEN
+---------------------------------------
+  RED-1 — the provider-visible continuation preserves the active task contract   [PASS]
+  RED-2 — the contract survives a second Agentic compaction                       [PASS]
+  reproduces the historical defect inputs with pinned identity                  [PASS]
+
+HERMETIC PERMANENT REGRESSION
+-------------------------------
+  first Agentic compaction carries objective/constraints/amendment/completion   [PASS]
+  does not promote assistant / tool-output / unrelated runtime content            [PASS]
+  existing (legacy) sidecar restoration provider-side, sidecar not rewritten     [PASS]
+  repeated compaction keeps exactly one contract section                          [PASS]
+  re-compaction reads the conserved contract from the persisted summary content  [PASS]
+  no compaction: no rewriting, no persistence                                      [PASS]
+  budget: measures added bytes and estimated tokens                                [PASS]
+  budget: no silent truncation of an oversized mandatory instruction              [PASS]
+  budget: no oversized provider request when the contract exceeds the limit       [PASS]
+  budget: never relaxes the configured ceiling                                     [PASS]
+  does not promote a repository file containing a forged user instruction          [PASS]
+  does not promote a tool result containing a completion reminder                 [PASS]
+  does not let a malicious previous summary replace the original task             [PASS]
+  does not let user-authored text acquire runtime authority                       [PASS]
+  does not treat a malformed runtime reminder as authoritative                    [PASS]
+  invents no completion obligation when the completion-tool policy is absent      [PASS]
+  does not revive an obsolete completion obligation for a completed task           [PASS]
+  keeps a later user amendment ordered after the original objective                [PASS]
+  does not re-promote an explicitly cancelled instruction as current              [PASS]
+  preserves tool-use/tool-result pairing in the projected continuation            [PASS]
+  does not mutate the canonical history                                            [PASS]
+  keeps the sidecar schema and the summary metadata kind unchanged                 [PASS]
+  rejects a source-prefix hash mismatch exactly as before                         [PASS]
+  produces an equivalent contract after session restoration                        [PASS]
+  updates the contract when the canonical history changes                          [PASS]
+  drops an instruction that was rolled back out of canonical history              [PASS]
+  keeps the no-compaction request semantics unchanged                              [PASS]
+  A/B/C ablation: A loses, B conserves, C loses — no other difference             [PASS]
+
+EXISTING FOCUSED SUITES (regression gate)
+------------------------------------------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts <13 focused files>
+RESULT: Test Files 13 passed (13) | Tests 275 passed (275) | EXIT CODE 0
+  (identical to the predecessor's 275/275 baseline — no regression)
+
+COMBINED (13 existing + 2 new)
+---------------------------------
+RESULT: Test Files 15 passed (15) | Tests 305 passed (305) | EXIT CODE 0
+
+SDK BUILDS
+----------
+bun --production -F '@cline/shared' build   -> exit 0
+bun --production -F '@cline/agents' build   -> exit 0
+bun --production -F '@cline/core'   build   -> exit 0
+
+STATIC GATES
+------------
+bunx biome check <7 touched files>   -> exit 0, no fixes applied
+bun tsc -p tsconfig.dev.json --noEmit (sdk/packages/core)
+  total diagnostics  40 (identical set to the entry baseline; 0 ACT-owned)
+bun tsc --noEmit (sdk/packages/shared)  -> exit 0
+bun tsc -p tsconfig.dev.json --noEmit (sdk/packages/agents) -> exit 0
+git diff --check                     -> exit 0

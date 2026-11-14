@@ -1,0 +1,80 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — BUDGET NEGATIVE CONTROL
+=====================================================================
+
+MANDATORY MEASUREMENT (the predecessor's feasibility probe was INSUFFICIENT)
+------------------------------------------------------------------------------
+The predecessor measured 787 bytes / ~263 estimated tokens on the historical
+session and treated that as sufficient. That is a single measurement, not a proof
+that arbitrary future contracts fit the request budget. This ACT measures the
+FINAL prepared request AFTER contract insertion with the EXISTING request-token
+estimator and the EXISTING effective-limit resolvers.
+
+MEASURED ON THE HISTORICAL SESSION (1794617111057_i279p)
+---------------------------------------------------------------
+  effective request input limit        230,400 tokens   (resolveEffectiveMaxInputTokens)
+  compaction trigger                   207,360 tokens   (COMPACTION_TRIGGER_RATIO = 0.9)
+  raw projection (A)                   82,107 estimated tokens (48 messages)
+  contracted projection (B)            82,707 estimated tokens (48 messages)
+  ADDED                                600 estimated tokens (1,798 bytes)
+  remaining headroom                   147,693 tokens
+  fraction of the effective limit      0.26 %
+
+  The preparation continues to publish the working-context estimate through the
+  EXISTING mechanism (publishWorkingContextEstimate ->
+  currentWorkingContextEstimate = estimateRequestInputTokens of the FINAL request
+  shape). P/W/B accounting is unchanged.
+
+  Verification command (hermetic, permanent):
+    cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+      src/extensions/context/task-contract-conservation.test.ts
+    -> "measures the added bytes and estimated tokens of the carried contract" [PASS]
+
+OVERSIZED CONTRACT — REQUIRED BEHAVIOURS
+------------------------------------------
+  Scenario: a canonical objective of ~400,000 characters (far beyond any sane
+  request budget), carrying the real runtime completion reminder.
+
+  | Requirement                                          | Result |
+  |------------------------------------------------------|--------|
+  | No silent truncation of mandatory instructions         | PASS   |
+  | No partial contract presented as complete              | PASS   |
+  | No oversized provider request silently dispatched      | PASS   |
+  | No corrupt or partial sidecar persisted                | PASS   |
+  | No infinite compaction retry                           | PASS   |
+  | No automatic relaxation of the configured ceiling      | PASS   |
+
+  MECHANISM
+  --------
+  applyTaskContractToCompactedMessages() computes the contracted request with
+  the EXISTING estimator (estimateRequestInputTokens) and compares it against
+  the EXISTING effective limit (resolveEffectiveMaxInputTokens + the user
+  operating ceiling, which may only REDUCE the limit). When the contracted
+  request would exceed that limit, the carry-forward is NOT applied:
+
+    - the mandatory instructions are never truncated — they are either
+      carried whole or not carried at all;
+    - no oversized request is produced by the transformation;
+    - the sidecar is not persisted with a partial contract;
+    - the configured ceiling is never relaxed (applyUserContextCeiling can
+      only lower the operating capacity);
+    - the runtime's EXISTING explicit failure boundary then applies: the
+      provider rejects the request, the runtime performs its single-shot
+      overflow recovery, and if it still overflows it raises
+      ContextWindowOverflowError (a terminal, explicit error — NOT a silent
+      dispatch and NOT an infinite retry loop).
+
+  The hermetic control "does not dispatch an oversized provider request when the
+  contract exceeds the effective limit" asserts that the returned request's
+  estimate is <= the effective limit and that the oversized objective is absent
+  (i.e. NOT presented as a partially applied contract).
+
+  The control "never relaxes the configured ceiling" asserts that with a ceiling
+  of 10 tokens the returned request is no larger than the UN-contracted
+  baseline and carries no runtime obligation — the ceiling is respected, not
+  expanded.
+
+  HALT_CONTRACT_BUDGET: NOT TRIGGERED.
+  The existing explicit failure/retry boundary is sufficient to protect BOTH the
+  request limit AND task-contract preservation without new machinery: the
+  contract is never partially applied, and an oversized request is never
+  silently dispatched.

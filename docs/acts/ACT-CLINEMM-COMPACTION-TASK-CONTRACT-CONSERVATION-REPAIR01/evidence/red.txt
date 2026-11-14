@@ -1,0 +1,77 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — RED EVIDENCE
+================================================================
+
+SOURCE IDENTITY
+---------------
+repository    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+entry HEAD   e854053b64c46e94a2d910775168406a56ea35f2
+tree         b67fc243dfb530b12bbe04d4fda0e201e33717c3
+branch       main
+source state UNMODIFIED production (only the new test modules are untracked)
+
+COMMAND
+-------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/task-contract-conservation.test.ts \
+  src/extensions/context/task-contract-conservation.historical.test.ts
+
+EXIT CODE: 1   (RED reproduced — not HALT_RED_NOT_REPRODUCED)
+RESULT:     Test Files 2 failed (2) | Tests 6 failed | 3 passed (9)
+
+EXACT FAILING ASSERTIONS (historical, real production boundary)
+--------------------------------------------------------
+src/extensions/context/task-contract-conservation.historical.test.ts
+  RED-1 — the provider-visible continuation preserves the active task contract
+    AssertionError: expected 'Context summary:
+
+## Continuation N…' to contain 'What does this project do?'
+    at task-contract-conservation.historical.test.ts:159
+  RED-2 — the contract survives a second Agentic compaction
+    AssertionError: expected 'Context summary:
+
+## Continuation N…' to contain 'What does this project do?'
+    at task-contract-conservation.historical.test.ts:235
+
+EXACT FAILING ASSERTIONS (hermetic)
+----------------------------------------
+src/extensions/context/task-contract-conservation.test.ts
+  first Agentic compaction — carries objective/constraints/amendment/completion
+    AssertionError: expected 'Context summary:
+
+summary of work so far' to contain 'What does this project do?'
+    at task-contract-conservation.test.ts:237
+  existing sidecar restoration — restores contract provider-side
+    AssertionError: expected 'Context summary:
+
+legacy summary' to contain 'What does this project do?'
+    at task-contract-conservation.test.ts:308
+  repeated compaction — keeps exactly one contract section
+    AssertionError: expected 'Context summary:
+
+first summary' to contain 'submit_and_exit'
+    at task-contract-conservation.test.ts:347
+  repeated compaction — re-compaction reads the conserved contract
+    AssertionError: expected 'first summary' to contain 'submit_and_exit'
+    at task-contract-conservation.test.ts:391
+
+PASSING (control) ASSERTIONS ON THE UNMODIFIED IMPLEMENTATION
+-------------------------------------------------------
+  historical — reproduces the historical defect inputs with pinned identity  [PASS]
+  hermetic — does not promote assistant, tool-output or unrelated runtime content  [PASS]
+  hermetic — no compaction: does not rewrite messages or persist anything    [PASS]
+  (the two adversarial/no-op controls pass BEFORE the repair, so the RED is specific)
+
+HISTORICAL INPUT IDENTITY (pinned by the predecessor recon)
+---------------------------------------------------------
+  02c5a31231787330b7491646bb70cdf168f75fb9bc44c0a60b85140c8e9eff15  /Volumes/UserData/Users/chistyakov/Downloads/1794617111057_i279p.messages.json
+  2cba633cd2e1f27d0226338ffec862f5faf061c91d88d35fd5b006b24e84e8f7  /Volumes/UserData/Users/chistyakov/Downloads/1794617111057_i279p.compaction.json
+  expected transcript 02c5a31231787330b7491646bb70cdf168f75fb9bc44c0a60b85140c8e9eff15
+  expected sidecar   2cba633cd2e1f27d0226338ffec862f5faf061c91d88d35fd5b006b24e84e8f7
+
+MECHANISM (observed)
+--------------------
+  - The raw projector is FAITHFUL: it propagates the historical loss without fabricating a fix
+    (asserted: raw projection is 48 messages and does NOT contain the completion marker).
+  - The loss is in the PRODUCER: runAgenticCompaction's generated summary omits the
+    runtime completion obligation, so the sidecar summary lacks it.
+  - The continuation is therefore lossy at the provider-request seam.

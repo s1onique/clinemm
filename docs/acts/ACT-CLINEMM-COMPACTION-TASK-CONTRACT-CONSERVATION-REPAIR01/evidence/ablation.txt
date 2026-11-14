@@ -1,0 +1,75 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — ABLATION
+======================================================
+
+HARNESS
+-------
+sdk/packages/core/src/extensions/context/task-contract-conservation.test.ts
+  describe("task contract conservation — A/B/C ablation")
+
+COMMAND
+-------
+cd sdk/packages/core && bunx vitest run --config vitest.config.ts \
+  src/extensions/context/task-contract-conservation.test.ts
+
+RESULT: 1 passed | EXIT CODE 0
+
+THE THREE PROJECTIONS
+----------------------
+  A — HISTORICAL BASELINE (no carry-forward)
+     The un-contracted projection of the sidecar, produced by the REAL
+     production projector (projectSessionCompactionState).
+
+  B — MINIMAL CARRY-FORWARD (the repair)
+     The SAME canonical history and the SAME sidecar, PLUS the authorized
+     carry-forward applied at the state-aware wrapper. The contract is
+     attached to the EXISTING compaction_summary message; every other
+     projected message is byte-identical to A.
+
+  C — NEGATIVE CONTROL
+     B with ONLY the carry-forward removed: the raw projector output again,
+     asserted byte-IDENTICAL to A.
+
+REQUIRED MEASUREMENTS
+---------------------
+metric                                         | A          | B          | C         
+---------------------------------------------------+------------+------------+-----------
+message count                                  | 48         | 48         | 48        
+active task objective available                | NO         | YES        | NO        
+active completion obligation available         | NO         | YES        | NO        
+read-only constraint available                 | NO         | YES        | NO        
+later amendments respected                     | n/a        | YES        | n/a       
+tool pairing preserved                         | 0 orphans  | 0 orphans  | 0 orphans 
+canonical history changed                      | NO         | NO         | NO        
+sidecar schema key count                       | 6          | 6          | 6         
+messages[1..n] byte-identical                  | n/a        | YES        | YES       
+added request tokens                           | 0          | 600        | 0         
+provider-visible request valid                 | PASS       | PASS       | PASS      
+
+  (Measured on the HISTORICAL session: 600 added estimated tokens /
+   1,798 added bytes over a 48-message projection.)
+
+STRUCTURAL NECESSITY
+----------------------
+  A and C are byte-identical; B differs from them by EXACTLY the authorized
+  carry-forward and nothing else. The presence of the completion obligation
+  tracks that difference exactly. The carry-forward is therefore NECESSARY
+  for the obligation to survive the observed compaction boundary.
+
+  The asserted invariants (from the permanent regression):
+    - b.providerRequest.length === aProjection.length
+    - b.savedStates.length === 0        (a read does not persist)
+    - Object.keys(sidecar) unchanged
+    - sidecar.source_message_count === canonical.length
+    - for every index >= 1: b.providerRequest[i].content === aProjection[i].content
+
+WHAT THE ABLATION DOES NOT CLAIM
+----------------------------
+  - It does NOT claim that preserving the completion instruction makes the
+    model finish faster or more reliably. NO behavioural discriminator was
+    executed; none is authorized by this ACT.
+  - It does NOT claim any causal link to the historical 44-minute run.
+  - It does NOT qualify the basic-compaction path. The carry-forward is
+    applied at the state-aware wrapper, which serves both strategies, but the
+    permanent regression drives the Agentic path explicitly.
+  - It does NOT claim live behaviour. Live qualification is recorded separately
+    (see evidence/live.txt) and is NOT_EXECUTED unless an operator ran it.

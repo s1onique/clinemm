@@ -1,0 +1,73 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — EVIDENCE IDENTITY
+======================================================================
+
+REPOSITORY
+----------
+path            /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+remote (origin) git@github.com:s1onique/clinemm.git
+remote (upstream) https://github.com/cline/cline.git
+branch          main
+entry HEAD      e854053b64c46e94a2d910775168406a56ea35f2
+                docs(task-header): reconcile report with exact-head package and P1 file set
+entry tree      b67fc243dfb530b12bbe04d4fda0e201e33717c3
+worktree at entry  CLEAN apart from the 9 UNTRACKED predecessor recon
+                documentation files (preserved, NOT added to this repair)
+stash count     1
+stash@{0}       PRESERVED VERBATIM (not popped/applied/dropped/rewritten):
+                WIP on main: d46223b51 fix(completion-continuation-stall-lifetime):
+                separate REARM lifetime from STALL lifetime at BCB re-registration
+unexpected tracked dirt   NONE observed (HALT_UNEXPECTED_TRACKED_DIRT not triggered)
+
+PREDECESSOR RECON ARTEFACTS (preserved, untracked, not committed here)
+-------------------------------------------------------------------
+docs/acts/ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-RECON01/
+  REPORT.md
+  evidence/ablation.txt
+  evidence/adversarial-matrix.txt
+  evidence/candidate-probe.txt
+  evidence/contract-sources.tsv
+  evidence/gates.txt
+  evidence/identity.txt
+  evidence/loss-boundary.tsv
+  evidence/red-reproduction.txt
+  => 9 files, IDENTICAL to the predecessor's inventory; preserved as-is.
+
+RUNTIME IDENTITY
+----------------
+node  n/a
+bun   1.3.14
+NOTE: bun was NOT on the default PATH in this shell; it was resolved explicitly at
+      /opt/homebrew/bin/bun. Tooling = bun; runtime = node (VS Code extension host).
+
+AUTHORITATIVE INPUT ARTEFACTS (operator-local; NOT committed)
+----------------------------------------------------------
+~/Downloads/1794617111057_i279p.messages.json
+  size    1199385
+  sha256  02c5a31231787330b7491646bb70cdf168f75fb9bc44c0a60b85140c8e9eff15
+  role    canonical transcript (207 messages)
+~/Downloads/1794617111057_i279p.compaction.json
+  size    47556
+  sha256  2cba633cd2e1f27d0226338ffec862f5faf061c91d88d35fd5b006b24e84e8f7
+  role    persisted compaction sidecar (163-message source prefix)
+
+  IDENTITY CROSS-CHECK vs the predecessor recon (evidence/identity.txt):
+    expected transcript 02c5a31231787330b7491646bb70cdf168f75fb9bc44c0a60b85140c8e9eff15
+    expected sidecar   2cba633cd2e1f27d0226338ffec862f5faf061c91d88d35fd5b006b24e84e8f7
+    => MATCH (the historical witness pins these values and fails on drift).
+
+SESSION IDENTITY (from the artefacts themselves)
+-------------------------------------------------
+conversation_id            1794617111057_i279p
+transcript.messages        207
+sidecar.source_message_count 163
+sidecar.source_prefix_hash sha256:17bfe0d8c106bc588231570d2c6fb4e7f9af0e772592363dd54bb66c5ee02c90
+sidecar.source_last_message_key  id:msg_dPCWFjbg
+projected continuation     48 messages (4 sidecar + 44 canonical tail)
+
+SECURITY / EVIDENCE HANDLING
+----------------------------
+No raw transcript, provider payload, system prompt, private repository source
+excerpt, credential or secret is committed by this ACT. The historical witness
+reads the operator-local files at run time and is self-skipping when they are
+absent (it reports NOT_EXECUTED rather than substituting synthetic inputs).
+The hermetic permanent regression never depends on ~/Downloads.

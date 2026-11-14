@@ -1,0 +1,113 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — PRODUCTION BOUNDARY
+================================================================
+
+OWNERSHIP PROOF (verified at the entry HEAD and after the repair)
+----------------------------------------------------------------
+In createCompactionStateAwarePrepareTurn()  (sdk/packages/core/src/extensions/context/compaction.ts)
+
+  1. context.messages IS the canonical history.
+     The wrapper receives the canonical transcript in the prepare-turn input and
+     never mutates it. The repair reads the contract from this exact array.
+
+  2. projectSessionCompactionState() produces the projected history.
+     compaction.ts:921-923 (repair) / :912-914 (entry)
+       const projectedMessages = existingState
+         ? projectSessionCompactionState(existingState, context.messages)
+         : undefined;
+
+  3. Subsequent input.compact() invocations receive the PROJECTED history.
+     compaction.ts:945-951 (repair) / :920-926 (entry)
+       const result = input.compact ? await input.compact({
+         ...context,
+         messages: projectedMessages,
+         apiMessages: await input.prepareApiMessages(projectedMessages),
+       }) : undefined;
+
+  4. Compaction results are persisted via createSessionCompactionState().
+     compaction.ts:966-972 (re-compaction path) and :1008-1014 (fresh path)
+       const nextState = createSessionCompactionState({
+         sourceMessages: context.messages,
+         compactedMessages: contractedMessages,
+         conversationId: context.conversationId,
+         systemPrompt,
+       });
+       await input.saveState?.(nextState, context.messages);
+
+  5. Returned messages become part of subsequent provider-request preparation.
+     compaction.ts:973-977 / :1015-1019 -> publishWorkingContextEstimate(
+       contractedMessages, ...) -> { messages, systemPrompt, currentWorkingContextEstimate }
+     The agent runtime replaces request.messages with result.messages
+     (sdk/packages/agents/src/agent-runtime.ts:2319-2324), and the host's
+     prepareApiMessages (MessageBuilder.buildForApi) builds the provider request.
+
+CRITICAL IMPLEMENTATION CONSTRAINT — HONOURED
+--------------------------------------------
+  The authoritative obligations are NEVER reconstructed exclusively from
+  runAgenticCompaction().context.messages after an existing compaction.
+
+  The repair reads context.messages (the CANONICAL history owned by the
+  state-aware wrapper) at every application point:
+    - re-compaction result path:  applyTaskContractToCompactedMessages(result.messages, context.messages, ...)
+    - existing-sidecar restoration: applyTaskContractToCompactedMessages(projectedMessages, context.messages, ...)
+    - fresh compaction result path: applyTaskContractToCompactedMessages(result.messages, context.messages, ...)
+
+  No new canonical state is created. The helper is a PURE transformation
+  over the canonical history; the summary remains only a projection.
+
+PRODUCTION FILES CHANGED
+-----------------------
+  sdk/packages/shared/src/agents/completion-reminder.ts   (NEW)
+    The exact runtime completion-reminder contract, shared by its producer
+    (@cline/agents AgentRuntime.getCompletionToolReminderMessage) and its
+    recogniser (@cline/core compaction task-contract conservation path).
+    The recogniser matches by TEMPLATE EQUALITY, not by broad string guessing.
+
+  sdk/packages/shared/src/agents/index.ts   (MODIFIED)
+    Barrel export of the two contract functions.
+
+  sdk/packages/agents/src/agent-runtime.ts   (MODIFIED)
+    getCompletionToolReminderMessage() now renders through the shared builder.
+    The rendered text is BYTE-IDENTICAL to the previous inline template.
+
+  sdk/packages/core/src/extensions/context/task-contract.ts   (NEW)
+    The pure extraction + carry-forward transformation.
+
+  sdk/packages/core/src/extensions/context/compaction.ts   (MODIFIED)
+    Three application points in createCompactionStateAwarePrepareTurn().
+
+  sdk/packages/core/src/index.ts   (MODIFIED)
+    Barrel export of the new helper.
+
+TEST FILES
+-----------
+  sdk/packages/core/src/extensions/context/task-contract-conservation.test.ts   (NEW, hermetic)
+  sdk/packages/core/src/extensions/context/task-contract-conservation.historical.test.ts   (NEW, local historical witness)
+
+EXISTING MODULES INSPECTED (UNCHANGED)
+------------------------------------------
+  sdk/packages/core/src/extensions/context/agentic-compaction.ts
+  sdk/packages/core/src/extensions/context/compaction-shared.ts
+  sdk/packages/core/src/session/models/session-compaction.ts
+  sdk/packages/core/src/session/user-run-messages.ts
+  sdk/packages/core/src/extensions/context/budget-projection/project.ts
+  sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+
+  Note: agentic-compaction.ts and compaction-shared.ts needed NO change. The
+  carry-forward is applied at the wrapper, which is the ONLY seam that holds
+  BOTH the canonical history and the compaction result.
+
+EXISTING AUTHORITY CLASSIFIERS REUSED (NOT REINVENTED)
+--------------------------------------------
+  isTurnStartMessage()   sdk/packages/core/src/extensions/context/compaction-shared.ts:356
+    -> USER authority: role === 'user' AND metadata.userRunSpan !== 0
+       AND not a tool-result-only message AND not a compaction summary.
+  getUserRunSpan()      sdk/packages/core/src/session/user-run-messages.ts:133
+    -> RUNTIME-SYNTHETIC classification: metadata.userRunSpan === 0.
+  isCompactionSummaryMessage() / getCompactionSummaryMetadata()
+    -> the existing compaction-summary identity and metadata reader.
+
+  NOT classified as a completion obligation: every userRunSpan === 0 message.
+  Only a message whose text is byte-identical to the runtime completion-
+  reminder template (for a recognised terminal completion tool) qualifies.
+  Other runtime notices (team completion guards, max-token recovery nudges,
+  provider-error continuations) are EXCLUDED.

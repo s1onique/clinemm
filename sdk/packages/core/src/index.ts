@@ -1111,6 +1111,18 @@ export {
 // the production budget resolver + ceiling sanitizer so the host can resolve
 // the SAME effective input budget the compaction policy applies.
 export { normalizeUserContextCeiling } from "./extensions/context/compaction-shared";
+// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: the active
+// task-contract extraction and pure carry-forward transformation. The
+// canonical session history stays the only authority; this module is a pure
+// projection over it, never a second task-state owner.
+export {
+	applyTaskContractToCompactedMessages,
+	applyTaskContractToSummary,
+	extractActiveTaskContract,
+	renderTaskContractSection,
+	stripTaskContractSection,
+	TASK_CONTRACT_SECTION_HEADING,
+} from "./extensions/context/task-contract";
 export { summarizeConversation } from "./extensions/context/summarize-conversation";
 export {
 	CLINE_PLUGIN_RUNTIME_DIR_ENV,

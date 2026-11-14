@@ -1,0 +1,54 @@
+ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01 — LIVE QUALIFICATION
+=====================================================================
+
+CLASSIFICATION: NOT_EXECUTED
+
+No operator-driven live qualification was performed for this ACT.
+
+WHY NOT
+-------
+  - The ACT authorises live qualification as OPTIONAL ("The operator may
+    install the packaged VSIX after structural GREEN").
+  - The historical 44-minute Flint benchmark was explicitly NOT to be repeated.
+  - No operator-driven live session was executed in this run, so no live
+    evidence exists to record.
+
+WHAT WAS NOT CLAIMED
+-------------------
+  No live behavioural claim is made anywhere in this ACT. In particular:
+
+    - The repair establishes that the continuing model RECEIVES the active
+      task contract after Agentic compaction (a structural property).
+    - It does NOT establish that the model acts on the contract, completes
+      sooner, or becomes more reliable.
+    - The A/B/C ablation establishes STRUCTURAL NECESSITY of the
+      carry-forward — nothing more.
+
+SUGGESTED BOUNDED LIVE SCENARIO (for a later operator-driven run)
+------------------------------------------------------------------
+    Inspect the README and explain what this small disposable project does.
+
+    Do not modify files.
+
+    When finished, use the normal completion tool.
+
+  Trigger compaction once after sufficient history exists, then verify:
+    1. The original objective survives.
+    2. The read-only instruction survives.
+    3. The completion reminder survives.
+    4. No unnecessary repeated instructions appear.
+    5. The model can complete normally.
+    6. No tool authorisation or execution regression occurs.
+    7. No malformed sidecar is persisted.
+
+  A second short compaction may qualify repeated-compaction behaviour if it can
+  be reached without a large benchmark.
+
+STRUCTURAL EVIDENCE THAT DOES NOT REQUIRE A LIVE RUN
+--------------------------------------------------------
+  The permanent hermetic regression suite already asserts, at the exact
+  provider-request seam:
+    - the objective, read-only constraint, amendment and runtime completion
+      obligation are present in the PREPARED provider request;
+    - the completion marker occurs exactly once across three compactions;
+    - the raw projector remains a faithful projection of the sidecar; echo     - no authority escalation occurs from assistant / tool / repository content.
