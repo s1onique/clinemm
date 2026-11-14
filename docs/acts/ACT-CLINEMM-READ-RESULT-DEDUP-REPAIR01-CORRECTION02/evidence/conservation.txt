@@ -1,0 +1,103 @@
+# Conservation matrix — every gate exercised individually
+
+Command pattern (one per required gate):
+  cd sdk/packages/core
+  bun x vitest run src/session/services/message-builder-read-dedup.test.ts \
+    --config vitest.config.ts -t "<test name>"
+
+Result (all green):
+
+rewrites obsolete ranged duplicates when a later full-file read owns the path
+  Tests  1 passed | 34 skipped (35)
+rewrites obsolete duplicate groups when a later read changed the content
+  Tests  1 passed | 34 skipped (35)
+keeps the newest observation authoritative for X to Y to X
+  Tests  1 passed | 34 skipped (35)
+keeps the anchor stable for an unchanged X to X to X sequence
+  Tests  1 passed | 34 skipped (35)
+does not alias reads of the same path at different ranges
+  Tests  1 passed | 34 skipped (35)
+keeps the anchor lifetime bound to the final projection
+  Tests  1 passed | 34 skipped (35)
+keeps a ranged observation current when no full-file read owns the path
+  Tests  1 passed | 34 skipped (35)
+keeps the full-file owner authoritative when a ranged read follows it
+  Tests  1 passed | 34 skipped (35)
+
+## Gate mapping
+
+| Required gate                                              | Test                                                                                       | Result |
+|------------------------------------------------------------|----------------------------------------------------------------------------------------------|--------|
+| New cross-locator RED -> GREEN                              | rewrites obsolete ranged duplicates when a later full-file read owns the path                   | PASS   |
+| Existing X -> X -> Y conservation                            | rewrites obsolete duplicate groups when a later read changed the content                       | PASS   |
+| Existing X -> Y -> X conservation                            | keeps the newest observation authoritative for X to Y to X                                     | PASS   |
+| Unchanged X -> X -> X first-anchor behaviour                 | keeps the anchor stable for an unchanged X to X to X sequence                                  | PASS   |
+| Different-range non-aliasing                                 | does not alias reads of the same path at different ranges                                      | PASS   |
+| Reference-lifetime checks                                    | keeps the anchor lifetime bound to the final projection                                        | PASS   |
+| No cross-locator over-reach (no owner on the path)           | keeps a ranged observation current when no full-file read owns the path                        | PASS   |
+| Full-content owner stays authoritative (reverse order)       | keeps the full-file owner authoritative when a ranged read follows it                           | PASS   |
+
+## Why the repair is not a second freshness model
+
+The correction adds no new freshness state. It reuses the EXISTING
+full-content-owner semantics already implemented by `isOutdatedReadLocator`:
+
+  const fullOwner = this.latestFullContentOwnerByPathCache.get(locator.path);
+  if (fullOwner && fullOwner !== toolUseId) {
+      return true;   // this observation is outdated
+  }
+
+`latestFullContentOwnerByPathCache` already maps a path to the tool_use_id of the
+latest full-file read of that path. The stale-read rewrite policy has ALWAYS
+treated every other observation of that path as outdated, including ranged
+windows at a different locator.
+
+The defect was that the duplicate-read projection's obsolete classification
+only recognised SAME-locator supersession (contiguous runs keyed by the exact
+locator key). So a ranged run at `file.ts:1-100` was never classified as
+obsolete, even though `isOutdatedReadLocator` already said it was. The
+projection then shielded that run from the stale-read rewrite policy, which
+re-granted protection the existing policy had already revoked.
+
+The correction extends the projection's obsolete classification with the
+cross-locator case, using that same existing owner map:
+
+  for (const run of runs) {
+      const owner = this.latestFullContentOwnerByPathCache.get(run.locator.path);
+      if (!owner) continue;
+      for (const resultId of run.resultIds) {
+          if (resultId === owner) continue;
+          // The owner is a full-file read, so its locator key is the path.
+          // An observation at that same locator is already covered by the
+          // run logic; only a DIFFERENT locator (a ranged window) is new.
+          if (run.locatorKey === run.locator.path) continue;
+          obsoleteResultIds.add(resultId);
+      }
+  }
+
+The `run.locatorKey === run.locator.path` guard is what preserves the unchanged
+X -> X -> X first-anchor behaviour: for a full-file observation the locator key
+IS the path, so the owner shares the same locator and the existing run logic
+remains the sole authority. Only ranged windows (a different locator key) are
+newly classified as obsolete.
+
+## Behavioural scope of the new classification
+
+An observation is newly classified as obsolete only when ALL of these hold:
+
+  1. It is a successful, parseable read result (the existing candidate filter).
+  2. Its path has a full-content owner: a full-file read of that path exists.
+  3. The owner is a different tool_use_id.
+  4. The observation is at a DIFFERENT locator than the owner, i.e. it is a
+     ranged window (`path:start-end`) rather than the full file.
+
+Consequences that are deliberately preserved:
+
+  - Two ranged reads of the same path at different ranges, with no full-file
+    read anywhere: neither is obsolete, and they are never aliased to each
+    other. Different-range non-aliasing is intact.
+  - A full-file read that is not the owner (an earlier full-file read) stays
+    governed by the same-locator run logic.
+  - The existing 64 KiB stale-rewrite batching threshold is untouched. A single
+    obsolete result below the threshold is still carried in full, exactly as
+    the pre-dedup baseline does.

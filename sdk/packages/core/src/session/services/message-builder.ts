@@ -87,6 +87,7 @@ interface DuplicateReadAnchor extends DuplicateReadCandidate {
  */
 interface DuplicateReadRun {
 	locatorKey: string;
+	locator: ReadLocator;
 	hash: string;
 	content: string;
 	resultIds: string[];
@@ -434,6 +435,7 @@ export class MessageBuilder {
 				const runIndex = runs.length;
 				runs.push({
 					locatorKey: candidate.locatorKey,
+					locator: candidate.locator,
 					hash: candidate.hash,
 					content: candidate.content,
 					resultIds: [candidate.toolUseId],
@@ -459,6 +461,45 @@ export class MessageBuilder {
 				for (const resultId of runs[locatorRuns[index]].resultIds) {
 					obsoleteResultIds.add(resultId);
 				}
+			}
+		}
+
+		// Cross-locator supersession. The existing full-content-owner rule makes
+		// the latest full-file read of a path the owner of that path's content:
+		// `isOutdatedReadLocator` already treats every other observation of that
+		// path as outdated. An observation taken at a DIFFERENT locator of the
+		// same path (a ranged window) therefore holds superseded bytes and must
+		// not be shielded from the stale-read rewrite policy either.
+		//
+		//   read A -> X   (ranged   file.ts:1-100)
+		//   read B -> X   (ranged   file.ts:1-100)
+		//   read C -> Y   (full-file file.ts, the path owner)
+		//
+		// Without this pass the ranged run is not superseded by the run logic
+		// (different locator key), so A stays the protected anchor and B stays a
+		// compact reference to it, and the obsolete X survives in full.
+		//
+		// The owner is itself a full-file read, so its locator key is the path.
+		// An observation at that same locator is the owner or a byte-identical
+		// duplicate of it, and is already covered by the run logic above; the
+		// unchanged X -> X -> X first-anchor behaviour is therefore untouched.
+		for (const run of runs) {
+			const owner = this.latestFullContentOwnerByPathCache.get(
+				run.locator.path,
+			);
+			if (!owner) {
+				continue;
+			}
+			for (const resultId of run.resultIds) {
+				if (resultId === owner) {
+					continue;
+				}
+				// Same locator as the owner: the run logic already decided
+				// whether this observation is current.
+				if (run.locatorKey === run.locator.path) {
+					continue;
+				}
+				obsoleteResultIds.add(resultId);
 			}
 		}
 

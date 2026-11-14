@@ -564,6 +564,255 @@ describe("MessageBuilder duplicate read-result freshness conservation", () => {
 		]);
 	});
 
+	/**
+	 * RED for the cross-locator freshness defect: a later FULL-FILE read of the
+	 * same path owns the file's content under the existing full-content-owner
+	 * rule, so earlier RANGED reads of that path are obsolete even though they
+	 * live at a different locator key.
+	 *
+	 *   read A -> X   (ranged   file.ts:1-100)
+	 *   read B -> X   (ranged   file.ts:1-100, duplicate of A)
+	 *   read C -> Y   (full-file file.ts, later)
+	 *
+	 * A and B must fall back to the stale-read rewrite policy, C must stay
+	 * authoritative, and no compact reference may survive that points at the
+	 * obsolete anchor.
+	 */
+	it("rewrites obsolete ranged duplicates when a later full-file read owns the path", () => {
+		const builder = new MessageBuilder({ maxToolResultChars: 200_000 });
+		const path = "/private/project/cross-locator.txt";
+		const rangedRead = (id: string, content: string): Message[] => [
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id,
+						name: "read_files",
+						input: { path, start_line: 1, end_line: 100 },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: id,
+						name: "read_files",
+						content: [
+							{
+								query: `${path}:1-100`,
+								result: content,
+								success: true,
+							},
+						] as unknown as ToolResultContent["content"],
+					},
+				],
+			},
+		];
+		const fullFileRead = (id: string, content: string): Message[] => [
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id,
+						name: "read_files",
+						input: { path },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: id,
+						name: "read_files",
+						content: [
+							{
+								query: path,
+								result: content,
+								success: true,
+							},
+						] as unknown as ToolResultContent["content"],
+					},
+				],
+			},
+		];
+		const messages: Message[] = [
+			...rangedRead("a", LARGE_CONTENT),
+			...rangedRead("b", LARGE_CONTENT),
+			...fullFileRead("c", LARGE_CHANGED_CONTENT),
+		];
+
+		const output = builder.buildForApi(messages);
+
+		// The obsolete ranged X observations are reclaimed by the stale-read policy.
+		expect(resultEntryById(output, "a")?.result).toBe(OUTDATED_MARKER);
+		expect(resultEntryById(output, "b")?.result).toBe(OUTDATED_MARKER);
+		// The newer full-file Y observation remains fully visible and authoritative.
+		expect(resultEntryById(output, "c")?.result).toBe(LARGE_CHANGED_CONTENT);
+		// No compact reference survives that points at the obsolete anchor.
+		expect(JSON.stringify(output)).not.toContain(
+			"same content as earlier read result",
+		);
+	});
+
+	it("keeps a ranged observation current when no full-file read owns the path", () => {
+		const builder = new MessageBuilder({ maxToolResultChars: 200_000 });
+		const path = "/private/project/range-only.txt";
+		const rangedRead = (
+			id: string,
+			startLine: number,
+			endLine: number,
+			content: string,
+		): Message[] => [
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id,
+						name: "read_files",
+						input: { path, start_line: startLine, end_line: endLine },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: id,
+						name: "read_files",
+						content: [
+							{
+								query: `${path}:${startLine}-${endLine}`,
+								result: content,
+								success: true,
+							},
+						] as unknown as ToolResultContent["content"],
+					},
+				],
+			},
+		];
+		const messages: Message[] = [
+			...rangedRead("a", 1, 100, LARGE_CONTENT),
+			...rangedRead("b", 101, 200, LARGE_CHANGED_CONTENT),
+		];
+
+		const output = builder.buildForApi(messages);
+
+		// No full-file read owns the path, so neither ranged observation is
+		// superseded: distinct windows of the same path are not each other's
+		// owner, and identical-size payloads must not be mistaken for staleness.
+		expect(resultEntryById(output, "a")?.result).toBe(LARGE_CONTENT);
+		expect(resultEntryById(output, "b")?.result).toBe(LARGE_CHANGED_CONTENT);
+		expect(JSON.stringify(output)).not.toContain(
+			"same content as earlier read result",
+		);
+	});
+
+	it("keeps the full-file owner authoritative when a ranged read follows it", () => {
+		const builder = new MessageBuilder({ maxToolResultChars: 200_000 });
+		const path = "/private/project/owner-first.txt";
+		const messages: Message[] = [
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "a",
+						name: "read_files",
+						input: { path },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "a",
+						name: "read_files",
+						content: [
+							{ query: path, result: LARGE_CONTENT, success: true },
+						] as unknown as ToolResultContent["content"],
+					},
+				],
+			},
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "b",
+						name: "read_files",
+						input: { path, start_line: 1, end_line: 100 },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "b",
+						name: "read_files",
+						content: [
+							{
+								query: `${path}:1-100`,
+								result: LARGE_CHANGED_CONTENT,
+								success: true,
+							},
+						] as unknown as ToolResultContent["content"],
+					},
+				],
+			},
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "c",
+						name: "read_files",
+						input: { path, start_line: 101, end_line: 200 },
+					},
+				],
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "c",
+						name: "read_files",
+						content: [
+							{
+								query: `${path}:101-200`,
+								result: LARGE_CONTENT,
+								success: true,
+							},
+						] as unknown as ToolResultContent["content"],
+					},
+				],
+			},
+		];
+
+		const output = builder.buildForApi(messages);
+
+		// The full-file read owns the path and stays authoritative.
+		expect(resultEntryById(output, "a")?.result).toBe(LARGE_CONTENT);
+		// The later ranged observations of the same path are narrower views of
+		// the same file and yield to that owner. Two obsolete results cross the
+		// existing 64 KiB stale-rewrite batching threshold, so both are
+		// reclaimed by the pre-existing policy.
+		expect(resultEntryById(output, "b")?.result).toBe(OUTDATED_MARKER);
+		expect(resultEntryById(output, "c")?.result).toBe(OUTDATED_MARKER);
+	});
+
 	it("keeps the anchor lifetime bound to the final projection", () => {
 		const builder = new MessageBuilder({
 			maxToolResultChars: HISTORICAL_CONTENT_CHARS * 2,

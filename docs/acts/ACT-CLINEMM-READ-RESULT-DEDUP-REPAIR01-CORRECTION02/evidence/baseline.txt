@@ -1,0 +1,31 @@
+# PRE-DEDUP BASELINE (bf486a47c) — cross-locator case PASSES
+
+Command:
+  git show bf486a47c:sdk/packages/core/src/session/services/message-builder.ts \
+    > sdk/packages/core/src/session/services/message-builder.ts
+  cd sdk/packages/core
+  bun x vitest run src/session/services/message-builder-read-dedup.test.ts \
+    --config vitest.config.ts
+  # restore the working-tree file afterwards
+
+The pre-dedup baseline rewrites the obsolete ranged observations and keeps the
+newest full-file observation authoritative:
+
+     v rewrites obsolete ranged duplicates when a later full-file read owns the path 0ms
+ Test Files  1 failed (1)
+      Tests  8 failed | 25 passed (33)
+
+The 8 baseline failures are the dedup-specific assertions (the baseline has no
+duplicate-read projection at all, so it cannot emit compact references). The
+new cross-locator freshness assertion PASSES on the baseline.
+
+That proves the duplicate-read projection introduced in f761fa682 regressed the
+cross-locator freshness behaviour, and that the pre-dedup baseline is the
+correct reference for this defect.
+
+The two further guard tests added by this correction also pass on the baseline:
+
+  - "keeps the full-file owner authoritative when a ranged read follows it"
+  - "keeps a ranged observation current when no full-file read owns the path"
+
+so the repair restores baseline semantics rather than inventing new behaviour.

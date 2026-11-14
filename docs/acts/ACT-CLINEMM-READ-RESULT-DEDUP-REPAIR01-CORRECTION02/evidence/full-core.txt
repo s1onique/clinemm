@@ -1,0 +1,62 @@
+# Full core unit suite — entry HEAD vs. correction
+
+Command (run in `sdk/packages/core`):
+  bun x vitest run --config vitest.config.ts
+
+The entry baseline was captured by temporarily stashing ONLY the two changed
+files, running the suite against the pristine entry HEAD
+`6cd7374e1c7bbafae3839e07e7d2d8eee6ecca89`, and restoring the working tree.
+The protected stash was never used for this.
+
+## Entry HEAD 6cd7374e1
+
+ Test Files  34 failed | 293 passed | 3 skipped (331)
+      Tests  154 failed | 4923 passed | 165 skipped (5251)
+
+## With the correction
+
+ Test Files  34 failed | 293 passed | 3 skipped (331)
+      Tests  154 failed | 4926 passed | 165 skipped (5254)
+
+## Comparison
+
+  - Test-file breakdown: IDENTICAL (34 failed / 293 passed / 3 skipped).
+  - Failure count: IDENTICAL (154).
+  - Passing tests: 4923 -> 4926 (+3: the three new cross-locator tests).
+  - Skipped: IDENTICAL (165).
+
+The sorted set of failing test names was extracted from both runs and diffed:
+
+  perl -pe 's/\e\[[0-9;]*m//g' <run> | grep -E '^ FAIL ' \
+    | sed -E 's/^ FAIL  //' | sort
+
+  diff baseline-failures final-failures
+  -> no output: FAILURE SETS IDENTICAL (155 FAIL lines each)
+
+## ACT-owned regressions: NONE
+
+Every failure is in an unrelated subsystem (hub transport, cloud publishing,
+codex auth, MCP client, plugin registry/sandbox, seatbelt/sandbox backends,
+subprocess sandbox, remote shell path, hook checkpoints, remote runtime host).
+The `src/session/checkpoint-restore.test.ts` failures (2) were independently
+confirmed pre-existing by running that file against the pristine entry HEAD,
+where the same 2 tests fail identically:
+
+   x fully rewinds a snapshot checkpoint: untracked reverted, created-after removed, no apply conflict
+   x keeps .gitignored files when rewinding a snapshot checkpoint
+
+No failure touches `src/session/services/message-builder.ts`,
+`src/session/services/message-builder-read-dedup.test.ts`, or
+`src/extensions/context/`. The hub failures whose names contain
+"compaction sidecar" are a hub transport ownership concern in
+`src/hub/server/boundary.test.ts`, not the session compaction architecture.
+
+## Focused suites (re-run against the final code)
+
+  MessageBuilder + dedup + recovery + cache
+   Test Files  4 passed (4)
+        Tests  103 passed (103)
+
+  Compaction suites (src/extensions/context/ + session-compaction)
+   Test Files  9 passed | 1 skipped (10)
+        Tests  177 passed | 1 skipped (178)

@@ -1,0 +1,41 @@
+# Typecheck diagnostic comparison — entry HEAD vs. correction
+
+Command:
+  cd sdk/packages/core
+  bun tsc -p tsconfig.dev.json --noEmit
+
+The entry baseline was captured by temporarily stashing only the two changed
+files (the protected stash was never used), running the compiler, and
+restoring the working tree.
+
+Diagnostic normalisation (file, code and message; line/column collapsed so that
+an unrelated shift elsewhere cannot mask a change):
+
+  grep -oE '^[^(]+\([0-9]+,[0-9]+\): error TS[0-9]+: .*' \
+    | sed -E 's/\(([0-9]+),([0-9]+)\)/(L,C)/' \
+    | sort
+
+Result:
+
+  baseline=40 final=40
+  DIAGNOSTICS IDENTICAL
+  ACT-owned: 0
+
+`diff` of the two normalised diagnostic sets is EMPTY: the correction adds,
+removes and changes no compiler diagnostic. All 40 diagnostics are pre-existing
+and none of them are in the ACT-owned files
+(`session/services/message-builder.ts` and its test).
+
+## Biome
+
+  bun x @biomejs/biome check --diagnostic-level=error \
+    sdk/packages/core/src/session/services/message-builder.ts \
+    sdk/packages/core/src/session/services/message-builder-read-dedup.test.ts
+
+  Checked 2 files in 26ms. No fixes applied.
+  biome_exit=0
+
+## git diff --check
+
+  git diff --check
+  diff_check_exit=0

@@ -1,0 +1,32 @@
+# RED — cross-locator freshness defect at entry HEAD 6cd7374e1
+
+Command:
+  cd sdk/packages/core
+  bun x vitest run src/session/services/message-builder-read-dedup.test.ts --config vitest.config.ts
+
+Real `MessageBuilder.buildForApi()` with:
+
+  A: successful ranged read   file.ts:1-100 -> X  (40000 chars)
+  B: identical ranged read    file.ts:1-100 -> X  (40000 chars)
+  C: later full-file read     file.ts       -> Y  (40000 chars)
+
+Aggregate payload size (2 x 40000 bytes of obsolete X) exceeds the existing
+64 KiB stale-rewrite threshold.
+
+Result:
+
+     x rewrites obsolete ranged duplicates when a later full-file read owns the path 4ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 32 passed (33)
+
+Assertion failure:
+
+  expected '[outdated - see the latest file content]'
+  received the full 40000-character X payload for result "a".
+
+All 32 pre-existing assertions in the same file passed, so the defect is
+isolated to the cross-locator case.
+
+Cause: the obsolete ranged observations were shielded from the stale-read
+rewrite policy, so the superseded X stayed fully visible even though the later
+full-file read owns the path and established Y as the current content.

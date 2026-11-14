@@ -1,0 +1,40 @@
+# GREEN — cross-locator RED now passes, focused suite fully green
+
+Command:
+  cd sdk/packages/core
+  bun x vitest run src/session/services/message-builder-read-dedup.test.ts \
+    --config vitest.config.ts
+
+Result:
+
+  v src/session/services/message-builder-read-dedup.test.ts (35 tests) 21ms
+ Test Files  1 passed (1)
+      Tests  35 passed (35)
+
+The cross-locator assertion now holds end to end through the real
+`MessageBuilder.buildForApi()`:
+
+  - A (ranged file.ts:1-100, X)  -> "[outdated - see the latest file content]"
+  - B (ranged file.ts:1-100, X)  -> "[outdated - see the latest file content]"
+  - C (full-file file.ts, Y)      -> Y, fully visible and authoritative
+  - no "same content as earlier read result" reference survives anywhere
+
+## Focused MessageBuilder + dedup + recovery + cache
+
+  bun x vitest run \
+    src/session/services/message-builder.test.ts \
+    src/session/services/message-builder-read-dedup.test.ts \
+    src/session/services/message-builder-recovery.test.ts \
+    src/session/services/tool-result-cache.test.ts \
+    --config vitest.config.ts
+
+ Test Files  4 passed (4)
+      Tests  103 passed (103)
+
+## Compaction suites
+
+  bun x vitest run src/extensions/context/ src/session/models/session-compaction.test.ts \
+    --config vitest.config.ts
+
+ Test Files  9 passed | 1 skipped (10)
+      Tests  177 passed | 1 skipped (178)
