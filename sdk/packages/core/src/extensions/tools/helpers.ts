@@ -19,6 +19,149 @@ export function formatError(error: unknown): string {
 	return String(error);
 }
 
+/**
+ * ACT-CLINEMM-ROUND-C-HARNESS-01 — a JSON-array-SHAPED literal whose
+ * members carry NO raw double quote.
+ *
+ * ## The shape
+ *
+ * The Round C payload `{"commands": "[\"cd … && echo '=== x ==='\"]"}` is a
+ * STRING that LOOKS like a JSON array but is not valid JSON: its members
+ * contain SHELL single-quotes, which JSON rejects with `Invalid \escape`.
+ * The model serialized a command LIST into a string, quoting the members
+ * the way a shell would.
+ *
+ * ## Why the parse is unambiguous
+ *
+ * The payload's double quotes occur ONLY at member boundaries, so the
+ * quote sequence is exactly `open, close, open, close, …` — always an even
+ * number of quotes. Pairing them in order yields the members, and the
+ * text between a close quote and the next open quote must be exactly
+ * `, ` (a comma and a space).
+ *
+ * Two properties make this safe:
+ *
+ *  1. A member containing a raw double quote would break the pairing and
+ *     is REJECTED, not guessed at.
+ *  2. The separator must be exactly `, `; anything else is REJECTED.
+ *
+ * A payload that fails either test is returned unchanged so the strict
+ * schema produces its normal, authoritative rejection.
+ */
+export function parseShellQuotedCommandArray(value: string): string[] | null {
+	const trimmed = value.trim();
+	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+		return null;
+	}
+	const inner = trimmed.slice(1, -1);
+	if (inner.length === 0 || !inner.startsWith('"')) {
+		return null;
+	}
+	// Collect every double-quote position. A member may not contain a raw
+	// double quote, so these positions are exactly the member boundaries.
+	const quotePositions: number[] = [];
+	for (let index = 0; index < inner.length; index++) {
+		if (inner[index] === '"') {
+			quotePositions.push(index);
+		}
+	}
+	if (quotePositions.length === 0 || quotePositions.length % 2 !== 0) {
+		return null;
+	}
+	const members: string[] = [];
+	for (let pair = 0; pair < quotePositions.length; pair += 2) {
+		const open = quotePositions[pair] as number;
+		const close = quotePositions[pair + 1] as number;
+		if (close <= open) {
+			return null;
+		}
+		members.push(inner.slice(open + 1, close));
+		if (pair + 2 < quotePositions.length) {
+			const nextOpen = quotePositions[pair + 2] as number;
+			if (inner.slice(close + 1, nextOpen) !== ", ") {
+				return null;
+			}
+		} else if (close + 1 !== inner.length) {
+			// The LAST member's closing quote must be the final character
+			// of the payload. Anything after it is unaccounted-for text
+			// that would be SILENTLY DROPPED — e.g. `["a" , 'b']`, whose
+			// trailing `, 'b'` would vanish and lose a command. Such a
+			// payload is rejected instead.
+			return null;
+		}
+	}
+	return members;
+}
+
+/**
+ * ACT-CLINEMM-ROUND-C-HARNESS-01 — canonicalize a `run_commands` input
+ * whose `commands` member is a LIST of `{command: "…"}` objects.
+ *
+ * ## The shape
+ *
+ * The Round C transcript contains four calls shaped
+ * `{commands: [{command: "…"}, …]}`. The strict `RunCommandsInputSchema`
+ * requires `commands` to be a list of STRINGS, so it rejected them with
+ * `expected string, received object`.
+ *
+ * ## What is accepted
+ *
+ * A list whose every member is an object with EXACTLY a `command` key
+ * whose value is a non-empty string, and with no other keys:
+ *
+ *  - `args` is NOT accepted here. The structured-command schema DOES
+ *    support `args`, but the Round C payloads never carried it, and
+ *    accepting an `args` array here would silently change how the command
+ *    is rendered (argv form versus shell form). A member that carries
+ *    `args` is left for the structured-command path, unchanged.
+ *  - an empty `command` string is not a command;
+ *  - a member with any additional key is ambiguous and is left alone.
+ *
+ * Every member is validated against the canonical `commands` element
+ * schema BEFORE canonicalization, so an invalid member can never reach
+ * validation, approval, or execution.
+ */
+export function canonicalizeObjectCommandEntries(
+	input: unknown,
+): string[] | null {
+	if (input === null || typeof input !== "object" || Array.isArray(input)) {
+		return null;
+	}
+	const record = input as Record<string, unknown>;
+	if (!("commands" in record)) {
+		return null;
+	}
+	const commands = record.commands;
+	if (!Array.isArray(commands) || commands.length === 0) {
+		return null;
+	}
+	const canonical: string[] = [];
+	for (const member of commands) {
+		if (
+			member === null ||
+			typeof member !== "object" ||
+			Array.isArray(member)
+		) {
+			return null;
+		}
+		const keys = Object.keys(member as Record<string, unknown>);
+		// EXACTLY one key: `command`. Anything else is ambiguous.
+		if (keys.length !== 1 || keys[0] !== "command") {
+			return null;
+		}
+		const command = (member as Record<string, unknown>).command;
+		if (typeof command !== "string" || command.trim().length === 0) {
+			return null;
+		}
+		canonical.push(command);
+	}
+	const validated = RunCommandsInputSchema.shape.commands.safeParse(canonical);
+	if (!validated.success) {
+		return null;
+	}
+	return validated.data;
+}
+
 export function getEditorSizeError(input: EditFileInput): string | null {
 	if (
 		typeof input.old_text === "string" &&
@@ -271,6 +414,28 @@ export function normalizeRunCommandsToolInput(input: unknown): unknown {
 		return input;
 	}
 	const raw = record[key];
+
+	// ACT-CLINEMM-ROUND-C-HARNESS-01 — the OBJECT-ENTRY shape.
+	//
+	// `{"commands": [{"command": "…"}, …]}` is rejected by the strict
+	// schema with `expected string, received object`. When every member
+	// carries EXACTLY a `command` key with a non-empty string value, the
+	// list is canonicalized to the equivalent list of command strings.
+	//
+	// The canonicalization is deliberately narrow: a member with any
+	// additional key (notably `args`) is AMBIGUOUS and is left unchanged,
+	// because accepting it would change how the command is rendered. The
+	// resulting list is validated against the canonical `commands` schema
+	// BEFORE it is returned, so an invalid member can never reach
+	// validation, approval, or execution.
+	if (Array.isArray(raw)) {
+		const canonical = canonicalizeObjectCommandEntries(input);
+		if (canonical === null) {
+			return input;
+		}
+		return { commands: canonical };
+	}
+
 	if (typeof raw !== "string") {
 		return input;
 	}
@@ -288,9 +453,38 @@ export function normalizeRunCommandsToolInput(input: unknown): unknown {
 		try {
 			parsed = JSON.parse(trimmed);
 		} catch {
-			// Malformed JSON is not a compatibility shape; let the strict
-			// schema produce the normal rejection.
-			return input;
+			// ACT-CLINEMM-ROUND-C-HARNESS-01: the value LOOKS like a JSON
+			// array but is not valid JSON — its members carry SHELL
+			// single-quotes, which JSON rejects with `Invalid \escape`.
+			// The model serialized a command LIST into a string, quoting
+			// the members the way a shell would.
+			//
+			// The shell-quoted form is parsed ONLY when it is
+			// UNAMBIGUOUS: every double quote in the payload must sit at a
+			// member boundary, and the text between a member's closing
+			// quote and the next member's opening quote must be exactly
+			// `, `. Anything else is left unchanged so the strict schema
+			// produces its normal, authoritative rejection.
+			//
+			// The parsed members are the COMMANDS; the serialized text is
+			// NEVER forwarded as a command. That is load-bearing: without
+			// this branch the captured payload would normalize to a single
+			// shell command that is the serialized array text.
+			const shellQuoted = parseShellQuotedCommandArray(trimmed);
+			if (shellQuoted === null || shellQuoted.length === 0) {
+				// Malformed JSON is not a compatibility shape; let the strict
+				// schema produce the normal rejection.
+				return input;
+			}
+			// Validate the COMPLETE array against the canonical `commands`
+			// schema BEFORE canonicalization, so an invalid member can never
+			// reach validation, approval, or execution.
+			const shellValidated =
+				RunCommandsInputSchema.shape.commands.safeParse(shellQuoted);
+			if (!shellValidated.success) {
+				return input;
+			}
+			return { commands: shellValidated.data };
 		}
 		if (!Array.isArray(parsed) || parsed.length === 0) {
 			return input;
