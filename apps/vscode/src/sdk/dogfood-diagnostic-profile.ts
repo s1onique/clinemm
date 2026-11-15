@@ -184,6 +184,10 @@ import {
 	isReconciliationDiagnosticCaptureEnabled,
 	setReconciliationDiagnosticCaptureEnabled,
 } from "./reconciliation-diagnostic-capture"
+// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: the Round C latency-trace
+// enable bit. Imported from the dedicated runtime module so the
+// activation helper and the runtime share ONE source of truth.
+import { isRoundcLatencyTraceEnabled, setRoundcLatencyTraceEnabled } from "./roundc-latency-trace-runtime"
 import {
 	isTaskHeaderSelectorInputCaptureEnabled as _isTaskHeaderSelectorInputCaptureEnabled,
 	setTaskHeaderSelectorInputCaptureEnabled,
@@ -2236,4 +2240,64 @@ function _isAutomaticIncidentCaptureEnabled(): boolean {
 
 function _isReconciliationDiagnosticCaptureEnabled(): boolean {
 	return isReconciliationDiagnosticCaptureEnabled()
+}
+
+// ===========================================================================
+// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01 — central dogfood profile resolver
+// for the Round C latency trace.
+//
+// The Round C `LatencyTraceSink` (ACT-CLINEMM-ROUND-C-HARNESS-01/02) is a
+// `ModelBehaviorTraceSink` adapter that turns the SDK runtime's EXISTING
+// observation channels into a bounded, privacy-allowlisted latency trace.
+//
+// HARNESS-02 qualified the sink through the SDK's own offline suites. It
+// did NOT establish a way for the VSCodium extension host to INSTALL it:
+// the sink was activated PROGRAMMATICALLY in the integration test, which
+// is not a mechanism an installed extension can use.
+//
+// This resolver closes that gap. It is the ONE activation path, and it
+// mirrors the sibling diagnostics exactly:
+//
+//   isDogfood === true  -> ON  (the sink is installed into the real SDK
+//                              runtime for the selected session)
+//   isDogfood === false -> OFF (NOTHING is installed; the disabled path has
+//                              zero state-semantic delta)
+//
+// No new env knob. No workspace setting. No command-palette toggle. No
+// public configuration surface. The closed dogfood runtime profile —
+// `CLINEMM_RUNTIME_PROFILE=dogfood` in the EXTENSION-HOST process
+// environment — is the SOLE gate, exactly like the BOCOR / BJLA / CCARD
+// diagnostics.
+//
+// The operator's ONLY surface is the READ side: the
+// `cline.debug.dumpRoundcLatencyTrace` command exports the captured trace
+// on demand (including while a task is still running).
+// ===========================================================================
+
+/**
+ * Arm or disarm the Round C latency trace for this extension host.
+ *
+ * Called from `extension.ts:activate` (sibling to the BOCOR / BJLA
+ * activations); there is exactly ONE production activation path, no copied
+ * orchestration in tests.
+ */
+export function applyRoundcLatencyTraceDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
+	const was = _isRoundcLatencyTraceEnabledForActivation()
+	const should = isDogfood
+	if (should && !was) {
+		setRoundcLatencyTraceEnabled(true)
+		return { enabled: true, flipped: true }
+	}
+	if (!should && was) {
+		setRoundcLatencyTraceEnabled(false)
+		return { enabled: false, flipped: true }
+	}
+	return { enabled: should, flipped: false }
+}
+
+function _isRoundcLatencyTraceEnabledForActivation(): boolean {
+	return isRoundcLatencyTraceEnabled()
 }

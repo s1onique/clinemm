@@ -103,6 +103,15 @@ const ClineCommands = {
 	// <globalStorageUri>/model-behavior-trace.jsonl and never clears it.
 	ToggleModelBehaviorTrace: `${prefix}.debug.toggleModelBehaviorTrace`,
 	DumpModelBehaviorTrace: `${prefix}.debug.dumpModelBehaviorTrace`,
+	// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: debug dump command for the
+	// Round C latency trace. Dogfood-only (controlled by the central
+	// dogfood profile resolver - no separate env-var toggle, no workspace
+	// toggle, no public configuration surface). The dump is unconditional
+	// (the operator can always inspect the captured trace, even after the
+	// diagnostic was disabled) and works WHILE a task is still running.
+	// The dump serializes the bounded, session-correlated trace to
+	// <globalStorageUri>/roundc-latency-trace.json.
+	DumpRoundcLatencyTrace: `${prefix}.debug.dumpRoundcLatencyTrace`,
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// (twenty-ninth-pass) — debug dump command for the temporary
 	// Q1..Q4 W-carrier trace observer. The dump is unconditional

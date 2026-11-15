@@ -122,6 +122,22 @@ const builds: Parameters<typeof Bun.build>[0][] = [
 		outdir: "./dist/runtime/command-policy",
 		...buildConfig,
 	},
+	// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: the trusted-internal Round C
+	// latency-trace entry point. NOT exported from the public `@cline/core`
+	// index. Reachable only via the explicit
+	// `@cline/core/internal/latency-trace` deep import, mirroring the
+	// established `@cline/core/internal/command-risk-internal`,
+	// `@cline/core/internal/parser-helper-runtime` and
+	// `@cline/core/internal/reformulation-classifier` precedent. It
+	// re-exports the HARNESS-01/02 `LatencyTraceSink` and the read-only
+	// trace TYPES — it adds no new capability of its own.
+	{
+		entrypoints: [
+			"./src/observability/latency/latency-trace-internal.ts",
+		],
+		outdir: "./dist/observability/latency",
+		...buildConfig,
+	},
 	// The plugin sandbox bootstrap runs in an isolated child process via
 	// SubprocessSandbox and must be emitted as a separate executable entrypoint.
 	{

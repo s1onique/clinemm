@@ -549,6 +549,19 @@ export default defineConfig({
 					"../../sdk/packages/core/src/runtime/command-policy/reformulation-classifier-internal.ts",
 				),
 			},
+			// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: the trusted-internal Round C
+			// latency-trace entry point. Defined BEFORE the bare `@cline/core`
+			// alias below so vite-resolve picks this exact match. Same
+			// aliasing strategy as `command-risk-internal` — resolve to the
+			// live TypeScript source so vitest sees the current sink rather
+			// than the bundled dist.
+			{
+				find: "@cline/core/internal/latency-trace",
+				replacement: path.resolve(
+					__dirname,
+					"../../sdk/packages/core/src/observability/latency/latency-trace-internal.ts",
+				),
+			},
 			{ find: "@cline/core", replacement: path.resolve(__dirname, "src/test/cline-core-vitest-stub.ts") },
 			{ find: "@cline/llms", replacement: path.resolve(__dirname, "node_modules/@cline/llms/dist/index.js") },
 			// Map @cline/shared subpath exports explicitly. The bare "@cline/shared"

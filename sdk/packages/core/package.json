@@ -47,6 +47,10 @@
 			"types": "./dist/runtime/command-policy/reformulation-classifier-internal.d.ts",
 			"import": "./dist/runtime/command-policy/reformulation-classifier-internal.js"
 		},
+		"./internal/latency-trace": {
+			"types": "./dist/observability/latency/latency-trace-internal.d.ts",
+			"import": "./dist/observability/latency/latency-trace-internal.js"
+		},
 		"./cloud": {
 			"types": "./dist/cloud/index.d.ts",
 			"import": "./dist/cloud/index.js"		}

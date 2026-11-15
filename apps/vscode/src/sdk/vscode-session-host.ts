@@ -60,6 +60,9 @@ import { createProductionPendingPromptCapture } from "./continuation-cardinality
 import { type VscodeGitTelemetry, VscodeGitTelemetryManager } from "./git-telemetry"
 import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
 import { modelBehaviorTraceSink } from "./model-behavior-trace-runtime"
+// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: the Round C latency-trace
+// activation + composition helpers.
+import { composeModelBehaviorTraceSinks, installRoundcLatencyTraceSink } from "./roundc-latency-trace-runtime"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
@@ -441,6 +444,33 @@ export class VscodeSessionHost implements SdkSessionHost {
 				// for every listTools/callTool during this session.
 				sessionId: sessionIdForMcp,
 			})
+			// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: install the Round C
+			// `LatencyTraceSink` for THIS session.
+			//
+			// This is the SAME seam that installs the extension's existing
+			// `modelBehaviorTraceSink` — the REAL SDK runtime construction
+			// path (`ClineCore.create` -> the session runtime -> the
+			// `AgentRuntime`). It is NOT a separate diagnostic runtime: the
+			// sink observes the production request/tool boundaries through
+			// the SDK's existing, already-wired HARNESS-02 channels.
+			//
+			// `installRoundcLatencyTraceSink` returns `undefined` when the
+			// diagnostic is OFF (the public profile), so the disabled path
+			// has zero state-semantic delta: no sink is constructed, no
+			// registry entry is created, no I/O happens, and the config
+			// carries exactly the same sink it carried before.
+			//
+			// The sink is PER SESSION and CORRELATED: the registry holds at
+			// most ONE live sink, and a new session REPLACES the previous
+			// one, so no cross-task attribution is possible and memory stays
+			// bounded.
+			//
+			// The SDK config carries ONE `modelBehaviorTraceSink`, so when
+			// the Round C sink is present the two are COMPOSITED — the
+			// extension's model-behavior recorder keeps observing exactly
+			// as before, and the Round C latency sink observes the same
+			// production boundaries in parallel.
+			const roundcLatencyTraceSink = installRoundcLatencyTraceSink(inputWithRemoteConfig.config.sessionId)
 			const config: ClineCoreStartInput["config"] = {
 				...inputWithRemoteConfig.config,
 				telemetry: inputWithRemoteConfig.config.telemetry ?? options.telemetry,
@@ -451,7 +481,15 @@ export class VscodeSessionHost implements SdkSessionHost {
 				// through it. The sink is consulted at observation time
 				// and is inert while the recorder is OFF, so this line
 				// changes nothing about execution.
-				modelBehaviorTraceSink: modelBehaviorTraceSink,
+				//
+				// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: in the dogfood
+				// profile the Round C latency sink is composed in, so both
+				// observers see the SAME production boundaries. In the
+				// public profile `roundcLatencyTraceSink` is `undefined`
+				// and this expression is EXACTLY the pre-ACT value.
+				modelBehaviorTraceSink: roundcLatencyTraceSink
+					? composeModelBehaviorTraceSinks(modelBehaviorTraceSink, roundcLatencyTraceSink)
+					: modelBehaviorTraceSink,
 			}
 			return {
 				...inputWithRemoteConfig,

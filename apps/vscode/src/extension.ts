@@ -64,6 +64,9 @@ import {
 	applyMycPrimeLiveDiagDiagnosticProfile,
 	applyProviderRequestCaptureDiagnosticProfile,
 	applyReconciliationDiagnosticCaptureProfile,
+	// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: the Round C latency-trace
+	// activation helper (dogfood-only).
+	applyRoundcLatencyTraceDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
@@ -101,6 +104,10 @@ import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
+// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: the Round C latency-trace dump
+// adapter. It serializes the bounded, session-correlated trace to
+// <globalStorageUri>/roundc-latency-trace.json.
+import { dumpRoundcLatencyTrace } from "@/sdk/roundc-latency-trace-runtime"
 import { setTaskHeaderElmProductionKernelPath } from "@/sdk/task-header-elm-shadow"
 import {
 	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
@@ -465,6 +472,19 @@ export async function activate(context: vscode.ExtensionContext) {
 	// construction guarantees the seam is armed BEFORE the first
 	// `new CommandJobManager({...})` inside `VscodeSessionHost.create`.
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01:
+	// arm the Round C latency trace at the SAME EARLIEST initialization
+	// seam, BEFORE SdkController construction. The helper arms the module
+	// seam idempotently based STRICTLY on the dogfood identity bit
+	// (mirrors BOCOR / BJLA — no env var, no override matrix, no new
+	// workspace setting, no public configuration surface).
+	//
+	// The sink itself is installed LATER, at the REAL SDK runtime
+	// construction seam (`VscodeSessionHost.prepareStartSessionInput`),
+	// for the selected session only. Arming it HERE guarantees the seam
+	// is armed BEFORE the first session is prepared.
+	applyRoundcLatencyTraceDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
 	// arm the CCARD (Continuation Cardinality Authority) capture
@@ -1344,6 +1364,32 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[MBT] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Model behavior trace dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01:
+		// Debug command for the Round C latency trace. The trace is
+		// armed AUTOMATICALLY for the closed dogfood runtime profile (no
+		// toggle command, no env var, no workspace setting); this command
+		// is the READ side only.
+		//
+		// The dump works WHILE the task is still running (the trace is a
+		// snapshot of the live sink) and it never clears the captured
+		// trace.
+		vscode.commands.registerCommand(commands.DumpRoundcLatencyTrace, async () => {
+			try {
+				const result = await dumpRoundcLatencyTrace(context)
+				if (!result.captured) {
+					void vscode.window.showInformationMessage(`Round C latency trace: NO_CAPTURE \u2192 ${result.file}`)
+					return
+				}
+				void vscode.window.showInformationMessage(
+					`Round C latency trace: ${result.eventCount} event(s) \u2192 ${result.file}`,
+				)
+			} catch (err) {
+				Logger.error("[ROUNDC] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Round C latency trace dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

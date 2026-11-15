@@ -212,6 +212,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpRoundcLatencyTrace",
+				"title": "Cline Debug: Dump Round C Latency Trace",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.debug.dumpPostTerminalAuthorityDiagnostic",
 				"title": "Cline Debug: Dump Post-Terminal Authority Diagnostic",
 				"category": "Cline"
