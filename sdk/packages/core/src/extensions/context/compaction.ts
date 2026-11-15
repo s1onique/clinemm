@@ -494,7 +494,8 @@ export function createContextCompactionPrepareTurn(
 			userContextCeiling: sanitizedUserContextCeiling,
 		});
 		observeCompactionTrace(
-			config.modelBehaviorTraceSink?.onCompactionDiagnostics,
+			config.modelBehaviorTraceSink,
+			"diagnostics",
 			{
 				sessionId: config.sessionId,
 				iteration: context.iteration,
@@ -736,8 +737,25 @@ export function createContextCompactionPrepareTurn(
 			// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the compaction COMPLETION
 			// boundary so the timeline carries the before/after token boundary in
 			// the same sequence as the model requests and tool executions.
+			//
+			// ACT-CLINEMM-ROUND-C-HARNESS-02: the completion ALSO carries the
+			// EVIDENCE REFERENCE CONTINUITY — how many of the tool-call
+			// references present before the compaction are still present
+			// after it.
+			//
+			// This is the measurement that makes the compaction evidence
+			// gap QUANTIFIABLE at the seam: the Round C session dropped 202
+			// of 208 tool results, and a reader of this payload can now see
+			// the same number reported by the compaction itself rather than
+			// inferring it afterwards from a lossy sidecar.
+			//
+			// Only COUNTS are reported. No reference, no content and no
+			// summary text is recorded.
+			const evidenceRefsBefore = countToolCallReferences(context.messages);
+			const evidenceRefsAfter = countToolCallReferences(result.messages);
 			observeCompactionTrace(
-				config.modelBehaviorTraceSink?.onCompactionCompleted,
+				config.modelBehaviorTraceSink,
+				"completed",
 				{
 					sessionId: config.sessionId,
 					iteration: context.iteration,
@@ -757,6 +775,20 @@ export function createContextCompactionPrepareTurn(
 					tokensSaved: requestInputTokens - afterRequestTokens,
 					messagesBefore: beforeMessageCount,
 					messagesAfter: result.messages.length,
+					compactionMessagesBefore: beforeMessageCount,
+					compactionMessagesAfter: result.messages.length,
+					compactionMessagesRemoved:
+						beforeMessageCount - result.messages.length,
+					compactionEvidenceRefsBefore: evidenceRefsBefore,
+					compactionEvidenceRefsAfter: evidenceRefsAfter,
+					compactionEvidenceRefsRetained: Math.min(
+						evidenceRefsBefore,
+						evidenceRefsAfter,
+					),
+					compactionEvidenceRefsDropped: Math.max(
+						0,
+						evidenceRefsBefore - evidenceRefsAfter,
+					),
 				},
 			);
 			context.emitStatusNotice?.(`${noticePrefix}compacted`, {
@@ -1300,16 +1332,64 @@ async function publishWorkingContextEstimateMetadataOnly(
  * Failure isolation: a throwing sink can never affect the compaction
  * policy, the compaction strategy, or the model request that follows.
  */
+/**
+ * Count the tool-call references in a set of messages.
+ *
+ * ACT-CLINEMM-ROUND-C-HARNESS-02.
+ *
+ * A "tool-call reference" is a tool RESULT — the evidence the model would
+ * have read. Counting them before and after a compaction quantifies how
+ * much EVIDENCE the compaction removed, which is the question the Round C
+ * summary could not answer about itself.
+ *
+ * Only the COUNT is returned. No reference, no content.
+ */
+function countToolCallReferences(
+	messages: readonly {
+		readonly content?: string | readonly { readonly type?: string }[];
+	}[],
+): number {
+	let count = 0;
+	for (const message of messages) {
+		const content = message.content;
+		if (typeof content === "string") {
+			continue;
+		}
+		for (const part of content ?? []) {
+			if (part.type === "tool-result" || part.type === "tool_result") {
+				count += 1;
+			}
+		}
+	}
+	return count;
+}
+
+/**
+ * Report a compaction observation to the trace sink.
+ *
+ * The helper is failure-isolated: a throwing sink must never change the
+ * compaction's behaviour.
+ */
 function observeCompactionTrace(
-	handler:
-		| ((observation: {
-				sessionId?: string;
-				iteration?: number;
-				providerId?: string;
-				modelId?: string;
-				payload: Record<string, unknown>;
-		  }) => void)
+	sink:
+		| {
+				onCompactionDiagnostics?: (observation: {
+					sessionId?: string;
+					iteration?: number;
+					providerId?: string;
+					modelId?: string;
+					payload: Record<string, unknown>;
+				}) => void;
+				onCompactionCompleted?: (observation: {
+					sessionId?: string;
+					iteration?: number;
+					providerId?: string;
+					modelId?: string;
+					payload: Record<string, unknown>;
+				}) => void;
+		  }
 		| undefined,
+	channel: "diagnostics" | "completed",
 	identity: {
 		sessionId?: string;
 		iteration?: number;
@@ -1318,11 +1398,19 @@ function observeCompactionTrace(
 	},
 	payload: Record<string, unknown>,
 ): void {
-	if (!handler) {
+	if (!sink) {
 		return;
 	}
 	try {
-		handler({
+		// ACT-CLINEMM-ROUND-C-HARNESS-02: the channel is invoked AS A
+		// METHOD on the sink object.
+		//
+		// Passing the extracted function (`handler`) and calling it detached
+		// loses the receiver, so a stateful adapter — the latency sink — threw
+		// on `this.record(...)`. The failure was swallowed by the isolation
+		// catch below, so the compaction boundary never appeared in the trace
+		// even though the runtime believed it had reported it.
+		const observation = {
 			...(identity.sessionId !== undefined
 				? { sessionId: identity.sessionId }
 				: {}),
@@ -1334,7 +1422,18 @@ function observeCompactionTrace(
 				: {}),
 			...(identity.modelId !== undefined ? { modelId: identity.modelId } : {}),
 			payload,
-		});
+		};
+		if (channel === "diagnostics") {
+			if (!sink.onCompactionDiagnostics) {
+				return;
+			}
+			sink.onCompactionDiagnostics(observation);
+			return;
+		}
+		if (!sink.onCompactionCompleted) {
+			return;
+		}
+		sink.onCompactionCompleted(observation);
 	} catch {
 		// Failure isolation: the recorder must never affect compaction.
 	}

@@ -47,6 +47,43 @@ import {
 } from "./latency-trace";
 
 /**
+ * Derive the tool-execution span's status from the runtime's own outcome
+ * facts.
+ *
+ * ACT-CLINEMM-ROUND-C-HARNESS-02. The runtime is the authority for three
+ * facts, and this adapter only translates them:
+ *
+ *   - `executionInvoked === false` — the executor never ran. The call was
+ *     skipped (validation failure, policy, denied approval, registry
+ *     miss). That is a REJECTION, not a success and not a failure of
+ *     the tool itself.
+ *   - `outcome === "error"` — the executor ran and reported an error.
+ *   - `outcome === "cancelled"` / `"aborted"` — the call was cancelled.
+ *
+ * An UNKNOWN payload (a caller that publishes none of these fields)
+ * falls back to `"ok"`, which preserves the previous behaviour for
+ * callers that only ever report successes.
+ */
+function deriveToolFinishStatus(
+	payload: Readonly<Record<string, unknown>>,
+): LatencyStatus {
+	const outcome = payload.outcome;
+	if (outcome === "cancelled" || outcome === "aborted") {
+		return "cancelled";
+	}
+	if (outcome === "error" || outcome === "failed") {
+		return "failed";
+	}
+	if (payload.executionInvoked === false) {
+		return "rejected";
+	}
+	if (typeof payload.skipReason === "string" && payload.skipReason.length > 0) {
+		return "rejected";
+	}
+	return "ok";
+}
+
+/**
  * The adapter.
  */
 export class LatencyTraceSink implements ModelBehaviorTraceSink {
@@ -171,6 +208,103 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 		} = {},
 	): void {
 		this.record("compaction", phase, options);
+	}
+
+	/**
+	 * The SCHEMA VALIDATION boundary, reported by the runtime.
+	 *
+	 * The runtime validates a tool call's input against the tool's own
+	 * schema before approval and before execution. This records the
+	 * outcome — never the input.
+	 */
+	onSchemaValidation(observation: ModelBehaviorTraceObservation): void {
+		const valid = observation.payload.schemaValid !== false;
+		if (valid) {
+			this.record("schema_validation", "start", {
+				metadata: observation.payload,
+			});
+			this.record("schema_validation", "end", {
+				metadata: observation.payload,
+				status: "ok",
+			});
+			return;
+		}
+		// A rejected schema is a REJECTION, not a successful validation.
+		this.record("schema_validation", "start", {
+			metadata: observation.payload,
+		});
+		this.record("schema_validation", "end", {
+			metadata: observation.payload,
+			status: "rejected",
+		});
+	}
+
+	/**
+	 * The TOOL RESULT DELIVERY boundary, reported by the runtime.
+	 *
+	 * The runtime reports this when the result becomes part of the
+	 * conversation — not when the executor returned it. The result's
+	 * content is never recorded; only its size and digest.
+	 */
+	onToolResultDelivered(observation: ModelBehaviorTraceObservation): void {
+		this.record("tool_result_delivered", "start", {
+			metadata: observation.payload,
+		});
+		this.record("tool_result_delivered", "end", {
+			metadata: observation.payload,
+			status: "ok",
+		});
+	}
+
+	/**
+	 * The COMPACTION boundary — START.
+	 *
+	 * The compaction pipeline reports its DIAGNOSTICS at the moment it
+	 * decides whether to compact, which is the start of the compaction
+	 * span. The diagnostics carry the before/after token budget and the
+	 * trigger reason; the message counts arrive with the completion.
+	 *
+	 * This is the REAL production seam: the compaction pipeline in
+	 * `extensions/context/compaction.ts` calls this channel before it
+	 * runs its strategy.
+	 */
+	onCompactionDiagnostics(observation: ModelBehaviorTraceObservation): void {
+		this.record("compaction", "start", {
+			metadata: observation.payload,
+		});
+	}
+
+	/**
+	 * The COMPACTION boundary — END.
+	 *
+	 * The compaction pipeline reports its COMPLETION with the message
+	 * counts before and after, the messages removed, and the evidence
+	 * reference continuity. The compaction's OUTPUT SUMMARY is never
+	 * recorded — only counts.
+	 */
+	onCompactionCompleted(observation: ModelBehaviorTraceObservation): void {
+		this.record("compaction", "end", {
+			metadata: observation.payload,
+			status: "ok",
+		});
+	}
+
+	/**
+	 * The PROVIDER-READY boundary, reported by the runtime.
+	 *
+	 * The runtime reports this for the FINAL provider-bound message
+	 * representation — after every transformation and safety pass. The
+	 * request's content is never recorded; only its size, its digest and
+	 * the inclusion classification of each tool result.
+	 */
+	onProviderReady(observation: ModelBehaviorTraceObservation): void {
+		this.record("provider_ready", "start", {
+			metadata: observation.payload,
+		});
+		this.record("provider_ready", "end", {
+			metadata: observation.payload,
+			status: "ok",
+		});
 	}
 
 	// -------------------------------------------------------------------------
@@ -349,14 +483,30 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * The status distinguishes a completed tool from one that was
 	 * CANCELLED, FAILED or REJECTED. A cancelled tool must never be
 	 * reported as a successful completion.
+	 *
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02: the status is derived from the
+	 * runtime's OWN outcome fields when the caller does not supply one.
+	 *
+	 * The runtime calls this channel with a single argument, so the
+	 * previous default of `"ok"` reported EVERY finished tool call as a
+	 * successful completion — including a call whose approval was
+	 * DENIED and whose executor never ran. The runtime already publishes
+	 * the authoritative facts in the payload:
+	 *
+	 *   - `outcome`            — `"success"` | `"error"` | ...
+	 *   - `executionInvoked`   — the C1.2 authority: did the executor run?
+	 *   - `skipReason`         — why the call never reached the executor
+	 *
+	 * A call that never reached its executor is NOT a successful
+	 * completion, no matter what its (synthetic) result said.
 	 */
 	onToolFinish(
 		observation: ModelBehaviorTraceObservation,
-		status: LatencyStatus = "ok",
+		status?: LatencyStatus,
 	): void {
 		this.tracer.exit("tool_execution", {
 			metadata: observation.payload,
-			status,
+			status: status ?? deriveToolFinishStatus(observation.payload),
 		});
 	}
 }

@@ -1999,6 +1999,18 @@ export class AgentRuntime {
 				this.state.pendingToolCalls = [];
 				for (const toolMessage of toolMessages) {
 					this.state.messages.push(toolMessage);
+					// ACT-CLINEMM-ROUND-C-HARNESS-02: report the TOOL RESULT
+					// DELIVERY boundary at the REAL seam — the moment the
+					// result becomes part of the CONVERSATION.
+					//
+					// This is deliberately NOT the executor's return: a
+					// result can be produced and never delivered, and the
+					// difference between the two is exactly what the
+					// compaction evidence gap was about.
+					//
+					// Only the result's SIZE is reported. Its content is
+					// never recorded.
+					this.observeToolResultDelivered(toolMessage);
 					await this.emit({
 						type: "message-added",
 						snapshot: this.snapshot(),
@@ -2823,6 +2835,22 @@ export class AgentRuntime {
 			});
 		}
 
+		// ACT-CLINEMM-ROUND-C-HARNESS-02: report the PROVIDER-READY
+		// boundary at the REAL seam.
+		//
+		// This is the FINAL provider-bound message representation — after
+		// every `beforeModel` hook that may have replaced the messages, and
+		// after the budget check. It is NOT the persistent conversation
+		// history: the two differ whenever a result was rewritten,
+		// shortened or omitted on the way to the provider, and that
+		// difference is precisely what the compaction sidecar cannot
+		// show.
+		//
+		// Only the request's SIZE, its message count and the per-result
+		// inclusion classification are reported. The request's CONTENT is
+		// never recorded.
+		this.observeProviderReady(request);
+
 		this.config.logger?.debug("Agent model request diagnostics", {
 			iteration: this.state.iteration,
 			providerId:
@@ -2951,218 +2979,218 @@ export class AgentRuntime {
 		this.state.executionModelStreaming = true;
 		await this.emitExecutionStateChangeIfChanged(streamBefore);
 		try {
-		for await (const event of stream) {
-			if (steerController.signal.aborted) break;
-			this.throwIfAborted();
-			switch (event.type) {
-				case "text-delta": {
-					accumulatedText += event.text;
-					const last = sequence.at(-1);
-					if (last?.type === "part" && last.part.type === "text") {
-						last.part.text += event.text;
-					} else {
-						sequence.push({
-							type: "part",
-							part: { type: "text", text: event.text },
-						});
-					}
-					await this.emit({
-						type: "assistant-text-delta",
-						snapshot: this.snapshot(),
-						iteration: this.state.iteration,
-						text: event.text,
-						accumulatedText,
-					});
-					break;
-				}
-				case "media": {
-					sequence.push({
-						type: "part",
-						part: {
-							type: "media",
-							media: event.media,
-						},
-					});
-					await this.emit({
-						type: "assistant-media",
-						snapshot: this.snapshot(),
-						iteration: this.state.iteration,
-						media: event.media,
-					});
-					break;
-				}
-				case "reasoning-delta": {
-					accumulatedReasoning += event.text;
-					const last = sequence.at(-1);
-					if (last?.type === "part" && last.part.type === "reasoning") {
-						last.part.text += event.text;
-						last.part.redacted = event.redacted ?? last.part.redacted;
-						last.part.metadata = event.metadata ?? last.part.metadata;
-					} else {
-						sequence.push({
-							type: "part",
-							part: {
-								type: "reasoning",
-								text: event.text,
-								redacted: event.redacted,
-								metadata: event.metadata,
-							},
-						});
-					}
-					await this.emit({
-						type: "assistant-reasoning-delta",
-						snapshot: this.snapshot(),
-						iteration: this.state.iteration,
-						text: event.text,
-						accumulatedText: accumulatedReasoning,
-						redacted: event.redacted,
-						metadata: event.metadata,
-					});
-					break;
-				}
-				case "tool-call-delta": {
-					if (event.execution) {
-						const toolCall: AgentToolCallPart = {
-							type: "tool-call",
-							toolCallId: event.toolCallId ?? createUID("model_tool"),
-							toolName: event.toolName ?? "tool",
-							input: event.input,
-							metadata: event.metadata,
-							execution: event.execution,
-						};
-						modelToolActivities.set(toolCall.toolCallId, {
-							toolCallId: toolCall.toolCallId,
-							toolName: toolCall.toolName,
-							execution: event.execution,
-							input: toolCall.input,
-						});
+			for await (const event of stream) {
+				if (steerController.signal.aborted) break;
+				this.throwIfAborted();
+				switch (event.type) {
+					case "text-delta": {
+						accumulatedText += event.text;
+						const last = sequence.at(-1);
+						if (last?.type === "part" && last.part.type === "text") {
+							last.part.text += event.text;
+						} else {
+							sequence.push({
+								type: "part",
+								part: { type: "text", text: event.text },
+							});
+						}
 						await this.emit({
-							type: "tool-started",
+							type: "assistant-text-delta",
 							snapshot: this.snapshot(),
 							iteration: this.state.iteration,
-							toolCall,
+							text: event.text,
+							accumulatedText,
 						});
 						break;
 					}
-					const key =
-						event.toolCallId ?? `tool_${event.index ?? nextToolIndex}`;
-					if (event.index == null && event.toolCallId == null) {
-						nextToolIndex += 1;
-					}
-					let assembly = toolAssemblies.get(key);
-					if (!assembly) {
-						assembly = {
-							toolCallId: event.toolCallId ?? createUID("tool"),
-							inputText: "",
-						};
-						toolAssemblies.set(key, assembly);
-						sequence.push({ type: "tool", key });
-					}
-					if (event.toolCallId) {
-						assembly.toolCallId = event.toolCallId;
-					}
-					if (event.toolName) {
-						assembly.toolName = event.toolName;
-					}
-					if (event.input !== undefined) {
-						assembly.inputValue = event.input;
-					}
-					if (event.metadata !== undefined) {
-						assembly.metadata = mergeToolMetadata(
-							assembly.metadata,
-							event.metadata,
-						);
-					}
-					if (event.inputText) {
-						assembly.inputText = mergeToolInputText(
-							assembly.inputText,
-							event.inputText,
-						);
-					}
-					// Only a progress signal: at most once a second, since each event
-					// copies the whole conversation and a large file write streams
-					// thousands of argument chunks.
-					if (Date.now() - lastToolCallDeltaAt >= 1_000) {
-						lastToolCallDeltaAt = Date.now();
+					case "media": {
+						sequence.push({
+							type: "part",
+							part: {
+								type: "media",
+								media: event.media,
+							},
+						});
 						await this.emit({
-							type: "tool-call-delta",
+							type: "assistant-media",
 							snapshot: this.snapshot(),
 							iteration: this.state.iteration,
+							media: event.media,
 						});
+						break;
 					}
-					break;
-				}
-				case "tool-result": {
-					const existing = modelToolActivities.get(event.toolCallId);
-					const activity = {
-						...existing,
-						toolCallId: event.toolCallId,
-						toolName: event.toolName,
-						execution: event.execution,
-						input: event.input === undefined ? existing?.input : event.input,
-						output: event.output,
-						isError: event.isError,
-					};
-					modelToolActivities.set(event.toolCallId, activity);
-					const toolCall: AgentToolCallPart = {
-						type: "tool-call",
-						toolCallId: event.toolCallId,
-						toolName: event.toolName,
-						input: activity.input,
-						execution: event.execution,
-					};
-					await this.emit({
-						type: "tool-finished",
-						snapshot: this.snapshot(),
-						iteration: this.state.iteration,
-						toolCall,
-						message: createMessage("tool", [
-							{
-								type: "tool-result",
-								toolCallId: event.toolCallId,
-								toolName: event.toolName,
-								output: event.output,
-								isError: event.isError,
+					case "reasoning-delta": {
+						accumulatedReasoning += event.text;
+						const last = sequence.at(-1);
+						if (last?.type === "part" && last.part.type === "reasoning") {
+							last.part.text += event.text;
+							last.part.redacted = event.redacted ?? last.part.redacted;
+							last.part.metadata = event.metadata ?? last.part.metadata;
+						} else {
+							sequence.push({
+								type: "part",
+								part: {
+									type: "reasoning",
+									text: event.text,
+									redacted: event.redacted,
+									metadata: event.metadata,
+								},
+							});
+						}
+						await this.emit({
+							type: "assistant-reasoning-delta",
+							snapshot: this.snapshot(),
+							iteration: this.state.iteration,
+							text: event.text,
+							accumulatedText: accumulatedReasoning,
+							redacted: event.redacted,
+							metadata: event.metadata,
+						});
+						break;
+					}
+					case "tool-call-delta": {
+						if (event.execution) {
+							const toolCall: AgentToolCallPart = {
+								type: "tool-call",
+								toolCallId: event.toolCallId ?? createUID("model_tool"),
+								toolName: event.toolName ?? "tool",
+								input: event.input,
+								metadata: event.metadata,
 								execution: event.execution,
-							},
-						]),
-					});
-					break;
-				}
-				case "usage": {
-					// Record the provider's own input-token count for this request so
-					// the prepare-turn pipeline can trigger compaction on real usage
-					// rather than a character-based estimate.
-					if (
-						typeof event.usage.inputTokens === "number" &&
-						event.usage.inputTokens > 0
-					) {
-						this.state.lastRequestInputTokens = event.usage.inputTokens;
+							};
+							modelToolActivities.set(toolCall.toolCallId, {
+								toolCallId: toolCall.toolCallId,
+								toolName: toolCall.toolName,
+								execution: event.execution,
+								input: toolCall.input,
+							});
+							await this.emit({
+								type: "tool-started",
+								snapshot: this.snapshot(),
+								iteration: this.state.iteration,
+								toolCall,
+							});
+							break;
+						}
+						const key =
+							event.toolCallId ?? `tool_${event.index ?? nextToolIndex}`;
+						if (event.index == null && event.toolCallId == null) {
+							nextToolIndex += 1;
+						}
+						let assembly = toolAssemblies.get(key);
+						if (!assembly) {
+							assembly = {
+								toolCallId: event.toolCallId ?? createUID("tool"),
+								inputText: "",
+							};
+							toolAssemblies.set(key, assembly);
+							sequence.push({ type: "tool", key });
+						}
+						if (event.toolCallId) {
+							assembly.toolCallId = event.toolCallId;
+						}
+						if (event.toolName) {
+							assembly.toolName = event.toolName;
+						}
+						if (event.input !== undefined) {
+							assembly.inputValue = event.input;
+						}
+						if (event.metadata !== undefined) {
+							assembly.metadata = mergeToolMetadata(
+								assembly.metadata,
+								event.metadata,
+							);
+						}
+						if (event.inputText) {
+							assembly.inputText = mergeToolInputText(
+								assembly.inputText,
+								event.inputText,
+							);
+						}
+						// Only a progress signal: at most once a second, since each event
+						// copies the whole conversation and a large file write streams
+						// thousands of argument chunks.
+						if (Date.now() - lastToolCallDeltaAt >= 1_000) {
+							lastToolCallDeltaAt = Date.now();
+							await this.emit({
+								type: "tool-call-delta",
+								snapshot: this.snapshot(),
+								iteration: this.state.iteration,
+							});
+						}
+						break;
 					}
-					await this.updateUsage(event.usage);
-					break;
-				}
-				case "finish": {
-					finishReason = event.reason;
-					requestId = event.requestId;
-					if (event.error) {
-						this.state.lastError = event.error;
-						// Models that classify at their own error boundary (where the
-						// raw provider error is still structured) win. Anything else —
-						// custom `AgentModel` implementations, adapters that carry only
-						// a flattened message — is classified from the message so it
-						// stays eligible for overflow recovery.
-						this.state.lastErrorClass =
-							event.errorClass ?? classifyProviderError(event.error);
-						// Prefer the boundary's typed `isRetryable` signal; fall back to
-						// classifying the flattened message for models that do not carry
-						// it.
-						this.state.lastErrorRetryable =
-							event.errorRetryable ?? isRetryableProviderError(event.error);
-						this.state.lastErrorReported = event.errorReported === true;
+					case "tool-result": {
+						const existing = modelToolActivities.get(event.toolCallId);
+						const activity = {
+							...existing,
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							execution: event.execution,
+							input: event.input === undefined ? existing?.input : event.input,
+							output: event.output,
+							isError: event.isError,
+						};
+						modelToolActivities.set(event.toolCallId, activity);
+						const toolCall: AgentToolCallPart = {
+							type: "tool-call",
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							input: activity.input,
+							execution: event.execution,
+						};
+						await this.emit({
+							type: "tool-finished",
+							snapshot: this.snapshot(),
+							iteration: this.state.iteration,
+							toolCall,
+							message: createMessage("tool", [
+								{
+									type: "tool-result",
+									toolCallId: event.toolCallId,
+									toolName: event.toolName,
+									output: event.output,
+									isError: event.isError,
+									execution: event.execution,
+								},
+							]),
+						});
+						break;
 					}
-					break;
-				}
+					case "usage": {
+						// Record the provider's own input-token count for this request so
+						// the prepare-turn pipeline can trigger compaction on real usage
+						// rather than a character-based estimate.
+						if (
+							typeof event.usage.inputTokens === "number" &&
+							event.usage.inputTokens > 0
+						) {
+							this.state.lastRequestInputTokens = event.usage.inputTokens;
+						}
+						await this.updateUsage(event.usage);
+						break;
+					}
+					case "finish": {
+						finishReason = event.reason;
+						requestId = event.requestId;
+						if (event.error) {
+							this.state.lastError = event.error;
+							// Models that classify at their own error boundary (where the
+							// raw provider error is still structured) win. Anything else —
+							// custom `AgentModel` implementations, adapters that carry only
+							// a flattened message — is classified from the message so it
+							// stays eligible for overflow recovery.
+							this.state.lastErrorClass =
+								event.errorClass ?? classifyProviderError(event.error);
+							// Prefer the boundary's typed `isRetryable` signal; fall back to
+							// classifying the flattened message for models that do not carry
+							// it.
+							this.state.lastErrorRetryable =
+								event.errorRetryable ?? isRetryableProviderError(event.error);
+							this.state.lastErrorReported = event.errorReported === true;
+						}
+						break;
+					}
 				}
 			}
 		} finally {
@@ -3468,7 +3496,9 @@ export class AgentRuntime {
 		phase: string,
 	): Record<string, unknown> {
 		const errorName =
-			error instanceof Error && typeof error.name === "string" && error.name.length > 0
+			error instanceof Error &&
+			typeof error.name === "string" &&
+			error.name.length > 0
 				? error.name
 				: undefined;
 		const errorMessage = sanitizeTraceErrorMessage(
@@ -3738,13 +3768,27 @@ export class AgentRuntime {
 		payload: Record<string, unknown>,
 	): void {
 		const sink = this.config.modelBehaviorTraceSink;
-		const handler =
-			kind === "error" ? sink?.onModelRequestError : sink?.onModelRequestAbort;
-		if (!handler) {
+		if (kind === "error") {
+			if (!sink?.onModelRequestError) {
+				return;
+			}
+			try {
+				// Invoked as a METHOD so a stateful adapter keeps its
+				// receiver — see `observeSchemaValidation`.
+				sink.onModelRequestError({
+					...this.modelBehaviorTraceIdentity(),
+					payload,
+				});
+			} catch {
+				// Failure isolation.
+			}
+			return;
+		}
+		if (!sink?.onModelRequestAbort) {
 			return;
 		}
 		try {
-			handler({
+			sink.onModelRequestAbort({
 				...this.modelBehaviorTraceIdentity(),
 				payload,
 			});
@@ -3869,8 +3913,7 @@ export class AgentRuntime {
 		prepared: PreparedToolExecution,
 	): Promise<void> {
 		const sink = this.config.modelBehaviorTraceSink;
-		const handler = sink?.onEditAttempt;
-		if (!handler) {
+		if (!sink?.onEditAttempt) {
 			return;
 		}
 		const toolName = prepared.toolCall.toolName;
@@ -3880,7 +3923,8 @@ export class AgentRuntime {
 		try {
 			const shape = describeEditRequest(toolName, prepared.input);
 			const fileIdentity = await this.fingerprintEditPath(shape.resolvedPath);
-			handler({
+			// Invoked as a METHOD so a stateful adapter keeps its receiver.
+			sink.onEditAttempt({
 				...this.modelBehaviorTraceIdentity(),
 				payload: {
 					toolCallId: prepared.toolCall.toolCallId,
@@ -3952,12 +3996,26 @@ export class AgentRuntime {
 		payload: Record<string, unknown>,
 	): void {
 		const sink = this.config.modelBehaviorTraceSink;
-		const handler = kind === "start" ? sink?.onToolStart : sink?.onToolFinish;
-		if (!handler) {
+		if (!sink) {
 			return;
 		}
 		try {
-			handler({
+			// Invoked as a METHOD so a stateful adapter keeps its receiver —
+			// see `observeSchemaValidation`.
+			if (kind === "start") {
+				if (!sink.onToolStart) {
+					return;
+				}
+				sink.onToolStart({
+					...this.modelBehaviorTraceIdentity(),
+					payload,
+				});
+				return;
+			}
+			if (!sink.onToolFinish) {
+				return;
+			}
+			sink.onToolFinish({
 				...this.modelBehaviorTraceIdentity(),
 				payload,
 			});
@@ -3971,6 +4029,182 @@ export class AgentRuntime {
 			error instanceof AgentRuntimeAbortError ||
 			this.abortController?.signal.aborted === true
 		);
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 — report the SCHEMA VALIDATION
+	 * boundary to the observation sink.
+	 *
+	 * Failure-isolated: a throwing sink must never change the agent's
+	 * behaviour. Only the outcome and the input's SIZE are reported; the
+	 * input itself is never recorded, because it can carry a command's
+	 * arguments or a file's content.
+	 */
+	private observeSchemaValidation(
+		toolName: string,
+		valid: boolean,
+		input: unknown,
+	): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onSchemaValidation) {
+			return;
+		}
+		try {
+			// ACT-CLINEMM-ROUND-C-HARNESS-02: the sink is invoked AS A
+			// METHOD on the sink object. Detaching the function
+			// (`const h = sink.onSchemaValidation; h(...)`) loses the
+			// receiver, and a stateful adapter — the latency sink — would
+			// then throw on `this.record(...)`. That failure was silently
+			// swallowed by the isolation catch, so the boundary never
+			// appeared in the trace while the runtime believed it had
+			// reported it.
+			sink.onSchemaValidation({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					toolName,
+					schemaValid: valid,
+					toolResultBytes: getOutputSize(input),
+				},
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 — report the TOOL RESULT DELIVERY
+	 * boundary to the observation sink.
+	 *
+	 * Failure-isolated. Only the result's SIZE is reported; its content
+	 * is never recorded.
+	 */
+	private observeToolResultDelivered(toolMessage: AgentMessage): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onToolResultDelivered) {
+			return;
+		}
+		try {
+			let bytes = 0;
+			let itemCount = 0;
+			let toolCallId: string | undefined;
+			let toolName: string | undefined;
+			for (const part of toolMessage.content) {
+				if (part.type !== "tool-result") {
+					continue;
+				}
+				itemCount += 1;
+				toolCallId = toolCallId ?? part.toolCallId;
+				toolName = toolName ?? part.toolName;
+				bytes += getOutputSize(part.output);
+			}
+			// Invoked as a METHOD so the adapter keeps its receiver — see
+			// `observeSchemaValidation` for why the detached call is wrong.
+			sink.onToolResultDelivered({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					toolCallId,
+					toolName,
+					toolResultBytes: bytes,
+					toolResultItemCount: itemCount,
+				},
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 — report the PROVIDER-READY boundary
+	 * to the observation sink.
+	 *
+	 * The projection is the FINAL provider-bound message representation,
+	 * computed from the request as it will be dispatched. The request's
+	 * CONTENT is never recorded: only its size, its message count, and the
+	 * inclusion classification of each tool result.
+	 *
+	 * Failure-isolated.
+	 */
+	private observeProviderReady(request: {
+		messages: readonly AgentMessage[];
+		systemPrompt?: string;
+	}): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onProviderReady) {
+			return;
+		}
+		try {
+			const providerMessages = toProviderVisibleMessages(request.messages);
+			let bytes = getOutputSize(request.systemPrompt ?? "");
+			// The provider projection uses the wire shape, where a tool
+			// result is `tool_result` and carries the ORIGINATING tool
+			// call id. The index lets the conversation's results be
+			// matched to their provider-bound counterparts BY IDENTITY
+			// rather than by position — position is not stable once the
+			// projection merges adjacent tool messages.
+			const providerToolResults = new Map<string, number>();
+			for (const message of providerMessages) {
+				bytes += getOutputSize(message.content);
+				const content = message.content;
+				if (typeof content === "string") {
+					continue;
+				}
+				for (const part of content) {
+					if (part.type !== "tool_result") {
+						continue;
+					}
+					const providerBytes = getOutputSize(part.content);
+					const existing = providerToolResults.get(part.tool_use_id);
+					providerToolResults.set(
+						part.tool_use_id,
+						(existing ?? 0) + providerBytes,
+					);
+				}
+			}
+			// Classify EVERY conversation tool result against the
+			// provider-bound projection:
+			//
+			//   - FULL     — present with the same size;
+			//   - SHORTENED— present but smaller than the conversation's
+			//                 copy (a truncation or a rewrite);
+			//   - OMITTED  — not present in the projection at all.
+			//
+			// Only SIZES and COUNTS are recorded. The result's content
+			// never leaves this method.
+			let included = 0;
+			let shortened = 0;
+			let omitted = 0;
+			for (const message of request.messages) {
+				for (const part of message.content) {
+					if (part.type !== "tool-result") {
+						continue;
+					}
+					const conversationBytes = getOutputSize(part.output);
+					const providerBytes = providerToolResults.get(part.toolCallId);
+					if (providerBytes === undefined) {
+						omitted += 1;
+						continue;
+					}
+					if (providerBytes < conversationBytes) {
+						shortened += 1;
+						continue;
+					}
+					included += 1;
+				}
+			}
+			// Invoked as a METHOD so a stateful adapter keeps its receiver.
+			sink.onProviderReady({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					providerRequestBytes: bytes,
+					providerMessageCount: providerMessages.length,
+					toolResultIncludedCount: included,
+					toolResultShortenedCount: shortened,
+					toolResultOmittedCount: omitted,
+				},
+			});
+		} catch {
+			// Failure isolation.
+		}
 	}
 
 	private captureUnexpectedReasoningTokens(
@@ -4244,7 +4478,6 @@ export class AgentRuntime {
 			prepared.push(await this.prepareToolExecution(toolCall));
 		}
 
-
 		const results: AgentMessage[] = [];
 		for (let index = 0; index < prepared.length; ) {
 			const execution = prepared[index];
@@ -4271,9 +4504,7 @@ export class AgentRuntime {
 			// call list. A sequential tool between two groups is not a sibling of
 			// either group and must not arm or clear the group's latch.
 			const group = prepared.slice(start, index);
-			results.push(
-				...(await this.executeParallelGroup(group)),
-			);
+			results.push(...(await this.executeParallelGroup(group)));
 		}
 		return results;
 	}
@@ -4555,6 +4786,19 @@ export class AgentRuntime {
 						? error.message
 						: `Invalid input for tool ${toolCall.toolName}: ${String(error)}`;
 			}
+			// ACT-CLINEMM-ROUND-C-HARNESS-02: report the SCHEMA VALIDATION
+			// boundary at the REAL seam — the point where the tool's own
+			// schema validates the input, before any approval and before
+			// any execution.
+			//
+			// Only the OUTCOME and the input's SIZE are reported. The input
+			// itself is never recorded: it can carry a command's arguments
+			// or a file's content.
+			this.observeSchemaValidation(
+				toolCall.toolName,
+				validationError === undefined,
+				input,
+			);
 			if (typeof validationError === "string" && validationError.length > 0) {
 				skipReason = validationError;
 				// Mutate the toolCall's metadata so the classifier sees

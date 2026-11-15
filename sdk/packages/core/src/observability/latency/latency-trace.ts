@@ -169,6 +169,41 @@ export const LATENCY_METADATA_ALLOWLIST: readonly string[] = [
 	"truncated",
 	"rewritten",
 	"included",
+	// ACT-CLINEMM-ROUND-C-HARNESS-02 — the tool-call OUTCOME
+	// classification.
+	//
+	// These are the runtime's OWN authoritative outcome facts, and they
+	// are what distinguishes a completed tool from one that was denied,
+	// skipped, cancelled or failed. Without them the trace reported every
+	// finished tool call as a successful completion.
+	//
+	// `outcome` is a short classification word, `executionInvoked` is a
+	// boolean, and `skipReason` is a diagnostic string owned by the
+	// runtime. None of them carries command arguments, output or content.
+	"outcome",
+	"executionInvoked",
+	"skipReason",
+	// ACT-CLINEMM-ROUND-C-HARNESS-02 — the provider-ready and
+	// compaction boundaries.
+	//
+	// These are counts, classifications and digests. The provider-ready
+	// boundary reports the SIZE of the request that was actually sent and
+	// the INCLUSION state of each tool result in it; the compaction
+	// boundary reports the message counts before and after and the
+	// continuity of the evidence references.
+	"providerRequestBytes",
+	"providerRequestDigest",
+	"providerMessageCount",
+	"toolResultIncludedCount",
+	"toolResultShortenedCount",
+	"toolResultOmittedCount",
+	"compactionMessagesBefore",
+	"compactionMessagesAfter",
+	"compactionMessagesRemoved",
+	"compactionEvidenceRefsBefore",
+	"compactionEvidenceRefsAfter",
+	"compactionEvidenceRefsRetained",
+	"compactionEvidenceRefsDropped",
 ];
 
 /**

@@ -314,3 +314,135 @@ describe("D3 — parallel timing", () => {
 		expect(bEnds.every((event) => event.correlationId === "corr-b")).toBe(true);
 	});
 });
+
+/**
+ * ACT-CLINEMM-ROUND-C-HARNESS-02 — Phase 4/5 regressions.
+ *
+ * ## The two defects these guard
+ *
+ * **The detached receiver.** The runtime used to extract the sink's
+ * channel as a bare function (`const h = sink.onSchemaValidation`) and
+ * call it detached. That loses the receiver, so a STATEFUL adapter — the
+ * latency sink, whose every channel reaches `this.record(...)` — threw on
+ * `this.record`. The runtime's failure-isolation catch swallowed the
+ * error, so the boundary NEVER appeared in the trace while the runtime
+ * believed it had reported it. Every boundary was silently dead.
+ *
+ * **The false successful completion.** `onToolFinish` defaulted its
+ * status to `"ok"`, and the runtime calls the channel with ONE argument.
+ * So EVERY finished tool call was reported as a successful completion —
+ * including a call whose approval was denied and whose executor never
+ * ran.
+ */
+describe("Phase 4/5 regressions — receiver and outcome truthfulness", () => {
+	it("every channel works when invoked as a METHOD on the sink", () => {
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-receiver", clock);
+
+		// The exact shape the runtime uses: a method call on the sink.
+		sink.onSchemaValidation(
+			observation({ toolName: "run_commands", schemaValid: true }),
+		);
+		sink.onToolResultDelivered(
+			observation({ toolCallId: "c1", toolResultBytes: 12 }),
+		);
+		sink.onProviderReady(observation({ providerMessageCount: 2 }));
+		sink.onCompactionDiagnostics(observation({ compactionTrigger: "budget" }));
+		sink.onCompactionCompleted(observation({ compactionMessagesAfter: 1 }));
+
+		const boundaries = new Set(
+			sink.getTrace().events.map((event) => event.boundary),
+		);
+		expect(boundaries.has("schema_validation")).toBe(true);
+		expect(boundaries.has("tool_result_delivered")).toBe(true);
+		expect(boundaries.has("provider_ready")).toBe(true);
+		expect(boundaries.has("compaction")).toBe(true);
+		expect(sink.getTrace().integrityFailures).toEqual([]);
+	});
+
+	it("reports a DENIED tool call as rejected, never as a success", () => {
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-denied", clock);
+
+		sink.onToolStart(observation({ toolCallId: "c1" }));
+		clock.advance(10);
+		// The runtime's own authority: the executor never ran, and the
+		// call carries a skip reason.
+		sink.onToolFinish(
+			observation({
+				toolCallId: "c1",
+				outcome: "success",
+				executionInvoked: false,
+				skipReason: "Tool execution was denied by the user.",
+			}),
+		);
+
+		const finish = sink
+			.getTrace()
+			.events.find(
+				(event) => event.boundary === "tool_execution" && event.phase === "end",
+			);
+		expect(finish?.status).toBe("rejected");
+		expect(finish?.status).not.toBe("ok");
+	});
+
+	it("reports a tool call whose executor FAILED as failed", () => {
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-failed", clock);
+		sink.onToolStart(observation({ toolCallId: "c1" }));
+		sink.onToolFinish(
+			observation({
+				toolCallId: "c1",
+				outcome: "error",
+				executionInvoked: true,
+			}),
+		);
+		const finish = sink
+			.getTrace()
+			.events.find(
+				(event) => event.boundary === "tool_execution" && event.phase === "end",
+			);
+		expect(finish?.status).toBe("failed");
+	});
+
+	it("reports a COMPLETED tool call as ok", () => {
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-ok", clock);
+		sink.onToolStart(observation({ toolCallId: "c1" }));
+		sink.onToolFinish(
+			observation({
+				toolCallId: "c1",
+				outcome: "success",
+				executionInvoked: true,
+			}),
+		);
+		const finish = sink
+			.getTrace()
+			.events.find(
+				(event) => event.boundary === "tool_execution" && event.phase === "end",
+			);
+		expect(finish?.status).toBe("ok");
+	});
+
+	it("keeps the outcome fields in the recorded metadata", () => {
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-meta", clock);
+		sink.onToolStart(observation({ toolCallId: "c1" }));
+		sink.onToolFinish(
+			observation({
+				toolCallId: "c1",
+				outcome: "success",
+				executionInvoked: false,
+			}),
+		);
+		const finish = sink
+			.getTrace()
+			.events.find(
+				(event) => event.boundary === "tool_execution" && event.phase === "end",
+			);
+		// The allowlist must carry the outcome facts, or the status
+		// derivation would have nothing truthful to read.
+		expect(finish?.metadata?.outcome).toBe("success");
+		expect(finish?.metadata?.executionInvoked).toBe(false);
+	});
+});

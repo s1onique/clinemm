@@ -2167,10 +2167,14 @@ const SECRET_MESSAGE_PATTERNS: ReadonlyArray<{
 	},
 	{
 		label: "api_key",
-		pattern: /\b(?:api[_-]?key|apikey|secret[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|private[_-]?key|password|passwd)\b\s*[:=]\s*["']?([^\s"',;}]{4,})/gi,
+		pattern:
+			/\b(?:api[_-]?key|apikey|secret[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|private[_-]?key|password|passwd)\b\s*[:=]\s*["']?([^\s"',;}]{4,})/gi,
 	},
 	// `sk-...` / `sk-ant-...` style vendor key prefixes.
-	{ label: "vendor_key", pattern: /\b(?:sk|pk|rk|key|ghp|gho|xox[baprs])[-_][A-Za-z0-9_-]{8,}\b/g },
+	{
+		label: "vendor_key",
+		pattern: /\b(?:sk|pk|rk|key|ghp|gho|xox[baprs])[-_][A-Za-z0-9_-]{8,}\b/g,
+	},
 	// A JWT (three base64url segments separated by dots).
 	{
 		label: "jwt",
@@ -2414,6 +2418,45 @@ export interface ModelBehaviorTraceSink {
 	onToolStart?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A tool call finished. */
 	onToolFinish?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 — the SCHEMA VALIDATION boundary.
+	 *
+	 * Reported at the point where the runtime validates a tool call's
+	 * input against the tool's own schema, BEFORE approval and BEFORE
+	 * execution.
+	 *
+	 * The payload carries the tool's identity, the validation outcome and
+	 * the SIZE and DIGEST of the input — never the input itself, never a
+	 * command's arguments, never a file's content.
+	 */
+	onSchemaValidation?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 — the TOOL RESULT DELIVERY boundary.
+	 *
+	 * Reported at the point where a tool result becomes part of the
+	 * CONVERSATION — the moment the result is appended to the message
+	 * list, not the moment the executor returned it.
+	 *
+	 * The distinction matters: a result can be produced and never
+	 * delivered. The payload carries the result's SIZE and DIGEST, never
+	 * its content.
+	 */
+	onToolResultDelivered?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 — the PROVIDER-READY boundary.
+	 *
+	 * Reported at the point where the FINAL provider-bound message
+	 * representation is computed — after every transformation and safety
+	 * pass, immediately before the request leaves the process.
+	 *
+	 * This is NOT the persistent conversation history. The two differ: a
+	 * result may be in the conversation and rewritten, shortened or
+	 * omitted from the request that is actually sent.
+	 *
+	 * The payload carries the request's SIZE, the per-result inclusion
+	 * classification and content DIGESTS — never the request's content.
+	 */
+	onProviderReady?: (observation: ModelBehaviorTraceObservation) => void;
 	/**
 	 * ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01.
 	 *

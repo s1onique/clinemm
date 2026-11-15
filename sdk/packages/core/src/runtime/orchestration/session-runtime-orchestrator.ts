@@ -2241,6 +2241,21 @@ export class SessionRuntime {
 			onCompactionCompleted: sink.onCompactionCompleted
 				? (observation) => sink.onCompactionCompleted?.(observation)
 				: undefined,
+			// ACT-CLINEMM-ROUND-C-HARNESS-02: the three boundaries that
+			// the runtime reports directly.
+			//
+			// They are forwarded EXPLICITLY, not by spreading the sink,
+			// because a spread copies own properties only and would drop
+			// every channel implemented on a prototype.
+			onSchemaValidation: sink.onSchemaValidation
+				? (observation) => sink.onSchemaValidation?.(observation)
+				: undefined,
+			onToolResultDelivered: sink.onToolResultDelivered
+				? (observation) => sink.onToolResultDelivered?.(observation)
+				: undefined,
+			onProviderReady: sink.onProviderReady
+				? (observation) => sink.onProviderReady?.(observation)
+				: undefined,
 			onEditCheckpointObservation: sink.onEditCheckpointObservation
 				? (observation) => sink.onEditCheckpointObservation?.(observation)
 				: undefined,
