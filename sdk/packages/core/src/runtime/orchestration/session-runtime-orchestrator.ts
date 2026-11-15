@@ -2169,6 +2169,20 @@ export class SessionRuntime {
 			this.lastKnownRequestOutcome = outcome;
 		};
 		return {
+			// ACT-CLINEMM-ROUND-C-HARNESS-01: the spread MUST NOT be the
+			// only carrier of the sink's channels.
+			//
+			// An object spread copies OWN properties only. A sink that is
+			// a CLASS INSTANCE keeps its channels on the PROTOTYPE, so
+			// `...sink` copied NOTHING and every channel the wrapper did
+			// not explicitly re-declare — `onToolStart`, `onToolFinish`,
+			// `onEffectiveModelConfig`, `onEditAttempt`, and the rest — was
+			// SILENTLY DROPPED. The tool boundaries were therefore never
+			// observed, with no error and no warning.
+			//
+			// The wrapper now re-declares every channel it forwards, so the
+			// wrapper's OWN behaviour is independent of the sink's
+			// implementation shape.
 			...sink,
 			onModelRequestStart: sink.onModelRequestStart
 				? (observation) => {
@@ -2193,6 +2207,66 @@ export class SessionRuntime {
 						observe(observation, "caller_cancelled");
 						sink.onModelRequestAbort?.(observation);
 					}
+				: undefined,
+			// The remaining channels are forwarded UNCHANGED. They are
+			// re-declared (rather than left to the spread) so that a
+			// prototype-backed sink keeps working.
+			onEffectiveModelConfig: sink.onEffectiveModelConfig
+				? (observation) => sink.onEffectiveModelConfig?.(observation)
+				: undefined,
+			onToolStart: sink.onToolStart
+				? (observation) => sink.onToolStart?.(observation)
+				: undefined,
+			onToolFinish: sink.onToolFinish
+				? (observation) => sink.onToolFinish?.(observation)
+				: undefined,
+			onEditAttempt: sink.onEditAttempt
+				? (observation) => sink.onEditAttempt?.(observation)
+				: undefined,
+			onEditApplication: sink.onEditApplication
+				? (observation) => sink.onEditApplication?.(observation)
+				: undefined,
+			onEditFailure: sink.onEditFailure
+				? (observation) => sink.onEditFailure?.(observation)
+				: undefined,
+			onRunTerminated: sink.onRunTerminated
+				? (observation) => sink.onRunTerminated?.(observation)
+				: undefined,
+			onLoopVerdict: sink.onLoopVerdict
+				? (observation) => sink.onLoopVerdict?.(observation)
+				: undefined,
+			onCompactionDiagnostics: sink.onCompactionDiagnostics
+				? (observation) => sink.onCompactionDiagnostics?.(observation)
+				: undefined,
+			onCompactionCompleted: sink.onCompactionCompleted
+				? (observation) => sink.onCompactionCompleted?.(observation)
+				: undefined,
+			onEditCheckpointObservation: sink.onEditCheckpointObservation
+				? (observation) => sink.onEditCheckpointObservation?.(observation)
+				: undefined,
+			onEditTargetResolved: sink.onEditTargetResolved
+				? (observation) => sink.onEditTargetResolved?.(observation)
+				: undefined,
+			onEditWriteVerification: sink.onEditWriteVerification
+				? (observation) => sink.onEditWriteVerification?.(observation)
+				: undefined,
+			onProcessObservation: sink.onProcessObservation
+				? (observation) => sink.onProcessObservation?.(observation)
+				: undefined,
+			onRunAbortRequested: sink.onRunAbortRequested
+				? (observation) => sink.onRunAbortRequested?.(observation)
+				: undefined,
+			isTraceEnabled: sink.isTraceEnabled
+				? () => sink.isTraceEnabled?.() === true
+				: undefined,
+			fingerprintToolArguments: sink.fingerprintToolArguments
+				? (toolName, input) => sink.fingerprintToolArguments?.(toolName, input)
+				: undefined,
+			fingerprintFilePath: sink.fingerprintFilePath
+				? (resolvedPath) => sink.fingerprintFilePath?.(resolvedPath)
+				: undefined,
+			fingerprintFileContent: sink.fingerprintFileContent
+				? (content) => sink.fingerprintFileContent?.(content)
 				: undefined,
 		};
 	}

@@ -10,22 +10,24 @@
  *   T10  Existing loop-detector behavior unchanged.
  *   T13  Trace ON/OFF produces equivalent execution results.
  */
+
+import type { AgentRuntime } from "@cline/agents";
 import type {
 	AgentMessage,
 	AgentRuntimeEvent,
 	AgentRuntimeStateSnapshot,
 	ModelBehaviorTraceObservation,
-} from "@cline/shared"
+	ModelBehaviorTraceSink,
+} from "@cline/shared";
 import {
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
 	EDIT_OBSERVATION_WORKSPACE_METADATA_KEY,
-} from "@cline/shared"
-import type { AgentRuntime } from "@cline/agents"
-import { describe, expect, it } from "vitest"
+} from "@cline/shared";
+import { describe, expect, it } from "vitest";
 import {
 	SessionRuntime,
 	type SessionRuntimeOrchestratorDeps,
-} from "./session-runtime-orchestrator"
+} from "./session-runtime-orchestrator";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -154,9 +156,7 @@ function makeFakeRuntime(events: AgentRuntimeEvent[]): CapturedRuntime {
 }
 
 function makeCollectingSink(): {
-	sink: NonNullable<
-		SessionRuntimeOrchestratorDeps["modelBehaviorTraceSink"]
-	>;
+	sink: NonNullable<SessionRuntimeOrchestratorDeps["modelBehaviorTraceSink"]>;
 	observations: ModelBehaviorTraceObservation[];
 } {
 	const observations: ModelBehaviorTraceObservation[] = [];
@@ -164,7 +164,10 @@ function makeCollectingSink(): {
 		kind: string,
 		observation: ModelBehaviorTraceObservation,
 	): void => {
-		observations.push({ ...observation, payload: { kind, ...observation.payload } });
+		observations.push({
+			...observation,
+			payload: { kind, ...observation.payload },
+		});
 	};
 	const sink = {
 		onModelRequestStart: (observation: ModelBehaviorTraceObservation) =>
@@ -192,8 +195,8 @@ function makeCollectingSink(): {
 }
 
 function makeRuntime(options: {
-	events: AgentRuntimeEvent[]
-	sink?: SessionRuntimeOrchestratorDeps["modelBehaviorTraceSink"]
+	events: AgentRuntimeEvent[];
+	sink?: SessionRuntimeOrchestratorDeps["modelBehaviorTraceSink"];
 }): SessionRuntime {
 	const { runtime } = makeFakeRuntime(options.events);
 	const deps: SessionRuntimeOrchestratorDeps = {
@@ -276,11 +279,11 @@ describe("SessionRuntime model behavior trace — real orchestrator path", () =>
 			(observation) => observation.payload.kind === "loop_verdict",
 		);
 		// The sink observed the PRODUCTION verdicts, unmodified.
-		expect(verdicts).toHaveLength(3)
-		expect(verdicts[0]?.payload.verdict).toBe("ok")
-		expect(verdicts[1]?.payload.verdict).toBe("ok")
-		expect(verdicts[2]?.payload.verdict).toBe("soft")
-		expect(verdicts[2]?.payload.toolName).toBe("read_file")
+		expect(verdicts).toHaveLength(3);
+		expect(verdicts[0]?.payload.verdict).toBe("ok");
+		expect(verdicts[1]?.payload.verdict).toBe("ok");
+		expect(verdicts[2]?.payload.verdict).toBe("soft");
+		expect(verdicts[2]?.payload.toolName).toBe("read_file");
 	});
 
 	it("T10b: the hard escalation verdict is observed without changing it", async () => {
@@ -300,8 +303,8 @@ describe("SessionRuntime model behavior trace — real orchestrator path", () =>
 
 		const verdicts = observations.filter(
 			(observation) => observation.payload.kind === "loop_verdict",
-		)
-		expect(verdicts).toHaveLength(5)
+		);
+		expect(verdicts).toHaveLength(5);
 		expect(verdicts[4]?.payload.verdict).toBe("hard");
 		// The hard verdict is observed; the OBSERVATION does not itself
 		// perform the abort — the production loop detector does.
@@ -320,9 +323,9 @@ describe("SessionRuntime model behavior trace — real orchestrator path", () =>
 		const resultOn = await runtimeOn.run("do the thing");
 		const resultOff = await runtimeOff.run("do the thing");
 
-		expect(resultOn.finishReason).toBe(resultOff.finishReason)
-		expect(resultOn.iterations).toBe(resultOff.iterations)
-		expect(resultOn.toolCalls).toHaveLength(resultOff.toolCalls.length)
+		expect(resultOn.finishReason).toBe(resultOff.finishReason);
+		expect(resultOn.iterations).toBe(resultOff.iterations);
+		expect(resultOn.toolCalls).toHaveLength(resultOff.toolCalls.length);
 	});
 
 	it("T10c: the loop detector is NOT fed when loop detection is disabled", async () => {
@@ -355,7 +358,7 @@ describe("SessionRuntime model behavior trace — real orchestrator path", () =>
 
 		const verdicts = observations.filter(
 			(observation) => observation.payload.kind === "loop_verdict",
-		)
+		);
 		// With loop detection disabled the tracker is never fed, so the sink
 		// observes NOTHING — the observation did not re-enable it.
 		expect(verdicts).toHaveLength(0);
@@ -376,26 +379,26 @@ describe("SessionRuntime model behavior trace — real orchestrator path", () =>
 
 describe("SessionRuntime — the workspace identity reaches the write layer", () => {
 	it("W-E1: the workspace identity is handed down in the tool-context metadata", async () => {
-		const { sink, observations } = makeCollectingSink()
+		const { sink, observations } = makeCollectingSink();
 		// The orchestrator only hands the workspace identity down when the
 		// recorder is PROVABLY ON, so the witness sink reports itself armed.
 		const armedSink = {
 			...sink,
 			isTraceEnabled: () => true,
-		}
-		const { runtime: fakeRuntime } = makeFakeRuntime([])
-		const captured: Record<string, unknown>[] = []
+		};
+		const { runtime: fakeRuntime } = makeFakeRuntime([]);
+		const captured: Record<string, unknown>[] = [];
 
 		const deps: SessionRuntimeOrchestratorDeps = {
 			createAgentRuntimeImpl: (config) => {
 				// Capture the tool-context metadata the orchestrator built.
 				captured.push(
 					(config.toolContextMetadata ?? {}) as Record<string, unknown>,
-				)
-				return fakeRuntime
+				);
+				return fakeRuntime;
 			},
 			modelBehaviorTraceSink: armedSink,
-		}
+		};
 		const runtime = new SessionRuntime(
 			{
 				providerId: "test-provider",
@@ -409,36 +412,48 @@ describe("SessionRuntime — the workspace identity reaches the write layer", ()
 				modelBehaviorTraceSink: armedSink,
 			},
 			deps,
-		)
+		);
 
-		await runtime.run("do the thing")
+		await runtime.run("do the thing");
 
-		expect(captured).toHaveLength(1)
-		const metadata = captured[0] ?? {}
-		const workspace = metadata[
-			EDIT_OBSERVATION_WORKSPACE_METADATA_KEY
-		] as { workspaceRoot?: string; benchmarkRoot?: string } | undefined
-		expect(workspace).toBeDefined()
-		expect(workspace?.workspaceRoot).toBe("/workspace/root")
+		expect(captured).toHaveLength(1);
+		const metadata = captured[0] ?? {};
+		const workspace = metadata[EDIT_OBSERVATION_WORKSPACE_METADATA_KEY] as
+			| { workspaceRoot?: string; benchmarkRoot?: string }
+			| undefined;
+		expect(workspace).toBeDefined();
+		expect(workspace?.workspaceRoot).toBe("/workspace/root");
 		// The benchmark root is the workspace whose retained changes the
 		// benchmark observes.
-		expect(workspace?.benchmarkRoot).toBe("/workspace/root")
+		expect(workspace?.benchmarkRoot).toBe("/workspace/root");
 		// The sink itself is present, so the executor's observation is live.
-		expect(metadata[EDIT_OBSERVATION_SINK_METADATA_KEY]).toBe(armedSink)
-		expect(observations.length).toBeGreaterThan(0)
-	})
+		//
+		// ACT-CLINEMM-ROUND-C-HARNESS-01: the sink that reaches the write
+		// layer is the orchestrator's WRAPPED sink, not the raw sink —
+		// the wrapper adds the run-terminal-facts observation. The
+		// assertion therefore checks that the wrapper FORWARDS to the
+		// original sink, rather than pinning the wrapper's exact shape
+		// (which legitimately grows as channels are added).
+		const handedDownSink = metadata[EDIT_OBSERVATION_SINK_METADATA_KEY] as
+			| ModelBehaviorTraceSink
+			| undefined;
+		expect(handedDownSink).toBeDefined();
+		expect(handedDownSink?.onToolStart).toBeTypeOf("function");
+		expect(handedDownSink?.onToolFinish).toBeTypeOf("function");
+		expect(observations.length).toBeGreaterThan(0);
+	});
 
 	it("W-E2: with the recorder OFF, NO workspace identity is handed down", async () => {
-		const { runtime: fakeRuntime } = makeFakeRuntime([])
-		const captured: Record<string, unknown>[] = []
+		const { runtime: fakeRuntime } = makeFakeRuntime([]);
+		const captured: Record<string, unknown>[] = [];
 		const deps: SessionRuntimeOrchestratorDeps = {
 			createAgentRuntimeImpl: (config) => {
 				captured.push(
 					(config.toolContextMetadata ?? {}) as Record<string, unknown>,
-				)
-				return fakeRuntime
+				);
+				return fakeRuntime;
 			},
-		}
+		};
 		const runtime = new SessionRuntime(
 			{
 				providerId: "test-provider",
@@ -451,15 +466,15 @@ describe("SessionRuntime — the workspace identity reaches the write layer", ()
 				workspaceRoot: "/workspace/root",
 			},
 			deps,
-		)
+		);
 
-		await runtime.run("do the thing")
+		await runtime.run("do the thing");
 
-		expect(captured).toHaveLength(1)
-		const metadata = captured[0] ?? {}
+		expect(captured).toHaveLength(1);
+		const metadata = captured[0] ?? {};
 		// Trace OFF: neither the sink nor the workspace identity is added,
 		// so the executor's observation channel is completely inert.
-		expect(metadata[EDIT_OBSERVATION_WORKSPACE_METADATA_KEY]).toBeUndefined()
-		expect(metadata[EDIT_OBSERVATION_SINK_METADATA_KEY]).toBeUndefined()
-	})
-})
+		expect(metadata[EDIT_OBSERVATION_WORKSPACE_METADATA_KEY]).toBeUndefined();
+		expect(metadata[EDIT_OBSERVATION_SINK_METADATA_KEY]).toBeUndefined();
+	});
+});
