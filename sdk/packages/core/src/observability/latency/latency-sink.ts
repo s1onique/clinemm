@@ -44,6 +44,7 @@ import {
 	type LatencyStatus,
 	type LatencyTrace,
 	LatencyTracer,
+	type LatencyTraceTruncation,
 } from "./latency-trace";
 
 /**
@@ -108,6 +109,18 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 */
 	getTrace(): LatencyTrace {
 		return this.tracer.getTrace();
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — the completeness metadata
+	 * of the BOUNDED capture.
+	 *
+	 * A host that exports the trace MUST carry this block: a truncated trace
+	 * is INCOMPLETE, and presenting it as exhaustive would be a false
+	 * statement about the measurement.
+	 */
+	getTruncation(): LatencyTraceTruncation {
+		return this.tracer.getTruncation();
 	}
 
 	/**

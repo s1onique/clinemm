@@ -257,6 +257,15 @@ export interface RoundcLatencyTraceArtifact {
 	readonly unavailable: LatencyTrace["unavailable"]
 	/** The trace-integrity failures. */
 	readonly integrityFailures: LatencyTrace["integrityFailures"]
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — the completeness metadata.
+	 *
+	 * The capture is BOUNDED. When `truncation.truncated` is true, the
+	 * retained events are only the MOST RECENT window and observations were
+	 * dropped — the artifact says so explicitly rather than presenting a
+	 * partial trace as a complete one.
+	 */
+	readonly truncation: LatencyTrace["truncation"]
 }
 
 /**
@@ -284,6 +293,10 @@ export function buildRoundcLatencyTraceArtifact(): RoundcLatencyTraceArtifact | 
 		integrityFailureCount: trace.integrityFailures.length,
 		wallClockMs: trace.wallClockMs,
 		overlapping: trace.overlapping,
+		// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — the capture is
+		// BOUNDED. The truncation block is carried verbatim so the
+		// artifact states, explicitly, whether it is COMPLETE.
+		truncation: trace.truncation,
 		events: trace.events,
 		stages: trace.stages,
 		unavailable: trace.unavailable,
@@ -342,17 +355,36 @@ export function _resetRoundcLatencyTraceForTests(): void {
 }
 
 /**
- * The `ModelBehaviorTraceSink` channel names this module fans out.
+ * The `ModelBehaviorTraceSink` EVENT channels this module fans out.
  *
- * The list is the SDK's `ModelBehaviorTraceSink` interface, VERBATIM. It
- * is declared here (rather than derived) because the interface is a
- * TypeScript type — there is no runtime reflection of it — and because an
- * explicitly enumerated list is auditable: a reviewer can compare it
- * against `sdk/packages/shared/src/runtime/model-behavior-trace.ts` and
- * see that no channel is missing and no channel is invented.
+ * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — SINK COMPOSITION COMPLETENESS.
  *
- * `COMPOSABLE_SINK_CHANNELS` is the SINGLE source of truth for the
- * fan-out; `composeModelBehaviorTraceSinks` below is generic over it.
+ * ## Why the list is explicit AND compile-time checked
+ *
+ * The SDK's `ModelBehaviorTraceSink` interface is a TypeScript TYPE, so it
+ * has no runtime reflection and the channel names cannot be derived at
+ * runtime. They are therefore declared here explicitly — which is also what
+ * makes the list AUDITABLE: a reviewer can compare it against
+ * `sdk/packages/shared/src/runtime/model-behavior-trace.ts` and see that no
+ * channel is missing and no channel is invented.
+ *
+ * ## The defect this correction repairs
+ *
+ * The original list carried only 18 of the interface's event channels. The
+ * seven EDIT / PROCESS channels (`onEditAttempt`, `onEditApplication`,
+ * `onEditFailure`, `onEditTargetResolved`, `onEditWriteVerification`,
+ * `onEditCheckpointObservation`, `onProcessObservation`) were MISSING, so
+ * enabling the Round C trace SILENTLY DROPPED the existing recorder's edit
+ * and process telemetry: the composed sink was handed to the SDK INSTEAD of
+ * the recorder, and the SDK then called channels the composite did not
+ * implement.
+ *
+ * ## Why the exhaustiveness check is load-bearing
+ *
+ * A hand-maintained list can silently drift again the moment a channel is
+ * added to the SDK interface. The assertion below turns that drift into a
+ * COMPILE ERROR: adding a channel to `ModelBehaviorTraceSink` without
+ * adding it here fails `check-types`, so the omission can never ship.
  */
 export const COMPOSABLE_SINK_CHANNELS = [
 	"onEffectiveModelConfig",
@@ -368,12 +400,92 @@ export const COMPOSABLE_SINK_CHANNELS = [
 	"onSchemaValidation",
 	"onToolResultDelivered",
 	"onProviderReady",
+	// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — the EDIT channels.
+	//
+	// These were the channels the original list dropped. The existing
+	// recorder implements them (the edit-efficiency and workspace-effect
+	// trace ACTs), so omitting them from the composite silently disabled
+	// existing telemetry whenever the Round C trace was armed.
+	"onEditAttempt",
+	"onEditApplication",
+	"onEditFailure",
+	"onEditTargetResolved",
+	"onEditWriteVerification",
+	"onEditCheckpointObservation",
+	// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — the PROCESS channel.
+	//
+	// The command-process-outcome bridge owns this one; the existing
+	// recorder implements it.
+	"onProcessObservation",
 	"onLoopVerdict",
 	"onCompactionDiagnostics",
 	"onCompactionCompleted",
 	"onRunTerminated",
 	"onRunAbortRequested",
 ] as const satisfies readonly (keyof ModelBehaviorTraceSink)[]
+
+/**
+ * The `ModelBehaviorTraceSink` members that are NOT event channels.
+ *
+ * They are handled separately because they have different semantics:
+ *
+ *   - `isTraceEnabled` — a synchronous enable bit (an OR of both sides).
+ *   - the three fingerprint operations — VALUE-PRODUCING operations. They
+ *     return a fingerprint the SDK CONSUMES, so they cannot be fanned out
+ *     as events: a composite that returned `undefined` would silently
+ *     disable the SDK's argument/path/content fingerprinting.
+ *
+ * Keeping them in their own list is what makes the exhaustiveness check
+ * below TOTAL: every member of `ModelBehaviorTraceSink` is accounted for
+ * by exactly one of the three lists.
+ */
+export const COMPOSABLE_SINK_FINGERPRINTS = [
+	"fingerprintToolArguments",
+	"fingerprintFilePath",
+	"fingerprintFileContent",
+] as const satisfies readonly (keyof ModelBehaviorTraceSink)[]
+
+/**
+ * The enable-bit member, named separately for the same reason.
+ */
+export const COMPOSABLE_SINK_ENABLE_BIT = "isTraceEnabled" as const satisfies keyof ModelBehaviorTraceSink
+
+/**
+ * Every member of `ModelBehaviorTraceSink`, as a union of the three lists.
+ */
+type ComposedSinkMember =
+	| (typeof COMPOSABLE_SINK_CHANNELS)[number]
+	| (typeof COMPOSABLE_SINK_FINGERPRINTS)[number]
+	| typeof COMPOSABLE_SINK_ENABLE_BIT
+
+/**
+ * The members of `ModelBehaviorTraceSink` that the composition does NOT
+ * account for.
+ *
+ * This MUST be `never`. If a channel is added to the SDK interface and not
+ * to one of the three lists above, this type becomes a non-`never` union
+ * and the assignment below fails to COMPILE — the drift is caught by
+ * `check-types`, not by a reviewer noticing it.
+ */
+type UncomposedSinkMember = Exclude<keyof ModelBehaviorTraceSink, ComposedSinkMember>
+
+/**
+ * COMPILE-TIME EXHAUSTIVENESS GATE.
+ *
+ * If `UncomposedSinkMember` is not `never`, this assignment is a type
+ * error. The exported constant therefore carries the proof that the
+ * composition covers EVERY member of the SDK's sink interface.
+ */
+export type ComposableSinkCoversEveryChannel = UncomposedSinkMember extends never ? true : never
+
+/**
+ * The compile-time proof, as a VALUE so it is not elided and so a test can
+ * assert on it.
+ *
+ * It is `true` if and only if the composition is exhaustive. It is typed as
+ * `true`, so a future omission makes this declaration a compile error.
+ */
+export const COMPOSABLE_SINK_IS_EXHAUSTIVE: ComposableSinkCoversEveryChannel = true
 
 /**
  * Compose two `ModelBehaviorTraceSink`s into one.
@@ -405,6 +517,40 @@ export const COMPOSABLE_SINK_CHANNELS = [
  * SDK uses this bit to take a SYNCHRONOUS fast path (skipping the
  * fingerprint `await`) when NOBODY is listening, so it must be the OR of
  * the two — never one of them alone.
+ *
+ * ## Fingerprint operations (VALUE-PRODUCING, not event fan-out)
+ *
+ * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01.
+ *
+ * The three fingerprint operations are NOT event channels: they RETURN a
+ * value the SDK CONSUMES (the SDK puts the argument fingerprint into the
+ * tool-call record). They therefore cannot be fanned out:
+ *
+ *   - If the composite dropped them, the SDK would receive `undefined` and
+ *     the existing recorder's argument/path/content fingerprinting would be
+ *     SILENTLY DISABLED whenever the Round C trace was armed. That is a
+ *     correctness regression in the existing telemetry, not a cosmetic one.
+ *   - If the composite fanned them out to both sides and returned the
+ *     SECOND side's value, the composite's answer would depend on argument
+ *     order rather than on authority.
+ *
+ * The composite therefore DELEGATES: the PRIMARY side (the existing
+ * recorder, which owns the ephemeral fingerprint key) is authoritative; the
+ * secondary side is the fallback when the primary does not implement the
+ * operation at all.
+ *
+ * Three properties are preserved:
+ *
+ *   1. The RETURN VALUE, including an asynchronous one. The composed
+ *      operation returns the delegate's result verbatim, so a `Promise` in
+ *      stays a `Promise` out and the SDK's `await` still observes the real
+ *      fingerprint.
+ *   2. The RECEIVER BINDING. The delegate is invoked with `.call(receiver,
+ *      ...)`, so `this` inside the implementation is still its own sink —
+ *      the recorder's `this.fingerprintKey` keeps resolving.
+ *   3. FAILURE ISOLATION. A throw in the delegate is contained: the
+ *      composite returns `undefined` rather than propagating into the
+ *      runtime's tool-execution path.
  */
 export function composeModelBehaviorTraceSinks(
 	primary: ModelBehaviorTraceSink,
@@ -434,6 +580,34 @@ export function composeModelBehaviorTraceSinks(
 				} catch {
 					// Failure isolation (see above).
 				}
+			}
+		}
+	}
+	for (const operation of COMPOSABLE_SINK_FINGERPRINTS) {
+		const primaryHandler = primary[operation]
+		const secondaryHandler = secondary[operation]
+		if (typeof primaryHandler !== "function" && typeof secondaryHandler !== "function") {
+			continue
+		}
+		composed[operation] = (...args: unknown[]) => {
+			// The PRIMARY side is authoritative; the secondary is the
+			// fallback for a side that does not implement the operation.
+			if (typeof primaryHandler === "function") {
+				try {
+					// `.call(receiver, ...)` preserves the receiver binding,
+					// and the result is returned VERBATIM so an async
+					// fingerprint stays async.
+					return (primaryHandler as (...a: unknown[]) => unknown).call(primary, ...args)
+				} catch {
+					// Failure isolation: a broken fingerprint implementation
+					// must never break the runtime's tool execution.
+					return undefined
+				}
+			}
+			try {
+				return (secondaryHandler as (...a: unknown[]) => unknown).call(secondary, ...args)
+			} catch {
+				return undefined
 			}
 		}
 	}

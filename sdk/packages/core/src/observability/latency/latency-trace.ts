@@ -314,6 +314,95 @@ export interface LatencyIntegrityFailure {
 }
 
 /**
+ * The completeness metadata of a bounded latency trace.
+ *
+ * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — BOUNDED RETENTION.
+ *
+ * The tracer retains a BOUNDED window of observations. A trace that has
+ * dropped observations is therefore INCOMPLETE, and this block states that
+ * explicitly: a partial trace is never presented as a complete one.
+ *
+ * The dropped observations are the OLDEST ones (a ring), so the retained
+ * window always carries the MOST RECENT boundaries — which is what the
+ * ~5 s floor investigation needs (the floor is visible in the most recent
+ * tool-execution → tool-result-delivered gap).
+ */
+export interface LatencyTraceTruncation {
+	/**
+	 * True when at least one observation was dropped from the ring.
+	 *
+	 * When this is true the trace is INCOMPLETE: `events` does not contain
+	 * every observation the tracer saw.
+	 */
+	readonly truncated: boolean;
+	/**
+	 * How many boundary events were dropped from the ring.
+	 */
+	readonly droppedEventCount: number;
+	/**
+	 * How many UNAVAILABLE measurements were dropped from the ring.
+	 */
+	readonly droppedUnavailableCount: number;
+	/**
+	 * How many trace-INTEGRITY failures were dropped from the ring.
+	 */
+	readonly droppedIntegrityFailureCount: number;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — how many OPEN spans were
+	 * discarded because the open-span bound was reached.
+	 *
+	 * A discarded span is a span that was ENTERED but whose start could no
+	 * longer be retained. Its exit can therefore never be measured: the
+	 * tracer reports that as a trace-integrity failure instead of
+	 * fabricating a duration.
+	 */
+	readonly droppedOpenSpanCount: number;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — how many open spans were
+	 * ever opened.
+	 */
+	readonly totalOpenSpanCount: number;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — how many open spans are
+	 * currently retained.
+	 */
+	readonly retainedOpenSpanCount: number;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the maximum number of
+	 * open spans the tracer retains.
+	 */
+	readonly maxOpenSpans: number;
+	/**
+	 * Total boundary events ever accepted by the tracer.
+	 */
+	readonly totalEventCount: number;
+	/**
+	 * How many boundary events are currently retained.
+	 */
+	readonly retainedEventCount: number;
+	/**
+	 * Total unavailable measurements ever accepted by the tracer.
+	 */
+	readonly totalUnavailableCount: number;
+	/**
+	 * Total integrity failures ever accepted by the tracer.
+	 */
+	readonly totalIntegrityFailureCount: number;
+	/**
+	 * The maximum number of events the tracer retains.
+	 */
+	readonly maxEvents: number;
+	/**
+	 * The maximum number of unavailable measurements the tracer retains.
+	 */
+	readonly maxUnavailable: number;
+	/**
+	 * The maximum number of integrity failures the tracer retains.
+	 */
+	readonly maxIntegrityFailures: number;
+}
+
+/**
  * The complete trace of one turn.
  */
 export interface LatencyTrace {
@@ -353,7 +442,72 @@ export interface LatencyTrace {
 	 * obtain a total.
 	 */
 	readonly overlapping: boolean;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — BOUNDED RETENTION.
+	 *
+	 * The completeness metadata of the bounded trace. A consumer MUST
+	 * consult `truncation.truncated` before presenting the trace as
+	 * exhaustive: when it is true, observations were dropped and the
+	 * retained window is only the MOST RECENT slice of the capture.
+	 */
+	readonly truncation: LatencyTraceTruncation;
 }
+
+/**
+ * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — the retention bounds.
+ *
+ * The tracer is a LONG-LIVED diagnostic: it is installed for a whole
+ * session, and a session can run for hours. Without an explicit bound the
+ * event array grows with EVERY observation, so a long-running dogfood
+ * session would accumulate unbounded trace history — the exact opposite of
+ * the bounded-capture requirement.
+ *
+ * The bounds are deliberately generous enough that a normal investigation
+ * window (tens of tool calls, hundreds of boundaries) is retained WHOLE,
+ * while a pathological session is bounded rather than unbounded.
+ */
+export const LATENCY_TRACE_MAX_EVENTS = 4_096;
+export const LATENCY_TRACE_MAX_UNAVAILABLE = 256;
+export const LATENCY_TRACE_MAX_INTEGRITY_FAILURES = 256;
+
+/**
+ * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the OPEN-SPAN bound.
+ *
+ * The event ring is not the only thing that grows. The tracer also keeps
+ * the spans it has ENTERED but not yet EXITED — the "open spans" — so it
+ * can measure a duration when the matching exit arrives.
+ *
+ * That map is INDEPENDENT of the event ring: a completed span is removed
+ * from it, but an unmatched start stays in it FOREVER. A pathological (or
+ * merely buggy) caller that enters without exiting therefore grows the map
+ * without limit, even though the event ring stays bounded. The retained
+ * open-span count is a MEMORY bound, so it needs its own bound.
+ *
+ * The bound is deliberately separate from {@link LATENCY_TRACE_MAX_EVENTS}:
+ * the two caps protect different things (history vs. in-flight state), and
+ * one cannot be derived from the other.
+ *
+ * A span that is discarded because of this bound is COUNTED as a dropped
+ * span, and a later exit that would have closed it is reported as a
+ * trace-integrity failure rather than being given a fabricated duration.
+ */
+export const LATENCY_TRACE_MAX_OPEN_SPANS = 1_024;
+
+/**
+ * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the TOMBSTONE bound.
+ *
+ * When an open span is discarded by the open-span bound, the tracer keeps
+ * a small TOMBSTONE in its place: a record that "a start for this id was
+ * discarded". The tombstone is what lets a LATE exit be recognised as
+ * belonging to a discarded start instead of being matched to an unrelated
+ * span.
+ *
+ * The tombstone registry is itself bounded, so a long session cannot grow
+ * it without limit either. When a tombstone is evicted, the fact that the
+ * boundary had discarded starts is still remembered as a COUNT, which is
+ * enough to refuse to fabricate a duration for an unmatched id.
+ */
+export const LATENCY_TRACE_MAX_DISCARDED_SPAN_TOMBSTONES = 1_024;
 
 /**
  * The boundary pairs that bound each stage.
@@ -596,6 +750,39 @@ export const DEFAULT_LATENCY_CLOCK: LatencyClock = {
 };
 
 /**
+ * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — the tracer's retention
+ * options.
+ *
+ * The bounds are injectable so a test can prove the ring behaves, and so a
+ * host that needs a tighter (or looser) window can set one explicitly.
+ * Each bound is clamped to at least 1, so the tracer can never be
+ * constructed with a zero-capacity ring.
+ */
+export interface LatencyTracerOptions {
+	/** Max retained boundary events. Defaults to {@link LATENCY_TRACE_MAX_EVENTS}. */
+	readonly maxEvents?: number;
+	/** Max retained unavailable measurements. Defaults to {@link LATENCY_TRACE_MAX_UNAVAILABLE}. */
+	readonly maxUnavailable?: number;
+	/** Max retained integrity failures. Defaults to {@link LATENCY_TRACE_MAX_INTEGRITY_FAILURES}. */
+	readonly maxIntegrityFailures?: number;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — max retained OPEN spans.
+	 *
+	 * Defaults to {@link LATENCY_TRACE_MAX_OPEN_SPANS}. This bound is
+	 * INDEPENDENT of `maxEvents`: the event ring bounds the retained
+	 * HISTORY, while this bounds the retained IN-FLIGHT state.
+	 */
+	readonly maxOpenSpans?: number;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — max retained TOMBSTONES
+	 * for discarded open spans.
+	 *
+	 * Defaults to {@link LATENCY_TRACE_MAX_DISCARDED_SPAN_TOMBSTONES}.
+	 */
+	readonly maxDiscardedSpanTombstones?: number;
+}
+
+/**
  * A boundary tracer for one turn.
  *
  * The tracer is READ-ONLY observation: it never changes a value the
@@ -605,14 +792,62 @@ export const DEFAULT_LATENCY_CLOCK: LatencyClock = {
  */
 export class LatencyTracer {
 	private readonly events: LatencyBoundaryEvent[] = [];
+	/**
+	 * The spans that were ENTERED but not yet EXITED, grouped by boundary.
+	 *
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — this map is BOUNDED.
+	 *
+	 * It used to be unbounded: a span stayed here until its exit arrived,
+	 * so a caller that entered without exiting grew the map without limit.
+	 * Each boundary's array is a STACK (last-in-first-out), and the
+	 * `seq` on each span is the global order in which the span was
+	 * opened — it is what lets the tracer discard the globally OLDEST
+	 * span when the bound is reached.
+	 */
 	private readonly openSpans = new Map<
 		LatencyBoundary,
 		Array<{
 			readonly boundary: LatencyBoundary;
 			readonly startedAt: number;
 			readonly toolCallId?: string;
+			readonly seq: number;
 		}>
 	>();
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the GLOBAL FIFO of open
+	 * spans, in the order they were opened.
+	 *
+	 * This is what makes the open-span bound evict the OLDEST span rather
+	 * than an arbitrary one. Because the eviction order matches the
+	 * opening order, the spans that remain on a boundary are exactly the
+	 * NEWEST ones, so the last-in-first-out matching between a start and
+	 * an exit keeps working for every span that was NOT discarded.
+	 */
+	private readonly openSpanOrder: Array<{
+		readonly boundary: LatencyBoundary;
+		readonly seq: number;
+	}> = [];
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the TOMBSTONES of spans
+	 * that were discarded by the open-span bound.
+	 *
+	 * A tombstone records that "a start for this id was discarded". It is
+	 * what lets a LATE exit be recognised as belonging to a discarded
+	 * start instead of being matched to an UNRELATED span (which would
+	 * fabricate a duration).
+	 *
+	 * The registry is itself bounded, and each boundary remembers how many
+	 * of its starts were discarded — so even after a tombstone has been
+	 * evicted, the tracer still knows that it must not guess.
+	 */
+	private readonly discardedSpanTombstones: Array<{
+		readonly boundary: LatencyBoundary;
+		readonly toolCallId?: string;
+	}> = [];
+	/** How many starts were discarded on each boundary. */
+	private readonly discardedSpanCounts = new Map<LatencyBoundary, number>();
+	/** The global order counter for open spans. */
+	private nextOpenSpanSeq = 0;
 	private readonly origin: number;
 	/** The boundaries that were opened at least once. */
 	private readonly openedBoundaries = new Set<LatencyBoundary>();
@@ -622,10 +857,93 @@ export class LatencyTracer {
 	private readonly unavailableMeasurements: LatencyUnavailableMeasurement[] =
 		[];
 
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — BOUNDED RETENTION.
+	//
+	// The tracer is installed for a whole SESSION, so its retention must be
+	// bounded: an unbounded event array would grow with every observation
+	// for the lifetime of the extension host.
+	//
+	// The retention is a RING: the OLDEST observation is dropped when the
+	// bound is reached, so the retained window always carries the MOST
+	// RECENT boundaries. That is the window the ~5 s floor investigation
+	// needs — the floor shows up in the most recent
+	// `tool_execution → tool_result_delivered` gap.
+	//
+	// Every drop is COUNTED. The counts are reported through
+	// {@link LatencyTraceTruncation} so an incomplete trace is never
+	// presented as a complete one, and NO continuity is invented across
+	// discarded observations.
+	// -------------------------------------------------------------------------
+
+	/** The maximum number of retained boundary events. */
+	private readonly maxEvents: number;
+	/** The maximum number of retained unavailable measurements. */
+	private readonly maxUnavailable: number;
+	/** The maximum number of retained integrity failures. */
+	private readonly maxIntegrityFailures: number;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the maximum number of
+	 * OPEN spans the tracer retains.
+	 */
+	private readonly maxOpenSpans: number;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the maximum number of
+	 * TOMBSTONES the tracer retains.
+	 */
+	private readonly maxDiscardedSpanTombstones: number;
+	/** How many boundary events were dropped from the ring. */
+	private droppedEventCount = 0;
+	/** How many unavailable measurements were dropped from the ring. */
+	private droppedUnavailableCount = 0;
+	/** How many integrity failures were dropped from the ring. */
+	private droppedIntegrityFailureCount = 0;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — how many open spans were
+	 * discarded by the open-span bound.
+	 */
+	private droppedOpenSpanCount = 0;
+	/** How many open spans were ever opened. */
+	private totalOpenSpanCount = 0;
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — how many integrity
+	 * failures were dropped when the EXPORT was bounded.
+	 *
+	 * This counts the failures the tracer knows about but does NOT include
+	 * in the exported list — including the ones synthesised from
+	 * still-open spans.
+	 */
+	private droppedExportedIntegrityFailureCount = 0;
+	/** How many boundary events were ever accepted. */
+	private totalEventCount = 0;
+	/** How many unavailable measurements were ever accepted. */
+	private totalUnavailableCount = 0;
+	/** How many integrity failures were ever accepted. */
+	private totalIntegrityFailureCount = 0;
+
 	constructor(
 		readonly correlationId: string,
 		private readonly clock: LatencyClock = DEFAULT_LATENCY_CLOCK,
+		options: LatencyTracerOptions = {},
 	) {
+		this.maxEvents = Math.max(1, options.maxEvents ?? LATENCY_TRACE_MAX_EVENTS);
+		this.maxUnavailable = Math.max(
+			1,
+			options.maxUnavailable ?? LATENCY_TRACE_MAX_UNAVAILABLE,
+		);
+		this.maxIntegrityFailures = Math.max(
+			1,
+			options.maxIntegrityFailures ?? LATENCY_TRACE_MAX_INTEGRITY_FAILURES,
+		);
+		this.maxOpenSpans = Math.max(
+			1,
+			options.maxOpenSpans ?? LATENCY_TRACE_MAX_OPEN_SPANS,
+		);
+		this.maxDiscardedSpanTombstones = Math.max(
+			1,
+			options.maxDiscardedSpanTombstones ??
+				LATENCY_TRACE_MAX_DISCARDED_SPAN_TOMBSTONES,
+		);
 		// The origin is read defensively: a broken clock must not prevent
 		// the tracer from being CONSTRUCTED, because the tracer is created
 		// on the runtime's hot path.
@@ -655,7 +973,7 @@ export class LatencyTracer {
 		try {
 			const now = this.clock.monotonic() - this.origin;
 			this.openedBoundaries.add(boundary);
-			this.events.push({
+			this.appendEvent({
 				correlationId: this.correlationId,
 				boundary,
 				phase: "start",
@@ -670,19 +988,84 @@ export class LatencyTracer {
 			// The `toolCallId` is carried on the span so that an exit can
 			// be matched to the RIGHT entry even when parallel calls
 			// finish out of order — see `takeSpan`.
+			//
+			// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the `seq` is the
+			// GLOBAL order in which this span was opened. It is what lets
+			// the open-span bound discard the OLDEST span rather than an
+			// arbitrary one.
 			const stack = this.openSpans.get(boundary);
 			const span = {
 				boundary,
 				startedAt: now,
 				toolCallId: readToolCallId(metadata),
+				seq: this.nextOpenSpanSeq,
 			};
+			this.nextOpenSpanSeq += 1;
+			this.totalOpenSpanCount += 1;
 			if (stack) {
 				stack.push(span);
 			} else {
 				this.openSpans.set(boundary, [span]);
 			}
+			this.openSpanOrder.push({ boundary, seq: span.seq });
+			// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — enforce the
+			// OPEN-SPAN bound. The event ring is bounded independently;
+			// this bounds the IN-FLIGHT state.
+			this.enforceOpenSpanBound();
 		} catch {
 			// Failure isolation.
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — discard the OLDEST open
+	 * spans until the open-span bound is satisfied.
+	 *
+	 * The OLDEST span is discarded because the retained spans must keep
+	 * their last-in-first-out relationship: on a given boundary the
+	 * discarded spans are then exactly the ones that were opened FIRST,
+	 * so every RETAINED span still receives its own exit.
+	 *
+	 * A discarded span leaves a TOMBSTONE behind, so a late exit is
+	 * recognised as belonging to a discarded start instead of being
+	 * matched to an unrelated span.
+	 */
+	private enforceOpenSpanBound(): void {
+		while (this.openSpanOrder.length > this.maxOpenSpans) {
+			const oldest = this.openSpanOrder.shift();
+			if (!oldest) {
+				break;
+			}
+			const stack = this.openSpans.get(oldest.boundary);
+			if (!stack) {
+				continue;
+			}
+			const index = stack.findIndex((span) => span.seq === oldest.seq);
+			if (index === -1) {
+				// Already closed by its own exit.
+				continue;
+			}
+			const [discarded] = stack.splice(index, 1);
+			if (!discarded) {
+				continue;
+			}
+			if (stack.length === 0) {
+				this.openSpans.delete(oldest.boundary);
+			}
+			this.droppedOpenSpanCount += 1;
+			this.discardedSpanCounts.set(
+				oldest.boundary,
+				(this.discardedSpanCounts.get(oldest.boundary) ?? 0) + 1,
+			);
+			this.discardedSpanTombstones.push({
+				boundary: discarded.boundary,
+				toolCallId: discarded.toolCallId,
+			});
+			while (
+				this.discardedSpanTombstones.length > this.maxDiscardedSpanTombstones
+			) {
+				this.discardedSpanTombstones.shift();
+			}
 		}
 	}
 
@@ -731,25 +1114,101 @@ export class LatencyTracer {
 			const now = this.clock.monotonic() - this.origin;
 			const toolCallId = readToolCallId(options.metadata);
 			const stack = this.openSpans.get(boundary);
+			// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the exit is
+			// matched against the RETAINED spans, the TOMBSTONES of
+			// discarded spans, and only then the never-entered case.
+			//
+			// The order matters: a start that was DISCARDED by the
+			// open-span bound must never fall through to the
+			// last-in-first-out fallback, because that would close an
+			// UNRELATED span and fabricate its duration.
+			const retainedMatch = this.findRetainedSpan(boundary, toolCallId);
+			const discardedMatch = this.findDiscardedSpan(boundary, toolCallId);
+			if (retainedMatch) {
+				// The exit closes a span that is still retained: its
+				// duration is measured against that span's own start.
+				this.removeRetainedSpan(retainedMatch);
+				this.appendEvent({
+					correlationId: this.correlationId,
+					boundary,
+					phase: "end",
+					monotonicMs: now,
+					wallClockIso: this.clock.wallClockIso(),
+					metadata: sanitizeLatencyMetadata(options.metadata),
+					durationMs: now - retainedMatch.startedAt,
+					status: options.status,
+				});
+				return;
+			}
+			if (discardedMatch) {
+				// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the start of
+				// this span was DISCARDED by the open-span bound. Its
+				// duration is not assertable, so NO duration is recorded
+				// and NO unrelated span is closed.
+				this.consumeDiscardedSpan(discardedMatch);
+				this.appendIntegrityFailure({
+					boundary,
+					reason: discardedMatch.toolCallId
+						? `start discarded by the open-span bound for tool call ${discardedMatch.toolCallId}`
+						: "start discarded by the open-span bound",
+				});
+				this.appendEvent({
+					correlationId: this.correlationId,
+					boundary,
+					phase: "end",
+					monotonicMs: now,
+					wallClockIso: this.clock.wallClockIso(),
+					metadata: sanitizeLatencyMetadata(options.metadata),
+					durationMs: undefined,
+					status: options.status,
+				});
+				return;
+			}
+			// No retained span and no tombstone matches this exit.
+			//
+			// If the boundary HAS discarded starts, the exit may belong to
+			// one of them whose tombstone has already been evicted. The
+			// tracer must not guess: no duration is recorded and no
+			// unrelated span is closed.
+			const discardedCount = this.discardedSpanCounts.get(boundary) ?? 0;
+			if (discardedCount > 0) {
+				this.appendIntegrityFailure({
+					boundary,
+					reason: toolCallId
+						? `start for tool call ${toolCallId} was discarded by the open-span bound`
+						: "start was discarded by the open-span bound",
+				});
+				this.appendEvent({
+					correlationId: this.correlationId,
+					boundary,
+					phase: "end",
+					monotonicMs: now,
+					wallClockIso: this.clock.wallClockIso(),
+					metadata: sanitizeLatencyMetadata(options.metadata),
+					durationMs: undefined,
+					status: options.status,
+				});
+				return;
+			}
 			// A boundary exited without a matching entry is a trace-
 			// integrity failure: the duration is not assertable.
 			if (!stack || stack.length === 0) {
-				this.integrityFailures.push({
+				this.appendIntegrityFailure({
 					boundary,
 					reason: "exit without a matching start",
 				});
-			} else if (
-				toolCallId !== undefined &&
-				!stack.some((span) => span.toolCallId === toolCallId)
-			) {
+			} else if (toolCallId !== undefined) {
 				// An exit naming a tool call that was never entered.
-				this.integrityFailures.push({
+				// This id was NEVER a start on this boundary, so the
+				// last-in-first-out fallback is safe: there is no
+				// discarded start it could belong to.
+				this.appendIntegrityFailure({
 					boundary,
 					reason: `unmatched span id ${toolCallId}`,
 				});
 			}
 			const span = this.takeSpan(boundary, toolCallId);
-			this.events.push({
+			this.appendEvent({
 				correlationId: this.correlationId,
 				boundary,
 				phase: "end",
@@ -783,7 +1242,7 @@ export class LatencyTracer {
 		try {
 			const now = this.clock.monotonic() - this.origin;
 			const span = this.takeSpan(boundary, undefined);
-			this.events.push({
+			this.appendEvent({
 				correlationId: this.correlationId,
 				boundary,
 				phase: "end",
@@ -794,11 +1253,19 @@ export class LatencyTracer {
 				durationMs: undefined,
 				status: options.status,
 			});
-			this.unavailableMeasurements.push({ boundary, reason });
+			this.appendUnavailable({ boundary, reason });
 			if (span === undefined) {
-				this.integrityFailures.push({
+				// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — distinguish the
+				// case where the boundary had DISCARDED starts from the case
+				// where it never had a start at all. Neither produces a
+				// duration, but they are different defects.
+				const discardedCount = this.discardedSpanCounts.get(boundary) ?? 0;
+				this.appendIntegrityFailure({
 					boundary,
-					reason: "marked unavailable without a matching start",
+					reason:
+						discardedCount > 0
+							? "marked unavailable after its start was discarded by the open-span bound"
+							: "marked unavailable without a matching start",
 				});
 			}
 		} catch {
@@ -838,10 +1305,236 @@ export class LatencyTracer {
 			const index = stack.findIndex((span) => span.toolCallId === toolCallId);
 			if (index !== -1) {
 				const [span] = stack.splice(index, 1);
+				this.forgetOpenSpanOrder(boundary, span?.seq);
 				return span;
 			}
 		}
-		return stack.pop();
+		const span = stack.pop();
+		this.forgetOpenSpanOrder(boundary, span?.seq);
+		return span;
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — find the RETAINED span an
+	 * exit closes.
+	 *
+	 * When the exit names a `toolCallId`, the span carrying that id is the
+	 * one closed — even when the calls finish out of order. When the exit
+	 * names no id, the most recently opened retained span is the one closed,
+	 * which is the last-in-first-out rule that is correct for a boundary
+	 * that is entered at most once.
+	 *
+	 * The search is NOT allowed to fall back when the boundary has
+	 * discarded starts: see {@link findDiscardedSpan}.
+	 */
+	private findRetainedSpan(
+		boundary: LatencyBoundary,
+		toolCallId: string | undefined,
+	):
+		| {
+				readonly boundary: LatencyBoundary;
+				readonly startedAt: number;
+				readonly toolCallId?: string;
+				readonly seq: number;
+		  }
+		| undefined {
+		const stack = this.openSpans.get(boundary);
+		if (!stack || stack.length === 0) {
+			return undefined;
+		}
+		if (toolCallId !== undefined) {
+			return stack.find((span) => span.toolCallId === toolCallId);
+		}
+		return stack[stack.length - 1];
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — remove a retained span
+	 * that an exit closed.
+	 */
+	private removeRetainedSpan(span: {
+		readonly boundary: LatencyBoundary;
+		readonly seq: number;
+	}): void {
+		const stack = this.openSpans.get(span.boundary);
+		if (!stack) {
+			return;
+		}
+		const index = stack.findIndex((candidate) => candidate.seq === span.seq);
+		if (index !== -1) {
+			stack.splice(index, 1);
+		}
+		if (stack.length === 0) {
+			this.openSpans.delete(span.boundary);
+		}
+		this.forgetOpenSpanOrder(span.boundary, span.seq);
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — find the TOMBSTONE of a
+	 * span whose start was discarded by the open-span bound.
+	 *
+	 * A tombstone is matched by `toolCallId` when the exit names one. When
+	 * the exit names no id, the OLDEST tombstone for the boundary is the
+	 * match: the discarded spans on a boundary are exactly the ones that
+	 * were opened FIRST, and their exits arrive last.
+	 */
+	private findDiscardedSpan(
+		boundary: LatencyBoundary,
+		toolCallId: string | undefined,
+	):
+		| {
+				readonly boundary: LatencyBoundary;
+				readonly toolCallId?: string;
+		  }
+		| undefined {
+		if (toolCallId !== undefined) {
+			return this.discardedSpanTombstones.find(
+				(tombstone) =>
+					tombstone.boundary === boundary &&
+					tombstone.toolCallId === toolCallId,
+			);
+		}
+		return this.discardedSpanTombstones.find(
+			(tombstone) =>
+				tombstone.boundary === boundary && tombstone.toolCallId === undefined,
+		);
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — consume a tombstone once
+	 * its late exit has been reported.
+	 */
+	private consumeDiscardedSpan(tombstone: {
+		readonly boundary: LatencyBoundary;
+		readonly toolCallId?: string;
+	}): void {
+		const index = this.discardedSpanTombstones.findIndex(
+			(candidate) =>
+				candidate.boundary === tombstone.boundary &&
+				candidate.toolCallId === tombstone.toolCallId,
+		);
+		if (index === -1) {
+			return;
+		}
+		this.discardedSpanTombstones.splice(index, 1);
+		const remaining = this.discardedSpanCounts.get(tombstone.boundary) ?? 0;
+		if (remaining <= 1) {
+			this.discardedSpanCounts.delete(tombstone.boundary);
+		} else {
+			this.discardedSpanCounts.set(tombstone.boundary, remaining - 1);
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — drop a closed span from
+	 * the global open-span order.
+	 *
+	 * The order queue is what makes the open-span bound discard the OLDEST
+	 * span, so a span that has been closed must leave the queue as well —
+	 * otherwise the bound would count it as retained.
+	 */
+	private forgetOpenSpanOrder(
+		boundary: LatencyBoundary,
+		seq: number | undefined,
+	): void {
+		if (seq === undefined) {
+			return;
+		}
+		const index = this.openSpanOrder.findIndex(
+			(entry) => entry.boundary === boundary && entry.seq === seq,
+		);
+		if (index !== -1) {
+			this.openSpanOrder.splice(index, 1);
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR01 — the bounded ring.
+	//
+	// Each append pushes onto its ring and evicts the OLDEST entry when the
+	// bound is reached. Every eviction is COUNTED, so the tracer can always
+	// state how much of the capture it no longer holds.
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Append a boundary event, evicting the oldest when the ring is full.
+	 */
+	private appendEvent(event: LatencyBoundaryEvent): void {
+		this.totalEventCount += 1;
+		this.events.push(event);
+		while (this.events.length > this.maxEvents) {
+			const evicted = this.events.shift();
+			if (!evicted) {
+				break;
+			}
+			this.droppedEventCount += 1;
+		}
+	}
+
+	/**
+	 * Append an unavailable measurement, evicting the oldest when the ring
+	 * is full.
+	 */
+	private appendUnavailable(measurement: LatencyUnavailableMeasurement): void {
+		this.totalUnavailableCount += 1;
+		this.unavailableMeasurements.push(measurement);
+		while (this.unavailableMeasurements.length > this.maxUnavailable) {
+			const evicted = this.unavailableMeasurements.shift();
+			if (!evicted) {
+				break;
+			}
+			this.droppedUnavailableCount += 1;
+		}
+	}
+
+	/**
+	 * Append a trace-integrity failure, evicting the oldest when the ring
+	 * is full.
+	 */
+	private appendIntegrityFailure(failure: LatencyIntegrityFailure): void {
+		this.totalIntegrityFailureCount += 1;
+		this.integrityFailures.push(failure);
+		while (this.integrityFailures.length > this.maxIntegrityFailures) {
+			const evicted = this.integrityFailures.shift();
+			if (!evicted) {
+				break;
+			}
+			this.droppedIntegrityFailureCount += 1;
+		}
+	}
+
+	/**
+	 * The completeness metadata of the bounded capture.
+	 *
+	 * `truncated` is true when ANY observation was dropped. A consumer MUST
+	 * check it before presenting the trace as exhaustive.
+	 */
+	getTruncation(): LatencyTraceTruncation {
+		return {
+			truncated:
+				this.droppedEventCount > 0 ||
+				this.droppedUnavailableCount > 0 ||
+				this.droppedIntegrityFailureCount > 0 ||
+				this.droppedOpenSpanCount > 0 ||
+				this.droppedExportedIntegrityFailureCount > 0,
+			droppedEventCount: this.droppedEventCount,
+			droppedUnavailableCount: this.droppedUnavailableCount,
+			droppedIntegrityFailureCount:
+				this.droppedIntegrityFailureCount +
+				this.droppedExportedIntegrityFailureCount,
+			droppedOpenSpanCount: this.droppedOpenSpanCount,
+			totalOpenSpanCount: this.totalOpenSpanCount,
+			retainedOpenSpanCount: this.openSpanOrder.length,
+			maxOpenSpans: this.maxOpenSpans,
+			totalEventCount: this.totalEventCount,
+			retainedEventCount: this.events.length,
+			totalUnavailableCount: this.totalUnavailableCount,
+			totalIntegrityFailureCount: this.totalIntegrityFailureCount,
+			maxEvents: this.maxEvents,
+			maxUnavailable: this.maxUnavailable,
+			maxIntegrityFailures: this.maxIntegrityFailures,
+		};
 	}
 
 	/**
@@ -933,16 +1626,22 @@ export class LatencyTracer {
 
 	/**
 	 * The complete trace.
+	 *
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the integrity-failure
+	 * export is computed BEFORE the truncation block, so the block reports
+	 * exactly how many failures the export withheld.
 	 */
 	getTrace(): LatencyTrace {
+		const integrityFailures = this.getIntegrityFailures();
 		return {
 			correlationId: this.correlationId,
 			events: this.getEvents(),
 			stages: this.getStages(),
 			unavailable: this.getUnavailable(),
-			integrityFailures: this.getIntegrityFailures(),
+			integrityFailures,
 			wallClockMs: this.getWallClockMs(),
 			overlapping: this.hasOverlap(),
+			truncation: this.getTruncation(),
 		};
 	}
 
@@ -988,9 +1687,26 @@ export class LatencyTracer {
 	 *  - a boundary is exited without a matching entry;
 	 *  - an exit names a tool call id that was never entered;
 	 *  - a span is still OPEN when the trace is taken.
+	 *
+	 * ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01-CORR02 — the EXPORT is BOUNDED.
+	 *
+	 * The failures that are synthesised from the still-open spans are not
+	 * a fixed number: there is one per open span, and the open-span count
+	 * is itself bounded but still large. Without an export bound a trace
+	 * dump could therefore carry far more integrity failures than the
+	 * declared retention bound allows.
+	 *
+	 * The exported list is therefore capped at `maxIntegrityFailures`. The
+	 * failures that are recorded explicitly (the ones the tracer observed
+	 * as they happened) are kept first, and the synthesised "span left
+	 * open" failures fill the remainder. Every failure that does NOT make
+	 * it into the export is COUNTED, so the truncation metadata states
+	 * exactly how much of the failure list was withheld.
 	 */
 	getIntegrityFailures(): readonly LatencyIntegrityFailure[] {
 		const failures: LatencyIntegrityFailure[] = [...this.integrityFailures];
+		// The recorded failures are already bounded by the ring, but the
+		// synthesised ones are not. Cap the TOTAL.
 		for (const [boundary, stack] of this.openSpans) {
 			for (const span of stack) {
 				failures.push({
@@ -1001,7 +1717,14 @@ export class LatencyTracer {
 				});
 			}
 		}
-		return failures;
+		if (failures.length <= this.maxIntegrityFailures) {
+			this.droppedExportedIntegrityFailureCount = 0;
+			return failures;
+		}
+		const exported = failures.slice(0, this.maxIntegrityFailures);
+		this.droppedExportedIntegrityFailureCount =
+			failures.length - this.maxIntegrityFailures;
+		return exported;
 	}
 
 	/**

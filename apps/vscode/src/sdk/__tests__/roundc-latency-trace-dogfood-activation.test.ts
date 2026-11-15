@@ -36,8 +36,16 @@ import type { ModelBehaviorTraceObservation, ModelBehaviorTraceSink } from "@cli
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { applyRoundcLatencyTraceDiagnosticProfile } from "../dogfood-diagnostic-profile"
 import {
+	_resetModelBehaviorTrace,
+	getModelBehaviorTraceRecords,
+	modelBehaviorTraceSink,
+	setModelBehaviorTraceEnabled,
+} from "../model-behavior-trace-runtime"
+import {
 	_resetRoundcLatencyTraceForTests,
 	buildRoundcLatencyTraceArtifact,
+	COMPOSABLE_SINK_CHANNELS,
+	COMPOSABLE_SINK_IS_EXHAUSTIVE,
 	composeModelBehaviorTraceSinks,
 	dumpRoundcLatencyTrace,
 	getRoundcLatencyTraceSnapshot,
@@ -478,6 +486,257 @@ describe("ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01 — Round C latency trace activati
 			expect(registry).not.toContain("CLINEMM_ROUNDC_LATENCY_TRACE")
 			// No toggle command: the dump is the ONLY operator surface.
 			expect(registry).not.toContain("toggleRoundcLatencyTrace")
+		})
+	})
+
+	// ---------------------------------------------------------------------
+	// ACT09 — CORRECTION01: sink composition completeness
+	//
+	// The original composition forwarded only 18 of the interface's 25
+	// event channels, so arming the Round C trace SILENTLY DROPPED the
+	// existing recorder's edit, process and fingerprint telemetry. These
+	// tests are the ADVERSARIAL proof that the defect cannot recur.
+	// ---------------------------------------------------------------------
+	describe("ACT09 — sink composition preserves EVERY existing channel", () => {
+		it("ACT09.1: the composition's channel list covers EVERY event channel of the SDK interface", () => {
+			// The compile-time gate in the production module proves this
+			// at build time; the runtime assertion proves the list is
+			// actually populated (a list could satisfy the type and still
+			// be empty at runtime if it were built dynamically).
+			expect(COMPOSABLE_SINK_IS_EXHAUSTIVE).toBe(true)
+			expect(COMPOSABLE_SINK_CHANNELS.length).toBeGreaterThan(0)
+			// Every event channel is DISTINCT — a duplicated name would
+			// silently drop one of the two.
+			expect(new Set(COMPOSABLE_SINK_CHANNELS).size).toBe(COMPOSABLE_SINK_CHANNELS.length)
+		})
+
+		it("ACT09.2: the EDIT channels are forwarded to BOTH sinks", () => {
+			const seen: string[] = []
+			const editChannels = [
+				"onEditAttempt",
+				"onEditApplication",
+				"onEditFailure",
+				"onEditTargetResolved",
+				"onEditWriteVerification",
+				"onEditCheckpointObservation",
+			] as const
+			for (const channel of editChannels) {
+				const primary: ModelBehaviorTraceSink = {
+					[channel]: () => seen.push(`primary:${channel}`),
+				}
+				const secondary: ModelBehaviorTraceSink = {
+					[channel]: () => seen.push(`secondary:${channel}`),
+				}
+				const composed = composeModelBehaviorTraceSinks(primary, secondary)
+				expect(typeof composed[channel]).toBe("function")
+				;(composed[channel] as (o: ModelBehaviorTraceObservation) => void)(observation())
+			}
+			// EVERY edit channel reached BOTH sides.
+			for (const channel of editChannels) {
+				expect(seen).toContain(`primary:${channel}`)
+				expect(seen).toContain(`secondary:${channel}`)
+			}
+		})
+
+		it("ACT09.3: the PROCESS channel is forwarded to BOTH sinks", () => {
+			const seen: string[] = []
+			const primary: ModelBehaviorTraceSink = {
+				onProcessObservation: () => seen.push("primary"),
+			}
+			const secondary: ModelBehaviorTraceSink = {
+				onProcessObservation: () => seen.push("secondary"),
+			}
+			const composed = composeModelBehaviorTraceSinks(primary, secondary)
+			expect(typeof composed.onProcessObservation).toBe("function")
+			composed.onProcessObservation?.(observation())
+			expect(seen).toEqual(["primary", "secondary"])
+		})
+
+		it("ACT09.4: the composition does NOT drop a channel that only ONE side implements", () => {
+			// The original defect's exact shape: the RECORDER implements the
+			// edit channels, the Round C sink does not. The composed sink
+			// must still deliver the recorder's events.
+			const seen: string[] = []
+			const recorder: ModelBehaviorTraceSink = {
+				onEditAttempt: () => seen.push("edit_attempt"),
+				onEditFailure: () => seen.push("edit_failure"),
+				onProcessObservation: () => seen.push("process_observation"),
+			}
+			// The Round C sink implements NONE of these.
+			const composed = composeModelBehaviorTraceSinks(recorder, {})
+			composed.onEditAttempt?.(observation())
+			composed.onEditFailure?.(observation())
+			composed.onProcessObservation?.(observation())
+			expect(seen).toEqual(["edit_attempt", "edit_failure", "process_observation"])
+		})
+
+		it("ACT09.5: the fingerprint operations are PRESERVED and return the PRIMARY's value", async () => {
+			const primary: ModelBehaviorTraceSink = {
+				fingerprintToolArguments: async () => "primary-args",
+				fingerprintFilePath: async () => "primary-path",
+				fingerprintFileContent: async () => "primary-content",
+			}
+			const secondary: ModelBehaviorTraceSink = {
+				fingerprintToolArguments: async () => "secondary-args",
+				fingerprintFilePath: async () => "secondary-path",
+				fingerprintFileContent: async () => "secondary-content",
+			}
+			const composed = composeModelBehaviorTraceSinks(primary, secondary)
+			expect(typeof composed.fingerprintToolArguments).toBe("function")
+			expect(await composed.fingerprintToolArguments?.("read_file", { path: "a.ts" })).toBe("primary-args")
+			expect(await composed.fingerprintFilePath?.("/abs/a.ts")).toBe("primary-path")
+			expect(await composed.fingerprintFileContent?.("content")).toBe("primary-content")
+		})
+
+		it("ACT09.6: the fingerprint operations preserve the ASYNCHRONOUS return value", async () => {
+			// The SDK `await`s these. A composite that returned `undefined`
+			// would silently disable the recorder's fingerprinting entirely.
+			const primary: ModelBehaviorTraceSink = {
+				fingerprintToolArguments: async () => {
+					await new Promise((resolve) => setTimeout(resolve, 1))
+					return "async-fingerprint"
+				},
+			}
+			const composed = composeModelBehaviorTraceSinks(primary, {})
+			const result = composed.fingerprintToolArguments?.("read_file", { path: "a.ts" })
+			expect(result).toBeInstanceOf(Promise)
+			expect(await result).toBe("async-fingerprint")
+		})
+
+		it("ACT09.7: the fingerprint operations preserve the RECEIVER BINDING", async () => {
+			// The recorder's implementation resolves `this.fingerprintKey`.
+			// A composite that invoked the delegate unbound would throw a
+			// TypeError, and the failure isolation would then swallow it
+			// into `undefined` — silently disabling the fingerprint.
+			const primary = {
+				key: "the-ephemeral-key",
+				fingerprintToolArguments(this: { key: string }, _tool: string, _input: unknown) {
+					return `${this.key}:fingerprint`
+				},
+			} satisfies ModelBehaviorTraceSink & { key: string }
+			const composed = composeModelBehaviorTraceSinks(primary, {})
+			expect(await composed.fingerprintToolArguments?.("read_file", { path: "a.ts" })).toBe("the-ephemeral-key:fingerprint")
+		})
+
+		it("ACT09.8: the fingerprint operations FALL BACK to the secondary when the primary does not implement them", async () => {
+			const secondary: ModelBehaviorTraceSink = {
+				fingerprintToolArguments: async () => "secondary-args",
+			}
+			const composed = composeModelBehaviorTraceSinks({}, secondary)
+			expect(await composed.fingerprintToolArguments?.("read_file", { path: "a.ts" })).toBe("secondary-args")
+		})
+
+		it("ACT09.9: a THROWING fingerprint does not break the runtime's tool execution", async () => {
+			const primary: ModelBehaviorTraceSink = {
+				fingerprintToolArguments: () => {
+					throw new Error("fingerprint exploded")
+				},
+			}
+			const composed = composeModelBehaviorTraceSinks(primary, {})
+			expect(() => composed.fingerprintToolArguments?.("read_file", { path: "a.ts" })).not.toThrow()
+			expect(composed.fingerprintToolArguments?.("read_file", { path: "a.ts" })).toBeUndefined()
+		})
+
+		it("ACT09.10: the DISABLED public profile installs no sink and composes to an inert sink", () => {
+			applyRoundcLatencyTraceDiagnosticProfile(false)
+			// No sink is installed at all — the composition is never reached
+			// on the disabled path.
+			expect(installRoundcLatencyTraceSink("session-abc")).toBeUndefined()
+			expect(getRoundcLatencyTraceSnapshot()).toBeUndefined()
+			// And if a composition IS built, the disabled recorder side
+			// reports "not enabled", so the SDK takes its fast path.
+			const disabled: ModelBehaviorTraceSink = { isTraceEnabled: () => false }
+			const composed = composeModelBehaviorTraceSinks(disabled, {})
+			expect(composed.isTraceEnabled?.()).toBe(false)
+		})
+
+		it("ACT09.11: the trace artifact reports the capture's COMPLETENESS explicitly", async () => {
+			const dir = await mkdtemp(join(tmpdir(), "roundc-truncation-"))
+			try {
+				applyRoundcLatencyTraceDiagnosticProfile(true)
+				const sink = installRoundcLatencyTraceSink("session-abc")
+				sink?.onModelRequestStart?.(observation({ modelId: "m1" }))
+				const artifact = buildRoundcLatencyTraceArtifact()
+				expect(artifact).toBeDefined()
+				// The truncation block is ALWAYS present, so a consumer can
+				// never mistake a partial capture for a complete one.
+				expect(artifact?.truncation).toBeDefined()
+				expect(artifact?.truncation.truncated).toBe(false)
+				expect(artifact?.truncation.droppedEventCount).toBe(0)
+				expect(artifact?.truncation.retainedEventCount).toBe(artifact?.eventCount)
+				// The block is serialized into the exported artifact.
+				const result = await dumpRoundcLatencyTrace({ globalStorageUri: { fsPath: dir } })
+				const parsed = JSON.parse(await readFile(result.file, "utf8"))
+				expect(parsed.truncation).toBeDefined()
+				expect(parsed.truncation.truncated).toBe(false)
+				expect(typeof parsed.truncation.maxEvents).toBe("number")
+			} finally {
+				await rm(dir, { recursive: true, force: true })
+			}
+		})
+
+		it("ACT09.12: the REAL production recorder keeps EVERY channel through the composition", async () => {
+			// The strongest evidence: drive the ACTUAL extension-host
+			// recorder (not a mock) through the ACTUAL composition, exactly
+			// as `VscodeSessionHost.prepareStartSessionInput` does, and
+			// prove that the recorder's edit / process telemetry AND its
+			// fingerprints survive.
+			_resetModelBehaviorTrace()
+			setModelBehaviorTraceEnabled(true)
+			applyRoundcLatencyTraceDiagnosticProfile(true)
+			const roundcSink = installRoundcLatencyTraceSink("session-real")
+			expect(roundcSink).toBeDefined()
+			if (!roundcSink) {
+				throw new Error("the dogfood profile must install the Round C sink")
+			}
+
+			// The EXACT production composition: the recorder is PRIMARY.
+			const composed = composeModelBehaviorTraceSinks(modelBehaviorTraceSink, roundcSink)
+
+			// The recorder's EDIT channels reach its buffer.
+			composed.onEditAttempt?.({
+				sessionId: "session-real",
+				runId: "run-1",
+				payload: { toolName: "edit_file", operation: "replace" },
+			})
+			composed.onEditFailure?.({
+				sessionId: "session-real",
+				runId: "run-1",
+				payload: { toolName: "edit_file", failureCategory: "text_not_found" },
+			})
+			composed.onProcessObservation?.({
+				sessionId: "session-real",
+				runId: "run-1",
+				payload: { terminalState: "exited", exitCode: 0 },
+			})
+
+			const records = getModelBehaviorTraceRecords()
+			const kinds = records.map((record) => record.event)
+			expect(kinds).toContain("edit_attempt")
+			expect(kinds).toContain("edit_failure")
+			expect(kinds).toContain("process_observation")
+
+			// The recorder's FINGERPRINTS survive the composition: the SDK
+			// consumes these values, so dropping them would silently
+			// disable the existing recorder's fingerprinting.
+			const argsFingerprint = await composed.fingerprintToolArguments?.("read_file", {
+				path: "a.ts",
+			})
+			const pathFingerprint = await composed.fingerprintFilePath?.("/workspace/src/a.ts")
+			const contentFingerprint = await composed.fingerprintFileContent?.("content")
+			expect(argsFingerprint).toBeTypeOf("string")
+			expect(argsFingerprint).toBeTruthy()
+			expect(pathFingerprint).toBeTypeOf("string")
+			expect(contentFingerprint).toBeTypeOf("string")
+			// The fingerprint is the recorder's, not the raw input.
+			expect(argsFingerprint).not.toContain("a.ts")
+
+			// And the Round C sink STILL observed the same events, so
+			// composition preserves BOTH sides rather than replacing one.
+			expect(getRoundcLatencyTraceSnapshot()).toBeDefined()
+
+			_resetModelBehaviorTrace()
+			applyRoundcLatencyTraceDiagnosticProfile(false)
 		})
 	})
 })

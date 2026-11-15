@@ -36,13 +36,6 @@
  */
 
 export { LatencyTraceSink } from "./latency-sink";
-export {
-	classifyLatencyStage,
-	classifySkipReason,
-	digestLatencyContent,
-	LatencyTracer,
-	sanitizeLatencyMetadata,
-} from "./latency-trace";
 export type {
 	LatencyBoundary,
 	LatencyBoundaryEvent,
@@ -54,6 +47,20 @@ export type {
 	LatencyStageMeasurement,
 	LatencyStatus,
 	LatencyTrace,
+	LatencyTracerOptions,
+	LatencyTraceTruncation,
 	LatencyUnavailableMeasurement,
 } from "./latency-trace";
-export { LATENCY_METADATA_ALLOWLIST } from "./latency-trace";
+export {
+	classifyLatencyStage,
+	classifySkipReason,
+	digestLatencyContent,
+	LATENCY_METADATA_ALLOWLIST,
+	LATENCY_TRACE_MAX_DISCARDED_SPAN_TOMBSTONES,
+	LATENCY_TRACE_MAX_EVENTS,
+	LATENCY_TRACE_MAX_INTEGRITY_FAILURES,
+	LATENCY_TRACE_MAX_OPEN_SPANS,
+	LATENCY_TRACE_MAX_UNAVAILABLE,
+	LatencyTracer,
+	sanitizeLatencyMetadata,
+} from "./latency-trace";
