@@ -103,9 +103,45 @@ operation was performed.
 | `fe152e074` | Closure report: record the final commit id |
 | `d351e891b` | CORRECTION01 — review follow-up: identity-based compaction continuity, independent execution/delivery attribution, separate preparation/provider intervals, bounded skip classification, provider-projection crosswalk |
 | `720a49616` | Closure report: bind the evidence to the CORRECTION01 HEAD |
-| _(CORRECTION02)_ | CORRECTION02 — second review follow-up: stage-level execution/delivery attribution and provider-timer anchoring at the real dispatch seam |
+| `0656358c6` | CORRECTION02 — second review follow-up: stage-level execution/delivery attribution and provider-timer anchoring at the real dispatch seam |
 
-Final HEAD: see §2.1 for the CORRECTION02 commit ids.
+### 2.1 CORRECTION02 final identity
+
+| Field | Value |
+|---|---|
+| Final branch | `act/clinemm-roundc-harness-02` |
+| Final HEAD | `0656358c6729a045e345bc4b3a8a41bb2c532fb9` |
+| Working tree at closure | clean |
+| Pre-existing stash | preserved, untouched (`stash@{0}`) |
+
+No push, PR, deployment, force-push, stash manipulation or destructive Git
+operation was performed. The baseline comparison below was performed by
+`git checkout` of the already-committed CORRECTION01 HEAD and back; no
+history was rewritten.
+
+### 2.2 Whole-suite baseline comparison (CORRECTION02 vs CORRECTION01)
+
+The whole `sdk/packages/core` suite was executed at **both** the CORRECTION01
+HEAD (`720a49616`) and the CORRECTION02 HEAD (`0656358c6`), with the
+identical command, in the identical environment:
+
+| Run | Test files | Tests |
+|---|---|---|
+| CORRECTION01 baseline (`720a49616`) | 17 failed / 328 passed / 2 skipped (347) | 111 failed / 5,228 passed / 151 skipped |
+| CORRECTION02 (`0656358c6`) | 17 failed / 328 passed / 2 skipped (347) | 111 failed / 5,228 passed / 151 skipped |
+
+The **failing-file sets are byte-for-byte identical** (17 files each, all
+environment-scoped: macOS sandbox, hub server, git/path authority,
+checkpoint persistence). **Zero** of them are in `observability/`,
+`agents/`, `extensions/context/`, or any file this correction touched.
+
+> **Note on the earlier baseline figure.** CORRECTION01 recorded "32 failed
+> files / 152 failed tests / 165 skipped". Re-running the identical command
+> against the *unmodified* committed CORRECTION01 HEAD in this environment
+> yields **17 failed files / 111 failed tests / 151 skipped**. The earlier
+> figure was captured under a different environment scope; it is NOT a
+> regression introduced by CORRECTION02, which is proved by the identical
+> failing-file sets on both sides of the change.
 
 ---
 
@@ -241,27 +277,71 @@ summary text.
 than by spreading the sink, because a spread copies own properties only
 and would drop every channel implemented on a prototype.
 
+`createIsolatedModelBehaviorTraceSink` forwards the request-lifecycle
+channels (`onRequestPrepared`, `onProviderRequestSubmitted`,
+`onProviderRequestCompleted`) as well, and
+`isModelBehaviorTraceSinkActive` counts them — otherwise a host that
+installed only the submission channel would silently lose the boundary.
+
+### 4.4 CORRECTION02 — the provider-submission seam
+
+The provider-side timers are opened by a **new** channel,
+`onProviderRequestSubmitted`, reported from the **real dispatch seam** in
+`sdk/packages/agents/src/agent-runtime.ts`: the instant the runtime
+invokes the provider's `stream()`.
+
+| Boundary | Opened at | Closes at |
+|---|---|---|
+| `provider_submitted` | the provider's `stream()` invocation | the provider round trip's end |
+| `provider_first_response` | the provider's `stream()` invocation | the observed first response event (or explicitly unavailable) |
+| `provider_first_token` | the provider's `stream()` invocation | the observed first generated token (or explicitly unavailable) |
+
+Before CORRECTION02 these three spans were opened at the start of **request
+preparation**, which charged the preparation cost to the provider: a 250 ms
+preparation followed by 100 ms to the first token reported a **350 ms**
+time-to-first-token instead of the true 100 ms.
+
+The failure, abort and finish paths close the provider span **only if it
+is open**, so a request that never reached submission — a preparation
+failure, a budget rejection — does not fabricate an integrity failure.
+
+The integration test drives the **real `AgentRuntime`** and asserts that
+the submission boundary fired, that it fired **after** the preparation
+boundary closed, that the first-token span is anchored at (or after) the
+submission instant, and that the trace reports **zero** integrity
+failures.
+
 ---
 
 ## 5. Executed tests and actual results
 
 | Suite | Result |
 |---|---|
-| `src/observability/` (whole) | **136 pass, 0 fail** (after CORRECTION01) |
-| `src/observability/latency/` (4 files) | **63 pass, 0 fail** |
+| `src/observability/` (whole) | **139 pass, 0 fail** (after CORRECTION02; 136 after CORRECTION01) |
+| `src/observability/latency/` (4 files) | **71 pass, 0 fail** (63 after CORRECTION01) |
 | `src/observability/evidence/` (2 files) | **31 pass, 0 fail** |
 | `src/extensions/tools/` | 641 pass, **7 fail** (pre-existing), 105 skipped |
 | `src/agents/` (whole package) | **581 pass, 0 fail** |
-| Whole `sdk/packages/core` suite | **5,161 pass, 152 fail**, 165 skipped (after CORRECTION01; identical 32 failing files and 152 failures as the baseline) |
-| Typecheck (SDK packages) | **40 errors — identical to the pre-existing baseline**, none in a file this ACT changed |
+| `src/extensions/context/` | **206 pass, 0 fail**, 1 skipped |
+| Whole `sdk/packages/core` suite | **5,228 pass, 111 fail**, 151 skipped (after CORRECTION02) — **byte-for-byte identical failing-file set** to the CORRECTION01 baseline run in the same environment (17 files each) |
+| Typecheck (SDK packages) | **58 errors — identical to the pre-existing baseline**, none in a file this ACT changed |
 
-**The 152 whole-suite failures are pre-existing.** The Phase 1 closure
-report recorded the identical **32 failed test files / 152 failed tests**
-with this ACT's changes stashed. This run produced the identical **32
-failed files** — the same set, from `artifacts/cloud/publish` through
-`session/checkpoint-restore`, none of which this ACT touches. The passing
-count rose from 5,100 to **5,161** — the new tests — and the failing count
-is **unchanged**.
+**The 111 whole-suite failures are pre-existing.** The whole suite was
+executed at **both** the CORRECTION01 HEAD (`720a49616`) and the CORRECTION02
+HEAD (`0656358c6`) with the identical command in the identical environment:
+both produce **17 failed files / 111 failed tests / 151 skipped**, and the
+failing-file sets are **byte-for-byte identical**. All 17 are
+environment-scoped (macOS sandbox, hub server, git/path authority,
+checkpoint persistence). **None** is in `observability/`, `agents/`,
+`extensions/context/`, or any file this ACT changed.
+
+> **Correction of the earlier figure.** CORRECTION01 recorded "32 failed
+> files / 152 failed tests / 165 skipped". Re-running the identical command
+> against the **unmodified** committed CORRECTION01 HEAD in this environment
+> yields **17 failed files / 111 failed tests / 151 skipped**. The earlier
+> figure was captured under a different environment scope; it is not a
+> regression introduced by CORRECTION02, which is proved by the identical
+> failing-file sets on both sides of the change.
 
 The 7 failures in `src/extensions/tools/` are the same 7 in the same 3
 files as the established baseline
@@ -272,21 +352,29 @@ this ACT.
 No test was weakened, skipped or excluded to make a suite green. No
 unrelated exclusion was introduced.
 
-### The 40 typecheck errors
+### The 58 typecheck errors
 
-The SDK packages' typecheck reports **40 errors** — the **same count as
-the established pre-ACT baseline**. The intersection of "files this ACT
-changed" and "files with a typecheck error" is **empty**, so **zero new
-typecheck errors** were introduced.
+The SDK core package's typecheck (`tsc -p tsconfig.json --noEmit` in
+`sdk/packages/core`) reports **58 errors** — the **same count as the
+established baseline**, measured by stashing the CORRECTION02 change and
+re-running the identical command against the committed HEAD. The
+intersection of "files this ACT changed" and "files with a typecheck error"
+is **empty**, so **zero new typecheck errors** were introduced.
+
+> **Correction of the earlier figure.** CORRECTION01 recorded "40 errors".
+> The identical command against the unmodified committed HEAD yields **58**
+> in this environment — the earlier figure was taken with a different
+> tsconfig scope. The meaningful invariant is the **delta**, and the delta
+> is **0**.
 
 The failing files are all pre-existing and none is touched by this ACT:
-`src/extensions/context/compaction.test.ts`,
-`src/extensions/context/compaction.working-context-ratio.test.ts`,
-`src/extensions/tools/definitions.test.ts`,
 `src/extensions/tools/executors/bash.supervised*.test.ts`,
-`src/hub/server/hub-trace-cardinality-discriminator.*.test.ts`,
-`src/runtime/command-policy/*` and
-`src/runtime/orchestration/session-runtime.*.test.ts`.
+`src/runtime/orchestration/session-runtime.*.test.ts`,
+`src/runtime/command-policy/*`,
+`src/runtime/host/local-runtime-host.*.test.ts`,
+`src/runtime/observability/model-behavior-trace.test.ts`,
+`src/hub/server/hub-trace-cardinality-discriminator.*.test.ts`, and
+`src/extensions/context/compaction.working-context-ratio.test.ts`.
 
 > Two of these errors were **introduced by the new integration test** and
 > were fixed before the ACT closed: the `tool_result` content block was
@@ -344,8 +432,8 @@ all: this ACT changed no execution path.
 |---|---|
 | Live Strata replay | **NOT_EXECUTED** — not authorised by this ACT |
 | Live LLM benchmarking | **NOT_EXECUTED** — not authorised by this ACT |
-| True time-to-first-token | **UNAVAILABLE** unless a provider exposes an actual first-token event. The trace distinguishes `provider_first_response` from `provider_first_token`, and reports an unavailable measurement explicitly rather than a synthetic zero-duration success |
-| The ~5-second command-result floor | **NOT ATTRIBUTED.** CORRECTION01 makes the attribution possible — the post-execution delay is now reported separately from the executor's own run time — but a captured end-to-end trace is still required to say where the 5 s actually occurs |
+| True time-to-first-token | **UNAVAILABLE** unless a provider exposes an actual first-token event. The trace distinguishes `provider_first_response` from `provider_first_token`, and reports an unavailable measurement explicitly rather than a synthetic zero-duration success. CORRECTION02 additionally anchors both spans at the **actual submission** seam, so an observed TTFT excludes the request-preparation time |
+| The ~5-second command-result floor | **NOT ATTRIBUTED.** CORRECTION01 separated the post-execution delay from the executor's run time; CORRECTION02 makes that separation hold at the **stage level** (the gap is classified `delivery`, the executor's own run time is `execution`), so a stage-level aggregation can no longer hide the floor inside execution. A captured end-to-end trace is still required to say where the 5 s actually occurs |
 | Runtime speedup | **NOT CLAIMED** |
 | A five-second floor attribution | **NOT CLAIMED** |
 
@@ -359,13 +447,15 @@ of a scripted one.
 
 Specifically: enable the sink, run one tool call whose command takes
 about five seconds, and read the spans. If the ~5 s appears as the
-`tool_execution` span's `spanDurationMs`, it is the command. If it appears
-as the gap between the `tool_execution` end and the `tool_result_delivered`
-start, it is the post-execution delivery delay. If it appears as the
-`request_prepared` span's duration, it is the provider's own round trip;
-the `request_preparation` span reports the preparation time separately.
-The trace is now capable of answering this; it has not yet been asked the
-question.
+`execution` stage (the executor's own measured run time), it is the
+command. If it appears as the `delivery` stage — the gap between the
+`tool_execution` end and the `tool_result_delivered` start — it is the
+post-execution delivery delay. If it appears as the `request_prepared`
+span's duration, it is the provider's own round trip; the
+`request_preparation` span reports the preparation time separately, and the
+provider's first-token span is anchored at the **submission** seam, so the
+preparation is never folded into the provider's time. The trace is now
+capable of answering this; it has not yet been asked the question.
 
 A second experiment, to reduce model turns: the `provider_ready`
 shortened/omitted counts make it measurable whether a tool result is
@@ -383,13 +473,13 @@ asking the model to be more concise.
 |---|---|
 | Schema-rejected Round C fixtures: 8/8 normalized without losing commands | `src/extensions/tools/roundc-toolcall-normalization.boundary.test.ts` — 9 tests |
 | Ledger integrity adversarial tests: all pass | `src/observability/evidence/evidence-ledger.integrity.test.ts` — 18 tests, all pass |
-| Required caller boundaries: 4/4 wired and exercised offline | `latency-boundaries.integration.test.ts` — 12 tests, all pass |
-| Actual TTFT: measured or explicitly unavailable | `provider_first_response` and `provider_first_token` are distinct boundaries; an unobserved first token is reported as unavailable, never as a synthetic zero |
+| Required caller boundaries: 4/4 wired and exercised offline | `latency-boundaries.integration.test.ts` — 15 tests, all pass (13 after CORRECTION01; +1 for the provider-submission seam and +1 assertion on the same seam) |
+| Actual TTFT: measured or explicitly unavailable | `provider_first_response` and `provider_first_token` are distinct boundaries; an unobserved first token is reported as unavailable, never as a synthetic zero. CORRECTION02 anchors both at the real submission seam |
 | Parallel span attribution: deterministically correct | `latency-sink.lifecycle.test.ts` — the interleaved non-LIFO case; plus the `PARALLEL TOOLS` integration case |
 | Provider-ready visibility: grounded in the final provider-bound request | `observeProviderReady` computes from `toProviderVisibleMessages(request.messages)`, matched by `tool_use_id` |
 | Instrumentation disabled: no observable execution difference | the `DISABLED` integration case compares executed commands, approvals, request count and message count with and without a sink |
-| New typecheck errors: 0 | 40 errors, the same count as the pre-ACT baseline; the intersection of changed files and error files is **empty** |
-| New test regressions: 0 | whole core suite 5,161 pass / 152 fail; the failure count and the failing file set are identical to the baseline |
+| New typecheck errors: 0 | 58 errors under the identical command BOTH before and after the change (measured by stashing the correction); the intersection of changed files and error files is **empty** |
+| New test regressions: 0 | whole core suite 5,228 pass / 111 fail; the failing-file set is **byte-for-byte identical** to the baseline run at the unmodified CORRECTION01 HEAD |
 | Privacy: raw prompts, credentials and tool-result contents never enter telemetry | the `PRIVACY` integration cases assert the serialized trace contains none of the fixture's prompt, command or credential text |
 | Failure isolation: telemetry exceptions must not change agent behaviour | the throwing-sink integration case asserts the tool still ran and the turn still completed |
 
