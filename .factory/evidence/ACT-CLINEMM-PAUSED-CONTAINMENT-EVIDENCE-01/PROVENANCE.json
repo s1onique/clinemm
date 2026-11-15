@@ -11,7 +11,7 @@
     "extensionHostInstanceId": "extension-host-47602-mwg6a71m"
   },
   "repository": {
-    "toplevel": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "toplevel": "<REPO>",
     "remoteOrigin": "git@github.com:s1onique/clinemm.git",
     "remoteUpstream": "https://github.com/cline/cline.git",
     "entryHead": "043a0606f5f43b0d742f8fa0b6a05c7014bf2fce",
@@ -26,8 +26,8 @@
     "worktreesPreserved": [
       "/private/tmp/clinemm-prebase (detached, prunable)",
       "/private/tmp/worktree-bun.7ddCHQ (detached)",
-      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first (experiment/m31-action-first)",
-      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded (detached)"
+      "<REPO>-m31-action-first (experiment/m31-action-first)",
+      "<REPO>-m31-bounded (detached)"
     ]
   },
   "originalArchive": {
@@ -58,17 +58,17 @@
     "matches": [
       {
         "role": "operator-active-cline-profile",
-        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c",
+        "path": "~/.vscodium-cline/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c",
         "bundleSha256": "48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5"
       },
       {
         "role": "live-incident-host-profile",
-        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c",
+        "path": "~/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c",
         "bundleSha256": "48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5"
       }
     ],
     "matchesIncidentBundleHash": true,
-    "artifactPath": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c/dist/extension.js",
+    "artifactPath": "~/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c/dist/extension.js",
     "artifactBytes": 27411852,
     "artifactSha256": "48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5",
     "manifestVersion": "4.1.16-5a1c485cb-e761cea8c",

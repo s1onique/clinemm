@@ -5,7 +5,7 @@
 **Nature of this ACT**: evidence acquisition + causal discrimination only. No repair, no behavioral change.
 
 All paths below are relative to the repository root
-`/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm`.
+`<REPO>`.
 
 ---
 

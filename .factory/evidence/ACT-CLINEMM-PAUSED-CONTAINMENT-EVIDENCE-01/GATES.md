@@ -1,7 +1,7 @@
 # ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01 — Executable gates (C6)
 
 All commands were run from the repository root
-`/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm` unless noted.
+`<REPO>` unless noted.
 Toolchain: `bun 1.3.13` (tooling), `node v26.0.0` (runtime), via
 `export PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH"`.
 
@@ -14,7 +14,7 @@ asserts the ALREADY-OBSERVED production behaviour and **PASSES**.
 ## G1 — C0 identity / safety (read-only)
 
 ```
-git rev-parse --show-toplevel   -> /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+git rev-parse --show-toplevel   -> <REPO>
 git rev-parse HEAD              -> 043a0606f5f43b0d742f8fa0b6a05c7014bf2fce
 git remote -v                   -> origin git@github.com:s1onique/clinemm.git (fetch/push)
                                    upstream https://github.com/cline/cline.git (fetch/push)
