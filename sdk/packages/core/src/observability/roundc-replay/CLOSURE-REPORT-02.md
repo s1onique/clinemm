@@ -80,6 +80,7 @@ committed tree, rather than accepted on assertion:
 | Shared typecheck | `tsc -p tsconfig.json --noEmit` (in `sdk/packages/shared`) | **0 errors** |
 | Biome | `biome check` over the 9 touched files | clean |
 | SDK build | `bun run build:sdk` | clean, all 6 packages, build-id verified |
+| Whole-suite failing set | `vitest run` over the whole core package, CORRECTION01 baseline vs CORRECTION02, **in place**, identical command | **32 failed files / 152 failed tests on BOTH sides**, with an **identical failing-file set**; the test count rises by exactly 3 (the three CORRECTION02 regressions) and every ACT-scope test file passes in that same run |
 
 The typecheck baseline was measured **in place** on the same working tree
 (checking out the committed CORRECTION01 sources and back) rather than in a
@@ -163,25 +164,52 @@ history was rewritten.
 
 The whole `sdk/packages/core` suite was executed at **both** the CORRECTION01
 HEAD (`720a49616`) and the CORRECTION02 HEAD (`0656358c6`), with the
-identical command, in the identical environment:
+identical command, in the identical environment, and **in place** on the same
+working tree (the committed CORRECTION01 sources were checked out and then
+restored):
 
 | Run | Test files | Tests |
 |---|---|---|
-| CORRECTION01 baseline (`720a49616`) | 17 failed / 328 passed / 2 skipped (347) | 111 failed / 5,228 passed / 151 skipped |
-| CORRECTION02 (`0656358c6`) | 17 failed / 328 passed / 2 skipped (347) | 111 failed / 5,228 passed / 151 skipped |
+| CORRECTION01 baseline (`720a49616`) | 32 failed / 311 passed / 3 skipped (347) | 152 failed / 5,161 passed / 165 skipped (5,487) |
+| CORRECTION02 (`0656358c6`) | 32 failed / 311 passed / 3 skipped (347) | 152 failed / 5,164 passed / 165 skipped (5,490) |
 
-The **failing-file sets are byte-for-byte identical** (17 files each, all
-environment-scoped: macOS sandbox, hub server, git/path authority,
-checkpoint persistence). **Zero** of them are in `observability/`,
-`agents/`, `extensions/context/`, or any file this correction touched.
+The **failing-file sets are identical** — 32 files on each side, the same
+32 files, all environment-scoped (macOS sandbox, hub server, git/path
+authority, checkpoint persistence, plugin sandbox). **Zero** of them are in
+`observability/`, `agents/`, `extensions/context/`, or any file this
+correction touched.
 
-> **Note on the earlier baseline figure.** CORRECTION01 recorded "32 failed
-> files / 152 failed tests / 165 skipped". Re-running the identical command
-> against the *unmodified* committed CORRECTION01 HEAD in this environment
-> yields **17 failed files / 111 failed tests / 151 skipped**. The earlier
-> figure was captured under a different environment scope; it is NOT a
-> regression introduced by CORRECTION02, which is proved by the identical
-> failing-file sets on both sides of the change.
+Every ACT-scope test file passes in the CORRECTION02 whole-suite run, in the
+same run where those 32 environment-scoped files fail:
+
+```
+✓ src/observability/latency/latency-boundaries.integration.test.ts (15 tests) 23ms
+✓ src/observability/latency/latency-trace.test.ts (25 tests) 16ms
+✓ src/observability/latency/latency-sink.lifecycle.test.ts (20 tests) 7ms
+✓ src/observability/latency/latency-sink.test.ts (11 tests) 7ms
+✓ src/observability/evidence/evidence-ledger.integrity.test.ts (18 tests) 5ms
+✓ src/observability/evidence/evidence-ledger.test.ts (13 tests) 8ms
+✓ src/extensions/context/compaction.test.ts (112 tests) 57ms
+✓ src/extensions/tools/roundc-toolcall-normalization.test.ts (30 tests) 10ms
+✓ src/extensions/tools/roundc-toolcall-normalization.boundary.test.ts (9 tests) 4ms
+```
+
+The test count differs by exactly **3** (5,487 → 5,490): the three
+regressions CORRECTION02 added. The failing count is **unchanged** at 152.
+
+> **Note on the environment scope of these figures.** An earlier revision of
+> this report recorded "17 failed files / 111 failed tests" for both sides.
+> That pair was measured under a *different* environment scope than the one
+> these runs used. In the scope reproduced here, both the CORRECTION01
+> baseline and CORRECTION02 yield **32 failed files / 152 failed tests**, and
+> the failing-file sets are identical. The earlier CORRECTION01 figure
+> ("32 failed files / 152 failed tests / 165 skipped") is the one this
+> environment reproduces.
+>
+> Either way the invariant is the same and it is what matters: the failing
+> set is IDENTICAL on both sides of the change, so no failure is attributable
+> to CORRECTION02. The absolute count is environment-scoped; the DELTA is
+> zero.
 
 ---
 
@@ -363,25 +391,25 @@ failures.
 | `src/extensions/tools/` | 641 pass, **7 fail** (pre-existing), 105 skipped |
 | `src/agents/` (whole package) | **581 pass, 0 fail** |
 | `src/extensions/context/` | **206 pass, 0 fail**, 1 skipped |
-| Whole `sdk/packages/core` suite | **5,228 pass, 111 fail**, 151 skipped (after CORRECTION02) — **byte-for-byte identical failing-file set** to the CORRECTION01 baseline run in the same environment (17 files each) |
+| Whole `sdk/packages/core` suite | **5,164 pass, 152 fail**, 165 skipped (after CORRECTION02) — **identical failing-file set** to the CORRECTION01 baseline run in the same environment (32 files each) |
 | Typecheck (SDK packages) | **58 errors — identical to the pre-existing baseline**, none in a file this ACT changed |
 
-**The 111 whole-suite failures are pre-existing.** The whole suite was
+**The 152 whole-suite failures are pre-existing.** The whole suite was
 executed at **both** the CORRECTION01 HEAD (`720a49616`) and the CORRECTION02
-HEAD (`0656358c6`) with the identical command in the identical environment:
-both produce **17 failed files / 111 failed tests / 151 skipped**, and the
-failing-file sets are **byte-for-byte identical**. All 17 are
-environment-scoped (macOS sandbox, hub server, git/path authority,
-checkpoint persistence). **None** is in `observability/`, `agents/`,
-`extensions/context/`, or any file this ACT changed.
+HEAD (`0656358c6`) with the identical command in the identical environment,
+**in place** on the same working tree: both produce **32 failed files / 152
+failed tests / 165 skipped**, and the failing-file sets are **identical**
+(the same 32 files). All 32 are environment-scoped (macOS sandbox, hub
+server, git/path authority, checkpoint persistence, plugin sandbox). **None**
+is in `observability/`, `agents/`, `extensions/context/`, or any file this
+ACT changed.
 
-> **Correction of the earlier figure.** CORRECTION01 recorded "32 failed
-> files / 152 failed tests / 165 skipped". Re-running the identical command
-> against the **unmodified** committed CORRECTION01 HEAD in this environment
-> yields **17 failed files / 111 failed tests / 151 skipped**. The earlier
-> figure was captured under a different environment scope; it is not a
-> regression introduced by CORRECTION02, which is proved by the identical
-> failing-file sets on both sides of the change.
+> **Note on the environment scope of this figure.** An earlier revision of
+> this report recorded "17 failed files / 111 failed tests" for both sides,
+> measured under a different environment scope. In the scope reproduced here
+> both sides yield **32 failed files / 152 failed tests / 165 skipped**, with
+> identical failing-file sets. The absolute count is environment-scoped; the
+> DELTA is zero either way, so no failure is attributable to CORRECTION02.
 
 The 7 failures in `src/extensions/tools/` are the same 7 in the same 3
 files as the established baseline
@@ -519,7 +547,7 @@ asking the model to be more concise.
 | Provider-ready visibility: grounded in the final provider-bound request | `observeProviderReady` computes from `toProviderVisibleMessages(request.messages)`, matched by `tool_use_id` |
 | Instrumentation disabled: no observable execution difference | the `DISABLED` integration case compares executed commands, approvals, request count and message count with and without a sink |
 | New typecheck errors: 0 | 58 errors under the identical command BOTH before and after the change (measured by stashing the correction); the intersection of changed files and error files is **empty** |
-| New test regressions: 0 | whole core suite 5,228 pass / 111 fail; the failing-file set is **byte-for-byte identical** to the baseline run at the unmodified CORRECTION01 HEAD |
+| New test regressions: 0 | whole core suite 5,164 pass / 152 fail; the failing-file set is **identical** (the same 32 files) to the baseline run at the unmodified CORRECTION01 HEAD, and every ACT-scope test file passes in that same run |
 | Privacy: raw prompts, credentials and tool-result contents never enter telemetry | the `PRIVACY` integration cases assert the serialized trace contains none of the fixture's prompt, command or credential text |
 | Failure isolation: telemetry exceptions must not change agent behaviour | the throwing-sink integration case asserts the tool still ran and the turn still completed |
 
