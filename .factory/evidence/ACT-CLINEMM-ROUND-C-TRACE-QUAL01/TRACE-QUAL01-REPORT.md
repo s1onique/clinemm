@@ -506,6 +506,41 @@ evidence was found.** The original transcript was not repaired or regenerated.
 
 ---
 
+## 7. Executable gates (C6)
+
+All gates were executed with **Bun** as the task runner and **Node ≥ 22** as
+the runtime, on the macOS host (`darwin`), against the ACT working tree.
+
+| # | Gate | Command | Result |
+|---|---|---|---|
+| 1 | RED → GREEN compaction lifecycle | `bun x vitest run --config vitest.config.ts src/extensions/context/compaction.latency-span-lifecycle.red01.test.ts` (core) | **RED 1 failed / 1 passed → GREEN 6 passed** |
+| 2 | No-op, success, failure/abort, concurrent compaction | same file | **6/6 PASS** |
+| 3 | 10 ms executor / 5,000 ms delivery attribution | `latency-trace.test.ts` → *"does not charge the execution-to-delivery delay to execution"* | **PASS** |
+| 4 | Trace retention + late-exit eviction | `latency-trace.test.ts` → *"bounded retention"* + *"bounded open-span retention"* | **PASS** |
+| 5 | Dogfood sink composition | `COMPOSABLE_SINK_CHANNELS` exhaustiveness (compile-time) + `roundc-latency-trace-dogfood-activation.test.ts` | **PASS (44/44)** |
+| 6 | Public-profile OFF / zero state delta | `roundc-latency-trace-identity.qual01.test.ts` | **PASS** |
+| 7 | Streaming output conservation | `agent-runtime.provider-first-event.test.ts` | **PASS (8/8)** |
+| 8 | Metadata privacy and omission | `roundc-latency-trace-identity.qual01.test.ts` | **PASS (7/7)** |
+| 9 | Focused typecheck / lint / build | see §7.2 | **PASS** |
+| 10 | Baseline comparison, zero ACT-owned failures | see §7.1 | **PASS — 0 regressions** |
+
+      Tests  7 passed (7)
+EXIT=0
+```
+
+**No permanent public configuration or protocol expansion** was introduced —
+the identity record is internal to the existing dogfood diagnostics channel
+and is not surfaced in the public extension settings or the webview protocol.
+
+| 3 | `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts` | Both channels are forwarded explicitly (like the other prototype-backed channels). |
+| 4 | `sdk/packages/core/src/runtime/observability/model-behavior-trace.ts` | The isolated sink forwards both channels. |
+| 5 | `apps/vscode/src/sdk/roundc-latency-trace-runtime.ts` | Both channels are added to `COMPOSABLE_SINK_CHANNELS` — the compile-time exhaustiveness gate makes their omission a **compile error**. |
+| 6 | `sdk/packages/core/src/observability/latency/latency-trace.ts` | `generatedTextLength` is allowlisted (a size, never content). |
+
+**`LIVE_UNOBSERVABLE` is NOT the outcome:** the provider **does** expose an
+authoritative first-token event. The measurement was *unavailable* because
+nothing observed it — that is now repaired.
+
 ### 7.1 The baseline comparison (C6.10)
 
 The baseline was run in an **isolated git worktree** at the exact entry HEAD
@@ -577,6 +612,33 @@ ACT production change lives — shows **zero** regressions.)
 
 ---
 
+### 7.2 Typecheck, lint, build
+
+```
+$ cd sdk/packages/shared && bun run build          → EXIT=0
+$ cd sdk/packages/agents && bun run build          → EXIT=0
+$ cd sdk/packages/core   && bun run build          → EXIT=0
+   (includes `bun tsc -p tsconfig.build.json` and
+    `bun run ./scripts/verify-runtime-build-id.ts`)
+
+$ cd apps/vscode && bun x tsc --noEmit -p tsconfig.json
+→ EXIT=0
+
+$ cd <repo> && bun x biome lint --config-path ./sdk/biome.json ... <9 sdk files>
+→ EXIT=0   "Checked 9 files in 37ms. No fixes applied."
+
+$ cd apps/vscode && bun x biome lint --config-path ./biome.jsonc ... <3 vscode files>
+→ EXIT=0   "Checked 3 files in 28ms. No fixes applied."
+```
+
+**A real type error was found and fixed during this gate.** The identity
+observer's `OBSERVED_IDENTITY_CHANNELS.includes(channel)` check was typed
+against a 3-element tuple, so the newly-added provider channels failed
+`check-types`. The comparison was widened to `readonly string[]` with an
+explanatory comment; `tsc --noEmit` then passed. **This is exactly what the
+gate is for — it was caught before commit, not after.**
+
+
 ## 8. Git, artifacts and closure (C7)
 
 ### 8.1 Produced artifacts
@@ -617,6 +679,23 @@ ACT's diff.
 
 ---
 
+### 8.4 Commit binding
+
+The report is bound to the ACT's implementation HEAD:
+
+| Commit | Subject |
+|---|---|
+| `90a153321e4d66eddb4197cb41667f81e6df6865` | `fix(roundc-trace): bound the compaction span to real compaction work` |
+| `cc921af7f415f27610a71910cdbe51ec30b12776` | `docs(roundc-trace): add the QUAL01 qualification report, crosswalk and receipts` |
+
+> The evidence commit's SHA is stated here for the reader's convenience; if
+> the commit was amended after this line was written, resolve the current
+> value with `git log --format=%H -2` — the **implementation** commit
+> (`90a153321…`) is the load-bearing one and is never amended.
+
+The full commit receipt (with the final tree status and the conservation
+statement) is `10-closure-commits.txt`.
+
 ## 9. Verdict
 
 ### 9.1 Exit classification
@@ -637,6 +716,24 @@ All substantive exit conditions are met:
 - ✅ The ten-risk evidence contract is **ready for a matched run**
   (7 EQUIVALENT, 3 STRONGER, 0 WEAKER, 0 UNVERIFIED), with the R1 offline
   Helm render really executed.
+
+### 9.2 The recorded residue (not certified)
+
+| # | Residue | Why it is non-blocking |
+|---|---|---|
+| 1 | The **served** (provider-reported) model id is `UNAVAILABLE_FROM_TRACE`. | The SDK does not surface it at any existing channel. It is now recorded as explicitly unavailable rather than inferred, so the successor run will say so truthfully instead of implying a match. |
+| 2 | The **quantization** is `UNAVAILABLE_FROM_TRACE`. | Same. The requested id contains `iq3_s`, but a requested id is not a served-quantization receipt and is **not** treated as one. |
+| 3 | The **effective sampling/reasoning settings** are `UNAVAILABLE_FROM_TRACE`. | Not surfaced by the configured provider session's dogfood channel. |
+| 4 | The **serving** image digest is unavailable from the offline render. | The render proves the chart's **digest-pinned** repository/tag/digest form and the **effective** chart defaults; the cluster's serving digest is a runtime fact no offline render can observe. |
+| 5 | The **≈5.57× speedup remains causally unattributed.** | This is a property of the *evidence*, not a defect in the repair. The observable identity fields are **equal** across the two runs, so the speedup cannot be explained by provider/model-id/branch/repository/session-history differences — it must lie in the **unobservable** served-model/quantization/inference configuration. C4 now instruments exactly that gap so the successor run can close it. |
+| 6 | The historical 45-start / 2-end trace retains its 43 integrity failures. | **By design.** The historical artifact is immutable and must not be rewritten. The correction applies only to future captures. |
+
+- The protected stash (`stash@{0}`) is **preserved and not popped**.
+- The temporary baseline worktree `/tmp/qual01-baseline` is **removed** at
+  closure (it was created by this ACT; the pre-existing worktrees are
+  untouched).
+- **No history rewrite, no force push, no PR, no deployment, no new VSIX
+  installed, no Strata benchmark run.**
 
 ### 9.3 GO / NO-GO for the successor matched Round C benchmark
 
@@ -697,100 +794,3 @@ and would not be comparable.
 
 - ✅ All ten executable gates pass; the baseline comparison shows **zero**
   ACT-owned regressions.
-
-### 9.2 The recorded residue (not certified)
-
-| # | Residue | Why it is non-blocking |
-|---|---|---|
-| 1 | The **served** (provider-reported) model id is `UNAVAILABLE_FROM_TRACE`. | The SDK does not surface it at any existing channel. It is now recorded as explicitly unavailable rather than inferred, so the successor run will say so truthfully instead of implying a match. |
-| 2 | The **quantization** is `UNAVAILABLE_FROM_TRACE`. | Same. The requested id contains `iq3_s`, but a requested id is not a served-quantization receipt and is **not** treated as one. |
-| 3 | The **effective sampling/reasoning settings** are `UNAVAILABLE_FROM_TRACE`. | Not surfaced by the configured provider session's dogfood channel. |
-| 4 | The **serving** image digest is unavailable from the offline render. | The render proves the chart's **digest-pinned** repository/tag/digest form and the **effective** chart defaults; the cluster's serving digest is a runtime fact no offline render can observe. |
-| 5 | The **≈5.57× speedup remains causally unattributed.** | This is a property of the *evidence*, not a defect in the repair. The observable identity fields are **equal** across the two runs, so the speedup cannot be explained by provider/model-id/branch/repository/session-history differences — it must lie in the **unobservable** served-model/quantization/inference configuration. C4 now instruments exactly that gap so the successor run can close it. |
-| 6 | The historical 45-start / 2-end trace retains its 43 integrity failures. | **By design.** The historical artifact is immutable and must not be rewritten. The correction applies only to future captures. |
-
-- The protected stash (`stash@{0}`) is **preserved and not popped**.
-- The temporary baseline worktree `/tmp/qual01-baseline` is **removed** at
-  closure (it was created by this ACT; the pre-existing worktrees are
-  untouched).
-- **No history rewrite, no force push, no PR, no deployment, no new VSIX
-  installed, no Strata benchmark run.**
-
-### 8.4 Commit binding
-
-The report is bound to the ACT's implementation HEAD:
-
-| Commit | Subject |
-|---|---|
-| `90a153321e4d66eddb4197cb41667f81e6df6865` | `fix(roundc-trace): bound the compaction span to real compaction work` |
-| `cc921af7f415f27610a71910cdbe51ec30b12776` | `docs(roundc-trace): add the QUAL01 qualification report, crosswalk and receipts` |
-
-> The evidence commit's SHA is stated here for the reader's convenience; if
-> the commit was amended after this line was written, resolve the current
-> value with `git log --format=%H -2` — the **implementation** commit
-> (`90a153321…`) is the load-bearing one and is never amended.
-
-The full commit receipt (with the final tree status and the conservation
-statement) is `10-closure-commits.txt`.
-
-### 7.2 Typecheck, lint, build
-
-```
-$ cd sdk/packages/shared && bun run build          → EXIT=0
-$ cd sdk/packages/agents && bun run build          → EXIT=0
-$ cd sdk/packages/core   && bun run build          → EXIT=0
-   (includes `bun tsc -p tsconfig.build.json` and
-    `bun run ./scripts/verify-runtime-build-id.ts`)
-
-$ cd apps/vscode && bun x tsc --noEmit -p tsconfig.json
-→ EXIT=0
-
-$ cd <repo> && bun x biome lint --config-path ./sdk/biome.json ... <9 sdk files>
-→ EXIT=0   "Checked 9 files in 37ms. No fixes applied."
-
-$ cd apps/vscode && bun x biome lint --config-path ./biome.jsonc ... <3 vscode files>
-→ EXIT=0   "Checked 3 files in 28ms. No fixes applied."
-```
-
-**A real type error was found and fixed during this gate.** The identity
-observer's `OBSERVED_IDENTITY_CHANNELS.includes(channel)` check was typed
-against a 3-element tuple, so the newly-added provider channels failed
-`check-types`. The comparison was widened to `readonly string[]` with an
-explanatory comment; `tsc --noEmit` then passed. **This is exactly what the
-gate is for — it was caught before commit, not after.**
-
-
-## 7. Executable gates (C6)
-
-All gates were executed with **Bun** as the task runner and **Node ≥ 22** as
-the runtime, on the macOS host (`darwin`), against the ACT working tree.
-
-| # | Gate | Command | Result |
-|---|---|---|---|
-| 1 | RED → GREEN compaction lifecycle | `bun x vitest run --config vitest.config.ts src/extensions/context/compaction.latency-span-lifecycle.red01.test.ts` (core) | **RED 1 failed / 1 passed → GREEN 6 passed** |
-| 2 | No-op, success, failure/abort, concurrent compaction | same file | **6/6 PASS** |
-| 3 | 10 ms executor / 5,000 ms delivery attribution | `latency-trace.test.ts` → *"does not charge the execution-to-delivery delay to execution"* | **PASS** |
-| 4 | Trace retention + late-exit eviction | `latency-trace.test.ts` → *"bounded retention"* + *"bounded open-span retention"* | **PASS** |
-| 5 | Dogfood sink composition | `COMPOSABLE_SINK_CHANNELS` exhaustiveness (compile-time) + `roundc-latency-trace-dogfood-activation.test.ts` | **PASS (44/44)** |
-| 6 | Public-profile OFF / zero state delta | `roundc-latency-trace-identity.qual01.test.ts` | **PASS** |
-| 7 | Streaming output conservation | `agent-runtime.provider-first-event.test.ts` | **PASS (8/8)** |
-| 8 | Metadata privacy and omission | `roundc-latency-trace-identity.qual01.test.ts` | **PASS (7/7)** |
-| 9 | Focused typecheck / lint / build | see §7.2 | **PASS** |
-| 10 | Baseline comparison, zero ACT-owned failures | see §7.1 | **PASS — 0 regressions** |
-
-      Tests  7 passed (7)
-EXIT=0
-```
-
-**No permanent public configuration or protocol expansion** was introduced —
-the identity record is internal to the existing dogfood diagnostics channel
-and is not surfaced in the public extension settings or the webview protocol.
-
-| 3 | `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts` | Both channels are forwarded explicitly (like the other prototype-backed channels). |
-| 4 | `sdk/packages/core/src/runtime/observability/model-behavior-trace.ts` | The isolated sink forwards both channels. |
-| 5 | `apps/vscode/src/sdk/roundc-latency-trace-runtime.ts` | Both channels are added to `COMPOSABLE_SINK_CHANNELS` — the compile-time exhaustiveness gate makes their omission a **compile error**. |
-| 6 | `sdk/packages/core/src/observability/latency/latency-trace.ts` | `generatedTextLength` is allowlisted (a size, never content). |
-
-**`LIVE_UNOBSERVABLE` is NOT the outcome:** the provider **does** expose an
-authoritative first-token event. The measurement was *unavailable* because
-nothing observed it — that is now repaired.
