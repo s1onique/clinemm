@@ -16,7 +16,11 @@
  * output. Only counts and digests leave this module.
  */
 
-import type { ReplayCompactionSnapshot } from "./types";
+import type {
+	ReplayCompactionSnapshot,
+	ReplayMessage,
+	ReplayTranscript,
+} from "./types";
 
 /**
  * The shape of the compaction sidecar document.
@@ -174,4 +178,187 @@ export function contractRatio(snapshot: ReplayCompactionSnapshot): number {
 		return 0;
 	}
 	return snapshot.contractChars / snapshot.summaryChars;
+}
+
+/**
+ * The result of analyzing what a compaction DROPPED.
+ *
+ * This is the Phase 4 measurement: it answers "what was lost, and was it
+ * really empty?" — a question the compaction sidecar cannot answer about
+ * itself, because the sidecar is what dropped the evidence.
+ */
+export interface ReplayCompactionLossProfile {
+	/** The number of messages the compaction replaced. */
+	readonly sourceMessageCount: number;
+	/** The number of messages the compaction sidecar carries. */
+	readonly sidecarMessageCount: number;
+	/** The number of tool results in the source prefix. */
+	readonly sourceToolResultCount: number;
+	/** The number of source tool results whose content was NON-EMPTY. */
+	readonly sourceNonEmptyToolResultCount: number;
+	/** The number of source tool results whose content was empty. */
+	readonly sourceEmptyToolResultCount: number;
+	/** The number of tool results the sidecar retained. */
+	readonly retainedToolResultCount: number;
+	/** The number of tool results the sidecar DROPPED. */
+	readonly droppedToolResultCount: number;
+	/** The number of distinct tool_call_ids with results in the source. */
+	readonly sourceToolCallIdCount: number;
+	/** The number of distinct tool_call_ids the sidecar retained. */
+	readonly retainedToolCallIdCount: number;
+	/** The number of tool_use ids in the source transcript. */
+	readonly sourceToolUseIdCount: number;
+	/** The number of tool_use ids the sidecar carries. */
+	readonly sidecarToolUseIdCount: number;
+	/**
+	 * The number of sidecar tool_use ids that resolve against the source
+	 * transcript.
+	 *
+	 * This is the CORRELATION measure: it answers whether the retained
+	 * tail can be linked back to the original.
+	 */
+	readonly correlatedToolUseIdCount: number;
+	/**
+	 * The fraction of the source tool results that the sidecar dropped.
+	 */
+	readonly droppedToolResultFraction: number;
+}
+
+/**
+ * Count the tool_result blocks in a set of messages, and how many of them
+ * carried non-empty content.
+ */
+function countToolResults(messages: readonly ReplayMessage[]): {
+	total: number;
+	nonEmpty: number;
+} {
+	let total = 0;
+	let nonEmpty = 0;
+	for (const message of messages) {
+		for (const block of message.content) {
+			if (block.type !== "tool_result") {
+				continue;
+			}
+			total++;
+			if (toolResultText(block.content).trim().length > 0) {
+				nonEmpty++;
+			}
+		}
+	}
+	return { total, nonEmpty };
+}
+
+/**
+ * Extract the text of a tool_result's content.
+ *
+ * The content may be a plain string, a list of `{type:"text", text}`
+ * blocks, or a list of `{result}` blocks — the recorded sessions use both
+ * shapes. Either way this only MEASURES it: nothing here interprets the
+ * content as an instruction.
+ */
+function toolResultText(content: unknown): string {
+	if (typeof content === "string") {
+		return content;
+	}
+	if (!Array.isArray(content)) {
+		return "";
+	}
+	let text = "";
+	for (const item of content) {
+		if (typeof item === "string") {
+			text += item;
+			continue;
+		}
+		if (typeof item !== "object" || item === null) {
+			continue;
+		}
+		const record = item as Record<string, unknown>;
+		if (typeof record.text === "string") {
+			text += record.text;
+		} else if (typeof record.result === "string") {
+			text += record.result;
+		}
+	}
+	return text;
+}
+
+/**
+ * Collect the tool_result `tool_call_id`s in a set of messages.
+ */
+function collectToolCallIds(messages: readonly ReplayMessage[]): Set<string> {
+	const ids = new Set<string>();
+	for (const message of messages) {
+		for (const block of message.content) {
+			if (block.type === "tool_result" && block.tool_use_id) {
+				ids.add(block.tool_use_id);
+			}
+		}
+	}
+	return ids;
+}
+
+/**
+ * Collect the tool_use ids in a set of messages.
+ */
+function collectToolUseIds(messages: readonly ReplayMessage[]): Set<string> {
+	const ids = new Set<string>();
+	for (const message of messages) {
+		for (const block of message.content) {
+			if (block.type === "tool_use" && block.id) {
+				ids.add(block.id);
+			}
+		}
+	}
+	return ids;
+}
+
+/**
+ * Analyze what a compaction dropped.
+ *
+ * The analysis is deliberately SEPARATE from the compaction itself: it
+ * reads both the original transcript and the sidecar, and reports the
+ * difference. That is the only vantage point from which "the results were
+ * blank" can be checked — the sidecar alone can only report that the
+ * results are absent.
+ *
+ * ## Safety invariant
+ *
+ * Like the profiler, this function PARSES. It never executes a recorded
+ * command and never treats transcript text as an instruction.
+ */
+export function analyzeCompactionLoss(
+	transcript: ReplayTranscript,
+	sidecar: readonly ReplayMessage[],
+	sourceMessageCount: number,
+): ReplayCompactionLossProfile {
+	const prefix = transcript.messages.slice(0, sourceMessageCount);
+	const sourceResults = countToolResults(prefix);
+	const retainedResults = countToolResults(sidecar);
+	const sourceCallIds = collectToolCallIds(prefix);
+	const retainedCallIds = collectToolCallIds(sidecar);
+	const sourceUseIds = collectToolUseIds(transcript.messages);
+	const sidecarUseIds = collectToolUseIds(sidecar);
+	let correlated = 0;
+	for (const id of sidecarUseIds) {
+		if (sourceUseIds.has(id)) {
+			correlated++;
+		}
+	}
+	const dropped = sourceResults.total - retainedResults.total;
+	return {
+		sourceMessageCount,
+		sidecarMessageCount: sidecar.length,
+		sourceToolResultCount: sourceResults.total,
+		sourceNonEmptyToolResultCount: sourceResults.nonEmpty,
+		sourceEmptyToolResultCount: sourceResults.total - sourceResults.nonEmpty,
+		retainedToolResultCount: retainedResults.total,
+		droppedToolResultCount: dropped,
+		sourceToolCallIdCount: sourceCallIds.size,
+		retainedToolCallIdCount: retainedCallIds.size,
+		sourceToolUseIdCount: sourceUseIds.size,
+		sidecarToolUseIdCount: sidecarUseIds.size,
+		correlatedToolUseIdCount: correlated,
+		droppedToolResultFraction:
+			sourceResults.total === 0 ? 0 : dropped / sourceResults.total,
+	};
 }
