@@ -63,10 +63,9 @@ operation was performed.
 | `848c9e088` | Phase 1–3: D1 ledger integrity, D2 latency lifecycle, D3 parallel timing, D4 normalization boundary |
 | `8dd313129` | Phase 4–5: production-boundary wiring, the two integration defects, and the offline qualification suite |
 | `fe152e074` | Closure report: record the final commit id |
-| `CORRECTION01` | Review follow-up: identity-based compaction continuity, independent execution/delivery attribution, separate preparation/provider intervals, bounded skip classification, provider-projection crosswalk |
+| `d351e891b` | CORRECTION01 — review follow-up: identity-based compaction continuity, independent execution/delivery attribution, separate preparation/provider intervals, bounded skip classification, provider-projection crosswalk |
 
-Final HEAD: recorded in the commit that adds this section (see
-`git log -1`). Branch: `act/clinemm-roundc-harness-02`.
+Final HEAD: `d351e891b` on `act/clinemm-roundc-harness-02`.
 
 ---
 
