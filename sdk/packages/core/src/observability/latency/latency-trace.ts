@@ -335,6 +335,22 @@ export function digestLatencyContent(content: string): string {
 }
 
 /**
+ * Read the `toolCallId` out of a metadata payload, if it has one.
+ *
+ * The id is the model's own identifier for a tool call, so it is the
+ * natural key for matching a parallel call's exit to its entry. It is
+ * read from the RAW payload rather than the sanitised one so that the
+ * matching works even if the allowlist is ever narrowed — matching a
+ * span must not depend on which metadata fields happen to be recorded.
+ */
+function readToolCallId(
+	metadata: Readonly<Record<string, unknown>> | undefined,
+): string | undefined {
+	const value = metadata?.toolCallId;
+	return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/**
  * The clock the tracer reads.
  *
  * `performance.now()` is monotonic; `Date.now()` is not. The tracer reads
@@ -371,7 +387,11 @@ export class LatencyTracer {
 	private readonly events: LatencyBoundaryEvent[] = [];
 	private readonly openSpans = new Map<
 		LatencyBoundary,
-		Array<{ readonly boundary: LatencyBoundary; readonly startedAt: number }>
+		Array<{
+			readonly boundary: LatencyBoundary;
+			readonly startedAt: number;
+			readonly toolCallId?: string;
+		}>
 	>();
 	private readonly origin: number;
 
@@ -418,11 +438,20 @@ export class LatencyTracer {
 			// A boundary may be entered more than once (parallel tool
 			// calls). Each entry pushes onto the boundary's own stack, so
 			// the matching exit pops exactly the span it closes.
+			//
+			// The `toolCallId` is carried on the span so that an exit can
+			// be matched to the RIGHT entry even when parallel calls
+			// finish out of order — see `takeSpan`.
 			const stack = this.openSpans.get(boundary);
+			const span = {
+				boundary,
+				startedAt: now,
+				toolCallId: readToolCallId(metadata),
+			};
 			if (stack) {
-				stack.push({ boundary, startedAt: now });
+				stack.push(span);
 			} else {
-				this.openSpans.set(boundary, [{ boundary, startedAt: now }]);
+				this.openSpans.set(boundary, [span]);
 			}
 		} catch {
 			// Failure isolation.
@@ -436,6 +465,15 @@ export class LatencyTracer {
 	 * one. A boundary that is exited without a matching entry still
 	 * records the event, with no duration, so a missing entry is visible
 	 * rather than silent.
+	 *
+	 * ## Matching a parallel exit to the RIGHT entry
+	 *
+	 * Parallel tool calls do NOT necessarily finish in the order they
+	 * started. A plain last-in-first-out stack would then attribute one
+	 * call's duration to another. When the exit carries a `toolCallId`
+	 * that matches an open span, THAT span is the one closed; otherwise
+	 * the behaviour falls back to last-in-first-out, which is correct for
+	 * every boundary that is entered at most once.
 	 */
 	exit(
 		boundary: LatencyBoundary,
@@ -446,7 +484,7 @@ export class LatencyTracer {
 	): void {
 		try {
 			const now = this.clock.monotonic() - this.origin;
-			const span = this.openSpans.get(boundary)?.pop();
+			const span = this.takeSpan(boundary, readToolCallId(options.metadata));
 			this.events.push({
 				correlationId: this.correlationId,
 				boundary,
@@ -460,6 +498,34 @@ export class LatencyTracer {
 		} catch {
 			// Failure isolation.
 		}
+	}
+
+	/**
+	 * Take the open span an exit closes.
+	 *
+	 * When the exit names a `toolCallId` and an open span carries the
+	 * same id, that span is closed. The stack order is otherwise
+	 * preserved, so removing a span from the middle does not disturb the
+	 * relative order of the others.
+	 */
+	private takeSpan(
+		boundary: LatencyBoundary,
+		toolCallId: string | undefined,
+	):
+		| { readonly boundary: LatencyBoundary; readonly startedAt: number }
+		| undefined {
+		const stack = this.openSpans.get(boundary);
+		if (!stack || stack.length === 0) {
+			return undefined;
+		}
+		if (toolCallId !== undefined) {
+			const index = stack.findIndex((span) => span.toolCallId === toolCallId);
+			if (index !== -1) {
+				const [span] = stack.splice(index, 1);
+				return span;
+			}
+		}
+		return stack.pop();
 	}
 
 	/**

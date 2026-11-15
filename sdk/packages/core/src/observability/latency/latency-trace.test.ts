@@ -97,6 +97,93 @@ describe("LatencyTracer — boundary recording", () => {
 		expect(ends[1]?.durationMs).toBe(110);
 	});
 
+	it("matches a parallel exit to its OWN entry when calls finish out of order", () => {
+		// The defect a plain LIFO stack has: parallel tool calls do not
+		// necessarily finish in the order they started. Call A starts
+		// first and finishes LAST; call B starts second and finishes
+		// FIRST. A LIFO stack would attribute B's 10 ms to A.
+		const clock = new ScriptedClock();
+		const tracer = new LatencyTracer("corr-4b", clock);
+		tracer.enter("tool_execution", { toolCallId: "a" });
+		clock.advance(10);
+		tracer.enter("tool_execution", { toolCallId: "b" });
+		clock.advance(90);
+		// B finishes FIRST, at t=100.
+		tracer.exit("tool_execution", { metadata: { toolCallId: "b" } });
+		clock.advance(10);
+		// A finishes at t=110.
+		tracer.exit("tool_execution", { metadata: { toolCallId: "a" } });
+
+		const ends = tracer.getEvents().filter((event) => event.phase === "end");
+		expect(ends).toHaveLength(2);
+		// B ran 10 -> 100 = 90 ms. A ran 0 -> 110 = 110 ms.
+		expect(ends[0]?.metadata?.toolCallId).toBe("b");
+		expect(ends[0]?.durationMs).toBe(90);
+		expect(ends[1]?.metadata?.toolCallId).toBe("a");
+		expect(ends[1]?.durationMs).toBe(110);
+	});
+
+	it("keeps the remaining spans' order when one is closed out of order", () => {
+		const clock = new ScriptedClock();
+		const tracer = new LatencyTracer("corr-4c", clock);
+		tracer.enter("tool_execution", { toolCallId: "a" });
+		tracer.enter("tool_execution", { toolCallId: "b" });
+		tracer.enter("tool_execution", { toolCallId: "c" });
+		clock.advance(10);
+		// Close the MIDDLE span out of order.
+		tracer.exit("tool_execution", { metadata: { toolCallId: "b" } });
+		clock.advance(10);
+		tracer.exit("tool_execution", { metadata: { toolCallId: "c" } });
+		clock.advance(10);
+		tracer.exit("tool_execution", { metadata: { toolCallId: "a" } });
+
+		const ends = tracer.getEvents().filter((event) => event.phase === "end");
+		expect(ends.map((event) => event.metadata?.toolCallId)).toEqual([
+			"b",
+			"c",
+			"a",
+		]);
+		expect(ends[0]?.durationMs).toBe(10);
+		expect(ends[1]?.durationMs).toBe(20);
+		expect(ends[2]?.durationMs).toBe(30);
+	});
+
+	it("falls back to LIFO when the exit carries no tool call id", () => {
+		const clock = new ScriptedClock();
+		const tracer = new LatencyTracer("corr-4d", clock);
+		tracer.enter("tool_execution");
+		clock.advance(10);
+		tracer.enter("tool_execution");
+		clock.advance(90);
+		tracer.exit("tool_execution");
+		clock.advance(10);
+		tracer.exit("tool_execution");
+
+		const ends = tracer.getEvents().filter((event) => event.phase === "end");
+		expect(ends[0]?.durationMs).toBe(90);
+		expect(ends[1]?.durationMs).toBe(110);
+	});
+
+	it("falls back to LIFO when the exit names an id that was never entered", () => {
+		const clock = new ScriptedClock();
+		const tracer = new LatencyTracer("corr-4e", clock);
+		tracer.enter("tool_execution", { toolCallId: "a" });
+		clock.advance(10);
+		tracer.enter("tool_execution", { toolCallId: "b" });
+		clock.advance(90);
+		// An id that matches nothing must not orphan the real spans.
+		tracer.exit("tool_execution", { metadata: { toolCallId: "zzz" } });
+		clock.advance(10);
+		tracer.exit("tool_execution", { metadata: { toolCallId: "a" } });
+
+		const ends = tracer.getEvents().filter((event) => event.phase === "end");
+		expect(ends).toHaveLength(2);
+		// The unmatched exit closed the most recent span (b), and the
+		// explicit "a" exit closed a.
+		expect(ends[0]?.durationMs).toBe(90);
+		expect(ends[1]?.durationMs).toBe(110);
+	});
+
 	it("is failure-isolated: a throwing clock cannot escape the tracer", () => {
 		const brokenClock: LatencyClock = {
 			monotonic: () => {

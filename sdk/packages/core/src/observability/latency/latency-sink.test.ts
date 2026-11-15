@@ -115,6 +115,46 @@ describe("LatencyTraceSink", () => {
 		expect(end?.durationMs).toBe(120);
 	});
 
+	it("keeps parallel tool calls distinct when they finish out of order", () => {
+		// The required Phase 5 check, at the level the RUNTIME actually
+		// reports: two tool calls start, and the SECOND one finishes
+		// FIRST. Each call's duration must be its own.
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-6b", clock);
+		sink.onToolStart(
+			observation({ toolName: "run_commands", toolCallId: "a" }),
+		);
+		clock.advance(10);
+		sink.onToolStart(
+			observation({ toolName: "run_commands", toolCallId: "b" }),
+		);
+		clock.advance(90);
+		// B finishes first, at t=100.
+		sink.onToolFinish(
+			observation({ toolName: "run_commands", toolCallId: "b" }),
+		);
+		clock.advance(10);
+		// A finishes at t=110.
+		sink.onToolFinish(
+			observation({ toolName: "run_commands", toolCallId: "a" }),
+		);
+
+		const ends = sink
+			.getTrace()
+			.events.filter(
+				(event) => event.boundary === "tool_execution" && event.phase === "end",
+			);
+		expect(ends).toHaveLength(2);
+		expect(ends[0]?.metadata?.toolCallId).toBe("b");
+		expect(ends[0]?.durationMs).toBe(90);
+		expect(ends[1]?.metadata?.toolCallId).toBe("a");
+		expect(ends[1]?.durationMs).toBe(110);
+		// Both calls carry the SAME correlation id, so the trace groups
+		// them into one turn while the tool call ids keep them apart.
+		expect(ends[0]?.correlationId).toBe("corr-6b");
+		expect(ends[1]?.correlationId).toBe("corr-6b");
+	});
+
 	it("records the tool result by size and digest, never by content", () => {
 		const sink = new LatencyTraceSink("corr-7", new ScriptedClock());
 		sink.recordToolResultDelivered("start");
