@@ -1,0 +1,23 @@
+ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — COMMIT RECEIPTS
+Generated: 2026-11-16
+
+== COMMITS (branch main, NOT pushed) ==
+implementation: 90a153321e4d66eddb4197cb41667f81e6df6865  fix(roundc-trace): bound the compaction span to real compaction work
+evidence:      THIS COMMIT  docs(roundc-trace): add the QUAL01 qualification report, crosswalk and receipts
+   (resolve with: git log --format=%H -2)
+
+== ENTRY HEAD (the packaged starting reference) ==
+b0b18da6cef7f118661c64b26fe539ddeb985e6f
+
+== CONSERVATION ==
+protected stash: stash@{0} — PRESERVED, not popped
+baseline worktree /tmp/qual01-baseline: REMOVED at closure
+pre-existing worktrees: UNTOUCHED
+remote: git@github.com:s1onique/clinemm.git
+pushes performed: NONE
+PRs opened: NONE
+deployments: NONE
+new VSIX installed: NONE
+Strata benchmark runs: NONE
+history rewrites / force pushes: NONE
+unrelated cleanup: NONE

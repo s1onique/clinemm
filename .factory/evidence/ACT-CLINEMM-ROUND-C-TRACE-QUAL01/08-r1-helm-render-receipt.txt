@@ -1,0 +1,38 @@
+ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — R1 OFFLINE HELM RENDER RECEIPT
+Generated: 2026-11-16
+Helm: v3.20.2 (GitCommit v3.20.2, GoVersion go1.26.6)
+
+== INPUTS (pinned, offline) ==
+chart dir:   /Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/.helm/roz
+chart:       keycloak-roz 7.0.1 (appVersion 26.3.1)
+dependency:  keycloakx 7.0.1 (vendored charts/keycloakx-7.0.1.tgz)
+chart.lock digest: sha256:b431346662cf9121146a3f5ad092614c72034141a3bae2d3bab7383079856654
+chart source SHA:  42de653b59708e712d694aeb9732f822b7f8fe5b
+
+== INVOCATION (isolated scratch dir; no network, no cluster, no helm upgrade) ==
+helm template keycloak-roz-prod . --namespace=roz-keycloak-prod \
+  --set keycloakx.image.repository=cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz \
+  --set keycloakx.image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
+  --set global.env=prod \
+  --set profilerWatcher.enabled=false \
+  -f values.yaml
+
+== RECEIPT ==
+render bytes: 17879
+render sha256: eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65
+image:         cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000 (digest-pinned)
+kinds:         ConfigMap 1, ExternalSecret 2, Ingress 2, SecretStore 1, Service 2, ServiceAccount 1, ServiceMonitor 1, StatefulSet 1
+runAsNonRoot:  true
+PodDisruptionBudget count: 0
+NetworkPolicy count:       0
+helm hook count:          2
+
+== CAVEAT ==
+The digest is a PLACEHOLDER in the chart pinned values. The render proves the
+chart pins by digest and resolves the repository/tag/digest form. It CANNOT
+observe the SERVING cluster effective digest. The two are not conflated.
+
+== CROSSWALK REGENERATION ==
+The crosswalk regenerates BYTE-IDENTICALLY from this render plus the two recovered
+transcripts (verified by diff). Regenerating WITHOUT --render-path degrades
+R1/R9/R10 to UNVERIFIED (7 EQUIVALENT + 3 UNVERIFIED) - the intended fail-closed path.

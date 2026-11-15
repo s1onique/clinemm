@@ -1,0 +1,36 @@
+ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — EXACT SOURCE / ARTIFACT IDENTITY RECEIPT
+Generated: 2026-11-16
+
+== REPOSITORY ==
+root:       /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+origin:    git@github.com:s1onique/clinemm.git
+branch:    main
+entry HEAD: b0b18da6cef7f118661c64b26fe539ddeb985e6f
+entry HEAD == packaged starting reference b0b18da6c: YES
+
+== EXTENSION / INSTALLED ARTIFACT ==
+installed extension dir: ~/.vscodium-roz/extensions/s1onique.clinemm-4.1.16-5a1c485cb-b0b18da6c
+installed version:        4.1.16-5a1c485cb-b0b18da6c
+installed publisher/name: s1onique.clinemm
+packaged VSIX:           /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-b0b18da6ce-roundc-latency-trace-corr02.vsix
+VSIX sha256:             fbfc8ace9aeb4d4ba22f81702e5532b17db3df72bd18bf26aa22c54605fe6a8c
+VSIX bytes:              65347194
+VSIX mtime:              2026-11-16T00:49 (local)
+
+== CONSERVATION ==
+protected stash: stash@{0} — PRESERVED, not popped
+baseline worktree: /tmp/qual01-baseline @ b0b18da6cef7f118661c64b26fe539ddeb985e6f (removed at closure)
+history rewrite / force push / deploy: NONE
+
+== HISTORICAL RUN IDENTITY (both Round C runs) ==
+original session: 1794702518894_gui73
+new session:      1794780088950_tc1vx
+provider:         openai-compatible
+requested model:  qwen3.8-flash-next-iq3_s
+effective model:  UNAVAILABLE_FROM_TRACE
+quantization:     UNAVAILABLE_FROM_TRACE
+branch:           optimize-ftls
+repo:             git@gitlab.roznanie.ru:backend/keycloak.git
+history origin:   4.1.16-5a1c485cb
+original output tokens / tool invocations: 229129 / 209
+new output tokens / tool invocations:      47634 / 48

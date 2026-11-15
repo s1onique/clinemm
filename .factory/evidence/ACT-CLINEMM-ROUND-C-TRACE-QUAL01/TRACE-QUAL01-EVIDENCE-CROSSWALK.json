@@ -1,0 +1,605 @@
+{
+  "schema": "cline.roundc-trace-qual01-evidence-crosswalk.v1",
+  "generatedBy": "scripts/roundc-trace-qual01-evidence-crosswalk.py",
+  "purpose": "Evidence-equivalence qualification for the Keycloak Round C comparison. This is a qualification manifest, not a security auditor and not a finding-scoring framework.",
+  "runs": {
+    "original": {
+      "sessionId": "1794702518894_gui73",
+      "metadata": {
+        "sessionId": "1794702518894_gui73",
+        "startedAt": "2026-11-15T00:28:39.033Z",
+        "status": "failed",
+        "provider": "openai-compatible",
+        "model": "qwen3.8-flash-next-iq3_s",
+        "cwd": "/Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak",
+        "outputTokens": 229129,
+        "inputTokens": 8598910,
+        "cacheReadTokens": 7564932,
+        "sessionHistoryOriginVersion": "4.1.16-5a1c485cb",
+        "gitBranch": "optimize-ftls",
+        "gitUrl": "git@gitlab.roznanie.ru:backend/keycloak.git"
+      },
+      "transcriptRecovered": true,
+      "toolInvocationCount": 209
+    },
+    "new": {
+      "sessionId": "1794780088950_tc1vx",
+      "metadata": {
+        "sessionId": "1794780088950_tc1vx",
+        "startedAt": "2026-11-15T22:01:29.063Z",
+        "status": "completed",
+        "provider": "openai-compatible",
+        "model": "qwen3.8-flash-next-iq3_s",
+        "cwd": "/Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak",
+        "outputTokens": 47634,
+        "inputTokens": 2086522,
+        "cacheReadTokens": 1894376,
+        "sessionHistoryOriginVersion": "4.1.16-5a1c485cb",
+        "gitBranch": "optimize-ftls",
+        "gitUrl": "git@gitlab.roznanie.ru:backend/keycloak.git"
+      },
+      "transcriptRecovered": true,
+      "toolInvocationCount": 48
+    }
+  },
+  "statusVocabulary": [
+    "EQUIVALENT",
+    "STRONGER",
+    "WEAKER",
+    "UNVERIFIED"
+  ],
+  "rows": [
+    {
+      "id": "R1",
+      "minimumEvidenceRequirement": "Effective Helm-rendered image and CI/manual-upgrade distinction",
+      "discriminator": "offline_helm_render",
+      "originalSourceObservation": {
+        "observedToolInvocations": 159,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "fetch_web_content",
+          "read_files",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 28,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "fetch_web_content",
+          "read_files",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "STRONGER",
+      "findingFaithfullyRepresentsEvidence": "STRONGER",
+      "missingOrWeakerVerification": "the render pins a placeholder digest; the SERVED image digest is a pipeline-time value that the offline render cannot observe",
+      "comparabilityJudgment": "STRONGER",
+      "status": "STRONGER",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ],
+      "offlineRenderReceipt": {
+        "renderSha256": "eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65",
+        "renderBytes": 17879,
+        "images": [
+          "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "kinds": {
+          "ConfigMap": 1,
+          "ExternalSecret": 2,
+          "Ingress": 2,
+          "SecretStore": 1,
+          "Service": 2,
+          "ServiceAccount": 1,
+          "ServiceMonitor": 1,
+          "StatefulSet": 1
+        },
+        "podDisruptionBudgetCount": 0,
+        "networkPolicyCount": 0,
+        "hookCount": 2,
+        "securityContextCount": 2
+      },
+      "effectiveRender": {
+        "chartVersion": "keycloak-roz 7.0.1 (dep keycloakx 7.0.1, appVersion 26.3.1)",
+        "chartSourceSha": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+        "images": [
+          "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "podDisruptionBudgetCount": 0,
+        "networkPolicyCount": 0,
+        "hookCount": 2
+      }
+    },
+    {
+      "id": "R2",
+      "minimumEvidenceRequirement": "Carrier timeout path, synchronous execution, real mitigations",
+      "discriminator": "source_read",
+      "originalSourceObservation": {
+        "observedToolInvocations": 120,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "fetch_web_content",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 25,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "read_files",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "EQUIVALENT",
+      "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "comparabilityJudgment": "EQUIVALENT",
+      "status": "EQUIVALENT",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ]
+    },
+    {
+      "id": "R3",
+      "minimumEvidenceRequirement": "DB pool invariant and enforcement/absence evidence",
+      "discriminator": "source_read",
+      "originalSourceObservation": {
+        "observedToolInvocations": 25,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 2,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "run_commands"
+        ]
+      },
+      "equivalentVerificationOccurred": "EQUIVALENT",
+      "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "comparabilityJudgment": "EQUIVALENT",
+      "status": "EQUIVALENT",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ]
+    },
+    {
+      "id": "R4",
+      "minimumEvidenceRequirement": "Actual build/start paths and persisted build settings",
+      "discriminator": "source_read",
+      "originalSourceObservation": {
+        "observedToolInvocations": 37,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "read_files",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 11,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "read_files",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "EQUIVALENT",
+      "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "comparabilityJudgment": "EQUIVALENT",
+      "status": "EQUIVALENT",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ]
+    },
+    {
+      "id": "R5",
+      "minimumEvidenceRequirement": "Exact six index identifiers reconciled with source artifacts",
+      "discriminator": "exact_identifier_reconciliation",
+      "originalSourceObservation": {
+        "observedToolInvocations": 50,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "fetch_web_content",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 12,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "EQUIVALENT",
+      "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
+      "missingOrWeakerVerification": "none: every one of the six identifiers appears in BOTH runs' observed tool evidence AND in a tracked source artifact",
+      "comparabilityJudgment": "EQUIVALENT",
+      "status": "EQUIVALENT",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ],
+      "reconciledIdentifiers": [
+        {
+          "identifier": "idx_pm_token_code_realm_ip_type_created_at_inc_id",
+          "originalRunOccurrences": 7,
+          "newRunOccurrences": 3,
+          "trackedSourceArtifacts": [
+            "pg-index-diff-20260624T070800Z/db1.indexes.csv",
+            "pg-index-diff-20260624T070800Z/db1.indexes.sql",
+            "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
+          ],
+          "reconciled": true
+        },
+        {
+          "identifier": "idx_pmtc_lookup_recent_unconfirmed_sms",
+          "originalRunOccurrences": 8,
+          "newRunOccurrences": 3,
+          "trackedSourceArtifacts": [
+            "pg-index-diff-20260624T070800Z/db1.indexes.csv",
+            "pg-index-diff-20260624T070800Z/db1.indexes.sql",
+            "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
+          ],
+          "reconciled": true
+        },
+        {
+          "identifier": "idx_pmtc_lookup_recent_unconfirmed_sms_exp",
+          "originalRunOccurrences": 7,
+          "newRunOccurrences": 2,
+          "trackedSourceArtifacts": [
+            "pg-index-diff-20260624T070800Z/db1.indexes.csv",
+            "pg-index-diff-20260624T070800Z/db1.indexes.sql",
+            "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
+          ],
+          "reconciled": true
+        },
+        {
+          "identifier": "idx_user_attribute_name_lower_value",
+          "originalRunOccurrences": 7,
+          "newRunOccurrences": 3,
+          "trackedSourceArtifacts": [
+            "pg-index-diff-20260624T070800Z/db1.indexes.csv",
+            "pg-index-diff-20260624T070800Z/db1.indexes.sql",
+            "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
+          ],
+          "reconciled": true
+        },
+        {
+          "identifier": "idx_user_entity_realm_email",
+          "originalRunOccurrences": 7,
+          "newRunOccurrences": 4,
+          "trackedSourceArtifacts": [
+            "pg-index-diff-20260624T070800Z/db1.indexes.csv",
+            "pg-index-diff-20260624T070800Z/db1.indexes.sql",
+            "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
+          ],
+          "reconciled": true
+        },
+        {
+          "identifier": "idx_user_entity_realm_email_cover",
+          "originalRunOccurrences": 7,
+          "newRunOccurrences": 2,
+          "trackedSourceArtifacts": [
+            "pg-index-diff-20260624T070800Z/db1.indexes.csv",
+            "pg-index-diff-20260624T070800Z/db1.indexes.sql",
+            "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
+          ],
+          "reconciled": true
+        }
+      ]
+    },
+    {
+      "id": "R6",
+      "minimumEvidenceRequirement": "Repository retention paths and explicit external-state unknown",
+      "discriminator": "source_read",
+      "originalSourceObservation": {
+        "observedToolInvocations": 18,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 3,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "EQUIVALENT",
+      "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "comparabilityJudgment": "EQUIVALENT",
+      "status": "EQUIVALENT",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ]
+    },
+    {
+      "id": "R7",
+      "minimumEvidenceRequirement": "Maven/CI execution evidence for Java tests",
+      "discriminator": "source_read",
+      "originalSourceObservation": {
+        "observedToolInvocations": 29,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 8,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "EQUIVALENT",
+      "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "comparabilityJudgment": "EQUIVALENT",
+      "status": "EQUIVALENT",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ]
+    },
+    {
+      "id": "R8",
+      "minimumEvidenceRequirement": "Committed secret exposure, without credential validation",
+      "discriminator": "source_read",
+      "originalSourceObservation": {
+        "observedToolInvocations": 39,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "fetch_web_content",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 8,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "EQUIVALENT",
+      "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "comparabilityJudgment": "EQUIVALENT",
+      "status": "EQUIVALENT",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ]
+    },
+    {
+      "id": "R9",
+      "minimumEvidenceRequirement": "Effective chart security defaults and NetworkPolicy/PDB coverage",
+      "discriminator": "offline_helm_render",
+      "originalSourceObservation": {
+        "observedToolInvocations": 40,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 8,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "fetch_web_content",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "STRONGER",
+      "findingFaithfullyRepresentsEvidence": "STRONGER",
+      "missingOrWeakerVerification": "the render pins a placeholder digest; the SERVED image digest is a pipeline-time value that the offline render cannot observe",
+      "comparabilityJudgment": "STRONGER",
+      "status": "STRONGER",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ],
+      "offlineRenderReceipt": {
+        "renderSha256": "eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65",
+        "renderBytes": 17879,
+        "images": [
+          "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "kinds": {
+          "ConfigMap": 1,
+          "ExternalSecret": 2,
+          "Ingress": 2,
+          "SecretStore": 1,
+          "Service": 2,
+          "ServiceAccount": 1,
+          "ServiceMonitor": 1,
+          "StatefulSet": 1
+        },
+        "podDisruptionBudgetCount": 0,
+        "networkPolicyCount": 0,
+        "hookCount": 2,
+        "securityContextCount": 2
+      },
+      "effectiveRender": {
+        "chartVersion": "keycloak-roz 7.0.1 (dep keycloakx 7.0.1, appVersion 26.3.1)",
+        "chartSourceSha": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+        "images": [
+          "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "podDisruptionBudgetCount": 0,
+        "networkPolicyCount": 0,
+        "hookCount": 2
+      }
+    },
+    {
+      "id": "R10",
+      "minimumEvidenceRequirement": "Actual hook semantics, rollback behavior and watcher implementation",
+      "discriminator": "offline_helm_render",
+      "originalSourceObservation": {
+        "observedToolInvocations": 46,
+        "totalToolInvocations": 209,
+        "toolsUsed": [
+          "fetch_web_content",
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "newSourceObservation": {
+        "observedToolInvocations": 11,
+        "totalToolInvocations": 48,
+        "toolsUsed": [
+          "run_commands",
+          "submit_and_exit"
+        ]
+      },
+      "equivalentVerificationOccurred": "STRONGER",
+      "findingFaithfullyRepresentsEvidence": "STRONGER",
+      "missingOrWeakerVerification": "the render pins a placeholder digest; the SERVED image digest is a pipeline-time value that the offline render cannot observe",
+      "comparabilityJudgment": "STRONGER",
+      "status": "STRONGER",
+      "evidenceReferences": [
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794702518894_gui73",
+          "messagesSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88"
+        },
+        {
+          "kind": "session_transcript",
+          "sessionId": "1794780088950_tc1vx",
+          "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
+        }
+      ],
+      "offlineRenderReceipt": {
+        "renderSha256": "eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65",
+        "renderBytes": 17879,
+        "images": [
+          "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "kinds": {
+          "ConfigMap": 1,
+          "ExternalSecret": 2,
+          "Ingress": 2,
+          "SecretStore": 1,
+          "Service": 2,
+          "ServiceAccount": 1,
+          "ServiceMonitor": 1,
+          "StatefulSet": 1
+        },
+        "podDisruptionBudgetCount": 0,
+        "networkPolicyCount": 0,
+        "hookCount": 2,
+        "securityContextCount": 2
+      },
+      "effectiveRender": {
+        "chartVersion": "keycloak-roz 7.0.1 (dep keycloakx 7.0.1, appVersion 26.3.1)",
+        "chartSourceSha": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+        "images": [
+          "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "podDisruptionBudgetCount": 0,
+        "networkPolicyCount": 0,
+        "hookCount": 2
+      }
+    }
+  ]
+}
