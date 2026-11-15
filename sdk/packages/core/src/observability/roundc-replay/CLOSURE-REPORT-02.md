@@ -150,7 +150,7 @@ operation was performed.
 |---|---|
 | Final branch | `act/clinemm-roundc-harness-02` |
 | CORRECTION02 code HEAD | `0656358c6729a045e345bc4b3a8a41bb2c532fb9` |
-| Final HEAD | `3b08b6dc8` (adds the P2 comment correction; the CORRECTION02 *code* is unchanged) |
+| Final HEAD | the tip of `act/clinemm-roundc-harness-02` at closure. The last commit that changes **executable** code is `0656358c6` (CORRECTION02); the commits after it are documentation only (`3b08b6dc8` corrects the stage-duration comments, `386723026` binds this report). Binding the report to a hash it contains is circular, so the *code* HEAD is bound instead |
 | Working tree at closure | clean |
 | Pre-existing stash | preserved, untouched (`stash@{0}`) |
 
