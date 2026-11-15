@@ -41,6 +41,7 @@ import {
 	buildAutomaticIncidentExportBundle,
 	writeAutomaticIncidentZip,
 } from "./automatic-incident-export"
+import { joinAutomaticIncidentExportSources } from "./automatic-incident-export-sources"
 import {
 	type AutomaticIncidentPersistenceContext,
 	automaticIncidentDirectory,
@@ -167,10 +168,50 @@ export async function prepareAutomaticIncidentExport(input: {
 		// store that holds no records for the incident's blocking jobs
 		// yields `UNAVAILABLE_FROM_TRACE`.
 		const containmentProvenance = readContainmentProvenanceForBlockingJobs(incident.blockingJobIds)
+		// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01 (AICE01):
+		// the OWNER-SCOPED SOURCE JOIN.
+		//
+		// The predecessor (ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01)
+		// proved from source that this call site passed NEITHER
+		// `phaseWriters` NOR `continuationSummary`, so the exported
+		// `phase-writers.jsonl` was ALWAYS empty and the exported
+		// `continuation-summary.json` was ALWAYS the same constant
+		// `unavailable` object — regardless of what the host had
+		// actually observed.
+		//
+		// The join reads the EXISTING host-realm diagnostic rings
+		// (TSWPD / CCARD / BCAPT). It adds NO recorder, NO protocol,
+		// NO public API and NO MCP operation, and it scopes every
+		// record to the incident's EXACT identity so a foreign owner
+		// or a stale epoch can never leak into the report.
+		//
+		// Every source reports an EXPLICIT availability with a reason:
+		// an empty collection is NEVER presented as a complete capture.
+		const sources = joinAutomaticIncidentExportSources(incident)
 		const bundle = buildAutomaticIncidentExportBundle({
 			incident,
 			buildIdentity: input.buildIdentity,
 			containmentProvenance,
+			phaseWriters: sources.phaseWriters,
+			continuationSummary: sources.continuationSummary,
+			sourceAvailability: {
+				"phase-writers.jsonl": sources.phaseWriterStatus,
+				"continuation-summary.json": {
+					availability: sources.continuationSummary.status,
+					reason: sources.continuationSummary.reason,
+					recordCount: sources.continuationSummary.status === "available" ? 1 : 0,
+				},
+				"reconciliation-timeline.jsonl": {
+					availability: sources.reconciliationAvailability === "available" ? "available" : "unavailable",
+					reason:
+						sources.reconciliationAvailability === "available"
+							? undefined
+							: sources.reconciliationAvailability === "unknown"
+								? "unknown"
+								: sources.reconciliationAvailability,
+					recordCount: incident.reconciliationTimeline.length,
+				},
+			},
 		})
 		return { ok: true, incident, bundle, candidates, persisted }
 	} catch (err) {

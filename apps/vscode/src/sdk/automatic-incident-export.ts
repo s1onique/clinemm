@@ -387,6 +387,30 @@ destination the user chose.
 `
 
 /**
+ * The EXPLICIT availability of ONE export source.
+ *
+ * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01 (AICE01):
+ *
+ * The manifest's `sources` block used to derive its status from
+ * `file.contents.trim().length > 0`. That is UNTRUTHFUL for every
+ * source whose file legitimately carries a non-empty "unavailable"
+ * envelope (for example `continuation-summary.json`, whose default is
+ * a non-empty JSON object). A member could therefore be reported as
+ * `available` while carrying NO evidence at all.
+ *
+ * The caller now states the availability EXPLICITLY. When it does not,
+ * the builder falls back to the content-length heuristic, so the
+ * pre-existing behaviour is preserved for every other call site.
+ */
+export interface AutomaticIncidentExportSourceAvailabilityEntry {
+	readonly availability: "available" | "unavailable"
+	/** WHY the source is unavailable. NEVER a claim that nothing happened. */
+	readonly reason?: string
+	/** How many joined records the source carries. */
+	readonly recordCount?: number
+}
+
+/**
  * Build the privacy-safe export bundle for ONE incident.
  */
 export function buildAutomaticIncidentExportBundle(input: {
@@ -395,6 +419,12 @@ export function buildAutomaticIncidentExportBundle(input: {
 	readonly containmentProvenance?: unknown
 	readonly phaseWriters?: readonly unknown[]
 	readonly continuationSummary?: unknown
+	/**
+	 * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01 (AICE01): the
+	 * EXPLICIT availability of each source. The manifest's `sources`
+	 * block uses this instead of guessing from the file's byte length.
+	 */
+	readonly sourceAvailability?: Readonly<Record<string, AutomaticIncidentExportSourceAvailabilityEntry>>
 }): AutomaticIncidentExportBundle {
 	const { incident } = input
 	const omissions: string[] = []
@@ -494,10 +524,20 @@ export function buildAutomaticIncidentExportBundle(input: {
 			selfDigestPublishedOutOfBand: true,
 			memberCount: files.length + 1,
 		},
-		sources: files.map((file) => ({
-			file: file.path,
-			status: file.contents.trim().length > 0 ? "available" : "unavailable",
-		})),
+		sources: files.map((file) => {
+			// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01 (AICE01):
+			// the EXPLICIT availability wins over the content-length
+			// heuristic. The heuristic is only a fallback for callers
+			// that do not state the availability.
+			const declared = input.sourceAvailability?.[file.path]
+			const status = declared?.availability ?? (file.contents.trim().length > 0 ? "available" : "unavailable")
+			return {
+				file: file.path,
+				status,
+				...(declared?.reason !== undefined ? { availabilityReason: declared.reason } : {}),
+				...(declared?.recordCount !== undefined ? { recordCount: declared.recordCount } : {}),
+			}
+		}),
 		loss: incident.loss,
 		omissions,
 		privacy: {

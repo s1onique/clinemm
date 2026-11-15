@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "act": "ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01",
+  "entryHead": "14a979cd1b8fb23dbe8a1348af4495eaf36984b8",
+  "subjectHead": "14a979cd1b8fb23dbe8a1348af4495eaf36984b8",
+  "branch": "main",
+  "predecessorCommit": "14a979cd1b8fb23dbe8a1348af4495eaf36984b8",
+  "predecessorReachable": true,
+  "treeCleanAtEntry": true,
+  "statusPorcelainV1AtEntry": "",
+  "stashesPreserved": [
+    "stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration"
+  ],
+  "worktreesPreserved": 5,
+  "liveInstanceModified": false,
+  "signalsSent": 0,
+  "pushPerformed": false,
+  "vsixDeployed": false,
+  "releasePerformed": false,
+  "bundleProduced": false,
+  "files": [
+    {
+      "path": "apps/vscode/src/sdk/automatic-incident-export-sources.ts",
+      "bytes": 13534,
+      "sha256": "abc802e487890f700881044f709a8d701a1b727c265ecde12e8a4b2cf9409ddc"
+    },
+    {
+      "path": "apps/vscode/src/sdk/automatic-incident-export-runtime.ts",
+      "bytes": 15252,
+      "sha256": "2fc933cfe14b57424cd7d7ce00b59107769a4789949109e1ff29def6cc96cc45"
+    },
+    {
+      "path": "apps/vscode/src/sdk/automatic-incident-export.ts",
+      "bytes": 19873,
+      "sha256": "2ca4389aa07c8ea3b7a5890fd18f98282822a045ba7e13b69aeefbb64b3387a1"
+    },
+    {
+      "path": "apps/vscode/src/sdk/__tests__/automatic-incident-export-gap01.aice01.test.ts",
+      "bytes": 22878,
+      "sha256": "a027476a6ee624592230f7a812739ffb9bd6bfe5f5c114a6c221fc886fa45133"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/RECON.md",
+      "bytes": 10117,
+      "sha256": "a6656112903d6bbf25a5b5d99b76e36af4caf2539d42275fabc6599a3f2dec76"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/RED-GREEN.md",
+      "bytes": 5346,
+      "sha256": "697daf0fb99d150d320783edd960464e25f93cf92c66ce3436c97d9d4b50546d"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/GATES.md",
+      "bytes": 7519,
+      "sha256": "82adbfbb55305d0e8c86975660f213d04c56b31d9c6a7b9bf8dd13b7da2a5f9e"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/VERDICT.md",
+      "bytes": 7274,
+      "sha256": "3b8b5158f7c27b8d9db90dab335c6b7d997a7aab72b9dd6e773fba1303367cd4"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01/VERDICT.md",
+      "bytes": 21989,
+      "sha256": "a40e5232f2215a8af380cf4b36628e3606f8abd0b5c62f1ccc240f579ca91f8b"
+    }
+  ]
+}

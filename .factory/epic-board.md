@@ -33360,3 +33360,124 @@ the timeline still empty or `reconciliation_exhausted` for a job whose group is
 verified `gone` would implicate the reconciliation producer itself
 (`runContainmentReconciliationTick` / `applyContainmentReconciliation`) rather
 than the export path.
+
+# ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01 — PASS_EVIDENCE_EXPORT_REPAIRED — 2026-11-15
+
+**Scope.** Repair automatic incident evidence EXPORT. NOT process containment
+and NOT completion policy. One bounded correction to the predecessor's evidence
+claims, then a focused RED -> GREEN repair of the existing export wiring and
+the diagnostics availability classification.
+
+## Identity and conservation
+
+`ENTRY_HEAD = SUBJECT_HEAD = 14a979cd1b8fb23dbe8a1348af4495eaf36984b8`;
+branch `main`. Remote `origin git@github.com:s1onique/clinemm.git`. Entry tree
+CLEAN — no `HALT_UNEXPECTED_TRACKED_DIRT`. The reported predecessor commit was
+VERIFIED reachable (`git cat-file -t` -> `commit`; `git merge-base --is-ancestor`
+-> exit 0) and was, in fact, this ACT's ENTRY_HEAD. The protected stash
+(`stash@{0}: WIP on main: d46223b51 ...`) and all 5 worktrees were preserved.
+
+**No signal was sent**, no process was signalled, and the operator's live
+VSCodium instance was NOT changed, restarted or re-instrumented. No push, no
+VSIX deployment, no release, no install. The MCP registry, the public API, the
+proto surface, the signals, the termination/cleanup policy, the reconciliation
+horizon, the process-group ownership, the C10 blocking logic and the completion
+suppression are all UNTOUCHED.
+
+## The corrected evidence claims
+
+An ADDENDUM was APPENDED to
+`.factory/evidence/ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01/VERDICT.md`; no
+observed raw fact was rewritten. The five bounded corrections: (1)
+`process.kill(-pgid, 0)` rc=0 establishes group existence AT THE OBSERVED
+INSTANT ONLY — not ownership, not birth identity, not later survival; (2) a
+spawn->failure interval exceeding `TERM_GRACE_MS` does NOT independently prove
+SIGTERM/SIGKILL delivery — the signal attempt and its result were unobserved;
+(3) a controlled D3 event with a disarmed sink does NOT prove that either
+historical job registered or completed reconciliation; (4) D2 proves a
+MANAGER-level reconciliation event in its harness and does NOT establish
+end-to-end C10 clearing absent a correlated controller/C10 assertion; (5) at the
+later C10 reevaluation the state is CACHED, so whether the original group had
+gone after the bounded reconciliation horizon is `UNAVAILABLE_FROM_TRACE`. The
+historical installed artifact
+(`48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5`) remains
+`HISTORICAL_RUNTIME_SOURCE_UNBOUND` to any SOURCE_HEAD.
+
+The predecessor's LEGITIMATE observation is PRESERVED: the persisted alive
+postcondition and the retained `containment_failed` states explain the INITIAL
+fail-closed hold; the historical reason for the persistence until the later
+hold is NOT fully observed.
+
+## The defect and the repair
+
+The defect was a structural MISSING_PRODUCER AT THE EXPORT CALL SITE, not a
+missing producer in the system. The ONE production export call
+(`apps/vscode/src/sdk/automatic-incident-export-runtime.ts`) passed NEITHER
+`phaseWriters` NOR `continuationSummary`, so `phase-writers.jsonl` was ALWAYS
+empty and `continuation-summary.json` was ALWAYS the same constant
+`unavailable` object.
+
+C1 confirmed the realm question by READING the producer sites rather than
+assuming: TSWPD (stamped by `TurnStateTracker.setWithWriter`), CCARD, BCAPT and
+the reconciliation sink are ALL extension-host realm. The webview / React realm
+never produces these records, so the host getter sees exactly what the
+production seams wrote. A CANONICAL owner-scoped continuation authority WAS
+found (the CCARD ring, with the BCAPT ring as the secondary authority); no
+summary was invented and no protocol was added.
+
+A second, independent defect was found and fixed: the manifest's `sources`
+block derived a member's status from the member's BYTE LENGTH, so
+`continuation-summary.json` was reported `available` while carrying NO
+evidence. The availability is now explicit and truthful.
+
+Changed files:
+
+- `apps/vscode/src/sdk/automatic-incident-export-sources.ts` (NEW) — the
+  owner-scoped source join over the EXISTING host rings. No new recorder, no
+  recorder call site, no protocol, no public API, no MCP operation.
+- `apps/vscode/src/sdk/automatic-incident-export-runtime.ts` — the one
+  production export call site now passes the joined sources and the explicit
+  availability map.
+- `apps/vscode/src/sdk/automatic-incident-export.ts` — the builder accepts the
+  explicit `sourceAvailability`; the manifest's `sources` block uses it and
+  falls back to the old heuristic for callers that do not state it.
+
+## Executable evidence
+
+- G1 new RED -> GREEN suite: RED **exit 1** (`6 failed / 8 passed (14)`) ->
+  GREEN **exit 0** (`14 passed (14)`), via the REAL export path
+  (`prepareAutomaticIncidentExport` -> `writeAutomaticIncidentZip` ->
+  DECOMPRESSED archive), NOT via synthetic `buildAutomaticIncidentExportBundle`
+  arguments.
+- G2 the existing `automatic-incident-*` aice01 suites: **exit 0** —
+  `60 passed (60)` across 5 files.
+- G3 the reconciliation / containment / phase-authority conservation sweep:
+  **exit 1** — `1 failed / 67 passed (68)`. The single failure
+  (`BCAPT-CMD.2.1`) is a **PROVEN PRE-EXISTING** registry source-text guard:
+  it reproduces at the clean ENTRY_HEAD with this ACT's changes stashed. The
+  same class of pre-existing failure (`CMD02.1`) exists in
+  `turn-state-writer-provenance.wprov.test.ts`. Neither touches the export,
+  incident, containment or phase-authority path; they are the PRE-EXISTING
+  BASELINE, recorded and NOT fixed (out of this ACT's bounded scope).
+- G4 `tsc --noEmit`: **exit 0**, 0 diagnostics.
+- G5 Biome lint + format on the changed files: **exit 0** / **exit 0**.
+- G6 hygiene: no global env or sink mutation without restoration; temporary
+  folders isolated and cleaned; no intentionally failing test in the default
+  suite; no repository-wide run.
+- G7 **NOT_EXECUTED**: installed-extension qualification, live-VSCodium export
+  against the operator's running instance, historical installed artifact
+  re-verification. **No live claim is made** — the repair is verified by tests
+  and structural probes only.
+
+## What this ACT does NOT establish
+
+The past incident remains `HISTORICAL_RECONCILIATION_UNOBSERVED`. The
+historical installed artifact remains `HISTORICAL_RUNTIME_SOURCE_UNBOUND` to
+any SOURCE_HEAD. The repair does NOT arm the diagnostic sinks by default — the
+existing sanctioned opt-in / dogfood arming remains the way to obtain a fuller
+future incident, and without it the members stay EXPLICITLY unavailable
+(`not_armed`), which is the correct honest outcome. This ACT does NOT close a
+containment or completion-behaviour repair.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/`
+  RECON.md, RED-GREEN.md, GATES.md, VERDICT.md, MANIFEST.json

@@ -269,3 +269,153 @@ observe, and the groups are now provably gone.
 - The incident's extension host (PID 47602) is still running the incident's
   bundle. Any follow-up that needs a live run must use a **separate disposable
   profile**, never this instance.
+
+---
+
+# ADDENDUM — ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01
+
+**This addendum APPENDS a bounded correction to the predecessor's verdict.
+It does NOT rewrite any observed raw fact above.** The raw observations,
+the trace, and the recorded timestamps above remain exactly as observed.
+Only the INTERPRETATIONS that overreach those observations are corrected
+here, as the successor ACT requires.
+
+Appended at ENTRY_HEAD `14a979cd1b8fb23dbe8a1348af4495eaf36984b8`
+(branch `main`), tree clean at entry.
+
+## A0. What remains LEGITIMATE
+
+The predecessor's central observation SURVIVES this correction and is
+retained in full:
+
+- The persisted **alive** postcondition and the **retained**
+  `containment_failed` terminal states explain the INITIAL fail-closed
+  hold. The containment gate held CORRECTLY on a genuine survivor.
+- The **historical reason for the persistence of the hold until the
+  later hold is NOT fully observed**. That gap is unchanged by this
+  ACT.
+
+## A1. The corrected interpretations (five bounded corrections)
+
+### A1.1 `process.kill(-pgid, 0)` returning rc=0
+
+**Overreaching claim (§1, §4):** the rc=0 result is "only producible by
+`process.kill(-pgid, 0)` returning rc=0 — the probe was permitted and
+the kernel reported the process group as *existing*", used to support a
+survival conclusion.
+
+**Correction:** a successful `process.kill(-pgid, 0)` establishes **group
+existence at the observed instant ONLY**. It does **NOT** establish
+ownership, does **NOT** establish birth identity, and does **NOT**
+establish survival at any later instant. The numeric PGID is not an
+identity carrier across time: PID/PGID reuse means the same number may
+later designate an unrelated group (the predecessor itself observed
+exactly this at ACT time — the recorded leaders 9667 / 13450 were absent
+and their numeric PGIDs were occupied by unrelated `bun /tmp/seam-host.ts`
+processes, with `kill -0` returning EPERM).
+
+**Consequence for the verdict:** the archive's `postcondition: "alive"`
+is an OBSERVED INSTANT-FACT about the probe's result. It is not proof
+that the original group continued to exist beyond that instant.
+
+### A1.2 The spawn->failure interval exceeding `TERM_GRACE_MS`
+
+**Overreaching claim (§1):** "the measured spawn->failure intervals
+(8.761 s and 6.064 s) both **exceed** the production 5 000 ms
+`TERM_GRACE_MS`, so a full SIGTERM->grace->SIGKILL sequence had already
+run and the group was still there".
+
+**Correction:** a spawn->failure interval that exceeds `TERM_GRACE_MS`
+does **NOT** independently prove that SIGTERM and SIGKILL were
+**delivered**. The elapsed interval is consistent with a full sequence
+having run, but the signal **attempt** and its **result** were
+**UNOBSERVED** — the predecessor's own coverage table records
+`signal attempt (target/signal/result)` as `UNAVAILABLE_FROM_TRACE`
+("not persisted"). An interval cannot substitute for the observation of
+the attempt and its result.
+
+**Consequence for the verdict:** the "a full SIGTERM->grace->SIGKILL
+sequence had already run" clause is withdrawn as an unbacked inference.
+The observed interval and the observed `alive` postcondition remain.
+
+### A1.3 The D3 disarmed-sink event
+
+**Overreaching claim (§1):** "the owning producer still registers and
+still publishes the `command_job_containment_reconciled` lifecycle event
+with the diagnostic sink disarmed (executed, D3)".
+
+**Correction:** a controlled D3 event with a **DISARMED** sink proves
+only that the lifecycle event is produced **in that controlled D3
+harness**. It does **NOT** prove that **either historical job**
+registered a reconciliation, nor that either historical job completed
+reconciliation. D3 is a synthetic-real discriminator over an injected
+probe; it is not evidence about the two historical jobs
+`cmd_mwh14ea1zuxmau36` / `cmd_mwh15l67vap32h26`.
+
+**Consequence for the verdict:** the historical jobs' reconciliation
+registration and completion remain **HISTORICAL_RECONCILIATION_UNOBSERVED**.
+
+### A1.4 The D2 manager-level event
+
+**Overreaching claim (§1):** "a group that exits inside the bounded
+reconciliation horizon **is** reconciled and the C10 blocking set
+**does** drain (executed, D2)".
+
+**Correction:** D2 proves a **manager-level** reconciliation event
+**in its harness**. It does **NOT** establish end-to-end **C10 clearing**
+unless a correlated **controller / C10 assertion** exists for the same
+observation. D2's evidence is the manager's own reconciliation path; the
+C10 blocking-set drain is a separate, downstream authority and was not
+correlated with D2's assertion.
+
+**Consequence for the verdict:** D2 supports the manager-level
+reconciliation claim only. Any end-to-end C10-clearing claim requires a
+correlated controller/C10 assertion, which the predecessor did not
+record.
+
+### A1.5 The later C10 reevaluation
+
+**Correction:** at the later C10 reevaluation
+(`23:38:36.078Z`, `remainingBlockingJobCount=2`), the state is
+**CACHED**. Whether the ORIGINAL group had gone after the bounded
+reconciliation horizon is **UNAVAILABLE_FROM_TRACE**. The cached
+`remainingBlockingJobCount=2` cannot be read back as a fresh liveness
+probe of the original group, and it cannot be read as proof of
+survival either.
+
+### A1.6 The installed-artifact-to-SOURCE_HEAD binding
+
+**Status: UNCHANGED and RE-AFFIRMED — `HISTORICAL_RUNTIME_SOURCE_UNBOUND`.**
+The historical installed extension's artifact SHA-256 was
+`48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5`.
+Its source HEAD remains **HISTORICAL_RUNTIME_SOURCE_UNBOUND**: the
+build-identity recorded `provenanceVerification: "UNOBSERVED"` with the
+note "no build provenance artifact was present". The hash identifies the
+**ARTIFACT**, not the **SOURCE TREE**. The working-tree source at any
+commit therefore does **NOT** conclusively describe the historical
+binary's internals.
+
+## A2. The net effect on the predecessor's verdict
+
+The predecessor's verdict `PASS_CAPTURE_DECISIVE` is **NOT** withdrawn:
+its load-bearing conclusion — that the containment gate held CORRECTLY
+on a genuine survivor, and that the empty `reconciliation-timeline.jsonl`
+is a DEFAULT-OFF diagnostic-sink gap rather than proof that reconciliation
+never ran — is unaffected by these corrections, and the
+**MISSING_PRODUCER (observation)** finding for the reconciliation sink
+is strengthened by them.
+
+What IS withdrawn is any **end-to-end historical** claim about the two
+historical jobs' reconciliation registration, their signal delivery, the
+survival of their process groups beyond the observed probe instant, or
+the end-to-end C10 clearing. Those remain
+**HISTORICAL_RECONCILIATION_UNOBSERVED** / **UNAVAILABLE_FROM_TRACE**.
+
+## A3. Scope of this addendum
+
+This addendum corrects EVIDENCE CLAIMS ONLY. It does **not** alter any
+signal, termination or cleanup policy, reconciliation horizon, process
+group ownership, C10 blocking logic, completion suppression, public
+API, proto or MCP registry. It does **not** close a containment or
+completion-behaviour repair. The past incident remains
+**HISTORICAL_RECONCILIATION_UNOBSERVED**.
