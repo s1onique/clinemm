@@ -5,7 +5,7 @@
 **Subject HEAD (entry):** `b0b18da6cef7f118661c64b26fe539ddeb985e6f`
 **Bound HEAD (implementation):** `90a153321e4d66eddb4197cb41667f81e6df6865`
 (`fix(roundc-trace): bound the compaction span to real compaction work`)
-**Evidence/artifacts commit:** `4ac6344db667f2906bff6c53a990399a94114e26`
+**Evidence/artifacts commit:** `cc921af7f415f27610a71910cdbe51ec30b12776`
 (`docs(roundc-trace): add the QUAL01 qualification report, crosswalk and receipts`)
 **Branch:** `main` (not pushed)
 **Date:** 2026-11-16
@@ -723,7 +723,12 @@ The report is bound to the ACT's implementation HEAD:
 | Commit | Subject |
 |---|---|
 | `90a153321e4d66eddb4197cb41667f81e6df6865` | `fix(roundc-trace): bound the compaction span to real compaction work` |
-| `4ac6344db667f2906bff6c53a990399a94114e26` | `docs(roundc-trace): add the QUAL01 qualification report, crosswalk and receipts` |
+| `cc921af7f415f27610a71910cdbe51ec30b12776` | `docs(roundc-trace): add the QUAL01 qualification report, crosswalk and receipts` |
+
+> The evidence commit's SHA is stated here for the reader's convenience; if
+> the commit was amended after this line was written, resolve the current
+> value with `git log --format=%H -2` — the **implementation** commit
+> (`90a153321…`) is the load-bearing one and is never amended.
 
 The full commit receipt (with the final tree status and the conservation
 statement) is `10-closure-commits.txt`.
