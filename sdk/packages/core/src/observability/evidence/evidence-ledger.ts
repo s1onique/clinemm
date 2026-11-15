@@ -43,6 +43,33 @@
  * It never records a credential, a secret, a file's content, a command's
  * arguments or a command's output. An observation carries a SOURCE
  * HASH of the content it describes, never the content itself.
+ *
+ * ## The trust model
+ *
+ * The ledger is TAMPER-EVIDENT, not AUTHENTICATED.
+ *
+ * The chain digest binds the COMPLETE canonical form of every
+ * observation, so any edit to any field of any entry is detectable, and
+ * the observation id is re-derived during verification so an entry cannot
+ * claim an identity its content does not support.
+ *
+ * That establishes CONSISTENCY: the ledger says what it says, and it
+ * says the same thing every time it is checked.
+ *
+ * It does NOT establish AUTHENTICATION. An attacker who can rewrite the
+ * ledger can also recompute every digest, producing a ledger that
+ * verifies perfectly. The defence is the EXTERNAL ANCHOR: the ledger
+ * publishes its digest and entry count at seal time, and that anchor
+ * must be held somewhere the attacker cannot reach — a signed commit, an
+ * append-only log, a separate system. The anchor is what turns
+ * "self-consistent" into "consistent with a trusted record".
+ *
+ * Consequently:
+ *
+ *   - hash chaining detects EDITS and MID-CHAIN REMOVALS on its own;
+ *   - TAIL TRUNCATION requires the anchor;
+ *   - a FULLY RE-FORGED LEDGER requires the anchor, and is
+ *     undetectable if the anchor is also replaced.
  */
 
 import { createHash } from "node:crypto";
@@ -183,25 +210,131 @@ export function digestEvidenceContent(content: string): string {
 }
 
 /**
+ * Canonicalize a value for hashing.
+ *
+ * The canonical form is DETERMINISTIC: keys are emitted in sorted order
+ * at every level, `undefined` fields are omitted entirely, and absent
+ * fields are distinguishable from fields set to `undefined` (they are
+ * simply not there). Two observations that differ in ANY field therefore
+ * produce different canonical strings, and two observations that agree in
+ * every field produce identical strings.
+ *
+ * This is what makes the entry digest bind EVERY field rather than a
+ * hand-picked subset: the digest covers the whole canonical form, so a
+ * field cannot be added to the observation later without changing the
+ * digest.
+ */
+export function canonicalizeEvidenceValue(value: unknown): string {
+	if (value === null) {
+		return "null";
+	}
+	if (value === undefined) {
+		return "undefined";
+	}
+	if (Array.isArray(value)) {
+		return `[${value.map(canonicalizeEvidenceValue).join(",")}]`;
+	}
+	if (typeof value === "object") {
+		const record = value as Record<string, unknown>;
+		const keys = Object.keys(record)
+			.filter((key) => record[key] !== undefined)
+			.sort();
+		return `{${keys
+			.map(
+				(key) =>
+					`${JSON.stringify(key)}:${canonicalizeEvidenceValue(record[key])}`,
+			)
+			.join(",")}}`;
+	}
+	if (typeof value === "number") {
+		// `NaN` and the infinities are not JSON values; represent them
+		// explicitly so they cannot collide with a real number.
+		if (Number.isNaN(value)) {
+			return '"NaN"';
+		}
+		if (value === Number.POSITIVE_INFINITY) {
+			return '"Infinity"';
+		}
+		if (value === Number.NEGATIVE_INFINITY) {
+			return '"-Infinity"';
+		}
+		return String(value);
+	}
+	return JSON.stringify(value);
+}
+
+/**
+ * The canonical serialization of a COMPLETE observation.
+ *
+ * Every field of the observation is included — the kind, every source
+ * field, the verification state, every finding reference, the HEAD, the
+ * capture timestamp and the label. The observation id is EXCLUDED,
+ * because it is DERIVED from these fields: including it would make the
+ * derivation circular.
+ */
+export function canonicalizeEvidenceObservation(
+	observation: EvidenceObservation,
+): string {
+	return canonicalizeEvidenceValue({
+		kind: observation.kind,
+		source: {
+			toolCallId: observation.source.toolCallId,
+			messageId: observation.source.messageId,
+			subject: observation.source.subject,
+			sourceHash: observation.source.sourceHash,
+			sourceBytes: observation.source.sourceBytes,
+		},
+		verification: observation.verification,
+		findingRefs: [...observation.findingRefs].sort(),
+		head: observation.head,
+		capturedAtIso: observation.capturedAtIso,
+		label: observation.label,
+	});
+}
+
+/**
  * Derive an observation's stable id.
  *
- * The id is derived from the observation's identity — its kind, its
- * source hash, its HEAD and its finding references — so that recording
- * the same observation twice yields the same id, and a DIFFERENT
- * observation can never collide with it.
+ * The id is derived from the observation's IDENTITY — the fields that
+ * make it the same observation rather than a different one. It covers
+ * the kind, the source's identifying fields, the verification state, the
+ * finding references, the HEAD and the capture timestamp.
+ *
+ * ## Why the timestamp is included
+ *
+ * Two observations of the same source at different times are DIFFERENT
+ * observations. Binding the timestamp means the id distinguishes them,
+ * and it means a timestamp cannot be changed without the id changing
+ * with it.
+ *
+ * ## What is NOT included
+ *
+ * The `label` is excluded. It is a human-facing classification, not an
+ * identity: the same observation may be labelled differently by two
+ * writers, and they are still the same observation. The label is still
+ * bound by the ENTRY digest (see `computeChainDigest`), so it cannot be
+ * changed undetected.
  */
 export function deriveObservationId(input: {
 	readonly kind: EvidenceKind;
 	readonly sourceHash: string;
 	readonly head: string;
 	readonly findingRefs: readonly string[];
+	readonly capturedAtIso?: string;
+	readonly verification?: EvidenceVerification;
+	readonly toolCallId?: string;
+	readonly messageId?: string;
 }): string {
-	const payload = [
-		input.kind,
-		input.sourceHash,
-		input.head,
-		[...input.findingRefs].sort().join(","),
-	].join("|");
+	const payload = canonicalizeEvidenceValue({
+		kind: input.kind,
+		sourceHash: input.sourceHash,
+		head: input.head,
+		findingRefs: [...input.findingRefs].sort(),
+		capturedAtIso: input.capturedAtIso,
+		verification: input.verification,
+		toolCallId: input.toolCallId,
+		messageId: input.messageId,
+	});
 	return `obs_${digestEvidenceContent(payload).slice(0, 32)}`;
 }
 
@@ -209,15 +342,23 @@ export function deriveObservationId(input: {
  * Compute the chain digest for an entry.
  *
  * The chain digest commits to the PREVIOUS digest as well as to the
- * observation, which is what turns a list of independent entries into a
- * tamper-evident chain.
+ * COMPLETE canonical form of the observation, which is what turns a list
+ * of independent entries into a tamper-evident chain.
+ *
+ * ## Why the COMPLETE observation
+ *
+ * The digest binds EVERY field of the observation, not a hand-picked
+ * subset. A subset leaves fields outside the integrity guarantee, and an
+ * attacker (or a buggy writer) changes exactly those fields. Because the
+ * canonical form covers the whole observation, a field cannot be added,
+ * removed or altered without the digest changing.
  */
 export function computeChainDigest(
 	previousDigest: string,
 	observation: EvidenceObservation,
 ): string {
 	return digestEvidenceContent(
-		`${previousDigest}|${observation.observationId}|${observation.source.sourceHash}|${observation.verification}|${observation.head}`,
+		`${previousDigest}|${canonicalizeEvidenceObservation(observation)}`,
 	);
 }
 
@@ -266,6 +407,10 @@ export class EvidenceLedgerBuilder {
 			sourceHash,
 			head: this.head,
 			findingRefs: input.findingRefs ?? [],
+			capturedAtIso: input.capturedAtIso,
+			verification: input.verification,
+			toolCallId: input.source.toolCallId,
+			messageId: input.source.messageId,
 		});
 		const previousDigest =
 			this.entries.length === 0
@@ -311,9 +456,22 @@ export class EvidenceLedgerBuilder {
 /**
  * Verify a ledger's chain.
  *
- * A ledger is INTACT when every entry's chain digest matches the digest
- * recomputed from its predecessor, and the ledger's own digest matches
- * its last entry.
+ * A ledger is INTACT when, for every entry:
+ *
+ *   1. the observation's id RE-DERIVES to the recorded id, and
+ *   2. the entry's chain digest matches the digest recomputed from its
+ *      predecessor over the observation's COMPLETE canonical form, and
+ *
+ * and the ledger's own digest matches its last entry.
+ *
+ * ## Why the id is re-derived
+ *
+ * The chain digest binds the complete observation, so any field change is
+ * detected by check 2. Check 1 is a SECOND, independent guarantee: it
+ * proves the observation is the one its id claims to be. Without it, an
+ * attacker could replace an observation with a different one AND
+ * recompute the chain digest — the chain would verify, but the id would
+ * no longer match its content. Re-derivation makes that detectable.
  *
  * ## What this does and does not detect
  *
@@ -328,17 +486,53 @@ export class EvidenceLedgerBuilder {
  * ledger's published `digest` and entry count against an EXTERNAL anchor
  * captured when the ledger was sealed; see `sealEvidenceLedger` and
  * `verifyEvidenceLedgerAgainstAnchor`.
+ *
+ * ## The trust model
+ *
+ * Hash chaining establishes CONSISTENCY against a trusted anchor. It
+ * does NOT provide AUTHENTICATION: an attacker who can replace both the
+ * ledger and its anchor can produce a self-consistent forgery. The
+ * anchor must therefore be held somewhere the attacker cannot reach —
+ * a signed commit, an append-only log, a separate system — for the
+ * guarantee to mean anything.
  */
 export function verifyEvidenceLedger(ledger: EvidenceLedger): {
 	readonly intact: boolean;
 	readonly brokenAtIndex?: number;
+	readonly reason?:
+		| "observation-id-mismatch"
+		| "chain-digest-mismatch"
+		| "ledger-digest-mismatch";
 } {
 	let previousDigest = EMPTY_LEDGER_DIGEST;
 	for (let index = 0; index < ledger.entries.length; index++) {
 		const entry = ledger.entries[index] as EvidenceLedgerEntry;
+		// Check 1: the observation must be the one its id claims to be.
+		const expectedId = deriveObservationId({
+			kind: entry.observation.kind,
+			sourceHash: entry.observation.source.sourceHash,
+			head: entry.observation.head,
+			findingRefs: entry.observation.findingRefs,
+			capturedAtIso: entry.observation.capturedAtIso,
+			verification: entry.observation.verification,
+			toolCallId: entry.observation.source.toolCallId,
+			messageId: entry.observation.source.messageId,
+		});
+		if (expectedId !== entry.observation.observationId) {
+			return {
+				intact: false,
+				brokenAtIndex: index,
+				reason: "observation-id-mismatch",
+			};
+		}
+		// Check 2: the chain digest must match the complete observation.
 		const expected = computeChainDigest(previousDigest, entry.observation);
 		if (expected !== entry.chainDigest) {
-			return { intact: false, brokenAtIndex: index };
+			return {
+				intact: false,
+				brokenAtIndex: index,
+				reason: "chain-digest-mismatch",
+			};
 		}
 		previousDigest = entry.chainDigest;
 	}
@@ -347,7 +541,9 @@ export function verifyEvidenceLedger(ledger: EvidenceLedger): {
 			? EMPTY_LEDGER_DIGEST
 			: (ledger.entries[ledger.entries.length - 1] as EvidenceLedgerEntry)
 					.chainDigest;
-	return { intact: expectedDigest === ledger.digest };
+	return expectedDigest === ledger.digest
+		? { intact: true }
+		: { intact: false, reason: "ledger-digest-mismatch" };
 }
 
 /**

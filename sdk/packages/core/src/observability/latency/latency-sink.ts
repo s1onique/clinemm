@@ -183,40 +183,131 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * This is boundary 1 (`request_prepared`) and the START of boundary 2
 	 * (`provider_submitted`): the runtime issues the request immediately
 	 * after preparing it, so the two are entered together.
+	 *
+	 * `request_prepared` is closed at the moment the request is handed to
+	 * the provider, so the preparation span measures the preparation and
+	 * nothing else.
+	 *
+	 * The `provider_first_response` and `provider_first_token` spans are
+	 * OPENED here, at submission, so their durations measure the time
+	 * from handing the request to the provider until the corresponding
+	 * event arrives. They are closed only when that event is observed;
+	 * if it never is, the span stays open and the trace reports the
+	 * measurement as unavailable rather than as a fabricated duration.
 	 */
 	onModelRequestStart(observation: ModelBehaviorTraceObservation): void {
 		this.tracer.enter("request_prepared", observation.payload);
 		this.tracer.enter("provider_submitted", observation.payload);
+		this.tracer.enter("provider_first_response", observation.payload);
+		this.tracer.enter("provider_first_token", observation.payload);
 	}
 
 	/**
 	 * The model request completed.
 	 *
-	 * This closes the provider span and is the START of the first-token
-	 * span: the runtime reports the finish when the provider's stream
-	 * ends, so the first-token boundary is entered at the same instant.
+	 * This closes the provider span.
+	 *
+	 * ## It does NOT fabricate a first-token measurement
+	 *
+	 * The runtime reports ONE event when the provider's stream ends. The
+	 * first response EVENT and the first generated TOKEN are both
+	 * distinct instants from that, so neither is inferred here. If the
+	 * provider did not report them, they stay UNAVAILABLE — the trace
+	 * says so explicitly rather than carrying a zero-duration span
+	 * that would read as "the first token arrived at stream completion".
 	 */
 	onModelRequestFinish(observation: ModelBehaviorTraceObservation): void {
+		this.tracer.exit("request_prepared", {
+			metadata: observation.payload,
+			status: "ok",
+		});
 		this.tracer.exit("provider_submitted", {
 			metadata: observation.payload,
 			status: "ok",
 		});
-		this.tracer.enter("provider_first_token", observation.payload);
+		// The first response event and the first token are NOT inferred
+		// from the stream's completion. If they were not observed, they
+		// are explicitly unavailable.
+		this.closeIfOpen("provider_first_response", observation.payload, "ok");
+		this.closeIfOpen("provider_first_token", observation.payload, "ok");
+		this.tracer.enter("provider_completed", observation.payload);
+		this.tracer.exit("provider_completed", {
+			metadata: observation.payload,
+			status: "ok",
+		});
+	}
+
+	/**
+	 * Close a boundary IF it is still open.
+	 *
+	 * A boundary that was already closed by its own event is left alone.
+	 * A boundary that is still open is marked unavailable, so the trace
+	 * records that the measurement was not observed rather than leaving a
+	 * span dangling.
+	 */
+	private closeIfOpen(
+		boundary: LatencyBoundary,
+		payload: Readonly<Record<string, unknown>>,
+		status: LatencyStatus,
+	): void {
+		if (!this.tracer.isOpen(boundary)) {
+			return;
+		}
+		this.tracer.markUnavailable(
+			boundary,
+			"the provider did not report this event",
+			{ metadata: payload, status },
+		);
+	}
+
+	/**
+	 * The provider produced its FIRST RESPONSE EVENT.
+	 *
+	 * This is the provider acknowledging the request or sending its first
+	 * byte — NOT the first generated token, and NOT the stream's
+	 * completion. A host that observes it reports it here so the
+	 * transport's time-to-first-byte is measurable.
+	 *
+	 * The span measures from the request's submission to the first
+	 * response event, so the host reports the EVENT, not the span's
+	 * endpoints.
+	 */
+	onProviderFirstResponse(observation: ModelBehaviorTraceObservation): void {
+		this.tracer.exit("provider_first_response", {
+			metadata: observation.payload,
+			status: "ok",
+		});
+	}
+
+	/**
+	 * The provider generated its FIRST TOKEN.
+	 *
+	 * The span measures from the request's submission to the first
+	 * generated token, which is the true time-to-first-token. A host that
+	 * cannot observe the first token must NOT call this method; the
+	 * measurement then stays UNAVAILABLE and the trace says so.
+	 */
+	onProviderFirstToken(observation: ModelBehaviorTraceObservation): void {
 		this.tracer.exit("provider_first_token", {
 			metadata: observation.payload,
 			status: "ok",
 		});
-		this.tracer.enter("provider_completed", observation.payload);
 	}
 
 	/**
 	 * The model request failed.
 	 */
 	onModelRequestError(observation: ModelBehaviorTraceObservation): void {
+		this.tracer.exit("request_prepared", {
+			metadata: observation.payload,
+			status: "failed",
+		});
 		this.tracer.exit("provider_submitted", {
 			metadata: observation.payload,
 			status: "failed",
 		});
+		this.closeIfOpen("provider_first_response", observation.payload, "failed");
+		this.closeIfOpen("provider_first_token", observation.payload, "failed");
 		this.tracer.enter("provider_completed", observation.payload);
 		this.tracer.exit("provider_completed", {
 			metadata: observation.payload,
@@ -228,10 +319,16 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * The model request was aborted.
 	 */
 	onModelRequestAbort(observation: ModelBehaviorTraceObservation): void {
+		this.tracer.exit("request_prepared", {
+			metadata: observation.payload,
+			status: "aborted",
+		});
 		this.tracer.exit("provider_submitted", {
 			metadata: observation.payload,
 			status: "aborted",
 		});
+		this.closeIfOpen("provider_first_response", observation.payload, "aborted");
+		this.closeIfOpen("provider_first_token", observation.payload, "aborted");
 		this.tracer.enter("provider_completed", observation.payload);
 		this.tracer.exit("provider_completed", {
 			metadata: observation.payload,
@@ -248,11 +345,18 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 
 	/**
 	 * A tool call finished.
+	 *
+	 * The status distinguishes a completed tool from one that was
+	 * CANCELLED, FAILED or REJECTED. A cancelled tool must never be
+	 * reported as a successful completion.
 	 */
-	onToolFinish(observation: ModelBehaviorTraceObservation): void {
+	onToolFinish(
+		observation: ModelBehaviorTraceObservation,
+		status: LatencyStatus = "ok",
+	): void {
 		this.tracer.exit("tool_execution", {
 			metadata: observation.payload,
-			status: "ok",
+			status,
 		});
 	}
 }

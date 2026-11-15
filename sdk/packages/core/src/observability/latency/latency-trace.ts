@@ -57,11 +57,24 @@
 import { createHash } from "node:crypto";
 
 /**
- * The nine instrumented boundaries.
+ * The instrumented boundaries.
+ *
+ * `provider_first_response` and `provider_first_token` are DISTINCT
+ * boundaries, and the distinction matters: the first response EVENT (the
+ * provider acknowledging, or sending its first byte) is not the same
+ * instant as the first generated TOKEN. A provider may take a long time
+ * to send its first byte and then stream tokens quickly, or respond
+ * instantly and then think before its first token.
+ *
+ * A stream's COMPLETION is neither of them. Recording the completion as
+ * if it were the first token produces a fabricated time-to-first-token,
+ * so the two are kept apart and an unobservable measurement is reported
+ * as UNAVAILABLE rather than as a zero-duration success.
  */
 export type LatencyBoundary =
 	| "request_prepared"
 	| "provider_submitted"
+	| "provider_first_response"
 	| "provider_first_token"
 	| "provider_completed"
 	| "schema_validation"
@@ -69,6 +82,24 @@ export type LatencyBoundary =
 	| "tool_result_delivered"
 	| "provider_ready"
 	| "compaction";
+
+/**
+ * Every boundary, in the order a well-behaved turn crosses them.
+ *
+ * The list is used to report which measurements were NOT available.
+ */
+export const ALL_LATENCY_BOUNDARIES: readonly LatencyBoundary[] = [
+	"request_prepared",
+	"provider_submitted",
+	"provider_first_response",
+	"provider_first_token",
+	"provider_completed",
+	"schema_validation",
+	"tool_execution",
+	"tool_result_delivered",
+	"provider_ready",
+	"compaction",
+];
 
 /**
  * The stage a measured gap belongs to.
@@ -192,12 +223,74 @@ export interface LatencyStageMeasurement {
 }
 
 /**
+ * A measurement that was NOT available, and why.
+ *
+ * An unavailable measurement is reported EXPLICITLY. It is never
+ * represented as a zero-duration success, because a zero-duration span
+ * reads as "this took no time" rather than "we do not know how long this
+ * took".
+ */
+export interface LatencyUnavailableMeasurement {
+	/** The boundary whose measurement is unavailable. */
+	readonly boundary: LatencyBoundary;
+	/** Why it is unavailable. */
+	readonly reason: string;
+}
+
+/**
+ * A trace-integrity failure.
+ *
+ * These are the defects in the TRACE ITSELF, not in the agent: a span
+ * that was exited without being entered, an exit naming an id that was
+ * never started, or a span left open when the trace was taken.
+ */
+export interface LatencyIntegrityFailure {
+	/** The boundary the failure concerns. */
+	readonly boundary: LatencyBoundary;
+	/** What went wrong. */
+	readonly reason: string;
+}
+
+/**
  * The complete trace of one turn.
  */
 export interface LatencyTrace {
 	readonly correlationId: string;
 	readonly events: readonly LatencyBoundaryEvent[];
 	readonly stages: readonly LatencyStageMeasurement[];
+	/**
+	 * The measurements that were NOT available.
+	 *
+	 * A boundary appears here when the seam that would measure it was
+	 * never crossed — for example, a provider that does not report its
+	 * first token. The absence of a measurement is therefore visible,
+	 * rather than being indistinguishable from a measurement of zero.
+	 */
+	readonly unavailable: readonly LatencyUnavailableMeasurement[];
+	/**
+	 * The trace-integrity failures.
+	 *
+	 * A missing start, a missing end, or an unmatched span id shows up
+	 * here. These are the conditions that would otherwise make a
+	 * duration assertable when it is not.
+	 */
+	readonly integrityFailures: readonly LatencyIntegrityFailure[];
+	/**
+	 * The wall-clock duration of the trace.
+	 *
+	 * This is measured from the FIRST event to the LAST event, NOT by
+	 * summing span durations. When operations overlap, the sum of the
+	 * durations exceeds the wall clock, and the wall clock is the honest
+	 * figure.
+	 */
+	readonly wallClockMs: number;
+	/**
+	 * Whether any two spans overlapped in time.
+	 *
+	 * When this is true, the per-span durations must NOT be summed to
+	 * obtain a total.
+	 */
+	readonly overlapping: boolean;
 }
 
 /**
@@ -394,6 +487,13 @@ export class LatencyTracer {
 		}>
 	>();
 	private readonly origin: number;
+	/** The boundaries that were opened at least once. */
+	private readonly openedBoundaries = new Set<LatencyBoundary>();
+	/** The trace-integrity failures observed so far. */
+	private readonly integrityFailures: LatencyIntegrityFailure[] = [];
+	/** The measurements that were explicitly marked unavailable. */
+	private readonly unavailableMeasurements: LatencyUnavailableMeasurement[] =
+		[];
 
 	constructor(
 		readonly correlationId: string,
@@ -427,6 +527,7 @@ export class LatencyTracer {
 	): void {
 		try {
 			const now = this.clock.monotonic() - this.origin;
+			this.openedBoundaries.add(boundary);
 			this.events.push({
 				correlationId: this.correlationId,
 				boundary,
@@ -475,6 +576,23 @@ export class LatencyTracer {
 	 * the behaviour falls back to last-in-first-out, which is correct for
 	 * every boundary that is entered at most once.
 	 */
+	/**
+	 * Record the EXIT from a boundary.
+	 *
+	 * The duration is measured against the matching `enter`, when there is
+	 * one. A boundary that is exited without a matching entry still
+	 * records the event, with no duration, so a missing entry is visible
+	 * rather than silent.
+	 *
+	 * ## Matching a parallel exit to the RIGHT entry
+	 *
+	 * Parallel tool calls do NOT necessarily finish in the order they
+	 * started. A plain last-in-first-out stack would then attribute one
+	 * call's duration to another. When the exit carries a `toolCallId`
+	 * that matches an open span, THAT span is the one closed; otherwise
+	 * the behaviour falls back to last-in-first-out, which is correct for
+	 * every boundary that is entered at most once.
+	 */
 	exit(
 		boundary: LatencyBoundary,
 		options: {
@@ -484,7 +602,26 @@ export class LatencyTracer {
 	): void {
 		try {
 			const now = this.clock.monotonic() - this.origin;
-			const span = this.takeSpan(boundary, readToolCallId(options.metadata));
+			const toolCallId = readToolCallId(options.metadata);
+			const stack = this.openSpans.get(boundary);
+			// A boundary exited without a matching entry is a trace-
+			// integrity failure: the duration is not assertable.
+			if (!stack || stack.length === 0) {
+				this.integrityFailures.push({
+					boundary,
+					reason: "exit without a matching start",
+				});
+			} else if (
+				toolCallId !== undefined &&
+				!stack.some((span) => span.toolCallId === toolCallId)
+			) {
+				// An exit naming a tool call that was never entered.
+				this.integrityFailures.push({
+					boundary,
+					reason: `unmatched span id ${toolCallId}`,
+				});
+			}
+			const span = this.takeSpan(boundary, toolCallId);
 			this.events.push({
 				correlationId: this.correlationId,
 				boundary,
@@ -498,6 +635,58 @@ export class LatencyTracer {
 		} catch {
 			// Failure isolation.
 		}
+	}
+
+	/**
+	 * Record that a boundary's measurement will NEVER be available.
+	 *
+	 * The span is closed WITHOUT a duration, so no fabricated number
+	 * enters the trace, and the boundary is recorded as unavailable with
+	 * the reason. This is how a provider that never reports its first
+	 * token is represented.
+	 */
+	markUnavailable(
+		boundary: LatencyBoundary,
+		reason: string,
+		options: {
+			readonly metadata?: Readonly<Record<string, unknown>>;
+			readonly status?: LatencyStatus;
+		} = {},
+	): void {
+		try {
+			const now = this.clock.monotonic() - this.origin;
+			const span = this.takeSpan(boundary, undefined);
+			this.events.push({
+				correlationId: this.correlationId,
+				boundary,
+				phase: "end",
+				monotonicMs: now,
+				wallClockIso: this.clock.wallClockIso(),
+				metadata: sanitizeLatencyMetadata(options.metadata),
+				// No duration: the measurement is unavailable, not zero.
+				durationMs: undefined,
+				status: options.status,
+			});
+			this.unavailableMeasurements.push({ boundary, reason });
+			if (span === undefined) {
+				this.integrityFailures.push({
+					boundary,
+					reason: "marked unavailable without a matching start",
+				});
+			}
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * Whether a boundary has an open span.
+	 *
+	 * A host uses this to decide whether a boundary still needs closing,
+	 * or whether its event already closed it.
+	 */
+	isOpen(boundary: LatencyBoundary): boolean {
+		return (this.openSpans.get(boundary)?.length ?? 0) > 0;
 	}
 
 	/**
@@ -581,6 +770,120 @@ export class LatencyTracer {
 			correlationId: this.correlationId,
 			events: this.getEvents(),
 			stages: this.getStages(),
+			unavailable: this.getUnavailable(),
+			integrityFailures: this.getIntegrityFailures(),
+			wallClockMs: this.getWallClockMs(),
+			overlapping: this.hasOverlap(),
 		};
+	}
+
+	/**
+	 * The measurements that were NOT available.
+	 *
+	 * A boundary is unavailable when it was never opened. The reason
+	 * distinguishes the cases that matter:
+	 *
+	 *  - `not-observed`: the seam that would have measured it was never
+	 *    crossed (a provider that does not report its first token);
+	 *  - `left-open`: the span was entered and never closed, which is a
+	 *    trace-integrity failure rather than an absent measurement.
+	 */
+	getUnavailable(): readonly LatencyUnavailableMeasurement[] {
+		const unavailable: LatencyUnavailableMeasurement[] = [
+			...this.unavailableMeasurements,
+		];
+		const reported = new Set(unavailable.map((item) => item.boundary));
+		for (const boundary of ALL_LATENCY_BOUNDARIES) {
+			// A boundary that was opened AND closed is available. A
+			// boundary that was explicitly marked unavailable has its own
+			// reason. Anything else was never observed.
+			if (reported.has(boundary)) {
+				continue;
+			}
+			if (this.openedBoundaries.has(boundary)) {
+				continue;
+			}
+			unavailable.push({
+				boundary,
+				reason: "not-observed",
+			});
+		}
+		return unavailable;
+	}
+
+	/**
+	 * The trace-integrity failures.
+	 *
+	 * A failure is recorded when:
+	 *
+	 *  - a boundary is exited without a matching entry;
+	 *  - an exit names a tool call id that was never entered;
+	 *  - a span is still OPEN when the trace is taken.
+	 */
+	getIntegrityFailures(): readonly LatencyIntegrityFailure[] {
+		const failures: LatencyIntegrityFailure[] = [...this.integrityFailures];
+		for (const [boundary, stack] of this.openSpans) {
+			for (const span of stack) {
+				failures.push({
+					boundary,
+					reason: span.toolCallId
+						? `span left open for tool call ${span.toolCallId}`
+						: "span left open",
+				});
+			}
+		}
+		return failures;
+	}
+
+	/**
+	 * The wall-clock duration of the trace.
+	 *
+	 * Measured from the first event to the last, NOT by summing span
+	 * durations. When operations overlap the sum exceeds the wall clock,
+	 * and the wall clock is the honest figure.
+	 */
+	getWallClockMs(): number {
+		if (this.events.length === 0) {
+			return 0;
+		}
+		const first = this.events[0] as LatencyBoundaryEvent;
+		const last = this.events[this.events.length - 1] as LatencyBoundaryEvent;
+		return last.monotonicMs - first.monotonicMs;
+	}
+
+	/**
+	 * Whether any two spans overlapped in time.
+	 *
+	 * Two spans overlap when one starts before the other ends. This is
+	 * what makes the per-span durations non-additive.
+	 */
+	hasOverlap(): boolean {
+		// The span intervals, reconstructed from the events.
+		const intervals: Array<{ start: number; end: number }> = [];
+		const open = new Map<LatencyBoundary, number[]>();
+		for (const event of this.events) {
+			if (event.phase === "start") {
+				const stack = open.get(event.boundary) ?? [];
+				stack.push(event.monotonicMs);
+				open.set(event.boundary, stack);
+				continue;
+			}
+			const stack = open.get(event.boundary);
+			const startedAt = stack?.pop();
+			if (startedAt !== undefined) {
+				intervals.push({ start: startedAt, end: event.monotonicMs });
+			}
+		}
+		intervals.sort((a, b) => a.start - b.start);
+		let latestEnd = Number.NEGATIVE_INFINITY;
+		for (const interval of intervals) {
+			if (interval.start < latestEnd) {
+				return true;
+			}
+			if (interval.end > latestEnd) {
+				latestEnd = interval.end;
+			}
+		}
+		return false;
 	}
 }

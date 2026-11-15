@@ -131,6 +131,26 @@ export function canonicalizeObjectCommandEntries(
 	if (!("commands" in record)) {
 		return null;
 	}
+	// ACT-CLINEMM-ROUND-C-HARNESS-02 — the TOP-LEVEL boundary.
+	//
+	// The object-entry shape is `{ "commands": [...] }` and nothing else.
+	// An unexpected sibling key — `timeout`, `cwd`, `notifyOnCompletion`,
+	// … — is AMBIGUOUS: canonicalizing it would silently DISCARD the
+	// sibling and broaden the accepted schema beyond what the strict
+	// `RunCommandsInputSchema` allows (`additionalProperties: false`).
+	//
+	// The member-level check below already rejects a member with an
+	// extra key for exactly this reason. The top level needs the same
+	// treatment: the payload is rejected UNCHANGED, so the strict schema
+	// produces its normal, authoritative rejection and the caller can
+	// see that its field was not honoured.
+	//
+	// This does NOT affect the eight repaired Round C payloads: their
+	// top-level object has exactly one key, `commands`.
+	const topLevelKeys = Object.keys(record);
+	if (topLevelKeys.length !== 1 || topLevelKeys[0] !== "commands") {
+		return null;
+	}
 	const commands = record.commands;
 	if (!Array.isArray(commands) || commands.length === 0) {
 		return null;
