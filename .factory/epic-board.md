@@ -33551,3 +33551,99 @@ bounded implementation and its verification.
 
 EVIDENCE: `.factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/`
   RECON.md, RED-GREEN.md, GATES.md, VERDICT.md, MANIFEST.json
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/`
+  RECON.md, RED-GREEN.md, GATES.md, VERDICT.md, MANIFEST.json
+
+# ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02 — PASS_EVIDENCE_EXPORT_REPAIRED — 2026-11-15
+
+**Scope.** ONE narrowly targeted discriminator plus the bounded correction
+its finding justified, authorized by the Factory review's
+`HALT_CCARD_EPOCH_UNBOUND` against `c86ac36c7`. The CORRECTION01 baseline
+`c86ac36c7` is PRESERVED; the correction is additive on top of it. The other
+three CORRECTION01 corrections were NOT reopened.
+
+## Identity and conservation
+
+Base `ENTRY_HEAD`/`SUBJECT_HEAD` of the parent ACT `c86ac36c7`. The parent
+repair commit `c86ac36c7` is preserved as the baseline. The protected stash
+(`stash@{0}: WIP on main: d46223b51 ...`) and all 5 worktrees were preserved.
+
+**No signal was sent** and the operator's live VSCodium instance was NOT
+changed, restarted or re-instrumented. No push, no VSIX deployment, no
+release, no install. The MCP registry, the public API, the proto surface, the
+signals, the termination/cleanup policy, the reconciliation horizon, the
+process-group ownership, the C10 blocking logic and the completion suppression
+are all UNTOUCHED. **No new recorder and no new protocol** were introduced.
+
+## The one remaining finding — post-open cross-epoch attribution
+
+The CORRECTION01 join excludes CCARD records captured BEFORE an incident
+opens, but a CCARD record carries **no epoch** while an incident carries an
+**explicit epoch**, and the incident's causal identity key is
+`(sessionId, taskId, epoch, barrierId)`. The temporal lower bound therefore
+cannot exclude a same-task record captured AFTER the incident opened in a
+LATER epoch, and `Date.now()` is wall-clock time rather than a monotonic
+causal sequence. The incident manager's task-based lookup
+(`getAutomaticIncidentForTask`) returns the most recent retained incident for
+the task, so a later epoch does not displace the earlier incident.
+
+**Counterexample verdict: `REPRODUCED`** through the ACTUAL selection path
+(`prepareAutomaticIncidentExport` → decompressed ZIP archive), not through a
+synthetic call into the join helper. The RED receipt was captured
+independently against the unmodified baseline (the working tree was stashed so
+the baseline source was restored byte-for-byte).
+
+## The correction — an explicit attribution boundary
+
+The review offered two acceptable dispositions: classify CCARD as a
+**task-level post-open observation**, or leave the incident-specific outcome
+**`unavailable`**. The first was taken: it preserves the evidence while
+narrowing only the claim.
+
+| Source | Carries an epoch | Reported attribution | `outcome` field |
+|---|---|---|---|
+| CCARD | **no** | `task_level_observation` / `scope: "task"` | **not set** — the observation is preserved under `observedOutcome`; no epoch is asserted |
+| BCAPT | **yes** (compared EXACTLY) | `incident_exact` / `scope: "incident"` | set, with the incident's epoch |
+
+The artifact now states its attribution boundary explicitly, so a consumer can
+never mistake a same-task observation for this incident's own outcome. No
+evidence is lost; only the claim is narrowed.
+
+## Executable evidence
+
+- RED at the baseline: **EXIT 1** — `3 failed / 1 passed (4)`. The decisive
+  assertion was `expected 'task_completion_committed' to be undefined`.
+- GREEN after the correction: **EXIT 0** — `4 passed (4)`.
+- The incident + export suites: **EXIT 0** — `108 passed (108)` (10 files).
+- The reconciliation / containment / phase-authority / BCAPT / CCARD sweep:
+  **EXIT 1** — `1 failed / 172 passed (173)`. The single failure is the SAME
+  pre-existing registry source-text guard (`BCAPT-CMD.2.1`), and it was
+  RE-PROVEN pre-existing by running the same file with this working tree
+  stashed. NOT a regression of this correction.
+- Combined sweep: **EXIT 1** — `1 failed / 280 passed (281)` (20 files), the
+  same single pre-existing guard.
+- `tsc --noEmit`: **EXIT 0**, 0 diagnostics.
+- Biome lint / format: **EXIT 0** / **EXIT 0**.
+- No intentionally failing test is in the default suite. No repository-wide run.
+
+## Three pre-existing assertions updated — STRICTER, not weakened
+
+`R2a`, `C-2c` and `C-2d` in the CORRECTION01 suite asserted the now-disproven
+claim that a CCARD record IS the incident's outcome. They were updated to the
+stricter contract: the observation must still be present and correct, AND it
+must carry the explicit attribution label, AND it must NOT occupy the
+incident's `outcome` field.
+
+## Not established
+
+The historical incident remains `HISTORICAL_RECONCILIATION_UNOBSERVED`; the
+historical installed artifact remains `HISTORICAL_RUNTIME_SOURCE_UNBOUND`. The
+isolated installed-extension qualification (disposable VSCodium profile) is
+**NOT_EXECUTED** by this correction, so **no live claim is made** and
+`PASS_EVIDENCE_EXPORT_LIVE` is NOT claimed. The review's authorization for
+that qualification was conditional on this single discriminator, which has now
+been run and closed; the qualification itself remains a separate step.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/`
+  RED-GREEN-CORRECTION02.md, VERDICT-CORRECTION02.md, MANIFEST.json
+

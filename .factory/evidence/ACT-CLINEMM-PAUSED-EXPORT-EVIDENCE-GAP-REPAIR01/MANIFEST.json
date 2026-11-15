@@ -1,10 +1,12 @@
 {
   "schemaVersion": 1,
   "act": "ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01",
-  "correction": "CORRECTION01",
-  "parentActEntryHead": "cee2f28d3213bc01674589b6d24a0671d7d3c337",
-  "parentActRepairCommit": "cee2f28d3213bc01674589b6d24a0671d7d3c337",
-  "baselineCommit": "cee2f28d3213bc01674589b6d24a0671d7d3c337",
+  "correction": "CORRECTION02",
+  "parentActEntryHead": "c86ac36c7e7bd79135f0202fa3c08781a99699a9",
+  "parentActRepairCommit": "c86ac36c7e7bd79135f0202fa3c08781a99699a9",
+  "baselineCommit": "c86ac36c7e7bd79135f0202fa3c08781a99699a9",
+  "counterexampleVerdict": "REPRODUCED",
+  "repairVerdict": "REPAIRED",
   "branch": "main",
   "stashesPreserved": [
     "stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration"
@@ -20,8 +22,23 @@
   "files": [
     {
       "path": "apps/vscode/src/sdk/automatic-incident-export-sources.ts",
-      "bytes": 22826,
-      "sha256": "2de829da72521bc186b0b582edf5a88fbc48f567929a8ac89ade1ba53abb5b4f"
+      "bytes": 28753,
+      "sha256": "b5116f6708474ec44f03b3dbdee21c453c1afd6a3bc8e006cd6e32b7fb9089ac"
+    },
+    {
+      "path": "apps/vscode/src/sdk/__tests__/automatic-incident-export-cross-epoch-ccard01.cecc01.test.ts",
+      "bytes": 12980,
+      "sha256": "8894a72ff4fac3a5e7f17acf88987ee5168a10357fb2af3ad21ddfa60e0cc3b5"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/RED-GREEN-CORRECTION02.md",
+      "bytes": 9858,
+      "sha256": "0c51122208a4d5c38b082b264c6d39c358ee38c0c5a2c0ef94caff67ca92ed53"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/VERDICT-CORRECTION02.md",
+      "bytes": 5330,
+      "sha256": "4ab56cf1606f50b11ee186c9938bcf541ac1cf0a32d7648231e5e6d3bf8ed67c"
     },
     {
       "path": "apps/vscode/src/sdk/automatic-incident-export-runtime.ts",
@@ -35,8 +52,8 @@
     },
     {
       "path": "apps/vscode/src/sdk/__tests__/automatic-incident-export-gap01.aice01.test.ts",
-      "bytes": 36716,
-      "sha256": "d31eed5629667b77ca50f737d3acd539768b42d8ee85e7c00cf9fa06fd8b3600"
+      "bytes": 37878,
+      "sha256": "6ce93ae13a77f0a6d6657c296b83bd81473cdc5149ac53ca5dbad0ce6ac456e2"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/RECON.md",

@@ -63,11 +63,38 @@
  *   - phase writers: `taskId` AND `epoch` must match (when the record
  *     carries them). A record that carries NEITHER is NOT joined:
  *     an unscoped record cannot be attributed to one incident.
- *   - continuation (CCARD): `sessionId` AND `taskId` must match.
+ *   - continuation (CCARD): `sessionId` AND `taskId` must match. CCARD
+ *     carries NO epoch, so a joined CCARD record is a TASK-LEVEL
+ *     post-open OBSERVATION, never an incident-exact outcome.
  *   - continuation (BCAPT): `sessionId` AND `taskId` AND `epoch` must
- *     match.
+ *     match. BCAPT carries an epoch, so a joined BCAPT record IS bound
+ *     to the incident by its full causal identity.
  *
  * A record that does not match is DROPPED. It never leaks.
+ *
+ * ATTRIBUTION BOUNDARY
+ * --------------------
+ *
+ * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02:
+ *
+ * A temporal predicate alone cannot prove exact incident-level
+ * attribution: `openedAt` excludes records captured BEFORE the incident
+ * opened, but it cannot exclude a record captured AFTER the incident
+ * opened in a LATER epoch of the same task. `Date.now()` is wall-clock
+ * time, not a monotonic causal sequence, so a timestamp comparison
+ * cannot independently establish event ownership.
+ *
+ * The summary therefore states its attribution explicitly:
+ *
+ *   - `attribution: "incident_exact"` — bound to THIS incident by
+ *     exact epoch identity (BCAPT only).
+ *   - `attribution: "task_level_observation"` — a post-open
+ *     observation of the same task that cannot be bound to the
+ *     incident's epoch (CCARD).
+ *
+ * The `outcome` field is reserved for the former. A task-level
+ * observation is reported under `observedOutcome`, so a consumer can
+ * never mistake it for this incident's own outcome.
  *
  * HONESTY CONTRACT
  * ----------------
@@ -198,11 +225,39 @@ export interface AutomaticIncidentExportPhaseWriter {
  * The `outcome` is the AUTHORITATIVE recorded stage. It is never
  * synthesized: a continuation summary with no joined authority stays
  * `unavailable` with a reason.
+ *
+ * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02:
+ *
+ * `attribution` and `scope` make the ATTRIBUTION BOUNDARY explicit.
+ *
+ *   - `attribution: "incident_exact"` — the record is bound to THIS
+ *     incident by its full causal identity. Only BCAPT qualifies: it
+ *     carries an epoch, and the epoch is compared EXACTLY against the
+ *     incident's epoch.
+ *   - `attribution: "task_level_observation"` — the record is a real
+ *     observation of the SAME TASK after the incident opened, but it
+ *     CANNOT be bound to this incident's epoch. It is reported as an
+ *     observation, never as this incident's exact outcome.
+ *
+ * `scope` names the identity the attribution was established against
+ * (`"incident"` or `"task"`).
  */
 export interface AutomaticIncidentExportContinuationSummary {
 	readonly status: AutomaticIncidentExportSourceAvailability
 	readonly reason?: AutomaticIncidentExportUnavailableReason
 	readonly outcome?: string
+	/**
+	 * The OBSERVED stage of a TASK-LEVEL post-open observation.
+	 *
+	 * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02:
+	 *
+	 * This is the stage a same-task observation carried. It is NOT
+	 * this incident's outcome and is never presented as such: the
+	 * record carries no epoch, so it cannot be bound to the incident's
+	 * epoch. `outcome` is reserved for records bound to THIS incident
+	 * by exact epoch identity.
+	 */
+	readonly observedOutcome?: string
 	readonly origin?: string
 	readonly sessionId?: string
 	readonly taskId?: string
@@ -210,7 +265,31 @@ export interface AutomaticIncidentExportContinuationSummary {
 	readonly writerId?: string
 	readonly committedPhase?: string
 	readonly observedAt?: number
+	/**
+	 * How the joined record was attributed.
+	 *
+	 * `incident_exact` — bound to this incident by exact epoch identity.
+	 * `task_level_observation` — a post-open observation of the same
+	 * task that cannot be bound to this incident's epoch.
+	 */
+	readonly attribution?: AutomaticIncidentExportContinuationAttribution
+	/** The identity scope the attribution was established against. */
+	readonly scope?: AutomaticIncidentExportContinuationScope
 }
+
+/**
+ * The attribution boundary of a joined continuation record.
+ *
+ * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02.
+ */
+export type AutomaticIncidentExportContinuationAttribution = "incident_exact" | "task_level_observation"
+
+/**
+ * The identity scope a continuation attribution was established against.
+ *
+ * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02.
+ */
+export type AutomaticIncidentExportContinuationScope = "incident" | "task"
 
 /**
  * The reconciliation timeline's availability classification.
@@ -397,6 +476,21 @@ function incidentOpenedAtMs(incident: AutomaticIncident): number | undefined {
  * BCAPT ring is consulted SECOND: it carries the BCB decision boundary's
  * own outcome.
  *
+ * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02:
+ *
+ * THE TWO RINGS ARE NOT SYMMETRIC, AND THE SUMMARY SAYS SO.
+ *
+ *   - BCAPT carries an EPOCH. It is compared EXACTLY against the
+ *     incident's epoch, so a joined BCAPT record is bound to THIS
+ *     incident by its full causal identity. It is reported as
+ *     `attribution: "incident_exact"` with the incident's epoch.
+ *
+ *   - CCARD carries NO epoch. Session + task + a post-open timestamp
+ *     cannot establish which epoch a record belongs to, so it is
+ *     reported as `attribution: "task_level_observation"` with
+ *     `scope: "task"` — a real observation of the same task, NEVER this
+ *     incident's exact outcome. It carries no epoch claim.
+ *
  * A record must satisfy ALL of:
  *
  *   1. the incident's session AND task (the owner scope);
@@ -430,14 +524,37 @@ function joinContinuation(incident: AutomaticIncident): AutomaticIncidentExportC
 		return { status: "unavailable", reason: "no_identity" }
 	}
 
-	// CCARD — the canonical completion-authority record. The LATEST
-	// qualifying record wins, so the summary names the incident's most
-	// recent outcome.
+	// CCARD — the canonical completion-authority record.
 	//
-	// The ordering is by the ring's MONOTONIC `seq` first and the
-	// capture timestamp second. `seq` is the ring's own ordering and is
-	// strictly increasing even when two records land in the SAME
-	// millisecond, so it resolves the tie that `at` alone cannot.
+	// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02:
+	//
+	// A CCARD record carries NO epoch. The incident DOES carry an
+	// explicit epoch, and the incident's causal identity key is
+	// `(sessionId, taskId, epoch, barrierId)`. The temporal lower
+	// bound (`record.at >= openedAt`) excludes records captured BEFORE
+	// the incident opened, but it CANNOT exclude a record captured
+	// AFTER the incident opened in a LATER epoch of the same task:
+	//
+	//   t0  incident A opens at epoch 4
+	//   t1  the task advances to epoch 5
+	//   t2  CCARD records `task_completion_committed` in epoch 5
+	//   t3  incident A is exported; the join can assign the epoch-5
+	//       outcome to the epoch-4 incident
+	//
+	// `Date.now()` is wall-clock time, not a monotonic causal sequence,
+	// so a timestamp comparison cannot independently establish event
+	// ownership, and the incident manager's task-based lookup returns
+	// the most recent retained incident for the task (so a later epoch
+	// does not displace the earlier incident).
+	//
+	// Therefore a CCARD record is reported as a TASK-LEVEL POST-OPEN
+	// OBSERVATION — a real observation of the same task — and NEVER as
+	// this incident's exact outcome. It carries no epoch claim.
+	//
+	// The ordering is by the ring's MONOTONIC `seq`: it is the ring's
+	// own ordering and is strictly increasing even when two records
+	// land in the SAME millisecond, so it resolves the tie that `at`
+	// alone cannot.
 	let bestCcard:
 		| {
 				readonly seq: number
@@ -473,9 +590,16 @@ function joinContinuation(incident: AutomaticIncident): AutomaticIncidentExportC
 		}
 	}
 	if (bestCcard !== undefined) {
+		// The observed stage is reported under an EXPLICIT task-level
+		// attribution. `outcome` is deliberately NOT set: the field
+		// names the INCIDENT's outcome, and this record cannot
+		// establish the incident's epoch. `observedOutcome` carries the
+		// observation itself, labeled for what it is.
 		return {
 			status: "available",
-			outcome: bestCcard.stage,
+			attribution: "task_level_observation",
+			scope: "task",
+			observedOutcome: bestCcard.stage,
 			origin: bestCcard.origin,
 			sessionId: bestCcard.sessionId,
 			taskId: bestCcard.taskId,
@@ -527,8 +651,14 @@ function joinContinuation(incident: AutomaticIncident): AutomaticIncidentExportC
 		}
 	}
 	if (bestBcapt !== undefined) {
+		// BCAPT carries an EPOCH and it was compared EXACTLY against the
+		// incident's epoch above, so this record IS bound to this
+		// incident by its full causal identity. The exact-epoch
+		// attribution is PRESERVED.
 		return {
 			status: "available",
+			attribution: "incident_exact",
+			scope: "incident",
 			outcome: bestBcapt.writerId,
 			origin: bestBcapt.writerId,
 			sessionId: bestBcapt.sessionId,

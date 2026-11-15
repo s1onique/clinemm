@@ -323,13 +323,24 @@ describe("R2 - the authoritative owner-matched continuation outcome reaches the 
 		const continuation = JSON.parse(readFileSync(join(outDir, "continuation-summary.json"), "utf8")) as {
 			status: string
 			outcome?: string
+			observedOutcome?: string
+			attribution?: string
+			scope?: string
 		}
 
 		// RED: at ENTRY_HEAD this is ALWAYS the constant
 		// `{ status: "unavailable", reason: ... }`.
 		expect(continuation.status).not.toBe("unavailable")
 		expect(continuation.status).toBe("available")
-		expect(continuation.outcome).toBe("task_completion_committed")
+		// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02:
+		// a CCARD record carries NO epoch, so it cannot be bound to this
+		// incident's epoch. It is reported as a TASK-LEVEL post-open
+		// observation under `observedOutcome`, and it is NEVER this
+		// incident's exact `outcome`.
+		expect(continuation.outcome).toBeUndefined()
+		expect(continuation.observedOutcome).toBe("task_completion_committed")
+		expect(continuation.attribution).toBe("task_level_observation")
+		expect(continuation.scope).toBe("task")
 	})
 
 	it("R2b - an UNRELATED owner's continuation outcome stays explicitly unavailable", async () => {
@@ -755,7 +766,7 @@ describe("CORRECTION01 C-2 - the continuation outcome must be CORRELATED to the 
 		expect(continuation.outcome).toBeUndefined()
 	})
 
-	it("C-2c - an AUTHORITATIVE stage INSIDE the window IS the outcome", async () => {
+	it("C-2c - an AUTHORITATIVE stage INSIDE the window IS reported as the task-level observation", async () => {
 		openIncident()
 		setContinuationCardinalityAuthorityCaptureEnabled(true)
 		captureContinuationCardinalityAuthorityRecord({
@@ -775,12 +786,19 @@ describe("CORRECTION01 C-2 - the continuation outcome must be CORRELATED to the 
 		const continuation = JSON.parse(readFileSync(join(outDir, "continuation-summary.json"), "utf8")) as {
 			status: string
 			outcome?: string
+			observedOutcome?: string
+			attribution?: string
 		}
 		expect(continuation.status).toBe("available")
-		expect(continuation.outcome).toBe("task_completion_committed")
+		// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02:
+		// the CCARD record carries NO epoch, so it is NOT the incident's
+		// exact outcome. It is a task-level post-open observation.
+		expect(continuation.outcome).toBeUndefined()
+		expect(continuation.observedOutcome).toBe("task_completion_committed")
+		expect(continuation.attribution).toBe("task_level_observation")
 	})
 
-	it("C-2d - the LATEST qualifying record is the outcome, not the first", async () => {
+	it("C-2d - the LATEST qualifying record is the reported observation, not the first", async () => {
 		openIncident()
 		setContinuationCardinalityAuthorityCaptureEnabled(true)
 		// An EARLIER qualifying outcome.
@@ -791,7 +809,7 @@ describe("CORRECTION01 C-2 - the continuation outcome must be CORRELATED to the 
 			taskId: TASK_A,
 		})
 		// A LATER qualifying outcome: it is the incident's most recent
-		// outcome and must be the one reported.
+		// observed outcome and must be the one reported.
 		captureContinuationCardinalityAuthorityRecord({
 			stage: "task_completion_committed",
 			origin: "background_terminal",
@@ -809,10 +827,14 @@ describe("CORRECTION01 C-2 - the continuation outcome must be CORRELATED to the 
 		const continuation = JSON.parse(readFileSync(join(outDir, "continuation-summary.json"), "utf8")) as {
 			status: string
 			outcome?: string
+			observedOutcome?: string
 		}
 		expect(continuation.status).toBe("available")
 		// RED at cee2f28d3: the FIRST matching record won.
-		expect(continuation.outcome).toBe("task_completion_committed")
+		// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02:
+		// it is reported as a task-level observation, not an outcome.
+		expect(continuation.outcome).toBeUndefined()
+		expect(continuation.observedOutcome).toBe("task_completion_committed")
 	})
 })
 
