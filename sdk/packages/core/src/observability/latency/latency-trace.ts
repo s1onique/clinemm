@@ -272,10 +272,14 @@ export interface LatencyStageMeasurement {
 	 * span owns a phase's work (request preparation or tool execution).
 	 *
 	 * This is the number that must be used for causal attribution. The
-	 * `durationMs` above is the phase's TOTAL interval and may include an
-	 * adjacent gap; for a tool, `durationMs` is the execution span plus
-	 * the delivery delay, while `spanDurationMs` is the executor's own
-	 * measured run time.
+	 * `durationMs` above is the GAP between the two boundaries and does
+	 * NOT include the `from` span's own duration; a phase that owns a
+	 * span's work is emitted as its own stage (the executor's run time
+	 * is the explicit `execution` stage), so the gap and the span stay
+	 * separable and additive. For a tool, the `execution` stage carries
+	 * the executor's own measured run time, while the adjacent
+	 * `tool_execution → tool_result_delivered` stage carries only the
+	 * delivery delay.
 	 */
 	readonly spanDurationMs?: number;
 }
@@ -853,15 +857,16 @@ export class LatencyTracer {
 	 * A stage is the time attributed to ONE named phase of the turn. It is
 	 * measured as the interval between the moment the PREVIOUS phase's
 	 * work finished and the moment the NEXT phase's work began — i.e. the
-	 * gap between an `end` event and the next `start` event, PLUS the
-	 * duration the previous phase itself consumed.
+	 * gap between an `end` event and the next `start` event.
 	 *
-	 * The span duration is included only for the phase that OWNS that
-	 * span's own work. The interval AFTER a span ends belongs to the gap
-	 * between that span and the next one; it is never silently charged to
-	 * the phase named by the span. In particular, a tool that ran for
-	 * 10 ms and whose result was delivered 5 s later reports 10 ms of
-	 * execution and a separate 5 s delivery delay.
+	 * The gap does NOT include the previous span's own duration: that
+	 * duration is reported SEPARATELY as `spanDurationMs`, and a phase
+	 * that OWNS its span's work is emitted as its own stage (see the
+	 * `execution` stage below). The interval AFTER a span ends belongs to
+	 * the gap between that span and the next one; it is never silently
+	 * charged to the phase named by the span. In particular, a tool that
+	 * ran for 10 ms and whose result was delivered 5 s later reports 10 ms
+	 * of execution and a separate 5 s delivery delay.
 	 */
 	getStages(): readonly LatencyStageMeasurement[] {
 		const stages: LatencyStageMeasurement[] = [];
