@@ -33,7 +33,9 @@ operation was performed.
 | Commit | Content |
 |---|---|
 | `848c9e088` | Phase 1–3: D1 ledger integrity, D2 latency lifecycle, D3 parallel timing, D4 normalization boundary |
-| Phase 4–5 commit | Production-boundary wiring, the two integration defects, and the offline qualification suite |
+| `8dd313129` | Phase 4–5: production-boundary wiring, the two integration defects, and the offline qualification suite |
+
+Final HEAD: `8dd313129` on `act/clinemm-roundc-harness-02`.
 
 ---
 
