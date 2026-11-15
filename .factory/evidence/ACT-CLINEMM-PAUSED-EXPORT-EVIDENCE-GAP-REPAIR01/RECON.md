@@ -193,3 +193,106 @@ reports `not_armed` when the sink was disarmed and never claims to know
 the arming state AT INCIDENT TIME when that cannot be established. The
 `reconciliation-timeline.jsonl` member's `availabilityReason` names the
 state, so an empty JSONL is no longer evidence of "no reconciliation".
+
+---
+
+# CORRECTION01 — the corrected join design
+
+## 1. Why the FIRST join was wrong
+
+The first correction's join used three weak predicates:
+
+1. **phase writers:** `record.epoch !== undefined && record.epoch !== epoch`
+   — an epoch-LESS record joined a specific-epoch incident;
+2. **continuation:** the FIRST CCARD record matching `sessionId + taskId`
+   — an arbitrary choice that could be stale, cross-epoch, or a
+   mid-flight ENTER-only stage;
+3. **reconciliation:** the sink's arming state read AT EXPORT TIME was
+   reported as if it described the incident.
+
+Each of these can attach evidence to an incident that does not own it.
+That is a TRUST defect, not a cosmetic one: the export is the
+user-facing support artifact.
+
+## 2. The corrected predicates
+
+### 2.1 Phase writers — EXACT task AND epoch
+
+```
+record.taskId === incident.identity.taskId
+record.epoch   === incident.identity.epoch      // EXACT; undefined never joins
+```
+
+A record that carries no epoch cannot be attributed to one epoch, so it
+is dropped. A record from a different epoch is dropped.
+
+### 2.2 Continuation — five conjunctive predicates
+
+```
+1. record.sessionId === incident.identity.sessionId
+2. record.taskId    === incident.identity.taskId
+3. record.epoch     === incident.identity.epoch     // when the record carries one
+4. record.at        >= incident.openedAt            // the temporal LOWER BOUND
+5. an AUTHORITATIVE outcome stage, and the LATEST qualifying record wins
+```
+
+**Why `openedAt` and NOT `[openedAt, updatedAt]`.** The first attempt used
+the full window `[openedAt, updatedAt]` and it broke a legitimate case:
+a continuation outcome is a CONSEQUENCE of the hold, so it legitimately
+occurs AFTER the incident's last observation. The upper bound rejected
+it. The causal discriminator that matters is the LOWER bound: a record
+captured BEFORE the incident opened belongs to an earlier epoch of the
+same task. The upper side is discriminated by the epoch match (BCAPT)
+and by selecting the LATEST qualifying record (CCARD).
+
+**Why an authoritative-stage requirement.** CCARD is a CYCLE recorder:
+it observes the whole lifecycle. Its ENTER-only stages
+(`run_turn_started`, `execute_turn_prelude_enter`, `terminal_committed`,
+`notify_consume_enter`, `wake_created`, `pending_prompt_enqueued`,
+`pending_prompt_dequeued`, `continuation_scheduled`, `task_started`,
+`continuation_started`) record that something STARTED. Presenting one as
+the incident's outcome would report a mid-flight observation as a
+terminal verdict. Only the outcome-bearing stages qualify:
+`agent_turn_done`, `submit_and_exit_seen`, `task_completion_committed`.
+
+**Why the LATEST record wins, and how ties are broken.** "First match"
+was arbitrary. "Latest match" names the incident's most recent outcome.
+CCARD carries a MONOTONIC `seq`, which is strictly increasing even when
+two records land in the same millisecond. BCAPT carries no per-record
+sequence, so the ring's own POSITION is the tiebreaker there.
+
+### 2.3 Reconciliation — incident-time and export-time are SEPARATE
+
+| Field | Meaning | Values |
+|---|---|---|
+| `availabilityReason` | the INCIDENT-TIME availability | `unknown` (never established) or absent (records were joined) |
+| `exportTimeArming` | the EXPORT-TIME arming state | `armed` / `disarmed` |
+
+The incident does NOT record the arming state it was in when it opened.
+The sink may have been armed or disarmed at any time between the
+incident and the export. So the incident-time reason is `unknown` unless
+records were ACTUALLY joined, and the export-time arming is reported
+separately and is NEVER used to explain the absence of historical
+evidence.
+
+### 2.4 The privacy value invariant
+
+The export's privacy gate is a KEY allowlist (`sanitizeDetail`). It
+assumed the VALUE of an allowlisted key was bounded. For the phase
+writer's `commitOrigin`, the value is a `TurnPhase` — a closed string
+union — but nothing enforced it.
+
+`exportSafePhase` now validates the value against the closed
+`LEGITIMATE_TURN_PHASES` set. A value outside the set is DROPPED. This
+closes the real leak that the CORRECTION01 privacy fixture exposed, and
+it adds no new privacy mechanism: it enforces the allowlist's existing
+assumed invariant.
+
+## 3. What was NOT changed
+
+No new recorder, no recorder call site, no protocol, no public API, no
+MCP operation, no signal, no termination/cleanup policy, no
+reconciliation horizon, no process-group ownership, no C10 blocking
+logic, no completion suppression. The repair stayed entirely inside the
+existing export sources, the existing export runtime/builder and the
+focused test suite.

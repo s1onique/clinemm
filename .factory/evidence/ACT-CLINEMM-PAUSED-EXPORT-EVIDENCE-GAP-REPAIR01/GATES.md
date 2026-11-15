@@ -164,3 +164,107 @@ bun x biome format --config-path ./biome.jsonc --no-errors-on-unmatched \
 
 **No live claim is made.** The repair is verified by TESTS and
 STRUCTURAL PROBES only.
+
+---
+
+# CORRECTION01 — GATES
+
+## C-RED (before the correction)
+
+```bash
+cd apps/vscode && bun x vitest run --config vitest.config.ts \
+  src/sdk/__tests__/automatic-incident-export-gap01.aice01.test.ts
+```
+
+**EXIT 1 — `Tests  6 failed | 17 passed (23)`**
+
+Failures: `C-1a`, `C-2a`, `C-2b`, `C-3a`, `C-3b`, `C-4a`.
+
+## C-GREEN (after the correction)
+
+```bash
+cd apps/vscode && bun x vitest run --config vitest.config.ts \
+  src/sdk/__tests__/automatic-incident-export-gap01.aice01.test.ts
+```
+
+**EXIT 0 — `Tests  24 passed (24)`**
+
+## C-conservation
+
+```bash
+cd apps/vscode && bun x vitest run --config vitest.config.ts \
+  src/sdk/__tests__/automatic-incident-activation01.aice01.test.ts \
+  src/sdk/__tests__/automatic-incident-capture-export01.aice01.test.ts \
+  src/sdk/__tests__/automatic-incident-correction01.aice01.test.ts \
+  src/sdk/__tests__/automatic-incident-export01.aice01.test.ts \
+  src/sdk/__tests__/automatic-incident-persistence01.aice01.test.ts
+```
+
+**EXIT 0 — `Test Files 5 passed (5)`, `Tests 60 passed (60)`.**
+
+```bash
+cd apps/vscode && bun x vitest run --config vitest.config.ts \
+  src/sdk/__tests__/transient-containment-reconciliation-repair01.tcrr01.test.ts \
+  src/sdk/__tests__/transient-containment-reconciliation-repair01.red-only.tcrr01.test.ts \
+  src/sdk/__tests__/paused-containment-evidence01.discriminator.pce01.test.ts \
+  src/sdk/__tests__/turn-state-writer-provenance.ctl01.test.ts \
+  src/sdk/__tests__/turn-state-writer-provenance.hotpath01.test.ts \
+  src/sdk/__tests__/turn-state-writer-provenance.equiv01.test.ts \
+  src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts \
+  src/sdk/__tests__/bcb-observation-unavailable-capture.bcapt01.test.ts
+```
+
+**EXIT 1 — `Test Files 1 failed | 6 passed (7)`, `Tests 1 failed | 67 passed (68)`.**
+
+The single failure is `BCAPT-CMD.2.1: registry declares both constants
+with the correct id-suffix` — the SAME pre-existing registry source-text
+guard that was already proven pre-existing at the clean entry head (see
+G3.1 above). It is NOT a regression of this correction.
+
+## C-types
+
+```bash
+cd apps/vscode && bun x tsc --noEmit -p tsconfig.json
+```
+
+**EXIT 0 — 0 lines of diagnostics.**
+
+(The CORRECTION01 test deliberately injects a value that is NOT a
+legitimate `TurnPhase`; the cast is explicit and documented, so the type
+check stays clean while the runtime validation is still exercised.)
+
+## C-lint / C-format
+
+```bash
+cd apps/vscode && bun x biome lint --config-path ./biome.jsonc \
+  --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error \
+  src/sdk/automatic-incident-export-sources.ts \
+  src/sdk/automatic-incident-export-runtime.ts \
+  src/sdk/automatic-incident-export.ts \
+  src/sdk/__tests__/automatic-incident-export-gap01.aice01.test.ts
+# EXIT 0 — "Checked 4 files. No fixes applied."
+
+cd apps/vscode && bun x biome format --config-path ./biome.jsonc \
+  --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error \
+  --semicolons=as-needed \
+  src/sdk/automatic-incident-export-sources.ts \
+  src/sdk/automatic-incident-export-runtime.ts \
+  src/sdk/automatic-incident-export.ts \
+  src/sdk/__tests__/automatic-incident-export-gap01.aice01.test.ts
+# EXIT 0 — "Checked 4 files. No fixes applied."
+```
+
+## C-hygiene
+
+Unchanged from the parent ACT: no global env or sink mutation without
+restoration; temporary folders isolated and cleaned; no intentionally
+failing test in the default suite; no repository-wide run.
+
+## C-NOT EXECUTED
+
+| Qualification | Status | Reason |
+|---|---|---|
+| isolated installed-extension qualification (disposable VSCodium profile) | **NOT_EXECUTED** | the correction's bounded scope was the implementation and its verification; the qualification is the NEXT step and is gated on this correction passing |
+| live export against the operator's running instance | **NOT_EXECUTED** | changing / restarting / signalling the live instance is FORBIDDEN |
+
+**No live claim is made.**

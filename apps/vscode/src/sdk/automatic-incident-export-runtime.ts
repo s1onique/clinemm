@@ -203,12 +203,13 @@ export async function prepareAutomaticIncidentExport(input: {
 				},
 				"reconciliation-timeline.jsonl": {
 					availability: sources.reconciliationAvailability === "available" ? "available" : "unavailable",
-					reason:
-						sources.reconciliationAvailability === "available"
-							? undefined
-							: sources.reconciliationAvailability === "unknown"
-								? "unknown"
-								: sources.reconciliationAvailability,
+					// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION01:
+					// the INCIDENT-TIME availability is `unknown` unless records
+					// were actually joined. The EXPORT-TIME arming is reported
+					// SEPARATELY and is never used to explain the absence of
+					// historical evidence.
+					reason: sources.reconciliationAvailability === "available" ? undefined : "unknown",
+					exportTimeArming: sources.reconciliationExportTimeArming,
 					recordCount: incident.reconciliationTimeline.length,
 				},
 			},

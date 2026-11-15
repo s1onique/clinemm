@@ -408,6 +408,16 @@ export interface AutomaticIncidentExportSourceAvailabilityEntry {
 	readonly reason?: string
 	/** How many joined records the source carries. */
 	readonly recordCount?: number
+	/**
+	 * ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION01:
+	 * the EXPORT-TIME state of the source's diagnostic sink.
+	 *
+	 * It is reported SEPARATELY from `reason` (which describes the
+	 * INCIDENT-time availability) because the sink's arming state at
+	 * export time says NOTHING about whether it was armed when the
+	 * incident occurred. The two are never conflated.
+	 */
+	readonly exportTimeArming?: string
 }
 
 /**
@@ -536,6 +546,7 @@ export function buildAutomaticIncidentExportBundle(input: {
 				status,
 				...(declared?.reason !== undefined ? { availabilityReason: declared.reason } : {}),
 				...(declared?.recordCount !== undefined ? { recordCount: declared.recordCount } : {}),
+				...(declared?.exportTimeArming !== undefined ? { exportTimeArming: declared.exportTimeArming } : {}),
 			}
 		}),
 		loss: incident.loss,

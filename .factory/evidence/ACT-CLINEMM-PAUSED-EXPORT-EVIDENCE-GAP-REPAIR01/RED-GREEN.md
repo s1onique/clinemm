@@ -107,3 +107,114 @@ Same command, same suite:
   public user still needs the existing sanctioned opt-in / dogfood
   arming to obtain a fuller future incident; without it the members
   remain explicitly unavailable, which is the CORRECT outcome.
+
+---
+
+# CORRECTION01 — the review's bounded correction
+
+**Trigger:** the Factory review returned `HALT_EXPORT_EVIDENCE_MISATTRIBUTION`
+against commit `cee2f28d3` with three P0 evidence-correctness issues and
+one P1 test issue. `cee2f28d3` is preserved as the repaired-export baseline.
+
+## C1. The RED reproduction (before the correction)
+
+```bash
+cd apps/vscode && bun x vitest run --config vitest.config.ts \
+  src/sdk/__tests__/automatic-incident-export-gap01.aice01.test.ts
+```
+
+**EXIT 1 — `Tests  6 failed | 17 passed (23)`**
+
+| Test | RED failure | Defect |
+|---|---|---|
+| **C-1a** | `expected [ { …(2) } ] to have a length of +0 but got 1` | a record with the MATCHING taskId but NO epoch JOINED the incident |
+| **C-2a** | `expected 'unavailable' not to be 'unavailable'` | a CCARD record captured BEFORE the incident opened became the outcome |
+| **C-2b** | `expected 'unavailable' not to be 'unavailable'` | a NON-AUTHORITATIVE (`run_turn_started`) stage became the outcome |
+| **C-3a** | `expected 'not_armed' not to be 'not_armed'` | the EXPORT-time arming was reported as the INCIDENT-time reason |
+| **C-3b** | `expected 'unknown' to be 'unknown'` | the export-time arming was not reported separately |
+| **C-4a** | `sentinel commandText leaked into phase-writers.jsonl` | **a REAL privacy leak**: the value in an allowlisted key was never validated |
+
+C-4a is notable: the original R4d privacy test was VACUOUS — it declared
+sentinels but never injected them. Fixing the fixture exposed a REAL leak
+that the empty fixture had hidden. The leak was in the VALUE, not the KEY:
+the export's privacy gate is a key allowlist, and it assumed the value of
+an allowlisted key (`commitOrigin`) was a bounded enum member. It was not.
+
+## C2. The correction
+
+### P0-1 — phase writers cross epoch boundaries
+
+**Before:** `if (record.epoch !== undefined && record.epoch !== epoch) continue`
+— a record with NO epoch joined a specific-epoch incident.
+
+**After:** `if (record.epoch !== epoch) continue` — EXACT match. A record
+with no epoch and a record with a different epoch are BOTH unattributable
+and BOTH dropped.
+
+### P0-2 — stale / misclassified continuation outcomes
+
+**Before:** the FIRST CCARD record matching `sessionId + taskId` won.
+
+**After:** a record must satisfy ALL of:
+
+1. the incident's session AND task;
+2. the incident's EPOCH, when the record carries one (BCAPT always does;
+   CCARD never does);
+3. the incident's temporal LOWER BOUND — the record must not have been
+   captured BEFORE the incident opened (a record from an earlier epoch of
+   the same task is dropped);
+4. for CCARD, an AUTHORITATIVE outcome stage
+   (`agent_turn_done` / `submit_and_exit_seen` /
+   `task_completion_committed`); and
+5. the LATEST qualifying record is selected — ordered by the ring's
+   MONOTONIC `seq` (CCARD) or the ring position (BCAPT), so a tie inside
+   one millisecond is still resolved deterministically.
+
+There is deliberately NO upper bound: a continuation outcome is a
+CONSEQUENCE of the hold, so it legitimately occurs AFTER the incident
+opened.
+
+### The additional issue — export-time is not incident-time
+
+**Before:** `classifyReconciliation` read the sink's arming state AT
+EXPORT TIME and reported `not_armed` / `no_matching_records` as if it
+described the incident. The sink may have changed state between the
+incident and the export.
+
+**After:** the INCIDENT-TIME availability is `unknown` unless records
+were ACTUALLY joined to the incident. The EXPORT-TIME arming is reported
+SEPARATELY in a new, explicitly labeled `exportTimeArming` field
+(`armed` / `disarmed`) and is NEVER used to explain the absence of
+historical evidence.
+
+### P1 — the vacuous privacy test, and the real leak it exposed
+
+**Before:** R4d declared three sentinels and searched the archive for
+them, but never injected them into the source records — so the assertion
+passed without exercising anything.
+
+**After:** C-4a GENUINELY injects the sentinels into the source records
+(the phase slot and the CCARD `correlationId`), ASSERTS that they are
+present in the source records, and then asserts that they are absent
+from every archive member. That is a non-vacuous exclusion claim.
+
+The REAL leak the fixed fixture exposed is closed by validating the
+phase VALUE against the closed `TurnPhase` set (`exportSafePhase`) before
+export. A value outside the set is DROPPED. No new privacy mechanism was
+added; the existing allowlist's assumed invariant is now enforced.
+
+## C3. The GREEN (after the correction)
+
+**EXIT 0 — `Tests  24 passed (24)`** (14 original + 10 correction tests).
+
+## C4. Conservation
+
+| Suite | Exit | Result |
+|---|---|---|
+| the new suite (24 tests) | **0** | `24 passed (24)` |
+| the existing `automatic-incident-*` aice01 suites | **0** | `60 passed (60)` |
+| the reconciliation / containment / phase-authority sweep | **1** | `1 failed / 67 passed (68)` — the SAME pre-existing `BCAPT-CMD.2.1` registry source-text guard, already proven pre-existing at the clean entry head |
+| `tsc --noEmit` | **0** | 0 diagnostics |
+| Biome lint / format | **0** / **0** | clean |
+
+**No intentionally failing test is in the default suite.**

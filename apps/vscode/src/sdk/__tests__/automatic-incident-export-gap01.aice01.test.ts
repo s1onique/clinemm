@@ -85,12 +85,14 @@ import {
 	enableTurnStateWriterProvenanceDiagnostic,
 	getTurnStateWriterProvenanceRecords,
 	recordTurnStateWriterProvenance,
+	type TurnStateWriterProvenanceRecord,
 } from "@shared/turn-state-writer-provenance"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	type AutomaticIncidentIdentity,
 	captureAutomaticIncident,
 	clearAutomaticIncidents,
+	getAutomaticIncidentForTask,
 	setAutomaticIncidentCaptureEnabled,
 	setAutomaticIncidentDurabilityHook,
 } from "@/sdk/automatic-incident-capture"
@@ -185,7 +187,7 @@ const readJsonl = (outDir: string, name: string): Record<string, unknown>[] =>
 const readManifest = (
 	outDir: string,
 ): {
-	sources: { file: string; status: string; availabilityReason?: string }[]
+	sources: { file: string; status: string; availabilityReason?: string; exportTimeArming?: string }[]
 	files: { file: string; sha256: string; bytes: number }[]
 	manifestIntegrity: { memberCount: number }
 } => JSON.parse(readFileSync(join(outDir, "manifest.json"), "utf8"))
@@ -392,6 +394,11 @@ describe("R3 - the reconciliation timeline differentiates the arming states", ()
 		// capture when the sink was never armed.
 		expect(source!.status).not.toBe("available")
 		expect(source!.availabilityReason).toBeTruthy()
+		// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION01:
+		// the export-time arming is reported SEPARATELY and is never
+		// used as the incident-time reason.
+		expect(source!.exportTimeArming).toBe("disarmed")
+		expect(source!.availabilityReason).not.toBe("not_armed")
 	})
 
 	it("R3b - an ARMED sink with no matching records is distinguishable from the disarmed case", async () => {
@@ -409,10 +416,13 @@ describe("R3 - the reconciliation timeline differentiates the arming states", ()
 		const manifest = readManifest(outDir)
 		const source = manifest.sources.find((s) => s.file === "reconciliation-timeline.jsonl")
 		expect(source).toBeDefined()
-		// An ARMED sink with zero records is a DIFFERENT state from a
-		// DISARMED sink: the reason must differ.
+		// An ARMED sink with zero records is a DIFFERENT export-time state
+		// from a DISARMED sink: the export-time arming must differ.
 		expect(source!.availabilityReason).toBeTruthy()
 		expect(source!.availabilityReason).not.toBe(source!.status)
+		// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION01:
+		// the export-time arming is reported SEPARATELY.
+		expect(source!.exportTimeArming).toBe("armed")
 	})
 })
 
@@ -573,5 +583,333 @@ describe("R5 - default-off diagnostics have ZERO state-semantic delta", () => {
 		// The incident itself is unchanged by the diagnostics.
 		expect(prepared.incident!.completionCommitted).toBe(false)
 		expect(prepared.incident!.observations.length).toBeGreaterThan(0)
+	})
+})
+
+// ===========================================================================
+// ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION01
+//
+// The RED reproduction of the reviewer's three P0 evidence-correctness
+// defects and the P1 vacuous-privacy-test defect.
+//
+// C-1 (P0-1)  a phase-writer record with the MATCHING taskId but NO epoch
+//              must NOT join an incident that has a specific epoch.
+//              A record with a DIFFERENT epoch must NOT join either.
+// C-2 (P0-2)  the continuation outcome must be correlated to the
+//              incident, not merely the FIRST record that shares the
+//              session/task. A record OUTSIDE the incident's temporal
+//              window, or a NON-AUTHORITATIVE stage, must not be
+//              presented as the incident's outcome.
+// C-3 (additional) the reconciliation availability must NOT confuse
+//              EXPORT-time arming with INCIDENT-time arming. The
+//              incident-time arming is `unknown` unless established;
+//              the export-time arming is reported separately and
+//              explicitly labeled.
+// C-4 (P1)    the privacy sentinels must be GENUINELY INJECTED into the
+//              source records, so the exclusion claim is actually
+//              exercised.
+// ===========================================================================
+
+describe("CORRECTION01 C-1 - a phase writer must match task AND epoch EXACTLY", () => {
+	it("C-1a - a record with the MATCHING taskId but NO epoch does NOT join", async () => {
+		openIncident()
+		enableTurnStateWriterProvenanceDiagnostic()
+		// The SAME task, but the record carries NO epoch: it cannot be
+		// attributed to ONE epoch, so it must not join.
+		recordTurnStateWriterProvenance({
+			capturedAt: Date.now(),
+			writerId: "session-event-bcb-hold-resumable",
+			taskId: TASK_A,
+			previous: { phase: "streaming", seq: 41, anchorTs: undefined },
+			requested: { phase: "resumable", anchorTs: undefined },
+			committed: { phase: "resumable", seq: 42, anchorTs: undefined },
+		})
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const phaseWriters = readJsonl(outDir, "phase-writers.jsonl")
+		// RED: at cee2f28d3 the epoch-less record JOINED.
+		expect(phaseWriters).toHaveLength(0)
+	})
+
+	it("C-1b - a record with the SAME task and a DIFFERENT epoch does NOT join", async () => {
+		openIncident()
+		enableTurnStateWriterProvenanceDiagnostic()
+		recordTurnStateWriterProvenance({
+			capturedAt: Date.now(),
+			writerId: "controller-cancel-task",
+			taskId: TASK_A,
+			epoch: EPOCH_A + 1,
+			previous: { phase: "streaming", seq: 7, anchorTs: undefined },
+			requested: { phase: "resumable", anchorTs: undefined },
+			committed: { phase: "resumable", seq: 8, anchorTs: undefined },
+		})
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const phaseWriters = readJsonl(outDir, "phase-writers.jsonl")
+		expect(phaseWriters).toHaveLength(0)
+	})
+
+	it("C-1c - the EXACT task AND epoch still joins", async () => {
+		openIncident()
+		enableTurnStateWriterProvenanceDiagnostic()
+		recordTurnStateWriterProvenance({
+			capturedAt: Date.now(),
+			writerId: "session-event-bcb-hold-resumable",
+			taskId: TASK_A,
+			epoch: EPOCH_A,
+			previous: { phase: "streaming", seq: 41, anchorTs: undefined },
+			requested: { phase: "resumable", anchorTs: undefined },
+			committed: { phase: "resumable", seq: 42, anchorTs: undefined },
+		})
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const phaseWriters = readJsonl(outDir, "phase-writers.jsonl")
+		expect(phaseWriters.length).toBeGreaterThan(0)
+	})
+})
+
+describe("CORRECTION01 C-2 - the continuation outcome must be CORRELATED to the incident", () => {
+	it("C-2a - a CCARD record captured BEFORE the incident opened does NOT become the outcome", async () => {
+		openIncident()
+		setContinuationCardinalityAuthorityCaptureEnabled(true)
+		// A record captured LONG BEFORE the incident existed. It shares
+		// the session/task but belongs to an EARLIER epoch.
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "agent_turn_done",
+			origin: "background_terminal",
+			sessionId: SESSION_A,
+			taskId: TASK_A,
+		})
+		// Age the record so it falls OUTSIDE the incident window.
+		const incident = getAutomaticIncidentForTask(TASK_A)!
+		const openedAt = Date.parse(incident.openedAt)
+		// The incident was opened now; a record from an hour ago was
+		// captured BEFORE it opened, so it belongs to an earlier epoch.
+		// The CCARD getter returns the LIVE buffer, so the test can age the
+		// record in place to place it OUTSIDE the incident window.
+		const live = getContinuationCardinalityAuthorityCaptureRecords() as unknown as {
+			at: number
+		}[]
+		expect(live.length).toBeGreaterThan(0)
+		live[0]!.at = openedAt - 3_600_000
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const continuation = JSON.parse(readFileSync(join(outDir, "continuation-summary.json"), "utf8")) as {
+			status: string
+			outcome?: string
+		}
+		// RED: at cee2f28d3 the FIRST matching record became the
+		// "authoritative" outcome regardless of when it was captured.
+		expect(continuation.status).toBe("unavailable")
+		expect(continuation.outcome).toBeUndefined()
+	})
+
+	it("C-2b - a NON-AUTHORITATIVE stage inside the window does NOT become the outcome", async () => {
+		openIncident()
+		setContinuationCardinalityAuthorityCaptureEnabled(true)
+		// `run_turn_started` is an ENTER-only stage: it is not an
+		// outcome. Selecting it as "the outcome" would misclassify.
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "run_turn_started",
+			origin: "background_terminal",
+			sessionId: SESSION_A,
+			taskId: TASK_A,
+		})
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const continuation = JSON.parse(readFileSync(join(outDir, "continuation-summary.json"), "utf8")) as {
+			status: string
+			outcome?: string
+		}
+		expect(continuation.status).toBe("unavailable")
+		expect(continuation.outcome).toBeUndefined()
+	})
+
+	it("C-2c - an AUTHORITATIVE stage INSIDE the window IS the outcome", async () => {
+		openIncident()
+		setContinuationCardinalityAuthorityCaptureEnabled(true)
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "task_completion_committed",
+			origin: "background_terminal",
+			sessionId: SESSION_A,
+			taskId: TASK_A,
+		})
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const continuation = JSON.parse(readFileSync(join(outDir, "continuation-summary.json"), "utf8")) as {
+			status: string
+			outcome?: string
+		}
+		expect(continuation.status).toBe("available")
+		expect(continuation.outcome).toBe("task_completion_committed")
+	})
+
+	it("C-2d - the LATEST qualifying record is the outcome, not the first", async () => {
+		openIncident()
+		setContinuationCardinalityAuthorityCaptureEnabled(true)
+		// An EARLIER qualifying outcome.
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "agent_turn_done",
+			origin: "background_terminal",
+			sessionId: SESSION_A,
+			taskId: TASK_A,
+		})
+		// A LATER qualifying outcome: it is the incident's most recent
+		// outcome and must be the one reported.
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "task_completion_committed",
+			origin: "background_terminal",
+			sessionId: SESSION_A,
+			taskId: TASK_A,
+		})
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const continuation = JSON.parse(readFileSync(join(outDir, "continuation-summary.json"), "utf8")) as {
+			status: string
+			outcome?: string
+		}
+		expect(continuation.status).toBe("available")
+		// RED at cee2f28d3: the FIRST matching record won.
+		expect(continuation.outcome).toBe("task_completion_committed")
+	})
+})
+
+describe("CORRECTION01 C-3 - export-time arming is NOT incident-time arming", () => {
+	it("C-3a - a DISARMED sink at export time does NOT assert 'not armed at incident time'", async () => {
+		openIncident()
+		setReconciliationDiagnosticCaptureEnabled(false)
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const manifest = readManifest(outDir)
+		const source = manifest.sources.find((s) => s.file === "reconciliation-timeline.jsonl")
+		expect(source).toBeDefined()
+		// The INCIDENT-TIME arming is never established by the incident:
+		// it must read `unknown`, NOT `not_armed`.
+		expect(source!.availabilityReason).not.toBe("not_armed")
+		expect(source!.availabilityReason).toBe("unknown")
+		// The EXPORT-TIME arming is reported SEPARATELY and EXPLICITLY
+		// labeled.
+		expect(source!.exportTimeArming).toBe("disarmed")
+	})
+
+	it("C-3b - an ARMED sink at export time is reported separately too", async () => {
+		openIncident()
+		setReconciliationDiagnosticCaptureEnabled(true)
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		const manifest = readManifest(outDir)
+		const source = manifest.sources.find((s) => s.file === "reconciliation-timeline.jsonl")
+		expect(source!.availabilityReason).toBe("unknown")
+		expect(source!.exportTimeArming).toBe("armed")
+	})
+})
+
+describe("CORRECTION01 C-4 - the privacy sentinels are GENUINELY injected", () => {
+	it("C-4a - the sentinels ARE present in the source records, and are ABSENT from the archive", async () => {
+		openIncident()
+		enableTurnStateWriterProvenanceDiagnostic()
+		// The sentinel is injected into a NON-allowlisted key of the
+		// REAL source record's `committed` phase slot. The export's
+		// strict allowlist must DROP it.
+		recordTurnStateWriterProvenance({
+			capturedAt: Date.now(),
+			writerId: "session-event-bcb-hold-resumable",
+			taskId: TASK_A,
+			epoch: EPOCH_A,
+			previous: { phase: "streaming", seq: 41, anchorTs: undefined },
+			requested: { phase: "resumable", anchorTs: undefined },
+			// The cast is DELIBERATE: the test injects a value that is
+			// NOT a legitimate `TurnPhase` to prove the export validates
+			// the VALUE against the closed set at runtime, not just the
+			// key against the allowlist.
+			committed: {
+				phase: `resumable:${SENTINELS.commandText}` as TurnStateWriterProvenanceRecord["committed"]["phase"],
+				seq: 42,
+				anchorTs: undefined,
+			},
+		})
+		setContinuationCardinalityAuthorityCaptureEnabled(true)
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "task_completion_committed",
+			origin: "background_terminal",
+			sessionId: SESSION_A,
+			taskId: TASK_A,
+			correlationId: SENTINELS.modelPrompt,
+		})
+
+		// PROVE the sentinel really is in the SOURCE record. Without
+		// this, the exclusion assertion below would be vacuous.
+		const sourceRecords = getTurnStateWriterProvenanceRecords()
+		expect(JSON.stringify(sourceRecords)).toContain(SENTINELS.commandText)
+		expect(JSON.stringify(getContinuationCardinalityAuthorityCaptureRecords())).toContain(SENTINELS.modelPrompt)
+
+		const prepared = await prepareAutomaticIncidentExport({
+			context: context(),
+			activeTaskId: TASK_A,
+			buildIdentity: buildIdentity(),
+		})
+		expect(prepared.ok, `export preparation failed: ${prepared.error}`).toBe(true)
+		const outDir = await decompress(prepared.bundle!)
+		for (const entry of readdirSync(outDir)) {
+			const contents = readFileSync(join(outDir, entry), "utf8")
+			for (const [name, sentinel] of Object.entries(SENTINELS)) {
+				expect(contents.includes(sentinel), `sentinel ${name} leaked into ${entry}`).toBe(false)
+			}
+			expect(contents.includes("/Users/")).toBe(false)
+		}
 	})
 })

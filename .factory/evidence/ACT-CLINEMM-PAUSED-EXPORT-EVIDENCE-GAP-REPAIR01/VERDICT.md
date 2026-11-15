@@ -129,3 +129,72 @@ every changed file and every evidence file — is
 It binds to the exact discovered `ENTRY_HEAD` / `SUBJECT_HEAD` and
 records the preserved stashes, the preserved worktrees, and the absence
 of any push / deploy / release / signal.
+
+---
+
+# CORRECTION01 — VERDICT
+
+## VERDICT: `PASS_EVIDENCE_EXPORT_REPAIRED` (corrected)
+
+### 1. What the review found and what changed
+
+The Factory review returned `HALT_EXPORT_EVIDENCE_MISATTRIBUTION` against
+`cee2f28d3`. It found three P0 evidence-correctness issues and one P1
+test issue in the join logic. All four are **corrected**, and all four
+were reproduced as RED before the correction (`RED-GREEN.md` §C1:
+**EXIT 1, 6 failed / 17 passed**).
+
+| Reviewer finding | Status | How it is now correct |
+|---|---|---|
+| **P0-1** — a phase writer with a matching taskId but NO epoch joined a specific-epoch incident | **CORRECTED** | the join requires `record.epoch === incident.identity.epoch` EXACTLY; an epoch-less record and a different-epoch record are BOTH dropped |
+| **P0-2** — the continuation outcome was the FIRST matching CCARD record (arbitrary, possibly stale, possibly cross-epoch) | **CORRECTED** | a record must satisfy the owner scope, the epoch (when it carries one), the incident's temporal LOWER BOUND, an AUTHORITATIVE outcome stage, and the LATEST qualifying record wins (ordered by the ring's monotonic `seq` / position) |
+| **additional** — export-time arming was reported as the incident-time reason | **CORRECTED** | the incident-time availability is `unknown` unless records were actually joined; the export-time arming is reported SEPARATELY in a labeled `exportTimeArming` field and never explains historical absence |
+| **P1** — the privacy test declared sentinels but never injected them | **CORRECTED** | the sentinels are GENUINELY injected into the source records, their presence there is asserted, and their absence from every archive member is asserted |
+
+### 2. The P1 correction exposed a REAL leak
+
+Fixing the vacuous privacy fixture revealed a genuine defect the empty
+fixture had hidden: the export's privacy gate is a **KEY** allowlist, and
+it assumed the VALUE of an allowlisted key was a bounded enum member. A
+phase slot carrying arbitrary text therefore reached
+`phase-writers.jsonl` verbatim through the allowlisted `commitOrigin`
+key.
+
+The correction closes it by validating the phase VALUE against the
+closed `TurnPhase` set before export (`exportSafePhase`); a value outside
+the set is DROPPED. **No new privacy mechanism was added** — the existing
+allowlist's assumed invariant is now enforced.
+
+### 3. Executable evidence (CORRECTION01)
+
+| Gate | Exit | Result |
+|---|---|---|
+| the new suite | RED **1** -> GREEN **0** | `6 failed / 17 passed (23)` -> `24 passed (24)` |
+| the existing `automatic-incident-*` aice01 suites | **0** | `60 passed (60)` |
+| the reconciliation / containment / phase-authority sweep | **1** | `1 failed / 67 passed (68)` — the SAME pre-existing `BCAPT-CMD.2.1` registry source-text guard |
+| `tsc --noEmit` | **0** | 0 diagnostics |
+| Biome lint / format | **0** / **0** | clean |
+
+### 4. What the correction does NOT change
+
+- The repaired-export baseline `cee2f28d3` is **preserved**; the
+  correction is a separate, additive commit on top of it.
+- The historical causality discussion is **not reopened**.
+- The historical installed artifact remains
+  **`HISTORICAL_RUNTIME_SOURCE_UNBOUND`**; the past incident remains
+  **`HISTORICAL_RECONCILIATION_UNOBSERVED`**.
+- No signal, termination/cleanup policy, reconciliation horizon,
+  process-group ownership, C10 blocking logic, completion suppression,
+  public API/proto or MCP registry was touched. The operator's live
+  VSCodium instance was not changed, restarted or signalled. No push,
+  VSIX deployment, release or install.
+
+### 5. Installed qualification
+
+The review directs an **isolated installed-extension qualification** using
+a disposable VSCodium profile after the correction, and only then
+`PASS_EVIDENCE_EXPORT_LIVE`. That qualification is **NOT EXECUTED** by
+this correction: the correction's scope was the bounded implementation
+and its verification. **No live claim is made.** The verdict remains
+`PASS_EVIDENCE_EXPORT_REPAIRED` — a tests-and-structural-probes verdict,
+not a live one.

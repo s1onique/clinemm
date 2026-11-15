@@ -33481,3 +33481,73 @@ containment or completion-behaviour repair.
 
 EVIDENCE: `.factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/`
   RECON.md, RED-GREEN.md, GATES.md, VERDICT.md, MANIFEST.json
+
+# ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION01 — PASS_EVIDENCE_EXPORT_REPAIRED — 2026-11-15
+
+**Scope.** ONE bounded correction to the export evidence joins, authorized by
+the Factory review's `HALT_EXPORT_EVIDENCE_MISATTRIBUTION` against
+`cee2f28d3`. The repaired-export baseline `cee2f28d3` is PRESERVED; the
+correction is additive on top of it. The historical causality discussion was
+NOT reopened and no comprehensive re-review was started.
+
+## Identity and conservation
+
+Base `ENTRY_HEAD`/`SUBJECT_HEAD` of the parent ACT
+`14a979cd1b8fb23dbe8a1348af4495eaf36984b8`; the parent repair commit
+`cee2f28d3` is preserved as the baseline. The protected stash
+(`stash@{0}: WIP on main: d46223b51 ...`) and all 5 worktrees were preserved.
+
+**No signal was sent** and the operator's live VSCodium instance was NOT
+changed, restarted or re-instrumented. No push, no VSIX deployment, no
+release, no install. The MCP registry, the public API, the proto surface, the
+signals, the termination/cleanup policy, the reconciliation horizon, the
+process-group ownership, the C10 blocking logic and the completion suppression
+are all UNTOUCHED.
+
+## The three P0 findings and the P1 finding
+
+| Finding | Status | Correction |
+|---|---|---|
+| **P0-1** a phase writer with a matching taskId but NO epoch joined a specific-epoch incident | **CORRECTED** | the join requires `record.epoch === incident.identity.epoch` EXACTLY; an epoch-less record and a different-epoch record are BOTH dropped |
+| **P0-2** the continuation outcome was the FIRST matching CCARD record (arbitrary, possibly stale, possibly cross-epoch) | **CORRECTED** | five conjunctive predicates: owner scope; epoch (when carried); the incident's temporal LOWER BOUND (`>= openedAt`); an AUTHORITATIVE outcome stage; and the LATEST qualifying record wins (CCARD by its monotonic `seq`, BCAPT by ring position) |
+| **additional** export-time arming was reported as the incident-time reason | **CORRECTED** | the incident-time availability is `unknown` unless records were actually joined; the export-time arming is reported SEPARATELY in a labeled `exportTimeArming` field and never explains historical absence |
+| **P1** the privacy test declared sentinels but never injected them | **CORRECTED** | the sentinels are GENUINELY injected into the source records, their presence there is asserted, and their absence from every archive member is asserted |
+
+## The P1 correction exposed a REAL leak
+
+Fixing the vacuous privacy fixture revealed a genuine defect the empty
+fixture had hidden: the export's privacy gate is a **KEY** allowlist and it
+assumed the VALUE of an allowlisted key was a bounded enum member. A phase
+slot carrying arbitrary text therefore reached `phase-writers.jsonl` verbatim
+through the allowlisted `commitOrigin` key. The correction closes it by
+validating the phase VALUE against the closed `TurnPhase` set
+(`exportSafePhase`); a value outside the set is DROPPED. **No new privacy
+mechanism was added** — the existing allowlist's assumed invariant is now
+enforced.
+
+## Executable evidence
+
+- RED before the correction: **EXIT 1** — `6 failed / 17 passed (23)`
+  (`C-1a`, `C-2a`, `C-2b`, `C-3a`, `C-3b`, `C-4a`).
+- GREEN after the correction: **EXIT 0** — `24 passed (24)`.
+- The existing `automatic-incident-*` aice01 suites: **EXIT 0** —
+  `60 passed (60)`.
+- The reconciliation / containment / phase-authority sweep: **EXIT 1** —
+  `1 failed / 67 passed (68)`. The single failure is the SAME pre-existing
+  registry source-text guard (`BCAPT-CMD.2.1`), already proven pre-existing
+  at the clean entry head. NOT a regression of this correction.
+- `tsc --noEmit`: **EXIT 0**, 0 diagnostics.
+- Biome lint / format: **EXIT 0** / **EXIT 0**.
+- No intentionally failing test is in the default suite. No repository-wide run.
+
+## Not established
+
+The past incident remains `HISTORICAL_RECONCILIATION_UNOBSERVED`; the
+historical installed artifact remains `HISTORICAL_RUNTIME_SOURCE_UNBOUND`. The
+isolated installed-extension qualification (disposable VSCodium profile) is
+**NOT_EXECUTED** by this correction, so **no live claim is made** and
+`PASS_EVIDENCE_EXPORT_LIVE` is NOT claimed. The correction's scope was the
+bounded implementation and its verification.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/`
+  RECON.md, RED-GREEN.md, GATES.md, VERDICT.md, MANIFEST.json
