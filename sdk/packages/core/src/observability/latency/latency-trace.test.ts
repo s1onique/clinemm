@@ -268,17 +268,24 @@ describe("LatencyTracer — stage attribution", () => {
 				stage.to === "provider_completed",
 		);
 		expect(firstTokenStage?.spanDurationMs).toBe(30);
-		// execution: the phase total is the 7 ms gap between the tool's
-		//             execution end and result delivery. The executor's own
-		//             measured run time is reported as the span duration.
-		expect(byStage.get("execution")).toBe(7);
+		// execution: the executor's own measured run time (60 ms). The
+		//          post-execution gap is NOT part of execution — it is a
+		//          delivery delay (see the delivery assertion below).
+		expect(byStage.get("execution")).toBe(60);
 		const executionStage = stages.find((stage) => stage.stage === "execution");
 		expect(executionStage?.spanDurationMs).toBe(60);
-		// delivery: the 2 ms gap between the result-delivered boundary and
-		//           the provider-ready request. The result-delivered span's
-		//           own 8 ms is reported as its span duration.
-		expect(byStage.get("delivery")).toBe(2);
-		const deliveryStage = stages.find((stage) => stage.stage === "delivery");
+		// delivery: the 7 ms gap between the tool's execution end and the
+		//           result delivery, plus the 2 ms gap between the
+		//           result-delivered boundary and the provider-ready request.
+		//           The result-delivered span's own 8 ms is reported as its
+		//           span duration.
+		expect(byStage.get("delivery")).toBe(7 + 2);
+		const deliveryStage = stages.find(
+			(stage) =>
+				stage.stage === "delivery" &&
+				stage.from === "tool_result_delivered" &&
+				stage.to === "provider_ready",
+		);
 		expect(deliveryStage?.spanDurationMs).toBe(8);
 	});
 
@@ -292,10 +299,20 @@ describe("LatencyTracer — stage attribution", () => {
 		const execution = tracer
 			.getStages()
 			.find((stage) => stage.stage === "execution");
-		// The phase total is the gap to the delivery boundary (0 ms here);
-		// the executor's own measured run time is the span duration.
-		expect(execution?.durationMs).toBe(0);
+		// The execution stage carries the executor's own measured run time.
+		// The post-execution gap to the delivery boundary (0 ms here) is a
+		// DELIVERY delay and is never part of the execution total.
+		expect(execution?.durationMs).toBe(60);
 		expect(execution?.spanDurationMs).toBe(60);
+		const delivery = tracer
+			.getStages()
+			.find(
+				(stage) =>
+					stage.stage === "delivery" &&
+					stage.from === "tool_execution" &&
+					stage.to === "tool_result_delivered",
+			);
+		expect(delivery?.durationMs).toBe(0);
 	});
 
 	it("does not charge the execution-to-delivery delay to execution", () => {
@@ -311,19 +328,62 @@ describe("LatencyTracer — stage attribution", () => {
 		const stages = tracer.getStages();
 		const execution = stages.find((stage) => stage.stage === "execution");
 		// The executor's own run time is 10 ms. The 5,000 ms between the
-		// execution end and result delivery is the execution phase's GAP,
-		// and is never folded into the execution span duration.
+		// execution end and result delivery is a DELIVERY delay and is never
+		// folded into the execution number.
 		expect(execution?.spanDurationMs).toBe(10);
-		expect(execution?.durationMs).toBe(5_000);
+		expect(execution?.durationMs).toBe(10);
+		const delivery = stages.find(
+			(stage) =>
+				stage.stage === "delivery" &&
+				stage.from === "tool_execution" &&
+				stage.to === "tool_result_delivered",
+		);
+		expect(delivery?.durationMs).toBe(5_000);
 	});
 
 	it("classifies the post-execution delivery gap separately from execution", () => {
-		// The pair remains associated with the execution phase for
-		// navigation, but the tracer reports the post-execution interval as
-		// its own delivery measurement rather than adding it to execution.
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02 — the inter-boundary
+		// gap between the tool's execution END and the result's delivery is a
+		// DELIVERY delay, NOT execution. A consumer that aggregates
+		// `durationMs` by stage must therefore never see the ~5 s
+		// post-execution floor attributed to execution.
 		expect(
 			classifyLatencyStage("tool_execution", "tool_result_delivered"),
-		).toBe("execution");
+		).toBe("delivery");
+	});
+
+	it("does not charge the post-execution delay to the execution stage", () => {
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02 — the exact Round C
+		// counterexample: a 10 ms executor whose result is delivered 5,000 ms
+		// later. Aggregating the stage durations by stage must report 10 ms
+		// of execution and 5,000 ms of post-execution delivery delay.
+		const clock = new ScriptedClock();
+		const tracer = new LatencyTracer("corr-execution-stage-aggregation", clock);
+		tracer.enter("tool_execution");
+		clock.advance(10);
+		tracer.exit("tool_execution");
+		clock.advance(5_000);
+		tracer.enter("tool_result_delivered");
+
+		const stages = tracer.getStages();
+		const byStage = new Map<string, number>();
+		for (const stage of stages) {
+			byStage.set(
+				stage.stage,
+				(byStage.get(stage.stage) ?? 0) + stage.durationMs,
+			);
+		}
+
+		// The executor's own measured run time is 10 ms, and it is
+		// attributed to the EXECUTION stage.
+		const execution = stages.find((stage) => stage.stage === "execution");
+		expect(execution?.spanDurationMs).toBe(10);
+		expect(execution?.durationMs).toBe(10);
+		// The 5,000 ms post-execution gap is a DELIVERY delay.
+		expect(byStage.get("delivery")).toBe(5_000);
+		// And it is NEVER charged to the execution stage: the execution
+		// stage carries only the executor's own measured run time.
+		expect(byStage.get("execution")).toBe(10);
 	});
 
 	it("does not guess an unknown pair", () => {

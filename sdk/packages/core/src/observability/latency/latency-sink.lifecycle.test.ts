@@ -120,6 +120,46 @@ describe("D2 — latency lifecycle", () => {
 		).toBe(true);
 	});
 
+	it("does not charge request preparation to the provider time-to-first-token", () => {
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02 — the provider timers
+		// must be anchored at the ACTUAL SUBMISSION boundary, not at the
+		// start of request preparation.
+		//
+		// The counterexample: 250 ms of request preparation followed by
+		// 100 ms from submission to the first provider token. The measured
+		// provider TTFT is 100 ms. A tracer that anchors the provider timer
+		// at preparation start reports 350 ms and charges the preparation
+		// cost to the provider.
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-provider-ttft", clock);
+		sink.onModelRequestStart(observation());
+		clock.advance(250);
+		sink.onRequestPrepared(observation());
+		// The provider request is submitted here; the provider timers are
+		// anchored at THIS instant.
+		sink.onProviderRequestSubmitted(observation());
+		clock.advance(100);
+		sink.onProviderFirstToken(observation());
+
+		const firstToken = sink
+			.getTrace()
+			.events.find(
+				(event) =>
+					event.boundary === "provider_first_token" && event.phase === "end",
+			);
+		// The provider TTFT is measured from SUBMISSION: 100 ms, not 350 ms.
+		expect(firstToken?.durationMs).toBe(100);
+
+		// The preparation span still measures the preparation itself.
+		const preparationEnd = sink
+			.getTrace()
+			.events.find(
+				(event) =>
+					event.boundary === "request_preparation" && event.phase === "end",
+			);
+		expect(preparationEnd?.durationMs).toBe(250);
+	});
+
 	it("keeps request preparation independent from provider round-trip time", () => {
 		const clock = new ScriptedClock();
 		const sink = new LatencyTraceSink("corr-preparation", clock);
@@ -158,6 +198,9 @@ describe("D2 — latency lifecycle", () => {
 		const sink = new LatencyTraceSink("corr-lc-4", clock);
 		sink.onModelRequestStart(observation());
 		clock.advance(20);
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: the provider timers
+		// are anchored at the ACTUAL SUBMISSION boundary.
+		sink.onProviderRequestSubmitted(observation());
 		sink.onProviderFirstResponse(observation());
 		clock.advance(30);
 		sink.onProviderFirstToken(observation());
@@ -170,15 +213,18 @@ describe("D2 — latency lifecycle", () => {
 				(event) =>
 					event.boundary === "provider_first_token" && event.phase === "end",
 			);
-		expect(firstToken?.durationMs).toBe(50);
+		// 20 ms (preparation) + 30 ms (to the first token) — the provider
+		// interval is measured from SUBMISSION, so it is 30 ms.
+		expect(firstToken?.durationMs).toBe(30);
 		const firstResponse = sink
 			.getTrace()
 			.events.find(
 				(event) =>
 					event.boundary === "provider_first_response" && event.phase === "end",
 			);
-		// The first response event is a SEPARATE measurement: 0 -> 20.
-		expect(firstResponse?.durationMs).toBe(20);
+		// The first response event is a SEPARATE measurement: 0 ms from
+		// submission to the first response event.
+		expect(firstResponse?.durationMs).toBe(0);
 		expect(
 			sink
 				.getTrace()

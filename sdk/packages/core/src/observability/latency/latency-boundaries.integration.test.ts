@@ -178,6 +178,62 @@ describe("Phase 5 — production boundary integration", () => {
 		expect(sink.getTrace().integrityFailures).toEqual([]);
 	});
 
+	it("SUCCESS: the provider request is submitted at the real dispatch seam", async () => {
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: the provider timers
+		// are anchored at the REAL submission seam — the instant the
+		// runtime invokes the provider's `stream()`. This test drives the
+		// REAL `AgentRuntime` and asserts that the submission boundary
+		// fired, that it fired AFTER the preparation boundary closed, and
+		// that the trace is internally consistent.
+		const sink = new LatencyTraceSink("int-submission");
+		await drive({ sink });
+
+		const events = sink.getTrace().events;
+		const submissionStart = events.find(
+			(event) =>
+				event.boundary === "provider_submitted" && event.phase === "start",
+		);
+		expect(submissionStart).toBeDefined();
+
+		// The submission happens AFTER request preparation has closed: the
+		// provider interval never includes the preparation time.
+		const preparationEnd = events.find(
+			(event) =>
+				event.boundary === "request_preparation" && event.phase === "end",
+		);
+		expect(preparationEnd).toBeDefined();
+		expect(submissionStart?.monotonicMs).toBeGreaterThanOrEqual(
+			preparationEnd?.monotonicMs ?? 0,
+		);
+
+		// The provider's first-response / first-token spans were opened at
+		// submission, so they are anchored at (or just after) the same
+		// instant — NOT at the start of request preparation.
+		const firstTokenStart = events.find(
+			(event) =>
+				event.boundary === "provider_first_token" && event.phase === "start",
+		);
+		expect(firstTokenStart).toBeDefined();
+		expect(firstTokenStart?.monotonicMs).toBeGreaterThanOrEqual(
+			submissionStart?.monotonicMs ?? 0,
+		);
+		// The decisive assertion: the first-token timer is anchored at the
+		// SUBMISSION, so it starts AFTER the preparation closed — not at the
+		// preparation's start.
+		expect(firstTokenStart?.monotonicMs).toBeGreaterThanOrEqual(
+			preparationEnd?.monotonicMs ?? 0,
+		);
+
+		// The provider never reported a first token in this scripted run, so
+		// the measurement is explicitly UNAVAILABLE rather than fabricated.
+		expect(
+			sink
+				.getTrace()
+				.unavailable?.some((item) => item.boundary === "provider_first_token"),
+		).toBe(true);
+		expect(sink.getTrace().integrityFailures).toEqual([]);
+	});
+
 	it("SUCCESS: the trace is internally consistent — every span is closed", async () => {
 		const sink = new LatencyTraceSink("int-2");
 		await drive({ sink });

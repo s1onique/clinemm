@@ -2,14 +2,52 @@
 
 ## Correctness repair and production-boundary integration
 
-**Outcome: GO (after CORRECTION01).**
+**Outcome: GO (after CORRECTION01 and CORRECTION02).**
 
 Every required caller boundary is wired and exercised through the real
 offline runtime path. Two further correctness defects were found *during*
 the integration and repaired. A subsequent independent review identified
 **two P0 measurement-correctness defects and two P1 contract gaps**; all
 four were repaired under CORRECTION01 with RED → GREEN regression evidence.
-Zero new typecheck errors and zero new test regressions.
+A second independent review of CORRECTION01 found **one residual P0 and one
+bounded P1**; both were repaired under CORRECTION02 with RED → GREEN
+regression evidence. Zero new typecheck errors and zero new test
+regressions.
+
+### CORRECTION02 — timing-attribution correction (second review follow-up)
+
+The reviewer returned `HALT_TIMING_ATTRIBUTION_INCOMPLETE`. The two
+findings, and their repairs:
+
+| Finding | Defect | Repair |
+|---|---|---|
+| **P0** | The stage-level attribution still classified the `tool_execution → tool_result_delivered` gap as `execution`. `getStages()` separated the two *numbers* (`durationMs` = gap, `spanDurationMs` = measured span), but a consumer that **aggregates `durationMs` by stage** still charged the ~5 s post-execution floor to execution | The inter-boundary gap is now classified `delivery`, and the executor's own measured run time is emitted as an explicit `execution` stage. A 10 ms executor followed by a 5,000 ms delivery delay now aggregates to `execution = 10 ms` and `delivery = 5,000 ms`. The regression asserts **both** the individual values **and** the stage-level aggregation |
+| **P1** | The provider timers (`provider_submitted`, `provider_first_response`, `provider_first_token`) were opened in `onModelRequestStart`, i.e. at the start of **request preparation**. A 250 ms preparation followed by 100 ms to the first token reported a **350 ms** provider TTFT instead of the true 100 ms | A new `onProviderRequestSubmitted` channel opens the provider spans at the **actual dispatch seam** — the instant the runtime invokes the provider's `stream()`. The provider interval is therefore measured from submission and never includes preparation. The failure / abort / finish paths close the provider span **only if it is open**, so a request that never reached submission does not fabricate an integrity failure |
+
+**RED evidence** (before the repair): 3 targeted regressions failed exactly
+on the two confirmed defects —
+
+- `expected 'execution' to be 'delivery'` (the post-execution gap was still
+  classified as execution);
+- `expected undefined to be 5000` (no `delivery` stage carried the 5,000 ms
+  gap);
+- `expected 350 to be 100` (the provider TTFT included the 250 ms
+  preparation).
+
+**GREEN evidence** (after the repair): the targeted latency suite is
+**71 passed / 0 failed** (was 57); the whole observability suite is
+**139 passed / 0 failed** (was 136); the context suite is **206 passed /
+0 failed** (1 skipped); the agents package is **581 passed / 0 failed**; the
+SDK build and Biome are clean; typecheck is **58 core errors both before
+and after** the change (measured by stashing the correction and re-running
+the identical command), with **zero** in a file this correction touched.
+
+> **Note on the typecheck baseline.** CORRECTION01 recorded "40 core
+> errors". Re-running the identical command (`tsc -p tsconfig.json
+> --noEmit` in `sdk/packages/core`) against the *unmodified* committed HEAD
+> yields **58**, not 40 — the earlier figure was taken with a different
+> tsconfig scope. The meaningful invariant is the **delta**, and the delta
+> is **0**: the stashed baseline and the corrected tree both report 58.
 
 ### CORRECTION01 — measurement-attribution repair (review follow-up)
 
@@ -64,8 +102,10 @@ operation was performed.
 | `8dd313129` | Phase 4–5: production-boundary wiring, the two integration defects, and the offline qualification suite |
 | `fe152e074` | Closure report: record the final commit id |
 | `d351e891b` | CORRECTION01 — review follow-up: identity-based compaction continuity, independent execution/delivery attribution, separate preparation/provider intervals, bounded skip classification, provider-projection crosswalk |
+| `720a49616` | Closure report: bind the evidence to the CORRECTION01 HEAD |
+| _(CORRECTION02)_ | CORRECTION02 — second review follow-up: stage-level execution/delivery attribution and provider-timer anchoring at the real dispatch seam |
 
-Final HEAD: `d351e891b` on `act/clinemm-roundc-harness-02`.
+Final HEAD: see §2.1 for the CORRECTION02 commit ids.
 
 ---
 

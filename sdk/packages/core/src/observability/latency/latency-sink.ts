@@ -314,23 +314,44 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	/**
 	 * The model request was prepared and is about to be issued.
 	 *
-	 * This is boundary 1 (`request_prepared`) and the START of boundary 2
-	 * (`provider_submitted`): the runtime issues the request immediately
-	 * after preparing it, so the two are entered together.
-	 *
-	 * `request_prepared` is closed at the moment the request is handed to
-	 * the provider, so the preparation span measures the preparation and
+	 * This opens ONLY the `request_preparation` span. The preparation span
+	 * is closed at the real provider-ready seam
+	 * ({@link onRequestPrepared}), so it measures the preparation and
 	 * nothing else.
 	 *
-	 * The `provider_first_response` and `provider_first_token` spans are
-	 * OPENED here, at submission, so their durations measure the time
-	 * from handing the request to the provider until the corresponding
-	 * event arrives. They are closed only when that event is observed;
-	 * if it never is, the span stays open and the trace reports the
-	 * measurement as unavailable rather than as a fabricated duration.
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: the PROVIDER-side spans
+	 * (`provider_submitted`, `provider_first_response` and
+	 * `provider_first_token`) are NOT opened here. They are opened at the
+	 * ACTUAL SUBMISSION boundary ({@link onProviderRequestSubmitted}).
+	 *
+	 * Opening them here would anchor every provider timer at the start of
+	 * request preparation and charge the preparation cost to the provider:
+	 * a 250 ms preparation followed by 100 ms to the first token would
+	 * report a 350 ms time-to-first-token instead of the true 100 ms.
 	 */
 	onModelRequestStart(observation: ModelBehaviorTraceObservation): void {
 		this.tracer.enter("request_preparation", observation.payload);
+	}
+
+	/**
+	 * The provider request was ACTUALLY SUBMITTED.
+	 *
+	 * This is the anchor for every provider-side timer. It opens:
+	 *
+	 * - `provider_submitted` — the request is now in flight;
+	 * - `provider_first_response` — the first provider RESPONSE EVENT;
+	 * - `provider_first_token` — the first generated TOKEN.
+	 *
+	 * The two first-event spans are closed only when the corresponding event
+	 * is observed. If it never is, the span stays open and the trace
+	 * reports the measurement as UNAVAILABLE rather than as a fabricated
+	 * duration.
+	 *
+	 * The runtime reports this at the real dispatch seam — the instant the
+	 * provider's `stream()` is invoked — so the provider interval is
+	 * measured from submission and never includes request preparation.
+	 */
+	onProviderRequestSubmitted(observation: ModelBehaviorTraceObservation): void {
 		this.tracer.enter("provider_submitted", observation.payload);
 		this.tracer.enter("provider_first_response", observation.payload);
 		this.tracer.enter("provider_first_token", observation.payload);
@@ -392,10 +413,10 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 		// by `onProviderRequestCompleted`; close it here as a fallback so
 		// no span is left open.
 		this.closeIfOpen("request_prepared", observation.payload, "ok");
-		this.tracer.exit("provider_submitted", {
-			metadata: observation.payload,
-			status: "ok",
-		});
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: guarded, because the
+		// provider span is opened at the ACTUAL SUBMISSION boundary. A
+		// request that never reached submission has no provider span.
+		this.closeIfOpen("provider_submitted", observation.payload, "ok");
 		// The first response event and the first token are NOT inferred
 		// from the stream's completion. If they were not observed, they
 		// are explicitly unavailable.
@@ -506,10 +527,12 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	onModelRequestError(observation: ModelBehaviorTraceObservation): void {
 		this.closeIfOpen("request_preparation", observation.payload, "failed");
 		this.closeIfOpen("request_prepared", observation.payload, "failed");
-		this.tracer.exit("provider_submitted", {
-			metadata: observation.payload,
-			status: "failed",
-		});
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: the provider span is
+		// opened at the ACTUAL SUBMISSION boundary. If the request never
+		// reached submission (a preparation failure, a budget rejection),
+		// there is no provider span to close, and closing one anyway would
+		// fabricate an integrity failure.
+		this.closeIfOpen("provider_submitted", observation.payload, "failed");
 		this.markUnavailableIfOpen(
 			"provider_first_response",
 			observation.payload,
@@ -533,10 +556,10 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	onModelRequestAbort(observation: ModelBehaviorTraceObservation): void {
 		this.closeIfOpen("request_preparation", observation.payload, "aborted");
 		this.closeIfOpen("request_prepared", observation.payload, "aborted");
-		this.tracer.exit("provider_submitted", {
-			metadata: observation.payload,
-			status: "aborted",
-		});
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: guarded for the same
+		// reason as the failure path — an abort before submission has no
+		// provider span to close.
+		this.closeIfOpen("provider_submitted", observation.payload, "aborted");
 		this.markUnavailableIfOpen(
 			"provider_first_response",
 			observation.payload,

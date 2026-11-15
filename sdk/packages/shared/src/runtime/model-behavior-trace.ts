@@ -2402,6 +2402,25 @@ export interface ModelBehaviorTraceSink {
 	 */
 	onRequestPrepared?: (observation: ModelBehaviorTraceObservation) => void;
 	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02 — the provider request
+	 * was ACTUALLY SUBMITTED.
+	 *
+	 * Reported at the real dispatch seam: the instant the provider's
+	 * `stream()` is invoked. This is the anchor for every provider-side
+	 * timer (the submission instant, the first response event and the
+	 * first generated token).
+	 *
+	 * Anchoring those timers at the START of request preparation would
+	 * charge the preparation cost to the provider: a 250 ms preparation
+	 * followed by 100 ms to the first token would report a 350 ms
+	 * time-to-first-token instead of the true 100 ms. This channel exists so
+	 * the provider interval is measured from submission, not from
+	 * preparation.
+	 */
+	onProviderRequestSubmitted?: (
+		observation: ModelBehaviorTraceObservation,
+	) => void;
+	/**
 	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01 — the provider round
 	 * trip has ended.
 	 *

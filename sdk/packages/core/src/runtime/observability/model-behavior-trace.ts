@@ -173,6 +173,13 @@ export function createIsolatedModelBehaviorTraceSink(
 	return {
 		onEffectiveModelConfig: safe,
 		onModelRequestStart: safe,
+		// ACT-CLINEMM-ROUND-C-HARNESS-02: the request-lifecycle channels are
+		// forwarded like every other channel. Dropping them would lose the
+		// preparation / submission / completion boundaries for any host
+		// that installs the ISOLATED sink.
+		onRequestPrepared: safe,
+		onProviderRequestSubmitted: safe,
+		onProviderRequestCompleted: safe,
 		onModelRequestFinish: safe,
 		onModelRequestError: safe,
 		onModelRequestAbort: safe,
@@ -216,6 +223,12 @@ export function isModelBehaviorTraceSinkActive(
 	return Boolean(
 		sink.onEffectiveModelConfig ||
 			sink.onModelRequestStart ||
+			// ACT-CLINEMM-ROUND-C-HARNESS-02: the request-lifecycle channels
+			// count as "somebody is listening" too, so a host that installs only
+			// the submission channel still pays the traced path.
+			sink.onRequestPrepared ||
+			sink.onProviderRequestSubmitted ||
+			sink.onProviderRequestCompleted ||
 			sink.onModelRequestFinish ||
 			sink.onModelRequestError ||
 			sink.onModelRequestAbort ||

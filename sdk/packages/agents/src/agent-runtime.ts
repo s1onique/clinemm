@@ -3390,6 +3390,18 @@ export class AgentRuntime {
 		let stream: AsyncIterable<AgentModelEvent>;
 		let phase = "provider_request_started";
 		try {
+			// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02 — the provider
+			// request was ACTUALLY SUBMITTED.
+			//
+			// This is the real dispatch seam: the instant the provider's
+			// `stream()` is invoked. Every provider-side timer (the
+			// submission instant, the first response event and the first
+			// generated token) is anchored HERE, so the provider interval
+			// never includes the request-preparation time that preceded it.
+			//
+			// The observation is fire-and-forget and failure-isolated: it
+			// cannot influence the provider call or the agent's behaviour.
+			this.observeProviderRequestSubmitted(request);
 			stream = await this.config.model.stream(request);
 			this.throwIfAborted();
 			phase = "provider_stream_started";
@@ -3721,6 +3733,38 @@ export class AgentRuntime {
 		}
 		try {
 			sink.onRequestPrepared({
+				...this.modelBehaviorTraceIdentity(),
+				payload: summarizeModelRequest(request),
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * Report that the provider request was ACTUALLY SUBMITTED.
+	 *
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02. The runtime calls this
+	 * from the real dispatch seam — the instant the provider's `stream()` is
+	 * invoked — and it anchors every provider-side timer (the submission
+	 * instant, the first provider response event and the first generated
+	 * token).
+	 *
+	 * Anchoring those timers at the start of request preparation would
+	 * charge the preparation cost to the provider: a 250 ms preparation
+	 * followed by 100 ms to the first token would report a 350 ms
+	 * time-to-first-token instead of the true 100 ms.
+	 *
+	 * The observation is failure-isolated and carries only a privacy-safe
+	 * request summary.
+	 */
+	private observeProviderRequestSubmitted(request: AgentModelRequest): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onProviderRequestSubmitted) {
+			return;
+		}
+		try {
+			sink.onProviderRequestSubmitted({
 				...this.modelBehaviorTraceIdentity(),
 				payload: summarizeModelRequest(request),
 			});

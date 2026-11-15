@@ -32,8 +32,15 @@
  *
  * - `queue`      — the agent held the work and had not sent it yet;
  * - `transport`  — the request was sent and the provider had not answered;
- * - `execution`  — the tool was actually running;
+ * - `preparation`— the request was being prepared for the provider;
+ * - `execution`  — the tool was actually running (the executor's own
+ *                  measured run time, reported as its own stage);
  * - `delivery`   — the result existed but had not reached the transcript.
+ *
+ * The post-execution gap is a DELIVERY delay and is classified as
+ * `delivery`, NEVER as `execution`. A tool that ran for 10 ms and whose
+ * result was delivered 5 s later therefore reports 10 ms of `execution`
+ * and 5,000 ms of `delivery` at the stage level.
  *
  * ## Privacy invariant (load-bearing)
  *
@@ -358,7 +365,7 @@ export interface LatencyTrace {
  * | `provider_first_token`      | `provider_completed`      | `transport` | the provider was still generating |
  * | `provider_completed`        | `schema_validation`       | `queue`     | the agent had the turn and had not validated yet |
  * | `schema_validation`         | `tool_execution`          | `queue`     | validation passed and the tool had not started |
- * | `tool_execution`            | `tool_result_delivered`   | `execution` | the tool ran; the gap after its end is the delivery delay |
+ * | `tool_execution`            | `tool_result_delivered`   | `delivery`  | the tool had finished; the result had not been delivered yet |
  * | `tool_result_delivered`     | `provider_ready`          | `delivery`  | the result existed but was not in the request |
  * | `provider_ready`            | `provider_submitted`      | `queue`     | the request was assembled and held |
  */
@@ -405,7 +412,7 @@ const STAGE_BOUNDARIES: Readonly<
 	"tool_execution>tool_result_delivered": {
 		from: "tool_execution",
 		to: "tool_result_delivered",
-		stage: "execution",
+		stage: "delivery",
 	},
 	"tool_result_delivered>provider_ready": {
 		from: "tool_result_delivered",
@@ -866,22 +873,11 @@ export class LatencyTracer {
 			}
 			const gap = next.monotonicMs - current.monotonicMs;
 			const stage = classifyLatencyStage(current.boundary, next.boundary);
-			// The independently measured span duration is retained for the
-			// phases that own a span's work (request preparation and tool
-			// execution). For every other boundary the phase measures the
-			// inter-boundary gap, so provider time can never be charged to
-			// request preparation.
-			//
-			// The tool-execution pair is special: it reports BOTH numbers.
-			// `durationMs` is the total interval from tool start to result
-			// delivery, while `spanDurationMs` is the executor's own measured
-			// run time. The post-execution delay is therefore never hidden
-			// inside the execution number.
-			// The independently measured span duration is retained for
-			// every boundary that owns a span's work. The PHASE total
-			// measures the gap between boundaries only, so a provider round
-			// trip is never folded into the adjacent queue interval and a
-			// post-execution delay is never folded into execution.
+			// The independently measured span duration is retained for every
+			// boundary that owns a span's work. The PHASE total measures the
+			// gap between boundaries only, so a provider round trip is never
+			// folded into the adjacent queue interval and a post-execution
+			// delay is never folded into execution.
 			const spanDuration = current.durationMs ?? 0;
 			const totalDuration = gap;
 			stages.push({
@@ -891,6 +887,40 @@ export class LatencyTracer {
 				to: next.boundary,
 				durationMs: totalDuration,
 				...(spanDuration !== undefined ? { spanDurationMs: spanDuration } : {}),
+			});
+		}
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02 — the EXECUTOR's own
+		// run time is an EXECUTION stage in its own right.
+		//
+		// The inter-boundary gap that FOLLOWS the execution span is a
+		// post-execution DELIVERY delay (see
+		// `tool_execution>tool_result_delivered`). Reporting the executor's
+		// measured run time only as the `spanDurationMs` of that delivery
+		// stage made it invisible to a consumer that aggregates stage
+		// durations — the Round C ~5 s floor then had nowhere to go except
+		// into `execution`.
+		//
+		// Emitting an explicit `execution` stage keeps the two facts
+		// separable AND additive:
+		//
+		//   execution  = the executor's measured run time (10 ms)
+		//   delivery   = the post-execution delay (5,000 ms)
+		//
+		// The execution stage's `durationMs` is the executor's own measured
+		// run time, so a stage-level aggregation attributes exactly the
+		// measured execution cost to execution and exactly the measured
+		// delay to delivery.
+		for (const event of this.events) {
+			if (event.phase !== "end" || event.boundary !== "tool_execution") {
+				continue;
+			}
+			stages.push({
+				correlationId: this.correlationId,
+				stage: "execution",
+				from: "tool_execution",
+				to: "tool_execution",
+				durationMs: event.durationMs ?? 0,
+				spanDurationMs: event.durationMs ?? 0,
 			});
 		}
 		return stages;
