@@ -2,12 +2,40 @@
 
 ## Correctness repair and production-boundary integration
 
-**Outcome: GO.**
+**Outcome: GO (after CORRECTION01).**
 
 Every required caller boundary is wired and exercised through the real
 offline runtime path. Two further correctness defects were found *during*
-the integration and repaired. Zero new typecheck errors and zero new test
-regressions.
+the integration and repaired. A subsequent independent review identified
+**two P0 measurement-correctness defects and two P1 contract gaps**; all
+four were repaired under CORRECTION01 with RED → GREEN regression evidence.
+Zero new typecheck errors and zero new test regressions.
+
+### CORRECTION01 — measurement-attribution repair (review follow-up)
+
+The reviewer returned `HALT_MEASUREMENT_ATTRIBUTION_UNSOUND`. The four
+findings, and their repairs:
+
+| Finding | Defect | Repair |
+|---|---|---|
+| **P0-1** | Compaction retention was computed from **counts**, so an equal-count / disjoint-reference compaction falsely claimed full retention | Retention is now computed from **tool-call reference identities** (`tool_use_id` / `id`). The seam reports `compactionEvidenceRefsRetained`, `…Dropped` and the new `…Replaced` counts. Metadata-only: no reference id is emitted |
+| **P0-2** | `tool_execution → tool_result_delivered` charged the post-execution delay to **execution**, hiding a 5 s floor | The stage measurement now reports the **phase gap** in `durationMs` and the **independently measured span duration** in `spanDurationMs`. A 10 ms tool followed by a 5,000 ms delivery delay reports `spanDurationMs = 10` and a 5,000 ms gap — the delay is never charged to execution |
+| **P1-1** | `request_prepared` spanned the provider round trip, so preparation time included provider time | A new `request_preparation` boundary is opened at request start and closed at the real provider-ready seam (after compaction, every `beforeModel` transform and the final budget check). The provider-bound interval is reported separately via `onProviderRequestCompleted` |
+| **P1-2** | The final provider-bound projection was asserted but not independently established | The provider-ready record is computed from `toProviderVisibleMessages(request.messages)` at the dispatch seam, matched to the conversation by **tool-call identity** (`toolCallId` → `tool_use_id`), and the integration test asserts the record exists at the real seam with no integrity failures |
+| **P1-3** | `skipReason` was persisted as free-form diagnostic text | `skipReason` is now a **bounded classification** (`schema_validation`, `normalization`, `approval_rejected`, `policy_disabled`, `provider_execution_disabled`, `runtime_hook_blocked`, `recovery_blocked`, `unknown_tool`, `other`). The raw diagnostic text is never persisted |
+
+**RED evidence** (before the repair): 3 targeted regressions failed exactly
+on the three confirmed measurement defects —
+`expected 5010 to be 10` (delay charged to execution),
+`expected 1 to be +0` (equal-count / disjoint references falsely retained),
+and the raw skip text persisted verbatim.
+
+**GREEN evidence** (after the repair): the targeted latency suite is
+**57 passed / 0 failed**; the whole observability suite is
+**136 passed / 0 failed**; the context suite is **206 passed / 0 failed**
+(1 skipped); the agents package is **581 passed / 0 failed**; the SDK build
+and Biome are clean; typecheck is unchanged at the pre-existing **40 core
+errors**, with **none** in a file this correction touched.
 
 ---
 
@@ -34,8 +62,11 @@ operation was performed.
 |---|---|
 | `848c9e088` | Phase 1–3: D1 ledger integrity, D2 latency lifecycle, D3 parallel timing, D4 normalization boundary |
 | `8dd313129` | Phase 4–5: production-boundary wiring, the two integration defects, and the offline qualification suite |
+| `fe152e074` | Closure report: record the final commit id |
+| `CORRECTION01` | Review follow-up: identity-based compaction continuity, independent execution/delivery attribution, separate preparation/provider intervals, bounded skip classification, provider-projection crosswalk |
 
-Final HEAD: `8dd313129` on `act/clinemm-roundc-harness-02`.
+Final HEAD: recorded in the commit that adds this section (see
+`git log -1`). Branch: `act/clinemm-roundc-harness-02`.
 
 ---
 
@@ -177,12 +208,12 @@ and would drop every channel implemented on a prototype.
 
 | Suite | Result |
 |---|---|
-| `src/observability/` (whole) | **131 pass, 0 fail** |
+| `src/observability/` (whole) | **136 pass, 0 fail** (after CORRECTION01) |
 | `src/observability/latency/` (4 files) | **63 pass, 0 fail** |
 | `src/observability/evidence/` (2 files) | **31 pass, 0 fail** |
 | `src/extensions/tools/` | 641 pass, **7 fail** (pre-existing), 105 skipped |
 | `src/agents/` (whole package) | **581 pass, 0 fail** |
-| Whole `sdk/packages/core` suite | **5,156 pass, 152 fail**, 165 skipped |
+| Whole `sdk/packages/core` suite | **5,161 pass, 152 fail**, 165 skipped (after CORRECTION01; identical 32 failing files and 152 failures as the baseline) |
 | Typecheck (SDK packages) | **40 errors — identical to the pre-existing baseline**, none in a file this ACT changed |
 
 **The 152 whole-suite failures are pre-existing.** The Phase 1 closure
@@ -190,8 +221,8 @@ report recorded the identical **32 failed test files / 152 failed tests**
 with this ACT's changes stashed. This run produced the identical **32
 failed files** — the same set, from `artifacts/cloud/publish` through
 `session/checkpoint-restore`, none of which this ACT touches. The passing
-count rose from 5,100 to 5,156 — the new tests — and the failing count is
-**unchanged**.
+count rose from 5,100 to **5,161** — the new tests — and the failing count
+is **unchanged**.
 
 The 7 failures in `src/extensions/tools/` are the same 7 in the same 3
 files as the established baseline
@@ -275,7 +306,7 @@ all: this ACT changed no execution path.
 | Live Strata replay | **NOT_EXECUTED** — not authorised by this ACT |
 | Live LLM benchmarking | **NOT_EXECUTED** — not authorised by this ACT |
 | True time-to-first-token | **UNAVAILABLE** unless a provider exposes an actual first-token event. The trace distinguishes `provider_first_response` from `provider_first_token`, and reports an unavailable measurement explicitly rather than a synthetic zero-duration success |
-| The ~5-second command-result floor | **NOT ATTRIBUTED.** It has not been identified. That requires a captured end-to-end trace, which this ACT does not have |
+| The ~5-second command-result floor | **NOT ATTRIBUTED.** CORRECTION01 makes the attribution possible — the post-execution delay is now reported separately from the executor's own run time — but a captured end-to-end trace is still required to say where the 5 s actually occurs |
 | Runtime speedup | **NOT CLAIMED** |
 | A five-second floor attribution | **NOT CLAIMED** |
 
@@ -288,12 +319,14 @@ latency sink installed, so the spans that separate *execution* from
 of a scripted one.
 
 Specifically: enable the sink, run one tool call whose command takes
-about five seconds, and read the spans. If the ~5 s appears in
-`tool_execution`, it is the command. If it appears in
-`tool_result_delivered`, it is the delivery into the conversation. If it
-appears between `provider_ready` and `request_prepared`, it is the
-provider's own round trip. The trace is now capable of answering this;
-it has not yet been asked the question.
+about five seconds, and read the spans. If the ~5 s appears as the
+`tool_execution` span's `spanDurationMs`, it is the command. If it appears
+as the gap between the `tool_execution` end and the `tool_result_delivered`
+start, it is the post-execution delivery delay. If it appears as the
+`request_prepared` span's duration, it is the provider's own round trip;
+the `request_preparation` span reports the preparation time separately.
+The trace is now capable of answering this; it has not yet been asked the
+question.
 
 A second experiment, to reduce model turns: the `provider_ready`
 shortened/omitted counts make it measurable whether a tool result is
@@ -317,7 +350,7 @@ asking the model to be more concise.
 | Provider-ready visibility: grounded in the final provider-bound request | `observeProviderReady` computes from `toProviderVisibleMessages(request.messages)`, matched by `tool_use_id` |
 | Instrumentation disabled: no observable execution difference | the `DISABLED` integration case compares executed commands, approvals, request count and message count with and without a sink |
 | New typecheck errors: 0 | 40 errors, the same count as the pre-ACT baseline; the intersection of changed files and error files is **empty** |
-| New test regressions: 0 | whole core suite 5,156 pass / 152 fail; the failure count and the failing file set are identical to the baseline |
+| New test regressions: 0 | whole core suite 5,161 pass / 152 fail; the failure count and the failing file set are identical to the baseline |
 | Privacy: raw prompts, credentials and tool-result contents never enter telemetry | the `PRIVACY` integration cases assert the serialized trace contains none of the fixture's prompt, command or credential text |
 | Failure isolation: telemetry exceptions must not change agent behaviour | the throwing-sink integration case asserts the tool still ran and the turn still completed |
 

@@ -53,7 +53,10 @@ describe("LatencyTraceSink", () => {
 
 		const events = sink.getTrace().events;
 		expect(events.length).toBeGreaterThan(0);
-		expect(events[0]?.boundary).toBe("request_prepared");
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01: the FIRST boundary
+		// is the independently measured request-PREPARATION span. The
+		// provider-bound interval is reported separately.
+		expect(events[0]?.boundary).toBe("request_preparation");
 		expect(events[0]?.correlationId).toBe("corr-1");
 	});
 

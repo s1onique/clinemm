@@ -164,6 +164,20 @@ describe("Phase 5 — production boundary integration", () => {
 		expect(boundaries.has("provider_ready")).toBe(true);
 	});
 
+	it("SUCCESS: preparation is reported separately from the provider round trip", async () => {
+		const sink = new LatencyTraceSink("int-preparation");
+		await drive({ sink });
+		const preparationEnd = sink
+			.getTrace()
+			.events.find(
+				(event) =>
+					event.boundary === "request_preparation" && event.phase === "end",
+			);
+		expect(preparationEnd).toBeDefined();
+		expect(typeof preparationEnd?.durationMs).toBe("number");
+		expect(sink.getTrace().integrityFailures).toEqual([]);
+	});
+
 	it("SUCCESS: the trace is internally consistent — every span is closed", async () => {
 		const sink = new LatencyTraceSink("int-2");
 		await drive({ sink });
@@ -357,6 +371,81 @@ describe("Phase 5 — production boundary integration", () => {
 		// The tool still ran and the turn still completed.
 		expect(result.executed).toEqual(["echo hi"]);
 		expect(result.messages.length).toBeGreaterThan(0);
+	});
+
+	it("COMPACTION: equal counts with disjoint identities do not claim retention", async () => {
+		const sink = new LatencyTraceSink("int-disjoint");
+		const prepareTurn = createContextCompactionPrepareTurn(
+			{
+				providerId: "openai-compatible",
+				modelId: "custom-model",
+				compaction: {
+					enabled: true,
+					// Same cardinality, completely different identity. A
+					// cardinality-only implementation would claim that both
+					// original references survived.
+					compact: async () => ({
+						messages: [
+							{
+								role: "user",
+								content: [
+									{
+										type: "tool_result",
+										tool_use_id: "replacement-1",
+										name: "run_commands",
+										content: "replacement",
+									},
+								],
+							},
+						],
+					}),
+				},
+				modelBehaviorTraceSink: sink,
+			},
+			{ mode: "manual" },
+		);
+
+		const messages: MessageWithMetadata[] = [
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "original-1",
+						name: "run_commands",
+						content: "original",
+					},
+				],
+			},
+		];
+
+		await prepareTurn?.({
+			agentId: "agent-disjoint",
+			conversationId: "conv-disjoint",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: new AbortController().signal,
+			systemPrompt: "You are helpful.",
+			tools: [],
+			messages,
+			apiMessages: messages,
+			model: {
+				id: "custom-model",
+				provider: "openai-compatible",
+				info: { id: "custom-model", maxInputTokens: 1_000 },
+			},
+		});
+
+		const completion = sink
+			.getTrace()
+			.events.find(
+				(event) => event.boundary === "compaction" && event.phase === "end",
+			);
+		expect(completion?.metadata?.compactionEvidenceRefsBefore).toBe(1);
+		expect(completion?.metadata?.compactionEvidenceRefsAfter).toBe(1);
+		expect(completion?.metadata?.compactionEvidenceRefsRetained).toBe(0);
+		expect(completion?.metadata?.compactionEvidenceRefsDropped).toBe(1);
+		expect(completion?.metadata?.compactionEvidenceRefsReplaced).toBe(1);
 	});
 
 	it("COMPACTION: the compaction boundary reports the evidence-reference continuity", async () => {

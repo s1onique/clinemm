@@ -751,8 +751,18 @@ export function createContextCompactionPrepareTurn(
 			//
 			// Only COUNTS are reported. No reference, no content and no
 			// summary text is recorded.
-			const evidenceRefsBefore = countToolCallReferences(context.messages);
-			const evidenceRefsAfter = countToolCallReferences(result.messages);
+			const evidenceRefsBefore = collectToolCallReferenceIds(context.messages);
+			const evidenceRefsAfter = collectToolCallReferenceIds(result.messages);
+			const evidenceRefsRetained = countRetainedReferenceIds(
+				evidenceRefsBefore,
+				evidenceRefsAfter,
+			);
+			const evidenceRefsDropped =
+				evidenceRefsBefore.size - evidenceRefsRetained;
+			const evidenceRefsReplaced = countReplacementReferenceIds(
+				evidenceRefsBefore,
+				evidenceRefsAfter,
+			);
 			observeCompactionTrace(
 				config.modelBehaviorTraceSink,
 				"completed",
@@ -779,16 +789,11 @@ export function createContextCompactionPrepareTurn(
 					compactionMessagesAfter: result.messages.length,
 					compactionMessagesRemoved:
 						beforeMessageCount - result.messages.length,
-					compactionEvidenceRefsBefore: evidenceRefsBefore,
-					compactionEvidenceRefsAfter: evidenceRefsAfter,
-					compactionEvidenceRefsRetained: Math.min(
-						evidenceRefsBefore,
-						evidenceRefsAfter,
-					),
-					compactionEvidenceRefsDropped: Math.max(
-						0,
-						evidenceRefsBefore - evidenceRefsAfter,
-					),
+					compactionEvidenceRefsBefore: evidenceRefsBefore.size,
+					compactionEvidenceRefsAfter: evidenceRefsAfter.size,
+					compactionEvidenceRefsRetained: evidenceRefsRetained,
+					compactionEvidenceRefsDropped: evidenceRefsDropped,
+					compactionEvidenceRefsReplaced: evidenceRefsReplaced,
 				},
 			);
 			context.emitStatusNotice?.(`${noticePrefix}compacted`, {
@@ -1333,35 +1338,81 @@ async function publishWorkingContextEstimateMetadataOnly(
  * policy, the compaction strategy, or the model request that follows.
  */
 /**
- * Count the tool-call references in a set of messages.
+ * Collect the tool-call reference identities in a set of messages.
  *
- * ACT-CLINEMM-ROUND-C-HARNESS-02.
+ * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01.
  *
  * A "tool-call reference" is a tool RESULT — the evidence the model would
- * have read. Counting them before and after a compaction quantifies how
- * much EVIDENCE the compaction removed, which is the question the Round C
- * summary could not answer about itself.
+ * have read. Retention is an IDENTITY question, not a cardinality
+ * question: a compaction that replaces ten original references with ten
+ * unrelated references retains none of them.
  *
- * Only the COUNT is returned. No reference, no content.
+ * The identities are used only inside this module to compute COUNTS.
+ * No reference id and no content is emitted to telemetry.
  */
-function countToolCallReferences(
+function collectToolCallReferenceIds(
 	messages: readonly {
-		readonly content?: string | readonly { readonly type?: string }[];
+		readonly content?:
+			| string
+			| readonly {
+					readonly type?: string;
+					readonly id?: string;
+					readonly tool_use_id?: string;
+			  }[];
 	}[],
-): number {
-	let count = 0;
+): Set<string> {
+	const ids = new Set<string>();
 	for (const message of messages) {
 		const content = message.content;
 		if (typeof content === "string") {
 			continue;
 		}
 		for (const part of content ?? []) {
-			if (part.type === "tool-result" || part.type === "tool_result") {
-				count += 1;
+			if (part.type !== "tool-result" && part.type !== "tool_result") {
+				continue;
+			}
+			const id = part.tool_use_id ?? part.id;
+			if (typeof id === "string" && id.length > 0) {
+				ids.add(id);
 			}
 		}
 	}
-	return count;
+	return ids;
+}
+
+/** The number of original identities that survived the compaction. */
+function countRetainedReferenceIds(
+	before: ReadonlySet<string>,
+	after: ReadonlySet<string>,
+): number {
+	let retained = 0;
+	for (const id of before) {
+		if (after.has(id)) {
+			retained += 1;
+		}
+	}
+	return retained;
+}
+
+/**
+ * The number of post-compaction identities that did NOT exist before.
+ *
+ * These are REPLACEMENTS: the compaction emitted a different evidence
+ * reference rather than retaining the original one. They are reported
+ * separately from retained and dropped identities so an equal-count,
+ * disjoint-reference compaction cannot masquerade as full retention.
+ */
+function countReplacementReferenceIds(
+	before: ReadonlySet<string>,
+	after: ReadonlySet<string>,
+): number {
+	let replaced = 0;
+	for (const id of after) {
+		if (!before.has(id)) {
+			replaced += 1;
+		}
+	}
+	return replaced;
 }
 
 /**

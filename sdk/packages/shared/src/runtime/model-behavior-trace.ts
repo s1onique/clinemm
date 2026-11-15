@@ -2392,6 +2392,25 @@ export interface ModelBehaviorTraceSink {
 	onEffectiveModelConfig?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request is about to be issued. */
 	onModelRequestStart?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01 — the request has
+	 * finished preparation and is provider-ready.
+	 *
+	 * Reported AFTER compaction, every `beforeModel` transformation and
+	 * the final budget check, but BEFORE the provider round trip. The
+	 * boundary keeps preparation time independent from provider time.
+	 */
+	onRequestPrepared?: (observation: ModelBehaviorTraceObservation) => void;
+	/**
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01 — the provider round
+	 * trip has ended.
+	 *
+	 * Reported when the provider's stream completes. This closes the
+	 * provider-bound interval separately from request preparation.
+	 */
+	onProviderRequestCompleted?: (
+		observation: ModelBehaviorTraceObservation,
+	) => void;
 	/** A model request completed (successfully or with a finish reason). */
 	onModelRequestFinish?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request failed. */

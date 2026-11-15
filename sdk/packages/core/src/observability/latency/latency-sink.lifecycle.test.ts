@@ -120,6 +120,39 @@ describe("D2 — latency lifecycle", () => {
 		).toBe(true);
 	});
 
+	it("keeps request preparation independent from provider round-trip time", () => {
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-preparation", clock);
+		sink.onModelRequestStart(observation());
+		clock.advance(25);
+		sink.onRequestPrepared(observation());
+		clock.advance(500);
+		sink.onProviderRequestCompleted(observation());
+
+		const preparationEnd = sink
+			.getTrace()
+			.events.find(
+				(event) =>
+					event.boundary === "request_preparation" && event.phase === "end",
+			);
+		expect(preparationEnd?.durationMs).toBe(25);
+		const preparationStage = sink
+			.getStages()
+			.find((stage) => stage.stage === "preparation");
+		// The preparation span's own measured 25 ms is the span duration;
+		// the phase's gap to the next boundary is 0 ms because the
+		// provider-ready seam is entered at the same instant.
+		expect(preparationStage?.spanDurationMs).toBe(25);
+		expect(preparationStage?.durationMs).toBe(0);
+		const preparedEnd = sink
+			.getTrace()
+			.events.find(
+				(event) =>
+					event.boundary === "request_prepared" && event.phase === "end",
+			);
+		expect(preparedEnd?.durationMs).toBe(500);
+	});
+
 	it("records a real first-token duration when one IS observable", () => {
 		const clock = new ScriptedClock();
 		const sink = new LatencyTraceSink("corr-lc-4", clock);
@@ -444,5 +477,28 @@ describe("Phase 4/5 regressions — receiver and outcome truthfulness", () => {
 		// derivation would have nothing truthful to read.
 		expect(finish?.metadata?.outcome).toBe("success");
 		expect(finish?.metadata?.executionInvoked).toBe(false);
+	});
+
+	it("records a bounded skip-reason classification, never arbitrary text", () => {
+		const clock = new ScriptedClock();
+		const sink = new LatencyTraceSink("corr-skip-classification", clock);
+		sink.onToolStart(observation({ toolCallId: "c1" }));
+		sink.onToolFinish(
+			observation({
+				toolCallId: "c1",
+				outcome: "success",
+				executionInvoked: false,
+				skipReason:
+					"Tool was denied because /secret/path and a user-authored diagnostic were present",
+			}),
+		);
+		const finish = sink
+			.getTrace()
+			.events.find(
+				(event) => event.boundary === "tool_execution" && event.phase === "end",
+			);
+		expect(finish?.metadata?.skipReason).toBe("approval_rejected");
+		expect(JSON.stringify(sink.getTrace())).not.toContain("/secret/path");
+		expect(JSON.stringify(sink.getTrace())).not.toContain("user-authored");
 	});
 });

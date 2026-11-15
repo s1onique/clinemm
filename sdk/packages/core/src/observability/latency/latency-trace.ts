@@ -72,6 +72,7 @@ import { createHash } from "node:crypto";
  * as UNAVAILABLE rather than as a zero-duration success.
  */
 export type LatencyBoundary =
+	| "request_preparation"
 	| "request_prepared"
 	| "provider_submitted"
 	| "provider_first_response"
@@ -89,6 +90,7 @@ export type LatencyBoundary =
  * The list is used to report which measurements were NOT available.
  */
 export const ALL_LATENCY_BOUNDARIES: readonly LatencyBoundary[] = [
+	"request_preparation",
 	"request_prepared",
 	"provider_submitted",
 	"provider_first_response",
@@ -109,6 +111,8 @@ export type LatencyStage =
 	| "queue"
 	/** The request was in flight; the provider had not answered. */
 	| "transport"
+	/** The request was being prepared for the provider. */
+	| "preparation"
 	/** The tool was actually running. */
 	| "execution"
 	/** The result existed but had not reached the conversation. */
@@ -178,8 +182,8 @@ export const LATENCY_METADATA_ALLOWLIST: readonly string[] = [
 	// finished tool call as a successful completion.
 	//
 	// `outcome` is a short classification word, `executionInvoked` is a
-	// boolean, and `skipReason` is a diagnostic string owned by the
-	// runtime. None of them carries command arguments, output or content.
+	// boolean, and `skipReason` is a BOUNDED classification derived from
+	// the runtime's diagnostic (never the diagnostic text itself).
 	"outcome",
 	"executionInvoked",
 	"skipReason",
@@ -204,6 +208,7 @@ export const LATENCY_METADATA_ALLOWLIST: readonly string[] = [
 	"compactionEvidenceRefsAfter",
 	"compactionEvidenceRefsRetained",
 	"compactionEvidenceRefsDropped",
+	"compactionEvidenceRefsReplaced",
 ];
 
 /**
@@ -255,6 +260,17 @@ export interface LatencyStageMeasurement {
 	readonly from: LatencyBoundary;
 	readonly to: LatencyBoundary;
 	readonly durationMs: number;
+	/**
+	 * The independently measured duration of the `from` span, when that
+	 * span owns a phase's work (request preparation or tool execution).
+	 *
+	 * This is the number that must be used for causal attribution. The
+	 * `durationMs` above is the phase's TOTAL interval and may include an
+	 * adjacent gap; for a tool, `durationMs` is the execution span plus
+	 * the delivery delay, while `spanDurationMs` is the executor's own
+	 * measured run time.
+	 */
+	readonly spanDurationMs?: number;
 }
 
 /**
@@ -336,12 +352,13 @@ export interface LatencyTrace {
  *
  * | From                        | To                        | Stage       | Meaning |
  * |-----------------------------|---------------------------|-------------|---------|
+ * | `request_preparation`       | `request_prepared`        | `preparation` | the request was being prepared for the provider |
  * | `request_prepared`          | `provider_submitted`      | `queue`     | the request was built and held |
  * | `provider_submitted`        | `provider_first_token`    | `transport` | the provider had not answered |
  * | `provider_first_token`      | `provider_completed`      | `transport` | the provider was still generating |
  * | `provider_completed`        | `schema_validation`       | `queue`     | the agent had the turn and had not validated yet |
  * | `schema_validation`         | `tool_execution`          | `queue`     | validation passed and the tool had not started |
- * | `tool_execution`            | `tool_result_delivered`   | `execution` | THE TOOL WAS RUNNING |
+ * | `tool_execution`            | `tool_result_delivered`   | `execution` | the tool ran; the gap after its end is the delivery delay |
  * | `tool_result_delivered`     | `provider_ready`          | `delivery`  | the result existed but was not in the request |
  * | `provider_ready`            | `provider_submitted`      | `queue`     | the request was assembled and held |
  */
@@ -355,6 +372,11 @@ const STAGE_BOUNDARIES: Readonly<
 		}
 	>
 > = {
+	"request_preparation>request_prepared": {
+		from: "request_preparation",
+		to: "request_prepared",
+		stage: "preparation",
+	},
 	"request_prepared>provider_submitted": {
 		from: "request_prepared",
 		to: "provider_submitted",
@@ -438,10 +460,69 @@ export function sanitizeLatencyMetadata(
 			typeof value === "boolean" ||
 			typeof value === "number"
 		) {
-			sanitized[key] = value;
+			sanitized[key] = key === "skipReason" ? classifySkipReason(value) : value;
 		}
 	}
 	return sanitized;
+}
+
+/**
+ * Classify a runtime skip diagnostic into a bounded vocabulary.
+ *
+ * The raw diagnostic is deliberately NOT persisted: it can contain a
+ * path, a command fragment, a provider name, or host-authored text. The
+ * trace only needs to distinguish the structural reason a call did not
+ * execute, so the classification is intentionally coarse and stable.
+ */
+export type LatencySkipReasonClassification =
+	| "schema_validation"
+	| "normalization"
+	| "approval_rejected"
+	| "policy_disabled"
+	| "provider_execution_disabled"
+	| "runtime_hook_blocked"
+	| "recovery_blocked"
+	| "unknown_tool"
+	| "other";
+
+export function classifySkipReason(
+	value: string | number | boolean,
+): LatencySkipReasonClassification {
+	const text = String(value).toLowerCase();
+	if (
+		text.includes("invalid input") ||
+		text.includes("schema") ||
+		text.includes("validation")
+	) {
+		return "schema_validation";
+	}
+	if (text.includes("normaliz")) {
+		return "normalization";
+	}
+	if (
+		text.includes("not approved") ||
+		text.includes("approval") ||
+		text.includes("denied") ||
+		text.includes("rejected")
+	) {
+		return "approval_rejected";
+	}
+	if (text.includes("disabled by policy")) {
+		return "policy_disabled";
+	}
+	if (text.includes("disabled for provider")) {
+		return "provider_execution_disabled";
+	}
+	if (text.includes("runtime hook") || text.includes("blocked by")) {
+		return "runtime_hook_blocked";
+	}
+	if (text.includes("recovery") || text.includes("repair budget")) {
+		return "recovery_blocked";
+	}
+	if (text.includes("unknown tool")) {
+		return "unknown_tool";
+	}
+	return "other";
 }
 
 /**
@@ -768,9 +849,12 @@ export class LatencyTracer {
 	 * gap between an `end` event and the next `start` event, PLUS the
 	 * duration the previous phase itself consumed.
 	 *
-	 * The span duration is included because the phase's own work IS the
-	 * phase: a tool that runs for 60 ms spent 60 ms in the `execution`
-	 * stage, whether or not the surrounding boundaries were adjacent.
+	 * The span duration is included only for the phase that OWNS that
+	 * span's own work. The interval AFTER a span ends belongs to the gap
+	 * between that span and the next one; it is never silently charged to
+	 * the phase named by the span. In particular, a tool that ran for
+	 * 10 ms and whose result was delivered 5 s later reports 10 ms of
+	 * execution and a separate 5 s delivery delay.
 	 */
 	getStages(): readonly LatencyStageMeasurement[] {
 		const stages: LatencyStageMeasurement[] = [];
@@ -781,17 +865,32 @@ export class LatencyTracer {
 				continue;
 			}
 			const gap = next.monotonicMs - current.monotonicMs;
-			// The phase the pair denotes is the phase the PREVIOUS span
-			// consumed, because the previous span's work happened inside
-			// that phase.
 			const stage = classifyLatencyStage(current.boundary, next.boundary);
+			// The independently measured span duration is retained for the
+			// phases that own a span's work (request preparation and tool
+			// execution). For every other boundary the phase measures the
+			// inter-boundary gap, so provider time can never be charged to
+			// request preparation.
+			//
+			// The tool-execution pair is special: it reports BOTH numbers.
+			// `durationMs` is the total interval from tool start to result
+			// delivery, while `spanDurationMs` is the executor's own measured
+			// run time. The post-execution delay is therefore never hidden
+			// inside the execution number.
+			// The independently measured span duration is retained for
+			// every boundary that owns a span's work. The PHASE total
+			// measures the gap between boundaries only, so a provider round
+			// trip is never folded into the adjacent queue interval and a
+			// post-execution delay is never folded into execution.
 			const spanDuration = current.durationMs ?? 0;
+			const totalDuration = gap;
 			stages.push({
 				correlationId: this.correlationId,
 				stage,
 				from: current.boundary,
 				to: next.boundary,
-				durationMs: spanDuration + gap,
+				durationMs: totalDuration,
+				...(spanDuration !== undefined ? { spanDurationMs: spanDuration } : {}),
 			});
 		}
 		return stages;

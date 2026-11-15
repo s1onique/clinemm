@@ -2929,6 +2929,12 @@ export class AgentRuntime {
 		// opened). The observation is fire-and-forget: no return value is
 		// read, so the sink cannot influence execution.
 		this.observeModelRequestStart(request, summarizeModelRequest(request));
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01 — the request has
+		// finished preparation (compaction, `beforeModel` transforms and the
+		// final budget check are all behind it) and is now entering the
+		// provider round trip. The preparation span closes HERE, so the
+		// provider's response time is never charged to preparation.
+		this.observeRequestPrepared(request);
 		// Steering cancels provider generation, while request preparation keeps
 		// the run-level signal so compaction and hooks can finish consistently.
 		request = {
@@ -3288,7 +3294,7 @@ export class AgentRuntime {
 		// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01: report the model request FINISH
 		// boundary (real runtime boundary — the provider stream has ended and
 		// the usage delta for this request is known).
-		this.observeModelRequestFinish({
+		const modelRequestFinishPayload = {
 			finishReason,
 			requestDurationMs: Date.now() - prepared.startedAt,
 			...(metrics
@@ -3313,7 +3319,12 @@ export class AgentRuntime {
 			...summarizeReasoningContent(content),
 			toolCallCount: content.filter((part) => part.type === "tool-call").length,
 			invalidToolCallCount: invalidToolCalls.length,
-		});
+		};
+		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01 — the provider round
+		// trip has ended. This is reported BEFORE the generic model-request
+		// finish so the provider-bound interval closes at the provider seam.
+		this.observeProviderRequestCompleted(modelRequestFinishPayload);
+		this.observeModelRequestFinish(modelRequestFinishPayload);
 
 		// R3: upstream's return carries the `interrupted` flag, which is how
 		// the caller distinguishes a STEER-interrupted turn (retry with the
@@ -3688,6 +3699,54 @@ export class AgentRuntime {
 					...summarizeReasoningConfiguration(request),
 					toolSchemaCount: request.tools.length,
 				},
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * Report that the model request finished preparation.
+	 *
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01. The runtime calls this
+	 * from `prepareModelRequest`, after compaction, every `beforeModel`
+	 * transform and the final provider-request budget check, and before
+	 * the request is handed to the provider. The observation is failure-
+	 * isolated and carries only a privacy-safe request summary.
+	 */
+	private observeRequestPrepared(request: AgentModelRequest): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onRequestPrepared) {
+			return;
+		}
+		try {
+			sink.onRequestPrepared({
+				...this.modelBehaviorTraceIdentity(),
+				payload: summarizeModelRequest(request),
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * Report that the provider round trip has ended.
+	 *
+	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION01. The runtime calls this
+	 * when the provider stream completes. It closes the provider-bound
+	 * interval separately from request preparation.
+	 */
+	private observeProviderRequestCompleted(
+		payload: Record<string, unknown>,
+	): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onProviderRequestCompleted) {
+			return;
+		}
+		try {
+			sink.onProviderRequestCompleted({
+				...this.modelBehaviorTraceIdentity(),
+				payload,
 			});
 		} catch {
 			// Failure isolation.

@@ -330,10 +330,43 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * measurement as unavailable rather than as a fabricated duration.
 	 */
 	onModelRequestStart(observation: ModelBehaviorTraceObservation): void {
-		this.tracer.enter("request_prepared", observation.payload);
+		this.tracer.enter("request_preparation", observation.payload);
 		this.tracer.enter("provider_submitted", observation.payload);
 		this.tracer.enter("provider_first_response", observation.payload);
 		this.tracer.enter("provider_first_token", observation.payload);
+	}
+
+	/**
+	 * The request finished preparation and is now provider-ready.
+	 *
+	 * This closes the INDEPENDENT preparation span. The runtime reports
+	 * this boundary at the seam where the request has passed compaction,
+	 * every `beforeModel` transform and the final budget check — before
+	 * the provider round trip begins. Keeping it separate prevents the
+	 * provider's response time from being charged to request preparation.
+	 */
+	onRequestPrepared(observation: ModelBehaviorTraceObservation): void {
+		if (!this.tracer.isOpen("request_preparation")) {
+			return;
+		}
+		this.tracer.exit("request_preparation", {
+			metadata: observation.payload,
+			status: "ok",
+		});
+		this.tracer.enter("request_prepared", observation.payload);
+	}
+
+	/**
+	 * The provider round trip has ENDED.
+	 *
+	 * The `request_prepared` span is the provider-bound interval: it opens
+	 * when the request is handed to the provider and closes when the
+	 * provider's stream ends. It is deliberately separate from
+	 * `request_preparation`, so a provider round trip is never charged to
+	 * request preparation.
+	 */
+	onProviderRequestCompleted(observation: ModelBehaviorTraceObservation): void {
+		this.closeIfOpen("request_prepared", observation.payload, "ok");
 	}
 
 	/**
@@ -351,10 +384,14 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * that would read as "the first token arrived at stream completion".
 	 */
 	onModelRequestFinish(observation: ModelBehaviorTraceObservation): void {
-		this.tracer.exit("request_prepared", {
-			metadata: observation.payload,
-			status: "ok",
-		});
+		// `request_preparation` is closed at the provider-ready seam
+		// (`onRequestPrepared`). If the runtime never reached that seam,
+		// the preparation span is closed here so no span is left open.
+		this.closeIfOpen("request_preparation", observation.payload, "ok");
+		// `request_prepared` is the provider-bound interval and is closed
+		// by `onProviderRequestCompleted`; close it here as a fallback so
+		// no span is left open.
+		this.closeIfOpen("request_prepared", observation.payload, "ok");
 		this.tracer.exit("provider_submitted", {
 			metadata: observation.payload,
 			status: "ok",
@@ -362,8 +399,16 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 		// The first response event and the first token are NOT inferred
 		// from the stream's completion. If they were not observed, they
 		// are explicitly unavailable.
-		this.closeIfOpen("provider_first_response", observation.payload, "ok");
-		this.closeIfOpen("provider_first_token", observation.payload, "ok");
+		this.markUnavailableIfOpen(
+			"provider_first_response",
+			observation.payload,
+			"ok",
+		);
+		this.markUnavailableIfOpen(
+			"provider_first_token",
+			observation.payload,
+			"ok",
+		);
 		this.tracer.enter("provider_completed", observation.payload);
 		this.tracer.exit("provider_completed", {
 			metadata: observation.payload,
@@ -375,11 +420,38 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * Close a boundary IF it is still open.
 	 *
 	 * A boundary that was already closed by its own event is left alone.
-	 * A boundary that is still open is marked unavailable, so the trace
-	 * records that the measurement was not observed rather than leaving a
-	 * span dangling.
+	 * A boundary that is still open is closed here with the supplied
+	 * status, so the trace records the measured interval instead of
+	 * leaving a span dangling.
+	 *
+	 * The provider's first-response / first-token boundaries use a
+	 * different path: when they are still open at stream completion the
+	 * measurement was genuinely NOT observed, so they are marked
+	 * unavailable rather than given a fabricated duration.
 	 */
 	private closeIfOpen(
+		boundary: LatencyBoundary,
+		payload: Readonly<Record<string, unknown>>,
+		status: LatencyStatus,
+	): void {
+		if (!this.tracer.isOpen(boundary)) {
+			return;
+		}
+		this.tracer.exit(boundary, {
+			metadata: payload,
+			status,
+		});
+	}
+
+	/**
+	 * Mark a boundary as UNAVAILABLE if it is still open.
+	 *
+	 * Used only for the provider's first-response / first-token events:
+	 * when the stream ends without those events, the measurement was not
+	 * observed, so the trace must say so explicitly instead of recording
+	 * the stream-completion instant as if it were the event.
+	 */
+	private markUnavailableIfOpen(
 		boundary: LatencyBoundary,
 		payload: Readonly<Record<string, unknown>>,
 		status: LatencyStatus,
@@ -432,16 +504,22 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * The model request failed.
 	 */
 	onModelRequestError(observation: ModelBehaviorTraceObservation): void {
-		this.tracer.exit("request_prepared", {
-			metadata: observation.payload,
-			status: "failed",
-		});
+		this.closeIfOpen("request_preparation", observation.payload, "failed");
+		this.closeIfOpen("request_prepared", observation.payload, "failed");
 		this.tracer.exit("provider_submitted", {
 			metadata: observation.payload,
 			status: "failed",
 		});
-		this.closeIfOpen("provider_first_response", observation.payload, "failed");
-		this.closeIfOpen("provider_first_token", observation.payload, "failed");
+		this.markUnavailableIfOpen(
+			"provider_first_response",
+			observation.payload,
+			"failed",
+		);
+		this.markUnavailableIfOpen(
+			"provider_first_token",
+			observation.payload,
+			"failed",
+		);
 		this.tracer.enter("provider_completed", observation.payload);
 		this.tracer.exit("provider_completed", {
 			metadata: observation.payload,
@@ -453,16 +531,22 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * The model request was aborted.
 	 */
 	onModelRequestAbort(observation: ModelBehaviorTraceObservation): void {
-		this.tracer.exit("request_prepared", {
-			metadata: observation.payload,
-			status: "aborted",
-		});
+		this.closeIfOpen("request_preparation", observation.payload, "aborted");
+		this.closeIfOpen("request_prepared", observation.payload, "aborted");
 		this.tracer.exit("provider_submitted", {
 			metadata: observation.payload,
 			status: "aborted",
 		});
-		this.closeIfOpen("provider_first_response", observation.payload, "aborted");
-		this.closeIfOpen("provider_first_token", observation.payload, "aborted");
+		this.markUnavailableIfOpen(
+			"provider_first_response",
+			observation.payload,
+			"aborted",
+		);
+		this.markUnavailableIfOpen(
+			"provider_first_token",
+			observation.payload,
+			"aborted",
+		);
 		this.tracer.enter("provider_completed", observation.payload);
 		this.tracer.exit("provider_completed", {
 			metadata: observation.payload,

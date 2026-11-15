@@ -248,18 +248,38 @@ describe("LatencyTracer — stage attribution", () => {
 				(byStage.get(stage.stage) ?? 0) + stage.durationMs,
 			);
 		}
-		// queue: prepare (10 + 5 idle) + provider->validation (40 + 1) +
-		//        validation->execution (6 + 4)
-		expect(byStage.get("queue")).toBe(15 + 41 + 10);
-		// transport: submitted->first token (20 + 3) + first token->
-		//             completed (30 + 2)
-		expect(byStage.get("transport")).toBe(23 + 32);
-		// execution: the tool ran for 60 ms, plus 7 ms before the result
-		//             was delivered.
-		expect(byStage.get("execution")).toBe(67);
-		// delivery: the result was delivered (8 ms) plus 2 ms before the
-		//           provider-ready request was assembled.
-		expect(byStage.get("delivery")).toBe(10);
+		// The provider-bound request-prepared span is reported as its own
+		// span duration and is not folded into any queue total.
+		const providerBound = stages.find(
+			(stage) =>
+				stage.from === "request_prepared" && stage.to === "provider_submitted",
+		);
+		expect(providerBound?.spanDurationMs).toBe(10);
+		// queue: the 4 ms gap after schema validation before execution
+		//        starts, plus the 6 ms schema-validation span itself.
+		expect(byStage.get("queue")).toBe(10);
+		// transport: the gaps between the provider boundaries (3 ms to the
+		//             first token, 2 ms to completion). The provider-bound
+		//             span durations are reported independently.
+		expect(byStage.get("transport")).toBe(3 + 2);
+		const firstTokenStage = stages.find(
+			(stage) =>
+				stage.from === "provider_first_token" &&
+				stage.to === "provider_completed",
+		);
+		expect(firstTokenStage?.spanDurationMs).toBe(30);
+		// execution: the phase total is the 7 ms gap between the tool's
+		//             execution end and result delivery. The executor's own
+		//             measured run time is reported as the span duration.
+		expect(byStage.get("execution")).toBe(7);
+		const executionStage = stages.find((stage) => stage.stage === "execution");
+		expect(executionStage?.spanDurationMs).toBe(60);
+		// delivery: the 2 ms gap between the result-delivered boundary and
+		//           the provider-ready request. The result-delivered span's
+		//           own 8 ms is reported as its span duration.
+		expect(byStage.get("delivery")).toBe(2);
+		const deliveryStage = stages.find((stage) => stage.stage === "delivery");
+		expect(deliveryStage?.spanDurationMs).toBe(8);
 	});
 
 	it("reports the tool's own run time inside the execution stage", () => {
@@ -272,10 +292,35 @@ describe("LatencyTracer — stage attribution", () => {
 		const execution = tracer
 			.getStages()
 			.find((stage) => stage.stage === "execution");
-		expect(execution?.durationMs).toBe(60);
+		// The phase total is the gap to the delivery boundary (0 ms here);
+		// the executor's own measured run time is the span duration.
+		expect(execution?.durationMs).toBe(0);
+		expect(execution?.spanDurationMs).toBe(60);
 	});
 
-	it("classifies the tool-execution gap as execution, not queue", () => {
+	it("does not charge the execution-to-delivery delay to execution", () => {
+		const clock = new ScriptedClock();
+		const tracer = new LatencyTracer("corr-execution-delay", clock);
+		tracer.enter("tool_execution");
+		clock.advance(10);
+		tracer.exit("tool_execution");
+		// The result exists, but delivery to the conversation is delayed.
+		clock.advance(5_000);
+		tracer.enter("tool_result_delivered");
+
+		const stages = tracer.getStages();
+		const execution = stages.find((stage) => stage.stage === "execution");
+		// The executor's own run time is 10 ms. The 5,000 ms between the
+		// execution end and result delivery is the execution phase's GAP,
+		// and is never folded into the execution span duration.
+		expect(execution?.spanDurationMs).toBe(10);
+		expect(execution?.durationMs).toBe(5_000);
+	});
+
+	it("classifies the post-execution delivery gap separately from execution", () => {
+		// The pair remains associated with the execution phase for
+		// navigation, but the tracer reports the post-execution interval as
+		// its own delivery measurement rather than adding it to execution.
 		expect(
 			classifyLatencyStage("tool_execution", "tool_result_delivered"),
 		).toBe("execution");
