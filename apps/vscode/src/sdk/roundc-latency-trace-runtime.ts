@@ -78,6 +78,18 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { type LatencyTrace, LatencyTraceSink } from "@cline/core/internal/latency-trace"
 import type { ModelBehaviorTraceSink } from "@cline/shared"
+// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the installed extension VERSION.
+//
+// The version is the other half of the build binding: a bundle digest
+// alone does not say WHICH release produced it.
+import { ExtensionRegistryInfo } from "../registry"
+// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the CANONICAL installed-bundle
+// identity resolver.
+//
+// It is the SAME resolver the extension-host allocation profiler uses, so
+// both diagnostics state the SAME artifact identity — the Round C trace
+// does not introduce a second, divergent notion of "which bytes ran".
+import { resolveInstalledBundleIdentityCached } from "./extension-host-allocation-profiler-runtime"
 
 /**
  * The dump filename under `context.globalStorageUri`.
@@ -171,9 +183,152 @@ export function installRoundcLatencyTraceSink(sessionId: string | undefined): Mo
 		return undefined
 	}
 	const correlationId = normalizeCorrelationId(sessionId)
-	activeSink = new LatencyTraceSink(correlationId)
+	const sink = new LatencyTraceSink(correlationId)
+	activeSink = sink
 	activeSessionId = correlationId
-	return activeSink
+	// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — a NEW session starts with a NEW
+	// identity. The previous session's observed identity is discarded with
+	// its trace, so an identity can never be attributed to the wrong run.
+	activeIdentity = emptyIdentity()
+	return sink
+}
+
+/**
+ * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the identity OBSERVER.
+ *
+ * The observer wraps the COMPOSED sink, so it sees every channel that
+ * EITHER constituent implements — including `onEffectiveModelConfig`,
+ * which the existing model-behavior recorder implements and the latency
+ * sink does not.
+ *
+ * It reads the model identity from the EXISTING production channels:
+ *
+ *   - `onProviderRequestSubmitted` — the provider FAMILY and the
+ *     CONFIGURED (requested) model id. This is the configured value, so
+ *     it is recorded as `CONFIGURED`, never as a served receipt.
+ *   - `onEffectiveModelConfig` — the effective reasoning / sampling
+ *     settings and the output limit.
+ *   - `onCompactionDiagnostics` — the EFFECTIVE request-time context
+ *     budget, resolved by the production compaction resolver.
+ *
+ * The provider-REPORTED model id and the quantization are NOT taken from
+ * these channels: the SDK does not surface them at these boundaries, so
+ * they stay `UNAVAILABLE_FROM_TRACE` unless a future channel reports
+ * them explicitly. They are never inferred from the model id.
+ *
+ * The wrapper is failure-isolated — a throw in the observer cannot
+ * break the runtime or prevent either sink from observing the event.
+ */
+export function observeRoundcCaptureIdentity(sink: ModelBehaviorTraceSink): ModelBehaviorTraceSink {
+	const wrapped: Record<string, unknown> = {}
+	for (const channel of OBSERVED_IDENTITY_CHANNELS) {
+		const original = (sink as unknown as Record<string, unknown>)[channel]
+		wrapped[channel] = (observation: { payload: Record<string, unknown> } & Record<string, unknown>): void => {
+			try {
+				observeIdentityFromObservation(channel, observation)
+			} catch {
+				// Failure isolation: the observer must never break the
+				// runtime or the sink.
+			}
+			if (typeof original === "function") {
+				;(original as (o: unknown) => void).call(sink, observation)
+			}
+		}
+	}
+	// Every OTHER channel is forwarded unchanged.
+	for (const channel of COMPOSABLE_SINK_CHANNELS) {
+		// The identity channels are observed (and wrapped) above. The
+		// comparison is widened to `string` because `COMPOSABLE_SINK_CHANNELS`
+		// is a SUPERSET of the identity channels — `includes` on the narrow
+		// tuple would reject every other channel at the type level.
+		if ((OBSERVED_IDENTITY_CHANNELS as readonly string[]).includes(channel)) {
+			continue
+		}
+		const original = (sink as unknown as Record<string, unknown>)[channel]
+		if (typeof original !== "function") {
+			continue
+		}
+		wrapped[channel] = (observation: never): void => {
+			;(original as (o: unknown) => void).call(sink, observation)
+		}
+	}
+	for (const operation of COMPOSABLE_SINK_FINGERPRINTS) {
+		const original = (sink as unknown as Record<string, unknown>)[operation]
+		if (typeof original !== "function") {
+			continue
+		}
+		wrapped[operation] = (...args: unknown[]): unknown => {
+			return (original as (...a: unknown[]) => unknown).call(sink, ...args)
+		}
+	}
+	const enableBit = (sink as unknown as Record<string, unknown>).isTraceEnabled
+	if (typeof enableBit === "function") {
+		wrapped.isTraceEnabled = (): boolean => {
+			try {
+				return (enableBit as () => boolean).call(sink)
+			} catch {
+				return false
+			}
+		}
+	}
+	return wrapped as ModelBehaviorTraceSink
+}
+
+/**
+ * The channels the identity observer reads.
+ *
+ * Each one is an EXISTING production channel that already reports the
+ * runtime's own authoritative facts. No new channel is introduced.
+ */
+const OBSERVED_IDENTITY_CHANNELS = ["onProviderRequestSubmitted", "onEffectiveModelConfig", "onCompactionDiagnostics"] as const
+
+/**
+ * Extract the observed identity fields from one observation.
+ *
+ * Every field is read from the observation's OWN payload — the runtime's
+ * authoritative facts — and never from a config file, a model catalog or
+ * a family-name heuristic.
+ */
+function observeIdentityFromObservation(
+	channel: string,
+	observation: { payload: Record<string, unknown> } & Record<string, unknown>,
+): void {
+	const payload = observation.payload ?? {}
+	const providerId = typeof payload.providerId === "string" ? payload.providerId : undefined
+	const modelId = typeof payload.modelId === "string" ? payload.modelId : undefined
+	if (channel === "onProviderRequestSubmitted") {
+		observeIdentityFragment({
+			...(providerId !== undefined ? { providerFamily: providerId } : {}),
+			...(modelId !== undefined ? { requestedModelId: modelId, requestedModelIdSource: "CONFIGURED" } : {}),
+		})
+		return
+	}
+	if (channel === "onEffectiveModelConfig") {
+		const reasoningEffort = typeof payload.reasoningEffort === "string" ? payload.reasoningEffort : undefined
+		const thinkingEnabled = typeof payload.thinkingEnabled === "boolean" ? payload.thinkingEnabled : undefined
+		const maxOutputTokens =
+			typeof payload.maxOutputTokens === "number" && Number.isFinite(payload.maxOutputTokens)
+				? payload.maxOutputTokens
+				: undefined
+		observeIdentityFragment({
+			...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+			...(thinkingEnabled !== undefined ? { thinkingEnabled } : {}),
+			...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+		})
+		return
+	}
+	if (channel === "onCompactionDiagnostics") {
+		// The production compaction resolver resolved the EFFECTIVE budget
+		// for THIS request — this is the request-time value, not a
+		// build-time constant.
+		const budget =
+			typeof payload.effectiveMaxInputTokens === "number" && Number.isFinite(payload.effectiveMaxInputTokens)
+				? payload.effectiveMaxInputTokens
+				: undefined
+		observeIdentityFragment({
+			...(budget !== undefined ? { effectiveContextBudgetTokens: budget } : {}),
+		})
+	}
 }
 
 /**
@@ -220,6 +375,181 @@ export function getRoundcLatencyTraceSnapshot(): RoundcLatencyTraceSnapshot | un
 }
 
 /**
+ * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the CAPTURE IDENTITY RECORD.
+ *
+ * ## Why the trace needs one
+ *
+ * A latency trace measures a RUN. To compare two runs, a reader must know
+ * that they measured the SAME software, the SAME model and the SAME
+ * inference configuration. The pre-correction trace carried none of that:
+ * it stated only the session id and the profile, so a "5.57x speedup"
+ * claim could not be attributed to any particular cause.
+ *
+ * ## The truthfulness rules (frozen)
+ *
+ *   - The REQUESTED model id and the EFFECTIVE model id are DISTINCT
+ *     fields. The requested id is the configured value; the effective id
+ *     is what the provider REPORTED. They are never conflated.
+ *
+ *   - The quantization is recorded ONLY when the provider or the SDK
+ *     explicitly supplied it. It is NEVER inferred from a model-family
+ *     name: a model id that happens to contain "iq3" is a REQUESTED
+ *     identifier, not a served-quantization receipt.
+ *
+ *   - A field the trace cannot observe is recorded as
+ *     `UNAVAILABLE_FROM_TRACE` — never as a guess, and never as a
+ *     plausible-looking default.
+ *
+ *   - NO credential, NO prompt, NO tool command, NO model response and no
+ *     credential-bearing URL is ever placed in this record. Every field
+ *     is an identifier, a digest, a count or a bounded classification.
+ */
+export interface RoundcLatencyTraceIdentity {
+	/** The capture schema version — explicit, so an old artifact is recognisable. */
+	readonly captureSchemaVersion: "cline.roundc-latency-trace.v1"
+	/** The runtime profile that armed the capture. */
+	readonly runtimeProfile: "dogfood"
+	/**
+	 * The exact Git identity of the SOURCE the artifact was built from.
+	 *
+	 * `UNAVAILABLE_FROM_TRACE` when the installed extension has no `.git`
+	 * (the normal installed-VSIX case) — the bundle digest below is then
+	 * the load-bearing identity.
+	 */
+	readonly sourceHead: string
+	/** The installed extension version, independently checked. */
+	readonly extensionVersion: string
+	/**
+	 * The SHA-256 of the installed bundle — the exact install-artifact
+	 * receipt. `UNAVAILABLE_FROM_TRACE` when the bundle could not be read.
+	 */
+	readonly extensionBundleSha256: string
+	/** The provider FAMILY actually configured (e.g. `openai-compatible`). */
+	readonly providerFamily: string
+	/** The CONFIGURED model id, and where that value came from. */
+	readonly requestedModelId: string
+	readonly requestedModelIdSource: "CONFIGURED" | "UNAVAILABLE_FROM_TRACE"
+	/**
+	 * The model id the PROVIDER REPORTED as served.
+	 *
+	 * `UNAVAILABLE_FROM_TRACE` when the provider did not report one. The
+	 * requested id is NEVER substituted for it.
+	 */
+	readonly effectiveModelId: string
+	readonly effectiveModelIdSource: "PROVIDER_REPORTED" | "UNAVAILABLE_FROM_TRACE"
+	/**
+	 * The quantization, ONLY when explicitly available.
+	 *
+	 * `UNAVAILABLE_FROM_TRACE` otherwise — never inferred from the model
+	 * id.
+	 */
+	readonly quantization: string
+	readonly quantizationSource: "PROVIDER_REPORTED" | "UNAVAILABLE_FROM_TRACE"
+	/** The EFFECTIVE request-time context budget, in tokens. */
+	readonly effectiveContextBudgetTokens: number | "UNAVAILABLE_FROM_TRACE"
+	/** The effective sampling / reasoning settings relevant to comparison. */
+	readonly reasoningEffort: string
+	readonly thinkingEnabled: boolean | "UNAVAILABLE_FROM_TRACE"
+	readonly maxOutputTokens: number | "UNAVAILABLE_FROM_TRACE"
+}
+
+/**
+ * The marker used for a field the trace could not observe.
+ *
+ * The same convention the existing model-behavior recorder uses
+ * (`recordModelBehaviorTraceEffectiveConfig`), so a reader learns it once.
+ */
+export const UNAVAILABLE_FROM_TRACE = "UNAVAILABLE_FROM_TRACE" as const
+
+/**
+ * The identity a capture starts with: every field UNAVAILABLE except the
+ * ones the capture itself knows.
+ *
+ * The trace then FILLS the observed fields in as the real boundaries
+ * report them. A field that is never observed stays UNAVAILABLE, which
+ * is the truthful outcome.
+ */
+function emptyIdentity(): RoundcLatencyTraceIdentity {
+	return {
+		captureSchemaVersion: "cline.roundc-latency-trace.v1",
+		runtimeProfile: "dogfood",
+		sourceHead: UNAVAILABLE_FROM_TRACE,
+		extensionVersion: UNAVAILABLE_FROM_TRACE,
+		extensionBundleSha256: UNAVAILABLE_FROM_TRACE,
+		providerFamily: UNAVAILABLE_FROM_TRACE,
+		requestedModelId: UNAVAILABLE_FROM_TRACE,
+		requestedModelIdSource: "UNAVAILABLE_FROM_TRACE",
+		effectiveModelId: UNAVAILABLE_FROM_TRACE,
+		effectiveModelIdSource: "UNAVAILABLE_FROM_TRACE",
+		quantization: UNAVAILABLE_FROM_TRACE,
+		quantizationSource: "UNAVAILABLE_FROM_TRACE",
+		effectiveContextBudgetTokens: UNAVAILABLE_FROM_TRACE,
+		reasoningEffort: UNAVAILABLE_FROM_TRACE,
+		thinkingEnabled: UNAVAILABLE_FROM_TRACE,
+		maxOutputTokens: UNAVAILABLE_FROM_TRACE,
+	}
+}
+
+/**
+ * The OBSERVED identity of the live capture.
+ *
+ * Kept beside the sink so the exported artifact can state WHICH model
+ * and WHICH software the trace came from.
+ */
+let activeIdentity: RoundcLatencyTraceIdentity = emptyIdentity()
+
+/**
+ * Merge the OBSERVED identity fields into the live capture's identity.
+ *
+ * Only fields that were actually OBSERVED are merged: an `undefined`
+ * value never overwrites an observed one, and the FIRST observation
+ * wins — so the record is stable and explainable.
+ */
+function observeIdentityFragment(fragment: Partial<RoundcLatencyTraceIdentity>): void {
+	for (const [key, value] of Object.entries(fragment)) {
+		if (value === undefined) {
+			continue
+		}
+		const current = (activeIdentity as unknown as Record<string, unknown>)[key]
+		if (current === UNAVAILABLE_FROM_TRACE) {
+			;(activeIdentity as unknown as Record<string, unknown>)[key] = value
+		}
+	}
+}
+
+/**
+ * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — observe the ARTIFACT and SOURCE
+ * identity.
+ *
+ * The SOURCE head is read from the extension's own `.git` when present,
+ * and the ARTIFACT digest is the SHA-256 of the bundle that is actually
+ * running. Both come from the CANONICAL resolver the allocation profiler
+ * uses, so both diagnostics state the SAME identity.
+ *
+ * The extension VERSION is the other half of the build binding: a bundle
+ * digest alone does not say which release produced it.
+ *
+ * Every field is failure-isolated: an unreadable bundle leaves the field
+ * `UNAVAILABLE_FROM_TRACE` rather than failing the dump.
+ */
+function observeArtifactIdentity(): void {
+	try {
+		const bundleIdentity = resolveInstalledBundleIdentityCached(__dirname)
+		observeIdentityFragment({
+			sourceHead: bundleIdentity.sourceHead === "unknown" ? UNAVAILABLE_FROM_TRACE : bundleIdentity.sourceHead,
+			extensionBundleSha256:
+				bundleIdentity.extensionBundleSha256 === "unknown"
+					? UNAVAILABLE_FROM_TRACE
+					: bundleIdentity.extensionBundleSha256,
+			extensionVersion: ExtensionRegistryInfo.version,
+		})
+	} catch {
+		// Failure isolation: the identity is best-effort metadata, never a
+		// reason to fail the dump.
+	}
+}
+
+/**
  * The exported artifact's document shape.
  *
  * Every field is either an identifier, a count, a timestamp, a
@@ -235,6 +565,15 @@ export interface RoundcLatencyTraceArtifact {
 	readonly correlationId: string
 	/** The runtime profile the trace was captured under. */
 	readonly captureProfile: "dogfood"
+	/**
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the CAPTURE IDENTITY.
+	 *
+	 * This is what makes two runs comparable: it states the artifact
+	 * bytes, the source commit, the runtime profile and the model
+	 * identity — or states, truthfully, that the trace could not observe
+	 * one of them.
+	 */
+	readonly identity: RoundcLatencyTraceIdentity
 	/** The wall-clock ISO instant the artifact was written. */
 	readonly exportedAtIso: string
 	/** The number of recorded boundary events. */
@@ -286,6 +625,8 @@ export function buildRoundcLatencyTraceArtifact(): RoundcLatencyTraceArtifact | 
 		sessionId: snapshot.sessionId,
 		correlationId: trace.correlationId,
 		captureProfile: "dogfood",
+		// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the CAPTURE IDENTITY.
+		identity: activeIdentity,
 		exportedAtIso: new Date().toISOString(),
 		eventCount: trace.events.length,
 		stageCount: trace.stages.length,
@@ -321,6 +662,14 @@ export async function dumpRoundcLatencyTrace(
 	const dir = context.globalStorageUri.fsPath
 	await mkdir(dir, { recursive: true })
 	const file = join(dir, ROUNDC_LATENCY_TRACE_DUMP_FILE)
+	// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — observe the ARTIFACT and SOURCE
+	// identity at the dump seam.
+	//
+	// This is the right seam: the artifact is written HERE, so this is
+	// where the identity of the bytes that produced the trace is known.
+	// The resolver is the CANONICAL one the allocation profiler uses, so
+	// both diagnostics record the SAME artifact identity.
+	observeArtifactIdentity()
 	const artifact = buildRoundcLatencyTraceArtifact()
 	if (!artifact) {
 		// Write an explicit empty document so the operator can tell
@@ -352,6 +701,7 @@ export function _resetRoundcLatencyTraceForTests(): void {
 	enabled = false
 	activeSink = undefined
 	activeSessionId = undefined
+	activeIdentity = emptyIdentity()
 }
 
 /**
@@ -392,6 +742,15 @@ export const COMPOSABLE_SINK_CHANNELS = [
 	"onRequestPrepared",
 	"onProviderRequestSubmitted",
 	"onProviderRequestCompleted",
+	// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the first-response and
+	// first-token channels.
+	//
+	// The transport's first event and the first GENERATED token are
+	// DISTINCT measurements. Composing both is what lets the trace
+	// report a true time-to-first-token instead of leaving the
+	// measurement unavailable.
+	"onProviderFirstResponse",
+	"onProviderFirstToken",
 	"onModelRequestFinish",
 	"onModelRequestError",
 	"onModelRequestAbort",

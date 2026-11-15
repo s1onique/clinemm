@@ -510,6 +510,26 @@ export function createContextCompactionPrepareTurn(
 				requestTriggerTokens,
 				userContextCeiling: sanitizedUserContextCeiling,
 				shouldCompact,
+				// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the ELIGIBILITY-CHECK
+				// discriminator.
+				//
+				// `shouldCompact` alone is NOT the answer to "did real
+				// compaction work begin?". In `auto` mode it answers
+				// "should it?", and the seam returns `undefined`
+				// immediately afterwards when it is false. In
+				// `manual` and `overflow_recovery` modes the seam ALWAYS
+				// proceeds to real work, whatever `shouldCompact` says.
+				//
+				// `compactionInitiated` answers the question the
+				// measurement actually needs: it is true exactly when
+				// this seam proceeds PAST the decision point and begins
+				// real compaction work. A consumer that opens a span on
+				// the diagnostics channel can therefore distinguish a
+				// no-op eligibility CHECK from an INITIATED compaction,
+				// and bound its span to the real execution.
+				//
+				// It is a boolean CLASSIFICATION, not content.
+				compactionInitiated: effectiveMode !== "auto" || shouldCompact,
 				// The ACT's required provenance field.
 				inputBudgetSource: budgetResolution.source,
 				effectiveMaxInputTokens: budgetResolution.effectiveMaxInputTokens,
@@ -610,92 +630,137 @@ export function createContextCompactionPrepareTurn(
 		};
 		let executedStrategy = telemetryStrategy;
 		let result: CoreCompactionResult | undefined;
-		if (effectiveMode === "overflow_recovery") {
-			// The provider already rejected the request, so recovery must end
-			// deterministically: the agentic strategy's own summarizer call could
-			// overflow the same window (its input budgeting trusts the same
-			// estimator that just undercounted). A custom compactor gets first
-			// shot — it sees mode "overflow_recovery" and owns its transcript
-			// invariants — but its result is held to the same bar basic
-			// compaction aims for: strictly smaller than the input (the runtime
-			// refuses to retry with a request that is not smaller) AND within
-			// the recovery token target. A marginal shrink would spend the
-			// run's single retry on a request that still cannot fit. On throw,
-			// decline, or an insufficient result, basic compaction runs so
-			// recovery never depends on another successful LLM request.
-			if (userCompaction?.compact) {
+		// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the TRUTHFUL TERMINAL OUTCOME
+		// of an INITIATED compaction that ABORTED or FAILED.
+		//
+		// The span was opened by the diagnostics channel (the seam decided
+		// to compact), so it must be closed with the OBSERVED outcome when
+		// the work aborts. Without this the span is left open and the
+		// tracer reports a `"span left open"` integrity failure — the very
+		// defect this ACT repairs — and a cancelled compaction would be
+		// indistinguishable from a check that never ran.
+		//
+		// The outcome is derived from the seam's OWN authority (the abort
+		// signal and the cancellation classifier), never guessed.
+		try {
+			if (effectiveMode === "overflow_recovery") {
+				// The provider already rejected the request, so recovery must end
+				// deterministically: the agentic strategy's own summarizer call could
+				// overflow the same window (its input budgeting trusts the same
+				// estimator that just undercounted). A custom compactor gets first
+				// shot — it sees mode "overflow_recovery" and owns its transcript
+				// invariants — but its result is held to the same bar basic
+				// compaction aims for: strictly smaller than the input (the runtime
+				// refuses to retry with a request that is not smaller) AND within
+				// the recovery token target. A marginal shrink would spend the
+				// run's single retry on a request that still cannot fit. On throw,
+				// decline, or an insufficient result, basic compaction runs so
+				// recovery never depends on another successful LLM request.
+				if (userCompaction?.compact) {
+					try {
+						result = await userCompaction.compact(compactionContext);
+					} catch (error) {
+						if (isCompactionCancellation(error, context.abortSignal)) {
+							throw error;
+						}
+						config.logger?.log(
+							"Custom compaction failed during overflow recovery; falling back to basic compaction",
+							{
+								severity: "warn",
+								...describeCompactionError(error),
+							},
+						);
+						result = undefined;
+					}
+					if (result?.messages) {
+						const customMessageTokens = result.messages.reduce(
+							(total: number, message) =>
+								total + estimateMessageTokens(message),
+							0,
+						);
+						// The full acceptance bar, covering every degenerate size: a
+						// non-empty transcript (an empty one erases the request being
+						// retried), strictly smaller than the input (the runtime
+						// refuses a retry that is not smaller), and within the
+						// recovery token target (a marginal shrink spends the run's
+						// single retry on a request that still cannot fit). Both size
+						// comparisons use the token estimator rather than serialized
+						// length so they are expressed in the same unit as the target.
+						const acceptable =
+							result.messages.length > 0 &&
+							customMessageTokens < messageInputTokens &&
+							customMessageTokens <= messageTargetTokens;
+						if (!acceptable) {
+							config.logger?.log(
+								"Custom compaction did not produce an acceptable overflow-recovery transcript; falling back to basic compaction",
+								{
+									severity: "warn",
+									customMessageCount: result.messages.length,
+									customMessageTokens,
+									messageTargetTokens,
+								},
+							);
+							result = undefined;
+						}
+					}
+				}
+				if (!result?.messages) {
+					executedStrategy = "basic";
+					result = await BUILTIN_COMPACTION_STRATEGIES.basic(builtinOptions);
+				}
+			} else if (userCompaction?.compact) {
+				result = await userCompaction.compact(compactionContext);
+			} else {
 				try {
-					result = await userCompaction.compact(compactionContext);
+					result = await runBuiltinStrategy(builtinOptions);
 				} catch (error) {
-					if (isCompactionCancellation(error, context.abortSignal)) {
+					if (
+						strategy !== "agentic" ||
+						isCompactionCancellation(error, context.abortSignal)
+					) {
 						throw error;
 					}
 					config.logger?.log(
-						"Custom compaction failed during overflow recovery; falling back to basic compaction",
+						"Agentic compaction failed; falling back to basic compaction",
 						{
 							severity: "warn",
 							...describeCompactionError(error),
 						},
 					);
-					result = undefined;
-				}
-				if (result?.messages) {
-					const customMessageTokens = result.messages.reduce(
-						(total: number, message) => total + estimateMessageTokens(message),
-						0,
-					);
-					// The full acceptance bar, covering every degenerate size: a
-					// non-empty transcript (an empty one erases the request being
-					// retried), strictly smaller than the input (the runtime
-					// refuses a retry that is not smaller), and within the
-					// recovery token target (a marginal shrink spends the run's
-					// single retry on a request that still cannot fit). Both size
-					// comparisons use the token estimator rather than serialized
-					// length so they are expressed in the same unit as the target.
-					const acceptable =
-						result.messages.length > 0 &&
-						customMessageTokens < messageInputTokens &&
-						customMessageTokens <= messageTargetTokens;
-					if (!acceptable) {
-						config.logger?.log(
-							"Custom compaction did not produce an acceptable overflow-recovery transcript; falling back to basic compaction",
-							{
-								severity: "warn",
-								customMessageCount: result.messages.length,
-								customMessageTokens,
-								messageTargetTokens,
-							},
-						);
-						result = undefined;
-					}
+					executedStrategy = "basic";
+					result = await BUILTIN_COMPACTION_STRATEGIES.basic(builtinOptions);
 				}
 			}
-			if (!result?.messages) {
-				executedStrategy = "basic";
-				result = await BUILTIN_COMPACTION_STRATEGIES.basic(builtinOptions);
-			}
-		} else if (userCompaction?.compact) {
-			result = await userCompaction.compact(compactionContext);
-		} else {
-			try {
-				result = await runBuiltinStrategy(builtinOptions);
-			} catch (error) {
-				if (
-					strategy !== "agentic" ||
-					isCompactionCancellation(error, context.abortSignal)
-				) {
-					throw error;
-				}
-				config.logger?.log(
-					"Agentic compaction failed; falling back to basic compaction",
-					{
-						severity: "warn",
-						...describeCompactionError(error),
-					},
-				);
-				executedStrategy = "basic";
-				result = await BUILTIN_COMPACTION_STRATEGIES.basic(builtinOptions);
-			}
+		} catch (error) {
+			// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — close the INITIATED
+			// compaction's span with the OBSERVED terminal outcome before
+			// the error propagates.
+			//
+			// The outcome is derived from the seam's own authority: an
+			// abort (the signal fired, or the error IS a cancellation) is
+			// a CANCELLATION; anything else is a FAILURE. Neither is a
+			// success, and neither is reported as one.
+			const cancelled = isCompactionCancellation(error, context.abortSignal);
+			observeCompactionTrace(
+				config.modelBehaviorTraceSink,
+				"completed",
+				{
+					sessionId: config.sessionId,
+					iteration: context.iteration,
+					providerId: config.providerId,
+					modelId: config.modelId,
+				},
+				{
+					mode: effectiveMode,
+					strategy: executedStrategy,
+					requestInputTokens,
+					maxInputTokens,
+					requestTriggerTokens,
+					compactionMessagesBefore: beforeMessageCount,
+					compactionOutcome: cancelled ? "cancelled" : "failed",
+				},
+			);
+			throw error;
 		}
 
 		const durationMs = Date.now() - startedAt;
@@ -794,6 +859,10 @@ export function createContextCompactionPrepareTurn(
 					compactionEvidenceRefsRetained: evidenceRefsRetained,
 					compactionEvidenceRefsDropped: evidenceRefsDropped,
 					compactionEvidenceRefsReplaced: evidenceRefsReplaced,
+					// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the OBSERVED
+					// terminal outcome. This compaction produced a
+					// transcript, so it completed.
+					compactionOutcome: "completed",
 				},
 			);
 			context.emitStatusNotice?.(`${noticePrefix}compacted`, {
@@ -860,6 +929,35 @@ export function createContextCompactionPrepareTurn(
 				iteration: context.iteration,
 				maxInputTokens,
 			});
+			// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the TRUTHFUL TERMINAL
+			// OUTCOME of an INITIATED compaction that produced no
+			// transcript.
+			//
+			// The compaction WORK ran (the diagnostics opened the span),
+			// but the strategy returned no result, so there is nothing to
+			// complete. Reporting the terminal outcome here is what keeps
+			// the span from being left open — and reporting it as a
+			// FAILURE is what keeps it from being recorded as a
+			// successful completion.
+			observeCompactionTrace(
+				config.modelBehaviorTraceSink,
+				"completed",
+				{
+					sessionId: config.sessionId,
+					iteration: context.iteration,
+					providerId: config.providerId,
+					modelId: config.modelId,
+				},
+				{
+					mode: effectiveMode,
+					strategy: executedStrategy,
+					requestInputTokens,
+					maxInputTokens,
+					requestTriggerTokens,
+					compactionMessagesBefore: beforeMessageCount,
+					compactionOutcome: "failed",
+				},
+			);
 			captureCompactionSkipped(config.telemetry, {
 				ulid: telemetryUlid,
 				strategy: executedStrategy,

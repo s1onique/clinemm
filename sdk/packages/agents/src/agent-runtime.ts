@@ -3448,6 +3448,28 @@ export class AgentRuntime {
 		}
 
 		let receivedFirstChunk = false;
+		// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the FIRST-RESPONSE and
+		// FIRST-TOKEN observations.
+		//
+		// The two events are DISTINCT and are never conflated:
+		//
+		//   - the first RESPONSE event is the first event the provider's
+		//     stream produced at all. It measures the transport's
+		//     time-to-first-event. A transport chunk is NOT necessarily
+		//     model output.
+		//   - the first TOKEN is the first GENERATED OUTPUT — a text
+		//     delta carrying actual model text. Only this one is a
+		//     time-to-first-token.
+		//
+		// The observation is metadata-only: the event TYPE and the
+		// generated text's LENGTH and DIGEST — never the text itself.
+		//
+		// The stream's iteration, ordering, cancellation and buffering
+		// are UNCHANGED: the observation is a side-effect on the events
+		// the runtime already consumes, it never pre-reads, buffers or
+		// re-orders anything.
+		let observedFirstResponse = false;
+		let observedFirstToken = false;
 		try {
 			for await (const event of stream) {
 				if (!receivedFirstChunk) {
@@ -3458,6 +3480,14 @@ export class AgentRuntime {
 						phase,
 						eventType: event.type,
 					});
+				}
+				if (!observedFirstResponse) {
+					observedFirstResponse = true;
+					this.observeProviderFirstResponse(event.type);
+				}
+				if (!observedFirstToken && event.type === "text-delta") {
+					observedFirstToken = true;
+					this.observeProviderFirstToken(event);
 				}
 				yield event;
 			}
@@ -3791,6 +3821,69 @@ export class AgentRuntime {
 			sink.onProviderRequestCompleted({
 				...this.modelBehaviorTraceIdentity(),
 				payload,
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * Report the FIRST observed provider RESPONSE EVENT.
+	 *
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01.
+	 *
+	 * This is the first event the provider's stream produced at all. It
+	 * is NOT the first generated token: a transport chunk is not
+	 * necessarily model output, so this observation measures the
+	 * transport's time-to-first-event and is never reported as a
+	 * time-to-first-token.
+	 *
+	 * The observation is metadata-only — the event TYPE, never content.
+	 */
+	private observeProviderFirstResponse(eventType: string): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onProviderFirstResponse) {
+			return;
+		}
+		try {
+			sink.onProviderFirstResponse({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					eventType,
+				},
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
+	 * Report the FIRST observed GENERATED TOKEN.
+	 *
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01.
+	 *
+	 * A `text-delta` carrying actual model text IS a generated token, so
+	 * this is the authoritative first-token observation. The observation
+	 * is metadata-only: the generated text's LENGTH, never the text
+	 * itself.
+	 *
+	 * A provider that emits no text at all (a tool-call-only or an empty
+	 * response) never produces this observation, and the measurement
+	 * stays unavailable rather than being inferred.
+	 */
+	private observeProviderFirstToken(event: AgentModelEvent): void {
+		const sink = this.config.modelBehaviorTraceSink;
+		if (!sink?.onProviderFirstToken) {
+			return;
+		}
+		try {
+			const text = event.type === "text-delta" ? event.text : "";
+			sink.onProviderFirstToken({
+				...this.modelBehaviorTraceIdentity(),
+				payload: {
+					eventType: event.type,
+					generatedTextLength: text.length,
+				},
 			});
 		} catch {
 			// Failure isolation.

@@ -180,6 +180,12 @@ export function createIsolatedModelBehaviorTraceSink(
 		onRequestPrepared: safe,
 		onProviderRequestSubmitted: safe,
 		onProviderRequestCompleted: safe,
+		// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the first-response and
+		// first-token channels. They are forwarded like every other
+		// channel so the transport's first event and the first GENERATED
+		// token are not lost when a host installs the isolated sink.
+		onProviderFirstResponse: safe,
+		onProviderFirstToken: safe,
 		onModelRequestFinish: safe,
 		onModelRequestError: safe,
 		onModelRequestAbort: safe,

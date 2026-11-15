@@ -2214,6 +2214,16 @@ export class SessionRuntime {
 			onEffectiveModelConfig: sink.onEffectiveModelConfig
 				? (observation) => sink.onEffectiveModelConfig?.(observation)
 				: undefined,
+			// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the first-response and
+			// first-token channels are forwarded EXPLICITLY, like the other
+			// prototype-implemented channels, so a prototype-backed sink
+			// keeps working.
+			onProviderFirstResponse: sink.onProviderFirstResponse
+				? (observation) => sink.onProviderFirstResponse?.(observation)
+				: undefined,
+			onProviderFirstToken: sink.onProviderFirstToken
+				? (observation) => sink.onProviderFirstToken?.(observation)
+				: undefined,
 			onToolStart: sink.onToolStart
 				? (observation) => sink.onToolStart?.(observation)
 				: undefined,

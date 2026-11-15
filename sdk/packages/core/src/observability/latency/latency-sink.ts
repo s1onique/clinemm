@@ -85,6 +85,42 @@ function deriveToolFinishStatus(
 }
 
 /**
+ * Derive the compaction span's terminal status from the OBSERVED outcome.
+ *
+ * ACT-CLINEMM-ROUND-C-TRACE-QUAL01.
+ *
+ * The production seam reports the compaction's terminal outcome in the
+ * completion payload:
+ *
+ *   - `compactionOutcome: "completed"` — the compaction produced a
+ *     transcript. This is the only outcome that is a success.
+ *   - `compactionOutcome: "failed"`   — the compaction ran and produced
+ *     no transcript.
+ *   - `compactionOutcome: "cancelled"` — the compaction was aborted.
+ *
+ * A payload that carries NO outcome is treated as `"ok"`: that is the
+ * historical behaviour (the completion channel was always a success)
+ * and it keeps every pre-existing producer working unchanged. The
+ * distinction only matters for producers that adopted the outcome
+ * classification.
+ *
+ * The status is never invented: a compaction that produced no
+ * transcript is never reported as a successful completion.
+ */
+function deriveCompactionFinishStatus(
+	payload: Readonly<Record<string, unknown>>,
+): LatencyStatus {
+	const outcome = payload.compactionOutcome;
+	if (outcome === "failed" || outcome === "error") {
+		return "failed";
+	}
+	if (outcome === "cancelled" || outcome === "aborted") {
+		return "cancelled";
+	}
+	return "ok";
+}
+
+/**
  * The adapter.
  */
 export class LatencyTraceSink implements ModelBehaviorTraceSink {
@@ -272,16 +308,49 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	/**
 	 * The COMPACTION boundary — START.
 	 *
-	 * The compaction pipeline reports its DIAGNOSTICS at the moment it
-	 * decides whether to compact, which is the start of the compaction
-	 * span. The diagnostics carry the before/after token budget and the
-	 * trigger reason; the message counts arrive with the completion.
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the MEASUREMENT BOUNDARY MOVED
+	 * TO THE REAL COMPACTION-EXECUTION SEAM.
 	 *
-	 * This is the REAL production seam: the compaction pipeline in
-	 * `extensions/context/compaction.ts` calls this channel before it
-	 * runs its strategy.
+	 * ## The defect this repairs
+	 *
+	 * The compaction pipeline reports its DIAGNOSTICS at the moment it
+	 * DECIDES whether to compact — before the decision is applied. The
+	 * `auto` mode then returns `undefined` when the transcript is below
+	 * the trigger, so NO compaction work ran.
+	 *
+	 * This sink used to open the `compaction` span on EVERY diagnostic,
+	 * so every no-op eligibility CHECK left a span open forever. The
+	 * tracer then reported each one as a `"span left open"` integrity
+	 * failure. The packaged Round C dogfood run (session
+	 * `1794780088950_tc1vx`) recorded 45 compaction starts, 2 compaction
+	 * ends, and exactly 43 such integrity failures.
+	 *
+	 * ## The correction
+	 *
+	 * The production seam publishes `compactionInitiated` — a boolean
+	 * classification that is true exactly when the seam proceeds PAST
+	 * the decision point and begins real compaction work. The span is
+	 * opened only then, so:
+	 *
+	 *   - a no-op eligibility check leaves NO open span;
+	 *   - a real compaction is bounded by its own execution.
+	 *
+	 * The diagnostic itself is still OBSERVED — the eligibility check is
+	 * real evidence and the trace must not lose it. What changes is only
+	 * whether it opens a span.
+	 *
+	 * A producer that does not publish `compactionInitiated` at all is
+	 * treated as having INITIATED a compaction: the span is opened. That
+	 * is the conservative choice — it preserves the pre-correction
+	 * behaviour for any producer that has not adopted the discriminator,
+	 * so an older producer cannot silently lose its compaction span.
 	 */
 	onCompactionDiagnostics(observation: ModelBehaviorTraceObservation): void {
+		const initiated = observation.payload.compactionInitiated;
+		if (initiated === false) {
+			// A no-op eligibility CHECK: observed, but not a span.
+			return;
+		}
 		this.record("compaction", "start", {
 			metadata: observation.payload,
 		});
@@ -294,11 +363,18 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * counts before and after, the messages removed, and the evidence
 	 * reference continuity. The compaction's OUTPUT SUMMARY is never
 	 * recorded — only counts.
+	 *
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the terminal status is the
+	 * OBSERVED outcome, not an assumption. A compaction that ran and
+	 * produced a transcript is `"ok"`. A compaction that was initiated
+	 * but produced NO transcript is reported by the production seam with
+	 * a terminal status, and this sink closes the span with THAT status
+	 * — it never invents a successful completion.
 	 */
 	onCompactionCompleted(observation: ModelBehaviorTraceObservation): void {
 		this.record("compaction", "end", {
 			metadata: observation.payload,
-			status: "ok",
+			status: deriveCompactionFinishStatus(observation.payload),
 		});
 	}
 

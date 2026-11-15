@@ -216,6 +216,30 @@ export const LATENCY_METADATA_ALLOWLIST: readonly string[] = [
 	"compactionEvidenceRefsRetained",
 	"compactionEvidenceRefsDropped",
 	"compactionEvidenceRefsReplaced",
+	// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the compaction EXECUTION
+	// discriminators.
+	//
+	// `compactionInitiated` is a boolean classification published by the
+	// production compaction seam: it is true exactly when the seam
+	// proceeds PAST its eligibility decision and begins real compaction
+	// work. It lets a consumer tell a no-op eligibility CHECK from an
+	// INITIATED compaction, so a span is bounded to the real execution
+	// rather than to every check.
+	//
+	// `compactionOutcome` is the OBSERVED terminal outcome of an
+	// initiated compaction ("completed" | "failed" | "cancelled"). It
+	// lets a consumer close an initiated compaction truthfully instead of
+	// inventing a successful completion or leaving the span open.
+	//
+	// Both are CLASSIFICATIONS — never content.
+	"compactionInitiated",
+	"compactionOutcome",
+	// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the first-token observation.
+	//
+	// `generatedTextLength` is the LENGTH of the first observed
+	// generated output. It is a SIZE, never content: the text itself is
+	// never recorded.
+	"generatedTextLength",
 ];
 
 /**

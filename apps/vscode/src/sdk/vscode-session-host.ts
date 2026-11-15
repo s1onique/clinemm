@@ -62,7 +62,11 @@ import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
 import { modelBehaviorTraceSink } from "./model-behavior-trace-runtime"
 // ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01: the Round C latency-trace
 // activation + composition helpers.
-import { composeModelBehaviorTraceSinks, installRoundcLatencyTraceSink } from "./roundc-latency-trace-runtime"
+import {
+	composeModelBehaviorTraceSinks,
+	installRoundcLatencyTraceSink,
+	observeRoundcCaptureIdentity,
+} from "./roundc-latency-trace-runtime"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
@@ -488,7 +492,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 				// public profile `roundcLatencyTraceSink` is `undefined`
 				// and this expression is EXACTLY the pre-ACT value.
 				modelBehaviorTraceSink: roundcLatencyTraceSink
-					? composeModelBehaviorTraceSinks(modelBehaviorTraceSink, roundcLatencyTraceSink)
+					? observeRoundcCaptureIdentity(composeModelBehaviorTraceSinks(modelBehaviorTraceSink, roundcLatencyTraceSink))
 					: modelBehaviorTraceSink,
 			}
 			return {

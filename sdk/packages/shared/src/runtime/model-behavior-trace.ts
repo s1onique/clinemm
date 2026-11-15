@@ -2430,6 +2430,39 @@ export interface ModelBehaviorTraceSink {
 	onProviderRequestCompleted?: (
 		observation: ModelBehaviorTraceObservation,
 	) => void;
+	/**
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the FIRST PROVIDER RESPONSE EVENT.
+	 *
+	 * Reported at the instant the provider's stream produces its FIRST
+	 * observed event — the provider acknowledging the request or sending
+	 * its first byte.
+	 *
+	 * This is NOT the first generated token and NOT the stream's
+	 * completion. A transport chunk is not necessarily model output, so
+	 * this channel measures the transport's time-to-first-event and must
+	 * never be reported as a time-to-first-token.
+	 *
+	 * A provider that cannot observe this event must NOT call this
+	 * method; the measurement then stays unavailable.
+	 */
+	onProviderFirstResponse?: (
+		observation: ModelBehaviorTraceObservation,
+	) => void;
+	/**
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the FIRST GENERATED TOKEN.
+	 *
+	 * Reported at the instant the provider's stream produces its first
+	 * observed GENERATED OUTPUT — a text delta carrying actual model
+	 * output. The span it closes measures from the request's submission,
+	 * so the measurement is the true time-to-first-token.
+	 *
+	 * A provider that cannot observe the first generated token must NOT
+	 * call this method; the measurement then stays unavailable rather
+	 * than being inferred from the stream's completion.
+	 */
+	onProviderFirstToken?: (
+		observation: ModelBehaviorTraceObservation,
+	) => void;
 	/** A model request completed (successfully or with a finish reason). */
 	onModelRequestFinish?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request failed. */
