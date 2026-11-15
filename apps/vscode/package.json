@@ -213,7 +213,7 @@
 			},
 			{
 				"command": "cline.debug.dumpRoundcLatencyTrace",
-				"title": "Cline Debug: Dump Round C Latency Trace",
+				"title": "Cline Debug: Dump Latency Trace",
 				"category": "Cline"
 			},
 			{

@@ -471,7 +471,7 @@ describe("ACT-CLINEMM-ROUND-C-DOGFOOD-TRACE01 — Round C latency trace activati
 			expect(registry).toMatch(/DumpRoundcLatencyTrace:\s*`\$\{prefix\}\.debug\.dumpRoundcLatencyTrace`/)
 			const pkg = await readFile(PACKAGE_JSON_PATH, "utf8")
 			expect(pkg).toMatch(
-				/"command":\s*"cline\.debug\.dumpRoundcLatencyTrace"[\s\S]*?"title":\s*"Cline Debug: Dump Round C Latency Trace"/,
+				/"command":\s*"cline\.debug\.dumpRoundcLatencyTrace"[\s\S]*?"title":\s*"Cline Debug: Dump Latency Trace"/,
 			)
 			const extension = await readFile(EXTENSION_PATH, "utf8")
 			expect(extension).toMatch(/vscode\.commands\.registerCommand\(\s*commands\.DumpRoundcLatencyTrace/)
