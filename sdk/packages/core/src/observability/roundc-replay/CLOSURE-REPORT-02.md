@@ -49,6 +49,43 @@ the identical command), with **zero** in a file this correction touched.
 > tsconfig scope. The meaningful invariant is the **delta**, and the delta
 > is **0**: the stashed baseline and the corrected tree both report 58.
 
+### P2 residue — the latency stage-duration comments
+
+The reviewer also recorded a non-blocking **P2**: *"Some latency comments
+contradict the new implementation."* Two did, and they are corrected in
+`3b08b6dc8`:
+
+| Location | The stale claim | The corrected claim |
+|---|---|---|
+| `LatencyTracer.getStages()` doc | a stage is measured as *"the gap between an `end` event and the next `start` event, **PLUS the duration the previous phase itself consumed**"* — while the implementation sets `totalDuration = gap`, and the comment's own second paragraph described the *correct* post-CORRECTION02 behaviour, so it contradicted itself | the stage total is the **gap** between the boundaries and does **NOT** include the `from` span's own duration; the independently measured span duration is reported separately as `spanDurationMs`, and a phase that owns a span's work is emitted as its own stage |
+| `LatencyStageMeasurement.spanDurationMs` doc | `durationMs` is *"the phase's TOTAL interval and may include an adjacent gap; for a tool, `durationMs` is the execution span plus the delivery delay"* | `durationMs` is the **gap** between the two boundaries; the executor's run time is the explicit `execution` stage, and the adjacent `tool_execution → tool_result_delivered` stage carries only the delivery delay |
+
+This is **documentation only**: no executable statement was touched, and the
+module header — which already described the corrected behaviour accurately —
+was left as-is.
+
+### Independent re-verification of CORRECTION02
+
+The CORRECTION02 evidence above was reproduced independently, from the
+committed tree, rather than accepted on assertion:
+
+| Check | Command / method | Result |
+|---|---|---|
+| RED reproduction | restore the CORRECTION01 `latency-trace.ts` / `latency-sink.ts`, keep the CORRECTION02 tests | **8 failed / 52 passed** — including `expected 'execution' to be 'delivery'`, `expected 5000 to be 10`, and the provider-TTFT 350-vs-100 case |
+| Focused latency suite | `vitest run src/observability/latency/` | **71 passed / 0 failed** |
+| Whole observability suite | `vitest run src/observability/` | **139 passed / 0 failed** |
+| Agents package | `vitest run` (in `sdk/packages/agents`) | **581 passed / 0 failed** |
+| Core typecheck delta | `tsc -p tsconfig.json --noEmit`, CORRECTION01 baseline vs CORRECTION02, **in place** on the same tree | **58 vs 58**, with a **byte-identical per-file distribution** — zero new errors |
+| Agents typecheck | `tsc -p tsconfig.json --noEmit` (in `sdk/packages/agents`) | **0 errors** |
+| Shared typecheck | `tsc -p tsconfig.json --noEmit` (in `sdk/packages/shared`) | **0 errors** |
+| Biome | `biome check` over the 9 touched files | clean |
+| SDK build | `bun run build:sdk` | clean, all 6 packages, build-id verified |
+
+The typecheck baseline was measured **in place** on the same working tree
+(checking out the committed CORRECTION01 sources and back) rather than in a
+separate worktree: a detached worktree resolves a different `node_modules`
+layout and produced a non-comparable 312-error figure.
+
 ### CORRECTION01 — measurement-attribution repair (review follow-up)
 
 The reviewer returned `HALT_MEASUREMENT_ATTRIBUTION_UNSOUND`. The four
@@ -104,13 +141,16 @@ operation was performed.
 | `d351e891b` | CORRECTION01 — review follow-up: identity-based compaction continuity, independent execution/delivery attribution, separate preparation/provider intervals, bounded skip classification, provider-projection crosswalk |
 | `720a49616` | Closure report: bind the evidence to the CORRECTION01 HEAD |
 | `0656358c6` | CORRECTION02 — second review follow-up: stage-level execution/delivery attribution and provider-timer anchoring at the real dispatch seam |
+| `05f4b62fc` | Closure report: bind the evidence to the CORRECTION02 HEAD |
+| `3b08b6dc8` | P2 residue — correct the latency stage-duration comments that contradicted the CORRECTION02 implementation (documentation only) |
 
 ### 2.1 CORRECTION02 final identity
 
 | Field | Value |
 |---|---|
 | Final branch | `act/clinemm-roundc-harness-02` |
-| Final HEAD | `0656358c6729a045e345bc4b3a8a41bb2c532fb9` |
+| CORRECTION02 code HEAD | `0656358c6729a045e345bc4b3a8a41bb2c532fb9` |
+| Final HEAD | `3b08b6dc8` (adds the P2 comment correction; the CORRECTION02 *code* is unchanged) |
 | Working tree at closure | clean |
 | Pre-existing stash | preserved, untouched (`stash@{0}`) |
 
