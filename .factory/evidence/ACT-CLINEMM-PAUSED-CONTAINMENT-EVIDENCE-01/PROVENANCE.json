@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "act": "ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01",
+  "subject": {
+    "incidentId": "incident-mwh1jzpl-8-d3g1w5",
+    "sessionId": "1794697115819_0ftrq",
+    "taskId": "1794697115819_0ftrq",
+    "epoch": 21,
+    "barrierId": "barrier-coord-1-1794697115819_0ftrq-1794697115819_0ftrq-21-22",
+    "coordinatorInstanceId": "coord-1",
+    "extensionHostInstanceId": "extension-host-47602-mwg6a71m"
+  },
+  "repository": {
+    "toplevel": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "remoteOrigin": "git@github.com:s1onique/clinemm.git",
+    "remoteUpstream": "https://github.com/cline/cline.git",
+    "entryHead": "043a0606f5f43b0d742f8fa0b6a05c7014bf2fce",
+    "entryBranch": "main",
+    "subjectBranch": "act/clinemm-paused-containment-evidence-01",
+    "subjectHead": "043a0606f5f43b0d742f8fa0b6a05c7014bf2fce",
+    "treeCleanAtEntry": true,
+    "statusPorcelainV1AtEntry": "",
+    "stashesPreserved": [
+      "stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration"
+    ],
+    "worktreesPreserved": [
+      "/private/tmp/clinemm-prebase (detached, prunable)",
+      "/private/tmp/worktree-bun.7ddCHQ (detached)",
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first (experiment/m31-action-first)",
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded (detached)"
+    ]
+  },
+  "originalArchive": {
+    "localPath": "~/Downloads/clinemm-incident-incident-mwh1jzpl-8-d3g1w5.zip",
+    "sha256": "e227a9c0d784e0ca5c4111642f032e998841a28cf94ae4dc3341139a2e7b8384",
+    "sha256Expected": "e227a9c0d784e0ca5c4111642f032e998841a28cf94ae4dc3341139a2e7b8384",
+    "sha256Matches": true,
+    "bytes": 5185,
+    "immutable": true,
+    "retainedOutsideRepository": true,
+    "quarantineUnpackDir": "/tmp/cline-quarantine/mwh1jzpl-8-d3g1w5/unpacked",
+    "noExecutableContentRun": true,
+    "manifestMembersVerified": "9/9 (sha256 + byte length)",
+    "memberVerificationResult": "ALL_MEMBERS_VERIFIED"
+  },
+  "historicalRuntime": {
+    "classification": "HISTORICAL_RUNTIME_SOURCE_UNBOUND",
+    "reason": "build-identity.json recorded provenanceVerification='UNOBSERVED' and verificationNote='no build provenance artifact was present'. The extension version string 4.1.16-5a1c485cb does NOT encode a source HEAD; the bundle hash identifies the ARTIFACT, not the SOURCE TREE.",
+    "hostPlatform": "darwin",
+    "hostArchitecture": "arm64",
+    "extensionVersion": "4.1.16-5a1c485cb",
+    "recordedOnDiskBundleSha256": "48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5",
+    "runtimeProfile": "public (VSCodium profile .vscodium-clinemm); reconciliation diagnostic sink DEFAULT-OFF (not dogfood, no clineDetailedLocalDiagnosticsEnabled opt-in)"
+  },
+  "installedArtifactBinding": {
+    "method": "read-only enumeration of the actual host/editor inventory (all ~/.vscodium-*/extensions/s1onique.clinemm-4.1.16-5a1c485cb-* bundles hashed)",
+    "candidatesInspected": 97,
+    "matches": [
+      {
+        "role": "operator-active-cline-profile",
+        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c",
+        "bundleSha256": "48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5"
+      },
+      {
+        "role": "live-incident-host-profile",
+        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c",
+        "bundleSha256": "48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5"
+      }
+    ],
+    "matchesIncidentBundleHash": true,
+    "artifactPath": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-5a1c485cb-e761cea8c/dist/extension.js",
+    "artifactBytes": 27411852,
+    "artifactSha256": "48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5",
+    "manifestVersion": "4.1.16-5a1c485cb-e761cea8c",
+    "manifestPublisher": "s1onique",
+    "manifestName": "clinemm",
+    "extensionHostProcess": {
+      "pid": 47602,
+      "pgid": 47523,
+      "started": "2026-11-14T11:57:36Z",
+      "userDataDir": "~/.vscodium-clinemm/user-data",
+      "clineDataDir": "~/.vscodium-clinemm/cline-data",
+      "status": "ALIVE at ACT time"
+    },
+    "runtimeIdentityEvidence": [
+      "lsof -p 47602 shows PID 47602 is the writer of logs/20261114T115735/window1/exthost/output_logging_20261114T115736/1-Cline.log (the log this ACT read)",
+      "the .vscodium-clinemm/extensions profile contains the byte-identical bundle 48998ee9...",
+      "the persisted incident snapshot incident-mwh1jzpl-8-d3g1w5 is inside that same profile's globalStorage"
+    ],
+    "runningArtifactVerified": true,
+    "activeInstanceModified": false,
+    "note": "The operator's live paused instance was NOT restarted, re-instrumented, signalled or otherwise changed. A separately installed disposable instance was NOT needed: the incident's own host was still alive and bound to the exact incident bundle, so the decisive evidence was acquired from the REAL incident runtime itself."
+  },
+  "newlyInstrumentedBuild": {
+    "produced": false,
+    "reason": "C1 proved the reconciliation/phase-writer transitions were DEFAULT-OFF or structurally un-wired in the EXPORT path, and that the decisive historical transitions were recoverable from the still-alive incident extension host. No instrumented build was required, so no new artifact identity is claimed."
+  },
+  "evidenceClassificationsUsed": {
+    "REAL": "Real production code path exercised by an executed production test or read from the live incident runtime",
+    "LIVE": "Observed in the still-running incident extension host (read-only)",
+    "SYNTHETIC_REAL": "Real production seam driven by a controlled fixture (the TCRR01 real-process harness)",
+    "STRUCTURAL": "Proven from source at ENTRY_HEAD",
+    "INFERRED": "Reasoned from correlated observations; not directly observed",
+    "NOT_EXECUTED": "Not run in this ACT",
+    "LIVE_UNOBSERVABLE": "Not observable from the live runtime even in principle"
+  }
+}

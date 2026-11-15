@@ -33227,3 +33227,136 @@ session-fencing and partial-failure contracts, as RECON01 §C6.5 already specifi
 EVIDENCE: `.factory/evidence/ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01/`
   00-identity.md, 01-correction.md, OPERATOR-PROCEDURE.md, 03-build-and-package.md,
   04-live-qualification.md, 05-verdict.md, SHA256SUMS.txt
+
+# ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01 — PASS_CAPTURE_DECISIVE — 2026-11-15
+
+**Scope.** Evidence acquisition and causal discrimination for the paused
+incident `incident-mwh1jzpl-8-d3g1w5` (task/session `1794697115819_0ftrq`,
+epoch 21). NOT a repair ACT. No production file was modified.
+
+## Identity and conservation
+
+`ENTRY_HEAD = SUBJECT_HEAD = 043a0606f5f43b0d742f8fa0b6a05c7014bf2fce`; branch
+`act/clinemm-paused-containment-evidence-01` (created only after the clean-entry
+check). Remote `origin git@github.com:s1onique/clinemm.git`. Entry tree CLEAN —
+no `HALT_UNEXPECTED_TRACKED_DIRT`. The protected stash
+(`stash@{0}: WIP on main: d46223b51 ...`) and all 5 worktrees were preserved.
+The original ZIP
+(`sha256 e227a9c0d784e0ca5c4111642f032e998841a28cf94ae4dc3341139a2e7b8384`)
+was verified and unpacked READ-ONLY outside the repository; 9/9 manifest
+members verified; nothing from it was executed or committed.
+
+**No signal was sent** to PID 9667, PID 13450, PGID 9667 or PGID 13450 — only
+`kill -0` existence/permission probes. The operator's live paused instance was
+not modified, restarted or re-instrumented. The two-operation read-only MCP
+registry and the control seam were untouched.
+
+## C1 — Production seam map
+
+All eight required transitions were mapped to concrete paths/functions/lines; see
+`.factory/evidence/ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01/RECON.md`.
+
+**First lossy boundary: the DEFAULT-OFF reconciliation diagnostic sink**
+(`apps/vscode/src/sdk/reconciliation-diagnostic-capture.ts:216-218`), armed only
+by the dogfood profile or the `clineDetailedLocalDiagnosticsEnabled` opt-in
+(`dogfood-diagnostic-profile.ts:2213-2231`, `extension.ts:544`). The incident
+ran on a PUBLIC VSCodium profile, so it was disarmed for the whole incident.
+
+**Second structural MISSING_PRODUCER (proven from source):** the only
+production call site of `buildAutomaticIncidentExportBundle`
+(`automatic-incident-export-runtime.ts:170-174`) passes NEITHER `phaseWriters`
+NOR `continuationSummary`. Therefore `phase-writers.jsonl` is ALWAYS empty and
+`continuation-summary.json` is ALWAYS the same constant, regardless of runtime
+behaviour. The archive's continuation "unavailable" is true of the artifact and
+UNINFORMATIVE about the runtime.
+
+**C10 reevaluation performs NO OS re-probe** — it reads only the cached
+`backgroundCommandJobStates` map, so the blocking set can drain ONLY via
+`command_job_containment_reconciled`.
+
+## C2 — Runtime/source binding
+
+97 installed bundles of version `4.1.16-5a1c485cb` were hashed; 2 match the
+incident bundle hash `48998ee982f7b5bcae8123359bbbbf6a2487a578fd6081f978ed2f4c1a5b62b5`
+exactly (`.vscodium-cline` and `.vscodium-clinemm` profiles,
+`...-5a1c485cb-e761cea8c`, 27 411 852 bytes). The incident's extension host
+(PID **47602**, `extension-host-47602-mwg6a71m`) is **STILL ALIVE** and `lsof`
+proves it wrote the `1-Cline.log` this ACT read.
+
+`HISTORICAL_RUNTIME_SOURCE_UNBOUND`: `build-identity.json` recorded
+`provenanceVerification: "UNOBSERVED"` — the hash binds the ARTIFACT, not the
+SOURCE TREE. No source HEAD is inferred from the version string. No newly
+instrumented build was produced (the decisive evidence came from the still-alive
+incident host itself).
+
+## C3/C4 — Capture and discrimination
+
+36 correlated per-job records in `TRACE.jsonl` (20 OBSERVABLE_NOW,
+6 UNAVAILABLE_FROM_TRACE, 10 MISSING_PRODUCER). The historical postcondition
+`alive` + `osErrorCode: null` is, under `defaultTerminalPostconditionProbe`
+(`command-job-manager.ts:4260-4274`), ONLY producible by `kill(-pgid, 0)`
+returning rc=0 — the probe was PERMITTED and the group EXISTED. Measured
+spawn->failure intervals 8.761 s and 6.064 s both EXCEED the 5 000 ms
+`TERM_GRACE_MS`, so a full SIGTERM->grace->SIGKILL sequence had already run.
+
+Executable discriminator (3/3 PASS, exit 0):
+
+- **D1 REAL_PRODUCTION_SEAM** — a real survivor keeps the gate closed and is
+  NEVER reconciled (the incident's shape).
+- **D2 REAL_PRODUCTION_SEAM** — a group that exits inside the horizon IS
+  reconciled and the C10 blocker DRAINS (this EXCLUDES the stale-blocker
+  explanation).
+- **D3 SYNTHETIC_REAL** — with the sink at its production default (disarmed)
+  the `command_job_containment_reconciled` lifecycle event IS still emitted
+  while the diagnostic records are EMPTY: this SEPARATES "missing registration"
+  from "missing capture" and proves the empty timeline is a DEFAULT-OFF capture
+  gap, not a missing runtime event.
+
+**OS truth at ACT time (LIVE, read-only):** the recorded leaders 9667/13450 are
+ABSENT; the numeric PGIDs are now occupied by UNRELATED `bun /tmp/seam-host.ts`
+processes started ~3 h after the incident — PID/PGID REUSE — and `kill -0` on
+them returns EPERM. The incident's original groups are PROVABLY GONE; the
+numeric PGID alone is not a valid identity carrier today.
+
+**Verdict selection.** H1 (containment really failed and remained blocked)
+SELECTED; H3 (reconciliation ran but was not recorded) selected FOR THE
+OBSERVATION STAGE ONLY; H5 partially supported for the FIRST banner
+(`suppress_originating_completion` at 23:33:02.217Z) but EXCLUDED as the
+terminal explanation (the last banner was
+`unresolved_containment_failure`). H2 (settlement not initiated) and H4 (stale
+blocker) EXCLUDED.
+
+**No intentionally failing test remains in the default suite.** The historical
+incident is not reproducible as a DEFECT — the observed behaviour is the
+CORRECT behaviour of a correctly-implemented gate — so this ACT produced a
+PASSING discriminator witness instead.
+
+## C5/C6 — Gates and evidence
+
+`bunx vitest run --config vitest.config.ts` over 7 focused files: **69/69
+passed, exit 0**. `bunx tsc --noEmit -p tsconfig.json`: **exit 0, 0
+diagnostics**. `biome lint` + `biome format`: **exit 0**. The ONE failing test
+(`transient-containment-reconciliation-repair01.controller.tcrr01.test.ts` scope
+case) was proven PRE-EXISTING by stashing this ACT's changes away and
+reproducing the identical failure at pristine ENTRY_HEAD; the protected stash
+was restored to `stash@{0}`.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01/`
+  RECON.md, PROVENANCE.json, TRACE.jsonl, DISCRIMINATOR.md, GATES.md, VERDICT.md
+
+## Successor
+
+**A bounded repair ACT for the EVIDENCE-GAP class only.** (1) Wire the
+orphaned `phaseWriters` / `continuationSummary` inputs at
+`automatic-incident-export-runtime.ts:170-174`. (2) Make the exporter report
+`reconciliation-timeline.jsonl` as unavailable WITH ITS REASON instead of a
+bare empty file, so a future incident cannot be misread as "reconciliation never
+ran". **The containment gate, signal policy, cleanup policy, blocking logic and
+completion suppression MUST NOT be changed** — the evidence shows they behaved
+correctly.
+
+**Reopen condition.** A future incident with the reconciliation sink ARMED and
+the timeline still empty or `reconciliation_exhausted` for a job whose group is
+verified `gone` would implicate the reconciliation producer itself
+(`runContainmentReconciliationTick` / `applyContainmentReconciliation`) rather
+than the export path.
