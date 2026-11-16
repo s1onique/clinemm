@@ -1,0 +1,149 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02",
+  "type": "reconnaissance + causal reproduction",
+  "implementation_authorization": false,
+  "repository": {
+    "top_level": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "origin_remote": "git@github.com:s1onique/clinemm.git",
+    "upstream_remote": "https://github.com/cline/cline.git",
+    "expected_repository": "s1onique/clinemm",
+    "repository_identity_verified": true,
+    "branch": "main",
+    "head": "d397d90c002e9fab136b346771965209d28c6455",
+    "historical_anchor_not_head": "b1ad2a0de",
+    "unexpected_tracked_dirt": false,
+    "halt_triggered": false
+  },
+  "preservation": {
+    "protected_stashes": [
+      {
+        "ref": "stash@{0}",
+        "subject": "WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration"
+      }
+    ],
+    "protected_stashes_preserved": true,
+    "worktrees_preserved": [
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+      "/private/tmp/clinemm-prebase",
+      "/private/tmp/worktree-bun.7ddCHQ",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-1WJufc/clinemm-dogfood-cyoi5ujq/worktree",
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first",
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded"
+    ],
+    "history_rewritten": false,
+    "pushed": false,
+    "deployed": false,
+    "extension_installed": false,
+    "keycloak_modified": false
+  },
+  "input_artifacts": [
+    {
+      "role": "canonical_messages",
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794835772204_hvkkv/1794835772204_hvkkv.messages.json",
+      "bytes": 2810637,
+      "sha256": "5a7d88cb6763ef6805df755540af821a83ad83d7166852f3d5b19272e558b6b8",
+      "classification": "PRIVATE",
+      "committed": false
+    },
+    {
+      "role": "compaction_sidecar",
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794835772204_hvkkv/1794835772204_hvkkv.compaction.json",
+      "bytes": 107807,
+      "sha256": "eb82980e648acd3f877135a2e11a9d44b2ed320b261b55e4e30e28dfb85c9f3e",
+      "classification": "PRIVATE",
+      "committed": false
+    },
+    {
+      "role": "session_metadata",
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794835772204_hvkkv/1794835772204_hvkkv.json",
+      "bytes": 2309,
+      "sha256": "33026de297c1a3a9d57e8262452c65b9522259de71ddbb1080dd49ca6f7ed8f2",
+      "classification": "PRIVATE",
+      "committed": false
+    },
+    {
+      "role": "roundc_latency_trace",
+      "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace.json",
+      "bytes": 1092250,
+      "sha256": "d8bf5217afb2303ba3896f250d77d18ecf7e5b20a1c03eaaefa6ffe218a6c252",
+      "classification": "MATCHED_SESSION_TRACE",
+      "session_id": "1794835772204_hvkkv",
+      "committed": false
+    }
+  ],
+  "session_identity": {
+    "session_id": "1794835772204_hvkkv",
+    "source": "vscode",
+    "provider": "openai-compatible",
+    "model": "qwen3.8-flash-next-iq3_s",
+    "started_at": "2026-11-16T13:29:32.314Z",
+    "sidecar_updated_at": "2026-11-16T15:40:56.579Z",
+    "exact_session_identity_confirmed": true,
+    "substitution_of_an_earlier_roundc_trace": false
+  },
+  "capture_generation_comparison": {
+    "uploaded_frozen_observations": {
+      "canonical_message_count": 249,
+      "matched_tool_call_result_pairs": 125,
+      "last_compaction_covered_prefix_messages": 245,
+      "covered_prefix_tool_results": 123,
+      "covered_prefix_nonempty_tool_results": 121,
+      "retained_summary_verified_outcomes": 12,
+      "canonical_messages_after_covered_prefix": 4
+    },
+    "executor_local_observed": {
+      "canonical_message_count": 273,
+      "canonical_tool_call_count": 137,
+      "canonical_tool_result_count": 137,
+      "canonical_matched_tool_call_result_pairs": 137,
+      "canonical_nonempty_tool_results": 135,
+      "last_compaction_covered_prefix_messages": 263,
+      "covered_prefix_tool_results": 132,
+      "covered_prefix_nonempty_tool_results": 130,
+      "retained_summary_verified_outcomes": 12,
+      "canonical_messages_after_covered_prefix": 10
+    },
+    "difference_is_a_newer_capture_of_the_same_session": true,
+    "proof_of_same_session": [
+      "The local compaction sidecar's source_last_message_key is 'id:msg_8nBMg_D6', and the local canonical transcript's message at index 262 (the covered prefix boundary) has id 'msg_8nBMg_D6'.",
+      "The local compaction sidecar's source_prefix_hash is 'sha256:32635c293f51cbd7dfd3e4239d56eb0ad8a6a47ff416de30a9e3196f57bfd506', recorded over the local canonical prefix.",
+      "The matched latency trace reports correlationId/sessionId '1794835772204_hvkkv' and its compaction events reference the same effectiveMaxInputTokens (115200) and the same message counts.",
+      "The retained summary's content is the Round C task contract (ACT-QWEN-IQ3S-KEYCLOAK-ROUND-C-01) and the retained summary's verified-outcome section contains the three R1/R7 probe call ids named by the ACT.",
+      "Every delta is an INCREASE in the same direction (messages, pairs, prefix, tail) with the same verified-outcome count (12), which is the signature of a longer capture of one session rather than a different session."
+    ],
+    "consequence": "The frozen observations remain VALID as an earlier generation of the same session. All causal claims in this ACT are made against the NEWER local capture, and the divergence is recorded here rather than silently reconciled."
+  },
+  "conservation": {
+    "canonical_tool_calls": 137,
+    "canonical_tool_results": 137,
+    "canonical_matched_pairs": 137,
+    "canonical_unmatched_results": 0,
+    "canonical_duplicate_call_ids": 0,
+    "canonical_nonempty_result_bodies": 135,
+    "canonical_empty_result_bodies": 2,
+    "covered_prefix_tool_calls": 132,
+    "covered_prefix_tool_results": 132,
+    "covered_prefix_nonempty_result_bodies": 130,
+    "tail_message_count": 10,
+    "prefix_boundary_message_id": "msg_8nBMg_D6",
+    "prefix_boundary_matches_sidecar_last_message_key": true
+  },
+  "latency_trace_conservation": {
+    "event_count": 2355,
+    "stage_count": 944,
+    "unavailable_count": 108,
+    "integrity_failure_count": 3,
+    "compaction_boundary_events": 20,
+    "compaction_cycles": 10,
+    "truncated": false,
+    "dropped_event_count": 0
+  },
+  "privacy": {
+    "raw_artifact_copies_in_factory": 0,
+    "raw_artifact_copies_in_git": 0,
+    "published_receipts_contain_raw_tool_output": false,
+    "published_receipts_contain_prompts": false,
+    "published_receipts_contain_credentials": false,
+    "synthetic_secrets_in_published_receipts": 0
+  }
+}

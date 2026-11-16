@@ -1,0 +1,85 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02",
+  "session_id": "1794835772204_hvkkv",
+  "matched_request_attribution": "CAPTURE_INSUFFICIENT",
+  "matched_request_attribution_reason": "The matched latency trace records the compaction DIAGNOSTICS channel with only {compactionInitiated, effectiveMaxInputTokens} and the COMPLETION channel with message/reference counts. It does NOT record requestInputTokens, requestTriggerTokens, projected_provider_request_tokens, previous_provider_reported_input_tokens, underestimate_factor, retained_tail_size or summarizer_input_budget. The compaction-decision request identity therefore cannot be joined to a provider request by request id, and a preceding provider request MUST NOT be directly compared against a later unsubmitted request.",
+  "what_the_trace_does_support": {
+    "compaction_cycles": 10,
+    "effective_max_input_tokens": 115200,
+    "compaction_trigger_ratio": 0.9,
+    "implied_trigger_tokens": 103680,
+    "preceding_provider_reported_input_tokens_range": [63343, 81197],
+    "every_cycle_fired_below_the_implied_trigger": true,
+    "observation_strength": "ADJACENT_REQUEST_PROXY — the provider-reported count is taken from the last provider_submitted event BEFORE the compaction's completion event. It is the same session and the immediately preceding request, but it is NOT the decision request, so the gap between the two is a BOUND, not an exact estimator error.",
+    "provider_ready_bytes_range": [234000, 283000],
+    "provider_ready_tool_result_included_count_range": [5, 23],
+    "tool_result_shortened_count_always_zero": true,
+    "tool_result_omitted_count_always_zero": true,
+    "interpretation": "The provider-visible requests that preceded the compactions carried 234-283 KB with 5-23 FULL tool results and ZERO shortened or omitted results. The provider nevertheless reported only 63k-81k input tokens for those requests, and every compaction still fired."
+  },
+  "production_estimator_accounting": {
+    "estimator": "estimateRequestInputTokens (sdk/packages/shared/src/llms/tokens.ts)",
+    "chars_per_token": 3,
+    "measured_quantity": "JSON.stringify({systemPrompt, messages, tools}) length / 3, plus a flat 1600 tokens per image",
+    "trigger_rule": "shouldCompact = requestInputTokens >= maxInputTokens * COMPACTION_TRIGGER_RATIO",
+    "underestimate_factor_rule": "min(4, max(1, previousProviderReportedInputTokens / requestInputTokens)) applied to maxInputTokens",
+    "request_overhead_rule": "requestInputTokens - apiMessageTokens, where apiMessageTokens is the SUM of per-message estimates over context.apiMessages",
+    "known_divergence_axis": "context.apiMessages is the PROVIDER-VISIBLE projection only when the caller threads prepareApiMessages / prepareProviderMessagesForApi. When it is the raw canonical projection, the estimator counts FULL tool-result bodies that MessageBuilder.buildForApi would bound to 8000 chars each."
+  },
+  "upstream_comparison": {
+    "upstream_release": "cline/cline v4.1.26",
+    "upstream_commit": "43a976d93151a159be7927cdc2424c26ae158e03",
+    "upstream_title": "fix(core): estimate re-compaction against API-safe projected messages (#15193)",
+    "upstream_issue": "#15159",
+    "upstream_mechanism": "createCompactionStateAwarePrepareTurn previously passed apiMessages: projectedMessages (the RAW projection). The trigger then counted full-size tool results that MessageBuilder.buildForApi truncates to 8k chars, running the estimate ~7x over the provider's actual input count and re-firing compaction every few tool calls. The fix threaded prepareApiMessages into createCompactionStateAwarePrepareTurn and projected the transcript through it before the pipeline estimates request size.",
+    "upstream_files_changed": [
+      "sdk/packages/core/src/extensions/context/compaction.ts (+10/-1)",
+      "sdk/packages/core/src/extensions/context/compaction.test.ts (+63/-0)",
+      "sdk/packages/core/src/runtime/host/local-runtime-host.ts (+9/-0)",
+      "sdk/packages/core/src/runtime/host/local-runtime-host.test.ts (+12/-0)",
+      "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts (+6/-1)"
+    ],
+    "fork_state": "PRESENT_AND_SUPERSEDED_IN_PART",
+    "fork_evidence": [
+      "sdk/packages/core/src/extensions/context/compaction.ts:1048 — prepareApiMessages is a REQUIRED parameter of createCompactionStateAwarePrepareTurn.",
+      "sdk/packages/core/src/extensions/context/compaction.ts:1171 — apiMessages: await input.prepareApiMessages(projectedMessages) — the re-compaction path estimates the API-SAFE projection.",
+      "sdk/packages/core/src/runtime/host/local-runtime-host.ts:1063-1070 — prepareApiMessages is wired to agent.prepareProviderMessagesForApi.",
+      "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1846 — prepareProviderMessagesForApi is the provider-request transform."
+    ],
+    "fork_additions_beyond_upstream": [
+      "sdk/packages/core/src/extensions/context/compaction.ts:1068 — prepareBudgetAccountingMessages, an ISOLATED accounting-only projection used by the task-contract budget guard, because the production MessageBuilder is STATEFUL.",
+      "sdk/packages/core/src/extensions/context/compaction.ts:1120-1126 — budgetProjection() prefers the isolated builder and falls back to prepareApiMessages.",
+      "sdk/packages/core/src/extensions/context/compaction.ts:400-408, 435-447 — the user-context ceiling and the provider-usage underestimate factor, neither of which exists upstream."
+    ],
+    "is_the_upstream_correction_still_the_explanation": false,
+    "why": "The upstream divergence — estimating the raw projection instead of the API-safe one — is corrected in this fork. The Round C trace shows tool_result_shortened_count = 0 on every request, i.e. the provider-visible request carried FULL tool results, so the API-safe projection was NOT smaller than the canonical form in this session and the upstream correction could not have suppressed these compactions.",
+    "is_the_upstream_correction_inapplicable_or_superseded": "SUPERSEDED_IN_PART — the fork's estimator additionally applies the underestimate_factor derived from the provider's PREVIOUS reported input count. In Round C the provider reported 63k-81k tokens for requests the estimator measured at 234-283 KB (~78k-94k estimated tokens), so the factor stayed near 1 and the budget was NOT scaled down. The trigger therefore fired on the ESTIMATOR's own view, which sat above the 103,680 trigger for reasons the trace does not directly capture."
+  },
+  "offline_counterexample": {
+    "status": "REPRODUCED",
+    "level": "SYNTHETIC_REAL",
+    "production_seam": "createContextCompactionPrepareTurn({ strategy: 'agentic' }) via createCompactionStateAwarePrepareTurn",
+    "configuration": {
+      "max_input_tokens": 128000,
+      "trigger_tokens": 115200,
+      "previous_compaction_summary_present": true,
+      "large_tool_result_objects": 12,
+      "large_tool_result_body_chars": 40000,
+      "short_provider_visible_representation": "[Tool result]: [succeeded] git status: [result omitted]"
+    },
+    "result": {
+      "estimator_view_tokens": "> 115200 (OVER the trigger)",
+      "actual_provider_visible_view_tokens": "< 115200 (UNDER the trigger)",
+      "estimator_compacts": true,
+      "actual_provider_view_compacts": false
+    },
+    "converse_tested": true,
+    "converse_result": "a genuinely oversized request still exceeds the trigger and still compacts",
+    "production_projection_used": "MessageBuilder.buildForApi (sdk/packages/core/src/session/services/message-builder.ts), DEFAULT_MAX_TOOL_RESULT_CHARS = 8000",
+    "test_evidence": "sdk/packages/core/src/extensions/context/compaction.roundc-fidelity-recon02.test.ts — 'counterexample: the estimator fires compaction for a request whose ACTUAL provider-visible size fits the operating budget' and 'the converse holds: a genuinely oversized request still triggers compaction'"
+  },
+  "were_the_repeated_compactions_justified_by_actual_model_bound_request_sizes": "NO",
+  "justification_basis": "Every one of the ten Round C compaction cycles fired while the immediately preceding provider request had reported 63,343-81,197 input tokens against an effective limit of 115,200 and an implied trigger of 103,680. The requests that triggered them carried 234-283 KB with 5-23 full tool results. The compactions were therefore NOT justified by the model-bound request sizes as the provider measured them.",
+  "accounting_divergence_axis_confirmed_by_source": "estimateRequestInputTokens measures the JSON-serialized length of {systemPrompt, messages, tools} at 3 chars/token. The provider-visible request and the estimator's input can diverge whenever the estimator's input representation differs from what the provider receives — either because a tool-result body is bounded by the MessageBuilder while the estimator counted it raw, or because the estimator's own char-per-token assumption under-counts a token-dense body. The trace does not distinguish these two for Round C; the offline counterexample demonstrates the former axis is a live, reproducible mechanism at the production seam.",
+  "upstream_equivalence": "NOT_EQUIVALENT — the fork has the upstream correction AND two additional budget authorities (the user-context ceiling and the provider-usage underestimate factor) that upstream v4.1.26 does not have. The fork's estimator is a SUPERSET of upstream's, not a copy."
+}

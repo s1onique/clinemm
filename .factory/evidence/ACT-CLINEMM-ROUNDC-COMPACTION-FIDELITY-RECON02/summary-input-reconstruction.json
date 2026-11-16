@@ -1,0 +1,115 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02",
+  "session_id": "1794835772204_hvkkv",
+  "reconstruction_fidelity": "SOURCE_FAITHFUL_PRODUCTION_PIPELINE",
+  "observation_authority_level": 2,
+  "observation_authority_note": "Level 2 — exact source-faithful reconstruction using complete captured runtime inputs. Level 1 (an actual historically captured summarizer request) is UNAVAILABLE_FROM_TRACE: the matched latency trace carries no summarizer-request payload and the compaction sidecar stores only the INSTALLED continuation, not the request that produced it.",
+  "reconstruction_method": "The production modules were invoked directly over the captured canonical transcript: extractVerifiedToolOutcomes() (evidence-continuity.ts), serializeConversation() (compaction-shared.ts), findCutIndex() (compaction-shared.ts), buildBudgetProjection() (budget-projection/project.ts), applyVerifiedEvidenceToCompactedMessages() (evidence-continuity.ts). The reconstruction does NOT concatenate the first 245/263 messages and call it the summarizer input; it measures the actual production projection.",
+  "selection": {
+    "covered_prefix_message_count": 263,
+    "covered_prefix_boundary_message_id": "msg_8nBMg_D6",
+    "sidecar_source_last_message_key": "id:msg_8nBMg_D6",
+    "sidecar_source_prefix_hash": "sha256:32635c293f51cbd7dfd3e4239d56eb0ad8a6a47ff416de30a9e3196f57bfd506",
+    "protected_live_tail_message_count": 10,
+    "cut_index_function": "findCutIndex (compaction-shared.ts)",
+    "cut_boundary_rule": "snap-forward to an assistant message or a typed-user turn; never split a tool_use/tool_result pair"
+  },
+  "canonical_conservation": {
+    "canonical_messages": 273,
+    "canonical_tool_calls": 137,
+    "canonical_tool_results": 137,
+    "canonical_matched_pairs": 137,
+    "canonical_nonempty_result_bodies": 135,
+    "covered_prefix_tool_calls": 132,
+    "covered_prefix_tool_results": 132,
+    "covered_prefix_nonempty_result_bodies": 130
+  },
+  "summarizer_input_projection": {
+    "serialized_chars": 383049,
+    "tool_results_represented": 130,
+    "result_bodies_deliberately_omitted": 487,
+    "result_bodies_omitted_marker": "[result omitted]",
+    "unsupported_shape_marker_count": 1,
+    "unsupported_shape_marker": "[unsupported tool result shape]",
+    "projection_status": "OK",
+    "projection_mechanism": "flattenToolResultContent() -> truncateToolResultContentForCompaction() -> renderToolResultBlocks() -> renderStructuredToolPayload(); the per-result status and an allowlisted command classification are kept; every arbitrary output string is replaced by the '[result omitted]' marker"
+  },
+  "verified_outcome_ledger": {
+    "carried_outcome_count": 12,
+    "carried_outcome_bound": 12,
+    "bound_constant": "MAX_CARRIED_OUTCOMES (evidence-continuity.ts)",
+    "bound_is_at_limit": true,
+    "rejected_outcome_count": 24,
+    "rejected_outcome_reasons": {
+      "payload_failure": 23,
+      "no_success_signal": 1
+    },
+    "retention_semantics": "the 12 most RECENT outcomes are kept; earlier ones are evicted",
+    "command_subject_classification_present_for_round_c_calls": false,
+    "command_subject_classification_cause": "Every Round C command begins with 'cd <path> && <cmd>'. classifyCommand() matches the command's LEADING WORDS against a finite allowlist that does not contain 'cd', so the classification is empty and the carried line degrades to 'succeeded — N commands' with no command identity."
+  },
+  "summary_generation": {
+    "summary_request_captured_historically": false,
+    "summary_request_unavailable_reason": "UNAVAILABLE_FROM_TRACE",
+    "generated_summary_installed": true,
+    "generated_summary_length_chars": 16861,
+    "generated_summary_incompleteness_status": "INCOMPLETE_BY_OWN_ADMISSION",
+    "generated_summary_self_reported_gaps": [
+      "successful command outputs were omitted",
+      "preserved command stdout and exact citations are missing",
+      "R7 remains unresolved; Maven evidence must be recollected"
+    ]
+  },
+  "continuation_projection": {
+    "installed_continuation_message_count": 5,
+    "installed_continuation_text_chars": 16861,
+    "carries_verified_outcome_section": true,
+    "carried_verified_outcome_line_count": 12,
+    "carries_task_contract_section": true,
+    "verified_operations_represented_in_continuation": "status and command count only; no command classification and no output body",
+    "r1_probe_call_ids_present": [
+      "call_c82e47fda7704342b2f74298",
+      "call_60c171e0942a444ba7d5469a"
+    ],
+    "r7_probe_call_ids_present": ["call_b44848a49e8f47cb91209629"],
+    "r1_probe_semantic_facts_present": false,
+    "r7_probe_semantic_facts_present": false
+  },
+  "approved_evidence_marker_presence": {
+    "approved_fact_r1_helm_render_succeeded": {
+      "in_canonical_history": true,
+      "in_summarizer_input_as_status": true,
+      "in_summarizer_input_as_semantic_fact": false,
+      "in_generated_summary": false,
+      "in_continuation": false
+    },
+    "approved_fact_r1_helm_render_failed": {
+      "in_canonical_history": true,
+      "in_summarizer_input_as_status": false,
+      "in_summarizer_input_as_semantic_fact": false,
+      "in_generated_summary": false,
+      "in_continuation": false
+    },
+    "approved_fact_r7_ci_maven_present": {
+      "in_canonical_history": true,
+      "in_summarizer_input_as_status": true,
+      "in_summarizer_input_as_semantic_fact": false,
+      "in_generated_summary": false,
+      "in_continuation": false
+    }
+  },
+  "unavailable_fields": [
+    "estimated_request_input_tokens for the exact compaction-decision requests (the trace's compaction diagnostics carry only compactionInitiated and effectiveMaxInputTokens)",
+    "projected_provider_request_tokens at decision time",
+    "summarizer_input_budget",
+    "the actual summarizer request string",
+    "the generated summary's generator-side token accounting",
+    "underestimate_factor at decision time"
+  ],
+  "hypothesis_disposition": {
+    "H1_input_omission": "REPRODUCED — the result BODY is deliberately omitted at flattenToolResultContent() (487 omitted bodies); the command CLASSIFICATION that would identify the subject is ALSO absent for every Round C call because the 'cd <path> && ' prefix defeats the leading-word allowlist.",
+    "H2_generative_omission": "NOT_ISOLATED — the actual summarizer request is UNAVAILABLE_FROM_TRACE, so a generator-side omission cannot be separated from the input-side omission for the specific facts.",
+    "H3_post_summary_loss": "NOT_REPRODUCED for the verified-outcome section — the deterministic carry-forward IS present in the installed continuation (12 lines). The loss of the R1/R7 SEMANTIC facts occurs BEFORE the summary, not after it.",
+    "H4_privacy_retention_limitation": "PARTIALLY_APPLICABLE — the arbitrary-output omission is a deliberate confidentiality policy (the 12-outcome bound is also working as specified). The empty command-classification set is NOT the stated policy: it is an allowlist-matching miss, not a deliberate omission."
+  }
+}
