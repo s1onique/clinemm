@@ -509,11 +509,43 @@ export function normalizeRunCommandsToolInput(input: unknown): unknown {
 		if (!Array.isArray(parsed) || parsed.length === 0) {
 			return input;
 		}
-		// Every member must be a string: the captured payloads are arrays
-		// of complete shell command strings. A mixed/invalid member is
-		// rejected rather than coerced.
+		// ACT-CLINEMM-ROUND-C-HARNESS-03: the JSON-ENCODED array of
+		// OBJECTS.
+		//
+		// A live payload arrived as
+		// `{"commands": "[{\"command\":\"git status\"}]"}` — a STRING whose
+		// contents are a JSON array of `{command: string}` objects. The
+		// strict schema requires `commands` to be an ARRAY, so the payload
+		// was rejected with `expected array, received string`.
+		//
+		// The two previously supported shapes — a JSON-encoded array of
+		// STRINGS, and a LIST of `{command}` objects — each had their own
+		// branch, but the COMBINED shape fell through both and was
+		// rejected.
+		//
+		// The fix reuses the EXISTING `canonicalizeObjectCommandEntries`
+		// contract instead of adding a second, looser one: the decoded
+		// list is canonicalized under exactly the same rules that already
+		// govern the object-LIST shape, so a member with an extra key
+		// (notably `args`, whose argv rendering differs from the shell
+		// rendering), a non-string command, an empty command, a mixed
+		// member, or an empty list is REJECTED UNCHANGED. The strict
+		// schema then produces its normal, authoritative rejection.
+		//
+		// The canonicalization is restricted to the `commands` key. The
+		// `command` key's value is ONE command, so a serialized array
+		// under it is ambiguous and is left alone.
 		if (!parsed.every((member) => typeof member === "string")) {
-			return input;
+			if (key !== "commands") {
+				return input;
+			}
+			const canonical = canonicalizeObjectCommandEntries({
+				commands: parsed,
+			});
+			if (canonical === null) {
+				return input;
+			}
+			return { commands: canonical };
 		}
 		// Validate the COMPLETE array against the canonical `commands`
 		// schema BEFORE canonicalization, so an invalid member can never
