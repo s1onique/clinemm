@@ -34262,3 +34262,118 @@ EVIDENCE: `.factory/evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01/`
   `07-failing-file-set-diff.txt`
 
 
+
+# ACT-CLINEMM-WORKING-AFTER-COMPLETION-DISCRIMINATOR01 — CAPTURE_INSUFFICIENT — 2026-11-16
+
+**Status:** CLOSED with verdict **`CAPTURE_INSUFFICIENT`**. Evidence acquisition and reproduction
+only. **ZERO production change. ZERO diagnostic probes added. ZERO tests added/modified/removed.**
+The ACT did **not** prove a defect and did **not** repair anything; it located the exact causal
+boundary and narrowed the remaining gap to **ONE already-instrumented historical record**.
+
+```text
+ACT_ID: ACT-CLINEMM-WORKING-AFTER-COMPLETION-DISCRIMINATOR01
+TYPE: Evidence acquisition and reproduction (no production change)
+VERDICT: CAPTURE_INSUFFICIENT
+ENTRY_HEAD: b1ad2a0de0a45ef184d8e836cc6d17bb422cf92e
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+PRODUCTION_CHANGE: ZERO   DIAGNOSTIC_PROBES: 0   TESTS_ADDED: 0
+INSTALLED_BUILD: s1onique.clinemm-4.1.16-5a1c485cb-1d9a37bcd
+        dist/extension.js sha256 f55400792f6bd035db76d791676002c7a693fc11150b4f47cfd4bf40e212ee9c
+        built from source 1d9a37bcd (== HEAD~1); the repo HEAD is one commit ahead and does
+        NOT touch the completion-authority / turn-phase seam
+INCIDENT: session/task 1794840293250_5ugld; extension host PID 98318
+        (instance 98318-49800609bcd187dae92f554228d093ea / mwjddpq6)
+EXECUTED: 21 focused test files, 367 assertions, 3 invocations, exit 0
+        (123 C9C10+BCB+turn-phase | 145 C10+continuation+containment+publication
+         | 99 webview TaskHeader projection)
+NOT_EXECUTED: broad sweep (test:unit / whole-package vitest / integration / e2e) — none required
+PRE-EXISTING FAILURES (not ACT-owned, identified by identity):
+        ELAUTHORITY01.A (completion-authority-elm-authority-counter-dump01.test.ts:39 —
+        stale source-text regex vs registry.ts:192; drift introduced by 363bdf7db vs 5f9330c55)
+        TaskHeader.test.tsx — COLLECTION/module-resolution failure in @react-aria/toggle@3.13.1
+        (zero assertions executed; dependency interop, not a ClineMM source defect)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-WORKING-AFTER-COMPLETION-DISCRIMINATOR01/
+        00-identity-and-existing-evidence.md, 01-incident-timeline.tsv,
+        02-production-authority-map.md, 03-ui-reconciliation.md,
+        04-causal-discriminator.md, 05-reproduction-or-capture.md,
+        06-executable-receipts.md, 07-closure-and-next-action.md, SHA256SUMS.txt
+```
+
+**What the evidence proves.** The reported symptom — "Working" in the header while the MCP bridge
+reported `running: false` after a completion-style message — is **fully explained and does NOT
+establish a defect**:
+
+1. **There was no authoritative completion.** The automatic incident store holds **no**
+   `completion_committed` observation for the task, and the runtime-diag publication trace contains
+   **zero** `turnPhase == "completed"` rows for `taskId = 1794840293250_5ugld` (540 rows for the
+   task; 1178 in the file). The control is decisive: the **same** pipeline published `completed` at
+   `publicationId 2998` for the **next** session, so the publication machinery is healthy.
+2. **The MCP `running: false` was never a completion signal.** `clinemm_get_run`'s `running` is
+   `ActiveSession.isRunning` — "a turn is in flight" — read at
+   `apps/vscode/src/sdk/control-seam/control-seam-authority.ts:78–99`. `runtimeStatus`/`runId` were
+   omitted because `AgentRuntime.snapshot()` had no live instance for the session. The seam's
+   allow-list is closed (`control-seam-protocol.ts:208`) and was **not** widened.
+3. **The header was faithful.** The last committed phase was `streaming`
+   (`publicationId 1957`, epoch 4), and `stateLabel("streaming")` is defined to render
+   `{label:"Working", glyph:"●", live:true}`
+   (`apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts:157`).
+   `resumable` would have rendered **"Paused"** (line 184).
+4. **C9/C10/BCB withheld terminal commitment TWICE, both defensibly.** (a) 18:00:43.541 — the BCB
+   held with `holdReason:"held_obligation"` over the session-owned job `cmd_mwjdtjh6hmr62k75`, whose
+   terminal result the model had not observed, and published the truthful `resumable`. (b) 18:04:29.118
+   — the deferred release reached `c10_reevaluated` with **every** conservation predicate clear
+   (`remainingBlockingJobCount:0`, `unconsumedTerminalCount:0`, `ownerStillRunning:false`,
+   `heldObligation:false`, `outstandingAutonomousWork:false`) and was then withheld by the **Elm
+   completion authority** at `sdk-session-event-coordinator.ts:2883`.
+5. **Both held jobs were fully discharged** before that decision: `cmd_mwjdtjh6hmr62k75` and
+   `cmd_mwje567ijng81j18` each reached `state=exited`, `exitCode=0`, and the model observed both
+   terminal results. No PID was probed (per the ACT).
+
+**Classification.** A (legitimate continuation) EXCLUDED — the continuation ended at 18:04:29 with
+no live turn. B (legitimate BCB hold) EXCLUDED as the 18:06 cause — no obligation was outstanding
+then (it WAS the correct explanation at 18:00:43). D (UI reconciliation defect) EXCLUDED — no
+terminal phase was ever committed, so there was nothing for the UI to fail to display. E
+(foreign-instance mismatch) EXCLUDED — the MCP seam, the runtime-diag trace and the incident store
+all resolve to extension host PID 98318. **F applies to exactly ONE fact: the Elm
+completion-authority decision at 18:04:29.118Z.**
+
+**The one missing observation.** The Elm authority's `decision.kind` (`authorize` / `hold` /
+`failure`) and, for a `hold`, its `holdReasons` list, for session `1794840293250_5ugld` at
+2026-11-16T15:04:29.118Z. At the installed revision the Elm authority is the **sole** completion
+authority ("There is no OFF mode … the trigger always fires",
+`sdk-session-event-coordinator.ts:3138–3144`) and the consult is **fail-closed**, so the decision
+determines the verdict outright.
+
+**Why the record exists but was not captured.** The BCB causal flight recorder already emits
+`stage:"completion_authority"` with `predicates.elmDecision` / `elmReason` at exactly that boundary
+(`sdk-session-event-coordinator.ts:1915/1955/1996`) — the same shape proven in
+`completion-incident-2026-11-05T18-16-35-773Z/completion-authority.jsonl`. It is emitted **only**
+through `captureIncident` (the flight recorder) and **never** through `captureAutomaticIncident`
+(the automatic incident store), so the incident store's silence proves nothing. The recorder
+serialises its capsules **only** on a task switch or an extension-host shutdown; the on-disk
+`completion-incident-checkpoint.json` has `savedAt = 2026-11-16T12:37:50.009Z` (two hours BEFORE the
+incident) and PID 98318 is still alive, so the incident's capsule has never reached disk.
+
+**The smallest justified next action (one operator action, read-only).** In the ClineMM window owned
+by extension host **PID 98318**, run **`Cline Debug: Dump Completion Incident Bundle`**, then read
+`completion-authority.jsonl` for `sessionId = 1794840293250_5ugld` and extract the
+`stage == "completion_authority"` record with the latest `timestamp <= 2026-11-16T15:04:29.118Z`.
+Alternative: a graceful extension-host shutdown, which writes the capsules into
+`completion-incident-checkpoint.json`. Both are read-only exports; neither mutates production state.
+Then classify: a `hold` on `pending_prompt` / `scheduled_continuation` / `active_run` ⇒
+`PASS_EXPECTED_BEHAVIOR` for the completion authority (and a SEPARATE presentation ACT if a
+legitimate hold should present as "Paused" rather than "Working"); a `hold` on
+`unconsumed_terminal_observation` / `running_background_job`, or a `failure`, or an `authorize` ⇒
+`PASS_CAUSAL_BOUNDARY_IDENTIFIED` and at most **one** bounded repair ACT.
+
+**Do NOT (yet).** Do not repair the model's completion message. Do not treat MCP `running: false` as
+completion. Do not change C9/C10, BCB, Elm, React or command-job semantics — there is no executed RED
+and this ACT's production budget is ZERO. Do not widen the `clinemm_get_run` allow-list. Do not
+re-create or reopen the incident.
+
+**Hygiene.** Protected stash `stash@{0}` preserved and untouched; all 5 worktrees preserved; no push /
+reset / rebase / checkout / reinstall / upgrade; the incident task and its history were read-only
+(no write to `db/sessions.db` or the session directory); no live job cancelled, killed or probed; no
+credential read (only a token *fingerprint*); no secrets in the committed evidence.
+
