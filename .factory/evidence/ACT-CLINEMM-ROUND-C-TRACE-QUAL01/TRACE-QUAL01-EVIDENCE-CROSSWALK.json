@@ -1,7 +1,111 @@
 {
-  "schema": "cline.roundc-trace-qual01-evidence-crosswalk.v1",
+  "schema": "cline.roundc-trace-qual01-evidence-crosswalk.v2",
   "generatedBy": "scripts/roundc-trace-qual01-evidence-crosswalk.py",
   "purpose": "Evidence-equivalence qualification for the Keycloak Round C comparison. This is a qualification manifest, not a security auditor and not a finding-scoring framework.",
+  "evidenceSemantics": {
+    "toolEvidence": "a tool invocation is evidence only when it was EXECUTED, its result did not FAIL, and its OBSERVED OUTPUT carries the subject's evidence; the invocation's INPUT alone is never evidence",
+    "r5Discriminator": "each of the six identifiers must be OBSERVED in a successful tool result in BOTH runs, be STATED in BOTH runs' final reports, and reconcile against a tracked source artifact",
+    "renderRows": "STRONGER is awarded only when the render carries the subject's EXACT semantic evidence; the mere existence of a render file is never sufficient",
+    "helmHooks": "the hook count counts the DISTINCT helm.sh/hook annotation only; helm.sh/hook-weight orders hooks and never designates one, and the two counts are reported separately"
+  },
+  "renders": {
+    "placeholderDigestRender": {
+      "renderBytes": 18164,
+      "images": [
+        "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "kinds": {
+        "ConfigMap": 1,
+        "ExternalSecret": 2,
+        "Ingress": 2,
+        "SecretStore": 1,
+        "Service": 2,
+        "ServiceAccount": 1,
+        "ServiceMonitor": 1,
+        "StatefulSet": 1
+      },
+      "podDisruptionBudgetCount": 0,
+      "networkPolicyCount": 0,
+      "hookCount": 0,
+      "hookWeightCount": 2,
+      "securityContextCount": 2,
+      "watcherRendered": false,
+      "valuesFiles": [
+        "values.yaml",
+        "values-prod.yaml"
+      ],
+      "productionValuesApplied": true,
+      "placeholderDigest": true,
+      "imageOverridesApplied": true,
+      "renderSha256": "5a91cde79fc8f7de2c0ff99f22f0cb99b3239b2972dc9a53a83a0710a5effaa6",
+      "renderPath": "/tmp/qual01-render-final/rendered-prod.yaml"
+    },
+    "noImageOverrideRender": {
+      "renderBytes": 18081,
+      "images": [
+        "quay.io/keycloak/keycloak:26.0.7"
+      ],
+      "kinds": {
+        "ConfigMap": 1,
+        "ExternalSecret": 2,
+        "Ingress": 2,
+        "SecretStore": 1,
+        "Service": 2,
+        "ServiceAccount": 1,
+        "ServiceMonitor": 1,
+        "StatefulSet": 1
+      },
+      "podDisruptionBudgetCount": 0,
+      "networkPolicyCount": 0,
+      "hookCount": 0,
+      "hookWeightCount": 2,
+      "securityContextCount": 2,
+      "watcherRendered": false,
+      "valuesFiles": [
+        "values.yaml",
+        "values-prod.yaml"
+      ],
+      "productionValuesApplied": true,
+      "placeholderDigest": false,
+      "imageOverridesApplied": false,
+      "renderSha256": "a94d472a2f53b3454d620bf0ec25fccaf3e0a2819cde98d5e237ba8d3102c4ca",
+      "renderPath": "/tmp/qual01-render-final/rendered-noimageoverride.yaml"
+    },
+    "watcherRender": {
+      "renderBytes": 33073,
+      "images": [
+        "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz-profiler-watcher@sha256:903543621a078589888632fd5fd52b2c16214b644fbb0c9e465ca052b0a856cc",
+        "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz:golang-watcher-e84ee47c"
+      ],
+      "kinds": {
+        "ConfigMap": 1,
+        "Deployment": 1,
+        "ExternalSecret": 2,
+        "Ingress": 2,
+        "Lease": 1,
+        "PersistentVolumeClaim": 1,
+        "Role": 1,
+        "RoleBinding": 1,
+        "SecretStore": 1,
+        "Service": 2,
+        "ServiceAccount": 2,
+        "ServiceMonitor": 1,
+        "StatefulSet": 1
+      },
+      "podDisruptionBudgetCount": 0,
+      "networkPolicyCount": 0,
+      "hookCount": 0,
+      "hookWeightCount": 7,
+      "securityContextCount": 4,
+      "watcherRendered": true,
+      "valuesFiles": [],
+      "productionValuesApplied": false,
+      "placeholderDigest": false,
+      "imageOverridesApplied": true,
+      "renderSha256": "4dc375afd1e31318b7b1e6171fb67d8dd51774f8ce8fec0a736320610efd005e",
+      "renderPath": "/tmp/qual01-render-final/rendered-watcher-dev.yaml"
+    }
+  },
   "runs": {
     "original": {
       "sessionId": "1794702518894_gui73",
@@ -54,28 +158,26 @@
       "minimumEvidenceRequirement": "Effective Helm-rendered image and CI/manual-upgrade distinction",
       "discriminator": "offline_helm_render",
       "originalSourceObservation": {
-        "observedToolInvocations": 159,
+        "observedToolInvocations": 141,
         "totalToolInvocations": 209,
         "toolsUsed": [
           "fetch_web_content",
           "read_files",
-          "run_commands",
-          "submit_and_exit"
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 28,
+        "observedToolInvocations": 27,
         "totalToolInvocations": 48,
         "toolsUsed": [
           "fetch_web_content",
           "read_files",
-          "run_commands",
-          "submit_and_exit"
+          "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "STRONGER",
       "findingFaithfullyRepresentsEvidence": "STRONGER",
-      "missingOrWeakerVerification": "the render pins a placeholder digest; the SERVED image digest is a pipeline-time value that the offline render cannot observe",
+      "missingOrWeakerVerification": "none: the render resolved the image, applied the PRODUCTION values and captured the no-image-override render (the manual-upgrade failure mechanism)",
       "comparabilityJudgment": "STRONGER",
       "status": "STRONGER",
       "evidenceReferences": [
@@ -91,8 +193,7 @@
         }
       ],
       "offlineRenderReceipt": {
-        "renderSha256": "eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65",
-        "renderBytes": 17879,
+        "renderBytes": 18164,
         "images": [
           "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
         ],
@@ -108,8 +209,19 @@
         },
         "podDisruptionBudgetCount": 0,
         "networkPolicyCount": 0,
-        "hookCount": 2,
-        "securityContextCount": 2
+        "hookCount": 0,
+        "hookWeightCount": 2,
+        "securityContextCount": 2,
+        "watcherRendered": false,
+        "valuesFiles": [
+          "values.yaml",
+          "values-prod.yaml"
+        ],
+        "productionValuesApplied": true,
+        "placeholderDigest": true,
+        "imageOverridesApplied": true,
+        "renderSha256": "5a91cde79fc8f7de2c0ff99f22f0cb99b3239b2972dc9a53a83a0710a5effaa6",
+        "renderPath": "/tmp/qual01-render-final/rendered-prod.yaml"
       },
       "effectiveRender": {
         "chartVersion": "keycloak-roz 7.0.1 (dep keycloakx 7.0.1, appVersion 26.3.1)",
@@ -119,7 +231,19 @@
         ],
         "podDisruptionBudgetCount": 0,
         "networkPolicyCount": 0,
-        "hookCount": 2
+        "hookCount": 0,
+        "hookWeightCount": 2,
+        "valuesFiles": [
+          "values.yaml",
+          "values-prod.yaml"
+        ],
+        "productionValuesApplied": true,
+        "placeholderDigest": true,
+        "imageOverridesApplied": true
+      },
+      "exactSemanticEvidence": {
+        "satisfied": true,
+        "caveat": "none: the render resolved the image, applied the PRODUCTION values and captured the no-image-override render (the manual-upgrade failure mechanism)"
       }
     },
     {
@@ -127,26 +251,26 @@
       "minimumEvidenceRequirement": "Carrier timeout path, synchronous execution, real mitigations",
       "discriminator": "source_read",
       "originalSourceObservation": {
-        "observedToolInvocations": 120,
+        "observedToolInvocations": 155,
         "totalToolInvocations": 209,
         "toolsUsed": [
           "fetch_web_content",
-          "run_commands",
-          "submit_and_exit"
+          "read_files",
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 25,
+        "observedToolInvocations": 32,
         "totalToolInvocations": 48,
         "toolsUsed": [
+          "fetch_web_content",
           "read_files",
-          "run_commands",
-          "submit_and_exit"
+          "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "EQUIVALENT",
       "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
-      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs' SUCCESSFUL tool results carried this subject's evidence",
       "comparabilityJudgment": "EQUIVALENT",
       "status": "EQUIVALENT",
       "evidenceReferences": [
@@ -167,23 +291,26 @@
       "minimumEvidenceRequirement": "DB pool invariant and enforcement/absence evidence",
       "discriminator": "source_read",
       "originalSourceObservation": {
-        "observedToolInvocations": 25,
+        "observedToolInvocations": 61,
         "totalToolInvocations": 209,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "fetch_web_content",
+          "read_files",
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 2,
+        "observedToolInvocations": 11,
         "totalToolInvocations": 48,
         "toolsUsed": [
+          "fetch_web_content",
+          "read_files",
           "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "EQUIVALENT",
       "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
-      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs' SUCCESSFUL tool results carried this subject's evidence",
       "comparabilityJudgment": "EQUIVALENT",
       "status": "EQUIVALENT",
       "evidenceReferences": [
@@ -204,26 +331,26 @@
       "minimumEvidenceRequirement": "Actual build/start paths and persisted build settings",
       "discriminator": "source_read",
       "originalSourceObservation": {
-        "observedToolInvocations": 37,
+        "observedToolInvocations": 70,
         "totalToolInvocations": 209,
         "toolsUsed": [
+          "fetch_web_content",
           "read_files",
-          "run_commands",
-          "submit_and_exit"
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 11,
+        "observedToolInvocations": 13,
         "totalToolInvocations": 48,
         "toolsUsed": [
+          "fetch_web_content",
           "read_files",
-          "run_commands",
-          "submit_and_exit"
+          "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "EQUIVALENT",
       "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
-      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs' SUCCESSFUL tool results carried this subject's evidence",
       "comparabilityJudgment": "EQUIVALENT",
       "status": "EQUIVALENT",
       "evidenceReferences": [
@@ -244,27 +371,25 @@
       "minimumEvidenceRequirement": "Exact six index identifiers reconciled with source artifacts",
       "discriminator": "exact_identifier_reconciliation",
       "originalSourceObservation": {
-        "observedToolInvocations": 50,
+        "observedToolInvocations": 42,
         "totalToolInvocations": 209,
         "toolsUsed": [
           "fetch_web_content",
-          "run_commands",
-          "submit_and_exit"
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 12,
+        "observedToolInvocations": 11,
         "totalToolInvocations": 48,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "run_commands"
         ]
       },
-      "equivalentVerificationOccurred": "EQUIVALENT",
-      "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
-      "missingOrWeakerVerification": "none: every one of the six identifiers appears in BOTH runs' observed tool evidence AND in a tracked source artifact",
-      "comparabilityJudgment": "EQUIVALENT",
-      "status": "EQUIVALENT",
+      "equivalentVerificationOccurred": "WEAKER",
+      "findingFaithfullyRepresentsEvidence": "WEAKER",
+      "missingOrWeakerVerification": "these identifiers did not reconcile against both runs' observed tool results, both runs' final reports and a tracked source artifact: idx_pm_token_code_realm_ip_type_created_at_inc_id, idx_pmtc_lookup_recent_unconfirmed_sms_exp, idx_user_attribute_name_lower_value, idx_user_entity_realm_email, idx_user_entity_realm_email_cover",
+      "comparabilityJudgment": "WEAKER",
+      "status": "WEAKER",
       "evidenceReferences": [
         {
           "kind": "session_transcript",
@@ -277,22 +402,34 @@
           "messagesSha256": "b6d200f7c34535929f0c3f28c6ffa8da16425d4c1fd2d87bc0af08b2b39313b2"
         }
       ],
+      "finalReport": {
+        "originalReportSha256": "618f78fe3f5d983604e703bdf7b5571a8865cde31e04d78503eef07201cd0efc",
+        "originalReportChars": 18065,
+        "newReportSha256": "555c5c28c7d323858d632ff22d2c0c9c66865d78d3ca7ccf968176459fb38ad4",
+        "newReportChars": 16554,
+        "originalReportRecovered": true,
+        "newReportRecovered": true
+      },
       "reconciledIdentifiers": [
         {
           "identifier": "idx_pm_token_code_realm_ip_type_created_at_inc_id",
-          "originalRunOccurrences": 7,
-          "newRunOccurrences": 3,
+          "originalRunObservedOccurrences": 16,
+          "newRunObservedOccurrences": 4,
+          "originalFinalReportStatesIdentifier": false,
+          "newFinalReportStatesIdentifier": true,
           "trackedSourceArtifacts": [
             "pg-index-diff-20260624T070800Z/db1.indexes.csv",
             "pg-index-diff-20260624T070800Z/db1.indexes.sql",
             "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
           ],
-          "reconciled": true
+          "reconciled": false
         },
         {
           "identifier": "idx_pmtc_lookup_recent_unconfirmed_sms",
-          "originalRunOccurrences": 8,
-          "newRunOccurrences": 3,
+          "originalRunObservedOccurrences": 16,
+          "newRunObservedOccurrences": 3,
+          "originalFinalReportStatesIdentifier": true,
+          "newFinalReportStatesIdentifier": true,
           "trackedSourceArtifacts": [
             "pg-index-diff-20260624T070800Z/db1.indexes.csv",
             "pg-index-diff-20260624T070800Z/db1.indexes.sql",
@@ -302,47 +439,55 @@
         },
         {
           "identifier": "idx_pmtc_lookup_recent_unconfirmed_sms_exp",
-          "originalRunOccurrences": 7,
-          "newRunOccurrences": 2,
+          "originalRunObservedOccurrences": 16,
+          "newRunObservedOccurrences": 3,
+          "originalFinalReportStatesIdentifier": false,
+          "newFinalReportStatesIdentifier": false,
           "trackedSourceArtifacts": [
             "pg-index-diff-20260624T070800Z/db1.indexes.csv",
             "pg-index-diff-20260624T070800Z/db1.indexes.sql",
             "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
           ],
-          "reconciled": true
+          "reconciled": false
         },
         {
           "identifier": "idx_user_attribute_name_lower_value",
-          "originalRunOccurrences": 7,
-          "newRunOccurrences": 3,
+          "originalRunObservedOccurrences": 17,
+          "newRunObservedOccurrences": 3,
+          "originalFinalReportStatesIdentifier": false,
+          "newFinalReportStatesIdentifier": true,
           "trackedSourceArtifacts": [
             "pg-index-diff-20260624T070800Z/db1.indexes.csv",
             "pg-index-diff-20260624T070800Z/db1.indexes.sql",
             "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
           ],
-          "reconciled": true
+          "reconciled": false
         },
         {
           "identifier": "idx_user_entity_realm_email",
-          "originalRunOccurrences": 7,
-          "newRunOccurrences": 4,
+          "originalRunObservedOccurrences": 17,
+          "newRunObservedOccurrences": 3,
+          "originalFinalReportStatesIdentifier": false,
+          "newFinalReportStatesIdentifier": true,
           "trackedSourceArtifacts": [
             "pg-index-diff-20260624T070800Z/db1.indexes.csv",
             "pg-index-diff-20260624T070800Z/db1.indexes.sql",
             "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
           ],
-          "reconciled": true
+          "reconciled": false
         },
         {
           "identifier": "idx_user_entity_realm_email_cover",
-          "originalRunOccurrences": 7,
-          "newRunOccurrences": 2,
+          "originalRunObservedOccurrences": 16,
+          "newRunObservedOccurrences": 3,
+          "originalFinalReportStatesIdentifier": false,
+          "newFinalReportStatesIdentifier": false,
           "trackedSourceArtifacts": [
             "pg-index-diff-20260624T070800Z/db1.indexes.csv",
             "pg-index-diff-20260624T070800Z/db1.indexes.sql",
             "pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql"
           ],
-          "reconciled": true
+          "reconciled": false
         }
       ]
     },
@@ -351,24 +496,25 @@
       "minimumEvidenceRequirement": "Repository retention paths and explicit external-state unknown",
       "discriminator": "source_read",
       "originalSourceObservation": {
-        "observedToolInvocations": 18,
+        "observedToolInvocations": 84,
         "totalToolInvocations": 209,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "fetch_web_content",
+          "read_files",
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 3,
+        "observedToolInvocations": 16,
         "totalToolInvocations": 48,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "read_files",
+          "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "EQUIVALENT",
       "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
-      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs' SUCCESSFUL tool results carried this subject's evidence",
       "comparabilityJudgment": "EQUIVALENT",
       "status": "EQUIVALENT",
       "evidenceReferences": [
@@ -389,24 +535,24 @@
       "minimumEvidenceRequirement": "Maven/CI execution evidence for Java tests",
       "discriminator": "source_read",
       "originalSourceObservation": {
-        "observedToolInvocations": 29,
+        "observedToolInvocations": 43,
         "totalToolInvocations": 209,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "read_files",
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 8,
+        "observedToolInvocations": 9,
         "totalToolInvocations": 48,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "read_files",
+          "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "EQUIVALENT",
       "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
-      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs' SUCCESSFUL tool results carried this subject's evidence",
       "comparabilityJudgment": "EQUIVALENT",
       "status": "EQUIVALENT",
       "evidenceReferences": [
@@ -427,25 +573,26 @@
       "minimumEvidenceRequirement": "Committed secret exposure, without credential validation",
       "discriminator": "source_read",
       "originalSourceObservation": {
-        "observedToolInvocations": 39,
+        "observedToolInvocations": 134,
         "totalToolInvocations": 209,
         "toolsUsed": [
           "fetch_web_content",
-          "run_commands",
-          "submit_and_exit"
+          "read_files",
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 8,
+        "observedToolInvocations": 27,
         "totalToolInvocations": 48,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "fetch_web_content",
+          "read_files",
+          "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "EQUIVALENT",
       "findingFaithfullyRepresentsEvidence": "EQUIVALENT",
-      "missingOrWeakerVerification": "none at the tool-evidence level: both runs executed the source-reading commands for this subject",
+      "missingOrWeakerVerification": "none at the tool-evidence level: both runs' SUCCESSFUL tool results carried this subject's evidence",
       "comparabilityJudgment": "EQUIVALENT",
       "status": "EQUIVALENT",
       "evidenceReferences": [
@@ -466,25 +613,24 @@
       "minimumEvidenceRequirement": "Effective chart security defaults and NetworkPolicy/PDB coverage",
       "discriminator": "offline_helm_render",
       "originalSourceObservation": {
-        "observedToolInvocations": 40,
+        "observedToolInvocations": 44,
         "totalToolInvocations": 209,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "fetch_web_content",
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 8,
+        "observedToolInvocations": 6,
         "totalToolInvocations": 48,
         "toolsUsed": [
           "fetch_web_content",
-          "run_commands",
-          "submit_and_exit"
+          "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "STRONGER",
       "findingFaithfullyRepresentsEvidence": "STRONGER",
-      "missingOrWeakerVerification": "the render pins a placeholder digest; the SERVED image digest is a pipeline-time value that the offline render cannot observe",
+      "missingOrWeakerVerification": "none: the effective chart security defaults and the NetworkPolicy/PDB coverage were both observed",
       "comparabilityJudgment": "STRONGER",
       "status": "STRONGER",
       "evidenceReferences": [
@@ -500,8 +646,7 @@
         }
       ],
       "offlineRenderReceipt": {
-        "renderSha256": "eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65",
-        "renderBytes": 17879,
+        "renderBytes": 18164,
         "images": [
           "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
         ],
@@ -517,8 +662,19 @@
         },
         "podDisruptionBudgetCount": 0,
         "networkPolicyCount": 0,
-        "hookCount": 2,
-        "securityContextCount": 2
+        "hookCount": 0,
+        "hookWeightCount": 2,
+        "securityContextCount": 2,
+        "watcherRendered": false,
+        "valuesFiles": [
+          "values.yaml",
+          "values-prod.yaml"
+        ],
+        "productionValuesApplied": true,
+        "placeholderDigest": true,
+        "imageOverridesApplied": true,
+        "renderSha256": "5a91cde79fc8f7de2c0ff99f22f0cb99b3239b2972dc9a53a83a0710a5effaa6",
+        "renderPath": "/tmp/qual01-render-final/rendered-prod.yaml"
       },
       "effectiveRender": {
         "chartVersion": "keycloak-roz 7.0.1 (dep keycloakx 7.0.1, appVersion 26.3.1)",
@@ -528,7 +684,19 @@
         ],
         "podDisruptionBudgetCount": 0,
         "networkPolicyCount": 0,
-        "hookCount": 2
+        "hookCount": 0,
+        "hookWeightCount": 2,
+        "valuesFiles": [
+          "values.yaml",
+          "values-prod.yaml"
+        ],
+        "productionValuesApplied": true,
+        "placeholderDigest": true,
+        "imageOverridesApplied": true
+      },
+      "exactSemanticEvidence": {
+        "satisfied": true,
+        "caveat": "none: the effective chart security defaults and the NetworkPolicy/PDB coverage were both observed"
       }
     },
     {
@@ -536,25 +704,26 @@
       "minimumEvidenceRequirement": "Actual hook semantics, rollback behavior and watcher implementation",
       "discriminator": "offline_helm_render",
       "originalSourceObservation": {
-        "observedToolInvocations": 46,
+        "observedToolInvocations": 110,
         "totalToolInvocations": 209,
         "toolsUsed": [
           "fetch_web_content",
-          "run_commands",
-          "submit_and_exit"
+          "read_files",
+          "run_commands"
         ]
       },
       "newSourceObservation": {
-        "observedToolInvocations": 11,
+        "observedToolInvocations": 27,
         "totalToolInvocations": 48,
         "toolsUsed": [
-          "run_commands",
-          "submit_and_exit"
+          "fetch_web_content",
+          "read_files",
+          "run_commands"
         ]
       },
       "equivalentVerificationOccurred": "STRONGER",
       "findingFaithfullyRepresentsEvidence": "STRONGER",
-      "missingOrWeakerVerification": "the render pins a placeholder digest; the SERVED image digest is a pipeline-time value that the offline render cannot observe",
+      "missingOrWeakerVerification": "none: the REAL hook count was observed (helm.sh/hook, never helm.sh/hook-weight) and the watcher resources were rendered; the observed hook count is 0 and the hook-weight count is 2",
       "comparabilityJudgment": "STRONGER",
       "status": "STRONGER",
       "evidenceReferences": [
@@ -570,8 +739,7 @@
         }
       ],
       "offlineRenderReceipt": {
-        "renderSha256": "eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65",
-        "renderBytes": 17879,
+        "renderBytes": 18164,
         "images": [
           "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
         ],
@@ -587,8 +755,19 @@
         },
         "podDisruptionBudgetCount": 0,
         "networkPolicyCount": 0,
-        "hookCount": 2,
-        "securityContextCount": 2
+        "hookCount": 0,
+        "hookWeightCount": 2,
+        "securityContextCount": 2,
+        "watcherRendered": false,
+        "valuesFiles": [
+          "values.yaml",
+          "values-prod.yaml"
+        ],
+        "productionValuesApplied": true,
+        "placeholderDigest": true,
+        "imageOverridesApplied": true,
+        "renderSha256": "5a91cde79fc8f7de2c0ff99f22f0cb99b3239b2972dc9a53a83a0710a5effaa6",
+        "renderPath": "/tmp/qual01-render-final/rendered-prod.yaml"
       },
       "effectiveRender": {
         "chartVersion": "keycloak-roz 7.0.1 (dep keycloakx 7.0.1, appVersion 26.3.1)",
@@ -598,7 +777,19 @@
         ],
         "podDisruptionBudgetCount": 0,
         "networkPolicyCount": 0,
-        "hookCount": 2
+        "hookCount": 0,
+        "hookWeightCount": 2,
+        "valuesFiles": [
+          "values.yaml",
+          "values-prod.yaml"
+        ],
+        "productionValuesApplied": true,
+        "placeholderDigest": true,
+        "imageOverridesApplied": true
+      },
+      "exactSemanticEvidence": {
+        "satisfied": true,
+        "caveat": "none: the REAL hook count was observed (helm.sh/hook, never helm.sh/hook-weight) and the watcher resources were rendered; the observed hook count is 0 and the hook-weight count is 2"
       }
     }
   ]

@@ -1,0 +1,97 @@
+{
+  "chart": "keycloak-roz 7.0.1 (appVersion 26.3.1)",
+  "chartLockDigest": "sha256:b431346662cf9121146a3f5ad092614c72034141a3bae2d3bab7383079856654",
+  "chartSourceSha": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+  "dependency": "keycloakx 7.0.1 (vendored charts/keycloakx-7.0.1.tgz)",
+  "generatedBy": "scripts/roundc-trace-qual01-evidence-crosswalk.py",
+  "helmVersion": "v3.20.2",
+  "invocations": {
+    "noImageOverrideRender": "helm template keycloak-roz-prod . --namespace=roz-keycloak-prod --set global.env=prod -f values.yaml -f values-prod.yaml",
+    "productionPlaceholderDigestRender": "helm template keycloak-roz-prod . --namespace=roz-keycloak-prod --set keycloakx.image.repository=cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz --set keycloakx.image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 --set global.env=prod -f values.yaml -f values-prod.yaml",
+    "watcherRender": "helm template keycloak-roz-dev . --namespace=roz-keycloak-dev --set global.env=dev --set profilerWatcher.enabled=true -f values.yaml -f values-dev.yaml"
+  },
+  "note": "This is the REDACTED SEMANTIC RECEIPT of the three offline Helm renders. The raw rendered manifests are NOT committed: they carry chart-template placeholder values (an empty SecretStore `key:` and a hardcoded example checksum) that the repository secret-scanner flags. Every fact the crosswalk derives from them is recorded here, together with the render sha256 so the exact bytes remain verifiable.",
+  "renders": {
+    "noImageOverrideRender": {
+      "hookCount": 0,
+      "hookWeightCount": 2,
+      "imageOverridesApplied": false,
+      "images": [
+        "quay.io/keycloak/keycloak:26.0.7"
+      ],
+      "kinds": {
+        "ConfigMap": 1,
+        "ExternalSecret": 2,
+        "Ingress": 2,
+        "SecretStore": 1,
+        "Service": 2,
+        "ServiceAccount": 1,
+        "ServiceMonitor": 1,
+        "StatefulSet": 1
+      },
+      "networkPolicyCount": 0,
+      "placeholderDigest": false,
+      "podDisruptionBudgetCount": 0,
+      "renderBytes": 18081,
+      "renderSha256": "a94d472a2f53b3454d620bf0ec25fccaf3e0a2819cde98d5e237ba8d3102c4ca",
+      "securityContextCount": 2,
+      "watcherRendered": false
+    },
+    "productionPlaceholderDigestRender": {
+      "hookCount": 0,
+      "hookWeightCount": 2,
+      "imageOverridesApplied": true,
+      "images": [
+        "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "kinds": {
+        "ConfigMap": 1,
+        "ExternalSecret": 2,
+        "Ingress": 2,
+        "SecretStore": 1,
+        "Service": 2,
+        "ServiceAccount": 1,
+        "ServiceMonitor": 1,
+        "StatefulSet": 1
+      },
+      "networkPolicyCount": 0,
+      "placeholderDigest": true,
+      "podDisruptionBudgetCount": 0,
+      "renderBytes": 18164,
+      "renderSha256": "5a91cde79fc8f7de2c0ff99f22f0cb99b3239b2972dc9a53a83a0710a5effaa6",
+      "securityContextCount": 2,
+      "watcherRendered": false
+    },
+    "watcherRender": {
+      "hookCount": 0,
+      "hookWeightCount": 7,
+      "imageOverridesApplied": true,
+      "images": [
+        "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz-profiler-watcher@sha256:903543621a078589888632fd5fd52b2c16214b644fbb0c9e465ca052b0a856cc",
+        "cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz:golang-watcher-e84ee47c"
+      ],
+      "kinds": {
+        "ConfigMap": 1,
+        "Deployment": 1,
+        "ExternalSecret": 2,
+        "Ingress": 2,
+        "Lease": 1,
+        "PersistentVolumeClaim": 1,
+        "Role": 1,
+        "RoleBinding": 1,
+        "SecretStore": 1,
+        "Service": 2,
+        "ServiceAccount": 2,
+        "ServiceMonitor": 1,
+        "StatefulSet": 1
+      },
+      "networkPolicyCount": 0,
+      "placeholderDigest": false,
+      "podDisruptionBudgetCount": 0,
+      "renderBytes": 33073,
+      "renderSha256": "4dc375afd1e31318b7b1e6171fb67d8dd51774f8ce8fec0a736320610efd005e",
+      "securityContextCount": 4,
+      "watcherRendered": true
+    }
+  }
+}

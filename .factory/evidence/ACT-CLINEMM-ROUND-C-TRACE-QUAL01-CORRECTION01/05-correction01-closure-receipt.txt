@@ -1,0 +1,147 @@
+ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — CORRECTION01 CLOSURE RECEIPT
+Generated: 2026-11-16
+
+== THE REVIEW VERDICT THAT TRIGGERED THIS CORRECTION ==
+HALT_EVIDENCE_EQUIVALENCE_UNSOUND (successor benchmark NO-GO).
+
+Three P0 defects. All three are corrected here. The compaction-lifecycle
+repair is NOT reopened and NOT altered.
+
+== P0-1 — THE CROSSWALK CONFUSED COMMANDS WITH EVIDENCE ==
+
+BEFORE (scripts/roundc-trace-qual01-evidence-crosswalk.py):
+    observed_tool_evidence() read ONLY the `tool_use` INPUTS.
+    evidence_for() matched the subject's KEYWORDS against those inputs.
+    status = EQUIVALENT if (len(original_matches)>0 and len(new_matches)>0).
+
+A command that merely MENTIONED `timeout`/`mvn`/`password` qualified as
+evidence — even when it FAILED, returned IRRELEVANT output, or was NEVER
+EXECUTED.
+
+AFTER:
+    observed_tool_evidence() correlates each `tool_use` with its OWN
+    `tool_result` by call id, and records executed / failed / output.
+    evidence_for() requires: EXECUTED AND NOT failed AND the OBSERVED OUTPUT
+    matches the subject's patterns. The invocation's INPUT is never evidence.
+    R5 additionally reconciles BOTH runs' FINAL REPORTS against the six
+    source-backed identifiers.
+    R1/R9/R10 require the EXACT semantic evidence; a render file's mere
+    existence never awards STRONGER.
+
+RED  : 12 of 14 tests failed (6 failures + 6 errors)
+GREEN: 14 of 14 tests pass
+      python3 -m unittest scripts.tests.test_roundc_trace_qual01_evidence_crosswalk
+
+== P0-2 — THE HELM HOOK EVIDENCE WAS MISCLASSIFIED ==
+
+BEFORE:
+    "hookCount": len(re.findall(r"helm\.sh/hook", text))
+This ALSO matches "helm.sh/hook-weight". The minimal counterexample — a
+ConfigMap whose ONLY annotation is `helm.sh/hook-weight: "5"` — counted as one
+hook. The chart's profiler-watcher resources carry ONLY `helm.sh/hook-weight`,
+so the previously reported "2 hooks" were both FALSE POSITIVES.
+
+AFTER:
+    HOOK_ANNOTATION_RE matches the DISTINCT `helm.sh/hook` key only
+    (quoted or unquoted; never `hook-weight`).
+    hookCount and hookWeightCount are reported SEPARATELY.
+    The receipt records the values-files provenance and whether the PRODUCTION
+    values were applied.
+    The PLACEHOLDER-DIGEST render, the NO-IMAGE-OVERRIDE render and the
+    WATCHER render are DISTINCT artifacts, recorded separately.
+
+OBSERVED AGAINST THE REAL ARTIFACTS:
+    production render        hookCount=0  hookWeightCount=2  watcher=False
+    no-image-override render hookCount=0  hookWeightCount=2  watcher=False
+    watcher (dev) render     hookCount=0  hookWeightCount=7  watcher=True
+    => THE CHART CONTAINS NO HELM HOOKS AT ALL.
+
+== P0-3 — THE FIRST TEXT CHUNK WAS CERTIFIED AS TRUE TTFT ==
+
+BEFORE:
+    The sink channel was `onProviderFirstToken` / boundary
+    `provider_first_token`, documented as "the true time-to-first-token".
+    The runtime fired it on ANY `text-delta`, including an EMPTY one.
+
+AFTER:
+    The channel is `onProviderFirstText` / boundary `provider_first_text` —
+    named for what it MEASURES.
+    It fires only on a NON-EMPTY text delta.
+    The observation carries `serverSideTtft: "UNAVAILABLE_FROM_TRACE"`.
+
+    | Measurement                                                | Status                  |
+    |------------------------------------------------------------|-------------------------|
+    | First stream event                                         | Observable              |
+    | First non-empty text delta                                 | Observable              |
+    | First generated text                                       | Observable              |
+    | First generated TOKEN, incl. reasoning/tool generation      | NOT independently established |
+    | Server-side TTFT                                           | UNAVAILABLE_FROM_TRACE  |
+
+RED  : 5 of 6 tests failed
+GREEN: 6 of 6 tests pass
+      bun x vitest run --config vitest.config.ts \
+        src/agent-runtime.provider-first-text-classification.correction01.test.ts
+
+== THE CORRECTED CROSSWALK RESULT ==
+
+BEFORE (the deterministic keyword classification): 7 EQUIVALENT / 3 STRONGER / 0 WEAKER
+AFTER  (evidence that qualifies OBSERVATIONS):     6 EQUIVALENT / 3 STRONGER / 1 WEAKER
+
+  R1  STRONGER   production values applied + the no-image-override render
+                 (the manual-upgrade failure mechanism) captured
+  R2  EQUIVALENT both runs' successful tool results carried the evidence
+  R3  EQUIVALENT both runs' successful tool results carried the evidence
+  R4  EQUIVALENT both runs' successful tool results carried the evidence
+  R5  WEAKER    ** only 1 of the 6 identifiers reconciles **
+  R6  EQUIVALENT both runs' successful tool results carried the evidence
+  R7  EQUIVALENT both runs' successful tool results carried the evidence
+  R8  EQUIVALENT both runs' successful tool results carried the evidence
+  R9  STRONGER   effective chart defaults + NetworkPolicy/PDB coverage observed
+  R10 STRONGER   the REAL hook count (0) observed + the watcher semantics
+                 observed in the dev watcher render
+
+The single WEAKER row is a REAL, SOURCE-BACKED finding: both runs OBSERVED all
+six identifiers in their tool output, but the runs' PUBLISHED REPORTS do not
+state five of them. The R5 requirement — "exact six index identifiers
+reconciled with source artifacts" — is not met by the new run relative to the
+original.
+
+== THE ADDITIONAL COMPARISON DEFECTS CORRECTED ==
+
+1. The original run's status is `failed`; the new run's is `completed`. They
+   are NOT confirmed equivalent completion outcomes. Recorded in §6.1.
+2. The causal claim that the speedup "must originate in unobserved
+   served-model, quantization or inference configuration differences" does NOT
+   follow. The observable identity fields being equal rules OUT a provider /
+   model-id / branch / repository / session-history difference, but different
+   reasoning paths, a different number of tool calls (48 vs 209), different
+   compaction behaviour and stochastic generation remain possible
+   explanations. The speedup remains causally unattributed.
+3. The pre-correction human-readable table marked R5 `STRONGER` while the
+   machine manifest assigned it `EQUIVALENT`. The report and the manifest now
+   agree (`WEAKER`).
+
+== VERDICT ==
+
+Compaction repair:        PASS_WITH_NONBLOCKING_RESIDUE (accepted)
+Successor benchmark:      NO-GO (the R5 reconciliation is open)
+
+== THE HELM RENDER EVIDENCE ARTIFACT ==
+
+The three rendered manifests are NOT committed: they carry chart-template
+placeholder values (an empty SecretStore `key:` and a hardcoded example
+checksum in the chart's own values) that the repository secret-scanner flags.
+
+`06-helm-render-semantic-receipt.json` records EVERY fact the crosswalk
+derives from them — the render sha256 (so the exact bytes remain verifiable),
+the byte count, the resolved images, the rendered kinds, the PDB/NetworkPolicy
+counts, the REAL hook count, the hook-weight count, the securityContext count,
+the watcher-rendered flag, the placeholder-digest flag and the
+image-overrides-applied flag — plus the exact `helm template` invocation of
+each render.
+
+== CONSERVATION ==
+- The compaction-lifecycle repair is untouched.
+- The protected stash (stash@{0}) is preserved and NOT popped.
+- No history rewrite, no force push, no PR, no deployment.
+- No new VSIX installed, no Strata run, no broad review round.

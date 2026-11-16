@@ -5,7 +5,7 @@
  * ## The defects
  *
  * **D2 — the synthetic first token.** `LatencyTraceSink.onModelRequestFinish`
- * entered the `provider_first_token` boundary and exited it in the SAME
+ * entered the `provider_first_text` boundary and exited it in the SAME
  * call. The runtime reports ONE event when the provider's stream ends,
  * so the "first token" boundary was a zero-duration span recorded at
  * stream completion. A consumer reading that span would conclude the
@@ -104,7 +104,7 @@ describe("D2 — latency lifecycle", () => {
 
 		const firstTokenEvents = sink
 			.getTrace()
-			.events.filter((event) => event.boundary === "provider_first_token");
+			.events.filter((event) => event.boundary === "provider_first_text");
 		// There must be no MEASURED first-token span.
 		for (const event of firstTokenEvents) {
 			if (event.phase === "end") {
@@ -116,7 +116,7 @@ describe("D2 — latency lifecycle", () => {
 		expect(
 			sink
 				.getTrace()
-				.unavailable?.some((item) => item.boundary === "provider_first_token"),
+				.unavailable?.some((item) => item.boundary === "provider_first_text"),
 		).toBe(true);
 	});
 
@@ -139,13 +139,13 @@ describe("D2 — latency lifecycle", () => {
 		// anchored at THIS instant.
 		sink.onProviderRequestSubmitted(observation());
 		clock.advance(100);
-		sink.onProviderFirstToken(observation());
+		sink.onProviderFirstText(observation());
 
 		const firstToken = sink
 			.getTrace()
 			.events.find(
 				(event) =>
-					event.boundary === "provider_first_token" && event.phase === "end",
+					event.boundary === "provider_first_text" && event.phase === "end",
 			);
 		// The provider TTFT is measured from SUBMISSION: 100 ms, not 350 ms.
 		expect(firstToken?.durationMs).toBe(100);
@@ -203,7 +203,7 @@ describe("D2 — latency lifecycle", () => {
 		sink.onProviderRequestSubmitted(observation());
 		sink.onProviderFirstResponse(observation());
 		clock.advance(30);
-		sink.onProviderFirstToken(observation());
+		sink.onProviderFirstText(observation());
 		clock.advance(80);
 		sink.onModelRequestFinish(observation());
 
@@ -211,7 +211,7 @@ describe("D2 — latency lifecycle", () => {
 			.getTrace()
 			.events.find(
 				(event) =>
-					event.boundary === "provider_first_token" && event.phase === "end",
+					event.boundary === "provider_first_text" && event.phase === "end",
 			);
 		// 20 ms (preparation) + 30 ms (to the first token) — the provider
 		// interval is measured from SUBMISSION, so it is 30 ms.
@@ -228,7 +228,7 @@ describe("D2 — latency lifecycle", () => {
 		expect(
 			sink
 				.getTrace()
-				.unavailable?.some((item) => item.boundary === "provider_first_token"),
+				.unavailable?.some((item) => item.boundary === "provider_first_text"),
 		).toBeFalsy();
 	});
 

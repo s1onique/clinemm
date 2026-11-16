@@ -1,0 +1,126 @@
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents
+
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+ ❯ src/agent-runtime.provider-first-text-classification.correction01.test.ts (6 tests | 5 failed) 15ms
+     × C3C.1: the first-text boundary is named for what it MEASURES 9ms
+     × C3C.2: a REASONING-first request produces NO first-text observation 1ms
+     ✓ C3C.3: a TOOL-CALL-ONLY request produces NO first-text observation 3ms
+     × C3C.4: an EMPTY text delta produces NO first-text observation 0ms
+     × C3C.5: the server-side TTFT is recorded as explicitly UNAVAILABLE 0ms
+     × C3C.6: the first-text observation remains metadata-only 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/agent-runtime.provider-first-text-classification.correction01.test.ts > ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 / timing classification > C3C.1: the first-text boundary is named for what it MEASURES
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/agent-runtime.provider-first-text-classification.correction01.test.ts:146:22
+    144|
+    145|   expect(firstResponses).toHaveLength(1);
+    146|   expect(firstTexts).toHaveLength(1);
+       |                      ^
+    147|   expect(firstTexts[0]?.payload.generatedTextLength).toBe(5);
+    148|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/agent-runtime.provider-first-text-classification.correction01.test.ts > ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 / timing classification > C3C.2: a REASONING-first request produces NO first-text observation
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/agent-runtime.provider-first-text-classification.correction01.test.ts:178:22
+    176|   expect(firstResponses).toHaveLength(1);
+    177|   expect(firstResponses[0]?.payload.eventType).toBe("reasoning-delta");
+    178|   expect(firstTexts).toHaveLength(1);
+       |                      ^
+    179|   // The first-text observation records the TEXT, and carries a marker
+    180|   // proving the model's first generated token may have been EARLIER.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/agent-runtime.provider-first-text-classification.correction01.test.ts > ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 / timing classification > C3C.4: an EMPTY text delta produces NO first-text observation
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/agent-runtime.provider-first-text-classification.correction01.test.ts:233:22
+    231|   // The EMPTY delta is not generated TEXT. The first-text observation
+    232|   // must wait for the first NON-EMPTY delta.
+    233|   expect(firstTexts).toHaveLength(1);
+       |                      ^
+    234|   expect(firstTexts[0]?.payload.generatedTextLength).toBe(
+    235|    "real output".length,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/agent-runtime.provider-first-text-classification.correction01.test.ts > ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 / timing classification > C3C.5: the server-side TTFT is recorded as explicitly UNAVAILABLE
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/agent-runtime.provider-first-text-classification.correction01.test.ts:257:22
+    255|   await runtime.execute("say something");
+    256|
+    257|   expect(firstTexts).toHaveLength(1);
+       |                      ^
+    258|   expect(firstTexts[0]?.payload.serverSideTtft).toBe(
+    259|    "UNAVAILABLE_FROM_TRACE",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/agent-runtime.provider-first-text-classification.correction01.test.ts > ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 / timing classification > C3C.6: the first-text observation remains metadata-only
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ src/agent-runtime.provider-first-text-classification.correction01.test.ts:282:26
+    280|
+    281|   const serialized = JSON.stringify(firstTexts[0]?.payload);
+    282|   expect(serialized).not.toContain("secret text");
+       |                          ^
+    283|  });
+    284| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)
+   Start at  03:06:10
+   Duration  320ms (transform 187ms, setup 0ms, import 243ms, tests 15ms, environment 0ms)
+
+EXIT=1

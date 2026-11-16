@@ -14,7 +14,7 @@
  * |---|---------------------------------|------------------------|
  * | 1 | model request prepared          | `request_prepared`     |
  * | 2 | provider request submitted      | `provider_submitted`   |
- * | 3 | first provider response / token | `provider_first_token` |
+ * | 3 | first provider response / text | `provider_first_text` |
  * | 4 | provider response completed    | `provider_completed`   |
  * | 5 | tool-call schema validation    | `schema_validation`    |
  * | 6 | tool execution                 | `tool_execution`       |
@@ -66,12 +66,32 @@ import { createHash } from "node:crypto";
 /**
  * The instrumented boundaries.
  *
- * `provider_first_response` and `provider_first_token` are DISTINCT
+ * `provider_first_response` and `provider_first_text` are DISTINCT
  * boundaries, and the distinction matters: the first response EVENT (the
  * provider acknowledging, or sending its first byte) is not the same
- * instant as the first generated TOKEN. A provider may take a long time
+ * instant as the first generated TEXT. A provider may take a long time
  * to send its first byte and then stream tokens quickly, or respond
- * instantly and then think before its first token.
+ * instantly and then think before its first text.
+ *
+ * ## Neither boundary is an authoritative first-token measurement
+ *
+ * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 (P0-3). The boundaries are
+ * named for what they MEASURE:
+ *
+ * | Measurement                                                | Status                 |
+ * |------------------------------------------------------------|------------------------|
+ * | First stream event                                         | Observable             |
+ * | First non-empty text delta                                 | Observable             |
+ * | First generated text                                       | Observable             |
+ * | First generated TOKEN, including reasoning/tool generation | NOT independently established |
+ * | Server-side TTFT                                           | UNAVAILABLE_FROM_TRACE |
+ *
+ * A reasoning-first request generates REASONING tokens before any text
+ * delta exists, and a tool-call-only request generates tokens without ever
+ * emitting a text delta. The first-text boundary is therefore a CLIENT-SIDE
+ * observation of generated text, never proof of the model's first generated
+ * token. The server-side TTFT is not observable at this seam and is
+ * recorded as explicitly UNAVAILABLE.
  *
  * A stream's COMPLETION is neither of them. Recording the completion as
  * if it were the first token produces a fabricated time-to-first-token,
@@ -83,7 +103,7 @@ export type LatencyBoundary =
 	| "request_prepared"
 	| "provider_submitted"
 	| "provider_first_response"
-	| "provider_first_token"
+	| "provider_first_text"
 	| "provider_completed"
 	| "schema_validation"
 	| "tool_execution"
@@ -101,7 +121,7 @@ export const ALL_LATENCY_BOUNDARIES: readonly LatencyBoundary[] = [
 	"request_prepared",
 	"provider_submitted",
 	"provider_first_response",
-	"provider_first_token",
+	"provider_first_text",
 	"provider_completed",
 	"schema_validation",
 	"tool_execution",
@@ -234,12 +254,20 @@ export const LATENCY_METADATA_ALLOWLIST: readonly string[] = [
 	// Both are CLASSIFICATIONS — never content.
 	"compactionInitiated",
 	"compactionOutcome",
-	// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the first-token observation.
+	// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 — the first-TEXT
+	// observation.
 	//
-	// `generatedTextLength` is the LENGTH of the first observed
-	// generated output. It is a SIZE, never content: the text itself is
-	// never recorded.
+	// `generatedTextLength` is the LENGTH of the first observed generated
+	// TEXT. It is a SIZE, never content: the text itself is never
+	// recorded.
+	//
+	// `serverSideTtft` is the AVAILABILITY CLASSIFICATION of the
+	// server-side time to first token. It is always the literal
+	// "UNAVAILABLE_FROM_TRACE": the client-side seam cannot observe the
+	// provider's own first-token accounting, so no consumer can mistake
+	// the first-text boundary for an authoritative TTFT.
 	"generatedTextLength",
+	"serverSideTtft",
 ];
 
 /**
@@ -543,8 +571,8 @@ export const LATENCY_TRACE_MAX_DISCARDED_SPAN_TOMBSTONES = 1_024;
  * |-----------------------------|---------------------------|-------------|---------|
  * | `request_preparation`       | `request_prepared`        | `preparation` | the request was being prepared for the provider |
  * | `request_prepared`          | `provider_submitted`      | `queue`     | the request was built and held |
- * | `provider_submitted`        | `provider_first_token`    | `transport` | the provider had not answered |
- * | `provider_first_token`      | `provider_completed`      | `transport` | the provider was still generating |
+ * | `provider_submitted`        | `provider_first_text`    | `transport` | the provider had not answered |
+ * | `provider_first_text`      | `provider_completed`      | `transport` | the provider was still generating |
  * | `provider_completed`        | `schema_validation`       | `queue`     | the agent had the turn and had not validated yet |
  * | `schema_validation`         | `tool_execution`          | `queue`     | validation passed and the tool had not started |
  * | `tool_execution`            | `tool_result_delivered`   | `delivery`  | the tool had finished; the result had not been delivered yet |
@@ -571,13 +599,13 @@ const STAGE_BOUNDARIES: Readonly<
 		to: "provider_submitted",
 		stage: "queue",
 	},
-	"provider_submitted>provider_first_token": {
+	"provider_submitted>provider_first_text": {
 		from: "provider_submitted",
-		to: "provider_first_token",
+		to: "provider_first_text",
 		stage: "transport",
 	},
-	"provider_first_token>provider_completed": {
-		from: "provider_first_token",
+	"provider_first_text>provider_completed": {
+		from: "provider_first_text",
 		to: "provider_completed",
 		stage: "transport",
 	},

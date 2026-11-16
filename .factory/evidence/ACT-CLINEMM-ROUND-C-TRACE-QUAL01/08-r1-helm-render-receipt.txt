@@ -1,4 +1,8 @@
 ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — R1 OFFLINE HELM RENDER RECEIPT
+CORRECTION01 (2026-11-16): the hook count and the values provenance are
+corrected. See 08-r1-helm-render-receipt-correction01.txt for the full
+receipt; the summary below is the corrected one.
+
 Generated: 2026-11-16
 Helm: v3.20.2 (GitCommit v3.20.2, GoVersion go1.26.6)
 
@@ -10,29 +14,67 @@ chart.lock digest: sha256:b431346662cf9121146a3f5ad092614c72034141a3bae2d3bab738
 chart source SHA:  42de653b59708e712d694aeb9732f822b7f8fe5b
 
 == INVOCATION (isolated scratch dir; no network, no cluster, no helm upgrade) ==
+
+# 1) The PRODUCTION render — the production values ARE applied.
 helm template keycloak-roz-prod . --namespace=roz-keycloak-prod \
   --set keycloakx.image.repository=cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz \
   --set keycloakx.image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
   --set global.env=prod \
-  --set profilerWatcher.enabled=false \
-  -f values.yaml
+  -f values.yaml -f values-prod.yaml
 
-== RECEIPT ==
-render bytes: 17879
-render sha256: eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65
-image:         cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000000000000000000000000000000000000000000000000000000000000000 (digest-pinned)
-kinds:         ConfigMap 1, ExternalSecret 2, Ingress 2, SecretStore 1, Service 2, ServiceAccount 1, ServiceMonitor 1, StatefulSet 1
-runAsNonRoot:  true
-PodDisruptionBudget count: 0
-NetworkPolicy count:       0
-helm hook count:          2
+# 2) The NO-IMAGE-OVERRIDE render — the R1 manual-upgrade failure mechanism.
+helm template keycloak-roz-prod . --namespace=roz-keycloak-prod \
+  --set global.env=prod \
+  -f values.yaml -f values-prod.yaml
+
+# 3) The WATCHER render — the watcher only renders in the `dev` environment.
+helm template keycloak-roz-dev . --namespace=roz-keycloak-dev \
+  --set global.env=dev --set profilerWatcher.enabled=true \
+  -f values.yaml -f values-dev.yaml
+
+== RECEIPT (CORRECTED) ==
+                          production   no-image-override   watcher(dev)
+render bytes:                 18164              18081            33073
+render sha256:        (see crosswalk renders block)
+image:            cr.yandex/…@sha256:0000…   quay.io/keycloak/keycloak:26.0.7   n/a
+values files:      values.yaml + values-prod.yaml (BOTH)        values.yaml + values-dev.yaml
+production values applied:        YES                YES                 n/a
+helm.sh/hook  (REAL hooks):         0                 0                  0
+helm.sh/hook-weight  (NOT hooks):   2                 2                  7
+watcher resources rendered:        no                no                 YES
+runAsNonRoot:                     true
+PodDisruptionBudget count:          0
+NetworkPolicy count:                0
+
+== CORRECTION01 — THE HOOK COUNT WAS WRONG ==
+The pre-correction receipt reported "helm hook count: 2". That number came
+from `len(re.findall(r"helm\.sh/hook", text))`, which ALSO matches
+"helm.sh/hook-weight". Both of the "2 hooks" were hook-weight annotations:
+
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-weight": "-10"
+
+Helm designates a hook with the DISTINCT "helm.sh/hook" annotation;
+"helm.sh/hook-weight" only ORDERS hooks that already exist and never makes a
+resource a hook. The REAL hook count is 0. The chart contains NO Helm hooks.
+
+== CORRECTION01 — THE PRODUCTION VALUES WERE MISSING ==
+The pre-correction render used `-f values.yaml` ONLY. The production CI
+(.gitlab-ci.yml:258-269) applies `-f values.yaml` AND `-f values-prod.yaml`
+for the prod environment. The production render now applies both; the
+difference is observable (the production render carries the nodeSelector and
+tolerations that values-prod.yaml supplies).
 
 == CAVEAT ==
 The digest is a PLACEHOLDER in the chart pinned values. The render proves the
 chart pins by digest and resolves the repository/tag/digest form. It CANNOT
 observe the SERVING cluster effective digest. The two are not conflated.
 
+The PLACEHOLDER-DIGEST render and the NO-IMAGE-OVERRIDE render are DISTINCT
+artifacts and are recorded separately in the crosswalk.
+
 == CROSSWALK REGENERATION ==
-The crosswalk regenerates BYTE-IDENTICALLY from this render plus the two recovered
-transcripts (verified by diff). Regenerating WITHOUT --render-path degrades
-R1/R9/R10 to UNVERIFIED (7 EQUIVALENT + 3 UNVERIFIED) - the intended fail-closed path.
+The crosswalk regenerates BYTE-IDENTICALLY from these renders plus the two
+recovered transcripts (verified by diff). Regenerating WITHOUT --render-path
+degrades the render rows — they now require the EXACT semantic evidence, so
+they yield WEAKER/UNVERIFIED, never STRONGER.

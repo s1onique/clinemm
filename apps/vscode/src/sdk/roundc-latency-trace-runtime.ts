@@ -750,7 +750,7 @@ export const COMPOSABLE_SINK_CHANNELS = [
 	// report a true time-to-first-token instead of leaving the
 	// measurement unavailable.
 	"onProviderFirstResponse",
-	"onProviderFirstToken",
+	"onProviderFirstText",
 	"onModelRequestFinish",
 	"onModelRequestError",
 	"onModelRequestAbort",

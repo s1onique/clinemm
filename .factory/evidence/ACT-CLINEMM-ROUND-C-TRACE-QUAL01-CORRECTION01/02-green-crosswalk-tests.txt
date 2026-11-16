@@ -1,0 +1,34 @@
+test_B1_hook_weight_is_not_a_hook (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B1_hook_weight_is_not_a_hook)
+B1: a manifest with ONLY helm.sh/hook-weight has ZERO hooks. ... ok
+test_B2_hook_annotation_is_a_hook (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B2_hook_annotation_is_a_hook)
+B2: the distinct helm.sh/hook annotation IS a hook. ... ok
+test_B3_hook_count_is_exact (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B3_hook_count_is_exact)
+B3: one hook-weight plus one hook counts exactly ONE hook. ... ok
+test_B3b_hook_weight_only_matches_do_not_leak_into_hook_count (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B3b_hook_weight_only_matches_do_not_leak_into_hook_count)
+B3b: the naive substring regex must not be the hook counter. ... ok
+test_A5_report_must_carry_the_identifier (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.R5FinalReportTests.test_A5_report_must_carry_the_identifier)
+A5: the identifier in the command but NOT in the report is not reconciled. ... ok
+test_A5b_final_report_is_actually_read (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.R5FinalReportTests.test_A5b_final_report_is_actually_read)
+A5b: the crosswalk records the final report it reconciled against. ... ok
+test_A6_report_carrying_the_identifier_reconciles (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.R5FinalReportTests.test_A6_report_carrying_the_identifier_reconciles)
+A6: the identifier in BOTH the command and the report reconciles. ... ok
+test_A7_render_alone_does_not_award_stronger (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderAutoStrongerTests.test_A7_render_alone_does_not_award_stronger)
+A7: an EMPTY render must not certify R1/R9/R10 as STRONGER. ... ok
+test_B4_production_values_provenance_is_recorded (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderProvenanceTests.test_B4_production_values_provenance_is_recorded)
+B4: the receipt states WHICH values files produced the render. ... ok
+test_B5_placeholder_and_no_override_renders_are_distinguished (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderProvenanceTests.test_B5_placeholder_and_no_override_renders_are_distinguished)
+B5: a placeholder-digest render is not the no-image-override render. ... ok
+test_A1_failed_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A1_failed_tool_result_is_not_evidence)
+A1: a FAILED command that merely MENTIONS the keyword is not evidence. ... ok
+test_A2_irrelevant_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A2_irrelevant_tool_result_is_not_evidence)
+A2: a SUCCESSFUL command whose OUTPUT is irrelevant is not evidence. ... ok
+test_A3_successful_on_topic_tool_result_is_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A3_successful_on_topic_tool_result_is_evidence)
+A3: a SUCCESSFUL command whose OUTPUT carries the evidence IS evidence. ... ok
+test_A4_tool_use_without_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A4_tool_use_without_tool_result_is_not_evidence)
+A4: a tool_use with NO tool_result at all is not evidence. ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.014s
+
+OK
+EXIT=0

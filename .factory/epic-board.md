@@ -33647,3 +33647,77 @@ been run and closed; the qualification itself remains a separate step.
 EVIDENCE: `.factory/evidence/ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01/`
   RED-GREEN-CORRECTION02.md, VERDICT-CORRECTION02.md, MANIFEST.json
 
+# ACT-CLINEMM-ROUND-C-TRACE-QUAL01-CORRECTION01 — HALT_EVIDENCE_EQUIVALENCE_UNSOUND (corrected) — 2026-11-16
+
+**Status:** The QUAL01 review returned `HALT_EVIDENCE_EQUIVALENCE_UNSOUND` for the successor matched Round C benchmark. Three P0 evidence defects were found in the qualification machinery — **not** in the compaction repair. All three are corrected here. **The compaction-lifecycle repair is untouched and remains accepted.** The successor benchmark's GO decision is **withdrawn**: it is now **NO-GO** pending the R5 reconciliation.
+
+```
+ACT_ID: ACT-CLINEMM-ROUND-C-TRACE-QUAL01-CORRECTION01
+TYPE: bounded P0 correction of the evidence/measurement machinery (3 P0s)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (correction of ACT-CLINEMM-ROUND-C-TRACE-QUAL01)
+VERDICT: PASS_WITH_NONBLOCKING_RESIDUE (compaction repair) / NO-GO (successor benchmark)
+PREDECESSOR_VERDICT: HALT_EVIDENCE_EQUIVALENCE_UNSOUND (all three P0 now closed)
+ENTRY_HEAD: 56ce0f23f
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+RED: P0-1 crosswalk 12/14 failed | P0-3 timing classification 5/6 failed
+GREEN: crosswalk 14/14 | timing 6/6 | latency 88/88 | agents 595/595 | vscode roundc 70/70
+TYPECHECK: tsc --noEmit EXIT 0 (agents, shared, vscode)
+COMPACTION REPAIR: UNTOUCHED (the review explicitly accepted it)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ROUND-C-TRACE-QUAL01-CORRECTION01/
+```
+
+## P0-1 — The crosswalk confused commands with evidence
+
+`observed_tool_evidence()` read only the `tool_use` **inputs**. It never joined a tool call to its `tool_result`, never checked the execution status and never compared the final reports. Its classification was effectively `EQUIVALENT if len(original_matches)>0 and len(new_matches)>0`. A command that merely **mentioned** `timeout`, `mvn` or `password` qualified as evidence — even when it **failed**, returned **irrelevant** output, or was **never executed**. The byte-identical regeneration demonstrated the **reproducibility** of the algorithm; it could never demonstrate its **validity**.
+
+**The correction.** A tool invocation is evidence only when it was **executed**, its result **did not fail**, and its **observed output** carries the subject's evidence. The R5 discriminator additionally reconciles **both runs' final reports** against the six source-backed identifiers. R1/R9/R10 require the **exact** rendered semantic evidence; a render file's mere existence never awards `STRONGER`.
+
+## P0-2 — The Helm hook evidence was misclassified
+
+The hook count used `len(re.findall(r"helm\.sh/hook", text))`, which also matches `helm.sh/hook-weight`. Helm designates a hook with the **distinct** `helm.sh/hook` annotation; `helm.sh/hook-weight` only **orders** hooks that already exist and never makes a resource a hook. The chart's profiler-watcher resources carry **only** `helm.sh/hook-weight`.
+
+**Both of the previously reported "2 hooks" were hook-weight false positives. The real hook count is 0 — the chart contains no Helm hooks at all.**
+
+**The correction.** The hook count counts the distinct `helm.sh/hook` key only; the hook-weight count is reported **separately**. The receipt records the values-files provenance and whether the **production values** were applied. The **placeholder-digest**, **no-image-override** and **watcher** renders are **distinct artifacts**, recorded separately.
+
+## P0-3 — The first text chunk was certified as true TTFT
+
+The boundary was named `provider_first_token` and documented as "the true time-to-first-token". A text delta is a **client-side** observation: a reasoning-first request generates reasoning tokens before any text, and a tool-call-only request generates tokens without ever emitting text.
+
+**The correction.** The boundary is renamed `provider_first_text` for what it measures, fires only on a **non-empty** text delta, and carries `serverSideTtft: "UNAVAILABLE_FROM_TRACE"`. The measurement is preserved; only the claim is narrowed.
+
+| Measurement | Status |
+|---|---|
+| First stream event | Observable |
+| First non-empty text delta | Observable |
+| First generated text | Observable |
+| First generated TOKEN, incl. reasoning/tool generation | **NOT independently established** |
+| Server-side TTFT | **UNAVAILABLE_FROM_TRACE** |
+
+## The corrected crosswalk result — and the real finding
+
+**6 `EQUIVALENT` / 3 `STRONGER` / 1 `WEAKER`** — not the previously reported `7 / 3 / 0`.
+
+The single `WEAKER` is **R5**, and it is a real, source-backed finding: both runs **observed** all six index identifiers in their tool output, but the runs' **published final reports** do not state five of them. Only `idx_pmtc_lookup_recent_unconfirmed_sms` reconciles against both. The R5 requirement — "exact six index identifiers reconciled with source artifacts" — is **not met** by the new run relative to the original. The pre-correction human-readable table marked R5 `STRONGER` while the machine manifest assigned it `EQUIVALENT`; the report and the manifest now agree (`WEAKER`).
+
+## The additional comparison defects, corrected
+
+- The original run's status is `failed`; the new run's is `completed`. They are **not** confirmed equivalent completion outcomes.
+- The causal claim that the speedup "must originate in unobserved served-model, quantization or inference configuration differences" does **not** follow. The observable identity fields being equal rules OUT a provider/model-id/branch/repository/session-history difference, but **different reasoning paths, a different number of tool calls (48 vs 209), different compaction behaviour and stochastic generation** remain possible explanations. The ≈5.57× elapsed-time improvement remains an **observed fact** and **causally unattributed**.
+
+## Verdict
+
+- **Compaction repair:** `PASS_WITH_NONBLOCKING_RESIDUE` — **accepted** on the supplied evidence. The historical trace remains valid.
+- **Successor benchmark:** **NO-GO** — the R5 reconciliation is open.
+
+**No compaction-lifecycle work is reopened.** The NO-GO is lifted when the successor's final report states all six source-backed identifiers and the regenerated crosswalk is free of `WEAKER` and `UNVERIFIED` rows, subject to the other successor conditions in the report's §9.3.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-ROUND-C-TRACE-QUAL01-CORRECTION01/`
+  `01-red-crosswalk-tests.txt`, `02-green-crosswalk-tests.txt`,
+  `03-red-timing-classification-tests.txt`,
+  `04-green-timing-classification-tests.txt`,
+  `05-correction01-closure-receipt.txt`,
+  `06-helm-render-semantic-receipt.json`
+

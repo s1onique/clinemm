@@ -12,9 +12,17 @@
  * |-------------------------|----------------------------------------------|
  * | Request submission     | Actual invocation boundary                    |
  * | First response / chunk | Only an observed provider/stream event        |
- * | First model output      | Only the first observed generated-output event |
- * | True TTFT              | Only an authoritative first-token observation  |
+ * | First generated text   | Only the first observed NON-EMPTY text delta |
+ * | True TTFT              | NOT independently established at this seam   |
  * | Provider completion    | Actual observed terminal boundary             |
+ *
+ * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 (P0-3): the first-text
+ * boundary is a CLIENT-SIDE observation of generated TEXT. It is NOT the
+ * model's first generated TOKEN — a reasoning-first request generates
+ * reasoning tokens before any text, and a tool-call-only request generates
+ * tokens without ever emitting text. The server-side TTFT is
+ * UNAVAILABLE_FROM_TRACE. The timing classification is witnessed in
+ * `agent-runtime.provider-first-text-classification.correction01.test.ts`.
  *
  * These witnesses drive the REAL `AgentRuntime` with a scripted model, so
  * the observations come from the PRODUCTION stream seam
@@ -23,9 +31,9 @@
  *
  * The gates:
  *   - the first event is observed EXACTLY ONCE per request;
- *   - an empty / no-token response produces NO first-token observation;
- *   - an error before the first output produces NO first-token observation;
- *   - a cancellation before the first output produces NO first-token
+ *   - an empty / no-text response produces NO first-text observation;
+ *   - an error before the first output produces NO first-text observation;
+ *   - a cancellation before the first output produces NO first-text
  *     observation;
  *   - concurrent requests with DIFFERENT identities do not cross-attribute;
  *   - the diagnostic-disabled path observes nothing at all;
@@ -112,7 +120,7 @@ function makeCollectingSink(): {
 		onProviderFirstResponse: (observation: ModelBehaviorTraceObservation) => {
 			firstResponses.push(observation);
 		},
-		onProviderFirstToken: (observation: ModelBehaviorTraceObservation) => {
+		onProviderFirstText: (observation: ModelBehaviorTraceObservation) => {
 			firstTokens.push(observation);
 		},
 	};

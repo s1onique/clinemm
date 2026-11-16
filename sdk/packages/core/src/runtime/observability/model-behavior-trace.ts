@@ -185,7 +185,7 @@ export function createIsolatedModelBehaviorTraceSink(
 		// channel so the transport's first event and the first GENERATED
 		// token are not lost when a host installs the isolated sink.
 		onProviderFirstResponse: safe,
-		onProviderFirstToken: safe,
+		onProviderFirstText: safe,
 		onModelRequestFinish: safe,
 		onModelRequestError: safe,
 		onModelRequestAbort: safe,

@@ -2449,20 +2449,37 @@ export interface ModelBehaviorTraceSink {
 		observation: ModelBehaviorTraceObservation,
 	) => void;
 	/**
-	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the FIRST GENERATED TOKEN.
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 (P0-3) — the FIRST
+	 * GENERATED TEXT.
 	 *
 	 * Reported at the instant the provider's stream produces its first
-	 * observed GENERATED OUTPUT — a text delta carrying actual model
-	 * output. The span it closes measures from the request's submission,
-	 * so the measurement is the true time-to-first-token.
+	 * observed GENERATED TEXT — a NON-EMPTY `text-delta`. The span it closes
+	 * measures from the request's submission to that text.
 	 *
-	 * A provider that cannot observe the first generated token must NOT
-	 * call this method; the measurement then stays unavailable rather
-	 * than being inferred from the stream's completion.
+	 * ## This is NOT a first-token measurement
+	 *
+	 * The boundary is named for what it MEASURES. A text delta is a
+	 * client-side observation of generated TEXT, and it is NOT proof of the
+	 * model's first generated TOKEN:
+	 *
+	 *   - a reasoning-first request generates REASONING tokens before any
+	 *     text delta exists, so the first text is strictly later than the
+	 *     model's first generated token;
+	 *   - a tool-call-only request generates tokens without ever emitting a
+	 *     text delta, so there is no first text at all;
+	 *   - the provider's own token accounting is not surfaced at this seam,
+	 *     so the SERVER-SIDE time to first token is
+	 *     `UNAVAILABLE_FROM_TRACE`.
+	 *
+	 * The observation therefore carries `serverSideTtft:
+	 * "UNAVAILABLE_FROM_TRACE"` so no consumer can mistake this boundary for
+	 * an authoritative TTFT.
+	 *
+	 * A provider that cannot observe the first generated text must NOT call
+	 * this method; the measurement then stays unavailable rather than being
+	 * inferred from the stream's completion.
 	 */
-	onProviderFirstToken?: (
-		observation: ModelBehaviorTraceObservation,
-	) => void;
+	onProviderFirstText?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request completed (successfully or with a finish reason). */
 	onModelRequestFinish?: (observation: ModelBehaviorTraceObservation) => void;
 	/** A model request failed. */

@@ -211,7 +211,7 @@ describe("Phase 5 — production boundary integration", () => {
 		// instant — NOT at the start of request preparation.
 		const firstTokenStart = events.find(
 			(event) =>
-				event.boundary === "provider_first_token" && event.phase === "start",
+				event.boundary === "provider_first_text" && event.phase === "start",
 		);
 		expect(firstTokenStart).toBeDefined();
 		expect(firstTokenStart?.monotonicMs).toBeGreaterThanOrEqual(
@@ -229,7 +229,7 @@ describe("Phase 5 — production boundary integration", () => {
 		expect(
 			sink
 				.getTrace()
-				.unavailable?.some((item) => item.boundary === "provider_first_token"),
+				.unavailable?.some((item) => item.boundary === "provider_first_text"),
 		).toBe(true);
 		expect(sink.getTrace().integrityFailures).toEqual([]);
 	});

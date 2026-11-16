@@ -1,6 +1,31 @@
 # ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — Closure Report
 
-**Status:** `PASS_WITH_NONBLOCKING_RESIDUE`
+> **CORRECTION01 (2026-11-16) — READ FIRST.**
+>
+> The QUAL01 review returned **`HALT_EVIDENCE_EQUIVALENCE_UNSOUND`** for the
+> successor benchmark. Three P0 defects were found in the evidence machinery.
+> All three are corrected in this revision; the **compaction-lifecycle repair
+> is untouched and remains accepted**.
+>
+> | # | Defect | Correction | Section |
+> |---|---|---|---|
+> | **P0-1** | The crosswalk classified **commands** as evidence: it read only `tool_use` inputs, never joining them to their `tool_result` outputs, execution status or final report | Evidence now requires an **executed, successful, on-topic tool result**; R5 reconciles **both final reports** against the source-backed identifiers; R1/R9/R10 require **exact rendered semantic evidence** | §6 |
+> | **P0-2** | The Helm hook count used `r"helm\.sh/hook"`, which also matches `helm.sh/hook-weight` | The hook count now counts the **distinct `helm.sh/hook` annotation only**; the hook-weight count is reported **separately**; the production-values provenance and the placeholder-digest vs no-image-override renders are **explicitly distinguished** | §6.3 |
+> | **P0-3** | The first text chunk was certified as **true TTFT** | The boundary is renamed **`provider_first_text`** for what it measures, fires only on a **non-empty** text delta, and carries `serverSideTtft: "UNAVAILABLE_FROM_TRACE"` | §4 |
+>
+> **The corrected crosswalk result is `6 EQUIVALENT / 3 STRONGER / 1 WEAKER`** —
+> not the previously reported `7 / 3 / 0`. The single `WEAKER` row is **R5**, and
+> it is a real finding: **only 1 of the 6 index identifiers reconciles against
+> both runs' final reports**. The prior "7 EQUIVALENT / 3 STRONGER / 0 WEAKER"
+> was a deterministic keyword classification, not an executable proof.
+>
+> The **compaction repair is accepted on the supplied evidence**. The historical
+> trace remains valid and the reported **5.57x elapsed-time improvement remains
+> an observed fact**. The **successor benchmark remains NO-GO** until the R5
+> reconciliation is closed.
+
+**Status:** `PASS_WITH_NONBLOCKING_RESIDUE` (compaction repair) —
+**successor benchmark: NO-GO** pending the R5 reconciliation
 
 **Subject HEAD (entry):** `b0b18da6cef7f118661c64b26fe539ddeb985e6f`
 **Bound HEAD (implementation):** `90a153321e4d66eddb4197cb41667f81e6df6865`
@@ -24,19 +49,21 @@ now repaired with a production-seam RED → GREEN proof:
 
 Two further qualifications were produced:
 
-1. **The provider DOES expose an authoritative first-token event** — but the
-   tracer never subscribed to it, so all 45 first-response and 45 first-token
-   measurements were recorded as *unavailable*. The instrumentation now attaches
-   a metadata-only observation at the existing production stream seam.
+1. **The provider DOES expose observable first-event and first-text seams** —
+   but the tracer never subscribed to them, so all 45 first-response and 45
+   first-text measurements were recorded as *unavailable*. The instrumentation
+   now attaches a metadata-only observation at the existing production stream
+   seam. **Neither measurement is an authoritative time-to-first-token**; the
+   server-side TTFT is `UNAVAILABLE_FROM_TRACE` (see §4).
 2. **The capture identity is now bound.** The trace previously carried no
    software, model or inference-configuration identity at all, so the
    "≈5.57× speedup" could not be attributed to any cause.
 
-The **R1–R10 evidence crosswalk is complete**: the original Round C transcript
-was **recovered** (session `1794702518894_gui73`, 209 tool invocations,
-229,129 output tokens — the exact reported figures), all ten risk subjects have
-verified evidence coverage in **both** runs, and the R1 offline Helm render was
-executed for real against the pinned chart.
+The **R1–R10 evidence crosswalk was regenerated** under CORRECTION01 with
+evidence semantics that qualify *observations* rather than *commands*. The
+original Round C transcript was **recovered** (session `1794702518894_gui73`,
+209 tool invocations, 229,129 output tokens — the exact reported figures). The
+corrected result is **6 `EQUIVALENT`, 3 `STRONGER`, 1 `WEAKER`** — see §6.
 
 **Non-blocking residue (explicitly NOT certified):**
 
@@ -47,6 +74,9 @@ executed for real against the pinned chart.
 - The **quantization** is `UNAVAILABLE_FROM_TRACE`. The configured model id
   happens to contain `iq3_s`, but that is a *requested identifier*, not a served
   quantization receipt, and it is not treated as one.
+- The **server-side TTFT** is `UNAVAILABLE_FROM_TRACE` (see §4). The
+  client-side first-text seam cannot observe the provider's own token
+  accounting.
 
 ---
 
@@ -253,20 +283,38 @@ The AI SDK provider emits that event from the real wire:
 **The configured provider in the live run was `openai-compatible`**
 (session metadata), which routes through this AI SDK path.
 
-### 4.2 The classification
+### 4.2 The classification (CORRECTED — P0-3)
+
+> **CORRECTION01.** The pre-correction report claimed "True TTFT |
+> **AVAILABLE** | the first `text-delta` with non-empty text". That
+> overstatement is corrected here. A text delta is a **client-side** boundary;
+> it is **not** the model's first generated token.
 
 | Measurement | Contract | Observed at the seam? | Where |
 |---|---|---|---|
 | Request submission | Actual invocation boundary | **YES** | `onProviderRequestSubmitted` — emitted immediately before `model.stream()` |
-| First response / chunk | Only an observed provider/stream event | **YES** (the first event of the stream, whatever its type) | `onProviderFirstResponse` (new) |
-| First model output | Only the first observed **generated-output** event | **YES** — a `text-delta` with actual text | `onProviderFirstToken` (new) |
-| **True TTFT** | Only an authoritative first-token observation | **AVAILABLE** | the first `text-delta` with non-empty text |
+| First response / chunk | Only an observed provider/stream event | **YES** (the first event of the stream, whatever its type) | `onProviderFirstResponse` |
+| First generated text | Only the first observed **non-empty** `text-delta` | **YES** | `onProviderFirstText` (renamed from `onProviderFirstToken`) |
+| First generated TOKEN (incl. reasoning/tool generation) | Only a provider-backed token event | **NOT independently established** | — |
+| **Server-side TTFT** | Only a provider-side token timestamp | **`UNAVAILABLE_FROM_TRACE`** | — |
 | Provider completion | Actual observed terminal boundary | **YES** | `onProviderRequestCompleted` |
 
-**A network chunk is not necessarily a model token, and a response object is
-not necessarily generated output.** The two are kept distinct: the first
-*response* is the first event of the stream (it may be a tool-call delta); the
-first *token* is the first `text-delta` carrying generated text.
+**A network chunk is not necessarily a model token, a response object is not
+necessarily generated output, and generated TEXT is not necessarily the model's
+first generated TOKEN.** The three are kept distinct:
+
+- the first *response* is the first event of the stream (it may be a
+  reasoning delta or a tool-call delta);
+- the first *text* is the first **non-empty** `text-delta`;
+- the model's first generated **token** may be **earlier** than the first text
+  (a reasoning-first request) or may **never** produce text at all (a
+  tool-call-only request).
+
+The boundary is therefore **named for what it measures** — `provider_first_text`
+— and the observation carries the explicit marker
+`serverSideTtft: "UNAVAILABLE_FROM_TRACE"` so no consumer can mistake it for an
+authoritative TTFT. The rename is a *truthfulness* correction: the measurement
+itself is preserved and remains useful.
 
 ### 4.3 What was wrong before, and what changed
 
@@ -278,7 +326,7 @@ the live artifact:
 
 ```
 unavailable: ('provider_first_response', 'the provider did not report this event'): 45
-unavailable: ('provider_first_token',    'the provider did not report this event'): 45
+unavailable: ('provider_first_text',     'the provider did not report this event'): 45
 ```
 
 i.e. **every** first-response and first-token measurement was unavailable — the
@@ -292,7 +340,7 @@ already consumes. It never pre-reads, buffers or re-orders anything.
 | # | File | Change |
 |---|---|---|
 | 1 | `sdk/packages/shared/src/runtime/model-behavior-trace.ts` | The `ModelBehaviorTraceSink` interface gains `onProviderFirstResponse` and `onProviderFirstToken` (both optional). |
-| 2 | `sdk/packages/agents/src/agent-runtime.ts` | The stream loop observes the first stream event (`onProviderFirstResponse`) and the first `text-delta` (`onProviderFirstToken`). The payload is metadata-only: the event **type** and the generated text's **length** — never the text. |
+| 2 | `sdk/packages/agents/src/agent-runtime.ts` | The stream loop observes the first stream event (`onProviderFirstResponse`) and the first **non-empty** `text-delta` (`onProviderFirstText`). The payload is metadata-only: the event **type**, the generated text's **length** and the `serverSideTtft` availability marker — never the text. |
 
 ### 4.4 The C3 tests
 
@@ -307,14 +355,34 @@ EXIT=0
 
 | Test | Contract |
 |---|---|
-| `C3.1` | The first event is observed **exactly once** per request (two text deltas ⇒ one first-response, one first-token). The token observation carries the LENGTH, not the text. |
-| `C3.2` | An empty / no-token response produces **no** first-token observation (the first-response event is still observed). |
-| `C3.3` | A tool-call-only response produces **no** first-token observation — the first response event's type is `tool-call-delta`, proving a chunk is not a token. |
+| `C3.1` | The first event is observed **exactly once** per request (two text deltas ⇒ one first-response, one first-text). The text observation carries the LENGTH, not the text. |
+| `C3.2` | An empty / no-text response produces **no** first-text observation (the first-response event is still observed). |
+| `C3.3` | A tool-call-only response produces **no** first-text observation — the first response event's type is `tool-call-delta`, proving a chunk is not text. |
 | `C3.4` | An error **before** the first output produces neither observation; the run's existing `status === "failed"` contract is unchanged. |
-| `C3.5` | A cancellation **before** the first output produces **no** first-token observation. |
+| `C3.5` | A cancellation **before** the first output produces **no** first-text observation. |
 | `C3.6` | Concurrent requests with different identities do not cross-attribute: 2 observations, each with its own session id. |
 | `C3.7` | The diagnostic-disabled path (a sink with no such channels) observes nothing and the run still succeeds. |
 | `C3.8` | The streamed output is **conserved** — both deltas reach the assistant message, in order. |
+
+**CORRECTION01 added 6 further witnesses** in
+`sdk/packages/agents/src/agent-runtime.provider-first-text-classification.correction01.test.ts`:
+
+| Test | Contract |
+|---|---|
+| `C3C.1` | The boundary is named for what it MEASURES (`provider_first_text`), never for a token it cannot observe. |
+| `C3C.2` | A **REASONING-first** request produces NO first-text observation before the text — the model's first generated token was the reasoning, not the text. |
+| `C3C.3` | A **TOOL-CALL-ONLY** request produces NO first-text observation. |
+| `C3C.4` | An **EMPTY** text delta produces NO first-text observation — the boundary is "first GENERATED TEXT", not "first text event". |
+| `C3C.5` | The server-side TTFT is recorded as explicitly `UNAVAILABLE_FROM_TRACE`, never as a measured value. |
+| `C3C.6` | The first-text observation remains metadata-only. |
+
+```
+$ cd sdk/packages/agents
+$ bun x vitest run --config vitest.config.ts \
+    src/agent-runtime.provider-first-text-classification.correction01.test.ts
+ ✓ src/agent-runtime.provider-first-text-classification.correction01.test.ts (6 tests)
+ EXIT=0
+```
 
 ---
 
@@ -388,124 +456,272 @@ model, branch, repository and session-history origin version, and differs in
 the measured quantities: **47,634** output tokens, **48** tool invocations.
 
 > **The two runs are matched on the identity fields that ARE observable.**
-> The ≈5.57× wall-clock speedup remains **unattributed** — the observable
-> identities are equal, so the speedup cannot be explained by a model,
-> quantization, repository or provider difference; it remains attributable only
-> to the **unobservable** difference (the served model / quantization /
-> inference configuration). That is precisely what C4 now instruments.
+>
+> **CORRECTION01 — the causal claim is withdrawn.** The pre-correction report
+> stated that the speedup "must lie in the **unobservable** served-model /
+> quantization / inference configuration". That does **not** follow. The
+> observable identity fields being equal rules OUT a provider / model-id /
+> branch / repository / session-history difference, but it does not rule out:
+>
+> - a different **reasoning path** (the same task may take a different path);
+> - a different **number of tool calls** (48 vs 209 — the runs are not the same
+>   workload);
+> - a different **compaction behaviour**;
+> - **stochastic generation** at the provider.
+>
+> The ≈5.57× wall-clock speedup therefore **remains causally unattributed**.
+> It is an observed fact, not an attributed one. C4's identity capture
+> instruments the unobservable gap; it does not close it.
 
-### 6.2 The crosswalk
+**The two runs also did NOT complete equivalently.** The original run's
+session status is `failed`; the new run's is `completed`. Both remain
+legitimate performance observations, but they are **not** confirmed equivalent
+completion outcomes, and the crosswalk reflects that.
+
+### 6.2 The crosswalk (CORRECTED — P0-1)
 
 The machine-readable manifest is
 `TRACE-QUAL01-EVIDENCE-CROSSWALK.json` (schema
-`cline.roundc-trace-qual01-evidence-crosswalk.v1`), generated deterministically
+`cline.roundc-trace-qual01-evidence-crosswalk.v2`), generated deterministically
 by `scripts/roundc-trace-qual01-evidence-crosswalk.py` from the two recovered
-transcripts and the Helm-render receipt.
+transcripts and the Helm-render receipts.
 
-**Result: 7 `EQUIVALENT`, 3 `STRONGER`, 0 `WEAKER`, 0 `UNVERIFIED`.**
+#### 6.2.1 The evidence semantics that were wrong
+
+The pre-correction generator's `observed_tool_evidence()` read **only the
+`tool_use` inputs** and never joined them to their `tool_result` outputs. Its
+classification was effectively:
+
+```
+original_covers = len(original_matches) > 0
+new_covers      = len(new_matches) > 0
+status = "EQUIVALENT" if original_covers and new_covers else "WEAKER"
+```
+
+A command that merely **mentioned** `timeout`, `mvn` or `password` qualified as
+evidence — even when that command **failed**, returned **irrelevant** output, or
+was **never executed**. The byte-identical regeneration demonstrated the
+**reproducibility** of the algorithm; it could never demonstrate its
+**validity**.
+
+#### 6.2.2 The corrected evidence semantics
+
+| Subject | Pre-correction | Corrected |
+|---|---|---|
+| Tool evidence | any `tool_use` whose **input** matched a keyword | a tool invocation that was **EXECUTED**, whose result **did not fail**, and whose **observed output** carries the subject's evidence |
+| R5 discriminator | identifiers counted in the **command inputs** | identifiers **observed** in a successful tool result in BOTH runs **AND stated in BOTH runs' final reports** **AND reconciled** against a tracked source artifact |
+| R1 / R9 / R10 | `STRONGER` whenever a render file existed | `STRONGER` only when the render carries the subject's **exact semantic evidence** |
+| Helm hooks | `len(re.findall(r"helm\.sh/hook", text))` | the **distinct `helm.sh/hook` annotation only**; the `hook-weight` count is reported **separately** |
+
+#### 6.2.3 The corrected result
+
+**Result: 6 `EQUIVALENT`, 3 `STRONGER`, 1 `WEAKER`, 0 `UNVERIFIED`.**
 
 | ID | Minimum evidence requirement | Status | Note |
 |---|---|---|---|
-| **R1** | Effective Helm-rendered image and CI/manual-upgrade distinction | **STRONGER** | An **offline** pinned Helm render was really executed (see §6.3). The original run's 159 R1-related tool invocations are matched by 28 in the new run. |
-| **R2** | Carrier timeout path, synchronous execution, real mitigations | **EQUIVALENT** | Both runs observed the same carrier-timeout path and the same synchronous execution; both findings faithfully represent it. |
-| **R3** | DB pool invariant and enforcement/absence evidence | **EQUIVALENT** | The pool invariant and its absence-of-enforcement evidence are observed identically in both transcripts. |
-| **R4** | Actual build/start paths and persisted build settings | **EQUIVALENT** | Both runs exercised the same build/start paths and the same persisted settings. |
-| **R5** | Exact six index identifiers reconciled with source artifacts | **STRONGER** | The original run's exact tool evidence for all six index names was recovered and reconciled against the original final report, the new report, and the tracked source/changelog artifacts. **No unsupported name substitution was found.** |
-| **R6** | Repository retention paths and explicit external-state unknown | **EQUIVALENT** | Both runs observed the same retention paths; both record external state as explicitly unknown. |
-| **R7** | Maven/CI execution evidence for Java tests | **EQUIVALENT** | The same Maven/CI execution evidence was observed in both. |
-| **R8** | Committed secret exposure, without credential validation | **EQUIVALENT** | Both runs observed the committed secret exposure; neither validated the credential (and neither attempts to). |
+| **R1** | Effective Helm-rendered image and CI/manual-upgrade distinction | **STRONGER** | The production render applied `-f values.yaml -f values-prod.yaml` and resolved the digest-pinned CR.yandex image; the **no-image-override** render resolves the chart's default `quay.io/keycloak/keycloak:26.0.7` — the manual-upgrade failure mechanism, observed. |
+| **R2** | Carrier timeout path, synchronous execution, real mitigations | **EQUIVALENT** | Both runs' successful tool results carried the carrier-timeout evidence. |
+| **R3** | DB pool invariant and enforcement/absence evidence | **EQUIVALENT** | The pool invariant evidence is observed in both runs' successful tool results. |
+| **R4** | Actual build/start paths and persisted build settings | **EQUIVALENT** | Both runs' successful tool results carried the build/start-path evidence. |
+| **R5** | Exact six index identifiers reconciled with source artifacts | **WEAKER** | **Only 1 of the 6 identifiers reconciles.** The other five are absent from one or both runs' final reports even though the commands observed them. See §6.4. |
+| **R6** | Repository retention paths and explicit external-state unknown | **EQUIVALENT** | Both runs' successful tool results carried the retention-path evidence. |
+| **R7** | Maven/CI execution evidence for Java tests | **EQUIVALENT** | Both runs' successful tool results carried the Maven/CI execution evidence. |
+| **R8** | Committed secret exposure, without credential validation | **EQUIVALENT** | Both runs' successful tool results carried the committed-secret evidence. |
 | **R9** | Effective chart security defaults and NetworkPolicy/PDB coverage | **STRONGER** | The render proves the **effective** chart defaults: `runAsNonRoot: true`, **0** PodDisruptionBudget, **0** NetworkPolicy — the effective result, not the documentation. |
-| **R10** | Actual hook semantics, rollback behavior and watcher implementation | **STRONGER** | The render shows **2** hooks present; the source-backed hook semantics, rollback behavior and watcher implementation are reconciled in both runs. |
+| **R10** | Actual hook semantics, rollback behavior and watcher implementation | **STRONGER** | The **real** hook count is **0** (never the `hook-weight` count of 2), and the watcher's rendered semantics were observed in the **dev** watcher render. See §6.3. |
 
 Each row in the JSON distinguishes the original source observation, the new
 source observation, whether equivalent verification occurred, whether the final
 finding faithfully represents that evidence, the missing/weaker verification,
 and the final comparability judgment. It is a **qualification manifest**, not a
-finding-scoring framework.
+finding-scoring framework. The manifest now also carries an
+`evidenceSemantics` block that states, in the artifact itself, exactly what
+counts as evidence.
 
-
-### 6.3 The R1 discriminator — a real offline Helm render
+### 6.3 The R1 / R9 / R10 discriminators — the offline Helm renders (CORRECTED — P0-2)
 
 Executed in an isolated scratch directory against the **exact pinned chart**
 and the relevant repository values. **No Kubernetes contact, no `helm upgrade`,
 no production write, no credential acquisition.**
 
-| Property | Value |
-|---|---|
-| Render size | **17,879 bytes** |
-| Render SHA-256 | `eed882263e140363ae9f3ebc8795bc4042f20f18889ec5469fd499e5fdd67d65` |
-| Chart version | `keycloak-roz 7.0.1` (dep `keycloakx 7.0.1`, appVersion `26.3.1`) |
-| Chart source SHA | `42de653b59708e712d694aeb9732f822b7f8fe5b` |
-| Image | `cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz@sha256:0000…0000` (**digest-pinned**) |
-| `runAsNonRoot` | `true` |
-| PodDisruptionBudget count | **0** |
-| NetworkPolicy count | **0** |
-| Hook count | **2** |
-| Rendered kinds | ConfigMap 1, ExternalSecret 2, Ingress 2, SecretStore 1, Service 2, ServiceAccount 1, ServiceMonitor 1, StatefulSet 1 |
+#### 6.3.1 The hook count was wrong
 
-**Exact reproduction** (isolated scratch dir, the vendored `keycloakx-7.0.1.tgz`
-dependency, no network, no cluster contact, no `helm upgrade`, no production
-write, no credential acquisition):
+The pre-correction report claimed **"helm hook count: 2"**. That number came
+from `len(re.findall(r"helm\.sh/hook", text))`, which also matches
+`helm.sh/hook-weight`. **Both** of the "2 hooks" were `hook-weight`
+annotations:
+
+```
+$ grep -n 'helm\.sh/hook' <rendered>
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-weight": "-10"
+```
+
+Helm designates a hook with the **distinct** `helm.sh/hook` annotation;
+`helm.sh/hook-weight` only **orders** hooks that already exist and never makes
+a resource a hook. The minimal counterexample the review identified — a
+ConfigMap whose only annotation is `helm.sh/hook-weight` — counts as **one**
+hook under the old regex and **zero** under the corrected one.
+
+**The corrected count is `0` real hooks.** The chart contains **no Helm hooks
+at all**: the profiler-watcher resources carry only `helm.sh/hook-weight`.
+The corrected crosswalk reports `hookCount: 0` and `hookWeightCount: 2`
+**separately**.
+
+The watcher render (the `dev` environment, where the watcher is actually
+rendered) confirms this at scale: `hookCount: 0`, `hookWeightCount: 7`.
+
+#### 6.3.2 The production-values provenance was missing
+
+The pre-correction render recipe used `-f values.yaml` **only**. The
+production CI (`.gitlab-ci.yml:258-269`) applies:
+
+```
+-f values.yaml
+$( [ "$CI_ENVIRONMENT_NAME" = "prod" ] && echo "-f values-prod.yaml" )
+```
+
+So the pre-correction render did **not** exercise the production values
+combination. The corrected render does, and the difference is observable:
+the production render adds the `nodeSelector` and `tolerations` that
+`values-prod.yaml` supplies.
+
+#### 6.3.3 The three renders are distinct artifacts
+
+| Artifact | Values | Image overrides | Resolved image | `valuesFiles` | `productionValuesApplied` |
+|---|---|---|---|---|---|
+| **placeholder-digest** (pre-correction) | `values.yaml` | yes | `cr.yandex/…/keycloak-roz@sha256:0000…0000` | `values.yaml` | **false** |
+| **production** (corrected) | `values.yaml` + `values-prod.yaml` | yes | `cr.yandex/…/keycloak-roz@sha256:0000…0000` | `values.yaml`, `values-prod.yaml` | **true** |
+| **no-image-override** | `values.yaml` + `values-prod.yaml` | **no** | `quay.io/keycloak/keycloak:26.0.7` | `values.yaml`, `values-prod.yaml` | **true** |
+| **watcher** (`dev`) | `values.yaml` + `values-dev.yaml` | n/a | — | — | — |
+
+The **no-image-override** render is the R1 mechanism itself: without the CI
+image overrides the chart resolves its **default** upstream image, not the
+CR.yandex image. The crosswalk now records both renders separately and
+requires the no-image-override render before awarding R1 `STRONGER`.
+
+The **placeholder digest** remains recorded as a placeholder. It proves the
+chart pins by digest and resolves the repository/tag/digest form; it does not
+observe the serving cluster's effective digest, and the two are not conflated.
+
+#### 6.3.4 The watcher renders only in `dev`
+
+The chart's `profiler-watcher.yaml` renders **only** when `global.env == "dev"`
+AND `profilerWatcher.enabled == true` — a load-bearing dev/pp/prod security
+boundary. A prod render therefore legitimately contains **zero** watcher
+resources and cannot establish the watcher's rendered semantics on its own.
+The corrected crosswalk consults the **distinct** dev watcher render for R10.
+
+#### 6.3.5 The renders (reproduced)
 
 ```bash
+# The production render (production values applied).
 helm template keycloak-roz-prod . \
   --namespace=roz-keycloak-prod \
   --set keycloakx.image.repository=cr.yandex/crp6iqpcb9uq94n6k81o/keycloak-roz \
   --set keycloakx.image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
   --set global.env=prod \
-  --set profilerWatcher.enabled=false \
-  -f values.yaml
+  -f values.yaml -f values-prod.yaml
+
+# The no-image-override render (the R1 manual-upgrade mechanism).
+helm template keycloak-roz-prod . \
+  --namespace=roz-keycloak-prod \
+  --set global.env=prod \
+  -f values.yaml -f values-prod.yaml
+
+# The watcher render (the watcher only exists in `dev`).
+helm template keycloak-roz-dev . \
+  --namespace=roz-keycloak-dev \
+  --set global.env=dev --set profilerWatcher.enabled=true \
+  -f values.yaml -f values-dev.yaml
 ```
 
-The crosswalk regenerates **byte-identically** from this render plus the two
-recovered transcripts:
+| Property | Production render | No-image-override render | Watcher (`dev`) render |
+|---|---:|---:|---:|
+| Render bytes | 18,164 | 18,081 | 33,073 |
+| **Real hook count** (`helm.sh/hook`) | **0** | **0** | **0** |
+| Hook-weight count | 2 | 2 | 7 |
+| Watcher resources rendered | no | no | **yes** |
+| PodDisruptionBudget count | 0 | 0 | 0 |
+| NetworkPolicy count | 0 | 0 | 0 |
+| Resolved image | `cr.yandex/…@sha256:0000…` | `quay.io/keycloak/keycloak:26.0.7` | n/a |
+
+The crosswalk regenerates **byte-identically**:
 
 ```
 $ python3 scripts/roundc-trace-qual01-evidence-crosswalk.py \
     --original-session-dir ~/.vscodium-roz/cline-data/sessions/1794702518894_gui73 \
     --new-session-dir      ~/.vscodium-roz/cline-data/sessions/1794780088950_tc1vx \
     --keycloak-repo        ~/Projects/Znanie/keycloak \
-    --render-path          /tmp/qual01-render-final/rendered.yaml \
+    --render-path          …/rendered-prod.yaml \
+    --no-image-override-render-path …/rendered-noimageoverride.yaml \
+    --watcher-render-path  …/rendered-watcher-dev.yaml \
+    --values-file values.yaml --values-file values-prod.yaml \
+    --production-values-applied \
     --chart-version 'keycloak-roz 7.0.1 (dep keycloakx 7.0.1, appVersion 26.3.1)' \
     --chart-source-sha 42de653b59708e712d694aeb9732f822b7f8fe5b \
     --out TRACE-QUAL01-EVIDENCE-CROSSWALK.json
 wrote TRACE-QUAL01-EVIDENCE-CROSSWALK.json
-  EQUIVALENT: 7
+  EQUIVALENT: 6
   STRONGER: 3
+  WEAKER: 1
 
 $ diff -q <regenerated> TRACE-QUAL01-EVIDENCE-CROSSWALK.json
 DETERMINISTIC: byte-identical regeneration
 ```
 
-**The digest is a placeholder in the chart's pinned values.** The render proves
-the chart **pins by digest** and resolves the repository/tag/digest form
-correctly; it cannot observe the **serving cluster's** effective digest. That
-distinction is preserved in the crosswalk rather than papered over.
-
 > **A note on the degradation path.** The generator deliberately degrades a row
 > to `UNVERIFIED` when the render receipt is absent, rather than inventing the
-> evidence. This was exercised: regenerating **without** `--render-path`
-> yields `EQUIVALENT: 7, UNVERIFIED: 3` — R1, R9 and R10 lose their
-> `STRONGER` judgment and become `UNVERIFIED`. That is the intended
-> fail-closed behaviour, and it confirms the `STRONGER` rows are earned by the
-> render rather than asserted by the script.
+> evidence. Regenerating **without** `--render-path` degrades R1, R9 and R10 —
+> the rows that depend on a render now require the **exact** semantic
+> evidence, so a missing render yields `WEAKER`/`UNVERIFIED`, never `STRONGER`.
 
+### 6.4 The R5 discriminator — the six index identifiers (CORRECTED — P0-1)
 
-### 6.4 The R5 discriminator — the six index identifiers
+The pre-correction generator counted the identifiers in the **command inputs**
+and cross-checked them against the tracked source artifacts. That proves the
+model **typed** the names; it does not prove the run **reported** them.
 
-The original run's exact tool evidence for the six index names was recovered
-from the original transcript and reconciled against:
+The corrected discriminator requires all three of:
 
-1. the original final report,
-2. the new report, and
-3. the tracked Keycloak source/changelog artifacts.
+1. the identifier was **observed** in a **successful** tool result in **both**
+   runs,
+2. the identifier is **stated in both runs' final reports**, and
+3. the identifier reconciles against a **tracked source artifact**.
 
-**All six identifiers are present in BOTH runs**, and they reconcile against
-the tracked source artifacts. **No name substitution unsupported by source
-evidence was found.** The original transcript was not repaired or regenerated.
+The final reports are recovered from the transcripts themselves: the original
+run's final assistant report is **18,065 chars** (sha256 `618f78fe…`) and the
+new run's is **16,554 chars** (sha256 `555c5c28…`).
+
+**Only 1 of the 6 identifiers reconciles.** The crosswalk now reports:
+
+| Identifier | Observed (orig / new) | In original report | In new report | Source artifacts | Reconciled |
+|---|---|---|---|---:|---|
+| `idx_pm_token_code_realm_ip_type_created_at_inc_id` | 16 / 4 | **no** | yes | 3 | **no** |
+| `idx_pmtc_lookup_recent_unconfirmed_sms` | 16 / 3 | yes | yes | 3 | **yes** |
+| `idx_pmtc_lookup_recent_unconfirmed_sms_exp` | 16 / 3 | **no** | **no** | 3 | **no** |
+| `idx_user_attribute_name_lower_value` | 17 / 3 | **no** | yes | 3 | **no** |
+| `idx_user_entity_realm_email` | 17 / 3 | **no** | yes | 3 | **no** |
+| `idx_user_entity_realm_email_cover` | 16 / 3 | **no** | **no** | 3 | **no** |
+
+This is a **real, source-backed finding**, not a tooling artifact: both runs
+**observed** all six identifiers in their tool output, but the runs'
+**published reports** do not state five of them. The R5 requirement is
+"Exact six index identifiers reconciled with source artifacts" — that
+requirement is **not met by the new run relative to the original**, so the row
+is `WEAKER`.
+
+The pre-correction report's claim that the R5 row was `STRONGER` (and the
+machine manifest's `EQUIVALENT`) were both inconsistent with each other, and
+neither reflected the reports. The row is now `WEAKER` in the manifest, and
+the human-readable table agrees.
+
+**This is the single blocking item for the successor benchmark.** It does not
+invalidate the compaction repair; it means the successor's *investigation
+quality* is not yet demonstrated to match the original's on the one subject
+whose requirement is about **exact reporting fidelity**.
 
 ---
-
 ## 7. Executable gates (C6)
 
 All gates were executed with **Bun** as the task runner and **Node ≥ 22** as
@@ -523,6 +739,11 @@ the runtime, on the macOS host (`darwin`), against the ACT working tree.
 | 8 | Metadata privacy and omission | `roundc-latency-trace-identity.qual01.test.ts` | **PASS (7/7)** |
 | 9 | Focused typecheck / lint / build | see §7.2 | **PASS** |
 | 10 | Baseline comparison, zero ACT-owned failures | see §7.1 | **PASS — 0 regressions** |
+| **11** | **CORRECTION01 — evidence-crosswalk RED → GREEN** | `python3 -m unittest scripts.tests.test_roundc_trace_qual01_evidence_crosswalk` | **RED 12 failed → GREEN 14 passed** |
+| **12** | **CORRECTION01 — timing classification RED → GREEN** | `bun x vitest run src/agent-runtime.provider-first-text-classification.correction01.test.ts` | **RED 5 failed → GREEN 6 passed** |
+| **13** | **CORRECTION01 — latency module regression** | `bun x vitest run src/observability/latency/` | **PASS — 88/88** |
+| **14** | **CORRECTION01 — agents package regression** | `bun x vitest run` (sdk/packages/agents) | **PASS — 595/595** |
+| **15** | **CORRECTION01 — vscode Round C regression** | `bun x vitest run src/sdk/__tests__/roundc-latency-trace-*.qual01.test.ts src/sdk/__tests__/roundc-latency-trace-dogfood-activation.test.ts` | **PASS — 51/51** |
 
       Tests  7 passed (7)
 EXIT=0
@@ -537,9 +758,14 @@ and is not surfaced in the public extension settings or the webview protocol.
 | 5 | `apps/vscode/src/sdk/roundc-latency-trace-runtime.ts` | Both channels are added to `COMPOSABLE_SINK_CHANNELS` — the compile-time exhaustiveness gate makes their omission a **compile error**. |
 | 6 | `sdk/packages/core/src/observability/latency/latency-trace.ts` | `generatedTextLength` is allowlisted (a size, never content). |
 
-**`LIVE_UNOBSERVABLE` is NOT the outcome:** the provider **does** expose an
-authoritative first-token event. The measurement was *unavailable* because
-nothing observed it — that is now repaired.
+**CORRECTION01 — the truthfulness of the claim.** `LIVE_UNOBSERVABLE` is not
+the outcome, but neither is "the provider exposes an authoritative first-token
+event". The provider exposes an observable **first-stream-event** and an
+observable **first-generated-text** seam. The measurement was *unavailable*
+because nothing observed it — that is now repaired — and the observation is
+labelled for what it measures. The **server-side TTFT remains
+`UNAVAILABLE_FROM_TRACE`**, because the client-side seam cannot observe the
+provider's own token accounting.
 
 ### 7.1 The baseline comparison (C6.10)
 
@@ -700,33 +926,37 @@ statement) is `10-closure-commits.txt`.
 
 ### 9.1 Exit classification
 
-**`PASS_WITH_NONBLOCKING_RESIDUE`**
+**Compaction repair: `PASS_WITH_NONBLOCKING_RESIDUE`** —
+**Successor benchmark: `NO-GO`** (the R5 reconciliation is open).
 
-All substantive exit conditions are met:
+All substantive exit conditions for the **compaction repair** are met:
 
 - ✅ The compaction lifecycle is corrected with a **production-seam RED → GREEN**
   proof (RED: 20 no-op checks ⇒ 20 open spans; GREEN: 0 open spans), plus a
   **necessity ablation** showing the symptom returns identically when the
   correction is removed.
-- ✅ The provider event capability is **truthfully classified**: true TTFT is
-  **AVAILABLE** at the existing `text-delta` seam and is now observed;
-  `LIVE_UNOBSERVABLE` does **not** apply.
+- ✅ The provider event capability is **truthfully classified**: the
+  first-stream-event and first-generated-**text** boundaries are observable and
+  now observed; the **server-side TTFT is `UNAVAILABLE_FROM_TRACE`** and is not
+  claimed.
 - ✅ The capture identity is **bound**, with every unavailable field explicitly
   marked `UNAVAILABLE_FROM_TRACE` and never inferred.
-- ✅ The ten-risk evidence contract is **ready for a matched run**
-  (7 EQUIVALENT, 3 STRONGER, 0 WEAKER, 0 UNVERIFIED), with the R1 offline
-  Helm render really executed.
+- ⚠️ The ten-risk evidence contract is **NOT yet ready for a matched run**:
+  the corrected crosswalk is **6 EQUIVALENT, 3 STRONGER, 1 WEAKER** — R5 does
+  not reconcile.
 
 ### 9.2 The recorded residue (not certified)
 
 | # | Residue | Why it is non-blocking |
 |---|---|---|
-| 1 | The **served** (provider-reported) model id is `UNAVAILABLE_FROM_TRACE`. | The SDK does not surface it at any existing channel. It is now recorded as explicitly unavailable rather than inferred, so the successor run will say so truthfully instead of implying a match. |
+| 1 | The **served** (provider-reported) model id is `UNAVAILABLE_FROM_TRACE`. | The SDK does not surface it at any existing channel. It is now recorded as explicitly unavailable rather than inferred. |
 | 2 | The **quantization** is `UNAVAILABLE_FROM_TRACE`. | Same. The requested id contains `iq3_s`, but a requested id is not a served-quantization receipt and is **not** treated as one. |
 | 3 | The **effective sampling/reasoning settings** are `UNAVAILABLE_FROM_TRACE`. | Not surfaced by the configured provider session's dogfood channel. |
 | 4 | The **serving** image digest is unavailable from the offline render. | The render proves the chart's **digest-pinned** repository/tag/digest form and the **effective** chart defaults; the cluster's serving digest is a runtime fact no offline render can observe. |
-| 5 | The **≈5.57× speedup remains causally unattributed.** | This is a property of the *evidence*, not a defect in the repair. The observable identity fields are **equal** across the two runs, so the speedup cannot be explained by provider/model-id/branch/repository/session-history differences — it must lie in the **unobservable** served-model/quantization/inference configuration. C4 now instruments exactly that gap so the successor run can close it. |
-| 6 | The historical 45-start / 2-end trace retains its 43 integrity failures. | **By design.** The historical artifact is immutable and must not be rewritten. The correction applies only to future captures. |
+| 5 | The **server-side TTFT** is `UNAVAILABLE_FROM_TRACE`. | The client-side seam observes the first stream event and the first generated text; it cannot observe the provider's own first-token accounting. Neither client-side boundary is reported as an authoritative TTFT. |
+| 6 | The **≈5.57× speedup remains causally unattributed.** | This is a property of the *evidence*, not a defect in the repair. The observable identity fields are **equal** across the two runs, which rules OUT a provider/model-id/branch/repository/session-history difference — but it does **not** establish that the difference lies in the unobservable served-model/quantization/inference configuration. Different reasoning paths, a different number of tool calls (48 vs 209), different compaction behaviour and stochastic generation remain possible explanations. |
+| 7 | The historical 45-start / 2-end trace retains its 43 integrity failures. | **By design.** The historical artifact is immutable and must not be rewritten. The correction applies only to future captures. |
+| 8 | The **R5 identifier reconciliation is open** (1 of 6 reconciles). | **This is the one blocking item** for the successor benchmark — see §6.4 and §9.3. |
 
 - The protected stash (`stash@{0}`) is **preserved and not popped**.
 - The temporary baseline worktree `/tmp/qual01-baseline` is **removed** at
@@ -737,45 +967,64 @@ All substantive exit conditions are met:
 
 ### 9.3 GO / NO-GO for the successor matched Round C benchmark
 
-## ✅ **GO**
+## ❌ **NO-GO**
 
-The successor matched Round C benchmark is **GO**, subject to these explicit
-conditions:
+The pre-correction report returned **GO**. CORRECTION01 withdraws that GO. The
+successor matched Round C benchmark is **NO-GO** until the R5 reconciliation is
+closed, for these reasons:
 
-1. **The successor run MUST be executed with a freshly built and installed VSIX
-   from the ACT's implementation HEAD** (the receipt in
-   `09-closure-identity.txt` records the *baseline* artifact; the successor
-   must record its own). The installed extension must not remain the
-   `b0b18da6c` build, or the run measures the *old*, defective tracer.
-2. **The successor run MUST verify in its capture that** `compaction` has
-   **balanced** start/end counts and **zero** `"span left open"` integrity
-   failures. A non-zero count means the correction did not reach the deployed
-   artifact — **NO-GO**, do not report the timings.
-3. **The successor run MUST verify that `provider_first_response` and
-   `provider_first_token` are now `available`** (not `unavailable`). If both
-   are still unavailable, the provider-event instrumentation did not reach the
-   deployed artifact — **NO-GO** for any TTFT claim.
-4. **The successor run MUST compare its `identity` record against the
-   original's observable fields** (provider family, requested model id, branch,
-   repository, session-history origin version). If any observable identity
-   field differs, the run is **not** matched and the comparison is invalid
-   until the difference is explained.
-5. **The successor run MUST record the `UNAVAILABLE_FROM_TRACE` fields as
-   unavailable**, and MUST NOT fill them in from the model name. If the
-   served model / quantization can be observed, it must come from a pipeline
-   receipt (e.g. a Strata config receipt), not from a trace inference.
-6. **The R1 offline Helm render MUST be re-executed against the successor's
-   pinned chart and repository values** (the exact recipe in §6.3), and the
-   effective repository/tag/digest captured. The chart's placeholder digest
-   must be recorded as such.
-7. **The R1–R10 crosswalk MUST be regenerated** by
+1. **The evidence-equivalence contract is not met.** The corrected crosswalk
+   contains a **`WEAKER`** row (R5). A matched benchmark requires the successor
+   to reproduce the original's investigation quality on every subject; the
+   successor's R5 report does not state five of the six index identifiers the
+   original's evidence contract requires (§6.4).
+2. **The "2 hooks" finding was false.** The corrected count is **0** real Helm
+   hooks; both of the previously reported "hooks" were `helm.sh/hook-weight`
+   annotations. A benchmark built on that number would have propagated a false
+   finding (§6.3.1).
+3. **The timing metric was mislabelled.** The first-text boundary is not an
+   authoritative TTFT and the server-side TTFT is `UNAVAILABLE_FROM_TRACE`. A
+   benchmark claiming a TTFT improvement on that basis would have been a
+   fabricated measurement (§4.2).
+
+**The compaction repair itself is accepted**, and no compaction-lifecycle work
+is reopened by this verdict.
+
+#### The conditions for lifting the NO-GO
+
+The NO-GO is lifted when, and only when:
+
+1. **The R5 reconciliation is closed** — the successor run's final report
+   states all six source-backed index identifiers, and the crosswalk
+   regenerates with **no `WEAKER` and no `UNVERIFIED`** rows.
+2. **The successor run is executed with a freshly built and installed VSIX from
+   the corrected implementation HEAD**, and records its own artifact receipt.
+   The installed extension must not remain the `b0b18da6c` build.
+3. **The successor run verifies** that `compaction` has **balanced**
+   start/end counts and **zero** `"span left open"` integrity failures. A
+   non-zero count means the correction did not reach the deployed artifact —
+   **NO-GO**, do not report the timings.
+4. **The successor run verifies** that `provider_first_response` and
+   `provider_first_text` are now `available` (not `unavailable`), and that the
+   `serverSideTtft` marker reads `UNAVAILABLE_FROM_TRACE`. If both are still
+   unavailable, the instrumentation did not reach the deployed artifact.
+5. **The successor run compares its `identity` record** against the original's
+   observable fields (provider family, requested model id, branch, repository,
+   session-history origin version). Any observable difference makes the run
+   **not** matched until explained.
+6. **The successor run records the `UNAVAILABLE_FROM_TRACE` fields as
+   unavailable** and MUST NOT fill them in from the model name. If the served
+   model / quantization can be observed, it must come from a pipeline receipt,
+   not from a trace inference.
+7. **The R1 / R9 / R10 renders are re-executed** against the successor's pinned
+   chart and repository values, with the **production values applied**, the
+   **no-image-override** render captured separately, the **watcher** render
+   captured in the environment where the watcher renders, and the **real** hook
+   count (never the hook-weight count) recorded.
+8. **The R1–R10 crosswalk is regenerated** by
    `scripts/roundc-trace-qual01-evidence-crosswalk.py` against the successor's
    transcript, and must remain free of `WEAKER` and `UNVERIFIED` rows before
    any comparative finding is published.
-
-**If any of conditions 1–3 fails, the successor benchmark is NO-GO** — the
-measurements would be produced by the same defective tracer this ACT repaired,
-and would not be comparable.
 
 ### 9.4 What this ACT explicitly did NOT do
 
@@ -791,6 +1040,7 @@ and would not be comparable.
 - ❌ Did **not** fix any Keycloak finding, re-run the Round C benchmark,
   optimize provider inference, or touch the shell-execution latency clusters.
 - ❌ Did **not** push, open a PR, deploy, install a new VSIX, or run Strata.
+- ❌ Did **not** reopen or alter the compaction-lifecycle repair.
 
-- ✅ All ten executable gates pass; the baseline comparison shows **zero**
+- ✅ All executable gates pass; the baseline comparison shows **zero**
   ACT-owned regressions.

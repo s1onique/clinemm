@@ -1,0 +1,148 @@
+test_B1_hook_weight_is_not_a_hook (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B1_hook_weight_is_not_a_hook)
+B1: a manifest with ONLY helm.sh/hook-weight has ZERO hooks. ... ERROR
+test_B2_hook_annotation_is_a_hook (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B2_hook_annotation_is_a_hook)
+B2: the distinct helm.sh/hook annotation IS a hook. ... ERROR
+test_B3_hook_count_is_exact (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B3_hook_count_is_exact)
+B3: one hook-weight plus one hook counts exactly ONE hook. ... ERROR
+test_B3b_hook_weight_only_matches_do_not_leak_into_hook_count (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B3b_hook_weight_only_matches_do_not_leak_into_hook_count)
+B3b: the naive substring regex must not be the hook counter. ... ERROR
+test_A5_report_must_carry_the_identifier (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.R5FinalReportTests.test_A5_report_must_carry_the_identifier)
+A5: the identifier in the command but NOT in the report is not reconciled. ... ok
+test_A5b_final_report_is_actually_read (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.R5FinalReportTests.test_A5b_final_report_is_actually_read)
+A5b: the crosswalk records the final report it reconciled against. ... FAIL
+test_A6_report_carrying_the_identifier_reconciles (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.R5FinalReportTests.test_A6_report_carrying_the_identifier_reconciles)
+A6: the identifier in BOTH the command and the report reconciles. ... FAIL
+test_A7_render_alone_does_not_award_stronger (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderAutoStrongerTests.test_A7_render_alone_does_not_award_stronger)
+A7: an EMPTY render must not certify R1/R9/R10 as STRONGER. ... FAIL
+test_B4_production_values_provenance_is_recorded (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderProvenanceTests.test_B4_production_values_provenance_is_recorded)
+B4: the receipt states WHICH values files produced the render. ... ERROR
+test_B5_placeholder_and_no_override_renders_are_distinguished (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderProvenanceTests.test_B5_placeholder_and_no_override_renders_are_distinguished)
+B5: a placeholder-digest render is not the no-image-override render. ... ERROR
+test_A1_failed_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A1_failed_tool_result_is_not_evidence)
+A1: a FAILED command that merely MENTIONS the keyword is not evidence. ... FAIL
+test_A2_irrelevant_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A2_irrelevant_tool_result_is_not_evidence)
+A2: a SUCCESSFUL command whose OUTPUT is irrelevant is not evidence. ... FAIL
+test_A3_successful_on_topic_tool_result_is_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A3_successful_on_topic_tool_result_is_evidence)
+A3: a SUCCESSFUL command whose OUTPUT carries the evidence IS evidence. ... ok
+test_A4_tool_use_without_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A4_tool_use_without_tool_result_is_not_evidence)
+A4: a tool_use with NO tool_result at all is not evidence. ... FAIL
+
+======================================================================
+ERROR: test_B1_hook_weight_is_not_a_hook (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B1_hook_weight_is_not_a_hook)
+B1: a manifest with ONLY helm.sh/hook-weight has ZERO hooks.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 341, in test_B1_hook_weight_is_not_a_hook
+    receipt = crosswalk.render_receipt_from_text(manifest)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'crosswalk' has no attribute 'render_receipt_from_text'
+
+======================================================================
+ERROR: test_B2_hook_annotation_is_a_hook (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B2_hook_annotation_is_a_hook)
+B2: the distinct helm.sh/hook annotation IS a hook.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 360, in test_B2_hook_annotation_is_a_hook
+    receipt = crosswalk.render_receipt_from_text(manifest)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'crosswalk' has no attribute 'render_receipt_from_text'
+
+======================================================================
+ERROR: test_B3_hook_count_is_exact (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B3_hook_count_is_exact)
+B3: one hook-weight plus one hook counts exactly ONE hook.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 381, in test_B3_hook_count_is_exact
+    receipt = crosswalk.render_receipt_from_text(manifest)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'crosswalk' has no attribute 'render_receipt_from_text'
+
+======================================================================
+ERROR: test_B3b_hook_weight_only_matches_do_not_leak_into_hook_count (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.HelmHookCountingTests.test_B3b_hook_weight_only_matches_do_not_leak_into_hook_count)
+B3b: the naive substring regex must not be the hook counter.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 387, in test_B3b_hook_weight_only_matches_do_not_leak_into_hook_count
+    receipt = crosswalk.render_receipt_from_text(manifest)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'crosswalk' has no attribute 'render_receipt_from_text'
+
+======================================================================
+ERROR: test_B4_production_values_provenance_is_recorded (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderProvenanceTests.test_B4_production_values_provenance_is_recorded)
+B4: the receipt states WHICH values files produced the render.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 410, in test_B4_production_values_provenance_is_recorded
+    receipt = crosswalk.render_receipt_from_text(self.RENDER)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'crosswalk' has no attribute 'render_receipt_from_text'
+
+======================================================================
+ERROR: test_B5_placeholder_and_no_override_renders_are_distinguished (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderProvenanceTests.test_B5_placeholder_and_no_override_renders_are_distinguished)
+B5: a placeholder-digest render is not the no-image-override render.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 425, in test_B5_placeholder_and_no_override_renders_are_distinguished
+    placeholder_receipt = crosswalk.render_receipt_from_text(placeholder)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'crosswalk' has no attribute 'render_receipt_from_text'
+
+======================================================================
+FAIL: test_A5b_final_report_is_actually_read (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.R5FinalReportTests.test_A5b_final_report_is_actually_read)
+A5b: the crosswalk records the final report it reconciled against.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 294, in test_A5b_final_report_is_actually_read
+    self.assertIn(
+AssertionError: 'finalReport' not found in {'id': 'R5', 'minimumEvidenceRequirement': 'Exact six index identifiers reconciled with source artifacts', 'discriminator': 'exact_identifier_reconciliation', 'originalSourceObservation': {'observedToolInvocations': 1, 'totalToolInvocations': 1, 'toolsUsed': ['run_commands']}, 'newSourceObservation': {'observedToolInvocations': 1, 'totalToolInvocations': 1, 'toolsUsed': ['run_commands']}, 'equivalentVerificationOccurred': 'UNVERIFIED', 'findingFaithfullyRepresentsEvidence': 'UNVERIFIED', 'missingOrWeakerVerification': 'one or more identifiers could not be reconciled against both runs and a tracked source artifact', 'comparabilityJudgment': 'UNVERIFIED', 'status': 'UNVERIFIED', 'evidenceReferences': [{'kind': 'session_transcript', 'sessionId': '1794702518894_gui73', 'messagesSha256': 'de09751b83534d3f0e2c935ab03209a13912535516eac1e30f07602624174645'}, {'kind': 'session_transcript', 'sessionId': '1794780088950_tc1vx', 'messagesSha256': 'de09751b83534d3f0e2c935ab03209a13912535516eac1e30f07602624174645'}], 'reconciledIdentifiers': [{'identifier': 'idx_pm_token_code_realm_ip_type_created_at_inc_id', 'originalRunOccurrences': 1, 'newRunOccurrences': 1, 'trackedSourceArtifacts': [], 'reconciled': False}, {'identifier': 'idx_pmtc_lookup_recent_unconfirmed_sms', 'originalRunOccurrences': 0, 'newRunOccurrences': 0, 'trackedSourceArtifacts': [], 'reconciled': False}, {'identifier': 'idx_pmtc_lookup_recent_unconfirmed_sms_exp', 'originalRunOccurrences': 0, 'newRunOccurrences': 0, 'trackedSourceArtifacts': [], 'reconciled': False}, {'identifier': 'idx_user_attribute_name_lower_value', 'originalRunOccurrences': 0, 'newRunOccurrences': 0, 'trackedSourceArtifacts': [], 'reconciled': False}, {'identifier': 'idx_user_entity_realm_email', 'originalRunOccurrences': 0, 'newRunOccurrences': 0, 'trackedSourceArtifacts': [], 'reconciled': False}, {'identifier': 'idx_user_entity_realm_email_cover', 'originalRunOccurrences': 0, 'newRunOccurrences': 0, 'trackedSourceArtifacts': [], 'reconciled': False}]} : R5 must record which final report it reconciled the identifiers against
+
+======================================================================
+FAIL: test_A6_report_carrying_the_identifier_reconciles (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.R5FinalReportTests.test_A6_report_carrying_the_identifier_reconciles)
+A6: the identifier in BOTH the command and the report reconciles.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 282, in test_A6_report_carrying_the_identifier_reconciles
+    self.assertTrue(
+AssertionError: False is not true : an identifier present in the command, the tool_result and the final report must reconcile
+
+======================================================================
+FAIL: test_A7_render_alone_does_not_award_stronger (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.RenderAutoStrongerTests.test_A7_render_alone_does_not_award_stronger)
+A7: an EMPTY render must not certify R1/R9/R10 as STRONGER.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 316, in test_A7_render_alone_does_not_award_stronger
+    self.assertNotEqual(
+AssertionError: 'STRONGER' == 'STRONGER' : R1 must not be STRONGER on the mere existence of a render
+
+======================================================================
+FAIL: test_A1_failed_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A1_failed_tool_result_is_not_evidence)
+A1: a FAILED command that merely MENTIONS the keyword is not evidence.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 174, in test_A1_failed_tool_result_is_not_evidence
+    self.assertNotEqual(
+AssertionError: 'EQUIVALENT' == 'EQUIVALENT' : a failed tool_result must not certify the R2 evidence as EQUIVALENT
+
+======================================================================
+FAIL: test_A2_irrelevant_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A2_irrelevant_tool_result_is_not_evidence)
+A2: a SUCCESSFUL command whose OUTPUT is irrelevant is not evidence.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 189, in test_A2_irrelevant_tool_result_is_not_evidence
+    self.assertNotEqual(
+AssertionError: 'EQUIVALENT' == 'EQUIVALENT' : a tool_result that does not carry the subject's evidence is not evidence
+
+======================================================================
+FAIL: test_A4_tool_use_without_tool_result_is_not_evidence (scripts.tests.test_roundc_trace_qual01_evidence_crosswalk.ToolResultCorrelationTests.test_A4_tool_use_without_tool_result_is_not_evidence)
+A4: a tool_use with NO tool_result at all is not evidence.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/scripts/tests/test_roundc_trace_qual01_evidence_crosswalk.py", line 226, in test_A4_tool_use_without_tool_result_is_not_evidence
+    self.assertNotEqual(
+AssertionError: 'EQUIVALENT' == 'EQUIVALENT' : a tool_use without any tool_result is not evidence
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.019s
+
+FAILED (failures=6, errors=6)
+EXIT=1

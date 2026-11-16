@@ -155,6 +155,7 @@ apps/examples/desktop-app/.cursor/settings.json
 .bun-install/
 
 scripts/__pycache__/
+scripts/tests/__pycache__/
 apps/vscode/~/
 .myc/
 tools/macos-host-helper/native/helper

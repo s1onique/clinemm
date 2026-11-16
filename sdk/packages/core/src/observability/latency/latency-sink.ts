@@ -410,13 +410,13 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 *
 	 * ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: the PROVIDER-side spans
 	 * (`provider_submitted`, `provider_first_response` and
-	 * `provider_first_token`) are NOT opened here. They are opened at the
+	 * `provider_first_text`) are NOT opened here. They are opened at the
 	 * ACTUAL SUBMISSION boundary ({@link onProviderRequestSubmitted}).
 	 *
 	 * Opening them here would anchor every provider timer at the start of
 	 * request preparation and charge the preparation cost to the provider:
-	 * a 250 ms preparation followed by 100 ms to the first token would
-	 * report a 350 ms time-to-first-token instead of the true 100 ms.
+	 * a 250 ms preparation followed by 100 ms to the first text would
+	 * report a 350 ms time-to-first-text instead of the true 100 ms.
 	 */
 	onModelRequestStart(observation: ModelBehaviorTraceObservation): void {
 		this.tracer.enter("request_preparation", observation.payload);
@@ -429,7 +429,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 *
 	 * - `provider_submitted` — the request is now in flight;
 	 * - `provider_first_response` — the first provider RESPONSE EVENT;
-	 * - `provider_first_token` — the first generated TOKEN.
+	 * - `provider_first_text` — the first generated TOKEN.
 	 *
 	 * The two first-event spans are closed only when the corresponding event
 	 * is observed. If it never is, the span stays open and the trace
@@ -443,7 +443,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	onProviderRequestSubmitted(observation: ModelBehaviorTraceObservation): void {
 		this.tracer.enter("provider_submitted", observation.payload);
 		this.tracer.enter("provider_first_response", observation.payload);
-		this.tracer.enter("provider_first_token", observation.payload);
+		this.tracer.enter("provider_first_text", observation.payload);
 	}
 
 	/**
@@ -484,14 +484,14 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 *
 	 * This closes the provider span.
 	 *
-	 * ## It does NOT fabricate a first-token measurement
+	 * ## It does NOT fabricate a first-text measurement
 	 *
 	 * The runtime reports ONE event when the provider's stream ends. The
 	 * first response EVENT and the first generated TOKEN are both
 	 * distinct instants from that, so neither is inferred here. If the
 	 * provider did not report them, they stay UNAVAILABLE — the trace
 	 * says so explicitly rather than carrying a zero-duration span
-	 * that would read as "the first token arrived at stream completion".
+	 * that would read as "the first text arrived at stream completion".
 	 */
 	onModelRequestFinish(observation: ModelBehaviorTraceObservation): void {
 		// `request_preparation` is closed at the provider-ready seam
@@ -506,7 +506,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 		// provider span is opened at the ACTUAL SUBMISSION boundary. A
 		// request that never reached submission has no provider span.
 		this.closeIfOpen("provider_submitted", observation.payload, "ok");
-		// The first response event and the first token are NOT inferred
+		// The first response event and the first text are NOT inferred
 		// from the stream's completion. If they were not observed, they
 		// are explicitly unavailable.
 		this.markUnavailableIfOpen(
@@ -515,7 +515,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 			"ok",
 		);
 		this.markUnavailableIfOpen(
-			"provider_first_token",
+			"provider_first_text",
 			observation.payload,
 			"ok",
 		);
@@ -534,7 +534,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * status, so the trace records the measured interval instead of
 	 * leaving a span dangling.
 	 *
-	 * The provider's first-response / first-token boundaries use a
+	 * The provider's first-response / first-text boundaries use a
 	 * different path: when they are still open at stream completion the
 	 * measurement was genuinely NOT observed, so they are marked
 	 * unavailable rather than given a fabricated duration.
@@ -556,7 +556,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	/**
 	 * Mark a boundary as UNAVAILABLE if it is still open.
 	 *
-	 * Used only for the provider's first-response / first-token events:
+	 * Used only for the provider's first-response / first-text events:
 	 * when the stream ends without those events, the measurement was not
 	 * observed, so the trace must say so explicitly instead of recording
 	 * the stream-completion instant as if it were the event.
@@ -596,15 +596,25 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	}
 
 	/**
-	 * The provider generated its FIRST TOKEN.
+	 * The provider produced its first observed GENERATED TEXT.
 	 *
 	 * The span measures from the request's submission to the first
-	 * generated token, which is the true time-to-first-token. A host that
-	 * cannot observe the first token must NOT call this method; the
-	 * measurement then stays UNAVAILABLE and the trace says so.
+	 * NON-EMPTY text delta. It is a CLIENT-SIDE measurement of generated
+	 * TEXT.
+	 *
+	 * ## It is NOT an authoritative time-to-first-token
+	 *
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 (P0-3). A reasoning-first
+	 * request generates reasoning tokens before any text exists, and a
+	 * tool-call-only request generates tokens without ever emitting text.
+	 * The server-side TTFT is not observable at this seam and is recorded
+	 * as explicitly UNAVAILABLE_FROM_TRACE.
+	 *
+	 * A host that cannot observe the first generated text must NOT call this
+	 * method; the measurement then stays UNAVAILABLE and the trace says so.
 	 */
-	onProviderFirstToken(observation: ModelBehaviorTraceObservation): void {
-		this.tracer.exit("provider_first_token", {
+	onProviderFirstText(observation: ModelBehaviorTraceObservation): void {
+		this.tracer.exit("provider_first_text", {
 			metadata: observation.payload,
 			status: "ok",
 		});
@@ -628,7 +638,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 			"failed",
 		);
 		this.markUnavailableIfOpen(
-			"provider_first_token",
+			"provider_first_text",
 			observation.payload,
 			"failed",
 		);
@@ -655,7 +665,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 			"aborted",
 		);
 		this.markUnavailableIfOpen(
-			"provider_first_token",
+			"provider_first_text",
 			observation.payload,
 			"aborted",
 		);

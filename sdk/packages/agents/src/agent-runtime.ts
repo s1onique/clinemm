@@ -3448,8 +3448,8 @@ export class AgentRuntime {
 		}
 
 		let receivedFirstChunk = false;
-		// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the FIRST-RESPONSE and
-		// FIRST-TOKEN observations.
+		// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 (P0-3) — the
+		// FIRST-RESPONSE and FIRST-TEXT observations.
 		//
 		// The two events are DISTINCT and are never conflated:
 		//
@@ -3457,19 +3457,25 @@ export class AgentRuntime {
 		//     stream produced at all. It measures the transport's
 		//     time-to-first-event. A transport chunk is NOT necessarily
 		//     model output.
-		//   - the first TOKEN is the first GENERATED OUTPUT — a text
-		//     delta carrying actual model text. Only this one is a
-		//     time-to-first-token.
+		//   - the first TEXT is the first observed GENERATED TEXT — a
+		//     NON-EMPTY text delta. It is NOT the model's first generated
+		//     TOKEN: a reasoning-first request generates reasoning tokens
+		//     before any text exists, and a tool-call-only request
+		//     generates tokens without ever emitting text.
 		//
-		// The observation is metadata-only: the event TYPE and the
-		// generated text's LENGTH and DIGEST — never the text itself.
+		// Neither measurement is an authoritative time-to-first-token. The
+		// server-side TTFT is UNAVAILABLE_FROM_TRACE.
 		//
-		// The stream's iteration, ordering, cancellation and buffering
-		// are UNCHANGED: the observation is a side-effect on the events
-		// the runtime already consumes, it never pre-reads, buffers or
+		// The observation is metadata-only: the event TYPE, the generated
+		// text's LENGTH and the server-side-TTFT availability marker —
+		// never the text itself.
+		//
+		// The stream's iteration, ordering, cancellation and buffering are
+		// UNCHANGED: the observation is a side-effect on the events the
+		// runtime already consumes, it never pre-reads, buffers or
 		// re-orders anything.
 		let observedFirstResponse = false;
-		let observedFirstToken = false;
+		let observedFirstText = false;
 		try {
 			for await (const event of stream) {
 				if (!receivedFirstChunk) {
@@ -3485,9 +3491,16 @@ export class AgentRuntime {
 					observedFirstResponse = true;
 					this.observeProviderFirstResponse(event.type);
 				}
-				if (!observedFirstToken && event.type === "text-delta") {
-					observedFirstToken = true;
-					this.observeProviderFirstToken(event);
+				// The first GENERATED TEXT is the first NON-EMPTY text
+				// delta. An EMPTY text delta is not generated text, so it
+				// must not close the first-text boundary.
+				if (
+					!observedFirstText &&
+					event.type === "text-delta" &&
+					(event.text ?? "").length > 0
+				) {
+					observedFirstText = true;
+					this.observeProviderFirstText(event);
 				}
 				yield event;
 			}
@@ -3858,31 +3871,49 @@ export class AgentRuntime {
 	}
 
 	/**
-	 * Report the FIRST observed GENERATED TOKEN.
+	 * Report the FIRST observed GENERATED TEXT.
 	 *
-	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01.
+	 * ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 (P0-3).
 	 *
-	 * A `text-delta` carrying actual model text IS a generated token, so
-	 * this is the authoritative first-token observation. The observation
-	 * is metadata-only: the generated text's LENGTH, never the text
-	 * itself.
+	 * A `text-delta` carrying actual model text IS generated TEXT, so this
+	 * is the first-generated-TEXT observation. The observation is
+	 * metadata-only: the generated text's LENGTH, never the text itself.
+	 *
+	 * ## This is NOT an authoritative first-token measurement
+	 *
+	 * The boundary is named for what it MEASURES. It does NOT establish the
+	 * model's first generated TOKEN, because:
+	 *
+	 *   - a reasoning-first request generates REASONING tokens before any
+	 *     text delta exists;
+	 *   - a tool-call-only request generates tokens without ever emitting a
+	 *     text delta.
+	 *
+	 * The provider's server-side token accounting is not surfaced at this
+	 * seam, so the observation carries the explicit marker
+	 * `serverSideTtft: "UNAVAILABLE_FROM_TRACE"`. No consumer can mistake
+	 * this boundary for an authoritative time-to-first-token.
 	 *
 	 * A provider that emits no text at all (a tool-call-only or an empty
 	 * response) never produces this observation, and the measurement
 	 * stays unavailable rather than being inferred.
 	 */
-	private observeProviderFirstToken(event: AgentModelEvent): void {
+	private observeProviderFirstText(event: AgentModelEvent): void {
 		const sink = this.config.modelBehaviorTraceSink;
-		if (!sink?.onProviderFirstToken) {
+		if (!sink?.onProviderFirstText) {
 			return;
 		}
 		try {
 			const text = event.type === "text-delta" ? event.text : "";
-			sink.onProviderFirstToken({
+			sink.onProviderFirstText({
 				...this.modelBehaviorTraceIdentity(),
 				payload: {
 					eventType: event.type,
 					generatedTextLength: text.length,
+					// The server-side time to first token is NOT observable at
+					// this seam. It is recorded as explicitly unavailable
+					// rather than being inferred from the text delta.
+					serverSideTtft: "UNAVAILABLE_FROM_TRACE",
 				},
 			});
 		} catch {

@@ -2221,8 +2221,8 @@ export class SessionRuntime {
 			onProviderFirstResponse: sink.onProviderFirstResponse
 				? (observation) => sink.onProviderFirstResponse?.(observation)
 				: undefined,
-			onProviderFirstToken: sink.onProviderFirstToken
-				? (observation) => sink.onProviderFirstToken?.(observation)
+			onProviderFirstText: sink.onProviderFirstText
+				? (observation) => sink.onProviderFirstText?.(observation)
 				: undefined,
 			onToolStart: sink.onToolStart
 				? (observation) => sink.onToolStart?.(observation)

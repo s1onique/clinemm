@@ -216,9 +216,9 @@ describe("LatencyTracer — stage attribution", () => {
 		clock.advance(20);
 		tracer.exit("provider_submitted");
 		clock.advance(3);
-		tracer.enter("provider_first_token");
+		tracer.enter("provider_first_text");
 		clock.advance(30);
-		tracer.exit("provider_first_token");
+		tracer.exit("provider_first_text");
 		clock.advance(2);
 		tracer.enter("provider_completed");
 		clock.advance(40);
@@ -267,7 +267,7 @@ describe("LatencyTracer — stage attribution", () => {
 		expect(byStage.get("transport")).toBe(3 + 2);
 		const firstTokenStage = stages.find(
 			(stage) =>
-				stage.from === "provider_first_token" &&
+				stage.from === "provider_first_text" &&
 				stage.to === "provider_completed",
 		);
 		expect(firstTokenStage?.spanDurationMs).toBe(30);
@@ -633,7 +633,7 @@ describe("LatencyTracer — bounded retention", () => {
 			maxUnavailable: 3,
 		});
 		for (let index = 0; index < 10; index++) {
-			tracer.markUnavailable("provider_first_token", "never observed");
+			tracer.markUnavailable("provider_first_text", "never observed");
 		}
 		const trace = tracer.getTrace();
 		expect(trace.truncation.droppedUnavailableCount).toBe(7);
