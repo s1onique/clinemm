@@ -28,6 +28,15 @@
  *   1. Exercise two consecutive continuation turns through the ACTUAL
  *      `LocalRuntimeHost`, the REAL canonical subscription and the REAL Elm
  *      kernel. NO fabricated `run-started` delivery.
+ *
+ *      ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01-INSTALL-QUAL01
+ *      §2 CORRECTION: the original `CPR01-01` arm claimed this scenario but
+ *      actually ran ONE explicit turn + ONE queued continuation, so its
+ *      receipt carried two `run-started` events but only ONE
+ *      `continuation_started` association. The arm now runs ONE explicit
+ *      turn + TWO consecutive queued continuations, and asserts three
+ *      distinct run IDs, two correctly-correlated prompt IDs and no orphaned
+ *      Elm prompt.
  *   2. Capture the actual `sessionId`, fresh `runId`, prompt ID, subscription
  *      attachment lifetime and run-started emission for each turn.
  *   3. Establish a failing RED at the production boundary. Distinguish:
@@ -218,6 +227,15 @@ interface TurnObservation {
 	agentTurnDoneRunIds: (string | undefined)[]
 	/** The canonical events the wiring actually observed. */
 	observedEventTypes: string[]
+	/**
+	 * The `continuation_scheduled` prompt IDs (the C6 seam). Every one of
+	 * them MUST be consumed by EXACTLY ONE `continuation_started` record —
+	 * this is the "no orphaned Elm prompt" invariant. A scheduled prompt
+	 * with NO matching `continuation_started` stays `PromptScheduled` in the
+	 * Elm completion authority and holds completion on `pending_prompt`
+	 * forever; that is precisely the incident shape.
+	 */
+	continuationScheduledPromptIds: string[]
 }
 
 /**
@@ -343,56 +361,123 @@ describe("ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01 — produc
 				"turn 1 agent_turn_done",
 			)
 
-			// ---- TURN 2: a QUEUED continuation turn. The queue path drains
-			// it after the first turn completes, which arms the held
+			// ---- TURN 2: the FIRST QUEUED continuation turn. The queue path
+			// drains it after the first turn completes, which arms the held
 			// continuation prompt (C6 `onBeforeDispatch`).
-			await host.runTurn({ sessionId, prompt: "queued continuation turn", delivery: "queue" })
+			await host.runTurn({ sessionId, prompt: "queued continuation turn 1", delivery: "queue" })
 			await waitFor(
 				() =>
 					getContinuationCardinalityAuthorityCaptureRecords().filter((r) => r.stage === "agent_turn_done").length >= 2,
 				"turn 2 agent_turn_done",
 			)
 
+			// ---- TURN 3: the SECOND QUEUED continuation turn.
+			//
+			// ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01-INSTALL-QUAL01
+			// §2 (the bounded P1 evidence correction the factory review
+			// raised): the original `CPR01-01` arm claimed to exercise TWO
+			// consecutive continuation turns but actually ran ONE explicit
+			// turn + ONE queued continuation, so its receipt carried two
+			// `run-started` events but only ONE `continuation_started`
+			// association. The mandated two-continuation scenario was NOT
+			// exercised.
+			//
+			// This arm now runs the full scenario: ONE explicit user turn
+			// followed by TWO consecutive queued continuations. The REAL
+			// queue drain loop (`PendingPromptsController.drain`) dispatches
+			// the second queued prompt after the first one completes, which
+			// arms a SECOND held continuation prompt (C6 `onBeforeDispatch`)
+			// and therefore MUST produce a SECOND `continuation_started`
+			// association.
+			await host.runTurn({ sessionId, prompt: "queued continuation turn 2", delivery: "queue" })
+			await waitFor(
+				() =>
+					getContinuationCardinalityAuthorityCaptureRecords().filter((r) => r.stage === "agent_turn_done").length >= 3,
+				"turn 3 agent_turn_done",
+			)
+			// The second continuation's `continuation_started` must also have
+			// been produced (the join fires on the SAME `run-started` that
+			// drives turn 3's `agent_turn_done`).
+			await waitFor(
+				() =>
+					getContinuationCardinalityAuthorityCaptureRecords().filter((r) => r.stage === "continuation_started")
+						.length >= 2,
+				"turn 3 continuation_started",
+			)
+
 			const records = getContinuationCardinalityAuthorityCaptureRecords()
 			const runStarted = records.filter((r) => r.stage === "run_turn_started")
 			const continuationStarted = records.filter((r) => r.stage === "continuation_started")
 			const agentTurnDone = records.filter((r) => r.stage === "agent_turn_done")
+			const continuationScheduled = records.filter((r) => r.stage === "continuation_scheduled")
 
 			const observation: TurnObservation = {
 				runStartedRunIds: runStarted.map((r) => r.runId ?? ""),
 				continuationStarted: continuationStarted.map((r) => ({ promptId: r.promptId, runId: r.runId })),
 				agentTurnDoneRunIds: agentTurnDone.map((r) => r.runId),
 				observedEventTypes,
+				continuationScheduledPromptIds: continuationScheduled.map((r) => r.promptId ?? ""),
 			}
 			console.log("CPR01-01-REPORT", JSON.stringify(observation, null, 2))
 
 			// ---- THE REAL `run-started` EVENTS REACHED THE REAL SUBSCRIPTION.
 			// These are emitted by the REAL `AgentRuntime.execute()`; nothing
-			// in this file fabricates them.
-			expect(observedEventTypes.filter((t) => t === "run-started").length).toBeGreaterThanOrEqual(2)
+			// in this file fabricates them. THREE turns ran, so THREE
+			// `run-started` events are expected.
+			expect(observedEventTypes.filter((t) => t === "run-started").length).toBeGreaterThanOrEqual(3)
 
 			// ---- EACH TURN GOT A DISTINCT runId.
 			const distinctRunIds = new Set(observation.runStartedRunIds.filter(Boolean))
-			expect(observation.runStartedRunIds.length).toBeGreaterThanOrEqual(2)
+			expect(observation.runStartedRunIds.length).toBeGreaterThanOrEqual(3)
 			expect(distinctRunIds.size).toBe(observation.runStartedRunIds.filter(Boolean).length)
+
+			// ---- BOTH CONSECUTIVE CONTINUATIONS PRODUCED A CORRELATION.
+			// This is the P1 correction's load-bearing assertion: TWO
+			// `continuation_started` associations, not one.
+			expect(continuationStarted.length).toBeGreaterThanOrEqual(2)
 
 			// ---- THE CONTINUATION PROMPT WAS CORRELATED TO THE RUN THAT
 			// ACTUALLY EXECUTED IT. The `continuation_started` runId MUST be
 			// one of the OBSERVED runIds (a real run), and MUST NOT be a
 			// synthetic / never-observed id.
-			expect(continuationStarted.length).toBeGreaterThanOrEqual(1)
 			for (const cs of continuationStarted) {
 				expect(cs.promptId).toBeTruthy()
 				expect(cs.runId).toBeTruthy()
 				expect(distinctRunIds.has(cs.runId as string)).toBe(true)
 			}
 
+			// ---- THE TWO CORRELATIONS ARE DISTINCT ON BOTH AXES: two
+			// DIFFERENT prompts, each paired with a DIFFERENT run. A
+			// repeated promptId or a repeated runId would mean the join
+			// reused an identity instead of allocating a fresh one.
+			const continuationPromptIds = continuationStarted.map((r) => r.promptId)
+			const continuationRunIds = continuationStarted.map((r) => r.runId)
+			expect(new Set(continuationPromptIds).size).toBe(continuationPromptIds.length)
+			expect(new Set(continuationRunIds).size).toBe(continuationRunIds.length)
+
 			// ---- THE CORRELATION IS NOT A REPLAY OF THE FIRST RUN. This is
 			// the exact P0 the review raised: the continuation must be paired
 			// with the run that executed IT, not with an earlier run.
 			const firstRunId = observation.runStartedRunIds[0]
-			const continuationRunIds = continuationStarted.map((r) => r.runId)
 			expect(continuationRunIds).not.toContain(firstRunId)
+
+			// ---- NO ORPHANED ELM PROMPT. Every scheduled continuation
+			// prompt (C6 `continuation_scheduled`) MUST be consumed by
+			// EXACTLY ONE `continuation_started` record. A scheduled prompt
+			// with NO matching correlation stays `PromptScheduled` in the
+			// Elm completion authority and holds completion on
+			// `pending_prompt` forever — the incident shape.
+			expect(observation.continuationScheduledPromptIds.length).toBeGreaterThanOrEqual(2)
+			for (const scheduledPromptId of observation.continuationScheduledPromptIds) {
+				expect(scheduledPromptId).toBeTruthy()
+				const consumers = continuationStarted.filter((cs) => cs.promptId === scheduledPromptId)
+				expect(consumers).toHaveLength(1)
+			}
+			// No `continuation_started` may point at a prompt that was never
+			// scheduled (a fabricated association).
+			for (const cs of continuationStarted) {
+				expect(observation.continuationScheduledPromptIds).toContain(cs.promptId as string)
+			}
 
 			// ---- CONSERVATION: the `agent_turn_done` capture (which reads
 			// the SAME retained runId map) agrees with the runStarted set.
