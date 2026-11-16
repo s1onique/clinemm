@@ -1,0 +1,9 @@
+ ✓ src/sdk/control-seam/control-seam-proxy.test.ts (5 tests) 51ms
+ ✓ src/sdk/control-seam/control-seam.recon01.test.ts (21 tests) 96ms
+ ✓ src/sdk/control-seam/control-seam.qual01.test.ts (21 tests) 273ms
+ ✓ src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts (5 tests) 1938ms
+     ✓ COR02-R1: at most ONE process acquires an unowned endpoint, and the loser's record is NOT replaced  835ms
+     ✓ COR02-R2: ownership is held until the cleanup finishes, and a contender cannot take the endpoint underneath it  1090ms
+ ✓ src/sdk/control-seam/control-seam-authority.production-shape.test.ts (3 tests) 11ms
+ Test Files  5 passed (5)
+      Tests  55 passed (55)

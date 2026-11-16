@@ -37,7 +37,12 @@ import {
 	parseControlSeamOptInRecord,
 	resolveControlSeamEnablement,
 } from "./control-seam-enablement"
-import { acquireControlSeamOwnership, releaseControlSeamOwnership, resolveControlSeamOwnerPath } from "./control-seam-ownership"
+import {
+	acquireControlSeamOwnership,
+	ownsControlSeamOwnership,
+	releaseControlSeamOwnership,
+	resolveControlSeamOwnerPath,
+} from "./control-seam-ownership"
 import {
 	CONTROL_SEAM_DIR_MODE,
 	CONTROL_SEAM_FILE_MODE,
@@ -308,13 +313,27 @@ export class ControlSeamServer {
 	/**
 	 * Remove the artifacts, but ONLY if this instance still owns them.
 	 *
-	 * The ownership release is the gate: when the on-disk record
-	 * belongs to somebody else, the socket and the token are left
-	 * untouched.
+	 * ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02: the ORDER of the two
+	 * steps is the invariant.
+	 *
+	 * The RECON01/QUAL01 order released the ownership FIRST and removed
+	 * the socket and the token SECOND. That opened a window in which a
+	 * second instance could take the endpoint (the owner record was
+	 * gone) and publish ITS socket and token — and the first instance
+	 * then deleted the second instance's LIVE artifacts.
+	 *
+	 * The corrected order is:
+	 *
+	 *   1. Verify this instance still owns the endpoint. If it does not,
+	 *      remove NOTHING — another instance's artifacts stay untouched.
+	 *   2. Remove the socket and the token WHILE the exclusive ownership
+	 *      claim is still held. No other instance can take the endpoint
+	 *      during this window, so nothing can be published underneath us.
+	 *   3. Release the ownership claim. Only now may another instance
+	 *      take the endpoint.
 	 */
 	private releaseOwnedArtifacts(instanceId: string, ownerPath: string, socketPath: string, tokenPath: string): void {
-		const released = releaseControlSeamOwnership({ ownerPath, instanceId })
-		if (!released) {
+		if (!ownsControlSeamOwnership({ ownerPath, instanceId })) {
 			// Another instance owns the endpoint now. Our artifacts were
 			// already replaced; removing the paths would delete the
 			// OTHER instance's live socket and token.
@@ -331,6 +350,8 @@ export class ControlSeamServer {
 		} catch {
 			// Best effort.
 		}
+		// The owned artifacts are gone; only NOW is the endpoint released.
+		releaseControlSeamOwnership({ ownerPath, instanceId })
 	}
 
 	/**

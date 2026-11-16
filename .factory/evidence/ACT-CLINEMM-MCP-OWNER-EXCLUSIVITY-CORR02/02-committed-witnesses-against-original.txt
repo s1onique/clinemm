@@ -1,0 +1,89 @@
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+ ❯ src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts (5 tests | 3 failed) 1591ms
+     × COR02-R1: at most ONE process acquires an unowned endpoint, and the loser's record is NOT replaced 843ms
+     × COR02-R2: ownership is held until the cleanup finishes, and a contender cannot take the endpoint underneath it 721ms
+     ✓ COR02-C1: the ownership claim is an EXCLUSIVE create — a second claim on the same path fails 23ms
+     × COR02-C2: a CRASHED owner fails closed — the stale record is reclaimed only under the exclusive reclaim token 2ms
+     ✓ COR02-C3: the FORCE escape hatch breaks an UNREADABLE owner record 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts > ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02 — R1 simultaneous acquisition > COR02-R1: at most ONE process acquires an unowned endpoint, and the loser's record is NOT replaced
+AssertionError: both processes must NOT report a successful acquisition: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts:364:102
+    362|
+    363|    // INVARIANT 1: at most one process acquires the endpoint.
+    364|    expect(resA.acquired && resB.acquired, "both processes must NOT rep…
+       |                                                                                                      ^
+    365|    expect(resA.acquired || resB.acquired, "exactly one process must ac…
+    366|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts > ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02 — R2 cleanup versus acquisition > COR02-R2: ownership is held until the cleanup finishes, and a contender cannot take the endpoint underneath it
+AssertionError: ownership must be held until the cleanup finishes: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts:414:87
+    412|    // INVARIANT 3: the ownership record is STILL PRESENT while the
+    413|    // cleanup is removing the owned artifacts.
+    414|    expect(existsSync(ownerPath), "ownership must be held until the cle…
+       |                                                                                       ^
+    415|    const ownerDuringCleanup = readControlSeamOwnerRecord(ownerPath)
+    416|    expect(ownerDuringCleanup).toBeDefined()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts > ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02 — the exclusive claim itself > COR02-C2: a CRASHED owner fails closed — the stale record is reclaimed only under the exclusive reclaim token
+TypeError: resolveControlSeamOwnerReclaimPath is not a function. (In 'resolveControlSeamOwnerReclaimPath(dir)', 'resolveControlSeamOwnerReclaimPath' is undefined)
+ ❯ src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts:500:21
+    498|   expect(owner?.instanceId).toBe("reclaiming-instance")
+    499|   // The transient reclaim token is released again.
+    500|   expect(existsSync(resolveControlSeamOwnerReclaimPath(dir))).toBe(fal…
+       |                     ^
+    501|  })
+    502|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  17:22:17
+   Duration  3.78s (transform 1.41s, setup 2.12s, import 12ms, tests 1.59s, environment 0ms)
+

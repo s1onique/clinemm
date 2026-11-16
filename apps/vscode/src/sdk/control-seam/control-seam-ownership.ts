@@ -24,15 +24,26 @@
  *
  * Rules:
  *
- *   1. `acquireControlSeamOwnership()` succeeds ONLY when there is no
- *      owner record, or when the recorded owner is provably DEAD
- *      (its pid no longer exists). A live owner causes a fail-closed
- *      error: the second instance must not take the endpoint.
- *   2. `releaseControlSeamOwnership()` removes the record ONLY when
- *      the on-disk record still carries THIS instance's id. Cleanup
- *      never removes another instance's artifacts.
- *   3. The record is written ATOMICALLY (write-then-rename) with mode
- *      0600, and the directory is 0700.
+ *   1. `acquireControlSeamOwnership()` succeeds ONLY when it can take the
+ *      EXCLUSIVE ownership claim. The claim is an ATOMIC, EXCLUSIVE
+ *      filesystem operation: the owner record is written to a private
+ *      temporary file and then HARD-LINKED into place (`link(2)`), which
+ *      fails with `EEXIST` when the name is already taken. A
+ *      read-check followed by a rename-to-overwrite is NOT an exclusive
+ *      claim — two contenders that both observed an unowned endpoint
+ *      would both "win" it, and the second would silently replace the
+ *      first one's token and socket.
+ *   2. A LIVE owner causes a fail-closed error: the second instance must
+ *      not take the endpoint.
+ *   3. A DEAD owner is a STALE endpoint. Reclaiming it is serialized by a
+ *      transient, exclusively-created reclaim token, so two reclaimers can
+ *      never both remove the stale record and both "win" the endpoint.
+ *      The reclaimer re-reads the record inside the critical section and
+ *      only removes the record it positively identified as stale.
+ *   4. `releaseControlSeamOwnership()` removes the record ONLY when the
+ *      on-disk record still carries THIS instance's id. Cleanup never
+ *      removes another instance's artifacts.
+ *   5. The record is written with mode 0600 and the directory is 0700.
  *
  * Liveness is decided by `process.kill(pid, 0)`:
  *   - no throw               -> the pid EXISTS -> the owner is LIVE.
@@ -45,17 +56,32 @@
  * user-local (0700 directory) and the worst case is a fail-closed
  * "the endpoint is busy" that the operator can clear with the explicit
  * `CLINEMM_CONTROL_SEAM_FORCE=1` escape hatch (which is itself an
- * explicit, operator-authored act).
+ * explicit, operator-authored act, and which is LOUD — it never
+ * silently bypasses a live owner's protection).
  */
 
 import { createHash, randomBytes } from "node:crypto"
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, linkSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+
+import { Logger } from "@shared/services/Logger"
 
 import { CONTROL_SEAM_FILE_MODE } from "./control-seam-paths"
 
 /** The owner-record file name inside the control-seam directory. */
 export const CONTROL_SEAM_OWNER_FILE_NAME = "owner.json"
+
+/**
+ * The transient reclaim-token file name inside the control-seam directory.
+ *
+ * The reclaim token serializes the STALE-reclaim critical section: only
+ * the holder of this token may remove a stale owner record. It is created
+ * with an EXCLUSIVE create (`O_CREAT | O_EXCL`), so exactly one process
+ * can hold it. It is removed as soon as the critical section ends, and it
+ * is NOT reclaimed automatically — a crashed token holder leaves the
+ * endpoint fail-closed until the operator forces it away.
+ */
+export const CONTROL_SEAM_OWNER_RECLAIM_FILE_NAME = "owner.json.reclaim"
 
 /** The schema version of the owner record. */
 export const CONTROL_SEAM_OWNER_RECORD_VERSION = 1
@@ -118,6 +144,11 @@ function ownershipError(
 /** The path of the owner record inside the control-seam directory. */
 export function resolveControlSeamOwnerPath(dirPath: string): string {
 	return join(dirPath, CONTROL_SEAM_OWNER_FILE_NAME)
+}
+
+/** The path of the transient reclaim token inside the control-seam directory. */
+export function resolveControlSeamOwnerReclaimPath(dirPath: string): string {
+	return join(dirPath, CONTROL_SEAM_OWNER_RECLAIM_FILE_NAME)
 }
 
 /**
@@ -215,26 +246,85 @@ export function readControlSeamOwnerRecord(ownerPath: string): ControlSeamOwnerR
 	}
 }
 
-/** Write the owner record atomically (write-then-rename) with mode 0600. */
-export function writeControlSeamOwnerRecordAtomic(ownerPath: string, record: ControlSeamOwnerRecord): void {
+/**
+ * Take the EXCLUSIVE ownership claim for an owner record.
+ *
+ * Returns `true` when this process took the claim and `false` when the
+ * name was already taken.
+ *
+ * The claim is a single ATOMIC filesystem operation:
+ *
+ *   1. The record is written to a private temporary file in the SAME
+ *      directory, with mode 0600. The content is therefore COMPLETE
+ *      before the claim becomes visible.
+ *   2. `link(2)` creates the owner-record name as a hard link to that
+ *      temporary file. `link` fails with `EEXIST` when the destination
+ *      name already exists — it is an EXCLUSIVE create (`O_CREAT |
+ *      O_EXCL` semantics) that the kernel serializes across processes.
+ *
+ * The claim is therefore atomic, exclusive and content-complete. A
+ * read-check followed by a rename-to-overwrite is NOT an exclusive
+ * claim: two contenders that both observed an unowned endpoint would
+ * both "win" it, and the second would silently replace the first one's
+ * token and socket.
+ */
+function claimControlSeamOwnerRecord(ownerPath: string, record: ControlSeamOwnerRecord): boolean {
 	const temporaryPath = `${ownerPath}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`
-	writeFileSync(temporaryPath, `${JSON.stringify(record, null, 2)}\n`, { mode: CONTROL_SEAM_FILE_MODE })
-	renameSync(temporaryPath, ownerPath)
+	try {
+		writeFileSync(temporaryPath, `${JSON.stringify(record, null, 2)}\n`, { mode: CONTROL_SEAM_FILE_MODE })
+		linkSync(temporaryPath, ownerPath)
+		return true
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+			return false
+		}
+		throw error
+	} finally {
+		try {
+			unlinkSync(temporaryPath)
+		} catch {
+			// Best effort: a leftover temporary file is inert.
+		}
+	}
+}
+
+/**
+ * Acquire the EXCLUSIVE reclaim token for the stale-reclaim critical
+ * section.
+ *
+ * Returns `true` when this process holds the token. The token is created
+ * with an EXCLUSIVE create (`O_CREAT | O_EXCL`), so exactly one process
+ * can hold it at a time.
+ */
+function acquireControlSeamReclaimToken(reclaimPath: string): boolean {
+	try {
+		writeFileSync(reclaimPath, `${process.pid}\n`, { flag: "wx", mode: CONTROL_SEAM_FILE_MODE })
+		return true
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+			return false
+		}
+		throw error
+	}
 }
 
 /**
  * Acquire ownership of the control endpoint.
  *
- * Succeeds only when the endpoint is genuinely free:
+ * Succeeds only when this process can take the EXCLUSIVE ownership
+ * claim:
  *
- *   - no owner record at all, OR
- *   - the recorded owner is provably dead (its pid is gone).
+ *   - the endpoint is unowned (no owner record at all), OR
+ *   - the recorded owner is provably DEAD (its pid is gone) and the
+ *     stale record can be reclaimed under the exclusive reclaim token.
  *
  * A LIVE owner raises a `ControlSeamOwnershipError` with reason
  * `live-owner`. The caller must NOT bind in that case.
  *
- * The record is written atomically so a concurrent reader never sees
- * a half-written file.
+ * The claim itself is an exclusive filesystem create, so two processes
+ * racing for the SAME unowned endpoint can never both succeed: exactly
+ * one takes the claim, the other observes the taken claim and fails
+ * closed.
  */
 export function acquireControlSeamOwnership(options: {
 	readonly dirPath: string
@@ -246,31 +336,10 @@ export function acquireControlSeamOwnership(options: {
 }): ControlSeamOwnerRecord {
 	const env = options.env ?? process.env
 	const ownerPath = options.ownerPath ?? resolveControlSeamOwnerPath(options.dirPath)
+	const reclaimPath = resolveControlSeamOwnerReclaimPath(options.dirPath)
 	const pid = options.pid ?? process.pid
 	const instanceId = options.instanceId ?? createControlSeamInstanceId(pid)
 	const force = env[CONTROL_SEAM_FORCE_ENV_VAR]?.trim().toLowerCase() === "1"
-
-	let existing: ControlSeamOwnerRecord | undefined
-	try {
-		existing = readControlSeamOwnerRecord(ownerPath)
-	} catch (error) {
-		if (!force) {
-			throw error
-		}
-		// The operator explicitly asked to break a stale/unknown lock.
-		existing = undefined
-	}
-
-	if (existing && !force && isControlSeamPidAlive(existing.pid)) {
-		throw ownershipError(
-			"live-owner",
-			`[ControlSeam] the control endpoint is already owned by a live instance (pid ${existing.pid}, instance ${existing.instanceId}); refusing to replace it`,
-			existing,
-		)
-	}
-	// Either there was no record, or the recorded owner is dead and the
-	// endpoint is stale and may be reclaimed. The stale record is
-	// overwritten below.
 
 	const record: ControlSeamOwnerRecord = {
 		v: CONTROL_SEAM_OWNER_RECORD_VERSION,
@@ -279,8 +348,128 @@ export function acquireControlSeamOwnership(options: {
 		startedAt: Date.now(),
 		tokenFingerprint: fingerprintControlSeamToken(options.token),
 	}
-	writeControlSeamOwnerRecordAtomic(ownerPath, record)
-	return record
+
+	// The bounded retry budget covers the contention paths only: a
+	// concurrent reclaim (whose exclusive token we lost) and a record
+	// that vanished between the read and the claim.
+	const maxAttempts = 8
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		// 1. Take the EXCLUSIVE claim.
+		if (claimControlSeamOwnerRecord(ownerPath, record)) {
+			return record
+		}
+
+		// 2. The claim is taken. Find out by whom.
+		let existing: ControlSeamOwnerRecord | undefined
+		// The record exists (the exclusive claim failed) but it cannot be
+		// trusted. Without the FORCE escape hatch this is a fail-closed
+		// error: an unreadable owner record means the endpoint's
+		// ownership is UNKNOWN.
+		let recordIsUntrusted = false
+		try {
+			existing = readControlSeamOwnerRecord(ownerPath)
+		} catch (error) {
+			if (!force) {
+				throw error
+			}
+			// The operator explicitly asked to break a stale/unknown lock.
+			// The untrusted record is reclaimed below — but only inside the
+			// exclusive reclaim critical section, and only if it is STILL
+			// the untrusted record we observed.
+			recordIsUntrusted = true
+			existing = undefined
+		}
+		if (!existing && !recordIsUntrusted) {
+			// The record vanished between the failed claim and the read.
+			// Retry the exclusive claim.
+			continue
+		}
+
+		const ownerIsAlive = existing !== undefined && isControlSeamPidAlive(existing.pid)
+		if (ownerIsAlive && !force) {
+			throw ownershipError(
+				"live-owner",
+				`[ControlSeam] the control endpoint is already owned by a live instance (pid ${existing?.pid}, instance ${existing?.instanceId}); refusing to replace it`,
+				existing,
+			)
+		}
+		if (ownerIsAlive && force) {
+			// The FORCE escape hatch is an explicit, operator-authored act.
+			// It is NOT silent: the operator is told, in the log, that a
+			// LIVE owner was displaced.
+			Logger.warn(
+				`[ControlSeam] ${CONTROL_SEAM_FORCE_ENV_VAR}=1 is displacing a LIVE owner (pid ${existing?.pid}, instance ${existing?.instanceId}); the displaced instance will lose its endpoint`,
+			)
+		}
+		if (recordIsUntrusted && force) {
+			Logger.warn(`[ControlSeam] ${CONTROL_SEAM_FORCE_ENV_VAR}=1 is breaking an UNREADABLE owner record at ${ownerPath}`)
+		}
+
+		// 3. Reclaim: remove the stale (or forced) record under the
+		// EXCLUSIVE reclaim token, so two reclaimers can never both
+		// remove it and both "win" the endpoint.
+		if (!acquireControlSeamReclaimToken(reclaimPath)) {
+			// Another process is inside the reclaim critical section.
+			// Wait for it and re-evaluate.
+			continue
+		}
+		try {
+			// Re-read INSIDE the critical section: the record may have
+			// changed while we waited for the token. Only the record we
+			// positively identified as stale is removed.
+			let current: ControlSeamOwnerRecord | undefined
+			let currentIsUntrusted = false
+			try {
+				current = readControlSeamOwnerRecord(ownerPath)
+			} catch {
+				current = undefined
+				currentIsUntrusted = true
+			}
+			// The record is removed ONLY when it is still the record we
+			// observed: either the same stale instance, or still the
+			// untrusted record the operator asked us to break.
+			const stillTheSameRecord = recordIsUntrusted
+				? currentIsUntrusted
+				: current !== undefined && current.instanceId === existing?.instanceId
+			if (stillTheSameRecord) {
+				try {
+					unlinkSync(ownerPath)
+				} catch {
+					// Best effort.
+				}
+			}
+		} finally {
+			try {
+				unlinkSync(reclaimPath)
+			} catch {
+				// Best effort.
+			}
+		}
+		// 4. Retry the EXCLUSIVE claim. Exactly one contender wins it.
+	}
+
+	throw ownershipError(
+		"live-owner",
+		`[ControlSeam] could not take the exclusive ownership claim for the control endpoint after ${maxAttempts} attempts; refusing to replace it`,
+	)
+}
+
+/**
+ * Whether the on-disk owner record still carries THIS instance's id.
+ *
+ * The cleanup path uses this to decide whether it may remove the socket
+ * and the token. It is checked IMMEDIATELY BEFORE the removal, while the
+ * exclusive ownership claim is still held.
+ */
+export function ownsControlSeamOwnership(options: { readonly ownerPath: string; readonly instanceId: string }): boolean {
+	let existing: ControlSeamOwnerRecord | undefined
+	try {
+		existing = readControlSeamOwnerRecord(options.ownerPath)
+	} catch {
+		// An unreadable record is NOT ours.
+		return false
+	}
+	return existing !== undefined && existing.instanceId === options.instanceId
 }
 
 /**
@@ -292,14 +481,7 @@ export function acquireControlSeamOwnership(options: {
  * socket or the token file.
  */
 export function releaseControlSeamOwnership(options: { readonly ownerPath: string; readonly instanceId: string }): boolean {
-	let existing: ControlSeamOwnerRecord | undefined
-	try {
-		existing = readControlSeamOwnerRecord(options.ownerPath)
-	} catch {
-		// An unreadable record is NOT ours to remove.
-		return false
-	}
-	if (!existing || existing.instanceId !== options.instanceId) {
+	if (!ownsControlSeamOwnership(options)) {
 		return false
 	}
 	try {

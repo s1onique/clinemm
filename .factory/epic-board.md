@@ -33104,6 +33104,96 @@ and no redirect), and the editor executor RED matrix.
 
 ---
 
+# ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02 — PASS — 2026-11-16
+
+**Status:** the newly discovered P0 ownership-exclusivity proof gap is CLOSED. Both interleavings
+are proven RED against the entry HEAD and GREEN against the corrected head by executable witnesses
+that drive the REAL production functions in REAL independent processes.
+
+```text
+ACT_ID: ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02
+TYPE: bounded P0 ownership-exclusivity correction
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (correction of ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01)
+VERDICT: PASS
+REPORTED_ENTRY_HEAD: 043a0606f5f43b0d742f8fa0b6a05c7014bf2fce (an ancestor of the actual HEAD)
+ACTUAL_ENTRY_HEAD: ef1ef40ab56fc01b7a5ca12b10bd73a75df912e5
+BRANCH: main (no ACT branch created)
+PUSHED: NO   RELEASED: NO   PUBLISHED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+RED: 3 of the 5 new committed witnesses FAIL at the entry HEAD (COR02-R1, COR02-R2, COR02-C2)
+GREEN: 5/5 new witnesses pass; 55/55 across the whole control-seam suite
+NO-REGRESSION: full vitest run before vs after -> BYTE-IDENTICAL failing-file sets
+        (68 files, 178 failing tests, identical in both runs); +2 passing tests, 0 new failures
+TYPECHECK: tsc --noEmit EXIT 0 | tsc -p tsconfig.vscode-compat.json EXIT 0
+LINT: biome EXIT 0 (2889 files package-wide)
+BUNDLE: bun esbuild.mjs --production EXIT 0 -> dist/extension.js 28,089,654 bytes
+EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02/
+```
+
+## The defect
+
+The QUAL01 correction established EXPLICIT INSTANCE OWNERSHIP with an on-disk owner record, but
+the CLAIM itself was a **read-check followed by a rename-to-overwrite**:
+`readControlSeamOwnerRecord()` → liveness check → `writeFileSync(tmp)` → `renameSync(tmp,
+ownerPath)`. `rename(2)` OVERWRITES an existing destination, so it is not an exclusive claim.
+
+Two interleavings were reproduced **deterministically** (3 consecutive identical runs), not
+inferred. The barrier parks each contender at the exact instruction boundary the interleaving
+requires, using an interposition on `node:fs` INSIDE THE CHILD PROCESS ONLY — the production
+functions were not modified to produce the RED.
+
+- **R1 — simultaneous acquisition.** Two independent processes both observed an unowned endpoint,
+  both passed the liveness check, and both wrote: **both reported a successful acquisition**, and
+  one **replaced the other's record** (the final `owner.json` carried one instance's id and pid).
+- **R2 — cleanup versus acquisition.** `releaseOwnedArtifacts()` released the ownership record
+  FIRST and removed the socket/token SECOND. A real started `ControlSeamServer` was parked inside
+  its production cleanup while a second instance acquired the endpoint:
+  `recordPresentDuringACleanup: false`, and **instance A removed instance B's live socket and
+  token**.
+
+## The correction
+
+1. **The claim is EXCLUSIVE, atomic and content-complete.** The record is written to a private
+   temporary file in the same directory (mode 0600) and then HARD-LINKED into place (`link(2)`),
+   which fails with `EEXIST` when the name is taken — an EXCLUSIVE create (`O_CREAT | O_EXCL`
+   semantics) the kernel serializes across processes. The content is complete before the claim
+   becomes visible.
+2. **The stale reclaim is serialized** under a transient, exclusively created reclaim token
+   (`owner.json.reclaim`, Node's `wx` flag), so two reclaimers can never both remove the stale
+   record and both "win" the endpoint. The reclaimer re-reads the record INSIDE the critical
+   section and removes only the record it positively identified as stale. The token is not
+   reclaimed automatically — a crashed token holder leaves the endpoint fail-closed.
+3. **Ownership is held until the cleanup finishes.** `releaseOwnedArtifacts()` now verifies
+   ownership, removes the socket and the token WHILE the claim is still held, and releases the
+   claim only afterwards.
+4. **Force recovery is loud.** `CLINEMM_CONTROL_SEAM_FORCE=1` remains the only override and an
+   explicit operator act, but it now LOGS a warning when it displaces a LIVE owner and when it
+   breaks an UNREADABLE record. (The force path also had a latent defect — it could not break an
+   unreadable record at all; that is closed too.)
+
+The six required invariants are enforced and witnessed: at most one process acquires; a second
+contender never changes the owner's token, socket or record; ownership is held until the owned
+artifacts are gone; cleanup never removes another instance's artifacts; a crashed owner fails
+closed and the automatic stale reclaim cannot race a live acquisition; and force recovery never
+silently bypasses a live owner's protection.
+
+**No generic lock service, no new RPC layer, no additional permanent infrastructure.** The diff
+is 2 production files, both under `apps/vscode/src/sdk/control-seam/`, plus 1 new test file in
+the same directory.
+
+## Conservation
+
+The two-operation read-only registry is preserved (`clinemm_capabilities` + `clinemm_get_run`, both
+`mutating: false`). Default OFF is unchanged. No TCP listener, no mutation, no transcript exposure
+and no approval path was added. No C9/C10, BCB, Elm, native-editor or session-lifecycle surface
+was touched; `proto/`, `registry.ts`, the shared barrels and `SdkController.ts` are unchanged.
+
+**Successor (unchanged):** the operator-run installed VSCodium observation and the Codex Desktop
+read-only handshake against the corrected exact-head build. Mutation-control operations remain
+unauthorized until `PASS_READONLY_LIVE`.
+
+---
+
 # ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01 — PASS_STRUCTURAL_ONLY — 2026-11-15
 
 **Status:** one bounded P1 correction cycle closed; the installed-runtime and real-Codex-Desktop
