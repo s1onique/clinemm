@@ -347,6 +347,24 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 */
 	onCompactionDiagnostics(observation: ModelBehaviorTraceObservation): void {
 		const initiated = observation.payload.compactionInitiated;
+		// ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — the DECISION RECORD.
+		//
+		// EVERY eligibility evaluation is now observable, whether or not
+		// compaction followed. The decision is recorded as a POINT
+		// OBSERVATION on the dedicated `compaction_decision` boundary:
+		// no span is opened and NO duration is manufactured.
+		//
+		// Before this, a no-op eligibility check (`compactionInitiated
+		// === false`) returned early and left NOTHING in the trace. That
+		// is the evidence needed to explain why a compaction did NOT
+		// happen — the request estimate, the effective threshold and the
+		// calibration factor AT THE MOMENT the policy decided — and it
+		// was missing.
+		//
+		// The `compaction` boundary remains EXCLUSIVELY the execution
+		// boundary: only an INITIATED compaction opens a span, and only
+		// its real terminal outcome closes it.
+		this.tracer.recordPoint("compaction_decision", observation.payload);
 		if (initiated === false) {
 			// A no-op eligibility CHECK: observed, but not a span.
 			return;

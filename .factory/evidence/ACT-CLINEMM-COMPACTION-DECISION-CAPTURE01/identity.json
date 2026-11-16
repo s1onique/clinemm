@@ -1,0 +1,96 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01",
+  "type": "evidence acquisition (offline capture complete; installed qualification deferred to the operator)",
+
+  "repository": {
+    "top_level": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "origin": "git@github.com:s1onique/clinemm.git",
+    "upstream": "https://github.com/cline/cline.git",
+    "branch": "main",
+    "entry_head_discovered": "25517f509a9f00167f5a65dbdaa70b60198a8fef",
+    "expected_predecessor": "d14979749",
+    "entry_head_note": "The expected predecessor d14979749 IS the parent of the discovered HEAD. The discovered HEAD is the already-committed, approved S1 correction (the semicolon status-attribution gap), so C0.1 required NO new S1 commit: S1_HEAD == the discovered HEAD.",
+    "s1_head": "25517f509a9f00167f5a65dbdaa70b60198a8fef",
+    "s1_files": [
+      "sdk/packages/core/src/extensions/context/evidence-continuity.ts",
+      "sdk/packages/core/src/extensions/context/evidence-continuity.test.ts"
+    ],
+    "s1_state": "COMMITTED — the working tree was CLEAN at entry, so the two previously approved S1 files were already closed and no S1 review was repeated."
+  },
+
+  "conservation": {
+    "protected_stash": {
+      "ref": "stash@{0}",
+      "subject": "WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration",
+      "state": "PRESERVED — not popped, not dropped, not rewritten"
+    },
+    "stash_count": 1,
+    "worktree_count": 6,
+    "temporary_stashes_used": "NONE — the baseline comparison was performed by copying files to /tmp and restoring them, never by stashing",
+    "history_rewrite_or_force_push": "NONE",
+    "deployment": "NONE",
+    "keycloak_repository": "UNTOUCHED",
+    "unexpected_tracked_dirt": "NONE — one test-regenerated timestamp in .factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md was observed during the VS Code suite run and restored with `git checkout --`; it is not ACT-owned"
+  },
+
+  "source": {
+    "SOURCE_HEAD": "25517f509a9f00167f5a65dbdaa70b60198a8fef",
+    "CAPTURE_SOURCE_HEAD": "25517f509a9f00167f5a65dbdaa70b60198a8fef",
+    "SOURCE_VERSION": "4.1.16-5a1c485cb",
+    "production_change_was_necessary": true,
+    "production_change_scope": "3 source files, +201 lines; 3 new test files. No threshold, estimator, retention, model-config or summarizer change.",
+    "correction_receipt": "CORRECTION01.md supersedes the pre-correction source/package identity in this artifact. The final review verdict is PASS_WITH_NONBLOCKING_RESIDUE; the corrected six-file source/test set is committed separately, and packaging/installed qualification remain operator steps from that new committed HEAD. The historical bundle SHA below belongs to the pre-correction working-tree build and is NOT the corrected artifact identity.",
+    "changed_source": [
+      "sdk/packages/core/src/extensions/context/compaction.ts",
+      "sdk/packages/core/src/observability/latency/latency-sink.ts",
+      "sdk/packages/core/src/observability/latency/latency-trace.ts"
+    ],
+    "new_tests": [
+      "sdk/packages/core/src/extensions/context/compaction.decision-capture.red01.test.ts",
+      "sdk/packages/core/src/extensions/context/compaction.decision-capture.matrix.test.ts",
+      "sdk/packages/core/src/extensions/context/compaction.decision-capture.conservation.test.ts"
+    ]
+  },
+
+  "build": {
+    "sdk_build_command": "bun run build:sdk",
+    "sdk_build_exit_status": 0,
+    "extension_build_command": "cd apps/vscode && bun run package",
+    "extension_build_exit_status": 0,
+    "built_bundle_path": "apps/vscode/dist/extension.js",
+    "built_bundle_sha256": "a3096983adb0280d98ced953b12a007db711539c8957ca648ca228cd19d0d713",
+    "built_bundle_size_bytes": 28091785,
+    "capture_code_present_in_bundle": {
+      "compaction_decision": 1,
+      "underestimateFactor": 2,
+      "apiMessagesJsonChars": 2,
+      "decisionOrdinal": 2,
+      "recordPoint": 1
+    }
+  },
+
+
+  "package": {
+    "VSIX_PATH": "NOT_PRODUCED — the packaging step was deferred to the operator",
+    "VSIX_SIZE_BYTES": "NOT_AVAILABLE",
+    "VSIX_SHA256": "NOT_AVAILABLE",
+    "why": "vsce hardcodes `npm run <prepublish>` for the prepublish hook and this repository uses bun (npm is not installed). The established workaround is a minimal `npm` shim that delegates `npm run X` to `bun run X`, or a temporary prepublish override that is restored afterwards. The operator must produce the VSIX; the exact-head build inputs are already in place (SDK dist + apps/vscode/dist/extension.js both carry the capture code)."
+  },
+
+  "installed_artifact": {
+    "INSTALLED_VERSION": "4.1.16-5a1c485cb-ef1ef40ab",
+    "INSTALLED_BUNDLE_SHA256": "7d633cae332fc99a27b0885b946bf47d62f2195b8fe3f144309d43a538beb37e",
+    "installed_extension_dir": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.16-5a1c485cb-ef1ef40ab",
+    "capture_code_present_in_installed_bundle": false,
+    "binding_state": "NOT_BOUND — the installed artifact is the PRIOR ACT's build (ef1ef40ab) and does NOT carry the capture code",
+    "verdict": "HALT_ARTIFACT_MISMATCH for the installed qualification — the installed extension cannot be bound to the intended source until the operator packages and installs the exact-head VSIX."
+  },
+
+  "next_action_for_the_operator": {
+    "step_1": "Package the exact-head VSIX (see the `why` note above for the npm shim / prepublish workaround).",
+    "step_2": "Install it into the ISOLATED VSCodium dogfood profile: /Applications/VSCodium.app/Contents/Resources/app/bin/codium --install-extension <vsix> --extensions-dir ~/.vscodium-roz/extensions --user-data-dir ~/.vscodium-roz",
+    "step_3": "Launch with CLINEMM_RUNTIME_PROFILE=dogfood and confirm the extension host reports that profile.",
+    "step_4": "Run a disposable task, then the command 'Cline Debug: Dump Latency Trace' (cline.debug.dumpRoundcLatencyTrace).",
+    "step_5": "Confirm the exported trace contains `compaction_decision` events with the decision-time fields, and record the live decision record into decision-capture.json."
+  }
+}

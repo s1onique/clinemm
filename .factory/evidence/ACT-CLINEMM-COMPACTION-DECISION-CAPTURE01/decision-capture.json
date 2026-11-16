@@ -1,0 +1,134 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01",
+  "source_head": "25517f509a9f00167f5a65dbdaa70b60198a8fef",
+  "correction_state": "CORRECTED — see CORRECTION01.md. The corrected source publishes `compactionMode` and `compactionStrategy` (the finite exported-trace field names), and the complete decision payload is omitted unless an actual sink is present and not explicitly disabled. The source_head in this historical artifact is its entry identity; the corrected commit identity is recorded in CORRECTION01.md.",
+  "capture_channel": {
+    "sink": "LatencyTraceSink (sdk/packages/core/src/observability/latency/latency-sink.ts)",
+    "boundary": "compaction_decision",
+    "boundary_kind": "POINT OBSERVATION — no span, no manufactured duration",
+    "producer": "createContextCompactionPrepareTurn (sdk/packages/core/src/extensions/context/compaction.ts)",
+    "producer_channel": "onCompactionDiagnostics (the EXISTING ModelBehaviorTraceSink channel — no new channel, no new tracing subsystem)",
+    "opt_in": "Enabled only through the existing opt-in dogfood telemetry mechanism (applyRoundcLatencyTraceDiagnosticProfile / CLINEMM_RUNTIME_PROFILE=dogfood). OFF in the public profile by default."
+  },
+
+  "field_contract": {
+    "fields_published_by_this_act": [
+      { "field": "apiMessageTokens", "source": "production resolver: sum of estimateMessageTokens over context.apiMessages" },
+      { "field": "requestOverheadTokens", "source": "production resolver: max(0, requestInputTokens - apiMessageTokens)" },
+      { "field": "rawMaxInputTokens", "source": "production resolver: ceiling-adjusted model limit, else DEFAULT_MAX_INPUT_TOKENS (128k)" },
+      { "field": "actualPreviousInputTokens", "source": "production resolver: context.previousRequestInputTokens — the PREVIOUS request's provider-reported usage, NEVER the current candidate's" },
+      { "field": "underestimateFactor", "source": "production resolver: min(4, max(1, actualPreviousInputTokens / requestInputTokens))" },
+      { "field": "messageCount", "source": "production resolver: context.messages.length" },
+      { "field": "apiMessageCount", "source": "production resolver: context.apiMessages.length" },
+      { "field": "apiMessagesJsonChars", "source": "production resolver: safeJsonSize(context.apiMessages)" },
+      { "field": "decisionId", "source": "THIS ACT: `${sessionId}#${iteration}#${decisionOrdinal}`" },
+      { "field": "decisionOrdinal", "source": "THIS ACT: per-session monotonic counter of eligibility decisions; allocated ONLY when the diagnostic is armed" }
+    ],
+    "fields_already_published_before_this_act": [
+      "mode", "strategy", "requestInputTokens", "maxInputTokens", "requestTriggerTokens",
+      "userContextCeiling", "shouldCompact", "compactionInitiated", "inputBudgetSource",
+      "effectiveMaxInputTokens", "usedFallbackBudget"
+    ],
+    "recomputed_inside_the_tracer": "NONE — every published value is the production resolver's OWN already-computed result.",
+    "nan_infinity_or_missing_handling": "Missing values remain unavailable. The production resolver yields finite numbers for every published field; `userContextCeiling` is absent (not zero) when the setting is Auto."
+  },
+
+  "correlation": {
+    "identity_at_the_decision_seam": ["sessionId", "iteration", "decisionOrdinal"],
+    "modelRequestId_available_at_the_decision_seam": false,
+    "why": "modelRequestId is minted in agent-runtime.ts:2915 (streamPreparedRequest), AFTER prepareTurnForModelRequest has returned and therefore AFTER the compaction decision.",
+    "provider_dispatch_join": "PROVIDER_DISPATCH_JOIN_UNAVAILABLE",
+    "provider_dispatch_join_reason": "The decision's (sessionId, iteration) is available at the provider-dispatch seam, but a join that asserts the decision and the dispatch describe the SAME REQUEST attempt would require an authoritative mapping that the current seam does not publish. The ACT therefore does NOT manufacture a join from timestamps. The three objects are kept separate: the decision request (never submitted), the submitted request (post-compaction), and the previous provider usage.",
+    "objects_never_conflated": [
+      "Decision request — the candidate CONSIDERED for compaction (requestInputTokens at the decision seam). Never submitted.",
+      "Submitted request — the final payload after compaction and subsequent transforms (provider_ready / provider_submitted).",
+      "Previous provider usage — tokens from an EARLIER request (actualPreviousInputTokens)."
+    ]
+  },
+
+
+  "live_decision_records": {
+    "status": "NOT_YET_CAPTURED",
+    "reason": "The offline capture is complete and GREEN, and the extension bundle was rebuilt with the capture code present. The installed dogfood qualification (C5) has NOT been performed: the packaging step was deferred to the operator, so there is no exact-head VSIX and no installed bundle to bind the trace to.",
+    "consequence": "No LIVE automatic-compaction decision record is claimed by this artifact."
+  },
+
+  "offline_decision_records": {
+    "status": "CAPTURED_OFFLINE",
+    "note": "These are OFFLINE production-seam records produced by the ACT's own focused test. They are NOT live dogfood records and are NOT presented as such.",
+    "records": [
+      {
+        "label": "below-threshold auto eligibility check",
+        "mode": "auto",
+        "shouldCompact": false,
+        "compactionInitiated": false,
+        "execution_span_opened": false,
+        "integrity_failures": 0,
+        "reported_as_unavailable": false
+      },
+      {
+        "label": "above-threshold auto eligibility check",
+        "mode": "auto",
+        "shouldCompact": true,
+        "compactionInitiated": true,
+        "execution_span_opened": true,
+        "execution_span_count": 1
+      },
+      {
+        "label": "provider-calibrated auto eligibility check",
+        "mode": "auto",
+        "calibration_present": true,
+        "arithmetic_verified": "captured maxInputTokens == captured rawMaxInputTokens / captured underestimateFactor; captured requestTriggerTokens == captured maxInputTokens * COMPACTION_TRIGGER_RATIO"
+      },
+      {
+        "label": "user-ceiling auto eligibility check",
+        "mode": "auto",
+        "inputBudgetSource": "userCeiling",
+        "userContextCeiling": 50000,
+        "rawMaxInputTokens": 50000
+      },
+      {
+        "label": "manual compaction",
+        "mode": "manual",
+        "shouldCompact": false,
+        "compactionInitiated": true
+      },
+      {
+        "label": "overflow recovery",
+        "mode": "overflow_recovery",
+        "compactionInitiated": true
+      },
+      {
+        "label": "unknown model limit (auto)",
+        "mode": "auto",
+        "decision_recorded": false,
+        "note": "The production seam returns BEFORE the decision. NO threshold was evaluated and NO record was fabricated."
+      }
+    ]
+  },
+
+  "privacy": {
+    "metadata_only": true,
+    "free_of_source_text": true,
+    "free_of_prompts": true,
+    "free_of_tool_results": true,
+    "free_of_command_arguments": true,
+    "free_of_urls": true,
+    "free_of_credentials": true,
+    "witness": "The 'Synthetic sensitive content' scenario injects a synthetic API key and a credential-bearing URL into the messages and asserts that NEITHER appears in the serialized trace.",
+    "allowlist": "The existing finite LATENCY_METADATA_ALLOWLIST was extended with the new scalar fields. The sanitizer still DROPS any field that is not on the allowlist and still rejects non-primitive values.",
+    "new_public_protocol_fields": "NONE",
+    "sink_composition_expansiveness": "NOT expanded — onCompactionDiagnostics was already a member of COMPOSABLE_SINK_CHANNELS, so the compile-time exhaustiveness gate is unchanged."
+  },
+
+  "boundedness": {
+    "retention": "The existing LATENCY_TRACE_MAX_EVENTS ring (4096 events).",
+    "truncation_metadata": "Carried verbatim in the exported artifact's `truncation` block.",
+    "witness": "The 'Retention overflow' scenario drives 5000 decisions and asserts `truncation.truncated === true` and `droppedEventCount > 0` — explicit truncation metadata, no invented continuity."
+  },
+
+  "failure_isolation": {
+    "preserved": true,
+    "witness": "The 'Sink throws' scenario drives a sink whose every channel throws; the compaction still runs and still produces its result."
+  }
+}

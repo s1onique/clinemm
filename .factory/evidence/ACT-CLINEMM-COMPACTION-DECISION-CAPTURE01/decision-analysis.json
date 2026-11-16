@@ -1,0 +1,78 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01",
+  "source_head": "25517f509a9f00167f5a65dbdaa70b60198a8fef",
+  "analysis_class": "STRUCTURAL — offline production-seam replay",
+  "analysis_class_note": "The arithmetic below is verified against the production resolver's OWN captured values at the real production seam. It is NOT a live measurement and it establishes NO provider token count.",
+
+  "A_policy_arithmetic": {
+    "question": "Was the policy decision internally correct?",
+    "production_policy": {
+      "requestInputTokens": "estimateRequestInputTokens({ systemPrompt, messages: context.apiMessages, tools: context.tools })",
+      "underestimateFactor": "actualPreviousInputTokens > 0 && requestInputTokens > 0 ? min(4, max(1, actualPreviousInputTokens / requestInputTokens)) : 1",
+      "maxInputTokens": "rawMaxInputTokens / underestimateFactor",
+      "requestTriggerTokens": "maxInputTokens * COMPACTION_TRIGGER_RATIO",
+      "shouldCompact": "requestInputTokens >= requestTriggerTokens",
+      "compactionTriggerRatio": 0.9,
+      "compactionTriggerRatio_source": "sdk/packages/core/src/extensions/context/compaction-shared.ts:20 (COMPACTION_TRIGGER_RATIO) — the EXACT production constant"
+    },
+    "expected_trigger_formula": "capturedMaxInputTokens * capturedCompactionTriggerRatio",
+    "expected_eligibility_formula": "capturedRequestInputTokens >= expectedTrigger",
+    "offline_result": {
+      "below_threshold_case": { "captured_shouldCompact": false, "recomputed_shouldCompact": false, "match": true },
+      "above_threshold_case": { "captured_shouldCompact": true, "recomputed_shouldCompact": true, "match": true },
+      "calibration_case": { "captured_maxInputTokens_equals_raw_over_factor": true, "captured_trigger_equals_max_times_ratio": true },
+      "user_ceiling_case": { "captured_rawMaxInputTokens": 50000, "captured_inputBudgetSource": "userCeiling", "match": true }
+    },
+    "verdict": "The captured decision is internally CORRECT: in every offline scenario the captured `shouldCompact` equals the production policy recomputed from the captured values.",
+    "important_limitation": "An internally correct decision may still rest on an INACCURATE token estimate. This ACT does not claim the estimate is accurate."
+  },
+
+  "B_request_representation": {
+    "question": "Did the estimator use the expected request representation?",
+    "production_fact_1": "The compaction trigger measures `context.apiMessages`, NOT `context.messages` (compaction.ts:385-389).",
+    "production_fact_2": "The production orchestrator populates `context.apiMessages` with the API-SAFE PROJECTION before the trigger reads it: session-runtime-orchestrator.ts:1775 -> prepareProviderMessagesForApi (:1846-1856) -> MessageBuilder.buildForApi.",
+    "upstream_correction_present": true,
+    "upstream_correction_note": "The upstream v4.1.26 correction ('estimate re-compaction against API-safe projected messages') is present on BOTH the first-compaction and the re-compaction path in this fork.",
+    "offline_witness": "The conservation test asserts the captured `apiMessageCount` and `messageCount` equal the counts of the projection and the canonical history the seam was HANDED — the capture never builds a second projection.",
+    "distinctions_preserved": {
+      "canonical_history": "context.messages",
+      "api_safe_projected_candidate": "context.apiMessages — what the estimator consumed",
+      "post_compaction_continuation": "the seam's RETURNED messages",
+      "final_provider_submitted_request": "the request at provider_ready / provider_submitted — produced AFTER compaction and after every beforeModel hook"
+    },
+    "verdict": "SOURCE-FAITHFUL. The estimate consumed the actual API-safe projection supplied to the compaction seam. No hand-built raw representation was compared."
+  },
+
+
+  "C_estimator_accuracy_against_provider_usage": {
+    "question": "Is the estimate accurate against provider usage?",
+    "live_measurable": false,
+    "live_measurable_reason": "A provider cannot report actual input tokens for a candidate that was never submitted. The decision candidate is by definition NOT submitted, so its provider-measured token count is LIVE_UNOBSERVABLE.",
+    "candidate_classification": "LIVE_UNOBSERVABLE",
+    "matched_observations_present": false,
+    "matched_observations_reason": "No matched decision->dispatch observation was captured in this ACT (see decision-capture.json: PROVIDER_DISPATCH_JOIN_UNAVAILABLE).",
+    "verdict": "CAPTURE_INSUFFICIENT",
+    "explicit_non_claims": [
+      "The pre-compaction candidate is NOT compared against the post-compaction submission as if equivalent.",
+      "The previous request's usage is NOT compared against a new decision candidate and called an error.",
+      "Character estimates are NOT presented as authoritative provider token counts.",
+      "The historical ten compactions are NOT declared premature."
+    ],
+    "structural_replay_scope": "The offline replay verifies POLICY ARITHMETIC and REPRESENTATION only. It cannot and does not establish the exact provider token count of an unsubmitted candidate."
+  },
+
+  "historical_claims_remaining_unavailable_from_trace": [
+    "Whether each of the ten historical Round C compactions was justified — the decision-time estimate, threshold and calibration factor were never recorded before this ACT.",
+    "The provider-measured input tokens of any unsubmitted pre-compaction candidate.",
+    "The provider-reported model id and quantization for any historical run.",
+    "Whether any historical compaction's threshold was internally correct under a calibration factor that was never captured."
+  ],
+
+  "successor_decision": {
+    "round_c_authorization": "CAPTURE_INSUFFICIENT — stop without attempting another long benchmark",
+    "reason": "The Round C gate requires an INSTALLED dogfood trace capture qualified AND decision-time records attributable to their originating turn. The offline capture is complete, but the installed qualification (C5) has not been performed because packaging was deferred to the operator.",
+    "next_step": "The operator packages and installs the exact-head VSIX into the isolated VSCodium dogfood profile, then runs the C5 qualification. If a live automatic decision is captured, the Round C gate can be re-evaluated.",
+    "go_repair": false,
+    "go_repair_reason": "No estimator defect was reproduced at the correct boundary. The chars-per-token axis remains an OPEN QUESTION, not a reproduced defect."
+  }
+}

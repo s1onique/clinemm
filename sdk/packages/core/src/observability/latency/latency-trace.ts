@@ -109,6 +109,28 @@ export type LatencyBoundary =
 	| "tool_execution"
 	| "tool_result_delivered"
 	| "provider_ready"
+	/**
+	 * ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — the ELIGIBILITY
+	 * DECISION point.
+	 *
+	 * This boundary is a POINT OBSERVATION, not a span: the compaction
+	 * policy EVALUATED whether to compact and recorded the decision. It
+	 * is deliberately distinct from the `compaction` boundary, which
+	 * measures the EXECUTION of real compaction work.
+	 *
+	 * The distinction is load-bearing:
+	 *
+	 *   - `compaction_decision` — the policy evaluated eligibility. It
+	 *     happens on EVERY turn, whether or not compaction followed.
+	 *   - `compaction` — real compaction work ran. It happens only when
+	 *     the decision was to compact.
+	 *
+	 * A no-op eligibility check therefore leaves a `compaction_decision`
+	 * record and NO `compaction` span — so the trace can explain why a
+	 * compaction did NOT happen without manufacturing an execution
+	 * duration.
+	 */
+	| "compaction_decision"
 	| "compaction";
 
 /**
@@ -127,6 +149,7 @@ export const ALL_LATENCY_BOUNDARIES: readonly LatencyBoundary[] = [
 	"tool_execution",
 	"tool_result_delivered",
 	"provider_ready",
+	"compaction_decision",
 	"compaction",
 ];
 
@@ -254,6 +277,37 @@ export const LATENCY_METADATA_ALLOWLIST: readonly string[] = [
 	// Both are CLASSIFICATIONS — never content.
 	"compactionInitiated",
 	"compactionOutcome",
+	// ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — the DECISION RECORD
+	// fields.
+	//
+	// These are the production compaction resolver's OWN results: a token
+	// COUNT, a ratio, a SIZE, a count or a CLASSIFICATION. They are the
+	// evidence needed to explain an automatic-compaction decision with
+	// captured production values instead of inference.
+	//
+	// `requestInputTokens` is the production ESTIMATE of the candidate
+	// request. `actualPreviousInputTokens` is the provider-reported usage
+	// of an EARLIER request — never the candidate's usage, which no
+	// provider ever reported because the candidate was not submitted.
+	//
+	// No message text, prompt, tool result, URL or credential is carried.
+	"rawMaxInputTokens",
+	"actualPreviousInputTokens",
+	"underestimateFactor",
+	"requestTriggerTokens",
+	"requestOverheadTokens",
+	"apiMessageTokens",
+	"apiMessagesJsonChars",
+	"apiMessageCount",
+	"decisionId",
+	"decisionOrdinal",
+	"compactionMode",
+	"compactionStrategy",
+	"inputBudgetSource",
+	"userContextCeiling",
+	// The ELIGIBILITY RESULT itself. It is a boolean classification: the
+	// production policy's `shouldCompact` answer at the decision seam.
+	"shouldCompact",
 	// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01 — the first-TEXT
 	// observation.
 	//
@@ -903,6 +957,15 @@ export class LatencyTracer {
 	private readonly origin: number;
 	/** The boundaries that were opened at least once. */
 	private readonly openedBoundaries = new Set<LatencyBoundary>();
+	/**
+	 * ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — the boundaries that were
+	 * POINT-OBSERVED (recorded as an instant fact, never entered as a
+	 * span).
+	 *
+	 * A point observation is a COMPLETE record, not an unfinished span, so
+	 * it must never be reported as an unavailable measurement.
+	 */
+	private readonly pointObservedBoundaries = new Set<LatencyBoundary>();
 	/** The trace-integrity failures observed so far. */
 	private readonly integrityFailures: LatencyIntegrityFailure[] = [];
 	/** The measurements that were explicitly marked unavailable. */
@@ -1510,6 +1573,45 @@ export class LatencyTracer {
 	// -------------------------------------------------------------------------
 
 	/**
+	 * ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — record a POINT
+	 * OBSERVATION.
+	 *
+	 * A point observation is a fact about an instant: the compaction
+	 * policy evaluated eligibility and reached a decision. It is NOT a
+	 * span: no `enter` is recorded, no open span is created, and NO
+	 * duration is manufactured.
+	 *
+	 * This is what makes a no-op eligibility check observable WITHOUT
+	 * opening a fake compaction execution span. The `compaction` boundary
+	 * remains exclusively the EXECUTION boundary.
+	 *
+	 * The event is recorded with `phase: "start"` and NO matching
+	 * `phase: "end"`. Because the tracer only reports a "span left open"
+	 * integrity failure for boundaries that were ENTERED via `enter()`,
+	 * a point observation leaves NO integrity failure — it is a
+	 * deliberate, complete record, not an unfinished span.
+	 */
+	recordPoint(
+		boundary: LatencyBoundary,
+		metadata?: Readonly<Record<string, unknown>>,
+	): void {
+		try {
+			const now = this.clock.monotonic() - this.origin;
+			this.pointObservedBoundaries.add(boundary);
+			this.appendEvent({
+				correlationId: this.correlationId,
+				boundary,
+				phase: "start",
+				monotonicMs: now,
+				wallClockIso: this.clock.wallClockIso(),
+				metadata: sanitizeLatencyMetadata(metadata),
+			});
+		} catch {
+			// Failure isolation.
+		}
+	}
+
+	/**
 	 * Append a boundary event, evicting the oldest when the ring is full.
 	 */
 	private appendEvent(event: LatencyBoundaryEvent): void {
@@ -1721,6 +1823,12 @@ export class LatencyTracer {
 				continue;
 			}
 			if (this.openedBoundaries.has(boundary)) {
+				continue;
+			}
+			// ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — a POINT-OBSERVED
+			// boundary WAS observed: it is a fact about an instant, not a
+			// span. Reporting it as "not-observed" would be false.
+			if (this.pointObservedBoundaries.has(boundary)) {
 				continue;
 			}
 			unavailable.push({

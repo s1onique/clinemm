@@ -34754,3 +34754,32 @@ changed/new source files; all four RECON02 JSON receipts re-parse after the corr
 
 **Next.** S2 remains open pending matched decision evidence. The new VSIX / Round C pass remains
 **DEFERRED** until S1 and S2 are qualified.
+
+
+
+# ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — PASS_WITH_NONBLOCKING_RESIDUE — 2026-11-16
+
+**Status:** the final expert review returned **`PASS_WITH_NONBLOCKING_RESIDUE`**
+and `C1: GO` for commit and packaging. Both P0 findings in the original
+uncommitted capture diff are closed: the exported trace now preserves
+`compactionMode` / `compactionStrategy` for auto, manual, and overflow-recovery
+decisions, and the complete decision payload is omitted unless an actual sink is
+present and not explicitly disabled. The OFF path publishes no identity, does not
+advance the ordinal, and adds no capture-only provider-message serialization.
+
+**Gates.** Focused decision-capture suite 23/23 GREEN; full core context scope
+344 passed / 2 skipped; latency/runtime observability and orchestration 423/423
+GREEN; Biome clean on all 6 ACT-owned source/test files; SDK core typecheck 43
+known baseline diagnostics with zero in ACT-owned files; `git diff --check`
+clean. The protected stash and unrelated files remain intact.
+
+**Artifact boundary.** The six original evidence artifacts retain the
+pre-correction bundle/source/package receipts as HISTORICAL values and must not
+be presented as the corrected artifact identity. `CORRECTION01.md` is the
+authoritative correction receipt. No VSIX was produced by this correction; the
+operator must build/package from the new committed HEAD, install into
+`~/.vscodium-roz`, and qualify a real automatic-compaction decision. Full Round
+C remains NO-GO until the live capture passes.
+
+**Evidence.**
+`.factory/evidence/ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01/CORRECTION01.md`

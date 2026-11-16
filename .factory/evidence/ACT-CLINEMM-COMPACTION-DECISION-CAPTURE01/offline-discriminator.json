@@ -1,0 +1,100 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01",
+  "purpose": "Offline RED/GREEN discriminator for the automatic-compaction DECISION observation, plus the C3.3 conservation witness.",
+  "source_head": "25517f509a9f00167f5a65dbdaa70b60198a8fef",
+  "runner": "vitest (sdk/packages/core), bun 1.3.13",
+
+  "red": {
+    "status": "REPRODUCED",
+    "failure_kind": "MISSING_OBSERVATION",
+    "not_a_guessed_threshold": "The RED asserts on the PRESENCE of an observation and on the PRESENCE of production-computed values. It never asserts a threshold value that production does not itself compute.",
+    "witnesses": [
+      {
+        "id": "RED 1",
+        "file": "sdk/packages/core/src/extensions/context/compaction.decision-capture.red01.test.ts",
+        "assertion": "A no-op eligibility check leaves at least one `compaction_decision` observation in the latency trace.",
+        "observed_before": "0 observations — the latency sink returned early for `compactionInitiated === false`, so the decision that did NOT compact left NOTHING in the trace.",
+        "observed_after": "1 observation, 0 `compaction` execution spans, 0 integrity failures, 0 unavailable measurements."
+      },
+      {
+        "id": "RED 2",
+        "file": "sdk/packages/core/src/extensions/context/compaction.decision-capture.red01.test.ts",
+        "assertion": "The diagnostics payload carries `rawMaxInputTokens`, `actualPreviousInputTokens`, `underestimateFactor`, `requestOverheadTokens`, `apiMessageTokens`, `messageCount`, `apiMessageCount`, `apiMessagesJsonChars`.",
+        "observed_before": "`rawMaxInputTokens` was `undefined` (expected 200000). The calibration step was INVISIBLE, so the captured `maxInputTokens` could not be verified against the captured inputs.",
+        "observed_after": "All eight values are present and are the production resolver's OWN results."
+      }
+    ]
+  },
+
+  "green": {
+    "status": "GREEN",
+    "scenario_matrix": {
+      "file": "sdk/packages/core/src/extensions/context/compaction.decision-capture.matrix.test.ts",
+      "scenarios": [
+        { "scenario": "Below threshold", "assertion": "Decision observed; shouldCompact=false; NO execution span opened; no integrity failure; not reported as unavailable." },
+        { "scenario": "Trigger arithmetic", "assertion": "The captured `shouldCompact` equals `capturedRequestInputTokens >= capturedRequestTriggerTokens`, and the captured trigger equals `capturedMaxInputTokens * COMPACTION_TRIGGER_RATIO` (the EXACT production constant, imported from `compaction-shared.ts`, not guessed). This is a strictly-below-threshold fixture; the former misleading `Exactly at threshold` title was renamed rather than claimed as an equality witness." },
+        { "scenario": "Exported trace modes", "assertion": "The final sanitized `compaction_decision` trace preserves `compactionMode` and `compactionStrategy` for auto, manual, and overflow-recovery decisions." },
+        { "scenario": "Absent or disabled sink", "assertion": "No decision payload or identity is published; the ordinal does not advance; the capture adds no API-message JSON serialization relative to the pre-existing production work." },
+        { "scenario": "Above threshold", "assertion": "Correct threshold captured; `shouldCompact=true`; `compactionInitiated=true`; exactly ONE execution span opened." },
+        { "scenario": "Provider calibration", "assertion": "Captured factor equals the production calculation `min(4, max(1, actualPreviousInputTokens / requestInputTokens))`; the captured `maxInputTokens` equals `rawMaxInputTokens / underestimateFactor`; the captured trigger equals `maxInputTokens * ratio`." },
+        { "scenario": "User context ceiling", "assertion": "Captured effective budget equals the production resolver: `rawMaxInputTokens=50000`, `userContextCeiling=50000`, `inputBudgetSource='userCeiling'`." },
+        { "scenario": "Unknown model limit", "assertion": "Auto mode invents NO default-budget decision: the production seam returns before the decision, and NO record is fabricated (not even a `NOT_EVALUATED` classification — the existing internal contract does not support one safely)." },
+        { "scenario": "Manual compaction", "assertion": "`mode='manual'`; `shouldCompact=false` AND `compactionInitiated=true` — the two facts are independent and both captured." },
+        { "scenario": "Overflow recovery", "assertion": "`mode='overflow_recovery'`; `compactionInitiated=true`." },
+        { "scenario": "Consecutive decisions", "assertion": "Three decisions (two sharing an iteration) receive THREE distinct `decisionId`s and ordinals 0/1/2 — no collision." },
+        { "scenario": "Missing terminal event", "assertion": "No successful completion is fabricated: the execution span stays OPEN and is reported as an integrity failure." },
+        { "scenario": "Disabled diagnostics", "assertion": "No state or request semantic delta: the armed and disarmed runs produce identical results." },
+        { "scenario": "Sink throws", "assertion": "Existing failure isolation preserved: the compaction still runs and still produces its result when the diagnostic sink throws." },
+        { "scenario": "Synthetic sensitive content", "assertion": "A synthetic API key and URL in the messages are ABSENT from the exported trace." },
+        { "scenario": "Retention overflow", "assertion": "Explicit truncation metadata: `truncation.truncated === true` and `droppedEventCount > 0`; no invented continuity." }
+      ]
+    },
+    "conservation": {
+      "file": "sdk/packages/core/src/extensions/context/compaction.decision-capture.conservation.test.ts",
+      "compared_with_tracing_off_vs_on": [
+        "canonical input",
+        "prepared provider-visible messages",
+        "compaction decision (shouldCompact, compactionInitiated, requestInputTokens, requestTriggerTokens)",
+        "compacted continuation (the returned result)",
+        "provider dispatch arguments (the request the seam was handed)"
+      ],
+      "result": "IDENTICAL modulo the diagnostic records.",
+      "no_second_message_builder_build": "The captured `apiMessageCount` and `messageCount` are the counts of the projection the seam was HANDED — the capture never invokes the stateful production `MessageBuilder` a second time.",
+      "no_semantic_delta_when_off": "The decision ordinal is allocated ONLY when the diagnostic sink is armed (`isTraceEnabled() !== false`). With diagnostics OFF no counter advances and no state is kept."
+    }
+  },
+
+  "executable_gates": {
+    "focused_discriminator": { "command": "bun x vitest run src/extensions/context/compaction.decision-capture.{red01,matrix,conservation}.test.ts", "result": "GREEN" },
+    "existing_context_compaction_suites": { "command": "bun x vitest run src/extensions/context/", "result": "GREEN — 20 files passed, 340 tests passed, 2 skipped" },
+    "existing_latency_observability_suites": { "command": "bun x vitest run src/observability/ src/runtime/observability/ src/runtime/orchestration/", "result": "GREEN — 31 files passed, 423 tests passed" },
+    "combined_core_scope": { "command": "bun x vitest run src/extensions/context/ src/observability/", "result": "GREEN — 29 files passed, 496 tests passed, 2 skipped" },
+    "vscode_sdk_suite": {
+      "command": "bun x vitest run src/sdk/",
+      "result": "PRE-EXISTING FAILURES — UNCHANGED BY THIS ACT",
+      "with_change": { "test_files_failed": 67, "tests_failed": 176, "tests_passed": 5526 },
+      "baseline_at_head_25517f509": { "test_files_failed": 67, "tests_failed": 176, "tests_passed": 5526 },
+      "attribution": "The baseline was measured by restoring the three HEAD versions of the ACT's source files, rebuilding the SDK, and re-running the identical command. The failure counts are IDENTICAL, so none of the failures is attributable to this ACT. The failing files are unrelated domains (bootstrap, seatbelt, background commands, completion continuation)."
+    },
+    "typecheck_and_lint": {
+      "biome": "bun x --bun @biomejs/biome check --diagnostic-level=error <changed files> — Checked 6 files. No fixes applied.",
+      "sdk_build": "bun run build:sdk — @cline/core build succeeded (bun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts).",
+      "sdk_typecheck": {
+        "command": "cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit",
+        "with_change": 43,
+        "baseline_at_head_25517f509": 48,
+        "diagnostics_in_act_owned_files": 0,
+        "attribution": "All 43 remaining diagnostics are in PRE-EXISTING test files that this ACT did not touch. The count DROPPED from 48 to 48->43 because the ACT's widened LatencyBoundary union and metadata typing resolve five pre-existing diagnostics."
+      }
+    }
+  },
+
+  "span_correctness_invariants": [
+    "Every eligibility check generates at most ONE decision observation.",
+    "A false eligibility result creates NO compaction execution span.",
+    "An initiated compaction opens ONE execution span, closed by its actual completion/failure/cancellation.",
+    "No synthetic execution duration is manufactured — the decision is a POINT observation (`tracer.recordPoint`), which never calls `enter()`.",
+    "A missing terminal observation leaves the span explicitly OPEN (an integrity failure), never a fabricated success.",
+    "A point observation leaves NO 'span left open' integrity failure, because the tracer derives that failure from `openSpans`, which only `enter()` populates."
+  ]
+}

@@ -373,6 +373,31 @@ export function createContextCompactionPrepareTurn(
 	const sanitizedUserContextCeiling = normalizeUserContextCeiling(
 		userCompaction?.userContextCeiling,
 	);
+	// ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — the DECISION ORDINAL.
+	//
+	// `(sessionId, iteration)` alone does NOT distinguish two eligibility
+	// decisions inside the SAME iteration (a re-compaction attempt after a
+	// failed summarizer call, for example). The ordinal is a per-session
+	// monotonic counter that makes every decision observation uniquely
+	// addressable within the session.
+	//
+	// It is incremented ONLY when an ACTUAL diagnostic sink is ARMED, so
+	// the diagnostics-OFF path allocates no counter, keeps no state and
+	// performs no decision-capture work beyond the sink presence check.
+	let decisionOrdinal = 0;
+	const traceSink = config.modelBehaviorTraceSink;
+	const decisionDiagnosticsEnabled = (): boolean => {
+		if (!traceSink) {
+			return false;
+		}
+		try {
+			// A sink without an enable bit is treated as ARMED: it may still
+			// be a collecting sink that a test or a host reads directly.
+			return traceSink.isTraceEnabled?.() !== false;
+		} catch {
+			return false;
+		}
+	};
 
 	return async (context) => {
 		const effectiveMode: CoreCompactionMode = context.overflowRecovery
@@ -494,49 +519,104 @@ export function createContextCompactionPrepareTurn(
 			contextWindow: context.model.info?.contextWindow,
 			userContextCeiling: sanitizedUserContextCeiling,
 		});
-		observeCompactionTrace(
-			config.modelBehaviorTraceSink,
-			"diagnostics",
-			{
-				sessionId: config.sessionId,
-				iteration: context.iteration,
-				providerId: config.providerId,
-				modelId: config.modelId,
-			},
-			{
-				mode: effectiveMode,
-				strategy,
-				requestInputTokens,
-				maxInputTokens,
-				requestTriggerTokens,
-				userContextCeiling: sanitizedUserContextCeiling,
-				shouldCompact,
-				// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the ELIGIBILITY-CHECK
-				// discriminator.
-				//
-				// `shouldCompact` alone is NOT the answer to "did real
-				// compaction work begin?". In `auto` mode it answers
-				// "should it?", and the seam returns `undefined`
-				// immediately afterwards when it is false. In
-				// `manual` and `overflow_recovery` modes the seam ALWAYS
-				// proceeds to real work, whatever `shouldCompact` says.
-				//
-				// `compactionInitiated` answers the question the
-				// measurement actually needs: it is true exactly when
-				// this seam proceeds PAST the decision point and begins
-				// real compaction work. A consumer that opens a span on
-				// the diagnostics channel can therefore distinguish a
-				// no-op eligibility CHECK from an INITIATED compaction,
-				// and bound its span to the real execution.
-				//
-				// It is a boolean CLASSIFICATION, not content.
-				compactionInitiated: effectiveMode !== "auto" || shouldCompact,
-				// The ACT's required provenance field.
-				inputBudgetSource: budgetResolution.source,
-				effectiveMaxInputTokens: budgetResolution.effectiveMaxInputTokens,
-				usedFallbackBudget: budgetResolution.usedFallback,
-			},
-		);
+		// ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — build the DECISION
+		// RECORD only when an ACTUAL diagnostic sink is ARMED. With no
+		// sink, or with a sink that explicitly reports itself disabled,
+		// this path performs no ordinal allocation and no extra JSON
+		// serialization of the provider-visible message array.
+		if (decisionDiagnosticsEnabled()) {
+			const decisionOrdinalForObservation = decisionOrdinal++;
+			observeCompactionTrace(
+				config.modelBehaviorTraceSink,
+				"diagnostics",
+				{
+					sessionId: config.sessionId,
+					iteration: context.iteration,
+					providerId: config.providerId,
+					modelId: config.modelId,
+				},
+				{
+					compactionMode: effectiveMode,
+					compactionStrategy: strategy,
+					requestInputTokens,
+					maxInputTokens,
+					requestTriggerTokens,
+					userContextCeiling: sanitizedUserContextCeiling,
+					shouldCompact,
+					// ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — the DECISION
+					// RECORD.
+					//
+					// The values below are the PRODUCTION resolver's OWN
+					// results, already computed above. They are PUBLISHED here,
+					// not recomputed: the tracer observes what the policy
+					// actually used, and the captured arithmetic can therefore
+					// be verified against the captured inputs.
+					//
+					// Before this, only a SUBSET reached the diagnostic, so a
+					// consumer could not verify the captured `maxInputTokens`
+					// against the captured `rawMaxInputTokens` and
+					// `underestimateFactor` — the calibration step was
+					// invisible, and the threshold was unauditable.
+					//
+					// Every field is a privacy-safe scalar: a token COUNT, a
+					// ratio, a SIZE, a count or a classification. No message
+					// text, tool result, prompt, URL or credential is carried.
+					//
+					// `actualPreviousInputTokens` is the PREVIOUS request's
+					// provider-reported input usage — never the current
+					// candidate's usage, which no provider ever reported
+					// because the candidate was not submitted.
+					apiMessageTokens,
+					requestOverheadTokens,
+					rawMaxInputTokens,
+					actualPreviousInputTokens,
+					underestimateFactor,
+					messageCount: context.messages.length,
+					apiMessageCount: context.apiMessages.length,
+					apiMessagesJsonChars: safeJsonSize(context.apiMessages),
+					// ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01 — the
+					// DECISION IDENTITY.
+					//
+					// The `modelRequestId` is NOT available here: it is minted
+					// in `streamPreparedRequest`, AFTER this seam returns. The
+					// decision therefore carries its OWN stable identity —
+					// `(sessionId, iteration, decisionOrdinal)` — and the
+					// provider-dispatch join is established later, at the
+					// seam that owns the request id.
+					//
+					// The ordinal is a per-session monotonic counter of
+					// eligibility decisions. It distinguishes consecutive
+					// decisions within the SAME iteration (a re-compaction
+					// attempt), which `(sessionId, iteration)` alone cannot.
+					decisionId: `${config.sessionId ?? "unknown-session"}#${context.iteration ?? 0}#${decisionOrdinalForObservation}`,
+					decisionOrdinal: decisionOrdinalForObservation,
+					// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the ELIGIBILITY-CHECK
+					// discriminator.
+					//
+					// `shouldCompact` alone is NOT the answer to "did real
+					// compaction work begin?". In `auto` mode it answers
+					// "should it?", and the seam returns `undefined`
+					// immediately afterwards when it is false. In
+					// `manual` and `overflow_recovery` modes the seam ALWAYS
+					// proceeds to real work, whatever `shouldCompact` says.
+					//
+					// `compactionInitiated` answers the question the
+					// measurement actually needs: it is true exactly when
+					// this seam proceeds PAST the decision point and begins
+					// real compaction work. A consumer that opens a span on
+					// the diagnostics channel can therefore distinguish a
+					// no-op eligibility CHECK from an INITIATED compaction,
+					// and bound its span to the real execution.
+					//
+					// It is a boolean CLASSIFICATION, not content.
+					compactionInitiated: effectiveMode !== "auto" || shouldCompact,
+					// The ACT's required provenance field.
+					inputBudgetSource: budgetResolution.source,
+					effectiveMaxInputTokens: budgetResolution.effectiveMaxInputTokens,
+					usedFallbackBudget: budgetResolution.usedFallback,
+				},
+			);
+		}
 		if (effectiveMode === "auto" && !shouldCompact) {
 			return undefined;
 		}
