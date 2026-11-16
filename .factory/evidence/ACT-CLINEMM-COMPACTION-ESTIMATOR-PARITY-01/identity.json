@@ -1,0 +1,142 @@
+{
+  "schema": "cline.compaction-estimator-parity.identity.v1",
+  "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01",
+  "executor": "codium-clinemm",
+  "repository": {
+    "toplevel": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "remoteOrigin": "git@github.com:s1onique/clinemm.git",
+    "remoteUpstream": "https://github.com/cline/cline.git",
+    "branch": "main",
+    "sourceHead": "c1aff630fdf6669b9b1e63ec927796e6f5423f07",
+    "identityDiscovery": "DISCOVERED — no expected HEAD was assumed from any prior report."
+  },
+  "inputTrace": {
+    "localPath": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace.json",
+    "uploadedName": "roundc-latency-trace(4).json",
+    "localCanonicalNameDiscovered": true,
+    "bytes": 1364376,
+    "sha256": "631a506d0719314373bab801dfc70f646cca508318f87c59cdc5e3e2a1e517df",
+    "sha256MatchesActDeclaration": true,
+    "schema": "cline.roundc-latency-trace.v1",
+    "sessionId": "1794860704742_kxlwr",
+    "captureProfile": "dogfood",
+    "eventCount": 2750,
+    "truncated": false,
+    "droppedEventCount": 0,
+    "keptOutOfGit": true,
+    "reason": "The trace may contain request-side metadata. It is read-only input and is NOT committed."
+  },
+  "sessionArtifacts": {
+    "readOnly": true,
+    "keptOutOfGit": true,
+    "files": [
+      {
+        "path": ".../sessions/1794860704742_kxlwr/1794860704742_kxlwr.json",
+        "sha256": "1b03395d3c8d772e9fc2bbe79a696b7db452aa8917c1f5650dd39e01a5a6d944"
+      },
+      {
+        "path": ".../sessions/1794860704742_kxlwr/1794860704742_kxlwr.compaction.json",
+        "sha256": "935f2a093d0abc2ddd14ff9112758ea05e7fef828457852a7dbfc80e2d182bd5"
+      },
+      {
+        "path": ".../sessions/1794860704742_kxlwr/1794860704742_kxlwr.messages.json",
+        "sha256": "1a9ea881a4a88c91847e79436e9864745ba2fedd8431e626622fd3e7d3fe5d1c"
+      }
+    ],
+    "privacy": "These may contain raw prompts, tool outputs and credentials. They were NOT copied into the repository, NOT read into any committed artifact, and NOT included in any committed receipt."
+  },
+  "installedBundleIdentity": {
+    "extensionBundleSha256FromTrace": "86bc07f5654139685c656e45de4d82c3d4ce615575343f3b221baaac1c4d75c1",
+    "extensionVersionFromTrace": "4.1.16-5a1c485cb",
+    "sourceHeadFromTrace": "UNAVAILABLE_FROM_TRACE",
+    "providerFamilyFromTrace": "UNAVAILABLE_FROM_TRACE",
+    "effectiveModelIdFromTrace": "UNAVAILABLE_FROM_TRACE",
+    "note": "The trace was produced by an EXTENSION BUNDLE whose identity is NOT this repository's HEAD (c1aff630...). The analysis therefore applies the CURRENT source's estimator and accounting semantics to the historical session's measurements. The estimator's CHARS_PER_TOKEN = 3 and the AI SDK usage contract are identical in both, so the comparison is valid; the trace's own identity block is retained above rather than reconciled away."
+  },
+
+
+  "repositoryConservation": {
+    "unexpectedTrackedDirt": false,
+    "trackedFilesModifiedAtStart": 0,
+    "trackedFilesModifiedAtClose": 0,
+    "protectedStashPreserved": {
+      "ref": "stash@{0}",
+      "subject": "WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration",
+      "popped": false,
+      "modified": false,
+      "dropped": false
+    },
+    "temporaryStashesCreated": 0,
+    "historyRewritten": false,
+    "worktreesPreserved": [
+      "/private/tmp/clinemm-prebase (prunable)",
+      "/private/tmp/worktree-bun.7ddCHQ",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-1WJufc/clinemm-dogfood-cyoi5ujq/worktree (prunable)",
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first",
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded"
+    ],
+    "unrelatedDirtyFilesModified": 0,
+    "actOwnedPaths": [
+      "sdk/packages/core/src/extensions/context/compaction.estimator-parity01.test.ts",
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/"
+    ],
+    "productionSourceModified": false,
+
+    "note": "This ACT authorized DIAGNOSTIC/TEST changes only. No estimator, threshold, algorithm, provider-request or configuration file was modified."
+  },
+
+  "testCommands": [
+    {
+      "gate": "1 — Historical trace analysis",
+      "command": "cd .factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01 && bun historical-parity-analysis.ts <trace-path>",
+      "result": "PASS — baseline reproduced deterministically (median ratio 1.497827, mean excess 21009.2, 114 decisions, 6 compactions, 107 non-compacting pairs, trigger 103680, limit 115200, 0 truncated). Re-running produces byte-identical output."
+    },
+    {
+      "gate": "2 — Focused same-request parity discriminator",
+      "command": "cd sdk/packages/core && bun x vitest run --config vitest.config.ts src/extensions/context/compaction.estimator-parity01.test.ts",
+      "result": "PASS — 19 passed / 19."
+    },
+    {
+      "gate": "3 — Necessity and conservation controls",
+      "command": "cd sdk/packages/core && bun x vitest run --config vitest.config.ts src/extensions/context/compaction.estimator-parity01.test.ts",
+      "result": "PASS — the necessity and conservation controls are part of the same suite (oversized request still compacts; underestimate factor engages; unknown limit fails closed; budget guard rejects before dispatch)."
+    },
+    {
+      "gate": "4 — Existing context/compaction suites",
+      "command": "cd sdk/packages/core && bun x vitest run --config vitest.config.ts src/extensions/context/",
+      "result": "PASS — 21 files passed, 1 skipped; 363 tests passed, 2 skipped. No new attributable failures."
+    },
+    {
+      "gate": "4b — Shared estimator / request-budget suites",
+      "command": "cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/llms/tokens.test.ts src/llms/request-budget.test.ts",
+      "result": "PASS — 15 passed / 15."
+    },
+    {
+      "gate": "5 — Latency/runtime tests",
+      "command": "cd sdk/packages/core && bun x vitest run --config vitest.config.ts src/extensions/context/compaction.latency-span-lifecycle.red01.test.ts src/extensions/context/compaction.decision-capture.conservation.test.ts src/extensions/context/compaction.decision-capture.matrix.test.ts src/extensions/context/compaction.real-producer-seam-red.test.ts",
+      "result": "PASS — included in gate 4; all green."
+    },
+    {
+      "gate": "6 — Typecheck on affected packages",
+      "command": "cd sdk/packages/core && bun run typecheck",
+      "result": "PASS — 43 diagnostics, IDENTICAL to the pre-ACT baseline (verified by removing the ACT test file and re-running: 43 both ways). Zero ACT-owned diagnostics."
+    },
+    {
+      "gate": "7 — Biome on ACT-owned files",
+      "command": "bun x --bun @biomejs/biome check --diagnostic-level=error sdk/packages/core/src/extensions/context/compaction.estimator-parity01.test.ts",
+      "result": "PASS — clean at error and warn levels."
+    },
+    {
+      "gate": "8 — SDK build",
+      "command": "n/a",
+      "result": "SKIPPED — no production source changed."
+    }
+  ],
+  "toolchain": {
+    "packageManager": "bun",
+    "bunVersion": "1.3.13",
+    "testRunner": "vitest 4.1.10",
+    "nodeRuntime": "Node >=22 (the VS Code extension host and the standalone core are Node; bun is the task runner)"
+  },
+  "liveBenchmarking": "NOT PERFORMED — no live Strata probe, no Round C repetition, no VSIX install."
+}

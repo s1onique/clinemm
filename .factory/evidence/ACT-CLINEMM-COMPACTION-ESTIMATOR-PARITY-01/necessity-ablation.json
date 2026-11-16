@@ -1,0 +1,113 @@
+{
+  "schema": "cline.compaction-estimator-parity.necessity-ablation.v1",
+  "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01",
+  "method": "The production request projection is HELD FIXED. Exactly ONE accounting component is varied at a time. Production thresholds are NEVER changed to manufacture an effect; the ablations are computed analytically from the trace's own measured quantities.",
+  "hypotheses": [
+    {
+      "id": "H1",
+      "statement": "The estimator's fixed 3-chars-per-token divisor overcounts text that the provider tokenizer represents with more tokens per character.",
+      "status": "SUPPORTED",
+      "authority": "TRACE_CALIBRATION + PRODUCTION_SEAM",
+      "evidence": "Over the 107 non-compacting pairs the session's own provider-reported usage implies 4.129 chars/token on the message payload (3.473 on the full wire bytes, CV 0.0732). The estimator bills 3.0. The resulting est/true ratio is 1.4937 median (p10 1.4649, p90 1.5682).",
+      "note": "This is the DOMINANT component and the ONLY one that changes an operational decision."
+    },
+    {
+      "id": "H2",
+      "statement": "The estimator counts serialization characters that are not equivalent to provider tokenization.",
+      "status": "CONTRIBUTES_BUT_NOT_DECISIVE",
+      "authority": "PRODUCTION_SEAM",
+      "evidence": "The serialized envelope (role/content/type framing, tool schemas) is counted in full — the production-seam suite asserts that the envelope exceeds the bare text length and that system prompt and tool schemas each add tokens. This inflates the numerator by roughly 5,700 tokens on every request in the session (the constant requestOverheadTokens, 5,691-5,697).",
+      "note": "The overhead is ~5.8% of a typical candidate estimate. It is real, correctly attributed, and must NOT be removed — dropping it would under-count."
+    },
+    {
+      "id": "H3",
+      "statement": "ClineMM counts more result content than reaches the provider.",
+      "status": "NOT_SUPPORTED",
+      "authority": "TRACE",
+      "evidence": "toolResultShortenedCount = 0 and toolResultOmittedCount = 0 on every request in the trace, and providerReady.providerRequestBytes tracks compaction_decision.apiMessagesJsonChars within ~1,000-4,000 bytes on every non-compacting request. The API-safe projection is NOT smaller than what the decision measured.",
+      "note": "Consistent with the upstream v4.1.26 correction being already present in this fork."
+    },
+    {
+      "id": "H4",
+      "statement": "The reported inputTokens field is not the complete prompt-token count, or is transformed incorrectly.",
+      "status": "REFUTED",
+      "authority": "INSTALLED_SDK + TRACE",
+      "evidence": "The installed @ai-sdk/openai-compatible maps inputTokens.total = prompt_tokens (complete) and inputTokens.cacheRead = prompt_tokens_details.cached_tokens (subset). ClineMM reads inputTokens.total. The session's internal consistency agrees: providerRequestBytes / inputTokens has CV 0.0732, whereas (inputTokens + cacheReadTokens) / providerRequestBytes has CV 0.2214 — adding the cached subset BREAKS the proportionality.",
+      "note": "This ACT did NOT add cacheReadTokens to inputTokens; the quantities are not disjoint."
+    },
+    {
+      "id": "H5",
+      "statement": "The historical 1.5x discrepancy is partly or entirely a pairing artifact.",
+      "status": "REFUTED_AS_PRIMARY_CAUSE",
+      "authority": "TRACE + PRODUCTION_SEAM",
+      "evidence": "The production-seam suite proves the decision candidate and the dispatched projection carry the SAME estimate, so the comparison is same-request. The pairing METHOD was corrected (order-preserving rather than positional) and the median ratio moved only from 1.50415 to 1.497827.",
+      "note": "The pairing correction matters and was necessary, but it does not explain the discrepancy: the ratio remains ~1.50 either way."
+    },
+    {
+      "id": "H6",
+      "statement": "The estimate is conservative by design and does not cause demonstrated harmful early compaction.",
+      "status": "REFUTED_FOR_THIS_RUN",
+      "authority": "TRACE_CALIBRATION_BOUND",
+      "evidence": "The conservatism is real by design (the source comment on CHARS_PER_TOKEN says it 'slightly over-counts vs the conventional 4'), but it is sufficient to cause premature compaction here: all six Round C compactions had empirical true-token bounds of 71,830-76,488 against a 103,680 trigger.",
+      "note": "Conservative-by-design is a policy choice; it became an OPERATIONAL DEFECT only because the margin exceeded the decision margin."
+    }
+  ],
+
+
+  "ablations": [
+    {
+      "name": "H1 — chars-per-token divisor",
+      "variable": "CHARS_PER_TOKEN (the only component varied)",
+      "heldFixed": "The production request projection, the trigger (103,680), the effective limit (115,200), the underestimate factor, the compaction strategy, the provider request contents.",
+      "observedSessionValue": 4.129,
+      "estimatorValue": 3.0,
+      "candidatesThatWouldStillCompact": 6,
+      "maxDivisorAtWhichACandidateWouldStillCompact": 3.223,
+      "verdict": "DECISIVE — at the session's own observed rate (4.129) ZERO candidates would have compacted; even at the most pessimistic candidate (3.223) all six would still have been below the trigger."
+    },
+    {
+      "name": "H2 — system/tool overhead",
+      "variable": "The constant requestOverheadTokens (5,691-5,697) contributed by the system prompt and the tool declarations",
+      "heldFixed": "Everything else.",
+      "note": "Removing the overhead would lower each candidate estimate by ~5,692, i.e. to 98,850-105,261. That would have prevented 0 of the 6 compactions on its own.",
+      "verdict": "NOT DECISIVE — and removing it would be unsafe, because the system prompt and the tool schemas DO reach the provider."
+    },
+    {
+      "name": "H4 — cache interpretation",
+      "variable": "Whether cacheReadTokens is added to inputTokens",
+      "heldFixed": "Everything else.",
+      "note": "Adding them would RAISE the reported complete prompt by the cached subset (up to +69,900 tokens at the session's peak), making the estimator look better by accident. It would also double-count, which the installed SDK contract forbids.",
+      "verdict": "NOT APPLICABLE — the quantities are not disjoint. Rejected on contract grounds, not on effect."
+    }
+  ],
+
+
+  "necessityTest": {
+    "required": "current estimator >= configured trigger AND trusted actual input < configured trigger, for the SAME request content, model configuration and compaction policy.",
+    "currentEstimatorAtOrAboveTrigger": true,
+    "trustedActualInputBelowTrigger": true,
+    "trustedActualInputAuthority": "EMPIRICAL_BOUND derived from the session's own 107 measured provider usages; NOT an extrapolation from the previous provider request.",
+    "trustedActualInputRange": [71830, 76488],
+    "trigger": 103680,
+    "estimateRange": [104542, 110953],
+    "sameRequestContent": true,
+    "sameModelConfiguration": true,
+    "sameCompactionPolicy": true,
+    "genuinelyOversizedStillCompacts": true,
+    "genuinelyOversizedEvidence": "The production-seam suite asserts a genuinely oversized request still compacts, the underestimate factor still engages, the unknown-model-limit path still fails closed, and the final dispatch budget guard still rejects an over-ceiling request BEFORE dispatch.",
+    "verdict": "OVERCOUNT_OBSERVED_AND_PREEMPTIVE_COMPACTION_PROVEN"
+  },
+  "conservationRequirements": {
+    "unknownContextLimitFailClosed": "PRESERVED — compaction.ts:439-444 returns undefined (no decision) when the effective limit is unknown in auto mode. Asserted GREEN in the production-seam suite.",
+    "underestimationProtection": "PRESERVED — underestimateFactor still scales the budget down when the provider's previous count exceeds the estimate. Asserted GREEN.",
+    "providerOverflowRecovery": "PRESERVED — overflow_recovery mode is untouched by this analysis and still forces compaction regardless of the estimate.",
+    "userConfiguredContextCeiling": "PRESERVED — applyUserContextCeiling is untouched and can only reduce capacity.",
+    "systemToolOverhead": "PRESERVED — must NOT be removed; it is real payload.",
+    "imageAwareAccounting": "PRESERVED — the flat 1,600-per-image cost is untouched.",
+    "existingCompactionStrategy": "PRESERVED — no strategy change.",
+    "noChangeToProviderRequestContents": "TRUE — the defect is in the MEASUREMENT, not the request.",
+    "noChangeToAuthorizationOrToolExecution": "TRUE.",
+    "doNotTradePrematureCompactionForOverflow": "A successor must not simply raise the divisor: the estimator must remain conservative on DENSE content, which is exactly what the underestimate factor exists for."
+  },
+  "supportedCausalConclusion": "H1 is the dominant and decision-changing cause. H2 contributes a small, correctly-attributed amount that must be retained. H3 is not supported. H4 is refuted by the installed provider contract. H5 is refuted as a primary cause. H6 is refuted for this run: the design margin exceeded the decision margin."
+}

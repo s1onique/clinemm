@@ -1,0 +1,237 @@
+{
+  "schema": "cline.compaction-estimator-parity.historical-parity.v1",
+  "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01",
+  "input": {
+    "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace.json",
+    "bytes": 1364376,
+    "sha256": "631a506d0719314373bab801dfc70f646cca508318f87c59cdc5e3e2a1e517df",
+    "schema": "cline.roundc-latency-trace.v1",
+    "sessionId": "1794860704742_kxlwr",
+    "eventCount": 2750,
+    "unavailableCount": 108,
+    "integrityFailureCount": 4,
+    "truncated": false,
+    "droppedEventCount": 0
+  },
+  "pairing": {
+    "authority": "INFERRED_CHRONOLOGICAL_PAIRING",
+    "reason": "The trace exports no per-request identifier that spans the decision, the provider dispatch and the provider completion. `decisionId` is minted on the decision seam only; `modelRequestId` is not in the trace metadata allowlist. The pairing is therefore positional.",
+    "checks": {
+      "allTriplesStrictlyOrdered": false,
+      "concurrentModelRequests": false,
+      "retriesObserved": 0,
+      "cancellationsObserved": 0
+    }
+  },
+  "baseline": {
+    "decisionObservations": 114,
+    "providerSubmissions": 227,
+    "providerCompletions": 113,
+    "executedCompactions": 6,
+    "nonCompactingPairs": 107,
+    "medianEstimatedOverReportedRatio": 1.497827,
+    "meanEstimatedExcessTokens": 21009.2,
+    "compactionTrigger": 103680,
+    "effectiveInputLimit": 115200,
+    "truncatedEvents": 0
+  },
+  "ratioDistribution": {
+    "definition": "estimated (decision candidate) / provider-reported inputTokens, over non-compacting pairs",
+    "count": 107,
+    "min": 1.150903,
+    "max": 1.730474,
+    "median": 1.497827,
+    "p10": 1.177215,
+    "p90": 1.664711,
+    "meanExcessTokens": 21009.2
+  },
+  "ratioDecomposition": {
+    "note": "`inputTokens` is the provider's COMPLETE prompt token count (OpenAI-compatible `prompt_tokens`). `cacheReadTokens` is the CACHED SUBSET of it, NOT an additional quantity. Adding them double-counts the cached portion.",
+    "estimatedOverReportedCompletePrompt": {
+      "median": 1.497827
+    },
+    "providerWireBytesOver3OverReported": {
+      "median": 1.157523,
+      "min": 0.816862,
+      "max": 1.298692
+    },
+    "providerWireBytesOver3OverReportedPlusCache": {
+      "median": 1.042433,
+      "min": 0.497288,
+      "max": 1.20287
+    },
+    "observedCharsPerToken": {
+      "onProviderRequestBytes": 3.473,
+      "onApiMessagesJsonChars": 4.129,
+      "estimatorConstant": 3,
+      "onProviderRequestBytesStdev": 0.254,
+      "onProviderRequestBytesCv": 0.0732
+    }
+  },
+  "compactionEpochBreakdown": [
+    {
+      "decisionId": "1794860704742_kxlwr#17#16",
+      "requestInputTokens": 110953,
+      "requestTriggerTokens": 103680,
+      "excessOverTrigger": 7273,
+      "underestimateFactor": 1
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#33#32",
+      "requestInputTokens": 105733,
+      "requestTriggerTokens": 103680,
+      "excessOverTrigger": 2053,
+      "underestimateFactor": 1
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#54#53",
+      "requestInputTokens": 105484,
+      "requestTriggerTokens": 103680,
+      "excessOverTrigger": 1804,
+      "underestimateFactor": 1
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#71#70",
+      "requestInputTokens": 105739,
+      "requestTriggerTokens": 103680,
+      "excessOverTrigger": 2059,
+      "underestimateFactor": 1
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#91#90",
+      "requestInputTokens": 104542,
+      "requestTriggerTokens": 103680,
+      "excessOverTrigger": 862,
+      "underestimateFactor": 1
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#113#112",
+      "requestInputTokens": 109876,
+      "requestTriggerTokens": 103680,
+      "excessOverTrigger": 6196,
+      "underestimateFactor": 1
+    }
+  ],
+  "compactionDecisions": [
+    {
+      "decisionId": "1794860704742_kxlwr#17#16",
+      "compactionMode": "auto",
+      "compactionStrategy": "agentic",
+      "requestInputTokens": 110953,
+      "requestTriggerTokens": 103680,
+      "rawMaxInputTokens": 115200,
+      "underestimateFactor": 1,
+      "actualPreviousInputTokens": 88675,
+      "shouldCompact": true,
+      "compactionInitiated": true,
+      "decisionMonotonicMs": 288522.554291,
+      "executionDurationMs": null,
+      "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
+      "empiricalTrueTokenBound": 82185,
+      "charsPerTokenAtWhichItWouldNotCompact": 3.223
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#33#32",
+      "compactionMode": "auto",
+      "compactionStrategy": "agentic",
+      "requestInputTokens": 105733,
+      "requestTriggerTokens": 103680,
+      "rawMaxInputTokens": 115200,
+      "underestimateFactor": 1,
+      "actualPreviousInputTokens": 84095,
+      "shouldCompact": true,
+      "compactionInitiated": true,
+      "decisionMonotonicMs": 1050081.092333,
+      "executionDurationMs": null,
+      "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
+      "empiricalTrueTokenBound": 78387,
+      "charsPerTokenAtWhichItWouldNotCompact": 3.063
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#54#53",
+      "compactionMode": "auto",
+      "compactionStrategy": "agentic",
+      "requestInputTokens": 105484,
+      "requestTriggerTokens": 103680,
+      "rawMaxInputTokens": 115200,
+      "underestimateFactor": 1,
+      "actualPreviousInputTokens": 71381,
+      "shouldCompact": true,
+      "compactionInitiated": true,
+      "decisionMonotonicMs": 2022349.078,
+      "executionDurationMs": null,
+      "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
+      "empiricalTrueTokenBound": 78207,
+      "charsPerTokenAtWhichItWouldNotCompact": 3.055
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#71#70",
+      "compactionMode": "auto",
+      "compactionStrategy": "agentic",
+      "requestInputTokens": 105739,
+      "requestTriggerTokens": 103680,
+      "rawMaxInputTokens": 115200,
+      "underestimateFactor": 1,
+      "actualPreviousInputTokens": 70172,
+      "shouldCompact": true,
+      "compactionInitiated": true,
+      "decisionMonotonicMs": 2821232.982,
+      "executionDurationMs": null,
+      "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
+      "empiricalTrueTokenBound": 78393,
+      "charsPerTokenAtWhichItWouldNotCompact": 3.063
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#91#90",
+      "compactionMode": "auto",
+      "compactionStrategy": "agentic",
+      "requestInputTokens": 104542,
+      "requestTriggerTokens": 103680,
+      "rawMaxInputTokens": 115200,
+      "underestimateFactor": 1,
+      "actualPreviousInputTokens": 69037,
+      "shouldCompact": true,
+      "compactionInitiated": true,
+      "decisionMonotonicMs": 3751927.692416,
+      "executionDurationMs": null,
+      "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
+      "empiricalTrueTokenBound": 77525,
+      "charsPerTokenAtWhichItWouldNotCompact": 3.026
+    },
+    {
+      "decisionId": "1794860704742_kxlwr#113#112",
+      "compactionMode": "auto",
+      "compactionStrategy": "agentic",
+      "requestInputTokens": 109876,
+      "requestTriggerTokens": 103680,
+      "rawMaxInputTokens": 115200,
+      "underestimateFactor": 1,
+      "actualPreviousInputTokens": 62462,
+      "shouldCompact": true,
+      "compactionInitiated": true,
+      "decisionMonotonicMs": 4734028.620125,
+      "executionDurationMs": null,
+      "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
+      "empiricalTrueTokenBound": 81399,
+      "charsPerTokenAtWhichItWouldNotCompact": 3.19
+    }
+  ],
+  "necessity": {
+    "question": "Would the same request have fit the operating budget under a trusted token count?",
+    "empiricalBoundMethod": "The candidate was never submitted, so no provider ever reported its usage. The bound uses the SESSION'S OWN observed chars-per-token rate (median over the non-compacting pairs, whose provider usage IS available) applied to the candidate's measured `apiMessagesJsonChars`, plus the candidate's measured constant overhead. It is a bound, not a measurement.",
+    "observedCharsPerToken": 4.129,
+    "estimatorConstant": 3,
+    "allSixCandidatesBelowTriggerUnderBound": true,
+    "maxCharsPerTokenAtWhichACandidateWouldStillCompact": 3.223,
+    "nonCompactingRowsThatWouldHaveCompactedUnderTrueCount": 0,
+    "nonCompactingRowCount": 107,
+    "conservation": "A genuinely oversized request still compacts: the trigger comparison and the underestimate factor are unchanged by this analysis, and the production-seam suite asserts both."
+  },
+  "limitations": [
+    "Pairing authority is INFERRED_CHRONOLOGICAL_PAIRING, not authoritative request identity.",
+    "The six compaction candidates were never submitted; their provider input-token count is LIVE_UNOBSERVABLE.",
+    "The true-token bound for the candidates is derived from the session's own observed calibration, not from an authoritative tokenizer.",
+    "Provider-side usage semantics for this historical run are inferred from the installed AI SDK contract and the session's internal consistency, not from a captured raw provider response.",
+    "Strata server-side receipts were not retained for this run; no live Strata probe was performed."
+  ]
+}
