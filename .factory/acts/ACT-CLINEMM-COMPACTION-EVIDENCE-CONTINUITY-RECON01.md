@@ -1,5 +1,34 @@
 # ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01
 
+> **SUPERSEDED IN PART BY
+> `ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01`** (2026-11-16).
+>
+> The expert review of this ACT returned
+> **`HALT_EVIDENCE_CONTINUITY_UNSOUND`**. The ARCHITECTURE is KEPT (the
+> deterministic, canonical-derived carry-forward of verified tool outcomes
+> remains the right direction). Three correctness properties and one contract
+> limitation were corrected by the successor ACT:
+>
+> 1. **The causal discrimination was misattributed.** The first cut's
+>    `discriminate.py` selected `call_7735403ff4f640c3b9de90d0` (0 of 3
+>    decisive markers) instead of the decisive
+>    `call_f476e4ce0f204de8baabc31d` (3 of 3), and it reconstructed the
+>    summarizer input as `canonical[0..75)` rather than the actual
+>    `previousSummary + folded messages` request. The historical boundary is
+>    now **`CAPTURE_INSUFFICIENT`**, not `SUMMARIZER_OMISSION`.
+> 2. **A failed operation could be promoted to a success.** The first cut
+>    returned on the first positive flag, so a mixed-success batch certified
+>    a failure, and `isError: false` was treated as affirmative success.
+> 3. **The credential sanitizer was not safe for arbitrary output.** It
+>    missed JSON / YAML / quoted multi-word values. The successor replaced
+>    raw-output carry-forward with structured, allowlisted evidence.
+> 4. **The 12-outcome long-session limitation was not established.** It is
+>    now measured and asserted against the real Round C shape.
+>
+> The canonical/final-report contradiction described below remains REAL and
+> is the defect the repair exists for. See
+> `.factory/acts/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01.md`.
+>
 > Status: **CLOSED / VERIFIED_OUTCOME_CONTINUITY_REPAIRED**.
 >
 > Epistemic purpose: **BOUNDED_PRODUCTION_ENGINEERING** — reproduce the

@@ -33831,3 +33831,223 @@ EVIDENCE: `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01/
   `05-baseline-failing-files.txt`, `06-after-failing-files.txt`,
   `07-failing-file-set-diff.txt`, `discriminate.py`
 
+# ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01 — VERIFIED_EVIDENCE_ATTRIBUTION_AND_PRIVACY_CORRECTED — 2026-11-16
+
+**Status:** P1 bounded CORRECTION01 on `fbee2279e`. The expert review of
+`fbee2279e` returned `HALT_EVIDENCE_CONTINUITY_UNSOUND`: the architecture
+(deterministic, canonical-derived carry-forward of verified tool outcomes) is
+KEPT, but three correctness properties and one contract limitation needed
+correction. This ACT closes exactly those four items and nothing else.
+
+```text
+ACT_ID: ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01
+TYPE: P1 bounded production correction (causal discrimination + success
+        semantics + attribution + credential safety + contract limitation)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (compaction-evidence continuity)
+VERDICT: VERIFIED_EVIDENCE_ATTRIBUTION_AND_PRIVACY_CORRECTED
+ENTRY_HEAD: fbee2279e (ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01)
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+CLASSIFICATION: CAPTURE_INSUFFICIENT (historical boundary; the
+        canonical/final-report contradiction remains REAL)
+RED: 13 failed / 16 passed (29) at the pre-fix production seam
+GREEN: 29/29
+NO-REGRESSION: full core suite failing-file set BYTE-IDENTICAL before and
+        after (diff = 0 bytes); 241/241 in src/extensions/context (1 skipped);
+        50/50 in the apps/vscode compaction suites
+TYPECHECK: 43 errors before AND after (ZERO regression; ZERO in the changed files)
+LINT: biome 0 errors / 0 warnings on the 3 touched files
+SDK_BUILD: EXIT 0
+EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01/
+        ACT: .factory/acts/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01.md
+```
+
+## P0 (a) — the causal discriminator selected the WRONG tool result
+
+`discriminate.py` selected the FIRST result mentioning `helm template` or
+`rc=0`, which was `call_7735403ff4f640c3b9de90d0` (8,181 chars, **0 of 3**
+decisive markers) — a DIFFERENT tool call from the decisive one. The real
+decisive result is `call_f476e4ce0f204de8baabc31d` (3 of 3 markers).
+
+It also reconstructed the summarizer input as `canonical[0..75)`, which is
+NOT what production does: `runAgenticCompaction()` submits
+`previousSummary + newly folded messages` AFTER the input-budget projection
+(`agentic-compaction.ts:74-84`, `:140-167`).
+
+Now: selection is by MARKER COMPLETENESS with the full ranked candidate list
+printed; the canonical-prefix serialization is reported as a
+RECONSTRUCTION; and the actual summarizer-request capture is reported
+honestly — the canonical history holds **0** `compaction_summary` messages
+and **no** summarizer-request artifact exists on disk.
+
+```text
+R1_EXECUTION_IN_CANONICAL_HISTORY     : True
+R1_EXECUTION_IN_RECONSTRUCTION         : True
+R1_EXECUTION_IN_SUMMARIZER_INPUT      : UNKNOWN (request not captured)
+R1_EXECUTION_IN_INSTALLED_SUMMARY     : False
+CANONICAL_FINAL_REPORT_CONTRADICTION  : True
+CLASSIFICATION                        : CAPTURE_INSUFFICIENT
+```
+
+The canonical/final-report contradiction — the defect the repair exists for
+— remains REAL. The exact stage of the first loss is now correctly recorded
+as NOT ESTABLISHED. The repair's justification is unaffected: it makes the
+canonical record authoritative at the compaction seam regardless of where the
+loss occurred.
+
+## P0 (b) — a failed operation could be promoted to a success
+
+The first cut returned on the FIRST positive flag, so a mixed batch
+(`success:true` then `success:false`) classified as `succeeded`, and
+`isError: false` was treated as affirmative success. The real Round C
+transcript contains two such mixed batches
+(`call_1741e2129191405986d10517`, `call_11bcc4342baf4d6d94e8ed6c`), both of
+which the first cut certified.
+
+Now: classification is the aggregate over all payloads and a single failure
+poisons it; `isError: false` is NOT affirmative; and attribution FAILS
+CLOSED on `ambiguous_call_id`, `tool_name_mismatch`, `result_precedes_call`
+and `unmatched_result`. Every non-carried result is recorded in
+`ledger.rejected` with its reason, so the absence of a carried entry is
+auditable rather than silent.
+
+## P0 (c) — credential safety: structured evidence, not raw output
+
+The first cut carried up to 240 chars of RAW tool output behind a regex
+sanitizer that missed `{"password":"..."}`, `password="two word secret"` and
+`apiKey: "a b c"` — i.e. it could have PRESERVED credential-bearing output
+that the pre-repair pipeline would have discarded.
+
+Now the module NEVER carries raw tool output. It carries a structured,
+allowlisted record derived from the tool CALL's declared input plus the
+result's status: tool name, call id, status, command count, and a redacted
+command SUBJECT. The redaction is applied at the VALUE POSITION and consumes
+the whole quoted value. The RED test proves that a result containing all
+four of the review's counterexamples is carried as a verified success while
+NONE of the credential-bearing text reaches the provider request.
+
+## The long-session contract limitation is now ESTABLISHED
+
+Two tests pin the 12-outcome bound against the real Round C shape. The
+decisive Helm render `call_f476e4ce0f204de8baabc31d` (canonical index 22/23)
+followed by 45 later successful outcomes **does NOT survive the bound**. The
+limitation is now measured and asserted rather than implied; it is recorded
+as a known bounded limitation of the 12-outcome policy and is NOT reopened
+as an architecture project.
+
+## What this ACT does NOT change
+
+The architecture, the compaction seam (same three call sites as the task
+contract), telemetry, compaction eligibility, latency tracing, the
+task-contract conservation machinery, and the rest of the runtime. No new
+ledger, no retrieval service, no persistent evidence database.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01/`
+  `01-discriminator-output.txt`, `02-red-tests.txt`, `03-green-tests.txt`,
+  `05-baseline-failing-files.txt`, `06-after-failing-files.txt`,
+  `07-failing-file-set-diff.txt`, `discriminate.py`
+
+# ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02 — VERIFIED_EVIDENCE_SAFETY_COMPLETE — 2026-11-16
+
+**Status:** P1 bounded CORRECTION02 on the CORRECTION01 working tree. The
+second expert review returned `HALT_VERIFIED_EVIDENCE_SAFETY_INCOMPLETE`:
+the three original P0 repairs were accepted, but the CORRECTION01
+implementation introduced two NEW correctness problems. This ACT closes
+exactly those two, plus the duplicate-result attribution case, and nothing
+else.
+
+```text
+ACT_ID: ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02
+TYPE: P1 bounded production correction (command-confidentiality +
+        result-status contradiction + duplicate-result attribution)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (compaction-evidence continuity)
+VERDICT: VERIFIED_EVIDENCE_SAFETY_COMPLETE
+ENTRY_HEAD: CORRECTION01 working tree (uncommitted at review time)
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+CLASSIFICATION: CONFIRMED_BY_REPRODUCTION (both P0s reproduced against the
+        CORRECTION01 implementation before the fix)
+RED: 22 failed / 19 passed (41) at the pre-fix production seam
+GREEN: 41/41
+NO-REGRESSION: full core suite failing-file set BYTE-IDENTICAL before and
+        after (diff = 0 bytes); 253/253 in src/extensions/context (1 skipped);
+        50/50 in the apps/vscode compaction suites
+TYPECHECK: 43 errors before AND after (ZERO regression; ZERO in the changed files)
+LINT: biome 0 errors / 0 warnings on the 3 touched files
+SDK_BUILD: EXIT 0
+EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02/
+        ACT: .factory/acts/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02.md
+```
+
+## Scope
+
+This ACT touches ONLY the verified-outcome evidence module and its test
+suite. Per the review's disposition it does NOT touch the discriminator, the
+compaction lifecycle, telemetry, or the existing task-contract machinery.
+The three original P0 repairs and the raw-output removal are KEPT as-is.
+
+## P0-A — command arguments could still expose credentials
+
+CORRECTION01 removed raw tool OUTPUT, but still copied the first three
+words of the tool INPUT into the provider-visible summary. Command
+arguments are arbitrary user-controlled strings, so no regex can establish
+that an arbitrary argument is safe. Reproduced against CORRECTION01:
+`echo synthetic-example-password`,
+`curl https://demo:syntheticPassword@example.test/api` and
+`psql 'postgresql://demo:syntheticPassword@db.example.test/app'` all leaked
+the credential.
+
+Now the carried command information is a CLASSIFICATION drawn from a FINITE
+allowlist — `COMMAND_CLASSIFICATION_ALLOWLIST` (base commands) and
+`COMMAND_SUBCOMMAND_ALLOWLIST` (two-word refinements such as
+`helm template`). The longest match wins; a command matching nothing yields
+NO label, so the verified FACT survives and nothing unverified is invented.
+**No user-supplied argument, path or URL is ever persisted.**
+
+The rendered evidence is now `- run_commands (call_...): succeeded — helm
+template` instead of the CORRECTION01 form that embedded the user's
+`kc-test` argument.
+
+## P0-B — contradictory or incomplete statuses could certify success
+
+CORRECTION01's classifier used `continue` immediately after `success ===
+true`, which BYPASSED the `isError` check on that SAME payload, so it
+accepted `{success: true, isError: true}` as `succeeded`, and
+`[{success: true}, {isError: false}]` as `succeeded`.
+
+Now all failure indicators are checked INDEPENDENTLY on the same payload,
+EVERY payload must affirmatively succeed (a payload with only
+`isError: false` or no signal leaves the batch `unknown`), and the
+classification is order-independent — both orderings are tested.
+
+The related attribution case is also closed: a call id answered by MORE
+THAN ONE result now fails closed with the new `ambiguous_result_id`
+reason, so a successful result followed by a contradictory failed result no
+longer leaves the successful one carried. Both orderings are tested.
+
+## The long-session test is relabelled `SYNTHETIC_REAL`
+
+The review correctly noted the long-session test uses a synthetic sequence
+MODELLED ON the real transcript, not the transcript itself. It is now named
+`SYNTHETIC_REAL: ...` and states the distinction: it establishes the
+bound's behaviour for the real transcript's SHAPE, not a live replay.
+
+## The documented evidence-content limitation is unchanged
+
+Execution continuity is preserved (the operation succeeded, and which
+command classification), but the resolved image
+`quay.io/keycloak/keycloak:26.0.7` is deliberately NOT preserved. The
+provider-visible summary may still contain the summary prose's
+`NOT_EXECUTED` alongside the authoritative success record; the tests
+establish that both survive, not that the model resolves the contradiction.
+Already documented; does not reopen the architecture.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02/`
+  `02-red-tests.txt`, `03-green-tests.txt`,
+  `05-baseline-failing-files.txt`, `06-after-failing-files.txt`,
+  `07-failing-file-set-diff.txt`
+
+
+

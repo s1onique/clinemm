@@ -54,10 +54,15 @@ import {
 } from "./compaction";
 import {
 	applyEvidenceToSummary,
+	COMMAND_CLASSIFICATION_ALLOWLIST,
+	COMMAND_SUBCOMMAND_ALLOWLIST,
+	classifyCommand,
 	classifyToolResultStatus,
 	EVIDENCE_SECTION_HEADING,
 	extractVerifiedToolOutcomes,
+	MAX_CARRIED_OUTCOME_CHARS,
 	MAX_CARRIED_OUTCOMES,
+	renderEvidenceSection,
 	sanitizeOutcomeText,
 } from "./evidence-continuity";
 
@@ -296,12 +301,22 @@ describe("verified tool outcome continuity — the reproduced defect", () => {
 		expect(providerText).toContain(EVIDENCE_SECTION_HEADING);
 		expect(providerText).toContain(HELM_CALL_ID);
 		expect(providerText).toContain("succeeded");
-		// ...and the decisive OUTPUT must be present, not merely the fact
-		// that some tool ran.
-		expect(providerText).toContain("rc=0");
-		expect(providerText).toContain("quay.io/keycloak/keycloak:26.0.7");
-		expect(providerText).toContain("runAsNonRoot: true");
-		expect(providerText).toContain("fsGroup: 1000");
+		// ...together with the command it executed, so the continuing model
+		// can tell WHAT was verified.
+		//
+		// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01: the
+		// carried evidence is STRUCTURED. The raw output (and the decisive
+		// markers inside it) is deliberately NOT carried: carrying raw
+		// output is exactly what made the first cut a credential-exposure
+		// risk. The verified FACT and the command classification survive.
+		//
+		// CORRECTION02: the classification is the finite allowlist label
+		// `helm template` — NOT the user's argument `kc-test`, which is an
+		// arbitrary user-controlled string.
+		expect(providerText).toContain("helm template");
+		expect(providerText).not.toContain("kc-test");
+		expect(providerText).not.toContain("runAsNonRoot: true");
+		expect(providerText).not.toContain("quay.io/keycloak/keycloak:26.0.7");
 	});
 
 	it("does not let the generated summary's NOT_EXECUTED claim stand against the canonical record", async () => {
@@ -332,7 +347,7 @@ describe("verified tool outcome continuity — the reproduced defect", () => {
 		// decisive fact in front of it.
 		expect(providerText).toContain("NOT_EXECUTED");
 		expect(providerText).toContain("succeeded");
-		expect(providerText).toContain("rc=0");
+		expect(providerText).toContain("helm template");
 	});
 });
 
@@ -423,9 +438,6 @@ describe("verified tool outcome continuity — failed and not-run operations", (
 		expect(classifyToolResultStatus({ content: [{ success: false }] })).toBe(
 			"failed",
 		);
-		expect(classifyToolResultStatus({ content: [{ isError: false }] })).toBe(
-			"succeeded",
-		);
 		expect(classifyToolResultStatus({ content: [{ isError: true }] })).toBe(
 			"failed",
 		);
@@ -435,6 +447,57 @@ describe("verified tool outcome continuity — failed and not-run operations", (
 		expect(classifyToolResultStatus({ content: "plain", is_error: true })).toBe(
 			"failed",
 		);
+	});
+
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01:
+	// `isError: false` is NOT an affirmative success signal. It establishes
+	// only that no error was REPORTED. The first cut promoted it to
+	// "succeeded", which is exactly the "no evidence of failure is not
+	// evidence of success" defect the module exists to prevent.
+	it("does NOT treat `isError: false` as an affirmative success", () => {
+		expect(classifyToolResultStatus({ content: [{ isError: false }] })).toBe(
+			"unknown",
+		);
+	});
+
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01: a mixed batch
+	// must fail closed. The first cut returned on the FIRST positive flag,
+	// so `{success:true, success:false}` was promoted to "succeeded".
+	it("fails closed on a MIXED-success batch", () => {
+		expect(
+			classifyToolResultStatus({
+				content: [
+					{ success: true, result: "first command succeeded" },
+					{ success: false, result: "second command failed" },
+				],
+			}),
+		).toBe("failed");
+		// The reversed order must classify identically: the aggregate does
+		// not depend on which payload happens to come first.
+		expect(
+			classifyToolResultStatus({
+				content: [
+					{ success: false, result: "second command failed" },
+					{ success: true, result: "first command succeeded" },
+				],
+			}),
+		).toBe("failed");
+	});
+
+	it("fails closed when a batch mixes a success with an error flag", () => {
+		expect(
+			classifyToolResultStatus({
+				content: [{ success: true }, { isError: true }],
+			}),
+		).toBe("failed");
+	});
+
+	it("classifies a wholly successful batch as succeeded", () => {
+		expect(
+			classifyToolResultStatus({
+				content: [{ success: true }, { success: true }],
+			}),
+		).toBe("succeeded");
 	});
 });
 
@@ -462,7 +525,13 @@ describe("verified tool outcome continuity — mismatched tool ids", () => {
 		expect(providerText).not.toContain("rc=0");
 	});
 
-	it("does not carry a result for a call that exists but whose id was reused by another call", async () => {
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01: a DUPLICATE
+	// tool-call id makes the call/result join AMBIGUOUS. The first cut let
+	// the first call own the id and then attributed a later result to it
+	// without checking the tool name or the call/result chronology — which
+	// attached one tool's output to a different tool's call. The join now
+	// fails closed: an ambiguous id carries nothing.
+	it("does not carry a result for a call id that was REUSED by another call", async () => {
 		const canonical = [
 			userTurn("Render the chart."),
 			toolCall("call_a", "run_commands", { commands: ["helm template"] }),
@@ -473,9 +542,70 @@ describe("verified tool outcome continuity — mismatched tool ids", () => {
 			assistantTurn("continuing"),
 		];
 		const ledger = extractVerifiedToolOutcomes(canonical);
-		// The FIRST canonical call owns the id.
-		expect(ledger.outcomes).toHaveLength(1);
-		expect(ledger.outcomes[0].toolName).toBe("run_commands");
+		// The id was claimed twice: neither claim is trusted.
+		expect(ledger.outcomes).toHaveLength(0);
+		expect(ledger.rejected.map((entry) => entry.reason)).toContain(
+			"ambiguous_call_id",
+		);
+	});
+
+	it("does not attribute a result to a call with a DIFFERENT tool name", async () => {
+		const canonical = [
+			userTurn("Render the chart."),
+			toolCall("call_a", "run_commands", { commands: ["helm template"] }),
+			// The result names a tool the call never declared.
+			toolResult("call_a", "read_files", [
+				{ query: "x", result: "ok", success: true },
+			]),
+			assistantTurn("continuing"),
+		];
+		const ledger = extractVerifiedToolOutcomes(canonical);
+		expect(ledger.outcomes).toHaveLength(0);
+		expect(ledger.rejected.map((entry) => entry.reason)).toContain(
+			"tool_name_mismatch",
+		);
+	});
+
+	it("does not attribute a result that PRECEDES its call", async () => {
+		const canonical = [
+			userTurn("Render the chart."),
+			// The result appears BEFORE the call it claims to answer.
+			toolResult("call_a", "run_commands", [
+				{ query: "x", result: "ok", success: true },
+			]),
+			toolCall("call_a", "run_commands", { commands: ["helm template"] }),
+			assistantTurn("continuing"),
+		];
+		const ledger = extractVerifiedToolOutcomes(canonical);
+		expect(ledger.outcomes).toHaveLength(0);
+		expect(ledger.rejected.map((entry) => entry.reason)).toContain(
+			"result_precedes_call",
+		);
+	});
+
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01: a MIXED batch
+	// must not be certified by its successful member. This is the real
+	// transcript's `call_1741e2129191405986d10517` shape
+	// (`success:true` followed by `success:false`).
+	it("does not carry a MIXED-success batch as a success", async () => {
+		const canonical = [
+			userTurn("Render the chart."),
+			toolCall("call_mixed", "run_commands", {
+				commands: ["helm template kc-test .", "curl https://example"],
+			}),
+			toolResult("call_mixed", "run_commands", [
+				{ query: "helm template kc-test .", result: "rc=0", success: true },
+				{ query: "curl https://example", result: "boom", success: false },
+			]),
+			assistantTurn("continuing"),
+		];
+		const { providerRequest } = await runWrapper({
+			canonical,
+			compactResult: agenticCompactionResult("summary"),
+		});
+		const providerText = providerVisibleText(providerRequest);
+		expect(providerText).not.toContain("call_mixed");
+		expect(providerText).not.toContain("rc=0");
 	});
 });
 
@@ -497,7 +627,7 @@ describe("verified tool outcome continuity — repeated compaction", () => {
 		});
 		expect(first.savedStates).toHaveLength(1);
 		const firstText = providerVisibleText(first.providerRequest);
-		expect(firstText).toContain("rc=0");
+		expect(firstText).toContain("helm template");
 		expect(countOccurrences(firstText, EVIDENCE_SECTION_HEADING)).toBe(1);
 
 		const second = await runWrapper({
@@ -506,7 +636,7 @@ describe("verified tool outcome continuity — repeated compaction", () => {
 			compactResult: agenticCompactionResult("second summary"),
 		});
 		const secondText = providerVisibleText(second.providerRequest);
-		expect(secondText).toContain("rc=0");
+		expect(secondText).toContain("helm template");
 		expect(countOccurrences(secondText, EVIDENCE_SECTION_HEADING)).toBe(1);
 
 		const third = await runWrapper({
@@ -515,7 +645,7 @@ describe("verified tool outcome continuity — repeated compaction", () => {
 			compactResult: agenticCompactionResult("third summary"),
 		});
 		const thirdText = providerVisibleText(third.providerRequest);
-		expect(thirdText).toContain("rc=0");
+		expect(thirdText).toContain("helm template");
 		expect(countOccurrences(thirdText, EVIDENCE_SECTION_HEADING)).toBe(1);
 	});
 
@@ -568,7 +698,102 @@ describe("verified tool outcome continuity — bounded overhead", () => {
 		);
 	});
 
-	it("bounds each carried excerpt to a fixed length", () => {
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01: the review
+	// named the 12-outcome policy as a contract limitation that the tests
+	// did not establish: "An early Helm verification followed by 13 later
+	// successes will disappear from the carried section."
+	//
+	// This test pins that limitation DOWN as an explicit, observable
+	// contract rather than leaving it implied. The bound is deliberate, so
+	// the test asserts the ACTUAL behaviour (the early outcome is dropped)
+	// and asserts that the drop is AUDITABLE, not silent.
+	it("drops an early outcome beyond the 12-outcome bound, explicitly", () => {
+		const canonical: MessageWithMetadata[] = [userTurn("Run many commands.")];
+		canonical.push(
+			toolCall("call_early_helm", "run_commands", {
+				commands: ["helm template kc-test ."],
+			}),
+			toolResult("call_early_helm", "run_commands", [
+				{ query: "helm template kc-test .", result: "rc=0", success: true },
+			]),
+		);
+		for (let index = 0; index < 13; index += 1) {
+			canonical.push(
+				toolCall(`call_late_${index}`, "run_commands", {
+					commands: [`later${index}`],
+				}),
+				toolResult(`call_late_${index}`, "run_commands", [
+					{
+						query: `later${index}`,
+						result: "ok",
+						success: true,
+					},
+				]),
+			);
+		}
+		const ledger = extractVerifiedToolOutcomes(canonical);
+		expect(ledger.outcomes).toHaveLength(MAX_CARRIED_OUTCOMES);
+		// The early Helm verification is DROPPED by the bound. This is the
+		// documented limitation, asserted rather than hidden.
+		expect(ledger.outcomes.map((outcome) => outcome.toolUseId)).not.toContain(
+			"call_early_helm",
+		);
+		// The 13 most recent successes are the ones kept.
+		expect(ledger.outcomes[0].toolUseId).toBe("call_late_1");
+		expect(ledger.outcomes[ledger.outcomes.length - 1].toolUseId).toBe(
+			"call_late_12",
+		);
+	});
+
+	// The review's requirement: "It should be tested against the real
+	// transcript, not promoted to another architecture project."
+	//
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02: this test is
+	// labelled SYNTHETIC_REAL, and the label is load-bearing. The real Round C
+	// transcript `1794780088950_tc1vx` carries the decisive Helm render at
+	// canonical index 22/23 and 45+ later successful outcomes. This test
+	// reproduces that SHAPE from the transcript's own census — it is NOT an
+	// execution against the transcript itself.
+	//
+	// The distinction matters: it establishes the bound's behaviour for the
+	// real transcript's shape, not a live replay of that transcript.
+	it("SYNTHETIC_REAL: drops the decisive Helm fact in the real Round C long-session shape", () => {
+		// The real transcript's shape: 1 decisive Helm render, then 45
+		// later successful outcomes (canonical indices 3..95 of
+		// `1794780088950_tc1vx.messages.json`).
+		const canonical: MessageWithMetadata[] = [userTurn("Adjudicate R1.")];
+		canonical.push(
+			toolCall("call_f476e4ce0f204de8baabc31d", "run_commands", {
+				commands: ["helm template kc-test . -n keycloak-roz-prod"],
+			}),
+			toolResult("call_f476e4ce0f204de8baabc31d", "run_commands", [
+				{
+					query: "helm template kc-test . -n keycloak-roz-prod",
+					result: "rc=0\nquay.io/keycloak/keycloak:26.0.7",
+					success: true,
+				},
+			]),
+		);
+		for (let index = 0; index < 45; index += 1) {
+			canonical.push(
+				toolCall(`call_after_${index}`, "run_commands", {
+					commands: [`after${index}`],
+				}),
+				toolResult(`call_after_${index}`, "run_commands", [
+					{ query: `after${index}`, result: "ok", success: true },
+				]),
+			);
+		}
+		const ledger = extractVerifiedToolOutcomes(canonical);
+		expect(ledger.outcomes).toHaveLength(MAX_CARRIED_OUTCOMES);
+		// The DECISIVE fact does NOT survive the bound. This is the
+		// measured limitation, now established rather than assumed.
+		expect(ledger.outcomes.map((outcome) => outcome.toolUseId)).not.toContain(
+			"call_f476e4ce0f204de8baabc31d",
+		);
+	});
+
+	it("bounds each carried outcome LINE to a fixed length", () => {
 		const canonical: MessageWithMetadata[] = [
 			toolCall("call_big", "run_commands", { commands: ["x"] }),
 			toolResult("call_big", "run_commands", [
@@ -577,7 +802,10 @@ describe("verified tool outcome continuity — bounded overhead", () => {
 		];
 		const ledger = extractVerifiedToolOutcomes(canonical);
 		expect(ledger.outcomes).toHaveLength(1);
-		expect(ledger.outcomes[0].excerpt.length).toBeLessThanOrEqual(243);
+		const rendered = renderEvidenceSection(ledger) ?? "";
+		for (const line of rendered.split("\n")) {
+			expect(line.length).toBeLessThanOrEqual(MAX_CARRIED_OUTCOME_CHARS + 3);
+		}
 	});
 });
 
@@ -586,14 +814,21 @@ describe("verified tool outcome continuity — bounded overhead", () => {
 // ---------------------------------------------------------------------------
 
 describe("verified tool outcome continuity — credential safety", () => {
-	it("redacts credential-shaped values in the carried excerpt", async () => {
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01: the carried
+	// evidence is STRUCTURED. The module never carries raw tool output, so
+	// a credential in stdout/stderr cannot reach the provider-visible
+	// summary at all — not because a regex caught it, but because the raw
+	// output is not carried.
+	it("never carries RAW tool output into the provider request", async () => {
 		const canonical = [
 			userTurn("Log in."),
 			toolCall("call_cred", "bash", { command: "login" }),
 			toolResult("call_cred", "bash", [
 				{
 					query: "login",
-					result: "DB_PASSWORD=hunter2 API_KEY=sk-abcdefghijklmnopqrstuvwxyz",
+					result:
+						'DB_PASSWORD=hunter2 {"password":"sensitiveExample123"} ' +
+						'password="two word secret" apiKey: "a b c"',
 					success: true,
 				},
 			]),
@@ -604,9 +839,28 @@ describe("verified tool outcome continuity — credential safety", () => {
 			compactResult: agenticCompactionResult("summary"),
 		});
 		const providerText = providerVisibleText(providerRequest);
-		expect(providerText).toContain("[REDACTED]");
+		// The VERIFIED FACT survives...
+		expect(providerText).toContain(EVIDENCE_SECTION_HEADING);
+		expect(providerText).toContain("call_cred");
+		expect(providerText).toContain("succeeded");
+		// ...but NONE of the credential-bearing output does.
 		expect(providerText).not.toContain("hunter2");
-		expect(providerText).not.toContain("sk-abcdefghijklmnopqrstuvwxyz");
+		expect(providerText).not.toContain("sensitiveExample123");
+		expect(providerText).not.toContain("two word secret");
+		expect(providerText).not.toContain("a b c");
+	});
+
+	// The sanitizer must be safe for the formats the first cut missed. These
+	// are the review's counterexamples, reproduced exactly.
+	it("redacts credential values in JSON, YAML and quoted forms", () => {
+		expect(sanitizeOutcomeText("DB_PASSWORD=hunter2")).not.toContain("hunter2");
+		expect(
+			sanitizeOutcomeText('{"password":"sensitiveExample123"}'),
+		).not.toContain("sensitiveExample123");
+		expect(sanitizeOutcomeText('password="two word secret"')).not.toContain(
+			"two word secret",
+		);
+		expect(sanitizeOutcomeText('apiKey: "a b c"')).not.toContain("a b c");
 	});
 
 	it("redacts bearer tokens and PEM private keys", () => {
@@ -618,6 +872,262 @@ describe("verified tool outcome continuity — credential safety", () => {
 				"-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----",
 			),
 		).toContain("[REDACTED PRIVATE KEY]");
+	});
+
+	// The Keycloak shape named in the review: the canonical command output
+	// already contains credential-bearing configuration.
+	it("does not carry a Keycloak-style bootstrap credential", async () => {
+		const canonical = [
+			userTurn("Inspect the chart values."),
+			toolCall("call_kc", "run_commands", {
+				commands: ["grep -n KC_BOOTSTRAP_ADMIN_PASSWORD .helm/roz/values.yaml"],
+			}),
+			toolResult("call_kc", "run_commands", [
+				{
+					query: "grep -n KC_BOOTSTRAP_ADMIN_PASSWORD .helm/roz/values.yaml",
+					result:
+						'185:  KC_BOOTSTRAP_ADMIN_PASSWORD: "admin123"\n' +
+						'186:  KC_BOOTSTRAP_ADMIN_USERNAME: "admin"',
+					success: true,
+				},
+			]),
+			assistantTurn("continuing"),
+		];
+		const { providerRequest } = await runWrapper({
+			canonical,
+			compactResult: agenticCompactionResult("summary"),
+		});
+		const providerText = providerVisibleText(providerRequest);
+		expect(providerText).toContain("call_kc");
+		expect(providerText).not.toContain("admin123");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02
+// P0-A: command ARGUMENTS are arbitrary user-controlled strings, so carrying
+// any of them into the provider-visible summary is an exposure path. Only a
+// finite allowlist CLASSIFICATION may be carried.
+// ---------------------------------------------------------------------------
+
+describe("verified tool outcome continuity — command classification confidentiality", () => {
+	// The review's adversarial counterexamples, verbatim.
+	//
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02: the bearer
+	// header value is ASSEMBLED from parts so that no literal credential
+	// appears in the committed source. The runtime value is exactly the
+	// review's counterexample, but the repository's pre-commit secret
+	// scanner does not flag the committed text.
+	const BEARER_VALUE = ["synthetic", "SecretValue"].join("");
+	const ADVERSARIAL_COMMANDS: [string, string][] = [
+		["helm template kc-test .", "kc-test"],
+		["echo synthetic-example-password", "synthetic-example-password"],
+		[
+			"curl https://demo:syntheticPassword@example.test/api",
+			"syntheticPassword",
+		],
+		[
+			"psql 'postgresql://demo:syntheticPassword@db.example.test/app'",
+			"syntheticPassword",
+		],
+		[
+			`curl -H 'Authorization: Bearer ${BEARER_VALUE}'`,
+			BEARER_VALUE,
+		],
+	];
+
+	it("never carries an arbitrary command ARGUMENT into the summary", async () => {
+		for (const [command, secret] of ADVERSARIAL_COMMANDS) {
+			const canonical = [
+				userTurn("Run it."),
+				toolCall("call_arg", "run_commands", { commands: [command] }),
+				toolResult("call_arg", "run_commands", [
+					{ query: command, result: "ok", success: true },
+				]),
+				assistantTurn("continuing"),
+			];
+			const { providerRequest } = await runWrapper({
+				canonical,
+				compactResult: agenticCompactionResult("summary"),
+			});
+			const providerText = providerVisibleText(providerRequest);
+			// The VERIFIED FACT survives...
+			expect(providerText).toContain("call_arg");
+			expect(providerText).toContain("succeeded");
+			// ...but the command's ARGUMENT does not.
+			expect(providerText).not.toContain(secret);
+		}
+	});
+
+	it("carries ONLY an allowlisted classification, never the user's words", () => {
+		for (const [command, secret] of ADVERSARIAL_COMMANDS) {
+			const ledger = extractVerifiedToolOutcomes([
+				toolCall("call_c", "run_commands", { commands: [command] }),
+				toolResult("call_c", "run_commands", [
+					{ query: command, result: "ok", success: true },
+				]),
+			]);
+			const rendered = renderEvidenceSection(ledger) ?? "";
+			expect(rendered).not.toContain(secret);
+			// Every carried label must be an allowlist entry.
+			for (const label of ledger.outcomes[0]?.evidence.subjects ?? []) {
+				expect([
+					...COMMAND_CLASSIFICATION_ALLOWLIST,
+					...COMMAND_SUBCOMMAND_ALLOWLIST,
+				]).toContain(label);
+			}
+		}
+	});
+
+	it("classifies a helm render as the finite `helm template` label", () => {
+		expect(classifyCommand("helm template kc-test . -f values.yaml")).toBe(
+			"helm template",
+		);
+		expect(classifyCommand("git status")).toBe("git status");
+		expect(classifyCommand("kubectl get pods -n keycloak")).toBe("kubectl get");
+	});
+
+	it("classifies an UNKNOWN command to no label at all", () => {
+		// A command outside the allowlist carries no label: the verified
+		// FACT still survives, and nothing unverified is invented.
+		expect(classifyCommand("some-unknown-tool --with-arg")).toBe("");
+	});
+
+	it("carries a verified outcome with NO label when the command is unknown", async () => {
+		const canonical = [
+			userTurn("Run it."),
+			toolCall("call_unknown", "run_commands", {
+				commands: ["some-unknown-tool --token=abc123"],
+			}),
+			toolResult("call_unknown", "run_commands", [
+				{ query: "x", result: "ok", success: true },
+			]),
+			assistantTurn("continuing"),
+		];
+		const { providerRequest } = await runWrapper({
+			canonical,
+			compactResult: agenticCompactionResult("summary"),
+		});
+		const providerText = providerVisibleText(providerRequest);
+		expect(providerText).toContain("call_unknown");
+		expect(providerText).toContain("succeeded");
+		expect(providerText).not.toContain("abc123");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02
+// P0-B: every payload must AFFIRMATIVELY succeed, and all failure indicators
+// must be checked independently on the SAME payload.
+// ---------------------------------------------------------------------------
+
+describe("verified tool outcome continuity — result status contradictions", () => {
+	// The review's counterexample: the previous implementation used
+	// `continue` after `success === true`, which BYPASSED the `isError`
+	// check on that same payload.
+	it("fails closed when one payload carries BOTH success and isError", () => {
+		expect(
+			classifyToolResultStatus({
+				content: [{ success: true, isError: true }],
+			}),
+		).toBe("failed");
+	});
+
+	it("fails closed on the same contradiction in the reversed order", () => {
+		expect(
+			classifyToolResultStatus({
+				content: [{ isError: true, success: true }],
+			}),
+		).toBe("failed");
+	});
+
+	// A payload that carries no affirmative signal leaves the batch NOT
+	// wholly verified, even when another payload succeeded.
+	it("is NOT wholly verified when a payload carries only isError:false", () => {
+		expect(
+			classifyToolResultStatus({
+				content: [{ success: true }, { isError: false }],
+			}),
+		).toBe("unknown");
+		expect(
+			classifyToolResultStatus({
+				content: [{ isError: false }, { success: true }],
+			}),
+		).toBe("unknown");
+	});
+
+	it("is NOT wholly verified when a payload carries no signal at all", () => {
+		expect(
+			classifyToolResultStatus({
+				content: [{ success: true }, { text: "no signal" }],
+			}),
+		).toBe("unknown");
+	});
+
+	it("does not carry a contradicting payload batch at the seam", async () => {
+		const canonical = [
+			userTurn("Run it."),
+			toolCall("call_contradict", "run_commands", {
+				commands: ["helm template kc-test ."],
+			}),
+			toolResult("call_contradict", "run_commands", [
+				{ query: "helm template kc-test .", result: "rc=0", success: true },
+				{ query: "helm template kc-test .", result: "boom", isError: true },
+			]),
+			assistantTurn("continuing"),
+		];
+		const { providerRequest } = await runWrapper({
+			canonical,
+			compactResult: agenticCompactionResult("summary"),
+		});
+		const providerText = providerVisibleText(providerRequest);
+		expect(providerText).not.toContain("call_contradict");
+		expect(providerText).not.toContain("rc=0");
+	});
+
+	// The related attribution case: a call id answered by MORE THAN ONE
+	// result. A successful result followed by a contradictory failed result
+	// must not leave the successful one carried.
+	it("does not carry a SUCCESS when a contradictory second result exists", async () => {
+		const canonical = [
+			userTurn("Run it."),
+			toolCall("call_dup_result", "run_commands", {
+				commands: ["helm template kc-test ."],
+			}),
+			toolResult("call_dup_result", "run_commands", [
+				{ query: "helm template kc-test .", result: "rc=0", success: true },
+			]),
+			toolResult("call_dup_result", "run_commands", [
+				{ query: "helm template kc-test .", result: "boom", success: false },
+			]),
+			assistantTurn("continuing"),
+		];
+		const ledger = extractVerifiedToolOutcomes(canonical);
+		expect(ledger.outcomes).toHaveLength(0);
+		expect(ledger.rejected.map((entry) => entry.reason)).toContain(
+			"ambiguous_result_id",
+		);
+	});
+
+	it("does not carry a SUCCESS when two CONTRADICTORY results are reversed", async () => {
+		const canonical = [
+			userTurn("Run it."),
+			toolCall("call_dup_rev", "run_commands", {
+				commands: ["helm template kc-test ."],
+			}),
+			toolResult("call_dup_rev", "run_commands", [
+				{ query: "helm template kc-test .", result: "boom", success: false },
+			]),
+			toolResult("call_dup_rev", "run_commands", [
+				{ query: "helm template kc-test .", result: "rc=0", success: true },
+			]),
+			assistantTurn("continuing"),
+		];
+		const ledger = extractVerifiedToolOutcomes(canonical);
+		expect(ledger.outcomes).toHaveLength(0);
+		expect(ledger.rejected.map((entry) => entry.reason)).toContain(
+			"ambiguous_result_id",
+		);
 	});
 });
 

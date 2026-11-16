@@ -1111,25 +1111,38 @@ export {
 // the production budget resolver + ceiling sanitizer so the host can resolve
 // the SAME effective input budget the compaction policy applies.
 export { normalizeUserContextCeiling } from "./extensions/context/compaction-shared";
-// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01: the verified
+// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01: the verified
 // tool-outcome extraction and pure carry-forward transformation. The
 // canonical session history stays the only authority; this module is a pure
 // projection over it, never a second evidence owner. A generated summary may
 // omit historical detail, but it must not become more authoritative than the
 // canonical record of what actually executed.
+//
+// CORRECTION01: the carried evidence is STRUCTURED and ALLOWLISTED. It
+// never carries raw tool output, so no credential-bearing stdout/stderr can
+// reach the provider-visible summary. Attribution FAILS CLOSED on ambiguous
+// ids, tool-name mismatches and out-of-order results.
 export {
 	applyEvidenceToSummary,
 	applyVerifiedEvidenceToCompactedMessages,
+	COMMAND_CLASSIFICATION_ALLOWLIST,
+	COMMAND_SUBCOMMAND_ALLOWLIST,
+	classifyCommand,
 	classifyToolResultStatus,
 	EVIDENCE_SECTION_HEADING,
 	type EvidenceApplicationResult,
 	extractVerifiedToolOutcomes,
 	MAX_CARRIED_OUTCOME_CHARS,
 	MAX_CARRIED_OUTCOMES,
+	MAX_CARRIED_SUBJECT_CHARS,
+	MAX_CARRIED_SUBJECTS,
+	type RejectedVerifiedOutcome,
 	renderEvidenceSection,
 	sanitizeOutcomeText,
 	stripEvidenceSection,
+	type VerifiedOutcomeEvidence,
 	type VerifiedOutcomeLedger,
+	type VerifiedOutcomeRejectionReason,
 	type VerifiedOutcomeStatus,
 	type VerifiedToolOutcome,
 } from "./extensions/context/evidence-continuity";

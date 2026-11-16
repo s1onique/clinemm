@@ -1,0 +1,393 @@
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+ ❯ src/extensions/context/evidence-continuity.test.ts (29 tests | 13 failed) 22ms
+     × carries a SUCCESSFUL execution into the provider request even when the generated summary omitted it 9ms
+     × does not let the generated summary's NOT_EXECUTED claim stand against the canonical record 1ms
+     ✓ does not carry a FAILED operation as a success 0ms
+     ✓ does not carry a result whose explicit error flag is set 0ms
+     ✓ does not carry a tool CALL with no matching result (not run) 0ms
+     ✓ does not carry a result with NO success signal at all 0ms
+     ✓ classifies the result status from the RESULT itself 0ms
+     × does NOT treat `isError: false` as an affirmative success 1ms
+     × fails closed on a MIXED-success batch 0ms
+     × fails closed when a batch mixes a success with an error flag 0ms
+     ✓ classifies a wholly successful batch as succeeded 0ms
+     ✓ does not attribute a result to a DIFFERENT call 0ms
+     × does not carry a result for a call id that was REUSED by another call 1ms
+     × does not attribute a result to a call with a DIFFERENT tool name 0ms
+     × does not attribute a result that PRECEDES its call 0ms
+     × does not carry a MIXED-success batch as a success 0ms
+     × keeps exactly ONE evidence section across repeated compactions 1ms
+     ✓ replaces a STALE carried section with the current canonical one 0ms
+     ✓ carries at most MAX_CARRIED_OUTCOMES outcomes regardless of transcript length 2ms
+     ✓ drops an early outcome beyond the 12-outcome bound, explicitly 0ms
+     ✓ drops the decisive Helm fact in the real Round C long-session shape 0ms
+     × bounds each carried outcome LINE to a fixed length 1ms
+     × never carries RAW tool output into the provider request 1ms
+     × redacts credential values in JSON, YAML and quoted forms 0ms
+     ✓ redacts bearer tokens and PEM private keys 0ms
+     ✓ does not carry a Keycloak-style bootstrap credential 0ms
+     ✓ is a pure function of the canonical history 0ms
+     ✓ strips and re-applies the section idempotently 0ms
+     ✓ does not rewrite a summary when nothing is verified 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — the reproduced defect > carries a SUCCESSFUL execution into the provider request even when the generated summary omitted it
+AssertionError: expected 'Context summary:\n\n## Goal\nRender t…' to contain 'helm template kc-test'
+
+- Expected
++ Received
+
+- helm template kc-test
++ Context summary:
++
++ ## Goal
++ Render the chart.
++ ## State
++ - Done: read the chart values.
++ - Blocked: several command outputs were blank, incomplete, or unavailable.
++ ## Next
++ - Still need the effective Helm rendering.
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Render the chart and report the effective image.
++ <!-- cline-task-contract:end -->
++
++ ## Verified tool outcomes (canonical record)
++ <!-- cline-evidence:begin -->
++ - run_commands (call_f476e4ce0f204de8baabc31d): succeeded — rc=0
++ 13
++ 213: image: "quay.io/keycloak/keycloak:26.0.7"
++ 210: securityContext:
++ 211: runAsNonRoot: true
++ 212- runAsUser: 1000
++ 290: securityContext:
++ 291- fsGroup: 1000
++ 294- nodeSelector:
++ 295- dedicated: keycloak
++ <!-- cline-evidence:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:309:24
+    307|   // output is exactly what made the first cut a credential-exposure
+    308|   // risk. The verified FACT and the command subject survive.
+    309|   expect(providerText).toContain("helm template kc-test");
+       |                        ^
+    310|   expect(providerText).not.toContain("runAsNonRoot: true");
+    311|   expect(providerText).not.toContain("quay.io/keycloak/keycloak:26.0.7…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — the reproduced defect > does not let the generated summary's NOT_EXECUTED claim stand against the canonical record
+AssertionError: expected 'Context summary:\n\n## Goal\nRender t…' to contain 'helm template kc-test'
+
+- Expected
++ Received
+
+- helm template kc-test
++ Context summary:
++
++ ## Goal
++ Render the chart.
++ ## State
++ - Done: read the chart values.
++ ## Next
++ - `helm template` offline render: NOT_EXECUTED.
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Render the chart and report the effective image.
++ <!-- cline-task-contract:end -->
++
++ ## Verified tool outcomes (canonical record)
++ <!-- cline-evidence:begin -->
++ - run_commands (call_f476e4ce0f204de8baabc31d): succeeded — rc=0
++ 13
++ 213: image: "quay.io/keycloak/keycloak:26.0.7"
++ 210: securityContext:
++ 211: runAsNonRoot: true
++ 212- runAsUser: 1000
++ 290: securityContext:
++ 291- fsGroup: 1000
++ 294- nodeSelector:
++ 295- dedicated: keycloak
++ <!-- cline-evidence:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:342:24
+    340|   expect(providerText).toContain("NOT_EXECUTED");
+    341|   expect(providerText).toContain("succeeded");
+    342|   expect(providerText).toContain("helm template kc-test");
+       |                        ^
+    343|  });
+    344| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — failed and not-run operations > does NOT treat `isError: false` as an affirmative success
+AssertionError: expected 'succeeded' to be 'unknown' // Object.is equality
+
+Expected: "unknown"
+Received: "succeeded"
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:450:71
+    448|  // evidence of success" defect the module exists to prevent.
+    449|  it("does NOT treat `isError: false` as an affirmative success", () =>…
+    450|   expect(classifyToolResultStatus({ content: [{ isError: false }] })).…
+       |                                                                       ^
+    451|    "unknown",
+    452|   );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — failed and not-run operations > fails closed on a MIXED-success batch
+AssertionError: expected 'succeeded' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "succeeded"
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:466:5
+    464|     ],
+    465|    }),
+    466|   ).toBe("failed");
+       |     ^
+    467|   // The reversed order must classify identically: the aggregate does
+    468|   // not depend on which payload happens to come first.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — failed and not-run operations > fails closed when a batch mixes a success with an error flag
+AssertionError: expected 'succeeded' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "succeeded"
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:484:5
+    482|     content: [{ success: true }, { isError: true }],
+    483|    }),
+    484|   ).toBe("failed");
+       |     ^
+    485|  });
+    486|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — mismatched tool ids > does not carry a result for a call id that was REUSED by another call
+AssertionError: expected [ { toolUseId: 'call_a', …(4) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:538:27
+    536|   const ledger = extractVerifiedToolOutcomes(canonical);
+    537|   // The id was claimed twice: neither claim is trusted.
+    538|   expect(ledger.outcomes).toHaveLength(0);
+       |                           ^
+    539|   expect(
+    540|    ledger.rejected.map((entry) => entry.reason),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — mismatched tool ids > does not attribute a result to a call with a DIFFERENT tool name
+AssertionError: expected [ { toolUseId: 'call_a', …(4) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:555:27
+    553|   ];
+    554|   const ledger = extractVerifiedToolOutcomes(canonical);
+    555|   expect(ledger.outcomes).toHaveLength(0);
+       |                           ^
+    556|   expect(
+    557|    ledger.rejected.map((entry) => entry.reason),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — mismatched tool ids > does not attribute a result that PRECEDES its call
+AssertionError: expected [ { toolUseId: 'call_a', …(4) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:572:27
+    570|   ];
+    571|   const ledger = extractVerifiedToolOutcomes(canonical);
+    572|   expect(ledger.outcomes).toHaveLength(0);
+       |                           ^
+    573|   expect(
+    574|    ledger.rejected.map((entry) => entry.reason),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — mismatched tool ids > does not carry a MIXED-success batch as a success
+AssertionError: expected 'Context summary:\n\nsummary\n\n## Act…' not to contain 'call_mixed'
+
+- Expected
++ Received
+
+- call_mixed
++ Context summary:
++
++ summary
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Render the chart.
++ <!-- cline-task-contract:end -->
++
++ ## Verified tool outcomes (canonical record)
++ <!-- cline-evidence:begin -->
++ - run_commands (call_mixed): succeeded — rc=0
++ boom
++ <!-- cline-evidence:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:599:28
+    597|   });
+    598|   const providerText = providerVisibleText(providerRequest);
+    599|   expect(providerText).not.toContain("call_mixed");
+       |                            ^
+    600|   expect(providerText).not.toContain("rc=0");
+    601|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — repeated compaction > keeps exactly ONE evidence section across repeated compactions
+AssertionError: expected 'Context summary:\n\nfirst summary\n\n…' to contain 'helm template kc-test'
+
+- Expected
++ Received
+
+- helm template kc-test
++ Context summary:
++
++ first summary
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Render the chart and report the effective image.
++ <!-- cline-task-contract:end -->
++
++ ## Verified tool outcomes (canonical record)
++ <!-- cline-evidence:begin -->
++ - run_commands (call_f476e4ce0f204de8baabc31d): succeeded — rc=0
++ 13
++ 213: image: "quay.io/keycloak/keycloak:26.0.7"
++ 210: securityContext:
++ 211: runAsNonRoot: true
++ 212- runAsUser: 1000
++ 290: securityContext:
++ 291- fsGroup: 1000
++ 294- nodeSelector:
++ 295- dedicated: keycloak
++ <!-- cline-evidence:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:622:21
+    620|   expect(first.savedStates).toHaveLength(1);
+    621|   const firstText = providerVisibleText(first.providerRequest);
+    622|   expect(firstText).toContain("helm template kc-test");
+       |                     ^
+    623|   expect(countOccurrences(firstText, EVIDENCE_SECTION_HEADING)).toBe(1…
+    624|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — bounded overhead > bounds each carried outcome LINE to a fixed length
+AssertionError: expected 282 to be less than or equal to 243
+ ❯ src/extensions/context/evidence-continuity.test.ts:794:24
+    792|   const rendered = renderEvidenceSection(ledger) ?? "";
+    793|   for (const line of rendered.split("\n")) {
+    794|    expect(line.length).toBeLessThanOrEqual(MAX_CARRIED_OUTCOME_CHARS +…
+       |                        ^
+    795|   }
+    796|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — credential safety > never carries RAW tool output into the provider request
+AssertionError: expected 'Context summary:\n\nsummary\n\n## Act…' not to contain 'sensitiveExample123'
+
+- Expected
++ Received
+
+- sensitiveExample123
++ Context summary:
++
++ summary
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Log in.
++ <!-- cline-task-contract:end -->
++
++ ## Verified tool outcomes (canonical record)
++ <!-- cline-evidence:begin -->
++ - bash (call_cred): succeeded — DB_PASSWORD=[REDACTED] {"password":"sensitiveExample123"} password="two word secret" apiKey: "a b c"
++ <!-- cline-evidence:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:835:28
+    833|   // ...but NONE of the credential-bearing output does.
+    834|   expect(providerText).not.toContain("hunter2");
+    835|   expect(providerText).not.toContain("sensitiveExample123");
+       |                            ^
+    836|   expect(providerText).not.toContain("two word secret");
+    837|   expect(providerText).not.toContain("a b c");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — credential safety > redacts credential values in JSON, YAML and quoted forms
+AssertionError: expected '{"password":"sensitiveExample123"}' not to contain 'sensitiveExample123'
+
+Expected: "sensitiveExample123"
+Received: "{"password":"sensitiveExample123"}"
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:848:9
+    846|   expect(
+    847|    sanitizeOutcomeText('{"password":"sensitiveExample123"}'),
+    848|   ).not.toContain("sensitiveExample123");
+       |         ^
+    849|   expect(sanitizeOutcomeText('password="two word secret"')).not.toCont…
+    850|    "two word secret",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/13]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  13 failed | 16 passed (29)
+   Start at  10:17:05
+   Duration  1.39s (transform 822ms, setup 0ms, import 1.29s, tests 22ms, environment 0ms)
+
+[0m[31merror[0m[2m:[0m "[1mvitest[0m" exited with code 1

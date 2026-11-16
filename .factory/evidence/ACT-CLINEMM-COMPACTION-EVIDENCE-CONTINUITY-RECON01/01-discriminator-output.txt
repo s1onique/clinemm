@@ -1,5 +1,5 @@
 ==============================================================================
-ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01 - causal discriminator
+ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01 - causal discriminator
 ==============================================================================
 session            : 1794780088950_tc1vx
 canonical messages : 96
@@ -9,41 +9,56 @@ compacted messages : 15
 ------------------------------------------------------------------------------
 Q1  WAS THE SUCCESSFUL EXECUTION PRESENT IN THE CANONICAL HISTORY?
 ------------------------------------------------------------------------------
-  canonical index      : 13
-  tool_use_id         : call_7735403ff4f640c3b9de90d0
-  tool name           : run_commands
-  result success flag : True
-  result length       : 8181 chars
-  marker census       : {'helm template': True, 'rc=0': True, 'quay.io/keycloak/keycloak:26.0.7': False, 'runAsNonRoot: true': False, 'fsGroup: 1000': False}
-  rc=0 present        : True
-  exceeds 2000-char compaction limit : True
+  CORRECTION01: selection is by MARKER COMPLETENESS, not first-match.
+  ranked candidates (decisive markers first):
+    idx=23   id=call_f476e4ce0f204de8baabc31d decisive=3 supporting=1 len=3536
+    idx=21   id=call_8e951ba771a842388063f51c decisive=2 supporting=0 len=5912
+    idx=57   id=call_1024d6b322064666aac65eb8 decisive=2 supporting=0 len=67062
+    idx=83   id=call_f3244350a85646479c787782 decisive=2 supporting=0 len=23083
+    idx=13   id=call_7735403ff4f640c3b9de90d0 decisive=0 supporting=2 len=8181
+
+  SELECTED (decisive) result:
+    canonical index      : 23
+    tool_use_id          : call_f476e4ce0f204de8baabc31d
+    tool name            : run_commands
+    result success flag  : True
+    result length        : 3536 chars
+    decisive markers     : 3/3
+      'quay.io/keycloak/keycloak:26.0.7'           : True
+      'runAsNonRoot: true'                         : True
+      'fsGroup: 1000'                              : True
+    exceeds 2000-char compaction limit : True
+    matching tool_use    : idx=22 name=run_commands
 
 ------------------------------------------------------------------------------
 Q2  DID IT SURVIVE THE COMPACTION INPUT (the summarizer's input)?
 ------------------------------------------------------------------------------
   folded prefix       : canonical[0..75)
   last folded message : msg_FT65i2dN (canonical index 74)
-  helm evidence index : 13 -> INSIDE the folded prefix
-  helm evidence present in compacted tail : False
+  decisive evidence index : 23 -> INSIDE the folded prefix
+  decisive evidence present in compacted tail : False
 
-  summarizer-input marker census (production serialization):
-    'helm template'                            : True
-    'rc=0'                                     : True
-    'quay.io/keycloak/keycloak:26.0.7'         : True
-    'runAsNonRoot: true'                       : True
-    'fsGroup: 1000'                            : True
-  projection chars   : 94335
+  RECONSTRUCTED canonical-prefix marker census (production serialization):
+    'quay.io/keycloak/keycloak:26.0.7'           : True
+    'runAsNonRoot: true'                         : True
+    'fsGroup: 1000'                              : True
+    reconstruction chars   : 94335
+
+  ACTUAL SUMMARIZER REQUEST CAPTURE:
+    canonical compaction_summary messages : 0
+    captured summarizer request artifact  : NONE
+    -> The summarizer's ACTUAL input was never persisted. The
+       canonical-prefix reconstruction below CANNOT establish that
+       the decisive markers reached the summarizer.
 
 ------------------------------------------------------------------------------
 Q3  DID IT SURVIVE THE COMPACTION OUTPUT (the installed summary)?
 ------------------------------------------------------------------------------
   summary chars      : 17152
-    'helm template'                            : False
-    'rc=0'                                     : False
-    'quay.io/keycloak/keycloak:26.0.7'         : False
-    'runAsNonRoot: true'                       : False
-    'fsGroup: 1000'                            : False
-  markers LOST       : ['helm template', 'rc=0', 'quay.io/keycloak/keycloak:26.0.7', 'runAsNonRoot: true', 'fsGroup: 1000']
+    'quay.io/keycloak/keycloak:26.0.7'           : False
+    'runAsNonRoot: true'                         : False
+    'fsGroup: 1000'                              : False
+  markers LOST       : ['quay.io/keycloak/keycloak:26.0.7', 'runAsNonRoot: true', 'fsGroup: 1000']
 
 ------------------------------------------------------------------------------
 Q4  DOES THE FINAL REPORT CLAIM THE RENDER WAS NOT EXECUTED?
@@ -64,9 +79,13 @@ Q4  DOES THE FINAL REPORT CLAIM THE RENDER WAS NOT EXECUTED?
 VERDICT
 ==============================================================================
   R1_EXECUTION_IN_CANONICAL_HISTORY : True
-  R1_EXECUTION_IN_SUMMARIZER_INPUT  : True
+  R1_EXECUTION_IN_RECONSTRUCTION     : True
+  R1_EXECUTION_IN_SUMMARIZER_INPUT  : UNKNOWN (request not captured)
   R1_EXECUTION_IN_INSTALLED_SUMMARY : False
-  CLASSIFICATION                    : SUMMARIZER_OMISSION
-  READING: the evidence reached the summarizer's window and was lost
-            in the generated summary - the summary is a lossy projection
-            of the canonical record.
+  CANONICAL_FINAL_REPORT_CONTRADICTION : True
+  CLASSIFICATION                    : CAPTURE_INSUFFICIENT
+  READING: the canonical record contradicts the final report. The
+            exact stage at which the first loss occurred is NOT
+            established: the summarizer's actual input was never
+            captured, and the canonical-prefix reconstruction is not
+            a source-faithful substitute for it.
