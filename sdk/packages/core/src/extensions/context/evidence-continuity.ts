@@ -705,10 +705,37 @@ function classifySegment(segment: string): string {
  * The `cd` prefix is recognised as a DIRECTORY CHANGE, not as a command:
  * `cd <path> && <cmd>` classifies `<cmd>`. The `cd` segment's own argument is
  * a path and is never carried.
+ *
+ * THE REPORTED STATUS BELONGS TO THE LAST SEGMENT
+ * -----------------------------------------------
+ *
+ * A shell chain reports the exit status of its LAST segment, whatever
+ * operators joined the segments. So a trailing segment MASKS the status of
+ * every segment before it: `helm template broken; echo done` exits 0 even
+ * though Helm itself failed, and `helm template broken; some-unknown-tool`
+ * does the same.
+ *
+ * A classification may therefore be attributed ONLY when the classified
+ * segment is the LAST segment of the chain. Otherwise the wrapper's success
+ * says nothing about the classified command's own outcome, and carrying the
+ * classification would report a failure as a success — the same
+ * misattribution defect as a pipeline or a `||` chain.
+ *
+ * This preserves the supported `cd /repo; helm template kc` shape: the
+ * classified command IS the last segment there, so its status IS the status
+ * the shell reported. The `cd` segment contributes no classification and
+ * never carries its path.
  */
 export function classifyCommand(command: string): string {
 	const normalized = command.replace(/\r\n/g, "\n").trim();
 	if (!normalized) {
+		return "";
+	}
+	if (normalized.includes("\n")) {
+		// A newline is a shell command-list separator. Without `set -e`, a
+		// later successful command can hide an earlier failure, so the
+		// executed command is not decidable from this text alone. Fail
+		// closed rather than attributing the wrapper status to one command.
 		return "";
 	}
 	const segments = splitShellSegments(normalized).filter((segment) => {
@@ -718,7 +745,12 @@ export function classifyCommand(command: string): string {
 		return "";
 	}
 	const classifications: string[] = [];
-	for (const segment of segments) {
+	// The index of the segment that produced the classification. The shell
+	// reports the LAST segment's exit status, so a classification is only
+	// attributable when its segment IS that last one.
+	let classifiedSegmentIndex = -1;
+	for (let index = 0; index < segments.length; index += 1) {
+		const segment = segments[index];
 		if (segment.operator === "|") {
 			// A PIPELINE is AMBIGUOUS. The shell's exit status of a pipeline is
 			// the status of its LAST element, so a successful wrapper does not
@@ -733,6 +765,13 @@ export function classifyCommand(command: string): string {
 			// text. Fail closed.
 			return "";
 		}
+		if (!isUnambiguousSegment(segment.text)) {
+			// An AMBIGUOUS segment makes the whole chain undecidable. Fail
+			// closed: carry nothing rather than guess which command ran. This
+			// validation applies to `cd` too: a directory-change segment can
+			// still execute command substitution or redirection.
+			return "";
+		}
 		const executable = splitSegmentWords(segment.text)[0]?.replace(
 			/^[;&|]+\s*/,
 			"",
@@ -743,14 +782,10 @@ export function classifyCommand(command: string): string {
 		if (executable === "cd") {
 			continue;
 		}
-		if (!isUnambiguousSegment(segment.text)) {
-			// An AMBIGUOUS segment makes the whole chain undecidable. Fail
-			// closed: carry nothing rather than guess which command ran.
-			return "";
-		}
 		const classification = classifySegment(segment.text);
 		if (classification) {
 			classifications.push(classification);
+			classifiedSegmentIndex = index;
 		}
 	}
 	if (classifications.length === 0) {
@@ -759,6 +794,19 @@ export function classifyCommand(command: string): string {
 	if (classifications.length > 1) {
 		// MORE THAN ONE allowlisted executable in the chain: which one ran is
 		// not decidable from the command text, so nothing is carried.
+		return "";
+	}
+	if (classifiedSegmentIndex !== segments.length - 1) {
+		// A TRAILING segment follows the classified one. The shell reports
+		// the LAST segment's exit status, so the classified command's own
+		// outcome is MASKED by that trailing segment: `helm template broken;
+		// echo done` exits 0 even though Helm failed. The wrapper's success
+		// therefore establishes nothing about the classified command, and
+		// attributing it would report a failure as a success. Fail closed.
+		//
+		// The trailing segment need not be allowlisted for this to hold —
+		// `helm template broken; some-unknown-tool` masks Helm's status in
+		// exactly the same way.
 		return "";
 	}
 	const match = classifications[0];

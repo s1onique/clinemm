@@ -1248,6 +1248,21 @@ describe("verified tool outcome continuity — S1 shell-chain classification", (
 		expect(classifyCommand("cd /repo; helm template kc")).toBe("helm template");
 	});
 
+	// A `;` chain reports the exit status of its LAST segment, so a trailing
+	// segment MASKS the classified command's own outcome. `helm template
+	// broken; echo done` exits 0 even though Helm failed, so attributing the
+	// wrapper's success to Helm would report a failure as a success.
+	it("carries NOTHING when a `;` chain MASKS the classified command's status", () => {
+		expect(classifyCommand("helm template broken; echo done")).toBe("");
+		expect(classifyCommand("cd /repo && helm template broken; echo done")).toBe(
+			"",
+		);
+		// The trailing segment need not be allowlisted for the masking to
+		// hold: an unknown trailing command masks Helm's status just the same.
+		expect(classifyCommand("helm template broken; some-unknown-tool")).toBe("");
+		expect(classifyCommand("helm template broken; cd /other")).toBe("");
+	});
+
 	// The `cd` segment's argument is a PATH: it must never be carried.
 	it("never carries the `cd` segment's path", () => {
 		const label = classifyCommand("cd /secret/path/repo && helm template kc");
@@ -1283,6 +1298,18 @@ describe("verified tool outcome continuity — S1 shell-chain classification", (
 		// Double quotes still expand `$`.
 		expect(classifyCommand('cd /repo && echo "$(whoami)"')).toBe("");
 		expect(classifyCommand("cd /repo && helm template $RELEASE")).toBe("");
+		// The `cd` exception must not bypass ambiguity validation.
+		expect(classifyCommand('cd "$(printf /repo)" && helm template kc')).toBe(
+			"",
+		);
+	});
+
+	it("carries NOTHING when a `cd` segment contains REDIRECTION", () => {
+		expect(classifyCommand("cd /repo > /tmp/out && helm template kc")).toBe("");
+	});
+
+	it("carries NOTHING for a MULTILINE command list", () => {
+		expect(classifyCommand("helm template broken\ngit status")).toBe("");
 	});
 
 	it("carries NOTHING for REDIRECTION, GLOBBING or BACKGROUNDING", () => {
@@ -1311,10 +1338,55 @@ describe("verified tool outcome continuity — S1 shell-chain classification", (
 		expect(classifyCommand("cd /repo && helm template 'a && b'")).toBe(
 			"helm template",
 		);
+		expect(classifyCommand("helm template 'a && b'")).toBe("helm template");
 	});
 
 	// The classification is a finite allowlist entry: a credential in the
 	// ARGUMENT is never carried, and the allowlist is never widened.
+	it("does not attribute a failed Helm command to a successful wrapper at the production seam", async () => {
+		const command = "helm template broken\ngit status";
+		const canonical = [
+			userTurn("Render the chart."),
+			toolCall("call_multiline", "run_commands", { commands: [command] }),
+			toolResult("call_multiline", "run_commands", [
+				{ query: command, result: "rc=0", success: true },
+			]),
+			assistantTurn("continuing"),
+		];
+		const { providerRequest } = await runWrapper({
+			canonical,
+			compactResult: agenticCompactionResult("summary"),
+		});
+		const providerText = providerVisibleText(providerRequest);
+		expect(providerText).not.toContain("succeeded — helm template");
+		expect(providerText).not.toContain("helm template");
+	});
+
+	// The `;`-chain shape at the PRODUCTION SEAM: the outer wrapper
+	// succeeded (the trailing `echo done` reports 0) while the inner Helm
+	// render failed. The wrapper's success must NOT be carried as a Helm
+	// success.
+	it("does not attribute a failed Helm command masked by a `;` wrapper at the production seam", async () => {
+		const command = "helm template broken; echo done";
+		const canonical = [
+			userTurn("Render the chart."),
+			toolCall("call_semicolon", "run_commands", { commands: [command] }),
+			// The OUTER wrapper succeeded: the shell reported the trailing
+			// segment's status, not Helm's.
+			toolResult("call_semicolon", "run_commands", [
+				{ query: command, result: "done", success: true },
+			]),
+			assistantTurn("continuing"),
+		];
+		const { providerRequest } = await runWrapper({
+			canonical,
+			compactResult: agenticCompactionResult("summary"),
+		});
+		const providerText = providerVisibleText(providerRequest);
+		expect(providerText).not.toContain("succeeded — helm template");
+		expect(providerText).not.toContain("helm template");
+	});
+
 	it("never carries a credential from a chained command's ARGUMENT", () => {
 		const secret = ["synthetic", "Password"].join("");
 		const label = classifyCommand(
