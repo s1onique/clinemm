@@ -34783,3 +34783,99 @@ C remains NO-GO until the live capture passes.
 
 **Evidence.**
 `.factory/evidence/ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01/CORRECTION01.md`
+
+---
+
+# ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — PASS_STRUCTURAL_ONLY — 2026-11-16
+
+**Status:** the bounded read-only MCP task-header projection is implemented and
+verified through the REAL production publication and transport seams. Installed-host
+qualification is explicitly PENDING.
+
+```text
+ACT_ID: ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01
+TYPE: bounded read-only MCP projection + executable qualification
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01)
+VERDICT: PASS_STRUCTURAL_ONLY
+ENTRY_HEAD: 5dc1394802b86cb1ac996396fda2ca4b72212a70
+ENTRY_TREE: 312cc2ad6c4fb98c2e2b770da82b05f78553d731
+BRANCH: main (no ACT branch created)
+PUSHED: NO   RELEASED: NO   PUBLISHED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+PROTO_CHANGES: 0   NEW_MCP_OPERATIONS: 0   PROTOCOL_VERSION: 1 (unchanged)
+TESTS: 39/39 PASS (2 new files: 31 projection witnesses + 8 publication-boundary witnesses)
+EXISTING CONTROL-SEAM: 89 tests PASS in 6 files; 1 file fails PRE-EXISTING (COR02-R1/R2)
+EXISTING TASK-HEADER ELM: 51/51 PASS (5 files)
+WEBVIEW LABEL MATRIX: 45/45 PASS   REACT UPDATER PURITY: 7/7 PASS (2 files)
+TYPECHECK: tsc --noEmit EXIT 0 (host) | webview tsc --noEmit EXIT 0
+LINT: biome EXIT 0 (21 files scoped) | git diff --check EXIT 0
+FULL-SUITE PARITY: ACT 63 failed files / 168 failed tests == HEAD baseline 63 / 168
+                   failing-file sets IDENTICAL (comm both directions EMPTY)
+                   ACT adds +2 passing files and +39 passing tests
+BASELINE_DIAGNOSTICS: control-seam.owner-exclusivity.cor02.test.ts (COR02-R1/R2) —
+                   ERR_UNSUPPORTED_ESM_URL_SCHEME ('bun:'); reproduced identically at HEAD
+ACT_OWNED_DIAGNOSTICS: NONE
+INSTALLED QUALIFICATION: NOT EXECUTED / PENDING (sandbox cannot install into
+                        ~/.vscodium-clinemm/extensions/; the filesystem restriction was
+                        NOT bypassed). No LIVE claim is made.
+EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/
+```
+
+## What changed
+
+`clinemm_get_run` gained an OPTIONAL `taskState` property that reports the LAST
+ELIGIBLE HOST-SUBMITTED TaskHeader presentation:
+
+```json
+{ "phase": "streaming", "source": "shadow", "seq": 1957, "epoch": 4, "stateVersion": 2001, "label": "Working" }
+```
+
+The record is captured at the EXISTING publication handoff — `SdkController.flushStateToWebview()`
+-> `sendStateUpdate(state)` — from the SAME `ExtensionState` object that was submitted, and ONLY
+when that handoff succeeded. `sendStateUpdate` now returns `true`/`false` so "publication failed" is
+observable (previously it returned `void` and swallowed the serialization failure).
+
+**No new task-state authority.** The Elm kernel remains the sole semantic selector; the MCP layer
+stores a copy of the projection the Elm authority already produced. The label text comes from the
+EXISTING UI mapping, which was EXTRACTED into `apps/vscode/src/shared/task-header-state-label.ts`
+and is now shared by the webview and the MCP authority — one vocabulary, not two.
+
+## The distinctions preserved
+
+```text
+SDK running state       != TaskHeader state       (R1-1, R1-2: independent in both directions)
+TaskHeader published    != React committed DOM    (documented; never claimed as LIVE)
+Assistant completion    != authoritative completion (no inference, no synthetic signal)
+```
+
+`running=false` does NOT mean completed. `taskState.phase=completed` is the published terminal
+presentation, not proof that every React render has committed. `taskState` is ABSENT when no valid
+identity-bound published projection exists — never a fabricated `idle`, and never a `taskStatus`.
+
+## Identity / epoch / generation conservation
+
+The record is valid only when `captured.sessionId == active sessionId`, `captured.taskId == active
+taskId`, and `captured.epoch == current epoch`. Ordering uses `stateVersion` ALONE — `seq` and
+`stateVersion` are different sequence domains and are never compared against each other. Invalidation
+happens at the epoch transition, the task-clear choke-point, and controller disposal. The store holds
+exactly ONE frozen record (no history, no diagnostic queue).
+
+## A regression the ACT's own sweep caught and fixed
+
+The first full-suite comparison surfaced four files that failed on the ACT tree but not at HEAD:
+three of them invoke `resetMessageTranslatorAndFence` / `clearTask` on a HAND-BUILT plain object
+(`SdkController.prototype.clearTask.call(controller)` and a `new Function(...)` harness that compiles
+the literal production method body), which bypasses the constructor's field initializers. The new
+`this.publishedTaskState.invalidate()` therefore threw. The invalidation calls use the optional form
+`this.publishedTaskState?.invalidate()` — in a real controller the store ALWAYS exists, so the
+identity/epoch semantics are unchanged. Those four files now pass 68/68 and the full-suite comparison
+is exact parity with the baseline.
+
+## Next
+
+Installed qualification is a SEPARATE successor step. The operator procedure (build, package,
+record VSIX + embedded bundle SHA-256, install into `codium-clinemm`, verify the bundle hash,
+enable the existing read-only control seam, observe the natural active/user-input/paused/completed
+matrix, correlate `sessionId` + `taskState.phase` + `stateVersion`/`epoch` from Codex Desktop) is
+delivered in `.factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/06-artifact-and-live-qualification.md`.
+The existing CPR01 installed qualification remains a separate ACT and is coordinated, not superseded.

@@ -71,6 +71,7 @@ import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalMan
 import { ExtensionRegistryInfo } from "@/registry"
 import { ControlSeamRuntime, createControlSeamAuthority } from "@/sdk/control-seam/control-seam-runtime"
 import { ControlSeamServer } from "@/sdk/control-seam/control-seam-server"
+import { PublishedTaskStateStore } from "@/sdk/published-task-state"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { UrlContentFetcher } from "@/services/browser/UrlContentFetcher"
 import { CloudSessionsService } from "@/services/cloud/CloudSessionsService"
@@ -1268,6 +1269,21 @@ export class Controller {
 	 * no way to start, steer, or cancel a run.
 	 */
 	private readonly controlSeam: ControlSeamRuntime
+	/**
+	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the controller-owned,
+	 * bounded, immutable record of the LAST ELIGIBLE HOST-SUBMITTED
+	 * TaskHeader presentation.
+	 *
+	 * The record is advanced ONLY at the EXISTING publication handoff
+	 * (`flushStateToWebview()` -> `sendStateUpdate(state)` -> capture),
+	 * from the SAME `ExtensionState` object that was submitted. It is
+	 * never computed on an MCP read, never re-derived from the Elm
+	 * kernel, and never inferred from `running`.
+	 *
+	 * Exactly ONE record per controller — no history, no diagnostic
+	 * queue.
+	 */
+	private readonly publishedTaskState = new PublishedTaskStateStore()
 
 	/**
 	 * ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01:
@@ -3297,6 +3313,13 @@ export class Controller {
 						}
 						return { status: snapshot.status, runId: snapshot.runId }
 					},
+					// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the READ of
+					// the bounded published-task-state record. This is a
+					// pure read of an EXISTING record — it never
+					// evaluates the Elm kernel, never builds a snapshot,
+					// never posts state, and never touches the runtime.
+					readPublishedTaskState: () => this.publishedTaskState.read(),
+					readCurrentEpoch: () => this.messageTranslatorState.getMinter().epoch,
 				}),
 				extensionVersion: ExtensionRegistryInfo.version,
 				platform: process.platform,
@@ -3709,6 +3732,10 @@ export class Controller {
 		// deactivated extension host leaves NO reachable listener and
 		// NO credential on disk.
 		await this.controlSeam.dispose()
+		// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: drop the bounded
+		// published-task-state record on controller disposal. A disposed
+		// controller must not expose a stale projection.
+		this.publishedTaskState?.invalidate()
 		// Clear the remote config timer to prevent stale fetches
 		if (this.remoteConfigTimer) {
 			clearInterval(this.remoteConfigTimer)
@@ -5003,6 +5030,17 @@ export class Controller {
 			)
 		}
 		this.pendingStartRetry = undefined
+		// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: `clearTask` is the
+		// universal task-terminating choke-point. Drop the bounded
+		// published-task-state record so the previous task's TaskHeader
+		// projection cannot be returned for the next active task.
+		//
+		// The optional call keeps this method executable against the
+		// plain-object harnesses that invoke
+		// `SdkController.prototype.clearTask` with a hand-built `this`
+		// (they bypass the constructor's field initializers). In a real
+		// controller the store ALWAYS exists.
+		this.publishedTaskState?.invalidate()
 		// No active task — UI returns to idle (input enabled, no buttons/thinking).
 		this.turnStateTracker.set("idle")
 		// A cloud task still provisioning has no SDK session for taskControl to end;
@@ -6736,7 +6774,66 @@ export class Controller {
 		// Import dynamically to avoid circular deps
 		const { sendStateUpdate } = await import("@core/controller/state/subscribeToState")
 		const state = await this.getStateToPostToWebview()
-		await sendStateUpdate(state)
+		const handedOff = await sendStateUpdate(state)
+		// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: capture the published
+		// TaskHeader projection ONLY AFTER the publication handoff
+		// succeeded, from the SAME `ExtensionState` object that was
+		// submitted.
+		//
+		// - A FAILED publication does NOT advance the record.
+		// - The phase is the EXACT value the Elm authority selected and
+		//   placed on the submitted state — MCP never re-derives it.
+		// - `stateVersion` / `epoch` come from the SAME submitted object,
+		//   so the record is bound to that publication's identity.
+		// - `taskHeaderPresentation.seq` is the presentation/turn-state
+		//   sequence domain; it is carried through verbatim and is NEVER
+		//   compared against `stateVersion`.
+		//
+		// A snapshot that was merely CONSTRUCTED (e.g. by
+		// `getStateToPostToWebview()` called outside the regular
+		// state-push path) never reaches this code and is therefore
+		// never observable.
+		if (handedOff) {
+			this.capturePublishedTaskState(state)
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: advance the bounded
+	 * published-task-state record from a SUBMITTED `ExtensionState`.
+	 *
+	 * The record is only accepted when the submission carries a
+	 * `taskHeaderPresentation`, a `stateVersion`, an `epoch`, and an
+	 * active session + task identity. Otherwise the previous record (if
+	 * any) stands — the store's own generation fence rejects an older
+	 * or out-of-order publication.
+	 */
+	private capturePublishedTaskState(state: ExtensionState): void {
+		const projection = state.taskHeaderPresentation
+		if (!projection) {
+			return
+		}
+		const stateVersion = state.stateVersion
+		const epoch = state.epoch
+		if (typeof stateVersion !== "number" || typeof epoch !== "number") {
+			return
+		}
+		const sessionId = this.sessions?.getActiveSession()?.sessionId
+		const taskId = this.task?.taskId
+		if (!sessionId || !taskId) {
+			return
+		}
+		this.publishedTaskState.capture({
+			sessionId,
+			taskId,
+			epoch,
+			stateVersion,
+			projection: {
+				phase: projection.phase,
+				source: projection.source,
+				seq: projection.seq,
+			},
+		})
 	}
 
 	/**
@@ -6774,6 +6871,18 @@ export class Controller {
 	resetMessageTranslatorAndFence(requestedPhase: TurnPhase = "idle"): void {
 		this.messageTranslatorState.reset()
 		this.messageTranslatorState.getMinter().bumpEpoch()
+		// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: an epoch transition
+		// is an ownership change. Drop the published-task-state record so
+		// the previous epoch's TaskHeader projection cannot be returned
+		// for the new conversation. The next eligible publication
+		// re-establishes it.
+		//
+		// The optional call keeps this method executable against the
+		// plain-object harnesses that invoke
+		// `SdkController.prototype.resetMessageTranslatorAndFence` with a
+		// hand-built `this` (they bypass the constructor's field
+		// initializers). In a real controller the store ALWAYS exists.
+		this.publishedTaskState?.invalidate()
 		this.turnStateTracker.setWithWriter(requestedPhase, undefined, this.writerIdentity("controller-epoch-transition-reseed"))
 	}
 

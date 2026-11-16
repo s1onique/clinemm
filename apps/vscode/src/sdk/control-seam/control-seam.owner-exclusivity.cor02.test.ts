@@ -168,6 +168,11 @@ try {
 			readIsRunning: () => false,
 			readQueuedPromptCount: () => 0,
 			readRuntimeSnapshot: () => undefined,
+			// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the published
+			// TaskHeader record is absent in this fixture — the seam
+			// therefore omits taskState (no fabricated idle).
+			readPublishedTaskState: () => undefined,
+			readCurrentEpoch: () => 0,
 		}
 		const server = new ControlSeamServer({
 			authority,

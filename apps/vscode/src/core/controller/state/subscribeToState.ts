@@ -55,16 +55,26 @@ export async function subscribeToState(
 }
 
 /**
- * Send a state update to all active subscribers
+ * Send a state update to all active subscribers.
+ *
+ * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: returns `true` when the
+ * state was successfully handed off (serialized and dispatched to the
+ * subscribers) and `false` when the handoff FAILED (the payload could
+ * not be serialized, so nothing was dispatched).
+ *
+ * The caller uses this to decide whether the publication ELIGIBLY
+ * advanced the host-side "last submitted TaskHeader projection" record.
+ * A failed publication must NOT advance that record.
+ *
  * @param state The state to send
  */
-export async function sendStateUpdate(state: ExtensionState): Promise<void> {
+export async function sendStateUpdate(state: ExtensionState): Promise<boolean> {
 	let stateJson: string
 	try {
 		stateJson = JSON.stringify(state)
 	} catch (error) {
 		Logger.error("Error serializing state update:", error)
-		return
+		return false
 	}
 
 	recordStateSizeTelemetry(Buffer.byteLength(stateJson, "utf8"))
@@ -83,6 +93,7 @@ export async function sendStateUpdate(state: ExtensionState): Promise<void> {
 			activeStateSubscriptions.delete(responseStream)
 		})
 	}
+	return true
 }
 
 function recordStateSizeTelemetry(sizeBytes: number): void {

@@ -60,6 +60,10 @@ function makeAuthority(fixture: AuthorityFixture = {}): ControlSeamAuthority {
 			}
 			return { status: fixture.runtimeStatus, runId: fixture.runId }
 		},
+		// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: this fixture has no
+		// published TaskHeader record, so `taskState` is omitted.
+		readPublishedTaskState: () => undefined,
+		readCurrentEpoch: () => 0,
 	}
 }
 

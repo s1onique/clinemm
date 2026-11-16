@@ -1,0 +1,27 @@
+# ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — SHA-256 of the evidence artifacts
+# Generated at the qualification source tree (see 06-artifact-and-live-qualification.md).
+# Format: <sha256>  <path relative to the repository root>
+
+## Evidence documents
+9aeef0c6f1d5f19edca89e284e8d148640db2cad219da9b744e3625f505c6ce5  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/00-identity-and-source-map.md
+513c5d40eb108a9fd85a3fb369dcfb41c3141e4960fc9ea08c741cb2e6a48e20  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/01-publication-contract.md
+51d2109513e529dfb18c2259d81750c41267dabe71f6793b69232a96b0371193  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/02-red-green.md
+59a77d4d74498086db0d3555a14ce701cc4ce3779e648368e1049d50490d7634  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/03-identity-epoch-adversarial.md
+68539caa97fe58b0f84b57815723158bbb17dac8baf13f0aaae24f7d03f3f055  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/04-control-seam-conservation.md
+c2fafad432d114c558db29d010ff1ee6ce1306c25af7ab85b3a95efad7c627b7  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/05-executable-gates.md
+49d0486a610befe808ad143c204718e8519a1e7cb1bc3d9c8e0b1e99abff16e5  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/06-artifact-and-live-qualification.md
+
+## ACT-owned production sources
+c8a3a3abe268bb0fd4de4b03b30cc173dd9f61a41608db24dabc5c6d9abf0023  apps/vscode/src/shared/task-header-state-label.ts
+22ea1edc8d25c9e7772b24d1e1be54145cd7006f5998f6661da57c0fe41e0771  apps/vscode/src/sdk/published-task-state.ts
+e461165f89c010ce4eb1da884c7a5a56ae2e12f96deff0c5a67af8c966dae7cd  apps/vscode/src/sdk/control-seam/control-seam-protocol.ts
+13989a6ea19915de89f3028e4b05ccc25d73ae04233e952fd18d8f963ceddf15  apps/vscode/src/sdk/control-seam/control-seam-authority.ts
+21255198a3a33527a54294fc8a76a2da0cf2489ddccc0c3d05550f95c67deb08  apps/vscode/src/sdk/control-seam/control-seam-runtime.ts
+4610e5a8b9c6d4988755f820e7afd51e791305c75273b5e73492fde1ec3bf518  apps/vscode/src/sdk/control-seam/control-seam-proxy.ts
+043937ebcde5e7f01bcaa8b9984c0e7b0c6cd89af3d3b58e5b019f9e72a70651  apps/vscode/src/core/controller/state/subscribeToState.ts
+e6fc7365aa3dcdad7286b81133f2cf100c29d7b2bbcffb056c08f780986664c3  apps/vscode/src/sdk/SdkController.ts
+333967897cf38853babb84f9997e754be64f586045e2bdedf0d41b2d437bbc46  apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
+
+## ACT-owned tests
+a003665c0c8787bd44ddec7366a4bf045e4580114919e5f70e85d55beb874e7e  apps/vscode/src/sdk/control-seam/control-seam.task-state-projection01.test.ts
+18cdc1e81eb227224eb6a2e031cec8785f896fb560fd3f07ce5999ebebaf82d5  apps/vscode/src/sdk/control-seam/control-seam.publication-boundary01.test.ts

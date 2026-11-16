@@ -26,7 +26,11 @@
  * at `SdkController.ts:4552`).
  */
 
-import type { ControlSeamRunIdentity } from "./control-seam-protocol"
+import { taskHeaderPhaseLabel } from "@shared/task-header-state-label"
+
+import type { PublishedTaskState } from "@/sdk/published-task-state"
+
+import type { ControlSeamRunIdentity, ControlSeamTaskState } from "./control-seam-protocol"
 
 /**
  * The narrow read surface the control seam needs from the controller.
@@ -63,6 +67,71 @@ export interface ControlSeamAuthority {
 	 * does not expose the canonical surface.
 	 */
 	readRuntimeSnapshot(): { readonly status?: string; readonly runId?: string } | undefined
+	/**
+	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the controller-owned,
+	 * bounded record of the LAST ELIGIBLE HOST-SUBMITTED TaskHeader
+	 * presentation. `undefined` when no valid published projection
+	 * exists.
+	 *
+	 * This is a READ of an EXISTING record — it never evaluates the Elm
+	 * kernel, never builds a snapshot, never posts state, and never
+	 * touches the runtime.
+	 */
+	readPublishedTaskState(): PublishedTaskState | undefined
+	/**
+	 * The controller's current conversation epoch, or `undefined` when
+	 * it cannot be established.
+	 *
+	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the epoch is part of the
+	 * published record's identity fence. When the controller cannot
+	 * establish the current epoch, the published record is treated as
+	 * NOT identity-bound and `taskState` is omitted.
+	 */
+	readCurrentEpoch(): number | undefined
+}
+
+/**
+ * Project the published TaskHeader record into the wire shape, IF AND
+ * ONLY IF it is identity-bound to the CURRENT active session / task /
+ * epoch.
+ *
+ * Returns `undefined` when:
+ *   - there is no published record,
+ *   - the record's session id does not match the active session id,
+ *   - the record's task id does not match the active task id,
+ *   - the record's epoch does not match the current epoch,
+ *   - the current epoch cannot be established.
+ *
+ * The label is derived through the SHARED pure label projection — the
+ * SAME mapping the TaskHeader renders. No second switch statement.
+ */
+export function projectControlSeamTaskState(
+	published: PublishedTaskState | undefined,
+	activeSessionId: string | undefined,
+	activeTaskId: string | undefined,
+	currentEpoch: number | undefined,
+): ControlSeamTaskState | undefined {
+	if (!published) {
+		return undefined
+	}
+	if (!activeSessionId || published.sessionId !== activeSessionId) {
+		return undefined
+	}
+	if (!activeTaskId || published.taskId !== activeTaskId) {
+		return undefined
+	}
+	if (currentEpoch === undefined || published.epoch !== currentEpoch) {
+		return undefined
+	}
+	const label = taskHeaderPhaseLabel(published.projection.phase)
+	return {
+		phase: published.projection.phase,
+		source: published.projection.source,
+		seq: published.projection.seq,
+		epoch: published.epoch,
+		stateVersion: published.stateVersion,
+		...(label !== undefined ? { label } : {}),
+	}
 }
 
 /**
@@ -88,6 +157,17 @@ export function readControlSeamRunIdentity(authority: ControlSeamAuthority): Con
 	const taskId = authority.readActiveTaskId()
 	const runtimeStatus = snapshot?.status
 	const runId = snapshot?.runId
+	// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the published TaskHeader
+	// projection is a READ of an existing controller-owned record. It is
+	// omitted unless it is identity-bound to the CURRENT active
+	// session / task / epoch. It is NEVER derived from `running` and
+	// NEVER a fabricated `idle`.
+	const taskState = projectControlSeamTaskState(
+		authority.readPublishedTaskState(),
+		sessionId,
+		taskId,
+		authority.readCurrentEpoch(),
+	)
 	return {
 		sessionId,
 		running: authority.readIsRunning(),
@@ -95,5 +175,6 @@ export function readControlSeamRunIdentity(authority: ControlSeamAuthority): Con
 		...(taskId !== undefined ? { taskId } : {}),
 		...(runtimeStatus !== undefined ? { runtimeStatus } : {}),
 		...(runId !== undefined ? { runId } : {}),
+		...(taskState !== undefined ? { taskState } : {}),
 	}
 }

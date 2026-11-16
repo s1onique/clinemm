@@ -104,6 +104,10 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — production-shape aut
 				const snapshot = active.sdkHost?.runtimeSnapshot?.(active.sessionId)
 				return snapshot ? { status: snapshot.status, runId: snapshot.runId } : undefined
 			},
+			// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: no published
+			// TaskHeader record in this fixture.
+			readPublishedTaskState: () => undefined,
+			readCurrentEpoch: () => 0,
 		})
 
 		expect(identity).toEqual({
@@ -153,6 +157,10 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — production-shape aut
 					const snapshot = active.sdkHost?.runtimeSnapshot?.(active.sessionId)
 					return snapshot ? { status: snapshot.status, runId: snapshot.runId } : undefined
 				},
+				// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: no published
+				// TaskHeader record in this fixture.
+				readPublishedTaskState: () => undefined,
+				readCurrentEpoch: () => 0,
 			},
 			extensionVersion: "0.0.0-test",
 			platform: "darwin",

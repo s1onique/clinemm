@@ -16,6 +16,8 @@
 
 import { Logger } from "@shared/services/Logger"
 
+import type { PublishedTaskState } from "@/sdk/published-task-state"
+
 import type { ControlSeamAuthority } from "./control-seam-authority"
 import { ControlSeamServer, type ControlSeamServerHandle } from "./control-seam-server"
 
@@ -42,6 +44,15 @@ export interface ControlSeamControllerSurface {
 	 * `AgentRuntime.snapshot()`).
 	 */
 	readRuntimeSnapshot(): { readonly status?: string; readonly runId?: string } | undefined
+	/**
+	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the controller-owned
+	 * bounded record of the last eligible host-submitted TaskHeader
+	 * presentation. A READ of an existing record — it never triggers a
+	 * publication.
+	 */
+	readPublishedTaskState(): PublishedTaskState | undefined
+	/** The controller's current conversation epoch, or `undefined`. */
+	readCurrentEpoch(): number | undefined
 }
 
 /**
@@ -57,6 +68,8 @@ export function createControlSeamAuthority(surface: ControlSeamControllerSurface
 		readIsRunning: () => surface.readIsRunning(),
 		readQueuedPromptCount: () => surface.readQueuedPromptCount(),
 		readRuntimeSnapshot: () => surface.readRuntimeSnapshot(),
+		readPublishedTaskState: () => surface.readPublishedTaskState(),
+		readCurrentEpoch: () => surface.readCurrentEpoch(),
 	}
 }
 

@@ -63,6 +63,12 @@ import type {
 	TurnPhase,
 	TurnState,
 } from "@shared/ExtensionMessage"
+// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the SHARED pure label
+// mapping. The webview and the MCP control seam both read it, so there
+// is exactly ONE phase -> label vocabulary. It is aliased because this
+// module already exports a DIFFERENT function named
+// `taskHeaderStateLabel` (the legacy TurnState convenience selector).
+import { taskHeaderPhaseLabel } from "@shared/task-header-state-label"
 
 const MS_PER_SECOND = 1_000
 const MS_PER_MINUTE = 60 * MS_PER_SECOND
@@ -148,15 +154,22 @@ export interface StateLabelProjection {
  * label + glyph. Mirrors the upstream ACT-CLINEMM-COMPLETION-CHANGESET-
  * UI-STATE-TRUTH01 vocabulary so the header state is consistent with
  * the composer / buttons.
+ *
+ * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the LABEL TEXT comes from
+ * the SHARED pure mapping (`@shared/task-header-state-label`), so the
+ * webview and the MCP control seam render the SAME label for the same
+ * phase. This function keeps the webview-only `glyph` / `live` facets;
+ * it does NOT own a second label vocabulary.
  */
 export function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
+	const label = taskHeaderPhaseLabel(phase)
 	switch (phase) {
 		case "idle":
-			return { label: "Idle", glyph: "○", live: false }
+			return { label: label ?? "Unknown", glyph: "○", live: false }
 		case "streaming":
-			return { label: "Working", glyph: "●", live: true }
+			return { label: label ?? "Unknown", glyph: "●", live: true }
 		case "awaiting_approval":
-			return { label: "Approval", glyph: "?", live: true }
+			return { label: label ?? "Unknown", glyph: "?", live: true }
 		case "awaiting_followup":
 			// ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01:
 			// The agent has yielded; the user owns the next move. The
@@ -168,7 +181,7 @@ export function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
 			// (streaming → "Working", compacting → "Compacting").
 			// Elapsed clock keeps ticking (live: true) — the same task
 			// continues when the user replies (CORRECTION01).
-			return { label: "Your turn", glyph: "↳", live: true }
+			return { label: label ?? "Unknown", glyph: "↳", live: true }
 		case "compacting":
 			// ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01: an internal
 			// SYSTEM TRANSITION owns the next progress step. This is
@@ -176,13 +189,13 @@ export function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
 			// must NOT be the human-wait "Waiting". The wording mirrors
 			// the chat surface's existing "Compacting context" divider
 			// vocabulary (CompactionRow) rather than inventing a new one.
-			return { label: "Compacting", glyph: "⌄", live: true }
+			return { label: label ?? "Unknown", glyph: "⌄", live: true }
 		case "completed":
-			return { label: "Complete", glyph: "✓", live: false }
+			return { label: label ?? "Unknown", glyph: "✓", live: false }
 		case "error":
-			return { label: "Error", glyph: "!", live: false }
+			return { label: label ?? "Unknown", glyph: "!", live: false }
 		case "resumable":
-			return { label: "Paused", glyph: "↻", live: false }
+			return { label: label ?? "Unknown", glyph: "↻", live: false }
 		default:
 			return { label: "Unknown", glyph: "?", live: false }
 	}

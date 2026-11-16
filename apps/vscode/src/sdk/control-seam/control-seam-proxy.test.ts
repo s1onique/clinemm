@@ -35,6 +35,10 @@ function makeAuthority(sessionId: string | undefined): ControlSeamAuthority {
 		readIsRunning: () => true,
 		readQueuedPromptCount: () => 0,
 		readRuntimeSnapshot: () => (sessionId ? { status: "running", runId: `run-${sessionId}` } : undefined),
+		// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: this fixture has no
+		// published TaskHeader record, so `taskState` is omitted.
+		readPublishedTaskState: () => undefined,
+		readCurrentEpoch: () => 0,
 	}
 }
 

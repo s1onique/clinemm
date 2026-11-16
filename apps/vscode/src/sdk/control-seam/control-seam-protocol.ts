@@ -165,6 +165,49 @@ export interface ControlSeamCapabilities {
 }
 
 /**
+ * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01
+ *
+ * The OPTIONAL published TaskHeader projection carried by the
+ * `clinemm_get_run` result.
+ *
+ * WHAT IT IS
+ *
+ *   The LAST ELIGIBLE HOST-SUBMITTED TaskHeader presentation, as
+ *   selected by the EXISTING Elm task-header authority and carried by
+ *   the SAME `ExtensionState` object that was submitted to the webview.
+ *
+ * WHAT IT IS NOT
+ *
+ *   - It is NOT the React DOM state. Host submission does not prove a
+ *     React commit or render.
+ *   - It is NOT derived from `running`. `running` is the SDK agent-turn
+ *     mirror; `running: false` does NOT mean completed.
+ *   - It is NOT an independently computed completion decision. The name
+ *     `taskStatus` is deliberately NOT used for that.
+ *   - It is NOT an inferred / fabricated `idle`. It is ABSENT when no
+ *     valid identity-bound published projection exists.
+ */
+export interface ControlSeamTaskState {
+	/** The EXACT selected `TurnPhase` from the published projection. */
+	readonly phase: string
+	/** The EXACT source from the published projection. */
+	readonly source: string
+	/** The existing projection sequence (TurnState / presentation domain). */
+	readonly seq: number
+	/** The conversation epoch of the submitted ExtensionState. */
+	readonly epoch: number
+	/** The `stateVersion` of the submitted ExtensionState. */
+	readonly stateVersion: number
+	/**
+	 * The existing UI label, derived through the SHARED pure label
+	 * projection (`@shared/task-header-state-label`) — the SAME mapping
+	 * the TaskHeader renders. It is a secondary, human-facing field; the
+	 * machine-readable contract is `phase`.
+	 */
+	readonly label?: string
+}
+
+/**
  * The `clinemm_get_run` result.
  *
  * Every field here is either an IDENTIFIER or a STATUS ENUM. There is
@@ -180,6 +223,10 @@ export interface ControlSeamRunIdentity {
 	 * The host-tracked "is a run in flight" mirror
 	 * (`ActiveSession.isRunning`). This is the HOST's own mirror, not
 	 * a reconstruction from the webview.
+	 *
+	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: `running` describes SDK
+	 * SESSION/RUN activity. It is INDEPENDENT of `taskState.phase`, and
+	 * `running: false` does NOT mean the task completed.
 	 */
 	readonly running: boolean
 	/**
@@ -199,13 +246,80 @@ export interface ControlSeamRunIdentity {
 	 * identity, not a locally minted one.
 	 */
 	readonly runId?: string
+	/**
+	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the LAST ELIGIBLE
+	 * HOST-SUBMITTED TaskHeader presentation.
+	 *
+	 * OPTIONAL: absent when no valid identity-bound published
+	 * projection exists for the current active session/task/epoch. It
+	 * is NEVER a fabricated `idle` and NEVER an inferred completion.
+	 */
+	readonly taskState?: ControlSeamTaskState
 }
 
 /**
  * Keys an allowed `clinemm_get_run` result may carry. The codec
  * rejects any OTHER key, so a widened payload fails closed.
  */
-const ALLOWED_RUN_IDENTITY_KEYS = new Set(["sessionId", "taskId", "running", "runtimeStatus", "queuedPromptCount", "runId"])
+const ALLOWED_RUN_IDENTITY_KEYS = new Set([
+	"sessionId",
+	"taskId",
+	"running",
+	"runtimeStatus",
+	"queuedPromptCount",
+	"runId",
+	"taskState",
+])
+
+/**
+ * Keys an allowed `taskState` may carry. Anything else (transcript,
+ * content, credential, path, model output) is rejected.
+ */
+const ALLOWED_TASK_STATE_KEYS = new Set(["phase", "source", "seq", "epoch", "stateVersion", "label"])
+
+/** The canonical `TurnPhase` vocabulary the published projection may carry. */
+const ALLOWED_TASK_STATE_PHASES = new Set([
+	"idle",
+	"streaming",
+	"awaiting_approval",
+	"awaiting_followup",
+	"compacting",
+	"completed",
+	"error",
+	"resumable",
+])
+
+/** The canonical `source` discriminants the published projection may carry. */
+const ALLOWED_TASK_STATE_SOURCES = new Set(["shadow", "host", "legacy"])
+
+/** A non-negative finite integer (the sequence/version domain). */
+function isNonNegativeInteger(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0
+}
+
+/**
+ * Validate a `taskState` payload against the allow-list.
+ *
+ * Fails closed on: unknown keys, unknown phases, invalid source
+ * discriminants, invalid / negative sequence or version values, and
+ * missing required nested fields.
+ */
+export function isControlSeamTaskState(value: unknown): value is ControlSeamTaskState {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+	const record = value as Record<string, unknown>
+	for (const key of Object.keys(record)) {
+		if (!ALLOWED_TASK_STATE_KEYS.has(key)) return false
+	}
+	if (!ALLOWED_TASK_STATE_PHASES.has(record.phase as string)) return false
+	if (!ALLOWED_TASK_STATE_SOURCES.has(record.source as string)) return false
+	if (!isNonNegativeInteger(record.seq)) return false
+	if (!isNonNegativeInteger(record.epoch)) return false
+	if (!isNonNegativeInteger(record.stateVersion)) return false
+	if (record.label !== undefined) {
+		if (typeof record.label !== "string" || record.label.length === 0) return false
+	}
+	return true
+}
 
 /**
  * Validate a `clinemm_get_run` payload against the allow-list.
@@ -215,7 +329,7 @@ const ALLOWED_RUN_IDENTITY_KEYS = new Set(["sessionId", "taskId", "running", "ru
  * widening is caught at the boundary) and by the tests.
  */
 export function isControlSeamRunIdentity(value: unknown): value is ControlSeamRunIdentity {
-	if (typeof value !== "object" || value === null) return false
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false
 	const record = value as Record<string, unknown>
 	for (const key of Object.keys(record)) {
 		if (!ALLOWED_RUN_IDENTITY_KEYS.has(key)) return false
@@ -226,6 +340,7 @@ export function isControlSeamRunIdentity(value: unknown): value is ControlSeamRu
 	if (record.taskId !== undefined && typeof record.taskId !== "string") return false
 	if (record.runtimeStatus !== undefined && typeof record.runtimeStatus !== "string") return false
 	if (record.runId !== undefined && typeof record.runId !== "string") return false
+	if (record.taskState !== undefined && !isControlSeamTaskState(record.taskState)) return false
 	return true
 }
 

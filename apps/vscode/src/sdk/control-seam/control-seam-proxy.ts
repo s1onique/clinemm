@@ -118,8 +118,25 @@ export function createControlSeamProxyServer(options: ControlSeamProxyOptions = 
 	server.registerTool(
 		"clinemm_get_run",
 		{
-			description:
+			description: [
 				"Read the active ClineMM run's session identity and authoritative status. Read-only; does not start, steer, or cancel anything.",
+				"",
+				"Field semantics:",
+				"  running: SDK agent turn currently in flight.",
+				"  taskState.phase: Last identity-bound host-submitted TaskHeader phase.",
+				"    Vocabulary: idle | streaming | awaiting_approval | awaiting_followup |",
+				"                compacting | completed | error | resumable",
+				"  taskState.source: Provenance of the published projection (shadow | host | legacy).",
+				"  taskState.seq: Presentation/turn-state sequence of the published projection.",
+				"  taskState.epoch: Conversation epoch of the published state.",
+				"  taskState.stateVersion: Publication version of the submitted state.",
+				"  taskState.label: The TaskHeader's user-facing label for that phase.",
+				"",
+				"running=false does NOT mean completed.",
+				"taskState.phase=completed is the published terminal presentation,",
+				"not proof that every React render has committed.",
+				"taskState is omitted when no valid identity-bound published projection exists.",
+			].join("\n"),
 			inputSchema: {
 				sessionId: z.string().optional().describe("Optional echo of the expected session id."),
 			},
