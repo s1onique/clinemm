@@ -1,0 +1,7 @@
+6,7d5
+< src/extensions/plugin/plugin-sandbox.test.ts
+< src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
+17c15
+< src/hub/server/plugin-commands.test.ts
+---
+> src/hub/server/replay-wire.test.ts

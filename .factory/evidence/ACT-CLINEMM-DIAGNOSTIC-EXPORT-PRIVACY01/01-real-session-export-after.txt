@@ -1,0 +1,58 @@
+[0m[31m<<<EXPORT>>>[0m
+[0m[31m{
+  "generatedAt": "2026-11-16T09:07:08.836Z",
+  "app": {
+    "name": "@cline/code",
+    "version": "0.0.49"
+  },
+  "system": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "osRelease": "23.6.0",
+    "bun": "1.3.13"
+  },
+  "dataDir": "~/.vscodium-roz/cline-data",
+  "globalSettings": {
+    "autoUpdateEnabled": true,
+    "telemetryOptOut": false,
+    "tools": {
+      "web_search": {
+        "enabled": true
+      }
+    }
+  }
+}
+
+===== session 1794789266763_q4tet =====
+{
+  "sessionId": "1794789266763_q4tet",
+  "source": "vscode",
+  "status": "idle",
+  "interactive": true,
+  "provider": "openai-compatible",
+  "model": "qwen3.8-flash-next-iq3_s",
+  "startedAt": "2026-11-16T00:34:26.874Z",
+  "workspace": "~/Projects/Znanie/keycloak",
+  "gitBranch": "optimize-ftls",
+  "checkpointRef": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+  "usage": {
+    "inputTokens": 4562216,
+    "outputTokens": 81385,
+    "cacheReadTokens": 4193916,
+    "cacheWriteTokens": 0,
+    "totalCost": 0
+  },
+  "omittedFields": [
+    "manifest.prompt",
+    "manifest.messages_path",
+    "manifest.compaction_path",
+    "metadata.sessionHistoryOrigin",
+    "metadata.size",
+    "metadata.title",
+    "metadata.isFavorited",
+    "metadata.legacyTask",
+    "metadata.aggregatedAgentsCost"
+  ]
+}
+[0m
+[0m[31m<<<END>>>[0m

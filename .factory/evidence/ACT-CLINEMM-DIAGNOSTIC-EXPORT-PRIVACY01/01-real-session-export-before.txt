@@ -1,0 +1,98 @@
+[0m[31m<<<EXPORT>>>[0m
+[0m[31m{
+  "generatedAt": "2026-11-16T09:07:24.373Z",
+  "app": {
+    "name": "@cline/code",
+    "version": "0.0.49"
+  },
+  "system": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "osRelease": "23.6.0",
+    "bun": "1.3.13"
+  },
+  "dataDir": "~/.vscodium-roz/cline-data",
+  "globalSettings": {
+    "autoUpdateEnabled": true,
+    "telemetryOptOut": false,
+    "tools": {
+      "web_search": {
+        "enabled": true
+      }
+    }
+  }
+}
+
+===== session 1794789266763_q4tet =====
+{
+  "version": 1,
+  "session_id": "1794789266763_q4tet",
+  "source": "vscode",
+  "pid": 57690,
+  "started_at": "2026-11-16T00:34:26.874Z",
+  "exit_code": null,
+  "status": "idle",
+  "interactive": true,
+  "provider": "openai-compatible",
+  "model": "qwen3.8-flash-next-iq3_s",
+  "cwd": "~/Projects/Znanie/keycloak",
+  "workspace_root": "~/Projects/Znanie/keycloak",
+  "enable_tools": true,
+  "enable_spawn": false,
+  "enable_teams": false,
+  "metadata": {
+    "sessionHistoryOrigin": {
+      "mode": "user",
+      "version": "4.1.16-5a1c485cb"
+    },
+    "git": {
+      "url": "git@gitlab.roznanie.ru:backend/keycloak.git",
+      "branch": "optimize-ftls"
+    },
+    "checkpoint": {
+      "latest": {
+        "ref": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+        "createdAt": 1794789267028,
+        "runCount": 1,
+        "kind": "commit"
+      },
+      "history": [
+        {
+          "ref": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+          "createdAt": 1794789267028,
+          "runCount": 1,
+          "kind": "commit"
+        }
+      ]
+    },
+    "size": 28972,
+    "title": "# ACT-QWEN-IQ3S-KEYCLOAK-ROUND-C-01\n## Adversarial falsification of Round B production risks\n\n### Mission\n\nIndependently",
+    "isFavorited": false,
+    "totalCost": 0,
+    "tokensIn": 368300,
+    "tokensOut": 81385,
+    "cacheWrites": 0,
+    "cacheReads": 4193916,
+    "modelId": "qwen3.8-flash-next-iq3_s",
+    "legacyTask": false,
+    "aggregatedAgentsCost": 0,
+    "usage": {
+      "inputTokens": 4562216,
+      "outputTokens": 81385,
+      "cacheReadTokens": 4193916,
+      "cacheWriteTokens": 0,
+      "totalCost": 0
+    },
+    "aggregateUsage": {
+      "inputTokens": 4562216,
+      "outputTokens": 81385,
+      "cacheReadTokens": 4193916,
+      "cacheWriteTokens": 0,
+      "totalCost": 0
+    }
+  },
+  "messages_path": "~/.vscodium-roz/cline-data/sessions/1794789266763_q4tet/1794789266763_q4tet.messages.json",
+  "compaction_path": "~/.vscodium-roz/cline-data/sessions/1794789266763_q4tet/1794789266763_q4tet.compaction.json"
+}
+[0m
+[0m[31m<<<END>>>[0m

@@ -1,0 +1,485 @@
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.sidecar.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/examples/desktop-app
+
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+ ❯ sidecar/diagnostics-export-privacy.test.ts (14 tests | 7 failed) 31ms
+     × does not disclose any secret class in the exported artifact 7ms
+     × does not carry the raw prompt under any metadata key 3ms
+     × does not carry credential-bearing or private-persistence URLs and paths 3ms
+     ✓ keeps the useful non-sensitive evidence 1ms
+     × records the fields it omitted instead of dropping them silently 2ms
+     ✓ does not mutate the canonical conversation records 3ms
+     ✓ writes an artifact that a support engineer can still read 1ms
+     ✓ bounds the exported artifact size 2ms
+     ✓ keeps the home directory out of the artifact 1ms
+     × does not disclose credentials that appear in the log tails 1ms
+     × still reports which host the credential-bearing URL pointed at 1ms
+     ✓ still produces a report when a session manifest is unreadable 1ms
+     ✓ does not read the canonical conversation artifacts 1ms
+     × carries no unexpected key anywhere in the session projection 2ms
+ ❯ sidecar/diagnostics.test.ts (8 tests | 1 failed) 33ms
+     ✓ blanks credential-looking values and the home directory 2ms
+     × includes app info, log tails, and the selected session manifests 7ms
+     ✓ caps each log tail and omits logs that do not exist 3ms
+     ✓ drops successful polls and keeps everything else 1ms
+     ✓ keeps the start of a poll that never finished 0ms
+     ✓ reaches past polling that would have filled the whole tail 14ms
+     ✓ writes the report to the output directory 2ms
+     ✓ writes into an output directory that already exists 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  sidecar/diagnostics-export-privacy.test.ts > shareable diagnostic export — credential safety > does not disclose any secret class in the exported artifact
+AssertionError: shareable export disclosed keycloakAdminPassword: kc-Bootstrap-Admin-Pw-9f3c1d: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ sidecar/diagnostics-export-privacy.test.ts:312:6
+    310|     text.includes(value),
+    311|     `shareable export disclosed ${name}: ${value}`,
+    312|    ).toBe(false);
+       |      ^
+    313|   }
+    314|   // The credential-bearing command and the raw tool output must not
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  sidecar/diagnostics-export-privacy.test.ts > shareable diagnostic export — credential safety > does not carry the raw prompt under any metadata key
+AssertionError: expected '{\n  "generatedAt": "2026-11-16T09:05…' not to contain 'bootstrap admin password is'
+
+- Expected
++ Received
+
+- bootstrap admin password is
++ {
++   "generatedAt": "2026-11-16T09:05:05.449Z",
++   "app": {
++     "name": "@cline/code",
++     "version": "0.0.49"
++   },
++   "system": {
++     "platform": "darwin",
++     "arch": "arm64",
++     "osRelease": "23.6.0",
++     "bun": "1.3.13"
++   },
++   "dataDir": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diag-privacy-SeO85m",
++   "globalSettings": {
++     "autoUpdateEnabled": true,
++     "telemetryOptOut": false
++   }
++ }
++
++ ===== session session_prompt =====
++ {
++   "version": 1,
++   "session_id": "session_prompt",
++   "source": "vscode",
++   "pid": 4242,
++   "started_at": "2026-11-16T00:34:26.874Z",
++   "status": "idle",
++   "interactive": true,
++   "provider": "openai-compatible",
++   "model": "qwen3.8-flash-next-iq3_s",
++   "cwd": "/home/tester/projects/keycloak",
++   "workspace_root": "/home/tester/projects/keycloak",
++   "enable_tools": true,
++   "enable_spawn": false,
++   "enable_teams": false,
++   "metadata": {
++     "title": "# ACT-KEYCLOAK-ROUND-C-01\nbootstrap admin password is kc-Bootstrap-Admin-Pw-9f3c1d",
++     "git": {
++       "url": "https://url-embedded-user-pw-5b2d8e@gitlab.example.invalid/backend/keycloak.git",
++       "branch": "optimize-ftls"
++     },
++     "providerConfig": "{\"client_id\":\"keycloak-prod\",\"client_secret\":\"js-client-secret-3a91f0c7b2\"}",
++     "helmValues": "kc:\n  db:\n    password: <redacted>    url: jdbc:postgresql://kc-db-host:6432/keycloak-prod",
++     "provider": {
++       "apiKey": "<redacted>",
++       "baseUrl": "https://api.example.invalid/v1?token=<redacted>"
++     },
++     "modelId": "qwen3.8-flash-next-iq3_s",
++     "totalCost": 0,
++     "tokensIn": 368300,
++     "tokensOut": 81385,
++     "cacheReads": 4193916,
++     "usage": {
++       "inputTokens": 4562216,
++       "outputTokens": 81385,
++       "cacheReadTokens": 4193916,
++       "cacheWriteTokens": 0,
++       "totalCost": 0
++     },
++     "aggregateUsage": {
++       "inputTokens": 4562216,
++       "outputTokens": 81385,
++       "cacheReadTokens": 4193916,
++       "cacheWriteTokens": 0,
++       "totalCost": 0
++     },
++     "checkpoint": {
++       "latest": {
++         "ref": "42de653b59708e712d694aeb9732f822b7f8fe5b",
++         "createdAt": 1794789267028,
++         "runCount": 1,
++         "kind": "commit"
++       }
++     }
++   },
++   "messages_path": "PLACEHOLDER_MESSAGES_PATH",
++   "compaction_path": "PLACEHOLDER_COMPACTION_PATH"
++ }
++
+
+ ❯ sidecar/diagnostics-export-privacy.test.ts:327:20
+    325|   const { text } = buildDiagnosticsReport([sessionId]);
+    326|
+    327|   expect(text).not.toContain("bootstrap admin password is");
+       |                    ^
+    328|   expect(text).not.toContain("ACT-KEYCLOAK-ROUND-C-01");
+    329|   expect(text).not.toContain("You are Cline");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  sidecar/diagnostics-export-privacy.test.ts > shareable diagnostic export — credential safety > does not carry credential-bearing or private-persistence URLs and paths
+AssertionError: expected '{\n  "generatedAt": "2026-11-16T09:05…' not to contain 'gitlab.example.invalid'
+
+- Expected
++ Received
+
+- gitlab.example.invalid
++ {
++   "generatedAt": "2026-11-16T09:05:05.453Z",
++   "app": {
++     "name": "@cline/code",
++     "version": "0.0.49"
++   },
++   "system": {
++     "platform": "darwin",
++     "arch": "arm64",
++     "osRelease": "23.6.0",
++     "bun": "1.3.13"
++   },
++   "dataDir": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diag-privacy-zaJEux",
++   "globalSettings": {
++     "autoUpdateEnabled": true,
++     "telemetryOptOut": false
++   }
++ }
++
++ ===== session session_urls =====
++ {
++   "version": 1,
++   "session_id": "session_urls",
++   "source": "vscode",
++   "pid": 4242,
++   "started_at": "2026-11-16T00:34:26.874Z",
++   "status": "idle",
++   "interactive": true,
++   "provider": "openai-compatible",
++   "model": "qwen3.8-flash-next-iq3_s",
++   "cwd": "/home/tester/projects/keycloak",
++   "workspace_root": "/home/tester/projects/keycloak",
++   "enable_tools": true,
++   "enable_spawn": false,
++   "enable_teams": false,
++   "metadata": {
++     "title": "# ACT-KEYCLOAK-ROUND-C-01\nbootstrap admin password is kc-Bootstrap-Admin-Pw-9f3c1d",
++     "git": {
++       "url": "https://url-embedded-user-pw-5b2d8e@gitlab.example.invalid/backend/keycloak.git",
++       "branch": "optimize-ftls"
++     },
++     "providerConfig": "{\"client_id\":\"keycloak-prod\",\"client_secret\":\"js-client-secret-3a91f0c7b2\"}",
++     "helmValues": "kc:\n  db:\n    password: <redacted>    url: jdbc:postgresql://kc-db-host:6432/keycloak-prod",
++     "provider": {
++       "apiKey": "<redacted>",
++       "baseUrl": "https://api.example.invalid/v1?token=<redacted>"
++     },
++     "modelId": "qwen3.8-flash-next-iq3_s",
++     "totalCost": 0,
++     "tokensIn": 368300,
++     "tokensOut": 81385,
++     "cacheReads": 4193916,
++     "usage": {
++       "inputTokens": 4562216,
++       "outputTokens": 81385,
++       "cacheReadTokens": 4193916,
++       "cacheWriteTokens": 0,
++       "totalCost": 0
++     },
++     "aggregateUsage": {
++       "inputTokens": 4562216,
++       "outputTokens": 81385,
++       "cacheReadTokens": 4193916,
++       "cacheWriteTokens": 0,
++       "totalCost": 0
++     },
++     "checkpoint": {
++       "latest": {
++         "ref": "42de653b59708e712d694aeb9732f822b7f8fe5b",
++         "createdAt": 1794789267028,
++         "runCount": 1,
++         "kind": "commit"
++       }
++     }
++   },
++   "messages_path": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diag-privacy-zaJEux/sessions/session_urls/session_urls.messages.json",
++   "compaction_path": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diag-privacy-zaJEux/sessions/session_urls/session_urls.compaction.json"
++ }
++
+
+ ❯ sidecar/diagnostics-export-privacy.test.ts:340:20
+    338|
+    339|   // The Git remote (which carries an embedded credential here).
+    340|   expect(text).not.toContain("gitlab.example.invalid");
+       |                    ^
+    341|   // The canonical private-persistence artifacts must not be advertise…
+    342|   // neither by PATH VALUE nor by the `*.messages.json` /
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  sidecar/diagnostics-export-privacy.test.ts > shareable diagnostic export — credential safety > records the fields it omitted instead of dropping them silently
+AssertionError: expected '{\n  "generatedAt": "2026-11-16T09:05…' to contain 'omittedFields'
+
+- Expected
++ Received
+
+- omittedFields
++ {
++   "generatedAt": "2026-11-16T09:05:05.457Z",
++   "app": {
++     "name": "@cline/code",
++     "version": "0.0.49"
++   },
++   "system": {
++     "platform": "darwin",
++     "arch": "arm64",
++     "osRelease": "23.6.0",
++     "bun": "1.3.13"
++   },
++   "dataDir": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diag-privacy-7Pm2Sg",
++   "globalSettings": {
++     "autoUpdateEnabled": true,
++     "telemetryOptOut": false
++   }
++ }
++
++ ===== session session_omissions =====
++ {
++   "version": 1,
++   "session_id": "session_omissions",
++   "source": "vscode",
++   "pid": 4242,
++   "started_at": "2026-11-16T00:34:26.874Z",
++   "status": "idle",
++   "interactive": true,
++   "provider": "openai-compatible",
++   "model": "qwen3.8-flash-next-iq3_s",
++   "cwd": "/home/tester/projects/keycloak",
++   "workspace_root": "/home/tester/projects/keycloak",
++   "enable_tools": true,
++   "enable_spawn": false,
++   "enable_teams": false,
++   "metadata": {
++     "title": "# ACT-KEYCLOAK-ROUND-C-01\nbootstrap admin password is kc-Bootstrap-Admin-Pw-9f3c1d",
++     "git": {
++       "url": "https://url-embedded-user-pw-5b2d8e@gitlab.example.invalid/backend/keycloak.git",
++       "branch": "optimize-ftls"
++     },
++     "providerConfig": "{\"client_id\":\"keycloak-prod\",\"client_secret\":\"js-client-secret-3a91f0c7b2\"}",
++     "helmValues": "kc:\n  db:\n    password: <redacted>    url: jdbc:postgresql://kc-db-host:6432/keycloak-prod",
++     "provider": {
++       "apiKey": "<redacted>",
++       "baseUrl": "https://api.example.invalid/v1?token=<redacted>"
++     },
++     "modelId": "qwen3.8-flash-next-iq3_s",
++     "totalCost": 0,
++     "tokensIn": 368300,
++     "tokensOut": 81385,
++     "cacheReads": 4193916,
++     "usage": {
++       "inputTokens": 4562216,
++       "outputTokens": 81385,
++       "cacheReadTokens": 4193916,
++       "cacheWriteTokens": 0,
++       "totalCost": 0
++     },
++     "aggregateUsage": {
++       "inputTokens": 4562216,
++       "outputTokens": 81385,
++       "cacheReadTokens": 4193916,
++       "cacheWriteTokens": 0,
++       "totalCost": 0
++     },
++     "checkpoint": {
++       "latest": {
++         "ref": "42de653b59708e712d694aeb9732f822b7f8fe5b",
++         "createdAt": 1794789267028,
++         "runCount": 1,
++         "kind": "commit"
++       }
++     }
++   },
++   "messages_path": "PLACEHOLDER_MESSAGES_PATH",
++   "compaction_path": "PLACEHOLDER_COMPACTION_PATH"
++ }
++
+
+ ❯ sidecar/diagnostics-export-privacy.test.ts:374:16
+    372|   const { text } = buildDiagnosticsReport([sessionId]);
+    373|
+    374|   expect(text).toContain("omittedFields");
+       |                ^
+    375|   expect(text).toContain("metadata.title");
+    376|   expect(text).toContain("metadata.prompt");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  sidecar/diagnostics-export-privacy.test.ts > shareable diagnostic export — log tails > does not disclose credentials that appear in the log tails
+AssertionError: shareable export disclosed urlEmbeddedCredential from the log tail: url-embedded-user-pw-5b2d8e: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ sidecar/diagnostics-export-privacy.test.ts:471:6
+    469|     text.includes(value),
+    470|     `shareable export disclosed ${name} from the log tail: ${value}`,
+    471|    ).toBe(false);
+       |      ^
+    472|   }
+    473|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  sidecar/diagnostics-export-privacy.test.ts > shareable diagnostic export — log tails > still reports which host the credential-bearing URL pointed at
+AssertionError: expected '{\n  "generatedAt": "2026-11-16T09:05…' to contain '<redacted>'
+
+- Expected
++ Received
+
+- <redacted>
++ {
++   "generatedAt": "2026-11-16T09:05:05.467Z",
++   "app": {
++     "name": "@cline/code",
++     "version": "0.0.49"
++   },
++   "system": {
++     "platform": "darwin",
++     "arch": "arm64",
++     "osRelease": "23.6.0",
++     "bun": "1.3.13"
++   },
++   "dataDir": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diag-privacy-OV1joR",
++   "globalSettings": {
++     "autoUpdateEnabled": true,
++     "telemetryOptOut": false
++   }
++ }
++
++ ===== tail of /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diag-privacy-OV1joR/logs/code.log =====
++ remote https://url-embedded-user-pw-5b2d8e@gitlab.example.invalid/backend/keycloak.git
++
+
+ ❯ sidecar/diagnostics-export-privacy.test.ts:484:16
+    482|
+    483|   expect(text).toContain("gitlab.example.invalid");
+    484|   expect(text).toContain("<redacted>");
+       |                ^
+    485|  });
+    486| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  sidecar/diagnostics-export-privacy.test.ts > shareable diagnostic export — complete recursive schema inspection > carries no unexpected key anywhere in the session projection
+AssertionError: unexpected projection key: version: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ sidecar/diagnostics-export-privacy.test.ts:551:66
+    549|   ]);
+    550|   for (const key of Object.keys(projection)) {
+    551|    expect(allowed.has(key), `unexpected projection key: ${key}`).toBe(…
+       |                                                                  ^
+    552|   }
+    553|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  sidecar/diagnostics.test.ts > buildDiagnosticsReport > includes app info, log tails, and the selected session manifests
+AssertionError: expected '{\n  "generatedAt": "2026-11-16T09:05…' to contain '"sessionId": "session_a"'
+
+- Expected
++ Received
+
+- "sessionId": "session_a"
++ {
++   "generatedAt": "2026-11-16T09:05:05.445Z",
++   "app": {
++     "name": "@cline/code",
++     "version": "0.0.49"
++   },
++   "system": {
++     "platform": "darwin",
++     "arch": "arm64",
++     "osRelease": "23.6.0",
++     "bun": "1.3.13"
++   },
++   "dataDir": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diagnostics-7A5MeI",
++   "globalSettings": {
++     "autoUpdateEnabled": true,
++     "telemetryOptOut": false
++   }
++ }
++
++ ===== tail of /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diagnostics-7A5MeI/logs/code.log =====
++ {"msg":"start","apiKey":"<redacted>"}
++ {"msg":"ready"}
++
++ ===== tail of /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-fRzhYt/cline-diagnostics-7A5MeI/logs/hub-daemon.log, routine polling omitted =====
++ [hub] ok
++
++ ===== session session_a =====
++ {
++   "session_id": "session_a",
++   "metadata": {
++     "title": "Renamed"
++   }
++ }
++
+
+ ❯ sidecar/diagnostics.test.ts:106:23
+    104|   // SCHEMA-DRIVEN, ALLOWLISTED projection of the manifest, so the
+    105|   // session identity is present...
+    106|   expect(report.text).toContain('"sessionId": "session_a"');
+       |                       ^
+    107|   // ...but `metadata.title` is NOT carried. In production `title` IS
+    108|   // the user's raw prompt, so carrying it would disclose it.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  8 failed | 14 passed (22)
+   Start at  12:05:03
+   Duration  2.08s (transform 2.41s, setup 0ms, import 3.95s, tests 64ms, environment 0ms)
+

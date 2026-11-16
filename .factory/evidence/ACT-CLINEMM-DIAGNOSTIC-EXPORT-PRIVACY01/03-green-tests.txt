@@ -1,0 +1,21 @@
+[0m[2m[35m$[0m [2m[1mvitest run sidecar/diagnostics.test.ts sidecar/diagnostics-export-privacy.test.ts --config vitest.sidecar.config.ts[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.sidecar.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/examples/desktop-app
+
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+ ✓ sidecar/diagnostics-export-privacy.test.ts (14 tests) 21ms
+ ✓ sidecar/diagnostics.test.ts (8 tests) 52ms
+
+ Test Files  2 passed (2)
+      Tests  22 passed (22)
+   Start at  12:04:32
+   Duration  2.16s (transform 2.54s, setup 0ms, import 4.11s, tests 73ms, environment 0ms)
+

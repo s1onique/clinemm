@@ -100,10 +100,19 @@ describe("buildDiagnosticsReport", () => {
 		expect(report.text).toContain('"msg":"ready"');
 		expect(report.text).toContain("[hub] ok");
 		expect(report.text).toContain("===== session session_a =====");
-		expect(report.text).toContain('"title": "Renamed"');
+		// ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01: the export carries a
+		// SCHEMA-DRIVEN, ALLOWLISTED projection of the manifest, so the
+		// session identity is present...
+		expect(report.text).toContain('"sessionId": "session_a"');
+		// ...but `metadata.title` is NOT carried. In production `title` IS
+		// the user's raw prompt, so carrying it would disclose it.
+		expect(report.text).not.toContain('"title": "Renamed"');
 		expect(report.text).not.toContain("session_b");
 		expect(report.text).not.toContain("sk-live-1234567890");
-		expect(report.text).not.toContain("systemPrompt");
+		// The system prompt is never carried. Its KEY NAME appears only in
+		// the `omittedFields` list, which records the omission.
+		expect(report.text).not.toContain("You are Cline");
+		expect(report.text).not.toContain('"systemPrompt"');
 		expect(report.text).not.toContain("secret project");
 		expect(report.text).not.toContain("private conversation");
 	});

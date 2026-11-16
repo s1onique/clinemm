@@ -33829,7 +33829,10 @@ no retrieval service, no persistent evidence database.**
 EVIDENCE: `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01/`
   `01-discriminator-output.txt`, `02-red-tests.txt`, `03-green-tests.txt`,
   `05-baseline-failing-files.txt`, `06-after-failing-files.txt`,
-  `07-failing-file-set-diff.txt`, `discriminate.py`
+  `07-failing-file-set-diff.txt`,
+  `08-core-same-code-run1-failing-files.txt`,
+  `09-core-same-code-run2-failing-files.txt`,
+  `10-core-same-code-flakiness-diff.txt`, `discriminate.py`
 
 # ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01 — VERIFIED_EVIDENCE_ATTRIBUTION_AND_PRIVACY_CORRECTED — 2026-11-16
 
@@ -34049,5 +34052,84 @@ EVIDENCE: `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTI
   `05-baseline-failing-files.txt`, `06-after-failing-files.txt`,
   `07-failing-file-set-diff.txt`
 
+
+
+# ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01 — PASS — 2026-11-16
+
+**Status:** P0 privacy repair at the SHAREABLE DIAGNOSTIC EXPORT boundary. The desktop app's
+`export_diagnostics` command (an explicit, user-invoked export whose artifact the user is expected
+to send to a support engineer) copied the canonical session MANIFEST into the artifact and then
+deleted three keys, relying on a single regex to blank anything credential-shaped. In production
+`metadata.title` IS the user's raw prompt, so the raw prompt shipped in the shareable artifact, and
+the credential-bearing Git remote URL and the paths of the PRIVATE canonical conversation artifacts
+(`*.messages.json`, `*.compaction.json`) shipped with it. **The canonical conversation persistence was
+NOT modified** — the export only ever opened the manifest, and the canonical `messages.json` /
+`compaction.json` are byte-identical before and after the repair (verified by SHA-256 on the real
+production session). No new production state. No tool-execution behaviour change. No VSIX, no
+installation, no live benchmarking.
+
+```text
+ACT_ID: ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01
+TYPE: P0 privacy repair (shareable diagnostic export)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+VERDICT: PASS
+ENTRY_HEAD: 91cc334ff (ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01)
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+RED: 8 of 22 focused tests FAIL at HEAD (real disclosure reproduced against the real
+     production session 1794789266763_q4tet)
+GREEN: 22/22 focused tests pass; 746/746 across the whole 48-file sidecar suite
+NO-REGRESSION: @cline/core 152 failed / 5246 passed (identical baseline; the
+        failing-FILE set is FLAKY on this machine — two runs of the SAME code
+        gave 26 and 28 files, union = 29 = the separately captured baseline,
+        and the SDK does not import the desktop app at all);
+        @cline/cli 107 failed / 362 passed / 13 skipped (identical baseline);
+        @cline/vscode 1 failed / 1 passed (identical baseline);
+        desktop-app typecheck 1 error (identical baseline);
+        biome 0 errors on the 5 ACT-owned files; bun run build:sdk EXIT 0
+EVIDENCE: .factory/acts/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01.md
+        + .factory/evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01/
+```
+
+**The defective boundary.** `cline.export_diagnostics` →
+`apps/examples/desktop-app/sidecar/commands.ts` → `writeDiagnosticsReport()` →
+`buildDiagnosticsReport()`. The artifact is a single UTF-8 TEXT file,
+`cline-diagnostics-<version>-<stamp>.txt`, written to `~/Downloads` (or
+`<clineDataDir>/diagnostics`). The canonical `<session>.messages.json` and `<session>.compaction.json`
+are PRIVATE runtime persistence; the export must never read them and must never advertise them.
+
+**The repair.** A NEW schema-driven, allowlisted projection
+(`apps/examples/desktop-app/sidecar/diagnostics-session-projection.ts`) replaces the manifest copy.
+Every value is built from a strict allowlist, so a non-allowlisted field cannot leak — it is dropped
+BY CONSTRUCTION, not redacted. Retained: the session identity and run metadata, the token/cost
+accounting counters, the checkpoint SHA, the git BRANCH label, the workspace path with the home
+directory collapsed, and `omittedFields` — the names of the OMITTED keys, so the omission is
+RECORDED rather than silent. Excluded: the raw prompts, command arguments, credentials, raw tool
+output, the Git remote URL, unrestricted error text, and the canonical private-persistence paths. The
+free-form LOG TAILS have no schema, so their shape-based filter was WIDENED to the credential
+shapes the old one missed (Authorization header values, URL-embedded credentials, quoted multi-word
+values, JDBC connection strings).
+
+**Measured on the real production session** (`1794789266763_q4tet`, whose canonical
+`messages.json` really does contain a messaging-provider API key, Keycloak bootstrap-admin
+credentials and JDBC connection strings): the pre-repair artifact carried 4 leaked lines — the Git
+remote URL, the raw prompt under `metadata.title`, and both canonical artifact paths. The
+post-repair artifact carries 0.
+
+**A pre-existing environment blocker was also cleared for the sidecar suite.** The desktop app
+declares `zod@^3.24.1` while `@cline/core` / `@cline/shared` declare `zod@^4.3.6`; Vite externalized
+the SDK packages and the SDK's ESM `import { z } from "zod"` was served through the app's zod v3
+CommonJS interop, so EVERY sidecar test touching `@cline/core` failed to load with
+`TypeError: undefined is not an object (evaluating 'z.object')` — 57 files at HEAD. The NEW
+`apps/examples/desktop-app/vitest.sidecar.config.ts` inlines the SDK packages so each resolves the
+zod version IT declares; the whole sidecar suite now runs (48 files, 746 tests, all passing). The
+shared `vitest.config.ts` is deliberately NOT changed, so the pre-existing baseline stays available
+for comparison.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01/`
+  `01-real-session-export-before.txt`, `01-real-session-export-after.txt`,
+  `02-red-tests.txt`, `03-green-tests.txt`,
+  `05-baseline-failing-files.txt`, `06-after-failing-files.txt`,
+  `07-failing-file-set-diff.txt`
 
 

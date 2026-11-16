@@ -11,6 +11,7 @@ import { arch, homedir, platform, release } from "node:os";
 import { join } from "node:path";
 import { readGlobalSettings, resolveClineDataDir } from "@cline/core";
 import packageJson from "../package.json";
+import { projectDiagnosticsSession } from "./diagnostics-session-projection";
 import { readSessionManifest } from "./paths";
 
 /** How much of each log file (from the end) is included in the report. */
@@ -59,15 +60,66 @@ export function dropHubPollingLines(text: string): string {
 
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-// providers.json / secrets.json are never read, but blank anything
-// credential-shaped that shows up in logs or settings as cheap insurance.
-// Matching the bare suffix also covers access_token, client_secret, etc.
+// ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01
+//
+// The LOG TAILS are FREE-FORM text: there is no schema to project them
+// through, so a key/value pattern alone cannot be the privacy boundary.
+// The patterns below cover the credential SHAPES that the free-form text
+// actually uses, each applied at the value position:
+//
+//   - `key: value` / `key=value` whose key names a secret. The value runs
+//     to the end of the quoted string (spaces and all) or to the next
+//     delimiter, so a multi-word secret is consumed whole.
+//   - URL-EMBEDDED credentials (`https://user:password@host`). The password
+//     is replaced and the rest of the URL is preserved, so the artifact
+//     still shows WHICH host was involved.
+//   - Authorization header values (`Authorization: Bearer <token>`). The
+//     scheme word is preserved and the credential is replaced.
+//   - Connection strings (`jdbc:postgresql://user:password@host/db`). The
+//     userinfo is replaced and the rest of the string is preserved.
+//
+// The log tail is a LAST-RESORT surface: the structured parts of the report
+// (the session projection, the global settings) are allowlisted and never
+// reach this code at all.
 const SECRET_FIELD_PATTERN =
-	/((?:api[_-]?key|token|secret|password|authorization)"?\s*[:=]\s*"?)([^",}\s]+)/gi;
+	/((?:api[_-]?key|token|secret|password|passwd|credential|authorization)"?\s*[:=]\s*"?)([^",}\s]+)/gi;
+const SECRET_QUOTED_VALUE_PATTERN =
+	/((?:api[_-]?key|token|secret|password|passwd|credential|authorization)"?\s*[:=]\s*")(?:[^"\\]|\\.)*"/gi;
+// The USERINFO of a URL: `scheme://<userinfo>@host`. The userinfo is either
+// `user:password` or a bare `user`/`token`. The whole userinfo is replaced,
+// and the host (and the path) are preserved so the artifact still shows
+// WHICH server was involved.
+const URL_EMBEDDED_CREDENTIAL_PATTERN = /(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s@]*@/gi;
+const AUTHORIZATION_SCHEME_PATTERN =
+	/\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+// A CONNECTION STRING (`jdbc:postgresql://host:port/database`). Even without
+// userinfo it identifies the production database and the cluster it lives
+// in, so the whole connection target is replaced. The scheme is preserved so
+// an analyst can still tell WHICH kind of database was involved.
+const CONNECTION_STRING_PATTERN = /\b(jdbc:[a-z0-9+.-]*:\/\/)[^\s"']+/gi;
 
+/**
+ * Redact the credential-bearing shapes out of free-form text.
+ *
+ * This is a BEST-EFFORT filter for the log tails, which have no schema.
+ * It is NOT the privacy boundary for the structured parts of the report:
+ * those are built from a strict allowlist (see
+ * `./diagnostics-session-projection.ts`) and are never passed through here.
+ */
 export function redactDiagnosticsText(text: string): string {
 	const home = homedir();
-	let result = text.replace(SECRET_FIELD_PATTERN, "$1<redacted>");
+	let result = text
+		// The credential of an Authorization header FIRST: the generic
+		// key/value pattern would otherwise consume the `Bearer` scheme word
+		// and leave the token behind.
+		.replace(AUTHORIZATION_SCHEME_PATTERN, "$1 <redacted>")
+		// The quoted form: it consumes the whole quoted value.
+		.replace(SECRET_QUOTED_VALUE_PATTERN, '$1<redacted>"')
+		.replace(SECRET_FIELD_PATTERN, "$1<redacted>")
+		// The userinfo of a URL or a connection string.
+		.replace(URL_EMBEDDED_CREDENTIAL_PATTERN, "$1<redacted>@")
+		// The target of a JDBC connection string.
+		.replace(CONNECTION_STRING_PATTERN, "$1<redacted>");
 	if (home) {
 		// JSON-encoded Windows paths carry doubled backslashes.
 		result = result
@@ -158,20 +210,23 @@ export function buildDiagnosticsReport(
 		if (!SESSION_ID_PATTERN.test(sessionId)) continue;
 		const manifest = readSessionManifest(sessionId);
 		if (!manifest) continue;
-		// Keep the manifest (title, provider, model, cwd, status…) but not the
-		// prompt text. Conversation contents (messages.json) are never read.
-		const { prompt: _prompt, ...rest } = manifest;
-		const metadata =
-			rest.metadata && typeof rest.metadata === "object"
-				? { ...(rest.metadata as Record<string, unknown>) }
-				: undefined;
-		if (metadata) {
-			delete metadata.prompt;
-			delete metadata.systemPrompt;
-		}
+		// ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01: the manifest is PRIVATE
+		// runtime state — its `prompt` and `metadata.title` are the user's
+		// raw prompt, `metadata.git.url` can embed a credential, and
+		// `messages_path` / `compaction_path` point at the PRIVATE canonical
+		// conversation records. The export therefore carries a SCHEMA-DRIVEN,
+		// ALLOWLISTED PROJECTION of the manifest, never the manifest itself.
+		//
+		// The canonical conversation records are NEVER read: the export only
+		// ever opens the manifest.
+		const projection = projectDiagnosticsSession(
+			manifest,
+			sessionId,
+			homedir(),
+		);
 		text += section(
 			`session ${sessionId}`,
-			JSON.stringify({ ...rest, metadata }, null, 2),
+			JSON.stringify(projection, null, 2),
 		);
 		includedSessions.push(sessionId);
 	}
