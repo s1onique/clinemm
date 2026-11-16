@@ -164,7 +164,7 @@
       ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/request-accounting-map.md",
       "sdk/packages/core/src/extensions/context/compaction.estimator-parity01.test.ts"
     ],
-    "evidenceCorrectionCommitSha": "PENDING_DISCOVERY_AFTER_COMMIT",
+    "evidenceCorrectionCommitSha": "d79a15fa0",
     "confidentialityScan": {
       "credentialShapes": "NONE FOUND",
       "longBlobs": "Only the SHA-256 hashes of the trace, the session files and the bundle — all required identity metadata.",
