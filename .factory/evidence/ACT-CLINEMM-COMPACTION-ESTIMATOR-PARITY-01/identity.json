@@ -138,5 +138,27 @@
     "testRunner": "vitest 4.1.10",
     "nodeRuntime": "Node >=22 (the VS Code extension host and the standalone core are Node; bun is the task runner)"
   },
-  "liveBenchmarking": "NOT PERFORMED — no live Strata probe, no Round C repetition, no VSIX install."
+  "liveBenchmarking": "NOT PERFORMED — no live Strata probe, no Round C repetition, no VSIX install.",
+  "closure": {
+    "commitSha": "367b3d6be3102e5020e9714c4a50e9a3200bc8ca",
+    "commitShaMethod": "DISCOVERED via `git rev-parse HEAD` after the commit — never predicted.",
+    "filesCommitted": [
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/RECON-REPORT.md",
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/historical-parity-analysis.ts",
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/historical-parity.json",
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/identity.json",
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/necessity-ablation.json",
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/production-seam-discriminator.json",
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/request-accounting-map.md",
+      "sdk/packages/core/src/extensions/context/compaction.estimator-parity01.test.ts"
+    ],
+    "confidentialityScan": {
+      "credentialShapes": "NONE FOUND",
+      "longBlobs": "Only the SHA-256 hashes of the trace, the session files and the bundle — all required identity metadata.",
+      "sessionMessageTextsLeaked": 0,
+      "traceMetadataStringsLeaked": "Only `decisionId` identifiers, the literal `UNAVAILABLE_FROM_TRACE` classification and the enum value `contextWindow` — all metadata, no content.",
+      "preCommitHook": "gitleaks — 0 commits scanned, no leaks found."
+    },
+    "pushPrOrHistoryRewrite": "NONE — not authorized and not performed."
+  }
 }
