@@ -1,0 +1,35 @@
+# ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01 — artifact SHA-256 bindings
+# INSTALLED_INCIDENT_SOURCE_HEAD = 1d9a37bcd408c185ef356303e1e5ac6237a15307
+# REPLAY_SUBJECT_HEAD            = e0e30879f9e5cf0716242b00dc3cd9447fbaa6e1
+#
+# NOTE: hashes below bind the COMMITTED state of each artifact.
+#       The pre-commit biome formatter may reformat the .test.ts file;
+#       this file was regenerated AFTER the commit to match the committed bytes.
+#
+# --- ACT-owned evidence artifacts ---
+d9457ae848e98ca011c2b2d67c78a91e84ac9115b2f42889df94691c82562d2d  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/00-identity-and-source-parity.md
+779162a0b9e3787cc38e81f92b37bda556b31b67de9beeb2ed58848e1fbc8a33  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/01-production-correlation-map.md
+694df8424630594cb4890a7ee37ad7be3598477eaa98647920fd080fa0af7f09  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/02-source-bound-replay.md
+c23005d4ea06e5bd8e1cbd151087a9e8047d21a8c1b486f5995f75c3ddd106bb  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/03-red-reproduction.md
+2bb77b4fe91f8e1ff7741e935b96ef8b72695deed818685f2f5c362df58cd1c7  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/04-causal-discriminator.md
+ba17821a6ea14c9f344d5001557ad4e1708eb41a94c2b61c57cc91da21f51d98  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/05-necessity-ablation.md
+979e923ea1eb750a888b2a1e080dd6b0df440e68cd34ffe96293d2d39b106b64  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/06-executable-receipts.md
+c102c0e68a130d7dd4bc8b5bc68eb9d5584dccc2962d2a22205c8a8008316561  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/07-decision.md
+a433a979fa100aec0c5bcf9a37925246affb7c53c00c92fcebe5158975270e71  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/fixtures/barrier-timeline.session.jsonl
+a4762d4d775c38b5f6c68254ae81cfb60c572a8d53c9965c55adc76ba3fa4d0d  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/fixtures/completion-authority.session.jsonl
+32a33731f3e7539b086617c8e48729e8114fa898d06343028c2bc40bed9d03eb  .factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01/fixtures/continuation-events.session.jsonl
+#
+# --- ACT-owned reproduction witness ---
+be051cddfe25dddae806bdc86577da5fe4c7aa5e9269eef7287e65aa7ffdb063  apps/vscode/src/sdk/__tests__/elm-pending-prompt-orphan-repro01.oppor01.test.ts
+#
+# --- read-only production assets (UNCHANGED; byte-identical to installed incident source) ---
+15c61e20468c36ac7bc3caed840c1012f5c5accbb0bcb96e0c748a00ad8d4f4c  apps/vscode/elm/completion-authority/vendor/completion-authority.js
+c9b1b0f9431c74e77b87701a4c08a1d501ca4f28433d1d2f5b3928bcd358c724  apps/vscode/elm/completion-authority/src/Authority.elm
+c4e9d48397c1bb6f2a04d43a6ad5477f46980ce4955164b3d440f66489c6e1bb  apps/vscode/elm/completion-authority/src/Codec.elm
+08d94352aa4ab23a3cfd4d2348fe0a1bd02715d885daa0efafbeda36b5695891  apps/vscode/elm/completion-authority/src/Domain.elm
+085ee6fe28fcd8cdcf4be7ee7dd07727ec42f5eeb1ae758780a8beb20219a8e1  apps/vscode/src/sdk/canonical-event-subscription.ts
+15a112ae6052ff1630bd57e0cf5f44667d61981e5a6be63147423a5d7d9b2364  apps/vscode/src/sdk/completion-authority-elm-replay.ts
+2f295690d9e530d2a566001bf9d53f20a31cc1d3d0efc35c531cbfb9973f97df  apps/vscode/src/sdk/completion-authority-elm-authority-runtime.ts
+84499b0cdac544fe5b0992c80e31588b2413b160aa021699984954968ab0ab07  apps/vscode/src/sdk/continuation-cardinality-authority.ts
+e0365b599299fdb3230f343acd046242b81a24f978dcc516ab3b207e69ea3551  apps/vscode/src/sdk/continuation-cardinality-authority.runtime-capture.ts
+f92151a4113fb327785564181f8a7e955271901a71641d9e692878664d13afce  apps/vscode/src/sdk/continuation-cardinality-authority.session-host-capture.ts

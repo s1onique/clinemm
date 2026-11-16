@@ -34377,3 +34377,99 @@ reset / rebase / checkout / reinstall / upgrade; the incident task and its histo
 (no write to `db/sessions.db` or the session directory); no live job cancelled, killed or probed; no
 credential read (only a token *fingerprint*); no secrets in the committed evidence.
 
+
+---
+
+## ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01 — PASS_CAUSAL_PROOF
+
+**Incident.** Session `1794840293250_5ugld`. The Elm completion authority withheld
+completion with `elmDecision:"hold"`, `elmReason:"pending_prompt"` at eight recorded
+consults (eventSeq 6252/6254/6256/6260/6264/6266/6270/6272), the last at
+`2026-11-16T15:04:29.118Z` (epoch 4). No `completed` task phase was ever published.
+The C10 reevaluation at the same boundary was fully clear (`remainingBlockingJobCount:0`,
+`unconsumedTerminalCount:0`, `ownerStillRunning:false`, `heldObligation:false`,
+`outstandingAutonomousWork:false`).
+
+**Identity.** `INSTALLED_INCIDENT_SOURCE_HEAD = 1d9a37bcd408c185ef356303e1e5ac6237a15307`
+(ancestor of HEAD). `REPLAY_SUBJECT_HEAD = e0e30879f9e5cf0716242b00dc3cd9447fbaa6e1`.
+All 11 causal-path production files (`canonical-event-subscription.ts`,
+`continuation-cardinality-authority{,.runtime-capture,.session-host-capture}.ts`,
+`completion-authority-elm-replay.ts`, `completion-authority-elm-authority-runtime.ts`,
+`elm/completion-authority/src/{Authority,Codec,Domain}.elm`,
+`sdk-session-event-coordinator.ts`, `SdkController.ts`) are **byte-identical** between the
+two revisions, so the replay is simultaneously a historical reproduction and a
+current-head reproduction.
+
+**The finding.** A continuation prompt leaves `PromptScheduled` ONLY via
+`ContinuationStarted promptRef runRef` (`Authority.elm:347-385`).
+`AgentTurnDone` consumes only `PromptRunning r` whose `r` equals the closing run
+reference (`consumePromptForRun`, `Authority.elm:692-711`); it leaves a
+`PromptScheduled` prompt untouched. `computeHoldReasons` then reports `PendingPrompt`
+(first in the hold list) plus `ScheduledContinuation`.
+
+The ONLY producer of the `continuation_started` capture is
+`canonical-event-subscription.ts:105-121`, which JOINS a held prompt (armed by
+`continuation_scheduled` at `continuation-cardinality-authority.session-host-capture.ts:98`)
+with the `runId` of a canonical `run-started` runtime event for the SAME session.
+
+The incident bundle shows, for this session, a **contiguous CCARD seq 1..64 with no
+gaps** (so the absence is not recorder truncation inside the causal window): **five**
+`execute_turn_prelude_enter` and **five** `agent_turn_done`, but only **ONE**
+`run_turn_started` (seq 3, `run_rCw8nsup`) and **ZERO** `continuation_started`. Because
+`recordAgentTurnDone` reads the RETAINED `runIdBySessionId`, all five `agent_turn_done`
+records carry the same `run_rCw8nsup` — direct evidence that the canonical `run-started`
+reached the subscription only ONCE (the explicit-user turn). Consequently the held-prompt
+join never fired for the continuation turns, both prompts stayed `PromptScheduled`, and
+the hold was permanent.
+
+**Reproduction.** Source-bound replay of the 64 retained incident records through the REAL
+`AUTHORITY_STAGES` filter -> REAL `adaptRecord()` -> REAL `enqueueElmAuthorityRecord()` ->
+REAL `flushElmAuthorityForSession()` -> REAL compiled Elm kernel
+(`elm/completion-authority/vendor/completion-authority.js`). Result:
+`finalKind="hold"`, `finalHoldReasons=["pending_prompt","scheduled_continuation"]`,
+`continuationStartedDelivered=0` — the incident symptom exactly. No synthetic Elm model
+was constructed; no mock replaced the adapter.
+
+**Necessity / ablation (all through the real adapter + real kernel).**
+A1 baseline -> `hold`/`pending_prompt`. A2 supply the two SOURCE-BACKED
+`continuation_started(promptId, runId)` transitions (P1=`pending_1794841243556_-tSbr`,
+P2=`pending_1794841410962_5gjid`, run=`run_rCw8nsup`, all verbatim from the bundle) at the
+production join point -> `authorize`, zero hold reasons. A3 remove them again -> `hold`
+returns; removing only ONE of the two -> `hold` returns (both prompts hold independently).
+A4 eight adversarial arms (genuinely queued prompt; scheduled-not-started; still-running;
+foreign prompt id; stale/foreign run id; unresolved background job; unconsumed terminal
+observation; plus a non-vacuous control) all still HOLD with the correct hold reason — the
+Elm fail-closed behaviour is intact.
+
+**Outcome.** `PASS_CAUSAL_PROOF`. The missing prompt->run association is the NECESSARY
+cause of the Elm `pending_prompt` hold. Not `HYPOTHESIS_ONLY`: every counterfactual
+identity is verbatim from the exported bundle.
+
+**Residual unknown (for the successor).** The bundle establishes that the canonical
+subscription did not observe a `run-started` for the continuation turns; it does NOT
+establish WHY (subscription never re-attached for that session under the
+`LOCAL_RUNTIME_SUBSCRIPTION_MODEL = POINT_IN_TIME` invariant / not emitted / attached to
+a different session). No subscription-lifecycle event exists in the bundle to discriminate
+these. This ACT deliberately added NO diagnostic instrumentation for it.
+
+**Do NOT.** Do not repair the Elm completion policy. Do not suppress `PendingPrompt`. Do
+not force completion from TypeScript counters. Do not fabricate a run id. Do not weaken
+C9/C10, BCB or session ownership. Do not create a second completion authority. Do not
+claim the installed extension was fixed or qualified — no production repair was made or
+authorized. Production change budget: ZERO.
+
+**Successor.** `ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01` — must begin from the
+reproduced RED (`OPPOR01-REPLAY` in
+`apps/vscode/src/sdk/__tests__/elm-pending-prompt-orphan-repro01.oppor01.test.ts`, which
+PASSES against the unmodified production code and will FAIL once repaired) and implement
+ONLY the causally necessary correction.
+
+**Hygiene.** Protected stash `stash@{0}` preserved and untouched; all 6 worktrees preserved;
+no push / reset / rebase / checkout / reinstall / upgrade; the operator's running ClineMM
+task was not used to investigate itself; no live session modified; the original exported
+bundle is preserved OUTSIDE the repository and only the sanitized session-filtered
+fixtures are committed. One pre-existing baseline diagnostic is preserved by identity and
+NOT ACT-owned:
+`completion-authority-elm-authority-counter-dump01.test.ts > ELAUTHORITY01.A` (a
+regex/format mismatch against a fork comment block in `src/registry.ts`; neither file is
+modified by this ACT).
