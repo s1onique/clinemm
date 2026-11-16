@@ -34786,40 +34786,84 @@ C remains NO-GO until the live capture passes.
 
 ---
 
-# ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — PASS_STRUCTURAL_ONLY — 2026-11-16
+# ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — PASS_WITH_NONBLOCKING_RESIDUE (identity-boundary CORRECTION01) — 2026-11-17
 
 **Status:** the bounded read-only MCP task-header projection is implemented and
-verified through the REAL production publication and transport seams. Installed-host
-qualification is explicitly PENDING.
+verified through the REAL production publication and transport seams. A reviewer
+raised ONE P1 (the controller publication boundary needed a direct witness); that
+check found a REAL identity-binding defect, which is now FIXED and covered by a
+production-controller witness that is RED against the pre-correction code.
+Installed-host qualification remains explicitly PENDING.
 
 ```text
 ACT_ID: ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01
 TYPE: bounded read-only MCP projection + executable qualification
 EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
 WORKSTREAM: W01 (successor of ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01)
-VERDICT: PASS_STRUCTURAL_ONLY
+VERDICT: PASS_WITH_NONBLOCKING_RESIDUE
 ENTRY_HEAD: 5dc1394802b86cb1ac996396fda2ca4b72212a70
 ENTRY_TREE: 312cc2ad6c4fb98c2e2b770da82b05f78553d731
 BRANCH: main (no ACT branch created)
 PUSHED: NO   RELEASED: NO   PUBLISHED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
 PROTO_CHANGES: 0   NEW_MCP_OPERATIONS: 0   PROTOCOL_VERSION: 1 (unchanged)
-TESTS: 39/39 PASS (2 new files: 31 projection witnesses + 8 publication-boundary witnesses)
-EXISTING CONTROL-SEAM: 89 tests PASS in 6 files; 1 file fails PRE-EXISTING (COR02-R1/R2)
-EXISTING TASK-HEADER ELM: 51/51 PASS (5 files)
-WEBVIEW LABEL MATRIX: 45/45 PASS   REACT UPDATER PURITY: 7/7 PASS (2 files)
+TESTS: 43/43 PASS (3 files: 31 projection + 8 publication-boundary + 4 identity-boundary)
+EXISTING CONTROL-SEAM: 92/94 PASS in 6 files; 1 file fails PRE-EXISTING (COR02-R1/R2),
+                   reproduced IDENTICALLY at the pristine baseline with the change stashed
+EXISTING TASK-HEADER ELM: 173/173 PASS
+WEBVIEW LABEL MATRIX + REACT UPDATER PURITY: 50/50 PASS
 TYPECHECK: tsc --noEmit EXIT 0 (host) | webview tsc --noEmit EXIT 0
-LINT: biome EXIT 0 (21 files scoped) | git diff --check EXIT 0
-FULL-SUITE PARITY: ACT 63 failed files / 168 failed tests == HEAD baseline 63 / 168
-                   failing-file sets IDENTICAL (comm both directions EMPTY)
-                   ACT adds +2 passing files and +39 passing tests
+LINT: biome EXIT 0 (4 scoped files)
+FULL-SUITE PARITY: CORRECTION 63 failed files / 168 failed tests == pristine baseline 63 / 168
+                   failing-file SETS IDENTICAL (sorted 63-file diff EMPTY both directions)
+                   CORRECTION adds +1 passing file and +4 passing tests
 BASELINE_DIAGNOSTICS: control-seam.owner-exclusivity.cor02.test.ts (COR02-R1/R2) —
-                   ERR_UNSUPPORTED_ESM_URL_SCHEME ('bun:'); reproduced identically at HEAD
+                   socket/timing artifact; reproduced identically at the pristine baseline
 ACT_OWNED_DIAGNOSTICS: NONE
-INSTALLED QUALIFICATION: NOT EXECUTED / PENDING (sandbox cannot install into
-                        ~/.vscodium-clinemm/extensions/; the filesystem restriction was
-                        NOT bypassed). No LIVE claim is made.
+INSTALLED QUALIFICATION: NOT EXECUTED / PENDING. No LIVE claim is made.
 EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/
+          (07-identity-boundary-correction01.md is the CORRECTION01 record)
 ```
+
+## IDENTITY-BOUNDARY CORRECTION01 — a REAL defect, found by the reviewer's P1
+
+The reviewer asked for one bounded production-controller witness: what happens if
+the active session changes while an asynchronous state submission is completing?
+The answer was: **the pre-correction code mis-bound the record.**
+
+`SdkController.capturePublishedTaskState()` read `sessionId` / `taskId` LIVE
+(`this.sessions.getActiveSession()?.sessionId`, `this.task?.taskId`) AFTER the
+`await sendStateUpdate(state)` suspension point. A session switch during the
+publication therefore bound session A's TaskHeader projection to session B's
+identity — a cross-identity mis-binding of the very fact the projection exists
+to expose faithfully. The pre-existing consistency guard in
+`getStateToPostToWebview()` runs BEFORE that await and does not cover the
+window.
+
+BEHAVIOURAL RED (the capture reverted in place; everything else unchanged):
+
+```
+ × IB02: a task switch DURING the publication does NOT rebind session A's
+          projection to session B
+AssertionError: expected 'session-b' to be 'session-a'
+```
+
+FIX: the publication identity is sampled ONCE, synchronously, at snapshot
+CONSTRUCTION time (where the controller already samples `snapshotTask` /
+`snapshotSession` and already consistency-checks them) and travels WITH the
+submitted snapshot on a NON-ENUMERABLE `Symbol`-keyed carrier. The capture
+reads ONLY that carrier; a snapshot without one is REJECTED rather than bound
+to a guessed identity. The carrier is non-enumerable, so `JSON.stringify` omits
+it and the webview wire payload is byte-for-byte unchanged.
+
+No second task-state authority was introduced: the carrier carries identity
+only; the phase is still the Elm-selected value on the submitted state. The
+control-seam read path already fences on the CURRENT active session / task /
+epoch, so a record bound to a superseded identity is simply NOT projected — it
+is never mis-attributed to the new owner.
+
+The ACT's own publication-boundary suite no longer uses a test-local mirror:
+`captureFromSubmittedState()` now invokes the REAL production
+`SdkController.prototype.capturePublishedTaskState` against the REAL store.
 
 ## What changed
 

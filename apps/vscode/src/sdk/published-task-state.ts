@@ -51,6 +51,101 @@
 import type { TaskHeaderPresentationProjection } from "@shared/ExtensionMessage"
 
 /**
+ * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — IDENTITY-BOUNDARY CORRECTION01.
+ *
+ * The identity that a given ExtensionState snapshot was BUILT for.
+ *
+ * WHY THIS EXISTS
+ *
+ *   The capture at the publication handoff MUST bind the published
+ *   projection to the identity of the session/task that PRODUCED it.
+ *
+ *   Reading the identity LIVE (after the `sendStateUpdate` await) is a
+ *   race: the active session can change while the publication is in
+ *   flight. In that case the live read returns the NEW session's
+ *   identity, and the OLD session's projection would be captured under
+ *   the NEW session's identity — a cross-identity mis-binding.
+ *
+ *   The identity is therefore SAMPLED ONCE, synchronously, at snapshot
+ *   CONSTRUCTION time (where the controller already samples the task and
+ *   the active session, and already consistency-checks them), and then
+ *   travels WITH the submitted object until the capture reads it.
+ *
+ * WIRE SHAPE
+ *
+ *   The carrier is attached as a NON-ENUMERABLE property, so
+ *   `JSON.stringify` (the actual webview serialization) does NOT emit
+ *   it. The webview wire payload is byte-for-byte unchanged; the
+ *   carrier exists only on the in-process object handed to
+ *   `sendStateUpdate`.
+ */
+export interface PublishedTaskStateIdentity {
+	/** The session id the snapshot was built for. */
+	readonly sessionId: string
+	/** The task id the snapshot was built for. */
+	readonly taskId: string
+}
+
+/**
+ * The non-enumerable property key under which the publication identity
+ * travels with an ExtensionState snapshot.
+ *
+ * A `Symbol` is used so the key can never collide with a wire field
+ * name and can never be produced by `JSON.parse` of a remote payload.
+ */
+export const PUBLISHED_TASK_STATE_IDENTITY = Symbol("cline.publishedTaskStateIdentity")
+
+/**
+ * Attach the publication identity to a snapshot WITHOUT changing the
+ * serialized wire shape.
+ *
+ * The identity is stored as a NON-ENUMERABLE own property:
+ *   - `JSON.stringify(snapshot)` omits it, so the webview payload is
+ *     byte-for-byte unchanged,
+ *   - an object spread (`{ ...snapshot }`) does NOT copy it, so the
+ *     identity cannot leak into a derived object and be mistaken for
+ *     the identity of a different publication.
+ *
+ * The carrier must therefore be attached to the EXACT object that is
+ * handed to `sendStateUpdate` — the capture reads it from that same
+ * object and never from a copy.
+ */
+export function attachPublishedTaskStateIdentity(state: object, identity: PublishedTaskStateIdentity): void {
+	Object.defineProperty(state, PUBLISHED_TASK_STATE_IDENTITY, {
+		value: Object.freeze({ ...identity }),
+		enumerable: false,
+		writable: false,
+		configurable: true,
+	})
+}
+
+/**
+ * Read the publication identity attached to a submitted snapshot.
+ *
+ * Returns `undefined` when the snapshot carries no identity — which
+ * means the snapshot was NOT produced by the identity-bearing
+ * construction path, and the capture MUST NOT guess an identity from
+ * live controller state.
+ */
+export function readPublishedTaskStateIdentity(state: unknown): PublishedTaskStateIdentity | undefined {
+	if (!state || typeof state !== "object") {
+		return undefined
+	}
+	const identity = (state as Record<PropertyKey, unknown>)[PUBLISHED_TASK_STATE_IDENTITY]
+	if (!identity || typeof identity !== "object") {
+		return undefined
+	}
+	const { sessionId, taskId } = identity as { sessionId?: unknown; taskId?: unknown }
+	if (typeof sessionId !== "string" || sessionId.length === 0) {
+		return undefined
+	}
+	if (typeof taskId !== "string" || taskId.length === 0) {
+		return undefined
+	}
+	return { sessionId, taskId }
+}
+
+/**
  * One immutable published TaskHeader projection, bound to the identity
  * and generation of the ExtensionState that carried it.
  */

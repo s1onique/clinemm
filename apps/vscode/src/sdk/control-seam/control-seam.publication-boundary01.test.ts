@@ -35,7 +35,8 @@ vi.mock("@/services/telemetry", () => ({
 import { sendStateUpdate } from "@core/controller/state/subscribeToState"
 import type { ExtensionState } from "@shared/ExtensionMessage"
 
-import { type PublishedTaskState, PublishedTaskStateStore } from "@/sdk/published-task-state"
+import { attachPublishedTaskStateIdentity, type PublishedTaskState, PublishedTaskStateStore } from "@/sdk/published-task-state"
+import { Controller as SdkController } from "../SdkController"
 
 import { projectControlSeamTaskState } from "./control-seam-authority"
 
@@ -63,33 +64,30 @@ function makeState(options: {
 }
 
 /**
- * The REAL controller capture logic, expressed against the REAL store.
+ * The REAL production controller capture, invoked against the REAL store.
  *
- * This mirrors `SdkController.capturePublishedTaskState()` exactly: the
- * capture is only attempted when the SUBMITTED state carries a
- * projection, a `stateVersion`, an `epoch`, and an active identity.
+ * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — IDENTITY-BOUNDARY CORRECTION01:
+ *
+ *   This helper previously MIRRORED `SdkController.capturePublishedTaskState()`
+ *   (a test-local re-implementation of the production logic). It now
+ *   invokes the REAL production method on the REAL prototype, so the
+ *   publication-boundary suite exercises the production capture rather
+ *   than a copy of it.
+ *
+ *   The production capture reads the publication identity from the
+ *   carrier that travels WITH the submitted snapshot, so the helper
+ *   attaches that carrier exactly as the production builder does.
  */
 function captureFromSubmittedState(
 	store: PublishedTaskStateStore,
 	state: ExtensionState,
 	identity: { sessionId: string; taskId: string },
 ): void {
-	const projection = state.taskHeaderPresentation
-	if (!projection) {
-		return
-	}
-	const stateVersion = state.stateVersion
-	const epoch = state.epoch
-	if (typeof stateVersion !== "number" || typeof epoch !== "number") {
-		return
-	}
-	store.capture({
-		sessionId: identity.sessionId,
-		taskId: identity.taskId,
-		epoch,
-		stateVersion,
-		projection: { phase: projection.phase, source: projection.source, seq: projection.seq },
-	})
+	attachPublishedTaskStateIdentity(state, identity)
+	// biome-ignore lint/suspicious/noExplicitAny: the production method is
+	// private; the prototype call is the established controller-test seam.
+	const capture = (SdkController.prototype as any).capturePublishedTaskState
+	capture.call({ publishedTaskState: store }, state)
 }
 
 const IDENTITY = { sessionId: "session-a", taskId: "task-a" }

@@ -71,7 +71,11 @@ import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalMan
 import { ExtensionRegistryInfo } from "@/registry"
 import { ControlSeamRuntime, createControlSeamAuthority } from "@/sdk/control-seam/control-seam-runtime"
 import { ControlSeamServer } from "@/sdk/control-seam/control-seam-server"
-import { PublishedTaskStateStore } from "@/sdk/published-task-state"
+import {
+	attachPublishedTaskStateIdentity,
+	PublishedTaskStateStore,
+	readPublishedTaskStateIdentity,
+} from "@/sdk/published-task-state"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { UrlContentFetcher } from "@/services/browser/UrlContentFetcher"
 import { CloudSessionsService } from "@/services/cloud/CloudSessionsService"
@@ -6789,6 +6793,18 @@ export class Controller {
 		//   sequence domain; it is carried through verbatim and is NEVER
 		//   compared against `stateVersion`.
 		//
+		// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — IDENTITY-BOUNDARY
+		// CORRECTION01:
+		//
+		//   The `sessionId` / `taskId` used by the capture also come from
+		//   the SAME submitted object — they ride along on the snapshot's
+		//   publication-identity carrier, stamped at construction time.
+		//
+		//   They are NOT re-read from the live controller here. This await
+		//   is a real suspension point, and the active session can change
+		//   while the publication is in flight; a live read would bind the
+		//   OLD session's projection to the NEW session's identity.
+		//
 		// A snapshot that was merely CONSTRUCTED (e.g. by
 		// `getStateToPostToWebview()` called outside the regular
 		// state-push path) never reaches this code and is therefore
@@ -6807,6 +6823,33 @@ export class Controller {
 	 * active session + task identity. Otherwise the previous record (if
 	 * any) stands — the store's own generation fence rejects an older
 	 * or out-of-order publication.
+	 *
+	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — IDENTITY-BOUNDARY
+	 * CORRECTION01:
+	 *
+	 *   The identity is read from the PUBLICATION IDENTITY CARRIER that
+	 *   travelled WITH the submitted snapshot — it is NEVER re-read from
+	 *   the live controller state.
+	 *
+	 *   Reading it live (the pre-correction behavior) was a race: the
+	 *   `await sendStateUpdate(state)` is a real suspension point, and
+	 *   the active session can change while the publication is in
+	 *   flight. The live read would then return the NEW session's
+	 *   identity and the OLD session's projection would be captured
+	 *   under the NEW session's identity.
+	 *
+	 *   The carrier is attached at snapshot CONSTRUCTION time, where the
+	 *   controller already samples the task and the active session and
+	 *   already consistency-checks them. So the captured `sessionId`,
+	 *   `taskId`, `epoch` and `stateVersion` all originate from ONE
+	 *   consistent publication identity.
+	 *
+	 *   A snapshot that carries NO carrier (e.g. one built by a path
+	 *   that does not stamp the identity) is REJECTED rather than bound
+	 *   to a guessed identity. The control-seam read path fences the
+	 *   record against the CURRENT active session/task/epoch, so a
+	 *   record bound to a now-superseded identity is simply not
+	 *   projected — it is never mis-attributed to the new owner.
 	 */
 	private capturePublishedTaskState(state: ExtensionState): void {
 		const projection = state.taskHeaderPresentation
@@ -6818,14 +6861,16 @@ export class Controller {
 		if (typeof stateVersion !== "number" || typeof epoch !== "number") {
 			return
 		}
-		const sessionId = this.sessions?.getActiveSession()?.sessionId
-		const taskId = this.task?.taskId
-		if (!sessionId || !taskId) {
+		// IDENTITY-BOUNDARY CORRECTION01: the identity comes from the
+		// carrier attached to the SUBMITTED snapshot, never from a live
+		// read of the active session / task.
+		const identity = readPublishedTaskStateIdentity(state)
+		if (!identity) {
 			return
 		}
 		this.publishedTaskState.capture({
-			sessionId,
-			taskId,
+			sessionId: identity.sessionId,
+			taskId: identity.taskId,
 			epoch,
 			stateVersion,
 			projection: {
@@ -7464,6 +7509,29 @@ export class Controller {
 				// propagate it without ever deriving it locally. When the toggle is OFF
 				// the field is undefined and the wire shape is unchanged.
 				...(ptadEnabled ? { _ptadEnabled: true, _ptadPushId: ptadPushId } : {}),
+			}
+			// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — IDENTITY-BOUNDARY
+			// CORRECTION01:
+			//
+			// Attach the PUBLICATION IDENTITY to this exact snapshot object,
+			// using the task / active session that were sampled at the TOP of
+			// this method and VERIFIED by the consistency check above. The
+			// carrier is a non-enumerable own property, so the serialized
+			// webview payload is byte-for-byte unchanged.
+			//
+			// The carrier travels WITH the submitted snapshot, so the capture
+			// at the publication handoff binds the published projection to the
+			// identity that PRODUCED it — even when the active session
+			// changes while the publication await is in flight.
+			//
+			// When there is no active session or no task, NO carrier is
+			// attached: such a publication is not identity-bound and must
+			// never be captured.
+			if (snapshotSession?.sessionId && snapshotTask?.taskId) {
+				attachPublishedTaskStateIdentity(snapshot, {
+					sessionId: snapshotSession.sessionId,
+					taskId: snapshotTask.taskId,
+				})
 			}
 			if (isPostTerminalAuthorityDiagnosticEnabled("extension")) {
 				recordPostTerminalAuthoritySnapshot(
