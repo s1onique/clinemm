@@ -11,6 +11,7 @@ export { CHARS_PER_TOKEN, estimateTokens };
 
 import type { CoreCompactionSummarizerConfig } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
+import { sanitizeOutcomeText } from "./evidence-continuity";
 
 export const DEFAULT_MAX_INPUT_TOKENS = 128_000;
 /** Estimate the usable input share when only a context window is reported. */
@@ -161,6 +162,151 @@ export function resolveProviderMaxInputTokens(
 	});
 }
 
+/**
+ * ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01
+ *
+ * The status of ONE structured tool payload.
+ *
+ * The three values mirror the `VerifiedOutcomeStatus` classification used by
+ * the evidence-continuity module, so the summarizer sees the SAME status
+ * vocabulary the persisted summary uses. In particular there is no
+ * "partially successful" aggregate: a batch is described payload by
+ * payload, so a mixed batch can never be read as wholly successful.
+ */
+type StructuredPayloadStatus = "succeeded" | "failed" | "unknown";
+
+/**
+ * Classify ONE structured tool payload by its OWN status signal.
+ *
+ * The signal semantics are deliberately identical to
+ * `classifyToolResultStatus()` in `evidence-continuity.ts`:
+ *
+ *   - `success: true`            -> "succeeded" (affirmative success)
+ *   - `success: false`           -> "failed"
+ *   - `isError: true`            -> "failed"
+ *   - no affirmative signal      -> "unknown" (NOT promoted to success)
+ *
+ * "No evidence of failure" is not "evidence of success".
+ */
+function classifyStructuredPayloadStatus(
+	payload: Record<string, unknown>,
+): StructuredPayloadStatus {
+	if (payload.success === false || payload.isError === true) {
+		return "failed";
+	}
+	if (payload.success === true) {
+		return "succeeded";
+	}
+	return "unknown";
+}
+
+/**
+ * True when a tool-result content entry is a STRUCTURED tool payload rather
+ * than one of the typed `text` / `file` / `image` blocks.
+ *
+ * The recognition is by DATA SHAPE, never by a provider id and never by a
+ * tool name: a payload is structured when it is a plain object that carries
+ * a `result` field. The production `run_commands` executor emits exactly
+ * that shape (`{query, result, success}`), and the canonical persistence
+ * path preserves such arrays as arrays (`toPersistedToolResultContent()` in
+ * `@cline/shared`).
+ */
+function isStructuredToolPayload(
+	entry: unknown,
+): entry is Record<string, unknown> {
+	return (
+		entry !== null &&
+		typeof entry === "object" &&
+		!Array.isArray(entry) &&
+		"result" in (entry as Record<string, unknown>)
+	);
+}
+
+/**
+ * The marker emitted for a tool-result entry whose shape is NOT recognized.
+ *
+ * An unsupported shape is CLASSIFIED EXPLICITLY: the summarizer is told that
+ * an unrecognized payload existed, so the absence of its content is an
+ * explicit, auditable statement rather than a silent drop. No content of an
+ * unrecognized payload is ever copied, and an unrecognized payload is never
+ * promoted to a typed block.
+ */
+const UNSUPPORTED_TOOL_RESULT_MARKER = "[unsupported tool result shape]";
+
+/**
+ * The maximum characters of a single structured payload's rendered result.
+ *
+ * The per-payload bound keeps the total bounded by the number of payloads,
+ * and the number of payloads in one tool result is bounded by the batch the
+ * caller issued. The overall result budget is enforced by the existing
+ * `TOOL_RESULT_CHAR_LIMIT` truncation applied to the whole flattened string.
+ */
+const STRUCTURED_PAYLOAD_RESULT_CHAR_LIMIT = TOOL_RESULT_CHAR_LIMIT;
+
+/**
+ * Render ONE structured tool payload for the summarizer input.
+ *
+ * The rendering is DETERMINISTIC and preserves the call identity:
+ *
+ *   [<status>] <query>: <result>
+ *
+ * - The status is the payload's OWN classification, so success and failure
+ *   stay distinguishable and a mixed batch cannot collapse into a single
+ *   aggregate verdict.
+ * - The query is the command the payload answered, bounded in length.
+ * - The result is the payload's output, REDACTED through the existing
+ *   `sanitizeOutcomeText()` helper and then truncated.
+ *
+ * The redaction is the repository's existing conservative credential
+ * redaction. It is applied at the VALUE POSITION and consumes whole quoted
+ * values, so the documented formats (`DB_PASSWORD=...`,
+ * `{"password":"..."}`, `password="two words"`, `apiKey: "..."`) and the
+ * bearer / PEM / provider-token shapes are covered.
+ */
+function renderStructuredToolPayload(
+	payload: Record<string, unknown>,
+	index: number,
+): string {
+	const status = classifyStructuredPayloadStatus(payload);
+	const rawQuery = payload.query;
+	const query =
+		typeof rawQuery === "string" && rawQuery.trim().length > 0
+			? truncateText(rawQuery.trim(), 200)
+			: `#${index + 1}`;
+	const rawResult = payload.result;
+	const result =
+		typeof rawResult === "string"
+			? truncateText(
+					sanitizeOutcomeText(rawResult),
+					STRUCTURED_PAYLOAD_RESULT_CHAR_LIMIT,
+				)
+			: typeof rawResult === "number" || typeof rawResult === "boolean"
+				? String(rawResult)
+				: "";
+	const suffix = result.length > 0 ? `: ${result}` : "";
+	return `[${status}] ${query}${suffix}`;
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01
+ *
+ * Render a tool result's content for the summarizer input window.
+ *
+ * The typed `text` / `file` / `image` blocks are handled exactly as before.
+ * The REPAIR is the `default:` branch:
+ *
+ * Before the repair, an unrecognized entry fell into `default:` and
+ * returned the EMPTY STRING, so the whole structured payload was silently
+ * dropped from the summarizer's input. The production `run_commands`
+ * executor emits `{query, result, success}` entries, so every command
+ * result reached the provider request intact but reached the summarizer
+ * BLANK — the summarizer could not see a successful `helm template` render
+ * at all.
+ *
+ * After the repair, a recognized structured payload is rendered with its
+ * own status and its redacted output, and an UNRECOGNIZED shape is
+ * classified explicitly with no content copied.
+ */
 export function flattenToolResultContent(
 	content: ToolResultContent["content"],
 ): string {
@@ -169,7 +315,7 @@ export function flattenToolResultContent(
 		return truncated;
 	}
 	return truncated
-		.map((block) => {
+		.map((block, index) => {
 			switch (block.type) {
 				case "text":
 					return block.text;
@@ -178,7 +324,11 @@ export function flattenToolResultContent(
 				case "image":
 					return `[image:${block.mediaType}]`;
 				default:
-					return "";
+					// ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01: a
+					// structured tool payload. Never silently dropped.
+					return isStructuredToolPayload(block)
+						? renderStructuredToolPayload(block, index)
+						: UNSUPPORTED_TOOL_RESULT_MARKER;
 			}
 		})
 		.join("\n");
