@@ -1,0 +1,72 @@
+==============================================================================
+ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01 - causal discriminator
+==============================================================================
+session            : 1794780088950_tc1vx
+canonical messages : 96
+compaction artifact: source_message_count=75 source_last_message_key=id:msg_FT65i2dN updated_at=2026-11-15T22:17:35.957Z
+compacted messages : 15
+
+------------------------------------------------------------------------------
+Q1  WAS THE SUCCESSFUL EXECUTION PRESENT IN THE CANONICAL HISTORY?
+------------------------------------------------------------------------------
+  canonical index      : 13
+  tool_use_id         : call_7735403ff4f640c3b9de90d0
+  tool name           : run_commands
+  result success flag : True
+  result length       : 8181 chars
+  marker census       : {'helm template': True, 'rc=0': True, 'quay.io/keycloak/keycloak:26.0.7': False, 'runAsNonRoot: true': False, 'fsGroup: 1000': False}
+  rc=0 present        : True
+  exceeds 2000-char compaction limit : True
+
+------------------------------------------------------------------------------
+Q2  DID IT SURVIVE THE COMPACTION INPUT (the summarizer's input)?
+------------------------------------------------------------------------------
+  folded prefix       : canonical[0..75)
+  last folded message : msg_FT65i2dN (canonical index 74)
+  helm evidence index : 13 -> INSIDE the folded prefix
+  helm evidence present in compacted tail : False
+
+  summarizer-input marker census (production serialization):
+    'helm template'                            : True
+    'rc=0'                                     : True
+    'quay.io/keycloak/keycloak:26.0.7'         : True
+    'runAsNonRoot: true'                       : True
+    'fsGroup: 1000'                            : True
+  projection chars   : 94335
+
+------------------------------------------------------------------------------
+Q3  DID IT SURVIVE THE COMPACTION OUTPUT (the installed summary)?
+------------------------------------------------------------------------------
+  summary chars      : 17152
+    'helm template'                            : False
+    'rc=0'                                     : False
+    'quay.io/keycloak/keycloak:26.0.7'         : False
+    'runAsNonRoot: true'                       : False
+    'fsGroup: 1000'                            : False
+  markers LOST       : ['helm template', 'rc=0', 'quay.io/keycloak/keycloak:26.0.7', 'runAsNonRoot: true', 'fsGroup: 1000']
+
+------------------------------------------------------------------------------
+Q4  DOES THE FINAL REPORT CLAIM THE RENDER WAS NOT EXECUTED?
+------------------------------------------------------------------------------
+  final report chars : 16554
+    | | **R1** Manual Helm upgrades deploy stock image | 5/5, 5/5 | CI deploy passes image only via `--set keycloakx.image.repository/tag/digest` (`.gitlab-ci.yml:258–266`); upstream keycloakx 7.0.1 default is `repository: quay.io/keycloak/keycloak`, `tag: ""` (fetched upstream values.yaml); **no** `keycloakx.image` pin in `values.yaml`/`values-prod.yaml`/`values-pp.yaml`/`.helm/do/values.yaml`; incident documented verbatim in `values-dev.yaml:93–101`: operator `helm upgrade` omitted `--set keycloakx.image.tag`, “dropping the StatefulSet back to the upstream image” | Failure requires a **manual** upgrade without `--set`; team already root-caused and fixed it for dev by pinning `keycloakx.image` repository+tag in `values-dev.yaml:74–78` (“CI's --set flag is intentionally NOT relied on, because operator-driven upgrades do not re-pass it”); CI path is digest-gated (`build-evidence/image-digest.txt` hard check, `.gitlab-ci.yml:233–238`) | **NARROWED** | 4/5 | 4.5/5 | Do operators still run manual `helm upgrade` in pp/prod? Is the dev pin temporary? |
+    | | **R6** OTP records accumulate without retention | 4/5, 4.5/5 | `PHONE_MESSAGE_TOKEN_CODE` created in `token-code-changelog.xml:7–86` with no TTL/delete; `git grep 'deleteQuery\|DELETE FROM\|@DELETE'` across the provider module main sources → **no hits**; `TokenCode.java`/`TokenCodeResource.java` contain no delete path; no CronJob/Job in either chart (`git grep -il cronjob .helm` → none) | Repo-internal absence only; a DBA-level purge or managed-DB retention could exist outside the repo (NOT_EXECUTED); accumulation is throttled by OTP rate limits; plaintext CODE/PHONE/IP raises compliance stakes that are plausible but unverified | **CONFIRMED** (repo scope), external-mitigation unknown | 3/5 | 4/5 | Prod table row count; existence of external cleanup jobs |
+    | | **R7** Java tests never executed in CI | 4/5, 5/5 | 43 tracked `src/test/java` files (`git ls-files \| grep -c` → 43); **all** Maven builds use `-DskipTests` (`Dockerfile.roz:35,41,53`; `Dockerfile.do:22,28`); no `mvn test`/surefire/failsafe job anywhere in `.gitlab-ci.yml` (only `mvn -version` preflight at :1811–1815) | CI is not test-free — Go (`go-test`, `go-race`, `go-vet`, `parity`), shell (`helm-render.test.sh`, `dockerfile-topology.test.sh`) and content gates (persisted-SPI property, digest gate) do run and guard packaging; but the 43 Java tests are provably never executed, and may even be bit-rotted | **CONFIRMED** | 3/5 | 5/5 | Whether the 43 tests currently pass (mvn test NOT_EXECUTED — requires network/deps) |
+    | | **R8** Bootstrap-admin credentials committed in both charts | 4/5 (5 if unrotated), 4/5 + 2/5 | Identical committed plaintext `KC_BOOTSTRAP_ADMIN_USERNAME/PASSWORD` pair in `.helm/roz/values.yaml:185–186` and `.helm/do/values.yaml:116–117` (values deliberately not reproduced); same pattern also exposes a third literal secret (RedSMS API key, `.helm/roz/values.yaml:~266`), strengthening the “not an isolated slip” reading | Operational secrets (DB password, carrier creds) *are* externalized via ExternalSecret/Lockbox (`templates/external-secrets-*.yaml`) — selective hygiene suggests the bootstrap pair may be a seed that was rotated; bootstrap-admin only ever creates/replaces the master-recovery admin, so blast radius depends on live state; private GitLab limits exposure | **CONFIRMED** (committed exposure is proven; “still usable” remains unproven) | 4/5 | 5/5 exposure; 2/5 usability | Credential validity/rotation state (testing it prohibited — NOT_EXECUTED); GitLab access breadth |
+    | | **R10** Broken hook ordering + no auto-rollback | 3/5, 4/5 | 9 `helm.sh/hook-weight` annotations with **zero** `helm.sh/hook` annotations (`profiler-watcher.yaml:193,205,248,266,316`; `external-secrets-roz.yaml:11,25`; `external-secrets-do.yaml:11,26`) — per Helm semantics a weight without a hook type is inert; deploy is `helm upgrade --install … --wait --timeout 900s` with no `--atomic` and no rollback step (`.gitlab-ci.yml:256–268`; `after_script` commented out) | Because no `helm.sh/hook` exists, the weights introduce **no ordering bug** — the resources are ordinary resources; ExternalSecret reconciliation is async but self-healing for pod env consumption; helm-render tests actively forbid hook annotations on the watcher; the one-shot pre-arm Job race is superseded at HEAD: watcher is a Deployment with Lease + Go supervisor cycling with `RearmCooldown` (`watcher-go/internal/supervisor/run.go:50–71`), and is dev-only (`profilerWatcher.enabled` default false, opt-in `values-dev.yaml:84`) | **NARROWED** | 2/5 | 4/5 | Live release history (whether a failed upgrade has ever lingered red) — NOT_EXECUTED |
+    | 5. `sed -n 233,275 .gitlab-ci.yml` → deploy block: digest gate + `helm upgrade --install --wait --timeout 900s --set keycloakx.image.repository/tag/digest`; no `--atomic`, no rollback.
+    | 6. `grep KC_BOOTSTRAP_ADMIN .helm/*/values.yaml` → identical pair in both charts (4 lines).
+    | 7. `grep -rn hook-weight .helm/*/templates` → 9 hits; `grep helm.sh/hook` → **only** hook-weight lines (0 true hooks).
+    | 9. `grep -in 'deleteQuery\|DELETE FROM\|@DELETE' -- phone-providers/.../src/main/java` → zero hits; `git grep -il cronjob .helm` → zero.
+    | - `helm dep up` + `helm template` offline render (would populate `charts/` — side effect on workspace); substituted with authoritative upstream values.yaml fetch.
+
+==============================================================================
+VERDICT
+==============================================================================
+  R1_EXECUTION_IN_CANONICAL_HISTORY : True
+  R1_EXECUTION_IN_SUMMARIZER_INPUT  : True
+  R1_EXECUTION_IN_INSTALLED_SUMMARY : False
+  CLASSIFICATION                    : SUMMARIZER_OMISSION
+  READING: the evidence reached the summarizer's window and was lost
+            in the generated summary - the summary is a lossy projection
+            of the canonical record.

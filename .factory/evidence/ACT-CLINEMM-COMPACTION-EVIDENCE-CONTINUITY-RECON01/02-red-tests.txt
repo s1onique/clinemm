@@ -1,0 +1,180 @@
+
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+
+ ❯ src/extensions/context/evidence-continuity.test.ts (18 tests | 5 failed) 18ms
+     × carries a SUCCESSFUL execution into the provider request even when the generated summary omitted it 9ms
+     × does not let the generated summary's NOT_EXECUTED claim stand against the canonical record 1ms
+     ✓ does not carry a FAILED operation as a success 0ms
+     ✓ does not carry a result whose explicit error flag is set 0ms
+     ✓ does not carry a tool CALL with no matching result (not run) 0ms
+     ✓ classifies the result status from the RESULT itself 0ms
+     ✓ does not attribute a result to a DIFFERENT call 0ms
+     × keeps exactly ONE evidence section across repeated compactions 0ms
+     × replaces a STALE carried section with the current canonical one 0ms
+     ✓ bounds each carried excerpt to a fixed length 1ms
+     × redacts credential-shaped values in the carried excerpt 0ms
+     ✓ redacts bearer tokens and PEM private keys 0ms
+     ✓ is a pure function of the canonical history 0ms
+     ✓ strips and re-applies the section idempotently 0ms
+     ✓ does not rewrite a summary when nothing is verified 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — the reproduced defect > carries a SUCCESSFUL execution into the provider request even when the generated summary omitted it
+AssertionError: expected 'Context summary:\n\n## Goal\nRender t…' to contain '## Verified tool outcomes (canonical …'
+
+- Expected
++ Received
+
+- ## Verified tool outcomes (canonical record)
++ Context summary:
++
++ ## Goal
++ Render the chart.
++ ## State
++ - Done: read the chart values.
++ - Blocked: several command outputs were blank, incomplete, or unavailable.
++ ## Next
++ - Still need the effective Helm rendering.
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Render the chart and report the effective image.
++ <!-- cline-task-contract:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:296:24
+    294|   const providerText = providerVisibleText(providerRequest);
+    295|   // The verified outcome MUST be present...
+    296|   expect(providerText).toContain(EVIDENCE_SECTION_HEADING);
+       |                        ^
+    297|   expect(providerText).toContain(HELM_CALL_ID);
+    298|   expect(providerText).toContain("succeeded");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — the reproduced defect > does not let the generated summary's NOT_EXECUTED claim stand against the canonical record
+AssertionError: expected 'Context summary:\n\n## Goal\nRender t…' to contain 'succeeded'
+
+- Expected
++ Received
+
+- succeeded
++ Context summary:
++
++ ## Goal
++ Render the chart.
++ ## State
++ - Done: read the chart values.
++ ## Next
++ - `helm template` offline render: NOT_EXECUTED.
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Render the chart and report the effective image.
++ <!-- cline-task-contract:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:334:24
+    332|   // decisive fact in front of it.
+    333|   expect(providerText).toContain("NOT_EXECUTED");
+    334|   expect(providerText).toContain("succeeded");
+       |                        ^
+    335|   expect(providerText).toContain("rc=0");
+    336|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — repeated compaction > keeps exactly ONE evidence section across repeated compactions
+AssertionError: expected 'Context summary:\n\nfirst summary\n\n…' to contain 'rc=0'
+
+- Expected
++ Received
+
+- rc=0
++ Context summary:
++
++ first summary
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Render the chart and report the effective image.
++ <!-- cline-task-contract:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:500:21
+    498|   expect(first.savedStates).toHaveLength(1);
+    499|   const firstText = providerVisibleText(first.providerRequest);
+    500|   expect(firstText).toContain("rc=0");
+       |                     ^
+    501|   expect(countOccurrences(firstText, EVIDENCE_SECTION_HEADING)).toBe(1…
+    502|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — repeated compaction > replaces a STALE carried section with the current canonical one
+AssertionError: expected 'Context summary:\n\nsummary body\n\n#…' not to contain 'call_stale'
+
+- Expected
++ Received
+
+- call_stale
++ Context summary:
++
++ summary body
++
++ ## Verified tool outcomes (canonical record)
++ <!-- cline-evidence:begin -->
++ - run_commands (call_stale): succeeded — rc=0
++ <!-- cline-evidence:end -->
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Do something else entirely.
++ <!-- cline-task-contract:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:540:28
+    538|   });
+    539|   const providerText = providerVisibleText(providerRequest);
+    540|   expect(providerText).not.toContain("call_stale");
+       |                            ^
+    541|  });
+    542| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/extensions/context/evidence-continuity.test.ts > verified tool outcome continuity — credential safety > redacts credential-shaped values in the carried excerpt
+AssertionError: expected 'Context summary:\n\nsummary\n\n## Act…' to contain '[REDACTED]'
+
+- Expected
++ Received
+
+- [REDACTED]
++ Context summary:
++
++ summary
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Log in.
++ <!-- cline-task-contract:end -->
+
+ ❯ src/extensions/context/evidence-continuity.test.ts:607:24
+    605|   });
+    606|   const providerText = providerVisibleText(providerRequest);
+    607|   expect(providerText).toContain("[REDACTED]");
+       |                        ^
+    608|   expect(providerText).not.toContain("hunter2");
+    609|   expect(providerText).not.toContain("sk-abcdefghijklmnopqrstuvwxyz");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 13 passed (18)
+   Duration  1.34s (transform 760ms, setup 0ms, import 1.26s, tests 18ms, environment 0ms)
+

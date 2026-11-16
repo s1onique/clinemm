@@ -33721,3 +33721,113 @@ EVIDENCE: `.factory/evidence/ACT-CLINEMM-ROUND-C-TRACE-QUAL01-CORRECTION01/`
   `05-correction01-closure-receipt.txt`,
   `06-helm-render-semantic-receipt.json`
 
+# ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01 — VERIFIED_OUTCOME_CONTINUITY_REPAIRED — 2026-11-16
+
+**Status:** P1 production repair on the existing `main` branch. The Round C
+successor run's final report claimed a `helm template` render was
+`NOT_EXECUTED`; the SAME session's canonical history records that render as
+SUCCESSFUL (`rc=0`, resolved image `quay.io/keycloak/keycloak:26.0.7`,
+`runAsNonRoot: true`, `fsGroup: 1000`). The canonical history remained
+intact; the MODEL'S WORKING CONTEXT lost a completed verification, and the
+model then asserted the opposite of what the canonical record said.
+
+```text
+ACT_ID: ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01
+TYPE: P1 bounded production repair (reproduction + causal discrimination +
+        conservation-carry-forward)
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (compaction-evidence continuity)
+VERDICT: VERIFIED_OUTCOME_CONTINUITY_REPAIRED
+ENTRY_HEAD: 0871dd9f1 (ACT-CLINEMM-ROUND-C-TRACE-QUAL01 CORRECTION01)
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+CLASSIFICATION: SUMMARIZER_OMISSION (mechanically discriminated)
+RED: 5 failed / 13 passed at the pre-fix production seam
+GREEN: 18/18
+NO-REGRESSION: full core suite failing-file set BYTE-IDENTICAL before and
+        after (diff = 0 bytes); 230/230 in src/extensions/context (1 skipped);
+        50/50 in the apps/vscode compaction suites
+TYPECHECK: 43 errors before AND after (ZERO regression; ZERO in the new files)
+LINT: biome 0 errors / 0 warnings on the 3 touched files
+EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01/
+        ACT: .factory/acts/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01.md
+```
+
+## The causal discrimination — mechanical, against the REAL transcript
+
+`discriminate.py` reads the on-disk Round C session
+`1794780088950_tc1vx` (canonical history + compaction artifact) and never
+invents an observation.
+
+```text
+R1_EXECUTION_IN_CANONICAL_HISTORY : True
+R1_EXECUTION_IN_SUMMARIZER_INPUT  : True
+R1_EXECUTION_IN_INSTALLED_SUMMARY : False
+CLASSIFICATION                    : SUMMARIZER_OMISSION
+```
+
+| Stage | Evidence present? |
+|---|---|
+| Canonical history | **YES** — `rc=0`, resolved image, `runAsNonRoot: true`, `fsGroup: 1000` |
+| Compaction INPUT (the summarizer's window) | **YES** — all five markers, in the production serialization of the folded prefix `canonical[0..75)` (94,335 chars) |
+| Installed compaction summary | **NO** — none of the five markers (17,152 chars) |
+| Final report | **NO** — and it asserts `NOT_EXECUTED` |
+
+**This rules OUT the 2,000-character truncation** (`TOOL_RESULT_CHAR_LIMIT`):
+the decisive tool result is **582 characters**, well under the limit, and the
+production serialization carries every marker. It also rules OUT the budget
+projection. The evidence REACHED the summarizer and was dropped in the
+GENERATED PROSE. A summarizer-prompt change is therefore not a correctness
+guarantee, and the loss was NOT the same defect as truncation.
+
+## The violated invariant
+
+> A generated summary may omit historical detail, but it must **not** become
+> more authoritative than the canonical record of what actually executed.
+
+## The repair
+
+`sdk/packages/core/src/extensions/context/evidence-continuity.ts` — a
+**deterministic** carry-forward of verified tool outcomes, integrated with
+the EXISTING conservation machinery (`task-contract.ts`). **No new ledger,
+no retrieval service, no persistent evidence database.**
+
+- **Authority:** the canonical session history is the ONLY authority. A
+  previous summary is never an authority source. The carried section is a
+  pure function of the canonical tool-call/tool-result pairs.
+- **Verified means:** canonical tool CALL exists AND the matching canonical
+  tool RESULT exists (by `tool_use_id`) AND the result is not an error AND
+  the result carries an explicit POSITIVE success signal. The signal is
+  matched on the DATA SHAPE (`is_error` / `success: boolean` /
+  `isError: boolean`), never on a provider id and never on a tool name.
+- **Strictness:** "no evidence of failure" is NOT "evidence of success". A
+  failed or not-run operation is never promoted; the absence of a carried
+  entry is the truthful representation of "not established".
+- **Bounded:** at most 12 outcomes, each at most 240 sanitized characters —
+  a fixed constant, not a function of transcript size.
+- **Credential-safe:** credential-shaped values are redacted before they can
+  reach the carried section (shape-based, never content-meaning).
+- **Composed with the existing machinery:** applied at the SAME three
+  production call sites as the task contract, AFTER it, attached to the
+  EXISTING `compaction_summary` message, updating the provider-visible text
+  AND `metadata.summary` together. Idempotent: the section is stripped
+  (heading included) and replaced on every compaction.
+
+## What this ACT does NOT change
+
+- **R5 reporting fidelity** — the successor's report stated four exact index
+  names versus one in the original. That is a benchmark-level finding and
+  deserves benchmark-level verification; it is NOT a runtime defect and is
+  not addressed here.
+- **`run_commands` execution/delivery measurements** — they do not explain
+  the false Helm execution claim and are untouched.
+- **Compaction eligibility and latency tracing** — already repaired and
+  closed; NOT reopened.
+- **General memory architecture** — no evidence database, no retrieval
+  service, no persistent ledger.
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01/`
+  `01-discriminator-output.txt`, `02-red-tests.txt`, `03-green-tests.txt`,
+  `05-baseline-failing-files.txt`, `06-after-failing-files.txt`,
+  `07-failing-file-set-diff.txt`, `discriminate.py`
+

@@ -1111,6 +1111,29 @@ export {
 // the production budget resolver + ceiling sanitizer so the host can resolve
 // the SAME effective input budget the compaction policy applies.
 export { normalizeUserContextCeiling } from "./extensions/context/compaction-shared";
+// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01: the verified
+// tool-outcome extraction and pure carry-forward transformation. The
+// canonical session history stays the only authority; this module is a pure
+// projection over it, never a second evidence owner. A generated summary may
+// omit historical detail, but it must not become more authoritative than the
+// canonical record of what actually executed.
+export {
+	applyEvidenceToSummary,
+	applyVerifiedEvidenceToCompactedMessages,
+	classifyToolResultStatus,
+	EVIDENCE_SECTION_HEADING,
+	type EvidenceApplicationResult,
+	extractVerifiedToolOutcomes,
+	MAX_CARRIED_OUTCOME_CHARS,
+	MAX_CARRIED_OUTCOMES,
+	renderEvidenceSection,
+	sanitizeOutcomeText,
+	stripEvidenceSection,
+	type VerifiedOutcomeLedger,
+	type VerifiedOutcomeStatus,
+	type VerifiedToolOutcome,
+} from "./extensions/context/evidence-continuity";
+export { summarizeConversation } from "./extensions/context/summarize-conversation";
 // ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: the active
 // task-contract extraction and pure carry-forward transformation. The
 // canonical session history stays the only authority; this module is a pure
@@ -1121,10 +1144,9 @@ export {
 	extractActiveTaskContract,
 	renderTaskContractSection,
 	stripTaskContractSection,
-	TaskContractBudgetError,
 	TASK_CONTRACT_SECTION_HEADING,
+	TaskContractBudgetError,
 } from "./extensions/context/task-contract";
-export { summarizeConversation } from "./extensions/context/summarize-conversation";
 export {
 	CLINE_PLUGIN_RUNTIME_DIR_ENV,
 	resolvePluginRuntimeDirectory,

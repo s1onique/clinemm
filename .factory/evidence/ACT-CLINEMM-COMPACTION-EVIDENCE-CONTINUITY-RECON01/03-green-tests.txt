@@ -1,0 +1,11 @@
+
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+
+ ✓ src/extensions/context/evidence-continuity.test.ts (18 tests) 14ms
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+   Duration  1.29s (transform 763ms, setup 0ms, import 1.22s, tests 14ms, environment 0ms)
+

@@ -35,6 +35,7 @@ import {
 	normalizeUserContextCeiling,
 	resolveEffectiveMaxInputTokens,
 } from "./compaction-shared";
+import { applyVerifiedEvidenceToCompactedMessages } from "./evidence-continuity";
 import { applyTaskContractToCompactedMessages } from "./task-contract";
 
 export interface ContextPipelinePrepareTurnInput {
@@ -1183,7 +1184,27 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					context.messages,
 					contractBudget(systemPrompt ?? context.systemPrompt),
 				);
-				const contractedMessages = contracted.messages;
+				// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01: carry the
+				// VERIFIED tool outcomes forward from the CANONICAL history into
+				// the freshly produced compaction summary, before persistence
+				// and before provider preparation.
+				//
+				// The generated summary is a LOSSY PROJECTION of the canonical
+				// history: it can drop an operation that actually executed
+				// successfully, and the continuing model then reports it as
+				// NOT_EXECUTED - a statement the canonical record contradicts.
+				// The carried section is DETERMINISTIC and derived from the
+				// canonical tool-call/result pairs, so it never depends on the
+				// summary prose that lost the evidence.
+				//
+				// It is applied AFTER the task contract so the two
+				// carry-forwards compose without either overwriting the
+				// other's section.
+				const evidenced = applyVerifiedEvidenceToCompactedMessages(
+					contracted.messages,
+					context.messages,
+				);
+				const contractedMessages = evidenced.messages;
 				const nextState = createSessionCompactionState({
 					sourceMessages: context.messages,
 					compactedMessages: contractedMessages,
@@ -1211,8 +1232,18 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				context.messages,
 				contractBudget(projectedSystemPrompt ?? context.systemPrompt),
 			);
-			return publishWorkingContextEstimate(
+			// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01: the same
+			// provider-visible restoration for the VERIFIED tool outcomes - a
+			// historical sidecar written before this repair carries no
+			// verified-outcome section, so the projection the model receives
+			// is enriched from the canonical history. The persisted sidecar is
+			// NOT rewritten on read.
+			const restoredWithEvidence = applyVerifiedEvidenceToCompactedMessages(
 				restored.messages,
+				context.messages,
+			);
+			return publishWorkingContextEstimate(
+				restoredWithEvidence.messages,
 				projectedSystemPrompt ?? context.systemPrompt,
 				context.tools,
 				contractMaxRequestTokens,
@@ -1229,7 +1260,15 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				context.messages,
 				contractBudget(result.systemPrompt ?? context.systemPrompt),
 			);
-			const contractedMessages = contracted.messages;
+			// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01: carry the
+			// VERIFIED tool outcomes forward from the CANONICAL history into the
+			// freshly produced compaction summary, before persistence and
+			// before provider preparation.
+			const evidenced = applyVerifiedEvidenceToCompactedMessages(
+				contracted.messages,
+				context.messages,
+			);
+			const contractedMessages = evidenced.messages;
 			const nextState = createSessionCompactionState({
 				sourceMessages: context.messages,
 				compactedMessages: contractedMessages,
