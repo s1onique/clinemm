@@ -34653,3 +34653,104 @@ by two queued continuations, capturing the actual `run-started`,
 require the header to transition `Working` → `Completed` with no outstanding obligations.
 The ORIGINAL incident evidence remains untouched; the installed extension identity is
 recorded separately.
+
+# ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01 — PASS_WITH_CORRECTION_APPLIED_S1_REPAIRED_S2_HALTED — 2026-11-16
+
+**Status:** CLOSED with verdict **`PASS_WITH_CORRECTION_APPLIED`**. The expert review of
+`ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02` (`eb245ae72`) returned
+`PASS_WITH_CORRECTION_REQUIRED`: RECON02 establishes a **genuine** command-classification defect,
+but it **promoted a synthetic accounting discrepancy into a claim about ten historical live
+decisions**. This ACT corrects the receipts and implements the ONE authorized repair. **S2 is HALTED.**
+
+```text
+ACT_ID: ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01
+TYPE: Evidence correction + bounded repair
+PREDECESSOR: ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 @ eb245ae72f63159e180a12d1f6173d0ca4d0acb6
+REVIEW_VERDICT: PASS_WITH_CORRECTION_REQUIRED
+BRANCH: main (no ACT branch created)
+PUSHED: NO   INSTALLED: NO   VSIX_BUILT: NO   NEW_DEPENDENCIES: 0
+PRODUCTION_CHANGE: 1 file (evidence-continuity.ts)   DIAGNOSTIC_PROBES: 0
+TESTS_ADDED: 2 files (S1 regression suite in evidence-continuity.test.ts; NEW S2 discriminator)
+RECEIPTS_CORRECTED: 5 (RECON-REPORT.md, compaction-trigger-attribution.json,
+        summary-input-reconstruction.json, r1-r7-evidence-crosswalk.json, boundary-map.md)
+EXECUTED: focused context suite (18 files, 318 tests) + full sdk/packages/core sweep
+        (354 files) for a regression baseline diff
+NOT_EXECUTED: VSIX build, extension installation, live task, live LLM request
+PRE-EXISTING FAILURES (not ACT-owned, identified by identity — IDENTICAL before and after):
+        17 failing files, byte-identical failing-file SET before/after (hub/server/*, hub/settings,
+        runtime/sandbox/*, runtime/command-policy/path-authority.temporary-external,
+        extensions/tools/executors/bash.supervised.bash-startup-env,
+        extensions/tools/executors/editor.realpath-authority, hooks/checkpoint-hooks,
+        session/checkpoint-restore, session/services/persistence-service)
+        ZERO failing files in extensions/context before or after
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01/
+        correction-receipt.json
+```
+
+**S1 — REPRODUCED, REPAIRED (`C1: GO`).** `classifyCommand` matched the WHOLE LINE's leading words
+against the finite allowlist, so the common `cd <path> && <cmd>` chain matched nothing: `cd` is not
+in the allowlist and the classification of the command that ACTUALLY ran was lost. This ACT
+reproduced the defect at the production seam before changing anything:
+
+```text
+BEFORE (RED):   classifyCommand("cd /repo && helm template kc .helm/roz")  === ""
+                 classifyCommand("helm template kc .helm/roz")               === "helm template"   <- control
+AFTER  (GREEN): classifyCommand("cd /repo && helm template kc .helm/roz")  === "helm template"
+                 classifyCommand("helm template kc .helm/roz")               === "helm template"
+```
+
+The repair reads the command line as a sequence of **quote-aware shell SEGMENTS** and classifies the
+executable of the segment that carries the work. The `cd` prefix is recognised as a DIRECTORY
+CHANGE (its argument is a path, and a path is never carried). The classifier remains **not a
+shell**: a pipeline, a `||` chain, a chain naming more than one allowlisted executable, command
+substitution, redirection, globbing, backgrounding and grouping all carry **nothing**. The finite
+allowlist was **not** widened, and no path, argument, URL or credential is carried. A quoted
+operator inside an argument is inert data (`helm template 'a && b'` → `helm template`).
+
+**Recovering a classification is NOT a success claim.** `helm template` now survives as a
+CLASSIFICATION, but the carried evidence records the tool's own success signal; it never upgrades a
+wrapper status into a render outcome. The R1 wrapper-vs-render distinction is stated explicitly in
+the corrected receipts.
+
+**S2 — HALTED (`HALT_ESTIMATOR_NOT_REPRODUCED_AT_ACTUAL_PATH`).** The review's P0 finding was
+confirmed independently. RECON02's counterexample supplies two views **by hand**
+(`estimatorView = messages`, `actualView = new MessageBuilder().buildForApi(messages)`) and
+evaluates both through a **locally defined** `shouldCompactOn` helper
+(`compaction.roundc-fidelity-recon02.test.ts:1128-1137`). It never drives the production trigger.
+The production trigger reads `context.apiMessages` (`compaction.ts:381-389`), and the production
+orchestrator populates that field with the **API-safe projection**
+(`session-runtime-orchestrator.ts:1775` → `prepareProviderMessagesForApi` `:1846-1856` →
+`MessageBuilder.buildForApi`) **before** the trigger reads it. The upstream v4.1.26 correction
+(`43a976d93151`) is therefore present on **BOTH** paths, and the raw view the counterexample
+compares against is not a representation the production trigger can observe.
+
+**The claim "the ten live compactions were unjustified" is WITHDRAWN.** The preceding provider
+request's 63,343–81,197 reported input tokens is an **ADJACENT-REQUEST PROXY**, not the decision
+request; a later, unsubmitted request may legitimately cross the trigger. The decision-request
+accounting remains `UNAVAILABLE_FROM_TRACE`. **The estimator's 3-chars-per-token under-count of
+token-dense bodies is NOT exonerated** — it is a separate, live and unmeasured axis and is the most
+likely remaining candidate. Any future S2 repair requires matched decision-time evidence captured
+through the existing diagnostics, default-off and metadata-only, reproducing a mismatch through the
+ACTUAL runtime projection.
+
+**Receipt corrections.** (1) The **487** omitted-body figure is now labelled a measurement of the
+**RECONSTRUCTED full prefix**, not a verified count for the actual historical summarizer request
+(the real pipeline folds `previousSummary + newMessagesToFold` and budget-projects before
+serializing); the historical request stays `UNAVAILABLE_FROM_TRACE`. The **policy** is unchanged —
+result bodies are deliberately omitted, accepted as policy and not a bug. (2)
+`approved_fact_r1_helm_render_succeeded.in_canonical_history` was a **false-positive `true`** that
+contradicted the crosswalk and the report; it is now `false`, and RENDER_ATTEMPTED is separated from
+RENDER_SUCCEEDED and RENDER_FAILED. (3) R7 re-collection stays unnecessary within its bounded scope.
+
+**Gates.** S1 RED reproduced and GREEN verified at the production seam; the S1 regression suite
+covers quoted paths, multiple commands, shell substitution, pipelines, unsupported operators and
+credentials; the NEW S2 discriminator (6 tests) pins the representation the trigger actually
+measures and states what it does **not** establish; the focused context suite is **316 passed /
+2 skipped** (17 files passed / 1 skipped); typecheck is **43 diagnostics, byte-identical** to the
+pre-ACT baseline (**zero** new diagnostics attributable to this ACT); Biome is clean on all four
+changed/new source files; all four RECON02 JSON receipts re-parse after the corrections; the full
+`sdk/packages/core` sweep shows the **same 17 pre-existing failing files** before and after, none in
+`extensions/context`.
+
+**Next.** S2 remains open pending matched decision evidence. The new VSIX / Round C pass remains
+**DEFERRED** until S1 and S2 are qualified.

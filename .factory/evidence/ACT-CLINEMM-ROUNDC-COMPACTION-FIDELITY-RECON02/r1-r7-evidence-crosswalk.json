@@ -59,7 +59,8 @@
       "present_after_continuation": "ABSENT",
       "confidence": "HIGH",
       "evidence_label": "OBSERVED_CANONICAL",
-      "note": "NEGATIVE CONTROL — the wrapper's success status must NOT certify a successful render. No evidence supports R1_RENDER_SUCCEEDED or R1_IMAGE_EXTRACTED; the canonical record contradicts them."
+      "note": "NEGATIVE CONTROL — the wrapper's success status must NOT certify a successful render. No evidence supports R1_RENDER_SUCCEEDED or R1_IMAGE_EXTRACTED; the canonical record contradicts them.",
+      "correction": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01 — the companion receipt `summary-input-reconstruction.json` marked `approved_fact_r1_helm_render_succeeded.in_canonical_history: true`, which contradicted this entry and the report. That false positive has been corrected to `false`, and the RENDER_ATTEMPTED marker is now separated from RENDER_SUCCEEDED and RENDER_FAILED. The wrapper status (SUCCESS_WRAPPER) and the render outcome (FAILED) are DISTINCT facts and must never be conflated."
     },
     {
       "risk_id": "R7",
@@ -99,6 +100,7 @@
     "r1_requested_semantic_verification_succeeded": false,
     "r1_required_fact_available_to_model": false,
     "r1_fact_available_form": "STATUS_ONLY (per-payload wrapper success), no command classification, no output body",
+    "r1_wrapper_status_is_not_render_status": "The tool_status SUCCESS_WRAPPER records the OUTER shell wrapper's exit status. The render outcome is a SEPARATE fact (FAILED, rc=1, Go-template error). A successful wrapper NEVER certifies a successful render, and no carried classification may be read as one.",
     "r7_operation_executed": true,
     "r7_requested_semantic_verification_succeeded": false,
     "r7_required_fact_available_to_model": false,

@@ -930,10 +930,7 @@ describe("verified tool outcome continuity — command classification confidenti
 			"psql 'postgresql://demo:syntheticPassword@db.example.test/app'",
 			"syntheticPassword",
 		],
-		[
-			`curl -H 'Authorization: Bearer ${BEARER_VALUE}'`,
-			BEARER_VALUE,
-		],
+		[`curl -H 'Authorization: Bearer ${BEARER_VALUE}'`, BEARER_VALUE],
 	];
 
 	it("never carries an arbitrary command ARGUMENT into the summary", async () => {
@@ -1166,5 +1163,177 @@ describe("verified tool outcome continuity — pure helpers", () => {
 			assistantTurn("working"),
 		]);
 		expect(applyEvidenceToSummary("body", ledger)).toBe("body");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01 (S1)
+//
+// THE REPRODUCED DEFECT
+// ----------------------
+//
+// The pre-existing classifier matched the WHOLE LINE's leading words against
+// the finite allowlist. Every Round C command began `cd <path> && <cmd>`, and
+// `cd` is not in the allowlist, so the classification of the command that
+// ACTUALLY ran was LOST. The carried verified-outcome line degraded to
+// "succeeded — N commands" with no indication of what was run.
+//
+// The repair reads the command line as a sequence of shell SEGMENTS and
+// classifies the executable of the segment that carries the work.
+//
+// THE INVARIANTS THAT MUST NOT REGRESS
+// ------------------------------------
+//
+//   1. The carried value is ALWAYS a finite-allowlist entry. No path,
+//      argument, URL or credential is ever carried.
+//   2. The classifier is NOT a shell. An ambiguous segment (command
+//      substitution, redirection, globbing, backgrounding, grouping, history
+//      expansion, a pipeline, a `||` chain, or more than one allowlisted
+//      executable) carries NOTHING.
+//   3. A `cd` prefix is a DIRECTORY CHANGE, not a command: its argument is a
+//      path and is never carried.
+// ---------------------------------------------------------------------------
+
+describe("verified tool outcome continuity — S1 shell-chain classification", () => {
+	// The reproduced Round C shape, with the direct-command CONTROL.
+	it("classifies the `cd <path> && <cmd>` chain that defeated the old matcher", () => {
+		expect(classifyCommand("cd /repo && helm template kc .helm/roz")).toBe(
+			"helm template",
+		);
+	});
+
+	it("keeps the direct-command control identical", () => {
+		expect(classifyCommand("helm template kc .helm/roz")).toBe("helm template");
+		expect(classifyCommand("git status")).toBe("git status");
+		expect(classifyCommand("kubectl get pods -n keycloak")).toBe("kubectl get");
+	});
+
+	it("carries the Round C classification through to the provider request", async () => {
+		const canonical = [
+			userTurn("Render the chart."),
+			toolCall("call_cd", "run_commands", {
+				commands: ["cd /repo && helm template kc .helm/roz"],
+			}),
+			toolResult("call_cd", "run_commands", [
+				{
+					query: "cd /repo && helm template kc .helm/roz",
+					result: "rc=0",
+					success: true,
+				},
+			]),
+			assistantTurn("continuing"),
+		];
+		const { providerRequest } = await runWrapper({
+			canonical,
+			compactResult: agenticCompactionResult("summary"),
+		});
+		const providerText = providerVisibleText(providerRequest);
+		// The command IDENTITY now survives...
+		expect(providerText).toContain("helm template");
+		// ...but the PATH and the ARGUMENT do not.
+		expect(providerText).not.toContain("/repo");
+		expect(providerText).not.toContain(".helm/roz");
+	});
+
+	it("recognises a QUOTED `cd` path", () => {
+		expect(classifyCommand("cd '/path with space/repo' && git status")).toBe(
+			"git status",
+		);
+		expect(classifyCommand('cd "/path with space/repo" && git status')).toBe(
+			"git status",
+		);
+	});
+
+	it("recognises a `;` chain", () => {
+		expect(classifyCommand("cd /repo; helm template kc")).toBe("helm template");
+	});
+
+	// The `cd` segment's argument is a PATH: it must never be carried.
+	it("never carries the `cd` segment's path", () => {
+		const label = classifyCommand("cd /secret/path/repo && helm template kc");
+		expect(label).toBe("helm template");
+		expect(label).not.toContain("/secret/path/repo");
+	});
+
+	it("carries NOTHING when the chain names MORE THAN ONE allowlisted executable", () => {
+		expect(classifyCommand("cd /repo && helm template kc && git status")).toBe(
+			"",
+		);
+		expect(classifyCommand("cd /repo && helm template kc; git status")).toBe(
+			"",
+		);
+	});
+
+	it("carries NOTHING for a PIPELINE (the wrapper's status is the LAST element's)", () => {
+		// This is the Round C R1 shape: `helm template | head` reported
+		// success while Helm itself failed.
+		expect(classifyCommand("cd /repo && helm template kc | head -20")).toBe("");
+		expect(classifyCommand("helm template kc | head -20")).toBe("");
+	});
+
+	it("carries NOTHING for a `||` chain (which segment ran is undecidable)", () => {
+		expect(classifyCommand("cd /repo && helm template kc || echo failed")).toBe(
+			"",
+		);
+	});
+
+	it("carries NOTHING for COMMAND SUBSTITUTION", () => {
+		expect(classifyCommand("cd /repo && echo $(whoami)")).toBe("");
+		expect(classifyCommand("cd /repo && echo `whoami`")).toBe("");
+		// Double quotes still expand `$`.
+		expect(classifyCommand('cd /repo && echo "$(whoami)"')).toBe("");
+		expect(classifyCommand("cd /repo && helm template $RELEASE")).toBe("");
+	});
+
+	it("carries NOTHING for REDIRECTION, GLOBBING or BACKGROUNDING", () => {
+		expect(
+			classifyCommand("cd /repo && helm template kc > /tmp/out.yaml"),
+		).toBe("");
+		expect(classifyCommand("cd /repo && ls *.yaml")).toBe("");
+		expect(classifyCommand("cd /repo && helm template kc &")).toBe("");
+	});
+
+	it("carries NOTHING for GROUPING", () => {
+		expect(classifyCommand("cd /repo && (helm template kc)")).toBe("");
+		expect(classifyCommand("cd /repo && { helm template kc; }")).toBe("");
+	});
+
+	it("carries NOTHING when the chain names NO allowlisted executable", () => {
+		expect(classifyCommand("cd /repo && some-unknown-tool --with-arg")).toBe(
+			"",
+		);
+		expect(classifyCommand("cd /repo")).toBe("");
+		expect(classifyCommand("cd /repo && cd /other")).toBe("");
+	});
+
+	it("treats a quoted operator inside an ARGUMENT as inert data", () => {
+		// `&&` inside single quotes is DATA, not an operator.
+		expect(classifyCommand("cd /repo && helm template 'a && b'")).toBe(
+			"helm template",
+		);
+	});
+
+	// The classification is a finite allowlist entry: a credential in the
+	// ARGUMENT is never carried, and the allowlist is never widened.
+	it("never carries a credential from a chained command's ARGUMENT", () => {
+		const secret = ["synthetic", "Password"].join("");
+		const label = classifyCommand(
+			`cd /repo && helm template kc --set password=${secret}`,
+		);
+		expect(label).toBe("helm template");
+		expect(label).not.toContain(secret);
+		// The carried label is a MEMBER of the finite allowlist — the
+		// allowlist is never widened by the repair.
+		expect([
+			...COMMAND_CLASSIFICATION_ALLOWLIST,
+			...COMMAND_SUBCOMMAND_ALLOWLIST,
+		]).toContain(label);
+	});
+
+	it("never carries a credential from a chained command's PATH", () => {
+		const secret = ["synthetic", "Token"].join("");
+		const label = classifyCommand(`cd /repo/${secret} && git status`);
+		expect(label).toBe("git status");
+		expect(label).not.toContain(secret);
 	});
 });

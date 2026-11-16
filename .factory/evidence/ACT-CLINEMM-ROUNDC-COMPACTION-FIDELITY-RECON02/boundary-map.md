@@ -74,11 +74,33 @@ canonical messages
 `JSON.stringify({systemPrompt, messages, tools}).length / 3` plus a flat 1600
 tokens per image. The `messages` it receives is `context.apiMessages`.
 
-`context.apiMessages` equals the provider-visible projection ONLY when the
-caller threads the provider transform. In this fork:
-`local-runtime-host.ts:1063-1070` wires `prepareApiMessages` to
-`agent.prepareProviderMessagesForApi`, and `compaction.ts:1171` uses it for the
-re-compaction path.
+> **`[CORRECTED]` by `ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01`.**
+>
+> The original text here said `context.apiMessages` "equals the provider-visible
+> projection ONLY when the caller threads the provider transform", which left
+> open the possibility that the FIRST-compaction path might not thread it. It
+> does, on both paths:
+>
+> - **Re-compaction:** `compaction.ts:1171` — `apiMessages: await
+>   input.prepareApiMessages(projectedMessages)`.
+> - **First compaction:** `session-runtime-orchestrator.ts:1775` — `const
+>   apiMessages = await this.prepareProviderMessagesForApi(messages);`, which
+>   ends at `:1855` with `this.messageBuilder.buildForApi(providerMessages)`.
+>   This runs BEFORE `prepareTurn` is called, so the trigger never observes
+>   the raw canonical view.
+>
+> The trigger's request-size decision reads `context.apiMessages`
+> (`compaction.ts:381-389`), not `context.messages`. The upstream correction
+> (`43a976d93151`) is therefore **present on BOTH paths** in this fork.
+>
+> **Consequence for the S2 finding:** the raw representation compared in
+> RECON02's counterexample is not a representation the production trigger can
+> observe. The causal attribution is
+> `HALT_ESTIMATOR_NOT_REPRODUCED_AT_ACTUAL_PATH`.
+>
+> The estimator's own chars-per-token assumption (3 chars/token) under-counting
+> token-dense bodies remains a **separate, live and unmeasured** axis. It is
+> not exonerated by this correction.
 
 ---
 
@@ -100,6 +122,14 @@ payload `{query, result, success}` therefore reaches the summarizer as:
 The Round C reconstruction measured **487** deliberately omitted result bodies
 across the covered 263-message prefix. This is the stated confidentiality
 policy, not a defect.
+
+> **`[CORRECTED]` by `ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01`.**
+> The 487 figure is a measurement of the **RECONSTRUCTED full prefix**
+> (`serializeConversation(prefix)`), not a verified count of bodies omitted
+> from the **actual historical summarizer request** — the real pipeline folds
+> `previousSummary + newMessagesToFold` and budget-projects before it
+> serializes. The exact historical request remains `UNAVAILABLE_FROM_TRACE`.
+> The *policy* is unchanged.
 
 ### Loss 2 — the command CLASSIFICATION (allowlist-matching miss)
 

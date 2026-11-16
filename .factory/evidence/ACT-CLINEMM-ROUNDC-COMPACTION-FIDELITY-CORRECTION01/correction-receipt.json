@@ -1,0 +1,95 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01",
+  "type": "evidence correction + bounded repair",
+  "predecessor": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02",
+  "predecessor_commit": "eb245ae72f63159e180a12d1f6173d0ca4d0acb6",
+  "review_verdict": "PASS_WITH_CORRECTION_REQUIRED",
+  "repository": {
+    "top_level": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "branch": "main",
+    "base_head": "eb245ae72f63159e180a12d1f6173d0ca4d0acb6"
+  },
+  "dispositions": {
+    "S1_command_classification": {
+      "decision": "C1_GO",
+      "implementation_authorization": true,
+      "verified_at": "production seam (sdk/packages/core/src/extensions/context/evidence-continuity.ts)",
+      "red_before": "classifyCommand('cd /repo && helm template kc .helm/roz') === '' while classifyCommand('helm template kc .helm/roz') === 'helm template'",
+      "green_after": "classifyCommand('cd /repo && helm template kc .helm/roz') === 'helm template'",
+      "repair": "The classifier now reads the command line as a sequence of quote-aware shell SEGMENTS and classifies the executable of the segment that carries the work. The `cd` prefix is recognised as a DIRECTORY CHANGE and never contributes a classification.",
+      "invariants_preserved": [
+        "The carried value is ALWAYS a finite-allowlist entry; the allowlist was NOT widened.",
+        "No user-supplied path, argument, URL or credential is ever carried.",
+        "The classifier is NOT a shell: an ambiguous segment carries NOTHING.",
+        "The `cd` segment's argument is a path and is never carried."
+      ],
+      "fail_closed_rules_added": {
+        "pipeline": "A `|` pipeline carries nothing. The shell's exit status of a pipeline is its LAST element's status, so a successful wrapper does not establish that the earlier element succeeded (the R1 failure shape).",
+        "or_chain": "A `||` chain carries nothing: the second segment runs only when the first one FAILED, so which segment ran is not decidable from the text.",
+        "multiple_allowlisted_executables": "A chain naming MORE THAN ONE allowlisted executable carries nothing.",
+        "ambiguous_characters": "Command substitution (`$`, backtick — also inside double quotes), grouping (`(`, `)`, `{`, `}`), redirection (`>`, `<`), backgrounding (`&`), globbing/tilde (`*`, `?`, `[`, `]`, `~`) and history expansion (`!`) make a segment ambiguous.",
+        "quoted_operators_are_data": "A quoted region is inert data: `helm template 'a && b'` still classifies as `helm template`."
+      }
+    },
+    "S2_compaction_accounting": {
+      "decision": "HALT_ESTIMATOR_NOT_REPRODUCED_AT_ACTUAL_PATH",
+      "implementation_authorization": false,
+      "review_finding_confirmed": "The RECON02 counterexample compares two hand-supplied representations through a LOCALLY DEFINED `shouldCompactOn` helper (compaction.roundc-fidelity-recon02.test.ts:1128-1137). It never drives the production trigger.",
+      "production_source_fact_1": "The compaction trigger's request-size decision reads `context.apiMessages`, not `context.messages` (compaction.ts:381-389).",
+      "production_source_fact_2": "The production orchestrator populates `context.apiMessages` with the API-SAFE PROJECTION before the trigger reads it: session-runtime-orchestrator.ts:1775 -> prepareProviderMessagesForApi (:1846-1856) -> MessageBuilder.buildForApi.",
+      "consequence": "The upstream v4.1.26 correction (43a976d93151) is present on BOTH the first-compaction and re-compaction paths in this fork. The raw representation the counterexample compares against is not a representation the production trigger can observe.",
+      "withdrawn_claim": "The ten live compactions were unjustified. This is NOT ESTABLISHED: the decision-request accounting is UNAVAILABLE_FROM_TRACE and the preceding provider request is an ADJACENT-REQUEST PROXY, not the decision request.",
+      "live_axis_not_exonerated": "The estimator's 3-chars-per-token assumption under-counting token-dense bodies remains a separate, live and unmeasured axis. It is the most likely remaining candidate.",
+      "precondition_for_any_future_repair": "Matched decision-time evidence: capture the request estimate, the API-projection estimate, the trigger, the calibration factor and the request identity through the existing compaction diagnostics (default-off, metadata-only), and reproduce a mismatch through the ACTUAL runtime projection rather than a manually supplied raw view.",
+      "permanent_discriminator": "sdk/packages/core/src/extensions/context/compaction.trigger-accounting-representation.test.ts (6 tests) pins the representation the trigger actually measures and states explicitly what it does NOT establish."
+    },
+    "result_bodies_omitted": {
+      "decision": "ACCEPT_AS_POLICY_NOT_A_BUG",
+      "correction": "The 487 figure is a measurement of the RECONSTRUCTED full prefix (serializeConversation(prefix)), NOT a verified count of bodies omitted from the ACTUAL HISTORICAL SUMMARIZER REQUEST. The real pipeline selects `previousSummary + newMessagesToFold`, applies the budget projection, and only then serializes. The exact historical request remains UNAVAILABLE_FROM_TRACE.",
+      "policy_unchanged": true
+    },
+    "R1_helm_render": {
+      "decision": "PASS",
+      "correction": "The wrapper status (SUCCESS_WRAPPER) and the render outcome (FAILED, rc=1, Go-template error) are DISTINCT facts. `approved_fact_r1_helm_render_succeeded.in_canonical_history` was a false-positive `true` and is now `false`; the RENDER_ATTEMPTED marker is separated from RENDER_SUCCEEDED and RENDER_FAILED.",
+      "recovered_classification_does_not_certify_success": "Recovering `helm template` as a CLASSIFICATION must not be read as proof that the render succeeded. The carried evidence records the tool's own success signal; it never upgrades a wrapper status into a render outcome."
+    },
+    "R7_maven_evidence": {
+      "decision": "PASS_BOUNDED_SCOPE",
+      "scope": "The previously collected observations are valid. The gap (result bodies omitted at the summarizer-input projection) is real; the necessity of re-collection is not."
+    },
+    "new_vsix_round_c_pass": {
+      "decision": "DEFER",
+      "reason": "Deferred until S1 and S2 qualification. This ACT produces no VSIX and installs nothing."
+    }
+  },
+  "production_changes": [
+    "sdk/packages/core/src/extensions/context/evidence-continuity.ts — classifyCommand now classifies the executable of a shell chain's working segment (S1).",
+    "sdk/packages/core/src/extensions/context/evidence-continuity.test.ts — the S1 regression suite (shell-chain classification, quoted paths, multiple commands, substitution, pipelines, unsupported operators, credentials).",
+    "sdk/packages/core/src/extensions/context/compaction.trigger-accounting-representation.test.ts — the S2 discriminator (NEW file).",
+    "sdk/packages/core/src/extensions/context/compaction.roundc-fidelity-recon02.test.ts — the three discriminators that encoded the pre-repair behaviour were updated to the repaired behaviour; each update is annotated with the correction."
+  ],
+  "receipt_changes": [
+    ".factory/evidence/ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02/RECON-REPORT.md — S2 disposition corrected in the Q2 answer, sections 2, 4, 7 and 8; the 487 authority corrected; the R1 wrapper-vs-render distinction stated.",
+    ".factory/evidence/ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02/compaction-trigger-attribution.json — `were_the_repeated_compactions_justified...` changed from NO to NOT_ESTABLISHED; the counterexample's evidence gap and the two production source facts recorded; `fork_state` corrected to PRESENT_ON_BOTH_PATHS.",
+    ".factory/evidence/ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02/summary-input-reconstruction.json — the 487 authority corrected; `approved_fact_r1_helm_render_succeeded.in_canonical_history` corrected to false; RENDER_ATTEMPTED separated.",
+    ".factory/evidence/ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02/r1-r7-evidence-crosswalk.json — the R1 false positive is cross-referenced and the wrapper-vs-render distinction is recorded in the summary.",
+    ".factory/evidence/ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02/boundary-map.md — the 487 authority and 'The estimator's input' section corrected to name both projection paths."
+  ],
+  "gates": {
+    "s1_red_reproduced": "PASS — the pre-repair classifier returned '' for `cd /repo && helm template kc .helm/roz` while the direct-command control returned 'helm template'.",
+    "s1_green": "PASS — the repaired classifier returns 'helm template' for the chain and 'helm template' for the direct control.",
+    "s2_discriminator": "PASS — 6/6 tests in compaction.trigger-accounting-representation.test.ts.",
+    "context_suite": "PASS — 17 files passed / 1 skipped; 316 tests passed / 2 skipped.",
+    "typecheck": "PASS — 43 diagnostics, byte-identical to the pre-ACT baseline (0 new diagnostics attributable to this ACT).",
+    "biome": "PASS — zero errors and zero warnings on the four changed/new source files.",
+    "json_receipts": "PASS — all four RECON02 JSON receipts re-parse after the corrections."
+  },
+  "preservation": {
+    "history_rewritten": false,
+    "pushed": false,
+    "vsix_built": false,
+    "extension_installed": false,
+    "live_llm_request": false,
+    "default_off_instrumentation_installed": false
+  }
+}

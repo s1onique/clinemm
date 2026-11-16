@@ -382,11 +382,16 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — R1 shell-status neg
 		expect(request).not.toMatch(/image:\s*"?[a-z0-9./-]+/i);
 
 		// What the summarizer DOES see is the wrapper's affirmative status
-		// plus the allowlisted command classification. This is the exact
-		// fact that was available to the model: "a helm template command ran
-		// and the wrapper reported success" — and nothing about whether the
-		// render produced a manifest.
-		expect(request).toContain("[succeeded] helm template");
+		// with the result body omitted.
+		//
+		// ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01: the command is
+		// a PIPELINE, so the classifier FAILS CLOSED and the command
+		// classification is NOT carried either. That is a STRONGER form of
+		// the same control: the summarizer sees the wrapper's status and
+		// nothing else — not the inner error, not the image, and not a
+		// command subject that could be read as "a helm template ran and
+		// succeeded".
+		expect(request).not.toContain("[succeeded] helm template");
 		expect(request).toContain("[result omitted]");
 
 		// The continuation representation must not silently upgrade the
@@ -401,6 +406,14 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — R1 shell-status neg
 		// summarizer-input projection of a structured payload NEVER carries
 		// the raw output, so it can NEVER be used to certify a rendered
 		// image or an inner process success.
+		//
+		// ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01: the query is a
+		// PIPELINE, so the classifier now FAILS CLOSED on it — a pipeline's
+		// exit status is its LAST element's, which is precisely why the
+		// wrapper's success could not certify Helm's. The command identity
+		// is therefore NOT carried, which is a STRONGER form of the same
+		// control: neither the raw output NOR the command subject reaches
+		// the summarizer.
 		const rendered = flattenToolResultContent([
 			{
 				query:
@@ -409,7 +422,7 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — R1 shell-status neg
 				success: true,
 			},
 		] as never);
-		expect(rendered).toContain("[succeeded] helm template");
+		expect(rendered).not.toContain("[succeeded] helm template");
 		expect(rendered).toContain("[result omitted]");
 		// The image reference NEVER reaches the summarizer input.
 		expect(rendered).not.toContain("quay.io/example/app:1.2.3");
@@ -511,19 +524,23 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — R7 evidence-status 
 		expect(request).not.toContain("[succeeded] grep");
 	});
 
-	it("R7/R1 boundary: a `cd <path> && <cmd>` chain yields NO command classification, so the carried evidence carries NO command identity", async () => {
+	it("R7/R1 boundary: a `cd <path> && <cmd>` chain yields the command classification of the command that ACTUALLY ran", async () => {
 		// THE ROUND C SHAPE. Every Round C command begins with a `cd`
 		// into the repository, then chains the real command with `&&`.
 		//
-		// `classifyCommand()` (evidence-continuity.ts) matches the command's
+		// BEFORE the repair, `classifyCommand()` matched the command's
 		// LEADING WORDS against a finite allowlist. `cd` is NOT in that
-		// allowlist, so the classification is EMPTY and the carried
-		// verified-outcome line degrades to "succeeded — N commands" with
-		// no indication of WHAT was run.
+		// allowlist, so the classification was EMPTY and the carried
+		// verified-outcome line degraded to "succeeded — N commands" with
+		// no indication of WHAT was run. That was the boundary at which the
+		// evidence identity was lost.
 		//
-		// This is the boundary at which the evidence identity is lost: not
-		// the result body (which is deliberately omitted) but the command
-		// CLASSIFICATION that would have told the model the fact's subject.
+		// ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01 (S1): the
+		// classifier now reads the command as a sequence of shell SEGMENTS
+		// and classifies the executable of the segment that carries the
+		// work. The `cd` prefix is recognised as a DIRECTORY CHANGE (its
+		// argument is a path, and a path is never carried), and the chained
+		// command's allowlisted classification IS carried.
 		const ledger = extractVerifiedToolOutcomes([
 			toolCall("call_cd_chain_001", "run_commands", {
 				commands: [
@@ -552,11 +569,14 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — R7 evidence-status 
 		// The outcome IS carried (the canonical success signal is present).
 		expect(ledger.outcomes.length).toBe(1);
 		expect(ledger.outcomes[0]?.status).toBe("succeeded");
-		// ...but the command SUBJECTS are EMPTY: the `cd` prefix defeats the
-		// leading-word allowlist match.
-		expect(ledger.outcomes[0]?.evidence.subjects).toEqual([]);
+		// ...and the command SUBJECTS are now the allowlisted classifications
+		// of the commands that actually ran.
+		expect(ledger.outcomes[0]?.evidence.subjects).toEqual([
+			"helm template",
+			"grep",
+		]);
 
-		// The rendered line therefore carries NO command identity.
+		// The rendered line therefore carries the command identity.
 		const { installedMessages } = await runStateAwareCompactionAndCapture({
 			canonicalMessages: [
 				userTurn("Render the chart and inspect CI."),
@@ -588,9 +608,13 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — R7 evidence-status 
 		const continuation = installedContinuationText(installedMessages);
 		expect(continuation).toContain("call_cd_chain_001");
 		expect(continuation).toContain("succeeded");
-		// The command identity is NOT carried.
-		expect(continuation).not.toContain("helm template");
-		expect(continuation).not.toContain("grep");
+		// The command identity IS carried now.
+		expect(continuation).toContain("helm template");
+		expect(continuation).toContain("grep");
+		// The PATH is NEVER carried: the `cd` argument is a path.
+		expect(continuation).not.toContain("/repo");
+		expect(continuation).not.toContain(".helm/roz");
+		expect(continuation).not.toContain(".gitlab-ci.yml");
 	});
 
 	it("R7/R1 control: a DIRECT command (no `cd` prefix) DOES yield a carried command classification", () => {

@@ -29,10 +29,13 @@
     "tool_results_represented": 130,
     "result_bodies_deliberately_omitted": 487,
     "result_bodies_omitted_marker": "[result omitted]",
+    "result_bodies_omitted_authority": "CORRECTED by ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01 — the 487 figure is a measurement of the RECONSTRUCTED FULL PREFIX, produced by calling `serializeConversation(prefix)`. It is NOT a verified count of bodies omitted from the ACTUAL HISTORICAL SUMMARIZER REQUEST. The real pipeline selects `previousSummary + newMessagesToFold`, applies the budget projection, and only then serializes. The exact historical request remains UNAVAILABLE_FROM_TRACE.",
+    "result_bodies_omitted_historical_request_authority": "UNAVAILABLE_FROM_TRACE",
     "unsupported_shape_marker_count": 1,
     "unsupported_shape_marker": "[unsupported tool result shape]",
     "projection_status": "OK",
-    "projection_mechanism": "flattenToolResultContent() -> truncateToolResultContentForCompaction() -> renderToolResultBlocks() -> renderStructuredToolPayload(); the per-result status and an allowlisted command classification are kept; every arbitrary output string is replaced by the '[result omitted]' marker"
+    "projection_mechanism": "flattenToolResultContent() -> truncateToolResultContentForCompaction() -> renderToolResultBlocks() -> renderStructuredToolPayload(); the per-result status and an allowlisted command classification are kept; every arbitrary output string is replaced by the '[result omitted]' marker",
+    "policy_status": "UNCHANGED — the arbitrary-output omission remains a deliberate confidentiality policy (PRIVACY_BOUNDED_CONTENT_LOSS), not a defect. Only the AUTHORITY of the count is corrected."
   },
   "verified_outcome_ledger": {
     "carried_outcome_count": 12,
@@ -77,6 +80,14 @@
   },
   "approved_evidence_marker_presence": {
     "approved_fact_r1_helm_render_succeeded": {
+      "in_canonical_history": false,
+      "in_summarizer_input_as_status": false,
+      "in_summarizer_input_as_semantic_fact": false,
+      "in_generated_summary": false,
+      "in_continuation": false,
+      "correction": "CORRECTED by ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01 — this marker previously read `in_canonical_history: true`, which CONTRADICTED both the crosswalk and the report: the canonical record shows rc=1 and a Go-template execution error, and a render was only ATTEMPTED. The fact is NOT established in canonical history. It was never carried to the summarizer input, the summary or the continuation, and the successful outer wrapper status must not be read as render success."
+    },
+    "approved_fact_r1_helm_render_attempted": {
       "in_canonical_history": true,
       "in_summarizer_input_as_status": true,
       "in_summarizer_input_as_semantic_fact": false,
@@ -107,9 +118,17 @@
     "underestimate_factor at decision time"
   ],
   "hypothesis_disposition": {
-    "H1_input_omission": "REPRODUCED — the result BODY is deliberately omitted at flattenToolResultContent() (487 omitted bodies); the command CLASSIFICATION that would identify the subject is ALSO absent for every Round C call because the 'cd <path> && ' prefix defeats the leading-word allowlist.",
+    "H1_input_omission": "REPRODUCED — the result BODY is deliberately omitted at flattenToolResultContent() (487 omitted bodies over the RECONSTRUCTED prefix; the historical request itself remains UNAVAILABLE_FROM_TRACE); the command CLASSIFICATION that would identify the subject is ALSO absent for every Round C call because the 'cd <path> && ' prefix defeats the leading-word allowlist.",
     "H2_generative_omission": "NOT_ISOLATED — the actual summarizer request is UNAVAILABLE_FROM_TRACE, so a generator-side omission cannot be separated from the input-side omission for the specific facts.",
     "H3_post_summary_loss": "NOT_REPRODUCED for the verified-outcome section — the deterministic carry-forward IS present in the installed continuation (12 lines). The loss of the R1/R7 SEMANTIC facts occurs BEFORE the summary, not after it.",
     "H4_privacy_retention_limitation": "PARTIALLY_APPLICABLE — the arbitrary-output omission is a deliberate confidentiality policy (the 12-outcome bound is also working as specified). The empty command-classification set is NOT the stated policy: it is an allowlist-matching miss, not a deliberate omission."
+  },
+  "correction_receipt": {
+    "act": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01",
+    "review_verdict": "PASS_WITH_CORRECTION_REQUIRED",
+    "corrections_applied": [
+      "The 487 omitted-body figure is now labelled as a RECONSTRUCTION measurement over the full prefix, NOT a verified count for the actual historical summarizer request (which stays UNAVAILABLE_FROM_TRACE). The policy itself is unchanged.",
+      "approved_fact_r1_helm_render_succeeded.in_canonical_history was false-positive `true` and is now `false`; the RENDER_ATTEMPTED marker is separated from RENDER_SUCCEEDED and RENDER_FAILED."
+    ]
   }
 }

@@ -39,12 +39,14 @@
       "sdk/packages/core/src/runtime/host/local-runtime-host.test.ts (+12/-0)",
       "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts (+6/-1)"
     ],
-    "fork_state": "PRESENT_AND_SUPERSEDED_IN_PART",
+    "fork_state": "PRESENT_ON_BOTH_PATHS",
     "fork_evidence": [
       "sdk/packages/core/src/extensions/context/compaction.ts:1048 — prepareApiMessages is a REQUIRED parameter of createCompactionStateAwarePrepareTurn.",
       "sdk/packages/core/src/extensions/context/compaction.ts:1171 — apiMessages: await input.prepareApiMessages(projectedMessages) — the re-compaction path estimates the API-SAFE projection.",
       "sdk/packages/core/src/runtime/host/local-runtime-host.ts:1063-1070 — prepareApiMessages is wired to agent.prepareProviderMessagesForApi.",
-      "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1846 — prepareProviderMessagesForApi is the provider-request transform."
+      "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1775 — the FIRST-compaction path computes `apiMessages = await this.prepareProviderMessagesForApi(messages)` BEFORE calling prepareTurn.",
+      "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1846-1856 — prepareProviderMessagesForApi ends with `this.messageBuilder.buildForApi(providerMessages)`, so the trigger's input is the API-SAFE PROJECTION.",
+      "sdk/packages/core/src/extensions/context/compaction.ts:381-389 — the trigger's request-size decision reads `context.apiMessages` (not `context.messages`)."
     ],
     "fork_additions_beyond_upstream": [
       "sdk/packages/core/src/extensions/context/compaction.ts:1068 — prepareBudgetAccountingMessages, an ISOLATED accounting-only projection used by the task-contract budget guard, because the production MessageBuilder is STATEFUL.",
@@ -59,6 +61,18 @@
     "status": "REPRODUCED",
     "level": "SYNTHETIC_REAL",
     "production_seam": "createContextCompactionPrepareTurn({ strategy: 'agentic' }) via createCompactionStateAwarePrepareTurn",
+    "corrected_by": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01",
+    "correction": {
+      "what_is_reproduced": "A raw-message estimate can exceed the trigger while the provider-visible projection of the SAME transcript fits. This is a real, deterministic property of the two representations.",
+      "what_is_NOT_reproduced": "That the production runtime observes the raw representation. It does not.",
+      "evidence_gap": "The test constructs `estimatorView = messages` and `actualView = new MessageBuilder().buildForApi(messages)` BY HAND and evaluates both through a LOCALLY DEFINED `shouldCompactOn` helper (compaction.roundc-fidelity-recon02.test.ts:1128-1137). It never drives the production trigger.",
+      "production_source_fact_1": "The compaction trigger measures `context.apiMessages`, not `context.messages` (compaction.ts:381-389): `estimateRequestInputTokens({ systemPrompt: context.systemPrompt, messages: context.apiMessages, tools: context.tools })`, and `shouldCompact = requestInputTokens >= requestTriggerTokens`.",
+      "production_source_fact_2": "The production orchestrator populates `context.apiMessages` with the API-SAFE PROJECTION before the trigger reads it (session-runtime-orchestrator.ts:1775 -> prepareProviderMessagesForApi (:1846-1856) -> MessageBuilder.buildForApi).",
+      "consequence": "The representation the counterexample calls 'the estimator's view' is NOT a representation the production trigger can observe. The upstream correction (43a976d93151) is therefore present on BOTH the first-compaction and re-compaction paths in this fork.",
+      "disposition": "HALT_ESTIMATOR_NOT_REPRODUCED_AT_ACTUAL_PATH",
+      "live_axis_not_exonerated": "The estimator's 3-chars-per-token assumption under-counts token-dense bodies. That axis is a DIFFERENT mechanism, remains live and unmeasured for Round C, and is the most likely remaining candidate.",
+      "precondition_for_any_repair": "Matched decision-time evidence: capture request estimate, API-projection estimate, trigger, calibration factor and request identity through the existing compaction diagnostics (default-off, metadata-only), and reproduce a mismatch through the ACTUAL runtime projection rather than a manually supplied raw view."
+    },
     "configuration": {
       "max_input_tokens": 128000,
       "trigger_tokens": 115200,
@@ -78,8 +92,8 @@
     "production_projection_used": "MessageBuilder.buildForApi (sdk/packages/core/src/session/services/message-builder.ts), DEFAULT_MAX_TOOL_RESULT_CHARS = 8000",
     "test_evidence": "sdk/packages/core/src/extensions/context/compaction.roundc-fidelity-recon02.test.ts — 'counterexample: the estimator fires compaction for a request whose ACTUAL provider-visible size fits the operating budget' and 'the converse holds: a genuinely oversized request still triggers compaction'"
   },
-  "were_the_repeated_compactions_justified_by_actual_model_bound_request_sizes": "NO",
-  "justification_basis": "Every one of the ten Round C compaction cycles fired while the immediately preceding provider request had reported 63,343-81,197 input tokens against an effective limit of 115,200 and an implied trigger of 103,680. The requests that triggered them carried 234-283 KB with 5-23 full tool results. The compactions were therefore NOT justified by the model-bound request sizes as the provider measured them.",
-  "accounting_divergence_axis_confirmed_by_source": "estimateRequestInputTokens measures the JSON-serialized length of {systemPrompt, messages, tools} at 3 chars/token. The provider-visible request and the estimator's input can diverge whenever the estimator's input representation differs from what the provider receives — either because a tool-result body is bounded by the MessageBuilder while the estimator counted it raw, or because the estimator's own char-per-token assumption under-counts a token-dense body. The trace does not distinguish these two for Round C; the offline counterexample demonstrates the former axis is a live, reproducible mechanism at the production seam.",
+  "were_the_repeated_compactions_justified_by_actual_model_bound_request_sizes": "NOT_ESTABLISHED",
+  "justification_basis": "WITHDRAWN by ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01. Every one of the ten Round C compaction cycles fired while the immediately preceding provider request had reported 63,343-81,197 input tokens against an effective limit of 115,200 and an implied trigger of 103,680, but the PRECEDING request is an ADJACENT-REQUEST PROXY, not the decision request. A later, unsubmitted request may legitimately cross the trigger. The ten compactions MAY have been unnecessary, but this receipt does not establish that, and it does not identify a causal mechanism.",
+  "accounting_divergence_axis_confirmed_by_source": "estimateRequestInputTokens measures the JSON-serialized length of {systemPrompt, messages, tools} at 3 chars/token. The estimator's input representation and the provider's can differ whenever the estimator's input is NOT the API-safe projection — but on BOTH production paths in this fork the trigger is handed the API-safe projection (compaction.ts:381-389 reads context.apiMessages; session-runtime-orchestrator.ts:1775 populates it through MessageBuilder.buildForApi). The remaining live axis is the estimator's own 3-chars-per-token assumption under-counting token-dense bodies; the trace cannot separate or measure it for this session.",
   "upstream_equivalence": "NOT_EQUIVALENT — the fork has the upstream correction AND two additional budget authorities (the user-context ceiling and the provider-usage underestimate factor) that upstream v4.1.26 does not have. The fork's estimator is a SUPERSET of upstream's, not a copy."
 }

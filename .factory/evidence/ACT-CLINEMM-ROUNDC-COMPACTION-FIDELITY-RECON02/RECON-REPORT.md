@@ -1,6 +1,15 @@
 # ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — Recon Report
 
-**Primary verdict: `REPRODUCED`**
+> **CORRECTED by `ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01`.**
+> The expert review of this recon returned `PASS_WITH_CORRECTION_REQUIRED`.
+> Two claims in this report were overstated and are corrected below:
+> the S2 causal attribution (§1 Q2, §4) and the historical summarizer-input
+> count (§2, §3). The S1 finding — the genuine command-classification defect
+> — is unchanged and has been repaired. The corrections are marked
+> **`[CORRECTED]`** and the correction receipt is in
+> `.factory/evidence/ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01/`.
+
+**Primary verdict: `REPRODUCED`** (S1 — the command-classification defect)
 
 **Session:** `1794835772204_hvkkv` · **Source HEAD:** `d397d90c002e9fab136b346771965209d28c6455` ·
 **Branch:** `main` · **Repository:** `s1onique/clinemm` · **Implementation authorization:** NO
@@ -22,6 +31,15 @@ separate boundaries:
    263-message prefix. The summarizer therefore saw
    `[succeeded] helm template: [result omitted]` — a status with no content.
 
+   **`[CORRECTED]`** The 487 figure is a measurement of the **RECONSTRUCTED
+   full prefix**, produced by calling `serializeConversation(prefix)`. It is
+   **not** a verified count of bodies omitted from the **actual historical
+   summarizer request**: the real pipeline selects `previousSummary +
+   newMessagesToFold`, applies the budget projection, and only then
+   serializes. The exact historical request remains
+   `UNAVAILABLE_FROM_TRACE`. The *policy* (arbitrary output is omitted) is
+   unchanged and is not in question.
+
 2. **The command classification is EMPTY for every Round C call (miss).**
    `evidence-continuity.ts:476-516` (`classifyCommand`) matches the command's
    **leading words** against a finite allowlist. Every Round C command begins
@@ -39,26 +57,53 @@ projection, and the carried section could not name the subject even if it had.
 
 ### Q2 — Were the repeated compactions justified by the actual model-bound request sizes, or caused by accounting divergence?
 
-**Accounting divergence.** All **10** Round C compaction cycles fired while the
-immediately preceding provider request had reported **63,343–81,197** input
-tokens, against an effective limit of **115,200** and an implied trigger of
-**103,680** (115,200 × 0.9). The requests that triggered them carried
-234–283 KB with 5–23 full tool results. The compactions were not justified by
-the model-bound request sizes as the provider measured them.
+**`[CORRECTED]` NOT ESTABLISHED — the causal mechanism is unproven.**
+
+The original answer here read "Accounting divergence." That overstated the
+evidence. The corrected answer separates what was measured from what was
+inferred:
+
+- **Measured (adjacent-request proxy):** all **10** Round C compaction cycles
+  fired while the immediately preceding provider request had reported
+  **63,343–81,197** input tokens, against an effective limit of **115,200**
+  and an implied trigger of **103,680**.
+- **Not measured:** the accounting of the requests that actually triggered
+  those compactions. The trace records only
+  `{compactionInitiated, effectiveMaxInputTokens}` on the compaction channel,
+  so `requestInputTokens`, `requestTriggerTokens`, the calibration factor and
+  the request identity at decision time are all unavailable.
+
+The preceding provider request's count is an **ADJACENT-REQUEST PROXY**, not
+the decision request. A later, unsubmitted request may legitimately cross the
+trigger even when the preceding request was far below it. So the ten
+compactions may have been unnecessary, but this report does **not** establish
+that they were, and it does not identify a causal mechanism.
 
 The upstream v4.1.26 correction (`43a976d93151`, "estimate re-compaction
 against API-safe projected messages") **is already present** in this fork
-(`compaction.ts:1171` threads `prepareApiMessages`) and **is not the
-explanation** here: the Round C trace shows `toolResultShortenedCount = 0` on
+(`compaction.ts:1171` threads `prepareApiMessages`) and is **not** the
+explanation here: the Round C trace shows `toolResultShortenedCount = 0` on
 every request, so the API-safe projection was not smaller than the canonical
 form and the upstream fix could not have suppressed these compactions.
 
-An **offline counterexample at the real production seam reproduces the
-divergence**: with a preceding compaction summary, 12 large tool-result
-objects, and a realistic 128k configuration, the estimator's view exceeds the
-trigger while the real `MessageBuilder.buildForApi` provider-visible view fits
-inside it. The converse is also tested: a genuinely oversized request still
-triggers compaction.
+**`[CORRECTED]` The offline counterexample does not exercise the production
+decision.** It compares a hand-supplied raw view against a hand-supplied
+`MessageBuilder.buildForApi` projection, and evaluates both through a
+**locally defined** `shouldCompactOn` helper — it never drives the production
+trigger. The production trigger reads `context.apiMessages`
+(`compaction.ts:381-389`), and the production orchestrator populates that
+field with the **API-safe projection** via `prepareProviderMessagesForApi` →
+`MessageBuilder.buildForApi` (`session-runtime-orchestrator.ts:1775`,
+`:1846-1856`) **before** the trigger reads it.
+
+What the counterexample therefore establishes is narrow and real: **raw
+estimates can exceed projected estimates.** What it does **not** establish is
+that the production runtime ever observes the raw representation. It does not.
+
+The downstream conclusion "the ten compactions were not justified" is
+withdrawn. The correct disposition is
+`HALT_ESTIMATOR_NOT_REPRODUCED_AT_ACTUAL_PATH`, and a matched
+decision-time capture is required before any S2 repair.
 
 ---
 
@@ -68,14 +113,16 @@ triggers compaction.
 |---|---|
 | 273 canonical messages, 137/137 matched tool pairs, 135 non-empty bodies | OBSERVED_CANONICAL (local capture) |
 | Last compaction covers a 263-message prefix; 10 messages follow | OBSERVED_CANONICAL |
-| 487 result bodies deliberately omitted from the summarizer input | OBSERVED_RECONSTRUCTION (production `serializeConversation`) |
+| 487 result bodies omitted by the policy, measured over the RECONSTRUCTED prefix | OBSERVED_RECONSTRUCTION (production `serializeConversation`) — **`[CORRECTED]` NOT the historical summarizer request**; that is `UNAVAILABLE_FROM_TRACE` |
 | 12 verified outcomes carried = exactly `MAX_CARRIED_OUTCOMES` | OBSERVED_RECONSTRUCTION (production `extractVerifiedToolOutcomes`) |
 | 24 outcomes rejected (23 `payload_failure`, 1 `no_success_signal`) | OBSERVED_RECONSTRUCTION |
 | The installed continuation DOES carry all 12 verified-outcome lines | OBSERVED_CANONICAL |
 | Every carried line has an EMPTY command classification | OBSERVED_CANONICAL + OBSERVED_RECONSTRUCTION |
 | The R1 Helm render FAILED (rc=1, Go-template error) while the wrapper reported success | OBSERVED_CANONICAL |
-| All 10 compactions fired below the implied trigger | OBSERVED_TRACE (adjacent-request proxy) |
+| All 10 compactions fired while the PRECEDING provider request was below the implied trigger | OBSERVED_TRACE (adjacent-request proxy) — **`[CORRECTED]` a BOUND, not a per-decision finding** |
 | The exact decision-request token accounting | **UNAVAILABLE_FROM_TRACE** |
+| **`[CORRECTED]`** The production trigger measures the API-safe PROJECTED view (`context.apiMessages`), not the raw canonical view | SOURCE_FACT (`compaction.ts:381-389` + `session-runtime-orchestrator.ts:1775`, `:1846-1856`) |
+| **`[CORRECTED]`** The ten live compactions were unjustified | **NOT ESTABLISHED** — `HALT_ESTIMATOR_NOT_REPRODUCED_AT_ACTUAL_PATH` |
 
 ### Capture-generation divergence (recorded, not reconciled away)
 
@@ -115,25 +162,52 @@ deliberate trade-off, not a bug.
 
 ## 4. Premature compaction: did it reproduce?
 
-**Yes, as an accounting divergence.** The ten compactions were not justified by
-the provider-reported request sizes.
+**`[CORRECTED]` NO — the causal attribution did not reproduce at the actual
+production path.**
+
+The original answer here read "Yes, as an accounting divergence." The
+corrected answer is `HALT_ESTIMATOR_NOT_REPRODUCED_AT_ACTUAL_PATH`.
 
 Two independent sub-findings, deliberately NOT collapsed:
 
-- **Reproduced (SYNTHETIC_REAL):** the estimator can exceed the trigger on a
-  request whose real provider-visible projection fits, because the estimator's
-  input representation and the provider's differ. Reproduced at the production
-  seam with the real `MessageBuilder.buildForApi` projection.
+- **Reproduced (SYNTHETIC_REAL):** a raw-message estimate can exceed the
+  trigger while the provider-visible projection of the same transcript fits.
+  This is reproduced **synthetically**: the test constructs two views and
+  evaluates both through a **locally defined** `shouldCompactOn` helper. It
+  does **not** drive the production trigger, and it does **not** establish
+  that the production runtime ever supplies the raw view.
+- **`[CORRECTED]` Not reproduced at the ACTUAL path:** the production trigger
+  reads `context.apiMessages` (`compaction.ts:381-389`), and the production
+  orchestrator populates that field with the **API-safe projection**
+  (`session-runtime-orchestrator.ts:1775` → `prepareProviderMessagesForApi` →
+  `MessageBuilder.buildForApi`) **before** the trigger reads it. The raw view
+  the counterexample compares against is therefore not a representation the
+  production trigger can observe.
 - **Not isolated (CAPTURE_INSUFFICIENT):** for Round C specifically, the trace
   does not record the decision-request token accounting, so the exact
   estimator error for those ten decisions cannot be computed. The finding is
-  therefore a **bound** (every cycle fired below the trigger), not an exact
-  per-decision estimator delta. The adjacent provider request is NOT the
-  decision request, and no comparison of the two is claimed as one.
+  therefore a **bound** (every cycle fired below the implied trigger, judged
+  against the PRECEDING provider request), not an exact per-decision
+  estimator delta. The adjacent provider request is NOT the decision request,
+  and no comparison of the two is claimed as one.
+
+**`[CORRECTED]` Consequence:** the claim "the ten compactions were not
+justified by the provider-reported request sizes" is WITHDRAWN. The ten
+compactions may have been unnecessary, but this report does not establish
+that, and it does not identify a causal mechanism. An independent accounting
+mismatch may still exist on a different axis.
 
 A second, compatible divergence axis is live but unmeasured for Round C: the
 estimator's 3-chars-per-token assumption under-counts token-dense bodies. The
-trace cannot separate the two axes for this session.
+trace cannot separate the two axes for this session. **This axis is NOT
+exonerated by the S2 correction** — it remains live and is the most likely
+remaining candidate.
+
+**Next step before any S2 repair:** acquire matched decision evidence. Use the
+existing compaction diagnostics to capture the request estimate, the
+API-projection estimate, the trigger, the calibration factor and the request
+identity, default-off and metadata-only, and reproduce a mismatch through the
+**actual runtime projection** rather than a manually supplied raw view.
 
 ---
 
@@ -186,25 +260,51 @@ trace cannot separate the two axes for this session.
 
 Two bounded, source-backed repairs, each independent:
 
-**S1 — Preserve the command identity through a shell chain.**
+**S1 — Preserve the command identity through a shell chain.** `C1: GO`.
 `classifyCommand` must recognise the executable that a `cd <path> && <cmd>` /
-`;` / `|` chain actually invokes, while still never carrying the user's
-arguments. The invariant to preserve: the carried classification is drawn from
-the **finite allowlist**, matched against the **executable word of a chained
+`;` chain actually invokes, while still never carrying the user's arguments.
+The invariant to preserve: the carried classification is drawn from the
+**finite allowlist**, matched against the **executable word of a chained
 command**, not against the literal leading words of the whole line.
 Acceptance: the three Round C probes carry a non-empty, allowlisted
 classification; a command with no allowlisted executable still carries none;
 no argument, path or URL ever appears in the carried section.
 
+**`[CORRECTED]` S1 is additionally bounded by two fail-closed rules** that the
+original contract did not state, and that the repair implements:
+
+- A **PIPELINE** (`|`) carries nothing. The shell's exit status of a pipeline
+  is the status of its **LAST** element, so a successful wrapper does not
+  establish that the earlier element succeeded — this is exactly the R1
+  failure (`helm template | head` reported success while Helm failed).
+- A **chain naming more than one allowlisted executable** carries nothing.
+  Which one ran is not decidable from the command text alone.
+
+A `||` chain carries nothing for the same reason (the second segment runs
+only when the first one failed).
+
 **S2 — Make the compaction trigger's accounting representation match the
-provider-visible request.**
-The trigger must measure the same representation the provider receives, for
-**every** path, not only the re-compaction path. The invariant to preserve: no
+provider-visible request.** `HALT_ESTIMATOR_NOT_REPRODUCED_AT_ACTUAL_PATH`.
+
+**`[CORRECTED]`** The original contract here was based on a causal attribution
+that the expert review found unproven, and it is therefore **not authorized**.
+The production trigger ALREADY measures the API-safe projection on both paths
+(`compaction.ts:381-389` reads `context.apiMessages`;
+`session-runtime-orchestrator.ts:1775` populates it through
+`prepareProviderMessagesForApi` → `MessageBuilder.buildForApi`), so the
+change this contract asks for is either already present or targets a path
+that has not been shown to exist.
+
+The precondition for any S2 repair is **matched decision-time evidence**:
+capture the request estimate, the API-projection estimate, the trigger, the
+calibration factor and the request identity through the existing compaction
+diagnostics — default-off and metadata-only — and reproduce a mismatch
+through the **actual runtime projection**, not a manually supplied raw view.
+
+The invariants that would still hold for a future, evidence-backed S2: no
 change to `COMPACTION_TRIGGER_RATIO`, no change to the context size, no change
 to the provider calibration, and a genuinely oversized request must still
-trigger. Acceptance: the offline counterexample's provider-visible view does
-not trigger; the estimator's raw view does not trigger either; the converse
-still triggers.
+trigger.
 
 **Explicitly out of scope for the successor:** re-inserting raw stdout, command
 arguments, URLs, secrets or unrestricted error text into summarizer inputs;
@@ -222,7 +322,7 @@ store or a retrieval subsystem.
 | First-loss discriminator | **REPRODUCED** — empty command classification at `classifyCommand` |
 | R1 shell-status negative control | GREEN |
 | R7 evidence-status control | GREEN |
-| Repeated-compaction conservation | GREEN — 10/10 cycles below the implied trigger; counterexample reproduces |
+| Repeated-compaction conservation | **`[CORRECTED]`** 10/10 cycles below the implied trigger **as judged against the PRECEDING provider request** (adjacent-request proxy — a BOUND, not a per-decision finding); the counterexample reproduces **synthetically** and does **not** drive the production trigger |
 | 12-outcome bound | MEASURED — exactly 12 carried, exactly 12 bound; the three probes were carried, so the bound did not evict them |
 | Confidentiality | GREEN — synthetic secrets absent from the summarizer request and the installed continuation |
 | Upstream comparison | GREEN — exact commit `43a976d93151` and the five affected files documented |

@@ -465,21 +465,180 @@ export const COMMAND_SUBCOMMAND_ALLOWLIST: readonly string[] = [
 ];
 
 /**
- * Classify a command into the finite allowlist.
+ * Characters that make a command segment AMBIGUOUS.
  *
- * The command's LEADING WORDS are matched against the allowlist. Only the
- * matched allowlist entry is returned — never the user's words themselves.
- * A command that matches nothing yields no classification, and the outcome
- * is then carried with an empty label list: the verified FACT survives and
- * nothing unverified is invented.
+ * A segment containing any of these cannot be reduced to "the executable this
+ * segment runs" without executing a shell, so the classifier FAILS CLOSED on
+ * it and carries nothing. This is the difference between reading a command
+ * line and INTERPRETING one: this module deliberately does not implement a
+ * shell.
+ *
+ *   - `$`, backtick — command substitution: the executed word is not the word
+ *     that is written.
+ *   - `(`, `)`, `{`, `}` — subshell / brace grouping.
+ *   - `>`, `<` — redirection: the executed word is not necessarily the first
+ *     word of the segment.
+ *   - `&` — background execution.
+ *   - `*`, `?`, `[`, `]`, `~` — globbing / tilde expansion: the written word
+ *     is not the executed path.
+ *   - `!` — history expansion.
  */
-export function classifyCommand(command: string): string {
-	const normalized = command.replace(/\r\n/g, "\n").trim();
-	if (!normalized) {
-		return "";
+const AMBIGUOUS_SEGMENT_CHARACTERS = /[$`(){}[\]<>*?~!&]/;
+
+/**
+ * Split a command line into its shell SEGMENTS.
+ *
+ * The split is QUOTE-AWARE: a `&&` inside a quoted string is data, not an
+ * operator. Every segment records the operator that FOLLOWED it, because the
+ * operator's semantics decide whether the next segment continues the same
+ * logical command or starts an independent one.
+ *
+ * The returned segments are RAW TEXT. They are never carried; they are only
+ * inspected to locate an executable word.
+ */
+function splitShellSegments(command: string): {
+	text: string;
+	operator: "&&" | "||" | ";" | "|" | "";
+}[] {
+	const segments: {
+		text: string;
+		operator: "&&" | "||" | ";" | "|" | "";
+	}[] = [];
+	let current = "";
+	let quote: '"' | "'" | undefined;
+	for (let index = 0; index < command.length; index += 1) {
+		const character = command[index];
+		// Inside a single-quoted string NOTHING is an operator.
+		if (quote === "'") {
+			current += character;
+			if (character === "'") {
+				quote = undefined;
+			}
+			continue;
+		}
+		if (quote === '"') {
+			current += character;
+			if (character === '"') {
+				quote = undefined;
+			}
+			continue;
+		}
+		if (character === "'" || character === '"') {
+			quote = character;
+			current += character;
+			continue;
+		}
+		// A backslash escapes the next character, so it cannot start an
+		// operator.
+		if (character === "\\") {
+			current += character;
+			if (index + 1 < command.length) {
+				index += 1;
+				current += command[index];
+			}
+			continue;
+		}
+		const twoCharacterOperator = command.slice(index, index + 2);
+		if (twoCharacterOperator === "&&" || twoCharacterOperator === "||") {
+			segments.push({ text: current, operator: twoCharacterOperator });
+			current = "";
+			index += 1;
+			continue;
+		}
+		if (character === ";" || character === "|") {
+			segments.push({ text: current, operator: character });
+			current = "";
+			continue;
+		}
+		current += character;
 	}
-	// Split the command into shell-ish words, keeping quoted runs intact.
-	const words = normalized.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+	segments.push({ text: current, operator: "" });
+	return segments;
+}
+
+/**
+ * The leading words of a command segment, with quoted runs kept intact.
+ *
+ * This is the SAME word-splitting the pre-existing classifier used, so a
+ * single-segment command classifies exactly as it did before.
+ */
+function splitSegmentWords(segment: string): string[] {
+	return segment.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+}
+
+/**
+ * Strip the QUOTED regions of a segment.
+ *
+ * A quoted region is INERT DATA: the shell does not interpret an operator, a
+ * substitution or a glob inside single quotes, and inside double quotes it
+ * interprets only `$` and backtick. So the ambiguity check must look at the
+ * segment's STRUCTURE, not at the literal characters of its arguments.
+ *
+ * The stripped text keeps a single space in place of each quoted run so that
+ * word boundaries are preserved.
+ */
+function stripQuotedRegions(segment: string): string {
+	let result = "";
+	let quote: '"' | "'" | undefined;
+	for (let index = 0; index < segment.length; index += 1) {
+		const character = segment[index];
+		if (quote === undefined) {
+			if (character === "'" || character === '"') {
+				quote = character;
+				result += " ";
+				continue;
+			}
+			result += character;
+			continue;
+		}
+		if (character === quote) {
+			quote = undefined;
+			result += " ";
+			continue;
+		}
+		// Inside DOUBLE quotes the shell still performs `$` expansion and
+		// backtick substitution, so those characters stay VISIBLE to the
+		// ambiguity check. Inside SINGLE quotes nothing is interpreted, so
+		// the whole run becomes inert data.
+		if (quote === '"' && (character === "$" || character === "`")) {
+			result += character;
+			continue;
+		}
+		// Every other quoted character becomes a space: the quoted run is one
+		// argument, whatever it contains.
+		result += " ";
+	}
+	return result;
+}
+
+/**
+ * Whether a segment is safe to reduce to its executable word.
+ *
+ * A segment is safe when its STRUCTURE contains no character that could
+ * change WHICH word the shell executes, and when its first word is a plain
+ * executable name (not a quoted path that could carry a secret through the
+ * allowlist match).
+ */
+function isUnambiguousSegment(segment: string): boolean {
+	if (AMBIGUOUS_SEGMENT_CHARACTERS.test(stripQuotedRegions(segment))) {
+		return false;
+	}
+	const executable = splitSegmentWords(segment)[0];
+	if (executable === undefined) {
+		return false;
+	}
+	// A quoted executable is not matched by the allowlist (the allowlist
+	// entries are bare command names), but it is rejected here so a segment
+	// can never be "recognised" through quoting tricks.
+	return !/["']/.test(executable);
+}
+
+/**
+ * The classification of ONE command segment, or `""` when the segment does
+ * not name an allowlisted executable.
+ */
+function classifySegment(segment: string): string {
+	const words = splitSegmentWords(segment);
 	const firstWord = words[0];
 	if (firstWord === undefined) {
 		return "";
@@ -509,6 +668,100 @@ export function classifyCommand(command: string): string {
 			}
 		}
 	}
+	return match;
+}
+
+/**
+ * Classify a command into the finite allowlist.
+ *
+ * The command's LEADING WORDS are matched against the allowlist. Only the
+ * matched allowlist entry is returned — never the user's words themselves.
+ * A command that matches nothing yields no classification, and the outcome
+ * is then carried with an empty label list: the verified FACT survives and
+ * nothing unverified is invented.
+ *
+ * ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01 (S1) — SHELL CHAINS.
+ *
+ * The pre-existing implementation matched the WHOLE LINE's leading words, so
+ * a common `cd <path> && <cmd>` chain matched nothing: `cd` is not in the
+ * allowlist, and the classification of the command that ACTUALLY ran was
+ * lost. This is the Round C defect — every carried verified-outcome line
+ * degraded to "succeeded — N commands" with no indication of what ran.
+ *
+ * The corrected implementation reads the command line as a sequence of shell
+ * SEGMENTS and classifies the executable of the segment that carries the
+ * work. The invariants are preserved:
+ *
+ *   - The carried value is ALWAYS a finite-allowlist entry. No user-supplied
+ *     path, argument, URL or credential is ever carried.
+ *   - The classifier is NOT a shell. A segment that contains a character
+ *     which could change WHICH word the shell executes (command
+ *     substitution, redirection, globbing, backgrounding, grouping, history
+ *     expansion) is AMBIGUOUS and the whole chain is skipped.
+ *   - A chain that names MORE THAN ONE allowlisted executable is AMBIGUOUS:
+ *     which one ran is not decidable from the text alone, so nothing is
+ *     carried. One label is carried, or none.
+ *
+ * The `cd` prefix is recognised as a DIRECTORY CHANGE, not as a command:
+ * `cd <path> && <cmd>` classifies `<cmd>`. The `cd` segment's own argument is
+ * a path and is never carried.
+ */
+export function classifyCommand(command: string): string {
+	const normalized = command.replace(/\r\n/g, "\n").trim();
+	if (!normalized) {
+		return "";
+	}
+	const segments = splitShellSegments(normalized).filter((segment) => {
+		return splitSegmentWords(segment.text).length > 0;
+	});
+	if (segments.length === 0) {
+		return "";
+	}
+	const classifications: string[] = [];
+	for (const segment of segments) {
+		if (segment.operator === "|") {
+			// A PIPELINE is AMBIGUOUS. The shell's exit status of a pipeline is
+			// the status of its LAST element, so a successful wrapper does not
+			// establish that the earlier element succeeded — this is exactly
+			// the Round C R1 failure (a `helm template | head` chain reported
+			// success while Helm itself failed). Fail closed.
+			return "";
+		}
+		if (segment.operator === "||") {
+			// A `||` chain runs its second segment only when the FIRST one
+			// FAILED. Which segment ran is therefore not decidable from the
+			// text. Fail closed.
+			return "";
+		}
+		const executable = splitSegmentWords(segment.text)[0]?.replace(
+			/^[;&|]+\s*/,
+			"",
+		);
+		// The `cd` prefix is a DIRECTORY CHANGE, not the command that ran. It
+		// never contributes a classification: `cd`'s argument is a PATH, and a
+		// path must never be carried.
+		if (executable === "cd") {
+			continue;
+		}
+		if (!isUnambiguousSegment(segment.text)) {
+			// An AMBIGUOUS segment makes the whole chain undecidable. Fail
+			// closed: carry nothing rather than guess which command ran.
+			return "";
+		}
+		const classification = classifySegment(segment.text);
+		if (classification) {
+			classifications.push(classification);
+		}
+	}
+	if (classifications.length === 0) {
+		return "";
+	}
+	if (classifications.length > 1) {
+		// MORE THAN ONE allowlisted executable in the chain: which one ran is
+		// not decidable from the command text, so nothing is carried.
+		return "";
+	}
+	const match = classifications[0];
 	if (match.length > MAX_CARRIED_SUBJECT_CHARS) {
 		return `${match.slice(0, MAX_CARRIED_SUBJECT_CHARS)}...`;
 	}
