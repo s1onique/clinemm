@@ -34575,3 +34575,81 @@ separately.
 (00 identity/parity, 01 production-seam discriminator, 02 Elm kernel closure, 03 the
 repair, 04 verification/regression, 05 base-stream regression, 06 executable receipt,
 07 decision, SHA256SUMS.txt).
+
+## ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01-INSTALL-QUAL01 — PASS_P1_CORRECTION_PROVEN
+
+**Head.** `86a8cf2fdcf2d1a2e29e1f009c1fad6420732ab9` (tree
+`60933e47f2ccb08b945b0bdf76b1e004864e552f`, clean).
+
+**Why.** The CPR01 factory review closed the P0 (synthetic prompt-to-run correlation) and
+left ONE bounded P1 in the EVIDENCE: `CPR01-01` claimed to execute two consecutive
+continuation turns, but its sequence was ONE explicit turn + ONE queued continuation —
+two `run-started` events but only ONE `continuation_started` association, so the
+mandated two-continuation scenario was never exercised.
+
+**What was done.** The EXISTING real-host witness was extended ONCE, with no new review
+round and NO production change: `CPR01-01` now runs ONE explicit user turn + TWO
+consecutive queued continuations through the REAL `LocalRuntimeHost` + REAL
+`SessionRuntime` + REAL `AgentRuntime` + REAL canonical subscription. The second queued
+prompt is dispatched by the REAL queue drain loop (`PendingPromptsController.drain`),
+which arms a SECOND held continuation prompt via the REAL C6 `onBeforeDispatch` seam.
+Nothing is fabricated — every `run-started` still originates from the REAL
+`AgentRuntime.execute()`.
+
+**Observed receipt** (`.factory/evidence/...-INSTALL-QUAL01/01-cpr01-corrected-witness-receipt.txt`):
+
+```
+runStartedRunIds        : run_1hHyNKkI, run_Mgdg2iyw, run_z9pgGfm5   (3 DISTINCT)
+continuationStarted      : pending_1794849211018_Kknak -> run_Mgdg2iyw
+                          pending_1794849211031_8RTsn -> run_z9pgGfm5
+continuationScheduledIds : the same two prompt IDs (each consumed EXACTLY once)
+agentTurnDoneRunIds     : run_1hHyNKkI, run_Mgdg2iyw, run_z9pgGfm5   (conservation agrees)
+```
+
+The P1 is CLOSED: three distinct run IDs, two correctly-correlated prompt IDs, and NO
+orphaned Elm prompt (every C6-scheduled prompt consumed by exactly one
+`continuation_started`; no `continuation_started` points at an unscheduled prompt).
+
+**Gates.** CPR01 real-host witness 7/7 PASS; OPPOR01 historical witness 5/5 PASS
+(unchanged); base typecheck PASS; `git diff --check` clean.
+
+**Pre-existing bridge-typecheck drift (NOT a regression).** The bridge gate reports 5
+diagnostics against a frozen baseline of 0. This ACT contributes ZERO of them: the same
+gate re-run with this ACT's test change STASHED produced a byte-identical 5-diagnostic
+set (none referencing the file this ACT touched). The empty baseline is a pre-existing
+staleness condition; the baseline was deliberately NOT refreshed, so nothing was masked.
+
+**P2 residue fixed.** The extra blank line at EOF in
+`.factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01/06-cpr01-executable-receipt.txt`
+(one byte removed; receipt CONTENT otherwise unchanged). `git diff --check` is clean.
+
+**Not claimed.** The INSTALLED qualification was NOT EXECUTED: no build was produced, no
+VSIX packaged, no artifact installed, no live task driven. Inspection only (not a
+qualification result): a `codium-clinemm` instance was running against
+`~/.vscodium-clinemm/extensions`, which already carries
+`s1onique.clinemm-4.1.16-5a1c485cb-f596742d5` (`extensions.json` source `vsix`, pinned;
+`dist/extension.js` SHA-256 `014639926780b13636a47e2bde1f21ffb11f854c6cc2a7973cfd159b956b5f9d`).
+The agent sandbox CANNOT write to that extensions dir (`touch` → `Operation not
+permitted`), consistent with the read-only-mount constraint recorded by earlier ACTs.
+Because this ACT's commit is TEST-ONLY (no production source changed), the production
+`extension.js` content is EXPECTED to be unchanged — but that expectation was NOT
+verified against a freshly built artifact and is therefore NOT claimed.
+
+**Non-authoritative digest.** The Leamas digest's `.factory/gate-summary.json` binding is
+invalid and its gate summary is explicitly non-authoritative. It was NOT substituted for
+the actual test receipts.
+
+**Evidence.**
+`.factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01-INSTALL-QUAL01/`
+(01 corrected witness receipt). ACT definition:
+`.factory/acts/ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01-INSTALL-QUAL01.md`.
+
+**Successor.** The installed qualification remains OPEN: prove the fix survives
+packaging, installation and real extension-host execution — build and package from the
+exact source HEAD, verify the VSIX and `extension.js` SHA-256, install into
+`codium-clinemm`, then in a fresh disposable task exercise a session replacement followed
+by two queued continuations, capturing the actual `run-started`,
+`continuation_started`, `agent_turn_done`, Elm decision and committed task phase, and
+require the header to transition `Working` → `Completed` with no outstanding obligations.
+The ORIGINAL incident evidence remains untouched; the installed extension identity is
+recorded separately.
