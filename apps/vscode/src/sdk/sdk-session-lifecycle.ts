@@ -96,6 +96,41 @@ export interface SdkSessionLifecycleOptions {
 	}
 	onDidBecomeIdle?: () => void
 	/**
+	 * ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01:
+	 * canonical runtime-event subscription REBIND hook.
+	 *
+	 * The canonical runtime-event subscription is POINT_IN_TIME:
+	 * `LocalRuntimeHost.subscribeRuntimeEvents` walks the host's session map
+	 * and attaches the listener to the `SessionRuntime` that is live AT CALL
+	 * TIME. When the lifecycle REPLACES the active session -- which
+	 * `replaceActiveSession` does for every mode / terminal-mode / provider /
+	 * MCP / auto-approval rebuild -- a NEW `SessionRuntime` is installed under
+	 * the (possibly identical) session id, and the previously attached
+	 * listener keeps observing the DISPOSED runtime.
+	 *
+	 * The consequence was measured at the production seam by
+	 * `apps/vscode/src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts`:
+	 * after the replacement the stale subscription observed ZERO canonical
+	 * events, so the `continuation_started(promptId, runId)` join never fired
+	 * for the continuation turns, the continuation prompt stayed
+	 * `PromptScheduled` in the Elm completion authority, and the completion
+	 * was withheld on `pending_prompt` (CPR01-02 RED) -- while the turns
+	 * themselves executed normally (CPR01-03 GREEN after the re-attach).
+	 *
+	 * This hook is invoked by `replaceActiveSession` AFTER the replacement
+	 * session is installed, with the replacement's session id. The host
+	 * (production: `SdkController`) re-attaches the canonical subscription
+	 * for that id. It is OPTIONAL: a host that does not wire it keeps the
+	 * legacy behavior (no rebind), so the lifecycle never depends on the
+	 * shadow/authority wiring existing.
+	 *
+	 * The FOLLOW-UP RESUME path has its own rebind
+	 * (`SdkFollowupCoordinator.resumeSessionFromTask` ->
+	 * `onCanonicalRuntimeRebind`); that path does NOT go through
+	 * `replaceActiveSession`, so the two rebinds do not overlap.
+	 */
+	onCanonicalRuntimeRebind?: (sessionId: string) => void
+	/**
 	 * ACT-MYC-CLINEMM02-C: session-start prime trigger.
 	 *
 	 * Invoked by `SdkSessionLifecycle.startNewSession` AFTER
@@ -751,6 +786,28 @@ export class SdkSessionLifecycle {
 		}
 		const { startResult, sdkHost } = result
 		this.setRunning(false)
+
+		// ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01:
+		// REBIND the canonical runtime-event subscription to the
+		// replacement session.
+		//
+		// The replacement installs a NEW `SessionRuntime` (the host's
+		// `startSession` -> `this.sessions.set(sessionId, active)`), so the
+		// listener attached to the PREVIOUS runtime is now observing a
+		// disposed runtime. Without this rebind the canonical
+		// `run-started` event of every subsequent turn is lost, the
+		// `continuation_started(promptId, runId)` join never fires, and the
+		// Elm completion authority holds the completion on `pending_prompt`
+		// forever (CPR01-02 RED).
+		//
+		// The rebind is fired with the REPLACEMENT's session id, and only
+		// after the replacement session is installed. The host owns the
+		// identity fence (the host re-attaches only if this session is
+		// still the active one at call time).
+		//
+		// The hook is OPTIONAL. A host that does not wire it keeps the
+		// legacy behavior unchanged.
+		this.options.onCanonicalRuntimeRebind?.(startResult.sessionId)
 
 		return { oldSessionId, startResult, sdkHost }
 	}

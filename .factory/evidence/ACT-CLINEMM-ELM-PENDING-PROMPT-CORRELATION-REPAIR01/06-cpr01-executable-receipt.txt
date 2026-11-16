@@ -1,0 +1,104 @@
+(node:20163) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.c2-4-c-bridge.ts:22:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:20179) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts > ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01 — production-seam correlation-identity discriminator > CPR01-01: two consecutive continuation turns through the REAL LocalRuntimeHost each produce a FRESH runId that reaches the REAL canonical subscription
+CPR01-01-REPORT {
+  "runStartedRunIds": [
+    "run_pBZ91v9u",
+    "run_NgELQ6jN"
+  ],
+  "continuationStarted": [
+    {
+      "promptId": "pending_1794848153824_dqRmF",
+      "runId": "run_NgELQ6jN"
+    }
+  ],
+  "agentTurnDoneRunIds": [
+    "run_pBZ91v9u",
+    "run_NgELQ6jN"
+  ],
+  "observedEventTypes": [
+    "run-started",
+    "turn-started",
+    "working-context-state-changed",
+    "execution-state-changed",
+    "assistant-text-delta",
+    "message-added",
+    "assistant-message",
+    "turn-finished",
+    "run-finished",
+    "run-started",
+    "turn-started",
+    "working-context-state-changed",
+    "execution-state-changed",
+    "assistant-text-delta",
+    "message-added",
+    "assistant-message",
+    "turn-finished",
+    "run-finished"
+  ]
+}
+
+stdout | src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts > ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01 — production-seam correlation-identity discriminator > CPR01-02: after a production-shaped SessionRuntime replacement under the same sessionId, the stale canonical subscription observes NO run-started and NO continuation_started
+CPR01-02-REPORT {
+  "observedRunStartedCount": 0,
+  "runStartedRunIds": [],
+  "continuationStarted": [],
+  "agentTurnDoneRunIds": [
+    "run_U6bokey-"
+  ],
+  "observedEventTypes": []
+}
+
+stdout | src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts > ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01 — production-seam correlation-identity discriminator > CPR01-03: re-attaching the canonical subscription after the lifecycle replacement restores the continuation_started correlation with a FRESH runId
+CPR01-03-REPORT {
+  "observedRunStartedCount": 1,
+  "runStartedRunIds": [
+    "run_4BJegH2g"
+  ],
+  "continuationStarted": [
+    {
+      "promptId": "pending_1794848153916_gn0zK",
+      "runId": "run_4BJegH2g"
+    }
+  ],
+  "agentTurnDoneRunIds": [
+    "run_4BJegH2g"
+  ],
+  "firstRunIds": [
+    "run_zhGOyuJf"
+  ]
+}
+
+stderr | src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts > ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01 — production-seam correlation-identity discriminator > CPR01-04: the REAL Elm kernel holds on pending_prompt without the correlation and authorizes with the REAL producer's fresh correlation
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+stdout | src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts > ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01 — production-seam correlation-identity discriminator > CPR01-04: the REAL Elm kernel holds on pending_prompt without the correlation and authorizes with the REAL producer's fresh correlation
+CPR01-04-BROKEN-REPORT {
+  "kind": "hold",
+  "holdReasons": [
+    "pending_prompt",
+    "scheduled_continuation"
+  ]
+}
+
+stdout | src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts > ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01 — production-seam correlation-identity discriminator > CPR01-04: the REAL Elm kernel holds on pending_prompt without the correlation and authorizes with the REAL producer's fresh correlation
+CPR01-04-FIXED-REPORT {
+  "kind": "authorize",
+  "holdReasons": []
+}
+
+ ✓ src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts (7 tests) 439ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  19:55:50
+   Duration  3.99s (transform 2.36s, setup 0ms, import 3.44s, tests 439ms, environment 0ms)
+

@@ -387,6 +387,14 @@ export default defineConfig({
 			// fires -- with no manufactured cardinality growth
 			// and an empty queue at settle.
 			"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01:
+			// production-seam correlation-identity discriminator. Drives
+			// the REAL LocalRuntimeHost + REAL SessionRuntime + REAL
+			// AgentRuntime (scripted model boundary only) + the REAL
+			// canonical subscription, with NO fabricated `run-started`
+			// delivery, and asserts that each continuation turn is
+			// correlated to the run that ACTUALLY executed it.
+			"src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01 / PPRD01:
 			// real-host RED witness for the BCB finalization-prompt drain
 			// defect. Drives the REAL LocalRuntimeHost + REAL

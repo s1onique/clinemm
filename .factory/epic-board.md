@@ -34473,3 +34473,105 @@ NOT ACT-owned:
 `completion-authority-elm-authority-counter-dump01.test.ts > ELAUTHORITY01.A` (a
 regex/format mismatch against a fork comment block in `src/registry.ts`; neither file is
 modified by this ACT).
+
+## ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 — PASS_CORRELATION_REPAIR_PROVEN
+
+**Predecessor.** `ACT-CLINEMM-ELM-PENDING-PROMPT-ORPHAN-REPRO01` (OPPOR01) at `159d92dcb`
+— `PASS_CAUSAL_PROOF`, factory-reviewed as `HALT_CORRELATION_IDENTITY_UNPROVEN`.
+
+**The reviewer's P0.** OPPOR01's counterfactual paired BOTH incident prompts with
+`run_rCw8nsup` — a run whose `agent_turn_done` was at CCARD seq 41, while prompt P1 was
+scheduled at seq 48 and prompt P2 at seq 57. The identifiers were individually
+authentic but their ASSOCIATION was synthetic, so OPPOR01 could not authorize a
+production repair. The review's P1 added that `OPPOR01-REPLAY` replays a FIXED
+historical fixture and must therefore CONTINUE to PASS after a repair (it must not be
+treated as a RED that flips).
+
+**The mandated first gate, executed.** Two consecutive continuation turns through the
+ACTUAL `LocalRuntimeHost`, the REAL canonical subscription and the REAL Elm kernel, with
+NO fabricated `run-started` delivery. REAL in the witness: `LocalRuntimeHost`,
+`SessionRuntime`, `AgentRuntime` (incl. `execute()`'s runId allocation at
+`agent-runtime.ts:1788` and its `run-started` emission at `:1837`),
+`subscribeCanonicalRuntimeEventsToShadow`, `createProductionPendingPromptCapture`,
+`captureContinuationCardinalityAuthorityRecord`, the compiled Elm kernel, and (for the
+lifecycle arm) the REAL `SdkSessionLifecycle.replaceActiveSession`. The ONLY stub in
+the causal chain is `AgentModel.stream` (the provider boundary).
+
+**Root cause (PROVEN at the production seam).** `LocalRuntimeHost.subscribeRuntimeEvents`
+is POINT_IN_TIME: it walks the host's session map and attaches the listener to the
+`SessionRuntime` live AT CALL TIME (`local-runtime-host.ts:2352-2373`). The production
+lifecycle REPLACES the `SessionRuntime` under the SAME session id
+(`local-runtime-host.ts:1363` — `this.sessions.set(sessionId, active)`). A subscription
+attached before the replacement keeps observing the DISPOSED runtime, so the canonical
+`run-started` of every subsequent turn is lost, the `continuation_started(promptId, runId)`
+join never fires, the continuation prompt stays `PromptScheduled` in the Elm completion
+authority, and completion is withheld on `pending_prompt` forever.
+
+**Discriminators (the review's four hypotheses).** (a) "event not emitted" — REFUTED
+(the REAL runtime allocated a runId and the host-side `agent_turn_done` capture carries
+it). (c) "wrong session identity" — REFUTED (the sessionId is byte-identical across the
+replacement; the `agent_turn_done` capture is keyed by that same sessionId). (b)
+"listener not attached" and (d) "event lost during lifecycle replacement" — CONFIRMED
+(the stale subscription observed ZERO canonical events while the turn executed normally).
+
+**Correlation identity (the P0 the review left open) — PROVEN.** From REAL producer
+output, not a synthetic pairing: each continuation turn gets a FRESH runId allocated by
+the REAL `AgentRuntime.execute()`; the `continuation_started(promptId, runId)` record
+carries the runId of THE run that ACTUALLY executed that continuation turn, never an
+earlier run; and the `agent_turn_done` capture (the SAME retained runId map) agrees.
+
+**The Elm kernel closure.** Replaying the REAL production-seam captures through the
+REAL adapter and the REAL compiled Elm kernel: BROKEN (stale subscription) ->
+`hold` / `[pending_prompt, scheduled_continuation]` — the EXACT incident signature;
+FIXED (re-bound subscription) -> `authorize`, zero hold reasons.
+
+**The repair (smallest sufficient; two production files).**
+`apps/vscode/src/sdk/sdk-session-lifecycle.ts` gains an OPTIONAL
+`onCanonicalRuntimeRebind?: (sessionId: string) => void` option, invoked by
+`replaceActiveSession` AFTER the replacement session is installed, with the
+replacement's session id. `apps/vscode/src/sdk/SdkController.ts` wires it to the
+EXISTING `attachCanonicalRuntimeEventSubscription`, with the SAME identity fence the
+follow-up-resume rebind uses (re-attach only if the replaced session is STILL active at
+call time). `replaceActiveSession` is the SINGLE chokepoint for all five
+session-replacing paths (mode switch, terminal execution mode, provider change,
+MCP/config change, auto-approval) — before this repair ONLY the follow-up-resume path
+re-bound the canonical subscription, so the other five replaced the `SessionRuntime`
+with a STALE listener. That is exactly the incident shape: ONE `run_turn_started` for
+FIVE `agent_turn_done` records in ONE session.
+
+**The historical witness is PRESERVED (the review's P1).** `OPPOR01-REPLAY` was NOT
+modified and was NOT turned into a RED; it still PASSES (5/5) because a subscription
+repair does not change the fixed historical fixture. The real-host RED -> GREEN
+regression lives in the NEW file
+`apps/vscode/src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts`
+(7/7 PASS): `CPR01-05-RED` is the executable RED against the PRE-repair production
+shape, `CPR01-02` is the production-boundary RED.
+
+**Verification.** Focused witness 7/7 PASS. Base typecheck (`tsconfig.json`) and bridge
+typecheck (`tsconfig.c2-4-c-bridge.json`) produce no diagnostics from this ACT; the new
+test is registered in the bridge tsconfig and EXCLUDED from the base one (it needs the
+`@cline-internal/core/...` aliases). FULL-STREAM REGRESSION: the bridge stream was run
+with and without the production change (12 failed files / 20 failed tests vs 11 / 19 —
+per-file failure sets IDENTICAL, the only delta being the CPR01 file itself, which
+requires the repair); the base stream was run the same way and is IDENTICAL (63 failed
+files / 168 failed tests in BOTH runs, byte-identical per-file failure sets). **ZERO new
+regressions.** All remaining failures are the repository's PRE-EXISTING baseline at
+`159d92dcb` and are NOT ACT-owned.
+
+**Do NOT.** Do not repair the Elm completion policy. Do not suppress `PendingPrompt`. Do
+not force completion from TypeScript counters. Do not fabricate a run id. Do not weaken
+C9/C10, BCB or session ownership. Do not create a second completion authority. Do not
+weaken `OPPOR01-REPLAY` — it must continue to PASS. Do not reclassify or suppress the
+pre-existing base/bridge failures; that would widen the ACT beyond its mandate.
+
+**Not claimed.** The installed extension was NOT qualified and NO installed behavior was
+verified; the built artifact was not bound to a new source HEAD.
+
+**Successor.** `ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01-INSTALL-QUAL01` —
+bind the built artifact to the exact source HEAD and qualify the INSTALLED behavior
+separately.
+
+**Evidence.** `.factory/evidence/ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01/`
+(00 identity/parity, 01 production-seam discriminator, 02 Elm kernel closure, 03 the
+repair, 04 verification/regression, 05 base-stream regression, 06 executable receipt,
+07 decision, SHA256SUMS.txt).

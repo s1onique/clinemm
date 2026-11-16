@@ -403,6 +403,15 @@ export default defineConfig({
 			// the test runs under vitest.config.c2-4-c-bridge.ts
 			// which has the alias.
 			"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01:
+			// the production-seam correlation-identity discriminator. Imports
+			// `@cline-internal/core/runtime/host/local-runtime-host` and
+			// `@cline-internal/core/runtime/orchestration/session-runtime-orchestrator`
+			// (aliases declared only in `vitest.config.c2-4-c-bridge.ts`).
+			// Excluded here so the base config's `@cline/core` stub alias
+			// stays in scope for other tests; runs under the dedicated bridge
+			// config.
+			"src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts",
 			// ACT-MYC-CLINEMM02-C: session-start prime automation tests.
 			// These are bun:test suites (run under `bun run test:unit`).
 			// They cannot run under vitest because they `import from

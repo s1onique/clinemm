@@ -200,7 +200,13 @@
 		// queue lifecycle (C4 -> C5 -> C6 -> C7 -> C8) and observing
 		// the Elm `pending_prompt` hold transition. The bridge
 		// aliases resolve the production SDK classes for typecheck.
-		"src/sdk/__tests__/pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01:
+		// production-seam correlation-identity discriminator. REAL
+		// LocalRuntimeHost + REAL SessionRuntime + REAL AgentRuntime +
+		// REAL canonical subscription + REAL Elm kernel. The bridge
+		// aliases resolve the production SDK classes for typecheck.
+		"src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

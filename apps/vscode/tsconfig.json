@@ -200,6 +200,13 @@
 		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
 		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
 		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
+		// ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01:
+		// the production-seam correlation-identity discriminator. It is
+		// bridge-only (requires the `@cline-internal/core/...` aliases
+		// declared in `tsconfig.c2-4-c-bridge.json` only) and runs under
+		// `vitest.config.c2-4-c-bridge.ts`. Excluded here to keep the base
+		// packaging/tsconfig domain free of TS2307.
+		"src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-P0-TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01 / TWQC01:
 		// the real-queue-consumer probe. Runs under
 		// `vitest.config.twqc01.ts` which adds the

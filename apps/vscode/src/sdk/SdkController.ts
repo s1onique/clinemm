@@ -2035,6 +2035,36 @@ export class Controller {
 			// task-operation fence before installing activeSession. This is
 			// the load-bearing check that closes the parent race window.
 			isOperationCurrent: (token) => this.taskOperationFence.isCurrent(token),
+			// ACT-CLINEMM-ELM-PENDING-PROMPT-CORRELATION-REPAIR01 / CPR01:
+			// Rebind the canonical runtime-event subscription when the
+			// lifecycle REPLACES the active session.
+			//
+			// Every mode / terminal-mode / provider / MCP / auto-approval
+			// rebuild flows through `SdkSessionLifecycle.replaceActiveSession`,
+			// which installs a NEW `SessionRuntime`. The canonical
+			// subscription is POINT_IN_TIME, so the listener attached to the
+			// previous runtime goes stale and every subsequent turn's
+			// `run-started` is lost -- which starves the
+			// `continuation_started(promptId, runId)` join and leaves the Elm
+			// completion authority holding on `pending_prompt` forever
+			// (proven at the production seam by
+			// `apps/vscode/src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts`).
+			//
+			// The identity fence is the SAME one the follow-up-resume rebind
+			// uses: re-attach only if the replaced session is STILL the
+			// active one at call time. A concurrent user intent that took
+			// over the active slot owns the subscription; attaching here
+			// would steal its listener pool.
+			//
+			// This is a REBIND of an observation-only seam. It changes no
+			// run-whether / run-completion / continuation / queueing /
+			// presentation / MCP / myc decision.
+			onCanonicalRuntimeRebind: (replacedSessionId: string) => {
+				const activeSessionId = this.sessions?.getActiveSession()?.sessionId
+				if (activeSessionId && activeSessionId === replacedSessionId) {
+					this.attachCanonicalRuntimeEventSubscription(activeSessionId)
+				}
+			},
 			// ACT-MYC-CLINEMM02-C: session-start prime trigger. Fires
 			// AFTER `activeSession` is installed by
 			// `SdkSessionLifecycle.startNewSession`. Fire-and-forget —
