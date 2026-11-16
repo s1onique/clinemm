@@ -198,8 +198,14 @@ function analyze(trace: Trace) {
  * the requests whose provider-reported usage IS available.
  *
  * This is the session's own calibration, not an external constant. It is
- * used ONLY to bound the unsubmitted candidates; the non-compacting rows'
+ * used ONLY to project the unsubmitted candidates; the non-compacting rows'
  * own measured ratios remain the primary parity evidence.
+ *
+ * IMPORTANT: `apiMessagesJsonChars` is the same provider-visible message
+ * payload whose provider-reported `inputTokens` supplied the denominator.
+ * The calibration therefore already covers the system prompt, tool schemas,
+ * and JSON framing represented by the provider's complete prompt. Adding
+ * `requestOverheadTokens` again would double-count that component.
  */
 function observedCharsPerToken(rows: Row[]): {
 	messages: number;
@@ -276,10 +282,9 @@ function main() {
 		const underestimateFactor = num(m.underestimateFactor) ?? 1;
 		const requestTriggerTokens = num(m.requestTriggerTokens) ?? 0;
 		const apiMessagesJsonChars = num(m.apiMessagesJsonChars) ?? 0;
-		const overheadTokens = num(m.requestOverheadTokens) ?? 0;
 		const charsPerTokenAtWhichItWouldNotCompact =
-			requestTriggerTokens > overheadTokens
-				? apiMessagesJsonChars / (requestTriggerTokens - overheadTokens)
+			requestTriggerTokens > 0
+				? apiMessagesJsonChars / requestTriggerTokens
 				: Number.NaN;
 		return {
 			decisionId: String(m.decisionId ?? "unknown"),
@@ -295,14 +300,14 @@ function main() {
 			decisionMonotonicMs: e.monotonicMs,
 			executionDurationMs: e.durationMs ?? null,
 			// The candidate was NEVER submitted: no provider ever reported
-			// its input usage. The value below is an EMPIRICAL BOUND derived
+			// its input usage. The value below is an EMPIRICAL PROJECTION derived
 			// from the session's own observed chars/token rate, NOT a
-			// measurement.
+			// measurement or a conservative bound.
 			providerInputTokensForCandidate: "LIVE_UNOBSERVABLE",
-			empiricalTrueTokenBound: Number.isFinite(
+			empiricalProjectedInputTokens: Number.isFinite(
 				charsPerTokenAtWhichItWouldNotCompact,
 			)
-				? Math.round(apiMessagesJsonChars / cpt.messages + overheadTokens)
+				? Math.round(apiMessagesJsonChars / cpt.messages)
 				: null,
 			charsPerTokenAtWhichItWouldNotCompact: Number.isFinite(
 				charsPerTokenAtWhichItWouldNotCompact,
@@ -313,10 +318,8 @@ function main() {
 	});
 
 	// ---- Necessity / ablation (C5.2 / C5.3) ----
-	const nonCompactingWouldCompactUnderTrueCount = nonCompacting.filter(
-		(r) =>
-			r.apiMessagesJsonChars / cpt.messages + r.requestOverheadTokens >=
-			r.requestTriggerTokens,
+	const nonCompactingWouldCompactUnderProjectedCount = nonCompacting.filter(
+		(r) => r.apiMessagesJsonChars / cpt.messages >= r.requestTriggerTokens,
 	).length;
 
 	const report = {
@@ -354,7 +357,7 @@ function main() {
 		baseline: {
 			decisionObservations: rows.length,
 			providerSubmissions: trace.events.filter(
-				(e) => e.boundary === "provider_submitted",
+				(e) => e.boundary === "provider_submitted" && e.phase === "start",
 			).length,
 			providerCompletions: trace.events.filter(
 				(e) => e.boundary === "provider_completed" && e.phase === "start",
@@ -424,19 +427,22 @@ function main() {
 			question:
 				"Would the same request have fit the operating budget under a " +
 				"trusted token count?",
-			empiricalBoundMethod:
+			empiricalProjectionMethod:
 				"The candidate was never submitted, so no provider ever reported " +
-				"its usage. The bound uses the SESSION'S OWN observed " +
+				"its usage. The projection uses the SESSION'S OWN observed " +
 				"chars-per-token rate (median over the non-compacting pairs, " +
 				"whose provider usage IS available) applied to the candidate's " +
-				"measured `apiMessagesJsonChars`, plus the candidate's measured " +
-				"constant overhead. It is a bound, not a measurement.",
+				"measured `apiMessagesJsonChars`. The calibration denominator " +
+				"already represents the provider's complete prompt, so " +
+				"`requestOverheadTokens` is not added again. This is a point " +
+				"projection, not a conservative bound or an authoritative tokenizer " +
+				"measurement.",
 			observedCharsPerToken: Number(cpt.messages.toFixed(3)),
 			estimatorConstant: 3,
-			allSixCandidatesBelowTriggerUnderBound: compactionDecisions.every(
+			allSixProjectedCandidatesBelowTrigger: compactionDecisions.every(
 				(d) =>
-					d.empiricalTrueTokenBound !== null &&
-					d.empiricalTrueTokenBound < d.requestTriggerTokens,
+					d.empiricalProjectedInputTokens !== null &&
+					d.empiricalProjectedInputTokens < d.requestTriggerTokens,
 			),
 			maxCharsPerTokenAtWhichACandidateWouldStillCompact: Number(
 				Math.max(
@@ -445,8 +451,8 @@ function main() {
 					),
 				).toFixed(3),
 			),
-			nonCompactingRowsThatWouldHaveCompactedUnderTrueCount:
-				nonCompactingWouldCompactUnderTrueCount,
+			nonCompactingRowsThatWouldHaveCompactedUnderProjectedCount:
+				nonCompactingWouldCompactUnderProjectedCount,
 			nonCompactingRowCount: nonCompacting.length,
 			conservation:
 				"A genuinely oversized request still compacts: the trigger " +
@@ -456,7 +462,7 @@ function main() {
 		limitations: [
 			"Pairing authority is INFERRED_CHRONOLOGICAL_PAIRING, not authoritative request identity.",
 			"The six compaction candidates were never submitted; their provider input-token count is LIVE_UNOBSERVABLE.",
-			"The true-token bound for the candidates is derived from the session's own observed calibration, not from an authoritative tokenizer.",
+			"The candidates' token values are empirical projections derived from the session's own observed calibration, not conservative bounds or authoritative tokenizer measurements.",
 			"Provider-side usage semantics for this historical run are inferred from the installed AI SDK contract and the session's internal consistency, not from a captured raw provider response.",
 			"Strata server-side receipts were not retained for this run; no live Strata probe was performed.",
 		],
@@ -472,7 +478,7 @@ function main() {
 			`compactions=${report.baseline.executedCompactions}`,
 	);
 	console.log(
-		`necessity: allSixBelowTrigger=${report.necessity.allSixCandidatesBelowTriggerUnderBound} ` +
+		`necessity: allSixProjectedBelowTrigger=${report.necessity.allSixProjectedCandidatesBelowTrigger} ` +
 			`observedCpt=${report.necessity.observedCharsPerToken}`,
 	);
 }

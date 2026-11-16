@@ -1,6 +1,18 @@
 {
   "schema": "cline.compaction-estimator-parity.identity.v1",
   "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01",
+  "evidenceCorrection": {
+    "verdict": "HALT_PREMATURE_COMPACTION_NOT_PROVEN",
+    "scope": "EVIDENCE_ONLY — production estimator and thresholds remain unchanged.",
+    "corrections": [
+      "Removed the duplicate requestOverheadTokens term from candidate projections; the calibration denominator already represents the provider's complete prompt.",
+      "Reclassified candidate values from empirical bounds to empirical point projections and downgraded the premature-compaction conclusion accordingly.",
+      "Corrected the H2 ablation to four prevented compactions and two remaining compactions.",
+      "Retained INFERRED_CHRONOLOGICAL_PAIRING and removed claims of authoritative historical same-request identity.",
+      "Counted provider submissions by start phase only (114 rather than 227).",
+      "Renamed the synthetic cache-subset test so it no longer claims to reproduce a measured historical provider discrepancy."
+    ]
+  },
   "executor": "codium-clinemm",
   "repository": {
     "toplevel": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
@@ -89,7 +101,7 @@
     {
       "gate": "1 — Historical trace analysis",
       "command": "cd .factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01 && bun historical-parity-analysis.ts <trace-path>",
-      "result": "PASS — baseline reproduced deterministically (median ratio 1.497827, mean excess 21009.2, 114 decisions, 6 compactions, 107 non-compacting pairs, trigger 103680, limit 115200, 0 truncated). Re-running produces byte-identical output."
+      "result": "PASS — baseline reproduced deterministically (median ratio 1.497827, mean excess 21009.2, 114 decisions, 6 compactions, 107 non-compacting pairs, trigger 103680, limit 115200, 0 truncated). The corrected analyzer emits six empirical point projections (71,830-76,488), does not add duplicate request overhead, and counts 114 provider submission starts. Re-running produces byte-identical output."
     },
     {
       "gate": "2 — Focused same-request parity discriminator",
@@ -152,6 +164,7 @@
       ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/request-accounting-map.md",
       "sdk/packages/core/src/extensions/context/compaction.estimator-parity01.test.ts"
     ],
+    "evidenceCorrectionCommitSha": "PENDING_DISCOVERY_AFTER_COMMIT",
     "confidentialityScan": {
       "credentialShapes": "NONE FOUND",
       "longBlobs": "Only the SHA-256 hashes of the trace, the session files and the bundle — all required identity metadata.",

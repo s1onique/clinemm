@@ -1,8 +1,8 @@
 {
-  "schema": "cline.compaction-estimator-parity.production-seam-discriminator.v1",
+  "schema": "cline.compaction-estimator-parity.production-seam-discriminator.v2",
   "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01",
-  "verdict": "REPRODUCED_ESTIMATOR_DEFECT",
-  "oneLine": "The production estimator's fixed 3-chars-per-token divisor overstates the same-request provider prompt by ~1.45x, and that overstatement alone carried all six Round C compactions over the trigger.",
+  "verdict": "HALT_PREMATURE_COMPACTION_NOT_PROVEN",
+  "oneLine": "The fixed 3-chars-per-token divisor is a credible source of overcount, and the inferred historical ratios are substantial; however, the six unsubmitted candidates support only empirical point projections, not proof that all six compactions were unnecessary.",
   "exercisedProductionSeam": {
     "seam": "createContextCompactionPrepareTurn({ strategy }) — the compaction prepare-turn function the runtime installs",
     "source": "sdk/packages/core/src/extensions/context/compaction.ts",
@@ -25,17 +25,17 @@
   "findings": [
     {
       "id": "F1",
-      "title": "The decision candidate estimate IS the dispatched request's estimate",
+      "title": "The synthetic decision candidate estimate equals the dispatched request's estimate",
       "authority": "PRODUCTION_SEAM",
-      "evidence": "The production resolver's published apiMessageTokens + requestOverheadTokens equals estimateRequestInputTokens over the same provider-visible input, byte for byte.",
-      "consequence": "D and P are comparable quantities for the non-compacting population; the ~1.5x ratio is a SAME-REQUEST comparison, not a cross-request artifact."
+      "evidence": "For the same synthetic provider-visible input, the production resolver's published apiMessageTokens + requestOverheadTokens equals estimateRequestInputTokens byte for byte.",
+      "consequence": "The synthetic seam establishes estimator reproducibility. It does not establish byte-identical identity between historical decisions and completions."
     },
     {
       "id": "F2",
-      "title": "The estimator overcounts the same request by ~1.45x against the session's own calibration",
-      "authority": "PRODUCTION_SEAM + TRACE_CALIBRATION",
-      "evidence": "Over the 107 non-compacting pairs the session's own provider-reported usage implies 4.129 chars/token on the message payload (3.473 on the full wire bytes). The estimator bills 3 chars/token. Ratio est/true = 1.4937 median.",
-      "consequence": "A genuine estimator overcount exists for the SAME request. It is not a pairing artifact."
+      "title": "The inferred historical ratio is substantial against the session's own calibration",
+      "authority": "TRACE_CALIBRATION",
+      "evidence": "Over 107 inferred non-compacting pairs the session's provider-reported usage implies 4.129 chars/token on the message payload (3.473 on the full wire bytes). The estimator bills 3 chars/token. Estimated/reported median = 1.497827.",
+      "consequence": "Estimator overcount is credible, but historical pairing remains inferred and cannot prove same-request identity."
     },
     {
       "id": "F3",
@@ -49,14 +49,14 @@
       "title": "The trigger arithmetic reconciles exactly for all 114 decisions",
       "authority": "TRACE",
       "evidence": "rawMaxInputTokens / underestimateFactor * COMPACTION_TRIGGER_RATIO reproduces the reported requestTriggerTokens (103680) for every decision, and requestInputTokens >= requestTriggerTokens reproduces the reported shouldCompact for all 114 (0 mismatches). compactionInitiated == shouldCompact for all 114.",
-      "consequence": "The trigger math is sound; the defect is in the ESTIMATE, not the comparison."
+      "consequence": "The trigger math is sound; the suspected issue is in the ESTIMATE, not the comparison."
     },
     {
       "id": "F5",
-      "title": "All six Round C compactions crossed the trigger ONLY because of the estimator's overcount",
-      "authority": "TRACE_CALIBRATION_BOUND",
-      "evidence": "Each candidate needed only a chars/token ratio of 3.026-3.223 to have stayed below the trigger; the session's observed ratio is 4.129. The candidates' empirical true-token bounds are 71,830-76,488, all below the 103,680 trigger, while their estimates were 104,542-110,953.",
-      "consequence": "The overcount is SUFFICIENT to cause automatic compaction that would otherwise be unnecessary."
+      "title": "All six Round C compactions project below the trigger under the session calibration",
+      "authority": "TRACE_CALIBRATION_PROJECTION",
+      "evidence": "Each candidate needed a chars/token ratio of 2.860-3.046 to have stayed below the trigger; the session's observed ratio is 4.129. The candidates' empirical point projections are 71,830-76,488, all below the 103,680 trigger, while their production estimates were 104,542-110,953.",
+      "consequence": "The projection is consistent with unnecessary compaction, but it is not a conservative bound or direct measurement and therefore does not prove necessity for all six."
     }
   ],
 
@@ -68,10 +68,10 @@
     "pairingMethod": "ORDER_PRESERVING — each decision pairs with the FIRST provider completion starting strictly after it. A positional zip is incorrect (114 decisions vs 113 completions; a compaction decision is followed by a compaction execution, not by the request it pre-empted).",
     "negativeControlsApplied": [
       "A decision with no provider completion after it is EXCLUDED from the ratio population rather than paired against a missing denominator.",
-      "Compaction decisions are EXCLUDED from the same-request ratio population: their candidate was never submitted, so no provider usage exists for it.",
-      "The suite asserts that the candidate and the dispatched projection are the same estimate, so a compaction that changed the request could not be silently compared as parity.",
+      "Compaction decisions are EXCLUDED from the inferred ratio population: their candidate was never submitted, so no provider usage exists for it.",
+      "The suite asserts that the synthetic candidate and dispatched projection are the same estimate, so a compaction that changed the synthetic request could not be silently compared as parity; this is not authoritative historical request identity.",
       "A throwing sink and a disabled sink are both exercised: the disabled sink must produce NO decision capture, and the throwing sink must not change the compaction outcome in either direction.",
-      "No fabricated zero, no inferred equality, no synthetic join is used anywhere in the ratio population."
+      "No fabricated zero or synthetic provider usage is used anywhere in the ratio population; the historical relationship itself remains chronologically inferred."
     ]
   },
   "syntheticVersusReal": {
@@ -87,9 +87,9 @@
   },
   "necessityProof": {
     "currentEstimatorAtOrAboveTrigger": true,
-    "trustedActualInputBelowTrigger": true,
-    "trustedActualInputMethod": "EMPIRICAL_BOUND from the session's own observed chars/token rate applied to the candidate's measured apiMessagesJsonChars plus its measured constant overhead — NOT an extrapolation from the previous provider request",
-    "sameRequestContent": true,
+    "projectedActualInputBelowTrigger": true,
+    "projectedActualInputMethod": "EMPIRICAL_POINT_PROJECTION from the session's own observed chars/token rate applied to the candidate's measured apiMessagesJsonChars — NOT a conservative bound, authoritative tokenizer measurement, or direct measurement of the unsubmitted candidate",
+    "sameRequestContentAuthority": "SYNTHETIC_PRODUCTION_SEAM only; historical request identity is INFERRED_CHRONOLOGICAL_PAIRING.",
     "sameModelConfiguration": true,
     "sameCompactionPolicy": true,
     "genuinelyOversizedStillCompacts": "ASSERTED_AND_GREEN in the production-seam suite (800,000-char request over a 115,200-token limit compacts; the underestimate factor still engages and scales the trigger down; the unknown-model-limit path still fails closed with no decision published)."

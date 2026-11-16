@@ -1,7 +1,7 @@
 /**
  * ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01
  *
- * SAME-REQUEST estimator/usage parity discriminators at the REAL production
+ * SAME-INPUT estimator/usage parity discriminators at the REAL production
  * compaction seam.
  *
  * WHAT THIS FILE DOES
@@ -225,13 +225,13 @@ async function driveProductionSeam(input: {
 	return { decisions: recorder.decisions, result, recorder };
 }
 
-describe("ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01 — same-request parity", () => {
+describe("ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01 — same-input parity", () => {
 	beforeEach(() => {
 		createHandlerMock.mockReset();
 	});
 
 	describe("Q1/Q2 — the estimated/reported ratio decomposition", () => {
-		it("reproduces the historical ~1.5x ratio from CACHE-SUBSET misreading, not from an estimator overcount", async () => {
+		it("demonstrates that CACHE-SUBSET misreading changes the ratio, without measuring a historical provider discrepancy", async () => {
 			// The synthetic request content is the SAME in both readings; only
 			// the provider's reported usage differs. The estimator's output
 			// must be IDENTICAL in both, because the estimator never sees

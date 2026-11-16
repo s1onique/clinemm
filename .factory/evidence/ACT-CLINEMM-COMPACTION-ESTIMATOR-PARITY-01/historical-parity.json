@@ -25,7 +25,7 @@
   },
   "baseline": {
     "decisionObservations": 114,
-    "providerSubmissions": 227,
+    "providerSubmissions": 114,
     "providerCompletions": 113,
     "executedCompactions": 6,
     "nonCompactingPairs": 107,
@@ -127,8 +127,8 @@
       "decisionMonotonicMs": 288522.554291,
       "executionDurationMs": null,
       "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
-      "empiricalTrueTokenBound": 82185,
-      "charsPerTokenAtWhichItWouldNotCompact": 3.223
+      "empiricalProjectedInputTokens": 76488,
+      "charsPerTokenAtWhichItWouldNotCompact": 3.046
     },
     {
       "decisionId": "1794860704742_kxlwr#33#32",
@@ -144,8 +144,8 @@
       "decisionMonotonicMs": 1050081.092333,
       "executionDurationMs": null,
       "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
-      "empiricalTrueTokenBound": 78387,
-      "charsPerTokenAtWhichItWouldNotCompact": 3.063
+      "empiricalProjectedInputTokens": 72695,
+      "charsPerTokenAtWhichItWouldNotCompact": 2.895
     },
     {
       "decisionId": "1794860704742_kxlwr#54#53",
@@ -161,8 +161,8 @@
       "decisionMonotonicMs": 2022349.078,
       "executionDurationMs": null,
       "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
-      "empiricalTrueTokenBound": 78207,
-      "charsPerTokenAtWhichItWouldNotCompact": 3.055
+      "empiricalProjectedInputTokens": 72514,
+      "charsPerTokenAtWhichItWouldNotCompact": 2.887
     },
     {
       "decisionId": "1794860704742_kxlwr#71#70",
@@ -178,8 +178,8 @@
       "decisionMonotonicMs": 2821232.982,
       "executionDurationMs": null,
       "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
-      "empiricalTrueTokenBound": 78393,
-      "charsPerTokenAtWhichItWouldNotCompact": 3.063
+      "empiricalProjectedInputTokens": 72699,
+      "charsPerTokenAtWhichItWouldNotCompact": 2.895
     },
     {
       "decisionId": "1794860704742_kxlwr#91#90",
@@ -195,8 +195,8 @@
       "decisionMonotonicMs": 3751927.692416,
       "executionDurationMs": null,
       "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
-      "empiricalTrueTokenBound": 77525,
-      "charsPerTokenAtWhichItWouldNotCompact": 3.026
+      "empiricalProjectedInputTokens": 71830,
+      "charsPerTokenAtWhichItWouldNotCompact": 2.86
     },
     {
       "decisionId": "1794860704742_kxlwr#113#112",
@@ -212,25 +212,25 @@
       "decisionMonotonicMs": 4734028.620125,
       "executionDurationMs": null,
       "providerInputTokensForCandidate": "LIVE_UNOBSERVABLE",
-      "empiricalTrueTokenBound": 81399,
-      "charsPerTokenAtWhichItWouldNotCompact": 3.19
+      "empiricalProjectedInputTokens": 75706,
+      "charsPerTokenAtWhichItWouldNotCompact": 3.015
     }
   ],
   "necessity": {
     "question": "Would the same request have fit the operating budget under a trusted token count?",
-    "empiricalBoundMethod": "The candidate was never submitted, so no provider ever reported its usage. The bound uses the SESSION'S OWN observed chars-per-token rate (median over the non-compacting pairs, whose provider usage IS available) applied to the candidate's measured `apiMessagesJsonChars`, plus the candidate's measured constant overhead. It is a bound, not a measurement.",
+    "empiricalProjectionMethod": "The candidate was never submitted, so no provider ever reported its usage. The projection uses the SESSION'S OWN observed chars-per-token rate (median over the non-compacting pairs, whose provider usage IS available) applied to the candidate's measured `apiMessagesJsonChars`. The calibration denominator already represents the provider's complete prompt, so `requestOverheadTokens` is not added again. This is a point projection, not a conservative bound or an authoritative tokenizer measurement.",
     "observedCharsPerToken": 4.129,
     "estimatorConstant": 3,
-    "allSixCandidatesBelowTriggerUnderBound": true,
-    "maxCharsPerTokenAtWhichACandidateWouldStillCompact": 3.223,
-    "nonCompactingRowsThatWouldHaveCompactedUnderTrueCount": 0,
+    "allSixProjectedCandidatesBelowTrigger": true,
+    "maxCharsPerTokenAtWhichACandidateWouldStillCompact": 3.046,
+    "nonCompactingRowsThatWouldHaveCompactedUnderProjectedCount": 0,
     "nonCompactingRowCount": 107,
     "conservation": "A genuinely oversized request still compacts: the trigger comparison and the underestimate factor are unchanged by this analysis, and the production-seam suite asserts both."
   },
   "limitations": [
     "Pairing authority is INFERRED_CHRONOLOGICAL_PAIRING, not authoritative request identity.",
     "The six compaction candidates were never submitted; their provider input-token count is LIVE_UNOBSERVABLE.",
-    "The true-token bound for the candidates is derived from the session's own observed calibration, not from an authoritative tokenizer.",
+    "The candidates' token values are empirical projections derived from the session's own observed calibration, not conservative bounds or authoritative tokenizer measurements.",
     "Provider-side usage semantics for this historical run are inferred from the installed AI SDK contract and the session's internal consistency, not from a captured raw provider response.",
     "Strata server-side receipts were not retained for this run; no live Strata probe was performed."
   ]
