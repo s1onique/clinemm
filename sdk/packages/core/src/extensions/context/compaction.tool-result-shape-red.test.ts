@@ -58,6 +58,20 @@ import type * as LlmsProviders from "@cline/llms";
 import type { MessageWithMetadata } from "@cline/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createContextCompactionPrepareTurn } from "./compaction";
+import {
+	flattenToolResultContent,
+	TOOL_RESULT_CHAR_LIMIT,
+} from "./compaction-shared";
+
+/**
+ * The maximum length of the truncation marker the serializer appends.
+ *
+ * `truncateText()` appends `\n...[truncated <n> chars]`. The digit count is
+ * bounded by the length of the truncated string, so a generous fixed bound
+ * is used: the assertion is about the AGGREGATE bound holding, not about the
+ * exact marker width.
+ */
+const TRUNCATION_MARKER_MAX_LENGTH = 64;
 
 type FakeChunk = Record<string, unknown>;
 
@@ -232,8 +246,11 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — production-seam R
 		// ...and the corresponding tool call is present...
 		expect(JSON.stringify(messages)).toContain(HELM_CALL_ID);
 
-		// ...so the summarizer-input projection MUST carry it too.
-		expect(request).toContain(HELM_IMAGE);
+		// ...so the summarizer-input projection MUST carry the verified
+		// classification, while the arbitrary output is omitted.
+		expect(request).toContain("[succeeded] helm template");
+		expect(request).toContain("[result omitted]");
+		expect(request).not.toContain(HELM_IMAGE);
 	});
 
 	it("SCENARIO 2: multiple command results with mixed success/failure retain their individual outcomes", async () => {
@@ -265,11 +282,13 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — production-seam R
 		expect(result).toBeDefined();
 		expect(request.length).toBeGreaterThan(0);
 
-		// The successful command's decisive output survives.
-		expect(request).toContain("MIGRATION_OK schema version 42");
-		// The failed command's decisive output survives too — a mixed batch
-		// must not become "wholly successful", and a failure must not hide.
-		expect(request).toContain("relation does not exist");
+		// The successful command's status survives and its arbitrary output
+		// is omitted. The failed command's status survives too — a mixed
+		// batch must not become "wholly successful".
+		expect(request).toContain("[succeeded] #1: [result omitted]");
+		expect(request).toContain("[failed] #2: [result omitted]");
+		expect(request).not.toContain("MIGRATION_OK schema version 42");
+		expect(request).not.toContain("relation does not exist");
 	});
 });
 
@@ -363,7 +382,9 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — conservation cont
 			messages,
 		});
 
-		expect(request).toContain(HELM_IMAGE);
+		expect(request).toContain("[succeeded] helm template");
+		expect(request).toContain("[result omitted]");
+		expect(request).not.toContain(HELM_IMAGE);
 	});
 
 	it("SCENARIO 5 (negative control): a credential-bearing sibling payload does not hide the safe observation", async () => {
@@ -395,9 +416,10 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — conservation cont
 		expect(result).toBeDefined();
 		expect(request.length).toBeGreaterThan(0);
 
-		// The safe Helm observation MUST survive even when a sibling payload
-		// carries credential-bearing output.
-		expect(request).toContain(HELM_IMAGE);
+		// The safe Helm classification MUST survive even when a sibling
+		// payload carries credential-bearing output.
+		expect(request).toContain("[succeeded] helm template");
+		expect(request).not.toContain(syntheticSecret);
 	});
 });
 
@@ -456,7 +478,7 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — repeated compacti
 		expect(request).toContain("Continue the helm deployment.");
 		// ...and the NEW evidence is folded in, without duplicating the prior
 		// summary's own text.
-		expect(request).toContain(HELM_IMAGE);
+		expect(request).toContain("[succeeded] helm template");
 		expect(request.match(/Continue the helm deployment\./g)?.length).toBe(1);
 	});
 });
@@ -485,9 +507,9 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — malformed and sen
 		expect(request.length).toBeGreaterThan(0);
 
 		// The payload is described with its OWN status, which is NOT success.
-		expect(request).toContain("[unknown] unclassified-command");
-		expect(request).toContain("MALFORMED_OUTPUT_MARKER ran without a status");
-		expect(request).not.toContain("[succeeded] unclassified-command");
+		expect(request).toContain("[unknown] #1: [result omitted]");
+		expect(request).not.toContain("MALFORMED_OUTPUT_MARKER");
+		expect(request).not.toContain("[succeeded] #1");
 	});
 
 	it("SCENARIO 8: an unsupported tool-result shape is classified explicitly and its content is NOT copied", async () => {
@@ -519,7 +541,7 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — malformed and sen
 		expect(request).not.toContain("MORE_UNSUPPORTED_MARKER");
 	});
 
-	it("SCENARIO 9 (credential negative control): synthetic credentials in a structured payload are redacted, and the safe sibling survives", async () => {
+	it("SCENARIO 9 (credential negative control): synthetic credentials in structured payloads never reach the summarizer", async () => {
 		const syntheticSecret = "SYNTHETIC-DO-NOT-USE-pw-abc123";
 		const messages = [
 			userTurn("Apply the secret and then render."),
@@ -550,9 +572,60 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — malformed and sen
 
 		// The SYNTHETIC credential never reaches the summarizer input.
 		expect(request).not.toContain(syntheticSecret);
-		expect(request).toContain("[REDACTED]");
-		// The safe, decisive Helm observation survives alongside it.
-		expect(request).toContain(HELM_IMAGE);
+		expect(request).toContain("[result omitted]");
+		// The safe command classification survives alongside it.
+		expect(request).toContain("[succeeded] helm template");
+		expect(request).not.toContain(HELM_IMAGE);
+	});
+
+	it("SCENARIO 11: URL credentials, unstructured secrets, mixed batches, and oversized batches remain confidential and bounded", async () => {
+		const urlSecret = "demo:syntheticPassword@db.example.test/app";
+		const opaqueSecret = "ZZZ_DEMO_CREDENTIAL_123";
+		const payloads = Array.from({ length: 100 }, (_, index) => ({
+			query:
+				index === 0
+					? `psql postgresql://${urlSecret}`
+					: index === 1
+						? "helm template kc-test ."
+						: `make test ${"x".repeat(200)}`,
+			result:
+				index === 1
+					? `Example access material is ${opaqueSecret}`
+					: "y".repeat(500),
+			success: index % 3 !== 0,
+		}));
+		const messages = [
+			userTurn("Run a large mixed batch."),
+			toolCall("call_adversarial_001", "run_commands", {
+				commands: [
+					"psql postgresql://demo:syntheticPassword@db.example.test/app",
+				],
+			}),
+			toolResult("call_adversarial_001", "run_commands", payloads),
+			assistantTurn("Done."),
+		];
+
+		const { request, result } = await runAgenticCompactionAndCaptureRequest({
+			messages,
+		});
+
+		expect(result).toBeDefined();
+		expect(request).not.toContain(urlSecret);
+		expect(request).not.toContain("syntheticPassword");
+		expect(request).not.toContain(opaqueSecret);
+		expect(request).not.toContain("db.example.test");
+		// The oversized tool result is dropped by the live-tail projection
+		// before it reaches the serializer, so none of its structured facts
+		// may appear either. The confidentiality assertions above are the
+		// decisive contract at this seam.
+		expect(request).not.toContain("[result omitted]");
+		expect(request).not.toContain("[failed]");
+		expect(request).not.toContain("[unknown]");
+		// The tool-call input is outside the structured-result evidence
+		// representation and may be present in the canonical call projection;
+		// the confidentiality contract is that the RESULT representation and
+		// the carried command classification never expose the URL credential.
+		expect(request).not.toContain("postgresql://demo:syntheticPassword");
 	});
 
 	it("SCENARIO 10 (repeated compaction): a second compaction over the SAME canonical evidence does not duplicate it", async () => {
@@ -585,8 +658,84 @@ describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — malformed and sen
 		// projection is a pure function of the canonical history, so a
 		// repeated compaction cannot accumulate copies.
 		expect(second.request).toBe(first.request);
-		expect(
-			second.request.match(/quay\.io\/keycloak\/keycloak:26\.0\.7/g)?.length,
-		).toBe(1);
+		expect(second.request.match(/\[succeeded\] helm template/g)?.length).toBe(
+			1,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The AGGREGATE SERIALIZER BOUND, exercised AT the serializer.
+//
+// SCENARIO 11 above proves the confidentiality contract at the live-tail
+// projection seam, but it does NOT reach the serializer's aggregate limit:
+// the oversized tool result is dropped by the input-budget projection
+// BEFORE it reaches `flattenToolResultContent()`. The bound implemented in
+// `renderToolResultBlocks()` therefore had no test that reached it.
+//
+// The test below calls the serializer's own entry point directly, with
+// enough STRUCTURED entries that the rendered result exceeds
+// `TOOL_RESULT_CHAR_LIMIT` (2,000 characters).
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01 — aggregate serializer bound", () => {
+	it("bounds the rendered structured result at the serializer and marks the truncation", () => {
+		// Enough structured entries that the RENDERED result exceeds the
+		// 2,000-character aggregate limit: each entry renders as
+		// `[status] <label>: [result omitted]`, and the labels are long
+		// enough that a few dozen entries exceed the bound.
+		const payloads = Array.from({ length: 120 }, (_, index) => ({
+			query: `make test ${"target".repeat(20)}-${index}`,
+			result: `ARBITRARY_OUTPUT_${index}_${"z".repeat(200)}`,
+			success: index % 2 === 0,
+		}));
+
+		const rendered = flattenToolResultContent(payloads as never);
+
+		// The aggregate bound holds.
+		expect(rendered.length).toBeLessThanOrEqual(
+			TOOL_RESULT_CHAR_LIMIT + TRUNCATION_MARKER_MAX_LENGTH,
+		);
+		// The truncation is MARKED, not silent.
+		expect(rendered).toContain("...[truncated ");
+		// The truncation marker states how much was dropped.
+		expect(rendered).toMatch(/\.\.\.\[truncated \d+ chars\]$/);
+		// The dropped content is genuinely absent: the first payload's
+		// arbitrary output never appears, and no per-entry output does.
+		expect(rendered).not.toContain("ARBITRARY_OUTPUT_0_");
+		expect(rendered).not.toContain("ARBITRARY_OUTPUT_119_");
+		expect(rendered).not.toContain("zzzz");
+		// The per-payload status and the safe command classification DO
+		// survive for the entries that were rendered.
+		expect(rendered).toContain("[succeeded]");
+		expect(rendered).toContain("[failed]");
+		expect(rendered).toContain("[result omitted]");
+	});
+
+	it("does not truncate a structured result that is already within the bound", () => {
+		const payloads = [
+			{
+				query: "helm template kc-test .",
+				result: "x".repeat(50),
+				success: true,
+			},
+		];
+
+		const rendered = flattenToolResultContent(payloads as never);
+
+		expect(rendered).not.toContain("...[truncated ");
+		expect(rendered).toContain("[succeeded] helm template");
+		expect(rendered).toContain("[result omitted]");
+	});
+
+	it("leaves a typed text result unbounded by the aggregate structured bound", () => {
+		// The aggregate cap applies to the STRUCTURED rendering only. A
+		// typed text block was already truncated by the per-block budget
+		// before this point, so the aggregate cap must not double-apply.
+		const rendered = flattenToolResultContent([
+			{ type: "text", text: "typed".repeat(100) },
+		] as never);
+
+		expect(rendered).not.toContain("...[truncated ");
 	});
 });

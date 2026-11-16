@@ -70,7 +70,7 @@ describe("redactDiagnosticsText", () => {
 });
 
 describe("buildDiagnosticsReport", () => {
-	it("includes app info, log tails, and the selected session manifests", () => {
+	it("includes app info and projected sessions while omitting raw log bodies", () => {
 		writeFileSync(
 			join(dataDir, "logs", "code.log"),
 			'{"msg":"start","apiKey":"sk-live-1234567890"}\n{"msg":"ready"}\n', // gitleaks:allow
@@ -96,9 +96,9 @@ describe("buildDiagnosticsReport", () => {
 
 		expect(report.sessionIds).toEqual(["session_a"]);
 		expect(report.text).toContain('"version"');
-		expect(report.text).toContain("===== tail of ");
-		expect(report.text).toContain('"msg":"ready"');
-		expect(report.text).toContain("[hub] ok");
+		expect(report.text).toContain('"included": false');
+		expect(report.text).not.toContain('"msg":"ready"');
+		expect(report.text).not.toContain("[hub] ok");
 		expect(report.text).toContain("===== session session_a =====");
 		// ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01: the export carries a
 		// SCHEMA-DRIVEN, ALLOWLISTED projection of the manifest, so the
@@ -117,7 +117,7 @@ describe("buildDiagnosticsReport", () => {
 		expect(report.text).not.toContain("private conversation");
 	});
 
-	it("caps each log tail and omits logs that do not exist", () => {
+	it("does not include raw log bodies in the shareable report", () => {
 		const line = `${"x".repeat(99)}\n`;
 		writeFileSync(
 			join(dataDir, "logs", "code.log"),
@@ -126,10 +126,9 @@ describe("buildDiagnosticsReport", () => {
 
 		const { text } = buildDiagnosticsReport([]);
 		const logLines = text.split("\n").filter((entry) => entry.startsWith("x"));
-		expect(logLines.length).toBe(
-			Math.floor(DIAGNOSTICS_LOG_TAIL_BYTES / line.length),
-		);
-		expect(text).toContain("=====\nxxx");
+		expect(logLines.length).toBe(0);
+		expect(text).toContain('"included": false');
+		expect(text).not.toContain("code.log");
 		expect(text).not.toContain("hub-daemon.log");
 	});
 });
@@ -173,9 +172,10 @@ describe("hub log polling filter", () => {
 		);
 
 		const { text } = buildDiagnosticsReport([]);
-		expect(text).toContain("hub-daemon.log, routine polling omitted");
-		expect(text).toContain("older run");
-		expect(text).toContain("newer");
+		// Raw log bodies are private, so none of the log content is exported.
+		expect(text).not.toContain("hub-daemon.log, routine polling omitted");
+		expect(text).not.toContain("older run");
+		expect(text).not.toContain("newer");
 		expect(text).not.toContain('"command":"session.list"');
 	});
 });
@@ -188,7 +188,7 @@ describe("writeDiagnosticsReport", () => {
 
 		expect(result.path).toMatch(/[\\/]cline-diagnostics-.+\.txt$/);
 		expect(result.path.startsWith(outputDir)).toBe(true);
-		expect(readFileSync(result.path, "utf8")).toContain("hello");
+		expect(readFileSync(result.path, "utf8")).not.toContain("hello");
 	});
 
 	it("writes into an output directory that already exists", () => {

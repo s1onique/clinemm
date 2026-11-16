@@ -1,6 +1,7 @@
 # ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01
 
 > Status: CLOSED (PASS — the shareable diagnostic export is credential-safe under the tested schema and adversarial fixtures)
+> CORRECTION02: CLOSED (PASS — the CORRECTION01 review's two P0 confidentiality gaps and one P1 test gap are closed)
 > Owner: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
 > Cluster: DIAGNOSTIC_EXPORT_PRIVACY
 > Predecessor: ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01
@@ -286,3 +287,119 @@ cd apps/examples/desktop-app && bun run test:sidecar
 - **No VSIX, installation or live benchmarking** — RESPECTED.
 - **No new dependency** — RESPECTED. Only the standard library and the
   existing workspace packages are used.
+
+## CORRECTION02 — value-level projection closure
+
+> Reviewer verdict on CORRECTION01: `HALT_SHAREABLE_EXPORT_PROJECTION_INCOMPLETE`.
+> Two P0 confidentiality gaps and one P1 test gap. This correction closes
+> all three.
+
+### P0-1 — the global-settings projection copied unrestricted strings
+
+CORRECTION01 selected specific global-settings KEYS, but several of the
+selected VALUES are unrestricted user strings. `GlobalSettingsSchema`
+(`sdk/packages/core/src/services/global-settings.ts`) declares:
+
+| Setting | Schema | Shareable? |
+| ------- | ------ | ---------- |
+| `telemetryOptOut`, `autoUpdateEnabled`, `compactionEnabled`, `toolAutoApprove` | `z.boolean()` | YES |
+| `compactionStrategy` | `z.enum(["basic","agentic"])` | YES (closed enum) |
+| `planActMode` | `z.enum(["plan","act"])` | YES (closed enum) |
+| `tuiTheme` | `z.string()` | **NO** |
+| `cloudModelId` | `z.string()` | **NO** |
+| `disabledTools`, `disabledPlugins`, `disabledAgentPlugins` | `z.array(z.string())` | **NO** (only the COUNT) |
+| `tools` | `z.partialRecord(z.enum(...), z.object({enabled: z.boolean()}))` | YES (finite keys, boolean values) |
+
+So a synthetic configuration carrying a sensitive string in
+`disabledPlugins` would have carried that string directly into the exported
+JSON. The previous test only exercised an unexpected TOP-LEVEL settings
+key, which the settings parser already strips — so the gap was not covered.
+
+**The repair** — `apps/examples/desktop-app/sidecar/diagnostics-global-settings-projection.ts`
+(**NEW**) is a dedicated, validated projection:
+
+- the unrestricted values (`tuiTheme`, `cloudModelId`) are **never read**,
+- the free-form lists are published as **COUNTS** (`disabledToolsCount`,
+  `disabledPluginsCount`, `disabledAgentPluginsCount`) — the SIZE is
+  evidence, the ENTRIES are content,
+- the model-tool block is projected onto the FINITE set of configurable tool
+  names as plain booleans,
+- every value is re-validated INSIDE the projection, so the boundary holds
+  even for a hand-edited settings file whose values never passed the schema.
+
+### P0-2 — omitted field names could disclose arbitrary content
+
+CORRECTION01 recorded unknown manifest/metadata keys verbatim:
+
+```ts
+omittedFields.push(`manifest.${key}`);
+omittedFields.push(`metadata.${key}`);
+```
+
+Those keys originate from the PRIVATE session manifest and are not
+constrained by a finite list. The manifest reader parses JSON without
+stripping unknown keys, so a synthetic metadata property named
+`PRIVATE_ACCESS_VALUE_123` would have appeared in the artifact as
+`"metadata.PRIVATE_ACCESS_VALUE_123"`. There was also no per-key length
+bound before the 64-entry array limit.
+
+**The repair** — the projection now publishes only its OWN finite vocabulary
+of omission identifiers (`manifest.prompt`, `manifest.messages_path`,
+`manifest.compaction_path`, `metadata.title`, `metadata.prompt`,
+`metadata.systemPrompt`, `metadata.providerConfig`, `metadata.helmValues`,
+`metadata.provider`). Every OTHER omitted field is reported as a **COUNT**
+(`unknownOmittedFieldCount`). The published identifiers are filtered through
+the finite vocabulary one final time at the boundary, so the invariant
+"only static names reach the artifact" holds at the return, not merely at
+the collection site.
+
+### P1 — the aggregate serializer bound had no test that reached it
+
+CORRECTION01's oversized-batch scenario (SCENARIO 11) proves the
+confidentiality contract at the live-tail projection seam, but it does NOT
+reach the serializer: the input-budget projection removes the oversized
+result BEFORE it reaches `flattenToolResultContent()`. The aggregate limit
+implemented in `renderToolResultBlocks()` therefore had no test that
+reached it.
+
+**The repair** — a new focused describe block in
+`sdk/packages/core/src/extensions/context/compaction.tool-result-shape-red.test.ts`
+calls the serializer's own entry point directly with 120 structured payloads.
+The MEASURED result is recorded in
+`../evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01/12-correction02-aggregate-bound-probe.txt`:
+
+```
+RENDERED_LENGTH=2026 LIMIT=2000
+TAIL="ke test: [result omitted\n...[truncated 2619 chars]"
+```
+
+2,026 characters = the 2,000-character bound plus the 26-character
+truncation marker. The test asserts the bound, the marker, the absence of
+the dropped arbitrary output, and — as a control — that a result WITHIN the
+bound is NOT truncated.
+
+### CORRECTION02 — the new tests
+
+| Test | Pins |
+| ---- | ---- |
+| `CORRECTION02: does not publish free-form global settings VALUES` | A synthetic sensitive string in `tuiTheme` / `cloudModelId` / the three disabled-name lists never reaches the artifact; the COUNTS do |
+| `CORRECTION02: publishes only validated primitives for the global settings` | The booleans, the closed enums and the finite model-tool toggles are published |
+| `CORRECTION02: does not publish the NAME of an unknown manifest key` | `metadata.PRIVATE_ACCESS_VALUE_123` never appears; the omission is a COUNT |
+| `CORRECTION02: does not publish the NAME of an unknown top-level manifest key` | The same for a top-level manifest key |
+| `carries no unexpected key anywhere in the global settings projection` | The allowed key set of the global-settings projection, and that every leaf is a boolean, a closed-enum string, or a count |
+| `aggregate serializer bound` (3 tests) | The 2,000-character aggregate bound AT the serializer, the truncation marker, and the two controls |
+
+### CORRECTION02 — the gates
+
+| Check | Result |
+| ----- | ------ |
+| `bun run test:sidecar:diagnostics` | **27 passed (27)** — 19 privacy (14 + 5 new) + 8 pre-existing |
+| `bun x vitest run src/extensions/context` (SDK core) | **275 passed, 1 skipped** — 16 files |
+| `bun x vitest run sidecar --config vitest.sidecar.config.ts` | **751 passed (751)** — 48 files |
+| Biome `check --diagnostic-level=error` on the 8 ACT-owned files | **clean** |
+| `bun run typecheck` (desktop app) | 1 error (`model-wire-reasoning.ts(236,2)` TS1170) — **IDENTICAL to the HEAD baseline** |
+| `bun run typecheck` (SDK core) | 43 diagnostics — **IDENTICAL to the HEAD baseline** (`diff` of the two sorted sets is empty) |
+
+The baseline comparisons were captured by stashing the working tree, running
+the same command at HEAD, and restoring it
+(`../evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01/13-correction02-typecheck-baseline.txt`).

@@ -1,3 +1,42 @@
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01/`
+  `01-real-session-export-after.txt`,
+  `02-red-tests.txt`, `03-green-tests.txt`,
+  `05-baseline-failing-files.txt`, `06-after-failing-files.txt`,
+  `07-failing-file-set-diff.txt`,
+  `11-correction02-green-tests.txt`,
+  `12-correction02-aggregate-bound-probe.txt`,
+  `13-correction02-typecheck-baseline.txt`
+
+**CORRECTION01 (privacy boundary).** The pre-repair real-session artifact was removed from the
+repository because it contained private prompt metadata, a Git remote, and private artifact paths.
+The shareable export now uses a strict finite projection for global settings and omits raw log
+bodies by default; arbitrary free-form log text is not treated as safe by regex redaction.
+
+**CORRECTION02 (value-level projection closure).** The CORRECTION01 review raised two P0
+confidentiality gaps that selected KEYS but not their VALUES, and one P1 test gap.
+
+- **P0 — unrestricted global-settings values.** The settings schema allows arbitrary strings in
+  `tuiTheme`, `cloudModelId` and the `disabledTools` / `disabledPlugins` / `disabledAgentPlugins`
+  lists, so selecting those keys was never sufficient: a sensitive string in `disabledPlugins`
+  would have shipped verbatim. The export now publishes a NEW validated projection
+  (`diagnostics-global-settings-projection.ts`) carrying only booleans, closed enums
+  (`compactionStrategy`, `planActMode`), the finite model-tool toggles as booleans, and the COUNTS
+  of the free-form lists. The unrestricted values are never read.
+- **P0 — arbitrary omitted-field names.** The projection recorded unknown manifest/metadata keys
+  verbatim, so a synthetic key such as `PRIVATE_ACCESS_VALUE_123` would have appeared in the
+  shareable artifact. `omittedFields` now carries ONLY the projection's own finite vocabulary
+  (`manifest.prompt`, `metadata.title`, ...), and every other omitted field is reported as a
+  COUNT (`unknownOmittedFieldCount`).
+- **P1 — aggregate serializer bound.** The oversized-batch test never reached the serializer: the
+  input-budget projection removed the result first. A new focused test calls
+  `flattenToolResultContent()` directly and MEASURES the bound (rendered length 2,026 = the
+  2,000-character limit plus the 26-character truncation marker), asserting the bound, the
+  truncation marker, and the absence of the dropped arbitrary output.
+
+Gates: 27/27 focused diagnostics tests, 275/275 SDK context tests, 751/751 sidecar tests,
+lint clean on all 8 ACT-owned files, and ZERO typecheck delta against the HEAD baseline
+(43 SDK core diagnostics identical before and after; the single desktop-app TS1170 is the same
+pre-existing baseline error recorded for CORRECTION01).
 # ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01 — PASS_EVIDENCE_PROVENANCE_CORRECTION — 2026-11-06
 
 **Status:** P0 EVIDENCE-PROVENANCE CORRECTION, on the existing `main` branch. The AICE01 review

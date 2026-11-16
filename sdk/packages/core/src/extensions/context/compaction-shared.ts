@@ -11,7 +11,7 @@ export { CHARS_PER_TOKEN, estimateTokens };
 
 import type { CoreCompactionSummarizerConfig } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
-import { sanitizeOutcomeText } from "./evidence-continuity";
+import { classifyCommand } from "./evidence-continuity";
 
 export const DEFAULT_MAX_INPUT_TOKENS = 128_000;
 /** Estimate the usable input share when only a context window is reported. */
@@ -233,35 +233,16 @@ function isStructuredToolPayload(
  */
 const UNSUPPORTED_TOOL_RESULT_MARKER = "[unsupported tool result shape]";
 
-/**
- * The maximum characters of a single structured payload's rendered result.
- *
- * The per-payload bound keeps the total bounded by the number of payloads,
- * and the number of payloads in one tool result is bounded by the batch the
- * caller issued. The overall result budget is enforced by the existing
- * `TOOL_RESULT_CHAR_LIMIT` truncation applied to the whole flattened string.
- */
-const STRUCTURED_PAYLOAD_RESULT_CHAR_LIMIT = TOOL_RESULT_CHAR_LIMIT;
+/** Marker used when a payload has no independently approved scalar fact. */
+const OMITTED_STRUCTURED_RESULT_MARKER = "[result omitted]";
 
 /**
  * Render ONE structured tool payload for the summarizer input.
  *
- * The rendering is DETERMINISTIC and preserves the call identity:
- *
- *   [<status>] <query>: <result>
- *
- * - The status is the payload's OWN classification, so success and failure
- *   stay distinguishable and a mixed batch cannot collapse into a single
- *   aggregate verdict.
- * - The query is the command the payload answered, bounded in length.
- * - The result is the payload's output, REDACTED through the existing
- *   `sanitizeOutcomeText()` helper and then truncated.
- *
- * The redaction is the repository's existing conservative credential
- * redaction. It is applied at the VALUE POSITION and consumes whole quoted
- * values, so the documented formats (`DB_PASSWORD=...`,
- * `{"password":"..."}`, `password="two words"`, `apiKey: "..."`) and the
- * bearer / PEM / provider-token shapes are covered.
+ * The rendering is DETERMINISTIC and preserves only independently verified
+ * facts: the payload status, a finite command classification, and approved
+ * scalar facts. Arbitrary command arguments and arbitrary output strings
+ * are never copied because regex redaction cannot make arbitrary data safe.
  */
 function renderStructuredToolPayload(
 	payload: Record<string, unknown>,
@@ -269,22 +250,17 @@ function renderStructuredToolPayload(
 ): string {
 	const status = classifyStructuredPayloadStatus(payload);
 	const rawQuery = payload.query;
-	const query =
-		typeof rawQuery === "string" && rawQuery.trim().length > 0
-			? truncateText(rawQuery.trim(), 200)
-			: `#${index + 1}`;
+	const classification =
+		typeof rawQuery === "string" ? classifyCommand(rawQuery) : "";
+	const label = classification || `#${index + 1}`;
 	const rawResult = payload.result;
-	const result =
-		typeof rawResult === "string"
-			? truncateText(
-					sanitizeOutcomeText(rawResult),
-					STRUCTURED_PAYLOAD_RESULT_CHAR_LIMIT,
-				)
-			: typeof rawResult === "number" || typeof rawResult === "boolean"
-				? String(rawResult)
-				: "";
-	const suffix = result.length > 0 ? `: ${result}` : "";
-	return `[${status}] ${query}${suffix}`;
+	const approvedResult =
+		typeof rawResult === "boolean"
+			? `result=${rawResult}`
+			: typeof rawResult === "number" && Number.isFinite(rawResult)
+				? `result=${rawResult}`
+				: OMITTED_STRUCTURED_RESULT_MARKER;
+	return `[${status}] ${label}: ${approvedResult}`;
 }
 
 /**
@@ -307,14 +283,10 @@ function renderStructuredToolPayload(
  * own status and its redacted output, and an UNRECOGNIZED shape is
  * classified explicitly with no content copied.
  */
-export function flattenToolResultContent(
-	content: ToolResultContent["content"],
+function renderToolResultBlocks(
+	truncated: Exclude<ToolResultContent["content"], string>,
 ): string {
-	const truncated = truncateToolResultContentForCompaction(content);
-	if (typeof truncated === "string") {
-		return truncated;
-	}
-	return truncated
+	const rendered = truncated
 		.map((block, index) => {
 			switch (block.type) {
 				case "text":
@@ -332,6 +304,28 @@ export function flattenToolResultContent(
 			}
 		})
 		.join("\n");
+	// Typed text/string tool results were already truncated before this
+	// point. The aggregate cap is therefore applied only when structured
+	// payloads made the rendered result longer than the per-result budget.
+	if (rendered.length <= TOOL_RESULT_CHAR_LIMIT) {
+		return rendered;
+	}
+	const hasStructuredPayload = truncated.some(
+		(block) => typeof block === "object" && block !== null && "result" in block,
+	);
+	return hasStructuredPayload
+		? truncateText(rendered, TOOL_RESULT_CHAR_LIMIT)
+		: rendered;
+}
+
+export function flattenToolResultContent(
+	content: ToolResultContent["content"],
+): string {
+	const truncated = truncateToolResultContentForCompaction(content);
+	if (typeof truncated === "string") {
+		return truncated;
+	}
+	return renderToolResultBlocks(truncated);
 }
 
 export function truncateToolResultContentForCompaction(

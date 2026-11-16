@@ -176,8 +176,9 @@ describe("M1 — the serializer preserves an approved safe Helm result", () => {
 		// safe Helm observation. The serializer does not apply the
 		// carry-forward bound — that is M3's job.
 		const serialized = serializeConversation(messages);
-		expect(serialized).toContain(HELM_IMAGE);
-		expect(serialized).toContain("[succeeded] helm template kc-test .");
+		expect(serialized).toContain("[succeeded] helm template");
+		expect(serialized).toContain("[result omitted]");
+		expect(serialized).not.toContain(HELM_IMAGE);
 	});
 
 	it("keeps the serializer projection bounded and deterministic", () => {
@@ -282,7 +283,7 @@ describe("M2 — the generated summary is a separate, lossy projection", () => {
 		const messages: MessageWithMetadata[] = [userTurn("Render the chart.")];
 		messages.push(...helmPair(0));
 
-		const resultMessage = messages[1];
+		const resultMessage = messages[2];
 		expect(resultMessage).toBeDefined();
 		const estimator = createTokenEstimator();
 		const estimated = estimator(resultMessage);

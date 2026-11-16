@@ -11,6 +11,7 @@ import { arch, homedir, platform, release } from "node:os";
 import { join } from "node:path";
 import { readGlobalSettings, resolveClineDataDir } from "@cline/core";
 import packageJson from "../package.json";
+import { projectDiagnosticsGlobalSettings } from "./diagnostics-global-settings-projection";
 import { projectDiagnosticsSession } from "./diagnostics-session-projection";
 import { readSessionManifest } from "./paths";
 
@@ -82,9 +83,9 @@ const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 // (the session projection, the global settings) are allowlisted and never
 // reach this code at all.
 const SECRET_FIELD_PATTERN =
-	/((?:api[_-]?key|token|secret|password|passwd|credential|authorization)"?\s*[:=]\s*"?)([^",}\s]+)/gi;
+	/((?:api[_-]?key|token|secret|password|passwd|credential|authorization|auth(?:orization)?[-_]?(?:header|key)|access[-_]?key[-_]?id|aws[-_]?access[-_]?key[-_]?id)"?\s*[:=]\s*"?)([^",}\s]+)/gi;
 const SECRET_QUOTED_VALUE_PATTERN =
-	/((?:api[_-]?key|token|secret|password|passwd|credential|authorization)"?\s*[:=]\s*")(?:[^"\\]|\\.)*"/gi;
+	/((?:api[_-]?key|token|secret|password|passwd|credential|authorization|auth(?:orization)?[-_]?(?:header|key)|access[-_]?key[-_]?id|aws[-_]?access[-_]?key[-_]?id)"?\s*[:=]\s*")(?:[^"\\]|\\.)*"/gi;
 // The USERINFO of a URL: `scheme://<userinfo>@host`. The userinfo is either
 // `user:password` or a bare `user`/`token`. The whole userinfo is replaced,
 // and the host (and the path) are preserved so the artifact still shows
@@ -178,6 +179,7 @@ export function buildDiagnosticsReport(
 	now = new Date(),
 ): { text: string; sessionIds: string[] } {
 	const dataDir = resolveClineDataDir();
+	const settings = readGlobalSettings();
 	const report = {
 		generatedAt: now.toISOString(),
 		app: { name: packageJson.name, version: packageJson.version },
@@ -188,22 +190,24 @@ export function buildDiagnosticsReport(
 			bun: process.versions.bun ?? null,
 		},
 		dataDir,
-		globalSettings: readGlobalSettings(),
+		// CORRECTION01: global settings are projected through a finite
+		// allowlist. The complete object is never serialized because its
+		// schema may gain fields whose values are not shareable.
+		//
+		// CORRECTION02: the allowlist is refined once more. Several of the
+		// selected VALUES are unrestricted user strings (`tuiTheme`,
+		// `disabledTools`, `disabledPlugins`, `disabledAgentPlugins`,
+		// `cloudModelId`), so selecting their KEYS was not enough: a
+		// sensitive string in `disabledPlugins` would have shipped
+		// verbatim. The projection therefore publishes only validated
+		// primitives (booleans and closed enums) and the COUNTS of the
+		// free-form lists — never their entries.
+		globalSettings: projectDiagnosticsGlobalSettings(settings),
+		// Raw logs remain private; unrestricted free-form bodies cannot be
+		// made safe by regex redaction.
+		logs: { included: false, reason: "raw log bodies are private" },
 	};
 	let text = `${JSON.stringify(report, null, 2)}\n`;
-
-	const codeLog =
-		process.env.CLINE_LOG_PATH?.trim() || join(dataDir, "logs", "code.log");
-	const codeTail = readTail(codeLog, DIAGNOSTICS_LOG_TAIL_BYTES);
-	if (codeTail !== null) text += section(`tail of ${codeLog}`, codeTail);
-	const hubLog = join(dataDir, "logs", "hub-daemon.log");
-	const hubTail = readTail(hubLog, DIAGNOSTICS_HUB_LOG_SCAN_BYTES);
-	if (hubTail !== null) {
-		text += section(
-			`tail of ${hubLog}, routine polling omitted`,
-			lastBytes(dropHubPollingLines(hubTail), DIAGNOSTICS_LOG_TAIL_BYTES),
-		);
-	}
 
 	const includedSessions: string[] = [];
 	for (const sessionId of new Set(sessionIds)) {

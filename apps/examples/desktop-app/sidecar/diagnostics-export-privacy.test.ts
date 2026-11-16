@@ -379,6 +379,41 @@ describe("shareable diagnostic export — credential safety", () => {
 		expect(text).toContain("manifest.compaction_path");
 	});
 
+	it("CORRECTION02: does not publish the NAME of an unknown manifest key", () => {
+		// A manifest key is USER-CONTROLLED CONTENT. Publishing it would
+		// turn the omission record into a disclosure channel: a synthetic
+		// key such as `PRIVATE_ACCESS_VALUE_123` would appear verbatim in
+		// the shareable artifact.
+		const sessionId = "session_unknown_key";
+		const manifest = adversarialManifest(sessionId);
+		(manifest.metadata as Record<string, unknown>).PRIVATE_ACCESS_VALUE_123 =
+			"UNKNOWN_METADATA_KEY_MARKER";
+		writeCanonicalSession(sessionId, manifest);
+
+		const { text } = buildDiagnosticsReport([sessionId]);
+
+		expect(text).not.toContain("PRIVATE_ACCESS_VALUE_123");
+		expect(text).not.toContain("UNKNOWN_METADATA_KEY_MARKER");
+		expect(text).not.toContain("metadata.PRIVATE_ACCESS_VALUE_123");
+		// The omission is still RECORDED — as a COUNT, which is safe.
+		expect(text).toContain("unknownOmittedFieldCount");
+		expect(text).toMatch(/"unknownOmittedFieldCount":\s*1/);
+	});
+
+	it("CORRECTION02: does not publish the NAME of an unknown top-level manifest key", () => {
+		const sessionId = "session_unknown_manifest_key";
+		const manifest = adversarialManifest(sessionId);
+		manifest.PRIVATE_MANIFEST_KEY_456 = "UNKNOWN_MANIFEST_KEY_MARKER";
+		writeCanonicalSession(sessionId, manifest);
+
+		const { text } = buildDiagnosticsReport([sessionId]);
+
+		expect(text).not.toContain("PRIVATE_MANIFEST_KEY_456");
+		expect(text).not.toContain("UNKNOWN_MANIFEST_KEY_MARKER");
+		expect(text).not.toContain("manifest.PRIVATE_MANIFEST_KEY_456");
+		expect(text).toMatch(/"unknownOmittedFieldCount":\s*1/);
+	});
+
 	it("does not mutate the canonical conversation records", () => {
 		const sessionId = "session_immutable";
 		const { manifestPath, messagesPath, compactionPath } =
@@ -441,15 +476,13 @@ describe("shareable diagnostic export — bounded output", () => {
 });
 
 describe("shareable diagnostic export — log tails", () => {
-	/**
-	 * The log tails are FREE-FORM text: there is no schema to project them
-	 * through, so they are filtered by credential SHAPE. The fixtures below
-	 * are the shapes that actually occur in a Cline log.
-	 */
-	it("does not disclose credentials that appear in the log tails", () => {
+	it("omits raw log bodies, including adversarial free-form credentials", () => {
 		writeFileSync(
 			join(dataDir, "logs", "code.log"),
 			[
+				`{"authorizationHeader":"SYNTHETIC_HEADER_VALUE_41"}`,
+				`{"aws_access_key_id":"SYNTHETIC_AWS_ID_ABC"}`,
+				"opaque access material: ZZZ_UNSTRUCTURED_ACCESS_MATERIAL_91",
 				`{"client_secret":"${SECRETS.jsonClientSecret}"}`,
 				`    password: ${SECRETS.yamlPassword}`,
 				`https://${SECRETS.urlEmbeddedCredential}@gitlab.example.invalid/backend/keycloak.git`,
@@ -464,24 +497,116 @@ describe("shareable diagnostic export — log tails", () => {
 
 		const { text } = buildDiagnosticsReport([]);
 
-		for (const [name, value] of Object.entries(SECRETS)) {
-			expect(
-				text.includes(value),
-				`shareable export disclosed ${name} from the log tail: ${value}`,
-			).toBe(false);
+		for (const value of [
+			"SYNTHETIC_HEADER_VALUE_41",
+			"SYNTHETIC_AWS_ID_ABC",
+			"ZZZ_UNSTRUCTURED_ACCESS_MATERIAL_91",
+			...Object.values(SECRETS),
+		]) {
+			expect(text).not.toContain(value);
 		}
+		expect(text).toContain('"included": false');
+		expect(text).not.toContain("code.log");
+	});
+});
+
+describe("shareable diagnostic export — strict global settings projection", () => {
+	it("does not serialize unexpected global settings fields", () => {
+		const settingsPath = join(dataDir, "settings", "global-settings.json");
+		mkdirSync(join(dataDir, "settings"), { recursive: true });
+		writeFileSync(
+			settingsPath,
+			JSON.stringify({
+				telemetryOptOut: false,
+				autoUpdateEnabled: true,
+				// A SYNTHETIC fixture, not a credential: the value must NOT
+				// reach the shareable artifact.
+				unexpectedCredential: "SYNTHETIC_GLOBAL_SECRET_73", // gitleaks:allow
+			}),
+		);
+
+		const { text } = buildDiagnosticsReport([]);
+		expect(text).not.toContain("unexpectedCredential");
+		expect(text).not.toContain("SYNTHETIC_GLOBAL_SECRET_73");
+		expect(text).toContain('"telemetryOptOut": false');
 	});
 
-	it("still reports which host the credential-bearing URL pointed at", () => {
+	it("CORRECTION02: does not publish free-form global settings VALUES", () => {
+		// The settings SCHEMA allows arbitrary strings in `tuiTheme` and in
+		// the disabled-name lists, so selecting those KEYS was never
+		// sufficient. A synthetic sensitive string placed in
+		// `disabledPlugins` must not reach the shareable artifact.
+		const settingsPath = join(dataDir, "settings", "global-settings.json");
+		mkdirSync(join(dataDir, "settings"), { recursive: true });
 		writeFileSync(
-			join(dataDir, "logs", "code.log"),
-			`remote https://${SECRETS.urlEmbeddedCredential}@gitlab.example.invalid/backend/keycloak.git\n`,
+			settingsPath,
+			JSON.stringify({
+				telemetryOptOut: false,
+				autoUpdateEnabled: true,
+				tuiTheme: "SYNTHETIC_THEME_SECRET_91",
+				cloudModelId: "SYNTHETIC_MODEL_SECRET_92",
+				disabledTools: ["SYNTHETIC_DISABLED_TOOL_SECRET_93"],
+				disabledPlugins: ["SYNTHETIC_DISABLED_PLUGIN_SECRET_94"],
+				disabledAgentPlugins: ["SYNTHETIC_DISABLED_AGENT_PLUGIN_95"],
+			}),
 		);
 
 		const { text } = buildDiagnosticsReport([]);
 
-		expect(text).toContain("gitlab.example.invalid");
-		expect(text).toContain("<redacted>");
+		for (const secret of [
+			"SYNTHETIC_THEME_SECRET_91",
+			"SYNTHETIC_MODEL_SECRET_92",
+			"SYNTHETIC_DISABLED_TOOL_SECRET_93",
+			"SYNTHETIC_DISABLED_PLUGIN_SECRET_94",
+			"SYNTHETIC_DISABLED_AGENT_PLUGIN_95",
+		]) {
+			expect(
+				text.includes(secret),
+				`shareable export disclosed ${secret}`,
+			).toBe(false);
+		}
+		// The unrestricted values are not published under ANY key: the
+		// QUOTED key names of the raw settings are absent (the count
+		// fields carry a different, suffixed key).
+		expect(text).not.toContain('"tuiTheme"');
+		expect(text).not.toContain('"cloudModelId"');
+		expect(text).not.toContain('"disabledPlugins"');
+		expect(text).not.toContain('"disabledAgentPlugins"');
+		expect(text).not.toContain('"disabledTools"');
+		// The COUNTS are published instead: the SIZE is evidence, the
+		// ENTRIES are content.
+		expect(text).toContain('"disabledPluginsCount": 1');
+		expect(text).toContain('"disabledToolsCount": 1');
+		expect(text).toContain('"disabledAgentPluginsCount": 1');
+	});
+
+	it("CORRECTION02: publishes only validated primitives for the global settings", () => {
+		const settingsPath = join(dataDir, "settings", "global-settings.json");
+		mkdirSync(join(dataDir, "settings"), { recursive: true });
+		writeFileSync(
+			settingsPath,
+			JSON.stringify({
+				telemetryOptOut: true,
+				autoUpdateEnabled: false,
+				compactionStrategy: "basic",
+				compactionEnabled: true,
+				planActMode: "plan",
+				toolAutoApprove: false,
+				tools: { web_search: { enabled: true } },
+			}),
+		);
+
+		const { text } = buildDiagnosticsReport([]);
+
+		expect(text).toContain('"telemetryOptOut": true');
+		expect(text).toContain('"autoUpdateEnabled": false');
+		expect(text).toContain('"compactionStrategy": "basic"');
+		expect(text).toContain('"compactionEnabled": true');
+		expect(text).toContain('"planActMode": "plan"');
+		expect(text).toContain('"toolAutoApprove": false');
+		expect(text).toContain('"web_search": true');
+		// The model-tool block is a FINITE key set of booleans.
+		expect(text).toMatch(/"modelTools":\s*\{\s*"web_search":\s*true\s*\}/);
 	});
 });
 
@@ -546,6 +671,7 @@ describe("shareable diagnostic export — complete recursive schema inspection",
 			"checkpointRef",
 			"usage",
 			"omittedFields",
+			"unknownOmittedFieldCount",
 		]);
 		for (const key of Object.keys(projection)) {
 			expect(allowed.has(key), `unexpected projection key: ${key}`).toBe(true);
@@ -596,5 +722,81 @@ describe("shareable diagnostic export — complete recursive schema inspection",
 			}
 		};
 		walk(projection, "projection");
+	});
+
+	it("carries no unexpected key anywhere in the global settings projection", () => {
+		const settingsPath = join(dataDir, "settings", "global-settings.json");
+		mkdirSync(join(dataDir, "settings"), { recursive: true });
+		writeFileSync(
+			settingsPath,
+			JSON.stringify({
+				telemetryOptOut: false,
+				autoUpdateEnabled: true,
+				compactionStrategy: "agentic",
+				compactionEnabled: true,
+				planActMode: "act",
+				toolAutoApprove: true,
+				tuiTheme: "SYNTHETIC_THEME_SECRET_91",
+				cloudModelId: "SYNTHETIC_MODEL_SECRET_92",
+				disabledTools: ["SYNTHETIC_DISABLED_TOOL_SECRET_93"],
+				disabledPlugins: ["SYNTHETIC_DISABLED_PLUGIN_SECRET_94"],
+				disabledAgentPlugins: ["SYNTHETIC_DISABLED_AGENT_PLUGIN_95"],
+				tools: { web_search: { enabled: true } },
+			}),
+		);
+
+		const { text } = buildDiagnosticsReport([]);
+
+		// The report header is the top-level JSON object; the session
+		// sections are appended after it as text. The header is extracted
+		// by brace matching, so the parse does not depend on the order of
+		// the header's keys.
+		const headerEnd = text.indexOf("\n}");
+		expect(headerEnd).toBeGreaterThan(-1);
+		const header = JSON.parse(text.slice(0, headerEnd + 2));
+
+		const settings = header.globalSettings as Record<string, unknown>;
+
+		// The ALLOWED keys of the global settings projection.
+		const allowed = new Set([
+			"telemetryOptOut",
+			"autoUpdateEnabled",
+			"compactionStrategy",
+			"compactionEnabled",
+			"planActMode",
+			"toolAutoApprove",
+			"modelTools",
+			"disabledToolsCount",
+			"disabledPluginsCount",
+			"disabledAgentPluginsCount",
+		]);
+		for (const key of Object.keys(settings)) {
+			expect(allowed.has(key), `unexpected global settings key: ${key}`).toBe(
+				true,
+			);
+		}
+
+		// Every leaf is a boolean, a closed-enum string, or a count.
+		for (const [key, value] of Object.entries(settings)) {
+			if (key === "modelTools") {
+				const toggles = value as Record<string, unknown>;
+				for (const [tool, enabled] of Object.entries(toggles)) {
+					expect(typeof enabled, `model tool ${tool} is not a boolean`).toBe(
+						"boolean",
+					);
+				}
+				continue;
+			}
+			expect(
+				typeof value === "boolean" ||
+					typeof value === "number" ||
+					value === undefined ||
+					value === "basic" ||
+					value === "agentic" ||
+					value === "plan" ||
+					value === "act",
+				`global settings value at ${key} is not a validated primitive`,
+			).toBe(true);
+		}
 	});
 });

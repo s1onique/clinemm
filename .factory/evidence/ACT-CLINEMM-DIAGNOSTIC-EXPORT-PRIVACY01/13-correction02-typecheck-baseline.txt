@@ -1,0 +1,27 @@
+TYPECHECK BASELINE COMPARISON — CORRECTION02
+
+$ cd sdk/packages/core && bun run typecheck   # AFTER the change
+error count: 43
+none of the 43 diagnostics are in the two ACT-owned SDK files:
+  sdk/packages/core/src/extensions/context/compaction-shared.ts
+  sdk/packages/core/src/extensions/context/compaction.tool-result-shape-red.test.ts
+  sdk/packages/core/src/extensions/context/compaction.long-session-discriminator.test.ts
+
+$ git stash push -u && cd sdk/packages/core && bun run typecheck   # BASELINE at HEAD
+error count: 43
+
+$ diff /tmp/core-tc-before.txt /tmp/core-tc-after.txt
+IDENTICAL (zero delta)
+  43 /tmp/core-tc-before.txt
+  43 /tmp/core-tc-after.txt
+
+$ cd apps/examples/desktop-app && bun run typecheck
+WITH THE CHANGE: exactly 1 error —
+  ../../../sdk/packages/shared/src/runtime/model-wire-reasoning.ts(236,2): error TS1170
+
+$ git stash push -u && cd apps/examples/desktop-app && bun run typecheck   # BASELINE at HEAD
+IDENTICAL (zero delta):
+  ../../../sdk/packages/shared/src/runtime/model-wire-reasoning.ts(236,2): error TS1170
+
+The TS1170 diagnostic is the SAME pre-existing baseline error the ACT doc
+recorded for CORRECTION01. It is NOT introduced by CORRECTION02.

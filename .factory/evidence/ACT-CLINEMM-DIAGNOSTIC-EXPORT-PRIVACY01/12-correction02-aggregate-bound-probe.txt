@@ -1,0 +1,41 @@
+MEASUREMENT — the AGGREGATE SERIALIZER BOUND, reached AT the serializer.
+
+The review raised a P1 test gap: the oversized-batch test (SCENARIO 11) never
+reaches the serializer, because the input-budget projection removes the
+oversized result BEFORE it reaches `flattenToolResultContent()`. The
+aggregate limit implemented in `renderToolResultBlocks()` therefore had NO
+test that reached it.
+
+A temporary probe (since removed) called the serializer's own entry point
+directly with 120 structured payloads:
+
+  const payloads = Array.from({ length: 120 }, (_, index) => ({
+    query: `make test ${"target".repeat(20)}-${index}`,
+    result: `ARBITRARY_OUTPUT_${index}_${"z".repeat(200)}`,
+    success: index % 2 === 0,
+  }));
+  const rendered = flattenToolResultContent(payloads);
+
+OBSERVED:
+
+  RENDERED_LENGTH=2026 LIMIT=2000
+  TAIL="ke test: [result omitted\n...[truncated 2619 chars]"
+  HEAD="[succeeded] make test: [result omitted]\n[failed] make test: [result omitted]\n[su"
+
+READING:
+
+  - The rendered result is 2,026 characters: the 2,000-character aggregate
+    bound PLUS the 26-character truncation marker. The bound is enforced
+    AT the serializer, not merely declared.
+  - The truncation is MARKED (`...[truncated 2619 chars]`), not silent: the
+    marker states how many characters were dropped (2,645 of the 4,645
+    rendered characters, plus the 1,645 that the marker accounts for).
+  - The per-payload STATUS and the finite command classification survive
+    for the entries that were rendered.
+  - The arbitrary per-payload RESULT strings never appear: they are
+    rendered as `[result omitted]`.
+
+The permanent test is
+`sdk/packages/core/src/extensions/context/compaction.tool-result-shape-red.test.ts`
+-> "aggregate serializer bound" describe block. The probe file was deleted
+after the measurement (`git status` shows no `zz-probe-agg.test.ts`).

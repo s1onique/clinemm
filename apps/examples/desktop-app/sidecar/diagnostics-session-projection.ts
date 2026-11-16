@@ -48,6 +48,18 @@
  *   - the canonical private-persistence paths,
  *   - any other manifest or metadata key that is not allowlisted.
  *
+ * HOW AN OMISSION IS RECORDED
+ * ---------------------------
+ * An omission is recorded, but the record never carries an ARBITRARY name.
+ * The projection publishes the omission identifiers from its OWN finite
+ * vocabulary (`manifest.prompt`, `metadata.title`, ...) and reports every
+ * other omitted field only as a COUNT (`unknownOmittedFieldCount`).
+ *
+ * Naming an unknown key would be a disclosure channel in its own right: a
+ * manifest key is user-controlled content, and a synthetic key such as
+ * `PRIVATE_ACCESS_VALUE_123` would otherwise appear verbatim in a shareable
+ * artifact.
+ *
  * The canonical records themselves are NEVER modified: this module is a
  * READ-ONLY projection. The original `*.messages.json` and
  * `*.compaction.json` remain the private runtime persistence.
@@ -98,13 +110,24 @@ export interface DiagnosticsSessionProjection {
 	/** The token/cost accounting counters. */
 	readonly usage: DiagnosticsSessionUsage | undefined;
 	/**
-	 * The keys that were present in the manifest but are NOT part of the
-	 * allowlist, so they were OMITTED.
+	 * The KNOWN fields that were present in the manifest but are NOT part of
+	 * the read allowlist, so they were OMITTED.
 	 *
-	 * The omission is recorded rather than silent: an analyst can tell "the
-	 * manifest had no such field" from "the field was dropped on purpose".
+	 * Every entry is a STATIC identifier from a finite list: the names come
+	 * from this module's own vocabulary, never from the manifest. A key that
+	 * the manifest carries but this module does not know is NOT named here —
+	 * it is counted in `unknownOmittedFieldCount` instead, because copying an
+	 * arbitrary key name would copy arbitrary content into a shareable
+	 * artifact.
 	 */
 	readonly omittedFields: readonly string[];
+	/**
+	 * How many fields were omitted whose NAMES are not in this module's
+	 * finite vocabulary.
+	 *
+	 * The count is safe to publish (it is a number); the names are not.
+	 */
+	readonly unknownOmittedFieldCount: number;
 }
 
 /**
@@ -277,6 +300,46 @@ function readCheckpointRef(metadata: JsonRecord): string | undefined {
 }
 
 /**
+ * The KNOWN manifest keys that are deliberately NOT read, and the KNOWN
+ * metadata keys that are deliberately NOT read.
+ *
+ * These names are the projection's OWN vocabulary: they are the field names
+ * this module knows about and refuses to read (the raw prompt, the
+ * credential-bearing Git remote, the private-persistence paths, the provider
+ * configuration, the Helm values).
+ *
+ * A manifest key that appears in NEITHER allowlist is an UNKNOWN key. Its
+ * name is attacker-/user-controlled content, so it is NEVER copied into the
+ * artifact — only counted. Naming an unknown key would turn the omission
+ * record into a channel for arbitrary strings.
+ */
+const KNOWN_OMITTED_MANIFEST_KEYS = new Set([
+	"prompt",
+	"messages_path",
+	"compaction_path",
+]);
+
+const KNOWN_OMITTED_METADATA_KEYS = new Set([
+	"title",
+	"prompt",
+	"systemPrompt",
+	"providerConfig",
+	"helmValues",
+	"provider",
+]);
+
+/**
+ * The finite vocabulary of omission identifiers the projection may publish.
+ *
+ * A published identifier is ALWAYS one of these literals; the projection
+ * never interpolates a manifest-supplied key into it.
+ */
+const PUBLISHABLE_OMISSION_IDS = new Set([
+	...Array.from(KNOWN_OMITTED_MANIFEST_KEYS, (key) => `manifest.${key}`),
+	...Array.from(KNOWN_OMITTED_METADATA_KEYS, (key) => `metadata.${key}`),
+]);
+
+/**
  * Project a canonical session manifest into the shareable, allowlisted shape.
  *
  * The manifest is READ-ONLY: nothing on disk is modified, and the canonical
@@ -293,16 +356,28 @@ export function projectDiagnosticsSession(
 ): DiagnosticsSessionProjection {
 	const metadata = readObject(manifest.metadata) ?? {};
 	const omittedFields: string[] = [];
+	let unknownOmittedFieldCount = 0;
 
 	for (const key of Object.keys(manifest)) {
-		if (!PROJECTED_MANIFEST_KEYS.has(key)) {
-			omittedFields.push(`manifest.${key}`);
+		if (PROJECTED_MANIFEST_KEYS.has(key)) {
+			continue;
 		}
+		if (KNOWN_OMITTED_MANIFEST_KEYS.has(key)) {
+			omittedFields.push(`manifest.${key}`);
+			continue;
+		}
+		// An UNKNOWN key: its NAME is content, so it is counted, never named.
+		unknownOmittedFieldCount += 1;
 	}
 	for (const key of Object.keys(metadata)) {
-		if (!PROJECTED_METADATA_KEYS.has(key)) {
-			omittedFields.push(`metadata.${key}`);
+		if (PROJECTED_METADATA_KEYS.has(key)) {
+			continue;
 		}
+		if (KNOWN_OMITTED_METADATA_KEYS.has(key)) {
+			omittedFields.push(`metadata.${key}`);
+			continue;
+		}
+		unknownOmittedFieldCount += 1;
 	}
 
 	const cwd = readString(manifest.cwd);
@@ -321,6 +396,13 @@ export function projectDiagnosticsSession(
 		gitBranch: readGitBranch(metadata),
 		checkpointRef: readCheckpointRef(metadata),
 		usage: readUsage(metadata),
-		omittedFields: omittedFields.slice(0, DIAGNOSTICS_PROJECTION_ARRAY_LIMIT),
+		// The published omission identifiers are filtered through the finite
+		// vocabulary one final time, so the invariant "only static names
+		// reach the artifact" holds at the boundary and not merely at the
+		// collection site.
+		omittedFields: omittedFields
+			.filter((id) => PUBLISHABLE_OMISSION_IDS.has(id))
+			.slice(0, DIAGNOSTICS_PROJECTION_ARRAY_LIMIT),
+		unknownOmittedFieldCount,
 	};
 }
