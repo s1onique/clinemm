@@ -225,6 +225,60 @@ qualified source (the `SUBJECT_HEAD` recorded above):
    - `running` with the SDK agent-turn mirror.
 
 7. **Do NOT manufacture transitions.** Do not interrupt, force, or
+
+---
+
+## Commit identity
+
+| Field | Value |
+|---|---|
+| `SUBJECT_HEAD` | `707b253e70988ce48de2dd9abbc3e95f64879ccb` |
+| `SOURCE_TREE` (subject) | `addad91a78aa48d4c64775a0fc9fe610ee7f3286` |
+| Commit subject | `feat(mcp): ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — expose the published TaskHeader phase to MCP` |
+| Branch | `main` |
+| Pushed | NO |
+| Released / published | NO |
+| New dependencies | 0 |
+| `proto/` changes | 0 |
+| New MCP operations | 0 |
+
+### Post-commit verification
+
+Executed against the committed tree (`707b253e7`):
+
+```
+cd apps/vscode
+bunx vitest run --config vitest.config.ts --testTimeout=15000 \
+  src/sdk/control-seam/control-seam.task-state-projection01.test.ts \
+  src/sdk/control-seam/control-seam.publication-boundary01.test.ts
+
+ Test Files  2 passed (2)
+      Tests  39 passed (39)
+
+bunx tsc --noEmit
+TSC_EXIT=0
+```
+
+### Repository hygiene at closure
+
+```
+git status --short --untracked-files=all
+→ (empty)          # clean tree, no intended board delta left unstaged
+
+git stash list
+→ stash@{0}: WIP on main: d46223b51 fix(completion-continuation-stall-lifetime):
+  separate REARM lifetime from STALL lifetime at BCB re-registration
+                    # the PROTECTED stash is UNTOUCHED
+```
+
+The `.factory/epic-board.md` delta was staged and committed with the
+implementation (the board is not gitignored; `git check-ignore` exits
+`1`).
+
+The pre-commit hook ran `biome check --write --staged` and the gitleaks
+scan (`no leaks found`). The working tree is clean after the commit, so
+the hook introduced no post-commit drift.
+
    otherwise perturb an existing live task to complete the matrix.
 
 8. **Coordinate with the existing CPR01 installed qualification.** One

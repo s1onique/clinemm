@@ -1,4 +1,6 @@
 # ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — SHA-256 of the evidence artifacts
+# SUBJECT_HEAD: 707b253e70988ce48de2dd9abbc3e95f64879ccb
+# SOURCE_TREE:  addad91a78aa48d4c64775a0fc9fe610ee7f3286
 # Generated at the qualification source tree (see 06-artifact-and-live-qualification.md).
 # Format: <sha256>  <path relative to the repository root>
 
@@ -9,7 +11,7 @@
 59a77d4d74498086db0d3555a14ce701cc4ce3779e648368e1049d50490d7634  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/03-identity-epoch-adversarial.md
 68539caa97fe58b0f84b57815723158bbb17dac8baf13f0aaae24f7d03f3f055  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/04-control-seam-conservation.md
 c2fafad432d114c558db29d010ff1ee6ce1306c25af7ab85b3a95efad7c627b7  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/05-executable-gates.md
-49d0486a610befe808ad143c204718e8519a1e7cb1bc3d9c8e0b1e99abff16e5  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/06-artifact-and-live-qualification.md
+81c33c75964b1eccec2b31a5945f6385e8ea5d64a08783f93bf537bd7e01a28b  .factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/06-artifact-and-live-qualification.md
 
 ## ACT-owned production sources
 c8a3a3abe268bb0fd4de4b03b30cc173dd9f61a41608db24dabc5c6d9abf0023  apps/vscode/src/shared/task-header-state-label.ts
@@ -23,5 +25,5 @@ e6fc7365aa3dcdad7286b81133f2cf100c29d7b2bbcffb056c08f780986664c3  apps/vscode/sr
 333967897cf38853babb84f9997e754be64f586045e2bdedf0d41b2d437bbc46  apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
 
 ## ACT-owned tests
-a003665c0c8787bd44ddec7366a4bf045e4580114919e5f70e85d55beb874e7e  apps/vscode/src/sdk/control-seam/control-seam.task-state-projection01.test.ts
-18cdc1e81eb227224eb6a2e031cec8785f896fb560fd3f07ce5999ebebaf82d5  apps/vscode/src/sdk/control-seam/control-seam.publication-boundary01.test.ts
+c9b1e708050d70deba66c2627e02f6ed1dc11cbc935ea9509bc1f61d9a52c66c  apps/vscode/src/sdk/control-seam/control-seam.task-state-projection01.test.ts
+358973c66c00924711d1befdcc2947811ab9cf1418249c9bc6367720375c2304  apps/vscode/src/sdk/control-seam/control-seam.publication-boundary01.test.ts
