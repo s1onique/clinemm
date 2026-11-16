@@ -23,7 +23,7 @@ b562ad9c5406cbb028d2194d25744386ba89a33322cd5d563fd28e31363d9982  .factory/evide
 
 ## ACT-owned production sources
 c8a3a3abe268bb0fd4de4b03b30cc173dd9f61a41608db24dabc5c6d9abf0023  apps/vscode/src/shared/task-header-state-label.ts
-203a28fae3cf7aad14a6d1acdd5cb6b323eba069b72a7c15edb0deeb4b0b0a7e  apps/vscode/src/sdk/published-task-state.ts
+21edbd84d4c8ca28443c069bacc5819a61d76160b01ecc21a4178a9b0c8745cc  apps/vscode/src/sdk/published-task-state.ts
 e461165f89c010ce4eb1da884c7a5a56ae2e12f96deff0c5a67af8c966dae7cd  apps/vscode/src/sdk/control-seam/control-seam-protocol.ts
 13989a6ea19915de89f3028e4b05ccc25d73ae04233e952fd18d8f963ceddf15  apps/vscode/src/sdk/control-seam/control-seam-authority.ts
 21255198a3a33527a54294fc8a76a2da0cf2489ddccc0c3d05550f95c67deb08  apps/vscode/src/sdk/control-seam/control-seam-runtime.ts
@@ -34,5 +34,5 @@ c2cada791cec5c1321a319923bfffe63194af52948f12ce0e873d39e9617183e  apps/vscode/sr
 
 ## ACT-owned tests
 c9b1e708050d70deba66c2627e02f6ed1dc11cbc935ea9509bc1f61d9a52c66c  apps/vscode/src/sdk/control-seam/control-seam.task-state-projection01.test.ts
-0125e8764e9b1cd0f31b3268f70c38b8ccebd4f528aa3b14acde90fff959e5bd  apps/vscode/src/sdk/control-seam/control-seam.publication-boundary01.test.ts
-7585c5c5d1a5bf5c8f40372596eac87e461965d9fc077da69ac5203025f9f008  apps/vscode/src/sdk/__tests__/mcp-task-state-identity-boundary01.test.ts
+71f085bb7f6fbbd8717df9e9189c2eb5ac76163d2f5b82e028b5db678fee40dc  apps/vscode/src/sdk/control-seam/control-seam.publication-boundary01.test.ts
+afafcbd7a3aa0da073f851248aa10d82f9477d60ba0abdf0d1479e24f3ab636b  apps/vscode/src/sdk/__tests__/mcp-task-state-identity-boundary01.test.ts
