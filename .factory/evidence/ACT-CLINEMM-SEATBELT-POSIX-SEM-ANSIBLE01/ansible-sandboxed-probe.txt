@@ -1,0 +1,68 @@
+=== SANDBOXED ANSIBLE LOCALHOST PING (repaired production profile) ===
+DATE_UTC=2026-11-17T06:26:06Z
+PROFILE_SHA256=bd39da5e14dbe32bff70d437bef9a4a5e4b12473178a9cfd00e3a2b999c7f126
+PROFILE_SEM_RULE_COUNT=1
+ANSIBLE_BIN=/run/current-system/sw/bin/ansible
+WORK_DIR=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-ansible-sb-lrKtHX
+
+--- PROFILE ---
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow ipc-posix-sem)
+(allow file-read*)
+(allow file-write*
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/act-ansible-sb-lrKtHX")
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/act-ansible-sb-lrKtHX/tmp")
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/tmp"))
+(allow file-write*
+  (subpath "/Volumes/UserData/Users/chistyakov/Library/Caches/go-build"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)
+
+--- COMMAND ---
+ANSIBLE_LOCAL_TEMP=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-ansible-sb-lrKtHX/ansible-tmp ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 /run/current-system/sw/bin/ansible -i 'localhost,' localhost -c local -m ansible.builtin.ping
+
+[ERROR]: Unexpected Exception, this is probably a bug: Local RPC server did not start.
+
+Traceback (most recent call last):
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/__init__.py", line 663, in cli_executor
+    exit_code = cli.run()
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/adhoc.py", line 184, in run
+    self._tqm = TaskQueueManager(
+                ~~~~~~~~~~~~~~~~^
+        inventory=inventory,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        forks=context.CLIARGS['forks'],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/executor/task_queue_manager.py", line 173, in __init__
+    _rpc_host.LocalManager.shared_instance()  # ensure the RPC host is available
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/_internal/_rpc_host.py", line 113, in shared_instance
+    instance.start()
+    ~~~~~~~~~~~~~~^^
+  File "/nix/store/8g76m81yyr8ki19d56l1czx1fqaxkk6b-python3-3.13.15/lib/python3.13/multiprocessing/managers.py", line 565, in start
+    self._process.start()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/_internal/_rpc_host.py", line 51, in start
+    raise TimeoutError("Local RPC server did not start.")
+TimeoutError: Local RPC server did not start.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/__init__.py", line 672, in cli_executor
+    raise AnsibleError("Unexpected Exception, this is probably a bug.") from ex
+ansible.errors.AnsibleError: Unexpected Exception, this is probably a bug: Local RPC server did not start.
+
+SANDBOXED_ANSIBLE_EXIT=250
+=== END_SANDBOXED_ANSIBLE ===

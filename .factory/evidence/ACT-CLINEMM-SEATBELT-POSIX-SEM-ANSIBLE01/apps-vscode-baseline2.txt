@@ -1,0 +1,120 @@
+=== BASELINE: production change reverted, C3 file alone ===
+DATE_UTC=2026-11-17T06:58:33Z
+
+Saved working directory and index state WIP on main: d68def3ae evidence(clinemm): qualify observed compaction trigger causality
+STASH_PUSH_EXIT=0
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode[39m
+
+ [31m❯[39m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts [2m([22m[2m18 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[33m 12094[2mms[22m[39m
+     [32m✓[39m sandbox ON: write to a path under the workspace root is KERNEL-ALLOWED (workspace trust boundary)[32m 19[2mms[22m[39m
+     [32m✓[39m counter-test: same write with sandbox OFF also succeeds[32m 12[2mms[22m[39m
+     [32m✓[39m write to a path outside the workspace AND outside /dev/null \u2014 kernel still DENIES (deny default + empty writableRoots)[32m 10[2mms[22m[39m
+     [32m✓[39m GREEN mktemp succeeds under the production resolver; path is descendant of canonical TMPDIR[32m 12[2mms[22m[39m
+     [32m✓[39m GREEN mktemp -d succeeds under the production resolver; created dir is inside canonical TMPDIR[32m 14[2mms[22m[39m
+     [32m✓[39m GREEN child TMPDIR is set to the canonical private root[32m 11[2mms[22m[39m
+     [32m✓[39m GREEN workspace write is KERNEL-ALLOWED under the workspace trust boundary (ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01)[32m 9[2mms[22m[39m
+     [32m✓[39m GREEN a sibling under the same parent canonical temp is DENIED (no parent authority expansion)[32m 11[2mms[22m[39m
+     [32m✓[39m GREEN synthesized temp root is removed after the command exits (cleanup)[32m 11[2mms[22m[39m
+     [32m✓[39m DEFAULT_OFF: stdout=OUT, stderr=ERR, exitCode=7[32m 9[2mms[22m[39m
+     [32m✓[39m opt-in seatbelt: stdout=OUT, stderr=ERR, exitCode=7 (supervision conserved)[32m 9[2mms[22m[39m
+     [33m[2m✓[22m[39m DEFAULT_OFF: deadline fires; terminal state is deadline_exceeded [33m 3508[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt: deadline fires; same terminal classification (no false clean exit; orphan absence NOT independently observed) [33m 3506[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt: profile temp dir is cleaned up after deadline (C2-P2 hygiene end-to-end) [33m 4101[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt through production resolver writes a real SBPL profile to disk [33m 373[2mms[22m[39m
+[31m     [31m×[31m T3: the production backgroundExec path runs a Python multiprocessing semaphore to a clean exit[39m[32m 120[2mms[22m[39m
+[31m     [31m×[31m T3b: the production backgroundExec path runs a real multiprocessing worker + queue[39m[32m 47[2mms[22m[39m
+[31m     [31m×[31m T8: a localhost-only ansible.builtin.ping task SUCCEEDS through the sandboxed production runner[39m[33m 308[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: production CommandJobManager path[2m > [22mT3: the production backgroundExec path runs a Python multiprocessing semaphore to a clean exit
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m673:28[22m[39m
+    [90m671|[39m     })
+    [90m672|[39m     [34mexpect[39m(start[33m.[39mstate)[33m.[39m[34mtoBe[39m([32m"exited"[39m)
+    [90m673|[39m     [34mexpect[39m(start[33m.[39mexitCode)[33m.[39m[34mtoBe[39m([34m0[39m)
+    [90m   |[39m                            [31m^[39m
+    [90m674|[39m     [34mexpect[39m(start[33m.[39mstdout)[33m.[39m[34mtoContain[39m([32m"POSIX_SEM_OK"[39m)
+    [90m675|[39m     [90m// The pre-repair failure signature must NOT appear.[39m
+[90m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m665:4[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: production CommandJobManager path[2m > [22mT3b: the production backgroundExec path runs a real multiprocessing worker + queue
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m724:28[22m[39m
+    [90m722|[39m     })
+    [90m723|[39m     [34mexpect[39m(start[33m.[39mstate)[33m.[39m[34mtoBe[39m([32m"exited"[39m)
+    [90m724|[39m     [34mexpect[39m(start[33m.[39mexitCode)[33m.[39m[34mtoBe[39m([34m0[39m)
+    [90m   |[39m                            [31m^[39m
+    [90m725|[39m     [34mexpect[39m(start[33m.[39mstdout)[33m.[39m[34mtoContain[39m([32m"MP_WORKER_QUEUE_OK"[39m)
+    [90m726|[39m     [34mexpect[39m(start[33m.[39mstderr)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m"Operation not permitted"[39m)
+[90m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m716:4[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: Ansible localhost qualification[2m > [22mT8: a localhost-only ansible.builtin.ping task SUCCEEDS through the sandboxed production runner
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m819:30[22m[39m
+    [90m817|[39m       })
+    [90m818|[39m       [34mexpect[39m(start[33m.[39mstate)[33m.[39m[34mtoBe[39m([32m"exited"[39m)
+    [90m819|[39m       [34mexpect[39m(start[33m.[39mexitCode)[33m.[39m[34mtoBe[39m([34m0[39m)
+    [90m   |[39m                              [31m^[39m
+    [90m820|[39m       [90m// The task-execution path (not just `--version`).[39m
+    [90m821|[39m       [34mexpect[39m(start[33m.[39mstdout)[33m.[39m[34mtoContain[39m([32m"SUCCESS"[39m)
+[90m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m808:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m15 passed[39m[22m[90m (18)[39m
+[2m   Start at [22m 09:58:33
+[2m   Duration [22m 14.19s[2m (transform 1.40s, setup 1.96s, import 63ms, tests 12.09s, environment 0ms)[22m
+
+BASELINE_EXIT=1
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+	modified:   sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.test.ts
+	modified:   sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.factory/evidence/ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01/
+	apps/vscode/src/sdk/__tests__/act-posix-sem01.profile-snapshot.test.ts
+	sdk/packages/core/src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (c6d883b87dab94017a0171d910f2053bde560e8b)
+STASH_POP_EXIT=0
+=== END_BASELINE ===

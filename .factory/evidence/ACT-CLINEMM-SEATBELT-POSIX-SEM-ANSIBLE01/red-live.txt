@@ -1,0 +1,360 @@
+=== RED PROOF: production profile change reverted ===
+DATE_UTC=2026-11-17T06:16:10Z
+SUBJECT_HEAD=d68def3ae2ddcb635bfbb34955f2cd561205d9c0
+
+Saved working directory and index state WIP on main: d68def3ae evidence(clinemm): qualify observed compaction trigger causality
+STASH_PUSH_EXIT=0
+--- verify the production rule is absent from the working tree ---
+0
+0 (rule absent, as expected for RED)
+
+COMMAND=vitest run --config vitest.config.ts src/runtime/sandbox/macos/
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core[39m
+
+ [32m✓[39m src/runtime/sandbox/macos/seatbelt-host-helper-authority.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/runtime/sandbox/macos/seatbelt-go-default-cache-authority01.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [31m❯[39m src/runtime/sandbox/macos/seatbelt-profile.test.ts [2m([22m[2m46 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[32m 11[2mms[22m[39m
+     [32m✓[39m returns empty string for empty input[32m 1[2mms[22m[39m
+     [32m✓[39m passes through ASCII paths unchanged[32m 0[2mms[22m[39m
+     [32m✓[39m passes through spaces unchanged (not special inside SBPL strings)[32m 0[2mms[22m[39m
+     [32m✓[39m escapes double-quote[32m 0[2mms[22m[39m
+     [32m✓[39m escapes backslash[32m 0[2mms[22m[39m
+     [32m✓[39m escapes both backslash and double-quote together[32m 0[2mms[22m[39m
+     [32m✓[39m passes parens through unchanged (not special inside strings)[32m 0[2mms[22m[39m
+     [32m✓[39m THROWS on newline / CR (CORRECTION01 P0-3: no silent aliasing)[32m 0[2mms[22m[39m
+     [32m✓[39m THROWS on tab (CORRECTION01 P0-3)[32m 0[2mms[22m[39m
+     [32m✓[39m THROWS on NUL and other control characters (CORRECTION01 P0-3)[32m 0[2mms[22m[39m
+     [32m✓[39m passes unicode (non-control) through unchanged[32m 0[2mms[22m[39m
+     [32m✓[39m passes the recon adversarial fixture matrix for safe inputs[32m 0[2mms[22m[39m
+     [32m✓[39m THROWS on every control-character entry in the recon adversarial fixture matrix (CORRECTION01 P0-3)[32m 0[2mms[22m[39m
+     [32m✓[39m emits the recon-validated required prelude[32m 0[2mms[22m[39m
+     [32m✓[39m emits (allow file-read*) when no deny-read subpaths are provided[32m 0[2mms[22m[39m
+     [32m✓[39m emits the containment pattern when deny-read subpaths are provided[32m 0[2mms[22m[39m
+     [32m✓[39m emits (deny network*) for network: 'deny'[32m 0[2mms[22m[39m
+     [32m✓[39m does NOT emit a network rule for network: 'allow'[32m 0[2mms[22m[39m
+     [32m✓[39m emits writableRoots as (subpath ...) entries[32m 0[2mms[22m[39m
+     [32m✓[39m emits tempRoot as a (subpath ...) entry[32m 0[2mms[22m[39m
+     [32m✓[39m always includes the always-writable literals and system subpaths[32m 0[2mms[22m[39m
+     [32m✓[39m is deterministic: same capability → same profile bytes (PROFILE_SHA256 matches)[32m 0[2mms[22m[39m
+     [32m✓[39m preserves the OR-vs-AND gotcha: deny-per-subpath pattern, not OR-of-subpaths on allow[32m 0[2mms[22m[39m
+     [32m✓[39m escapes adversarial paths safely inside deny rules[32m 0[2mms[22m[39m
+       [32m✓[39m default mode (sshAuthenticationAuthority omitted): no agent rules emitted[32m 0[2mms[22m[39m
+       [32m✓[39m deny mode: no agent rules emitted even when option is omitted (no-op)[32m 0[2mms[22m[39m
+       [32m✓[39m agent mode + canonical socket: emits AF_UNIX system-socket + path-literal network-outbound[32m 0[2mms[22m[39m
+       [32m✓[39m agent mode: empty/undefined socket path produces no agent rules (fail-closed caller contract)[32m 0[2mms[22m[39m
+       [32m✓[39m agent mode: does NOT widen to ~/.ssh or any filesystem grant (no readwritePaths widening)[32m 0[2mms[22m[39m
+       [32m✓[39m agent mode: control-character socket path is REJECTED (CORRECTION01 P0-3 invariant)[32m 0[2mms[22m[39m
+       [32m✓[39m agent mode: socket path with quote is escaped inside the SBPL string[32m 0[2mms[22m[39m
+       [32m✓[39m T1 RED→GREEN: profile grants (subpath "<canonical /tmp>") for BSD mktemp + literal /tmp compatibility[32m 0[2mms[22m[39m
+       [32m✓[39m T2 CORRECTION BOUND: profile does NOT grant canonical os.tmpdir() (per-user temp authority is bounded to capability tempRoot)[32m 0[2mms[22m[39m
+       [32m✓[39m T3 conservation: profile's temp allow is bounded to canonical /tmp (only one temp subpath emitted, and it IS canonical /tmp)[32m 0[2mms[22m[39m
+       [32m✓[39m T4 conservation: temp subpaths do NOT widen to os.tmpdir()[32m 0[2mms[22m[39m
+       [32m✓[39m T5 conservation: temp allow does NOT add (allow file-read*) widening[32m 0[2mms[22m[39m
+       [32m✓[39m T6 conservation: ssh-agent rules are unchanged[32m 0[2mms[22m[39m
+       [32m✓[39m T7 conservation: profile remains deterministic after temp-subpath addition[32m 0[2mms[22m[39m
+       [32m✓[39m T8 conservation: network deny rule unchanged when temp subpaths added[32m 0[2mms[22m[39m
+       [32m✓[39m T9 conservation: temp subpaths appear AFTER readonlyRoots deny (deny-after-allow ordering preserved)[32m 0[2mms[22m[39m
+[31m       [31m×[31m T1 RED→GREEN: emits EXACTLY ONE (allow ipc-posix-sem) rule[39m[32m 4[2mms[22m[39m
+[31m       [31m×[31m T1b: the semaphore rule is emitted for EVERY capability shape (no capability knob, no command detection)[39m[32m 1[2mms[22m[39m
+[31m       [31m×[31m T2 conservation: profile generation remains deterministic with the semaphore rule[39m[32m 0[2mms[22m[39m
+       [32m✓[39m T3 conservation: existing capability-driven profile sections are unchanged[32m 0[2mms[22m[39m
+[31m       [31m×[31m T4 conservation: network-deny AND network-allow profiles retain their previous network rules[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m T5 conservation: NO unrelated IPC or Mach-service permissions are introduced[39m[32m 1[2mms[22m[39m
+ [32m✓[39m src/runtime/sandbox/macos/seatbelt-availability.test.ts [2m([22m[2m5 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/runtime/sandbox/macos/seatbelt-same-sandbox-signal-repair01.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [31m❯[39m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts [2m([22m[2m10 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[32m 154[2mms[22m[39m
+[31m     [31m×[31m T2: the exact RED probe SUCCEEDS under the repaired production profile[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m T2b: a real multiprocessing worker + queue round-trip succeeds under the production profile[39m[32m 43[2mms[22m[39m
+     [32m✓[39m T3: the prepared production invocation reaches a clean terminal state with the correct output[32m 19[2mms[22m[39m
+     [32m✓[39m T4-a: writes OUTSIDE the authorized roots remain DENIED at the kernel level[32m 19[2mms[22m[39m
+     [32m✓[39m T4-b: authorized workspace writes continue to WORK at the kernel level[32m 20[2mms[22m[39m
+     [32m✓[39m T4-c: default network egress remains DENIED at the kernel level[32m 23[2mms[22m[39m
+[31m     [31m×[31m T4-d: the explicit network opt-in still ALLOWS egress (behavior unchanged)[39m[32m 2[2mms[22m[39m
+     [32m✓[39m T4-e: sensitive environment values remain sanitized[32m 19[2mms[22m[39m
+[31m     [31m×[31m T4-f: the SSH-agent authority remains opt-in (no AF_UNIX rule without the agent authority)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m T4-g: the host-helper socket authority remains gated on the network mode[39m[32m 1[2mms[22m[39m
+ [31m❯[39m src/runtime/sandbox/macos/seatbelt-backend.test.ts [2m([22m[2m25 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 801[2mms[22m[39m
+     [32m✓[39m emits a parseable SBPL profile when prepare() is called[32m 4[2mms[22m[39m
+     [32m✓[39m filesystem: RW inside write PASSES[32m 11[2mms[22m[39m
+     [32m✓[39m filesystem: outside read DENIED[32m 8[2mms[22m[39m
+     [32m✓[39m filesystem: outside write DENIED (defense-in-depth)[32m 10[2mms[22m[39m
+     [32m✓[39m filesystem: symlink escape DENIED[32m 8[2mms[22m[39m
+     [32m✓[39m network: deny blocks nc-style outbound connectivity[32m 9[2mms[22m[39m
+     [32m✓[39m inheritance: bash child inherits the deny[32m 9[2mms[22m[39m
+     [32m✓[39m environment: sanitized mode strips SSH_AUTH_SOCK and AWS_* from the child[32m 8[2mms[22m[39m
+     [32m✓[39m classifier-mistake: outside write via NoSandboxBackend succeeds (control)[32m 4[2mms[22m[39m
+     [32m✓[39m classifier-mistake: same write via SeatbeltBackend is DENIED (DEFENSE_IN_DEPTH_PROOF)[32m 9[2mms[22m[39m
+     [32m✓[39m stdout/stderr/exit conservation for benign commands[32m 11[2mms[22m[39m
+     [32m✓[39m cleanup hook removes the profile temp dir[32m 2[2mms[22m[39m
+     [32m✓[39m fail-closed: invalid writableRoot throws SandboxError, command NOT executed[32m 1[2mms[22m[39m
+[31m     [31m×[31m CORRECTION01: profile generation failure cleans up the synthesized temp root[39m[32m 118[2mms[22m[39m
+     [32m✓[39m CORRECTION01: caller-supplied tempRoot is NOT touched on any failure[32m 1[2mms[22m[39m
+     [32m✓[39m emits NO host-helper AF_UNIX rule when the capability denies network[32m 1[2mms[22m[39m
+     [32m✓[39m emits the host-helper AF_UNIX rule when the capability allows network[32m 1[2mms[22m[39m
+     [2m[90m↓[39m[22m isAvailable() returns false on non-darwin
+     [32m✓[39m default mode: SSH_AUTH_SOCK is NOT reintroduced[32m 1[2mms[22m[39m
+     [32m✓[39m deny mode: SSH_AUTH_SOCK is NOT reintroduced even when present in parent env[32m 1[2mms[22m[39m
+     [32m✓[39m SSH-03 ENV: agent-mode child sees SSH_AUTH_SOCK (canonical realpath)[32m 8[2mms[22m[39m
+     [32m✓[39m SSH-04 connect: agent-mode child can connect to authorized agent.sock (real connect(2))[32m 74[2mms[22m[39m
+     [32m✓[39m SSH-06 raw key: agent-mode child cannot read private key bytes (raw-key conservation)[32m 8[2mms[22m[39m
+     [32m✓[39m SSH-12 sibling: agent-mode child cannot connect to unauthorized sibling.sock (path-literal scope, real connect(2))[32m 144[2mms[22m[39m
+     [33m[2m✓[22m[39m Phase F: AGENT ON vs AGENT OFF (real connect(2) differential) [33m 348[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 11 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-backend.test.ts[2m > [22mSeatbeltSandboxBackendExperimental — CORRECTION01: synthesized temp root cleaned on prepare() failure[2m > [22mCORRECTION01: profile generation failure cleans up the synthesized temp root
+[31m[1mAssertionError[22m: expected '/var/folders/0g/mpt_55f524ndzxymkp20w…' to be undefined[39m
+
+[32m- Expected:[39m
+undefined
+
+[31m+ Received:[39m
+"/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-Jv447x"
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-backend.test.ts:[2m753:18[22m[39m
+    [90m751|[39m  it("CORRECTION01: profile generation failure cleans up the synthesize…
+    [90m752|[39m   [35mconst[39m leaked [33m=[39m [35mawait[39m [34mexpectCleanupOnFailure[39m()[33m;[39m
+    [90m753|[39m   [34mexpect[39m(leaked)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+    [90m   |[39m                  [31m^[39m
+    [90m754|[39m  })[33m;[39m
+    [90m755|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01 — REAL Darwin substrate[2m > [22mT2: the exact RED probe SUCCEEDS under the repaired production profile
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts:[2m202:63[22m[39m
+    [90m200|[39m     [90m// The repaired production profile carries EXACTLY ONE[39m
+    [90m201|[39m     [90m// semaphore rule.[39m
+    [90m202|[39m     [34mexpect[39m(profile[33m.[39m[34msplit[39m([32m"(allow ipc-posix-sem)"[39m)[33m.[39mlength [33m-[39m [34m1[39m)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   |[39m                                                               [31m^[39m
+    [90m203|[39m
+    [90m204|[39m     [35mconst[39m r [33m=[39m [34mrunPrepared[39m(prepared)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01 — REAL Darwin substrate[2m > [22mT2b: a real multiprocessing worker + queue round-trip succeeds under the production profile
+[31m[1mAssertionError[22m: expected '' to contain 'MP_WORKER_QUEUE_OK'[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- MP_WORKER_QUEUE_OK[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts:[2m246:22[22m[39m
+    [90m244|[39m     )[33m;[39m
+    [90m245|[39m     [35mconst[39m r [33m=[39m [34mrunPrepared[39m(prepared)[33m;[39m
+    [90m246|[39m     [34mexpect[39m(r[33m.[39mstdout)[33m.[39m[34mtoContain[39m([32m"MP_WORKER_QUEUE_OK"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m247|[39m     [34mexpect[39m(r[33m.[39mstdout)[33m.[39m[34mtoContain[39m([32m"QUEUE_RESULTS:"[39m)[33m;[39m
+    [90m248|[39m     [34mexpect[39m(r[33m.[39mstdout)[33m.[39m[34mtoContain[39m([32m"worker-ok"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01 — REAL Darwin substrate[2m > [22mT4-d: the explicit network opt-in still ALLOWS egress (behavior unchanged)
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts:[2m399:63[22m[39m
+    [90m397|[39m     [34mexpect[39m(profile)[33m.[39m[34mtoContain[39m([32m"(allow network*)"[39m)[33m;[39m
+    [90m398|[39m     [34mexpect[39m(profile)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m"(deny network*)"[39m)[33m;[39m
+    [90m399|[39m     [34mexpect[39m(profile[33m.[39m[34msplit[39m([32m"(allow ipc-posix-sem)"[39m)[33m.[39mlength [33m-[39m [34m1[39m)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   |[39m                                                               [31m^[39m
+    [90m400|[39m
+    [90m401|[39m     [35mconst[39m r [33m=[39m [34mrunPrepared[39m(prepared)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01 — REAL Darwin substrate[2m > [22mT4-f: the SSH-agent authority remains opt-in (no AF_UNIX rule without the agent authority)
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts:[2m470:63[22m[39m
+    [90m468|[39m     [34mexpect[39m(profile)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m"system-socket"[39m)[33m;[39m
+    [90m469|[39m     [90m// The semaphore rule is present and is the ONLY ipc rule.[39m
+    [90m470|[39m     [34mexpect[39m(profile[33m.[39m[34msplit[39m([32m"(allow ipc-posix-sem)"[39m)[33m.[39mlength [33m-[39m [34m1[39m)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   |[39m                                                               [31m^[39m
+    [90m471|[39m     [34mexpect[39m(profile[33m.[39m[34mmatch[39m([36m/\(allow ipc-[a-z0-9-]+\)/g[39m))[33m.[39m[34mtoEqual[39m([
+    [90m472|[39m      [32m"(allow ipc-posix-sem)"[39m[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01 — REAL Darwin substrate[2m > [22mT4-g: the host-helper socket authority remains gated on the network mode
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts:[2m502:68[22m[39m
+    [90m500|[39m     [90m// by this ACT). Either way, the semaphore rule count is[39m
+    [90m501|[39m     [90m// 1 in both.[39m
+    [90m502|[39m     expect(deny.profile.split("(allow ipc-posix-sem)").length - 1).toB…
+    [90m   |[39m                                                                    [31m^[39m
+    [90m503|[39m     expect(allow.profile.split("(allow ipc-posix-sem)").length - 1).to…
+    [90m504|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-profile.test.ts[2m > [22mgenerateSeatbeltProfile[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: POSIX semaphore authority[2m > [22mT1 RED→GREEN: emits EXACTLY ONE (allow ipc-posix-sem) rule
+[31m[1mAssertionError[22m: expected '(version 1)\n(deny default)\n(allow p…' to contain '(allow ipc-posix-sem)'[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- ([7mallow ipc-posix-sem)[27m[39m
+[31m+ ([7mversion 1)[27m[39m
+[31m+ (deny default)[39m
+[31m+ (allow process-exec)[39m
+[31m+ (allow process-fork)[39m
+[31m+ (allow signal (target same-sandbox))[39m
+[31m+ (allow sysctl-read)[39m
+[31m+ (allow mach-lookup)[39m
+[31m+ (allow file-read*)[39m
+[31m+ (allow file-write*[39m
+[31m+   (literal "/dev/null")[39m
+[31m+   (literal "/dev/tty")[39m
+[31m+   (subpath "/private/tmp"))[39m
+[31m+ (allow file-write*[39m
+[31m+   (subpath "/Volumes/UserData/Users/chistyakov/Library/Caches/go-build"))[39m
+[31m+ (allow file-read-metadata (subpath "/"))[39m
+[31m+ (deny network*)[39m
+[31m+[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-profile.test.ts:[2m507:14[22m[39m
+    [90m505|[39m   it("T1 RED→GREEN: emits EXACTLY ONE (allow ipc-posix-sem) rule", () …
+    [90m506|[39m    [35mconst[39m p [33m=[39m [34mgenerateSeatbeltProfile[39m(minimalCap)[33m;[39m
+    [90m507|[39m    [34mexpect[39m(p)[33m.[39m[34mtoContain[39m([33mSEM_RULE[39m)[33m;[39m
+    [90m   |[39m              [31m^[39m
+    [90m508|[39m    [90m// Exactly one occurrence -- a duplicate / wildcard grant[39m
+    [90m509|[39m    [90m// would be an unintended widening.[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-profile.test.ts[2m > [22mgenerateSeatbeltProfile[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: POSIX semaphore authority[2m > [22mT1b: the semaphore rule is emitted for EVERY capability shape (no capability knob, no command detection)
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-profile.test.ts:[2m535:42[22m[39m
+    [90m533|[39m    [35mfor[39m ([35mconst[39m cap [35mof[39m shapes) {
+    [90m534|[39m     [35mconst[39m p [33m=[39m [34mgenerateSeatbeltProfile[39m(cap)[33m;[39m
+    [90m535|[39m     [34mexpect[39m(p[33m.[39m[34msplit[39m([33mSEM_RULE[39m)[33m.[39mlength [33m-[39m [34m1[39m)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   |[39m                                          [31m^[39m
+    [90m536|[39m    }
+    [90m537|[39m    [90m// The ssh-agent / host-helper opt-in paths do NOT change the[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-profile.test.ts[2m > [22mgenerateSeatbeltProfile[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: POSIX semaphore authority[2m > [22mT2 conservation: profile generation remains deterministic with the semaphore rule
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-profile.test.ts:[2m557:41[22m[39m
+    [90m555|[39m    [34mexpect[39m(a)[33m.[39m[34mtoBe[39m(b)[33m;[39m
+    [90m556|[39m    [34mexpect[39m([34msha256[39m(a))[33m.[39m[34mtoBe[39m([34msha256[39m(b))[33m;[39m
+    [90m557|[39m    [34mexpect[39m(a[33m.[39m[34msplit[39m([33mSEM_RULE[39m)[33m.[39mlength [33m-[39m [34m1[39m)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   |[39m                                         [31m^[39m
+    [90m558|[39m   })[33m;[39m
+    [90m559|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-profile.test.ts[2m > [22mgenerateSeatbeltProfile[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: POSIX semaphore authority[2m > [22mT4 conservation: network-deny AND network-allow profiles retain their previous network rules
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-profile.test.ts:[2m601:51[22m[39m
+    [90m599|[39m    [90m// The semaphore rule is INDEPENDENT of the network decision:[39m
+    [90m600|[39m    [90m// it appears in both, and never alters the network rule.[39m
+    [90m601|[39m    [34mexpect[39m(denyProfile[33m.[39m[34msplit[39m([33mSEM_RULE[39m)[33m.[39mlength [33m-[39m [34m1[39m)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   |[39m                                                   [31m^[39m
+    [90m602|[39m    [34mexpect[39m(allowProfile[33m.[39m[34msplit[39m([33mSEM_RULE[39m)[33m.[39mlength [33m-[39m [34m1[39m)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m603|[39m   })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/sandbox/macos/seatbelt-profile.test.ts[2m > [22mgenerateSeatbeltProfile[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: POSIX semaphore authority[2m > [22mT5 conservation: NO unrelated IPC or Mach-service permissions are introduced
+[31m[1mAssertionError[22m: expected [] to deeply equal [ '(allow ipc-posix-sem)' ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [[39m
+[32m-   "(allow ipc-posix-sem)",[39m
+[32m- ][39m
+[31m+ [][39m
+
+[36m [2m❯[22m src/runtime/sandbox/macos/seatbelt-profile.test.ts:[2m609:21[22m[39m
+    [90m607|[39m    [90m// The ONLY ipc-* authority in the profile is ipc-posix-sem.[39m
+    [90m608|[39m    [35mconst[39m ipcRules [33m=[39m p[33m.[39m[34mmatch[39m([36m/\(allow ipc-[a-z0-9-]+\)/g[39m) [33m??[39m [][33m;[39m
+    [90m609|[39m    [34mexpect[39m(ipcRules)[33m.[39m[34mtoEqual[39m([[33mSEM_RULE[39m])[33m;[39m
+    [90m   |[39m                     [31m^[39m
+    [90m610|[39m    [90m// No ipc-posix-shm / msg / mq authority.[39m
+    [90m611|[39m    [34mexpect[39m(p)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m"ipc-posix-shm"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (8)[39m
+[2m      Tests [22m [1m[31m11 failed[39m[22m[2m | [22m[1m[32m116 passed[39m[22m[2m | [22m[33m2 skipped[39m[90m (129)[39m
+[2m   Start at [22m 09:16:10
+[2m   Duration [22m 1.12s[2m (transform 1.02s, setup 0ms, import 1.31s, tests 1.02s, environment 0ms)[22m
+
+RED_SUITE_EXIT=1
+
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.test.ts
+	modified:   sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.factory/evidence/ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01/
+	sdk/packages/core/src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (22f52952bfa6849484dc8fc04879ae2fe56ca943)
+STASH_POP_EXIT=0
+--- verify the production rule is restored ---
+4
+=== END_RED_PROOF ===

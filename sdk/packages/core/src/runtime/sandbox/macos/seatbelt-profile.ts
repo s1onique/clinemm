@@ -741,6 +741,59 @@ export function generateSeatbeltProfile(
 	// `/usr/bin/sandbox-exec -f <profile>` (no sandbox bypass).
 	const signalRule = "(allow signal (target same-sandbox))";
 
+	// ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01:
+	//
+	// PERMANENT production rule. The generated Seatbelt profile did NOT
+	// carry `(allow ipc-posix-sem)`, so Python's `multiprocessing`
+	// `SemLock` (the POSIX semaphore backing primitive) failed with
+	// `PermissionError: [Errno 1] Operation not permitted` inside every
+	// sandboxed command. Ansible's task executor uses
+	// `multiprocessing` for its forked worker processes, so the whole
+	// Ansible task-execution path failed inside the sandbox even though
+	// the same command succeeded in an ordinary terminal.
+	//
+	// CAUSAL EVIDENCE (live, this host; see
+	// `.factory/evidence/ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01/`):
+	//
+	//   1. The LIVE profile emitted by the real `backgroundExec` path
+	//      (`/usr/bin/sandbox-exec -f <profile>`) contained NO
+	//      `ipc-posix-sem` rule.
+	//   2. A/B DISCRIMINATOR on the Darwin kernel, two otherwise
+	//      IDENTICAL temporary policies (same filesystem / network /
+	//      process rules, same python executable, same env, same
+	//      working directory, same launch mechanism):
+	//
+	//        Policy A (no semaphore rule)
+	//          -> mp.Semaphore(1) => [Errno 1] Operation not permitted
+	//             exit=1
+	//
+	//        Policy B (exactly + `(allow ipc-posix-sem)`)
+	//          -> mp.Semaphore(1) => POSIX_SEM_OK
+	//             exit=0
+	//
+	//      The policy diff was exactly one line.
+	//
+	// SCOPE LIMIT (load-bearing): this grants access to ONE specific OS
+	// IPC class — POSIX semaphores — to sandboxed workloads. It is a
+	// DELIBERATE EXPANSION of sandbox authority, not a claim of zero
+	// security impact. It grants NO filesystem, NO network, NO Mach
+	// service, NO signal, NO process-ownership and NO socket authority
+	// beyond what the profile already granted.
+	//
+	// SECURITY CONSERVATION: this changes EXACTLY ONE profile line.
+	// Filesystem, network, environment, socket and cwd rules are
+	// byte-for-byte unchanged, and the command still runs through
+	// `/usr/bin/sandbox-exec -f <profile>` (no sandbox bypass, no
+	// unsandboxed fallback).
+	//
+	// WHY IT IS UNCONDITIONAL: unlike the ssh-agent and host-helper
+	// socket authorities (which are capability-driven and opt-in),
+	// POSIX semaphores are a baseline OS IPC primitive that ordinary
+	// multi-process runtimes need. There is no capability knob, no
+	// environment variable, and no command-name detection: the rule is
+	// emitted for every generated profile.
+	const posixSemaphoreRule = "(allow ipc-posix-sem)";
+
 	const lines: string[] = [
 		"(version 1)",
 		"(deny default)",
@@ -750,6 +803,10 @@ export function generateSeatbeltProfile(
 		signalRule,
 		"(allow sysctl-read)",
 		"(allow mach-lookup)",
+		// ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: POSIX semaphores
+		// (Python multiprocessing / Ansible task workers). See the
+		// doc comment above for the live A/B causal evidence.
+		posixSemaphoreRule,
 		// CORRECTION01 (P0-1): Read permission — broad allow with
 		// deny-subpaths carve-outs. The deny list IS the secure
 		// boundary; see buildReadRule doc.

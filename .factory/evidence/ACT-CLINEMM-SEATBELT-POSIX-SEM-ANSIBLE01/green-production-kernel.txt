@@ -1,0 +1,105 @@
+=== T2/T4 GREEN: repaired PRODUCTION profile, Darwin kernel ===
+DATE_UTC=2026-11-17T06:42:52Z
+PYTHON_BIN=/run/current-system/sw/bin/python3.13
+PYTHON_VERSION=Python 3.13.15
+WORK_DIR=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-green-wkAOLk
+PROFILE_GENERATION_EXIT=0
+PROFILE_DENY_SEM_RULE_COUNT=1
+PROFILE_DENY_NETWORK_RULE=(deny network*)
+PROFILE_ALLOW_SEM_RULE_COUNT=1
+PROFILE_ALLOW_NETWORK_RULE=(allow network*)
+
+--- PRODUCTION PROFILE (network:deny) verbatim ---
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow ipc-posix-sem)
+(allow file-read*)
+(allow file-write*
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/act-green-wkAOLk/profiles")
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/act-green-wkAOLk/profiles/tmp")
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/tmp"))
+(allow file-write*
+  (subpath "/Volumes/UserData/Users/chistyakov/Library/Caches/go-build"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)
+PROFILE_SHA256=6b622e14aa4195d7c0fe5a92c1c07e0cab8073e572a7e2ae7c1ef7a15fbecd61
+PROFILE_SEM_RULE_COUNT=1
+
+--- PRODUCTION PROFILE (network:allow) verbatim ---
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow ipc-posix-sem)
+(allow file-read*)
+(allow file-write*
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/act-green-wkAOLk/profiles")
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/act-green-wkAOLk/profiles/tmp")
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/tmp"))
+(allow file-write*
+  (subpath "/Volumes/UserData/Users/chistyakov/Library/Caches/go-build"))
+(allow file-read-metadata (subpath "/"))
+(allow network*)
+(allow system-socket
+  (socket-domain AF_UNIX))
+(allow network-outbound
+  (remote unix-socket (path-literal "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock")))
+PROFILE_ALLOW_SHA256=d0fb6defc997c2ab8e26c52b9cd96b2d2c4f9b2c552f7f5d515b14c0e56e15e9
+PROFILE_ALLOW_SEM_RULE_COUNT=1
+
+--- STEP 2 (T2): exact RED probe under the repaired production profile ---
+PYTHON: /run/current-system/sw/bin/python3.13
+POSIX_SEM_OK
+T2_EXIT=0
+
+--- STEP 3 (T2): multiprocessing worker + queue (beyond semaphore construction) ---
+QUEUE_RESULTS: [('worker-ok', 'ForkProcess-1'), ('worker-ok', 'ForkProcess-2'), ('worker-ok', 'ForkProcess-3')]
+EXIT_CODES: [0, 0, 0]
+MP_WORKER_QUEUE_OK
+T2_WORKER_EXIT=0
+
+--- STEP 4 (T4): security conservation negative controls ---
+[T4-a] write OUTSIDE authorized roots must be DENIED:
+/bin/sh: /Volumes/UserData/Users/chistyakov/act-outside-write-probe-90045.txt: Operation not permitted
+WRITE_EXIT=1
+T4A_HOST_EXIT=0
+T4A_FILE_EXISTS_ON_HOST=NO_DENIED
+
+[T4-b] authorized workspace write must SUCCEED:
+WRITE_EXIT=0
+authorized
+T4B_HOST_EXIT=0
+
+[T4-c] default network egress must be DENIED (network:deny profile):
+NETWORK_DENIED errno=1 [Errno 1] Operation not permitted
+T4C_EXIT=7 (7 == denied as expected)
+
+[T4-d] sensitive environment values must remain SANITIZED:
+T4D_NOTE=sanitization is an EXECUTOR contract, proven by seatbelt-posix-sem01.live.test.ts T4-e
+PROFILE_GRANTS_ENV_AUTHORITY=n/a (env is supplied by the executor, not the profile)
+T4D_HOST_EXIT=0
+
+[T4-e] explicit network opt-in (network:allow profile) behavior unchanged:
+NETWORK_ALLOW_OK
+T4E_EXIT=0 (0 == explicit opt-in still allows)
+
+[T4-f] SSH-agent authority remains opt-in (no AF_UNIX rule in deny profile):
+PROFILE_DENY_HAS_AF_UNIX=0
+PROFILE_DENY_HAS_SSH_AGENT_RULE=0
+[T4-g] host-helper socket authority remains gated on network mode:
+PROFILE_DENY_HAS_HOST_HELPER=0
+PROFILE_ALLOW_HAS_HOST_HELPER=1
+
+=== END_T2_T4_GREEN ===

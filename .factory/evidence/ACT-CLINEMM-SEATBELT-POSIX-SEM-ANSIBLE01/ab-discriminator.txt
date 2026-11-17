@@ -1,0 +1,67 @@
+=== A/B CAUSAL DISCRIMINATOR ===
+DATE_UTC=2026-11-17T06:08:05Z
+WORK_DIR=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB
+PYTHON_BIN=/run/current-system/sw/bin/python3.13
+PYTHON_PATH=/run/current-system/sw/bin/python3.13
+PYTHON_VERSION=Python 3.13.15
+
+--- POLICY A (existing: no semaphore permission) ---
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*)
+(allow file-write*
+  (subpath "/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB")
+  (subpath "/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB")
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/tmp"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)
+POLICY_A_SHA256=79060ef42b682b660f5ccf985d72b5f0999443ef56abcb6942cc04af7275f6fb
+POLICY_A_SEM_RULE_COUNT=0
+POLICY_A_DIFF_VS_B:
+16a17
+> (allow ipc-posix-sem)
+
+--- POLICY B (experimental: + (allow ipc-posix-sem)) ---
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*)
+(allow file-write*
+  (subpath "/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB")
+  (subpath "/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB")
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/tmp"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)
+(allow ipc-posix-sem)
+POLICY_B_SHA256=c539699869918057e767cfd98562e36fad57abe1de353f65785f7bb168900ab8
+POLICY_B_SEM_RULE_COUNT=1
+
+=== EXECUTION POLICY A ===
+PROFILE_PATH=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB/profile-A.sb
+LAUNCH=/usr/bin/sandbox-exec -f /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB/profile-A.sb /run/current-system/sw/bin/python3.13 -c <probe>
+PYTHON: /run/current-system/sw/bin/python3.13
+SEMAPHORE_ERROR_ERRNO=1
+SEMAPHORE_ERROR=[Errno 1] Operation not permitted
+POLICY_A_EXIT=1
+
+=== EXECUTION POLICY B ===
+PROFILE_PATH=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB/profile-B.sb
+LAUNCH=/usr/bin/sandbox-exec -f /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-posix-sem-KaBvYB/profile-B.sb /run/current-system/sw/bin/python3.13 -c <probe>
+PYTHON: /run/current-system/sw/bin/python3.13
+POSIX_SEM_OK
+POLICY_B_EXIT=0
+
+=== END_A/B_CAUSAL_DISCRIMINATOR ===

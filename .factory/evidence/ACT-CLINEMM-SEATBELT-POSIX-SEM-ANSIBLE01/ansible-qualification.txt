@@ -1,0 +1,48 @@
+=== ANSIBLE QUALIFICATION (localhost only, sandboxed) ===
+DATE_UTC=2026-11-17T07:08:06Z
+ANSIBLE_BIN=/run/current-system/sw/bin/ansible
+ANSIBLE_PLAYBOOK_BIN=/run/current-system/sw/bin/ansible-playbook
+ANSIBLE_LOCAL_TEMP=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-ansible-hY9sCO/ansible-tmp
+
+--- STEP 1: ansible --version (interpreter + version capture) ---
+ansible [core 2.21.1]
+  config file = None
+  configured module search path = ['/Volumes/UserData/Users/chistyakov/.ansible/plugins/modules', '/usr/share/ansible/plugins/modules']
+  ansible python module location = /nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible
+  ansible collection location = /Volumes/UserData/Users/chistyakov/.ansible/collections:/usr/share/ansible/collections
+  executable location = /nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/bin/ansible
+  python version = 3.13.15 (main, Aug  5 2026, 12:25:43) [Clang 21.1.8 ] (/nix/store/8g76m81yyr8ki19d56l1czx1fqaxkk6b-python3-3.13.15/bin/python3.13)
+  jinja version = 3.1.6
+  pyyaml version = 6.0.3 (with libyaml v0.2.5)
+ANSIBLE_VERSION_EXIT=0
+
+--- STEP 2: the SAME interpreter, raw multiprocessing probe ---
+ANSIBLE_SHEBANG=#! /nix/store/j0hldai2k6ch691p6dlh4v75c1ym73mq-bash-5.3p9/bin/bash -e
+
+--- STEP 3: UNSANDBOXED baseline — localhost-only ansible.builtin.ping ---
+COMMAND=/run/current-system/sw/bin/ansible -i 'localhost,' localhost -c local -m ansible.builtin.ping
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+localhost | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/opt/homebrew/bin/python3.14"
+    },
+    "changed": false,
+    "ping": "pong"
+}
+ANSIBLE_PING_UNSANDBOXED_EXIT=0
+
+--- STEP 3b: the SANDBOXED localhost-only ansible.builtin.ping ---
+Executed by the apps/vscode production-path test:
+  'T8: a localhost-only ansible.builtin.ping task SUCCEEDS through the sandboxed production runner'
+  in apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+Receipt: apps-vscode-suites.txt
+
+--- STEP 4: syntax-check the ACTUAL playbook when available ---
+PLAYBOOK=NOT_FOUND (no playbook files discovered in the repository)
+ANSIBLE_SYNTAX_CHECK_EXIT=NOT_EXECUTED
+
+--- STEP 5: remote guest qualification ---
+REMOTE_GUEST=192.168.50.239:22
+REMOTE_SSH_PERFORMED=NO
+REMOTE_SSH_REASON=No destination-scoped network authority exists in the current Seatbelt profile; the network capability is deny|allow (not destination-scoped). A remote ping would require an unrestricted network grant, which this ACT explicitly forbids. Recorded as a separate bounded successor.
+=== END_ANSIBLE_QUALIFICATION ===

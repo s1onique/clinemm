@@ -1,0 +1,83 @@
+=== ANSIBLE BOUNDARY CLASSIFICATION (Darwin kernel) ===
+DATE_UTC=2026-11-17T06:35:24Z
+PROFILE_GENERATION_EXIT=0
+PROFILE_DENY_SEM_RULE_COUNT=1
+PROFILE_DENY_NETWORK_RULE=(deny network*)
+PROFILE_ALLOW_SEM_RULE_COUNT=1
+PROFILE_ALLOW_NETWORK_RULE=(allow network*)
+
+##### V1_DENY_NETWORK_LOCAL_TEMP_AUTHORIZED #####
+PROFILE_MODE=deny
+PROFILE_SHA256=e7cdf4b35d11ff5e4416cf70caff80c3550a458e5029b30043ce982ae00c0a18
+SEM_RULE_COUNT=1
+NETWORK_RULE=(deny network*)
+[ERROR]: Unexpected Exception, this is probably a bug: Local RPC server did not start.
+
+Traceback (most recent call last):
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/__init__.py", line 663, in cli_executor
+    exit_code = cli.run()
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/adhoc.py", line 184, in run
+    self._tqm = TaskQueueManager(
+                ~~~~~~~~~~~~~~~~^
+        inventory=inventory,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        forks=context.CLIARGS['forks'],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/executor/task_queue_manager.py", line 173, in __init__
+    _rpc_host.LocalManager.shared_instance()  # ensure the RPC host is available
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/_internal/_rpc_host.py", line 113, in shared_instance
+    instance.start()
+    ~~~~~~~~~~~~~~^^
+  File "/nix/store/8g76m81yyr8ki19d56l1czx1fqaxkk6b-python3-3.13.15/lib/python3.13/multiprocessing/managers.py", line 565, in start
+    self._process.start()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/_internal/_rpc_host.py", line 51, in start
+    raise TimeoutError("Local RPC server did not start.")
+TimeoutError: Local RPC server did not start.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/__init__.py", line 672, in cli_executor
+    raise AnsibleError("Unexpected Exception, this is probably a bug.") from ex
+ansible.errors.AnsibleError: Unexpected Exception, this is probably a bug: Local RPC server did not start.
+
+CASE_V1_DENY_NETWORK_LOCAL_TEMP_AUTHORIZED_EXIT=250
+
+##### V2_ALLOW_NETWORK_LOCAL_TEMP_AUTHORIZED #####
+PROFILE_MODE=allow
+PROFILE_SHA256=66f851f9273b75fa7991df938d9ec1f6f477ae8a7c5b1099a053b47a93c58ce3
+SEM_RULE_COUNT=1
+NETWORK_RULE=(allow network*)
+[ERROR]: Task failed: Failed to create temporary directory. In some cases, you may have been able to authenticate and did not have permissions on the target directory. Consider changing the remote tmp path in ansible.cfg to a path rooted in "/tmp", for more error information use -vvv. Failed command was: ( umask 77 && mkdir -p "` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp `"&& mkdir "` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp/ansible-tmp-1794897330.326734-60009-209500875134204 `" && echo ansible-tmp-1794897330.326734-60009-209500875134204="` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp/ansible-tmp-1794897330.326734-60009-209500875134204 `" ), exited with result 1
+Origin: <adhoc 'ansible.builtin.ping' task>
+
+{'action': 'ansible.builtin.ping', 'args': {}, 'timeout': 0, 'async_val': 0, 'poll': 15}
+
+localhost | UNREACHABLE! => {
+    "changed": false,
+    "msg": "Task failed: Failed to create temporary directory. In some cases, you may have been able to authenticate and did not have permissions on the target directory. Consider changing the remote tmp path in ansible.cfg to a path rooted in \"/tmp\", for more error information use -vvv. Failed command was: ( umask 77 && mkdir -p \"` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp `\"&& mkdir \"` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp/ansible-tmp-1794897330.326734-60009-209500875134204 `\" && echo ansible-tmp-1794897330.326734-60009-209500875134204=\"` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp/ansible-tmp-1794897330.326734-60009-209500875134204 `\" ), exited with result 1",
+    "unreachable": true
+}
+CASE_V2_ALLOW_NETWORK_LOCAL_TEMP_AUTHORIZED_EXIT=4
+
+##### V3_ALLOW_NETWORK_LOCAL_AND_REMOTE_TEMP_AUTHORIZED #####
+PROFILE_MODE=allow
+PROFILE_SHA256=66f851f9273b75fa7991df938d9ec1f6f477ae8a7c5b1099a053b47a93c58ce3
+SEM_RULE_COUNT=1
+NETWORK_RULE=(allow network*)
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/nix/store/8g76m81yyr8ki19d56l1czx1fqaxkk6b-python3-3.13.15/bin/python3.13', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+localhost | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/nix/store/8g76m81yyr8ki19d56l1czx1fqaxkk6b-python3-3.13.15/bin/python3.13"
+    },
+    "changed": false,
+    "ping": "pong"
+}
+CASE_V3_ALLOW_NETWORK_LOCAL_AND_REMOTE_TEMP_AUTHORIZED_EXIT=0
+
+=== END_ANSIBLE_BOUNDARY_CLASSIFICATION ===

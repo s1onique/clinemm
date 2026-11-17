@@ -1,0 +1,32 @@
+=== PROFILE-SNAPSHOT OPT-IN CONTRACT (review C1 P1 correction) ===
+DATE_UTC=2026-11-17T06:55:00Z (approx; see file mtimes for exact)
+COMMAND=vitest run --config vitest.config.ts src/sdk/__tests__/act-posix-sem01.profile-snapshot.test.ts
+WORKDIR=apps/vscode
+
+--- DEFAULT BEHAVIOUR (ACT_POSIX_SEM_PROFILE_OUT UNSET) ---
+✓ src/sdk/__tests__/act-posix-sem01.profile-snapshot.test.ts (2 tests | 1 skipped) 1ms
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+EXIT=0
+
+CONTRACT: the emitting test is SKIPPED. An ordinary `vitest run` (which does
+not set the variable) neither FAILS nor writes anything into the repository.
+
+--- OPT-IN BEHAVIOUR (ACT_POSIX_SEM_PROFILE_OUT=/tmp/act-prof-optin2) ---
+PROFILE_DENY_PATH=/tmp/act-prof-optin2/production-profile-deny.sb
+PROFILE_DENY_SEM_RULE_COUNT=1
+PROFILE_DENY_NETWORK_RULE=(deny network*)
+PROFILE_ALLOW_PATH=/tmp/act-prof-optin2/production-profile-allow.sb
+PROFILE_ALLOW_SEM_RULE_COUNT=1
+PROFILE_ALLOW_NETWORK_RULE=(allow network*)
+✓ src/sdk/__tests__/act-posix-sem01.profile-snapshot.test.ts (2 tests) 5ms
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+EXIT=0
+
+EMITTED FILES:
+-rw-r--r-- 1 chistyakov wheel 694 .../production-profile-allow.sb
+-rw-r--r-- 1 chistyakov wheel 519 .../production-profile-deny.sb
+
+REPO POLLUTION CHECK: `ls apps/vscode/src/sdk/__tests__/*.sb` -> NO (repo clean).
+The helper writes ONLY into the directory the operator named.

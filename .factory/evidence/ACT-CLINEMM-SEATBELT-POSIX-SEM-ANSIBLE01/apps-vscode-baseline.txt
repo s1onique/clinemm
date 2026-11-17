@@ -1,0 +1,101 @@
+=== BASELINE: production profile change reverted ===
+DATE_UTC=2026-11-17T06:18:56Z
+
+Saved working directory and index state WIP on main: d68def3ae evidence(clinemm): qualify observed compaction trigger causality
+STASH_PUSH_EXIT=0
+
+COMMAND=vitest run --config vitest.config.ts src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode[39m
+
+ [31m❯[39m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts [2m([22m[2m17 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 11783[2mms[22m[39m
+     [32m✓[39m sandbox ON: write to a path under the workspace root is KERNEL-ALLOWED (workspace trust boundary)[32m 22[2mms[22m[39m
+     [32m✓[39m counter-test: same write with sandbox OFF also succeeds[32m 10[2mms[22m[39m
+     [32m✓[39m write to a path outside the workspace AND outside /dev/null \u2014 kernel still DENIES (deny default + empty writableRoots)[32m 10[2mms[22m[39m
+     [32m✓[39m GREEN mktemp succeeds under the production resolver; path is descendant of canonical TMPDIR[32m 16[2mms[22m[39m
+     [32m✓[39m GREEN mktemp -d succeeds under the production resolver; created dir is inside canonical TMPDIR[32m 18[2mms[22m[39m
+     [32m✓[39m GREEN child TMPDIR is set to the canonical private root[32m 11[2mms[22m[39m
+     [32m✓[39m GREEN workspace write is KERNEL-ALLOWED under the workspace trust boundary (ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01)[32m 13[2mms[22m[39m
+     [32m✓[39m GREEN a sibling under the same parent canonical temp is DENIED (no parent authority expansion)[32m 15[2mms[22m[39m
+     [32m✓[39m GREEN synthesized temp root is removed after the command exits (cleanup)[32m 11[2mms[22m[39m
+     [32m✓[39m DEFAULT_OFF: stdout=OUT, stderr=ERR, exitCode=7[32m 12[2mms[22m[39m
+     [32m✓[39m opt-in seatbelt: stdout=OUT, stderr=ERR, exitCode=7 (supervision conserved)[32m 11[2mms[22m[39m
+     [33m[2m✓[22m[39m DEFAULT_OFF: deadline fires; terminal state is deadline_exceeded [33m 3505[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt: deadline fires; same terminal classification (no false clean exit; orphan absence NOT independently observed) [33m 3507[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt: profile temp dir is cleaned up after deadline (C2-P2 hygiene end-to-end) [33m 4099[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt through production resolver writes a real SBPL profile to disk [33m 385[2mms[22m[39m
+[31m     [31m×[31m T3: the production backgroundExec path runs a Python multiprocessing semaphore to a clean exit[39m[32m 92[2mms[22m[39m
+[31m     [31m×[31m T3b: the production backgroundExec path runs a real multiprocessing worker + queue[39m[32m 45[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: production CommandJobManager path[2m > [22mT3: the production backgroundExec path runs a Python multiprocessing semaphore to a clean exit
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m679:29[22m[39m
+    [90m677|[39m      })
+    [90m678|[39m      [34mexpect[39m(start[33m.[39mstate)[33m.[39m[34mtoBe[39m([32m"exited"[39m)
+    [90m679|[39m      [34mexpect[39m(start[33m.[39mexitCode)[33m.[39m[34mtoBe[39m([34m0[39m)
+    [90m   |[39m                             [31m^[39m
+    [90m680|[39m      [34mexpect[39m(start[33m.[39mstdout)[33m.[39m[34mtoContain[39m([32m"POSIX_SEM_OK"[39m)
+    [90m681|[39m      [90m// The pre-repair failure signature must NOT appear.[39m
+[90m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m671:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts[2m > [22mACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: production CommandJobManager path[2m > [22mT3b: the production backgroundExec path runs a real multiprocessing worker + queue
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m730:29[22m[39m
+    [90m728|[39m      })
+    [90m729|[39m      [34mexpect[39m(start[33m.[39mstate)[33m.[39m[34mtoBe[39m([32m"exited"[39m)
+    [90m730|[39m      [34mexpect[39m(start[33m.[39mexitCode)[33m.[39m[34mtoBe[39m([34m0[39m)
+    [90m   |[39m                             [31m^[39m
+    [90m731|[39m      [34mexpect[39m(start[33m.[39mstdout)[33m.[39m[34mtoContain[39m([32m"MP_WORKER_QUEUE_OK"[39m)
+    [90m732|[39m      [34mexpect[39m(start[33m.[39mstderr)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m"Operation not permitted"[39m)
+[90m [2m❯[22m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:[2m722:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m15 passed[39m[22m[90m (17)[39m
+[2m   Start at [22m 09:18:56
+[2m   Duration [22m 13.89s[2m (transform 1.39s, setup 1.97s, import 69ms, tests 11.78s, environment 0ms)[22m
+
+BASELINE_SUITE_EXIT=1
+
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+	modified:   sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.test.ts
+	modified:   sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.factory/evidence/ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01/
+	sdk/packages/core/src/runtime/sandbox/macos/seatbelt-posix-sem01.live.test.ts
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (6d7b383f98187063c2197a71da961af6490732cb)
+STASH_POP_EXIT=0
+=== END_BASELINE ===

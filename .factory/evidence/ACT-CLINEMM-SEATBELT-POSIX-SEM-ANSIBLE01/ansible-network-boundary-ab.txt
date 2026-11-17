@@ -1,0 +1,69 @@
+=== ANSIBLE NETWORK BOUNDARY A/B (Darwin kernel) ===
+DATE_UTC=2026-11-17T06:34:06Z
+WORK_DIR=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T//act-ansible-ab-zmvnw9
+PROFILE_GENERATION_EXIT=0
+PROFILE_DENY_SEM_RULE_COUNT=1
+PROFILE_DENY_NETWORK_RULE=(deny network*)
+PROFILE_ALLOW_SEM_RULE_COUNT=1
+PROFILE_ALLOW_NETWORK_RULE=(allow network*)
+
+########## PROFILE MODE: deny ##########
+PROFILE_SHA256=e43a1c124674824a2bc47ab4f5166c38f4a17c93ecbc496e65e4bdbd2885a2bd
+SEM_RULE_COUNT=1
+NETWORK_RULE=(deny network*)
+
+[ERROR]: Unexpected Exception, this is probably a bug: Local RPC server did not start.
+
+Traceback (most recent call last):
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/__init__.py", line 663, in cli_executor
+    exit_code = cli.run()
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/adhoc.py", line 184, in run
+    self._tqm = TaskQueueManager(
+                ~~~~~~~~~~~~~~~~^
+        inventory=inventory,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        forks=context.CLIARGS['forks'],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/executor/task_queue_manager.py", line 173, in __init__
+    _rpc_host.LocalManager.shared_instance()  # ensure the RPC host is available
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/_internal/_rpc_host.py", line 113, in shared_instance
+    instance.start()
+    ~~~~~~~~~~~~~~^^
+  File "/nix/store/8g76m81yyr8ki19d56l1czx1fqaxkk6b-python3-3.13.15/lib/python3.13/multiprocessing/managers.py", line 565, in start
+    self._process.start()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/_internal/_rpc_host.py", line 51, in start
+    raise TimeoutError("Local RPC server did not start.")
+TimeoutError: Local RPC server did not start.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/nix/store/rq12yh8jfndszsmvkfrrzh5p4nsawli2-python3.13-ansible-core-2.21.1/lib/python3.13/site-packages/ansible/cli/__init__.py", line 672, in cli_executor
+    raise AnsibleError("Unexpected Exception, this is probably a bug.") from ex
+ansible.errors.AnsibleError: Unexpected Exception, this is probably a bug: Local RPC server did not start.
+
+MODE_deny_EXIT=250
+
+########## PROFILE MODE: allow ##########
+PROFILE_SHA256=67e579d18379ff00764ff8795f33da0ffd4100c7fd3c10a2a2da603e72b0cfc2
+SEM_RULE_COUNT=1
+NETWORK_RULE=(allow network*)
+
+[ERROR]: Task failed: Failed to create temporary directory. In some cases, you may have been able to authenticate and did not have permissions on the target directory. Consider changing the remote tmp path in ansible.cfg to a path rooted in "/tmp", for more error information use -vvv. Failed command was: ( umask 77 && mkdir -p "` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp `"&& mkdir "` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp/ansible-tmp-1794897252.170613-54545-130545058839007 `" && echo ansible-tmp-1794897252.170613-54545-130545058839007="` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp/ansible-tmp-1794897252.170613-54545-130545058839007 `" ), exited with result 1
+Origin: <adhoc 'ansible.builtin.ping' task>
+
+{'action': 'ansible.builtin.ping', 'args': {}, 'timeout': 0, 'async_val': 0, 'poll': 15}
+
+localhost | UNREACHABLE! => {
+    "changed": false,
+    "msg": "Task failed: Failed to create temporary directory. In some cases, you may have been able to authenticate and did not have permissions on the target directory. Consider changing the remote tmp path in ansible.cfg to a path rooted in \"/tmp\", for more error information use -vvv. Failed command was: ( umask 77 && mkdir -p \"` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp `\"&& mkdir \"` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp/ansible-tmp-1794897252.170613-54545-130545058839007 `\" && echo ansible-tmp-1794897252.170613-54545-130545058839007=\"` echo /Volumes/UserData/Users/chistyakov/.ansible/tmp/ansible-tmp-1794897252.170613-54545-130545058839007 `\" ), exited with result 1",
+    "unreachable": true
+}
+MODE_allow_EXIT=4
+
+=== END_ANSIBLE_NETWORK_BOUNDARY_AB ===

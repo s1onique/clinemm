@@ -1,0 +1,27 @@
+=== APPS/VSCODE FOCUSED SANDBOX SUITES (unsandboxed executor) ===
+DATE_UTC=2026-11-17T07:06:45Z
+NODE=v24.18.0
+COMMAND=vitest run --config vitest.config.ts src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts src/sdk/command-job-manager.sandbox-integration.test.ts src/sdk/sandbox-policy-production-composition.test.ts
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode[39m
+
+ [32m✓[39m src/sdk/sandbox-policy-production-composition.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m src/sdk/command-job-manager.sandbox-integration.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 76[2mms[22m[39m
+ [32m✓[39m src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 12718[2mms[22m[39m
+     [33m[2m✓[22m[39m DEFAULT_OFF: deadline fires; terminal state is deadline_exceeded [33m 3511[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt: deadline fires; same terminal classification (no false clean exit; orphan absence NOT independently observed) [33m 3507[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt: profile temp dir is cleaned up after deadline (C2-P2 hygiene end-to-end) [33m 4123[2mms[22m[39m
+     [33m[2m✓[22m[39m opt-in seatbelt through production resolver writes a real SBPL profile to disk [33m 371[2mms[22m[39m
+     [33m[2m✓[22m[39m T8: a localhost-only ansible.builtin.ping task SUCCEEDS through the sandboxed production runner [33m 844[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m41 passed[39m[22m[90m (41)[39m
+[2m   Start at [22m 10:06:45
+[2m   Duration [22m 14.93s[2m (transform 4.33s, setup 6.20s, import 222ms, tests 12.82s, environment 0ms)[22m
+
+SUITE_EXIT=0
+=== END_APPS_VSCODE_FOCUSED_SUITES ===

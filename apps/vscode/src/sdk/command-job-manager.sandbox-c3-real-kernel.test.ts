@@ -29,7 +29,7 @@
 
 import { spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
@@ -618,4 +618,223 @@ describe.skipIf(!HAS_SUBSTRATE)("C3: production seam sanity (real backend is wir
 			await manager.dispose()
 		}
 	})
+})
+
+/**
+ * ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01
+ *
+ * T3 — the REAL production command-execution path
+ * (`CommandJobManager.start()` -> production resolver -> REAL Seatbelt
+ * backend -> `/usr/bin/sandbox-exec` -> Darwin kernel) must be able to
+ * run a Python `multiprocessing` workload.
+ *
+ * Before the repair the production profile carried NO
+ * `(allow ipc-posix-sem)` rule, so `multiprocessing.Semaphore(1)`
+ * failed with `PermissionError: [Errno 1] Operation not permitted`
+ * inside the sandbox, which broke Ansible's task-execution path.
+ *
+ * This test uses NO dependency injection: the `CommandJobManager` is
+ * constructed with the DEFAULT production resolver, exactly as the
+ * extension host constructs it.
+ */
+describe.skipIf(!HAS_SUBSTRATE)("ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: production CommandJobManager path", () => {
+	/**
+	 * The Python interpreter used by the live probes. The ACT
+	 * requires the same interpreter that launches the installed
+	 * Ansible. An absolute path is used so the sandboxed child's
+	 * sanitized PATH cannot select a different one.
+	 */
+	const PYTHON_BIN = (() => {
+		const candidates = ["/run/current-system/sw/bin/python3.13", "/usr/bin/python3", "/usr/local/bin/python3"]
+		for (const c of candidates) {
+			try {
+				if (existsSync(c)) return c
+			} catch {
+				// ignore
+			}
+		}
+		return "python3"
+	})()
+
+	it("T3: the production backgroundExec path runs a Python multiprocessing semaphore to a clean exit", async () => {
+		const workspaceRoot = mkdtempSync(join(tmpRoot!, "ws-sem-"))
+		const manager = new CommandJobManager({
+			experimentalSandboxWorkspaceRoots: [workspaceRoot],
+		})
+		try {
+			await withSandboxOptIn(SEATBELT_OPTIN, async () => {
+				const start = await manager.start({
+					command: `${PYTHON_BIN} -c 'import multiprocessing as mp; s = mp.Semaphore(1); s.acquire(); s.release(); print("POSIX_SEM_OK")'`,
+					cwd: workspaceRoot,
+					waitBudgetMs: 20_000,
+					executionDeadlineMs: 20_000,
+				})
+				expect(start.state).toBe("exited")
+				expect(start.exitCode).toBe(0)
+				expect(start.stdout).toContain("POSIX_SEM_OK")
+				// The pre-repair failure signature must NOT appear.
+				expect(start.stderr).not.toContain("Operation not permitted")
+				expect(start.stderr).not.toContain("multiprocessing")
+			})
+		} finally {
+			await manager.dispose()
+		}
+	})
+
+	it("T3b: the production backgroundExec path runs a real multiprocessing worker + queue", async () => {
+		const workspaceRoot = mkdtempSync(join(tmpRoot!, "ws-semq-"))
+		// The program is written to a FILE inside the authorized
+		// workspace root so no shell quoting can corrupt it. The
+		// command line then references only that path.
+		const programPath = join(workspaceRoot, "mp_probe.py")
+		writeFileSync(
+			programPath,
+			[
+				"import multiprocessing as mp",
+				"",
+				"def worker(q):",
+				"    q.put(('worker-ok', mp.current_process().name))",
+				"",
+				"if __name__ == '__main__':",
+				"    ctx = mp.get_context('fork')",
+				"    q = ctx.Queue()",
+				"    procs = [ctx.Process(target=worker, args=(q,)) for _ in range(2)]",
+				"    for p in procs:",
+				"        p.start()",
+				"    results = [q.get(timeout=20) for _ in range(2)]",
+				"    for p in procs:",
+				"        p.join(timeout=20)",
+				"    assert all(p.exitcode == 0 for p in procs), [p.exitcode for p in procs]",
+				"    print('MP_WORKER_QUEUE_OK', results)",
+				"",
+			].join("\n"),
+		)
+		const manager = new CommandJobManager({
+			experimentalSandboxWorkspaceRoots: [workspaceRoot],
+		})
+		try {
+			await withSandboxOptIn(SEATBELT_OPTIN, async () => {
+				const start = await manager.start({
+					command: `${PYTHON_BIN} ${JSON.stringify(programPath)}`,
+					cwd: workspaceRoot,
+					waitBudgetMs: 30_000,
+					executionDeadlineMs: 30_000,
+				})
+				expect(start.state).toBe("exited")
+				expect(start.exitCode).toBe(0)
+				expect(start.stdout).toContain("MP_WORKER_QUEUE_OK")
+				expect(start.stderr).not.toContain("Operation not permitted")
+			})
+		} finally {
+			await manager.dispose()
+		}
+	})
+})
+
+/**
+ * ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01
+ *
+ * Ansible qualification through the REAL production command-execution
+ * path (`CommandJobManager.start()` -> production resolver -> REAL
+ * Seatbelt backend -> Darwin kernel).
+ *
+ * The `ansible.builtin.ping` module runs against LOCALHOST ONLY. The
+ * Ubuntu guest (192.168.50.239:22) is NOT contacted; the provisioning
+ * playbook is NOT run; host-key verification is NOT disabled; no private
+ * SSH key is read or printed.
+ *
+ * BOUNDARY NOTES (established by the live A/B classification, see
+ * `.factory/evidence/ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01/ansible-boundary-classification.txt`):
+ *
+ *   - The POSIX-semaphore repair removed the pre-repair
+ *     `PermissionError: [Errno 1] Operation not permitted` from
+ *     Ansible's `multiprocessing` worker startup.
+ *   - Under the DEFAULT network mode (`deny`), Ansible's `LocalManager`
+ *     still fails with "Local RPC server did not start" because it
+ *     binds an AF_INET listener socket. That is a SEPARATE, pre-existing
+ *     boundary (the network capability), NOT the semaphore boundary.
+ *   - The explicit network opt-in (`allow`) plus an Ansible remote-temp
+ *     path inside the authorized workspace root makes the localhost
+ *     task SUCCEED.
+ *
+ * The test therefore asserts the qualification under the explicit
+ * network opt-in (which is the documented, existing ClineMM mechanism)
+ * and asserts that the PRE-REPAIR failure signature is absent.
+ *
+ * The test is SKIPPED (not silently passed) when the installed Ansible
+ * is absent, so the qualification result is always explicit.
+ */
+describe.skipIf(!HAS_SUBSTRATE)("ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: Ansible localhost qualification", () => {
+	const ANSIBLE_BIN = (() => {
+		const candidates = [
+			"/run/current-system/sw/bin/ansible",
+			"/usr/local/bin/ansible",
+			"/opt/homebrew/bin/ansible",
+			"/usr/bin/ansible",
+		]
+		for (const c of candidates) {
+			try {
+				if (existsSync(c)) return c
+			} catch {
+				// ignore
+			}
+		}
+		return ""
+	})()
+
+	it.skipIf(!ANSIBLE_BIN)(
+		"T8: a localhost-only ansible.builtin.ping task SUCCEEDS through the sandboxed production runner",
+		async () => {
+			const workspaceRoot = mkdtempSync(join(tmpRoot!, "ws-ansible-"))
+			// Ansible needs a writable local temp AND a writable
+			// remote temp for its localhost connection plugin. Both
+			// are placed INSIDE the authorized workspace root so the
+			// sandbox permits them.
+			const ansibleTmp = join(workspaceRoot, "ansible-tmp")
+			const remoteTmp = join(workspaceRoot, "ansible-remote-tmp")
+			mkdirSync(ansibleTmp, { recursive: true })
+			mkdirSync(remoteTmp, { recursive: true })
+
+			const manager = new CommandJobManager({
+				experimentalSandboxWorkspaceRoots: [workspaceRoot],
+			})
+			try {
+				// The existing, documented network opt-in
+				// (`CLINEMM_SAFE_YOLO_NETWORK=allow`). Ansible's
+				// LocalManager binds an AF_INET listener socket, so
+				// the DEFAULT `network: "deny"` posture cannot host
+				// it. This is a pre-existing, separate boundary from
+				// the POSIX-semaphore one.
+				await withSandboxOptIn(SEATBELT_OPTIN, async () => {
+					const prevNetworkOptIn = process.env.CLINEMM_SAFE_YOLO_NETWORK
+					process.env.CLINEMM_SAFE_YOLO_NETWORK = "allow"
+					try {
+						const start = await manager.start({
+							command: `ANSIBLE_LOCAL_TEMP=${JSON.stringify(ansibleTmp)} ANSIBLE_REMOTE_TEMP=${JSON.stringify(remoteTmp)} ANSIBLE_FORCE_COLOR=0 ANSIBLE_NOCOLOR=1 ${ANSIBLE_BIN} -i 'localhost,' localhost -c local -m ansible.builtin.ping`,
+							cwd: workspaceRoot,
+							waitBudgetMs: 60_000,
+							executionDeadlineMs: 60_000,
+						})
+						expect(start.state).toBe("exited")
+						expect(start.exitCode).toBe(0)
+						// The task-execution path (not just `--version`).
+						expect(start.stdout).toContain("SUCCESS")
+						expect(start.stdout).toContain("pong")
+						// The pre-repair multiprocessing failure signature
+						// must NOT appear.
+						expect(start.stderr).not.toContain("Operation not permitted")
+						expect(start.stderr).not.toContain("Unable to use multiprocessing")
+					} finally {
+						if (prevNetworkOptIn === undefined) {
+							delete process.env.CLINEMM_SAFE_YOLO_NETWORK
+						} else {
+							process.env.CLINEMM_SAFE_YOLO_NETWORK = prevNetworkOptIn
+						}
+					}
+				})
+			} finally {
+				await manager.dispose()
+			}
+		},
+	)
 })

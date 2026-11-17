@@ -1,0 +1,15 @@
+=== PROBE_ENVIRONMENT ===
+DATE_UTC=2026-11-17T06:07:07Z
+SHELL_PID=43060
+PPID=41194
+TMPDIR=/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/
+CLINEMM_HOST_HELPER_SOCKET=<unset>
+UNAME=Darwin MacBook-Pro-3.local 23.6.0 Darwin Kernel Version 23.6.0: Thu Dec 19 20:47:16 PST 2024; root:xnu-10063.141.1.703.2~1/RELEASE_ARM64_T6031 arm64 arm Darwin
+SW_VERS=14.7.4
+NESTED_SANDBOX_EXEC=OK
+PYTHON_BIN=python3
+PYTHON_PATH=/run/current-system/sw/bin/python3
+PYTHON: /run/current-system/sw/bin/python3
+POSIX_SEM_OK
+POSIX_SEM_EXIT=0
+=== END_PROBE_ENVIRONMENT ===

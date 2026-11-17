@@ -480,4 +480,149 @@ describe("generateSeatbeltProfile", () => {
 			}
 		});
 	});
+
+	// ===============================================================
+	// ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01
+	// POSIX semaphore authority (Python multiprocessing / Ansible).
+	//
+	// The live production profile emitted by the real `backgroundExec`
+	// path did NOT carry `(allow ipc-posix-sem)`, so Python's
+	// `multiprocessing.SemLock` failed with `EPERM`
+	// ("Operation not permitted") inside every sandboxed command.
+	//
+	// This block asserts:
+	//   T1) EXACTLY ONE `(allow ipc-posix-sem)` rule is emitted.
+	//   T2) Profile generation remains deterministic with the rule.
+	//   T3) Existing capability-driven profile sections are unchanged
+	//       (read / write / readonly-deny / createOnly / go-cache).
+	//   T4) Network-deny AND network-allow profiles both retain their
+	//       previous network rules.
+	//   T5) NO unrelated IPC or Mach-service permissions are introduced.
+	// ===============================================================
+	describe("ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01: POSIX semaphore authority", () => {
+		const SEM_RULE = "(allow ipc-posix-sem)";
+
+		it("T1 RED→GREEN: emits EXACTLY ONE (allow ipc-posix-sem) rule", () => {
+			const p = generateSeatbeltProfile(minimalCap);
+			expect(p).toContain(SEM_RULE);
+			// Exactly one occurrence -- a duplicate / wildcard grant
+			// would be an unintended widening.
+			const occurrences = p.split(SEM_RULE).length - 1;
+			expect(occurrences).toBe(1);
+			// It is emitted as a standalone top-level rule line, not
+			// folded into another allow.
+			expect(p).toMatch(/^\(allow ipc-posix-sem\)$/m);
+		});
+
+		it("T1b: the semaphore rule is emitted for EVERY capability shape (no capability knob, no command detection)", () => {
+			const shapes: CommandCapability[] = [
+				minimalCap,
+				{ ...minimalCap, network: "allow" },
+				{
+					...minimalCap,
+					readonlyRoots: ["/Users/me/readonly"],
+					writableRoots: ["/Users/me/writable"],
+				},
+				{
+					...minimalCap,
+					writableRoots: ["/Users/me/writable"],
+					createOnlyRoots: ["/Users/me/create-only"],
+					tempRoot: "/private/tmp/clinemm-sandbox-1",
+				},
+			];
+			for (const cap of shapes) {
+				const p = generateSeatbeltProfile(cap);
+				expect(p.split(SEM_RULE).length - 1).toBe(1);
+			}
+			// The ssh-agent / host-helper opt-in paths do NOT change the
+			// semaphore rule count either.
+			const withAgent = generateSeatbeltProfile(minimalCap, {
+				sshAgentCanonicalSocketPath:
+					"/private/tmp/com.apple.launchd.abc/Listeners",
+			});
+			expect(withAgent.split(SEM_RULE).length - 1).toBe(1);
+		});
+
+		it("T2 conservation: profile generation remains deterministic with the semaphore rule", () => {
+			const cap: CommandCapability = {
+				readonlyRoots: [],
+				writableRoots: ["/Users/me/writable"],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				tempRoot: "/private/tmp/clinemm-sandbox-1",
+			};
+			const a = generateSeatbeltProfile(cap);
+			const b = generateSeatbeltProfile(cap);
+			expect(a).toBe(b);
+			expect(sha256(a)).toBe(sha256(b));
+			expect(a.split(SEM_RULE).length - 1).toBe(1);
+		});
+
+		it("T3 conservation: existing capability-driven profile sections are unchanged", () => {
+			const cap: CommandCapability = {
+				readonlyRoots: ["/Users/me/readonly"],
+				writableRoots: ["/Users/me/writable"],
+				createOnlyRoots: ["/Users/me/create-only"],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				tempRoot: "/private/tmp/clinemm-sandbox-1",
+			};
+			const p = generateSeatbeltProfile(cap);
+			// Read rule (broad allow + per-subpath deny).
+			expect(p).toContain("(allow file-read*)");
+			// Write rule with the capability's writable roots + tempRoot.
+			expect(p).toContain('(subpath "/Users/me/writable")');
+			expect(p).toContain('(subpath "/private/tmp/clinemm-sandbox-1")');
+			// Narrow create-only rule.
+			expect(p).toContain("(allow file-write-create");
+			expect(p).toContain('(subpath "/Users/me/create-only")');
+			// ReadonlyRoots deny is still emitted LAST (deny-after-allow).
+			expect(p).toContain('(deny file-write* (subpath "/Users/me/readonly"))');
+			expect(p.indexOf("(deny file-write*")).toBeGreaterThan(
+				p.indexOf("(allow file-write*"),
+			);
+			// Metadata read rule unchanged.
+			expect(p).toContain('(allow file-read-metadata (subpath "/"))');
+		});
+
+		it("T4 conservation: network-deny AND network-allow profiles retain their previous network rules", () => {
+			const denyProfile = generateSeatbeltProfile(minimalCap);
+			expect(denyProfile).toContain("(deny network*)");
+			expect(denyProfile).not.toContain("(allow network*)");
+
+			const allowProfile = generateSeatbeltProfile({
+				...minimalCap,
+				network: "allow",
+			});
+			expect(allowProfile).not.toContain("(deny network*)");
+			expect(allowProfile).toContain("(allow network*)");
+
+			// The semaphore rule is INDEPENDENT of the network decision:
+			// it appears in both, and never alters the network rule.
+			expect(denyProfile.split(SEM_RULE).length - 1).toBe(1);
+			expect(allowProfile.split(SEM_RULE).length - 1).toBe(1);
+		});
+
+		it("T5 conservation: NO unrelated IPC or Mach-service permissions are introduced", () => {
+			const p = generateSeatbeltProfile(minimalCap);
+			// The ONLY ipc-* authority in the profile is ipc-posix-sem.
+			const ipcRules = p.match(/\(allow ipc-[a-z0-9-]+\)/g) ?? [];
+			expect(ipcRules).toEqual([SEM_RULE]);
+			// No ipc-posix-shm / msg / mq authority.
+			expect(p).not.toContain("ipc-posix-shm");
+			expect(p).not.toContain("ipc-posix-msg");
+			expect(p).not.toContain("ipc-posix-mq");
+			// No broad wildcard IPC grant.
+			expect(p).not.toContain("(allow ipc*)");
+			expect(p).not.toContain("(allow ipc-*)");
+			// Mach service authority is unchanged: only the pre-existing
+			// `(allow mach-lookup)` rule, no per-service grants.
+			expect(p).toContain("(allow mach-lookup)");
+			expect(p).not.toMatch(/\(allow mach-service/);
+			expect(p).not.toContain("mach-lookup (global-name");
+			// No system-socket authority is introduced by this rule.
+			expect(p).not.toContain("system-socket");
+			expect(p).not.toContain("unix-socket");
+		});
+	});
 });
