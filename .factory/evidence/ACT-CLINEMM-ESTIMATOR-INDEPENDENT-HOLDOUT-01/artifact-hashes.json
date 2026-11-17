@@ -1,0 +1,72 @@
+{
+  "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.artifact-hashes.v1",
+  "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
+  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
+  "hashes": [
+    {
+      "name": "frozen-candidates.json",
+      "sha256": "e0a0ceff2b1b879ae7275918afbc3ac2a5ae2fd1cc494530952d51b4c88c6ac1",
+      "bytes": 1410
+    },
+    {
+      "name": "holdout-comparison.json",
+      "sha256": "22d63b566df903587214a03836078da9a93a534361e595d2cae81f5c61ce29cb",
+      "bytes": 1855
+    },
+    {
+      "name": "holdout-manifest.json",
+      "sha256": "282f138c9e7f1a217e9f9359e58c0143ed7fa549173158a8921f60fd3c481b6a",
+      "bytes": 2546
+    },
+    {
+      "name": "identity.json",
+      "sha256": "93b0e5b280e621ec47b22f27970846288f305cda85b6e556a4d880588f3a3ba8",
+      "bytes": 1340
+    },
+    {
+      "name": "join-audit.json",
+      "sha256": "b77beeeb804fdfb68b8d888c14d95c3b58237fe0f68fecef018b87487c2c623e",
+      "bytes": 754
+    },
+    {
+      "name": "qualification-report.md",
+      "sha256": "d4258f3cef4d385e0cd845d7e86e26e28a4fbca137771bba635ae5db07dba066",
+      "bytes": 15391
+    },
+    {
+      "name": "safety-discriminators.json",
+      "sha256": "e38c07b99b44b762905767bd9af14bf471ab64dfc9216e365e409ccf1645c4b3",
+      "bytes": 3770
+    },
+    {
+      "name": "test-receipt.json",
+      "sha256": "b6472aec5bd9b221fb47a439ceaf1c9cfaa547ee3da551f12c39de63536638cf",
+      "bytes": 2501
+    },
+    {
+      "name": "tool/artifacts.ts",
+      "sha256": "9c2909087ba2f603a0a228f423d66a96e7a00c2dae47bd9fba2ddc650b25a2fd",
+      "bytes": 9072
+    },
+    {
+      "name": "tool/holdout.test.ts",
+      "sha256": "73d4200283bb0f014003f23addc13a91d1d35f051f035551de1284e31deebf94",
+      "bytes": 17375
+    },
+    {
+      "name": "tool/holdout.ts",
+      "sha256": "3069a174dd475f441b4a799ed27755c7f92174232dc4006d35e0b8c26cb65608",
+      "bytes": 22822
+    },
+    {
+      "name": "tool/receipt.ts",
+      "sha256": "4beb665c7fb28f07d48e0905c0608cd11d2c1fdb420ae90733bc2e4202c43723",
+      "bytes": 2412
+    },
+    {
+      "name": "tool/run.ts",
+      "sha256": "657b9507487bd4cadb88f10a49570f4e3d286f7a9d236baf60c2f6a92944f92f",
+      "bytes": 6139
+    }
+  ]
+}

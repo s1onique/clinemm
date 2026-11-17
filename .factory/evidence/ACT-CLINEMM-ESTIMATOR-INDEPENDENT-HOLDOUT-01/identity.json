@@ -1,0 +1,29 @@
+{
+  "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.identity.v1",
+  "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
+  "toolVersion": "offline-independent-holdout.v1",
+  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
+  "repository": {
+    "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "remote": "git@github.com:s1onique/clinemm.git",
+    "branch": "main",
+    "entryHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31"
+  },
+  "tool": {
+    "path": ".factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.ts",
+    "version": "offline-independent-holdout.v1",
+    "sha256": "3069a174dd475f441b4a799ed27755c7f92174232dc4006d35e0b8c26cb65608",
+    "testPath": ".factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts",
+    "importer": {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.ts",
+      "version": "offline-estimator-calibration.v1",
+      "sha256": "ddbb74e93286c59451edc83a154d781d8a5044780a25d8a1a6072fc8329eb471",
+      "modifiedByThisAct": false
+    }
+  },
+  "verdict": "AWAITING_INDEPENDENT_DOGFOOD_SESSION",
+  "productionDeploymentAuthorized": false,
+  "estimatorImplementationChanged": false,
+  "compactionPolicyChanged": false,
+  "coefficientsRefitOnHoldout": false
+}

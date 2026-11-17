@@ -1,0 +1,62 @@
+{
+  "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.holdout-comparison.v1",
+  "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
+  "toolVersion": "offline-independent-holdout.v1",
+  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
+  "independentSessions": 0,
+  "eligibleRequests": 0,
+  "observationTarget": 10,
+  "evaluationPerformed": false,
+  "comparison": [
+    {
+      "candidateId": "BASELINE",
+      "statistics": {
+        "count": 0,
+        "maximumUnderestimation": 0
+      },
+      "accuracyImprovementVsBaseline": {
+        "medianAbsoluteErrorDelta": 0,
+        "p95AbsoluteErrorDelta": 0,
+        "interpretation": "UNCHANGED"
+      }
+    },
+    {
+      "candidateId": "CONSTANT",
+      "statistics": {
+        "count": 0,
+        "maximumUnderestimation": 0
+      },
+      "accuracyImprovementVsBaseline": {
+        "medianAbsoluteErrorDelta": 0,
+        "p95AbsoluteErrorDelta": 0,
+        "interpretation": "UNCHANGED"
+      }
+    },
+    {
+      "candidateId": "CONSTANT_MODEL_SCOPED",
+      "statistics": {
+        "count": 0,
+        "maximumUnderestimation": 0
+      },
+      "accuracyImprovementVsBaseline": {
+        "medianAbsoluteErrorDelta": 0,
+        "p95AbsoluteErrorDelta": 0,
+        "interpretation": "UNCHANGED"
+      }
+    },
+    {
+      "candidateId": "AFFINE",
+      "statistics": {
+        "count": 0,
+        "maximumUnderestimation": 0
+      },
+      "accuracyImprovementVsBaseline": {
+        "medianAbsoluteErrorDelta": 0,
+        "p95AbsoluteErrorDelta": 0,
+        "interpretation": "UNCHANGED"
+      }
+    }
+  ],
+  "temporalGroups": {},
+  "temporalNote": "The temporal grouping uses ONLY request-recorded observables (compactionInitiated and decision-estimate/submission equivalence). The prior analyzer's ordinal-derived `epoch` field is NOT used as evidence of compaction timing."
+}

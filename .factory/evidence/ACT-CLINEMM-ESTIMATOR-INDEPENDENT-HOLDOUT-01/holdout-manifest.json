@@ -1,0 +1,71 @@
+{
+  "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.holdout-manifest.v1",
+  "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
+  "toolVersion": "offline-independent-holdout.v1",
+  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
+  "independence": {
+    "independent": false,
+    "reasonCode": "DUPLICATE_EXPORT_SAME_SESSION",
+    "holdoutSessionIds": [],
+    "trainingSessionIds": [
+      "1794881611778_557z3"
+    ]
+  },
+  "discoveredTraces": [
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/user-data/User/globalStorage/s1onique.clinemm/roundc-latency-trace.json",
+      "sha256": "601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed",
+      "bytes": 647103,
+      "sessionId": "1794881611778_557z3",
+      "schema": "cline.roundc-latency-trace.v1",
+      "eventCount": 782,
+      "truncated": false,
+      "droppedEventCount": 0,
+      "integrityFailureCount": 0,
+      "role": "TRAINING_SOURCE",
+      "decision": "EXCLUDE_FROM_HOLDOUT"
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace.json",
+      "sha256": "601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed",
+      "bytes": 647103,
+      "sessionId": "1794881611778_557z3",
+      "schema": "cline.roundc-latency-trace.v1",
+      "eventCount": 782,
+      "truncated": false,
+      "droppedEventCount": 0,
+      "integrityFailureCount": 0,
+      "role": "TRAINING_SOURCE",
+      "decision": "EXCLUDE_FROM_HOLDOUT"
+    }
+  ],
+  "distinctSessionIds": [
+    "1794881611778_557z3"
+  ],
+  "duplicateExportsOfSameSession": 1,
+  "loadErrors": [],
+  "trainingSource": {
+    "sessionId": "1794881611778_557z3",
+    "traceSha256": "601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed"
+  },
+  "installedBuildIdentity": {
+    "extensionVersion": "4.1.16-5a1c485cb",
+    "extensionBundleSha256": "bfda14727f7a2e91fffb47d74884a58dc11c29f7cbce8612e660a4e473a80fb5",
+    "sourceHead": "UNAVAILABLE_FROM_TRACE",
+    "observedFrom": "training-session trace identity block"
+  },
+  "modelProviderIdentity": {
+    "providerId": "openai-compatible",
+    "modelId": "qwen3.8-flash-next-iq3_s",
+    "effectiveContextBudgetTokens": 115200,
+    "reasoningEffort": "medium",
+    "thinkingEnabled": true,
+    "maxOutputTokens": 16384
+  },
+  "strataIdentity": {
+    "version": "UNAVAILABLE_FROM_TRACE",
+    "configuration": "UNAVAILABLE_FROM_TRACE",
+    "note": "The sanitized latency trace carries no Strata version/configuration identity field."
+  },
+  "rawTraceCommitted": false
+}

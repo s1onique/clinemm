@@ -1,0 +1,43 @@
+{
+  "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.frozen-candidates.v1",
+  "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
+  "toolVersion": "offline-independent-holdout.v1",
+  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
+  "frozenAt": "pre-validation",
+  "refitOnHoldout": false,
+  "trainingSourceSessionId": "1794881611778_557z3",
+  "trainingSourceTraceSha256": "601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed",
+  "targetScope": {
+    "providerId": "openai-compatible",
+    "modelId": "qwen3.8-flash-next-iq3_s"
+  },
+  "candidates": [
+    {
+      "id": "BASELINE",
+      "kind": "BASELINE"
+    },
+    {
+      "id": "CONSTANT",
+      "kind": "CONSTANT",
+      "factor": 0.79935
+    },
+    {
+      "id": "CONSTANT_MODEL_SCOPED",
+      "kind": "CONSTANT",
+      "factor": 0.79935,
+      "scope": {
+        "providerId": "openai-compatible",
+        "modelId": "qwen3.8-flash-next-iq3_s"
+      }
+    },
+    {
+      "id": "AFFINE",
+      "kind": "AFFINE",
+      "a": 0.8078297287430471,
+      "b": -601.9734484558503
+    }
+  ],
+  "primaryCandidateId": "CONSTANT_MODEL_SCOPED",
+  "observationTarget": 10,
+  "provenance": "Transcribed from .factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/calibration-candidates.json (committed at 88f7ce2ca). The coefficients are frozen constants; this ACT does not fit, tune or select a coefficient."
+}
