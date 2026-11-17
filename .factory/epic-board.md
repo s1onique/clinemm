@@ -35468,3 +35468,108 @@ trace in Git.
 RC-01, RC-02 and RC-04 are **not** reopened. The P1 is **closed**; the review's
 `PASS_WITH_NONBLOCKING_RESIDUE` disposition is satisfied. The digest's invalid historical
 gate summary and the ≈3 MB epic board remain **P2 hygiene**, not blockers.
+
+# ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01 — PASS_LIVE_NORMALIZATION_QUALIFIED — 2026-11-17
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01/`
+  `00-identity-record.json`, `01-model-provider-matrix.json`, `analysis.json`,
+  `source-map.md`, `qualification-report.md`, `artifact-hashes.txt`,
+  `02-sanitization-audit.txt`, `gate-01-normalization-suites.txt`,
+  `gate-02-tools-tree.txt`, `gate-03-flint-witness-live.txt`,
+  `gate-04-preexisting-failures.txt`, `gate-05-typecheck.txt`,
+  `tool/qualify.ts`
+
+**RECON AND QUALIFICATION ONLY — NO PRODUCTION REPAIR.** Production source is
+UNCHANGED (`git diff --stat HEAD` empty). No normalization behavior was
+altered, no public tool schema was relaxed, no permanent API field was added,
+no always-on diagnostic was introduced, and no raw provider payload, prompt,
+secret or command text entered Git.
+
+## What was established
+
+The existing `run_commands` tool-call normalization contract works against
+ClineMM's real model-facing schema and the installed-runtime execution path.
+The installed runtime `s1onique.clinemm 4.1.16-5a1c485cb-8c3351e56` contains
+all four normalization fixes (`0b6ec51af`, `feffc821b`, `02a70e9cb`,
+`b1ad2a0de`) and its bundled minified normalizer was read directly and
+confirmed **semantically identical** to the repo source, including the
+HARNESS-03 encoded-object-array branch.
+
+| Qualification item | Result |
+|---|---|
+| 1 — valid strict-schema tool calls | **QUALIFIED (live)** — the Qwen baseline `1794892591345_7em4g` emitted 21/21 `run_commands` calls in the canonical strict shape; all 21 `schemaValid=true`; zero rejections |
+| 2 — the previously observed object-array normalization shapes | **QUALIFIED (live)** — the Round C session `1794702518894_gui73` emitted 193 calls including exactly the 4 shell-quoted JSON-array-string and 4 object-list shapes, at the documented message indices (21, 27, 27, 285 / 63, 99, 107, 111) and tool-call ids |
+| 3 — sibling-field and ordering conservation | **QUALIFIED** — ordering conserved across all branches; duplicates not collapsed; the serialized JSON text is never forwarded as a command; siblings are conserved **by failing closed** (the single-key rule leaves any multi-key payload unchanged for the strict schema to reject) |
+| 4 — malformed / unsupported arguments fail closed | **QUALIFIED (live RED + live GREEN)** — 12 live rejections in the pre-fix Flint session `1794587196390_xn030`, all application-side (`Invalid input for tool run_commands`); the **identical** `{command: "<JSON array string>"}` shape was **accepted** in the post-fix session `1794593797996_r48lj` |
+| 5 — tool-call identity and correlation | **QUALIFIED (live, exact)** — 26 `tool_execution` and 26 `tool_result_delivered` boundaries with identical tool-call id sets and zero tool-name mismatches; the transcript's 21 `run_commands` ids are a strict subset of the trace's 26 (21/21 shared, 0 on either side) |
+
+## The decisive causal discriminator
+
+The `{command: "<JSON array string>"}` shape appears in BOTH live Flint
+sessions with byte-identical payloads (valid JSON arrays of strings). It was
+**REJECTED 11/11** in `1794587196390_xn030` (build `4.1.16-5a1c485cb`, pre-fix)
+and **ACCEPTED 4/4** in `1794593797996_r48lj` (build `4.1.16-5a1c485cb-0b6ec51af`).
+The discriminator is therefore the **BUILD**, not the payload, not the schema,
+not the provider, and not the model.
+
+## Boundary attribution (provider vs application)
+
+The live provider-request captures (622 files) show the model-facing
+`run_commands` schema was **advertised but NOT provider-enforced**:
+`providerOptions.openaiCompatible.strictJsonSchema = false` in every captured
+request, with a byte-identical schema (hash `d1607d24…`) across all sessions.
+Every live Flint rejection is the **application-side** Zod message emitted at
+the validation boundary, and every rejected payload was a well-formed
+structured `tool_use` block whose **arguments** were malformed. **Arbitrary
+textual GLM markup is NOT a valid structured tool call** and is not claimed as
+such anywhere in this ACT.
+
+## Flint live qualification: `LIVE_UNOBSERVABLE`
+
+Flint is **not available in the installed runtime**: the model registry still
+carries a stale `flint:16gb` entry, but the provider endpoint's `/v1/models`
+serves only `qwen3.8-flash-next-iq3_s`, and a direct `model=flint:16gb`
+request is silently served by that Qwen model. **No synthetic fixture was used
+to fabricate a passing live Flint test.** The historical Flint boundary is
+fully established from two REAL live transcripts and 622 REAL captured provider
+requests. **No new model run was performed** — the existing evidence was
+sufficient to establish the required boundary, so the ACT's
+"a new model run only if existing evidence cannot establish the boundary"
+condition was not met.
+
+## Coverage assessment
+
+**No new adversarial witness was added, and none was needed.** The existing
+real-production-seam suites cover all five items: HARNESS-03 (28 tests, incl.
+the real runtime seam), HARNESS-02 boundary (9), HARNESS-01 normalization (30)
+and runtime (13) driven with the LIVE fixtures, FLINT-RED-01 (20),
+FLINT-CORR-01 (35), and the LIVE FLINT witness verifier (4). A probe for a
+sibling-conservation gap on the non-canonical branches found **no defect**.
+
+**Recorded limitation:** the HARNESS-03 shape (`{commands: "[{\"command\":…}]"}`)
+has **no live-source witness** — it was scanned across **201 live sessions** and
+occurs in **NONE** of them. It is a composition of two separately live-observed
+shapes and is production-seam qualified, but it is **not** live-witnessed.
+
+## Gates
+
+- **G1** — the nine normalization suites: **230 / 230 passed**, 9 / 9 files.
+- **G2** — the whole `src/extensions/tools/` tree: 679 passed, 6 failed, 105 skipped. The 6 failures are **PRE-EXISTING and environment-caused** (the editor executor's macOS `/private/var` realpath and the bash supervisor's inherited shell-env); both files are byte-identical between the pre-ACT baseline `ab5ee16ec` and HEAD, and the working tree is clean.
+- **G3** — the LIVE Flint witness verifier: **4 / 4 EXECUTED (not skipped)** against the live transcript on disk.
+- **G4** — pre-existing-failure proof: `git diff --stat ab5ee16ec HEAD -- <the 2 files>` and `git diff --stat HEAD` are both EMPTY.
+- **G5** — typecheck: 43 diagnostics = the pre-existing baseline; **0** in `helpers.ts` / `schemas.ts` / `definitions.ts`.
+- **G6** — the analyzer is deterministic (byte-identical on re-run) and the sanitization audit finds **no** API keys, private repo paths, command text, internal hosts, or prompt text.
+
+## Board update (RC-05)
+
+| Stage | Status |
+|---|---|
+| RC-01 independent calibration | **Unchanged** — production estimator unchanged, coefficients not refit, frozen calibration preserved |
+| RC-02 observed trigger causality | **Unchanged** — QUALIFIED, explicit scope (one observed event) |
+| RC-03 live latency attribution | **Unchanged** — NOT_REPRODUCED |
+| RC-04 canonical evidence continuity | **Unchanged** — QUALIFIED, `PASS_CANONICAL_CONTINUITY_LIVE` |
+| **RC-05 tool-call normalization** | **QUALIFIED — `PASS_LIVE_NORMALIZATION_QUALIFIED`** — the existing production normalizer accepts every live-observed `run_commands` shape, conserves ordering, conserves sibling fields by failing closed, rejects malformed input before approval and before execution, and conserves tool-call identity exactly from the model's structured call through execution and result delivery (26/26 execution↔delivery ids; 21/21 transcript↔trace ids). The same-shape live RED→GREEN pair isolates the normalizer as the causal discriminator. **No production change is warranted** — a successor repair ACT would need a NEW real failure against the current build, and none exists. Sub-classifications: fresh live Flint = `LIVE_UNOBSERVABLE` (model not served by the installed runtime); the HARNESS-03 encoded-object-array shape is production-seam qualified but not live-witnessed. |
+| RC-06 … RC-08 | **Unchanged** |
+
+RC-01, RC-02, RC-03 and RC-04 are **not** reopened. No production source was
+modified by this ACT.

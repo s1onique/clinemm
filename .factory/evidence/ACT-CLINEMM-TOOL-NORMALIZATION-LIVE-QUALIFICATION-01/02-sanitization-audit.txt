@@ -1,0 +1,17 @@
+# Sanitization audit — the committed package must contain NO secrets, NO prompts,
+# NO raw provider payloads and NO command text.
+
+## A. API-key patterns (sk-*, sk-cp-*, sk-strata-*, bearer tokens):
+(none)
+
+## B. Absolute repository paths outside the operator profile (private repos):
+(none)
+
+## C. Shell command text (known live command fragments):
+(none)
+
+## D. The provider base URL / host:port (internal infra):
+(none)
+
+## E. Prompt text / system prompt:
+(none)

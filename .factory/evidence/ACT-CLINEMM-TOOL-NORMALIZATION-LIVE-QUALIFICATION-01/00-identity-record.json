@@ -1,0 +1,108 @@
+{
+  "act": "ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01",
+  "type": "recon and qualification (no production repair authorized)",
+  "implementation_authorization": false,
+  "production_modifications": false,
+  "new_diagnostic_side_effects": false,
+  "new_public_api_fields": false,
+  "schema_relaxation": false,
+  "repository": {
+    "top_level": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "origin_remote": "git@github.com:s1onique/clinemm.git",
+    "upstream_remote": "https://github.com/cline/cline.git",
+    "expected_repository": "s1onique/clinemm",
+    "repository_identity_verified": true,
+    "branch": "main",
+    "entry_head": "48800ea1142dc18379fcc25ce0101cab540f41ff",
+    "expected_entry_head": "48800ea1142dc18379fcc25ce0101cab540f41ff",
+    "entry_head_matches_expected": true,
+    "tracked_tree_clean_at_entry": true,
+    "history_rewritten": false,
+    "pushed": false,
+    "pr_created": false,
+    "branch_created": false,
+    "worktree_created": false,
+    "reset_performed": false,
+    "production_source_diff_vs_entry_head": "EMPTY (git diff --stat HEAD is empty at qualification time)"
+  },
+  "preservation": {
+    "worktrees_preserved": true,
+    "protected_stashes_preserved": true,
+    "worktree_list_at_entry": [
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm  48800ea11 [main]",
+      "/private/tmp/clinemm-prebase  1f456b971 (detached HEAD) prunable",
+      "/private/tmp/clinemm-stash-recovery-20261117  8b76c9e3e [recovery/protected-stash-20261117]",
+      "/private/tmp/worktree-bun.7ddCHQ  bbdccf8a2 (detached HEAD)",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-1WJufc/clinemm-dogfood-cyoi5ujq/worktree  3147a53b5 (detached HEAD) prunable",
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first  38e726c45 [experiment/m31-action-first]",
+      "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded  0366ea506 (detached HEAD)"
+    ],
+    "stash_list_at_entry": "empty (no stash entries reported by git stash list at entry)"
+  },
+  "installed_runtime": {
+    "profile": "/Volumes/UserData/Users/chistyakov/.vscodium-roz",
+    "extension_id": "s1onique.clinemm",
+    "active_version": "4.1.16-5a1c485cb-8c3351e56",
+    "active_version_location": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.16-5a1c485cb-8c3351e56",
+    "active_version_is_pinned": true,
+    "prior_version_present": "4.1.16-5a1c485cb-1f1670b27",
+    "normalization_fixes_present_in_active_install": {
+      "0b6ec51af_flint_json_array_command": true,
+      "feffc821b_flint_two_single_string_shapes": true,
+      "02a70e9cb_roundc_harness01": true,
+      "b1ad2a0de_roundc_harness03": true
+    },
+    "note": "the active installed bundle's minified normalizer was read directly from dist/extension.js and is semantically identical to the repo source, including the HARNESS-03 encoded-object-array branch"
+  },
+  "input_artifacts": {
+    "role": "authoritative_live_evidence",
+    "classification": "PRIVATE",
+    "committed": false,
+    "committed_note": "raw transcripts, provider request captures, the latency trace and the provider settings (which contain API keys) are kept OUTSIDE Git; only sanitized derived evidence is committed",
+    "items": [
+      {
+        "name": "roundc-latency-trace(8).json",
+        "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace(8).json",
+        "bytes": 350052,
+        "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+        "sessionId": "1794892591345_7em4g",
+        "schema": "cline.roundc-latency-trace.v1"
+      },
+      {
+        "name": "1794892591345_7em4g.messages.json",
+        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794892591345_7em4g/1794892591345_7em4g.messages.json",
+        "sha256": "b48b0f94ebc003a3a92bbf226fca3126433ec8d986d763a73e73ef258cf4e9b4",
+        "role": "live dogfood session transcript (Qwen baseline)"
+      },
+      {
+        "name": "1794702518894_gui73.messages.json",
+        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794702518894_gui73/1794702518894_gui73.messages.json",
+        "role": "live Round C session transcript (the previously observed run_commands object-array / JSON-array-string shapes)"
+      },
+      {
+        "name": "1794587196390_xn030.messages.json",
+        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794587196390_xn030/1794587196390_xn030.messages.json",
+        "role": "live Flint session (pre-normalizer build)"
+      },
+      {
+        "name": "1794593797996_r48lj.messages.json",
+        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794593797996_r48lj/1794593797996_r48lj.messages.json",
+        "role": "live Flint session (post-normalizer build)"
+      },
+      {
+        "name": "provider-request-captures/",
+        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/",
+        "captureFiles": 622,
+        "role": "the actual provider requests as dispatched (the model-facing schema on the wire)"
+      }
+    ]
+  },
+  "analyzer": {
+    "path": ".factory/evidence/ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01/tool/qualify.ts",
+    "language": "typescript (bun)",
+    "read_only": true,
+    "reproduce_command": "bun .factory/evidence/ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01/tool/qualify.ts > .factory/evidence/ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01/analysis.json",
+    "output": "analysis.json",
+    "reduction": "command texts, prompts, API keys and provider payloads are reduced to SHAPES, COUNTS and tool-call ids; no raw payload is copied into the committed output"
+  }
+}

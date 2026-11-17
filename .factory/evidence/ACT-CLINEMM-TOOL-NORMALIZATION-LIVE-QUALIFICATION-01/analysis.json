@@ -1,0 +1,544 @@
+{
+  "act": "ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01",
+  "generatedBy": "tool/qualify.ts (read-only)",
+  "artifactClassification": "PRIVATE_IN",
+  "committedContent": "SANITIZED_SHAPES_AND_COUNTS_ONLY",
+  "sessions": {
+    "qwenBaseline": {
+      "sessionId": "1794892591345_7em4g",
+      "present": true,
+      "transcriptSha256": "b48b0f94ebc003a3a92bbf226fca3126433ec8d986d763a73e73ef258cf4e9b4",
+      "originVersion": "4.1.16-5a1c485cb",
+      "messageCount": 46,
+      "totalToolUse": 26,
+      "runCommandsCalls": 21,
+      "runCommandsShapes": {
+        "keys[commands] array[string,string]": 4,
+        "keys[commands] array[string,string,string]": 6,
+        "keys[commands] array[string,string,string,string]": 2,
+        "keys[commands] array[string]": 9
+      },
+      "runCommandsShapeVerdicts": {
+        "keys[commands] array[string,string]": {
+          "ACCEPTED": 4
+        },
+        "keys[commands] array[string,string,string]": {
+          "ACCEPTED": 6
+        },
+        "keys[commands] array[string,string,string,string]": {
+          "ACCEPTED": 2
+        },
+        "keys[commands] array[string]": {
+          "ACCEPTED": 9
+        }
+      },
+      "distinctRejectionMessages": [],
+      "toolCallIds": [
+        "call_087e10709269481c9afcebb1",
+        "call_1d306f44bde84d43b1144f53",
+        "call_231717bc7f904f6db8b206f8",
+        "call_2f78c5bb009844c68d3d6dc2",
+        "call_32ebb6511aae41f0905e9813",
+        "call_49d69844f70c4a3ca63305f5",
+        "call_68ba32fa8c4a4cc8b5e3fe1f",
+        "call_750d8cef04fb41df834250b7",
+        "call_750fc45d51d7461cbfe85cde",
+        "call_776e68ba7fa049edba75f44c",
+        "call_8315c8450e5948978bfca8c8",
+        "call_8a2fd562ff654df88d7cfa58",
+        "call_a9de8d4ce59f47b8b883edce",
+        "call_ac3c763e6185485bb116d573",
+        "call_b673b379a99346c7a2d5de11",
+        "call_b70e638e535d43bb9d00dbc1",
+        "call_bd9782e4326d416998017e0a",
+        "call_c5f8395e7af8449e849bd8ae",
+        "call_c66406c4a42047848750cbd8",
+        "call_e6534afb478a47a58b9a659c",
+        "call_e76201ef3cbf407c8ae16aef"
+      ]
+    },
+    "roundCLive": {
+      "sessionId": "1794702518894_gui73",
+      "present": true,
+      "transcriptSha256": "7da88fbd63d9f05b1cecf14cd5be766541ab4dff22642ae857b288147e30ba88",
+      "originVersion": "4.1.16-5a1c485cb",
+      "messageCount": 397,
+      "totalToolUse": 209,
+      "runCommandsCalls": 193,
+      "runCommandsShapes": {
+        "keys[commands] array[string]": 19,
+        "keys[commands] string:not_json": 4,
+        "keys[commands] array[string,string,string]": 25,
+        "keys[commands] array[string,string]": 12,
+        "keys[commands] array[object,object,object]": 1,
+        "keys[commands] array[string,string,string,string]": 99,
+        "keys[commands] array[string,string,string,string,string]": 21,
+        "keys[commands] array[object]": 3,
+        "keys[commands] array[string,string,string,string,string,string]": 8,
+        "keys[commands] array[string,string,string,string,string,string,string,string]": 1
+      },
+      "runCommandsShapeVerdicts": {
+        "keys[commands] array[string]": {
+          "ACCEPTED": 19
+        },
+        "keys[commands] string:not_json": {
+          "REJECTED": 4
+        },
+        "keys[commands] array[string,string,string]": {
+          "ACCEPTED": 25
+        },
+        "keys[commands] array[string,string]": {
+          "ACCEPTED": 12
+        },
+        "keys[commands] array[object,object,object]": {
+          "REJECTED": 1
+        },
+        "keys[commands] array[string,string,string,string]": {
+          "ACCEPTED": 99
+        },
+        "keys[commands] array[string,string,string,string,string]": {
+          "ACCEPTED": 21
+        },
+        "keys[commands] array[object]": {
+          "REJECTED": 3
+        },
+        "keys[commands] array[string,string,string,string,string,string]": {
+          "ACCEPTED": 8
+        },
+        "keys[commands] array[string,string,string,string,string,string,string,string]": {
+          "ACCEPTED": 1
+        }
+      },
+      "distinctRejectionMessages": [
+        "✖ Invalid input: expected array, received string",
+        "✖ Invalid input: expected string, received object"
+      ],
+      "toolCallIds": [
+        "call_02ca7147967a4a81b9f865fc",
+        "call_076940163bc8413183e46ed9",
+        "call_0868862c77db426d805658a6",
+        "call_09da7c2a80e844498c2f9864",
+        "call_0d6d8506998049718f2bd28e",
+        "call_10f385bc3ebe4f7a8d45323c",
+        "call_17260d9f5dc24f88a20af1f7",
+        "call_175e469be30c4903967940bc",
+        "call_17f2b46fcf3a431c924cf8d1",
+        "call_184a1d327823477e98a01453",
+        "call_1868d2aed1d046758ed7280b",
+        "call_199866269d62444bab9f3ef9",
+        "call_19efa87575474d5492162827",
+        "call_1a0bdf58c4b4438fbd6ac4f5",
+        "call_1b92ef11ac0741ed87c0b103",
+        "call_1b979d36c0bd4284966da489",
+        "call_1cce8321bec54f7fbc4a9323",
+        "call_1d33a8d1f5144b48a7f43eda",
+        "call_2040957bc41a4b59a352c161",
+        "call_2048417511b84899b9f64dab",
+        "call_222adbc7931d41bebbf2d704",
+        "call_2460b99e788646bd9e3da285",
+        "call_247b636551124fb4955fe7ab",
+        "call_259da56e2b284265bbd7c79e",
+        "call_27f56beaeb0d4da3b39499b9",
+        "call_2a8866fad82d4bbe87fadd81",
+        "call_2ab0c086b8db400087c47394",
+        "call_2abb542b418f47a4ba710131",
+        "call_2ae9c53d1ba14dff8671b087",
+        "call_2c1b1cd49f8743cdb702af38",
+        "call_2c6880f2d7ca4d3bb5edf04f",
+        "call_2c8aea94778e4ba0acc2b288",
+        "call_2d17c80980304a00928654d8",
+        "call_2f93b49827894a51aad131af",
+        "call_3455ade8c86243a48d8568f6",
+        "call_364855ec8c864f3692dfd3f7",
+        "call_39a18444ced34189a2759e36",
+        "call_3b6fbdfeda4a44daa911e6a9",
+        "call_3bff230ce18a4d3ca1f00836",
+        "call_3d5c70ba180d4ebcb3c46c57",
+        "call_3d84d85c6369456480f21929",
+        "call_3f7347a431ef4cdcabf4aee3",
+        "call_4056fdb203cf403fa3e4a2fa",
+        "call_4194766a0da44c2481d5616a",
+        "call_41efe2bf126349e1b7dd005e",
+        "call_42d8e4033dc74f26869fac98",
+        "call_43a40432383a4ddca34c3919",
+        "call_45af852a37014328b99680af",
+        "call_47dd32e51ec74cb293b17196",
+        "call_4900047fad5e4b24b24c7b61",
+        "call_4967b7a52cf647a2b2b014a0",
+        "call_497feb7d2d5d4db3b76b9d42",
+        "call_499439d425394f49bf10f479",
+        "call_49a44b3825bd445981df9865",
+        "call_4a8a502b858f4c93ad20e1a2",
+        "call_4bef19f6b5854ffa9fe39651",
+        "call_4e6d852447cc407c9992dbf6",
+        "call_52d30c3702c548428ec36fb0",
+        "call_560132f64414447c9bc8d666",
+        "call_572511ddcf784eaaa2ff5a40",
+        "call_57d3801dc4664d63aa0088ba",
+        "call_57f8a957a3ad40f3bab227ad",
+        "call_5891635422a04dcfb8094ea5",
+        "call_59b8d7ba82a84e7d99e72600",
+        "call_5b5e2a46d97546f19a931385",
+        "call_5ca2f7dc93e840aa86c27c23",
+        "call_5dbb85bd4d844b828aa492a7",
+        "call_5f721a8d21d24047b83b4ad8",
+        "call_5f73e59706fd49e4b6116dee",
+        "call_636288b710374204a892f8c7",
+        "call_657446497283442c92438f4d",
+        "call_666208302e1846e08ff99848",
+        "call_675414f67462470c953fe5af",
+        "call_68df08c4656642c0b140f85a",
+        "call_696da9921edd43d7b9476217",
+        "call_69fd905781ec46f283246a6c",
+        "call_6b364da5f5d24ad5876dce91",
+        "call_6ba0a5e7b6f6422f8f64d2a0",
+        "call_6bb820e898214adfafb4e86e",
+        "call_6e198a25c6d64940b3346a07",
+        "call_6edea6872b0747bb8c393007",
+        "call_6f1ba39c2c4d40adb1af081d",
+        "call_725f1265cc24432386ad5c49",
+        "call_7377ecd6867c46fc84e54ab4",
+        "call_76393e83ce9448d9812f4733",
+        "call_776037a7241b463f94e43fd2",
+        "call_781f7c879e8e4109afe8eae5",
+        "call_7a13b068d5af4e8dae9d6528",
+        "call_7b2741e07abc4d8aa42edfff",
+        "call_7b411d4f457b4546b963d854",
+        "call_7b73ea9962c147ee92e3cc72",
+        "call_7bcc201e90734031989d0fca",
+        "call_8027d885c66c4fc3a0b8ab47",
+        "call_833257a2f0f949a6866648c0",
+        "call_85f3c55634ca4e7987e20a22",
+        "call_86761a17cb954424a1208fa3",
+        "call_871c31f7a2084d20a1254131",
+        "call_897a8165feea48f78a39dc31",
+        "call_8a08974effd94257a5675af4",
+        "call_8a71178c2e8f476183658b71",
+        "call_8c27bbc73c2b486d935b9418",
+        "call_8cf0c1473d0b4c9fa8b2f087",
+        "call_92fa76e104f74badbd913259",
+        "call_936750385d6646aa9c2b753f",
+        "call_93d194cf9d2a4fe6bf615d23",
+        "call_9525ae92f2474e5591e7df12",
+        "call_953b7eb91ff7426aa35f9487",
+        "call_95d0f0fec0f144db9c2090d3",
+        "call_9cc783f816e542a987307524",
+        "call_9da0a5f6e3a749bdaf7c6f14",
+        "call_9e3c41daadf747fe8de43533",
+        "call_9eafe236899443f2817349b9",
+        "call_9fbe3ea4c9824989b01f5236",
+        "call_a050cab11be1479089fa7386",
+        "call_a104219796ca4d069f8acb80",
+        "call_a230d24a4936498e82533c30",
+        "call_a25f86b523694e23b01dc33c",
+        "call_a26f3ad4ea484c9db1a6f8e8",
+        "call_a3a63970452a4495853226c3",
+        "call_a432155d59b143f0b973c691",
+        "call_a4595168457b49e0974f19f2",
+        "call_a589b892d0184012b2fa8f2e",
+        "call_a5c6a95b522f487bb0c568a0",
+        "call_a71d3dd82cee4224977b5e59",
+        "call_aa360da1e0664829941e7f2d",
+        "call_aaaf5ab558bf492390c9ff1b",
+        "call_ab9aecbfb3fc47cf837cf521",
+        "call_ad00cdd586794cec92d1dfc5",
+        "call_affe80bfaacb4895ae3697be",
+        "call_b04be8c05f3a4246b8174a8a",
+        "call_b18d8fee0199457185b5eb4b",
+        "call_b1aa78e5b68e4982a287629e",
+        "call_b43e98831deb41329185c887",
+        "call_b6c8c93bdd0c408689a072f3",
+        "call_b84c8770570b41a49723a868",
+        "call_ba437e5be36c45318b10f368",
+        "call_bc03a87cdc894b0c82d806dc",
+        "call_bcd65ae9cf9e411fbb7bf035",
+        "call_bd4b28e4c2e74d15ac2157c2",
+        "call_bdb7de2cf9f34b0792e6f7ec",
+        "call_beaf268886464f0fbafa7654",
+        "call_c257832346df4124add9f45c",
+        "call_c40accc7a0ec45ad82b12a6b",
+        "call_c5a089a5e97447e3b105ebfb",
+        "call_c7cb0ff4c93f473cabee4311",
+        "call_c803dd317d4144e09b53b8ae",
+        "call_c9590f5a29204d319caaf480",
+        "call_ca339ccae91f466cbede1467",
+        "call_cc230aba9dff4248bbdfbba4",
+        "call_cdc23aef27af40d0866a2c16",
+        "call_d0bfc607b142431a80856a39",
+        "call_d162f563135943dba8ab3aa8",
+        "call_d19075a225044efb8d9f9ac3",
+        "call_d22b8c40731345af8c0ae3f4",
+        "call_d3e9f820c5f74c8d8ed706d1",
+        "call_d43a70883a484258a14f49e8",
+        "call_d672e4d39e374e4380b10256",
+        "call_d84303691d53434f989a1562",
+        "call_d94700b4d6094c9db83a8ba1",
+        "call_da8aa70301fc4484b1a80297",
+        "call_dab8c59100734160a6194322",
+        "call_dc3af6cb9e5840379946336d",
+        "call_e0b99b73b1074014b9c7b808",
+        "call_e0f853c3081d41e78f53205c",
+        "call_e1dfda3602384f8090a13de2",
+        "call_e3a79af3d3844b1092959364",
+        "call_e482c432d037464294b173d4",
+        "call_e5a3927684474f5187ba12d6",
+        "call_e5d5cf148ec1458f9c9ff83c",
+        "call_e690016240a7426ba43c5878",
+        "call_e7646c2933f2497888fcf777",
+        "call_e7f0553c6454401db00df672",
+        "call_e8bff55e7a454442940fc7e5",
+        "call_e96ab9bb54464d27899e1c35",
+        "call_ea81b4f0a5684967b3e9a903",
+        "call_ec3eabf4fc294ee0bd73c1fa",
+        "call_ef46587da1cb4befbab71739",
+        "call_f1e4d272f1f14c6696466215",
+        "call_f67e33a1c2c94e71adac13c4",
+        "call_f6f579e6c28842c7bdecab9f",
+        "call_f8799ca6b2fb444bb1f1f947",
+        "call_fa4d7e6bc82749eaa30db1ac",
+        "call_faa612fb0b8f4410af11925d",
+        "call_fbfb0da59d374d2b9a244116",
+        "call_fc329eef2d9d402894436f18",
+        "call_fcab4101caa74709b96cc1c1",
+        "call_fef22ba3e4d04646bb4c5984",
+        "call_ff736041c6da40d38faf6e1d",
+        "call_ff8fc8c2b9864a7ebeb87f03",
+        "call_ffa8f5e24e6e426b8662a33a",
+        "call_ffb1d6654aa74edebf73c0fe",
+        "call_ffbbf8ba3fdd4a8c9eb75112",
+        "call_ffc4386e96474f5c924f4d71"
+      ]
+    },
+    "flintPreFix": {
+      "sessionId": "1794587196390_xn030",
+      "present": true,
+      "transcriptSha256": "793de4fd4da9748ab489e862613f96ecd6cad1a0786a839c06ff01e408961703",
+      "originVersion": "4.1.16-5a1c485cb",
+      "messageCount": 61,
+      "totalToolUse": 35,
+      "runCommandsCalls": 17,
+      "runCommandsShapes": {
+        "keys[commands] string:plain": 1,
+        "keys[commands] array[string,string,string]": 1,
+        "keys[commands] array[string]": 4,
+        "keys[command] string:json_array_of_strings": 11
+      },
+      "runCommandsShapeVerdicts": {
+        "keys[commands] string:plain": {
+          "REJECTED": 1
+        },
+        "keys[commands] array[string,string,string]": {
+          "ACCEPTED": 1
+        },
+        "keys[commands] array[string]": {
+          "ACCEPTED": 4
+        },
+        "keys[command] string:json_array_of_strings": {
+          "REJECTED": 11
+        }
+      },
+      "distinctRejectionMessages": [
+        "✖ Invalid input: expected array, received string",
+        "✖ Unrecognized key:"
+      ],
+      "toolCallIds": [
+        "call_1KSrJ5gI3fPgnNZ8zDcCAGnV",
+        "call_5wERvYmLptIhnGGTOjMKGYnR",
+        "call_7LDSnCZuM7b8DGmzc1OU9Y3W",
+        "call_F7vsb0xzBDj4cYhIGJ3TIykp",
+        "call_HMPImgWlXBK4e5VyJTOXcrVD",
+        "call_OCNNSrXDGTElIgJzmtQb18or",
+        "call_Oc5Yl19tmmiMmg2yiRL0Uxq8",
+        "call_TFdWTSfvpgd874VnKwNKytCz",
+        "call_TP0NBedzYLPZAXga4S0NgVTy",
+        "call_W2PE2r9SHf2rvaF3Ltib4Qx6",
+        "call_Wu9zItQP1rWJYoGT7q4t67XL",
+        "call_cTGPDvHaD5BJX2KqW5CF7KEB",
+        "call_f2Fs8NstpUwAgUuEpR9RlX0Q",
+        "call_iT5FBsh1y0eJ8nYVZxmBbGHJ",
+        "call_kk5dtlrng6KGLX0wSb1s1n4a",
+        "call_lajHZxAZqDOc5beSwI1tszWx",
+        "call_v9xjUwCRjwmf2lSfWs0lzrmz"
+      ]
+    },
+    "flintPostFix": {
+      "sessionId": "1794593797996_r48lj",
+      "present": true,
+      "transcriptSha256": "0e6c64741c638fc487789a84aef39ed1a42db8ad8a6f52f72b66791bc70b2005",
+      "originVersion": "4.1.16-5a1c485cb",
+      "messageCount": 58,
+      "totalToolUse": 35,
+      "runCommandsCalls": 17,
+      "runCommandsShapes": {
+        "keys[command] string:plain": 2,
+        "keys[commands] string:plain": 5,
+        "keys[commands] array[string]": 2,
+        "keys[commands] array[string,string,string,string,string,string]": 1,
+        "keys[commands] array[string,string,string]": 1,
+        "keys[command] string:json_array_of_strings": 6
+      },
+      "runCommandsShapeVerdicts": {
+        "keys[command] string:plain": {
+          "REJECTED": 2
+        },
+        "keys[commands] string:plain": {
+          "REJECTED": 5
+        },
+        "keys[commands] array[string]": {
+          "ACCEPTED": 2
+        },
+        "keys[commands] array[string,string,string,string,string,string]": {
+          "ACCEPTED": 1
+        },
+        "keys[commands] array[string,string,string]": {
+          "ACCEPTED": 1
+        },
+        "keys[command] string:json_array_of_strings": {
+          "ACCEPTED": 4,
+          "NO_RESULT": 2
+        }
+      },
+      "distinctRejectionMessages": [
+        "✖ Invalid input: expected array, received string",
+        "✖ Unrecognized key:"
+      ],
+      "toolCallIds": [
+        "call_1frOpkqaisnIbNCWbLjSxfXb",
+        "call_1gKvlIl21tFdHqM1NXbW81VW",
+        "call_3bRpPCxVtXDAEhJko6Tz50y8",
+        "call_5M2jBMm8ddNUaKEwIzYkCqFG",
+        "call_9f4onkHHlemsGlvltJAXY9St",
+        "call_9fGdtrWcgUjtBaDTPojaQvmD",
+        "call_AsGorCTQR91JOtGNzaehmvku",
+        "call_Haq57ee5ELIArFesUZp8Yww2",
+        "call_IEXkxCyYP8gR1pGDwQduK4Ia",
+        "call_Jt0GyBUtTjl78pxEAzKb5scY",
+        "call_QKRXofhLBViWYMQfSYOPtF6R",
+        "call_abTGQDrLxXMHNQiEyaISSlaQ",
+        "call_fagARbV7KTBxcNmBcZ4bReb7",
+        "call_i7XQq1s0UsrDVZPwfLykqWpI",
+        "call_mLUqZrOjgn7CjTgmTEg6dkyr",
+        "call_ncGIFz0sAAtmY0aOpCfMaUAb",
+        "call_ssgf1ymgELEzY588ECFKK0Or"
+      ]
+    }
+  },
+  "trace": {
+    "present": true,
+    "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace(8).json",
+    "sessionId": "1794892591345_7em4g",
+    "identity": {
+      "captureSchemaVersion": "cline.roundc-latency-trace.v1",
+      "runtimeProfile": "dogfood",
+      "sourceHead": "UNAVAILABLE_FROM_TRACE",
+      "extensionVersion": "4.1.16-5a1c485cb",
+      "extensionBundleSha256": "b8b63baaebf9b5a12e2a636004695fc4eccbde0fb2bf13b55ccf7107cf83263e",
+      "providerFamily": "UNAVAILABLE_FROM_TRACE",
+      "requestedModelId": "qwen3.8-flash-next-iq3_s",
+      "requestedModelIdSource": "CONFIGURED",
+      "effectiveModelId": "UNAVAILABLE_FROM_TRACE",
+      "effectiveModelIdSource": "UNAVAILABLE_FROM_TRACE",
+      "quantization": "UNAVAILABLE_FROM_TRACE",
+      "quantizationSource": "UNAVAILABLE_FROM_TRACE",
+      "effectiveContextBudgetTokens": 115200,
+      "reasoningEffort": "medium",
+      "thinkingEnabled": true,
+      "maxOutputTokens": 16384
+    },
+    "schemaValidationStarts": 21,
+    "schemaValidationTrue": 21,
+    "schemaValidationTools": [
+      "run_commands"
+    ],
+    "toolExecutionStarts": 26,
+    "toolExecutionEnds": 26,
+    "toolResultDeliveredStarts": 26,
+    "toolResultDeliveredEnds": 26,
+    "executionStartEndIdsMatch": true,
+    "deliveryStartEndIdsMatch": true,
+    "deliveredIdsEqualExecutionIds": true,
+    "toolNameMismatchesBetweenExecutionAndDelivery": [],
+    "toolCallIds": [
+      "call_087e10709269481c9afcebb1",
+      "call_1d306f44bde84d43b1144f53",
+      "call_231717bc7f904f6db8b206f8",
+      "call_2ce7a82da69e47e383036a65",
+      "call_2f78c5bb009844c68d3d6dc2",
+      "call_32ebb6511aae41f0905e9813",
+      "call_49d69844f70c4a3ca63305f5",
+      "call_68ba32fa8c4a4cc8b5e3fe1f",
+      "call_6fc172f7b6004b41b0a7575c",
+      "call_750d8cef04fb41df834250b7",
+      "call_750fc45d51d7461cbfe85cde",
+      "call_776e68ba7fa049edba75f44c",
+      "call_8315c8450e5948978bfca8c8",
+      "call_8a2fd562ff654df88d7cfa58",
+      "call_946d8f190df34f399ce4d2d3",
+      "call_a9de8d4ce59f47b8b883edce",
+      "call_ac3c763e6185485bb116d573",
+      "call_b673b379a99346c7a2d5de11",
+      "call_b70e638e535d43bb9d00dbc1",
+      "call_bd9782e4326d416998017e0a",
+      "call_c5f8395e7af8449e849bd8ae",
+      "call_c66406c4a42047848750cbd8",
+      "call_dcc05ffbe087471a98beecf2",
+      "call_e6534afb478a47a58b9a659c",
+      "call_e76201ef3cbf407c8ae16aef",
+      "call_e7aba9c0dda94ea69edc0d2b"
+    ]
+  },
+  "traceTranscriptCorrelation": {
+    "transcriptToolCallIds": 21,
+    "traceToolCallIds": 26,
+    "sharedToolCallIds": 21,
+    "transcriptOnly": [],
+    "traceOnly": [
+      "call_2ce7a82da69e47e383036a65",
+      "call_6fc172f7b6004b41b0a7575c",
+      "call_946d8f190df34f399ce4d2d3",
+      "call_dcc05ffbe087471a98beecf2",
+      "call_e7aba9c0dda94ea69edc0d2b"
+    ]
+  },
+  "providerRequests": {
+    "present": true,
+    "captureFiles": 622,
+    "perSession": {
+      "1794524499963_op3ld": {
+        "strictJsonSchema": null,
+        "runCommandsSchemaHash": "d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4",
+        "captures": 496
+      },
+      "1794560033090_1sqng": {
+        "strictJsonSchema": false,
+        "runCommandsSchemaHash": "d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4",
+        "captures": 25
+      },
+      "1794599235421_7adcr": {
+        "strictJsonSchema": false,
+        "runCommandsSchemaHash": "d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4",
+        "captures": 42
+      },
+      "1794593797996_r48lj": {
+        "strictJsonSchema": false,
+        "runCommandsSchemaHash": "d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4",
+        "captures": 23
+      },
+      "1794587196390_xn030": {
+        "strictJsonSchema": false,
+        "runCommandsSchemaHash": "d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4",
+        "captures": 23
+      },
+      "1794606517194_x1js5": {
+        "strictJsonSchema": false,
+        "runCommandsSchemaHash": "d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4",
+        "captures": 13
+      }
+    }
+  },
+  "secretsRedaction": {
+    "providerApiKeysRead": false,
+    "promptsRead": false,
+    "commandTextRetained": false
+  }
+}

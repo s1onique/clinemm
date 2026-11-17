@@ -1,0 +1,222 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts (7 tests | 3 failed) 23ms
+     ✓ A. control: clean write inside cwd passes 5ms
+     ✓ B. relative lexical traversal escape (../...) is refused today 3ms
+     × C. ABSOLUTE OUTSIDE TARGET — RED: must be refused 5ms
+     × D. EXISTING SYMLINK ESCAPE — RED: lexical-inside must still be refused (effective destination) 3ms
+     × E. nonexistent descendant of an outside root — RED: must be refused 3ms
+     ✓ F. control: in-root canonical variant still passes 2ms
+     ✓ H. control: ordinary workspace edit still passes 2ms
+ ✓ src/extensions/tools/executors/apply-patch.test.ts (11 tests) 23ms
+ ✓ src/extensions/tools/executors/editor.test.ts (13 tests) 26ms
+ ✓ src/extensions/tools/executors/edit-workspace-effect-trace01-corr02.test.ts (12 tests) 39ms
+ ✓ src/extensions/tools/executors/edit-workspace-effect-trace01-corr01.test.ts (18 tests) 69ms
+ ✓ src/extensions/tools/executors/edit-efficiency-trace01.mutation.test.ts (5 tests) 149ms
+ ✓ src/extensions/tools/executors/search.test.ts (4 tests) 204ms
+ ✓ src/extensions/tools/executors/edit-workspace-effect-trace01.test.ts (12 tests) 25ms
+ ✓ src/extensions/tools/team/multi-agent.lifecycle.test.ts (16 tests) 373ms
+ ✓ src/extensions/tools/executors/file-read.test.ts (19 tests) 68ms
+ ✓ src/extensions/tools/executors/edit-efficiency-trace01.test.ts (19 tests) 62ms
+ ✓ src/extensions/tools/command-guard.test.ts (91 tests) 7ms
+ ✓ src/extensions/tools/team/spawn-agent-tool.test.ts (7 tests) 594ms
+     ✓ creates a sub-agent, forwards callbacks, and returns normalized output  591ms
+ ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts (4 tests) 24ms
+ ❯ src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts (17 tests | 3 failed) 223ms
+       × `/usr/bin/mktemp` (slash-form AUTO): BASH_ENV sentinel remains empty 23ms
+       × `/usr/bin/mktemp -d`: BASH_ENV sentinel remains empty 16ms
+       ✓ `pwd` (general): BASH_ENV sentinel remains empty 8ms
+       ✓ `echo hello` (general): BASH_ENV sentinel remains empty 8ms
+       ✓ `/usr/bin/mktemp -d /tmp/foo.XXXXXX` (template ASK candidate): BASH_ENV sentinel remains empty 14ms
+       ✓ `pwd` with ENV=<file>: ENV sentinel remains empty (defensive filter) 8ms
+       ✓ PATH inheritance works (child sees inherited PATH) 17ms
+       ✓ TERM inheritance works (child sees inherited TERM) 7ms
+       ✓ caller-supplied env (config.env) is preserved over inherited 8ms
+       ✓ sanitized Seatbelt path: caller env passed AS-IS, filter does NOT touch it 20ms
+       ✓ bare `pwd` against BASH_FUNC_pwd%% in parent env: imported function does NOT run 9ms
+       ✓ bare `ls /tmp` against BASH_FUNC_ls%% in parent env: imported function does NOT run 28ms
+       ✓ bare `git --version` against BASH_FUNC_git%% in parent env: imported function does NOT run 12ms
+       ✓ bare `cat /dev/null` against BASH_FUNC_cat%% in parent env: imported function does NOT run 8ms
+       ✓ prefix-strip is unbounded: BASH_FUNC_anything%% is stripped (not enumerated) 7ms
+       ✓ type -t pwd reports builtin (not function) when BASH_FUNC_pwd%% is in parent env 7ms
+       × slash-prefixed `/usr/bin/mktemp` still works (slash-bypass composes with the strip) 21ms
+ ✓ src/extensions/tools/team/configured-agent-config.test.ts (6 tests) 9ms
+ ✓ src/extensions/tools/flint-toolcall-red01-correction01.test.ts (35 tests) 26ms
+ ✓ src/extensions/tools/definitions.test.ts (87 tests) 44ms
+ ✓ src/extensions/tools/flint-toolcall-red01.test.ts (20 tests) 22ms
+ ✓ src/extensions/tools/null-runcommands-abort-recon01.test.ts (9 tests) 13ms
+ ✓ src/extensions/tools/command-process-observation.test.ts (8 tests) 11ms
+ ✓ src/extensions/tools/team/team-tools.test.ts (24 tests) 37ms
+ ✓ src/extensions/tools/roundc-toolcall-runtime.test.ts (13 tests) 49ms
+ ✓ src/extensions/tools/team/multi-agent.state-delta.test.ts (8 tests) 14ms
+ ✓ src/extensions/tools/roundc-toolcall-normalization.test.ts (30 tests) 18ms
+ ✓ src/extensions/tools/command-guard-extension.test.ts (9 tests) 36ms
+ ✓ src/extensions/tools/team/spawn-agent-concurrency.test.ts (2 tests) 31ms
+ ✓ src/extensions/tools/roundc-toolcall-json-object-array.test.ts (28 tests) 20ms
+ ✓ src/extensions/tools/team/persistence-policy.test.ts (8 tests) 5ms
+ ✓ src/extensions/tools/presets.test.ts (7 tests) 4ms
+ ✓ src/extensions/tools/executors/run-command-execution-controller.test.ts (1 test) 2ms
+ ✓ src/extensions/tools/model-tool-routing.test.ts (5 tests) 3ms
+ ✓ src/extensions/tools/helpers.run-commands.test.ts (4 tests) 5ms
+ ✓ src/extensions/tools/__tests__/guide-sufficiency-progressive-disclosure01.swcm03.test.ts (23 tests) 464ms
+ ✓ src/extensions/tools/roundc-toolcall-normalization.boundary.test.ts (9 tests) 3ms
+ ✓ src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts (23 tests) 473ms
+ ✓ src/extensions/tools/index.test.ts (5 tests) 9ms
+stderr | src/extensions/tools/executors/bash.powershell.test.ts
+SKIP PowerShell runtime powershell.exe: unavailable
+SKIP PowerShell runtime pwsh.exe: unavailable
+SKIP PowerShell runtime pwsh: unavailable
+
+ ↓ src/extensions/tools/executors/bash.powershell.test.ts (91 tests | 91 skipped)
+ ✓ src/extensions/tools/runtime.test.ts (8 tests) 4ms
+ ✓ src/extensions/tools/team/configured-agent-tool.test.ts (2 tests) 3ms
+ ✓ src/extensions/tools/team/delegated-agent.test.ts (2 tests) 2ms
+ ✓ src/extensions/tools/shell-contract.test.ts (2 tests) 113ms
+ ✓ src/extensions/tools/executors/bash.supervised.test.ts (13 tests) 2661ms
+     ✓ does NOT kill the child when the caller ignores it for longer than a typical bash-executor timeout  887ms
+     ✓ kills a SIGTERM-IGNORING descendant in the owned PG (CORRECTION03 P0)  1227ms
+ ✓ src/extensions/tools/executors/bash.test.ts (53 tests | 14 skipped) 11480ms
+     ✓ releases a detachable command while it continues in the background  629ms
+     ✓ tracks the detached command across host restarts until it exits  563ms
+     ✓ preserves signal termination without an exit code (inherited pipes: true)  1057ms
+     ✓ finishes abort cleanup before a descendant can outlive the command  1307ms
+     ✓ completes when a background child keeps the stdio pipes open after the shell exits  1005ms
+     ✓ reports a failing exit code when a background child keeps the stdio pipes open  1014ms
+     ✓ finalizes a detached log when the shell exits while a background child holds the pipes (signal: false)  2054ms
+     ✓ finalizes a detached log when the shell exits while a background child holds the pipes (signal: true)  2065ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts > ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 (C2: supervisor strips inherited bash-startup-affecting env under overlay semantics) > RED CLOSED: BASH_ENV startup file does NOT run before the authorized command > `/usr/bin/mktemp` (slash-form AUTO): BASH_ENV sentinel remains empty
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts:80:29
+     78|     it("`/usr/bin/mktemp` (slash-form AUTO): BASH_ENV sentinel remains…
+     79|       const { sentinel, exit } = await runBashSupervisor("/usr/bin/mkt…
+     80|       expect(exit.exitCode).toBe(0);
+       |                             ^
+     81|       expect(sentinel).toBe("");
+     82|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts > ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 (C2: supervisor strips inherited bash-startup-affecting env under overlay semantics) > RED CLOSED: BASH_ENV startup file does NOT run before the authorized command > `/usr/bin/mktemp -d`: BASH_ENV sentinel remains empty
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts:85:29
+     83|     it("`/usr/bin/mktemp -d`: BASH_ENV sentinel remains empty", async …
+     84|       const { sentinel, exit } = await runBashSupervisor("/usr/bin/mkt…
+     85|       expect(exit.exitCode).toBe(0);
+       |                             ^
+     86|       expect(sentinel).toBe("");
+     87|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts > ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 (C2: supervisor strips inherited bash-startup-affecting env under overlay semantics) > RED CLOSED: BASH_FUNC_<name>%% inherited exported function does NOT shadow bare AUTO commands > slash-prefixed `/usr/bin/mktemp` still works (slash-bypass composes with the strip)
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts:343:31
+    341|         // pathnames. /usr/bin/mktemp runs the real binary.
+    342|         expect(contents).toBe("");
+    343|         expect(exit.exitCode).toBe(0);
+       |                               ^
+    344|       } finally {
+    345|         delete process.env["BASH_FUNC_mktemp%%"];
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > C. ABSOLUTE OUTSIDE TARGET — RED: must be refused
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-u73yOz/cline-edit-auth-QKUmSC/outside/c.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:141:6
+    139|       context,
+    140|      ),
+    141|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    142|     await expect(fs.access(target)).rejects.toMatchObject({
+    143|      code: "ENOENT",
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:9
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:125:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > D. EXISTING SYMLINK ESCAPE — RED: lexical-inside must still be refused (effective destination)
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-u73yOz/cline-edit-auth-6wEjm3/authorized/escape/d.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:186:6
+    184|       context,
+    185|      ),
+    186|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    187|     await expect(
+    188|      fs.access(path.join(outsideRoot, "d.txt")),
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:3
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:149:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > E. nonexistent descendant of an outside root — RED: must be refused
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-u73yOz/cline-edit-auth-S4dkeu/outside/deep/sub/e.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:207:6
+    205|       context,
+    206|      ),
+    207|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    208|     await expect(
+    209|      fs.access(path.join(outsideRoot, "deep")),
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:9
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:194:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  2 failed | 41 passed | 1 skipped (44)
+      Tests  6 failed | 679 passed | 105 skipped (790)
+   Start at  11:36:36
+   Duration  13.20s (transform 11.90s, setup 0ms, import 32.95s, tests 17.47s, environment 2ms)
+

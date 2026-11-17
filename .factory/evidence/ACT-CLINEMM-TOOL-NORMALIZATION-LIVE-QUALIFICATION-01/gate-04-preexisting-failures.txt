@@ -1,0 +1,33 @@
+# Pre-existing (environment-caused) failures — NOT caused by this ACT
+
+## Proof 1: the two failing files are byte-identical between the pre-ACT baseline ab5ee16ec and HEAD 48800ea11.
+##   (git diff --stat ab5ee16ec HEAD -- <the two files> is EMPTY)
+
+(empty output above = identical)
+
+## Proof 2: the working tree is clean vs HEAD — this ACT changed no source at all.
+(empty output above = clean)
+
+## Proof 3: the failures are macOS realpath (/private/var vs /var) and shell-env artifacts.
+##   They are in the EDITOR executor and the BASH supervisor — neither is on the
+##   run_commands normalization seam.
+
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-u73yOz/cline-edit-auth-QKUmSC/outside/c.txt"
+
+ ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts (4 tests) 24ms
+ ❯ src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts (17 tests | 3 failed) 223ms
+       × `/usr/bin/mktemp` (slash-form AUTO): BASH_ENV sentinel remains empty 23ms
+       × `/usr/bin/mktemp -d`: BASH_ENV sentinel remains empty 16ms
+       ✓ `pwd` (general): BASH_ENV sentinel remains empty 8ms
+       ✓ `echo hello` (general): BASH_ENV sentinel remains empty 8ms
+       ✓ `/usr/bin/mktemp -d /tmp/foo.XXXXXX` (template ASK candidate): BASH_ENV sentinel remains empty 14ms
+       ✓ `pwd` with ENV=<file>: ENV sentinel remains empty (defensive filter) 8ms
+       ✓ PATH inheritance works (child sees inherited PATH) 17ms

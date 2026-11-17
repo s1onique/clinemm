@@ -1,0 +1,11 @@
+# Typecheck receipt — sdk/packages/core (tsconfig.dev.json, --noEmit)
+
+## Diagnostic count:
+43
+
+## Diagnostics in the run_commands normalization source files (expect NONE):
+(none)
+
+## The 43 diagnostics are the pre-existing baseline recorded on the epic board
+## ("43 SDK core diagnostics" — ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01).
+## This ACT changed no TypeScript at all, so the baseline is unchanged by construction.
