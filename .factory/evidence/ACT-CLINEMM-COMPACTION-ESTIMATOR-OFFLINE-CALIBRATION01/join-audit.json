@@ -1,0 +1,15 @@
+{
+  "schema": "cline.ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01.join-audit.v1",
+  "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01",
+  "toolVersion": "offline-estimator-calibration.v1",
+  "sourceHead": "f87e1547d85f1f01b7040bda1b1495812b5c5a0c",
+  "observed": {
+    "decisions": 32,
+    "completionEvents": 32,
+    "uniqueAttempts": 32
+  },
+  "accepted": 32,
+  "excluded": [],
+  "authority": "AUTHORITATIVE_EXACT_IDENTITY",
+  "notes": "Provider completion events are deduplicated by modelRequestId. Cached tokens are a subset of inputTokens and are never added."
+}

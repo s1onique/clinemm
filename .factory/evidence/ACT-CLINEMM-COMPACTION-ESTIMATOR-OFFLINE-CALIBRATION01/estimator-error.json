@@ -1,0 +1,191 @@
+{
+  "schema": "cline.ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01.estimator-error.v1",
+  "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01",
+  "toolVersion": "offline-estimator-calibration.v1",
+  "qualifiedSessions": [
+    "1794881611778_557z3"
+  ],
+  "qualifiedRequests": 32,
+  "baseline": {
+    "count": 32,
+    "min": 1.227373,
+    "median": 1.248834,
+    "mean": 1.264511,
+    "max": 1.495628,
+    "p10": 1.232096,
+    "p50": 1.248834,
+    "p90": 1.310669,
+    "p95": 1.356647,
+    "p99": 1.454715,
+    "medianAbsoluteError": 9806,
+    "p95AbsoluteError": 17806.2,
+    "maxAbsoluteError": 21416,
+    "underestimationFrequency": 0,
+    "maximumUnderestimation": 0
+  },
+  "candidates": [
+    {
+      "candidate": {
+        "id": "BASELINE_CURRENT",
+        "kind": "BASELINE"
+      },
+      "statistics": {
+        "count": 32,
+        "min": 1.227373,
+        "median": 1.248834,
+        "mean": 1.264511,
+        "max": 1.495628,
+        "p10": 1.232096,
+        "p50": 1.248834,
+        "p90": 1.310669,
+        "p95": 1.356647,
+        "p99": 1.454715,
+        "medianAbsoluteError": 9806,
+        "p95AbsoluteError": 17806.2,
+        "maxAbsoluteError": 21416,
+        "underestimationFrequency": 0,
+        "maximumUnderestimation": 0
+      }
+    },
+    {
+      "candidate": {
+        "id": "CONSTANT_MEDIAN",
+        "kind": "CONSTANT",
+        "factor": 0.79935
+      },
+      "statistics": {
+        "count": 32,
+        "min": 0.98111,
+        "median": 0.998264,
+        "mean": 1.010806,
+        "max": 1.195677,
+        "p10": 0.984883,
+        "p50": 0.998264,
+        "p90": 1.047712,
+        "p95": 1.084471,
+        "p99": 1.162936,
+        "medianAbsoluteError": 443,
+        "p95AbsoluteError": 1408.95,
+        "maxAbsoluteError": 1938,
+        "underestimationFrequency": 0.625,
+        "maximumUnderestimation": 954
+      }
+    },
+    {
+      "candidate": {
+        "id": "CONSTANT_MEDIAN_MODEL_SCOPED",
+        "kind": "CONSTANT",
+        "factor": 0.79935,
+        "scope": {
+          "providerId": "openai-compatible",
+          "modelId": "qwen3.8-flash-next-iq3_s"
+        }
+      },
+      "statistics": {
+        "count": 32,
+        "min": 0.98111,
+        "median": 0.998264,
+        "mean": 1.010806,
+        "max": 1.195677,
+        "p10": 0.984883,
+        "p50": 0.998264,
+        "p90": 1.047712,
+        "p95": 1.084471,
+        "p99": 1.162936,
+        "medianAbsoluteError": 443,
+        "p95AbsoluteError": 1408.95,
+        "maxAbsoluteError": 1938,
+        "underestimationFrequency": 0.625,
+        "maximumUnderestimation": 954
+      }
+    },
+    {
+      "candidate": {
+        "id": "AFFINE_OLS",
+        "kind": "AFFINE",
+        "a": 0.8078297287430471,
+        "b": -601.9734484558503
+      },
+      "statistics": {
+        "count": 32,
+        "min": 0.950761,
+        "median": 0.99521,
+        "mean": 1.00072,
+        "max": 1.109058,
+        "p10": 0.980522,
+        "p50": 0.99521,
+        "p90": 1.02892,
+        "p95": 1.059545,
+        "p99": 1.096332,
+        "medianAbsoluteError": 517.5,
+        "p95AbsoluteError": 1095.35,
+        "maxAbsoluteError": 2159,
+        "underestimationFrequency": 0.71875,
+        "maximumUnderestimation": 995
+      }
+    }
+  ],
+  "confounders": {
+    "largeStructuredToolDefinitions": {
+      "value": "UNAVAILABLE_FROM_TRACE",
+      "note": "Tool schema content is not exported; only toolSchemaCount is available."
+    },
+    "largeToolResults": {
+      "value": "UNAVAILABLE_FROM_TRACE"
+    },
+    "sourceCodeAndMinifiedContent": {
+      "value": "UNAVAILABLE_FROM_TRACE"
+    },
+    "mixedLanguageContent": {
+      "value": "UNAVAILABLE_FROM_TRACE"
+    },
+    "reasoningHistoryRepresentation": {
+      "value": "UNAVAILABLE_FROM_TRACE"
+    },
+    "imagesOrMultimodal": {
+      "value": "UNAVAILABLE_FROM_TRACE"
+    },
+    "requestOptions": {
+      "value": "UNAVAILABLE_FROM_TRACE"
+    },
+    "preVersusPostCompaction": {
+      "available": true,
+      "groups": {
+        "pre_compaction": {
+          "count": 16,
+          "min": 1.230499,
+          "median": 1.250917,
+          "mean": 1.277249,
+          "max": 1.495628,
+          "p10": 1.232896,
+          "p50": 1.250917,
+          "p90": 1.357284,
+          "p95": 1.396646,
+          "p99": 1.475831,
+          "medianAbsoluteError": 9806,
+          "p95AbsoluteError": 16856,
+          "maxAbsoluteError": 21416,
+          "underestimationFrequency": 0,
+          "maximumUnderestimation": 0
+        },
+        "post_compaction": {
+          "count": 16,
+          "min": 1.227373,
+          "median": 1.246779,
+          "mean": 1.251773,
+          "max": 1.312497,
+          "p10": 1.232588,
+          "p50": 1.246779,
+          "p90": 1.282045,
+          "p95": 1.298788,
+          "p99": 1.309755,
+          "medianAbsoluteError": 10151,
+          "p95AbsoluteError": 17623,
+          "maxAbsoluteError": 18310,
+          "underestimationFrequency": 0,
+          "maximumUnderestimation": 0
+        }
+      }
+    }
+  }
+}

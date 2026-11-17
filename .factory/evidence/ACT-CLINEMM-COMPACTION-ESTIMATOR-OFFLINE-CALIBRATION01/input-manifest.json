@@ -1,0 +1,56 @@
+{
+  "schema": "cline.compaction-estimator-offline-calibration.input-manifest.v1",
+  "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01",
+  "sources": [
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/user-data/User/globalStorage/s1onique.clinemm/roundc-latency-trace.json",
+      "sourceKind": "SANITIZED_LATENCY_TRACE",
+      "sha256": "601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed",
+      "bytes": 647103,
+      "sessionId": "1794881611778_557z3",
+      "modelId": "qwen3.8-flash-next-iq3_s",
+      "providerId": "openai-compatible",
+      "exportSchema": "cline.roundc-latency-trace.v1",
+      "installedExtensionIdentity": {
+        "extensionVersion": "4.1.16-5a1c485cb",
+        "extensionBundleSha256": "bfda14727f7a2e91fffb47d74884a58dc11c29f7cbce8612e660a4e473a80fb5",
+        "sourceHead": "UNAVAILABLE_FROM_TRACE"
+      },
+      "completeness": {
+        "truncated": false,
+        "droppedEventCount": 0,
+        "eventCount": 782,
+        "integrityFailureCount": 0
+      },
+      "evidenceAuthority": "AUTHORITATIVE_METADATA_ONLY",
+      "decision": "INCLUDE"
+    }
+  ],
+  "excludedSources": [
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794881611778_557z3/1794881611778_557z3.messages.json",
+      "sourceKind": "RAW_CONVERSATION_MESSAGES",
+      "decision": "EXCLUDE",
+      "reason": "PRIVATE_CONTENT_NOT_ALLOWED_IN_COMMITTED_EVIDENCE"
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794881611778_557z3/1794881611778_557z3.compaction.json",
+      "sourceKind": "PRIVATE_COMPACTION_CANDIDATE",
+      "decision": "EXCLUDE",
+      "reason": "PRIVATE_CONTENT_NOT_ALLOWED_IN_COMMITTED_EVIDENCE"
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01/historical-parity.json",
+      "sourceKind": "HISTORICAL_INFERRED_ONLY",
+      "decision": "EXCLUDE_FROM_FITTING",
+      "reason": "INFERRED_CHRONOLOGICAL_PAIRING"
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01/candidate-capture-receipt.json",
+      "sourceKind": "SHADOW_CANDIDATE_RECEIPT",
+      "decision": "EXCLUDE_FROM_FITTING",
+      "reason": "LIVE_SHADOW_INFERENCE_UNCALIBRATED"
+    }
+  ],
+  "notes": "Only the explicitly supplied sanitized trace and existing metadata-only receipts were inspected. No filesystem-wide search was used."
+}

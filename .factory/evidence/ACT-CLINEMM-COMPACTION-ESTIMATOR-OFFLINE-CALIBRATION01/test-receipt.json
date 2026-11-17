@@ -1,0 +1,89 @@
+{
+  "schema": "cline.compaction-estimator-offline-calibration.test-receipt.v1",
+  "act": "ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01",
+  "toolVersion": "offline-estimator-calibration.v1",
+  "commands": [
+    {
+      "command": "bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts",
+      "result": "PASS",
+      "observed": "16 pass, 0 fail, 24 expect() calls; witnesses T1-T16"
+    },
+    {
+      "command": "ENTRY_HEAD=$(git rev-parse HEAD) bun .factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.ts <supplied-trace>",
+      "result": "PASS",
+      "observed": "32 authoritative rows; 0 excluded; baseline median ratio 1.248834; maximum absolute error 21416"
+    }
+  ],
+  "redRepair": [
+    {
+      "defect": "offline analyzer syntax: missing closing brace in estimator-error object",
+      "red": "Bun parse error at analyze.ts:237",
+      "repair": "restored the object terminator",
+      "green": "16/16 witnesses pass"
+    },
+    {
+      "defect": "fixture/semantic mismatch: synthetic fixture used non-target provider/model",
+      "red": "T1/T3/T4/T6/T7/T12 failed",
+      "repair": "fixture uses target identity; parser explicitly rejects non-authoritative providerInputAuthority",
+      "green": "16/16 witnesses pass"
+    }
+  ],
+  "privacy": {
+    "rawPromptsMessagesToolsCredentialsCommitted": false,
+    "rawPerRequestRowsCommitted": false,
+    "committedEvidence": "metadata-only aggregates"
+  },
+  "outputArtifactHashes": [
+    {
+      "name": "source-map.md",
+      "sha256": "6573c7790a4dda3da7d03384430ba434fca4bf8bac58b467a9b4823c71e89f69",
+      "bytes": 2984
+    },
+    {
+      "name": "input-manifest.json",
+      "sha256": "ecf333bc9a51d95e8727da13ba111227e9b6caf6fcad8afeb7b9b1cf212e1113",
+      "bytes": 2559
+    },
+    {
+      "name": "join-audit.json",
+      "sha256": "d30673196d87155dec5af30b2b9829f645f9c61bcd5536dba1a3b7ff1436fffe",
+      "bytes": 591
+    },
+    {
+      "name": "estimator-error.json",
+      "sha256": "0a1946f881669152ff345a00c66991a20fa67b9fba3a365a4b7ae4ae9ba2c72e",
+      "bytes": 5007
+    },
+    {
+      "name": "calibration-candidates.json",
+      "sha256": "fd95749d5e73f04cfbc7888832aba61c1a80c4d07b9a1ebba8c18fbb4a337597",
+      "bytes": 4431
+    },
+    {
+      "name": "holdout-evaluation.json",
+      "sha256": "7bd55abc158fbcb9d5a0446072ddc7f252796f9f82abe1a52a3a09bd82da84c0",
+      "bytes": 18952
+    },
+    {
+      "name": "safety-counterfactuals.json",
+      "sha256": "c7833c976614220975fe3c024339ff3a0b43a2424f378a2d670ac0fd0e912b53",
+      "bytes": 48455
+    },
+    {
+      "name": "qualification-report.md",
+      "sha256": "37794e81f5110b09f14cbbc7bc1e165616caee6e77598db113349df2a964bc11",
+      "bytes": 6502
+    },
+    {
+      "name": "tool/analyze.ts",
+      "sha256": "ddbb74e93286c59451edc83a154d781d8a5044780a25d8a1a6072fc8329eb471",
+      "bytes": 19079
+    },
+    {
+      "name": "tool/analyze.test.ts",
+      "sha256": "73051cfd80168b54257dc9562c9e9a60ca4c36f90bde905c9d8bfc7bb34ed231",
+      "bytes": 5159
+    }
+  ],
+  "sourceHead": "f87e1547d85f1f01b7040bda1b1495812b5c5a0c"
+}
