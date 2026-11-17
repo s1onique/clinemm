@@ -691,6 +691,45 @@ export interface AgentRuntimePrepareTurnContext {
 	 * enforcement. It never EXPANDS a limit.
 	 */
 	maxRequestTokens?: number;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The PREPARATION REQUEST IDENTITY — the id the agent runtime minted
+	 * ONCE, EARLY, in `prepareModelRequest()` (before the compaction
+	 * pipeline runs) for the model request being prepared.
+	 *
+	 * It is forwarded here so the compaction DECISION can be joined to the
+	 * request that the decision actually measured, and that request can in
+	 * turn be joined to the provider DISPATCH and the provider USAGE.
+	 *
+	 * Before this, the decision seam minted its OWN identity
+	 * (`sessionId#iteration#decisionOrdinal`) because the preparation id
+	 * was not available to it. That made the decision -> dispatch -> usage
+	 * join inferential (chronological pairing) rather than authoritative.
+	 *
+	 * The id is forwarded VERBATIM. It is never re-minted per decision and
+	 * never re-minted per provider attempt: a provider RETRY against the
+	 * same prepared request keeps the SAME preparation id and receives a
+	 * different provider ATTEMPT id.
+	 *
+	 * ABSENT (never synthesized) when the host did not supply one.
+	 */
+	preparationRequestId?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The formatting-relevant REQUEST OPTIONS of the request being
+	 * prepared.
+	 *
+	 * They are forwarded so a private candidate capture can record the
+	 * options that affect how the provider renders the candidate (thinking
+	 * mode, reasoning effort, tool-choice, output limits). Without them the
+	 * captured candidate could not be replayed equivalently.
+	 *
+	 * The host MUST NOT place a credential in this bag. The private capture
+	 * filters it again before anything is written.
+	 */
+	requestOptions?: Readonly<Record<string, unknown>>;
 	emitStatusNotice?: (
 		message: string,
 		metadata?: Record<string, unknown>,

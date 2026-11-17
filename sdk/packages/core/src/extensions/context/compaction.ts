@@ -1,4 +1,15 @@
-import { estimateRequestInputTokens } from "@cline/shared";
+import { join } from "node:path";
+import {
+	computeCandidateContentFingerprint,
+	estimateRequestInputTokens,
+} from "@cline/shared";
+import {
+	CompactionCandidateCaptureStore,
+	type CompactionCandidateSnapshot,
+	filterCapturableRequestOptions,
+	isCompactionCandidateCaptureArmed,
+	resolveCompactionCandidateCaptureStorageRoot,
+} from "../../runtime/observability/compaction-candidate-capture";
 import { resolveModelBehaviorTraceBudget } from "../../runtime/observability/model-behavior-trace";
 import { resolveConnectionProviderConfig } from "../../services/llms/handler-factory";
 import {
@@ -63,6 +74,37 @@ export interface ContextPipelinePrepareTurnInput {
 	 * compaction. See AgentPrepareTurnContext.previousRequestInputTokens.
 	 */
 	previousRequestInputTokens?: number;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The PREPARATION REQUEST IDENTITY — the id the agent runtime minted
+	 * ONCE, EARLY, before this compaction seam ran, for the model request
+	 * being prepared.
+	 *
+	 * It is forwarded here so the compaction DECISION can be joined to the
+	 * exact request it measured, and that request to the provider dispatch
+	 * and the provider-reported usage. Before this, the decision seam
+	 * minted its own identity (`sessionId#iteration#decisionOrdinal`)
+	 * because the preparation id was not reachable here, which made the
+	 * join inferential (chronological pairing) rather than authoritative.
+	 *
+	 * ABSENT (never synthesized) when the host did not supply one.
+	 */
+	preparationRequestId?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The formatting-relevant REQUEST OPTIONS of the request being prepared.
+	 *
+	 * They are forwarded so a private candidate capture can record the
+	 * options that affect how the provider renders the candidate (thinking
+	 * mode, reasoning effort, tool-choice, output limits). Without them the
+	 * captured candidate could not be replayed equivalently.
+	 *
+	 * The capture NEVER records a credential: the option bag is filtered
+	 * before it reaches the capture.
+	 */
+	requestOptions?: Readonly<Record<string, unknown>>;
 	emitStatusNotice?: (
 		message: string,
 		metadata?: Record<string, unknown>,
@@ -330,6 +372,176 @@ function countUserAssistantPairs(
  * do not emit compaction telemetry. If we want coverage there too, the
  * plugin/hook pipelines must be instrumented separately.
  */
+
+/**
+ * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+ *
+ * Whether the PRIVATE candidate capture is armed for this process.
+ *
+ * The arming decision is read ONCE per process and cached, so the hot
+ * decision path performs a boolean check rather than an environment read
+ * on every turn.
+ *
+ * Reading the environment creates nothing and writes nothing.
+ */
+let privateCaptureArmed: boolean | undefined;
+
+function privateCandidateCaptureArmed(): boolean {
+	if (privateCaptureArmed === undefined) {
+		privateCaptureArmed = isCompactionCandidateCaptureArmed();
+	}
+	return privateCaptureArmed;
+}
+
+/**
+ * The private capture store for this process, created lazily.
+ *
+ * It is created ONLY when the capture is armed, so the default path
+ * allocates no store and touches no filesystem.
+ */
+let privateCaptureStore: CompactionCandidateCaptureStore | undefined;
+
+function resolvePrivateCaptureStore():
+	| CompactionCandidateCaptureStore
+	| undefined {
+	if (privateCaptureStore) {
+		return privateCaptureStore;
+	}
+	const directory = resolvePrivateCompactionCandidateCaptureDirectory();
+	if (!directory) {
+		// Fail closed: without an explicit ISOLATED storage root there is
+		// nowhere provably private to write the candidate to.
+		return undefined;
+	}
+	privateCaptureStore = new CompactionCandidateCaptureStore(directory);
+	return privateCaptureStore;
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+ *
+ * Capture the exact pre-compaction CLIENT DECISION CANDIDATE.
+ *
+ * The capture is:
+ *
+ *   - SKIPPED entirely when the private opt-in is not armed (no
+ *     serialization, no I/O, no state);
+ *   - FAILURE-ISOLATED: a capture failure never changes the runtime's
+ *     behaviour — it is swallowed and reported as an absent capture;
+ *   - ONE-WAY: nothing is read back into the runtime.
+ */
+async function captureCompactionDecisionCandidate(input: {
+	config: {
+		providerId?: string;
+		modelId?: string;
+		sessionId?: string;
+		logger?: CoreSessionConfig["logger"];
+	};
+	context: ContextPipelinePrepareTurnInput;
+	decisionId: string | undefined;
+	decisionOrdinal: number | undefined;
+	requestInputTokens: number;
+	requestTriggerTokens: number;
+	shouldCompact: boolean;
+	compactionInitiated: boolean;
+}): Promise<void> {
+	if (!privateCandidateCaptureArmed()) {
+		return;
+	}
+	try {
+		const store = resolvePrivateCaptureStore();
+		if (!store) {
+			// Fail closed: the capture is armed but no ISOLATED storage root
+			// is configured, so there is nowhere provably private to write.
+			return;
+		}
+		const candidate: CompactionCandidateSnapshot = {
+			systemPrompt: input.context.systemPrompt,
+			// The ALREADY-PREPARED API messages are captured verbatim. The
+			// stateful `MessageBuilder` is NEVER called again here.
+			apiMessages: input.context.apiMessages,
+			tools: input.context.tools,
+			options: filterCapturableRequestOptions(input.context.requestOptions),
+			modelId: input.config.modelId,
+			providerId: input.config.providerId,
+			preparationRequestId: input.context.preparationRequestId,
+			decisionId: input.decisionId,
+		};
+		store.record(candidate, input.compactionInitiated);
+		const receipts = await store.flush(async (snapshot) => {
+			const fingerprint = computeCandidateContentFingerprint({
+				systemPrompt: snapshot.systemPrompt,
+				apiMessages: snapshot.apiMessages,
+				tools: snapshot.tools,
+				options: snapshot.options,
+			});
+			return {
+				kind: "compaction_candidate" as const,
+				requestIdentity:
+					snapshot.preparationRequestId ??
+					snapshot.decisionId ??
+					"unknown-request",
+				representation: fingerprint.representation,
+				snapshotComplete: true,
+				contentFingerprint: fingerprint.fingerprint,
+				estimatedInputTokens: input.requestInputTokens,
+				requestTriggerTokens: input.requestTriggerTokens,
+				// The candidate was NOT submitted: no provider ever reported
+				// usage for it. The field is explicitly null, never zero.
+				providerInputTokens: null,
+				providerInputAuthority: "UNAVAILABLE_FROM_TRACE",
+				compactionInitiated: input.compactionInitiated,
+				decisionId: snapshot.decisionId,
+				preparationRequestId: snapshot.preparationRequestId,
+				payloadBytes: 0,
+				truncated: false,
+			};
+		});
+		for (const receipt of receipts) {
+			input.config.logger?.debug?.("Private compaction candidate captured", {
+				requestIdentity: receipt.requestIdentity,
+				contentFingerprint: receipt.contentFingerprint,
+				snapshotComplete: receipt.snapshotComplete,
+				truncated: receipt.truncated,
+				compactionInitiated: receipt.compactionInitiated,
+			});
+		}
+	} catch {
+		// Failure isolation: the capture never changes runtime behaviour.
+	}
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+ *
+ * The PRIVATE diagnostic directory the candidate capture writes to.
+ *
+ * It is EXPLICITLY private: it lives under the ISOLATED dogfood storage
+ * root in a `private/` subdirectory that the standard diagnostics exports
+ * and the incident bundles never include.
+ *
+ * ## Fail-closed isolation (P0-3 correction)
+ *
+ * The storage root is the dogfood runtime's ACTUAL configured data
+ * directory (`CLINE_DATA_DIR`, or `<CLINE_DIR>/data`). There is deliberately
+ * NO `~/.cline/data` fallback: the shared default data directory is not
+ * provably inside the isolated dogfood profile, and it may hold the
+ * operator's real credentials and prompts. When no explicit root is
+ * configured the capture is NOT armed at all.
+ *
+ * The directory is NOT created here — only its path is resolved. The store
+ * creates it (with 0700) when it actually writes.
+ */
+function resolvePrivateCompactionCandidateCaptureDirectory():
+	| string
+	| undefined {
+	const storageRoot = resolveCompactionCandidateCaptureStorageRoot();
+	if (!storageRoot) {
+		return undefined;
+	}
+	return join(storageRoot, "private", "compaction-candidates");
+}
+
 export function createContextCompactionPrepareTurn(
 	config: Pick<
 		CoreSessionConfig,
@@ -524,8 +736,23 @@ export function createContextCompactionPrepareTurn(
 		// sink, or with a sink that explicitly reports itself disabled,
 		// this path performs no ordinal allocation and no extra JSON
 		// serialization of the provider-visible message array.
+		// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 — the DECISION
+		// IDENTITY is hoisted out of the diagnostics-only block so the
+		// private candidate capture can reference it too.
+		//
+		// The ordinal is allocated ONLY when an ACTUAL observer is armed (the
+		// diagnostic sink OR the private capture). With neither armed, no
+		// ordinal is allocated, no state is kept, and no serialization is
+		// performed — the diagnostics-OFF path stays allocation-free.
+		const decisionObservationArmed =
+			decisionDiagnosticsEnabled() || privateCandidateCaptureArmed();
+		let decisionOrdinalForObservation: number | undefined;
+		let decisionIdForObservation: string | undefined;
+		if (decisionObservationArmed) {
+			decisionOrdinalForObservation = decisionOrdinal++;
+			decisionIdForObservation = `${config.sessionId ?? "unknown-session"}#${context.iteration ?? 0}#${decisionOrdinalForObservation}`;
+		}
 		if (decisionDiagnosticsEnabled()) {
-			const decisionOrdinalForObservation = decisionOrdinal++;
 			observeCompactionTrace(
 				config.modelBehaviorTraceSink,
 				"diagnostics",
@@ -534,6 +761,12 @@ export function createContextCompactionPrepareTurn(
 					iteration: context.iteration,
 					providerId: config.providerId,
 					modelId: config.modelId,
+					// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+					// PREPARATION REQUEST IDENTITY, forwarded VERBATIM from the
+					// agent runtime. It is the id of the request this decision
+					// actually measured, so the decision joins to the provider
+					// dispatch and the provider-reported usage by an EXACT key.
+					preparationRequestId: context.preparationRequestId,
 				},
 				{
 					compactionMode: effectiveMode,
@@ -588,8 +821,36 @@ export function createContextCompactionPrepareTurn(
 					// eligibility decisions. It distinguishes consecutive
 					// decisions within the SAME iteration (a re-compaction
 					// attempt), which `(sessionId, iteration)` alone cannot.
-					decisionId: `${config.sessionId ?? "unknown-session"}#${context.iteration ?? 0}#${decisionOrdinalForObservation}`,
+					decisionId: decisionIdForObservation,
 					decisionOrdinal: decisionOrdinalForObservation,
+					// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 — the
+					// AUTHORITATIVE JOIN KEY.
+					//
+					// `decisionId` remains the per-session monotonic DECISION
+					// identity: it distinguishes two eligibility decisions inside
+					// the SAME iteration (a re-compaction attempt), which
+					// `(sessionId, iteration)` alone cannot.
+					//
+					// `preparationRequestId` is the PREPARATION identity. It is
+					// forwarded verbatim from the agent runtime (minted BEFORE
+					// this seam ran) and therefore joins this decision to the
+					// request it measured, to the provider dispatch of that
+					// request, and to the provider-reported usage.
+					//
+					// A provider RETRY against the same prepared request keeps
+					// the SAME preparation id and receives a DIFFERENT provider
+					// attempt id, so retries cannot double-count decisions.
+					//
+					// `decisionJoinAuthority` states whether the join is
+					// AUTHORITATIVE (the preparation id was forwarded) or
+					// UNAVAILABLE (the host did not supply one). It is never
+					// reported as authoritative when the id is absent.
+					...(context.preparationRequestId !== undefined
+						? {
+								preparationRequestId: context.preparationRequestId,
+								decisionJoinAuthority: "AUTHORITATIVE",
+							}
+						: { decisionJoinAuthority: "UNAVAILABLE" }),
 					// ACT-CLINEMM-ROUND-C-TRACE-QUAL01 — the ELIGIBILITY-CHECK
 					// discriminator.
 					//
@@ -617,6 +878,33 @@ export function createContextCompactionPrepareTurn(
 				},
 			);
 		}
+		// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 — the PRIVATE
+		// CANDIDATE CAPTURE, at the ACTUAL DECISION BOUNDARY.
+		//
+		// The capture happens HERE: AFTER the decision arithmetic and the
+		// decision record, and BEFORE any compaction work. That is the only
+		// point at which the already-prepared inputs are still exactly the
+		// inputs the decision measured.
+		//
+		// The stateful `MessageBuilder` is NEVER called again here — the
+		// already-prepared `apiMessages` are captured verbatim. The captured
+		// objects are never mutated.
+		//
+		// The capture is ONE-WAY: nothing is read back into the runtime, so
+		// it cannot influence the request, the dispatch or the run.
+		//
+		// It runs ONLY when the separate private opt-in is armed. With the
+		// opt-in off, this path performs no serialization and no I/O at all.
+		await captureCompactionDecisionCandidate({
+			config,
+			context,
+			decisionId: decisionIdForObservation,
+			decisionOrdinal: decisionOrdinalForObservation,
+			requestInputTokens,
+			requestTriggerTokens,
+			shouldCompact,
+			compactionInitiated: effectiveMode !== "auto" || shouldCompact,
+		});
 		if (effectiveMode === "auto" && !shouldCompact) {
 			return undefined;
 		}
@@ -830,6 +1118,11 @@ export function createContextCompactionPrepareTurn(
 					iteration: context.iteration,
 					providerId: config.providerId,
 					modelId: config.modelId,
+					// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+					// preparation identity is forwarded on the COMPLETION
+					// record too, so the compaction execution joins to the same
+					// prepared request as the decision that caused it.
+					preparationRequestId: context.preparationRequestId,
 				},
 				{
 					mode: effectiveMode,
@@ -917,6 +1210,11 @@ export function createContextCompactionPrepareTurn(
 					iteration: context.iteration,
 					providerId: config.providerId,
 					modelId: config.modelId,
+					// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+					// preparation identity is forwarded on the COMPLETION
+					// record too, so the compaction execution joins to the same
+					// prepared request as the decision that caused it.
+					preparationRequestId: context.preparationRequestId,
 				},
 				{
 					mode: effectiveMode,
@@ -1028,6 +1326,11 @@ export function createContextCompactionPrepareTurn(
 					iteration: context.iteration,
 					providerId: config.providerId,
 					modelId: config.modelId,
+					// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+					// preparation identity is forwarded on the COMPLETION
+					// record too, so the compaction execution joins to the same
+					// prepared request as the decision that caused it.
+					preparationRequestId: context.preparationRequestId,
 				},
 				{
 					mode: effectiveMode,
@@ -1646,6 +1949,7 @@ function observeCompactionTrace(
 					iteration?: number;
 					providerId?: string;
 					modelId?: string;
+					preparationRequestId?: string;
 					payload: Record<string, unknown>;
 				}) => void;
 				onCompactionCompleted?: (observation: {
@@ -1653,6 +1957,7 @@ function observeCompactionTrace(
 					iteration?: number;
 					providerId?: string;
 					modelId?: string;
+					preparationRequestId?: string;
 					payload: Record<string, unknown>;
 				}) => void;
 		  }
@@ -1663,6 +1968,12 @@ function observeCompactionTrace(
 		iteration?: number;
 		providerId?: string;
 		modelId?: string;
+		/**
+		 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the preparation
+		 * request identity, forwarded so the decision joins to the request it
+		 * measured.
+		 */
+		preparationRequestId?: string;
 	},
 	payload: Record<string, unknown>,
 ): void {
@@ -1689,6 +2000,12 @@ function observeCompactionTrace(
 				? { providerId: identity.providerId }
 				: {}),
 			...(identity.modelId !== undefined ? { modelId: identity.modelId } : {}),
+			// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: forward the
+			// preparation identity verbatim. It is OBSERVED (forwarded), never
+			// synthesized.
+			...(identity.preparationRequestId !== undefined
+				? { preparationRequestId: identity.preparationRequestId }
+				: {}),
 			payload,
 		};
 		if (channel === "diagnostics") {

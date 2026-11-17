@@ -97,6 +97,31 @@ export interface ModelBehaviorTraceIdentity {
 	 * with this one.
 	 */
 	readonly modelRequestId?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The PREPARATION REQUEST IDENTITY — the id the agent runtime minted
+	 * ONCE, EARLY, in `prepareModelRequest()` for the model request being
+	 * prepared, BEFORE the compaction pipeline ran.
+	 *
+	 * It is DISTINCT from {@link ModelBehaviorTraceIdentity.modelRequestId},
+	 * which is the PROVIDER ATTEMPT identity (minted later, per issued
+	 * attempt). The relationship is:
+	 *
+	 *   one preparationRequestId  ->  one prepared request
+	 *   one prepared request      ->  N provider attempts (retries)
+	 *
+	 * A provider RETRY against the same prepared request keeps the SAME
+	 * `preparationRequestId` and receives a DIFFERENT `modelRequestId`.
+	 *
+	 * It is forwarded to the compaction DECISION seam so a decision can be
+	 * joined to the exact request it measured, and from there to the
+	 * dispatch and the provider-reported usage. Before this ACT the decision
+	 * seam minted its own identity, which made that join inferential.
+	 *
+	 * ABSENT (never synthesized) when the producer did not supply one.
+	 */
+	readonly preparationRequestId?: string;
 	/** Configured provider id, when known. */
 	readonly providerId?: string;
 	/** Configured model id, when known. */
@@ -2667,6 +2692,13 @@ export interface ModelBehaviorTraceObservation {
 	 * {@link ModelBehaviorTraceIdentity.modelRequestId}.
 	 */
 	readonly modelRequestId?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The PREPARATION REQUEST IDENTITY. See
+	 * {@link ModelBehaviorTraceIdentity.preparationRequestId}.
+	 */
+	readonly preparationRequestId?: string;
 	readonly providerId?: string;
 	readonly modelId?: string;
 	readonly payload: Readonly<Record<string, unknown>>;
@@ -2677,3 +2709,42 @@ export interface ModelBehaviorTraceObservation {
  * pays only a null check.
  */
 export const NOOP_MODEL_BEHAVIOR_TRACE_SINK: ModelBehaviorTraceSink = {};
+
+/**
+ * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 (P0-2 correction).
+ *
+ * Whether the PROVIDER-DISPATCH RECORD must be computed for this sink.
+ *
+ * The dispatch record carries the extra measurement the compaction evidence
+ * contract needs: the final projection's estimated token count, its
+ * message/tool counts and its deterministic fingerprint. Computing it is
+ * NOT free — it re-projects the provider-visible messages, re-runs the
+ * token estimator, canonicalizes the projection and computes a synchronous
+ * SHA-256.
+ *
+ * That work must happen ONLY when somebody is listening. Otherwise an
+ * ordinary request in a public profile would pay for a measurement no
+ * consumer reads, which violates the tracing-OFF conservation contract.
+ *
+ * The guard is at the PRODUCER: the runtime checks this BEFORE building the
+ * record, so the projection/hash work never executes when the sink is
+ * absent or has none of the dispatch-record channels.
+ *
+ * A DISABLED sink is indistinguishable from an absent one here: a sink
+ * object that exposes the channels but is internally disabled still
+ * receives the observation, and the observation is the sink's business.
+ * The OFF-path contract is enforced by the HOST, which installs NO sink
+ * (or the no-op sink) when the diagnostic is disabled.
+ */
+export function isProviderDispatchRecordRequired(
+	sink: ModelBehaviorTraceSink | undefined,
+): boolean {
+	if (!sink) {
+		return false;
+	}
+	return Boolean(
+		sink.onRequestPrepared ||
+			sink.onProviderRequestSubmitted ||
+			sink.onProviderRequestCompleted,
+	);
+}

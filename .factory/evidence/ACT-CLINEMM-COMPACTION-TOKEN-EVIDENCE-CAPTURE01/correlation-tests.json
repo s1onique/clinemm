@@ -1,0 +1,280 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01",
+  "gate": "C5 RED/GREEN and C6 conservation",
+  "verdict": "PASS_CODE_LEVEL_AFTER_BOUNDED_CORRECTION",
+  "note": "Every witness drives the REAL production seam. No witness re-implements the estimator. No live provider call is made by any test: every provider is a scripted/recording fake with synthetic credentials only.",
+  "boundedCorrection": {
+    "reviewVerdict": "HALT_CAPTURE_CONTRACT_INCOMPLETE",
+    "scope": "One bounded correction of four P0 defects and one adjacent P1. No new tracing architecture, no estimator change, no context-threshold change, no compaction-policy change.",
+    "defectsCorrected": [
+      {
+        "id": "P0-1",
+        "defect": "The 8 MiB / 64 MiB limits did not constrain ACTUAL writes: flush() computed the truncation flag and then wrote the COMPLETE serialized candidate anyway, and successive flushes left obsolete files behind, so the in-memory retention cap did not bound the directory.",
+        "correction": "The oversized candidate is REJECTED BEFORE ANY BYTE IS WRITTEN and reported as a metadata-only rejection receipt. The store tracks the files it owns, derives the byte/count totals from that map, and removes superseded files. chmod corrects the directory and every written file, because mkdir/writeFile mode only applies to newly created entries.",
+        "red": "3 of 14 capture-store tests FAILED against a deliberately reverted implementation",
+        "green": "14 of 14 capture-store tests PASS",
+        "gates": [
+          "P0-1: an oversized candidate is REJECTED BEFORE the write — the disk stays bounded",
+          "P0-1: repeated captures keep the ACTUAL disk file count and byte total bounded",
+          "P0-1: a SUPERSEDED control candidate is REMOVED from disk",
+          "P0-3: a PERMISSIVE pre-existing directory and file are CORRECTED, not inherited"
+        ]
+      },
+      {
+        "id": "P0-2",
+        "defect": "Fingerprinting ran even with diagnostics disabled: prepareModelRequest() unconditionally built the provider dispatch record, adding a projection, a token estimation, a canonicalization and a synchronous SHA-256 to every ordinary request.",
+        "correction": "The guard is AT THE PRODUCER. isProviderDispatchRecordRequired(sink) (new, in @cline/shared) reports whether any consumer of the dispatch record exists; when it does not, the record is not built at all.",
+        "red": "the P0-2 witness FAILED (1 failed / 7 passed) against a deliberately reverted implementation",
+        "green": "8 of 8 agent-runtime witnesses PASS",
+        "gates": [
+          "P0-2: with NO sink, the dispatch-record projection and fingerprint NEVER execute"
+        ]
+      },
+      {
+        "id": "P0-3",
+        "defect": "The private capture was not dogfood-only: the arming function checked only the opt-in variable, and the storage resolver fell back to ~/.cline/data, so a full prompt/tool-argument capture could land in the shared default data directory.",
+        "correction": "Arming requires BOTH the explicit opt-in AND the closed-runtime dogfood identity CLINEMM_RUNTIME_PROFILE=dogfood (exact-match, fail-closed). The storage root resolves ONLY from CLINE_DATA_DIR or <CLINE_DIR>/data; there is no implicit ~/.cline/data fallback and the capture is not armed when neither is set.",
+        "red": "covered by the same 3-of-14 RED run as P0-1",
+        "green": "14 of 14 capture-store tests PASS",
+        "gates": [
+          "the private capture is armed ONLY by an explicit separate opt-in AND the dogfood identity",
+          "P0-3: a REGULAR profile can NEVER arm the capture, even with the opt-in set",
+          "P0-3: the storage root FAILS CLOSED — there is no implicit ~/.cline/data fallback"
+        ]
+      },
+      {
+        "id": "P0-4",
+        "defect": "The exported latency trace lost the new correlation fields: LatencyTraceSink recorded observation.payload only, while the authoritative preparationRequestId / modelRequestId live on the OBSERVATION, and the finite metadata allowlist did not carry the new fields. The exported JSON therefore could not establish the decision -> dispatch -> completion join.",
+        "correction": "The sink projects the observation identity onto the metadata bag, and the finite LATENCY_METADATA_ALLOWLIST carries preparationRequestId, modelRequestId, decisionId, decisionJoinAuthority, estimatedFinalInputTokens, finalProjectionFingerprint (+ representation/version/producer), providerFamily, providerVisibleMessageCount and toolSchemaCount.",
+        "red": "4 of 5 export-path tests FAILED against a deliberately reverted implementation",
+        "green": "5 of 5 export-path tests PASS",
+        "gates": [
+          "the EXPORTED trace carries the preparation identity through the dispatch and completion",
+          "the EXPORTED trace carries the dispatch record's measurement and fingerprint",
+          "the EXPORTED trace does NOT leak request CONTENT",
+          "the compaction DECISION joins to the dispatch through the preparation identity",
+          "the join authority is UNAVAILABLE — never AUTHORITATIVE — when the preparation identity is absent"
+        ]
+      },
+      {
+        "id": "P1",
+        "defect": "The candidate snapshot was not deep-copied, and the filtered options could diverge from the pre-filter fingerprint: record() retained object references and flush() serialized them later, so a mutation in between could change what the supposedly exact snapshot represented.",
+        "correction": "record() deep-copies and freezes the candidate BEFORE the first asynchronous boundary. The write boundary still re-applies the option allowlist as defence in depth.",
+        "red": "covered by the P1 witness (mutation after record)",
+        "green": "14 of 14 capture-store tests PASS",
+        "gates": [
+          "P1: the captured snapshot is IMMUTABLE — a later mutation cannot change it"
+        ]
+      }
+    ],
+    "nonBlocking": "The invalid Leamas gate-summary binding was classified P2, NON-BLOCKING and was deliberately not spent another cycle on."
+  },
+  "red": {
+    "witness": "sdk/packages/core/src/extensions/context/compaction.token-evidence-capture01.red01.test.ts",
+    "demonstratedGap": "Without a forwarded preparation identity the compaction decision carried only its own (sessionId, iteration, decisionOrdinal) identity and NO link to the request it measured; the decisionJoinAuthority is UNAVAILABLE. The decision record also carried NO candidate content, so the exact pre-compaction candidate could not be reconstructed from the metadata.",
+    "preActJoinAuthority": "INFERRED_CHRONOLOGICAL_PAIRING",
+    "postActJoinAuthority": "AUTHORITATIVE",
+    "result": "PASS (1 test)"
+  },
+  "green": {
+    "suites": [
+      {
+        "path": "sdk/packages/core/src/extensions/context/compaction.token-evidence-capture01.test.ts",
+        "tests": 5,
+        "result": "PASS"
+      },
+      {
+        "path": "sdk/packages/core/src/extensions/context/compaction.token-evidence-capture01.red01.test.ts",
+        "tests": 1,
+        "result": "PASS"
+      },
+      {
+        "path": "sdk/packages/agents/src/agent-runtime.token-evidence-capture01.test.ts",
+        "tests": 8,
+        "result": "PASS"
+      },
+      {
+        "path": "sdk/packages/core/src/runtime/observability/compaction-candidate-capture.test.ts",
+        "tests": 14,
+        "result": "PASS"
+      },
+      {
+        "path": "sdk/packages/core/src/observability/latency/latency-sink.compaction-token-evidence-capture01.test.ts",
+        "tests": 5,
+        "result": "PASS"
+      },
+      {
+        "path": "sdk/packages/shared/src/runtime/compaction-token-evidence.test.ts",
+        "tests": 5,
+        "result": "PASS"
+      }
+    ],
+    "totalNewWitnesses": 38,
+    "totalResult": "PASS"
+  },
+  "requiredGateCoverage": [
+    {
+      "gate": "T1",
+      "requirement": "Early request identity survives the prepare-turn/compaction boundary",
+      "witness": "core/compaction.token-evidence-capture01.test.ts :: T1, T1b",
+      "result": "PASS",
+      "evidence": "The forwarded preparationRequestId appears verbatim on the decision record; decisionJoinAuthority is AUTHORITATIVE when present and UNAVAILABLE (never synthesized) when absent."
+    },
+    {
+      "gate": "T2",
+      "requirement": "Decision and provider dispatch correlate authoritatively for a non-compacting request",
+      "witness": "agents/agent-runtime.token-evidence-capture01.test.ts :: T2",
+      "result": "PASS",
+      "evidence": "The submitted and finished records carry the SAME preparationRequestId and the SAME modelRequestId; the dispatch record carries estimatedFinalInputTokens, providerVisibleMessageCount, toolSchemaCount and the finalProjectionFingerprint with its representation/version/producer."
+    },
+    {
+      "gate": "T3",
+      "requirement": "Compacted candidates remain distinct from the post-compaction request",
+      "witness": "core/compaction.token-evidence-capture01.test.ts :: T2, T3",
+      "result": "PASS",
+      "evidence": "Two decisions in the SAME iteration retain distinct decisionIds and distinct forwarded preparation identities; the private capture records the candidate BEFORE compaction while the dispatch record fingerprints the FINAL post-compaction projection, so the two are distinguishable by representation."
+    },
+    {
+      "gate": "T4",
+      "requirement": "Two provider attempts using one prepared request do not double-count decisions",
+      "witness": "agents/agent-runtime.token-evidence-capture01.test.ts :: T4",
+      "result": "PASS",
+      "evidence": "The preparation identity is bound to the PREPARED REQUEST (never re-minted per attempt) and the attempt identity is minted per ATTEMPT and is always distinct from it. The number of preparation identities is <= the number of attempts, so a retry cannot inflate the decision count."
+    },
+    {
+      "gate": "T5",
+      "requirement": "beforeModel mutations invalidate false equality assumptions",
+      "witness": "agents/agent-runtime.token-evidence-capture01.test.ts :: T5",
+      "result": "PASS",
+      "evidence": "A beforeModel hook that appends a message changes the finalProjectionFingerprint and the providerVisibleMessageCount; the two dispatches are provably different."
+    },
+    {
+      "gate": "T6",
+      "requirement": "Actual provider usage joins to the correct attempt, not the nearest timestamp",
+      "witness": "agents/agent-runtime.token-evidence-capture01.test.ts :: T6",
+      "result": "PASS",
+      "evidence": "Two consecutive turns produce two distinct attempt identities and two distinct preparation identities; each usage record carries the inputTokens of its OWN attempt (111 vs 222)."
+    },
+    {
+      "gate": "T7",
+      "requirement": "Missing usage remains unavailable, never zero",
+      "witness": "agents/agent-runtime.token-evidence-capture01.test.ts :: T7",
+      "result": "PASS",
+      "evidence": "usageAvailable is false and the inputTokens/outputTokens fields are ABSENT (not zero) when the provider reports no usage."
+    },
+    {
+      "gate": "T8",
+      "requirement": "Cache token accounting does not double-count",
+      "witness": "agents/agent-runtime.token-evidence-capture01.test.ts :: T8",
+      "result": "PASS",
+      "evidence": "inputTokens (the complete prompt) and cacheReadTokens (a subset) are reported ALONGSIDE each other; the cached amount is never added into the total."
+    },
+    {
+      "gate": "T9",
+      "requirement": "The candidate snapshot preserves structured tool results and exact ordering",
+      "witness": "core/compaction-candidate-capture.test.ts :: T9",
+      "result": "PASS",
+      "evidence": "The captured JSON preserves the exact message order, the structured tool_result block with its tool_use_id and its nested content parts (not flattened), the multi-part message parts in order, and the tool inventory order."
+    },
+    {
+      "gate": "T10",
+      "requirement": "Truncation makes a snapshot explicitly ineligible for exact replay",
+      "witness": "core/compaction-candidate-capture.test.ts :: T10",
+      "result": "PASS",
+      "evidence": "An over-budget candidate yields truncated=true, snapshotComplete=false and truncationReason=CANDIDATE_EXCEEDS_PER_CANDIDATE_BYTE_BUDGET."
+    },
+    {
+      "gate": "T11",
+      "requirement": "Diagnostics OFF adds no capture I/O or serialization",
+      "witness": "agents/agent-runtime.token-evidence-capture01.test.ts :: T11",
+      "result": "PASS",
+      "evidence": "The execution result, the reported usage and the dispatched provider-visible message count are IDENTICAL with the diagnostics off. The private capture performs no directory creation, no serialization and no write when its own separate opt-in is absent."
+    },
+    {
+      "gate": "T12",
+      "requirement": "Synthetic credentials cannot enter shareable artifacts",
+      "witness": "core/compaction-candidate-capture.test.ts :: T12",
+      "result": "PASS",
+      "evidence": "A credential-shaped option key is absent from the captured payload AND from the receipt; only the allowlisted formatting-relevant options survive. The filter is applied at the producer AND at the write boundary."
+    },
+    {
+      "gate": "T13",
+      "requirement": "Capture failures do not change runtime behaviour",
+      "witness": "core/compaction-candidate-capture.test.ts :: T13",
+      "result": "PASS",
+      "evidence": "A capture write failure rejects, and the store's retained candidate state is unchanged (1 retained, 0 written, 0 bytes)."
+    },
+    {
+      "gate": "T14",
+      "requirement": "The existing compaction threshold and overflow controls are unchanged",
+      "witness": "core/compaction.token-evidence-capture01.test.ts :: T14",
+      "result": "PASS",
+      "evidence": "A tiny request still reports shouldCompact=false and compactionInitiated=false and returns undefined (no compaction); a genuinely oversized request still reports shouldCompact=true and compactionInitiated=true and produces a compacted transcript. The estimator, threshold and compaction-shared files are byte-identical to HEAD."
+    }
+  ],
+  "conservationGates": {
+    "regressionFoundAndFixed": {
+      "gate": "synchronous-fingerprint",
+      "symptom": "10 production agent-runtime tests timed out (5000ms) after the first implementation, which used an ASYNCHRONOUS WebCrypto digest on the request-preparation path.",
+      "mechanism": "The digest introduced a suspension point that the production retry-backoff tests, which drive the runtime with FAKE TIMERS, could not advance.",
+      "resolution": "The fingerprint is computed with a dependency-free SYNCHRONOUS FIPS 180-4 SHA-256 (sdk/packages/shared/src/runtime/compaction-token-evidence.ts). It adds NO suspension point, so the request, the tool inventory, the token budget and the provider dispatch are bit-for-bit identical to the un-instrumented path.",
+      "sha256Witness": "The synchronous digest is witnessed against node:crypto at every block boundary (lengths 0, 3, 55, 56, 63, 64, 65, 1000, unicode, 100000) in sdk/packages/shared/src/runtime/compaction-token-evidence.test.ts.",
+      "postFixResult": "PASS — all 602 agents tests pass."
+    },
+    "typecheck": {
+      "shared": "PASS (0 errors)",
+      "agents": "PASS (0 errors)",
+      "core": "PASS — 0 NEW errors in the touched files; the pre-existing baseline errors are unchanged"
+    },
+    "biome": "PASS — `biome check` on all 14 touched files reports no findings (only pre-existing non-null-assertion INFO-level suggestions)",
+    "sdkBuild": "PASS — `bun run build:sdk` completed successfully (shared + agents rebuilt after the shared barrel gained isProviderDispatchRecordRequired)",
+    "extensionBundle": "NOT_BUILT — the operator builds manually (instruction received during the run)",
+    "coreSuiteAttributableFailures": {
+      "baselineAtHead": {
+        "failedTests": 152,
+        "failedFiles": 32,
+        "passedTests": 5366,
+        "totalFiles": 358
+      },
+      "withActChangesAndBoundedCorrection": {
+        "failedTests": 111,
+        "failedFiles": 16,
+        "passedTests": 5455,
+        "totalFiles": 362
+      },
+      "newAttributableFailures": 0,
+      "note": "The remaining failures are all in PRE-EXISTING baseline files (bash supervisor, editor realpath authority, hub server, hub runtime host, macOS sandbox, checkpoint/persistence). No ACT-owned file fails. The failure count went DOWN relative to the recorded baseline."
+    },
+    "agentsSuite": {
+      "result": "PASS",
+      "passedTests": 603,
+      "files": 36,
+      "note": "602 baseline + the new P0-2 producer-guard witness"
+    },
+    "sharedSuite": {
+      "result": "PASS",
+      "passedTests": 573,
+      "skippedTests": 6
+    },
+    "compactionSuite": {
+      "result": "PASS",
+      "passedTests": 369,
+      "skippedTests": 2,
+      "files": 24
+    },
+    "coreOrchestrationObservabilitySuite": {
+      "result": "PASS",
+      "passedTests": 430,
+      "files": 32
+    },
+    "privateCaptureActivationContract": {
+      "requiredEnvironment": [
+        "CLINEMM_RUNTIME_PROFILE=dogfood (closed-runtime dogfood identity; exact-match, fail-closed)",
+        "CLINE_PRIVATE_COMPACTION_CANDIDATE_CAPTURE=1 (separate explicit private opt-in)",
+        "CLINE_DATA_DIR (or CLINE_DIR) pointing at the isolated dogfood storage root"
+      ],
+      "failClosed": "No ~/.cline/data fallback: with no explicit storage root the capture is NOT armed at all.",
+      "witness": "sdk/packages/core/src/runtime/observability/compaction-candidate-capture.test.ts"
+    }
+  }
+}

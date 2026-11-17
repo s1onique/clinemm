@@ -1,0 +1,159 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01",
+  "purpose": "Metadata-only receipt for the PRIVATE candidate capture. The raw candidate snapshots stay OUTSIDE Git and outside every shareable diagnostics export.",
+  "captureImplementation": {
+    "module": "sdk/packages/core/src/runtime/observability/compaction-candidate-capture.ts",
+    "store": "CompactionCandidateCaptureStore",
+    "seam": "the compaction DECISION boundary, AFTER the decision arithmetic and BEFORE any compaction work",
+    "messageBuilderReread": false,
+    "capturedObjectsMutated": false
+  },
+  "privacyContract": {
+    "separateExplicitOptIn": {
+      "envVar": "CLINE_PRIVATE_COMPACTION_CANDIDATE_CAPTURE",
+      "requiredValue": "1",
+      "separation": "SEPARATE from the shareable latency/trace opt-in — enabling the metadata trace does NOT arm the private capture. The opt-in is NECESSARY BUT NOT SUFFICIENT: the closed-runtime dogfood identity is also required.",
+      "armedValues": [
+        "1"
+      ],
+      "notArmedValues": [
+        "0",
+        "true",
+        "yes",
+        "<absent>",
+        "the opt-in alone (without the dogfood identity)"
+      ]
+    },
+    "isolatedDogfoodRuntimeOnly": {
+      "enforced": true,
+      "requiredEnvVar": "CLINEMM_RUNTIME_PROFILE",
+      "requiredValue": "dogfood",
+      "matching": "EXACT, fail-closed (an absent, empty, whitespace, differently-cased, or otherwise-valued marker resolves to 'public')",
+      "rationale": "Reuses the established closed-runtime dogfood identity (apps/vscode/src/sdk/dogfood-runtime-profile.ts) rather than inventing a second profile bit.",
+      "witnesses": [
+        "core/compaction-candidate-capture.test.ts :: 'the private capture is armed ONLY by an explicit separate opt-in AND the dogfood identity'",
+        "core/compaction-candidate-capture.test.ts :: 'P0-3: a REGULAR profile can NEVER arm the capture, even with the opt-in set'"
+      ]
+    },
+    "neverInNormalLogs": true,
+    "neverInDiagnosticsExports": true,
+    "neverInIncidentBundles": true,
+    "neverInGit": true,
+    "neverPrintedToTerminal": true,
+    "neverInSupportExport": true,
+    "privateDirectory": {
+      "resolution": "<CLINE_DATA_DIR>/private/compaction-candidates/  (or <CLINE_DIR>/data/private/compaction-candidates/)",
+      "fallback": "NONE — there is no implicit ~/.cline/data fallback; with no explicit storage root the capture is NOT armed at all (fail closed)",
+      "outsideEveryExport": true,
+      "witness": "core/compaction-candidate-capture.test.ts :: 'P0-3: the storage root FAILS CLOSED — there is no implicit ~/.cline/data fallback'"
+    },
+    "permissions": {
+      "directory": "0700",
+      "files": "0600",
+      "posixEnforced": true,
+      "existingEntriesCorrected": "chmod is applied explicitly to the directory and to every file the store writes, because mkdir/writeFile `mode` only applies to NEWLY created entries",
+      "witnesses": [
+        "core/compaction-candidate-capture.test.ts :: 'the private directory uses restrictive POSIX permissions'",
+        "core/compaction-candidate-capture.test.ts :: 'P0-3: a PERMISSIVE pre-existing directory and file are CORRECTED, not inherited'"
+      ]
+    },
+    "bounds": {
+      "maxCandidates": 12,
+      "maxCandidatesIsATotal": true,
+      "maxCandidatesScope": "The cap counts the CONTROL and the COMPACTION candidates TOGETHER. A control does NOT get a slot on top of the cap: the directory never holds more than 12 candidate files, whatever the mix.",
+      "maxBytesPerCandidate": 8388608,
+      "maxTotalBytes": 67108864,
+      "enforcement": "ON THE WRITE — an oversized candidate is REJECTED BEFORE ANY BYTE IS WRITTEN and reported as a metadata-only rejection receipt; the oversized content never lands on disk",
+      "diskAccounting": "The store tracks the files it owns and derives the byte/count totals from that map, so the reported totals are the ACTUAL on-disk totals",
+      "supersededFilesRemoved": true,
+      "truncationIsExplicit": true,
+      "truncatedCandidateIsIneligibleForExactCounting": true,
+      "witnesses": [
+        "core/compaction-candidate-capture.test.ts :: 'P0-1: an oversized candidate is REJECTED BEFORE the write — the disk stays bounded'",
+        "core/compaction-candidate-capture.test.ts :: 'P0-1: repeated captures keep the ACTUAL disk file count and byte total bounded'",
+        "core/compaction-candidate-capture.test.ts :: 'P0-1: a SUPERSEDED control candidate is REMOVED from disk'",
+        "core/compaction-candidate-capture.identity-retention.test.ts :: 'I2: the hard retention cap counts the CONTROL and the compaction candidates TOGETHER'",
+        "core/compaction-candidate-capture.identity-retention.test.ts :: 'I2: the 12 → 13 → 14 candidate transitions NEVER exceed the declared maximum on disk'",
+        "core/compaction-candidate-capture.identity-retention.test.ts :: 'I3: the reported count and byte totals RECONCILE with the actual directory'"
+      ]
+    },
+    "storageIdentity": {
+      "rule": "A capture file is identified by the DECISION's storage identity ALONGSIDE the content fingerprint: `<storage identity>--<content fingerprint>.json`.",
+      "storageIdentitySource": "the candidate's decisionId, else its preparationRequestId; a candidate carrying NEITHER gets a monotonic ordinal so it still receives its own file",
+      "identityResolvedAt": "record() — the file name is stable for the candidate's whole lifetime across every subsequent flush",
+      "whyNotContentFingerprintAlone": "The content fingerprint identifies WHAT was measured, not WHICH decision measured it. Two distinct eligibility decisions can measure byte-identical content; naming both files after the content collapsed them onto one file and the second write silently OVERWROTE the first decision's snapshot.",
+      "distinctDecisionsNeverCollapse": true,
+      "witnesses": [
+        "core/compaction-candidate-capture.identity-retention.test.ts :: 'I1: DISTINCT decisions with IDENTICAL content do NOT collapse onto one file'"
+      ]
+    },
+    "writeSafety": {
+      "flushesSerialized": true,
+      "serializationMechanism": "a per-store promise chain: an overlapping flush starts only after the previous one completes. Node explicitly warns against overlapping writeFile() calls to the same file — the writes can interleave and leave a corrupt file behind.",
+      "chainDoesNotBreakOnFailure": "a rejected flush does not poison subsequent flushes",
+      "unchangedPayloadNotRewritten": true,
+      "idempotenceRationale": "A candidate whose serialized bytes are unchanged is not rewritten, so a previously persisted snapshot is not needlessly re-exposed and the directory is not churned on every flush.",
+      "witnesses": [
+        "core/compaction-candidate-capture.identity-retention.test.ts :: 'I4: overlapping flushes are serialized and never corrupt a captured file'",
+        "core/compaction-candidate-capture.identity-retention.test.ts :: 'I4b: an unchanged payload is NOT rewritten on a subsequent flush'"
+      ]
+    },
+    "retention": {
+      "controlCandidates": "ONE immediately preceding non-compacting candidate",
+      "compactionCandidates": "up to the bound",
+      "olderControlsDiscarded": true,
+      "supersededFilesRemovedFromDisk": true,
+      "evictionOrder": "the OLDEST compaction candidate is evicted first; the control is evicted only when nothing older remains to drop",
+      "capSharedWithControl": true
+    },
+    "explicitRemoval": {
+      "api": "CompactionCandidateCaptureStore.remove()",
+      "witness": "core/compaction-candidate-capture.test.ts :: 'the capture retains ONE control ... and is removable'"
+    },
+    "credentialFilter": {
+      "strategy": "ALLOWLIST",
+      "appliedAt": [
+        "the producer (compaction seam)",
+        "the write boundary (capture store) — defence in depth"
+      ],
+      "unknownKeysDropped": true,
+      "witness": "core/compaction-candidate-capture.test.ts :: T12"
+    },
+    "failureIsolation": {
+      "behaviour": "a capture failure is swallowed and never changes the runtime's behaviour",
+      "witness": "core/compaction-candidate-capture.test.ts :: T13"
+    },
+    "immutableSnapshot": {
+      "behaviour": "record() deep-copies and freezes the candidate BEFORE the first asynchronous boundary, so a later mutation of the live request objects cannot change what the 'exact' snapshot represents",
+      "witness": "core/compaction-candidate-capture.test.ts :: 'P1: the captured snapshot is IMMUTABLE — a later mutation cannot change it'"
+    }
+  },
+  "snapshotSchema": {
+    "kind": "compaction_candidate",
+    "requestIdentity": "<opaque preparationRequestId, else decisionId, else 'unknown-request'>",
+    "representation": "CLIENT_DECISION_CANDIDATE_EXACT",
+    "representationVersion": 1,
+    "producer": "@cline/shared/runtime/compaction-token-evidence",
+    "snapshotComplete": true,
+    "contentFingerprint": "<sha256 hex of the canonicalized candidate>",
+    "estimatedInputTokens": "<the production estimator's requestInputTokens at the decision>",
+    "requestTriggerTokens": "<the production resolver's requestTriggerTokens at the decision>",
+    "providerInputTokens": null,
+    "providerInputAuthority": "UNAVAILABLE_FROM_TRACE",
+    "compactionInitiated": true,
+    "decisionId": "<the decision identity>",
+    "preparationRequestId": "<the preparation identity>",
+    "payloadBytes": "<the serialized size>",
+    "truncated": false
+  },
+  "snapshots": [],
+  "snapshotCount": 0,
+  "snapshotsCapturedLive": 0,
+  "liveCaptureStatus": "PENDING_OPERATOR_BUILD_AND_QUALIFICATION",
+  "liveCaptureNote": "The capture is implemented, privacy-witnessed and armed-by-opt-in. No live snapshot was produced by this run because the exact-head dogfood VSIX is built manually by the operator. The schema above is the CONTRACT, not a measured observation.",
+  "exactCountingEligibility": {
+    "rule": "a snapshot is eligible for exact counting only when snapshotComplete === true AND truncated === false",
+    "currentlyEligible": 0
+  },
+  "contentsRecordedHere": "NONE — this receipt carries only references, hashes and classifications. The raw candidate bodies remain in the private directory and are never committed."
+}

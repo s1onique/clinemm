@@ -47,11 +47,14 @@ import {
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,
+	computeFinalProjectionFingerprint,
 	describeEditRequest,
 	EDIT_OBSERVATION_APPROVAL_METADATA_KEY,
 	EDIT_OBSERVATION_IDENTITY_METADATA_KEY,
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
+	estimateRequestInputTokens,
 	estimateTokens,
+	isProviderDispatchRecordRequired,
 	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 	mergeModelOptions,
@@ -93,6 +96,23 @@ interface PreparedModelRequest {
 	request: AgentModelRequest;
 	/** When preparation began; anchors the provider-request lifecycle timings. */
 	startedAt: number;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The PREPARATION REQUEST IDENTITY for this prepared request.
+	 *
+	 * It is minted ONCE in `prepareModelRequest()` — BEFORE the compaction
+	 * pipeline runs — and forwarded to the compaction decision seam so the
+	 * decision, the provider dispatch and the provider-reported usage can be
+	 * joined by an EXACT key rather than by chronological pairing.
+	 *
+	 * It is carried on the prepared request (NOT on the runtime instance)
+	 * because a prepared request may be issued N times: every provider
+	 * attempt against it keeps the SAME preparation id and receives its own
+	 * provider attempt id. Storing it on the runtime instance would let a
+	 * later preparation silently overwrite an earlier request's identity.
+	 */
+	preparationRequestId: string;
 }
 
 const MAX_TOKENS_INCOMPLETE_TURN_MESSAGE =
@@ -906,6 +926,43 @@ export class AgentRuntime {
 		 */
 		lastFinishReason: undefined as AgentModelFinishReason | undefined,
 	};
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The ACTIVE PREPARATION REQUEST IDENTITY — the id minted ONCE, EARLY,
+	 * in `prepareModelRequest()` for the prepared request currently being
+	 * issued.
+	 *
+	 * It is set when a prepared request enters `streamPreparedRequest`, so it
+	 * is ALWAYS the identity of the request the provider is about to see. A
+	 * provider RETRY re-enters `streamPreparedRequest` with the SAME prepared
+	 * request, so the preparation id is UNCHANGED across retries while the
+	 * provider attempt id (`this.modelRequestId`) is re-minted. That is the
+	 * distinction the measurement needs: a retry is a new ATTEMPT against
+	 * the same PREPARED REQUEST, never a new compaction decision.
+	 *
+	 * ABSENT (never synthesized) before any request is prepared.
+	 */
+	private activePreparationRequestId: string | undefined;
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * The PROVIDER-DISPATCH RECORD for the active prepared request: the
+	 * final projection's estimated input tokens, its provider-visible message
+	 * count, its tool-schema count and its deterministic content fingerprint.
+	 *
+	 * It is computed ONCE, at the provider-ready seam — the only point where
+	 * the request content is final — and then REUSED by the dispatch and
+	 * completion observations, so all of them describe the SAME projection.
+	 *
+	 * It is recomputed for every prepared request (a new preparation means a
+	 * new projection). It is NOT recomputed per provider attempt: a retry
+	 * re-issues the SAME prepared request, so the SAME dispatch record
+	 * applies.
+	 *
+	 * ABSENT when no sink is armed or the fingerprint could not be computed.
+	 */
+	private activeDispatchRecord: Record<string, unknown> | undefined;
 	/** One automatic overflow-recovery attempt per run. */
 	private overflowRecoveryAttempted = false;
 	/** Consecutive output-limit cut-offs recovered this run; see MAX_TOKENS_RECOVERY_LIMIT. */
@@ -2780,7 +2837,14 @@ export class AgentRuntime {
 			};
 		}
 
-		request = await this.prepareTurnForModelRequest(request, options);
+		request = await this.prepareTurnForModelRequest(request, {
+			...options,
+			// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+			// preparation identity is forwarded to the compaction decision
+			// seam so the decision can be joined to the request it measured.
+			// It is the SAME id that was minted above — never a second one.
+			preparationRequestId: modelRequestId,
+		});
 		this.throwIfAborted();
 
 		for (const hook of this.hooks.beforeModel) {
@@ -2849,6 +2913,32 @@ export class AgentRuntime {
 		// Only the request's SIZE, its message count and the per-result
 		// inclusion classification are reported. The request's CONTENT is
 		// never recorded.
+		// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 — the PROVIDER
+		// DISPATCH RECORD.
+		//
+		// Computed HERE, at the provider-ready seam, because this is the only
+		// point where the request content is final: compaction has run, every
+		// `beforeModel` transform has been applied, and the budget has been
+		// enforced. The record is then REUSED by the dispatch and completion
+		// observations, so all of them describe the same projection.
+		//
+		// The computation is failure-isolated: a fingerprint failure never
+		// changes the request, the dispatch, or the run.
+		//
+		// P0-2 CORRECTION — the guard is AT THE PRODUCER. Building this
+		// record re-projects the provider-visible messages, re-runs the
+		// token estimator, canonicalizes the projection and computes a
+		// synchronous SHA-256. That work must not happen when NOBODY is
+		// listening: an ordinary request in a public profile must not pay
+		// for a measurement no consumer reads. When the trace sink is absent
+		// (or exposes none of the dispatch-record channels), the record is
+		// NOT built at all — the projection and hash work never executes.
+		this.activeDispatchRecord = isProviderDispatchRecordRequired(
+			this.config.modelBehaviorTraceSink,
+		)
+			? this.buildProviderDispatchRecord(request)
+			: undefined;
+
 		this.observeProviderReady(request);
 
 		this.config.logger?.debug("Agent model request diagnostics", {
@@ -2865,7 +2955,7 @@ export class AgentRuntime {
 			...summarizeModelRequest(request),
 		});
 
-		return { request, startedAt };
+		return { request, startedAt, preparationRequestId: modelRequestId };
 	}
 
 	private async generateAssistantMessageForRequest(
@@ -2898,6 +2988,11 @@ export class AgentRuntime {
 		const usageBeforeModel = cloneUsage(this.state.usage);
 		const getTaskLifecycleDurationMs = () => Date.now() - prepared.startedAt;
 		let request = prepared.request;
+		// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: bind the
+		// preparation identity to the request being issued NOW. It is the
+		// SAME id for every provider attempt against this prepared request,
+		// so a retry cannot masquerade as a second compaction decision.
+		this.activePreparationRequestId = prepared.preparationRequestId;
 
 		this.throwIfAborted();
 		// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R3/R4):
@@ -3297,6 +3392,20 @@ export class AgentRuntime {
 		const modelRequestFinishPayload = {
 			finishReason,
 			requestDurationMs: Date.now() - prepared.startedAt,
+			// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 — the
+			// PROVIDER-USAGE record.
+			//
+			// `usageAvailable` states whether the provider REPORTED usage at
+			// all. When it is false the token fields are ABSENT (never zero):
+			// a missing usage is UNAVAILABLE, not "the provider said zero".
+			//
+			// The token fields carry the provider's OWN semantics. Per the
+			// established provider contract, `inputTokens` is the COMPLETE
+			// prompt and `cacheReadTokens` is a SUBSET of it. The cached
+			// amount is therefore reported alongside the total and is NEVER
+			// added to it — adding them would double-count the cached
+			// portion.
+			usageAvailable: metrics !== undefined,
 			...(metrics
 				? {
 						inputTokens: metrics.inputTokens,
@@ -3305,6 +3414,11 @@ export class AgentRuntime {
 						cacheWriteTokens: metrics.cacheWriteTokens,
 					}
 				: {}),
+			// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+			// provider-dispatch record is echoed so the usage joins to the
+			// EXACT projection that produced it, without needing a
+			// timestamp join.
+			...(this.activeDispatchRecord ?? {}),
 			// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1).
 			//
 			// The PROVIDER-REPORTED reasoning token count. It is reported
@@ -3648,6 +3762,7 @@ export class AgentRuntime {
 		runId?: string;
 		iteration?: number;
 		modelRequestId?: string;
+		preparationRequestId?: string;
 		providerId?: string;
 		modelId?: string;
 	} {
@@ -3669,6 +3784,17 @@ export class AgentRuntime {
 			// It is ABSENT (never synthesized) when no model request has been
 			// issued yet in this runtime.
 			...(this.modelRequestId ? { modelRequestId: this.modelRequestId } : {}),
+			// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+			// PREPARATION identity, carried on every provider-side
+			// observation. It is the join key between the compaction
+			// DECISION (which measured the prepared request) and the
+			// provider DISPATCH / USAGE (which observed the attempt).
+			//
+			// It is ABSENT (never synthesized) when no prepared request is
+			// active.
+			...(this.activePreparationRequestId
+				? { preparationRequestId: this.activePreparationRequestId }
+				: {}),
 			...(this.getTelemetryProviderId()
 				? { providerId: this.getTelemetryProviderId() }
 				: {}),
@@ -3777,10 +3903,87 @@ export class AgentRuntime {
 		try {
 			sink.onRequestPrepared({
 				...this.modelBehaviorTraceIdentity(),
-				payload: summarizeModelRequest(request),
+				payload: {
+					...summarizeModelRequest(request),
+					// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+					// provider-dispatch record, describing the FINAL
+					// provider-visible projection.
+					...(this.activeDispatchRecord ?? {}),
+				},
 			});
 		} catch {
 			// Failure isolation.
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+	 *
+	 * Build the PROVIDER-DISPATCH record for the FINAL request.
+	 *
+	 * "Final" means: AFTER compaction, AFTER every `beforeModel` transform
+	 * and AFTER the final request-budget enforcement. That is the only point
+	 * at which the request content is the content the provider will see, so
+	 * it is the only honest place to fingerprint it.
+	 *
+	 * The record carries the C2 correlation and provenance:
+	 *
+	 *   - `preparationRequestId` — the PREPARATION identity (on the trace
+	 *     identity, not duplicated here);
+	 *   - `providerAttemptId` — the ATTEMPT identity (on the trace identity
+	 *     as `modelRequestId`);
+	 *   - `modelId` / `providerFamily` — the model and provider identity;
+	 *   - `estimatedFinalInputTokens` — the production estimator applied to
+	 *     the FINAL provider-visible projection (the SAME estimator the
+	 *     compaction policy uses, so the two numbers are comparable);
+	 *   - `providerVisibleMessageCount` — the number of messages the
+	 *     provider actually sees;
+	 *   - `toolSchemaCount` — the number of tool schemas in the request;
+	 *   - `finalProjectionFingerprint` — the deterministic SHA-256 of the
+	 *     canonicalized final projection, together with its representation
+	 *     version and producer.
+	 *
+	 * The fingerprint is a CONTENT fingerprint of the CLIENT-side
+	 * representation. It is NOT a claim of byte-identical provider-wire
+	 * content: the provider adapter may still transform the request after
+	 * this point. The representation and producer are recorded precisely so
+	 * that no consumer can mistake one for the other.
+	 *
+	 * FAILURE ISOLATED: a fingerprint failure never changes the request, the
+	 * dispatch, or the run. It only means the fingerprint is absent.
+	 */
+	private buildProviderDispatchRecord(
+		request: AgentModelRequest,
+	): Record<string, unknown> {
+		const providerMessages = toProviderVisibleMessages(request.messages);
+		const base: Record<string, unknown> = {
+			modelId: this.getTelemetryModelId(),
+			providerFamily: this.getTelemetryProviderId(),
+			estimatedFinalInputTokens: estimateRequestInputTokens({
+				systemPrompt: request.systemPrompt ?? "",
+				messages: providerMessages,
+				tools: request.tools,
+			}),
+			providerVisibleMessageCount: providerMessages.length,
+			toolSchemaCount: request.tools.length,
+		};
+		try {
+			const fingerprint = computeFinalProjectionFingerprint({
+				systemPrompt: request.systemPrompt ?? "",
+				messages: providerMessages,
+				tools: request.tools,
+				options: request.options ?? {},
+			});
+			return {
+				...base,
+				finalProjectionFingerprint: fingerprint.fingerprint,
+				finalProjectionRepresentation: fingerprint.representation,
+				finalProjectionRepresentationVersion: fingerprint.representationVersion,
+				finalProjectionFingerprintProducer: fingerprint.producer,
+			};
+		} catch {
+			// Failure isolation: the fingerprint is absent, never faked.
+			return base;
 		}
 	}
 
@@ -3809,7 +4012,15 @@ export class AgentRuntime {
 		try {
 			sink.onProviderRequestSubmitted({
 				...this.modelBehaviorTraceIdentity(),
-				payload: summarizeModelRequest(request),
+				payload: {
+					...summarizeModelRequest(request),
+					// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: the
+					// provider-dispatch record. The ATTEMPT identity
+					// (`modelRequestId`) and the PREPARATION identity
+					// (`preparationRequestId`) are on the trace identity;
+					// this payload describes the CONTENT that was sent.
+					...(this.activeDispatchRecord ?? {}),
+				},
 			});
 		} catch {
 			// Failure isolation.
@@ -4463,7 +4674,17 @@ export class AgentRuntime {
 
 	private async prepareTurnForModelRequest(
 		request: AgentModelRequest,
-		options?: { overflowRecovery?: boolean },
+		options?: {
+			overflowRecovery?: boolean;
+			/**
+			 * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01.
+			 *
+			 * The preparation request identity, forwarded VERBATIM into the
+			 * host's prepare-turn context so the compaction decision seam
+			 * can join its decision to the request it measured.
+			 */
+			preparationRequestId?: string;
+		},
 	): Promise<AgentModelRequest> {
 		if (!this.config.prepareTurn) {
 			// No host pipeline means no host ceiling. Clear any ceiling left
@@ -4492,6 +4713,13 @@ export class AgentRuntime {
 				this.state.lastRequestInputTokens > 0
 					? this.state.lastRequestInputTokens
 					: undefined,
+			// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: forward the
+			// preparation identity VERBATIM. The compaction decision seam
+			// records it on the decision, which makes the decision ->
+			// dispatch -> usage join authoritative.
+			...(options?.preparationRequestId !== undefined
+				? { preparationRequestId: options.preparationRequestId }
+				: {}),
 			emitStatusNotice: (message, metadata) => {
 				void this.emit({
 					type: "status-notice",

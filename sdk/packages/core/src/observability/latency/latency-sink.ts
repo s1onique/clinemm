@@ -121,6 +121,42 @@ function deriveCompactionFinishStatus(
 }
 
 /**
+ * Project the OBSERVATION IDENTITY onto the metadata bag.
+ *
+ * ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 (P0-4 correction).
+ *
+ * The runtime carries the authoritative correlation identities on the
+ * OBSERVATION (`observation.preparationRequestId`,
+ * `observation.modelRequestId`), not on the payload. The latency tracer
+ * only records METADATA, so an adapter that forwards only
+ * `observation.payload` silently DROPS the join key — the exported trace
+ * then cannot connect the compaction decision to the provider dispatch and
+ * completion.
+ *
+ * This projection moves the identity fields into the metadata bag. They are
+ * IDENTIFIERS (opaque ids), and they are still subject to the finite
+ * metadata ALLOWLIST in `sanitizeLatencyMetadata`, so nothing escapes the
+ * privacy contract.
+ *
+ * The payload's own value wins when both carry the same field: the payload
+ * is the seam-specific value (for example the compaction seam's own
+ * `preparationRequestId`), while the identity is the runtime-wide value.
+ */
+function withObservationCorrelation(
+	observation: ModelBehaviorTraceObservation,
+): Readonly<Record<string, unknown>> {
+	return {
+		...(observation.preparationRequestId !== undefined
+			? { preparationRequestId: observation.preparationRequestId }
+			: {}),
+		...(observation.modelRequestId !== undefined
+			? { modelRequestId: observation.modelRequestId }
+			: {}),
+		...observation.payload,
+	};
+}
+
+/**
  * The adapter.
  */
 export class LatencyTraceSink implements ModelBehaviorTraceSink {
@@ -270,20 +306,20 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 		const valid = observation.payload.schemaValid !== false;
 		if (valid) {
 			this.record("schema_validation", "start", {
-				metadata: observation.payload,
+				metadata: withObservationCorrelation(observation),
 			});
 			this.record("schema_validation", "end", {
-				metadata: observation.payload,
+				metadata: withObservationCorrelation(observation),
 				status: "ok",
 			});
 			return;
 		}
 		// A rejected schema is a REJECTION, not a successful validation.
 		this.record("schema_validation", "start", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 		});
 		this.record("schema_validation", "end", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "rejected",
 		});
 	}
@@ -297,10 +333,10 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 */
 	onToolResultDelivered(observation: ModelBehaviorTraceObservation): void {
 		this.record("tool_result_delivered", "start", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 		});
 		this.record("tool_result_delivered", "end", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "ok",
 		});
 	}
@@ -364,13 +400,16 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 		// The `compaction` boundary remains EXCLUSIVELY the execution
 		// boundary: only an INITIATED compaction opens a span, and only
 		// its real terminal outcome closes it.
-		this.tracer.recordPoint("compaction_decision", observation.payload);
+		this.tracer.recordPoint(
+			"compaction_decision",
+			withObservationCorrelation(observation),
+		);
 		if (initiated === false) {
 			// A no-op eligibility CHECK: observed, but not a span.
 			return;
 		}
 		this.record("compaction", "start", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 		});
 	}
 
@@ -391,7 +430,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 */
 	onCompactionCompleted(observation: ModelBehaviorTraceObservation): void {
 		this.record("compaction", "end", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: deriveCompactionFinishStatus(observation.payload),
 		});
 	}
@@ -406,10 +445,10 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 */
 	onProviderReady(observation: ModelBehaviorTraceObservation): void {
 		this.record("provider_ready", "start", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 		});
 		this.record("provider_ready", "end", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "ok",
 		});
 	}
@@ -437,7 +476,10 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * report a 350 ms time-to-first-text instead of the true 100 ms.
 	 */
 	onModelRequestStart(observation: ModelBehaviorTraceObservation): void {
-		this.tracer.enter("request_preparation", observation.payload);
+		this.tracer.enter(
+			"request_preparation",
+			withObservationCorrelation(observation),
+		);
 	}
 
 	/**
@@ -459,9 +501,18 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * measured from submission and never includes request preparation.
 	 */
 	onProviderRequestSubmitted(observation: ModelBehaviorTraceObservation): void {
-		this.tracer.enter("provider_submitted", observation.payload);
-		this.tracer.enter("provider_first_response", observation.payload);
-		this.tracer.enter("provider_first_text", observation.payload);
+		this.tracer.enter(
+			"provider_submitted",
+			withObservationCorrelation(observation),
+		);
+		this.tracer.enter(
+			"provider_first_response",
+			withObservationCorrelation(observation),
+		);
+		this.tracer.enter(
+			"provider_first_text",
+			withObservationCorrelation(observation),
+		);
 	}
 
 	/**
@@ -478,10 +529,13 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 			return;
 		}
 		this.tracer.exit("request_preparation", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "ok",
 		});
-		this.tracer.enter("request_prepared", observation.payload);
+		this.tracer.enter(
+			"request_prepared",
+			withObservationCorrelation(observation),
+		);
 	}
 
 	/**
@@ -494,7 +548,11 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * request preparation.
 	 */
 	onProviderRequestCompleted(observation: ModelBehaviorTraceObservation): void {
-		this.closeIfOpen("request_prepared", observation.payload, "ok");
+		this.closeIfOpen(
+			"request_prepared",
+			withObservationCorrelation(observation),
+			"ok",
+		);
 	}
 
 	/**
@@ -515,31 +573,46 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 		// `request_preparation` is closed at the provider-ready seam
 		// (`onRequestPrepared`). If the runtime never reached that seam,
 		// the preparation span is closed here so no span is left open.
-		this.closeIfOpen("request_preparation", observation.payload, "ok");
+		this.closeIfOpen(
+			"request_preparation",
+			withObservationCorrelation(observation),
+			"ok",
+		);
 		// `request_prepared` is the provider-bound interval and is closed
 		// by `onProviderRequestCompleted`; close it here as a fallback so
 		// no span is left open.
-		this.closeIfOpen("request_prepared", observation.payload, "ok");
+		this.closeIfOpen(
+			"request_prepared",
+			withObservationCorrelation(observation),
+			"ok",
+		);
 		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: guarded, because the
 		// provider span is opened at the ACTUAL SUBMISSION boundary. A
 		// request that never reached submission has no provider span.
-		this.closeIfOpen("provider_submitted", observation.payload, "ok");
+		this.closeIfOpen(
+			"provider_submitted",
+			withObservationCorrelation(observation),
+			"ok",
+		);
 		// The first response event and the first text are NOT inferred
 		// from the stream's completion. If they were not observed, they
 		// are explicitly unavailable.
 		this.markUnavailableIfOpen(
 			"provider_first_response",
-			observation.payload,
+			withObservationCorrelation(observation),
 			"ok",
 		);
 		this.markUnavailableIfOpen(
 			"provider_first_text",
-			observation.payload,
+			withObservationCorrelation(observation),
 			"ok",
 		);
-		this.tracer.enter("provider_completed", observation.payload);
+		this.tracer.enter(
+			"provider_completed",
+			withObservationCorrelation(observation),
+		);
 		this.tracer.exit("provider_completed", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "ok",
 		});
 	}
@@ -608,7 +681,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 */
 	onProviderFirstResponse(observation: ModelBehaviorTraceObservation): void {
 		this.tracer.exit("provider_first_response", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "ok",
 		});
 	}
@@ -633,7 +706,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 */
 	onProviderFirstText(observation: ModelBehaviorTraceObservation): void {
 		this.tracer.exit("provider_first_text", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "ok",
 		});
 	}
@@ -642,27 +715,42 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * The model request failed.
 	 */
 	onModelRequestError(observation: ModelBehaviorTraceObservation): void {
-		this.closeIfOpen("request_preparation", observation.payload, "failed");
-		this.closeIfOpen("request_prepared", observation.payload, "failed");
+		this.closeIfOpen(
+			"request_preparation",
+			withObservationCorrelation(observation),
+			"failed",
+		);
+		this.closeIfOpen(
+			"request_prepared",
+			withObservationCorrelation(observation),
+			"failed",
+		);
 		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: the provider span is
 		// opened at the ACTUAL SUBMISSION boundary. If the request never
 		// reached submission (a preparation failure, a budget rejection),
 		// there is no provider span to close, and closing one anyway would
 		// fabricate an integrity failure.
-		this.closeIfOpen("provider_submitted", observation.payload, "failed");
+		this.closeIfOpen(
+			"provider_submitted",
+			withObservationCorrelation(observation),
+			"failed",
+		);
 		this.markUnavailableIfOpen(
 			"provider_first_response",
-			observation.payload,
+			withObservationCorrelation(observation),
 			"failed",
 		);
 		this.markUnavailableIfOpen(
 			"provider_first_text",
-			observation.payload,
+			withObservationCorrelation(observation),
 			"failed",
 		);
-		this.tracer.enter("provider_completed", observation.payload);
+		this.tracer.enter(
+			"provider_completed",
+			withObservationCorrelation(observation),
+		);
 		this.tracer.exit("provider_completed", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "failed",
 		});
 	}
@@ -671,25 +759,40 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * The model request was aborted.
 	 */
 	onModelRequestAbort(observation: ModelBehaviorTraceObservation): void {
-		this.closeIfOpen("request_preparation", observation.payload, "aborted");
-		this.closeIfOpen("request_prepared", observation.payload, "aborted");
+		this.closeIfOpen(
+			"request_preparation",
+			withObservationCorrelation(observation),
+			"aborted",
+		);
+		this.closeIfOpen(
+			"request_prepared",
+			withObservationCorrelation(observation),
+			"aborted",
+		);
 		// ACT-CLINEMM-ROUND-C-HARNESS-02 CORRECTION02: guarded for the same
 		// reason as the failure path — an abort before submission has no
 		// provider span to close.
-		this.closeIfOpen("provider_submitted", observation.payload, "aborted");
+		this.closeIfOpen(
+			"provider_submitted",
+			withObservationCorrelation(observation),
+			"aborted",
+		);
 		this.markUnavailableIfOpen(
 			"provider_first_response",
-			observation.payload,
+			withObservationCorrelation(observation),
 			"aborted",
 		);
 		this.markUnavailableIfOpen(
 			"provider_first_text",
-			observation.payload,
+			withObservationCorrelation(observation),
 			"aborted",
 		);
-		this.tracer.enter("provider_completed", observation.payload);
+		this.tracer.enter(
+			"provider_completed",
+			withObservationCorrelation(observation),
+		);
 		this.tracer.exit("provider_completed", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: "aborted",
 		});
 	}
@@ -698,7 +801,10 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 	 * A tool call started.
 	 */
 	onToolStart(observation: ModelBehaviorTraceObservation): void {
-		this.tracer.enter("tool_execution", observation.payload);
+		this.tracer.enter(
+			"tool_execution",
+			withObservationCorrelation(observation),
+		);
 	}
 
 	/**
@@ -729,7 +835,7 @@ export class LatencyTraceSink implements ModelBehaviorTraceSink {
 		status?: LatencyStatus,
 	): void {
 		this.tracer.exit("tool_execution", {
-			metadata: observation.payload,
+			metadata: withObservationCorrelation(observation),
 			status: status ?? deriveToolFinishStatus(observation.payload),
 		});
 	}

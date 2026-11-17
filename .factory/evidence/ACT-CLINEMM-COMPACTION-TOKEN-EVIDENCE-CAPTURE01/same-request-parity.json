@@ -1,0 +1,155 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01",
+  "purpose": "Authoritative joined provider observations for the SAME request, plus the tokenizer-route equivalence measurement that determines whether the route can be an authority.",
+  "target": {
+    "provider": "openai-compatible",
+    "providerEndpoint": "http://192.168.50.111:8080/v1",
+    "service": "strata",
+    "model": "qwen3.8-flash-next-iq3_s",
+    "maxContext": 131072,
+    "reasoningEnabled": false
+  },
+  "providerUsageContract": {
+    "observed": true,
+    "source": "live Strata responses captured during this ACT",
+    "promptTokensField": "usage.prompt_tokens",
+    "cachedTokensField": "usage.prompt_tokens_details.cached_tokens",
+    "timingsPromptTokensField": "timings.prompt_n",
+    "promptNEqualsPromptTokens": true,
+    "contract": "prompt_tokens is the COMPLETE prompt; cached_tokens is a SUBSET of it.",
+    "doubleCountingRule": "The cached amount is reported ALONGSIDE the total and is NEVER added into it. The production completion record preserves this, and it is pinned by witness T8."
+  },
+  "sameRequestObservations": [
+    {
+      "case": "simple",
+      "messages": [{ "role": "user", "content": "Say OK." }],
+      "system": null,
+      "tools": 0,
+      "countTokens": 55,
+      "openAiPromptTokens": 55,
+      "delta": 0,
+      "equivalent": true
+    },
+    {
+      "case": "system",
+      "messages": [{ "role": "user", "content": "Say OK." }],
+      "system": "You are a helpful assistant.",
+      "tools": 0,
+      "countTokens": 62,
+      "openAiPromptTokens": 62,
+      "delta": 0,
+      "equivalent": true
+    },
+    {
+      "case": "long_text",
+      "messages": [{ "role": "user", "content": "The quick brown fox jumps over the lazy dog. x120" }],
+      "system": null,
+      "tools": 0,
+      "countTokens": 1252,
+      "openAiPromptTokens": 1252,
+      "delta": 0,
+      "equivalent": true
+    },
+    {
+      "case": "tool_result_shaped_turn",
+      "messages": [
+        { "role": "user", "content": "weather?" },
+        { "role": "assistant", "content": "calling tool" },
+        { "role": "user", "content": "tool says: sunny, 21C" }
+      ],
+      "system": null,
+      "tools": 0,
+      "countTokens": 79,
+      "openAiPromptTokens": 79,
+      "delta": 0,
+      "equivalent": true
+    },
+    {
+      "case": "tool_1_empty_schema",
+      "messages": [{ "role": "user", "content": "Say OK." }],
+      "system": null,
+      "tools": 1,
+      "countTokens": 269,
+      "openAiPromptTokens": 278,
+      "delta": -9,
+      "equivalent": false
+    },
+    {
+      "case": "tool_1_one_property",
+      "messages": [{ "role": "user", "content": "Say OK." }],
+      "system": null,
+      "tools": 1,
+      "countTokens": 271,
+      "openAiPromptTokens": 288,
+      "delta": -17,
+      "equivalent": false
+    },
+    {
+      "case": "tool_1_two_properties",
+      "messages": [{ "role": "user", "content": "Say OK." }],
+      "system": null,
+      "tools": 1,
+      "countTokens": 271,
+      "openAiPromptTokens": 297,
+      "delta": -26,
+      "equivalent": false
+    },
+    {
+      "case": "tool_1_long_description",
+      "messages": [{ "role": "user", "content": "Say OK." }],
+      "system": null,
+      "tools": 1,
+      "countTokens": 295,
+      "openAiPromptTokens": 312,
+      "delta": -17,
+      "equivalent": false
+    },
+    {
+      "case": "two_tools",
+      "messages": [{ "role": "user", "content": "Say OK." }],
+      "system": null,
+      "tools": 2,
+      "countTokens": 290,
+      "openAiPromptTokens": 324,
+      "delta": -34,
+      "equivalent": false
+    }
+  ],
+  "toolCountSweep": {
+    "description": "Identical tool shape (2 properties), varying tool count. Isolates the offset as exactly linear in the tool count.",
+    "rows": [
+      { "tools": 0, "countTokens": 55, "openAiPromptTokens": 55, "delta": 0 },
+      { "tools": 1, "countTokens": 271, "openAiPromptTokens": 297, "delta": -26, "perTool": -26 },
+      { "tools": 2, "countTokens": 290, "openAiPromptTokens": 342, "delta": -52, "perTool": -26 },
+      { "tools": 3, "countTokens": 309, "openAiPromptTokens": 387, "delta": -78, "perTool": -26 },
+      { "tools": 4, "countTokens": 328, "openAiPromptTokens": 432, "delta": -104, "perTool": -26 }
+    ],
+    "conclusion": "The count_tokens route renders the tool inventory with a DIFFERENT serialization than the OpenAI route. The per-tool offset is a function of the tool SCHEMA (9 / 17 / 26 tokens for the shapes measured), not a fixed constant."
+  },
+  "mechanismProbe": {
+    "probe": "tool_choice=none on the OpenAI route",
+    "openAiPromptTokens": 55,
+    "countTokensWithTools": 271,
+    "conclusion": "With tool_choice=none the OpenAI route drops the tools entirely (55 = the no-tool count) while count_tokens still returns 271. The two routes therefore render the tool block differently."
+  },
+  "classification": "TOKENIZER_FORMAT_NOT_EQUIVALENT",
+  "classificationDetail": {
+    "messagesAndSystem": "EXACT — delta 0 in 4 of 4 measured no-tool shapes.",
+    "toolSchemas": "NOT EQUIVALENT — a deterministic, schema-dependent per-tool under-count.",
+    "overall": "NOT an authority for the full OpenAI-compatible request.",
+    "whyItMattersHere": "ClineMM's real requests always carry a tool inventory, and the production estimator explicitly bills it (requestOverheadTokens; PARITY01 measured ~5,692 tokens on the historical session). So for the target configuration the route cannot certify the candidate as a whole.",
+    "whatWouldBeRequired": "Either (a) an empty-tool candidate, where the route IS exact today, or (b) a controlled minimal-generation probe to observe the OpenAI-side tool rendering. Neither was exercised."
+  },
+  "liveClineMMDispatches": {
+    "status": "PENDING_OPERATOR_BUILD",
+    "note": "No live ClineMM dispatch was performed by this run: the exact-head dogfood VSIX is built manually by the operator. The instrumented dispatch record (preparationRequestId, providerAttemptId, estimatedFinalInputTokens, providerVisibleMessageCount, toolSchemaCount, finalProjectionFingerprint) and the completion record (usageAvailable, inputTokens, cacheReadTokens, outputTokens, finishReason) are implemented and witnessed at the production seam.",
+    "rows": []
+  },
+  "confidentiality": {
+    "apiKeyRecorded": false,
+    "promptsRecorded": false,
+    "messageBodiesRecorded": false,
+    "toolOutputsRecorded": false,
+    "note": "Every measurement above is a COUNT or a DELTA. The synthetic content used for the equivalence probe is not reproduced."
+  }
+}

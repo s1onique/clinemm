@@ -1,0 +1,159 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01",
+  "stage": "CODE_COMPLETE_AFTER_BOUNDED_CORRECTION__BUILD_AND_LIVE_QUALIFICATION_PENDING_OPERATOR",
+  "source": {
+    "repositoryRoot": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "remote": "git@github.com:s1onique/clinemm.git",
+    "branch": "main",
+    "sourceHead": "f39ffb732a03a4e755c179c7202b65b7d2c1491f",
+    "sourceHeadSubject": "docs(clinemm): record PARITY01 evidence correction commit identity",
+    "expectedAncestry": {
+      "parity01Closure": "f39ffb732",
+      "confirmed": true,
+      "note": "The discovered HEAD IS the PARITY01 closure commit; it was not assumed."
+    },
+    "dirtyStatusAtStart": "clean",
+    "unexpectedTrackedDirt": false,
+    "haltTriggered": false
+  },
+  "preservedState": {
+    "protectedStash": {
+      "ref": "stash@{0}",
+      "subject": "WIP on main: d46223b51 fix(completion-continuation-stall-lifetime): separate REARM lifetime from STALL lifetime at BCB re-registration",
+      "preserved": true
+    },
+    "worktrees": {
+      "count": 6,
+      "preserved": true,
+      "temporaryWorktreeCreatedForBaseline": "/tmp/cte-baseline-wt",
+      "temporaryWorktreeRemoved": true,
+      "note": "A temporary detached worktree was created only to measure the pre-ACT typecheck baseline and was removed; all pre-existing worktrees are unchanged."
+    },
+    "noPush": true,
+    "noPr": true,
+    "noHistoryRewrite": true,
+    "noKeycloakModification": true,
+    "noFullRoundC": true
+  },
+  "productionEstimator": {
+    "authorized": false,
+    "CHARS_PER_TOKENChanged": false,
+    "contextBudgetChanged": false,
+    "triggerThresholdsChanged": false,
+    "compactionLogicChanged": false,
+    "filesUnchanged": [
+      "sdk/packages/shared/src/llms/tokens.ts",
+      "sdk/packages/core/src/extensions/context/compaction-shared.ts"
+    ]
+  },
+  "strata": {
+    "modificationsAuthorized": false,
+    "modificationsMade": false,
+    "endpoint": "http://192.168.50.111:8080",
+    "service": "strata",
+    "model": "qwen3.8-flash-next-iq3_s",
+    "maxContext": 131072,
+    "tokenizeRoutePresent": false,
+    "countTokensRoutePresent": true
+  },
+  "installedDogfoodExtension": {
+    "profile": "~/.vscodium-clinemm",
+    "installedVersion": "4.1.16-5a1c485cb-f39ffb732",
+    "installedBundleSha256": "789ef6cd5d0c8e4634a3d69ca04a5ba5f87bfafb3b5d04e7986d5e22c1b6fc7e",
+    "installedBundlePath": "dist/extension.js",
+    "boundToSourceHead": "f39ffb732",
+    "note": "The installed dogfood extension was recorded INDEPENDENTLY of the source checkout, before any build. It is the pre-ACT build of the discovered HEAD.",
+    "alsoPresentOlderDogfoodBuild": "4.1.16-5a1c485cb-c1aff630f (bundle sha256 a3da8ea5eb2d09d9cedc2ca9c3c0f5c5e7aa43067e3796dd3e390eb0a833b63c)"
+  },
+  "dogfoodProviderConfiguration": {
+    "providerId": "openai-compatible",
+    "model": "qwen3.8-flash-next-iq3_s",
+    "baseUrl": "http://192.168.50.111:8080/v1",
+    "reasoningEnabled": false,
+    "apiKeyRecorded": false,
+    "note": "The API key is NEVER recorded in any committed artifact."
+  },
+  "build": {
+    "status": "PENDING_OPERATOR",
+    "sourceHead": null,
+    "version": null,
+    "vsixPath": null,
+    "vsixSize": null,
+    "vsixSha256": null,
+    "bundleSha256": null,
+    "note": "The operator builds the exact-head dogfood VSIX manually. The SDK packages (shared, llms, core, agents, ui, sdk) were built successfully during typecheck validation; the extension bundle and VSIX were deliberately NOT produced by this run."
+  },
+  "boundedCorrection": {
+    "reviewVerdict": "HALT_CAPTURE_CONTRACT_INCOMPLETE",
+    "scope": "One bounded correction of four P0 defects and one adjacent P1. No new tracing architecture, no estimator change, no context-threshold change, no compaction-policy change.",
+    "defectsCorrected": [
+      "P0-1 disk bounds did not constrain actual writes",
+      "P0-2 fingerprinting ran with diagnostics disabled",
+      "P0-3 the private capture was not dogfood-only",
+      "P0-4 the exported latency trace lost the correlation fields",
+      "P1 the candidate snapshot was not immutable"
+    ],
+    "nonBlocking": "The invalid Leamas gate-summary binding was classified P2, NON-BLOCKING and was deliberately not spent another cycle on.",
+    "touchedFilesAddedByTheCorrection": [
+      "sdk/packages/core/src/observability/latency/latency-sink.ts",
+      "sdk/packages/core/src/observability/latency/latency-trace.ts",
+      "sdk/packages/core/src/observability/latency/latency-sink.compaction-token-evidence-capture01.test.ts"
+    ],
+    "sourceHeadUnchanged": "f39ffb732a03a4e755c179c7202b65b7d2c1491f",
+    "estimatorTouched": false,
+    "strataTouched": false,
+    "protectedStashPreserved": true,
+    "worktreesPreserved": true
+  },
+  "boundedCorrection02": {
+    "reviewVerdict": "HALT_CAPTURE_IDENTITY_COLLISION_REPRODUCED",
+    "scope": "The capture-store IDENTITY and RETENTION contract ONLY. No estimator, Strata, compaction-policy, estimator-repair, Leamas gate-summary or Full-Round-C change.",
+    "p0sCorrected": [
+      "P0-A the 12-candidate cap could retain 13 files because the control was capped independently of the compaction candidates",
+      "P0-B two distinct decisions with identical content collapsed onto one file, and the second write silently overwrote the first decision's snapshot",
+      "P0-C overlapping flush() calls were not serialized, so two writeFile() calls to the same file could interleave"
+    ],
+    "repair": [
+      "the file name is a PER-DECISION identity: <storage identity>--<content fingerprint>.json, where the storage identity is the candidate's decisionId, else preparationRequestId, else a monotonic ordinal",
+      "the storage identity is resolved in record(), so the file name is stable across every subsequent flush",
+      "the retention cap is a TOTAL over the control AND the compaction candidates; the control no longer gets a slot on top of the cap",
+      "flushes are chained on a per-store promise chain; the chain does not break on failure",
+      "an unchanged serialized payload is not rewritten, so a previously persisted snapshot is not needlessly re-exposed"
+    ],
+    "productionFilesTouched": [
+      "sdk/packages/core/src/runtime/observability/compaction-candidate-capture.ts"
+    ],
+    "testFilesAdded": [
+      "sdk/packages/core/src/runtime/observability/compaction-candidate-capture.identity-retention.test.ts"
+    ],
+    "redReproducedAgainstTheProductionStore": "Both reviewer counterexamples reproduced against the REPOSITORY checkout, not a source-extracted replay: I1 distinct decisions with identical content yielded 1 file (expected 2); I2 control plus 12 compaction candidates yielded 13 files against a declared maximum of 12.",
+    "ablations": "Every production change was ablated to prove its witness is load-bearing: reverting the identity fix fails I1; reverting the total cap fails both I2 witnesses; removing the flush serialization fails I4; removing the idempotent-rewrite skip fails I4b.",
+    "green": "56 tests / 8 files PASS across the capture + observability surface (14 pre-existing capture witnesses + 6 new identity/retention witnesses). Zero regressions.",
+    "conservation": {
+      "coreTypecheck": "ZERO delta — 43 errors before AND after, the error sets are IDENTICAL (empty diff); all 43 are pre-existing baseline errors in non-ACT-owned files",
+      "coreFullSuite": "17 failing files, IDENTICAL and STABLE across two runs, NONE ACT-owned; those 17 files in isolation give 111 failures before AND after this change",
+      "agentsSuite": "PASS — 603 tests / 36 files (matches the recorded baseline)",
+      "sharedSuite": "PASS — 573 tests / 46 files (matches the recorded baseline)",
+      "sdkBuild": "PASS — bun run build:sdk",
+      "biome": "0 errors in both touched files; 2 info-level non-null-assertion notices, matching the 17 pre-existing infos in the sibling test file",
+      "downstreamDependenceOnTheFileNamingScheme": "NONE — the capture file name is purely internal to the store"
+    },
+    "estimatorTouched": false,
+    "strataTouched": false,
+    "compactionPolicyTouched": false,
+    "leamasGateSummaryTouched": false,
+    "fullRoundCTouched": false,
+    "evidence": ".factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01/capture-identity-retention-correction.md",
+    "remaining": "C1 GO for commit; the operator's manual exact-head VSIX build and the targeted dogfood capture remain outstanding. No live snapshot is claimed. Full Round C and estimator repair remain deferred until actual candidate-token evidence exists."
+  },
+  "conservationAfterCorrection": {
+    "redToGreen": "PASS — 6 new witnesses demonstrated RED against a deliberately reverted implementation and GREEN after the correction",
+    "targetedCoreTests": "PASS — 113 tests across 8 files",
+    "agentsSuite": "PASS — 603 tests / 36 files",
+    "sharedSuite": "PASS — 573 tests / 46 files",
+    "coreSuite": "111 failed / 5455 passed across 362 files; the 16 failing files are ALL pre-existing baseline files and NONE is ACT-owned (the recorded baseline was 152 failed / 5379 passed)",
+    "typecheck": "shared 0 errors, agents 0 errors, core 0 errors in any ACT-owned file (the remaining core errors are pre-existing baseline files)",
+    "biome": "213 error-bearing files before AND after the change — zero Biome delta; 0 errors in any of the 14 ACT-touched files",
+    "sdkBuild": "PASS — bun run build:sdk"
+  }
+}

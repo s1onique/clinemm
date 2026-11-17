@@ -529,6 +529,17 @@ export {
 	resolveClineAppUrl,
 	resolveClineEnvironment,
 } from "./runtime/cline-environment";
+export type { CompactionEvidenceFingerprint } from "./runtime/compaction-token-evidence";
+export {
+	COMPACTION_CANDIDATE_CLIENT_REPRESENTATION,
+	COMPACTION_CANDIDATE_CLIENT_REPRESENTATION_VERSION,
+	COMPACTION_CANDIDATE_FINGERPRINT_PRODUCER,
+	COMPACTION_CANDIDATE_PROJECTION_REPRESENTATION,
+	canonicalizeCompactionEvidenceValue,
+	computeCandidateContentFingerprint,
+	computeFinalProjectionFingerprint,
+	sha256HexSync,
+} from "./runtime/compaction-token-evidence";
 // ACT-CLINEMM-BACKGROUND-EXEC-EPERM-LIVE-QUALIFICATION01: the single
 // canonical resolver for the trusted host-helper AF_UNIX endpoint.
 // Shared so the VS Code adapter and the SDK Seatbelt backend can
@@ -622,6 +633,7 @@ export {
 	EDIT_OBSERVATION_WORKSPACE_METADATA_KEY,
 	estimateRecordBytes,
 	hmacSha256,
+	isProviderDispatchRecordRequired,
 	MODEL_BEHAVIOR_TRACE_MAX_BYTES,
 	MODEL_BEHAVIOR_TRACE_MAX_ERROR_MESSAGE_LENGTH,
 	MODEL_BEHAVIOR_TRACE_MAX_RECORDS,

@@ -322,6 +322,58 @@ export const LATENCY_METADATA_ALLOWLIST: readonly string[] = [
 	// the first-text boundary for an authoritative TTFT.
 	"generatedTextLength",
 	"serverSideTtft",
+	// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 — the AUTHORITATIVE
+	// REQUEST / DECISION / ATTEMPT CORRELATION.
+	//
+	// Without these fields the exported trace cannot establish the join
+	// that the evidence contract requires. The compaction DECISION is
+	// recorded on the `compaction_decision` boundary, the provider
+	// DISPATCH on `provider_submitted` and the provider USAGE on the
+	// completion boundary. The three events are joined by the PREPARATION
+	// identity, and a provider RETRY against the same prepared request
+	// keeps that preparation identity while receiving a DIFFERENT attempt
+	// identity.
+	//
+	// `preparationRequestId` — the PREPARATION identity. It is minted
+	// BEFORE the compaction decision, forwarded through the prepare-turn
+	// context and reused for every provider attempt against that prepared
+	// request, so a retry cannot masquerade as a second decision.
+	//
+	// `modelRequestId` — the PROVIDER ATTEMPT identity. It is re-minted per
+	// attempt, so two attempts against one preparation are distinguishable.
+	//
+	// `decisionId` — the per-session monotonic DECISION identity. It
+	// distinguishes two eligibility decisions inside the SAME iteration.
+	//
+	// `decisionJoinAuthority` — the AUTHORITY CLASSIFICATION of the join:
+	// "AUTHORITATIVE" when the preparation id was actually forwarded, and
+	// "UNAVAILABLE" when the host supplied none. It is never reported as
+	// authoritative when the identity is absent.
+	//
+	// `estimatedFinalInputTokens` — the production estimator applied to the
+	// FINAL provider-visible projection.
+	//
+	// `finalProjectionFingerprint` — the deterministic SHA-256 of the
+	// canonicalized final projection, together with its representation
+	// version and producer. A CONTENT fingerprint of the CLIENT-side
+	// representation — never a claim of byte-identical provider-wire
+	// content.
+	//
+	// `providerFamily`, `providerVisibleMessageCount`, `toolSchemaCount`
+	// and the fingerprint provenance fields are counts, classifications and
+	// identifiers. No message text, prompt, tool result, URL or credential
+	// is carried by any of them.
+	"preparationRequestId",
+	"modelRequestId",
+	"decisionJoinAuthority",
+	"estimatedFinalInputTokens",
+	"finalProjectionFingerprint",
+	"finalProjectionRepresentation",
+	"finalProjectionRepresentationVersion",
+	"finalProjectionFingerprintProducer",
+	"providerFamily",
+	"providerVisibleMessageCount",
+	"toolSchemaCount",
 ];
 
 /**

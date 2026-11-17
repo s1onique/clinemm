@@ -89,7 +89,10 @@ import {
 	agentMessagesToMessagesWithMetadata,
 	messagesToAgentMessages,
 } from "../config/agent-message-codec";
-import { createAgentRuntimeConfig } from "../config/agent-runtime-config-builder";
+import {
+	buildModelOptions,
+	createAgentRuntimeConfig,
+} from "../config/agent-runtime-config-builder";
 import {
 	type ConnectionUpdate,
 	normalizeConnectionUpdate,
@@ -1791,6 +1794,21 @@ export class SessionRuntime {
 				},
 				overflowRecovery: context.overflowRecovery,
 				previousRequestInputTokens: context.previousRequestInputTokens,
+				// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: forward the
+				// preparation request identity VERBATIM. The compaction
+				// decision seam records it on the decision record, which is
+				// what makes the decision -> dispatch -> usage join
+				// authoritative instead of chronological.
+				...(context.preparationRequestId !== undefined
+					? { preparationRequestId: context.preparationRequestId }
+					: {}),
+				// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01: forward the
+				// formatting-relevant request options. They are forwarded
+				// verbatim from the session's own model options — the same bag
+				// the request is built from.
+				...(buildModelOptions(this.config) !== undefined
+					? { requestOptions: buildModelOptions(this.config) }
+					: {}),
 				emitStatusNotice: context.emitStatusNotice,
 			});
 			if (!result) {
