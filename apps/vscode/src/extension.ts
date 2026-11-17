@@ -348,6 +348,57 @@ export async function activate(context: vscode.ExtensionContext) {
 	// only writes when the operator did NOT set the var.
 	applyProviderRequestCaptureDiagnosticProfile(isDogfoodRuntime(process.env), process.env, context.globalStorageUri.fsPath)
 
+	// ACT-CLINEMM-COMPACTION-TOKEN-EVIDENCE-CAPTURE01 — PROFILE DEFAULT.
+	//
+	// Make the PRIVATE compaction candidate capture ON BY DEFAULT in the
+	// dogfood profile.
+	//
+	// The capture is gated by TWO independent conditions inside the SDK
+	// (`isCompactionCandidateCaptureArmed()` in
+	// `sdk/packages/core/src/runtime/observability/compaction-candidate-capture.ts`):
+	//
+	//   1. `CLINE_PRIVATE_COMPACTION_CANDIDATE_CAPTURE` === "1"  (exact), AND
+	//   2. `CLINEMM_RUNTIME_PROFILE` === "dogfood"                 (exact).
+	//
+	// This block supplies condition (1) as the DOGFOOD PROFILE DEFAULT so the
+	// operator no longer has to remember to export it before every launch.
+	// Condition (2) is NEVER touched here: it is launcher-owned, exact-match
+	// and fail-closed, so a PUBLIC install can never arm the capture no matter
+	// how the environment is set. The public privacy gate is therefore
+	// preserved intact.
+	//
+	// Precedence (frozen):
+	//
+	//   - UNSET   -> dogfood default ON, public OFF
+	//   - "1"     -> ON in dogfood; STILL OFF in public (the SDK's own
+	//                profile gate decides)
+	//   - "0"     -> OFF everywhere (an explicit operator opt-out is NEVER
+	//                overridden)
+	//
+	// The write is a ONE-TIME profile default, applied ONCE at the EARLIEST
+	// initialization seam — BEFORE the first SDK session — so the capture is
+	// armed for the very first compaction decision of the process.
+	//
+	// Privacy / fail-closed notes:
+	//
+	//   - The SDK's private storage resolver still FAILS CLOSED: without an
+	//     explicit `CLINE_DATA_DIR` (or `CLINE_DIR`) there is no isolated
+	//     storage root, so NOTHING is written. The provider-capture
+	//     activation above already binds `CLINE_DATA_DIR` to
+	//     `context.globalStorageUri.fsPath` in dogfood mode.
+	//   - The capture store's retention cap (12 candidates), total byte
+	//     budget (64 MiB) and restrictive POSIX permissions (0700 dir /
+	//     0600 files) are UNCHANGED by this block.
+	//   - The captured snapshots may contain prompts, tool results and
+	//     credentials. They stay in the private store, OUTSIDE Git and
+	//     OUTSIDE diagnostic exports.
+	//
+	// Idempotence: the block writes only when the operator left the var
+	// UNSET, so repeated activation is a no-op.
+	if (isDogfoodRuntime(process.env) && process.env.CLINE_PRIVATE_COMPACTION_CANDIDATE_CAPTURE === undefined) {
+		process.env.CLINE_PRIVATE_COMPACTION_CANDIDATE_CAPTURE = "1"
+	}
+
 	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
 	// Arm the legacy TSWPD ring at the EARLIEST initialization seam,
 	// BEFORE SdkController construction. The helper composes the
