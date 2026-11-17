@@ -5,13 +5,13 @@
   "hashes": [
     {
       "name": "identity.json",
-      "sha256": "04618e8aa7215e26f39fc79e20a18269d3efed9797892ae8d9f299177647f048",
+      "sha256": "f0b1b8e66c11623c0fca6069b94aee04a983466deafae2edee8adeea50115ef0",
       "bytes": 2996
     },
     {
       "name": "source-map.md",
-      "sha256": "6573c7790a4dda3da7d03384430ba434fca4bf8bac58b467a9b4823c71e89f69",
-      "bytes": 2984
+      "sha256": "582a6444dc7000be596f031f8c7c32b62f3eb8270ecd57b2f1d2622cf3e755c2",
+      "bytes": 3015
     },
     {
       "name": "input-manifest.json",
