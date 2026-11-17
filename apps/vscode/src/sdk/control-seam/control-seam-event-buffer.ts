@@ -57,8 +57,22 @@ export const CONTROL_SEAM_EVENT_BUFFER_MAX_EVENTS = 500
  *
  * `cursor` is the EXISTING `ClineMessage.seq` — the same ordering
  * identity the webview merge uses.
+ *
+ * ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: `sessionId` is the
+ * SOURCE-BACKED identity of the session that PRODUCED the event. It is
+ * captured at the EXISTING publication boundary from the
+ * `CoreSessionEvent.payload.sessionId` — the runtime's own session
+ * identity, which every variant of `CoreSessionEvent` carries. It is
+ * NOT an approximate observation of "the currently active session":
+ * an event is attributed to the session that actually emitted it.
+ *
+ * Without this field the shared ring cannot answer "WHICH session
+ * produced this event", and a client authorized for session B would
+ * receive session A's events — including their message text.
  */
 export interface ControlSeamBufferedEvent {
+	/** The session that PRODUCED this event. */
+	readonly sessionId: string
 	readonly cursor: string
 	readonly epoch: number
 	readonly type: string
@@ -75,12 +89,27 @@ export interface ControlSeamBufferedEvent {
  * message is a content-bearing kind. It is truncated to
  * `maxTextLength` with an explicit truncation marker so a reader can
  * tell that the text was cut.
+ *
+ * ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: `options.sessionId` is
+ * REQUIRED. An event with no producing-session identity is NOT
+ * retained — the buffer fails closed rather than storing an event it
+ * could never scope.
  */
 export function projectControlSeamBufferedEvent(
 	message: ClineMessage,
-	options: { readonly allowContentRead: boolean; readonly maxTextLength: number },
+	options: {
+		readonly sessionId: string
+		readonly allowContentRead: boolean
+		readonly maxTextLength: number
+	},
 ): ControlSeamBufferedEvent | undefined {
 	if (!message || typeof message !== "object") {
+		return undefined
+	}
+	// ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: the producing session
+	// identity is MANDATORY. Without it the event could never be
+	// attributed to a session, so it is dropped (fail closed).
+	if (typeof options.sessionId !== "string" || options.sessionId.length === 0) {
 		return undefined
 	}
 	const type = typeof message.type === "string" ? message.type : ""
@@ -112,6 +141,7 @@ export function projectControlSeamBufferedEvent(
 	}
 
 	return {
+		sessionId: options.sessionId,
 		cursor: String(message.seq),
 		epoch,
 		type,
@@ -162,7 +192,7 @@ export class ControlSeamEventBuffer {
 	}
 
 	/**
-	 * Read a bounded slice AFTER `afterCursor`.
+	 * Read a bounded slice AFTER `afterCursor`, SCOPED to one session.
 	 *
 	 * `afterCursor` is the EXISTING `seq` the client last observed. When
 	 * it is omitted, the slice starts at the beginning of the retained
@@ -172,9 +202,40 @@ export class ControlSeamEventBuffer {
 	 *
 	 * The returned events are in the EXISTING production order. Missing
 	 * events are NEVER synthesized.
+	 *
+	 * ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: the read is SCOPED to
+	 * `options.sessionId` — the session the reader is authorized for.
+	 * Only the events PRODUCED by that session are returned; every other
+	 * session's events (their metadata AND their text) are excluded.
+	 *
+	 * The scoping is applied to the retained window BEFORE the cursor is
+	 * positioned, so:
+	 *
+	 *   - the cursor-expiry verdict is computed against THIS session's
+	 *     own retained events, not against the shared ring — a foreign
+	 *     session's eviction can neither falsely expire nor falsely
+	 *     validate this session's cursor;
+	 *   - a foreign session's events can never occupy a position in the
+	 *     returned slice, so they can never be observed.
+	 *
+	 * `options.sessionId` is REQUIRED. A read with no session scope
+	 * returns an EMPTY slice: the buffer fails closed rather than
+	 * answering an unscoped question about the shared ring.
 	 */
-	read(options: { readonly afterCursor?: string; readonly limit: number }): ControlSeamBufferedSlice {
+	read(options: {
+		readonly sessionId: string
+		readonly afterCursor?: string
+		readonly limit: number
+	}): ControlSeamBufferedSlice {
 		const limit = Math.max(1, Math.floor(options.limit))
+		// ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: an unscoped read is
+		// refused by returning NOTHING. The buffer never answers "give
+		// me the shared ring".
+		if (typeof options.sessionId !== "string" || options.sessionId.length === 0) {
+			return { events: [], cursorExpired: false }
+		}
+		// The session's OWN retained window, in the EXISTING order.
+		const scoped = this.events.filter((event) => event.sessionId === options.sessionId)
 		let startIndex = 0
 		let cursorExpired = false
 		if (options.afterCursor !== undefined) {
@@ -183,16 +244,16 @@ export class ControlSeamEventBuffer {
 				// An unparseable cursor cannot be positioned. Fail
 				// closed by reporting the whole retained window as
 				// expired rather than guessing a position.
-				cursorExpired = this.events.length > 0
+				cursorExpired = scoped.length > 0
 				startIndex = 0
 			} else {
-				const index = this.events.findIndex((event) => Number.parseInt(event.cursor, 10) > after)
+				const index = scoped.findIndex((event) => Number.parseInt(event.cursor, 10) > after)
 				if (index === -1) {
 					// The cursor is at or after the newest retained
 					// event: nothing new. Not an expiry.
 					return { events: [], cursorExpired: false }
 				}
-				if (index === 0 && this.events.length > 0) {
+				if (index === 0 && scoped.length > 0) {
 					// The requested cursor is older than the retained
 					// window: the caller missed events.
 					cursorExpired = true
@@ -200,9 +261,9 @@ export class ControlSeamEventBuffer {
 				startIndex = index
 			}
 		}
-		const slice = this.events.slice(startIndex, startIndex + limit)
+		const slice = scoped.slice(startIndex, startIndex + limit)
 		const last = slice[slice.length - 1]
-		const hasMore = startIndex + slice.length < this.events.length
+		const hasMore = startIndex + slice.length < scoped.length
 		return {
 			events: slice,
 			...(hasMore && last !== undefined ? { nextCursor: last.cursor } : {}),

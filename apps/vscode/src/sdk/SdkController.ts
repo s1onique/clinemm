@@ -3384,9 +3384,29 @@ export class Controller {
 		// retains the REAL emitted events, with their REAL identity and
 		// ordering. This is a READER of the existing publication point,
 		// NOT a new event bus.
-		this.controlSeamEventSubscription = this.onSessionEvent((messages) => {
+		//
+		// ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: the retained event
+		// is attributed to the session that PRODUCED it. The identity
+		// comes from the `CoreSessionEvent.payload.sessionId` — the
+		// runtime's OWN session identity, which EVERY variant of
+		// `CoreSessionEvent` carries. It is NOT an observation of
+		// "whatever session happens to be active now": the controller
+		// publishes events for sessions that are no longer active (a
+		// mode-switch's cancel row names the session it replaced), and
+		// attributing those to the current session would place another
+		// task's transcript in the wrong session's view.
+		this.controlSeamEventSubscription = this.onSessionEvent((messages, event) => {
+			// The producing session id. `CoreSessionEvent.payload` carries
+			// `sessionId` on every variant; a malformed event without one
+			// is DROPPED (fail closed) rather than attributed to a
+			// guessed session.
+			const sessionId = event?.payload?.sessionId
+			if (typeof sessionId !== "string" || sessionId.length === 0) {
+				return
+			}
 			for (const message of messages) {
 				const projected = projectControlSeamBufferedEvent(message, {
+					sessionId,
 					allowContentRead: true,
 					maxTextLength: CONTROL_SEAM_MAX_EVENT_TEXT_LENGTH,
 				})

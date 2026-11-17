@@ -1,0 +1,71 @@
+ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01 - CONSERVATION AND GATES
+===========================================================
+
+--- PRODUCTION DIFF (files touched) ---
+ apps/vscode/src/sdk/SdkController.ts               | 22 ++++++-
+ .../sdk/control-seam/control-seam-event-buffer.ts  | 77 +++++++++++++++++++---
+ .../src/sdk/control-seam/control-seam-server.ts    | 18 ++++-
+ ...ontrol-seam.execution-control-v1-corr01.test.ts |  8 ++-
+ .../control-seam.execution-control-v1.test.ts      | 17 ++++-
+ 5 files changed, 127 insertions(+), 15 deletions(-)
+
+--- CONSERVED: no protocol / operation / approval change ---
+CONTROL_SEAM_PROTOCOL_VERSION: 1 (UNCHANGED)
+56:export const CONTROL_SEAM_PROTOCOL_VERSION = 1
+
+MCP operation ids (UNCHANGED - no new operation):
+99:export const CONTROL_SEAM_READ_OPERATION_IDS = ["clinemm_capabilities", "clinemm_get_run"] as const
+101:export const CONTROL_SEAM_WRITE_OPERATION_IDS = ["clinemm_start_act", "clinemm_read_events"] as const
+
+PROTO_CHANGES: 0   (no .proto file modified)
+0
+  0 .proto files modified
+
+--- TYPECHECK ---
+COMMAND: apps/vscode \$ bun run check-types
+EXIT:    0   (0 diagnostics)
+
+--- LINT / FORMAT (scoped to the 6 changed files) ---
+COMMAND: bun x biome lint --config-path ./biome.jsonc --diagnostic-level=error <6 files>
+EXIT:    0   (Checked 6 files in 447ms. No fixes applied.)
+COMMAND: bun x biome format --config-path ./biome.jsonc --diagnostic-level=error --semicolons=as-needed <6 files>
+EXIT:    0   (Checked 6 files in 48ms. No fixes applied.)
+
+--- FOCUSED GATE ---
+COMMAND: apps/vscode \$ bun x vitest run src/sdk/control-seam/
+EXIT:    0
+ Test Files  10 passed (10)
+      Tests  145 passed (145)
+  (includes the NEW suite: control-seam.event-session-isolation01.test.ts - 4 tests)
+
+--- FULL VITEST SWEEP - REGRESSION DELTA ---
+BASELINE  (pristine HEAD bd79e6dcbe): 68 failed files | 178 failed / 5918 passed (538 files)
+CORRECTED:                              68 failed files | 178 failed / 5922 passed (539 files)
+DELTA:   -0 failures, +4 passes (the 4 new isolation tests), +1 file (the new test file)
+FAILING-FILE SET: byte-IDENTICAL between baseline and corrected (diff empty).
+CONTROL-SEAM FAILURES IN THE SWEEP: 0
+REGRESSION: NONE. The 68 failing files are PRE-EXISTING and environmental
+           (the host has no `node` on PATH; the failures are MCP stdio-child spawns
+           and hook fixtures, identical at the pristine baseline).
+
+--- FULL BUN UNIT SWEEP - REGRESSION DELTA ---
+BASELINE:  18 failing files | 106 failed / 1303 passed (112 files)
+CORRECTED: 18 failing files | 106 failed / 1303 passed (112 files)
+FAILING-FILE SET: byte-IDENTICAL between baseline and corrected (diff empty).
+REGRESSION: NONE.
+
+--- BUILD + ARTIFACT BINDING ---
+COMMAND: apps/vscode \$ bun esbuild.mjs
+EXIT:    0   ([watch] build finished)
+BUNDLE SHA256: e68b549dcbcb35954c09c89adb89528baa9fde48e0f19dd2dd6444841d344037
+ARTIFACT BINDING (markers VERIFIED PRESENT in dist/extension.js):
+  1. buffer read scope + fail-closed:
+     read(options) { ... if (typeof options.sessionId !== \"string\" || options.sessionId.length === 0) { return {events:[],cursorExpired:false} }
+     const scoped = this.events.filter((event) => event.sessionId === options.sessionId);
+  2. server passes the owned session:
+     const slice3 = this.eventBuffer.read({ sessionId: ownedSessionId, afterCursor: input2.afterCursor, limit });
+  3. producer attribution:
+     payload?.sessionId
+
+ACT_OWNED_DIAGNOSTICS: NONE
+INSTALLED QUALIFICATION: NOT EXECUTED / PENDING. No LIVE claim is made.

@@ -36130,3 +36130,130 @@ exact-head rebuild and the live pilot, proceed directly to the disposable
 Codex → ClineMM live pilot. **No broad re-review** of C9/C10, Elm, or the
 upstream integration is warranted — the diff surface is bounded to the control
 layer and every conserved surface is provably untouched.
+
+# ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01 — PASS_STRUCTURAL_ONLY — 2026-11-17
+
+**Status:** the single reopen condition raised by the review of
+ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01 — **event-session isolation** — is
+resolved. The leak **REPRODUCES** against the unmodified production code, the
+correction is implemented in the PRODUCTION code, and each of its three parts is
+proven load-bearing by a necessity ablation. The live pilot remains **PENDING
+operator action**.
+
+```text
+ACT_ID: ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01
+TYPE: bounded production correction of the control layer + executable qualification
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01)
+VERDICT: PASS_STRUCTURAL_ONLY
+ENTRY_HEAD: bd79e6dcbe183cf9375f905a40d862d32607166d
+ENTRY_TREE: f32dd0dd9881d4516fa8f70598bbee7a30a6f6f3
+BRANCH: main (no ACT branch created)
+PUSHED: NO   RELEASED: NO   PUBLISHED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+PROTO_CHANGES: 0   NEW_MCP_OPERATIONS: 0   PROTOCOL_VERSION: 1 (unchanged)
+LEAK REPRODUCED: YES — against the UNMODIFIED production code
+BEHAVIORAL RED: 3 failed | 1 passed (4)
+BEHAVIORAL GREEN: 4 passed (4)
+EXISTING CONTROL-SEAM SUITE: 145/145 PASS (10 files)
+NECESSITY ABLATIONS: 3/3 - each production correction is load-bearing
+TYPECHECK: bun run check-types EXIT 0 (0 diagnostics)
+LINT: biome EXIT 0 (6 scoped files)   FORMAT: clean
+BUILD: bun esbuild.mjs - extension bundle finished
+BUNDLE SHA256: e68b549dcbcb35954c09c89adb89528baa9fde48e0f19dd2dd6444841d344037
+ARTIFACT BINDING: the 3 corrected markers are VERIFIED PRESENT in dist/extension.js
+VITEST SWEEP - BASELINE:  68 failed files | 178 failed / 5918 passed (538 files)
+VITEST SWEEP - CORRECTED: 68 failed files | 178 failed / 5922 passed (539 files)
+REGRESSION DELTA: -0 failures, +4 passes (the new isolation tests), +1 file.
+                   The FAILING-FILE SET is byte-IDENTICAL (diff empty).
+BUN UNIT SWEEP: 18 failing files | 106 failed / 1303 passed - IDENTICAL at the
+                   pristine baseline. CONTROL-SEAM FAILURES: 0
+ACT_OWNED_DIAGNOSTICS: NONE
+INSTALLED QUALIFICATION: NOT EXECUTED / PENDING. No LIVE claim is made.
+EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01/
+```
+
+## The defect
+
+The CORR01 review was correct: the corrected `clinemm_read_events` path verified
+**who may request events**, but the shared event buffer carried **no
+producer-to-buffer session binding**.
+
+| Location | Before | Why it leaked |
+|---|---|---|
+| `control-seam-event-buffer.ts` `ControlSeamBufferedEvent` | `cursor`/`epoch`/`type`/`kind`/`ts`/`text` — **no `sessionId`** | the ring could not answer "which session produced this event" |
+| `control-seam-event-buffer.ts` `read()` | sliced the **shared** ring with no session filter | any authorized reader got every session's events |
+
+## Behavioural RED → GREEN
+
+RED (unmodified production code) — the leak, verbatim:
+
+```json
+{"v":1,"ok":true,"result":{"sessionId":"session-b","events":[
+  {"cursor":"1","epoch":0,"type":"say","kind":"text","ts":1794947618771,"text":"SECRET-A-UI-TASK-TEXT"}]}}
+```
+
+With the content-read grant **off**, the foreign session's **metadata** leaked
+too (`cursor` / `epoch` / `type` / `kind` / `ts`).
+
+## Necessity ablations (3/3)
+
+| ID | Production revert | Result | Verdict |
+|---|---|---|---|
+| A | the buffer's session filter removed | ISO-1 FAIL, ISO-2 FAIL, ISO-3 FAIL | LOAD-BEARING |
+| B | the server drops the owned-session scope | ISO-2 FAIL, ISO-4 FAIL | LOAD-BEARING |
+| C | the producer attribution replaced with an approximate current-session observation | ISO-2 FAIL | LOAD-BEARING |
+
+## Conservation (proven, not asserted)
+
+**No new MCP operation** (`clinemm_capabilities`, `clinemm_get_run`,
+`clinemm_start_act`, `clinemm_read_events` — unchanged). **No protocol change**
+(`CONTROL_SEAM_PROTOCOL_VERSION` stays `1`; every request/response wire shape
+unchanged). **No proto change** (0 `.proto` files modified). **No approval
+change.** **No event infrastructure** — the buffer is still a READER of the
+EXISTING publication boundary, not a new event bus. **No new runtime.** C1–C5
+and the read-only view are preserved; the CORR01 and V1 suites still pass with
+the session id threaded into their fixtures.
+
+## Decision
+
+`HALT_EVENT_SESSION_ISOLATION` is cleared **structurally**. The live Codex →
+ClineMM pilot may proceed once the operator performs the exact-head rebuild /
+install / opt-in, extended by the isolation steps in
+`.factory/evidence/ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01/04-live-qualification.md`.
+
+**No further broad review cycle is required.** C1–C5 remain accepted; the
+session-isolation question was the only reopen condition and it is resolved.
+
+### Operator qualifications carried forward
+
+1. The documented `code --install-extension` command targets the **`code` CLI**,
+   not necessarily the dedicated `codium-clinemm` installation — VS Code's CLI
+   installs into the selected editor's extensions environment. Use the CLI of the
+   editor actually being qualified.
+2. The documented default `~/.cline/data/control-seam` is **not** the
+   established dogfood location. The dogfood path is
+   **`~/.vscodium-clinemm/cline-data/control-seam`**. Use the actual profile's
+   path, without exposing either credential.
+
+The invalid Leamas gate-summary binding remains **P2, non-blocking**; the
+targeted source evidence remains useful.
+
+| `SdkController.ts:3387` | `onSessionEvent((messages) => …)` — the `event` argument was **discarded** | the source-backed session identity was available and thrown away |
+| `SdkController.ts:3811` | the buffer is cleared on controller **disposal** only | a task/session transition does NOT clear it |
+
+## The correction (production code, minimal and fail-closed)
+
+| # | File | Change |
+|---|---|---|
+| 1 | `control-seam-event-buffer.ts` | `ControlSeamBufferedEvent` gains a required `sessionId`; `projectControlSeamBufferedEvent` requires `options.sessionId` (no identity ⇒ not retained); `read()` requires `options.sessionId`, filters the retained window **before** positioning the cursor, and returns an **empty** slice for an unscoped read |
+| 2 | `control-seam-server.ts` | `handleReadEvents` passes `sessionId: ownedSessionId` into `eventBuffer.read(...)` |
+| 3 | `SdkController.ts` | the publication-boundary subscription attributes each event to **`event.payload.sessionId`** — the runtime's OWN identity, carried by EVERY `CoreSessionEvent` variant; an event without one is **dropped** |
+
+The identity is **SOURCE-BACKED**, exactly as the review required — not an
+approximate current-session observation. The controller genuinely publishes
+events for sessions that are **no longer active** (e.g. the mode switch's
+cancel row names the session it replaced,
+`sdk-mode-coordinator.ts:452-455`, payload `{ sessionId: oldSessionId, … }`);
+an approximate attribution would place that other task's transcript in the wrong
+session's view. Ablation C proves this part is load-bearing.
+

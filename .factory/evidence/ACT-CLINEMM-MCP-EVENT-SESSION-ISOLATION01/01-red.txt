@@ -1,0 +1,105 @@
+ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01 - BEHAVIOURAL RED
+======================================================
+
+COMMAND: apps/vscode \$ bun x vitest run src/sdk/control-seam/control-seam.event-session-isolation01.test.ts
+BASELINE: UNMODIFIED production code (HEAD bd79e6dcbe183cf9375f905a40d862d32607166d)
+         tree  f32dd0dd9881d4516fa8f70598bbee7a30a6f6f3
+EXIT:    1
+
+Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+      at warnOnDeactivatedColors (internal:tty:33:24)
+      at getColorDepth (internal:tty:42:39)
+      at shouldColorize (internal:util/colors:14:109)
+      at refresh (internal:util/colors:18:31)
+      at internal:util/colors (internal:util/colors:24:16)
+      at internal:assert/assertion_error (internal:assert/assertion_error:2:187)
+      at loadAssertionError (node:assert:28:96)
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+      at warnOnDeactivatedColors (internal:tty:33:24)
+      at getColorDepth (internal:tty:42:39)
+      at shouldColorize (internal:util/colors:14:109)
+      at refresh (internal:util/colors:18:31)
+      at internal:util/colors (internal:util/colors:24:16)
+      at internal:assert/assertion_error (internal:assert/assertion_error:2:187)
+      at loadAssertionError (node:assert:28:96)
+
+ ❯ src/sdk/control-seam/control-seam.event-session-isolation01.test.ts (4 tests | 3 failed) 33ms
+     × ISO-1: events published by a DIFFERENT session are NOT returned to the session this client owns 17ms
+     × ISO-2: an event published by a LATER UI-OWNED session is not returned to the session this client owns 4ms
+     × ISO-3: WITHOUT the content-read grant, a foreign session's event METADATA is still not returned 7ms
+     ✓ ISO-4: the owned session's own events remain readable, with cursor continuity across an epoch transition 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/control-seam/control-seam.event-session-isolation01.test.ts > ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01 - event session isolation > ISO-1: events published by a DIFFERENT session are NOT returned to the session this client owns
+AssertionError: expected '{"v":1,"ok":true,"result":{"sessionId…' not to contain 'SECRET-A-UI-TASK-TEXT'
+
+Expected: "SECRET-A-UI-TASK-TEXT"
+Received: "{"v":1,"ok":true,"result":{"sessionId":"session-b","events":[{"cursor":"1","epoch":0,"type":"say","kind":"text","ts":1794947629253,"text":"SECRET-A-UI-TASK-TEXT"}],"cursorExpired":false}}"
+
+ ❯ src/sdk/control-seam/control-seam.event-session-isolation01.test.ts:373:40
+    371|   const result = response.result as { sessionId: string; events: { cur…
+    372|   expect(result.sessionId).toBe("session-b")
+    373|   expect(JSON.stringify(response)).not.toContain("SECRET-A-UI-TASK-TEX…
+       |                                        ^
+    374|   expect(result.events).toEqual([])
+    375|  })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.event-session-isolation01.test.ts > ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01 - event session isolation > ISO-2: an event published by a LATER UI-OWNED session is not returned to the session this client owns
+AssertionError: expected '{"v":1,"ok":true,"result":{"sessionId…' not to contain 'SECRET-C-UI-TASK-TEXT'
+
+Expected: "SECRET-C-UI-TASK-TEXT"
+Received: "{"v":1,"ok":true,"result":{"sessionId":"session-b","events":[{"cursor":"1","epoch":0,"type":"say","kind":"text","ts":1794947629266,"text":"MY-OWN-EVENT"},{"cursor":"2","epoch":0,"type":"say","kind":"text","ts":1794947629266,"text":"SECRET-C-UI-TASK-TEXT"}],"cursorExpired":false}}"
+
+ ❯ src/sdk/control-seam/control-seam.event-session-isolation01.test.ts:407:40
+    405|   expect(response.ok).toBe(true)
+    406|   const result = response.result as { events: { cursor: string; text?:…
+    407|   expect(JSON.stringify(response)).not.toContain("SECRET-C-UI-TASK-TEX…
+       |                                        ^
+    408|   // ONLY the owned session's event is returned.
+    409|   expect(result.events.map((event) => event.text)).toEqual(["MY-OWN-EV…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.event-session-isolation01.test.ts > ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01 - event session isolation (metadata + continuity) > ISO-3: WITHOUT the content-read grant, a foreign session's event METADATA is still not returned
+AssertionError: expected [ { cursor: '1', epoch: +0, …(3) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "cursor": "1",
++     "epoch": 0,
++     "kind": "text",
++     "ts": 1794947629272,
++     "type": "say",
++   },
++ ]
+
+ ❯ src/sdk/control-seam/control-seam.event-session-isolation01.test.ts:441:25
+    439|   const result = response.result as { events: { cursor: string; text?:…
+    440|   // No foreign event METADATA (the cursor) is disclosed either.
+    441|   expect(result.events).toEqual([])
+       |                         ^
+    442|  })
+    443|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  23:33:44
+   Duration  4.98s (transform 3.21s, setup 2.03s, import 2.85s, tests 33ms, environment 0ms)
+

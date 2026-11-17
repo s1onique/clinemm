@@ -440,7 +440,9 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01 - C3 event-read ownership"
 		)
 		const projected = projectControlSeamBufferedEvent(
 			{ ts: 1_000, type: "say", say: "text", text: "a private ui event", epoch: 1, seq: 1 } as never,
-			{ allowContentRead: true, maxTextLength: 2_000 },
+			// ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: the event is
+			// attributed to the session that PRODUCED it.
+			{ sessionId: "session-ui-started", allowContentRead: true, maxTextLength: 2_000 },
 		)
 		expect(projected).toBeDefined()
 		harness.eventBuffer.append(projected!)
@@ -476,7 +478,9 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01 - C3 event-read ownership"
 
 		const projected = projectControlSeamBufferedEvent(
 			{ ts: 2_000, type: "say", say: "text", text: "my own event", epoch: 1, seq: 7 } as never,
-			{ allowContentRead: true, maxTextLength: 2_000 },
+			// ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: the event is
+			// attributed to the session that PRODUCED it.
+			{ sessionId: "session-owned", allowContentRead: true, maxTextLength: 2_000 },
 		)
 		expect(projected).toBeDefined()
 		harness.eventBuffer.append(projected!)

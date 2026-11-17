@@ -946,7 +946,23 @@ export class ControlSeamServer {
 		}
 
 		const limit = input.limit ?? CONTROL_SEAM_DEFAULT_EVENT_LIMIT
-		const slice = this.eventBuffer.read({ afterCursor: input.afterCursor, limit })
+		// ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: the read is SCOPED
+		// to the OWNED session. The buffer is a SHARED ring — it retains
+		// the events of EVERY session the extension host published — so
+		// an unscoped read would return OTHER sessions' events (their
+		// metadata AND, with the content grant, their message text) to a
+		// client that only owns the session named above.
+		//
+		// The scope is the OWNED session id — the one the authorization
+		// fence above already proved this client started. The buffer
+		// attributes each retained event to the session that PRODUCED it
+		// (the `CoreSessionEvent.payload.sessionId` captured at the
+		// publication boundary), so the filter is exact.
+		const slice = this.eventBuffer.read({
+			sessionId: ownedSessionId,
+			afterCursor: input.afterCursor,
+			limit,
+		})
 		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the CONTENT-READ
 		// grant is enforced HERE, at the wire boundary. Without it every
 		// `text` field is STRIPPED - the event METADATA (cursor, epoch,

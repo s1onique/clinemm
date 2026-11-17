@@ -1,0 +1,29 @@
+ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01 - GREEN + NECESSITY ABLATIONS
+=============================================================
+
+GREEN (corrected production code):
+COMMAND: apps/vscode \$ bun x vitest run src/sdk/control-seam/
+EXIT:    0
+ Test Files  10 passed (10)
+      Tests  145 passed (145)
+
+--- ABLATION A: the buffer session filter is REMOVED (shared ring returned unscoped) ---
+FILE: apps/vscode/src/sdk/control-seam/control-seam-event-buffer.ts:234
+  const scoped = this.events   // ABLATION A
+RESULT: ISO-1 FAIL, ISO-2 FAIL, ISO-3 FAIL, ISO-4 PASS  (3 failed | 1 passed)
+VERDICT: LOAD-BEARING - the filter is what stops the foreign session leak.
+
+--- ABLATION B: the server drops the owned-session scope from the read ---
+FILE: apps/vscode/src/sdk/control-seam/control-seam-server.ts:962
+  this.eventBuffer.read({ afterCursor, limit })   // ABLATION B
+RESULT: ISO-1 PASS, ISO-2 FAIL, ISO-3 PASS, ISO-4 FAIL  (2 failed | 2 passed)
+VERDICT: LOAD-BEARING - the scope must reach the buffer read.
+
+--- ABLATION C: the producer-side attribution is REMOVED (approximate current session) ---
+FILE: apps/vscode/src/sdk/control-seam/control-seam.event-session-isolation01.test.ts:202
+  const sessionId = harness.fixture.sessionId   // ABLATION C
+  (mirrors apps/vscode/src/sdk/SdkController.ts:3403)
+RESULT: ISO-1 PASS, ISO-2 FAIL, ISO-3 PASS, ISO-4 PASS  (1 failed | 3 passed)
+VERDICT: LOAD-BEARING - the SOURCE-BACKED producer identity is required.
+
+NECESSITY ABLATIONS: 3/3 - each production correction is load-bearing.

@@ -662,9 +662,17 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R5 read events", () => {
 		} as ClineMessage
 	}
 
-	/** Append a projected event to the harness's ring. */
-	function appendEvent(harness: Harness, seq: number, allowContentRead = true): void {
+	/**
+	 * Append a projected event to the harness's ring.
+	 *
+	 * ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: the retained event is
+	 * attributed to the session that PRODUCED it. `sessionId` is the
+	 * producing session — for the events this suite reads back it is
+	 * the session the mutation client started.
+	 */
+	function appendEvent(harness: Harness, seq: number, allowContentRead = true, sessionId = "session-started"): void {
 		const projected = projectControlSeamBufferedEvent(message({ seq }), {
+			sessionId,
 			allowContentRead,
 			maxTextLength: 2_000,
 		})
@@ -755,12 +763,15 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R5 read events", () => {
 		const smallBuffer = new ControlSeamEventBuffer({ maxEvents: 2 })
 		for (const seq of [1, 2, 3, 4]) {
 			const projected = projectControlSeamBufferedEvent(message({ seq }), {
+				sessionId: "session-started",
 				allowContentRead: true,
 				maxTextLength: 2_000,
 			})
 			smallBuffer.append(projected!)
 		}
-		const slice = smallBuffer.read({ afterCursor: "1", limit: 20 })
+		// ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01: the read is scoped to
+		// the session whose events are being paged.
+		const slice = smallBuffer.read({ sessionId: "session-started", afterCursor: "1", limit: 20 })
 		expect(slice.cursorExpired).toBe(true)
 		expect(slice.events.map((event) => event.cursor)).toEqual(["3", "4"])
 	})
