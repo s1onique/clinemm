@@ -304,6 +304,41 @@ describe("AICE01 G14/A1/A8 — the archive contents", () => {
 })
 
 describe("AICE01 G12/A9 — the build identity", () => {
+	it("G12/A9 — version disagreement is MISMATCH while bundle SHA remains independent", () => {
+		const bundleSha = "a".repeat(64)
+		const provenance = {
+			schemaVersion: 1,
+			sourceHead: "b5f1f9f54a915e19cd59f8d7cb8a2b7c938de3ea",
+			extensionVersion: "4.1.26-b5f1f9f54",
+			bundledExtensionSha256: bundleSha,
+		}
+		const runtimeVersion = "4.1.26-b5f1f9f54"
+		expect(
+			verifyBuildProvenance(provenance, bundleSha, {
+				runtimeExtensionVersion: runtimeVersion,
+				installedPackageVersion: runtimeVersion,
+			}).verification,
+		).toBe("VERIFIED")
+		expect(
+			verifyBuildProvenance(provenance, bundleSha, {
+				runtimeExtensionVersion: "4.1.16-5a1c485cb",
+				installedPackageVersion: runtimeVersion,
+			}).verification,
+		).toBe("MISMATCH")
+		expect(
+			verifyBuildProvenance(provenance, bundleSha, {
+				runtimeExtensionVersion: runtimeVersion,
+				installedPackageVersion: "4.1.16-5a1c485cb",
+			}).verification,
+		).toBe("MISMATCH")
+		expect(
+			verifyBuildProvenance(provenance, "b".repeat(64), {
+				runtimeExtensionVersion: runtimeVersion,
+				installedPackageVersion: runtimeVersion,
+			}).verification,
+		).toBe("MISMATCH")
+	})
+
 	it("G12 — an ABSENT provenance is UNOBSERVED, never VERIFIED", () => {
 		const identity = buildBuildRuntimeIdentity({
 			provenance: undefined,

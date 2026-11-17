@@ -52,6 +52,12 @@ export interface BuildProvenance {
 	readonly buildTimestamp?: string
 	readonly buildId?: string
 	readonly bundledExtensionSha256?: string
+	/** The exact source package manifest bound into the packaged build. */
+	readonly sourcePackageSha256?: string
+	/** The exact source package manifest size bound into the packaged build. */
+	readonly sourcePackageBytes?: number
+	/** The source package manifest path recorded in the build workspace. */
+	readonly sourcePackagePath?: string
 }
 
 /**
@@ -90,6 +96,23 @@ export async function sha256File(path: string): Promise<string | undefined> {
 	try {
 		const contents = await readFile(path)
 		return createHash("sha256").update(contents).digest("hex")
+	} catch {
+		return undefined
+	}
+}
+
+/**
+ * Read the installed extension's package manifest version.
+ *
+ * Returns `undefined` when the manifest is absent, unreadable, or has no
+ * version string. This is an independent installed-manifest observation,
+ * never inferred from the compiled runtime.
+ */
+export async function readInstalledPackageVersion(extensionPath: string): Promise<string | undefined> {
+	try {
+		const raw = await readFile(join(extensionPath, "package.json"), "utf8")
+		const parsed = JSON.parse(raw) as { readonly version?: unknown }
+		return typeof parsed.version === "string" && parsed.version ? parsed.version : undefined
 	} catch {
 		return undefined
 	}
@@ -138,6 +161,10 @@ export async function readOnDiskBundleSha256(extensionPath: string): Promise<str
 export function verifyBuildProvenance(
 	provenance: BuildProvenance | undefined,
 	onDiskBundleSha256: string | undefined,
+	options?: {
+		readonly runtimeExtensionVersion?: string
+		readonly installedPackageVersion?: string
+	},
 ): { readonly verification: BuildProvenanceVerification; readonly note?: string } {
 	if (!provenance) {
 		return { verification: "UNOBSERVED", note: "no build provenance artifact was present" }
@@ -157,6 +184,26 @@ export function verifyBuildProvenance(
 			note: "the on-disk extension bundle hash does not match the packaged build provenance",
 		}
 	}
+	const runtimeVersion = options?.runtimeExtensionVersion
+	const installedVersion = options?.installedPackageVersion
+	if (runtimeVersion && installedVersion && runtimeVersion !== installedVersion) {
+		return {
+			verification: "MISMATCH",
+			note: "the runtime extension version does not match the installed package manifest version",
+		}
+	}
+	if (provenance.extensionVersion && runtimeVersion && provenance.extensionVersion !== runtimeVersion) {
+		return {
+			verification: "MISMATCH",
+			note: "the packaged build version does not match the runtime extension version",
+		}
+	}
+	if (provenance.extensionVersion && installedVersion && provenance.extensionVersion !== installedVersion) {
+		return {
+			verification: "MISMATCH",
+			note: "the packaged build version does not match the installed package manifest version",
+		}
+	}
 	return { verification: "VERIFIED" }
 }
 
@@ -166,8 +213,12 @@ export function verifyBuildProvenance(
 export function buildBuildRuntimeIdentity(input: {
 	readonly provenance?: BuildProvenance
 	readonly runtime: RuntimeIdentity
+	readonly installedPackageVersion?: string
 }): BuildRuntimeIdentity {
-	const { verification, note } = verifyBuildProvenance(input.provenance, input.runtime.onDiskBundleSha256)
+	const { verification, note } = verifyBuildProvenance(input.provenance, input.runtime.onDiskBundleSha256, {
+		runtimeExtensionVersion: input.runtime.extensionVersion,
+		installedPackageVersion: input.installedPackageVersion,
+	})
 	return {
 		schemaVersion: BUILD_PROVENANCE_SCHEMA_VERSION,
 		provenanceVerification: verification,

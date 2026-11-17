@@ -1,7 +1,12 @@
 import { Empty, type EmptyRequest } from "@shared/proto/cline/common"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
-import { buildBuildRuntimeIdentity, readBuildProvenance, readOnDiskBundleSha256 } from "@/sdk/automatic-incident-build-identity"
+import {
+	buildBuildRuntimeIdentity,
+	readBuildProvenance,
+	readInstalledPackageVersion,
+	readOnDiskBundleSha256,
+} from "@/sdk/automatic-incident-build-identity"
 import { getAutomaticIncidentExtensionHostInstanceId } from "@/sdk/automatic-incident-capture"
 import { runAutomaticIncidentExport } from "@/sdk/automatic-incident-export-runtime"
 import { Logger } from "@/shared/services/Logger"
@@ -37,8 +42,10 @@ export async function reportTaskProblem(controller: Controller, _request: EmptyR
 		const extensionPath = HostProvider.isInitialized() ? HostProvider.get().extensionFsPath : undefined
 		const provenance = extensionPath ? await readBuildProvenance(extensionPath) : undefined
 		const onDiskBundleSha256 = extensionPath ? await readOnDiskBundleSha256(extensionPath) : undefined
+		const installedPackageVersion = extensionPath ? await readInstalledPackageVersion(extensionPath) : undefined
 		const buildIdentity = buildBuildRuntimeIdentity({
 			provenance,
+			installedPackageVersion,
 			runtime: {
 				runtimeInstanceId: getAutomaticIncidentExtensionHostInstanceId(),
 				extensionVersion: ExtensionRegistryInfo.version,

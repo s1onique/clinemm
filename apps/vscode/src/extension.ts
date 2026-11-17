@@ -9,7 +9,12 @@ import {
 } from "@shared/bcb-observation-unavailable-capture"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
-import { buildBuildRuntimeIdentity, readBuildProvenance, readOnDiskBundleSha256 } from "@/sdk/automatic-incident-build-identity"
+import {
+	buildBuildRuntimeIdentity,
+	readBuildProvenance,
+	readInstalledPackageVersion,
+	readOnDiskBundleSha256,
+} from "@/sdk/automatic-incident-build-identity"
 // ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01): the
 // automatic incident capture, its durable persistence, its exact
 // build/runtime identity, and the one-click local export.
@@ -222,8 +227,10 @@ async function resolveActiveTaskIdForIncidentExport(): Promise<string | undefine
 async function resolveBuildIdentityForIncidentExport(extensionPath: string | undefined) {
 	const provenance = extensionPath ? await readBuildProvenance(extensionPath) : undefined
 	const onDiskBundleSha256 = extensionPath ? await readOnDiskBundleSha256(extensionPath) : undefined
+	const installedPackageVersion = extensionPath ? await readInstalledPackageVersion(extensionPath) : undefined
 	return buildBuildRuntimeIdentity({
 		provenance,
+		installedPackageVersion,
 		runtime: {
 			runtimeInstanceId: getAutomaticIncidentExtensionHostInstanceId(),
 			extensionVersion: ExtensionRegistryInfo.version,

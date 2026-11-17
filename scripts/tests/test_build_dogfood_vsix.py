@@ -97,13 +97,18 @@ from build_dogfood_vsix_lib import (  # noqa: E402
     default_dogfood_vsix_name,
     derive_dogfood_version,
     disable_vscode_prepublish_hook,
+    extract_runtime_version,
     read_package_version,
+    read_vsix_bundle_bytes,
+    read_vsix_package_version,
     remove_worktree_quietly,
     run_canonical_build,
     stage_elm_kernel_runtime_asset,
     verify_install_listing,
+    verify_installed_version_identity,
     verify_vsix_manifest,
     verify_vsix_payload,
+    write_build_provenance,
     write_package_version,
 )
 
@@ -132,8 +137,15 @@ def _make_vsix(path: Path, *, version: str, include_ext: bool = True, include_we
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("extension.vsixmanifest", manifest)
+        z.writestr(
+            "extension/package.json",
+            json.dumps({"name": "clinemm", "version": version}) + "\n",
+        )
         if include_ext:
-            z.writestr("extension/dist/extension.js", "// stub\n")
+            z.writestr(
+                "extension/dist/extension.js",
+                'var packageManifest={name:"clinemm",version:"' + version + '"};\n',
+            )
         if include_webview:
             z.writestr(
                 "extension/webview-ui/build/assets/index.js",
@@ -528,6 +540,56 @@ class TestDogfood05bCanonicalBuildCommandCwdTrace(unittest.TestCase):
             ),
         )
 
+    def test_build_specific_version_is_stamped_before_runtime_compilation(self) -> None:
+        """ACT-CLINEMM-DOGFOOD-VERSION-PROVENANCE-CORRECTION01 RED.
+
+        The extension runtime imports the staged package.json version when
+        esbuild compiles dist/extension.js. Therefore the build-specific
+        stamp must be present before ANY runtime compilation step, while
+        dependency installation must still precede the staged mutation.
+        """
+        trace: list[tuple[list[str], Path]] = []
+        observed_versions: list[tuple[str, str]] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            stage = Path(tmp)
+            apps = stage / "apps" / "vscode"
+            apps.mkdir(parents=True)
+            staged_pkg = _write_package_json(apps, version="4.1.26")
+
+            def record(argv, cwd):
+                trace.append((list(argv), Path(cwd)))
+                if argv[:3] in (
+                    ["bun", "run", "vscode:prepublish"],
+                    ["bun", "esbuild.mjs", "--production"],
+                ):
+                    observed_versions.append(
+                        ("compile", read_package_version(staged_pkg))
+                    )
+
+            run_canonical_build(
+                stage,
+                run_visible=record,
+                package_version="4.1.26-b5f1f9f54",
+            )
+
+        self.assertEqual(
+            [argv for argv, _cwd in trace],
+            [
+                ["bun", "install", "--frozen-lockfile"],
+                ["bun", "run", "build:sdk"],
+                ["bun", "run", "vscode:prepublish"],
+            ],
+        )
+        self.assertEqual(
+            observed_versions,
+            [("compile", "4.1.26-b5f1f9f54")],
+            msg=(
+                "the staged manifest must carry the build-specific version "
+                "before the extension runtime is compiled"
+            ),
+        )
+
 
 # =============================================================================
 # DOGFOOD05 — verify_vsix_manifest rejects mismatched versions
@@ -562,9 +624,115 @@ class TestDogfood05ManifestVerification(unittest.TestCase):
                 verify_vsix_manifest(vsix, "4.1.10-2f3bdfeee")
 
 
-# =============================================================================
-# DOGFOOD05c — orchestrator delegates to run_canonical_build (CORRECTION02)
-# =============================================================================
+class TestVersionProvenanceIdentity(unittest.TestCase):
+    """ACT-CLINEMM-DOGFOOD-VERSION-PROVENANCE-CORRECTION01 V3-V5."""
+
+    def test_vsix_manifest_installed_manifest_and_runtime_versions_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            vsix = Path(tmp) / "identity.vsix"
+            version = "4.1.26-b5f1f9f54"
+            _make_vsix(vsix, version=version)
+            self.assertEqual(read_vsix_package_version(vsix), version)
+            self.assertEqual(
+                extract_runtime_version(read_vsix_bundle_bytes(vsix)),
+                version,
+            )
+            verify_installed_version_identity(
+                vsix,
+                version,
+                extract_runtime_version(read_vsix_bundle_bytes(vsix)),
+            )
+
+    def test_adversarial_runtime_manifest_mismatch_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            vsix = Path(tmp) / "identity.vsix"
+            _make_vsix(vsix, version="4.1.26-b5f1f9f54")
+            with self.assertRaises(BuildError) as ctx:
+                verify_installed_version_identity(
+                    vsix,
+                    "4.1.26-b5f1f9f54",
+                    "4.1.16-5a1c485cb",
+                )
+        self.assertIn("compiled runtime version mismatch", str(ctx.exception))
+
+    def test_runtime_version_extractor_ignores_unrelated_earlier_version_property(self) -> None:
+        bundle = (
+            b'var unrelated={version:"v4"};'
+            b'var packageManifest={name:"clinemm",displayName:"ClineMM",'
+            b'description:"ClineMM",version:"4.1.26-61d235ab7"};\n'
+        )
+        self.assertEqual(
+            extract_runtime_version(bundle),
+            "4.1.26-61d235ab7",
+        )
+
+    def test_build_provenance_records_source_head_package_and_bundle_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            apps = Path(tmp)
+            source_pkg = _write_package_json(apps, version="4.1.26")
+            bundle = apps / "extension.js"
+            bundle.write_bytes(b"compiled extension bytes")
+            output = write_build_provenance(
+                apps,
+                source_head="b5f1f9f54a915e19cd59f8d7cb8a2b7c938de3ea",
+                extension_version="4.1.26-b5f1f9f54",
+                source_package_path="apps/vscode/package.json",
+                source_package_sha256=compute_sha256(source_pkg),
+                source_package_bytes=source_pkg.stat().st_size,
+                bundled_extension_sha256=compute_sha256(bundle),
+            )
+            provenance = json.loads(output.read_text())
+            self.assertEqual(
+                provenance["sourceHead"],
+                "b5f1f9f54a915e19cd59f8d7cb8a2b7c938de3ea",
+            )
+            self.assertEqual(provenance["extensionVersion"], "4.1.26-b5f1f9f54")
+            self.assertEqual(
+                provenance["sourcePackagePath"], "apps/vscode/package.json"
+            )
+            self.assertEqual(
+                provenance["sourcePackageSha256"], compute_sha256(source_pkg)
+            )
+            self.assertEqual(
+                provenance["sourcePackageBytes"], source_pkg.stat().st_size
+            )
+            self.assertEqual(
+                provenance["bundledExtensionSha256"], compute_sha256(bundle)
+            )
+
+    def test_adversarial_installed_manifest_mismatch_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            vsix = Path(tmp) / "identity.vsix"
+            _make_vsix(vsix, version="4.1.26-b5f1f9f54")
+            with zipfile.ZipFile(vsix, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr(
+                    "extension.vsixmanifest",
+                    '<?xml version="1.0" encoding="utf-8"?>\n'
+                    '<PackageManifest Version="2.0.0"><Metadata>'
+                    '<Identity Id="s1onique.clinemm" Version="4.1.26-b5f1f9f54" '
+                    'Publisher="s1onique"/></Metadata></PackageManifest>\n',
+                )
+                z.writestr(
+                    "extension/package.json",
+                    json.dumps({"version": "4.1.16-5a1c485cb"}) + "\n",
+                )
+                z.writestr(
+                    "extension/dist/extension.js",
+                    'var packageManifest={name:"clinemm",version:"4.1.26-b5f1f9f54"};\n',
+                )
+                z.writestr(
+                    "extension/webview-ui/build/assets/index.js",
+                    "// webview stub\n",
+                )
+            with self.assertRaises(BuildError) as ctx:
+                verify_installed_version_identity(
+                    vsix,
+                    "4.1.26-b5f1f9f54",
+                    "4.1.26-b5f1f9f54",
+                )
+        self.assertIn("installed package version mismatch", str(ctx.exception))
+
+
 
 
 class TestDogfood05cOrchestratorUsesCanonicalBuildHelper(unittest.TestCase):
@@ -720,10 +888,12 @@ class TestDogfood05cOrchestratorUsesCanonicalBuildHelper(unittest.TestCase):
         self.assertTrue(
             ("run_canonical_build(stage, run_visible=run_visible)" in body)
             or ("run_canonical_build(\n            stage, run_visible=run_visible, skip_typecheck=skip_typecheck\n        )" in body)
-            or ("run_canonical_build(stage, run_visible=run_visible, skip_typecheck=skip_typecheck)" in body),
+            or ("run_canonical_build(stage, run_visible=run_visible, skip_typecheck=skip_typecheck)" in body)
+            or ("run_canonical_build(" in body and "package_version=dogfood_version" in body),
             msg=(
                 "build_dogfood_vsix must call run_canonical_build(stage, "
-                "run_visible=run_visible) [with or without skip_typecheck]."
+                "run_visible=run_visible) [with the optional skip_typecheck "
+                "and package_version arguments]."
             ),
         )
 
@@ -921,6 +1091,9 @@ class TestCorrection06OrchestratorUnconditionalNeuter(unittest.TestCase):
                     _seed_staged_prepublish_hook(apps)
                     _write_tracked_elm_sources(wstage)
                     (apps / "dist").mkdir(parents=True, exist_ok=True)
+                    (apps / "dist" / "extension.js").write_bytes(
+                        b"compiled extension bytes"
+                    )
                     dogfood_version = derive_dogfood_version(
                         "4.1.10", "2f3bdfeee"
                     )
@@ -971,6 +1144,11 @@ class TestCorrection06OrchestratorUnconditionalNeuter(unittest.TestCase):
                     (["BUILD-ELM-KERNEL-INVOKED"], Path(stage))
                 )
                 apps = stage
+                dist = apps / "dist"
+                dist.mkdir(parents=True, exist_ok=True)
+                (dist / "extension.js").write_bytes(
+                    b"compiled extension bytes"
+                )
                 js_bytes = b"recording-build-payload-bytes"
                 sha = compute_sha256_bytes(js_bytes)
                 # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
@@ -979,6 +1157,9 @@ class TestCorrection06OrchestratorUnconditionalNeuter(unittest.TestCase):
                 for kernel_dir in (
                     "completion-authority",
                     "task-header-orchestration",
+                    "completion-continuation-control",
+                    "background-notify-authority",
+                    "deferred-completion-barrier",
                 ):
                     src_dir = apps / "elm" / kernel_dir / "vendor"
                     src_dir.mkdir(parents=True, exist_ok=True)
@@ -1209,6 +1390,12 @@ class TestDogfood06PayloadExtensionJs(unittest.TestCase):
                 # as a real VSIX runtime asset.
                 "extension/runtime-assets/task-header-orchestration.js",
                 "extension/runtime-assets/task-header-orchestration.js.sha256",
+                "extension/runtime-assets/completion-continuation-control.js",
+                "extension/runtime-assets/completion-continuation-control.js.sha256",
+                "extension/runtime-assets/background-notify-authority.js",
+                "extension/runtime-assets/background-notify-authority.js.sha256",
+                "extension/runtime-assets/deferred-completion-barrier.js",
+                "extension/runtime-assets/deferred-completion-barrier.js.sha256",
             }
         )
 
@@ -1249,6 +1436,12 @@ class TestDogfood07PayloadWebviewAssets(unittest.TestCase):
                 # as a real VSIX runtime asset.
                 "extension/runtime-assets/task-header-orchestration.js",
                 "extension/runtime-assets/task-header-orchestration.js.sha256",
+                "extension/runtime-assets/completion-continuation-control.js",
+                "extension/runtime-assets/completion-continuation-control.js.sha256",
+                "extension/runtime-assets/background-notify-authority.js",
+                "extension/runtime-assets/background-notify-authority.js.sha256",
+                "extension/runtime-assets/deferred-completion-barrier.js",
+                "extension/runtime-assets/deferred-completion-barrier.js.sha256",
             }
         )
 
@@ -1305,6 +1498,12 @@ class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
                 # as a real VSIX runtime asset.
                 "extension/runtime-assets/task-header-orchestration.js",
                 "extension/runtime-assets/task-header-orchestration.js.sha256",
+                "extension/runtime-assets/completion-continuation-control.js",
+                "extension/runtime-assets/completion-continuation-control.js.sha256",
+                "extension/runtime-assets/background-notify-authority.js",
+                "extension/runtime-assets/background-notify-authority.js.sha256",
+                "extension/runtime-assets/deferred-completion-barrier.js",
+                "extension/runtime-assets/deferred-completion-barrier.js.sha256",
             }
         )
 
@@ -1379,6 +1578,12 @@ class TestDogfoodKernelElmKernelBundle(unittest.TestCase):
                 "extension/runtime-assets/completion-authority.js.sha256",
                 "extension/runtime-assets/task-header-orchestration.js",
                 "extension/runtime-assets/task-header-orchestration.js.sha256",
+                "extension/runtime-assets/completion-continuation-control.js",
+                "extension/runtime-assets/completion-continuation-control.js.sha256",
+                "extension/runtime-assets/background-notify-authority.js",
+                "extension/runtime-assets/background-notify-authority.js.sha256",
+                "extension/runtime-assets/deferred-completion-barrier.js",
+                "extension/runtime-assets/deferred-completion-barrier.js.sha256",
             }
         )
         # task-header-orchestration kernel JS missing -> fail.
@@ -1444,6 +1649,15 @@ class TestDogfoodKernel04StageRuntimeAsset(unittest.TestCase):
         src_dir.mkdir(parents=True, exist_ok=True)
         (src_dir / "task-header-orchestration.js").write_bytes(js_bytes)
         (src_dir / "task-header-orchestration.js.sha256").write_text(sha + "\n")
+        for kernel_dir in (
+            "completion-continuation-control",
+            "background-notify-authority",
+            "deferred-completion-barrier",
+        ):
+            src_dir = root / "elm" / kernel_dir / "vendor"
+            src_dir.mkdir(parents=True, exist_ok=True)
+            (src_dir / f"{kernel_dir}.js").write_bytes(js_bytes)
+            (src_dir / f"{kernel_dir}.js.sha256").write_text(sha + "\n")
 
     def test_stages_js_and_sha_and_sha_matches(self) -> None:
         with tempfile.TemporaryDirectory(
@@ -1547,7 +1761,13 @@ def _write_tracked_elm_sources(root: Path) -> Path:
     can locate the build scripts for every tracked kernel.
     Returns the apps/vscode root inside ``root``."""
     apps = root / "apps" / "vscode"
-    for kernel_dir in ("completion-authority", "task-header-orchestration"):
+    for kernel_dir in (
+        "completion-authority",
+        "task-header-orchestration",
+        "completion-continuation-control",
+        "background-notify-authority",
+        "deferred-completion-barrier",
+    ):
         scripts_dir = (
             apps / "elm" / kernel_dir / "scripts"
         )
@@ -1595,25 +1815,24 @@ class TestDogfoodKernel05BuildElmKernel(unittest.TestCase):
 
             build_elm_kernel(apps, run_visible=record)
 
-            # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02: the
-            # helper now invokes BOTH kernel build scripts in order.
-            self.assertEqual(len(trace), 2)
-            argv0 = trace[0][0]
-            argv1 = trace[1][0]
-            self.assertTrue(
-                argv0[0].endswith(
-                    "elm/completion-authority/scripts/build-elm.sh"
-                ),
-                msg=f"unexpected argv0[0]: {argv0[0]!r}",
+            # Every tracked Elm kernel build script is invoked in order.
+            self.assertEqual(len(trace), 5)
+            expected_kernels = (
+                "completion-authority",
+                "task-header-orchestration",
+                "completion-continuation-control",
+                "background-notify-authority",
+                "deferred-completion-barrier",
             )
-            self.assertTrue(
-                argv1[0].endswith(
-                    "elm/task-header-orchestration/scripts/build-elm.sh"
-                ),
-                msg=f"unexpected argv1[0]: {argv1[0]!r}",
-            )
-            self.assertEqual(trace[0][1], Path(apps))
-            self.assertEqual(trace[1][1], Path(apps))
+            for item, kernel_dir in zip(trace, expected_kernels):
+                argv, cwd = item
+                self.assertTrue(
+                    argv[0].endswith(
+                        f"elm/{kernel_dir}/scripts/build-elm.sh"
+                    ),
+                    msg=f"unexpected kernel build script: {argv[0]!r}",
+                )
+                self.assertEqual(cwd, Path(apps))
 
     def test_helper_fails_closed_when_build_script_missing(self) -> None:
         """No tracked ``build-elm.sh`` => ``BuildError`` from the
@@ -1915,13 +2134,14 @@ class TestDogfoodKernel05bBuildSuccessMissingArtifactFailsClosed(
             expected_sha = compute_sha256_bytes(js_bytes)
 
             def fake_build(argv, cwd):
-                # ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02:
-                # The build helper now writes BOTH kernel vendor
-                # directories. The staging helper then verifies
-                # both.
+                # The build helper writes every tracked kernel vendor
+                # artifact; the staging helper then verifies all of them.
                 for kernel_dir in (
                     "completion-authority",
                     "task-header-orchestration",
+                    "completion-continuation-control",
+                    "background-notify-authority",
+                    "deferred-completion-barrier",
                 ):
                     src_dir = apps / "elm" / kernel_dir / "vendor"
                     src_dir.mkdir(parents=True, exist_ok=True)
@@ -2244,7 +2464,9 @@ class TestDogfood09CleanupOnFailure(unittest.TestCase):
                 return "abcdef1234567890abcdef1234567890abcdef12"
             if argv[:3] == ["git", "worktree", "add"]:
                 stage = Path(argv[4])
-                stage.mkdir(parents=True, exist_ok=True)
+                apps = stage / "apps" / "vscode"
+                apps.mkdir(parents=True, exist_ok=True)
+                _write_package_json(apps, version="4.1.26")
                 (stage / "marker.txt").write_text("worktree-marker\n")
                 return ""
             if (
@@ -2266,9 +2488,12 @@ class TestDogfood09CleanupOnFailure(unittest.TestCase):
                 return
             if argv[:3] == ["git", "worktree", "add"]:
                 # Drop a fake worktree on disk so cleanup has
-                # something to remove.
+                # something to remove. The staged manifest must exist
+                # because the version stamp now precedes compilation.
                 stage = Path(argv[4])
-                stage.mkdir(parents=True, exist_ok=True)
+                apps = stage / "apps" / "vscode"
+                apps.mkdir(parents=True, exist_ok=True)
+                _write_package_json(apps, version="4.1.26")
                 (stage / "marker.txt").write_text("worktree-marker\n")
                 return
             if "vscode:prepublish" in argv:

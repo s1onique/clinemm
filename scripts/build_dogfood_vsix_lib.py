@@ -136,6 +136,105 @@ def derive_dogfood_version(source_version: str, short_sha: str) -> str:
     return f"{source_version}-{short_sha}"
 
 
+def write_build_provenance(
+    stage_apps_vscode: Path,
+    *,
+    source_head: str,
+    extension_version: str,
+    source_package_path: str,
+    source_package_sha256: str,
+    source_package_bytes: int,
+    bundled_extension_sha256: str,
+) -> Path:
+    """Write the existing build-provenance artifact into the staged extension.
+
+    This is the artifact already read by the automatic-incident runtime. It
+    binds the installed bytes to the exact source HEAD and source package
+    manifest used by the isolated build.
+    """
+    provenance = {
+        "schemaVersion": 1,
+        "sourceHead": source_head,
+        "extensionVersion": extension_version,
+        "sourcePackagePath": source_package_path,
+        "sourcePackageSha256": source_package_sha256,
+        "sourcePackageBytes": source_package_bytes,
+        "bundledExtensionSha256": bundled_extension_sha256,
+    }
+    output = stage_apps_vscode / "build-provenance.json"
+    output.write_text(json.dumps(provenance, indent=2) + "\n")
+    return output
+
+
+def read_vsix_package_version(vsix_path: Path) -> str:
+    """Read the installed extension version from the VSIX's package.json."""
+    try:
+        with zipfile.ZipFile(vsix_path) as z:
+            data = json.loads(z.read("extension/package.json").decode("utf-8"))
+    except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError) as exc:
+        raise BuildError(f"cannot read installed package manifest from {vsix_path}: {exc}")
+    version = data.get("version")
+    if not isinstance(version, str) or not version:
+        raise BuildError(f"installed package manifest has no version in {vsix_path}")
+    return version
+
+
+def read_vsix_bundle_bytes(vsix_path: Path) -> bytes:
+    """Read the compiled extension runtime bytes from the VSIX."""
+    try:
+        with zipfile.ZipFile(vsix_path) as z:
+            return z.read(_VSIX_ENTRY_NAME)
+    except (OSError, zipfile.BadZipFile, KeyError) as exc:
+        raise BuildError(f"cannot read compiled extension runtime from {vsix_path}: {exc}")
+
+
+def verify_installed_version_identity(
+    vsix_path: Path,
+    expected_version: str,
+    runtime_version: str,
+) -> None:
+    """Fail closed unless installed manifest and compiled runtime agree.
+
+    The runtime version is supplied by the packaging caller after it
+    inspects the compiled bundle. The VSIX manifest and installed package
+    manifest are independently read from the artifact.
+    """
+    installed_version = read_vsix_package_version(vsix_path)
+    if installed_version != expected_version:
+        raise BuildError(
+            f"installed package version mismatch: {installed_version} != {expected_version}"
+        )
+    if runtime_version != expected_version:
+        raise BuildError(
+            f"compiled runtime version mismatch: {runtime_version} != {expected_version}"
+        )
+
+
+def extract_runtime_version(bundle_bytes: bytes) -> str:
+    """Extract the package version compiled into the extension runtime.
+
+    esbuild inlines the staged JSON package manifest into the runtime
+    bundle. The imported manifest object contains the literal `version`
+    property, so this reads the compiled identity without executing the
+    extension.
+    """
+    text = bundle_bytes.decode("utf-8", errors="replace")
+    # esbuild's JSON loader emits the imported manifest as a minified
+    # JavaScript object. Anchor on the extension's package name so an
+    # unrelated `version:` property earlier in the bundle cannot be
+    # mistaken for the compiled package version.
+    match = re.search(
+        r'\bname\s*:\s*["\']clinemm["\']\s*,\s*'
+        r'(?:displayName\s*:\s*["\'][^"\']*["\']\s*,\s*)?'
+        r'(?:description\s*:\s*["\'][^"\']*["\']\s*,\s*)?'
+        r'version\s*:\s*["\']([^"\']+)["\']',
+        text,
+    )
+    if not match:
+        raise BuildError("compiled extension runtime does not contain an inlined package version")
+    return match.group(1)
+
+
 def read_package_version(package_json: Path) -> str:
     """Read the ``version`` field from a package.json. Pure (file IO
     only, no mutation). DOGFOOD03 uses this to assert the source
@@ -955,15 +1054,23 @@ def find_vsce_binary(stage_apps_vscode: Path) -> str:
 # =============================================================================
 
 
-def run_canonical_build(stage: Path, *, run_visible: Optional[Callable[[Sequence[str], Path], None]] = None, skip_typecheck: bool = False) -> None:
+def run_canonical_build(
+    stage: Path,
+    *,
+    run_visible: Optional[Callable[[Sequence[str], Path], None]] = None,
+    skip_typecheck: bool = False,
+    package_version: Optional[str] = None,
+) -> None:
     """Run the repo's canonical build pipeline:
 
         1. ``bun install --frozen-lockfile``          (D05, cwd=stage)
         2. ``bun run build:sdk``                       (cwd=stage)
-        3a. ``bun run vscode:prepublish``              (D06, cwd=stage/apps/vscode)
+        3. stamp the build-specific version in the STAGED manifest
+           (after dependency installation, before runtime compilation)
+        4a. ``bun run vscode:prepublish``              (D06, cwd=stage/apps/vscode)
             OR (if skip_typecheck=True -- DOGFOOD-VSIX-QUALIFICATION01
             deliberate dogfood shortcut, NOT for release):
-        3b. ``bun run protos``                         (cwd=stage/apps/vscode)
+        4b. ``bun run protos``                         (cwd=stage/apps/vscode)
             + ``bun run build:webview``                (cwd=stage/apps/vscode)
             + ``bun esbuild.mjs --production``         (cwd=stage/apps/vscode)
 
@@ -1009,6 +1116,16 @@ def run_canonical_build(stage: Path, *, run_visible: Optional[Callable[[Sequence
     runner = run_visible or (lambda argv, cwd: _default_run(argv, cwd, capture=False))
     runner(["bun", "install", "--frozen-lockfile"], stage)
     runner(["bun", "run", "build:sdk"], stage)
+    if package_version is not None:
+        # ACT-CLINEMM-DOGFOOD-VERSION-PROVENANCE-CORRECTION01:
+        # registry.ts imports the staged package.json version into the
+        # compiled runtime. Stamp it AFTER frozen dependency installation
+        # (which may consult the manifest) but BEFORE any runtime
+        # compilation. This mutates only the detached worktree manifest.
+        write_package_version(
+            stage / "apps" / "vscode" / "package.json",
+            package_version,
+        )
     if skip_typecheck:
         stage_vscode = stage / "apps" / "vscode"
         runner(["bun", "run", "protos"], stage_vscode)
@@ -1329,7 +1446,10 @@ def build_dogfood_vsix(
         # truth. Pinning once, here, also pins the test surface (the
         # helper is the unit-tested boundary).
         run_canonical_build(
-            stage, run_visible=run_visible, skip_typecheck=skip_typecheck
+            stage,
+            run_visible=run_visible,
+            skip_typecheck=skip_typecheck,
+            package_version=dogfood_version,
         )
 
         # ---- D03 SOURCE_IMMUTABILITY post-build assertions --------------
@@ -1346,9 +1466,6 @@ def build_dogfood_vsix(
             expected_status=pinned_canonical_status,
             run_cmd=run_cmd,
         )
-
-        # ---- D07 stage-specific patch (DOGFOOD04, DOGFOOD04b) ------------
-        write_package_version(stage_apps / "package.json", dogfood_version)
 
         # ---- D05 (cont.) VSCE_AUTHORITY: neuter the staged hook --------
         # ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION06
@@ -1401,10 +1518,38 @@ def build_dogfood_vsix(
         elm_compiler = build_elm_kernel(stage_apps, run_visible=run_visible)
         stage_elm_kernel_runtime_asset(stage_apps)
 
+        # ACT-CLINEMM-DOGFOOD-VERSION-PROVENANCE-CORRECTION01:
+        # Bind the staged extension bytes to the exact source identity
+        # using the EXISTING build-provenance artifact read by the runtime.
+        # The bundle SHA is independently computed from the compiled bytes;
+        # it is not a substitute for the version identity.
+        compiled_bundle = stage_apps / "dist" / "extension.js"
+        if not compiled_bundle.is_file():
+            raise BuildError(f"compiled extension runtime missing: {compiled_bundle}")
+        write_build_provenance(
+            stage_apps,
+            source_head=head,
+            extension_version=dogfood_version,
+            source_package_path="apps/vscode/package.json",
+            source_package_sha256=compute_sha256(source_pkg),
+            source_package_bytes=source_pkg.stat().st_size,
+            bundled_extension_sha256=compute_sha256(compiled_bundle),
+        )
+
         vsce_package(stage_apps, stage_out, run_visible=run_visible)
 
         # ---- D08 PACKAGE_VERIFICATION (DOGFOOD05) -----------------------
         verify_vsix_manifest(stage_out, dogfood_version)
+
+        # ACT-CLINEMM-DOGFOOD-VERSION-PROVENANCE-CORRECTION01:
+        # independently verify the installed package manifest and the
+        # version compiled into the runtime bundle agree with the VSIX
+        # manifest. The bundle SHA-256 remains a separate artifact identity.
+        verify_installed_version_identity(
+            stage_out,
+            dogfood_version,
+            extract_runtime_version(read_vsix_bundle_bytes(stage_out)),
+        )
 
         # ---- D09 PAYLOAD_SANITY (DOGFOOD06, DOGFOOD07) ------------------
         verify_vsix_payload(read_vsix_names(stage_out))
@@ -1454,7 +1599,12 @@ __all__ = [
     "BuildError",
     "derive_dogfood_version",
     "read_package_version",
+    "read_vsix_package_version",
+    "read_vsix_bundle_bytes",
+    "extract_runtime_version",
+    "verify_installed_version_identity",
     "write_package_version",
+    "write_build_provenance",
     "disable_vscode_prepublish_hook",
     "short_sha_from_head",
     "full_sha_from_head",
