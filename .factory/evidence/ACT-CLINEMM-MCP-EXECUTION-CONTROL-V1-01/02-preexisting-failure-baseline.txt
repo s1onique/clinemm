@@ -1,0 +1,21 @@
+# Pre-existing failure baseline (stash-based, base commit ae802ca980ae116a3d4c5d35411f4e6628681ac2)
+
+## COR02 owner-exclusivity (BASE)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts > ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02 — R1 simultaneous acquisition > COR02-R1: at most ONE process acquires an unowned endpoint, and the loser's record is NOT replaced
+AssertionError: both contenders must reach the write gate: expected false to be true // Object.is equality
+ FAIL  src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts > ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02 — R2 cleanup versus acquisition > COR02-R2: ownership is held until the cleanup finishes, and a contender cannot take the endpoint underneath it
+AssertionError: instance A must start the control seam: expected false to be true // Object.is equality
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+
+## C10 filter ablation/baseline (BASE)
+     × C10-ABLATION-03-LOST-WAKE: dispatch FAILED -> originating completion ALLOWED with SEAM A OFF (zero completion / duplicate / stuck barrier) 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts > ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-02 (matrix B — non-notify completion) > C10-ABLATION-02-NON-NOTIFY: SEAM A OFF does not alter ordinary non-notify completion behavior
+ FAIL  src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts > ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-03 (matrix C — lost wake) > C10-ABLATION-03-LOST-WAKE: dispatch FAILED -> originating completion ALLOWED with SEAM A OFF (zero completion / duplicate / stuck barrier)
+ FAIL  src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts > ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-04 (matrix D — fast exit) > C10-ABLATION-04-FAST-EXIT: SEAM A OFF preserves <=1 framework completion and exactly 1 visible completion box
+ FAIL  src/sdk/__tests__/c10-filter-ablation01.baseline.test.ts > ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-BASELINE (current production contract) > C10-BASELINE-02: ordinary non-notify completion -> completion_result row VISIBLE
+ FAIL  src/sdk/__tests__/c10-filter-ablation01.baseline.test.ts > ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-BASELINE (current production contract) > C10-BASELINE-03: wake-driven completion (no owned jobs in flight) -> completion_result row VISIBLE
+ Test Files  2 failed (2)
+      Tests  5 failed | 6 passed (11)

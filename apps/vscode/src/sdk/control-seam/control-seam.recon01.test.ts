@@ -29,6 +29,7 @@ import {
 	CONTROL_SEAM_ERROR_CODES,
 	CONTROL_SEAM_OPERATIONS,
 	CONTROL_SEAM_PROTOCOL_VERSION,
+	CONTROL_SEAM_READ_OPERATIONS,
 	decodeControlSeamRequest,
 	encodeControlSeamResponse,
 	isControlSeamRunIdentity,
@@ -64,6 +65,10 @@ function makeAuthority(fixture: AuthorityFixture = {}): ControlSeamAuthority {
 		// published TaskHeader record, so `taskState` is omitted.
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY fixture.
+		// The mutation members are never exercised by the RECON01 tests.
+		readWorkspaceRoot: async () => "/tmp/crecon-workspace",
+		startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -161,14 +166,27 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — C3 read-only proof",
 		socket?.destroy()
 	})
 
-	it("CS03: the registry exposes exactly two READ-ONLY operations", () => {
-		expect(CONTROL_SEAM_OPERATIONS).toHaveLength(2)
-		for (const operation of CONTROL_SEAM_OPERATIONS) {
+	it("CS03: the READ-ONLY registry exposes exactly two READ-ONLY operations", () => {
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the RECON01
+		// read-only contract is CONSERVED, not weakened. The
+		// READ-ONLY projection is still exactly two operations and
+		// every one of them is still `mutating: false`.
+		expect(CONTROL_SEAM_READ_OPERATIONS).toHaveLength(2)
+		for (const operation of CONTROL_SEAM_READ_OPERATIONS) {
 			expect(operation.mutating).toBe(false)
 		}
-		expect(CONTROL_SEAM_OPERATIONS.map((operation) => operation.id)).not.toContain("start_act")
-		expect(CONTROL_SEAM_OPERATIONS.map((operation) => operation.id)).not.toContain("send_feedback")
-		expect(CONTROL_SEAM_OPERATIONS.map((operation) => operation.id)).not.toContain("cancel_run")
+		expect(CONTROL_SEAM_READ_OPERATIONS.map((operation) => operation.id)).toEqual(["clinemm_capabilities", "clinemm_get_run"])
+		expect(CONTROL_SEAM_READ_OPERATIONS.map((operation) => operation.id)).not.toContain("start_act")
+		expect(CONTROL_SEAM_READ_OPERATIONS.map((operation) => operation.id)).not.toContain("send_feedback")
+		expect(CONTROL_SEAM_READ_OPERATIONS.map((operation) => operation.id)).not.toContain("cancel_run")
+		// The FULL registry gained the two WRITE operations, and they
+		// are discriminated as `mutating: true` with a declared scope.
+		expect(CONTROL_SEAM_OPERATIONS).toHaveLength(4)
+		for (const operation of CONTROL_SEAM_OPERATIONS) {
+			if (operation.mutating) {
+				expect(operation.writeScope).toBeDefined()
+			}
+		}
 	})
 })
 
@@ -211,7 +229,7 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — C4 security + conser
 
 	it("CS08 (C4.2): a client with NO token is refused", async () => {
 		const harness = await startHarness(makeAuthority({ sessionId: "session-secret" }))
-		const response = harness.server.handleLine(
+		const response = await harness.server.handleLine(
 			JSON.stringify({ v: CONTROL_SEAM_PROTOCOL_VERSION, op: "clinemm_get_run", token: "" }),
 		)
 		expect(response.ok).toBe(false)
@@ -285,7 +303,7 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — C4 security + conser
 		await new Promise((resolve) => setTimeout(resolve, 20))
 
 		// The run is still owned by the same session and still running.
-		const after = harness.server.handleLine(
+		const after = await harness.server.handleLine(
 			JSON.stringify({
 				v: CONTROL_SEAM_PROTOCOL_VERSION,
 				op: "clinemm_get_run",

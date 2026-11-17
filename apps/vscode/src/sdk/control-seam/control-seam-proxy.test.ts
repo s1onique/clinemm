@@ -39,6 +39,10 @@ function makeAuthority(sessionId: string | undefined): ControlSeamAuthority {
 		// published TaskHeader record, so `taskState` is omitted.
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY fixture.
+		// The mutation members are never exercised by the proxy tests.
+		readWorkspaceRoot: async () => "/tmp/csproxy-workspace",
+		startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -77,6 +81,46 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — MCP proxy", () => {
 		}
 		await client.close()
 		await server.close()
+	})
+
+	it("PX01b: with mutation ENABLED the proxy exposes the two write tools, and `clinemm_start_act` is annotated as MUTATING", async () => {
+		const dir = mkdtempSync(join("/tmp", "csproxy-mut-"))
+		const socketPath = join(dir, "control.sock")
+		const tokenPath = join(dir, "token")
+		const writeTokenPath = join(dir, "write-token")
+		const server = new ControlSeamServer({
+			authority: makeAuthority("session-proxy"),
+			extensionVersion: "0.0.0-proxy-test",
+			platform: "darwin",
+			socketPath,
+			tokenPath,
+			writeTokenPath,
+			dirPath: dir,
+			forceEnabled: true,
+			forceMutationEnabled: true,
+		})
+		openServers.push(server)
+		const handle = await server.start()
+		expect(handle?.writeToken).toBeDefined()
+
+		const proxy = createControlSeamProxyServer({ socketPath, tokenPath, writeTokenPath })
+		const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+		const client = new Client({ name: "test-client", version: "1" }, { capabilities: {} })
+		await Promise.all([client.connect(clientTransport), proxy.connect(serverTransport)])
+
+		const tools = await client.listTools()
+		const names = tools.tools.map((tool) => tool.name).sort()
+		expect(names).toEqual(["clinemm_capabilities", "clinemm_get_run", "clinemm_read_events", "clinemm_start_act"])
+		// `clinemm_start_act` declares itself MUTATING. The annotation is
+		// a DISCOVERY hint only - the extension-host server still
+		// enforces the credential per request.
+		const startAct = tools.tools.find((tool) => tool.name === "clinemm_start_act")
+		expect(startAct?.annotations?.readOnlyHint).toBe(false)
+		const readEvents = tools.tools.find((tool) => tool.name === "clinemm_read_events")
+		expect(readEvents?.annotations?.readOnlyHint).toBe(true)
+
+		await client.close()
+		await proxy.close()
 	})
 
 	it("PX02: the proxy relays clinemm_get_run to the extension host", async () => {

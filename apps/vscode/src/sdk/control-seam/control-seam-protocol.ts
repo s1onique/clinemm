@@ -3,18 +3,38 @@
  *
  * Wire protocol + operation registry for the embedded MCP control seam.
  *
- * DESIGN CONSTRAINTS (frozen by the ACT charter):
+ * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 EXTENSION
+ * --------------------------------------------------
+ * The RECON01 registry was READ-ONLY and declared `mutating: false` as a
+ * TYPE-LEVEL invariant. This ACT extends the registry with the FIRST
+ * bounded mutation vertical slice while CONSERVING that invariant's
+ * intent:
  *
- *  - READ-ONLY. The operation registry below contains exactly two
- *    operations and BOTH are observation-only. There is no
- *    `start_act`, `send_feedback`, `cancel_run`, or any mutating
- *    operation. The registry is the single place a mutating operation
- *    could be added, so it is deliberately a frozen literal with an
- *    explicit `mutating: false` marker on every entry.
- *  - NO CREDENTIALS / NO TRANSCRIPTS. The response shapes carry only
- *    identity + status. The wire codec REJECTS any response object
- *    carrying unexpected keys, so a future careless edit that widens a
- *    payload fails closed at the codec, not at review.
+ *  - DISCRIMINATED OPERATION TYPES. The registry is now a discriminated
+ *    union over `ControlSeamReadOperation` (`mutating: false`) and
+ *    `ControlSeamWriteOperation` (`mutating: true`). The type no longer
+ *    admits an operation whose `mutating` bit is an unrestricted
+ *    boolean: a mutating operation MUST declare `mutating: true`
+ *    LITERALLY and MUST declare the write-authorization scope it
+ *    requires. A read operation MUST declare `mutating: false`
+ *    LITERALLY. This is the C4 requirement "use discriminated read/write
+ *    operation types; do not weaken every operation's type to an
+ *    unrestricted boolean".
+ *  - THE READ-ONLY CONTRACT IS UNCHANGED. `clinemm_capabilities` and
+ *    `clinemm_get_run` keep their exact semantics, their exact response
+ *    shapes, and their exact allow-lists. A read-only client still sees
+ *    EXACTLY those two operations.
+ *  - THE WRITE OPERATIONS ARE GATED, NOT ANNOTATED. `clinemm_start_act`
+ *    and `clinemm_read_events` are declared here, but the server refuses
+ *    them unless the request carries a VALID mutation credential for
+ *    THIS extension-host instance. MCP tool annotations are NEVER
+ *    treated as authorization (C1).
+ *  - NO CREDENTIALS / NO TRANSCRIPTS IN RESPONSES. The response shapes
+ *    carry only identity + status + bounded event metadata. The wire
+ *    codec REJECTS any response object carrying unexpected keys.
+ *
+ * DESIGN CONSTRAINTS (still frozen):
+ *
  *  - NO GENERIC RPC FRAMEWORK. The wire is one JSON object per line
  *    (NDJSON), a fixed request/response envelope, and a fixed
  *    operation id set. No plugins, no method routing table, no
@@ -58,7 +78,7 @@ export const CONTROL_SEAM_PROTOCOL_VERSION = 1
 export const CONTROL_SEAM_MAX_REQUEST_BYTES = 64 * 1024
 
 /**
- * The two read-only operations exposed by this ACT.
+ * The operations exposed by this ACT.
  *
  * `clinemm_capabilities` — describe what this seam can do. Contains NO
  * session identity: the list carries no per-task information.
@@ -66,25 +86,75 @@ export const CONTROL_SEAM_MAX_REQUEST_BYTES = 64 * 1024
  * `clinemm_get_run` — read the ACTIVE run's identity + authoritative
  * status. The session identifier is resolved by the extension host
  * from its OWN active-session owner; the client never supplies it.
+ *
+ * `clinemm_start_act` — ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01. Start
+ * ONE task through the EXISTING `SdkController.initTask()` lifecycle.
+ * MUTATING. Requires the separate mutation grant.
+ *
+ * `clinemm_read_events` — ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01. Read
+ * a BOUNDED, ordered slice of the task's REAL emitted events for the
+ * session this mutation client owns. Requires the separate mutation
+ * grant.
  */
-export const CONTROL_SEAM_OPERATION_IDS = ["clinemm_capabilities", "clinemm_get_run"] as const
+export const CONTROL_SEAM_READ_OPERATION_IDS = ["clinemm_capabilities", "clinemm_get_run"] as const
+
+export const CONTROL_SEAM_WRITE_OPERATION_IDS = ["clinemm_start_act", "clinemm_read_events"] as const
+
+export const CONTROL_SEAM_OPERATION_IDS = [...CONTROL_SEAM_READ_OPERATION_IDS, ...CONTROL_SEAM_WRITE_OPERATION_IDS] as const
+
+export type ControlSeamReadOperationId = (typeof CONTROL_SEAM_READ_OPERATION_IDS)[number]
+
+export type ControlSeamWriteOperationId = (typeof CONTROL_SEAM_WRITE_OPERATION_IDS)[number]
 
 export type ControlSeamOperationId = (typeof CONTROL_SEAM_OPERATION_IDS)[number]
 
 /**
- * A single operation's registry entry.
+ * A READ operation's registry entry.
  *
- * `mutating: false` is a TYPE-LEVEL invariant: `ControlSeamOperation`
- * only admits `mutating: false`, so a mutating operation cannot be
- * added to the registry without changing this type — which is the
- * review signal the ACT asks for.
+ * `mutating: false` is a LITERAL in the type: a read operation cannot
+ * be widened to `mutating: boolean`, so the read-only contract is a
+ * compile-time invariant, not a convention.
  */
-export interface ControlSeamOperation {
-	readonly id: ControlSeamOperationId
+export interface ControlSeamReadOperation {
+	readonly id: ControlSeamReadOperationId
 	readonly mutating: false
 	readonly description: string
 }
 
+/**
+ * A WRITE operation's registry entry.
+ *
+ * `mutating: true` is a LITERAL in the type, and the operation MUST
+ * declare the `writeScope` it requires. The server refuses a write
+ * operation whose scope is not satisfied by the request's mutation
+ * grant — the registry declaration is what the server enforces, so a
+ * write operation can never be reachable without a declared scope.
+ */
+export interface ControlSeamWriteOperation {
+	readonly id: ControlSeamWriteOperationId
+	readonly mutating: true
+	readonly description: string
+	/**
+	 * The mutation-grant scope the request must satisfy. `"mutation"`
+	 * requires the write credential (start a task). `"mutation+content"`
+	 * requires the write credential AND the explicit content-read
+	 * grant (read task message text).
+	 */
+	readonly writeScope: ControlSeamWriteScope
+}
+
+/** The mutation-grant scopes a write operation may require. */
+export type ControlSeamWriteScope = "mutation" | "mutation+content"
+
+/** The discriminated registry entry union. */
+export type ControlSeamOperation = ControlSeamReadOperation | ControlSeamWriteOperation
+
+/**
+ * The FULL registry.
+ *
+ * The two READ operations are unchanged from RECON01. The two WRITE
+ * operations are new in ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01.
+ */
 export const CONTROL_SEAM_OPERATIONS: readonly ControlSeamOperation[] = [
 	{
 		id: "clinemm_capabilities",
@@ -96,11 +166,53 @@ export const CONTROL_SEAM_OPERATIONS: readonly ControlSeamOperation[] = [
 		mutating: false,
 		description: "Read the active run's session identity and authoritative status.",
 	},
+	{
+		id: "clinemm_start_act",
+		mutating: true,
+		description: "Start one task in the installed extension's workspace through the existing ClineMM task lifecycle.",
+		writeScope: "mutation",
+	},
+	{
+		id: "clinemm_read_events",
+		mutating: true,
+		description: "Read a bounded, ordered slice of the owned task's real emitted events.",
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the scope is
+		// `"mutation"`, NOT `"mutation+content"`. The CONTENT-READ
+		// grant gates only the message TEXT: without it, the operation
+		// still returns the event METADATA (cursor, epoch, type, kind,
+		// timestamp) - the conservative path - and omits every `text`
+		// field. The metadata-only path needs no separate content
+		// grant.
+		writeScope: "mutation",
+	},
 ] as const
+
+/** The READ-ONLY registry projection — what a read-only client sees. */
+export const CONTROL_SEAM_READ_OPERATIONS: readonly ControlSeamReadOperation[] = CONTROL_SEAM_OPERATIONS.filter(
+	(operation): operation is ControlSeamReadOperation => operation.mutating === false,
+)
 
 /** True when `id` names a registered operation. */
 export function isControlSeamOperationId(id: unknown): id is ControlSeamOperationId {
 	return typeof id === "string" && (CONTROL_SEAM_OPERATION_IDS as readonly string[]).includes(id)
+}
+
+/** True when `id` names a registered READ operation. */
+export function isControlSeamReadOperationId(id: unknown): id is ControlSeamReadOperationId {
+	return typeof id === "string" && (CONTROL_SEAM_READ_OPERATION_IDS as readonly string[]).includes(id)
+}
+
+/** True when `id` names a registered WRITE operation. */
+export function isControlSeamWriteOperationId(id: unknown): id is ControlSeamWriteOperationId {
+	return typeof id === "string" && (CONTROL_SEAM_WRITE_OPERATION_IDS as readonly string[]).includes(id)
+}
+
+/** The registry entry for `id`, or `undefined` when `id` is not registered. */
+export function getControlSeamOperation(id: unknown): ControlSeamOperation | undefined {
+	if (!isControlSeamOperationId(id)) {
+		return undefined
+	}
+	return CONTROL_SEAM_OPERATIONS.find((operation) => operation.id === id)
 }
 
 /**
@@ -109,14 +221,95 @@ export function isControlSeamOperationId(id: unknown): id is ControlSeamOperatio
  * `token` is the client authorization bearer. It is compared against
  * the extension host's own token with a constant-time comparison; the
  * token NEVER appears in a log line.
+ *
+ * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: `writeToken` is the
+ * SEPARATE, DISTINCT mutation credential. It is NEVER the read token,
+ * never derived from it, and never accepted in its place. A write
+ * operation requires BOTH the read token (so the read path keeps its
+ * existing semantics unchanged) AND a valid `writeToken`.
  */
 export interface ControlSeamRequest {
 	readonly v: number
 	readonly op: ControlSeamOperationId
 	readonly token: string
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the SEPARATE mutation
+	 * credential. Required for every WRITE operation; ignored for
+	 * READ operations.
+	 */
+	readonly writeToken?: string
 	/** Optional session-id echo; used ONLY to detect a stale/foreign id. */
 	readonly sessionId?: string
+	/**
+	 * The operation-specific payload. Read operations take no payload;
+	 * write operations take their own discriminated payload.
+	 */
+	readonly payload?: ControlSeamWritePayload
 }
+
+/**
+ * The WRITE operation payloads.
+ *
+ * Discriminated on `op` so the codec can reject a payload that does not
+ * match the operation it travelled with — a `clinemm_start_act` request
+ * carrying a `clinemm_read_events` payload fails closed.
+ */
+export type ControlSeamWritePayload =
+	| { readonly op: "clinemm_start_act"; readonly input: ControlSeamStartActInput }
+	| { readonly op: "clinemm_read_events"; readonly input: ControlSeamReadEventsInput }
+
+/**
+ * The `clinemm_start_act` input.
+ *
+ * `requestId` is the CLIENT-SUPPLIED idempotency key. It is scoped to
+ * ONE extension-host instance and is bounded by the instance-local
+ * operation ledger.
+ *
+ * `expectedWorkspace` is the client's ASSERTION about the workspace.
+ * The extension host resolves the ACTUAL workspace identity from its
+ * OWN installed-workspace owner and compares it to this value. A
+ * mismatch is rejected — the client can never SELECT a workspace.
+ */
+export interface ControlSeamStartActInput {
+	readonly requestId: string
+	readonly prompt: string
+	readonly expectedWorkspace: string
+}
+
+/**
+ * The `clinemm_read_events` input.
+ *
+ * `sessionId` MUST be the session this mutation client owns. The
+ * extension host rejects a foreign session id — the client cannot read
+ * another task's transcript.
+ */
+export interface ControlSeamReadEventsInput {
+	readonly sessionId: string
+	readonly afterCursor?: string
+	readonly limit?: number
+}
+
+/**
+ * The maximum accepted prompt length for `clinemm_start_act`, in
+ * characters. A longer prompt is rejected before any lifecycle call.
+ */
+export const CONTROL_SEAM_MAX_PROMPT_LENGTH = 32_000
+
+/**
+ * The maximum accepted `requestId` length, in characters.
+ */
+export const CONTROL_SEAM_MAX_REQUEST_ID_LENGTH = 200
+
+/**
+ * The maximum accepted `limit` for `clinemm_read_events`.
+ */
+export const CONTROL_SEAM_MAX_EVENT_LIMIT = 100
+
+/**
+ * The default `limit` for `clinemm_read_events` when the client omits
+ * it.
+ */
+export const CONTROL_SEAM_DEFAULT_EVENT_LIMIT = 20
 
 /** A response envelope. Exactly one of `result` / `error` is present. */
 export interface ControlSeamResponse {
@@ -136,6 +329,8 @@ export const CONTROL_SEAM_ERROR_CODES = {
 	unknownOperation: "control_seam_unknown_operation",
 	/** There is no active run to describe. */
 	noActiveRun: "control_seam_no_active_run",
+	/** An internal failure. The message never carries task content. */
+	internal: "control_seam_internal",
 	/** The client supplied a session id that is not the active one. */
 	foreignSession: "control_seam_foreign_session",
 	/**
@@ -143,11 +338,147 @@ export const CONTROL_SEAM_ERROR_CODES = {
 	 * connection is closed after this response.
 	 */
 	payloadTooLarge: "control_seam_payload_too_large",
-	/** An internal failure. The message never carries task content. */
-	internal: "control_seam_internal",
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the write operation was
+	 * refused because the request carried no mutation credential, the
+	 * mutation credential was invalid, or mutation control is OFF.
+	 */
+	mutationNotAuthorized: "control_seam_mutation_not_authorized",
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the operation was
+	 * refused because its preconditions failed (workspace mismatch, an
+	 * existing active task owner, invalid input). NO execution started.
+	 */
+	rejected: "control_seam_rejected",
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the operation was
+	 * superseded by another lifecycle operation. NO execution was
+	 * installed by this operation.
+	 */
+	superseded: "control_seam_superseded",
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the transport or host
+	 * failure prevents proving whether the start occurred.
+	 */
+	unknownOutcome: "control_seam_unknown_outcome",
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the requested cursor is
+	 * older than the retained event window, or the retained window has
+	 * a gap. The events that ARE retained are returned; the gap is
+	 * reported explicitly.
+	 */
+	cursorExpired: "control_seam_cursor_expired",
 } as const
 
 export type ControlSeamErrorCode = (typeof CONTROL_SEAM_ERROR_CODES)[keyof typeof CONTROL_SEAM_ERROR_CODES]
+
+/**
+ * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the outcome vocabulary of
+ * `clinemm_start_act`.
+ *
+ *   - `accepted` — task/session creation is ACKNOWLEDGED by the
+ *     authoritative lifecycle (`startNewSession` returned `started`).
+ *     The `sessionId` is the REAL accepted identity.
+ *   - `rejected` — preconditions failed; NO execution started.
+ *   - `superseded` — another lifecycle operation took ownership; NO
+ *     session was installed by this operation.
+ *   - `unknown_outcome` — transport or host failure prevents proving
+ *     whether a start occurred.
+ *
+ * An acknowledgement is NOT task completion. `accepted` says nothing
+ * about whether the task later completed, failed, or was cancelled.
+ */
+export type ControlSeamStartActOutcome = "accepted" | "rejected" | "superseded" | "unknown_outcome"
+
+/**
+ * The `clinemm_start_act` result.
+ *
+ * `accepted` REQUIRES `sessionId` — the server must never report an
+ * acceptance without an authoritative session identity.
+ */
+export interface ControlSeamStartActResult {
+	readonly outcome: ControlSeamStartActOutcome
+	/**
+	 * The REAL accepted session identity. Present IFF `outcome` is
+	 * `"accepted"`.
+	 */
+	readonly sessionId?: string
+	/** The task id the controller owns for the accepted session, if any. */
+	readonly taskId?: string
+	/**
+	 * The client-supplied idempotency key this outcome was recorded
+	 * under. Echoed so the client can correlate a replayed request with
+	 * its original outcome.
+	 */
+	readonly requestId: string
+	/**
+	 * A non-informative reason for a `rejected` / `superseded` /
+	 * `unknown_outcome` outcome. It NEVER carries task content, a
+	 * credential, or a file path beyond the workspace the client
+	 * already asserted.
+	 */
+	readonly reason?: string
+}
+
+/**
+ * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: ONE observed event.
+ *
+ * The event's identity and ordering come from the EXISTING production
+ * message stream (`ClineMessage.seq` / `.epoch`), NOT from a
+ * reconstructed timeline. The `type` is the existing `ClineMessage`
+ * shape tag (`say` / `ask`), and `kind` carries the EXISTING sub-kind
+ * when there is one.
+ *
+ * The payload carries NO raw tool arguments, NO credentials, NO hidden
+ * reasoning, and NO unrestricted file contents. `text` is present ONLY
+ * when the content-read grant is present AND the message is a
+ * user-visible text kind; it is truncated to a bounded length.
+ */
+export interface ControlSeamEvent {
+	/** The EXISTING ordering identity: the `ClineMessage.seq`. */
+	readonly cursor: string
+	/** The EXISTING conversation epoch the event belongs to. */
+	readonly epoch: number
+	/** The event kind (`say` / `ask`). */
+	readonly type: string
+	/** The existing sub-kind (e.g. `task`, `text`, `tool`). */
+	readonly kind?: string
+	/** The event's own timestamp (the existing `ClineMessage.ts`). */
+	readonly ts: number
+	/**
+	 * The message text. Present ONLY under the explicit content-read
+	 * grant. Bounded by `CONTROL_SEAM_MAX_EVENT_TEXT_LENGTH`.
+	 */
+	readonly text?: string
+}
+
+/**
+ * The maximum length of an event's `text` on the wire. A longer text
+ * is TRUNCATED (with an explicit marker), never dropped silently.
+ */
+export const CONTROL_SEAM_MAX_EVENT_TEXT_LENGTH = 2_000
+
+/**
+ * The `clinemm_read_events` result.
+ *
+ * `events` is in the EXISTING production order. `nextCursor` is the
+ * cursor the client passes as `afterCursor` for the next slice.
+ * `cursorExpired` is `true` when the retained window has moved past
+ * the requested cursor — the caller MUST NOT assume it observed every
+ * event.
+ */
+export interface ControlSeamEventsResult {
+	readonly sessionId: string
+	readonly events: readonly ControlSeamEvent[]
+	/** The cursor to resume from, or `undefined` when there are no more. */
+	readonly nextCursor?: string
+	/**
+	 * True when the requested cursor is older than the retained window
+	 * (or a gap was detected). The caller MUST treat the returned slice
+	 * as INCOMPLETE.
+	 */
+	readonly cursorExpired: boolean
+}
 
 /**
  * The `clinemm_capabilities` result.
@@ -158,8 +489,16 @@ export type ControlSeamErrorCode = (typeof CONTROL_SEAM_ERROR_CODES)[keyof typeo
 export interface ControlSeamCapabilities {
 	readonly protocolVersion: number
 	readonly operations: readonly { readonly id: ControlSeamOperationId; readonly description: string }[]
-	/** Always true for every registered operation in this ACT. */
-	readonly readOnly: true
+	/**
+	 * Whether THIS CALLER's operation view is read-only.
+	 *
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: a read-only client
+	 * (no valid write credential) sees `readOnly: true` and EXACTLY the
+	 * original two operations — its view is byte-for-byte the RECON01
+	 * view. A mutation-authorized client sees `readOnly: false` and
+	 * the two write operations as well.
+	 */
+	readonly readOnly: boolean
 	/** The extension-host build identity, so a client can pin what it talked to. */
 	readonly host: { readonly extensionVersion: string; readonly platform: string }
 }
@@ -394,11 +733,113 @@ export function decodeControlSeamRequest(line: string): ControlSeamRequest | und
 	if (!isControlSeamOperationId(record.op)) return undefined
 	if (typeof record.token !== "string" || record.token.length === 0) return undefined
 	if (record.sessionId !== undefined && typeof record.sessionId !== "string") return undefined
+	// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the write credential is
+	// OPTIONAL at the codec level (a READ request never carries one),
+	// but when present it MUST be a non-empty string.
+	if (record.writeToken !== undefined && (typeof record.writeToken !== "string" || record.writeToken.length === 0)) {
+		return undefined
+	}
+	const payload = decodeControlSeamWritePayload(record.op, record.payload)
+	if (payload === null) {
+		// A write operation with a malformed or mismatched payload is
+		// rejected at the codec. A read operation that carries a
+		// payload is likewise rejected: the read path's request shape
+		// is unchanged.
+		return undefined
+	}
 	return {
 		v: CONTROL_SEAM_PROTOCOL_VERSION,
 		op: record.op,
 		token: record.token,
-		sessionId: record.sessionId,
+		...(record.writeToken !== undefined ? { writeToken: record.writeToken } : {}),
+		...(record.sessionId !== undefined ? { sessionId: record.sessionId } : {}),
+		...(payload !== undefined ? { payload } : {}),
+	}
+}
+
+/**
+ * Decode + validate the operation-specific payload.
+ *
+ * Returns `undefined` when the operation takes no payload (READ
+ * operations) and the request carried none. Returns `null` when the
+ * request is malformed: a WRITE operation without a payload, a WRITE
+ * operation whose payload does not match its own operation id, a READ
+ * operation that carries a payload, or a payload whose fields fail
+ * their own schema.
+ */
+function decodeControlSeamWritePayload(op: ControlSeamOperationId, raw: unknown): ControlSeamWritePayload | undefined | null {
+	if (isControlSeamReadOperationId(op)) {
+		// A read operation MUST NOT carry a payload.
+		return raw === undefined ? undefined : null
+	}
+	if (raw === undefined || raw === null) {
+		return null
+	}
+	if (typeof raw !== "object" || Array.isArray(raw)) {
+		return null
+	}
+	const record = raw as Record<string, unknown>
+	if (record.op !== op) {
+		// The payload must belong to the operation that carried it.
+		return null
+	}
+	if (op === "clinemm_start_act") {
+		const input = record.input
+		if (typeof input !== "object" || input === null || Array.isArray(input)) {
+			return null
+		}
+		const inputRecord = input as Record<string, unknown>
+		if (typeof inputRecord.requestId !== "string" || inputRecord.requestId.length === 0) {
+			return null
+		}
+		if (inputRecord.requestId.length > CONTROL_SEAM_MAX_REQUEST_ID_LENGTH) {
+			return null
+		}
+		if (typeof inputRecord.prompt !== "string" || inputRecord.prompt.length === 0) {
+			return null
+		}
+		if (inputRecord.prompt.length > CONTROL_SEAM_MAX_PROMPT_LENGTH) {
+			return null
+		}
+		if (typeof inputRecord.expectedWorkspace !== "string" || inputRecord.expectedWorkspace.length === 0) {
+			return null
+		}
+		return {
+			op: "clinemm_start_act",
+			input: {
+				requestId: inputRecord.requestId,
+				prompt: inputRecord.prompt,
+				expectedWorkspace: inputRecord.expectedWorkspace,
+			},
+		}
+	}
+	// clinemm_read_events
+	const input = record.input
+	if (typeof input !== "object" || input === null || Array.isArray(input)) {
+		return null
+	}
+	const inputRecord = input as Record<string, unknown>
+	if (typeof inputRecord.sessionId !== "string" || inputRecord.sessionId.length === 0) {
+		return null
+	}
+	if (inputRecord.afterCursor !== undefined && typeof inputRecord.afterCursor !== "string") {
+		return null
+	}
+	if (inputRecord.limit !== undefined) {
+		if (typeof inputRecord.limit !== "number" || !Number.isInteger(inputRecord.limit)) {
+			return null
+		}
+		if (inputRecord.limit < 1 || inputRecord.limit > CONTROL_SEAM_MAX_EVENT_LIMIT) {
+			return null
+		}
+	}
+	return {
+		op: "clinemm_read_events",
+		input: {
+			sessionId: inputRecord.sessionId,
+			...(inputRecord.afterCursor !== undefined ? { afterCursor: inputRecord.afterCursor } : {}),
+			...(inputRecord.limit !== undefined ? { limit: inputRecord.limit } : {}),
+		},
 	}
 }
 

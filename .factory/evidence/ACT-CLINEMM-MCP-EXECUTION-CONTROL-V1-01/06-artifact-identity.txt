@@ -1,0 +1,24 @@
+# C7 - Exact artifact identity
+
+SOURCE_HEAD: ae802ca980ae116a3d4c5d35411f4e6628681ac2
+SOURCE_TREE: 452d2a27643d985a9ac2a75b74496b701f6c76ba
+BRANCH: main
+VERSION: 4.1.26
+
+## Extension bundle (repo-local build product)
+PATH: apps/vscode/dist/extension.js
+BYTES: 57766590
+SHA256: 7a0600588bdbfd7f44a169b6f920d1961f66728f471177f68b1e589f530e6176
+
+## Webview bundle
+PATH: apps/vscode/webview-ui/build/assets/index.js
+BYTES: 10059487
+SHA256: 8e45ee6e626b79a2291de71179c520bf376e68697d9d268157ae6ed5706beb2a
+
+## Installed ClineMM extension on this host
+ABSENT (no ClineMM extension installed)
+
+## VSIX packaging
+NOT produced. The code-execution environment does not install the extension.
+
+## Operator build/install steps (see 09-live-qualification.md)

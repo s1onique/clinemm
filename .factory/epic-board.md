@@ -35944,3 +35944,96 @@ operator warning requires a separately authorized repair ACT.
 
 RC-01 through RC-05 are **not reopened**. No production repair is warranted by
 this qualification.
+
+# ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 — PASS_STRUCTURAL_ONLY — 2026-11-17
+
+**Status:** the bounded MCP execution-control vertical slice is implemented and
+verified against the REAL production seams. Codex Desktop can now start ONE task
+through the EXISTING ClineMM task lifecycle and observe its REAL emitted events.
+No second runtime, no approval bypass, no duplicate execution. The live pilot
+against a running installed extension remains explicitly PENDING operator
+action.
+
+```text
+ACT_ID: ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01
+TYPE: bounded MCP mutation vertical slice + executable qualification
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01)
+VERDICT: PASS_STRUCTURAL_ONLY
+ENTRY_HEAD: ae802ca980ae116a3d4c5d35411f4e6628681ac2
+ENTRY_TREE: 452d2a27643d985a9ac2a75b74496b701f6c76ba
+BRANCH: main (no ACT branch created)
+PUSHED: NO   RELEASED: NO   PUBLISHED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+PROTO_CHANGES: 0   NEW_MCP_OPERATIONS: 2   PROTOCOL_VERSION: 1 (unchanged)
+TESTS: 31/31 PASS (focused R1-R6) + 8/8 PASS (proxy + existing control-seam)
+EXISTING CONTROL-SEAM: 124/126 PASS in 8 files; 1 file fails PRE-EXISTING (COR02-R1/R2),
+                   reproduced IDENTICALLY at the pristine baseline with the change stashed
+SESSION START + LIFECYCLE FENCES: 60/60 PASS
+SdkController: 44/44 PASS
+CPR01 CONTINUATION CORRELATION: 7/7 PASS (dedicated bridge config)
+ELM TASK-HEADER AUTHORITY + TURN-STATE: 145/145 PASS
+BCB BARRIER + C9/C10 COMMIT-DRIVEN PUBLICATION + STATECHART CAUSAL REPAIR: 77/77 PASS
+C10 FILTER ABLATION/BASELINE: 5 failures — reproduced IDENTICALLY at the pristine baseline
+TYPECHECK: tsc --noEmit EXIT 0   (0 diagnostics)
+LINT: biome EXIT 0 (22 scoped files)   FORMAT: clean
+BUILD: bun esbuild.mjs — extension bundle finished
+ACT_OWNED_DIAGNOSTICS: NONE
+INSTALLED QUALIFICATION: NOT EXECUTED / PENDING. No LIVE claim is made.
+EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01/
+```
+
+## What was added
+
+Two operations, gated behind a SEPARATE, EXPLICIT mutation grant:
+
+- **`clinemm_start_act`** — starts ONE task through the EXISTING
+  `SdkController.initTask()` → `SdkTaskStartCoordinator.initTask()` →
+  `SdkSessionLifecycle.startNewSession()` chain and returns the REAL accepted
+  session id. Outcomes: `accepted` (WITH a session id) / `rejected` /
+  `superseded` / `unknown_outcome`.
+- **`clinemm_read_events`** — a bounded, ordered slice of the REAL emitted
+  events, read from the EXISTING `SdkMessageCoordinator.onSessionEvent()`
+  publication boundary with the EXISTING `seq` / `epoch` ordering identity.
+
+## The security boundary
+
+| Property | Disposition |
+|---|---|
+| Read credential vs write authority | **Separate.** The write credential is an independent `randomBytes(32)` value, never derived from and never equal to the read token. A valid read token alone cannot mutate. |
+| Default state | Mutation is **DEFAULT OFF**. The read seam's own `enabled.json` is a separate decision from the new `mutation.json`. |
+| Credential comparison | `constantTimeEquals`, **per request**, including on an open connection. |
+| Instance binding | The write credential is minted per extension-host instance and dies with it; the file is removed on dispose. |
+| Workspace binding | The grant records the workspace the host resolved from its OWN owner. The client may only **ASSERT** it. The workspace is re-verified at request time. |
+| Content boundary | Task message TEXT requires a third, separate `allowContentRead` opt-in. Without it, `clinemm_read_events` still returns event METADATA and strips every `text` field. |
+| Read-only backward compatibility | A client with no valid write credential sees **EXACTLY** the original two operations and `readOnly: true`. |
+| Annotations | `readOnlyHint` / `destructiveHint` are DISCOVERY hints. Authorization is enforced by the extension-host server, never by an annotation. |
+
+## Conservation
+
+No YOLO mode, no automatic approval override, no shell shortcut, no editor-tool
+bypass, no hidden approval, no settings modification, no access to another
+active task. The seam exposes no approval-responding, cancel, feedback, or
+file-access operation. The native ClineMM Cancel and approval controls remain
+the operator's.
+
+C9/C10, BCB, the Elm task-header authority, the CPR01 correlation repair, and
+the session-lifecycle fences are **unchanged** — their gates pass and their
+diff surface is empty.
+
+## Idempotency boundary (explicit)
+
+The operation ledger is **IN MEMORY**, bounded (64 entries), instance-local.
+Same key + same payload → the same recorded outcome; same key + different
+payload → rejected; a duplicate delivered during an in-flight start → joins
+that operation. **After a host restart the ledger is EMPTY** — this ACT does
+not pretend an in-memory ledger guarantees durable exactly-once delivery. An
+ambiguous outcome is reconciled through the EXISTING session state
+(`clinemm_get_run`) before retrying, and there is no automatic retry.
+
+## Pending
+
+The live pilot against a running installed extension is **PENDING operator
+action**. No ClineMM extension is installed on the code-execution host, and the
+code-execution environment does not install it. Exact build / install /
+mutation-opt-in steps and the 8-step pilot procedure are in
+`.factory/evidence/ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01/09-live-qualification.md`.

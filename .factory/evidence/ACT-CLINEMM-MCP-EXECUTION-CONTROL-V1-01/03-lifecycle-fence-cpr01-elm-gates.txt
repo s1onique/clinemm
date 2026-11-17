@@ -1,0 +1,17 @@
+# Lifecycle / fence / CPR01 / task-state / Elm task-header authority gates
+
+## sdk-task-start-coordinator + sdk-session-lifecycle
+ Test Files  2 passed (2)
+      Tests  60 passed (60)
+
+## SdkController
+ Test Files  1 passed (1)
+      Tests  44 passed (44)
+
+## CPR01 correlation repair (dedicated bridge config)
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+
+## Elm task-header authority + turn-state
+ Test Files  8 passed (8)
+      Tests  145 passed (145)

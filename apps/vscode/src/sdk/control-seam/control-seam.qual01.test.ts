@@ -42,8 +42,8 @@ import {
 import {
 	CONTROL_SEAM_ERROR_CODES,
 	CONTROL_SEAM_MAX_REQUEST_BYTES,
-	CONTROL_SEAM_OPERATIONS,
 	CONTROL_SEAM_PROTOCOL_VERSION,
+	CONTROL_SEAM_READ_OPERATIONS,
 } from "./control-seam-protocol"
 import { ControlSeamServer, readControlSeamOptInRecord } from "./control-seam-server"
 
@@ -80,6 +80,11 @@ function makeAuthority(fixture: AuthorityFixture = {}): ControlSeamAuthority {
 		// published TaskHeader record, so `taskState` is omitted.
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY fixture.
+		// The mutation members are never exercised by the qualification
+		// tests.
+		readWorkspaceRoot: async () => "/tmp/cq-workspace",
+		startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -562,13 +567,17 @@ describe("ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01 — C1.4 validated opt-in record"
 
 describe("ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01 — the read-only registry is preserved", () => {
 	it("QL21: EXACTLY two READ-ONLY operations remain, and no mutating operation exists", () => {
-		expect(CONTROL_SEAM_OPERATIONS).toHaveLength(2)
-		expect(CONTROL_SEAM_OPERATIONS.map((operation) => operation.id)).toEqual(["clinemm_capabilities", "clinemm_get_run"])
-		for (const operation of CONTROL_SEAM_OPERATIONS) {
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the READ-ONLY
+		// projection is UNCHANGED. The two write operations live in the
+		// full registry but are NOT part of the read-only view, and a
+		// read-only client never sees them.
+		expect(CONTROL_SEAM_READ_OPERATIONS).toHaveLength(2)
+		expect(CONTROL_SEAM_READ_OPERATIONS.map((operation) => operation.id)).toEqual(["clinemm_capabilities", "clinemm_get_run"])
+		for (const operation of CONTROL_SEAM_READ_OPERATIONS) {
 			expect(operation.mutating).toBe(false)
 		}
 		for (const forbidden of ["start_act", "send_feedback", "cancel_run", "run_commands", "editor", "read_file"]) {
-			expect(CONTROL_SEAM_OPERATIONS.map((operation) => operation.id)).not.toContain(forbidden)
+			expect(CONTROL_SEAM_READ_OPERATIONS.map((operation) => operation.id)).not.toContain(forbidden)
 		}
 	})
 })

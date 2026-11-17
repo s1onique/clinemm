@@ -18,15 +18,23 @@ import { Logger } from "@shared/services/Logger"
 
 import type { PublishedTaskState } from "@/sdk/published-task-state"
 
-import type { ControlSeamAuthority } from "./control-seam-authority"
+import type { ControlSeamAuthority, ControlSeamStartActAuthorityOutcome } from "./control-seam-authority"
+import { ControlSeamEventBuffer } from "./control-seam-event-buffer"
 import { ControlSeamServer, type ControlSeamServerHandle } from "./control-seam-server"
 
 /**
  * The minimal controller surface the control seam needs.
  *
- * Every member is a READ. The control seam has no way to start, steer,
- * or cancel a run even if it wanted to — the surface it holds does not
- * contain those operations.
+ * The READ members are reads. The two WRITE members are the EXISTING
+ * production seams the first mutation vertical slice routes through:
+ *
+ *   - `readWorkspaceRoot` — the controller's OWN installed-workspace
+ *     owner. The client may only ASSERT a workspace; it can never
+ *     select one.
+ *   - `startAct` — the controller's EXISTING `initTask()` lifecycle.
+ *     It does NOT create a second runtime: it starts a session through
+ *     the SAME `ClineCore` / `LocalRuntimeHost` / `SessionRuntime` the
+ *     UI uses, and it preserves the native approval authority.
  */
 export interface ControlSeamControllerSurface {
 	/** The active session id, or `undefined`. */
@@ -53,6 +61,16 @@ export interface ControlSeamControllerSurface {
 	readPublishedTaskState(): PublishedTaskState | undefined
 	/** The controller's current conversation epoch, or `undefined`. */
 	readCurrentEpoch(): number | undefined
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the controller's OWN
+	 * installed-workspace root.
+	 */
+	readWorkspaceRoot(): Promise<string>
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: start ONE task through
+	 * the EXISTING `initTask()` lifecycle.
+	 */
+	startAct(input: { readonly prompt: string }): Promise<ControlSeamStartActAuthorityOutcome>
 }
 
 /**
@@ -70,6 +88,8 @@ export function createControlSeamAuthority(surface: ControlSeamControllerSurface
 		readRuntimeSnapshot: () => surface.readRuntimeSnapshot(),
 		readPublishedTaskState: () => surface.readPublishedTaskState(),
 		readCurrentEpoch: () => surface.readCurrentEpoch(),
+		readWorkspaceRoot: () => surface.readWorkspaceRoot(),
+		startAct: (input) => surface.startAct(input),
 	}
 }
 
@@ -82,6 +102,14 @@ export function createControlSeamAuthority(surface: ControlSeamControllerSurface
 export class ControlSeamRuntime {
 	private readonly server: ControlSeamServer
 	private started = false
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the bounded buffer that
+	 * retains the EXISTING production events for `clinemm_read_events`.
+	 *
+	 * The controller feeds it from the EXISTING `onSessionEvent`
+	 * publication boundary. It is NOT a new event bus.
+	 */
+	readonly eventBuffer = new ControlSeamEventBuffer()
 
 	constructor(server: ControlSeamServer) {
 		this.server = server

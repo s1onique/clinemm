@@ -23,7 +23,7 @@
  * mutating surface is not merely unused here, it is ABSENT.
  */
 
-import { randomBytes } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { createServer, type Server, type Socket } from "node:net"
 import { dirname } from "node:path"
@@ -37,6 +37,18 @@ import {
 	parseControlSeamOptInRecord,
 	resolveControlSeamEnablement,
 } from "./control-seam-enablement"
+import { ControlSeamEventBuffer } from "./control-seam-event-buffer"
+import {
+	authorizeControlSeamMutation,
+	type ControlSeamMutationGrant,
+	createControlSeamMutationGrant,
+	readControlSeamMutationOptInRecord,
+	removeControlSeamWriteTokenFile,
+	resolveControlSeamMutationOptInPath,
+	resolveControlSeamWriteTokenPath,
+	writeControlSeamWriteTokenFile,
+} from "./control-seam-mutation"
+import { type ControlSeamLedgerOutcome, ControlSeamOperationLedger } from "./control-seam-operation-ledger"
 import {
 	acquireControlSeamOwnership,
 	ownsControlSeamOwnership,
@@ -54,12 +66,17 @@ import {
 	resolveControlSeamTokenPath,
 } from "./control-seam-paths"
 import {
+	CONTROL_SEAM_DEFAULT_EVENT_LIMIT,
 	CONTROL_SEAM_ERROR_CODES,
 	CONTROL_SEAM_MAX_REQUEST_BYTES,
 	CONTROL_SEAM_OPERATIONS,
 	CONTROL_SEAM_PROTOCOL_VERSION,
+	CONTROL_SEAM_READ_OPERATIONS,
 	type ControlSeamCapabilities,
+	type ControlSeamEventsResult,
+	type ControlSeamRequest,
 	type ControlSeamResponse,
+	type ControlSeamStartActResult,
 	constantTimeEquals,
 	controlSeamError,
 	decodeControlSeamRequest,
@@ -84,6 +101,16 @@ export interface ControlSeamServerOptions {
 	readonly dirPath?: string
 	/** Override the ownership record path (tests). */
 	readonly ownerPath?: string
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: override the mutation
+	 * opt-in record path (tests).
+	 */
+	readonly mutationOptInPath?: string
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: override the write
+	 * credential file path (tests).
+	 */
+	readonly writeTokenPath?: string
 	/** Environment used for path resolution (tests). */
 	readonly env?: NodeJS.ProcessEnv
 	/**
@@ -91,6 +118,21 @@ export interface ControlSeamServerOptions {
 	 * decides (env override -> opt-in record -> default OFF).
 	 */
 	readonly forceEnabled?: boolean
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: force the MUTATION
+	 * enablement decision. When `undefined`, the resolver decides
+	 * (the operator's mutation opt-in record -> default OFF).
+	 */
+	readonly forceMutationEnabled?: boolean
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the event buffer that
+	 * retains the EXISTING production events for `clinemm_read_events`.
+	 *
+	 * When omitted, the server owns a private buffer that is never
+	 * fed — `clinemm_read_events` then returns an empty slice with
+	 * `cursorExpired: false`. Production MUST wire the shared buffer.
+	 */
+	readonly eventBuffer?: ControlSeamEventBuffer
 }
 
 export interface ControlSeamServerHandle {
@@ -111,6 +153,20 @@ export interface ControlSeamServerHandle {
 	 * another instance's live artifacts.
 	 */
 	readonly instanceId: string
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the DISTINCT write
+	 * credential, when mutation control is ON. `undefined` when
+	 * mutation control is OFF — in that case there is NO mutation
+	 * credential at all, and every write operation is refused.
+	 */
+	readonly writeToken?: string
+	/** The write credential file path, when mutation control is ON. */
+	readonly writeTokenPath?: string
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the workspace the
+	 * mutation grant is bound to, when mutation control is ON.
+	 */
+	readonly mutationWorkspace?: string
 }
 
 /**
@@ -131,9 +187,32 @@ export class ControlSeamServer {
 	 * never removes another instance's artifacts.
 	 */
 	private ownerPath: string | undefined
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the INSTANCE-LOCAL
+	 * mutation grant. `undefined` means mutation control is OFF for
+	 * this instance — every write operation is then refused.
+	 */
+	private mutationGrant: ControlSeamMutationGrant | undefined
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the instance-local
+	 * idempotency ledger. It is IN MEMORY and dies with the host.
+	 */
+	private readonly ledger = new ControlSeamOperationLedger()
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the bounded buffer that
+	 * retains the EXISTING production events.
+	 */
+	private readonly eventBuffer: ControlSeamEventBuffer
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the write credential
+	 * file path, when the grant was created. Removed on dispose so a
+	 * dead extension host leaves NO mutation credential behind.
+	 */
+	private writeTokenPath: string | undefined
 
 	constructor(options: ControlSeamServerOptions) {
 		this.options = options
+		this.eventBuffer = options.eventBuffer ?? new ControlSeamEventBuffer()
 	}
 
 	/**
@@ -206,9 +285,30 @@ export class ControlSeamServer {
 		})
 		const instanceId = ownership.instanceId
 
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: these are declared
+		// OUTSIDE the try so the catch block can release the write
+		// credential file if the start fails after it was written.
+		let writeToken: string | undefined
+		let resolvedWriteTokenPath: string | undefined
+
 		try {
 			writeFileSync(tokenPath, `${token}\n`, { mode: CONTROL_SEAM_FILE_MODE })
 			chmodSync(tokenPath, CONTROL_SEAM_FILE_MODE)
+
+			// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: resolve the
+			// MUTATION grant. It is DEFAULT OFF and it is a SEPARATE
+			// decision from the seam's own enablement.
+			//
+			// The grant is bound to THIS extension-host instance and to
+			// the workspace the host resolved from its OWN installed-
+			// workspace owner. The client can never select a workspace.
+			const mutationGrant = await this.resolveMutationGrant({ dirPath, instanceId })
+			const mutationWorkspace = mutationGrant?.workspace
+			writeToken = mutationGrant?.writeToken
+			resolvedWriteTokenPath = this.options.writeTokenPath ?? resolveControlSeamWriteTokenPath(dirPath)
+			if (writeToken) {
+				writeControlSeamWriteTokenFile(resolvedWriteTokenPath, writeToken)
+			}
 
 			// A stale socket file from a previous crashed host would
 			// make `listen` fail with EADDRINUSE. We may only remove it
@@ -240,17 +340,82 @@ export class ControlSeamServer {
 				socket.on("close", () => this.sockets.delete(socket))
 			})
 			this.server = server
-			this.handle = { socketPath, tokenPath, token, source: resolution.source, instanceId }
+			this.handle = {
+				socketPath,
+				tokenPath,
+				token,
+				source: resolution.source,
+				instanceId,
+				...(writeToken !== undefined ? { writeToken } : {}),
+				...(writeToken !== undefined ? { writeTokenPath: resolvedWriteTokenPath } : {}),
+				...(mutationWorkspace !== undefined ? { mutationWorkspace } : {}),
+			}
 			this.ownerPath = ownerPath
-			Logger.log(`[ControlSeam] listening on ${socketPath} (source=${resolution.source}, instance=${instanceId})`)
+			this.mutationGrant = mutationGrant
+			this.writeTokenPath = writeToken !== undefined ? resolvedWriteTokenPath : undefined
+			Logger.log(
+				`[ControlSeam] listening on ${socketPath} (source=${resolution.source}, instance=${instanceId}, mutation=${writeToken !== undefined ? "on" : "off"})`,
+			)
 			return this.handle
 		} catch (error) {
 			// The start failed: release ONLY our own artifacts. The
 			// ownership release is instance-scoped, so a failure here
 			// cannot delete another instance's live artifacts.
+			// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the write
+			// credential file must not survive a failed start.
+			if (writeToken !== undefined && resolvedWriteTokenPath !== undefined) {
+				removeControlSeamWriteTokenFile(resolvedWriteTokenPath)
+			}
 			this.releaseOwnedArtifacts(instanceId, ownerPath, socketPath, tokenPath)
 			throw error
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: resolve the instance-local
+	 * MUTATION grant.
+	 *
+	 * Returns `undefined` when mutation control is OFF — which is the
+	 * DEFAULT. Mutation control requires the operator's SEPARATE
+	 * mutation opt-in record (or the explicit test override), AND the
+	 * workspace the extension host resolved from its OWN installed-
+	 * workspace owner.
+	 *
+	 * The grant's write credential is a DISTINCT, freshly generated
+	 * random value. It is NEVER the read token and never derived from
+	 * it.
+	 */
+	private async resolveMutationGrant(options: {
+		readonly dirPath: string
+		readonly instanceId: string
+	}): Promise<ControlSeamMutationGrant | undefined> {
+		const env = this.options.env ?? process.env
+		const mutationOptInPath = this.options.mutationOptInPath ?? resolveControlSeamMutationOptInPath(options.dirPath)
+		const forced = this.options.forceMutationEnabled
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the operator's record
+		// is READ EVEN WHEN the decision is forced, because it carries the
+		// SEPARATE content-read sub-grant. The forced path only overrides
+		// the on/off DECISION - never the content-read sub-grant.
+		const optInRecord = readControlSeamMutationOptInRecord(mutationOptInPath)
+		if (forced === undefined && !optInRecord) {
+			// DEFAULT OFF: no operator record, no grant.
+			return undefined
+		}
+		if (forced === false) {
+			// Explicitly OFF: never a grant, whatever the record says.
+			return undefined
+		}
+		// The workspace comes from the controller's OWN owner. The
+		// client never supplies it - it may only ASSERT it later.
+		const workspace = await this.options.authority.readWorkspaceRoot()
+		return createControlSeamMutationGrant({
+			instanceId: options.instanceId,
+			workspace,
+			// The content-read sub-grant is OPTIONAL and defaults to
+			// FALSE. Without it, `clinemm_read_events` returns event
+			// metadata but NO message text.
+			allowContentRead: optInRecord?.allowContentRead === true,
+		})
 	}
 
 	/** The active handle, if the seam is running. */
@@ -291,6 +456,22 @@ export class ControlSeamServer {
 		this.server = undefined
 		const handle = this.handle
 		this.handle = undefined
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: invalidate the
+		// mutation grant FIRST. From this point every write operation
+		// is refused, even if a socket survived the close. The write
+		// credential FILE is removed too, so a dead extension host
+		// leaves NO mutation credential on disk.
+		this.mutationGrant = undefined
+		const writeTokenPath = this.writeTokenPath
+		this.writeTokenPath = undefined
+		if (writeTokenPath) {
+			removeControlSeamWriteTokenFile(writeTokenPath)
+		}
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: drop the instance-
+		// local idempotency ledger and the event buffer. They are
+		// IN MEMORY and MUST NOT survive a host replacement.
+		this.ledger.clear()
+		this.eventBuffer.clear()
 		if (server) {
 			await new Promise<void>((resolve) => server.close(() => resolve()))
 		}
@@ -395,8 +576,20 @@ export class ControlSeamServer {
 			while (newlineIndex >= 0) {
 				const line = buffer.slice(0, newlineIndex)
 				buffer = buffer.slice(newlineIndex + 1)
-				const response = this.handleLine(line)
-				this.writeResponse(socket, response)
+				// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the handler is
+				// async (the WRITE operations reach the real task-start
+				// lifecycle). The response is written when it settles.
+				// A disconnect in the meantime does NOT cancel the
+				// operation: its outcome is recorded in the ledger.
+				this.handleLine(line)
+					.then((response) => this.writeResponse(socket, response))
+					.catch((error) => {
+						Logger.error("[ControlSeam] failed to handle a request:", error)
+						this.writeResponse(
+							socket,
+							controlSeamError(CONTROL_SEAM_ERROR_CODES.internal, "control-seam request failed"),
+						)
+					})
 				newlineIndex = buffer.indexOf("\n")
 			}
 		})
@@ -425,8 +618,13 @@ export class ControlSeamServer {
 	 *
 	 * Exposed for the tests so the request/response logic can be
 	 * exercised without a socket.
+	 *
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the handler is now
+	 * ASYNC because the WRITE operations reach the real task-start
+	 * lifecycle. The READ operations resolve synchronously inside the
+	 * returned promise, so their observable semantics are unchanged.
 	 */
-	handleLine(line: string): ControlSeamResponse {
+	async handleLine(line: string): Promise<ControlSeamResponse> {
 		const request = decodeControlSeamRequest(line)
 		if (!request) {
 			return controlSeamError(CONTROL_SEAM_ERROR_CODES.badRequest, "malformed control-seam request")
@@ -442,23 +640,278 @@ export class ControlSeamServer {
 		}
 		switch (request.op) {
 			case "clinemm_capabilities":
-				return this.handleCapabilities()
+				return this.handleCapabilities(request)
 			case "clinemm_get_run":
 				return this.handleGetRun(request.sessionId)
+			case "clinemm_start_act":
+				return this.handleStartAct(request)
+			case "clinemm_read_events":
+				return this.handleReadEvents(request)
 			default:
 				return controlSeamError(CONTROL_SEAM_ERROR_CODES.unknownOperation, "unknown control-seam operation")
 		}
 	}
 
-	/** `clinemm_capabilities` — no session identity is disclosed. */
-	private handleCapabilities(): ControlSeamResponse {
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: `clinemm_start_act`.
+	 *
+	 * The order of the checks is load-bearing:
+	 *
+	 *   1. The registry entry MUST declare `mutating: true` (it does).
+	 *   2. The mutation grant MUST be present (mutation control ON).
+	 *   3. The request MUST carry the write credential, and it MUST
+	 *      match THIS instance's credential in constant time.
+	 *   4. The asserted workspace MUST match the grant's workspace.
+	 *   5. The payload MUST be present and well-formed.
+	 *   6. There MUST NOT be an existing active task owner.
+	 *   7. The ledger MUST NOT already hold this request id with a
+	 *      different payload.
+	 *   8. ONLY THEN is the real `initTask()` lifecycle invoked.
+	 *
+	 * A socket disconnect during the start does NOT cancel the start:
+	 * the operation continues and its outcome is recorded in the ledger,
+	 * so a replay of the same request id returns the SAME outcome
+	 * instead of starting a second task.
+	 */
+	private async handleStartAct(request: ControlSeamRequest): Promise<ControlSeamResponse> {
+		const payload = request.payload
+		if (!payload || payload.op !== "clinemm_start_act") {
+			return controlSeamError(CONTROL_SEAM_ERROR_CODES.rejected, "clinemm_start_act requires its input payload")
+		}
+		const input = payload.input
+
+		// (2-4) AUTHORIZATION. The credential is checked on EVERY
+		// request, including on a connection that stays open.
+		const authorization = authorizeControlSeamMutation({
+			grant: this.mutationGrant,
+			writeToken: request.writeToken,
+			expectedWorkspace: input.expectedWorkspace,
+		})
+		if (!authorization.authorized) {
+			return controlSeamError(
+				CONTROL_SEAM_ERROR_CODES.mutationNotAuthorized,
+				"clinemm_start_act is not authorized for this client",
+			)
+		}
+
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: re-verify the
+		// workspace AT REQUEST TIME. The grant captured the workspace
+		// when the host started; the user may have opened a DIFFERENT
+		// folder since. The grant is bound to the INTENDED workspace,
+		// so a workspace that is no longer the installed one invalidates
+		// the request — the client can never make the extension operate
+		// on a workspace the grant did not name.
+		const currentWorkspace = await this.options.authority.readWorkspaceRoot()
+		if (currentWorkspace !== authorization.grant.workspace) {
+			return controlSeamError(
+				CONTROL_SEAM_ERROR_CODES.mutationNotAuthorized,
+				"clinemm_start_act is not authorized for this client",
+			)
+		}
+
+		// (6) NO EXISTING ACTIVE TASK OWNER. The seam never implicitly
+		// replaces, clears, cancels or resumes a task.
+		const activeSessionId = this.options.authority.readActiveSessionId()
+		if (activeSessionId !== undefined) {
+			return this.startActResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				reason: "active-task-owner-exists",
+			})
+		}
+
+		// (7) IDEMPOTENCY. The ledger is instance-local and bounded.
+		const fingerprint = this.fingerprintStartActPayload(input)
+		const lookup = this.ledger.lookup(input.requestId, fingerprint)
+		if (lookup.kind === "conflict") {
+			return this.startActResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				reason: "request-id-conflict",
+			})
+		}
+		if (lookup.kind === "found") {
+			return this.startActResultFromLedger(lookup.outcome, input.requestId)
+		}
+
+		// Record the IN-FLIGHT entry BEFORE the lifecycle call, so a
+		// duplicate delivery that arrives during the start joins this
+		// operation instead of starting a second one.
+		this.ledger.begin(input.requestId, fingerprint)
+
+		let outcome: ControlSeamLedgerOutcome
+		try {
+			const authorityOutcome = await this.options.authority.startAct({ prompt: input.prompt })
+			outcome =
+				authorityOutcome.outcome === "accepted"
+					? {
+							status: "accepted",
+							sessionId: authorityOutcome.sessionId,
+							...(authorityOutcome.taskId !== undefined ? { taskId: authorityOutcome.taskId } : {}),
+						}
+					: { status: authorityOutcome.outcome, reason: authorityOutcome.reason }
+		} catch (error) {
+			// The lifecycle threw. We CANNOT prove whether a start
+			// occurred, so the outcome is `unknown_outcome` — and it is
+			// RECORDED, so a replay does not start a second task.
+			Logger.error("[ControlSeam] clinemm_start_act failed with an unprovable outcome:", error)
+			outcome = { status: "unknown_outcome", reason: "host-failure" }
+		}
+		this.ledger.complete(input.requestId, outcome)
+		return this.startActResultFromLedger(outcome, input.requestId)
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: `clinemm_read_events`.
+	 *
+	 * The read is scoped to the task this mutation client owns: the
+	 * requested session id MUST be the session the mutation grant
+	 * started. A foreign session id is refused without disclosing
+	 * whether it exists.
+	 */
+	private handleReadEvents(request: ControlSeamRequest): Promise<ControlSeamResponse> {
+		const payload = request.payload
+		if (!payload || payload.op !== "clinemm_read_events") {
+			return Promise.resolve(
+				controlSeamError(CONTROL_SEAM_ERROR_CODES.rejected, "clinemm_read_events requires its input payload"),
+			)
+		}
+		const input = payload.input
+
+		// The MUTATION grant is REQUIRED for this operation.
+		const authorization = authorizeControlSeamMutation({
+			grant: this.mutationGrant,
+			writeToken: request.writeToken,
+		})
+		if (!authorization.authorized) {
+			return Promise.resolve(
+				controlSeamError(
+					CONTROL_SEAM_ERROR_CODES.mutationNotAuthorized,
+					"clinemm_read_events is not authorized for this client",
+				),
+			)
+		}
+		const grant = authorization.grant
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the CONTENT-READ
+		// grant gates ONLY the message TEXT. Without it the operation
+		// still returns the event METADATA - the conservative path - and
+		// every `text` field is omitted.
+		const allowContentRead = grant.allowContentRead
+
+		// SCOPE: the session must be the one this mutation client owns.
+		const activeSessionId = this.options.authority.readActiveSessionId()
+		if (activeSessionId === undefined || activeSessionId !== input.sessionId) {
+			return Promise.resolve(
+				controlSeamError(
+					CONTROL_SEAM_ERROR_CODES.foreignSession,
+					"session identifier does not match the task this client owns",
+				),
+			)
+		}
+
+		const limit = input.limit ?? CONTROL_SEAM_DEFAULT_EVENT_LIMIT
+		const slice = this.eventBuffer.read({ afterCursor: input.afterCursor, limit })
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the CONTENT-READ
+		// grant is enforced HERE, at the wire boundary. Without it every
+		// `text` field is STRIPPED - the event METADATA (cursor, epoch,
+		// type, kind, timestamp) is still returned, because that is the
+		// conservative path.
+		const events = allowContentRead
+			? slice.events
+			: slice.events.map((event) => {
+					const { text: _text, ...metadata } = event
+					return metadata
+				})
+		const result: ControlSeamEventsResult = {
+			sessionId: input.sessionId,
+			events,
+			...(slice.nextCursor !== undefined ? { nextCursor: slice.nextCursor } : {}),
+			cursorExpired: slice.cursorExpired,
+		}
+		return Promise.resolve({ v: CONTROL_SEAM_PROTOCOL_VERSION, ok: true, result })
+	}
+
+	/**
+	 * The payload fingerprint used to bind a `requestId` to its
+	 * payload.
+	 *
+	 * It is a SHA-256 over the canonical encoding of the payload. The
+	 * ledger NEVER stores the prompt itself, so a ledger dump cannot
+	 * leak task content.
+	 */
+	private fingerprintStartActPayload(input: { readonly prompt: string; readonly expectedWorkspace: string }): string {
+		return createHash("sha256").update(`${input.expectedWorkspace}${input.prompt}`, "utf8").digest("hex")
+	}
+
+	/** Build the `clinemm_start_act` response from a ledger outcome. */
+	private startActResultFromLedger(outcome: ControlSeamLedgerOutcome, requestId: string): ControlSeamResponse {
+		if (outcome.status === "pending") {
+			// The operation is still in flight. Report an ambiguous
+			// outcome rather than a fabricated acceptance.
+			return this.startActResult({
+				outcome: "unknown_outcome",
+				requestId,
+				reason: "in-flight",
+			})
+		}
+		if (outcome.status === "accepted") {
+			return this.startActResult({
+				outcome: "accepted",
+				requestId,
+				sessionId: outcome.sessionId,
+				...(outcome.taskId !== undefined ? { taskId: outcome.taskId } : {}),
+			})
+		}
+		return this.startActResult({
+			outcome: outcome.status,
+			requestId,
+			reason: outcome.reason,
+		})
+	}
+
+	/** Build the `clinemm_start_act` response envelope. */
+	private startActResult(result: {
+		outcome: "accepted" | "rejected" | "superseded" | "unknown_outcome"
+		requestId: string
+		sessionId?: string
+		taskId?: string
+		reason?: string
+	}): ControlSeamResponse {
+		const payload: ControlSeamStartActResult = {
+			outcome: result.outcome,
+			requestId: result.requestId,
+			...(result.sessionId !== undefined ? { sessionId: result.sessionId } : {}),
+			...(result.taskId !== undefined ? { taskId: result.taskId } : {}),
+			...(result.reason !== undefined ? { reason: result.reason } : {}),
+		}
+		return { v: CONTROL_SEAM_PROTOCOL_VERSION, ok: true, result: payload }
+	}
+
+	/**
+	 * `clinemm_capabilities` — no session identity is disclosed.
+	 *
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the operation list is
+	 * SCOPED TO THE CALLER. A read-only client (no write credential)
+	 * sees EXACTLY the original two read operations — its view is
+	 * byte-for-byte the RECON01 view. A mutation-authorized client
+	 * additionally sees the two write operations.
+	 *
+	 * The `readOnly` flag reports whether the CALLER's view is
+	 * read-only, not whether the registry contains writes.
+	 */
+	private handleCapabilities(request?: ControlSeamRequest): ControlSeamResponse {
+		const isMutationAuthorized =
+			this.mutationGrant !== undefined &&
+			request?.writeToken !== undefined &&
+			authorizeControlSeamMutation({ grant: this.mutationGrant, writeToken: request.writeToken }).authorized
+		const operations = isMutationAuthorized ? CONTROL_SEAM_OPERATIONS : CONTROL_SEAM_READ_OPERATIONS
 		const capabilities: ControlSeamCapabilities = {
 			protocolVersion: CONTROL_SEAM_PROTOCOL_VERSION,
-			operations: CONTROL_SEAM_OPERATIONS.map((operation) => ({
+			operations: operations.map((operation) => ({
 				id: operation.id,
 				description: operation.description,
 			})),
-			readOnly: true,
+			readOnly: !isMutationAuthorized,
 			host: {
 				extensionVersion: this.options.extensionVersion,
 				platform: this.options.platform,

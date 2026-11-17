@@ -1,0 +1,14 @@
+# Typecheck / scoped lint / format / build receipts
+
+## bunx tsc --noEmit (apps/vscode)
+tsc_exit=0
+
+## scoped biome lint (ACT-owned files)
+Checked 22 files in 282ms. No fixes applied.
+
+## scoped biome format --check
+Checked 22 files in 27ms. No fixes applied.
+
+## bun esbuild.mjs (extension bundle)
+[watch] build started
+[watch] build finished

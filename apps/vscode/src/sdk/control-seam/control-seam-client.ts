@@ -25,6 +25,7 @@ import {
 	CONTROL_SEAM_PROTOCOL_VERSION,
 	type ControlSeamOperationId,
 	type ControlSeamResponse,
+	type ControlSeamWritePayload,
 	controlSeamError,
 } from "./control-seam-protocol"
 
@@ -70,8 +71,18 @@ export function loadControlSeamToken(tokenPath: string): string | undefined {
  *
  * The client and the server both build requests through this ONE
  * function so the two ends cannot drift.
+ *
+ * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the envelope gained the
+ * SEPARATE `writeToken` and the operation-specific `payload`. A READ
+ * request carries neither, so its wire shape is UNCHANGED.
  */
-export function encodeControlSeamRequest(input: { op: ControlSeamOperationId; token: string; sessionId?: string }): string {
+export function encodeControlSeamRequest(input: {
+	op: ControlSeamOperationId
+	token: string
+	sessionId?: string
+	writeToken?: string
+	payload?: ControlSeamWritePayload
+}): string {
 	const request: Record<string, unknown> = {
 		v: CONTROL_SEAM_PROTOCOL_VERSION,
 		op: input.op,
@@ -79,6 +90,12 @@ export function encodeControlSeamRequest(input: { op: ControlSeamOperationId; to
 	}
 	if (input.sessionId !== undefined) {
 		request.sessionId = input.sessionId
+	}
+	if (input.writeToken !== undefined) {
+		request.writeToken = input.writeToken
+	}
+	if (input.payload !== undefined) {
+		request.payload = input.payload
 	}
 	return `${JSON.stringify(request)}\n`
 }
@@ -104,6 +121,13 @@ export function encodeControlSeamRequest(input: { op: ControlSeamOperationId; to
  */
 export class ControlSeamClient {
 	private readonly token: string
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the SEPARATE write
+	 * credential. When absent, the client can only issue READ
+	 * operations — the server refuses the write operations without a
+	 * valid write credential.
+	 */
+	private readonly writeToken: string | undefined
 	private readonly requestTimeoutMs: number
 	private buffer = ""
 	private readonly pending: PendingRequest[] = []
@@ -117,8 +141,9 @@ export class ControlSeamClient {
 	 */
 	private connected = true
 
-	constructor(token: string, options: { readonly requestTimeoutMs?: number } = {}) {
+	constructor(token: string, options: { readonly requestTimeoutMs?: number; readonly writeToken?: string } = {}) {
 		this.token = token
+		this.writeToken = options.writeToken
 		this.requestTimeoutMs = options.requestTimeoutMs ?? CONTROL_SEAM_DEFAULT_REQUEST_TIMEOUT_MS
 	}
 
@@ -201,8 +226,12 @@ export class ControlSeamClient {
 	 * If the socket is already gone (closed or failed), the request
 	 * settles IMMEDIATELY with an error rather than being enqueued
 	 * against a dead transport.
+	 *
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the optional `payload`
+	 * carries the WRITE operation's discriminated input. The write
+	 * credential is attached automatically when the client holds one.
 	 */
-	request(op: ControlSeamOperationId, sessionId?: string): Promise<ControlSeamResponse> {
+	request(op: ControlSeamOperationId, sessionId?: string, payload?: ControlSeamWritePayload): Promise<ControlSeamResponse> {
 		if (this.disposed) {
 			return Promise.resolve(controlSeamError(CONTROL_SEAM_ERROR_CODES.internal, "the control-seam client is closed"))
 		}
@@ -231,7 +260,15 @@ export class ControlSeamClient {
 			// Never hold the process open for a pending request.
 			pending.timer.unref?.()
 			this.pending.push(pending)
-			this.writer?.(encodeControlSeamRequest({ op, token: this.token, sessionId }))
+			this.writer?.(
+				encodeControlSeamRequest({
+					op,
+					token: this.token,
+					sessionId,
+					...(this.writeToken !== undefined ? { writeToken: this.writeToken } : {}),
+					...(payload !== undefined ? { payload } : {}),
+				}),
+			)
 		})
 	}
 

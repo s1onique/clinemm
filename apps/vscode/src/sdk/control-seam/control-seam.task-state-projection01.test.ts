@@ -78,6 +78,11 @@ function makeAuthority(fixture: Fixture): ControlSeamAuthority {
 		readRuntimeSnapshot: () => undefined,
 		readPublishedTaskState: () => fixture.published,
 		readCurrentEpoch: () => fixture.epoch ?? 4,
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY fixture.
+		// The mutation members are never exercised by the projection
+		// tests.
+		readWorkspaceRoot: async () => "/tmp/ctsp-workspace",
+		startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -287,9 +292,14 @@ describe("ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — R3 other user-visible stat
 			await client.request("clinemm_get_run")
 			await client.request("clinemm_get_run")
 
-			// The authority surface exposes NO mutating member and NO
+			// The READ surface exposes NO mutating member and NO
 			// publication trigger, so an MCP read structurally cannot cause
 			// an Elm evaluation, a state post, or an agent execution.
+			//
+			// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the authority gained
+			// two WRITE members (`readWorkspaceRoot` / `startAct`) for the
+			// separate mutation grant. They are NOT reachable from the
+			// READ path: the read operations never consult them.
 			const authority = makeAuthority({
 				sessionId: "session-a",
 				taskId: "task-a",
@@ -303,6 +313,8 @@ describe("ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — R3 other user-visible stat
 				"readPublishedTaskState",
 				"readQueuedPromptCount",
 				"readRuntimeSnapshot",
+				"readWorkspaceRoot",
+				"startAct",
 			])
 
 			socket?.destroy()

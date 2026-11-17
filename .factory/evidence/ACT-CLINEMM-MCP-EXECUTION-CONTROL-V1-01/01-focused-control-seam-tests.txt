@@ -1,0 +1,154 @@
+(node:225) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:241) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:244) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:243) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:247) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:242) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:245) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:248) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:246) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/control-seam/control-seam-proxy.test.ts (6 tests) 33ms
+ ✓ src/sdk/control-seam/control-seam.task-state-projection01.test.ts (31 tests) 37ms
+[A] (node:464) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/control-seam/__cor02-worker-A-241.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[B] (node:465) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/control-seam/__cor02-worker-B-241.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/control-seam/control-seam.recon01.test.ts (21 tests) 53ms
+[A] node:internal/modules/esm/load:195
+    throw new ERR_UNSUPPORTED_ESM_URL_SCHEME(parsed, schemes);
+          ^
+
+Error [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. Received protocol 'bun:'
+[90m    at throwIfUnsupportedURLScheme (node:internal/modules/esm/load:195:11)[39m
+[90m    at defaultLoadSync (node:internal/modules/esm/load:142:3)[39m
+[90m    at #loadAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:779:12)[39m
+[90m    at #loadSync (node:internal/modules/esm/loader:799:49)[39m
+[90m    at ModuleLoader.load (node:internal/modules/esm/loader:765:26)[39m
+[90m    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:31)[39m
+[90m    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:558:36)[39m
+[90m    at afterResolve (node:internal/modules/esm/loader:606:52)[39m
+[90m    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:612:12)[39m
+[90m    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:631:32)[39m {
+  code: [32m'ERR_UNSUPPORTED_ESM_URL_SCHEME'[39m
+}
+
+Node.js v26.0.0
+[B] node:internal/modules/esm/load:195
+    throw new ERR_UNSUPPORTED_ESM_URL_SCHEME(parsed, schemes);
+          ^
+
+Error [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. Received protocol 'bun:'
+[90m    at throwIfUnsupportedURLScheme (node:internal/modules/esm/load:195:11)[39m
+[90m    at defaultLoadSync (node:internal/modules/esm/load:142:3)[39m
+[90m    at #loadAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:779:12)[39m
+[90m    at #loadSync (node:internal/modules/esm/loader:799:49)[39m
+[90m    at ModuleLoader.load (node:internal/modules/esm/loader:765:26)[39m
+[90m    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:31)[39m
+[90m    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:558:36)[39m
+[90m    at afterResolve (node:internal/modules/esm/loader:606:52)[39m
+[90m    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:612:12)[39m
+[90m    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:631:32)[39m {
+  code: [32m'ERR_UNSUPPORTED_ESM_URL_SCHEME'[39m
+}
+
+Node.js v26.0.0
+ ✓ src/sdk/control-seam/control-seam.execution-control-v1.test.ts (31 tests) 169ms
+ ✓ src/sdk/control-seam/control-seam.qual01.test.ts (21 tests) 241ms
+ ✓ src/sdk/control-seam/control-seam.publication-boundary01.test.ts (8 tests) 8ms
+ ✓ src/sdk/control-seam/control-seam-authority.production-shape.test.ts (3 tests) 9ms
+[A] (node:2639) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/control-seam/__cor02-worker-A-241.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[A] node:internal/modules/esm/load:195
+    throw new ERR_UNSUPPORTED_ESM_URL_SCHEME(parsed, schemes);
+          ^
+
+Error [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. Received protocol 'bun:'
+[90m    at throwIfUnsupportedURLScheme (node:internal/modules/esm/load:195:11)[39m
+[90m    at defaultLoadSync (node:internal/modules/esm/load:142:3)[39m
+[90m    at #loadAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:779:12)[39m
+[90m    at #loadSync (node:internal/modules/esm/loader:799:49)[39m
+[90m    at ModuleLoader.load (node:internal/modules/esm/loader:765:26)[39m
+[90m    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:31)[39m
+[90m    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:558:36)[39m
+[90m    at afterResolve (node:internal/modules/esm/loader:606:52)[39m
+[90m    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:612:12)[39m
+[90m    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:631:32)[39m {
+  code: [32m'ERR_UNSUPPORTED_ESM_URL_SCHEME'[39m
+}
+
+Node.js v26.0.0
+ ❯ src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts (5 tests | 2 failed) 60851ms
+     × COR02-R1: at most ONE process acquires an unowned endpoint, and the loser's record is NOT replaced 30826ms
+     × COR02-R2: ownership is held until the cleanup finishes, and a contender cannot take the endpoint underneath it 30014ms
+     ✓ COR02-C1: the ownership claim is an EXCLUSIVE create — a second claim on the same path fails 4ms
+     ✓ COR02-C2: a CRASHED owner fails closed — the stale record is reclaimed only under the exclusive reclaim token 2ms
+     ✓ COR02-C3: the FORCE escape hatch breaks an UNREADABLE owner record 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts > ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02 — R1 simultaneous acquisition > COR02-R1: at most ONE process acquires an unowned endpoint, and the loser's record is NOT replaced
+AssertionError: both contenders must reach the write gate: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts:361:67
+    359|   // parked. This is what makes the interleaving deterministic.
+    360|   const bothParked = await waitForFiles([parkedA, parkedB], 30_000)
+    361|   expect(bothParked, "both contenders must reach the write gate").toBe…
+       |                                                                   ^
+    362|
+    363|   // Release both writes. Both had already observed an unowned
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts > ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02 — R2 cleanup versus acquisition > COR02-R2: ownership is held until the cleanup finishes, and a contender cannot take the endpoint underneath it
+AssertionError: instance A must start the control seam: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.owner-exclusivity.cor02.test.ts:405:62
+    403|   })
+    404|   const aStarted = await waitForFiles([`${cleanupResult}.started`], 30…
+    405|   expect(aStarted, "instance A must start the control seam").toBe(true)
+       |                                                              ^
+    406|   await sleep(300)
+    407|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  2 failed | 124 passed (126)
+   Start at  22:27:11
+   Duration  63.23s (transform 14.77s, setup 17.59s, import 4.92s, tests 61.40s, environment 0ms)
+
+exit=1

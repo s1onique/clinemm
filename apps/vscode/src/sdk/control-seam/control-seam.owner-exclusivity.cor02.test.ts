@@ -173,6 +173,10 @@ try {
 			// therefore omits taskState (no fabricated idle).
 			readPublishedTaskState: () => undefined,
 			readCurrentEpoch: () => 0,
+			// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY
+			// fixture. The mutation members are never exercised here.
+			readWorkspaceRoot: async () => "/tmp/ccor02-workspace",
+			startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 		}
 		const server = new ControlSeamServer({
 			authority,

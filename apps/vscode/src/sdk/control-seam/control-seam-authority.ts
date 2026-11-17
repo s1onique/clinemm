@@ -33,6 +33,20 @@ import type { PublishedTaskState } from "@/sdk/published-task-state"
 import type { ControlSeamRunIdentity, ControlSeamTaskState } from "./control-seam-protocol"
 
 /**
+ * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the outcome of a
+ * `clinemm_start_act` request, as observed at the AUTHORITATIVE
+ * lifecycle boundary.
+ *
+ * The authority reports what the EXISTING lifecycle decided. It does
+ * not interpret, retry, or soften the result.
+ */
+export type ControlSeamStartActAuthorityOutcome =
+	| { readonly outcome: "accepted"; readonly sessionId: string; readonly taskId?: string }
+	| { readonly outcome: "rejected"; readonly reason: string }
+	| { readonly outcome: "superseded"; readonly reason: string }
+	| { readonly outcome: "unknown_outcome"; readonly reason: string }
+
+/**
  * The narrow read surface the control seam needs from the controller.
  *
  * Every member is a READ. There is no mutating member, so a caller
@@ -88,6 +102,28 @@ export interface ControlSeamAuthority {
 	 * NOT identity-bound and `taskState` is omitted.
 	 */
 	readCurrentEpoch(): number | undefined
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the workspace the
+	 * extension host resolved from its OWN installed-workspace owner.
+	 *
+	 * This is the workspace a mutation grant is bound to. The client
+	 * can never SELECT a workspace: it may only ASSERT one, and the
+	 * assertion is compared against this value.
+	 */
+	readWorkspaceRoot(): Promise<string>
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: start ONE task through
+	 * the EXISTING `SdkController.initTask()` lifecycle.
+	 *
+	 * The implementation MUST route through the production lifecycle —
+	 * it MUST NOT create a second `ClineCore`, `LocalRuntimeHost`,
+	 * `SessionRuntime` or execution loop, and it MUST NOT bypass the
+	 * native approval authority.
+	 *
+	 * The returned outcome reports what the authoritative lifecycle
+	 * decided. `accepted` is returned ONLY with a REAL session id.
+	 */
+	startAct(input: { readonly prompt: string }): Promise<ControlSeamStartActAuthorityOutcome>
 }
 
 /**

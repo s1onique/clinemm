@@ -69,6 +69,8 @@ import { WorkspaceRootManager } from "@/core/workspace/WorkspaceRootManager"
 import { HostProvider } from "@/hosts/host-provider"
 import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import { ExtensionRegistryInfo } from "@/registry"
+import { ControlSeamEventBuffer, projectControlSeamBufferedEvent } from "@/sdk/control-seam/control-seam-event-buffer"
+import { CONTROL_SEAM_MAX_EVENT_TEXT_LENGTH } from "@/sdk/control-seam/control-seam-protocol"
 import { ControlSeamRuntime, createControlSeamAuthority } from "@/sdk/control-seam/control-seam-runtime"
 import { ControlSeamServer } from "@/sdk/control-seam/control-seam-server"
 import {
@@ -1273,6 +1275,21 @@ export class Controller {
 	 * no way to start, steer, or cancel a run.
 	 */
 	private readonly controlSeam: ControlSeamRuntime
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the bounded buffer that
+	 * retains the EXISTING production events for `clinemm_read_events`.
+	 *
+	 * It is fed from the EXISTING `onSessionEvent` publication
+	 * boundary, so the events it retains are the events the UI saw —
+	 * with their REAL identity (`seq` / `epoch`) and REAL ordering.
+	 * It is NOT a new event bus and NOT an event-history database.
+	 */
+	private readonly controlSeamEventBuffer = new ControlSeamEventBuffer()
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the unsubscribe handle
+	 * for the existing-publication-boundary subscription.
+	 */
+	private controlSeamEventSubscription: (() => void) | undefined
 	/**
 	 * ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: the controller-owned,
 	 * bounded, immutable record of the LAST ELIGIBLE HOST-SUBMITTED
@@ -3324,11 +3341,60 @@ export class Controller {
 					// never posts state, and never touches the runtime.
 					readPublishedTaskState: () => this.publishedTaskState.read(),
 					readCurrentEpoch: () => this.messageTranslatorState.getMinter().epoch,
+					// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the
+					// controller's OWN installed-workspace owner. The
+					// client may only ASSERT a workspace; it can never
+					// select one.
+					readWorkspaceRoot: () => this.getWorkspaceRoot(),
+					// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: route the
+					// start through the EXISTING `initTask()` lifecycle.
+					//
+					// This is the SAME method the webview's "New Task"
+					// button reaches. It allocates the session id, runs
+					// the EXISTING `SdkTaskStartCoordinator`, and returns
+					// the REAL accepted session id. It creates NO second
+					// `ClineCore` / `LocalRuntimeHost` / `SessionRuntime`
+					// and NO second execution loop, and it preserves the
+					// native editor and approval authority.
+					startAct: async (input) => {
+						const sessionId = await this.initTask(input.prompt)
+						if (!sessionId) {
+							// `initTask` returned no session id. The start
+							// did NOT complete — no execution is running
+							// under a session this client owns.
+							return { outcome: "rejected", reason: "task-init-did-not-start" }
+						}
+						return {
+							outcome: "accepted",
+							sessionId,
+							...(this.task?.taskId !== undefined ? { taskId: this.task.taskId } : {}),
+						}
+					},
 				}),
 				extensionVersion: ExtensionRegistryInfo.version,
 				platform: process.platform,
+				// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the bounded
+				// buffer that retains the EXISTING production events for
+				// `clinemm_read_events`.
+				eventBuffer: this.controlSeamEventBuffer,
 			}),
 		)
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: subscribe to the
+		// EXISTING session-event publication boundary so the buffer
+		// retains the REAL emitted events, with their REAL identity and
+		// ordering. This is a READER of the existing publication point,
+		// NOT a new event bus.
+		this.controlSeamEventSubscription = this.onSessionEvent((messages) => {
+			for (const message of messages) {
+				const projected = projectControlSeamBufferedEvent(message, {
+					allowContentRead: true,
+					maxTextLength: CONTROL_SEAM_MAX_EVENT_TEXT_LENGTH,
+				})
+				if (projected) {
+					this.controlSeamEventBuffer.append(projected)
+				}
+			}
+		})
 		void this.controlSeam.start()
 
 		// Restore auth state from secrets on startup, then start the remote
@@ -3736,6 +3802,13 @@ export class Controller {
 		// deactivated extension host leaves NO reachable listener and
 		// NO credential on disk.
 		await this.controlSeam.dispose()
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: drop the existing-
+		// publication-boundary subscription and clear the bounded event
+		// buffer. A disposed controller must not retain events, and it
+		// must not keep appending to a buffer nobody can read.
+		this.controlSeamEventSubscription?.()
+		this.controlSeamEventSubscription = undefined
+		this.controlSeamEventBuffer.clear()
 		// ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01: drop the bounded
 		// published-task-state record on controller disposal. A disposed
 		// controller must not expose a stale projection.
