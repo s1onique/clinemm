@@ -1,0 +1,1202 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
+  "trace": {
+    "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace(8).json",
+    "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+    "sessionId": "1794892591345_7em4g",
+    "schema": "cline.roundc-latency-trace.v1"
+  },
+  "wall_clock": {
+    "declared_wallClockMs": 920908.6393329999,
+    "first_event_monotonicMs": 190.96720900000037,
+    "last_event_monotonicMs": 921099.606542,
+    "observed_boundary_span_ms": 920908.639
+  },
+  "boundary_span_totals_ms": {
+    "compaction": 64564.481,
+    "provider_completed": 0.115,
+    "provider_first_response": 137245.925,
+    "provider_first_text": 119110.146,
+    "provider_ready": 0.344,
+    "provider_submitted": 810271.851,
+    "request_preparation": 7.504,
+    "request_prepared": 810280.115,
+    "schema_validation": 0.203,
+    "tool_execution": 44525.705,
+    "tool_result_delivered": 0.217
+  },
+  "stage_attribution": [
+    {
+      "stage": "delivery",
+      "meaning": "the tool result existed but was not yet in the provider request",
+      "measurement": "gap between tool_execution.end and tool_result_delivered.start",
+      "n": 18,
+      "min_ms": 0.021,
+      "median_ms": 0.084,
+      "p90_ms": 0.161,
+      "max_ms": 0.295,
+      "sum_ms": 1.697
+    },
+    {
+      "stage": "execution",
+      "meaning": "the executor's own measured run time",
+      "measurement": "tool_execution span duration (the executor's own run time)",
+      "n": 26,
+      "min_ms": 0.559,
+      "median_ms": 709.728,
+      "p90_ms": 4038.841,
+      "max_ms": 5068.866,
+      "sum_ms": 44525.705
+    },
+    {
+      "stage": "preparation",
+      "meaning": "the request was being prepared for the provider",
+      "measurement": "gap between request_preparation.end and request_prepared.start",
+      "n": 18,
+      "min_ms": 0.004,
+      "median_ms": 0.005,
+      "p90_ms": 0.009,
+      "max_ms": 0.013,
+      "sum_ms": 0.109
+    },
+    {
+      "stage": "queue",
+      "meaning": "the request was built and held, or the agent held the turn",
+      "measurement": "gap between request_prepared.end and provider_submitted.start",
+      "n": 34,
+      "min_ms": 1.382,
+      "median_ms": 5.661,
+      "p90_ms": 23.608,
+      "max_ms": 345.993,
+      "sum_ms": 795.472
+    },
+    {
+      "stage": "transport",
+      "meaning": "the provider had not answered, or was still generating",
+      "measurement": "gap between provider_submitted.end and provider_first_text.start",
+      "n": 13,
+      "min_ms": 0.004,
+      "median_ms": 0.014,
+      "p90_ms": 0.025,
+      "max_ms": 0.058,
+      "sum_ms": 0.221
+    },
+    {
+      "stage": "unclassified",
+      "meaning": "a gap with no production stage classification",
+      "measurement": "n/a",
+      "n": 62,
+      "min_ms": 0.005,
+      "median_ms": 1.284,
+      "p90_ms": 9.048,
+      "max_ms": 112.116,
+      "sum_ms": 330.041
+    }
+  ],
+  "tool_executions": [
+    {
+      "toolCallId": "call_087e10709269481c9afcebb1",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_XBnHEY5n"
+      ],
+      "modelRequestIds": [
+        "model_request_A-jiubj1FlnfP0slHdiFU"
+      ],
+      "execution_start_ms": 320034.51975000004,
+      "execution_end_ms": 320051.172084,
+      "execution_duration_ms": 16.652333999983966,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 320051.285542,
+      "delivery_end_ms": 320051.287917,
+      "delivered": true,
+      "toolResultBytes": 5154,
+      "post_execution_delivery_delay_ms": 0.113,
+      "own_provider_submitted_ms": 284388.26291700004,
+      "next_provider_submitted_ms": 320074.6395,
+      "terminal_to_next_submission_ms": 23.467
+    },
+    {
+      "toolCallId": "call_1d306f44bde84d43b1144f53",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_86BlAx1e"
+      ],
+      "modelRequestIds": [
+        "model_request_Bg-zuFGOJKiGLps-fd8Wm"
+      ],
+      "execution_start_ms": 38444.467375,
+      "execution_end_ms": 40458.531334,
+      "execution_duration_ms": 2014.0639589999992,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 40466.134834000004,
+      "delivery_end_ms": 40466.146834,
+      "delivered": true,
+      "toolResultBytes": 8011,
+      "post_execution_delivery_delay_ms": 7.604,
+      "own_provider_submitted_ms": 29291.054709000004,
+      "next_provider_submitted_ms": 40503.82525,
+      "terminal_to_next_submission_ms": 45.294
+    },
+    {
+      "toolCallId": "call_231717bc7f904f6db8b206f8",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_otCXMAnM"
+      ],
+      "modelRequestIds": [
+        "model_request_A_dluOIN2Dhoi4TItS8ut"
+      ],
+      "execution_start_ms": 686609.557959,
+      "execution_end_ms": 686685.774042,
+      "execution_duration_ms": 76.21608299994841,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 686685.8032089999,
+      "delivery_end_ms": 686685.8072919999,
+      "delivered": true,
+      "toolResultBytes": 949,
+      "post_execution_delivery_delay_ms": 0.029,
+      "own_provider_submitted_ms": 665833.655084,
+      "next_provider_submitted_ms": 686706.5872089999,
+      "terminal_to_next_submission_ms": 20.813
+    },
+    {
+      "toolCallId": "call_2ce7a82da69e47e383036a65",
+      "toolName": "fetch_web_content",
+      "preparationRequestIds": [
+        "req_KkVoLzaT"
+      ],
+      "modelRequestIds": [
+        "model_request_N__gj8Jfi-654-ZMUhId6"
+      ],
+      "execution_start_ms": 463971.94975,
+      "execution_end_ms": 464394.275959,
+      "execution_duration_ms": 422.32620899996255,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 464394.70587500004,
+      "delivery_end_ms": 464394.716459,
+      "delivered": true,
+      "toolResultBytes": 32370,
+      "post_execution_delivery_delay_ms": 0.43,
+      "own_provider_submitted_ms": 427127.279125,
+      "next_provider_submitted_ms": 464426.090584,
+      "terminal_to_next_submission_ms": 31.815
+    },
+    {
+      "toolCallId": "call_2f78c5bb009844c68d3d6dc2",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_Pvr6N_B5"
+      ],
+      "modelRequestIds": [
+        "model_request_h-jrJ6v5OXpX3L2taQXgO"
+      ],
+      "execution_start_ms": 155710.219625,
+      "execution_end_ms": 159724.416875,
+      "execution_duration_ms": 4014.1972499999974,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 159724.67424999998,
+      "delivery_end_ms": 159724.67887499998,
+      "delivered": true,
+      "toolResultBytes": 12613,
+      "post_execution_delivery_delay_ms": 0.257,
+      "own_provider_submitted_ms": 93833.59370900001,
+      "next_provider_submitted_ms": 159751.03279199998,
+      "terminal_to_next_submission_ms": 26.616
+    },
+    {
+      "toolCallId": "call_32ebb6511aae41f0905e9813",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_wdW3TYdm"
+      ],
+      "modelRequestIds": [
+        "model_request_rNzg1ix3UpKYZkDIeI99B"
+      ],
+      "execution_start_ms": 643323.478459,
+      "execution_end_ms": 645334.93525,
+      "execution_duration_ms": 2011.456790999975,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 645335.013584,
+      "delivery_end_ms": 645335.024792,
+      "delivered": true,
+      "toolResultBytes": 4304,
+      "post_execution_delivery_delay_ms": 0.078,
+      "own_provider_submitted_ms": 615004.686875,
+      "next_provider_submitted_ms": 645359.2322089999,
+      "terminal_to_next_submission_ms": 24.297
+    },
+    {
+      "toolCallId": "call_49d69844f70c4a3ca63305f5",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_ZN5QTkEo"
+      ],
+      "modelRequestIds": [
+        "model_request_6QIi2pd4vrSLOf3rucaCH"
+      ],
+      "execution_start_ms": 9011.484041999998,
+      "execution_end_ms": 11032.792625,
+      "execution_duration_ms": 2021.3085830000018,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 11033.088042000001,
+      "delivery_end_ms": 11033.107958999999,
+      "delivered": true,
+      "toolResultBytes": 2867,
+      "post_execution_delivery_delay_ms": 0.295,
+      "own_provider_submitted_ms": 297.77537499999926,
+      "next_provider_submitted_ms": 11040.294292,
+      "terminal_to_next_submission_ms": 7.502
+    },
+    {
+      "toolCallId": "call_68ba32fa8c4a4cc8b5e3fe1f",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_mva3VHij"
+      ],
+      "modelRequestIds": [
+        "model_request_MJieVyTY7TsWDTSdEnIDs"
+      ],
+      "execution_start_ms": 89793.28395900001,
+      "execution_end_ms": 93813.855584,
+      "execution_duration_ms": 4020.571624999997,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 93817.490792,
+      "delivery_end_ms": 93817.495125,
+      "delivered": true,
+      "toolResultBytes": 5641,
+      "post_execution_delivery_delay_ms": 3.635,
+      "own_provider_submitted_ms": 40503.82525,
+      "next_provider_submitted_ms": 93833.59370900001,
+      "terminal_to_next_submission_ms": 19.738
+    },
+    {
+      "toolCallId": "call_6fc172f7b6004b41b0a7575c",
+      "toolName": "read_files",
+      "preparationRequestIds": [
+        "req_86BlAx1e"
+      ],
+      "modelRequestIds": [
+        "model_request_Bg-zuFGOJKiGLps-fd8Wm"
+      ],
+      "execution_start_ms": 40459.833084000005,
+      "execution_end_ms": 40466.030834000005,
+      "execution_duration_ms": 6.19774999999936,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 40466.352792000005,
+      "delivery_end_ms": 40466.356292000004,
+      "delivered": true,
+      "toolResultBytes": 25448,
+      "post_execution_delivery_delay_ms": 0.322,
+      "own_provider_submitted_ms": 29291.054709000004,
+      "next_provider_submitted_ms": 40503.82525,
+      "terminal_to_next_submission_ms": 37.794
+    },
+    {
+      "toolCallId": "call_750d8cef04fb41df834250b7",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_H28674dX"
+      ],
+      "modelRequestIds": [
+        "model_request_WhvVt3eoKOhWvm55tYcxj"
+      ],
+      "execution_start_ms": 422083.456834,
+      "execution_end_ms": 427101.142584,
+      "execution_duration_ms": 5017.685750000004,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 427101.23979200004,
+      "delivery_end_ms": 427101.255,
+      "delivered": true,
+      "toolResultBytes": 8202,
+      "post_execution_delivery_delay_ms": 0.097,
+      "own_provider_submitted_ms": 320074.6395,
+      "next_provider_submitted_ms": 427127.279125,
+      "terminal_to_next_submission_ms": 26.137
+    },
+    {
+      "toolCallId": "call_750fc45d51d7461cbfe85cde",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_LCeA375z"
+      ],
+      "modelRequestIds": [
+        "model_request_I1UH3QwaHjq5TiWrnptCF"
+      ],
+      "execution_start_ms": 25207.02175,
+      "execution_end_ms": 29235.773959,
+      "execution_duration_ms": 4028.7522089999984,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 29235.910792000002,
+      "delivery_end_ms": 29235.921542000004,
+      "delivered": true,
+      "toolResultBytes": 2010,
+      "post_execution_delivery_delay_ms": 0.137,
+      "own_provider_submitted_ms": 11040.294292,
+      "next_provider_submitted_ms": 29291.054709000004,
+      "terminal_to_next_submission_ms": 55.281
+    },
+    {
+      "toolCallId": "call_776e68ba7fa049edba75f44c",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_fOLWb5Qw"
+      ],
+      "modelRequestIds": [
+        "model_request_aBTiJCmBsUHJ3H3Z-zjch"
+      ],
+      "execution_start_ms": 663797.37975,
+      "execution_end_ms": 665809.1845,
+      "execution_duration_ms": 2011.8047500000102,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 665809.324792,
+      "delivery_end_ms": 665809.33575,
+      "delivered": true,
+      "toolResultBytes": 4556,
+      "post_execution_delivery_delay_ms": 0.14,
+      "own_provider_submitted_ms": 645359.2322089999,
+      "next_provider_submitted_ms": 665833.655084,
+      "terminal_to_next_submission_ms": 24.471
+    },
+    {
+      "toolCallId": "call_8315c8450e5948978bfca8c8",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_B3-Yjnop"
+      ],
+      "modelRequestIds": [
+        "model_request_JAbjvLATrGQN7f90oYuhK"
+      ],
+      "execution_start_ms": 550233.7925,
+      "execution_end_ms": 550295.254542,
+      "execution_duration_ms": 61.462042000028305,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 550321.3511249999,
+      "delivery_end_ms": 550321.356084,
+      "delivered": true,
+      "toolResultBytes": 4975,
+      "post_execution_delivery_delay_ms": 26.097,
+      "own_provider_submitted_ms": 518486.568667,
+      "next_provider_submitted_ms": 615004.686875,
+      "terminal_to_next_submission_ms": 64709.432
+    },
+    {
+      "toolCallId": "call_8a2fd562ff654df88d7cfa58",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_ONFacrGp"
+      ],
+      "modelRequestIds": [
+        "model_request_ViikL13h6TdsH8riqpd3u"
+      ],
+      "execution_start_ms": 278295.103459,
+      "execution_end_ms": 283363.96925,
+      "execution_duration_ms": 5068.865791000018,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 284363.812542,
+      "delivery_end_ms": 284363.827959,
+      "delivered": true,
+      "toolResultBytes": 6080,
+      "post_execution_delivery_delay_ms": 999.843,
+      "own_provider_submitted_ms": 194745.378,
+      "next_provider_submitted_ms": 284388.26291700004,
+      "terminal_to_next_submission_ms": 1024.294
+    },
+    {
+      "toolCallId": "call_946d8f190df34f399ce4d2d3",
+      "toolName": "submit_and_exit",
+      "preparationRequestIds": [
+        "req_bH78ZvgO"
+      ],
+      "modelRequestIds": [
+        "model_request_wUXE-g9WVHdlHhjiD-95N"
+      ],
+      "execution_start_ms": 921099.0236249999,
+      "execution_end_ms": 921099.582292,
+      "execution_duration_ms": 0.5586670000338927,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 921099.6037089999,
+      "delivery_end_ms": 921099.606542,
+      "delivered": true,
+      "toolResultBytes": 25,
+      "post_execution_delivery_delay_ms": 0.021,
+      "own_provider_submitted_ms": 750837.443917,
+      "next_provider_submitted_ms": null,
+      "terminal_to_next_submission_ms": null
+    },
+    {
+      "toolCallId": "call_a9de8d4ce59f47b8b883edce",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_15CcRirj"
+      ],
+      "modelRequestIds": [
+        "model_request_qP855ypBjoJnufmV_ZdOh"
+      ],
+      "execution_start_ms": 190688.967334,
+      "execution_end_ms": 194711.16587499998,
+      "execution_duration_ms": 4022.1985409999907,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 194711.578792,
+      "delivery_end_ms": 194711.589125,
+      "delivered": true,
+      "toolResultBytes": 4266,
+      "post_execution_delivery_delay_ms": 0.413,
+      "own_provider_submitted_ms": 159751.03279199998,
+      "next_provider_submitted_ms": 194745.378,
+      "terminal_to_next_submission_ms": 34.212
+    },
+    {
+      "toolCallId": "call_ac3c763e6185485bb116d573",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_7aq6C3th"
+      ],
+      "modelRequestIds": [
+        "model_request_W3fwefrvgyJBAgqqOPWYG"
+      ],
+      "execution_start_ms": 514439.111542,
+      "execution_end_ms": 518452.673917,
+      "execution_duration_ms": 4013.5623749999795,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 518452.76437499997,
+      "delivery_end_ms": 518452.77350000007,
+      "delivered": true,
+      "toolResultBytes": 2895,
+      "post_execution_delivery_delay_ms": 0.09,
+      "own_provider_submitted_ms": 464426.090584,
+      "next_provider_submitted_ms": 518486.568667,
+      "terminal_to_next_submission_ms": 33.895
+    },
+    {
+      "toolCallId": "call_b673b379a99346c7a2d5de11",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_XBnHEY5n"
+      ],
+      "modelRequestIds": [
+        "model_request_A-jiubj1FlnfP0slHdiFU"
+      ],
+      "execution_start_ms": 320007.620834,
+      "execution_end_ms": 320034.23175000004,
+      "execution_duration_ms": 26.610916000034194,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 320051.21158400003,
+      "delivery_end_ms": 320051.218125,
+      "delivered": true,
+      "toolResultBytes": 8183,
+      "post_execution_delivery_delay_ms": 16.98,
+      "own_provider_submitted_ms": 284388.26291700004,
+      "next_provider_submitted_ms": 320074.6395,
+      "terminal_to_next_submission_ms": 40.408
+    },
+    {
+      "toolCallId": "call_b70e638e535d43bb9d00dbc1",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_ONFacrGp"
+      ],
+      "modelRequestIds": [
+        "model_request_ViikL13h6TdsH8riqpd3u"
+      ],
+      "execution_start_ms": 283366.568584,
+      "execution_end_ms": 284363.6975,
+      "execution_duration_ms": 997.128916000016,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 284364.014459,
+      "delivery_end_ms": 284364.023875,
+      "delivered": true,
+      "toolResultBytes": 5934,
+      "post_execution_delivery_delay_ms": 0.317,
+      "own_provider_submitted_ms": 194745.378,
+      "next_provider_submitted_ms": 284388.26291700004,
+      "terminal_to_next_submission_ms": 24.565
+    },
+    {
+      "toolCallId": "call_bd9782e4326d416998017e0a",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_mbH_1dZu"
+      ],
+      "modelRequestIds": [
+        "model_request_aRzEDIiiGE6jrTBBvlLfP"
+      ],
+      "execution_start_ms": 709201.1605,
+      "execution_end_ms": 709327.7050419999,
+      "execution_duration_ms": 126.54454199993052,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 709327.7306669999,
+      "delivery_end_ms": 709327.735334,
+      "delivered": true,
+      "toolResultBytes": 340,
+      "post_execution_delivery_delay_ms": 0.026,
+      "own_provider_submitted_ms": 686706.5872089999,
+      "next_provider_submitted_ms": 709349.4224169999,
+      "terminal_to_next_submission_ms": 21.717
+    },
+    {
+      "toolCallId": "call_c5f8395e7af8449e849bd8ae",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_Pvr6N_B5"
+      ],
+      "modelRequestIds": [
+        "model_request_h-jrJ6v5OXpX3L2taQXgO"
+      ],
+      "execution_start_ms": 151660.353667,
+      "execution_end_ms": 155709.283834,
+      "execution_duration_ms": 4048.930167000013,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 159724.553292,
+      "delivery_end_ms": 159724.563834,
+      "delivered": true,
+      "toolResultBytes": 13835,
+      "post_execution_delivery_delay_ms": 4015.269,
+      "own_provider_submitted_ms": 93833.59370900001,
+      "next_provider_submitted_ms": 159751.03279199998,
+      "terminal_to_next_submission_ms": 4041.749
+    },
+    {
+      "toolCallId": "call_c66406c4a42047848750cbd8",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_nUIeSU5Y"
+      ],
+      "modelRequestIds": [
+        "model_request_1SQw83-bXz9SSk7anmSbM"
+      ],
+      "execution_start_ms": 750719.915959,
+      "execution_end_ms": 750815.463625,
+      "execution_duration_ms": 95.54766599996947,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 750815.49075,
+      "delivery_end_ms": 750815.49475,
+      "delivered": true,
+      "toolResultBytes": 413,
+      "post_execution_delivery_delay_ms": 0.027,
+      "own_provider_submitted_ms": 709349.4224169999,
+      "next_provider_submitted_ms": 750837.443917,
+      "terminal_to_next_submission_ms": 21.98
+    },
+    {
+      "toolCallId": "call_dcc05ffbe087471a98beecf2",
+      "toolName": "read_files",
+      "preparationRequestIds": [
+        "req_15CcRirj"
+      ],
+      "modelRequestIds": [
+        "model_request_qP855ypBjoJnufmV_ZdOh"
+      ],
+      "execution_start_ms": 190687.145959,
+      "execution_end_ms": 190688.523834,
+      "execution_duration_ms": 1.377875000005588,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 194711.37491699998,
+      "delivery_end_ms": 194711.387417,
+      "delivered": true,
+      "toolResultBytes": 16412,
+      "post_execution_delivery_delay_ms": 4022.851,
+      "own_provider_submitted_ms": 159751.03279199998,
+      "next_provider_submitted_ms": 194745.378,
+      "terminal_to_next_submission_ms": 4056.854
+    },
+    {
+      "toolCallId": "call_e6534afb478a47a58b9a659c",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_B3-Yjnop"
+      ],
+      "modelRequestIds": [
+        "model_request_JAbjvLATrGQN7f90oYuhK"
+      ],
+      "execution_start_ms": 550295.575709,
+      "execution_end_ms": 550321.314667,
+      "execution_duration_ms": 25.738957999972627,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 550321.4222919999,
+      "delivery_end_ms": 550321.4247089999,
+      "delivered": true,
+      "toolResultBytes": 3345,
+      "post_execution_delivery_delay_ms": 0.108,
+      "own_provider_submitted_ms": 518486.568667,
+      "next_provider_submitted_ms": 615004.686875,
+      "terminal_to_next_submission_ms": 64683.372
+    },
+    {
+      "toolCallId": "call_e76201ef3cbf407c8ae16aef",
+      "toolName": "run_commands",
+      "preparationRequestIds": [
+        "req_KkVoLzaT"
+      ],
+      "modelRequestIds": [
+        "model_request_N__gj8Jfi-654-ZMUhId6"
+      ],
+      "execution_start_ms": 463598.18825,
+      "execution_end_ms": 463971.49708400003,
+      "execution_duration_ms": 373.30883400002494,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 464394.347084,
+      "delivery_end_ms": 464394.358375,
+      "delivered": true,
+      "toolResultBytes": 2174,
+      "post_execution_delivery_delay_ms": 422.85,
+      "own_provider_submitted_ms": 427127.279125,
+      "next_provider_submitted_ms": 464426.090584,
+      "terminal_to_next_submission_ms": 454.593
+    },
+    {
+      "toolCallId": "call_e7aba9c0dda94ea69edc0d2b",
+      "toolName": "read_files",
+      "preparationRequestIds": [
+        "req_mva3VHij"
+      ],
+      "modelRequestIds": [
+        "model_request_MJieVyTY7TsWDTSdEnIDs"
+      ],
+      "execution_start_ms": 93814.81075,
+      "execution_end_ms": 93817.44725,
+      "execution_duration_ms": 2.636499999993248,
+      "outcome": "success",
+      "executionInvoked": true,
+      "delivery_start_ms": 93817.599875,
+      "delivery_end_ms": 93817.60312500001,
+      "delivered": true,
+      "toolResultBytes": 29427,
+      "post_execution_delivery_delay_ms": 0.153,
+      "own_provider_submitted_ms": 40503.82525,
+      "next_provider_submitted_ms": 93833.59370900001,
+      "terminal_to_next_submission_ms": 16.146
+    }
+  ],
+  "controls": {
+    "C1_identity_and_request_census": {
+      "trace_sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+      "schema": "cline.roundc-latency-trace.v1",
+      "sessionId": "1794892591345_7em4g",
+      "correlationId": "1794892591345_7em4g",
+      "captureProfile": "dogfood",
+      "exportedAtIso": "2026-11-17T05:32:59.438Z",
+      "declared_event_count": 418,
+      "actual_event_count": 418,
+      "declared_stage_count": 171,
+      "actual_stage_count": 171,
+      "declared_unavailable_count": 13,
+      "actual_unavailable_count": 13,
+      "declared_integrity_failure_count": 0,
+      "actual_integrity_failure_count": 0,
+      "distinct_model_request_ids": 18,
+      "distinct_preparation_request_ids": 18,
+      "boundary_phase_counts": {
+        "compaction:end": 1,
+        "compaction:start": 1,
+        "compaction_decision:start": 18,
+        "provider_completed:end": 18,
+        "provider_completed:start": 18,
+        "provider_first_response:end": 18,
+        "provider_first_response:start": 18,
+        "provider_first_text:end": 18,
+        "provider_first_text:start": 18,
+        "provider_ready:end": 18,
+        "provider_ready:start": 18,
+        "provider_submitted:end": 18,
+        "provider_submitted:start": 18,
+        "request_preparation:end": 18,
+        "request_preparation:start": 18,
+        "request_prepared:end": 18,
+        "request_prepared:start": 18,
+        "schema_validation:end": 21,
+        "schema_validation:start": 21,
+        "tool_execution:end": 26,
+        "tool_execution:start": 26,
+        "tool_result_delivered:end": 26,
+        "tool_result_delivered:start": 26
+      },
+      "truncation": {
+        "truncated": false,
+        "droppedEventCount": 0,
+        "droppedUnavailableCount": 0,
+        "droppedIntegrityFailureCount": 0,
+        "droppedOpenSpanCount": 0,
+        "totalOpenSpanCount": 200,
+        "retainedOpenSpanCount": 0,
+        "maxOpenSpans": 1024,
+        "totalEventCount": 418,
+        "retainedEventCount": 418,
+        "totalUnavailableCount": 13,
+        "totalIntegrityFailureCount": 0,
+        "maxEvents": 4096,
+        "maxUnavailable": 256,
+        "maxIntegrityFailures": 256
+      },
+      "complete": true
+    },
+    "C5_missing_first_text_explicit": {
+      "unavailable_by_boundary": {
+        "provider_first_text": 13
+      },
+      "unavailable_reasons": {
+        "provider_first_text::the provider did not report this event": 13
+      },
+      "provider_first_text_started": 18,
+      "provider_first_text_ended": 18,
+      "provider_first_text_unclosed": 0,
+      "note": "provider_first_text is a CLIENT-SIDE observation of generated text. Server-side TTFT is UNAVAILABLE_FROM_TRACE for every observation, including the ones where the boundary did close.",
+      "server_side_ttft_available": false,
+      "server_side_ttft_classification": "UNAVAILABLE_FROM_TRACE"
+    },
+    "C2_tool_terminal_joined_to_call_identity": {
+      "tool_execution_start_events": 26,
+      "tool_execution_end_events": 26,
+      "tool_result_delivered_start_events": 26,
+      "tool_result_delivered_end_events": 26,
+      "distinct_tool_call_ids": 26,
+      "tools_with_terminal_outcome": 26,
+      "tools_with_delivery_observed": 26,
+      "tools_with_post_execution_delay_measurable": 26,
+      "tool_names": {
+        "run_commands": 21,
+        "fetch_web_content": 1,
+        "read_files": 3,
+        "submit_and_exit": 1
+      },
+      "join_key": "toolCallId"
+    },
+    "C6_tool_result_latency_hypothesis": {
+      "hypothesis": "a ~5 s floor on the tool-result path: a fixed cost paid between the tool executor's terminal outcome and the delivery of its result into the conversation",
+      "suspected_floor_ms": 5000.0,
+      "discriminator": "post_execution_delivery_delay_ms = tool_result_delivered.start.monotonicMs - tool_execution.end.monotonicMs, joined by toolCallId",
+      "sample_count_independent_tool_executions": 26,
+      "delivery_delay_distribution": {
+        "n": 26,
+        "min_ms": 0.021,
+        "median_ms": 0.276,
+        "p90_ms": 711.346,
+        "max_ms": 4022.851,
+        "sum_ms": 9518.182
+      },
+      "execution_duration_distribution": {
+        "n": 26,
+        "min_ms": 0.559,
+        "median_ms": 709.728,
+        "p90_ms": 4038.841,
+        "max_ms": 5068.866,
+        "sum_ms": 44525.705
+      },
+      "terminal_to_next_submission_distribution": {
+        "n": 25,
+        "min_ms": 7.502,
+        "median_ms": 31.815,
+        "p90_ms": 4050.812,
+        "max_ms": 64709.432,
+        "sum_ms": 139506.442
+      },
+      "at_or_above_floor": {
+        "count": 0,
+        "values_ms": []
+      },
+      "near_floor_80_to_100_pct": {
+        "count": 2,
+        "values_ms": [
+          4015.269,
+          4022.851
+        ]
+      },
+      "below_80_pct_of_floor": {
+        "count": 24,
+        "values_ms": [
+          0.021,
+          0.026,
+          0.027,
+          0.029,
+          0.078,
+          0.09,
+          0.097,
+          0.108,
+          0.113,
+          0.137,
+          0.14,
+          0.153,
+          0.257,
+          0.295,
+          0.317,
+          0.322,
+          0.413,
+          0.43,
+          3.635,
+          7.604,
+          16.98,
+          26.097,
+          422.85,
+          999.843
+        ]
+      },
+      "floor_reproduced": false,
+      "floor_reproduced_strict_any": false
+    },
+    "C6b_sibling_batch_discriminator": {
+      "claim": "the observed post-execution delivery delay of a tool result equals the execution time of the NEXT sibling tool call in the SAME model request batch, because the runtime delivers every result in the batch only after the whole batch resolves",
+      "production_basis": "sdk/packages/agents/src/agent-runtime.ts: executeToolCalls batches tool calls and runs a parallel group with Promise.all; the caller then pushes each result and calls observeToolResultDelivered only after executeToolCalls has resolved",
+      "multi_call_batches": 8,
+      "single_call_batches": 10,
+      "comparisons": 8,
+      "residual_ms_distribution": {
+        "n": 8,
+        "min_ms": 0.036,
+        "median_ms": 0.087,
+        "p90_ms": 0.158,
+        "max_ms": 0.209,
+        "sum_ms": 0.755
+      },
+      "max_abs_residual_ms": 0.209,
+      "mean_abs_residual_ms": 0.0944,
+      "rows": [
+        {
+          "batchModelRequestId": "model_request_Bg-zuFGOJKiGLps-fd8Wm",
+          "batchSize": 2,
+          "toolCallId": "call_1d306f44bde84d43b1144f53",
+          "toolName": "run_commands",
+          "own_execution_ms": 2014.0639589999992,
+          "observed_delivery_delay_ms": 7.604,
+          "next_sibling_toolCallId": "call_6fc172f7b6004b41b0a7575c",
+          "next_sibling_execution_ms": 6.198,
+          "inter_call_gap_ms": 1.302,
+          "predicted_delay_ms": 7.5,
+          "residual_ms": 0.104
+        },
+        {
+          "batchModelRequestId": "model_request_MJieVyTY7TsWDTSdEnIDs",
+          "batchSize": 2,
+          "toolCallId": "call_68ba32fa8c4a4cc8b5e3fe1f",
+          "toolName": "run_commands",
+          "own_execution_ms": 4020.571624999997,
+          "observed_delivery_delay_ms": 3.635,
+          "next_sibling_toolCallId": "call_e7aba9c0dda94ea69edc0d2b",
+          "next_sibling_execution_ms": 2.636,
+          "inter_call_gap_ms": 0.955,
+          "predicted_delay_ms": 3.592,
+          "residual_ms": 0.044
+        },
+        {
+          "batchModelRequestId": "model_request_h-jrJ6v5OXpX3L2taQXgO",
+          "batchSize": 2,
+          "toolCallId": "call_c5f8395e7af8449e849bd8ae",
+          "toolName": "run_commands",
+          "own_execution_ms": 4048.930167000013,
+          "observed_delivery_delay_ms": 4015.269,
+          "next_sibling_toolCallId": "call_2f78c5bb009844c68d3d6dc2",
+          "next_sibling_execution_ms": 4014.197,
+          "inter_call_gap_ms": 0.936,
+          "predicted_delay_ms": 4015.133,
+          "residual_ms": 0.136
+        },
+        {
+          "batchModelRequestId": "model_request_qP855ypBjoJnufmV_ZdOh",
+          "batchSize": 2,
+          "toolCallId": "call_dcc05ffbe087471a98beecf2",
+          "toolName": "read_files",
+          "own_execution_ms": 1.377875000005588,
+          "observed_delivery_delay_ms": 4022.851,
+          "next_sibling_toolCallId": "call_a9de8d4ce59f47b8b883edce",
+          "next_sibling_execution_ms": 4022.199,
+          "inter_call_gap_ms": 0.443,
+          "predicted_delay_ms": 4022.642,
+          "residual_ms": 0.209
+        },
+        {
+          "batchModelRequestId": "model_request_ViikL13h6TdsH8riqpd3u",
+          "batchSize": 2,
+          "toolCallId": "call_8a2fd562ff654df88d7cfa58",
+          "toolName": "run_commands",
+          "own_execution_ms": 5068.865791000018,
+          "observed_delivery_delay_ms": 999.843,
+          "next_sibling_toolCallId": "call_b70e638e535d43bb9d00dbc1",
+          "next_sibling_execution_ms": 997.129,
+          "inter_call_gap_ms": 2.599,
+          "predicted_delay_ms": 999.728,
+          "residual_ms": 0.115
+        },
+        {
+          "batchModelRequestId": "model_request_A-jiubj1FlnfP0slHdiFU",
+          "batchSize": 2,
+          "toolCallId": "call_b673b379a99346c7a2d5de11",
+          "toolName": "run_commands",
+          "own_execution_ms": 26.610916000034194,
+          "observed_delivery_delay_ms": 16.98,
+          "next_sibling_toolCallId": "call_087e10709269481c9afcebb1",
+          "next_sibling_execution_ms": 16.652,
+          "inter_call_gap_ms": 0.288,
+          "predicted_delay_ms": 16.94,
+          "residual_ms": 0.04
+        },
+        {
+          "batchModelRequestId": "model_request_N__gj8Jfi-654-ZMUhId6",
+          "batchSize": 2,
+          "toolCallId": "call_e76201ef3cbf407c8ae16aef",
+          "toolName": "run_commands",
+          "own_execution_ms": 373.30883400002494,
+          "observed_delivery_delay_ms": 422.85,
+          "next_sibling_toolCallId": "call_2ce7a82da69e47e383036a65",
+          "next_sibling_execution_ms": 422.326,
+          "inter_call_gap_ms": 0.453,
+          "predicted_delay_ms": 422.779,
+          "residual_ms": 0.071
+        },
+        {
+          "batchModelRequestId": "model_request_JAbjvLATrGQN7f90oYuhK",
+          "batchSize": 2,
+          "toolCallId": "call_8315c8450e5948978bfca8c8",
+          "toolName": "run_commands",
+          "own_execution_ms": 61.462042000028305,
+          "observed_delivery_delay_ms": 26.097,
+          "next_sibling_toolCallId": "call_e6534afb478a47a58b9a659c",
+          "next_sibling_execution_ms": 25.739,
+          "inter_call_gap_ms": 0.321,
+          "predicted_delay_ms": 26.06,
+          "residual_ms": 0.036
+        }
+      ]
+    },
+    "C3_no_double_counting": {
+      "gap_stage_count": 145,
+      "execution_stage_count": 26,
+      "gap_stages_are_disjoint": true,
+      "gap_overlaps": [],
+      "execution_stages_nested_in_tool_span": true,
+      "execution_nesting_detail": [
+        {
+          "toolCallId": "call_49d69844f70c4a3ca63305f5",
+          "nested": true,
+          "execution_ms": 2021.3085830000018,
+          "span_ms": 2021.309
+        },
+        {
+          "toolCallId": "call_750fc45d51d7461cbfe85cde",
+          "nested": true,
+          "execution_ms": 4028.7522089999984,
+          "span_ms": 4028.752
+        },
+        {
+          "toolCallId": "call_1d306f44bde84d43b1144f53",
+          "nested": true,
+          "execution_ms": 2014.0639589999992,
+          "span_ms": 2014.064
+        },
+        {
+          "toolCallId": "call_6fc172f7b6004b41b0a7575c",
+          "nested": true,
+          "execution_ms": 6.19774999999936,
+          "span_ms": 6.198
+        },
+        {
+          "toolCallId": "call_68ba32fa8c4a4cc8b5e3fe1f",
+          "nested": true,
+          "execution_ms": 4020.571624999997,
+          "span_ms": 4020.572
+        },
+        {
+          "toolCallId": "call_e7aba9c0dda94ea69edc0d2b",
+          "nested": true,
+          "execution_ms": 2.636499999993248,
+          "span_ms": 2.636
+        },
+        {
+          "toolCallId": "call_c5f8395e7af8449e849bd8ae",
+          "nested": true,
+          "execution_ms": 4048.930167000013,
+          "span_ms": 4048.93
+        },
+        {
+          "toolCallId": "call_2f78c5bb009844c68d3d6dc2",
+          "nested": true,
+          "execution_ms": 4014.1972499999974,
+          "span_ms": 4014.197
+        },
+        {
+          "toolCallId": "call_dcc05ffbe087471a98beecf2",
+          "nested": true,
+          "execution_ms": 1.377875000005588,
+          "span_ms": 1.378
+        },
+        {
+          "toolCallId": "call_a9de8d4ce59f47b8b883edce",
+          "nested": true,
+          "execution_ms": 4022.1985409999907,
+          "span_ms": 4022.199
+        },
+        {
+          "toolCallId": "call_8a2fd562ff654df88d7cfa58",
+          "nested": true,
+          "execution_ms": 5068.865791000018,
+          "span_ms": 5068.866
+        },
+        {
+          "toolCallId": "call_b70e638e535d43bb9d00dbc1",
+          "nested": true,
+          "execution_ms": 997.128916000016,
+          "span_ms": 997.129
+        },
+        {
+          "toolCallId": "call_b673b379a99346c7a2d5de11",
+          "nested": true,
+          "execution_ms": 26.610916000034194,
+          "span_ms": 26.611
+        },
+        {
+          "toolCallId": "call_087e10709269481c9afcebb1",
+          "nested": true,
+          "execution_ms": 16.652333999983966,
+          "span_ms": 16.652
+        },
+        {
+          "toolCallId": "call_750d8cef04fb41df834250b7",
+          "nested": true,
+          "execution_ms": 5017.685750000004,
+          "span_ms": 5017.686
+        },
+        {
+          "toolCallId": "call_e76201ef3cbf407c8ae16aef",
+          "nested": true,
+          "execution_ms": 373.30883400002494,
+          "span_ms": 373.309
+        },
+        {
+          "toolCallId": "call_2ce7a82da69e47e383036a65",
+          "nested": true,
+          "execution_ms": 422.32620899996255,
+          "span_ms": 422.326
+        },
+        {
+          "toolCallId": "call_ac3c763e6185485bb116d573",
+          "nested": true,
+          "execution_ms": 4013.5623749999795,
+          "span_ms": 4013.562
+        },
+        {
+          "toolCallId": "call_8315c8450e5948978bfca8c8",
+          "nested": true,
+          "execution_ms": 61.462042000028305,
+          "span_ms": 61.462
+        },
+        {
+          "toolCallId": "call_e6534afb478a47a58b9a659c",
+          "nested": true,
+          "execution_ms": 25.738957999972627,
+          "span_ms": 25.739
+        },
+        {
+          "toolCallId": "call_32ebb6511aae41f0905e9813",
+          "nested": true,
+          "execution_ms": 2011.456790999975,
+          "span_ms": 2011.457
+        },
+        {
+          "toolCallId": "call_776e68ba7fa049edba75f44c",
+          "nested": true,
+          "execution_ms": 2011.8047500000102,
+          "span_ms": 2011.805
+        },
+        {
+          "toolCallId": "call_231717bc7f904f6db8b206f8",
+          "nested": true,
+          "execution_ms": 76.21608299994841,
+          "span_ms": 76.216
+        },
+        {
+          "toolCallId": "call_bd9782e4326d416998017e0a",
+          "nested": true,
+          "execution_ms": 126.54454199993052,
+          "span_ms": 126.545
+        },
+        {
+          "toolCallId": "call_c66406c4a42047848750cbd8",
+          "nested": true,
+          "execution_ms": 95.54766599996947,
+          "span_ms": 95.548
+        },
+        {
+          "toolCallId": "call_946d8f190df34f399ce4d2d3",
+          "nested": true,
+          "execution_ms": 0.5586670000338927,
+          "span_ms": 0.559
+        }
+      ],
+      "note": "gap stages are pairwise-disjoint intervals (end -> next start); the `execution` stage is the executor's own run time, nested inside the tool_execution span, and is therefore NOT part of the gap sum. Summing gap stages + execution stages would double count the executor's run time."
+    },
+    "C4_stage_totals_reconcile_with_wall_time": {
+      "declared_wallClockMs": 920908.6393329999,
+      "gap_stage_sum_ms": 1127.54,
+      "execution_stage_sum_ms": 44525.705,
+      "stage_rebuild_matches_trace_stages": true,
+      "rebuilt_stage_count": 171,
+      "trace_stage_count": 171,
+      "note": "The gap stages cover only the intervals BETWEEN boundaries. The boundary SPANS themselves (request_preparation, request_prepared, provider_submitted, provider_first_response, provider_first_text, provider_completed, schema_validation, tool_execution, tool_result_delivered, provider_ready) are measured independently and reported as `spanDurationMs`. Wall time = gap stages + the spans they bracket."
+    },
+    "C4b_wall_reconciliation": {
+      "declared_wallClockMs": 920908.6393329999,
+      "observed_boundary_span_ms": 920908.639,
+      "union_of_boundary_spans_ms": 919380.464,
+      "gap_stage_sum_ms": 1127.54,
+      "unexplained_ms": 1528.175,
+      "note": "The union of boundary spans is the sum of DISJOINT time intervals (overlapping/nested spans are merged, so nested spans such as `request_prepared` inside `provider_submitted` are counted once). The residual against wall time is the inter-boundary gap time that the stage table attributes to preparation/queue/transport/delivery.",
+      "provider_round_trips": {
+        "n": 18,
+        "duration_distribution": {
+          "n": 18,
+          "min_ms": 8365.514,
+          "median_ms": 33660.926,
+          "p90_ms": 89059.096,
+          "max_ms": 170238.382,
+          "sum_ms": 810271.851
+        },
+        "total_ms": 810271.851,
+        "pct_of_wall": 87.99,
+        "note": "`request_prepared` and `provider_submitted` cover the SAME interval and are nested; they are reported here once, under the provider round trip."
+      },
+      "exclusive_wall_attribution": {
+        "provider_round_trip_ms": 810271.851,
+        "tool_execution_ms": 44525.705,
+        "compaction_ms": 64564.481,
+        "inter_boundary_gap_ms": 1127.54,
+        "note": "These four are mutually disjoint EXCLUSIVE wall-time buckets. The compaction window was verified to contain no other boundary event, so the compaction span is disjoint from the provider and tool intervals."
+      }
+    },
+    "C7_compaction_attribution": {
+      "observed_span_ms": 64564.481,
+      "declared_duration_ms": 64564.48125000007,
+      "outcome": "completed",
+      "messages_before": 34,
+      "messages_after": 6,
+      "messages_removed": 28,
+      "evidence_refs_dropped": 17,
+      "compaction_decisions_observed": 18,
+      "disjoint_from_other_boundaries": true,
+      "overlapping_events": [],
+      "note": "The compaction duration is an OBSERVED span. It is reported as exclusive wall time only because the compaction window was verified to contain no other boundary event (no provider span, no tool span). This is an observation about THIS session, not a general property."
+    }
+  }
+}

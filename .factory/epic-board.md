@@ -35251,3 +35251,138 @@ trace: **0** matched. Private workspace / repository references in the committed
 
 RC-02 is **not** reopened — no contradictory evidence appeared. RC-01's production estimator
 is **not** touched.
+
+
+# ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01 — NOT_REPRODUCED — 2026-11-17
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01/`
+  `00-identity-record.json`, `01-stage-attribution-table.json`,
+  `02-causal-classification.json`, `03-executable-controls.json`,
+  `04-tool-execution-timeline.json`, `05-latency-attribution-report.md`,
+  `tool/{attribute_latency,emit_evidence}.py`
+
+**Principal disposition: `NOT_REPRODUCED`.** The suspected ~5 s TOOL-RESULT floor is **not
+reproduced** as a property of the tool-result path. The elapsed time that looked like a ~5 s
+tool-result overhead **is** measured, and it is located elsewhere: it is the **sibling tool's
+own execution time** inside the same model-turn batch, observed at the earlier sibling's
+delivery boundary. The dominant actionable latency cost of the 15:21 dogfood execution is
+**provider wait**.
+
+**Evidence acquisition and causal classification only. No production repair was authorized
+and none was made.** No production source, protocol field, telemetry field, estimator or
+policy was changed; no probe was installed; no RED test was manufactured for a
+hypothesised-but-unreproduced defect.
+
+## Source identity and authoritative input
+
+- Repository `s1onique/clinemm`, branch `main`, **ENTRY_HEAD
+  `575465bf5ba556fe3c7a4f9d6d3d6a0597ae19f6`** — discovered with `git rev-parse HEAD`, and it
+  **matches the expected predecessor** exactly. Tracked tree clean at entry. No branch,
+  worktree, push, PR, reset, stash pop or unrelated cleanup. Protected stashes and all six
+  worktrees preserved.
+- Authoritative input: the preserved session `1794892591345_7em4g`, trace
+  `~/Downloads/roundc-latency-trace(8).json`, SHA-256
+  `b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1` — **verified**.
+  The raw trace is **PRIVATE and stays outside Git**; only sanitized derived evidence is
+  committed.
+- **Completeness verified before analysis**: 418/418 events, 171/171 stages, 13/13
+  unavailable, 0/0 integrity failures, `truncated: false`, 0 events / 0 unavailable / 0
+  integrity failures dropped. Schema `cline.roundc-latency-trace.v1`, capture profile
+  `dogfood`, 18 distinct model requests over 18 distinct preparation requests.
+- Existing Round C instrumentation was **reused**, and the actual production sources were
+  inspected read-only before any analysis: `latency-trace.ts` (`STAGE_BOUNDARIES`,
+  `classifyLatencyStage`, `LatencyTracer.getStages()`), `latency-sink.ts`
+  (`LatencyTraceSink`, `markUnavailableIfOpen`), `agent-runtime.ts`
+  (`executeToolCalls` / `executeParallelGroup` / `observeToolResultDelivered`) and
+  `agent-runtime-config-builder.ts` (`resolveToolExecution`). The analyzer reproduces the
+  production stage taxonomy verbatim; no new boundary and no new emission site were
+  introduced.
+
+## Attribution result
+
+Total wall clock **920,908.6 ms (15.35 min)**, reconciled into four mutually disjoint
+exclusive buckets:
+
+| Bucket | n | Total (ms) | % of wall |
+|---|---|---|---|
+| **Provider round trip** (submission → completion) | 18 | 810,271.9 | **87.99 %** |
+| Compaction (observed span) | 1 | 64,564.5 | 7.01 % |
+| Tool execution (executor run time) | 26 | 44,525.7 | 4.83 % |
+| Inter-boundary gaps (all stages) | 145 | 1,127.5 | 0.12 % |
+| **Sum of exclusive buckets** | | **920,489.6** | |
+| Reconciliation residual | | 419.1 | |
+
+Provider round trip: median 33,660.9 ms, p90 89,059.1 ms, max 170,238.4 ms.
+
+## Priority discriminator — the ~5 s tool-result floor
+
+**Absent.** On **26** independently identified tool executions, joined by the authoritative
+`toolCallId`, `post_execution_delivery_delay_ms = tool_result_delivered.start −
+tool_execution.end` has median **0.276 ms**, p90 711.3 ms, **max 4,022.851 ms**, and
+**0 of 26** reach 5,000 ms. The production-classified `delivery` stage
+(`tool_execution → tool_result_delivered`) is at most **0.295 ms**, median **0.084 ms**, over
+18 samples.
+
+### Where the elapsed time actually occurs
+
+Two tools show a ~4 s post-execution delivery delay (4,015.3 ms and 4,022.9 ms). They are the
+**earlier siblings** of two-call model turns. The runtime executes a model turn's tool calls
+as a batch and delivers every result only after the whole batch resolves
+(`executeToolCalls` → `Promise.all` over the parallel group; the caller then emits
+`observeToolResultDelivered` per result), so an earlier sibling's result cannot be delivered
+until its later sibling has finished.
+
+Verified numerically on all **8** multi-call batches (8 comparisons):
+
+> observed delivery delay − (next sibling's execution + inter-call gap)
+> → max |residual| = **0.209 ms**, mean **0.0944 ms**
+
+The elapsed time is therefore the **sibling tool's own execution time**, re-attributed to the
+earlier sibling's delivery boundary — **not** a per-result delivery cost. The attribution
+rests on the shared authoritative `modelRequestId` batch identity plus that numerical
+residual, **not** on chronological adjacency.
+
+## Boundary classification
+
+| Required boundary | Classification |
+|---|---|
+| Provider submission → completion | **MEASURED** (18 round trips) |
+| First-token / first-text | **MEASURED for 5 of 18**; `UNAVAILABLE_FROM_TRACE` for 13 |
+| Server-side TTFT | `UNAVAILABLE_FROM_TRACE` (all observations) |
+| Model-request preparation | **MEASURED** (18 requests) |
+| Orchestration | **MEASURED** (provider-ready, schema validation, queue gaps) |
+| Tool dispatch → execution → terminal outcome | **MEASURED** (26 executions, joined by `toolCallId`) |
+| Tool terminal outcome → subsequent model submission | **MEASURED** (n=25; median 31.8 ms, p90 4,050.8 ms, max 64,709 ms) |
+| Compaction start → completion | **MEASURED** (1 span, 64,564.5 ms) |
+| UI and host boundaries | `UNAVAILABLE_FROM_TRACE` |
+| Time to first edit | `NOT_APPLICABLE` — this Keycloak task was read-only |
+| Server-side inference time | `UNAVAILABLE_FROM_TRACE` — not inferred |
+
+## Gates
+
+Offline analyzer, read-only, deterministic (byte-identical artifacts on re-run):
+**8 / 8 executable controls PASS** — C1 trace identity and request census; C2 all tool
+terminal events joined to actual call identities; C3 no double-counting of nested or
+overlapping spans (gap stages pairwise-disjoint, 0 overlaps; all 26 `execution` stages nested
+in their tool span; the stage table rebuilt from the events matches the trace's own stage
+array exactly); C4 stage totals reconciled with wall time; C5 missing first-text observations
+reported explicitly; C6 tool-result latency hypothesis evaluated against the observed
+distributions; C7 no production modifications or new diagnostic side effects; C8 evidence
+limitations honoured. `git diff --name-only HEAD` outside the evidence directory:
+**empty**. No raw trace, prompt, conversation content, tool payload or credential committed.
+
+## Board update (RC-03)
+
+| Stage | Status |
+|---|---|
+| RC-01 independent calibration | **Unchanged** — production estimator unchanged, coefficients not refit, frozen calibration preserved |
+| RC-02 observed trigger causality | **Unchanged** — QUALIFIED, explicit scope (one observed event) |
+| **RC-03 live latency attribution** | **NOT_REPRODUCED** — the suspected ~5 s tool-result floor is absent from 26 independently identified tool executions (0 at or above 5,000 ms; max 4,022.851 ms; the `delivery` stage maxes at 0.295 ms). The apparent ~4 s tool-result overhead is the **sibling tool's own execution time** inside the same model-turn batch (max residual 0.209 ms over 8 batches), re-attributed to the earlier sibling's delivery boundary by the runtime's batch-resolve-then-deliver ordering. The dominant actionable cost is **provider round-trip wait — 810,271.9 ms, 87.99 % of wall (n=18)**; host-side orchestration totals ≈1.1 ms. |
+| RC-04 canonical evidence continuity | **Unchanged** — QUALIFIED, `PASS_CANONICAL_CONTINUITY_LIVE` |
+| RC-05 … RC-08 | **Unchanged** |
+
+RC-02 and RC-04 are **not** reopened — no contradictory evidence appeared. RC-01's production
+estimator is **not** touched. The ~5 s hypothesis is **not repaired**: it is refuted at the
+authoritative boundary, and the elapsed time it appeared to describe is located in the
+sibling tool's execution time. **No speculative optimization is proposed and no production
+change is authorized by this ACT.**

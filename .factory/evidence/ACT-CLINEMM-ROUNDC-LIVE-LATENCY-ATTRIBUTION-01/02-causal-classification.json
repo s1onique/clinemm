@@ -1,0 +1,118 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
+  "verdict": "NOT_REPRODUCED",
+  "verdict_scope": "The suspected ~5 s TOOL-RESULT floor is NOT_REPRODUCED as a property of the tool-result path. The elapsed time that LOOKED like a ~5 s tool-result overhead is measured, but it is located elsewhere: it is the SIBLING TOOL's execution time inside the same model-turn batch, observed at the earlier sibling's delivery boundary. The dominant actionable latency cost of this session is PROVIDER WAIT, not tool-result delivery.",
+  "primary_discriminator": {
+    "hypothesis": "a ~5 s floor on the tool-result path: a fixed cost paid between the tool executor's terminal outcome and the delivery of its result into the conversation",
+    "measurement": "post_execution_delivery_delay_ms = tool_result_delivered.start.monotonicMs - tool_execution.end.monotonicMs, joined by toolCallId",
+    "sample_count_independent_tool_executions": 26,
+    "distribution": {
+      "n": 26,
+      "min_ms": 0.021,
+      "median_ms": 0.276,
+      "p90_ms": 711.346,
+      "max_ms": 4022.851,
+      "sum_ms": 9518.182
+    },
+    "at_or_above_5000ms": {
+      "count": 0,
+      "values_ms": []
+    },
+    "near_floor_4000_to_5000ms": {
+      "count": 2,
+      "values_ms": [
+        4015.269,
+        4022.851
+      ]
+    },
+    "floor_reproduced": false,
+    "conclusion": "0 of 26 independently identified tool executions reach a 5,000 ms post-execution delivery delay. The maximum observed is 4,022.851 ms. The delivery stage's own gap measurement is at most 0.295 ms (median 0.084 ms) across all 18 production-classified `delivery` stages. There is no ~5 s floor on the tool-result path."
+  },
+  "where_the_elapsed_time_actually_occurs": {
+    "claim": "the observed post-execution delivery delay of a tool result equals the execution time of the NEXT sibling tool call in the SAME model request batch, because the runtime delivers every result in the batch only after the whole batch resolves",
+    "production_basis": "sdk/packages/agents/src/agent-runtime.ts: executeToolCalls batches tool calls and runs a parallel group with Promise.all; the caller then pushes each result and calls observeToolResultDelivered only after executeToolCalls has resolved",
+    "multi_call_model_turn_batches": 8,
+    "single_call_model_turn_batches": 10,
+    "comparisons": 8,
+    "residual_distribution_ms": {
+      "n": 8,
+      "min_ms": 0.036,
+      "median_ms": 0.087,
+      "p90_ms": 0.158,
+      "max_ms": 0.209,
+      "sum_ms": 0.755
+    },
+    "max_abs_residual_ms": 0.209,
+    "mean_abs_residual_ms": 0.0944,
+    "conclusion": "For every one of the 8 multi-call batches, the earlier sibling's observed delivery delay equals the later sibling's execution time plus the inter-call gap, to within 0.209 ms (mean 0.094 ms). The runtime executes a model turn's tool calls as a batch and delivers every result only after the whole batch resolves (`executeToolCalls` -> `Promise.all` over the parallel group; the caller then emits `observeToolResultDelivered` per result). The ~4 s apparent tool-result overhead is therefore the SIBLING TOOL'S OWN EXECUTION TIME, re-attributed to the earlier sibling's delivery boundary. It is not a per-result delivery cost.",
+    "not_a_causal_claim": "This classification identifies WHERE the elapsed time occurs at the authoritative boundaries. It does NOT assert a server-side cause, and it does not convert chronological adjacency into causal identity: the sibling attribution is established by the shared authoritative modelRequestId batch identity plus the numerical residual, not by adjacency alone."
+  },
+  "dominant_actionable_cost": {
+    "component": "provider_round_trip_wait",
+    "total_ms": 810271.851,
+    "pct_of_wall": 87.99,
+    "n_round_trips": 18,
+    "distribution": {
+      "n": 18,
+      "min_ms": 8365.514,
+      "median_ms": 33660.926,
+      "p90_ms": 89059.096,
+      "max_ms": 170238.382,
+      "sum_ms": 810271.851
+    },
+    "conclusion": "87.99% of the 920.9 s wall clock is the model request in flight at the provider. This is provider waiting, not host-side orchestration. The host-side orchestration costs are negligible by comparison: request preparation 0.109 ms total, provider_ready 0.3 ms total, tool result delivery 0.2 ms total, schema validation 0.2 ms total.",
+    "limitation": "Provider request duration is NOT equivalent to inference computation time. No server-side time is inferred. The host-observable boundary is `provider_submitted` (the real dispatch seam) to `provider_completed` (the stream end)."
+  },
+  "secondary_costs": {
+    "compaction": {
+      "observed_span_ms": 64564.481,
+      "pct_of_wall": 7.01,
+      "outcome": "completed",
+      "messages_removed": 28,
+      "evidence_refs_dropped": 17,
+      "disjoint_from_other_boundaries": true,
+      "classification": "An OBSERVED span, reported as exclusive wall time for THIS session only because its window contains no other boundary event. It is not automatically exclusive overhead."
+    },
+    "tool_execution": {
+      "total_ms": 44525.705,
+      "pct_of_wall": 4.83,
+      "distribution": {
+        "n": 26,
+        "min_ms": 0.559,
+        "median_ms": 709.728,
+        "p90_ms": 4038.841,
+        "max_ms": 5068.866,
+        "sum_ms": 44525.705
+      },
+      "classification": "genuine executor run time; the dominant tool-level cost"
+    },
+    "inter_boundary_gaps": {
+      "total_ms": 1127.54,
+      "pct_of_wall": 0.12,
+      "classification": "queue 795.5 ms (n=34), delivery 1.7 ms (n=18), transport 0.2 ms (n=13), preparation 0.1 ms (n=18), unclassified 330.0 ms (n=62)"
+    }
+  },
+  "boundary_classification": {
+    "provider_submission_to_completion": "MEASURED (18 round trips)",
+    "available_first_token_first_text_boundaries": "MEASURED for 5 of 18 requests; UNAVAILABLE_FROM_TRACE for 13",
+    "provider_first_text_unavailable_count": 13,
+    "provider_first_text_unavailable_reason": "the provider did not report this event (production `markUnavailableIfOpen`)",
+    "server_side_ttft": "UNAVAILABLE_FROM_TRACE (all observations)",
+    "model_request_preparation": "MEASURED (request_preparation span, 18 requests)",
+    "orchestration": "MEASURED (provider_ready / schema_validation / queue gaps)",
+    "tool_dispatch_execution_terminal_outcome": "MEASURED (26 tool executions, joined by toolCallId)",
+    "tool_terminal_outcome_to_subsequent_model_submission": "MEASURED (n=25; median 31.8 ms, p90 4050.8 ms, max 64709.4 ms)",
+    "compaction_start_to_completion": "MEASURED (1 span, 64,564.5 ms)",
+    "ui_and_host_boundaries": "UNAVAILABLE_FROM_TRACE - the trace records no UI/webview boundary and no extension-host boundary; only the agent-runtime and provider seams are observable",
+    "time_to_first_edit": "NOT_APPLICABLE - this Keycloak task was read-only; no edit was attempted",
+    "server_side_inference_time": "UNAVAILABLE_FROM_TRACE - not inferred"
+  },
+  "evidence_limitations_honoured": {
+    "ttft_never_synthesized": true,
+    "provider_duration_not_called_inference_compute_time": true,
+    "compaction_span_not_assumed_exclusive_overhead": "reported as exclusive only after verifying the window contains no other boundary event",
+    "read_only_task_ttfe_marked_not_applicable": true,
+    "chronological_adjacency_not_promoted_to_causal_identity": true,
+    "absent_boundaries_classified_unavailable_from_trace": true
+  }
+}

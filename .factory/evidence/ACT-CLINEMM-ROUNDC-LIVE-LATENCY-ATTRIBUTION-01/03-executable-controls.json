@@ -1,0 +1,191 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
+  "trace_sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+  "controls": [
+    {
+      "control": "C1",
+      "requirement": "Exact source-trace identity and request census.",
+      "result": "PASS",
+      "evidence": {
+        "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+        "sha256_matches_contract": true,
+        "sessionId": "1794892591345_7em4g",
+        "declared_vs_actual": {
+          "events": [
+            418,
+            418
+          ],
+          "stages": [
+            171,
+            171
+          ],
+          "unavailable": [
+            13,
+            13
+          ],
+          "integrityFailures": [
+            0,
+            0
+          ]
+        },
+        "truncated": false,
+        "distinct_model_request_ids": 18,
+        "distinct_preparation_request_ids": 18
+      }
+    },
+    {
+      "control": "C2",
+      "requirement": "All tool terminal events joined to actual command/call identities.",
+      "result": "PASS",
+      "evidence": {
+        "join_key": "toolCallId",
+        "tool_execution_start_events": 26,
+        "tool_execution_end_events": 26,
+        "tool_result_delivered_start_events": 26,
+        "tool_result_delivered_end_events": 26,
+        "distinct_tool_call_ids": 26,
+        "tools_with_terminal_outcome": 26,
+        "tools_with_delivery_observed": 26,
+        "tool_names": {
+          "run_commands": 21,
+          "fetch_web_content": 1,
+          "read_files": 3,
+          "submit_and_exit": 1
+        }
+      }
+    },
+    {
+      "control": "C3",
+      "requirement": "No double-counting of nested or overlapping spans.",
+      "result": "PASS",
+      "evidence": {
+        "gap_stages_are_disjoint": true,
+        "gap_overlaps": [],
+        "execution_stages_nested_in_tool_span": true,
+        "gap_stage_count": 145,
+        "execution_stage_count": 26,
+        "rule": "gap stages are pairwise-disjoint intervals (end -> next start); the `execution` stage is the executor's own run time, nested inside the tool_execution span, and is therefore NOT part of the gap sum. Summing gap stages + execution stages would double count the executor's run time."
+      }
+    },
+    {
+      "control": "C4",
+      "requirement": "Stage totals reconciled with wall time.",
+      "result": "PASS",
+      "evidence": {
+        "stage_rebuild_matches_trace_stages": true,
+        "rebuilt_stage_count": 171,
+        "trace_stage_count": 171,
+        "exclusive_buckets_ms": {
+          "provider_round_trip_ms": 810271.851,
+          "tool_execution_ms": 44525.705,
+          "compaction_ms": 64564.481,
+          "inter_boundary_gap_ms": 1127.54,
+          "note": "These four are mutually disjoint EXCLUSIVE wall-time buckets. The compaction window was verified to contain no other boundary event, so the compaction span is disjoint from the provider and tool intervals."
+        },
+        "sum_of_buckets_ms": 920489.577,
+        "declared_wallClockMs": 920908.6393329999,
+        "reconciliation_residual_ms": 419.062,
+        "union_of_boundary_spans_ms": 919380.464,
+        "observed_boundary_span_ms": 920908.639
+      }
+    },
+    {
+      "control": "C5",
+      "requirement": "Missing first-text observations reported explicitly.",
+      "result": "PASS",
+      "evidence": {
+        "unavailable_by_boundary": {
+          "provider_first_text": 13
+        },
+        "unavailable_reasons": {
+          "provider_first_text::the provider did not report this event": 13
+        },
+        "provider_first_text_started": 18,
+        "provider_first_text_ended": 18,
+        "provider_first_text_unclosed": 0,
+        "server_side_ttft_classification": "UNAVAILABLE_FROM_TRACE"
+      }
+    },
+    {
+      "control": "C6",
+      "requirement": "Tool-result latency hypothesis evaluated against observed distributions.",
+      "result": "PASS",
+      "evidence": {
+        "hypothesis": "a ~5 s floor on the tool-result path: a fixed cost paid between the tool executor's terminal outcome and the delivery of its result into the conversation",
+        "discriminator": "post_execution_delivery_delay_ms = tool_result_delivered.start.monotonicMs - tool_execution.end.monotonicMs, joined by toolCallId",
+        "sample_count": 26,
+        "delivery_delay_distribution": {
+          "n": 26,
+          "min_ms": 0.021,
+          "median_ms": 0.276,
+          "p90_ms": 711.346,
+          "max_ms": 4022.851,
+          "sum_ms": 9518.182
+        },
+        "execution_duration_distribution": {
+          "n": 26,
+          "min_ms": 0.559,
+          "median_ms": 709.728,
+          "p90_ms": 4038.841,
+          "max_ms": 5068.866,
+          "sum_ms": 44525.705
+        },
+        "terminal_to_next_submission_distribution": {
+          "n": 25,
+          "min_ms": 7.502,
+          "median_ms": 31.815,
+          "p90_ms": 4050.812,
+          "max_ms": 64709.432,
+          "sum_ms": 139506.442
+        },
+        "at_or_above_floor": {
+          "count": 0,
+          "values_ms": []
+        },
+        "near_floor": {
+          "count": 2,
+          "values_ms": [
+            4015.269,
+            4022.851
+          ]
+        },
+        "floor_reproduced": false,
+        "sibling_batch_discriminator": {
+          "multi_call_batches": 8,
+          "comparisons": 8,
+          "max_abs_residual_ms": 0.209,
+          "mean_abs_residual_ms": 0.0944
+        },
+        "verdict": "NOT_REPRODUCED"
+      }
+    },
+    {
+      "control": "C7",
+      "requirement": "No production modifications or new diagnostic side effects.",
+      "result": "PASS",
+      "evidence": {
+        "production_files_modified": 0,
+        "git_diff_outside_evidence_dir": "empty",
+        "probe_installed": false,
+        "analyzer_location": ".factory/evidence/ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01/tool/attribute_latency.py",
+        "analyzer_reads_only_the_preserved_trace": true,
+        "note": "the analyzer reuses the existing production instrumentation and the existing Round C stage taxonomy; no new boundary, no new emission site and no production change was introduced"
+      }
+    },
+    {
+      "control": "C8",
+      "requirement": "Evidence limitations honoured (no synthesis, no unobserved inference).",
+      "result": "PASS",
+      "evidence": {
+        "ttft_never_synthesized": true,
+        "server_side_ttft": "UNAVAILABLE_FROM_TRACE",
+        "provider_duration_not_called_inference_compute_time": true,
+        "compaction_span_not_assumed_exclusive_overhead": true,
+        "read_only_task_time_to_first_edit": "NOT_APPLICABLE",
+        "chronological_adjacency_not_promoted_to_causal_identity": true,
+        "ui_and_host_boundaries": "UNAVAILABLE_FROM_TRACE"
+      }
+    }
+  ],
+  "all_controls_pass": true
+}

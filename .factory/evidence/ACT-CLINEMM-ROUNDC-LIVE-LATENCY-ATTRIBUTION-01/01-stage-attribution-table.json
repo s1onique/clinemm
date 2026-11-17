@@ -1,0 +1,159 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
+  "sessionId": "1794892591345_7em4g",
+  "trace_sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+  "total_wall_ms": 920908.6393329999,
+  "total_wall_minutes": 15.35,
+  "reconciliation": {
+    "sum_of_exclusive_buckets_ms": 920489.577,
+    "declared_wallClockMs": 920908.6393329999,
+    "residual_ms": 419.062,
+    "residual_note": "the residual is the edge time before the first boundary event and after the last one, plus the sub-millisecond inter-boundary gaps the stage table rounds away"
+  },
+  "exclusive_wall_attribution": [
+    {
+      "bucket": "provider_round_trip",
+      "boundary": "provider_submitted (start -> end)",
+      "meaning": "the model request was in flight at the provider",
+      "n": 18,
+      "total_ms": 810271.851,
+      "median_ms": 33660.926,
+      "p90_ms": 89059.096,
+      "max_ms": 170238.382,
+      "min_ms": 8365.514,
+      "pct_of_wall": 87.99,
+      "exclusive": true,
+      "note": "`request_prepared` covers the SAME interval and is NESTED inside it; it is counted once here. Provider request duration is NOT inference computation time and no server-side time is inferred."
+    },
+    {
+      "bucket": "tool_execution",
+      "boundary": "tool_execution (start -> end)",
+      "meaning": "the tool executor's own measured run time",
+      "n": 26,
+      "total_ms": 44525.705,
+      "median_ms": 709.728,
+      "p90_ms": 4038.841,
+      "max_ms": 5068.866,
+      "min_ms": 0.559,
+      "pct_of_wall": 4.83,
+      "exclusive": true,
+      "note": "the executor's run time; it is nested inside the tool_execution span and is NOT part of the gap-stage sum"
+    },
+    {
+      "bucket": "compaction",
+      "boundary": "compaction (start -> end)",
+      "meaning": "the compaction pipeline ran",
+      "n": 1,
+      "total_ms": 64564.481,
+      "median_ms": 64564.481,
+      "p90_ms": 64564.481,
+      "max_ms": 64564.481,
+      "min_ms": 64564.481,
+      "pct_of_wall": 7.01,
+      "exclusive": true,
+      "note": "an OBSERVED span. Reported as exclusive wall time only because the compaction window was verified to contain no other boundary event (see controls.C7_compaction_attribution)."
+    },
+    {
+      "bucket": "inter_boundary_gap",
+      "boundary": "gap stages (end -> next start)",
+      "meaning": "preparation / queue / transport / delivery gaps between boundary spans",
+      "n": 145,
+      "total_ms": 1127.54,
+      "median_ms": null,
+      "p90_ms": null,
+      "max_ms": null,
+      "min_ms": null,
+      "pct_of_wall": 0.12,
+      "exclusive": true,
+      "note": "pairwise-disjoint intervals; the stage breakdown follows"
+    }
+  ],
+  "stage_breakdown": [
+    {
+      "stage": "delivery",
+      "meaning": "the tool result existed but was not yet in the provider request",
+      "measurement": "gap between tool_execution.end and tool_result_delivered.start",
+      "n": 18,
+      "total_ms": 1.697,
+      "median_ms": 0.084,
+      "p90_ms": 0.161,
+      "max_ms": 0.295,
+      "min_ms": 0.021,
+      "pct_of_wall": 0.0,
+      "counts_toward_exclusive_wall": true
+    },
+    {
+      "stage": "execution",
+      "meaning": "the executor's own measured run time",
+      "measurement": "tool_execution span duration (the executor's own run time)",
+      "n": 26,
+      "total_ms": 44525.705,
+      "median_ms": 709.728,
+      "p90_ms": 4038.841,
+      "max_ms": 5068.866,
+      "min_ms": 0.559,
+      "pct_of_wall": 4.835,
+      "counts_toward_exclusive_wall": false
+    },
+    {
+      "stage": "preparation",
+      "meaning": "the request was being prepared for the provider",
+      "measurement": "gap between request_preparation.end and request_prepared.start",
+      "n": 18,
+      "total_ms": 0.109,
+      "median_ms": 0.005,
+      "p90_ms": 0.009,
+      "max_ms": 0.013,
+      "min_ms": 0.004,
+      "pct_of_wall": 0.0,
+      "counts_toward_exclusive_wall": true
+    },
+    {
+      "stage": "queue",
+      "meaning": "the request was built and held, or the agent held the turn",
+      "measurement": "gap between request_prepared.end and provider_submitted.start",
+      "n": 34,
+      "total_ms": 795.472,
+      "median_ms": 5.661,
+      "p90_ms": 23.608,
+      "max_ms": 345.993,
+      "min_ms": 1.382,
+      "pct_of_wall": 0.086,
+      "counts_toward_exclusive_wall": true
+    },
+    {
+      "stage": "transport",
+      "meaning": "the provider had not answered, or was still generating",
+      "measurement": "gap between provider_submitted.end and provider_first_text.start",
+      "n": 13,
+      "total_ms": 0.221,
+      "median_ms": 0.014,
+      "p90_ms": 0.025,
+      "max_ms": 0.058,
+      "min_ms": 0.004,
+      "pct_of_wall": 0.0,
+      "counts_toward_exclusive_wall": true
+    },
+    {
+      "stage": "unclassified",
+      "meaning": "a gap with no production stage classification",
+      "measurement": "n/a",
+      "n": 62,
+      "total_ms": 330.041,
+      "median_ms": 1.284,
+      "p90_ms": 9.048,
+      "max_ms": 112.116,
+      "min_ms": 0.005,
+      "pct_of_wall": 0.036,
+      "counts_toward_exclusive_wall": true
+    }
+  ],
+  "overlap_accounting": {
+    "rule": "a stage is the GAP between an `end` event and the NEXT `start` event; the gap does NOT include the previous span's own duration. The `execution` stage is the executor's run time, nested inside the tool_execution span, and is therefore NOT part of the gap sum. Overlapping/nested spans (e.g. request_prepared inside provider_submitted) are counted ONCE.",
+    "gap_stages_disjoint": true,
+    "execution_stages_nested_in_tool_span": true,
+    "stage_rebuild_matches_trace_stages": true,
+    "union_of_boundary_spans_ms": 919380.464,
+    "observed_boundary_span_ms": 920908.639
+  }
+}
