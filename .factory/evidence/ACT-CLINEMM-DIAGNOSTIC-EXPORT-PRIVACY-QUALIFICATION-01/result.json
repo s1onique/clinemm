@@ -1,0 +1,93 @@
+{
+  "schema": "cline.ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY-QUALIFICATION-01.result.v1",
+  "act": "ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY-QUALIFICATION-01",
+  "epic": "EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE",
+  "workstream": "RC-06",
+  "principalDisposition": "PASS_EXPORT_PRIVACY_QUALIFIED",
+  "entryHead": "f940a5ab88421944156c5e917c6806b12bc085ae",
+  "expectedEntryHead": "f940a5ab88421944156c5e917c6806b12bc085ae",
+  "entryHeadMatchesExpected": true,
+  "branch": "main",
+  "productionChanges": 0,
+  "newPublicProtocolFields": 0,
+  "canonicalPersistenceChanges": 0,
+  "selectedProductionBoundary": {
+    "command": "cline.debug.dumpRoundcLatencyTrace",
+    "hostAdapter": "apps/vscode/src/sdk/roundc-latency-trace-runtime.ts",
+    "serializer": "buildRoundcLatencyTraceArtifact",
+    "writer": "dumpRoundcLatencyTrace",
+    "sanitizer": "sdk/packages/core/src/observability/latency/latency-trace.ts#sanitizeLatencyMetadata",
+    "artifact": "<globalStorageUri>/roundc-latency-trace.json",
+    "classification": "SHAREABLE_STRUCTURAL_DIAGNOSTIC"
+  },
+  "realArtifact": {
+    "classification": "PRIVATE",
+    "committed": false,
+    "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+    "bytes": 350052,
+    "schema": "cline.roundc-latency-trace.v1",
+    "captureProfile": "dogfood",
+    "sessionId": "1794892591345_7em4g",
+    "correlationId": "1794892591345_7em4g",
+    "eventCount": 418,
+    "stageCount": 171,
+    "unavailableCount": 13,
+    "integrityFailureCount": 0,
+    "truncated": false,
+    "privacy": {
+      "canonicalAbsolutePathValuesInTrace": 0,
+      "canonicalTextContentCommandInputOutputResultValuesInTrace": 0,
+      "credentialShapedCanonicalValuesInTrace": 0,
+      "jdbcShapedCanonicalValuesInTrace": 0,
+      "traceAbsolutePathLeafValues": 0
+    },
+    "correlationConserved": true
+  },
+  "gates": {
+    "productionExportSeam": "PASS",
+    "positiveNegativeSanitizerControls": "PASS",
+    "realArtifactPrivacyAssessment": "PASS",
+    "correlationConservation": "PASS",
+    "noProductionChanges": "PASS",
+    "noNewTypecheckFailures": "PASS",
+    "cleanEvidencePackagePrivacyScan": "PASS_WITH_ONE_CLASSIFIED_PATH_IDENTITY"
+  },
+  "committedEvidenceScan": {
+    "packages": [
+      "ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01",
+      "ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01",
+      "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
+      "ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01"
+    ],
+    "trackedFiles": 51,
+    "highEntropyCredentialPatternMatches": 0,
+    "exactCanonicalRawContentMatches": 0,
+    "exactCanonicalPrivateArtifactPathMatches": 1,
+    "projectSpecificPrivatePathMarkers": 0,
+    "rawArtifactBytesCommitted": 0,
+    "classifiedPathIdentity": {
+      "package": "ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01",
+      "file": "00-identity-record.json",
+      "fieldPath": "input_artifacts.items[].path",
+      "nonReversibleFingerprint": "e26c9ec2b43f7c681af3d0fc50bd61b3c511d470734a5e3c154170abf3088aa9",
+      "classification": "PRIVATE_ARTIFACT_IDENTITY_RECEIPT",
+      "artifactBytesCommitted": false
+    }
+  },
+  "overwriteBehaviour": {
+    "classification": "DURABILITY_LIMITATION_NOT_A_PRIVACY_LEAK",
+    "canonicalPathReplacedByLaterDump": true,
+    "operatorWarningBeforeReplacement": false,
+    "authoritativeCapturePreservedInTwoExternalCopies": true,
+    "authoritativeCaptureDestroyed": false,
+    "productionRepairMade": false
+  },
+  "remainingLimitations": [
+    "One live dogfood session and one provider/model shape do not prove every future payload shape.",
+    "Synthetic canaries prove current sanitizer behaviour, not historical non-disclosure.",
+    "Evidence packages intentionally retain private artifact identity paths for reproducibility.",
+    "Canonical dump overwrite remains a durability limitation.",
+    "SDK core typecheck has pre-existing repository diagnostics."
+  ],
+  "rc01ThroughRc05Reopened": false
+}

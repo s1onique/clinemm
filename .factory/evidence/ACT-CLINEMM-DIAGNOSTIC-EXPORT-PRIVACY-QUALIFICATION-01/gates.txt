@@ -1,0 +1,105 @@
+ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY-QUALIFICATION-01
+ENTRY_HEAD=f940a5ab88421944156c5e917c6806b12bc085ae
+EXPECTED_ENTRY_HEAD=f940a5ab88421944156c5e917c6806b12bc085ae
+BRANCH=main
+PRINCIPAL_DISPOSITION=PASS_EXPORT_PRIVACY_QUALIFIED
+PRODUCTION_CHANGES=0
+NEW_PUBLIC_PROTOCOL_FIELDS=0
+CANONICAL_PERSISTENCE_CHANGES=0
+
+GATE_01_ENTRY_IDENTITY=PASS
+  actual HEAD == expected HEAD; tracked tree clean at entry.
+
+GATE_02_PRODUCTION_EXPORT_SEAM=PASS
+  cd apps/vscode && bun x vitest run \
+    src/sdk/__tests__/roundc-latency-trace-dogfood-activation.test.ts \
+    src/sdk/__tests__/roundc-latency-trace-identity.qual01.test.ts
+  RESULT: 2 files, 51 tests, 51 PASS, 0 FAIL.
+
+GATE_03_POSITIVE_NEGATIVE_CONTROLS=PASS
+  Real production dump + sink + allowlist sanitizer exercised.
+  Positive: allowed identifiers/counts/digests/classifications retained.
+  Negative: prompt, command, API-key, authorization, private-path and
+  tool-result-content canaries absent from the exported artifact.
+  Negative: raw skip reason reduced to a finite classification.
+  Negative: public profile installs no sink and writes no capture.
+  Conservation: dump does not clear the live trace.
+
+GATE_04_SDK_LATENCY_SANITIZER=PASS
+  cd sdk/packages/core && bun x vitest run src/observability/latency/latency-trace.test.ts
+  RESULT: 1 file, 42 tests, 42 PASS, 0 FAIL.
+
+GATE_05_AUTOMATIC_INCIDENT_EXPORT_ADJACENT=PASS
+  cd apps/vscode && bun x vitest run \
+    src/sdk/__tests__/automatic-incident-export01.aice01.test.ts \
+    src/sdk/__tests__/automatic-incident-export-gap01.aice01.test.ts
+  RESULT: 2 files, 34 tests, 34 PASS, 0 FAIL.
+
+GATE_06_DESKTOP_SHAREABLE_DIAGNOSTICS_PRIVACY=PASS
+  cd apps/examples/desktop-app && bun x vitest run \
+    sidecar/diagnostics.test.ts sidecar/diagnostics-export-privacy.test.ts \
+    --config vitest.sidecar.config.ts
+  RESULT: 2 files, 27 tests, 27 PASS, 0 FAIL.
+
+GATE_07_TYPECHECK_VSCODE=PASS
+  cd apps/vscode && bun run check-types
+  RESULT: exit 0, zero diagnostics.
+
+GATE_08_TYPECHECK_SDK_CORE=PRE_EXISTING_BASELINE_ONLY
+  cd sdk/packages/core && bun x tsc -p tsconfig.dev.json --noEmit
+  RESULT: non-zero with pre-existing repository diagnostics; none in the
+  exercised latency files; this ACT changed no SDK source.
+
+GATE_09_REAL_ARTIFACT_IDENTITY=PASS
+  trace SHA-256 b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1
+  schema cline.roundc-latency-trace.v1; profile dogfood;
+  session/correlation 1794892591345_7em4g;
+  events 418, stages 171, unavailable 13, integrity failures 0;
+  truncation false; declared counts equal actual lengths.
+
+GATE_10_REAL_ARTIFACT_PRIVACY=PASS
+  canonical absolute-path values in trace: 0
+  canonical text/content/command/input/output/result values in trace: 0
+  credential-shaped canonical values in trace: 0
+  JDBC-shaped canonical values in trace: 0
+  trace absolute-path leaf values: 0
+  required correlation identities/digests retained.
+
+GATE_11_RAW_ARTIFACTS_OUTSIDE_GIT=PASS
+  raw trace, canonical transcript, compaction sidecar and manifest are not
+  committed; their SHA-256 receipts are retained only as evidence identities.
+
+GATE_12_COMMITTED_RC01_RC05_EVIDENCE_SCAN=PASS_WITH_ONE_CLASSIFIED_PATH_IDENTITY
+  51 tracked files across RC-02..RC-05 live-evidence packages.
+  high-entropy credential patterns: 0
+  exact canonical raw-content matches: 0
+  exact canonical private-artifact path matches: 1
+    package: ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01
+    file: 00-identity-record.json
+    field path: input_artifacts.items[].path
+    non-reversible fingerprint:
+      e26c9ec2b43f7c681af3d0fc50bd61b3c511d470734a5e3c154170abf3088aa9
+    classification: PRIVATE artifact identity receipt; artifact bytes not
+    committed; package declares input_artifacts PRIVATE and committed=false.
+  project-specific private-path markers: 0
+  raw artifact bytes committed: 0
+
+GATE_13_OLDER_EXPORT_PRIVACY_PACKAGE_SCAN=PASS
+  ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01:
+  absolute paths are runner root + disposable synthetic fixture roots;
+  one credential-shaped literal is a synthetic RED canary;
+  post-repair real export receipt contains no absolute private path or credential.
+
+GATE_14_OVERWRITE_BEHAVIOUR=DURABILITY_LIMITATION_NOT_A_PRIVACY_LEAK
+  fixed canonical dump path is replaced by a later dump without an operator
+  warning; authoritative capture exists in two external copies with identical
+  bytes; no authoritative capture was destroyed during qualification.
+  No production repair authorized or made.
+
+GATE_15_PRODUCTION_DIFF=EMPTY
+  git diff --name-only outside .factory/evidence and .factory/epic-board.md
+  is empty.
+
+GATE_16_PROTECTED_STATE=PRESERVED
+  protected worktrees preserved; no push, PR, reset, stash operation, branch
+  creation or new worktree.

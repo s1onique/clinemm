@@ -35853,3 +35853,94 @@ be driven against a fixture; no logic changed).
 | RC-06 … RC-08 | **Unchanged** |
 
 RC-01 through RC-04 are **not** reopened. No production source was modified.
+
+# ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY-QUALIFICATION-01 — PASS_EXPORT_PRIVACY_QUALIFIED — 2026-11-17
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY-QUALIFICATION-01/`
+  `qualification-report.md`, `gates.txt`, `result.json`
+
+**Principal disposition: `PASS_EXPORT_PRIVACY_QUALIFIED`.** The real Round C
+production export (`cline.debug.dumpRoundcLatencyTrace` →
+`dumpRoundcLatencyTrace` → `buildRoundcLatencyTraceArtifact` →
+`LatencyTraceSink` / `sanitizeLatencyMetadata` →
+`<globalStorageUri>/roundc-latency-trace.json`) is schema-driven and
+allowlist-bounded. **Recon and executable qualification only: zero production
+changes, zero protocol-field changes, zero canonical-persistence changes, no
+new diagnostic, and no RED manufactured for an unreproduced defect.**
+
+## Entry and authoritative input
+
+- Repository `s1onique/clinemm`, branch `main`, **ENTRY_HEAD
+  `f940a5ab88421944156c5e917c6806b12bc085ae`** — discovered with
+  `git rev-parse HEAD` and equal to the expected entry. Tracked tree clean at
+  entry. No push, PR, reset, stash operation, branch, new worktree or unrelated
+  cleanup; protected worktrees and external raw artifacts preserved.
+- Preserved dogfood session `1794892591345_7em4g`; authoritative trace SHA-256
+  `b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1` —
+  **MATCH**, schema `cline.roundc-latency-trace.v1`, profile `dogfood`, 418
+  events, 171 stages, 13 unavailable, zero integrity failures, no truncation.
+  The raw trace remains **PRIVATE and outside Git**.
+
+## Real artifact privacy and correlation
+
+The live trace contains **0** canonical absolute-path values, **0** canonical
+text/content/command/input/output/result values, **0** credential-shaped
+canonical values, **0** JDBC-shaped canonical values and **0** absolute-path
+leaf values. It retains the required authoritative correlation: session id,
+correlation id, per-event correlation id, preparation/request/decision
+identities, tool-call ids, model/provider identities and deterministic
+projection digests. Sanitization therefore removes content without sacrificing
+causal correlation.
+
+## Executable gates
+
+- VS Code Round C activation + identity suites: **51/51 PASS** (2 files).
+- VS Code Round C + automatic-incident export suites: **85/85 PASS** (4 files).
+- SDK core latency-trace suite: **42/42 PASS**.
+- Desktop shareable diagnostics privacy suite: **27/27 PASS** (2 files).
+- `apps/vscode` `bun run check-types`: **PASS, zero diagnostics**.
+- SDK core typecheck: pre-existing repository diagnostics only; none in the
+  exercised latency files; no SDK source changed.
+- Real-artifact assessment and committed-package scan were executed
+  independently of synthetic canaries. The canaries prove current sanitizer
+  behaviour; they are not claimed as historical non-disclosure.
+
+## Committed RC-01…RC-05 evidence privacy
+
+Across the four committed live-evidence packages (51 tracked files): **0**
+high-entropy credential patterns, **0** exact canonical raw-content matches,
+**0** project-specific private-path markers and **0** raw artifact bytes
+committed. One exact canonical **private-artifact path identity** remains in
+the RC-05 `00-identity-record.json` receipt (field
+`input_artifacts.items[].path`, non-reversible fingerprint
+`e26c9ec2b43f7c681af3d0fc50bd61b3c511d470734a5e3c154170abf3088aa9`).
+That package explicitly classifies `input_artifacts` as `PRIVATE` and
+`committed: false`; it is an external-artifact **identity receipt**, not
+session content or artifact bytes. It is disclosed here rather than hidden.
+The older `ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01` package contains only
+runner/synthetic-fixture roots and one synthetic RED canary; no live
+credential is present.
+
+## Overwrite behaviour
+
+The canonical Round C dump path is replaced by a later dump without an
+operator warning. The preserved authoritative capture exists in two external
+copies with identical bytes and the canonical path currently holds the same
+bytes, so no authoritative capture was destroyed. Classified as
+**`DURABILITY_LIMITATION_NOT_A_PRIVACY_LEAK`**; any non-destructive dump or
+operator warning requires a separately authorized repair ACT.
+
+## RC-06 board update
+
+| Stage | Status |
+|-------|--------|
+| RC-01 independent calibration | **Unchanged** — replicated; production estimator unchanged |
+| RC-02 observed trigger causality | **Unchanged** — qualified with explicit scope |
+| RC-03 live latency attribution | **Unchanged** — `NOT_REPRODUCED` |
+| RC-04 canonical evidence continuity | **Unchanged** — `PASS_CANONICAL_CONTINUITY_LIVE` |
+| RC-05 tool-call normalization | **Unchanged** — `PASS_LIVE_NORMALIZATION_QUALIFIED` |
+| **RC-06 diagnostic export privacy** | **QUALIFIED — `PASS_EXPORT_PRIVACY_QUALIFIED`** — the real production Round C export is allowlist-bounded; the preserved live artifact contains no prompt, provider payload, tool-result body, credential or private path; correlation identities and hashes remain intact; committed RC-01…RC-05 evidence contains no raw artifact bytes or raw session content. One private-artifact **path identity** remains in the RC-05 receipt by design and is explicitly classified. Canonical dump overwrite is a separate durability limitation, not a confirmed privacy leak. |
+| RC-07 … RC-08 | **Unchanged** |
+
+RC-01 through RC-05 are **not reopened**. No production repair is warranted by
+this qualification.

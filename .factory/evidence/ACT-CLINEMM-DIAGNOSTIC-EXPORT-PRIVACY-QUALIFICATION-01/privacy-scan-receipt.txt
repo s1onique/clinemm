@@ -1,0 +1,16 @@
+ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY-QUALIFICATION-01 — evidence package privacy scan receipt
+SCAN_TARGET=.factory/evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY-QUALIFICATION-01/
+SCAN_MODE=byte-level regex over committed evidence files (values never emitted)
+FILE gates.txt sha256=86006ca96fc7a83386f85613871a206a556c47e7a55494b181be8decb7af660f bytes=4747
+FILE qualification-report.md sha256=c95c3e9c0d34cb30d08bdd71632469c8734d252d97c66b657636970b5b4870f2 bytes=10438
+FILE result.json sha256=5283f3e2c1a8d5ff005841a8768b9ee84f051a548d341706adf8ff3aac084ebb bytes=3950
+PATTERN private_key matches=0
+PATTERN aws_access_key matches=0
+PATTERN openai_style_key matches=0
+PATTERN auth_header matches=0
+PATTERN secret_assignment matches=0
+PATTERN jdbc_url matches=0
+PATTERN private_fs_path matches=0
+NOTE the fingerprints quoted in the report (e26c9ec2..., b84ee4a8...) are
+NOTE SHA-256 digests of already-committed evidence identities, not secret values.
+NOTE No discovered private value is reproduced in this receipt.
