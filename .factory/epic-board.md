@@ -37,6 +37,111 @@ Gates: 27/27 focused diagnostics tests, 275/275 SDK context tests, 751/751 sidec
 lint clean on all 8 ACT-owned files, and ZERO typecheck delta against the HEAD baseline
 (43 SDK core diagnostics identical before and after; the single desktop-app TS1170 is the same
 pre-existing baseline error recorded for CORRECTION01).
+# ACT-CLINEMM-EDITOR-REALPATH-AUTHORITY-TRIAGE01 — PASS_INTENDED_EXTERNAL_EDIT_CONTRACT — 2026-11-17
+
+```text
+ACT_ID: ACT-CLINEMM-EDITOR-REALPATH-AUTHORITY-TRIAGE01
+TYPE: bounded reconnaissance + reproduction (no production repair authorized)
+VERDICT: PASS_INTENDED_EXTERNAL_EDIT_CONTRACT
+ENTRY_HEAD: 2a8c31bd07065678966ef908af2f3e97e0d6b193   (== EXPECTED ENTRY_HEAD)
+BRANCH: main (no ACT branch created)
+PRODUCTION_CODE_CHANGES: 0
+EXISTING_TEST_MODIFICATIONS: 0   (0 skips, 0 deletions, 0 weakenings)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-EDITOR-REALPATH-AUTHORITY-TRIAGE01/
+  01-reproduction-and-contract.md
+  02-executable-transcript.txt
+```
+
+**Status:** The three pre-existing RED failures in
+`sdk/packages/core/src/extensions/tools/executors/editor.realpath-authority.test.ts`
+(cases C "absolute outside target", D "existing symlink escape", E
+"nonexistent descendant of an outside root") are a **TEST-CONTRACT MISMATCH** —
+**NOT** an authorization bypass and **NOT** a test-environment artifact.
+
+**RED REPRODUCED** (suite UNMODIFIED, `sdk/packages/core`):
+`Tests 3 failed | 4 passed (7)` — C, D, E fail; A, B, F, H (positive controls)
+pass. The RED is preserved intact.
+
+**Why it is not a bypass.** The suite asserts a **workspace-only** contract on
+the raw SDK executor. The real production contract is **"capability-specific
+authorized writable root"**: external edits are permitted when explicitly
+authorized via the `editFilesExternally` AutoApproveBar toggle, which is
+**ON by default** (`DEFAULT_AUTO_APPROVAL_SETTINGS`, `AutoApprovalSettings.ts:37`)
+and **ON in the live installed configuration** (`~/.cline/data/globalState.json`
+→ `autoApprovalSettings.actions.editFilesExternally = true`). The SDK executor
+(`sdk/packages/core/src/extensions/tools/executors/editor.ts`) has **no**
+workspace-authorization concept at all — its only path option `restrictToCwd`
+is documented as *"Restrict relative-path file operations to paths inside cwd.
+Absolute paths are always accepted as-is."* The `authorizedRoot` the test
+passes as `cwd` is a **relative-path resolution base, not a security boundary**
+**The real boundary is present, wired, and correct.** The authorization gate
+lives one layer up in the host: `SdkInteractionCoordinator.handleEditorOrApplyPatchApproval`
+→ `classifyEditTarget` (realpath canonicalization, `editor-path-authority.ts`)
+→ `evaluateEditAutoApproval` (the 5-row + fail-closed lattice,
+`editor-auto-approval-policy.ts`) → ASK publishes an approval card and
+**blocks**; ALLOW invokes the executor. The VS Code host forces
+`autoApprove=false` for the `editor` tool (`sdk-tool-policies.ts:69`) and the
+SDK runtime skips the executor entirely when approval is not granted
+(`sdk/packages/agents/src/agent-runtime.ts:5323`). Seatbelt governs shell
+execution, NOT host-side editor writes.
+
+**Executable causal discriminator (REAL surfaces, disposable mkdtemp fixtures,
+21/21 PASS):**
+- **D1 classifier** — absolute-outside ⇒ `outside`; symlink escape (lexically
+  INSIDE) ⇒ `outside` (realpath-resolved); nonexistent outside descendant ⇒
+  `outside`; in-workspace controls ⇒ `inside`. The lexical/resolved
+  disagreement exists ONLY for the symlink case and the production classifier
+  already resolves it correctly.
+- **D2 policy lattice** — `editFiles=true`+`external=false`+outside ⇒ **ASK**;
+  `external=true`+outside ⇒ **ALLOW**; `editFiles=false` ⇒ **ASK**;
+  `unavailable` ⇒ **ASK** (fail closed). Identical verdicts for all three
+  RED geometries via `evaluateEditAutoApprovalForRequest`.
+- **D3 REAL coordinator seam** — negative control (`external=false`, outside)
+  ⇒ **ASK**, approval card published, gate BLOCKS, **no filesystem effect**;
+  positive control (`external=true`, outside) ⇒ **ALLOW**; `editFiles=false`
+  ⇒ **ASK**, no write. **CONTRAST row (load-bearing):** `external=false` +
+  the user clicking **Approve** ⇒ approved=true ⇒ the executor **DOES write
+  outside**. An outside write is therefore *gated behind an approval the user
+  may grant*, not forbidden.
+- **D4 effective destinations** — absolute ⇒ the absolute target; symlink ⇒
+  the symlink target OUTSIDE the root; nonexistent ⇒ the outside tree is
+  CREATED; in-workspace control ⇒ inside.
+- **D5 macOS `/var` ↔ `/private/var` alias** — a discriminating control
+  re-ran the classifier and the executor with the ALIASED root spelling and
+  obtained IDENTICAL results (outside ⇒ `outside`; write ⇒ still outside).
+  **The alias is NOT causal.**
+**Independent classification of the three failures:** C, D and E are each an
+**INTENTIONAL, EXPLICITLY APPROVED EXTERNAL EDIT** — not an unauthorized escape
+through the applicable production authorization path.
+
+**Precedent (already adjudicated).** The predecessor ACT's CYCLE7 P1-4
+correction states verbatim: *"current CYCLE5 RED suite expects C/D/E → executor
+refuses, but the correct semantic is C/D/E → ASK → user approves → executor
+STILL WRITES ... Cannot simply flip C/D/E to executor-rejection GREEN — that
+encodes 'outside is forbidden', contradicting the upstream 'Edit all files'
+product contract."* The SDK-side file is the un-split CYCLE5 RED suite; the
+split (classifier / policy / executor) was implemented on the host side by
+`ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01` (closed GREEN).
+
+**Hygiene:** disposable `os.tmpdir()` fixtures only; the post-run sweep found
+NO leftover `cline-edit-auth-*` / `cline-triage01-*` directories; no arbitrary
+real files touched; the disposable discriminator file was removed after the
+evidence capture and is NOT part of the commit.
+
+**Successor (NOT this ACT's scope):** a narrowly scoped **test-contract
+correction** on
+`sdk/packages/core/src/extensions/tools/executors/editor.realpath-authority.test.ts`
+— split it per the CYCLE7 P1-4 shape (classifier assertions belong on the
+host classifier; the SDK-executor rows must assert that an APPROVED outside
+write SUCCEEDS, while the RELATIVE traversal escape (case B) remains
+refused). No production repair is warranted on this evidence.
+
+
+
+
+— so the suite **bypasses the very policy boundary that owns authorization**.
+
+
 # ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01 — PASS_EVIDENCE_PROVENANCE_CORRECTION — 2026-11-06
 
 **Status:** P0 EVIDENCE-PROVENANCE CORRECTION, on the existing `main` branch. The AICE01 review

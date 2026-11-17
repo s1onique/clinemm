@@ -1,0 +1,159 @@
+# ACT-CLINEMM-EDITOR-REALPATH-AUTHORITY-TRIAGE01 / 02 — Executable transcript
+
+ENTRY_HEAD = 2a8c31bd07065678966ef908af2f3e97e0d6b193
+
+================================================================
+SECTION A — EXISTING RED REPRODUCTION (suite UNMODIFIED)
+================================================================
+
+$ cd sdk/packages/core
+$ bunx vitest run --config vitest.config.ts src/extensions/tools/executors/editor.realpath-authority.test.ts
+
+
+ RUN  v4.1.10 <repo>/sdk/packages/core
+
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > A. control: clean write inside cwd passes 4ms
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > B. relative lexical traversal escape (../...) is refused today 2ms
+ × src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > C. ABSOLUTE OUTSIDE TARGET — RED: must be refused 4ms
+   → promise resolved "'File created successfully at: /privat…'" instead of rejecting
+ × src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > D. EXISTING SYMLINK ESCAPE — RED: lexical-inside must still be refused (effective destination) 1ms
+   → promise resolved "'File created successfully at: /privat…'" instead of rejecting
+ × src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > E. nonexistent descendant of an outside root — RED: must be refused 2ms
+   → promise resolved "'File created successfully at: /privat…'" instead of rejecting
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > F. control: in-root canonical variant still passes 1ms
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > H. control: ordinary workspace edit still passes 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > C. ABSOLUTE OUTSIDE TARGET — RED: must be refused
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-d64koK/cline-edit-auth-CHhm21/outside/c.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:141:6
+    139|       context,
+    140|      ),
+    141|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    142|     await expect(fs.access(target)).rejects.toMatchObject({
+    143|      code: "ENOENT",
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:9
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:125:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > D. EXISTING SYMLINK ESCAPE — RED: lexical-inside must still be refused (effective destination)
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-d64koK/cline-edit-auth-6Al7GI/authorized/escape/d.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:186:6
+    184|       context,
+    185|      ),
+    186|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    187|     await expect(
+    188|      fs.access(path.join(outsideRoot, "d.txt")),
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:3
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:149:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > E. nonexistent descendant of an outside root — RED: must be refused
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-d64koK/cline-edit-auth-XfuMPC/outside/deep/sub/e.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:207:6
+    205|       context,
+    206|      ),
+    207|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    208|     await expect(
+    209|      fs.access(path.join(outsideRoot, "deep")),
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:9
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:194:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 4 passed (7)
+   Start at  12:04:46
+   Duration  338ms (transform 156ms, setup 0ms, import 214ms, tests 16ms, environment 0ms)
+
+
+================================================================
+SECTION B — DISPOSABLE CAUSAL DISCRIMINATOR (REAL production surfaces)
+================================================================
+
+The discriminator file was DISPOSABLE and is NOT part of the commit:
+  apps/vscode/src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts
+
+It drove the REAL: classifyEditTarget / evaluateEditAutoApproval /
+evaluateEditAutoApprovalForRequest / SdkInteractionCoordinator.handleRequestToolApproval
+/ createEditorExecutor. Fixtures were os.tmpdir() mkdtemp only.
+
+$ cd apps/vscode
+$ bunx vitest run --config vitest.config.ts src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 <repo>/apps/vscode
+
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D1 — production classifier verdict for the three RED geometries > classifies absolute-outside as OUTSIDE 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D1 — production classifier verdict for the three RED geometries > classifies the symlink escape as OUTSIDE (lexical-inside, effective-outside) 0ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D1 — production classifier verdict for the three RED geometries > classifies a nonexistent descendant of an outside root as OUTSIDE 0ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D1 — production classifier verdict for the three RED geometries > classifies in-workspace positive controls as INSIDE 0ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D2 — production policy lattice (the REAL contract) > lattice row: editFiles=true + outside + editFilesExternally=false => ASK 0ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D2 — production policy lattice (the REAL contract) > lattice row: editFiles=true + outside + editFilesExternally=true => ALLOW 0ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D2 — production policy lattice (the REAL contract) > lattice row: editFiles=true + inside => ALLOW (external option irrelevant) 0ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D2 — production policy lattice (the REAL contract) > lattice row: editFiles=false => ASK regardless of target 0ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D2 — production policy lattice (the REAL contract) > lattice row: unavailable => ASK (fail closed), even with external=true 0ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D2 — production policy lattice (the REAL contract) > evaluateEditAutoApprovalForRequest agrees for the three RED geometries 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D3 — REAL coordinator seam verdict (negative + positive authorization controls) > NEGATIVE: editFilesExternally=false + outside target => ASK (approval card published, blocked) 54ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D3 — REAL coordinator seam verdict (negative + positive authorization controls) > POSITIVE: editFilesExternally=true + outside target => ALLOW (explicitly authorized external edit) 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D3 — REAL coordinator seam verdict (negative + positive authorization controls) > NEGATIVE: editFiles=false + inside target => ASK (base toggle off) 51ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D3 — REAL coordinator seam verdict (negative + positive authorization controls) > CONTRAST: user APPROVES an outside edit => the executor DOES write (approval != refusal) 55ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D3 — REAL coordinator seam verdict (negative + positive authorization controls) > POSITIVE: editFiles=true + inside target => ALLOW 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D4 — REAL executor destination effects (absolute / symlink / nonexistent) > absolute outside: the executor writes to the OUTSIDE absolute destination 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D4 — REAL executor destination effects (absolute / symlink / nonexistent) > symlink escape: the executor writes THROUGH the symlink to the outside root 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D4 — REAL executor destination effects (absolute / symlink / nonexistent) > nonexistent outside descendant: the executor CREATES the outside tree 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D4 — REAL executor destination effects (absolute / symlink / nonexistent) > in-workspace positive control still writes inside 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D5 — macOS /var ↔ /private/var alias discrimination > proves the alias is NOT causal: an ALIASED root still classifies an outside target as OUTSIDE 1ms
+ ✓ src/sdk/__tests__/zz-disposable-editor-realpath-authority-triage01.test.ts > TRIAGE01 D5 — macOS /var ↔ /private/var alias discrimination > proves the alias is NOT causal for the executor either: aliased cwd still writes outside 1ms
+
+ Test Files  1 passed (1)
+      Tests  21 passed (21)
+   Start at  12:04:46
+   Duration  2.75s (transform 1.65s, setup 2.08s, import 390ms, tests 172ms, environment 0ms)
+
+
+================================================================
+SECTION C — FIXTURE HYGIENE SWEEP
+================================================================
+
+$ ls -d /var/folders/*/T/cline-edit-auth-* 2>/dev/null
+(no matches)
+$ ls -d /var/folders/*/T/cline-triage01-* 2>/dev/null
+(no matches)
