@@ -1,0 +1,75 @@
+# C4 - Conservation and no-regression gates
+
+## C4.1 The whole control-seam suite
+
+COMMAND: bunx vitest run --config vitest.config.ts src/sdk/control-seam/
+RESULT: Tests  2 failed | 139 passed (141)
+        Test Files  1 failed | 8 passed (9)
+
+The 2 failures are the PRE-EXISTING `control-seam.owner-exclusivity.cor02.test.ts`
+failures (COR02-R1, COR02-R2) that the predecessor ACT recorded as reproduced
+IDENTICALLY at the pristine baseline:
+
+  COR02-R1  AssertionError: both contenders must reach the write gate: expected false to be true
+  COR02-R2  AssertionError: instance A must start the control seam: expected false to be true
+
+They are subprocess-based endpoint-ownership tests, are unrelated to this
+correction, and are NOT caused by it (see C4.2).
+
+## C4.2 The `src/sdk/` sweep - baseline versus corrected
+
+COMMAND: bunx vitest run --config vitest.config.ts src/sdk/
+
+| State | Test Files | Tests |
+|---|---|---|
+| PRISTINE BASELINE (the CORR01 diff stashed) | 64 failed \| 428 passed \| 6 skipped (498) | 175 failed \| 5642 passed \| 60 skipped (5877) |
+| WITH the CORR01 correction | 64 failed \| 428 passed \| 6 skipped (498) | 170 failed \| 5647 passed \| 60 skipped (5877) |
+
+DELTA: **-5 failures, +5 passes, and the failing-file count is IDENTICAL (64).**
+
+The five newly-passing tests are exactly the five behavioral witnesses that
+were RED at the pristine baseline (C1-1, C2-1, C3-1, C4-1, C4-3; plus C4-2b
+which is new). NO test that passed at the baseline fails with the correction.
+The 64 pre-existing failing files are unrelated (bridge-config tests, the
+command-job-manager suite, the bootstrap suites) and are IDENTICAL in both runs.
+
+## C4.3 Authorization conservation
+
+| Property | Receipt |
+|---|---|
+| A valid READ credential alone still cannot mutate | CN-1 PASS; V1 R1-1/R1-2/R1-3/R6-1 PASS |
+| The read credential is NEVER equal to the write credential | V1 R1-4 PASS |
+| The write credential is invalidated on host replacement | V1 R6-5 PASS |
+| The write credential file is owner-only and removed on dispose | V1 R6-8 PASS |
+| The mutation opt-in record is SEPARATE from the seam enablement | V1 R6-9 PASS |
+| The READ-ONLY view is EXACTLY the original two operations | CN-2 PASS; V1 R6-6 PASS |
+| The mutation-AUTHORIZED view shows exactly the two write operations | CN-3 PASS; V1 R6-7 PASS |
+| No approval bypass / cancel / feedback / shell shortcut | V1 R6-10 PASS |
+
+## C4.4 Operation and lifecycle conservation
+
+| Property | Receipt |
+|---|---|
+| The two MCP operations are UNCHANGED in identity and shape | no change to `control-seam-protocol.ts`; the diff touches only the server and the ledger |
+| The start still routes through the EXISTING `initTask()` lifecycle | `control-seam-authority.ts` and `SdkController.ts` are UNCHANGED (empty diff) |
+| The authority returns the REAL accepted session id | V1 R2-2 PASS; C1-1 PASS |
+| The authority is asked to start the client's prompt verbatim | V1 R2-3 PASS |
+| A lifecycle failure that cannot be proven yields `unknown_outcome` | V1 R2-4 PASS |
+| The existing active task owner is never implicitly replaced | V1 R4-1 PASS |
+| A superseded start is RECORDED so a replay does not start a task | V1 R4-3 PASS |
+| The seam exposes no new operation | V1 R6-10 PASS; CN-2 PASS |
+
+## C4.5 Production diff surface
+
+```
+ apps/vscode/src/sdk/control-seam/control-seam-operation-ledger.ts  |  80 ++++++++-
+ apps/vscode/src/sdk/control-seam/control-seam-server.ts            | 180 ++++++++++++++++++---
+ apps/vscode/src/sdk/control-seam/control-seam.execution-control-v1.test.ts | 108 ++++++++++---
+ apps/vscode/src/sdk/control-seam/control-seam.execution-control-v1-corr01.test.ts | 692 (new)
+```
+
+UNCHANGED (empty diff): `control-seam-protocol.ts`, `control-seam-authority.ts`,
+`control-seam-runtime.ts`, `control-seam-mutation.ts`, `control-seam-client.ts`,
+`control-seam-proxy.ts`, `SdkController.ts`, `control-seam-event-buffer.ts`.
+
+No protocol version bump. No new dependency. No proto change.

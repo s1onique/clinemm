@@ -199,6 +199,37 @@ export class ControlSeamServer {
 	 */
 	private readonly ledger = new ControlSeamOperationLedger()
 	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the SINGLE-SLOT
+	 * in-flight start reservation.
+	 *
+	 * The V1 implementation had NO reservation across DIFFERENT request
+	 * ids: two requests could both observe "no active session" while
+	 * neither start had finished, and both could reach
+	 * `authority.startAct()`. This slot closes that window. It holds the
+	 * request id of the start that is currently in flight; a second
+	 * start with a DIFFERENT id is refused with
+	 * `rejected(start-already-in-flight)` and never reaches the
+	 * lifecycle.
+	 *
+	 * The slot is INSTANCE-LOCAL, like the ledger, and is released when
+	 * the in-flight start settles.
+	 */
+	private inFlightStartRequestId: string | undefined
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the session id of the
+	 * task THIS mutation client started.
+	 *
+	 * `clinemm_read_events` is scoped to THIS value, not to whatever
+	 * session happens to be active. The V1 implementation compared the
+	 * requested session against the CURRENTLY ACTIVE session, so a valid
+	 * write credential could read a task the client never started - for
+	 * example a task the operator started in the UI.
+	 *
+	 * `undefined` means the mutation client has NOT started any task yet,
+	 * so every event read is refused.
+	 */
+	private ownedSessionId: string | undefined
+	/**
 	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the bounded buffer that
 	 * retains the EXISTING production events.
 	 */
@@ -472,6 +503,13 @@ export class ControlSeamServer {
 		// IN MEMORY and MUST NOT survive a host replacement.
 		this.ledger.clear()
 		this.eventBuffer.clear()
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: drop the in-flight
+		// start reservation and the owned session id. Both are
+		// instance-local state and MUST NOT survive a host replacement -
+		// a new host mints a new write credential, so it must not inherit
+		// the previous instance's ownership.
+		this.inFlightStartRequestId = undefined
+		this.ownedSessionId = undefined
 		if (server) {
 			await new Promise<void>((resolve) => server.close(() => resolve()))
 		}
@@ -555,6 +593,34 @@ export class ControlSeamServer {
 	 */
 	private handleConnection(socket: Socket): void {
 		let buffer = ""
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the RESPONSE
+		// ORDERING fence for this connection.
+		//
+		// The client matches replies to requests through a FIFO pending
+		// queue, so the server MUST answer on a socket in REQUEST order.
+		// The V1 implementation wrote each response as its handler
+		// settled: a fast read could overtake a slow write on the SAME
+		// socket, and the client then attributed the replies to the wrong
+		// requests.
+		//
+		// Every request line gets a monotonically increasing sequence
+		// number. A settled response is buffered until every EARLIER
+		// request on this socket has been written; then it is flushed in
+		// order. The in-order write is the ONLY thing that touches the
+		// socket, so the ordering cannot be broken by a late settle.
+		let nextSequence = 0
+		let nextToWrite = 0
+		const settled = new Map<number, ControlSeamResponse>()
+		const flush = (): void => {
+			while (settled.has(nextToWrite)) {
+				const response = settled.get(nextToWrite)
+				settled.delete(nextToWrite)
+				nextToWrite++
+				if (response !== undefined) {
+					this.writeResponse(socket, response)
+				}
+			}
+		}
 		socket.on("data", (chunk: Buffer) => {
 			buffer += chunk.toString("utf8")
 			// Bound the INCOMPLETE-line buffer BEFORE parsing anything.
@@ -581,14 +647,20 @@ export class ControlSeamServer {
 				// lifecycle). The response is written when it settles.
 				// A disconnect in the meantime does NOT cancel the
 				// operation: its outcome is recorded in the ledger.
+				//
+				// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the settled
+				// response is QUEUED by its sequence number and flushed in
+				// REQUEST order, so a slow request cannot be overtaken.
+				const sequence = nextSequence++
 				this.handleLine(line)
-					.then((response) => this.writeResponse(socket, response))
+					.then((response) => {
+						settled.set(sequence, response)
+						flush()
+					})
 					.catch((error) => {
 						Logger.error("[ControlSeam] failed to handle a request:", error)
-						this.writeResponse(
-							socket,
-							controlSeamError(CONTROL_SEAM_ERROR_CODES.internal, "control-seam request failed"),
-						)
+						settled.set(sequence, controlSeamError(CONTROL_SEAM_ERROR_CODES.internal, "control-seam request failed"))
+						flush()
 					})
 				newlineIndex = buffer.indexOf("\n")
 			}
@@ -663,15 +735,33 @@ export class ControlSeamServer {
 	 *      match THIS instance's credential in constant time.
 	 *   4. The asserted workspace MUST match the grant's workspace.
 	 *   5. The payload MUST be present and well-formed.
-	 *   6. There MUST NOT be an existing active task owner.
-	 *   7. The ledger MUST NOT already hold this request id with a
-	 *      different payload.
-	 *   8. ONLY THEN is the real `initTask()` lifecycle invoked.
+	 *   6. The LEDGER MUST be consulted for this request id. A recorded
+	 *      outcome is returned VERBATIM - this happens BEFORE the
+	 *      active-owner check, because a replay of an accepted request
+	 *      must return the SAME recorded outcome even though the
+	 *      accepted task is now the active session.
+	 *   7. There MUST NOT be an existing active task owner.
+	 *   8. There MUST NOT be another start IN FLIGHT (the single-slot
+	 *      reservation). Two different request ids may not both reach
+	 *      the lifecycle.
+	 *   9. ONLY THEN is the real `initTask()` lifecycle invoked.
 	 *
 	 * A socket disconnect during the start does NOT cancel the start:
 	 * the operation continues and its outcome is recorded in the ledger,
 	 * so a replay of the same request id returns the SAME outcome
 	 * instead of starting a second task.
+	 *
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01:
+	 *
+	 *   - The ledger lookup MOVED AHEAD of the active-owner check. The
+	 *     V1 order produced a deterministic contradiction: a replay of
+	 *     an accepted request saw the active session and returned
+	 *     `rejected(active-task-owner-exists)` instead of the recorded
+	 *     `accepted` outcome.
+	 *   - A SINGLE-SLOT in-flight reservation now guards the lifecycle
+	 *     call. The V1 implementation had none, so two DIFFERENT request
+	 *     ids could both pass the no-active-session check while neither
+	 *     start had finished, and both could reach `startAct()`.
 	 */
 	private async handleStartAct(request: ControlSeamRequest): Promise<ControlSeamResponse> {
 		const payload = request.payload
@@ -709,18 +799,14 @@ export class ControlSeamServer {
 			)
 		}
 
-		// (6) NO EXISTING ACTIVE TASK OWNER. The seam never implicitly
-		// replaces, clears, cancels or resumes a task.
-		const activeSessionId = this.options.authority.readActiveSessionId()
-		if (activeSessionId !== undefined) {
-			return this.startActResult({
-				outcome: "rejected",
-				requestId: input.requestId,
-				reason: "active-task-owner-exists",
-			})
-		}
-
-		// (7) IDEMPOTENCY. The ledger is instance-local and bounded.
+		// (6) IDEMPOTENCY - FIRST.
+		//
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: this lookup MUST
+		// precede the active-owner check. A replay of an ALREADY ACCEPTED
+		// request finds the accepted task as the ACTIVE session, so the
+		// active-owner check would reject it - contradicting the contract
+		// that an identical replay returns the SAME recorded outcome. The
+		// recorded outcome is the authority for a replay.
 		const fingerprint = this.fingerprintStartActPayload(input)
 		const lookup = this.ledger.lookup(input.requestId, fingerprint)
 		if (lookup.kind === "conflict") {
@@ -733,6 +819,34 @@ export class ControlSeamServer {
 		if (lookup.kind === "found") {
 			return this.startActResultFromLedger(lookup.outcome, input.requestId)
 		}
+
+		// (7) NO EXISTING ACTIVE TASK OWNER. The seam never implicitly
+		// replaces, clears, cancels or resumes a task.
+		const activeSessionId = this.options.authority.readActiveSessionId()
+		if (activeSessionId !== undefined) {
+			return this.startActResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				reason: "active-task-owner-exists",
+			})
+		}
+
+		// (8) THE SINGLE-SLOT IN-FLIGHT RESERVATION.
+		//
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the V1
+		// implementation had no reservation across DIFFERENT request ids.
+		// Two requests could both observe "no active session" while
+		// neither start had finished, and both could reach the lifecycle.
+		// The reservation is taken SYNCHRONOUSLY - before any `await` -
+		// so the window is closed for the whole server.
+		if (this.inFlightStartRequestId !== undefined) {
+			return this.startActResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				reason: "start-already-in-flight",
+			})
+		}
+		this.inFlightStartRequestId = input.requestId
 
 		// Record the IN-FLIGHT entry BEFORE the lifecycle call, so a
 		// duplicate delivery that arrives during the start joins this
@@ -756,8 +870,19 @@ export class ControlSeamServer {
 			// RECORDED, so a replay does not start a second task.
 			Logger.error("[ControlSeam] clinemm_start_act failed with an unprovable outcome:", error)
 			outcome = { status: "unknown_outcome", reason: "host-failure" }
+		} finally {
+			// The in-flight slot is ALWAYS released - including on the
+			// failure path - so a later request is not permanently blocked
+			// by a start that never completed.
+			this.inFlightStartRequestId = undefined
 		}
-		this.ledger.complete(input.requestId, outcome)
+		this.ledger.complete(input.requestId, outcome, fingerprint)
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: an ACCEPTED start
+		// establishes this mutation client's OWNERSHIP of the session, so
+		// `clinemm_read_events` can be scoped to it.
+		if (outcome.status === "accepted") {
+			this.ownedSessionId = outcome.sessionId
+		}
 		return this.startActResultFromLedger(outcome, input.requestId)
 	}
 
@@ -798,9 +923,20 @@ export class ControlSeamServer {
 		// every `text` field is omitted.
 		const allowContentRead = grant.allowContentRead
 
-		// SCOPE: the session must be the one this mutation client owns.
-		const activeSessionId = this.options.authority.readActiveSessionId()
-		if (activeSessionId === undefined || activeSessionId !== input.sessionId) {
+		// SCOPE: the session must be the one THIS mutation client
+		// started.
+		//
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the V1
+		// implementation compared the requested session against the
+		// CURRENTLY ACTIVE session. That is NOT ownership: a valid
+		// write credential could therefore read the events of a task it
+		// never started - for example a task the operator started in the
+		// UI. The fence is now the session THIS client started, recorded
+		// when its own `clinemm_start_act` was accepted. A foreign or
+		// never-started session id is refused without disclosing whether
+		// it exists.
+		const ownedSessionId = this.ownedSessionId
+		if (ownedSessionId === undefined || ownedSessionId !== input.sessionId) {
 			return Promise.resolve(
 				controlSeamError(
 					CONTROL_SEAM_ERROR_CODES.foreignSession,

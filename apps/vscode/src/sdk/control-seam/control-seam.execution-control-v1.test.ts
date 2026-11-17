@@ -46,8 +46,15 @@ import { ControlSeamServer } from "./control-seam-server"
 const SHORT_TMP_ROOT = "/tmp"
 
 interface AuthorityFixture {
-	/** The active session id the controller owns, or `undefined`. */
-	readonly sessionId?: string
+	/**
+	 * The active session id the controller owns, or `undefined`.
+	 *
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: it is MUTABLE
+	 * because the production authority installs the accepted session as
+	 * the ACTIVE session when a start is accepted - and the corrected
+	 * replay contract depends on that precondition being observable.
+	 */
+	sessionId?: string
 	readonly taskId?: string
 	readonly isRunning?: boolean
 	/**
@@ -86,6 +93,14 @@ interface AuthorityFixture {
 	 * finish.
 	 */
 	releaseStart?: () => void
+	/**
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: when false, the
+	 * authority does NOT install the accepted session as the ACTIVE
+	 * session. A test that wants to observe the "active task owner
+	 * exists" precondition separately from the acceptance sets this to
+	 * false.
+	 */
+	installSessionOnAccept?: boolean
 }
 
 interface Harness {
@@ -149,17 +164,27 @@ function makeAuthority(fixture: AuthorityFixture) {
 			if (fixture.startOutcome) {
 				const outcome = fixture.startOutcome
 				if (outcome.outcome === "accepted") {
+					const sessionId = outcome.sessionId ?? "session-default"
+					if (fixture.installSessionOnAccept !== false) {
+						// The production authority installs the session as
+						// the ACTIVE session when the start is accepted.
+						fixture.sessionId = sessionId
+					}
 					return {
 						outcome: "accepted" as const,
-						sessionId: outcome.sessionId ?? "session-default",
+						sessionId,
 						...(outcome.taskId !== undefined ? { taskId: outcome.taskId } : {}),
 					}
 				}
 				return { outcome: outcome.outcome, reason: outcome.reason ?? "fixture-outcome" }
 			}
+			const sessionId = fixture.sessionId ?? "session-started"
+			if (fixture.installSessionOnAccept !== false) {
+				fixture.sessionId = sessionId
+			}
 			return {
 				outcome: "accepted" as const,
-				sessionId: fixture.sessionId ?? "session-started",
+				sessionId,
 				...(fixture.taskId !== undefined ? { taskId: fixture.taskId } : {}),
 			}
 		},
@@ -185,6 +210,7 @@ async function startHarness(
 		...(fixture.startThrows !== undefined ? { startThrows: fixture.startThrows } : {}),
 		...(fixture.blockStart !== undefined ? { blockStart: fixture.blockStart } : {}),
 		...(fixture.releaseStart !== undefined ? { releaseStart: fixture.releaseStart } : {}),
+		...(fixture.installSessionOnAccept !== undefined ? { installSessionOnAccept: fixture.installSessionOnAccept } : {}),
 	}
 	// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the operator's SEPARATE
 	// mutation opt-in record carries the content-read sub-grant. It is
@@ -279,6 +305,33 @@ function startActRequest(input: {
 			},
 		},
 	}
+}
+
+/**
+ * Start a task through the seam so the mutation client OWNS the
+ * session, and return the accepted session id.
+ *
+ * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: `clinemm_read_events`
+ * is scoped to the session the mutation client STARTED, not to whatever
+ * session happens to be active. A test that reads events must therefore
+ * establish ownership first.
+ */
+async function ownSession(harness: Harness, sessionId: string, requestId: string): Promise<string> {
+	const response = await send(
+		harness,
+		startActRequest({
+			requestId,
+			expectedWorkspace: "/tmp/workspace",
+			writeToken: harness.writeToken,
+		}),
+		{ withWriteToken: true, writeToken: harness.writeToken },
+	)
+	expect(response.ok).toBe(true)
+	// The authority returns the session id it accepted; the ownership
+	// fence is bound to that ACCEPTED id.
+	const accepted = (response.result as { sessionId?: string }).sessionId
+	expect(accepted).toBe(sessionId)
+	return accepted as string
 }
 
 /** Build a `clinemm_read_events` request envelope. */
@@ -621,38 +674,44 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R5 read events", () => {
 
 	it("R5-1: the REAL emitted events are returned, in the REAL production order", async () => {
 		const harness = await startHarness(
-			{ workspace: "/tmp/workspace", sessionId: "session-events" },
+			{ workspace: "/tmp/workspace", installSessionOnAccept: false },
 			{ mutationEnabled: true, allowContentRead: true },
 		)
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: `clinemm_read_events`
+		// is scoped to the session THIS mutation client STARTED. The
+		// client therefore starts the task before reading its events.
+		const owned = await ownSession(harness, "session-started", "r5-1")
 		for (const seq of [1, 2, 3]) {
 			appendEvent(harness, seq)
 		}
 
-		const response = await send(harness, readEventsRequest({ sessionId: "session-events", writeToken: harness.writeToken }), {
+		const response = await send(harness, readEventsRequest({ sessionId: owned, writeToken: harness.writeToken }), {
 			withWriteToken: true,
 			writeToken: harness.writeToken,
 		})
 		expect(response.ok).toBe(true)
 		const result = response.result as { sessionId: string; events: { cursor: string; text?: string }[] }
-		expect(result.sessionId).toBe("session-events")
+		expect(result.sessionId).toBe(owned)
 		expect(result.events.map((event) => event.cursor)).toEqual(["1", "2", "3"])
 		expect(result.events.map((event) => event.text)).toEqual(["event 1", "event 2", "event 3"])
 	})
 
 	it("R5-2: `afterCursor` pages forward and the returned `nextCursor` resumes exactly where it left off", async () => {
 		const harness = await startHarness(
-			{ workspace: "/tmp/workspace", sessionId: "session-events" },
+			{ workspace: "/tmp/workspace", installSessionOnAccept: false },
 			{ mutationEnabled: true, allowContentRead: true },
 		)
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the client must
+		// OWN the session before it may read its events.
+		const owned = await ownSession(harness, "session-started", "r5-2")
 		for (const seq of [1, 2, 3, 4, 5]) {
 			appendEvent(harness, seq)
 		}
 
-		const first = await send(
-			harness,
-			readEventsRequest({ sessionId: "session-events", limit: 2, writeToken: harness.writeToken }),
-			{ withWriteToken: true, writeToken: harness.writeToken },
-		)
+		const first = await send(harness, readEventsRequest({ sessionId: owned, limit: 2, writeToken: harness.writeToken }), {
+			withWriteToken: true,
+			writeToken: harness.writeToken,
+		})
 		const firstResult = first.result as { events: { cursor: string }[]; nextCursor?: string }
 		expect(firstResult.events.map((event) => event.cursor)).toEqual(["1", "2"])
 		expect(firstResult.nextCursor).toBe("2")
@@ -660,7 +719,7 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R5 read events", () => {
 		const second = await send(
 			harness,
 			readEventsRequest({
-				sessionId: "session-events",
+				sessionId: owned,
 				afterCursor: firstResult.nextCursor,
 				limit: 2,
 				writeToken: harness.writeToken,
@@ -673,17 +732,19 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R5 read events", () => {
 
 	it("R5-3: the output is BOUNDED by `limit`", async () => {
 		const harness = await startHarness(
-			{ workspace: "/tmp/workspace", sessionId: "session-events" },
+			{ workspace: "/tmp/workspace", installSessionOnAccept: false },
 			{ mutationEnabled: true, allowContentRead: true },
 		)
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the client must
+		// OWN the session before it may read its events.
+		const owned = await ownSession(harness, "session-started", "r5-3")
 		for (let seq = 1; seq <= 20; seq++) {
 			appendEvent(harness, seq)
 		}
-		const response = await send(
-			harness,
-			readEventsRequest({ sessionId: "session-events", limit: 3, writeToken: harness.writeToken }),
-			{ withWriteToken: true, writeToken: harness.writeToken },
-		)
+		const response = await send(harness, readEventsRequest({ sessionId: owned, limit: 3, writeToken: harness.writeToken }), {
+			withWriteToken: true,
+			writeToken: harness.writeToken,
+		})
 		const result = response.result as { events: unknown[] }
 		expect(result.events).toHaveLength(3)
 	})
@@ -725,12 +786,15 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R5 read events", () => {
 
 	it("R5-6: WITHOUT the explicit content-read grant, NO message text is exposed", async () => {
 		const harness = await startHarness(
-			{ workspace: "/tmp/workspace", sessionId: "session-events" },
+			{ workspace: "/tmp/workspace", installSessionOnAccept: false },
 			{ mutationEnabled: true, allowContentRead: false },
 		)
+		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the client must
+		// OWN the session before it may read its events.
+		const owned = await ownSession(harness, "session-started", "r5-6")
 		appendEvent(harness, 1, false)
 
-		const response = await send(harness, readEventsRequest({ sessionId: "session-events", writeToken: harness.writeToken }), {
+		const response = await send(harness, readEventsRequest({ sessionId: owned, writeToken: harness.writeToken }), {
 			withWriteToken: true,
 			writeToken: harness.writeToken,
 		})

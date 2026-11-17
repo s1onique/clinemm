@@ -1,0 +1,46 @@
+# C2 - GREEN: the behavioral GREEN after the bounded production correction
+
+COMMAND: bunx vitest run --config vitest.config.ts src/sdk/control-seam/control-seam.execution-control-v1-corr01.test.ts --reporter=verbose
+STATE:  production code WITH the CORR01 correction
+
+RESULT: Tests  15 passed (15)
+        Test Files  1 passed (1)
+
+## The witnesses
+
+| Witness | Requirement | Result |
+|---|---|---|
+| C1-1 | an accepted-request replay after the active session becomes visible returns the SAME recorded outcome | PASS |
+| C1-2 | a replay of a REJECTED request returns the SAME recorded outcome | PASS |
+| C2-1 | TWO simultaneous different-key starts while session creation is blocked - exactly ONE reaches the lifecycle | PASS |
+| C2-2 | the in-flight reservation is RELEASED when the start settles | PASS |
+| C3-1 | cross-task event-read denial - a write credential that did not start the session cannot read it | PASS |
+| C3-2 | the session this mutation client STARTED is readable | PASS |
+| C4-1 | an IN-FLIGHT ledger entry is never evicted by later entries | PASS |
+| C4-2 | a COMPLETED entry is still evictable - the ledger stays bounded | PASS |
+| C4-2b | the bound applies to the COMPLETED entries - pending entries are retained | PASS |
+| C4-3 | an in-flight entry's terminal outcome is still observable after other entries | PASS |
+| C5-1 | same-socket response ordering - replies arrive in REQUEST order | PASS |
+| C5-2 | the server writes each response as ONE line on the same socket | PASS |
+| CN-1 | a VALID READ credential alone still cannot start a task | PASS |
+| CN-2 | the READ-ONLY view is UNCHANGED - exactly the original two operations | PASS |
+| CN-3 | the mutation-AUTHORIZED view still shows exactly the two write operations | PASS |
+
+## The existing V1 suite - restored
+
+COMMAND: bunx vitest run --config vitest.config.ts src/sdk/control-seam/control-seam.execution-control-v1.test.ts --reporter=verbose
+RESULT: Tests  31 passed (31)
+        Test Files  1 passed (1)
+
+The four V1 R5 witnesses (R5-1, R5-2, R5-3, R5-6) were updated to establish
+OWNERSHIP before reading events. The V1 R5 tests read a session the mutation
+client never started - they encoded the defective contract that CORR01 C3
+corrects. No V1 assertion was weakened: each R5 test now starts its own task
+through the seam and then reads THAT session's events. R5-5 (foreign session
+refusal) was already correct and is unchanged.
+
+## The combined focused gate
+
+COMMAND: bunx vitest run --config vitest.config.ts src/sdk/control-seam/control-seam.execution-control-v1-corr01.test.ts src/sdk/control-seam/control-seam.execution-control-v1.test.ts
+RESULT: Tests  46 passed (46)
+        Test Files  2 passed (2)

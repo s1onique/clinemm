@@ -34,6 +34,18 @@
  * OLDEST entry is evicted. Eviction can only ever cause a MISSED
  * duplicate-suppression, never a wrong outcome: an evicted key is
  * treated as a fresh key.
+ *
+ * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: an IN-FLIGHT (`pending`)
+ * entry is NEVER evicted. The V1 implementation evicted the oldest
+ * entry unconditionally, so a start that was still running could be
+ * dropped from the ledger while its lifecycle call was in flight. A
+ * later duplicate of that request id was then treated as ABSENT and
+ * could start a SECOND task. The correction makes the bound apply to
+ * COMPLETED entries only: a pending entry always survives, so the
+ * duplicate-suppression contract holds for the whole in-flight window.
+ * The bound is therefore a bound on COMPLETED entries; the number of
+ * simultaneously pending entries is bounded by the server's own
+ * single-slot in-flight reservation (at most one).
  */
 
 /**
@@ -113,14 +125,26 @@ export class ControlSeamOperationLedger {
 
 	/**
 	 * Record a terminal outcome for a key.
+	 *
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: the payload
+	 * fingerprint is supplied so that a re-inserted entry stays BOUND to
+	 * its payload. The V1 implementation re-inserted with an EMPTY
+	 * fingerprint, so the next lookup of that key reported `conflict`
+	 * instead of the recorded outcome - a duplicate of a completed
+	 * request could then be told "request-id-conflict" rather than being
+	 * answered with the SAME recorded outcome.
+	 *
+	 * With the CORR01 eviction rule an IN-FLIGHT entry is never evicted,
+	 * so this re-insert path is only reachable for a key that was never
+	 * begun.
 	 */
-	complete(requestId: string, outcome: ControlSeamLedgerOutcome): void {
+	complete(requestId: string, outcome: ControlSeamLedgerOutcome, payloadFingerprint = ""): void {
 		const existing = this.entries.get(requestId)
 		if (!existing) {
 			// The key was evicted while the operation ran. Re-insert it
 			// so the terminal outcome is still observable.
 			this.evictIfNeeded()
-			this.entries.set(requestId, { payloadFingerprint: "", outcome })
+			this.entries.set(requestId, { payloadFingerprint, outcome })
 			return
 		}
 		existing.outcome = outcome
@@ -146,18 +170,60 @@ export class ControlSeamOperationLedger {
 	}
 
 	/**
-	 * Evict the OLDEST entry when the ledger is at capacity.
+	 * Evict the OLDEST COMPLETED entry when the ledger is at capacity.
 	 *
 	 * `Map` preserves insertion order, so the first key is the oldest.
+	 *
+	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01: an IN-FLIGHT
+	 * (`pending`) entry is NEVER evicted. The V1 implementation evicted
+	 * the oldest entry unconditionally, so a start that was still running
+	 * could be dropped from the ledger while its lifecycle call was in
+	 * flight. A later duplicate of that request id was then treated as
+	 * ABSENT and could start a SECOND task, violating the
+	 * duplicate-suppression contract for the whole in-flight window.
+	 *
+	 * THE BOUND. The bound applies to the COMPLETED entries: those are
+	 * evicted oldest-first until the ledger is back within its bound.
+	 * The PENDING entries are retained regardless - the in-flight
+	 * guarantee outranks the bound. Because the server's single-slot
+	 * in-flight reservation admits at most ONE pending entry at a time,
+	 * the ledger is bounded by `maxEntries + 1` in the worst case.
 	 */
 	private evictIfNeeded(): void {
-		while (this.entries.size >= this.maxEntries) {
-			const oldest = this.entries.keys().next()
-			if (oldest.done) {
+		while (this.completedEntryCount() >= this.maxEntries) {
+			if (!this.evictOldestCompleted()) {
+				// Every retained entry is IN FLIGHT. Nothing can be
+				// evicted without breaking the in-flight guarantee.
 				return
 			}
-			this.entries.delete(oldest.value)
 		}
+	}
+
+	/** The number of COMPLETED (non-pending) entries. */
+	private completedEntryCount(): number {
+		let count = 0
+		for (const entry of this.entries.values()) {
+			if (entry.outcome.status !== "pending") {
+				count++
+			}
+		}
+		return count
+	}
+
+	/**
+	 * Evict the oldest COMPLETED entry.
+	 *
+	 * Returns `true` when an entry was evicted, `false` when every
+	 * retained entry is IN FLIGHT.
+	 */
+	private evictOldestCompleted(): boolean {
+		for (const [key, entry] of this.entries) {
+			if (entry.outcome.status !== "pending") {
+				this.entries.delete(key)
+				return true
+			}
+		}
+		return false
 	}
 }
 

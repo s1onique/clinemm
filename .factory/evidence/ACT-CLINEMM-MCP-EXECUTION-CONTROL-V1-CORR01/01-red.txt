@@ -1,0 +1,33 @@
+# C1 — RED: the behavioral RED against the UNMODIFIED production code
+
+COMMAND: bunx vitest run --config vitest.config.ts src/sdk/control-seam/control-seam.execution-control-v1-corr01.test.ts --reporter=verbose
+STATE:  production code at 9c9506f0c6fd (UNMODIFIED), CORR01 witness file only
+
+RESULT: Tests  6 failed | 8 passed (14)
+        Test Files  1 failed (1)
+
+## The failing witnesses
+
+| Witness | Defect | Observed |
+|---|---|---|
+| C1-1 | replay ordering | the replay of the ACCEPTED request returned `rejected(active-task-owner-exists)` instead of the recorded `accepted` outcome |
+| C2-1 | in-flight reservation | the second (different-key) start REACHED the lifecycle — `fixture.startCalls` had two entries |
+| C3-1 | event-read ownership | the write credential read a session it never started (`response.ok === true`) |
+| C4-1 | pending eviction | the IN-FLIGHT ledger entry was `absent` — it had been evicted |
+| C4-3 | pending eviction | the re-inserted entry reported `conflict` (the V1 `complete()` re-inserted with an EMPTY fingerprint) |
+| C5-1 | same-socket ordering | the FIRST request received the SECOND request's capabilities payload — the replies were attributed to the wrong requests |
+
+## Verbatim failure excerpts
+
+```
+C1-1  AssertionError: expected { outcome: "rejected", reason: "active-task-owner-exists" } to match object { outcome: "accepted", ... }
+C2-1  AssertionError: expected [ "first prompt", "second prompt" ] to equal [ "first prompt" ]
+C3-1  AssertionError: expected true to be false  // response.ok was true for a foreign session
+C4-1  AssertionError: expected "absent" to be "found"
+C4-3  AssertionError: expected "conflict" to be "found"
+C5-1  AssertionError: expected { protocolVersion: 1, ...(3) } to match object { outcome: "accepted", ...(1) }
+```
+
+## The passing witnesses at RED (already-correct behaviour, pinned as conservation)
+
+C1-2, C2-2, C4-2, C5-2, CN-1, CN-2, CN-3 — 8 passed.

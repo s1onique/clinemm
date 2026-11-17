@@ -1,0 +1,57 @@
+# C3 - Necessity ablation: each production fix is LOAD-BEARING
+
+METHOD: one production change is reverted at a time, the CORR01 witness suite is
+re-run, and the production tree is restored immediately afterwards. A fix that
+can be reverted without a witness failing is NOT load-bearing.
+
+COMMAND (each row):
+  bunx vitest run --config vitest.config.ts src/sdk/control-seam/control-seam.execution-control-v1-corr01.test.ts --reporter=verbose
+
+| Ablation | Reverted production change | Witness that failed | Result |
+|---|---|---|---|
+| A | the ledger lookup moved back AFTER the active-owner check (the V1 order) | C1-1 | 1 failed \| 14 passed |
+| B | the single-slot in-flight start reservation disabled | C2-1 | 1 failed \| 14 passed |
+| C | the event-read ownership fence reverted to the "currently active session" comparison | C3-1 | 1 failed \| 14 passed |
+| D | the ledger eviction reverted to "evict the OLDEST entry, pending included" (the V1 rule) | C4-1, C4-2b, C4-3 | 3 failed \| 12 passed |
+| E | the response handling reverted to "write each response as it settles" (the V1 rule) | C5-1 | 1 failed \| 14 passed |
+
+## Verbatim ablation receipts
+
+```
+ABLATION A applied: ledger lookup moved back AFTER the active-owner check
+ x C1-1: a replay of an ACCEPTED request returns the SAME recorded outcome after the active session becomes visible
+      Tests  1 failed | 14 passed (15)
+RESTORED
+
+ABLATION B applied: in-flight reservation disabled
+ x C2-1: TWO different request ids cannot both reach the lifecycle while the first start is blocked 10071ms
+      Tests  1 failed | 14 passed (15)
+RESTORED
+
+ABLATION C applied: event-read ownership fence reverted to the active-session comparison
+ x C3-1: a write credential that did NOT start the session cannot read that session's events
+      Tests  1 failed | 14 passed (15)
+RESTORED
+
+ABLATION D applied: pending entries are evictable again
+ x C4-1: an IN-FLIGHT ledger entry is never evicted by later entries
+ x C4-2b: the bound applies to the COMPLETED entries - pending entries are retained
+ x C4-3: an in-flight entry's terminal outcome is still observable after other entries
+      Tests  3 failed | 12 passed (15)
+RESTORED
+
+ABLATION E applied: responses are written as they settle
+ x C5-1: two requests on ONE socket are answered in REQUEST order even when the first settles LAST
+      Tests  1 failed | 14 passed (15)
+RESTORED
+```
+
+NOTE on the C2-1 ablation duration: with the reservation disabled, the second
+start REACHES the blocked lifecycle call and therefore never settles - the
+witness observes it through the client's request timeout (10071 ms). With the
+reservation in place the same witness completes in ~54 ms.
+
+## Verdict
+
+PASS - every one of the five production changes is load-bearing. Removing any
+one of them reproduces exactly the defect it corrects.
