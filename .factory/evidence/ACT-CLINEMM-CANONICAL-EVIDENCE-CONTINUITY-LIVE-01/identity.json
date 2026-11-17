@@ -1,0 +1,100 @@
+{
+  "schema": "cline.ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01.identity.v1",
+  "act": "ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01",
+  "generatedBy": "tool/audit.ts",
+  "source": {
+    "repository": "s1onique/clinemm",
+    "branch": "main",
+    "entryHead": "8c3351e56d949b514f60bbfde0735e756ed082ca",
+    "note": "ENTRY_HEAD was DISCOVERED with `git rev-parse HEAD`, not assumed. The ACT brief named d68def3ae2ddcb635bfbb34955f2cd561205d9c0 as the expected entry; that commit is the PARENT of the actual HEAD and is the immediately preceding ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01 commit. HEAD advanced by exactly one unrelated commit (8c3351e56, ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01), which touches only the macOS sandbox profile and no compaction, session-persistence or canonical-message code. The adjudicated session's artifacts are UNAFFECTED by that commit.",
+    "expectedEntryHead": "d68def3ae2ddcb635bfbb34955f2cd561205d9c0",
+    "expectedEntryHeadRelation": "PARENT_OF_ACTUAL_HEAD",
+    "actualHeadDiffVsExpectedEntry": "one unrelated commit; no compaction / session-persistence / canonical-message production source touched",
+    "workingTreeCleanAtEntry": true,
+    "trackedPorcelainLinesAtEntry": 0
+  },
+  "liveSession": {
+    "sessionId": "1794892591345_7em4g",
+    "storageRoot": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1794892591345_7em4g",
+    "source": "vscode",
+    "provider": "openai-compatible",
+    "model": "qwen3.8-flash-next-iq3_s",
+    "status": "completed",
+    "exitCode": 0,
+    "startedAtIso": "2026-11-17T05:16:31.659Z",
+    "endedAtIso": "2026-11-17T05:49:17.899Z",
+    "agent": "lead",
+    "sessionHistoryOriginVersion": "4.1.16-5a1c485cb",
+    "workspaceRoot": "PRIVATE_REDACTED",
+    "cwd": "PRIVATE_REDACTED"
+  },
+  "artifacts": {
+    "canonicalMessages": {
+      "name": "1794892591345_7em4g.messages.json",
+      "bytes": 394572,
+      "sha256": "b48b0f94ebc003a3a92bbf226fca3126433ec8d986d763a73e73ef258cf4e9b4",
+      "schemaVersion": 1,
+      "role": "CANONICAL_TRANSCRIPT"
+    },
+    "compactionSidecar": {
+      "name": "1794892591345_7em4g.compaction.json",
+      "bytes": 73907,
+      "sha256": "20461b286e3adc353f6f91d5e7314ef8eac38465a165650d8f0be14b2892a7bc",
+      "schemaVersion": 1,
+      "role": "COMPACTION_STATE"
+    },
+    "sessionManifest": {
+      "name": "1794892591345_7em4g.json",
+      "bytes": 2345,
+      "sha256": "0192cfca5cdd8a2afe1e916d33fbbf045035f466e4380cba0ed1e8aa9e68be3f",
+      "schemaVersion": 1,
+      "role": "SESSION_MANIFEST"
+    }
+  },
+  "sourceTrace": {
+    "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace(8).json",
+    "bytes": 350052,
+    "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+    "schema": "cline.roundc-latency-trace.v1",
+    "sessionId": "1794892591345_7em4g",
+    "captureProfile": "dogfood",
+    "requestedModelId": "qwen3.8-flash-next-iq3_s",
+    "exportedAtIso": "2026-11-17T05:32:59.438Z",
+    "eventCount": 418,
+    "truncation": "NONE",
+    "integrityFailureCount": 0
+  },
+  "adjudicatedCompactionEvent": {
+    "decisionId": "1794892591345_7em4g#13#12",
+    "decisionOrdinal": 12,
+    "preparationRequestId": "req_wdW3TYdm",
+    "modelRequestId": "model_request_rNzg1ix3UpKYZkDIeI99B",
+    "compactionMode": "auto",
+    "compactionStrategy": "agentic",
+    "messagesBefore": 34,
+    "messagesAfter": 6,
+    "messagesRemoved": 28,
+    "evidenceRefsBefore": 20,
+    "evidenceRefsAfter": 3,
+    "evidenceRefsRetained": 3,
+    "evidenceRefsDropped": 17,
+    "evidenceRefsReplaced": 0,
+    "compactionOutcome": "completed",
+    "compactionDurationMs": 64564.48125,
+    "postCompactionProviderInputTokens": 15607,
+    "preCompactionRequestEstimateTokens": 108280,
+    "preCompactionEstimateLabel": "UNLABELLED — the 34-message candidate was never submitted; no provider usage exists for it"
+  },
+  "checks": {
+    "sha256Matches": "MATCH",
+    "sessionIdMatches": "MATCH",
+    "schemaMatches": "MATCH",
+    "captureProfileMatches": "MATCH",
+    "artifactHashesRecorded": true,
+    "rawTraceCommitted": false,
+    "rawCanonicalMessagesCommitted": false,
+    "rawCompactionSidecarCommitted": false
+  },
+  "complete": true,
+  "rawArtifactsCommitted": false
+}

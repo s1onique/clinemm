@@ -1,0 +1,240 @@
+{
+  "schema": "cline.ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01.canonical-continuity-audit.v1",
+  "act": "ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01",
+  "sessionId": "1794892591345_7em4g",
+  "artifacts": {
+    "canonicalMessages": {
+      "name": "1794892591345_7em4g.messages.json",
+      "bytes": 394572,
+      "sha256": "b48b0f94ebc003a3a92bbf226fca3126433ec8d986d763a73e73ef258cf4e9b4",
+      "schemaVersion": 1
+    },
+    "compactionSidecar": {
+      "name": "1794892591345_7em4g.compaction.json",
+      "bytes": 73907,
+      "sha256": "20461b286e3adc353f6f91d5e7314ef8eac38465a165650d8f0be14b2892a7bc",
+      "schemaVersion": 1
+    },
+    "sessionManifest": {
+      "name": "1794892591345_7em4g.json",
+      "bytes": 2345,
+      "sha256": "0192cfca5cdd8a2afe1e916d33fbbf045035f466e4380cba0ed1e8aa9e68be3f",
+      "schemaVersion": 1
+    }
+  },
+  "canonicalTranscript": {
+    "messageCount": 46,
+    "uniqueMessageIds": 46,
+    "duplicateMessageIds": 0,
+    "tsMonotonicityViolations": 0,
+    "toolUseBlocks": 26,
+    "toolResultBlocks": 26,
+    "orphanToolResults": 0,
+    "orphanToolUses": 0
+  },
+  "compactionStateBinding": {
+    "sourceMessageCount": 34,
+    "sourceLastMessageKey": "id:msg_qU4pQ33J",
+    "storedPrefixHash": "sha256:5eea2fcb91f3d935e65c96a83afa00077823da2120efb520012c26f0b4f91e58",
+    "recomputedPrefixHash": "sha256:5eea2fcb91f3d935e65c96a83afa00077823da2120efb520012c26f0b4f91e58",
+    "prefixHashMatches": true,
+    "boundaryKeyMatches": true,
+    "sidecarMessageCount": 6,
+    "sidecarUpdatedAt": "2026-11-17T05:26:46.573Z",
+    "canonicalUpdatedAt": "2026-11-17T05:31:52.789Z",
+    "canonicalTailCount": 12
+  },
+  "resumeProjection": {
+    "defined": true,
+    "projectedMessageCount": 18,
+    "composition": {
+      "sidecarMessages": 6,
+      "canonicalTailMessages": 12
+    },
+    "canonicalTailIdentityConserved": true,
+    "appendedAfterBoundaryIncorporated": true
+  },
+  "evidenceReferenceContinuity": {
+    "definition": "tool_result.tool_use_id (production collectToolCallReferenceIds)",
+    "workingContextReferencesBefore": 20,
+    "workingContextReferencesAfter": 3,
+    "retainedInWorkingContext": 3,
+    "droppedFromWorkingContext": 17,
+    "carriedAsVerifiedEvidence": 12,
+    "droppedButCarriedAsVerifiedEvidence": 9,
+    "droppedAndPresentInCanonicalStorage": 17,
+    "droppedAndMissingFromCanonicalStorage": 0,
+    "identityLevelConservationComplete": true,
+    "perReference": [
+      {
+        "toolCallId": "call_087e10709269481c9afcebb1",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_muFVL73d"
+      },
+      {
+        "toolCallId": "call_1d306f44bde84d43b1144f53",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": false,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_D6Yrxfrc"
+      },
+      {
+        "toolCallId": "call_2ce7a82da69e47e383036a65",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_lnDo4xWZ"
+      },
+      {
+        "toolCallId": "call_2f78c5bb009844c68d3d6dc2",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": false,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_nk64rEH9"
+      },
+      {
+        "toolCallId": "call_49d69844f70c4a3ca63305f5",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": false,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_jwIUEkn2"
+      },
+      {
+        "toolCallId": "call_68ba32fa8c4a4cc8b5e3fe1f",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": false,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_pr0JcUXN"
+      },
+      {
+        "toolCallId": "call_6fc172f7b6004b41b0a7575c",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": false,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_WZXERBmm"
+      },
+      {
+        "toolCallId": "call_750d8cef04fb41df834250b7",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_UDOx8s9D"
+      },
+      {
+        "toolCallId": "call_750fc45d51d7461cbfe85cde",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": false,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_mAS5IR9C"
+      },
+      {
+        "toolCallId": "call_8315c8450e5948978bfca8c8",
+        "workingContextRetained": true,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_QgaGEIO_"
+      },
+      {
+        "toolCallId": "call_8a2fd562ff654df88d7cfa58",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_F1IbNQmM"
+      },
+      {
+        "toolCallId": "call_a9de8d4ce59f47b8b883edce",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_euTE-ayw"
+      },
+      {
+        "toolCallId": "call_ac3c763e6185485bb116d573",
+        "workingContextRetained": true,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_YkWCd46Q"
+      },
+      {
+        "toolCallId": "call_b673b379a99346c7a2d5de11",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_S-tETbF9"
+      },
+      {
+        "toolCallId": "call_b70e638e535d43bb9d00dbc1",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_WIZgOIGA"
+      },
+      {
+        "toolCallId": "call_c5f8395e7af8449e849bd8ae",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": false,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_8sBO2CIv"
+      },
+      {
+        "toolCallId": "call_dcc05ffbe087471a98beecf2",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_xZ9RgZJ1"
+      },
+      {
+        "toolCallId": "call_e6534afb478a47a58b9a659c",
+        "workingContextRetained": true,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_qU4pQ33J"
+      },
+      {
+        "toolCallId": "call_e76201ef3cbf407c8ae16aef",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": true,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_-CkcayZk"
+      },
+      {
+        "toolCallId": "call_e7aba9c0dda94ea69edc0d2b",
+        "workingContextRetained": false,
+        "carriedAsVerifiedEvidence": false,
+        "canonicalRecordPresent": true,
+        "canonicalOwnerMessageId": "msg_FmepECt5"
+      }
+    ]
+  },
+  "rejectionControls": {
+    "mismatchedPrefixHashRejected": true,
+    "tamperedSourceMessageCountRejected": true,
+    "oversizedSourceMessageCountRejected": true
+  },
+  "canonicalImmutability": {
+    "canonicalBytesUnchangedByProjection": true,
+    "canonicalMessageCountUnchanged": true
+  },
+  "verdictInputs": {
+    "prefixHashMatches": true,
+    "boundaryKeyMatches": true,
+    "projectionDefined": true,
+    "canonicalTailIdentityConserved": true,
+    "appendedAfterBoundaryIncorporated": true,
+    "mismatchedHashRejected": true,
+    "tamperedCountRejected": true,
+    "oversizedCountRejected": true,
+    "canonicalUnchangedByProjection": true,
+    "identityLevelConservationComplete": true,
+    "orphanToolResults": 0,
+    "orphanToolUses": 0,
+    "duplicateMessageIds": 0
+  },
+  "privacy": {
+    "rawCanonicalMessagesCommitted": false,
+    "rawToolResultPayloadsCommitted": false,
+    "emittedFields": "opaque identities, hashes, counts and classifications only"
+  }
+}

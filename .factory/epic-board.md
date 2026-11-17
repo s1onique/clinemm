@@ -35131,3 +35131,123 @@ force operation.
 
 RC-03 and RC-05 through RC-08 are unchanged by this ACT.
 
+
+# ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01 — PASS_CANONICAL_CONTINUITY_LIVE — 2026-11-17
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01/`
+  `identity.json`, `canonical-continuity-audit.json`, `source-map.md`,
+  `qualification-report.md`, `artifact-hashes.json`, `tool/{audit,hashes}.ts`
+
+**Principal disposition: `PASS_CANONICAL_CONTINUITY_LIVE`.** Live canonical artifacts and
+production-source checks establish that the 17 working-context-dropped evidence references
+were **not** lost from the canonical record. No production repair was authorized and none
+was made; no estimator, policy, coefficient, protocol field or telemetry field was changed;
+no RED test was manufactured for an unreproduced defect.
+
+## Source identity and authoritative input
+
+- Repository `s1onique/clinemm`, branch `main`, **ENTRY_HEAD
+  `8c3351e56d949b514f60bbfde0735e756ed082ca`** (discovered with `git rev-parse HEAD`, not a
+  predicted SHA). The brief named `d68def3ae2ddcb635bfbb34955f2cd561205d9c0`, which is the
+  **parent** of the actual HEAD; the one intervening commit (`8c3351e56`,
+  ACT-CLINEMM-SEATBELT-POSIX-SEM-ANSIBLE01) adds one macOS Seatbelt rule and touches **no**
+  compaction, session-persistence or canonical-message code. Working tree clean (0 porcelain
+  lines) at entry; stashes and worktrees preserved; no push, PR, reset, stash manipulation,
+  new worktree or new dogfood session.
+- Authoritative trace `~/Downloads/roundc-latency-trace(8).json`, SHA-256
+  `b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1` — **MATCH**, schema
+  `cline.roundc-latency-trace.v1`, profile `dogfood`, session `1794892591345_7em4g`, 418
+  events, no truncation, 0 integrity failures. The raw trace was not committed.
+- Persisted session artifacts, discovered from the session id under the ClineMM session
+  storage root (not assumed, not filesystem-wide searched): canonical transcript
+  `1794892591345_7em4g.messages.json` (394,572 B, sha256 `b48b0f94…cf4e9b4`, schema v1);
+  compaction state `1794892591345_7em4g.compaction.json` (73,907 B, sha256
+  `20461b28…892a7bc`, schema v1); session manifest `1794892591345_7em4g.json` (2,345 B,
+  sha256 `0192cfca…8aa9e68be3f`, schema v1). **None committed.**
+
+## The adjudicated event
+
+Decision `1794892591345_7em4g#13#12`, preparation `req_wdW3TYdm`, model request
+`model_request_rNzg1ix3UpKYZkDIeI99B`. Compaction 34 → 6 working-context messages;
+20 → 3 evidence references (17 dropped, **0 replaced**); outcome `completed`, duration
+**64,564.481 ms**; post-compaction provider input **15,607** tokens.
+
+## Live continuity qualification — the decisive results
+
+All measurements were produced by driving the **real production seam**
+(`sdk/packages/core/src/session/models/session-compaction.ts`) against the **real persisted
+artifacts** of this session. **15 / 15 live checks PASS, 0 FAIL.**
+
+| Property | Result |
+|---|---|
+| Canonical transcript | **46 messages**, 46 unique ids, 0 duplicates, 0 `ts` monotonicity violations |
+| Tool pairing | 26 `tool_use` / 26 `tool_result`, **0 orphans**, **0 ordering violations** |
+| Prefix binding — count | `source_message_count = 34` resolves to canonical[0..33] — **MATCH** |
+| Prefix binding — boundary key | `source_last_message_key = id:msg_qU4pQ33J` = canonical[33].id — **MATCH** |
+| Prefix binding — stored hash | `sha256:5eea2fcb…91e58` **reproduced byte-for-byte** by the production algorithm over the live canonical prefix |
+| Reference transition | 20 → 3, retained 3, dropped 17, replaced 0 — **EXACT reproduction** of the trace |
+| **Identity conservation of the 17** | **17 / 17 present in canonical storage**, each mapped to a **unique** canonical message, 0 missing, 0 id churn |
+| Resume projection | **DEFINED**, 18 messages = 6 sidecar + 12 canonical tail; tail identity conserved positionally |
+| Appended-after-boundary | incorporated (18 → 19) |
+| Canonical immutability | transcript **byte-identical** after projection; message count unchanged |
+| Rejection controls | mismatched prefix hash → **REJECTED**; tampered count → **REJECTED**; oversized count → **REJECTED** |
+
+**The 17 dropped references split into two disjoint classes, both established at the
+identity level:** **9** are carried into the model-facing summary by identity (the production
+`## Verified tool outcomes (canonical record)` section, derived from the canonical
+tool-call/tool-result pairs); the other **8** are **omitted from the model-facing projection**
+but their canonical records are **present and intact**. The ACT does **not** claim that all 17
+survived in the working context — only nine did. The other eight are a **working-context
+omission**, not a canonical loss. No property required classification `LIVE_UNOBSERVABLE` or
+`CAPTURE_INSUFFICIENT`; every required property was observable and measured.
+
+## Append-only determination
+
+**The canonical transcript is append-only in production, and compaction can neither replace,
+remove nor mutate a previously persisted canonical record.** Established structurally, not
+merely observationally: (1) the compaction result is a request-scoped projection —
+`agent-runtime.ts:4875-4883` returns a **new** `AgentModelRequest` and never mutates
+`state.messages`; (2) no persistence path truncates the canonical list — `messages.slice` /
+`messages.splice` / `messages.length =` do not occur on the canonical transcript, and the one
+`splice` in the agent runtime is a hook-context **insertion**; (3) the canonical transcript and
+the compaction sidecar are **separate files** with distinct schemas and hashes; (4) the
+sidecar binds to its prefix **cryptographically** and the host refuses to persist an
+unprojectable state (`canPersistCompactionState`, `local-runtime-host.ts:2159-2186`).
+
+## Gates
+
+Live auditor (production seam × live artifacts): **15 / 15 PASS, exit 0**, deterministic
+(byte-identical output on re-run). Existing real-production-seam suites: **12 files, 286
+tests passed, 3 skipped, 0 failed** — `session-compaction.test.ts` (12),
+`evidence-continuity.test.ts` (62), `task-contract-conservation.test.ts` (29),
+`compaction.test.ts` (112), `compaction.roundc-fidelity-recon02.test.ts` (20),
+`compaction.decision-capture.conservation.test.ts` (2),
+`compaction.tool-result-shape-red.test.ts` (15),
+`compaction.working-context-authority-publish.test.ts` (3),
+`task-contract-conservation.historical.test.ts` (3),
+`task-contract-budget-authority.test.ts` (9),
+`latency-boundaries.integration.test.ts` (15),
+`latency-sink.compaction-token-evidence-capture01.test.ts` (5). No new permanent production
+test was added — the seam was already covered. `git diff --name-only HEAD` over `sdk/`,
+`apps/`, `src/`, `proto/`: **empty** — production source unchanged.
+
+## Privacy
+
+Committed evidence contains **bounded metadata, opaque identities, hashes, classifications and
+counts only**. 336 distinctive canonical/summary strings were tested against the committed
+package: **1** matched, and it is the exported production constant `EVIDENCE_SECTION_HEADING`
+(`evidence-continuity.ts:211`), not canonical content. 326 were tested against the exported
+trace: **0** matched. Private workspace / repository references in the committed package:
+**0**. No raw canonical message, raw sidecar, raw trace or tool-result payload was committed.
+
+## Board update
+
+| Stage | Status |
+|---|---|
+| RC-01 independent calibration | **Unchanged** — production estimator unchanged, coefficients not refit, frozen calibration preserved |
+| RC-02 observed trigger causality | **Unchanged** — QUALIFIED, explicit scope (one observed event) |
+| **RC-04 canonical evidence continuity** | **QUALIFIED — `PASS_CANONICAL_CONTINUITY_LIVE`** — the 17 working-context-dropped evidence references are conserved in canonical storage at the identity level (17/17 present, unique owners); 9 are carried into the model-facing summary by identity and 8 are omitted from the projection while their canonical records remain intact. Canonical ordering, identity and tool-result pairing are conserved across the compaction boundary; the compacted state binds to its canonical prefix by an exactly reproduced SHA-256; invalid or mismatched prefix hashes are rejected per the production contract; resume reconstructs sidecar + canonical tail without rewriting canonical history. |
+| RC-03, RC-05 … RC-08 | **Unchanged** |
+
+RC-02 is **not** reopened — no contradictory evidence appeared. RC-01's production estimator
+is **not** touched.

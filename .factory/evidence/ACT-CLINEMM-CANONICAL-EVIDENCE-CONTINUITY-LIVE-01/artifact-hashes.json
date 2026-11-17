@@ -1,0 +1,74 @@
+{
+  "schema": "cline.ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01.artifact-hashes.v1",
+  "act": "ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01",
+  "sourceHead": "8c3351e56d949b514f60bbfde0735e756ed082ca",
+  "sessionId": "1794892591345_7em4g",
+  "hashes": [
+    {
+      "name": "identity.json",
+      "sha256": "2da4d8b53e6f04c29dd799a60c833ffe536873aebffcfceac4461b02b61fd615",
+      "bytes": 4275
+    },
+    {
+      "name": "canonical-continuity-audit.json",
+      "sha256": "6b6656fbca3518a1baa10f07e5af267bd577c26a2fa9a51c83ac1a41f9ecdef2",
+      "bytes": 8356
+    },
+    {
+      "name": "source-map.md",
+      "sha256": "95851225deaa9fd6eac158cda323c0b798f88742a1ecafcff63e77077ccc10ca",
+      "bytes": 12796
+    },
+    {
+      "name": "qualification-report.md",
+      "sha256": "2f6027820fd32fbb2afd0538cfb82148a00eccc3894ebf839f35c0a1cd2edb27",
+      "bytes": 22200
+    },
+    {
+      "name": "tool/audit.ts",
+      "sha256": "b341fad8c9a562d426ddfda608efed420433db695b637830e75784288e6b9a7a",
+      "bytes": 14107
+    },
+    {
+      "name": "tool/hashes.ts",
+      "sha256": "0c0d3025ae6ad049477f62576e89e960ea97261252bda1a0bd3566634860702e",
+      "bytes": 2690
+    }
+  ],
+  "externalSourceArtifacts": [
+    {
+      "name": "1794892591345_7em4g.messages.json",
+      "role": "CANONICAL_TRANSCRIPT",
+      "bytes": 394572,
+      "sha256": "b48b0f94ebc003a3a92bbf226fca3126433ec8d986d763a73e73ef258cf4e9b4",
+      "committed": false
+    },
+    {
+      "name": "1794892591345_7em4g.compaction.json",
+      "role": "COMPACTION_STATE",
+      "bytes": 73907,
+      "sha256": "20461b286e3adc353f6f91d5e7314ef8eac38465a165650d8f0be14b2892a7bc",
+      "committed": false
+    },
+    {
+      "name": "1794892591345_7em4g.json",
+      "role": "SESSION_MANIFEST",
+      "bytes": 2345,
+      "sha256": "0192cfca5cdd8a2afe1e916d33fbbf045035f466e4380cba0ed1e8aa9e68be3f",
+      "committed": false
+    },
+    {
+      "name": "roundc-latency-trace(8).json",
+      "role": "AUTHORITATIVE_TRACE",
+      "bytes": 350052,
+      "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+      "committed": false
+    }
+  ],
+  "privacy": {
+    "rawCanonicalMessagesCommitted": false,
+    "rawCompactionSidecarCommitted": false,
+    "rawTraceCommitted": false,
+    "rawToolResultPayloadsCommitted": false
+  }
+}
