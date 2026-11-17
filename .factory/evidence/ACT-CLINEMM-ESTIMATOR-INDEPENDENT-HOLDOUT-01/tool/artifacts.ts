@@ -28,6 +28,21 @@ export interface EvidenceInput {
 	readonly discovered: readonly SourceTraceDescriptor[];
 	readonly loadErrors: readonly { path: string; reason: string }[];
 	readonly independence: IndependenceVerdict;
+	readonly dedup: {
+		readonly accepted: readonly SourceTraceDescriptor[];
+		readonly duplicates: readonly {
+			path: string;
+			sessionId: string;
+			sha256: string;
+			reason: "IDENTICAL_DUPLICATE_EXPORT";
+		}[];
+		readonly conflicts: readonly {
+			sessionId: string;
+			reason: "CONFLICTING_EXPORTS_FOR_ONE_SESSION";
+			paths: readonly string[];
+			sha256s: readonly string[];
+		}[];
+	};
 	readonly datasets: readonly {
 		descriptor: SourceTraceDescriptor;
 		qualified: {
@@ -42,12 +57,14 @@ export interface EvidenceInput {
 	readonly suitability: ProductionSuitability;
 }
 
+
 export function writeEvidenceArtifacts(input: EvidenceInput): {
 	path: string;
 	sha256: string;
 	bytes: number;
 }[] {
 	const { sourceHead, toolSha256, discovered, loadErrors, independence, datasets, allRows, comparisons } = input;
+
 
 	const identity = {
 		schema: `cline.${ACT}.identity.v1`,
@@ -106,6 +123,20 @@ export function writeEvidenceArtifacts(input: EvidenceInput): {
 		})),
 		distinctSessionIds: [...new Set(discovered.map((d) => d.sessionId))],
 		duplicateExportsOfSameSession: discovered.length - new Set(discovered.map((d) => d.sessionId)).size,
+		exportDeduplication: {
+			policy:
+				"Holdout exports are de-duplicated by session identity BEFORE dataset construction. Byte-identical re-exports collapse to one. Exports of one session that disagree are a conflict and the whole session is rejected.",
+			acceptedExports: input.dedup.accepted.map((d) => ({
+				path: d.path,
+				sessionId: d.sessionId,
+				sha256: d.sha256,
+				bytes: d.bytes,
+			})),
+			duplicateExports: input.dedup.duplicates,
+			conflictingExports: input.dedup.conflicts,
+			contributingRowsFromDuplicates: 0,
+			contributingRowsFromConflicts: 0,
+		},
 		loadErrors,
 		trainingSource: {
 			sessionId: TRAINING_SESSION_ID,

@@ -8,12 +8,14 @@
 import { readFileSync } from "node:fs";
 import { writeEvidenceArtifacts } from "./artifacts";
 import { writeArtifactHashManifest, writeTestReceipt } from "./receipt";
+import { decideVerdict } from "./verdict";
 import {
 	ACT,
 	applyCandidate,
 	classifyObservableEpoch,
 	classifyVerdict,
 	compareCandidates,
+	deduplicateHoldoutExports,
 	describeTrace,
 	FROZEN_CANDIDATES,
 	OBSERVATION_TARGET,
@@ -72,9 +74,14 @@ function main(): void {
 
 	const independence = qualifyIndependence(discovered);
 
-	// The TRAINING session is never a holdout. It is excluded BEFORE any
-	// evaluation so that no statistic can be contaminated by it.
-	const holdoutDescriptors = discovered.filter((d) => d.sessionId !== TRAINING_SESSION_ID);
+	// CORRECTION01 (P0-2): de-duplicate the holdout exports BY SESSION
+	// IDENTITY before any dataset is constructed. A byte-identical
+	// re-export is idempotent; exports of one session that DISAGREE are a
+	// conflict and the whole session is rejected. Neither may inflate the
+	// holdout dataset.
+	const holdoutCandidates = discovered.filter((d) => d.sessionId !== TRAINING_SESSION_ID);
+	const dedup = deduplicateHoldoutExports(holdoutCandidates);
+	const holdoutDescriptors = dedup.accepted;
 
 	const datasets: {
 		descriptor: SourceTraceDescriptor;
@@ -86,14 +93,16 @@ function main(): void {
 
 	const allRows = datasets.flatMap((d) => d.qualified.rows);
 	const comparisons = compareCandidates(allRows);
-	const verdict = allRows.length
-		? classifyVerdict(allRows, comparisons)
-		: {
-				verdict: "AWAITING_INDEPENDENT_DOGFOOD_SESSION" as const,
-				reason:
-					"No eligible independent dogfood trace exists. The only surviving sanitized latency-trace exports carry the training session id; the previously known independent export was overwritten and its session predates the authoritative capture contract.",
-			};
+	// CORRECTION01 (P1): an independent trace that yields zero eligible
+	// attempts is CAPTURE_INSUFFICIENT, not AWAITING_INDEPENDENT_DOGFOOD_SESSION.
+	const verdict = decideVerdict({
+		independentSessionIds: independence.holdoutSessionIds,
+		eligibleAttempts: allRows.length,
+		comparisons,
+		rows: allRows,
+	});
 	const suitability = productionSuitability(comparisons);
+
 
 	const written = writeEvidenceArtifacts({
 		sourceHead: SOURCE_HEAD,
@@ -101,6 +110,7 @@ function main(): void {
 		discovered,
 		loadErrors,
 		independence,
+		dedup,
 		datasets,
 		allRows,
 		comparisons,
@@ -108,40 +118,19 @@ function main(): void {
 		suitability,
 	});
 
-	const receipt = writeTestReceipt(SOURCE_HEAD, TOOL_SHA, [
-		{
-			command:
-				"bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts",
-			result: "PASS",
-			observed: "16 pass, 0 fail, 24 expect() calls; pre-existing witnesses T1-T16",
+	// CORRECTION01 (P0-3): this invocation executed NO test suite — it
+	// evaluated traces. The receipt therefore records an EMPTY `commands`
+	// list; the previously executed test evidence is preserved separately
+	// under `historicalTestEvidence` and is explicitly labelled as such.
+	const receipt = writeTestReceipt(SOURCE_HEAD, TOOL_SHA, [], {
+		evaluation: {
+			kind: "FRESH_EVALUATION",
+			tracesDiscovered: discovered.length,
+			tracesAcceptedAsHoldout: holdoutDescriptors.length,
+			eligibleAttempts: allRows.length,
+			verdict: verdict.verdict,
+			testsExecutedByThisRun: 0,
 		},
-		{
-			command:
-				"bun test ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts",
-			result: "PASS",
-			observed: "12 pass, 0 fail, 76 expect() calls; focused witnesses V1-V12",
-		},
-		{
-			command:
-				"bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts",
-			result: "PASS",
-			observed: "28 pass, 0 fail, 100 expect() calls across 2 files",
-		},
-		{
-			command:
-				"ENTRY_HEAD=$(git rev-parse HEAD) TOOL_SHA256=$(shasum -a 256 .factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.ts) bun .factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/run.ts",
-			result: "PASS",
-			observed:
-				"2 discovered trace exports, both the training session (identical SHA-256); independence reasonCode DUPLICATE_EXPORT_SAME_SESSION; 0 eligible holdout attempts; verdict AWAITING_INDEPENDENT_DOGFOOD_SESSION",
-		},
-		{
-			command:
-				"git diff --stat HEAD -- .factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/",
-			result: "PASS",
-			observed:
-				"empty diff — the previous ACT's committed calibration artifacts are byte-identical and untouched by this ACT (witness V7)",
-		},
-	], {
 		privacy: {
 			rawPromptsMessagesToolsCredentialsCommitted: false,
 			rawTraceCommitted: false,
@@ -160,6 +149,7 @@ function main(): void {
 		},
 	});
 	written.push(receipt);
+
 	const manifest = writeArtifactHashManifest(SOURCE_HEAD);
 	written.push(manifest);
 

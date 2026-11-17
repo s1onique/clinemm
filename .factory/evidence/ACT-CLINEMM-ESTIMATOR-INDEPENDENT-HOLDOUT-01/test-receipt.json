@@ -2,33 +2,44 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.test-receipt.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
-  "toolSha256": "3069a174dd475f441b4a799ed27755c7f92174232dc4006d35e0b8c26cb65608",
-  "commands": [
+  "sourceHead": "2d5f8c00ccc050f8105af65787d265cbe1ba5069",
+  "toolSha256": "a81aac31407dfbae235fcc732d883864dafe0f44aa534c5ae608fa2ab4dcd07c",
+  "commands": [],
+  "historicalTestEvidence": [
     {
+      "kind": "HISTORICAL_TEST_EVIDENCE",
       "command": "bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts",
       "result": "PASS",
-      "observed": "16 pass, 0 fail, 24 expect() calls; pre-existing witnesses T1-T16"
+      "observed": "16 pass, 0 fail, 24 expect() calls; pre-existing witnesses T1-T16",
+      "note": "Executed for commit 2d5f8c00c (the evidence-discovery run)."
     },
     {
+      "kind": "HISTORICAL_TEST_EVIDENCE",
       "command": "bun test ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts",
       "result": "PASS",
-      "observed": "12 pass, 0 fail, 76 expect() calls; focused witnesses V1-V12"
+      "observed": "12 pass, 0 fail, 76 expect() calls; focused witnesses V1-V12",
+      "note": "Executed for commit 2d5f8c00c (the evidence-discovery run)."
     },
     {
+      "kind": "HISTORICAL_TEST_EVIDENCE",
       "command": "bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts",
       "result": "PASS",
-      "observed": "28 pass, 0 fail, 100 expect() calls across 2 files"
+      "observed": "28 pass, 0 fail, 100 expect() calls across 2 files",
+      "note": "Executed for commit 2d5f8c00c (the evidence-discovery run)."
     },
     {
+      "kind": "HISTORICAL_TEST_EVIDENCE",
       "command": "ENTRY_HEAD=$(git rev-parse HEAD) TOOL_SHA256=$(shasum -a 256 .factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.ts) bun .factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/run.ts",
       "result": "PASS",
-      "observed": "2 discovered trace exports, both the training session (identical SHA-256); independence reasonCode DUPLICATE_EXPORT_SAME_SESSION; 0 eligible holdout attempts; verdict AWAITING_INDEPENDENT_DOGFOOD_SESSION"
+      "observed": "2 discovered trace exports, both the training session (identical SHA-256); independence reasonCode DUPLICATE_EXPORT_SAME_SESSION; 0 eligible holdout attempts; verdict AWAITING_INDEPENDENT_DOGFOOD_SESSION",
+      "note": "Executed for commit 2d5f8c00c (the evidence-discovery run)."
     },
     {
+      "kind": "HISTORICAL_TEST_EVIDENCE",
       "command": "git diff --stat HEAD -- .factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/",
       "result": "PASS",
-      "observed": "empty diff — the previous ACT's committed calibration artifacts are byte-identical and untouched by this ACT (witness V7)"
+      "observed": "empty diff — the previous ACT's committed calibration artifacts are byte-identical and untouched by this ACT (witness V7)",
+      "note": "Executed for commit 2d5f8c00c (the evidence-discovery run)."
     }
   ],
   "privacy": {
@@ -46,5 +57,14 @@
     "coefficientRefit": false,
     "vsixBuild": false,
     "roundCRepeat": false
+  },
+  "evaluation": {
+    "kind": "FRESH_EVALUATION",
+    "note": "This run evaluated traces; it executed NO test suite. `commands` is therefore empty. The test evidence below belongs to earlier runs and is labelled as historical.",
+    "tracesDiscovered": 2,
+    "tracesAcceptedAsHoldout": 0,
+    "eligibleAttempts": 0,
+    "verdict": "AWAITING_INDEPENDENT_DOGFOOD_SESSION",
+    "testsExecutedByThisRun": 0
   }
 }

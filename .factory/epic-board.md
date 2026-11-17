@@ -34923,3 +34923,73 @@ enable the existing read-only control seam, observe the natural active/user-inpu
 matrix, correlate `sessionId` + `taskState.phase` + `stateVersion`/`epoch` from Codex Desktop) is
 delivered in `.factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/06-artifact-and-live-qualification.md`.
 The existing CPR01 installed qualification remains a separate ACT and is coordinated, not superseded.
+
+# ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01 — AWAITING_INDEPENDENT_DOGFOOD_SESSION (CORRECTION01) — 2026-11-17
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/`
+  `identity.json`, `holdout-manifest.json`, `join-audit.json`, `frozen-candidates.json`,
+  `holdout-comparison.json`, `safety-discriminators.json`, `test-receipt.json`,
+  `qualification-report.md`, `artifact-hashes.json`, `tool/{holdout,verdict,receipt,artifacts,run}.ts`,
+  `tool/{holdout,guards}.test.ts`
+
+**CORRECTION01 (bounded offline evidence-integrity correction).** The review of the
+evidence-discovery commit `2d5f8c00c` reproduced three P0 evidence-integrity defects and one P1
+verdict defect. All four were corrected in the OFFLINE ADAPTER ONLY. No production estimator,
+compaction policy, Strata configuration, runtime diagnostic, shadow inference, coefficient, VSIX
+build or Round C repeat was touched.
+
+- **P0-1 — zero observations produced a positive production-suitability result.** The committed
+  `safety-discriminators.json` asserted `productionProposalSuitable: true` with an empty `reasons`
+  array on an EMPTY dataset (0 evaluated requests), turning absence of evidence into a positive
+  safety claim. `productionSuitability()` is now explicitly three-state: with zero qualified
+  observations it returns `status: "NOT_EVALUATED"`, `productionProposalSuitable: false`,
+  `reasons: ["NO_QUALIFIED_OBSERVATIONS"]`, `evaluatedRequests: 0`. A populated observation set
+  with no pre-registered failure remains `EVALUATED` and suitable.
+- **P0-2 — duplicate independent exports inflated the holdout dataset.** `qualifyIndependence()`
+  deduplicated session ids for the session COUNT, but `run.ts` then processed every discovered
+  export independently, so one session exported twice doubled every eligible row (32 → 64) while
+  still reporting one independent session. `deduplicateHoldoutExports()` now de-duplicates BY
+  SESSION IDENTITY BEFORE dataset construction: byte-identical re-exports collapse to one, and
+  exports of one session whose content hashes disagree are a CONFLICT whose whole session is
+  rejected. Duplicates and conflicts contribute zero rows. Verified END TO END in the real runner:
+  two identical exports of one session yield 32 rows, not 64; a conflicting pair yields 0 rows.
+- **P0-3 — the test receipt became stale on rerun.** The runner hard-coded historical PASS entries
+  and the original zero-holdout observations into `test-receipt.json`, so a subsequent `--trace`
+  run would falsely describe the PREVIOUS run's tests and observations. `buildTestReceipt()` now
+  separates `commands` (ONLY the tests the current invocation actually executed) from
+  `historicalTestEvidence` (each entry explicitly labelled `HISTORICAL_TEST_EVIDENCE` and bound to
+  the commit it belongs to). An evaluation run that executes no suite records `commands: []` and
+  `testsExecutedByThisRun: 0`.
+- **P1 — an independent trace with zero eligible attempts was mis-verdicted.** The runner returned
+  `AWAITING_INDEPENDENT_DOGFOOD_SESSION` even when an independent trace WAS present but unusable,
+  telling the operator to collect a session that had already been collected. `decideVerdict()`
+  (new `tool/verdict.ts`) returns `CAPTURE_INSUFFICIENT` when an independent session exists but
+  yields zero eligible attempts, and `AWAITING_INDEPENDENT_DOGFOOD_SESSION` only when no independent
+  session exists at all. Verified END TO END in the real runner.
+
+Gates: 11/11 new CORRECTION01 guard witnesses (`tool/guards.test.ts`, 40 expect() calls) PASS;
+39/39 across the three suites (16 T1–T16 original calibration + 12 V1–V12 focused + 11
+CORRECTION01, 140 expect() calls) PASS; strict `tsc --noEmit` clean on all five adapter modules;
+the artifact-hash manifest verifies on all 15 entries; the previous ACT's committed calibration
+directory is byte-identical (empty `git diff`, witness V7); no production-source path is modified;
+no raw trace, private candidate JSON, prompt, conversation content, tool payload or credential is
+committed.
+
+**Outcome.** The ACT's disposition is unchanged in substance and corrected in integrity: the
+current disposition remains `AWAITING_INDEPENDENT_DOGFOOD_SESSION` because BOTH surviving latency
+exports are byte-identical duplicates of the TRAINING session
+`1794881611778_557z3` (SHA-256 `601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed`).
+The holdout qualification gate is `HALT_HOLDOUT_EVIDENCE_GUARDS`: no eligible independent trace
+exists, so 0 eligible attempts, 0 exclusions, and NO holdout statistics are reported. The safety
+gate is `NOT_EVALUATED` (not a pass). Near-limit coverage is `NEAR_LIMIT_SAFETY_UNOBSERVED`; no
+zero-risk claim is made from zero examples. Production deployment remains out of scope; the
+original production estimator is retained; the frozen coefficients were not refit.
+
+**Next (RC-01).** The bounded guard correction is complete. The remaining dependency is
+OPERATOR dogfood collection, not more tooling: run one naturally occurring useful coding task
+through `codium-clinemm` with the installed dogfood profile and the same
+`openai-compatible` / `qwen3.8-flash-next-iq3_s` scope, export with
+`cline.debug.dumpRoundcLatencyTrace`, and IMMEDIATELY copy the export to a unique filename
+outside Git (the canonical path is overwritten by later sessions). Then evaluate with the EXISTING
+`--trace <path>` option — no source edit to `KNOWN_TRACE_LOCATIONS` is necessary.
+

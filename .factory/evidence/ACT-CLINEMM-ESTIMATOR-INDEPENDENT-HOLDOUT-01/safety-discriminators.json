@@ -2,7 +2,7 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.safety-discriminators.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
+  "sourceHead": "2d5f8c00ccc050f8105af65787d265cbe1ba5069",
   "evaluatedRequests": 0,
   "perCandidate": [
     {
@@ -79,8 +79,12 @@
     }
   ],
   "productionSuitability": {
-    "productionProposalSuitable": true,
-    "reasons": []
+    "status": "NOT_EVALUATED",
+    "productionProposalSuitable": false,
+    "reasons": [
+      "NO_QUALIFIED_OBSERVATIONS"
+    ],
+    "evaluatedRequests": 0
   },
   "preRegisteredInterpretation": "The frozen factor is NOT suitable for a production proposal if the holdout demonstrates a false-safe ceiling crossing, unsupported request accounting, or a significant unmitigated underestimate near the effective limit. Even with no failure observed, production deployment remains out of scope.",
   "selectionBias": "The current budget guard may prevent some unsafe requests from ever reaching the provider. Completed-request samples therefore do not cover all possible overflow cases. Unsubmitted or rejected requests remain UNLABELLED because no actual provider token usage exists for them.",

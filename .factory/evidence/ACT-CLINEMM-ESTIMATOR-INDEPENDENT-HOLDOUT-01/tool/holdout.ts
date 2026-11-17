@@ -177,8 +177,101 @@ export function qualifyIndependence(
 }
 
 /* ------------------------------------------------------------------ */
+/* Holdout export de-duplication                                       */
+/* ------------------------------------------------------------------ */
+
+export interface ExportDedupConflict {
+	readonly sessionId: string;
+	readonly reason: "CONFLICTING_EXPORTS_FOR_ONE_SESSION";
+	readonly paths: readonly string[];
+	readonly sha256s: readonly string[];
+}
+
+export interface ExportDedupResult {
+	/** The ONE accepted export per non-conflicting session. */
+	readonly accepted: readonly SourceTraceDescriptor[];
+	/** Byte-identical re-exports of an accepted export. */
+	readonly duplicates: readonly { path: string; sessionId: string; sha256: string; reason: "IDENTICAL_DUPLICATE_EXPORT" }[];
+	/** Sessions whose exports disagree — NONE of them is accepted. */
+	readonly conflicts: readonly ExportDedupConflict[];
+}
+
+/**
+ * De-duplicate holdout exports BY SESSION IDENTITY before any dataset is
+ * constructed.
+ *
+ * ## Why this exists (CORRECTION01, P0-2)
+ *
+ * `qualifyIndependence()` already deduplicates session IDs for the
+ * independent-session COUNT. But the runner subsequently processed EVERY
+ * discovered export independently, so exporting one holdout session twice
+ * produced two copies of every eligible row — inflating the holdout dataset
+ * and distorting every statistic, while still reporting ONE independent
+ * session.
+ *
+ * This function closes that gap:
+ *
+ *   - exports of one session with the SAME content hash are an idempotent
+ *     re-export: the first is accepted, the rest are recorded as duplicates;
+ *   - exports of one session with DIFFERENT content hashes CONFLICT. Neither
+ *     is trusted: the session is rejected wholesale and reported, because a
+ *     silently combined or silently chosen export would misattribute the
+ *     evidence.
+ *
+ * Conflicting and duplicated exports contribute ZERO rows.
+ */
+export function deduplicateHoldoutExports(
+	descriptors: readonly SourceTraceDescriptor[],
+): ExportDedupResult {
+	const bySession = new Map<string, SourceTraceDescriptor[]>();
+	for (const descriptor of descriptors) {
+		const group = bySession.get(descriptor.sessionId);
+		if (group) {
+			group.push(descriptor);
+		} else {
+			bySession.set(descriptor.sessionId, [descriptor]);
+		}
+	}
+
+	const accepted: SourceTraceDescriptor[] = [];
+	const duplicates: { path: string; sessionId: string; sha256: string; reason: "IDENTICAL_DUPLICATE_EXPORT" }[] = [];
+	const conflicts: ExportDedupConflict[] = [];
+
+	for (const [sessionId, group] of bySession) {
+		const distinctHashes = new Set(group.map((d) => d.sha256));
+		if (group.length === 1) {
+			accepted.push(group[0]!);
+			continue;
+		}
+		if (distinctHashes.size === 1) {
+			// Byte-identical re-export: keep the first, record the rest.
+			accepted.push(group[0]!);
+			for (const duplicate of group.slice(1)) {
+				duplicates.push({
+					path: duplicate.path,
+					sessionId,
+					sha256: duplicate.sha256,
+					reason: "IDENTICAL_DUPLICATE_EXPORT",
+				});
+			}
+			continue;
+		}
+		// CONFLICT: the exports of this session disagree. Reject the session.
+		conflicts.push({
+			sessionId,
+			reason: "CONFLICTING_EXPORTS_FOR_ONE_SESSION",
+			paths: group.map((d) => d.path),
+			sha256s: group.map((d) => d.sha256),
+		});
+	}
+
+	return { accepted, duplicates, conflicts };
+}
+
+/* ------------------------------------------------------------------ */
 /* Temporal classification (NEVER row-ordinal based)                   */
 /* ------------------------------------------------------------------ */
+
 
 /**
  * The OBSERVABLE temporal classification of a joined row.
@@ -449,16 +542,51 @@ export function compareCandidates(rows: readonly EligibleRow[]): CandidateCompar
 }
 
 /**
+ * The production-suitability verdict for the frozen candidates.
+ *
+ * CORRECTION01: `NOT_EVALUATED` is a first-class state. It means the gate
+ * could not be evaluated at all because no qualified observation exists. It
+ * is NOT a positive result and NOT a pass.
+ */
+export interface ProductionSuitability {
+	readonly status: "NOT_EVALUATED" | "EVALUATED" | "EVALUATED_WITH_FAILURES";
+	readonly productionProposalSuitable: boolean;
+	readonly reasons: readonly string[];
+	readonly evaluatedRequests: number;
+}
+
+/**
  * The pre-registered safety gate.
  *
  * The frozen factor is NOT suitable for a production proposal if the holdout
  * demonstrates a false-safe ceiling crossing, unsupported request accounting,
  * or a significant unmitigated underestimate near the effective limit.
+ *
+ * ## CORRECTION01 — absence of evidence is NEVER a positive result
+ *
+ * The previous implementation returned `productionProposalSuitable: true`
+ * whenever no failure reason had been recorded. With zero evaluated requests
+ * that produced a POSITIVE suitability claim from an EMPTY dataset, which
+ * contradicts the safety-unknown conclusion the qualification report states.
+ *
+ * The gate is now explicitly three-state:
+ *
+ *   - `NOT_EVALUATED` — no qualified observation exists. The factor is NOT
+ *     suitable for a production proposal, and no claim of safety is made.
+ *   - `EVALUATED` — observations exist and no pre-registered failure fired.
+ *   - `EVALUATED_WITH_FAILURES` — observations exist and at least one
+ *     pre-registered failure fired.
  */
-export function productionSuitability(comparisons: readonly CandidateComparison[]): {
-	readonly productionProposalSuitable: boolean;
-	readonly reasons: readonly string[];
-} {
+export function productionSuitability(comparisons: readonly CandidateComparison[]): ProductionSuitability {
+	const evaluatedRequests = comparisons.reduce((total, comparison) => total + comparison.safety.evaluatedRequests, 0);
+	if (evaluatedRequests === 0) {
+		return {
+			status: "NOT_EVALUATED",
+			productionProposalSuitable: false,
+			reasons: ["NO_QUALIFIED_OBSERVATIONS"],
+			evaluatedRequests: 0,
+		};
+	}
 	const reasons: string[] = [];
 	for (const comparison of comparisons) {
 		if (comparison.safety.falseSafeCeilingCount > 0) {
@@ -472,8 +600,14 @@ export function productionSuitability(comparisons: readonly CandidateComparison[
 			reasons.push(`${comparison.candidateId}:SIGNIFICANT_UNDERESTIMATE_NEAR_EFFECTIVE_LIMIT`);
 		}
 	}
-	return { productionProposalSuitable: reasons.length === 0, reasons };
+	return {
+		status: reasons.length === 0 ? "EVALUATED" : "EVALUATED_WITH_FAILURES",
+		productionProposalSuitable: reasons.length === 0,
+		reasons,
+		evaluatedRequests,
+	};
 }
+
 
 /**
  * The final verdict for a qualified holdout evaluation.

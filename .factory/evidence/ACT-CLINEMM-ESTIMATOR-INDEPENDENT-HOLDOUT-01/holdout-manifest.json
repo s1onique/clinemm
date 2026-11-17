@@ -2,7 +2,7 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.holdout-manifest.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
+  "sourceHead": "2d5f8c00ccc050f8105af65787d265cbe1ba5069",
   "independence": {
     "independent": false,
     "reasonCode": "DUPLICATE_EXPORT_SAME_SESSION",
@@ -43,6 +43,14 @@
     "1794881611778_557z3"
   ],
   "duplicateExportsOfSameSession": 1,
+  "exportDeduplication": {
+    "policy": "Holdout exports are de-duplicated by session identity BEFORE dataset construction. Byte-identical re-exports collapse to one. Exports of one session that disagree are a conflict and the whole session is rejected.",
+    "acceptedExports": [],
+    "duplicateExports": [],
+    "conflictingExports": [],
+    "contributingRowsFromDuplicates": 0,
+    "contributingRowsFromConflicts": 0
+  },
   "loadErrors": [],
   "trainingSource": {
     "sessionId": "1794881611778_557z3",

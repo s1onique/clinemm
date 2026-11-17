@@ -1,5 +1,24 @@
 # Qualification report — ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01
 
+## Correction notice (CORRECTION01)
+
+This report was corrected under the bounded offline-correction authorization that followed the
+review of the evidence-discovery commit `2d5f8c00c`. Three **P0 evidence-integrity defects** and
+one **P1 verdict defect** were reproduced and fixed in the offline adapter only. **No production
+estimator, compaction policy, Strata configuration, runtime diagnostic, coefficient, VSIX or
+Round C run was changed.**
+
+| ID | Defect | Correction |
+|---|---|---|
+| P0-1 | Zero observations produced `productionProposalSuitable: true` — absence of evidence became a positive safety claim. | `productionSuitability()` is now three-state. With zero qualified observations it returns `status: "NOT_EVALUATED"`, `productionProposalSuitable: false`, `reasons: ["NO_QUALIFIED_OBSERVATIONS"]`. |
+| P0-2 | Duplicate exports of one holdout session were processed independently, doubling every eligible row while still reporting one independent session. | `deduplicateHoldoutExports()` now de-duplicates **by session identity before dataset construction**. Byte-identical re-exports collapse to one; exports of one session that disagree are a conflict and the whole session is rejected. Duplicates and conflicts contribute zero rows. |
+| P0-3 | The runner hard-coded historical test results into a fresh `test-receipt.json`, so a subsequent `--trace` run would falsely claim the earlier run's tests and observations. | `buildTestReceipt()` separates `commands` (ONLY the tests the current invocation actually executed) from `historicalTestEvidence` (explicitly labelled `HISTORICAL_TEST_EVIDENCE`). An evaluation run that executes no suite records `commands: []` and `testsExecutedByThisRun: 0`. |
+| P1 | An independent trace yielding zero eligible attempts was reported as `AWAITING_INDEPENDENT_DOGFOOD_SESSION`, telling the operator to collect a session that had already been collected. | `decideVerdict()` (new `tool/verdict.ts`) returns `CAPTURE_INSUFFICIENT` when an independent session exists but yields zero eligible attempts, and `AWAITING_INDEPENDENT_DOGFOOD_SESSION` only when no independent session exists at all. |
+
+The RED→GREEN witnesses for all four defects live in `tool/guards.test.ts` (11 tests). They
+exercise the **real** analysis functions — the holdout adapter, the receipt builder and the
+verdict selector — not re-implementations.
+
 ## Verdict
 
 **AWAITING_INDEPENDENT_DOGFOOD_SESSION**
@@ -13,17 +32,23 @@ contract, so it is ineligible on two independent grounds.
 No holdout statistics are reported. A frozen coefficient was **not** refit, an estimator was
 **not** implemented, a compaction policy was **not** changed, and no live session was invented.
 
+**Holdout qualification remains `HALT_HOLDOUT_EVIDENCE_GUARDS`** until an operator supplies a
+genuine independent trace with authoritative attempt identity.
+
 ## Repository and artifact identity
 
 - Repository: `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm`
 - Remote: `git@github.com:s1onique/clinemm.git`
 - Branch: `main` (no branch created, no worktree created, no push, no PR)
-- **ENTRY_HEAD**: `e5343571df97e5b2ef9c68fe1ddfd32d93acaf31`
+- **ENTRY_HEAD**: `2d5f8c00ccc050f8105af65787d265cbe1ba5069` (the evidence-discovery commit; the
+  evidence-discovery run itself was executed at `e5343571df97e5b2ef9c68fe1ddfd32d93acaf31`)
 - Expected history confirmed: `f87e1547d` (dogfood capture default) → `88f7ce2ca` (offline
-  calibration evidence) → `e5343571d` (bounded evidence-identity correction) is HEAD.
+  calibration evidence) → `e5343571d` (bounded evidence-identity correction) → `2d5f8c00c`
+  (independent-holdout evidence discovery).
 - Unexpected tracked dirt: **none** (`git status --porcelain=v1` was empty at entry).
 - Existing worktrees were left untouched, including the recovery worktree
   `/private/tmp/clinemm-stash-recovery-20261117`.
+
 
 ## Evidence discovery (prescribed order)
 
@@ -103,6 +128,22 @@ set is empty after the training session is removed.
 | Eligible provider attempts | 0 |
 | Distinct holdout session ids | none |
 | Duplicate exports of the same session | 1 (both training exports) |
+| Holdout exports accepted after de-duplication | 0 |
+| Holdout exports rejected as duplicates | 0 |
+| Holdout sessions rejected for conflicting exports | 0 |
+
+**CORRECTION01 (P0-2).** Holdout exports are now de-duplicated **by session identity before any
+dataset is constructed**. Byte-identical re-exports of one session collapse to a single accepted
+export; exports of one session whose content hashes disagree are a conflict and the whole session
+is rejected. Neither duplicates nor conflicts contribute any row. `holdout-manifest.json` records
+this under `exportDeduplication`, including
+`contributingRowsFromDuplicates: 0` and `contributingRowsFromConflicts: 0`.
+
+In this run the de-duplication step had no holdout candidates to act on: both discovered exports
+carry the **training** session id and are excluded before de-duplication as
+`EXCLUDE_FROM_HOLDOUT`. The two exports are nevertheless documented as the same session exported
+twice by the independence gate (`DUPLICATE_EXPORT_SAME_SESSION`).
+
 
 ## Frozen holdout evaluation
 
@@ -111,6 +152,19 @@ qualified attempts is `CAPTURE_INSUFFICIENT`; however, the pre-registered *opera
 takes precedence: with no eligible independent trace at all, the required disposition is
 **`AWAITING_INDEPENDENT_DOGFOOD_SESSION`**, and no empty evidence files were fabricated to
 satisfy the deliverable list.
+
+**CORRECTION01 clarification.** These two outcomes are now distinguished by the executable
+verdict selector (`tool/verdict.ts`):
+
+| State | Verdict |
+|---|---|
+| No independent session exists at all | `AWAITING_INDEPENDENT_DOGFOOD_SESSION` |
+| An independent session exists but yields zero eligible attempts | `CAPTURE_INSUFFICIENT` |
+
+This run found **no independent session at all**, so `AWAITING_INDEPENDENT_DOGFOOD_SESSION` is
+correct. The P1 defect was that the runner returned `AWAITING_INDEPENDENT_DOGFOOD_SESSION` even
+when an independent trace *was* present but unusable — that case now correctly yields
+`CAPTURE_INSUFFICIENT`.
 
 Training-session observations (baseline median absolute error 9,806; constant 443; constant
 underestimates 20/32 with a maximum of 954) are **training results, not holdout results**, and
@@ -128,6 +182,7 @@ criteria and their status:
 | C. Effective-ceiling false safety (`actual > max` AND `estimate ≤ max`) | NOT EVALUATED |
 | D. Near-limit coverage (≥ 0.9 × trigger / ≥ 0.9 × ceiling) | **NEAR_LIMIT_SAFETY_UNOBSERVED** |
 | E. Selection bias | APPLICABLE — see below |
+
 
 **Selection bias (E)** is structural, not incidental: the current budget guard may prevent unsafe
 requests from ever reaching the provider, so completed-request samples never cover all possible
@@ -156,6 +211,23 @@ false-safe ceiling crossing, unsupported request accounting, or a significant un
 underestimate near the effective limit. This ACT produced no holdout, so the criterion was not
 exercised. **Production deployment remains out of scope regardless.**
 
+## Production-suitability gate (CORRECTION01)
+
+The gate is **explicitly not evaluated** in the absence of observations. It is NOT a pass and NOT
+a positive safety claim:
+
+```json
+"productionSuitability": {
+  "status": "NOT_EVALUATED",
+  "productionProposalSuitable": false,
+  "reasons": ["NO_QUALIFIED_OBSERVATIONS"],
+  "evaluatedRequests": 0
+}
+```
+
+The pre-correction artifact asserted `productionProposalSuitable: true` with an empty `reasons`
+array on an empty dataset. That was an evidence-integrity defect (P0-1) and has been corrected.
+
 ## Executable gates
 
 | Gate | Assertion | Result |
@@ -173,6 +245,22 @@ exercised. **Production deployment remains out of scope regardless.**
 | V11 | Unknown model/provider configuration remains unqualified | PASS |
 | V12 | Output contains no prompts, conversation content, tools or credentials | PASS |
 
+### CORRECTION01 guard witnesses (`tool/guards.test.ts`)
+
+| Witness | Assertion | Result |
+|---|---|---|
+| P0-1 | Zero evaluated requests yield `NOT_EVALUATED` / `NO_QUALIFIED_OBSERVATIONS` and `productionProposalSuitable: false` | PASS |
+| P0-1 | A populated observation set with no pre-registered failure remains `EVALUATED` and suitable | PASS |
+| P0-2 | Byte-identical duplicate exports collapse to one accepted export | PASS |
+| P0-2 | Conflicting exports for one session are rejected wholesale, not combined | PASS |
+| P0-2 | A conflicting session contributes no rows | PASS |
+| P0-2 | The independence gate sees one session for duplicated exports | PASS |
+| P0-3 | A fresh run with no executed tests records `commands: []` | PASS |
+| P0-3 | Historical test evidence is separately and explicitly labelled | PASS |
+| P1 | An independent trace with zero eligible attempts is `CAPTURE_INSUFFICIENT` | PASS |
+| P1 | No independent session at all is `AWAITING_INDEPENDENT_DOGFOOD_SESSION` | PASS |
+| P1 | The populated-dataset verdict authority is unchanged | PASS |
+
 ### Finding raised by witness V4
 
 The prior analyzer's `buildDataset` reports `MULTIPLE_ATTEMPTS_FOR_ONE_PREPARATION` when a
@@ -185,20 +273,25 @@ completion event for the *same* attempt id is correctly treated as a deduplicati
 ambiguity. The faulty behaviour is demonstrated inside the V4 witness so the guard cannot silently
 regress.
 
-### Commands actually executed
+### Commands actually executed for this correction
 
 | Command | Result | Observed |
 |---|---|---|
-| `bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts` | PASS | 16 pass, 0 fail, 24 expect() calls (T1–T16) |
-| `bun test ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts` | PASS | 12 pass, 0 fail, 76 expect() calls (V1–V12) |
-| `bun test <both files>` | PASS | 28 pass, 0 fail, 100 expect() calls |
-| `ENTRY_HEAD=$(git rev-parse HEAD) TOOL_SHA256=$(shasum -a 256 …/tool/holdout.ts) bun …/tool/run.ts` | PASS | 2 exports, both training; `DUPLICATE_EXPORT_SAME_SESSION`; 0 eligible attempts |
-| `git diff --stat HEAD -- .factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/` | PASS | empty — previous calibration artifacts byte-identical and untouched (V7) |
+| `bun test ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/guards.test.ts` | PASS | 11 pass, 0 fail, 40 expect() calls (P0-1 ×2, P0-2 ×4, P0-3 ×2, P1 ×3) |
+| `bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/guards.test.ts` | PASS | 39 pass, 0 fail, 140 expect() calls across 3 files (16 T1–T16 + 12 V1–V12 + 11 CORRECTION01) |
+| `ENTRY_HEAD=$(git rev-parse HEAD) TOOL_SHA256=$(shasum -a 256 …/tool/holdout.ts) bun …/tool/run.ts` | PASS | 2 exports, both training; `DUPLICATE_EXPORT_SAME_SESSION`; 0 eligible attempts; verdict `AWAITING_INDEPENDENT_DOGFOOD_SESSION`; suitability `NOT_EVALUATED` |
+
+The **historical** test evidence from the evidence-discovery run (`2d5f8c00c`) is preserved in
+`test-receipt.json` under `historicalTestEvidence`, each entry explicitly labelled
+`HISTORICAL_TEST_EVIDENCE` with the commit it belongs to. The current run's `commands` list is
+empty because the runner executed no test suite — it evaluated traces. That separation is the
+P0-3 correction.
 
 The prior ACT's tool hashes were re-verified against its committed manifest:
 `analyze.ts` = `ddbb74e9…b471`, `analyze.test.ts` = `73051cfd…d231`,
 `calibration-candidates.json` = `fd95749d…7597`. **No historical calibration receipt was
 rewritten or normalized.**
+
 
 ## Required operator collection instructions
 
@@ -231,6 +324,32 @@ schema, exported from the installed dogfood extension, whose `sessionId` differs
    `~/Downloads/holdout-<sessionId>.json` — and record:
    - session ID,
    - export path,
+   - SHA-256 and byte size,
+   - installed extension version and bundle SHA-256,
+   - model/provider identity,
+   - trace schema, event count, truncation and integrity status,
+   - Strata version/configuration identity when observable.
+6. Keep the raw exported trace **outside Git**. Do not include private candidate snapshots in any
+   committed output.
+
+**Once the artifact exists**, evaluate it with the existing `--trace <path>` option. **No source
+edit to `KNOWN_TRACE_LOCATIONS` is necessary** — the option is repeatable, so several exports may
+be supplied at once:
+
+```
+ENTRY_HEAD=$(git rev-parse HEAD) \
+TOOL_SHA256=$(shasum -a 256 .factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.ts | awk '{print $1}') \
+bun .factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/run.ts \
+  --trace ~/Downloads/holdout-<sessionId>.json
+```
+
+Duplicate exports of the same session are collapsed by SHA-256, and conflicting exports of one
+session are rejected wholesale (P0-2 correction). A supplied independent trace that yields zero
+eligible attempts is reported as `CAPTURE_INSUFFICIENT` with the exact missing identity or
+accounting field (P1 correction), not as `AWAITING_INDEPENDENT_DOGFOOD_SESSION`.
+
+The frozen coefficients are already in place and **must not** be changed, fitted, or optimized
+after inspecting the holdout.
 
 ## Scope compliance
 
@@ -255,23 +374,4 @@ Record the independent-session trace collection as the next required evidence. O
 frozen candidates can be evaluated without any refit. If near-limit coverage remains missing after
 that, record it as a further evidence requirement rather than manufacturing risk claims — and do
 not start another calibration review cycle merely because some statistics are inconclusive.
-
-   - SHA-256 and byte size,
-   - installed extension version and bundle SHA-256,
-   - model/provider identity,
-   - trace schema, event count, truncation and integrity status,
-   - Strata version/configuration identity when observable.
-6. Keep the raw exported trace **outside Git**. Do not include private candidate snapshots in any
-   committed output.
-
-**Once the artifact exists**, add its path to `KNOWN_TRACE_LOCATIONS` in `tool/run.ts` and re-run:
-
-```
-ENTRY_HEAD=$(git rev-parse HEAD) \
-TOOL_SHA256=$(shasum -a 256 .factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.ts | awk '{print $1}') \
-bun .factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/run.ts
-```
-
-The frozen coefficients are already in place and **must not** be changed, fitted, or optimized
-after inspecting the holdout.
 

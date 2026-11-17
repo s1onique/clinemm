@@ -1,52 +1,57 @@
 {
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.artifact-hashes.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
-  "sourceHead": "e5343571df97e5b2ef9c68fe1ddfd32d93acaf31",
+  "sourceHead": "2d5f8c00ccc050f8105af65787d265cbe1ba5069",
   "hashes": [
     {
       "name": "frozen-candidates.json",
-      "sha256": "e0a0ceff2b1b879ae7275918afbc3ac2a5ae2fd1cc494530952d51b4c88c6ac1",
+      "sha256": "bb4103c1c3ae154f063e51aa1dffa48d8786ee75b9b9f8421d6899777e892cd7",
       "bytes": 1410
     },
     {
       "name": "holdout-comparison.json",
-      "sha256": "22d63b566df903587214a03836078da9a93a534361e595d2cae81f5c61ce29cb",
+      "sha256": "8ecf8466afe13ddb3624754348bb6f3c9ac6ea8a544ba9b29c740879126d5a51",
       "bytes": 1855
     },
     {
       "name": "holdout-manifest.json",
-      "sha256": "282f138c9e7f1a217e9f9359e58c0143ed7fa549173158a8921f60fd3c481b6a",
-      "bytes": 2546
+      "sha256": "cd75841c6488c80f4871fc0fd5fcb8978d3219b919aa6eae217c9b7e107906b9",
+      "bytes": 2973
     },
     {
       "name": "identity.json",
-      "sha256": "93b0e5b280e621ec47b22f27970846288f305cda85b6e556a4d880588f3a3ba8",
+      "sha256": "81e8fd0799b3e6eca1f99547fc8e789c5b334b3344d95071198a7c5e8fc78cf8",
       "bytes": 1340
     },
     {
       "name": "join-audit.json",
-      "sha256": "b77beeeb804fdfb68b8d888c14d95c3b58237fe0f68fecef018b87487c2c623e",
+      "sha256": "1e3fc0762ba26120971ea7f2314bb1053b60db276c2aede882f3ac0ff154f6d2",
       "bytes": 754
     },
     {
       "name": "qualification-report.md",
-      "sha256": "d4258f3cef4d385e0cd845d7e86e26e28a4fbca137771bba635ae5db07dba066",
-      "bytes": 15391
+      "sha256": "49e43252e8567c35e6d58a4f06d72d017dff892b16c39c98bc2685648d556cbf",
+      "bytes": 22373
     },
     {
       "name": "safety-discriminators.json",
-      "sha256": "e38c07b99b44b762905767bd9af14bf471ab64dfc9216e365e409ccf1645c4b3",
-      "bytes": 3770
+      "sha256": "f0c2a9ab73d92af29ba7cadf534deae1ba1776ee06de170e102d4998b5000a73",
+      "bytes": 3869
     },
     {
       "name": "test-receipt.json",
-      "sha256": "b6472aec5bd9b221fb47a439ceaf1c9cfaa547ee3da551f12c39de63536638cf",
-      "bytes": 2501
+      "sha256": "c5eeedcdeb958f29e2af26af2d368d40a9c8dd9174311097dddae406783cb74d",
+      "bytes": 3537
     },
     {
       "name": "tool/artifacts.ts",
-      "sha256": "9c2909087ba2f603a0a228f423d66a96e7a00c2dae47bd9fba2ddc650b25a2fd",
-      "bytes": 9072
+      "sha256": "9726f43bdc7ab91fa0f7826f07ea93a751ec357cdf5868d4defac5ab0a8df87d",
+      "bytes": 10042
+    },
+    {
+      "name": "tool/guards.test.ts",
+      "sha256": "ababebf273fbeaf4347b9ce0d4c86f5d1d3fe9100ba5d36d01e7e86ede345aba",
+      "bytes": 7349
     },
     {
       "name": "tool/holdout.test.ts",
@@ -55,18 +60,23 @@
     },
     {
       "name": "tool/holdout.ts",
-      "sha256": "3069a174dd475f441b4a799ed27755c7f92174232dc4006d35e0b8c26cb65608",
-      "bytes": 22822
+      "sha256": "a81aac31407dfbae235fcc732d883864dafe0f44aa534c5ae608fa2ab4dcd07c",
+      "bytes": 27774
     },
     {
       "name": "tool/receipt.ts",
-      "sha256": "4beb665c7fb28f07d48e0905c0608cd11d2c1fdb420ae90733bc2e4202c43723",
-      "bytes": 2412
+      "sha256": "4bcb9f49451999d5e32e8a099252f992742d68dc09f9bf79ff81fcef9f6c251a",
+      "bytes": 6678
     },
     {
       "name": "tool/run.ts",
-      "sha256": "657b9507487bd4cadb88f10a49570f4e3d286f7a9d236baf60c2f6a92944f92f",
-      "bytes": 6139
+      "sha256": "8d6d91a8790833c23ef4cdab804c7fa8694376e0c0b566f59c7c3eb5ad4ffbbf",
+      "bytes": 5377
+    },
+    {
+      "name": "tool/verdict.ts",
+      "sha256": "7ed43f103f0b14434fd43f104d010e45a344982c5ba94c4513de51a0b1f04692",
+      "bytes": 1930
     }
   ]
 }
