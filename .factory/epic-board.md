@@ -35386,3 +35386,85 @@ estimator is **not** touched. The ~5 s hypothesis is **not repaired**: it is ref
 authoritative boundary, and the elapsed time it appeared to describe is located in the
 sibling tool's execution time. **No speculative optimization is proposed and no production
 change is authorized by this ACT.**
+
+
+# ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01 — CORRECTION01 — 2026-11-17
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01/`
+  `06-correction01-receipt.json`, `03-executable-controls.json`,
+  `02-causal-classification.json`, `05-latency-attribution-report.md` (§7b),
+  `tool/{test_failing_control_witness.py,run_witness_discrimination_check.sh}`
+
+**Principal disposition: `NOT_REPRODUCED` (unchanged).** This is the bounded P1 correction
+raised by the review of RC-03. The review finding is **accepted** and corrected: it does not
+contradict the session's measurements, but the evidence generator could have falsely
+reported success for a future trace.
+
+**Evidence generator only. No production change, no new diagnostic infrastructure, no
+probe.** The correction is confined to the analyzer, the evidence generator and the witness
+inside the evidence directory.
+
+## The P1
+
+In `tool/emit_evidence.py`, controls **C6, C7 and C8 were marked PASS unconditionally**
+(`add("C6", ..., True, ...)`) and the verdict was emitted as a **fixed string**
+(`"verdict": "NOT_REPRODUCED"`) instead of being derived from the analyzer's results.
+
+## The correction
+
+| Item | Before | After |
+|---|---|---|
+| Verdict | fixed string | **DERIVED** by `derive_verdict()` from the C1 completeness contract and the C6 measured coverage / floor result. Incomplete or truncated trace ⇒ `CAPTURE_INSUFFICIENT`; fewer than 20 independently identified tool executions ⇒ `CAPTURE_INSUFFICIENT` (below that coverage "no floor observed" is indistinguishable from "not observed"); otherwise `REPRODUCED` / `NOT_REPRODUCED`. |
+| C6 | `True` (constant) | **DERIVED CHECK** — passes only when the hypothesis was actually evaluated against a sufficient sample of independently identified tool executions, with the REGISTERED floor discriminator applied to that whole sample. |
+| C7 | `True` (constant) | **REAL CHECK** — inspects unstaged, staged and untracked state across `sdk/ apps/ src/ proto/ webview-ui/`, and scans the analyzer and generator for a production emission site (a probe). |
+| C8 | `True` (constant) | **STRUCTURAL / MANUAL ASSERTION**, labelled `executable: false` — properties of the ANALYSIS (no TTFT synthesized, no server-side time inferred, adjacency not promoted to causality) that no program can observe. Each claim now carries the machine-checkable fact backing it where one exists. |
+
+## Failing-control witness
+
+`tool/test_failing_control_witness.py` — **21 / 21 checks PASS**. It proves the corrected
+generator **FAILS** on a violating trace: insufficient coverage ⇒ `CAPTURE_INSUFFICIENT`
+and C6 fails; incomplete trace ⇒ `CAPTURE_INSUFFICIENT`; the floor **reproduced** ⇒
+`REPRODUCED`; discriminator applied to only part of the sample ⇒ C6 fails; unregistered
+floor ⇒ C6 fails; and C7 fails on unstaged, untracked and staged production edits (driven
+against a **throwaway git repository**, so the real repository is never touched). The real
+trace must still yield `NOT_REPRODUCED` with C6 passing, so the negatives cannot be
+satisfied by simply always failing.
+
+**Discriminating power** (`tool/run_witness_discrimination_check.sh`): the witness **PASSES**
+against the corrected code and **FAILS** against the pre-correction code at commit
+`ab5ee16ec` with `AttributeError: module 'attribute_latency' has no attribute
+'derive_verdict'`; the pre-correction generator is confirmed to hardcode the verdict and to
+mark **C6, C7 and C8** PASS unconditionally. A witness that cannot fail is not a witness.
+
+## Measured findings — unchanged
+
+The correction changes how the verdict is **computed**, not what this session **measures**.
+The verdict for session `1794892591345_7em4g` is still **`NOT_REPRODUCED`**, still derived
+from **26** independently identified tool executions with **0** at or above the registered
+**5,000 ms** floor (max observed 4,022.851 ms; the `delivery` stage maxes at 0.295 ms). The
+dominant actionable cost remains **provider round-trip wait — 810,271.9 ms, 87.99 % of the
+920.9 s wall (n=18)**; the ~4 s apparent tool-result overhead remains the **sibling tool's
+own execution time** inside the same model-turn batch (max residual 0.209 ms over 8
+batches).
+
+## Gates
+
+Witness **21 / 21 PASS**; witness discrimination check **PASS**; all 8 evidence controls
+PASS (C6/C7 derived, C8 structural); evidence artifacts **deterministic** (byte-identical on
+re-run); `git diff --name-only HEAD` over `sdk/ apps/ src/ proto/ webview-ui/`:
+**empty** — production source unchanged; **no new diagnostic infrastructure**; no raw
+trace in Git.
+
+## Board update (RC-03 — correction)
+
+| Stage | Status |
+|---|---|
+| RC-01 independent calibration | **Unchanged** — production estimator unchanged, coefficients not refit, frozen calibration preserved |
+| RC-02 observed trigger causality | **Unchanged** — QUALIFIED, explicit scope (one observed event) |
+| **RC-03 live latency attribution** | **NOT_REPRODUCED (unchanged)** — the suspected ~5 s tool-result floor is absent from 26 independently identified tool executions (0 at or above the registered 5,000 ms floor; max 4,022.851 ms; the `delivery` stage maxes at 0.295 ms). The apparent ~4 s tool-result overhead is the **sibling tool's own execution time** inside the same model-turn batch (max residual 0.209 ms over 8 batches). The dominant actionable cost is **provider round-trip wait — 810,271.9 ms, 87.99 % of wall (n=18)**; host-side orchestration totals ≈1.1 ms. **CORRECTION01 applied:** the verdict and controls C6/C7/C8 are now derived / real / structural rather than constant, with a 21-check failing-control witness that has demonstrated discriminating power against the pre-correction code. |
+| RC-04 canonical evidence continuity | **Unchanged** — QUALIFIED, `PASS_CANONICAL_CONTINUITY_LIVE` |
+| RC-05 … RC-08 | **Unchanged** — RC-05 (tool normalization) is NEXT |
+
+RC-01, RC-02 and RC-04 are **not** reopened. The P1 is **closed**; the review's
+`PASS_WITH_NONBLOCKING_RESIDUE` disposition is satisfied. The digest's invalid historical
+gate summary and the ≈3 MB epic board remain **P2 hygiene**, not blockers.

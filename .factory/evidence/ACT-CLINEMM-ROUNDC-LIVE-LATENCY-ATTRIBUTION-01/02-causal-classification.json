@@ -1,6 +1,22 @@
 {
   "act": "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
   "verdict": "NOT_REPRODUCED",
+  "verdict_derivation": {
+    "verdict": "NOT_REPRODUCED",
+    "reasons": [
+      "0 of 26 independently identified tool executions reached the registered 5000 ms floor (max observed 4022.851 ms)"
+    ],
+    "derived_from": [
+      "C1_identity_and_request_census.complete",
+      "C6_tool_result_latency_hypothesis.sample_count_independent_tool_executions",
+      "C6_tool_result_latency_hypothesis.at_or_above_floor.count"
+    ],
+    "registered_floor_ms": 5000.0,
+    "minimum_sample_coverage": 20,
+    "observed_sample_coverage": 26,
+    "measurements_at_or_above_floor": 0,
+    "floor_reproduced": false
+  },
   "verdict_scope": "The suspected ~5 s TOOL-RESULT floor is NOT_REPRODUCED as a property of the tool-result path. The elapsed time that LOOKED like a ~5 s tool-result overhead is measured, but it is located elsewhere: it is the SIBLING TOOL's execution time inside the same model-turn batch, observed at the earlier sibling's delivery boundary. The dominant actionable latency cost of this session is PROVIDER WAIT, not tool-result delivery.",
   "primary_discriminator": {
     "hypothesis": "a ~5 s floor on the tool-result path: a fixed cost paid between the tool executor's terminal outcome and the delivery of its result into the conversation",

@@ -11,9 +11,9 @@
     "expected_repository": "s1onique/clinemm",
     "repository_identity_verified": true,
     "branch": "main",
-    "entry_head": "575465bf5ba556fe3c7a4f9d6d3d6a0597ae19f6",
+    "entry_head": "ab5ee16ecd11ce4ae08e39f7d8a1870bdaec11b0",
     "expected_predecessor": "575465bf5ba556fe3c7a4f9d6d3d6a0597ae19f6",
-    "entry_head_matches_expected_predecessor": true,
+    "entry_head_matches_expected_predecessor": false,
     "tracked_tree_clean_at_entry": true,
     "history_rewritten": false,
     "pushed": false,
@@ -24,7 +24,7 @@
   },
   "preservation": {
     "protected_stashes": "(none)",
-    "worktrees": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm                                                             575465bf5 [main]\n/private/tmp/clinemm-prebase                                                                                           1f456b971 (detached HEAD) prunable\n/private/tmp/clinemm-stash-recovery-20261117                                                                           8b76c9e3e [recovery/protected-stash-20261117]\n/private/tmp/worktree-bun.7ddCHQ                                                                                       bbdccf8a2 (detached HEAD)\n/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-1WJufc/clinemm-dogfood-cyoi5ujq/worktree 3147a53b5 (detached HEAD) prunable\n/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first                                            38e726c45 [experiment/m31-action-first]\n/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded                                                 0366ea506 (detached HEAD)",
+    "worktrees": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm                                                             ab5ee16ec [main]\n/private/tmp/clinemm-prebase                                                                                           1f456b971 (detached HEAD) prunable\n/private/tmp/clinemm-stash-recovery-20261117                                                                           8b76c9e3e [recovery/protected-stash-20261117]\n/private/tmp/worktree-bun.7ddCHQ                                                                                       bbdccf8a2 (detached HEAD)\n/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-1WJufc/clinemm-dogfood-cyoi5ujq/worktree 3147a53b5 (detached HEAD) prunable\n/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-action-first                                            38e726c45 [experiment/m31-action-first]\n/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-m31-bounded                                                 0366ea506 (detached HEAD)",
     "worktrees_preserved": true,
     "protected_stashes_preserved": true
   },

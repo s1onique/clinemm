@@ -125,6 +125,131 @@ def identity_of(event):
             md.get("toolCallId"))
 
 
+# ---------------------------------------------------------------------------
+# CORRECTION01 — DERIVED verdict and DERIVED control outcomes.
+#
+# The reviewer found (P1) that the evidence generator emitted a FIXED verdict
+# and marked controls PASS unconditionally. That is corrected here: the
+# verdict and every derived control outcome are computed from the MEASURED
+# facts of the trace under analysis. A trace that does not satisfy the
+# contract cannot produce a passing verdict.
+# ---------------------------------------------------------------------------
+
+#: The minimum number of INDEPENDENTLY IDENTIFIED tool executions required
+#: before a "floor absent" conclusion is admissible. Below this coverage the
+#: trace cannot distinguish "no floor" from "not observed", so the verdict is
+#: CAPTURE_INSUFFICIENT rather than NOT_REPRODUCED.
+MIN_SAMPLE_COVERAGE = 20
+
+#: The floor threshold is REGISTERED, not inferred from the data: it is the
+#: ~5 s value the hypothesis under test names.
+REGISTERED_FLOOR_MS = 5000.0
+
+
+def derive_verdict(controls, floor_ms=REGISTERED_FLOOR_MS,
+                   min_coverage=MIN_SAMPLE_COVERAGE):
+    """Derive the ACT verdict from the MEASURED controls.
+
+    Returns a dict with the verdict and the reasoning that produced it.
+
+    The rules, in order:
+
+    1. If the trace does not satisfy its own completeness contract, the
+       capture is insufficient — no verdict about the hypothesis is possible.
+    2. If fewer than `min_coverage` independently identified tool executions
+       were measured, the capture is insufficient: "no floor observed" is not
+       distinguishable from "not observed".
+    3. If the trace is complete and adequately covered, the floor is either
+       reproduced or it is not. REPRODUCED / NOT_REPRODUCED are then the
+       only admissible verdicts.
+    """
+    c1 = controls["C1_identity_and_request_census"]
+    c6 = controls["C6_tool_result_latency_hypothesis"]
+    sample_count = c6["sample_count_independent_tool_executions"]
+    at_or_above = c6["at_or_above_floor"]["count"]
+    reproduced = bool(at_or_above) and (
+        at_or_above >= max(1, int(0.5 * sample_count)))
+
+    reasons = []
+    if not c1["complete"]:
+        reasons.append(
+            "the trace does not satisfy its completeness contract "
+            "(declared counts differ from actual counts, or the export was "
+            "truncated)")
+        verdict = "CAPTURE_INSUFFICIENT"
+    elif sample_count < min_coverage:
+        reasons.append(
+            "only %d independently identified tool executions were measured, "
+            "below the %d required to distinguish 'no floor' from 'not "
+            "observed'" % (sample_count, min_coverage))
+        verdict = "CAPTURE_INSUFFICIENT"
+    elif reproduced:
+        reasons.append(
+            "%d of %d independently identified tool executions reached the "
+            "registered %g ms floor" % (at_or_above, sample_count, floor_ms))
+        verdict = "REPRODUCED"
+    else:
+        reasons.append(
+            "0 of %d independently identified tool executions reached the "
+            "registered %g ms floor (max observed %s ms)" % (
+                sample_count, floor_ms,
+                c6["delivery_delay_distribution"]["max_ms"]))
+        verdict = "NOT_REPRODUCED"
+
+    return {
+        "verdict": verdict,
+        "reasons": reasons,
+        "derived_from": [
+            "C1_identity_and_request_census.complete",
+            "C6_tool_result_latency_hypothesis."
+            "sample_count_independent_tool_executions",
+            "C6_tool_result_latency_hypothesis.at_or_above_floor.count",
+        ],
+        "registered_floor_ms": floor_ms,
+        "minimum_sample_coverage": min_coverage,
+        "observed_sample_coverage": sample_count,
+        "measurements_at_or_above_floor": at_or_above,
+        "floor_reproduced": reproduced,
+    }
+
+
+def derive_c6_check(controls, floor_ms=REGISTERED_FLOOR_MS,
+                     min_coverage=MIN_SAMPLE_COVERAGE):
+    """Derive the C6 control outcome from measured coverage and results.
+
+    C6 PASSES only when the hypothesis was ACTUALLY EVALUATED against a
+    sufficient sample of independently identified tool executions, and the
+    registered floor discriminator was applied to that sample. It is not a
+    constant.
+    """
+    c6 = controls["C6_tool_result_latency_hypothesis"]
+    sample_count = c6["sample_count_independent_tool_executions"]
+    registered = c6.get("suspected_floor_ms")
+    coverage_ok = sample_count >= MIN_SAMPLE_COVERAGE
+    discriminator_ok = (
+        registered is not None
+        and abs(float(registered) - floor_ms) < 1e-9
+        and c6.get("discriminator")
+        and c6.get("at_or_above_floor") is not None
+        and c6.get("delivery_delay_distribution", {}).get("n") == sample_count)
+    passed = bool(coverage_ok and discriminator_ok)
+    return {
+        "passed": passed,
+        "sample_coverage": sample_count,
+        "minimum_sample_coverage": MIN_SAMPLE_COVERAGE,
+        "coverage_sufficient": coverage_ok,
+        "registered_floor_ms": floor_ms,
+        "analyzer_reported_floor_ms": registered,
+        "floor_discriminator_applied_to_whole_sample": discriminator_ok,
+        "measurements_at_or_above_floor": c6["at_or_above_floor"]["count"],
+        "floor_reproduced": c6["floor_reproduced"],
+        "note": ("C6 asserts that the hypothesis WAS EVALUATED against a "
+                 "sufficient, independently identified sample using the "
+                 "registered floor discriminator. The verdict is reported "
+                 "separately and is derived, not asserted."),
+    }
+
+
 def main():
     if len(sys.argv) != 3:
         print(__doc__)
@@ -725,8 +850,15 @@ def main():
             "measurement": STAGE_MEASUREMENT.get(stage, "n/a"),
             **stage_totals[stage]})
 
+    # CORRECTION01 — the verdict and the C6 outcome are DERIVED from the
+    # measured controls, not asserted by the caller.
+    verdict = derive_verdict(controls)
+    c6_check = derive_c6_check(controls)
+
     report = {
         "act": "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
+        "verdict": verdict,
+        "c6_check": c6_check,
         "trace": {
             "path": os.path.abspath(trace_path),
             "sha256": controls["C1_identity_and_request_census"]["trace_sha256"],
@@ -778,6 +910,9 @@ def main():
         "C4b_unexplained_ms": controls["C4b_wall_reconciliation"]["unexplained_ms"],
         "wall": report["wall_clock"],
         "stage_attribution": attribution,
+        "DERIVED_verdict": verdict["verdict"],
+        "DERIVED_verdict_reasons": verdict["reasons"],
+        "DERIVED_c6_passed": c6_check["passed"],
     }, indent=2))
     return 0
 

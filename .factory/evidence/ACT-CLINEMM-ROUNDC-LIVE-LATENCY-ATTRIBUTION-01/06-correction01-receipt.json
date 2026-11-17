@@ -1,0 +1,101 @@
+{
+  "act": "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
+  "correction": "CORRECTION01",
+  "type": "bounded correction of the evidence generator (review P1)",
+  "review_finding": {
+    "severity": "P1",
+    "summary": "the evidence generator marked controls C6, C7 and C8 PASS UNCONDITIONALLY and emitted a FIXED verdict (\"verdict\": \"NOT_REPRODUCED\") instead of deriving it from the analyzer's results",
+    "site": ".factory/evidence/ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01/tool/emit_evidence.py",
+    "risk": "the same generator could falsely report success for a future trace that violated the contract",
+    "blocking": false,
+    "classification": "bounded P1 \u2014 does not contradict the session's measurements"
+  },
+  "correction_applied": {
+    "verdict": "DERIVED by derive_verdict() in attribute_latency.py from the C1 completeness contract and the C6 measured coverage / floor result. Rules: incomplete or truncated trace => CAPTURE_INSUFFICIENT; fewer than 20 independently identified tool executions => CAPTURE_INSUFFICIENT; otherwise REPRODUCED or NOT_REPRODUCED.",
+    "C6": "DERIVED CHECK \u2014 passes only when the hypothesis was actually evaluated against a sufficient sample of independently identified tool executions with the REGISTERED floor discriminator applied to that whole sample",
+    "C7": "REAL CHECK \u2014 inspects unstaged, staged and untracked state across sdk/ apps/ src/ proto/ webview-ui/ and scans the analyzer and generator for a production emission site (a probe)",
+    "C8": "STRUCTURAL / MANUAL ASSERTION, labelled executable: false \u2014 these are properties of the ANALYSIS (no TTFT synthesized, no server-side time inferred, adjacency not promoted to causality) that no program can observe. Each claim now carries the machine-checkable fact backing it where one exists",
+    "new_diagnostic_infrastructure": false,
+    "production_changes": 0
+  },
+  "failing_control_witness": {
+    "file": "tool/test_failing_control_witness.py",
+    "checks": 21,
+    "passed": 21,
+    "failed": 0,
+    "cases": [
+      {
+        "id": "W1",
+        "condition": "coverage below the registered minimum",
+        "required": "CAPTURE_INSUFFICIENT and C6 FAILS"
+      },
+      {
+        "id": "W2",
+        "condition": "trace fails its completeness contract",
+        "required": "CAPTURE_INSUFFICIENT"
+      },
+      {
+        "id": "W3",
+        "condition": "the floor IS reproduced",
+        "required": "REPRODUCED (the generator is not pinned to NOT_REPRODUCED)"
+      },
+      {
+        "id": "W3b",
+        "condition": "discriminator applied to only part of the sample",
+        "required": "C6 FAILS"
+      },
+      {
+        "id": "W3c",
+        "condition": "unregistered floor threshold",
+        "required": "C6 FAILS"
+      },
+      {
+        "id": "W6",
+        "condition": "clean / unstaged / untracked / staged production edit",
+        "required": "C7 FAILS on all three modification kinds"
+      },
+      {
+        "id": "W4",
+        "condition": "the real trace",
+        "required": "NOT_REPRODUCED and C6 PASSES"
+      },
+      {
+        "id": "W5",
+        "condition": "generator source",
+        "required": "consumes the derived verdict; no hardcoded verdict; C6 not unconditional"
+      }
+    ],
+    "discrimination_check": {
+      "script": "tool/run_witness_discrimination_check.sh",
+      "against_corrected_code": "PASS (exit 0, 21/21)",
+      "against_pre_correction_code": "FAIL (exit 1) \u2014 AttributeError: module 'attribute_latency' has no attribute 'derive_verdict'",
+      "pre_correction_base_commit": "ab5ee16ecd11ce4ae08e39f7d8a1870bdaec11b0",
+      "pre_correction_defect_confirmed": {
+        "hardcoded_verdict": true,
+        "unconditionally_pass_controls": [
+          "C6",
+          "C7",
+          "C8"
+        ]
+      }
+    },
+    "isolation": "the C7 witnesses run against a throwaway git repository in a temp dir; the real repository is never modified"
+  },
+  "measured_findings_unchanged": {
+    "verdict": "NOT_REPRODUCED",
+    "verdict_reasons": [
+      "0 of 26 independently identified tool executions reached the registered 5000 ms floor (max observed 4022.851 ms)"
+    ],
+    "sample_coverage": 26,
+    "measurements_at_or_above_floor": 0,
+    "statement": "the correction changes how the verdict is COMPUTED, not what this session measures: the verdict for this session is still NOT_REPRODUCED, derived from 26 independently identified tool executions with 0 at or above the registered 5,000 ms floor"
+  },
+  "gates": {
+    "witness_checks_passed": "21 / 21",
+    "witness_discrimination_check": "PASS",
+    "all_evidence_controls_pass": true,
+    "evidence_artifacts_deterministic": true,
+    "production_files_modified": 0,
+    "raw_trace_in_git": false
+  }
+}

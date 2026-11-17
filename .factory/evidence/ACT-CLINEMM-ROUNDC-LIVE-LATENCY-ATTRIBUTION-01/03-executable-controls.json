@@ -111,6 +111,7 @@
       "requirement": "Tool-result latency hypothesis evaluated against observed distributions.",
       "result": "PASS",
       "evidence": {
+        "kind": "derived_check",
         "hypothesis": "a ~5 s floor on the tool-result path: a fixed cost paid between the tool executor's terminal outcome and the delivery of its result into the conversation",
         "discriminator": "post_execution_delivery_delay_ms = tool_result_delivered.start.monotonicMs - tool_execution.end.monotonicMs, joined by toolCallId",
         "sample_count": 26,
@@ -156,6 +157,18 @@
           "max_abs_residual_ms": 0.209,
           "mean_abs_residual_ms": 0.0944
         },
+        "derived_check": {
+          "passed": true,
+          "sample_coverage": 26,
+          "minimum_sample_coverage": 20,
+          "coverage_sufficient": true,
+          "registered_floor_ms": 5000.0,
+          "analyzer_reported_floor_ms": 5000.0,
+          "floor_discriminator_applied_to_whole_sample": true,
+          "measurements_at_or_above_floor": 0,
+          "floor_reproduced": false,
+          "note": "C6 asserts that the hypothesis WAS EVALUATED against a sufficient, independently identified sample using the registered floor discriminator. The verdict is reported separately and is derived, not asserted."
+        },
         "verdict": "NOT_REPRODUCED"
       }
     },
@@ -164,12 +177,25 @@
       "requirement": "No production modifications or new diagnostic side effects.",
       "result": "PASS",
       "evidence": {
-        "production_files_modified": 0,
-        "git_diff_outside_evidence_dir": "empty",
+        "kind": "derived_check",
+        "repo_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+        "production_paths_checked": [
+          "sdk/",
+          "apps/",
+          "src/",
+          "proto/",
+          "webview-ui/"
+        ],
+        "working_tree_modified_in_production_paths": [],
+        "committed_diff_modified_in_production_paths": [],
         "probe_installed": false,
         "analyzer_location": ".factory/evidence/ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01/tool/attribute_latency.py",
-        "analyzer_reads_only_the_preserved_trace": true,
-        "note": "the analyzer reuses the existing production instrumentation and the existing Round C stage taxonomy; no new boundary, no new emission site and no production change was introduced"
+        "staged_in_production_paths": [],
+        "untracked_in_production_paths": [],
+        "analyzer_reads_production_sources": true,
+        "analyzer_adds_production_emission_site": false,
+        "generator_adds_production_emission_site": false,
+        "passed": true
       }
     },
     {
@@ -177,13 +203,46 @@
       "requirement": "Evidence limitations honoured (no synthesis, no unobserved inference).",
       "result": "PASS",
       "evidence": {
-        "ttft_never_synthesized": true,
-        "server_side_ttft": "UNAVAILABLE_FROM_TRACE",
-        "provider_duration_not_called_inference_compute_time": true,
-        "compaction_span_not_assumed_exclusive_overhead": true,
-        "read_only_task_time_to_first_edit": "NOT_APPLICABLE",
-        "chronological_adjacency_not_promoted_to_causal_identity": true,
-        "ui_and_host_boundaries": "UNAVAILABLE_FROM_TRACE"
+        "kind": "structural_manual_assertion",
+        "executable": false,
+        "note": "these are properties of the ANALYSIS, asserted by the analyst; no program can observe them. Each claim below is accompanied by the machine-checkable fact that backs it where one exists.",
+        "claims": [
+          {
+            "claim": "no TTFT was synthesized",
+            "backing_fact": "provider_first_text is reported as UNAVAILABLE for 13 observations and its closed span is used only as an observed client-side boundary",
+            "machine_checkable": true
+          },
+          {
+            "claim": "server-side TTFT is not inferred",
+            "backing_fact": "server_side_ttft_classification = UNAVAILABLE_FROM_TRACE",
+            "machine_checkable": true
+          },
+          {
+            "claim": "provider request duration is not called inference compute time",
+            "backing_fact": "the provider bucket is labelled a host-observable round trip and the report states the limitation explicitly",
+            "machine_checkable": false
+          },
+          {
+            "claim": "the compaction span is not assumed exclusive overhead",
+            "backing_fact": "exclusivity was VERIFIED: the compaction window contains 0 other boundary events",
+            "machine_checkable": true
+          },
+          {
+            "claim": "the read-only task has no time-to-first-edit",
+            "backing_fact": "time_to_first_edit = NOT_APPLICABLE",
+            "machine_checkable": false
+          },
+          {
+            "claim": "chronological adjacency was not promoted to causal identity",
+            "backing_fact": "the sibling attribution is joined on the shared authoritative modelRequestId batch identity and reconciles within 0.209 ms",
+            "machine_checkable": true
+          },
+          {
+            "claim": "UI and host boundaries are unavailable from the trace",
+            "backing_fact": "ui_and_host_boundaries = UNAVAILABLE_FROM_TRACE",
+            "machine_checkable": false
+          }
+        ]
       }
     }
   ],

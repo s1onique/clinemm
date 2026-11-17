@@ -147,7 +147,9 @@ activity — reported as exclusive wall time for *this session only*, not as a g
 
 ## 7. Executable controls
 
-All **8** controls **PASS** (`03-executable-controls.json`).
+All **8** controls **PASS** (`03-executable-controls.json`). After CORRECTION01, C6 and C7 are
+**derived checks** that can fail, C8 is a labelled structural assertion, and the verdict is
+**derived** from the measured facts — see §7b.
 
 | Control | Requirement | Result |
 |---|---|---|
@@ -159,6 +161,59 @@ All **8** controls **PASS** (`03-executable-controls.json`).
 | C6 | Tool-result latency hypothesis evaluated against observed distributions. | **PASS** |
 | C7 | No production modifications or new diagnostic side effects. | **PASS** |
 | C8 | Evidence limitations honoured (no synthesis, no unobserved inference). | **PASS** |
+
+## 7b. CORRECTION01 — the evidence generator's derived controls
+
+The review of this ACT raised **one bounded P1**: in `tool/emit_evidence.py`, controls
+**C6, C7 and C8 were marked PASS unconditionally**, and the verdict was emitted as a
+**fixed string** (`"verdict": "NOT_REPRODUCED"`). The same generator could therefore
+report success for a future trace that violated the contract.
+
+**Corrected.** The verdict and every derived control outcome are now **computed from the
+measured facts** of the trace under analysis.
+
+| Control | Before | After |
+|---|---|---|
+| C6 | `True` (constant) | **Derived check**: passes only when the hypothesis was actually evaluated against a sufficient sample of independently identified tool executions, with the *registered* floor discriminator applied to that whole sample |
+| C7 | `True` (constant) | **Real repository check**: inspects unstaged, staged and untracked state across `sdk/ apps/ src/ proto/ webview-ui/` and scans the analyzer/generator for a production emission site (a probe) |
+| C8 | `True` (constant) | **Structural / manual assertion**, explicitly labelled `executable: false` — these are properties of the *analysis* (no TTFT synthesized, no server-side time inferred, adjacency not promoted to causality) that no program can observe. Each claim now carries the machine-checkable fact backing it where one exists |
+| Verdict | fixed string | **Derived** by `derive_verdict()` from the C1 completeness contract and the C6 measured coverage/floor result |
+
+The derived verdict rules, in order: an incomplete or truncated trace ⇒ `CAPTURE_INSUFFICIENT`;
+fewer than **20** independently identified tool executions ⇒ `CAPTURE_INSUFFICIENT` (below
+that coverage, "no floor observed" is indistinguishable from "not observed"); otherwise the
+floor is either reproduced or not — `REPRODUCED` / `NOT_REPRODUCED` are then the only
+admissible verdicts.
+
+### Failing-control witness
+
+`tool/test_failing_control_witness.py` — **21 checks, all passing**. It proves the
+corrected generator *fails* on a violating trace:
+
+| Witness | Adversarial condition | Required outcome |
+|---|---|---|
+| W1 | coverage below the registered minimum | `CAPTURE_INSUFFICIENT`, C6 **FAILS** |
+| W2 | trace fails its completeness contract | `CAPTURE_INSUFFICIENT` |
+| W3 | the floor **is** reproduced | `REPRODUCED` (the generator is not pinned to `NOT_REPRODUCED`) |
+| W3b | discriminator applied to only part of the sample | C6 **FAILS** |
+| W3c | unregistered floor threshold | C6 **FAILS** |
+| W6 | clean / unstaged / untracked / staged production edit | C7 **FAILS** on all three modification kinds |
+| W4 | the real trace | `NOT_REPRODUCED`, C6 **PASSES** (so the negatives are not satisfied by always failing) |
+| W5 | generator source | consumes the derived verdict; no hardcoded verdict; C6 not unconditional |
+
+**Discriminating power** (`tool/run_witness_discrimination_check.sh`): the witness **PASSES**
+against the corrected code and **FAILS** against the pre-correction code at commit
+`ab5ee16ec` with `AttributeError: module 'attribute_latency' has no attribute
+'derive_verdict'`, and the pre-correction generator is confirmed to hardcode the verdict and
+to mark **C6, C7 and C8** PASS unconditionally. A witness that cannot fail is not a witness.
+
+The C7 witnesses run against a **throwaway git repository** in a temp dir; the real
+repository is never modified. **No new diagnostic infrastructure was introduced** — the
+correction is confined to the evidence generator, the analyzer and the witness.
+
+The measured findings of this ACT are **unchanged** by the correction: the verdict for this
+session is still `NOT_REPRODUCED`, still derived from 26 independently identified tool
+executions with 0 at or above the registered 5,000 ms floor.
 
 ## 8. Disposition
 
@@ -177,11 +232,14 @@ by this ACT.
 |---|---|
 | `00-identity-record.json` | repository, preservation, trace identity, completeness |
 | `01-stage-attribution-table.json` | exclusive wall buckets, stage breakdown, overlap accounting |
-| `02-causal-classification.json` | verdict, discriminator, sibling attribution, boundary classification |
-| `03-executable-controls.json` | the 8 executable controls and their evidence |
+| `02-causal-classification.json` | verdict + its derivation, discriminator, sibling attribution, boundary classification |
+| `03-executable-controls.json` | the 8 executable controls and their evidence (CORRECTION01: C6/C7 derived, C8 structural) |
 | `04-tool-execution-timeline.json` | all 26 tool executions with authoritative joins |
 | `05-latency-attribution-report.md` | this report |
-| `tool/attribute_latency.py` | the read-only analyzer |
+| `tool/attribute_latency.py` | the read-only analyzer (CORRECTION01: adds `derive_verdict` / `derive_c6_check`) |
+| `tool/emit_evidence.py` | the evidence generator (CORRECTION01: derived C6/C7/C8 and derived verdict) |
+| `tool/test_failing_control_witness.py` | CORRECTION01 failing-control witness (21 checks) |
+| `tool/run_witness_discrimination_check.sh` | CORRECTION01 witness discrimination check |
 | `analysis/attribution.json` | full machine-readable analyzer output |
 
 Reproduce:
