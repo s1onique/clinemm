@@ -1,0 +1,25 @@
+ENTRY_HEAD = fa7da411d401b2e46672fa426fdaf10db5827360
+
+===============================================================
+SECTION B — CORRECTED SDK SUITE (GREEN)
+===============================================================
+
+$ cd sdk/packages/core
+$ bunx vitest run --config vitest.config.ts src/extensions/tools/executors/editor.realpath-authority.test.ts
+
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — authorized-external-edit contract (raw SDK executor) > A. control: clean write inside cwd passes 4ms
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — authorized-external-edit contract (raw SDK executor) > B. relative lexical traversal escape (../...) is refused when restrictToCwd is enabled 1ms
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — authorized-external-edit contract (raw SDK executor) > C. ABSOLUTE OUTSIDE TARGET — already-authorized outside write succeeds 1ms
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — authorized-external-edit contract (raw SDK executor) > D. EXISTING SYMLINK ESCAPE — already-authorized outside write resolves to the symlink destination 1ms
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — authorized-external-edit contract (raw SDK executor) > E. NONEXISTENT OUTSIDE DESCENDANT — already-authorized outside tree is created successfully 1ms
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — authorized-external-edit contract (raw SDK executor) > F. control: in-root canonical variant still passes 1ms
+ ✓ src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — authorized-external-edit contract (raw SDK executor) > H. control: ordinary workspace edit still passes 1ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  12:25:11
+   Duration  322ms (transform 153ms, setup 0ms, import 206ms, tests 12ms, environment 0ms)
+

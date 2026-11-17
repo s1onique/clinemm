@@ -142,6 +142,95 @@ refused). No production repair is warranted on this evidence.
 — so the suite **bypasses the very policy boundary that owns authorization**.
 
 
+# ACT-CLINEMM-EDITOR-REALPATH-TEST-CONTRACT-CORRECTION01 — PASS — 2026-11-17
+
+```text
+ACT_ID: ACT-CLINEMM-EDITOR-REALPATH-TEST-CONTRACT-CORRECTION01
+TYPE: bounded test correction (no production changes authorized)
+VERDICT: PASS
+ENTRY_HEAD: fa7da411d401b2e46672fa426fdaf10db5827360   (== EXPECTED ENTRY_HEAD)
+BRANCH: main (no ACT branch created)
+PRODUCTION_CODE_CHANGES: 0
+EXISTING_TEST_MODIFICATIONS: 1 file (the obsolete SDK contract only)
+TEST_SKIPS / EXCLUSIONS / WEAKENINGS: 0
+EVIDENCE: .factory/evidence/ACT-CLINEMM-EDITOR-REALPATH-TEST-CONTRACT-CORRECTION01/
+  00-contract-correction-report.md
+  01-original-red-reproduction.txt
+  02-corrected-sdk-suite-green.txt
+  03-host-suites-green.txt
+  04-wider-tools-regression-and-bash-classification.txt
+```
+
+**Status:** The successor that `ACT-CLINEMM-EDITOR-REALPATH-AUTHORITY-TRIAGE01`
+named has been executed. The obsolete SDK-side executor contract has been
+replaced with executable tests of the ACTUAL authorized-external-edit
+contract. The suite now verifies ClineMM's real authorization architecture
+instead of imposing a nonexistent workspace-only restriction on the raw SDK
+executor.
+
+**Original RED reproduced (suite UNMODIFIED at ENTRY_HEAD):**
+`Tests 3 failed | 4 passed (7)` — C, D, E fail; A, B, F, H (controls) pass.
+No material baseline difference, so no baseline re-classification was needed.
+The transcript was captured from a verbatim temporary copy of the ENTRY_HEAD
+file; the copy was REMOVED after capture and is NOT part of the commit.
+
+**The corrected SDK contract** (`sdk/packages/core/src/extensions/tools/executors/editor.realpath-authority.test.ts`):
+
+| Case | Before | After |
+|---|---|---|
+| A | control — write inside | UNCHANGED |
+| B | relative lexical traversal refused | UNCHANGED — still refused when `restrictToCwd` is enabled |
+| C | absolute outside ⇒ executor refuses | absolute outside ⇒ **WRITTEN** (already-authorized) |
+| D | symlink escape ⇒ executor refuses | symlink destination resolved to the intended outside fixture ⇒ **WRITTEN** |
+| E | nonexistent outside descendant ⇒ executor refuses | nonexistent outside descendant ⇒ **CREATED and WRITTEN** |
+| F | control — in-root canonical | UNCHANGED |
+| H | control — ordinary workspace edit | UNCHANGED |
+
+Each of C/D/E now asserts the **actual destination**, the **contents**, that the
+**effective (realpath) destination is OUTSIDE** the workspace root, that the
+write did **not** land at a second in-root location, and that the **disposable
+fixture is removed**. **NO authorization policy was added to
+`createEditorExecutor`** — the production executor is byte-for-byte unchanged.
+
+**Host-side conservation.** The already-passing host suites were REUSED (not
+rewritten) for absolute-outside classification, symlink realpath
+classification, `editFilesExternally=false` ⇒ ASK, `editFilesExternally=true` ⇒
+ALLOW, and `unavailable` ⇒ ASK. Two required points had **no** permanent
+coverage, so ONE new host suite was added:
+`apps/vscode/src/sdk/__tests__/editor-authorized-external-edit-contract01.test.ts`
+(5 tests) — (GAP1) nonexistent-outside-descendant classification ⇒ OUTSIDE,
+plus its INSIDE conservation mirror; (GAP2) external OFF ⇒ ASK with **no**
+filesystem effect, explicit user approval ⇒ the outside write **IS**
+performed, and external ON ⇒ ALLOW + the outside write **IS** performed. It
+drives the REAL classifier, the REAL coordinator and the REAL SDK executor
+(`@cline/core`'s vitest stub re-exports `createEditorExecutor` directly from
+the SDK source). The 21 disposable triage witnesses were NOT duplicated as
+permanent tests.
+
+**Gates executed:**
+- original RED reproduced: **3 failed | 4 passed (7)**
+- corrected SDK suite: **7 passed (7)** — entirely GREEN
+- 12 existing host editor/approval suites + the new one: **66 passed (66)**
+- wider `src/extensions/tools` regression: **682 passed**, 105 skipped
+- host typecheck (`apps/vscode`): **EXIT=0**, zero diagnostics
+- SDK core typecheck delta: **70 before / 70 after — ZERO delta**; the edited
+  file contributes **0** diagnostics
+- biome lint on both changed files: **clean**
+
+**Unrelated failures, classified separately (NOT modified):** the 3
+`bash.supervised.bash-startup-env.test.ts` failures (`/usr/bin/mktemp`
+slash-form cases). That file is untouched, and the SAME 3 failures
+(`3 failed | 14 passed (17)`) reproduce with this ACT's changes **stashed
+away** ⇒ PRE-EXISTING and UNRELATED.
+
+**Hygiene:** disposable `os.tmpdir()` fixtures only; the post-run sweep found
+NO leftover `cline-edit-auth-*` / `contract01-*` directories; no arbitrary
+real files touched (the new host suite's workspace root is a disposable temp
+root, not the repository); no production code modified; no skips, deletions or
+weakenings; the relative-traversal protection (case B) is PRESERVED and still
+GREEN.
+
+
 # ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01 — PASS_EVIDENCE_PROVENANCE_CORRECTION — 2026-11-06
 
 **Status:** P0 EVIDENCE-PROVENANCE CORRECTION, on the existing `main` branch. The AICE01 review

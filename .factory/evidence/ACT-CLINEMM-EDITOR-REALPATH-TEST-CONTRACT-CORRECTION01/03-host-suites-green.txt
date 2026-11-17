@@ -1,0 +1,30 @@
+ENTRY_HEAD = fa7da411d401b2e46672fa426fdaf10db5827360
+
+===============================================================
+SECTION C — EXISTING HOST APPROVAL SUITES (GREEN) + NEW COVERAGE-GAP SUITE
+===============================================================
+
+$ cd apps/vscode
+$ bunx vitest run --config vitest.config.ts <12 editor host suites>
+
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts (8 tests) 2ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts (10 tests) 4ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.r4-necessity-ablation.qual.test.ts (3 tests) 3ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts (8 tests) 3ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts (5 tests) 5ms
+ ✓ src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts (6 tests) 5ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.correction03-dangling-symlink.red.test.ts (4 tests) 6ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts (4 tests) 111ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts (3 tests) 111ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.r3-composed-movepath.qual.test.ts (3 tests) 111ms
+ ✓ src/sdk/__tests__/editor-effective-destination-approval.correction02-policy-precedence.red.test.ts (7 tests) 112ms
+ ✓ src/sdk/__tests__/editor-authorized-external-edit-contract01.test.ts (5 tests) 116ms
+
+ Test Files  12 passed (12)
+      Tests  66 passed (66)
+   Start at  12:25:18
+   Duration  3.52s (transform 20.00s, setup 32.17s, import 3.27s, tests 589ms, environment 1ms)
+

@@ -1,0 +1,52 @@
+ENTRY_HEAD = fa7da411d401b2e46672fa426fdaf10db5827360
+
+===============================================================
+SECTION D — WIDER SDK TOOLS SUITE (regression check)
+===============================================================
+
+$ cd sdk/packages/core
+$ bunx vitest run --config vitest.config.ts src/extensions/tools
+
+
+- 0
++ 1
+
+ ❯ src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts:343:31
+    341|         // pathnames. /usr/bin/mktemp runs the real binary.
+    342|         expect(contents).toBe("");
+    343|         expect(exit.exitCode).toBe(0);
+       |                               ^
+    344|       } finally {
+    345|         delete process.env["BASH_FUNC_mktemp%%"];
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed | 42 passed | 1 skipped (44)
+      Tests  3 failed | 682 passed | 105 skipped (790)
+   Start at  12:25:32
+   Duration  13.09s (transform 13.92s, setup 0ms, import 28.11s, tests 18.04s, environment 5ms)
+
+
+===============================================================
+SECTION E — THE 3 UNRELATED BASH STARTUP-ENV FAILURES (classified separately)
+===============================================================
+
+These 3 failures live in:
+  sdk/packages/core/src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+
+That file is UNTOUCHED by this ACT (git diff --stat shows no change).
+The failures reproduce IDENTICALLY with this ACTs changes stashed away:
+
+$ git stash push -- sdk/.../editor.realpath-authority.test.ts
+$ cd sdk/packages/core && bunx vitest run ... bash.supervised.bash-startup-env.test.ts
+
+       × `/usr/bin/mktemp` (slash-form AUTO): BASH_ENV sentinel remains empty 11ms
+       × `/usr/bin/mktemp -d`: BASH_ENV sentinel remains empty 5ms
+       × slash-prefixed `/usr/bin/mktemp` still works (slash-bypass composes with the strip) 5ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  3 failed | 14 passed (17)
+
+=> SAME 3 failures with this ACTs changes absent => PRE-EXISTING and UNRELATED.
+=> NOT MODIFIED by this ACT (per the ACT instruction: do not modify those tests).
