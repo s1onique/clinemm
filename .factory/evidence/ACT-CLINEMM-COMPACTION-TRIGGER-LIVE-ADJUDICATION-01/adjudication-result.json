@@ -1,0 +1,12 @@
+{
+  "schema": "cline.ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01.adjudication-result.v1",
+  "act": "ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01",
+  "traceSha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+  "identityComplete": true,
+  "decisionCount": 18,
+  "decisionCountMatches": true,
+  "productionBranchInconsistencyCount": 0,
+  "decisiveChecksPassed": true,
+  "representationChecksPassed": true,
+  "verdict": "PASS_OBSERVED_TRIGGER_CAUSALITY"
+}

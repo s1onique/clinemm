@@ -35038,3 +35038,96 @@ driven by the primary.
 
 RC-02 through RC-08 are unchanged by this correction.
 
+# ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01 — PASS_OBSERVED_TRIGGER_CAUSALITY — 2026-11-17
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01/`
+  `identity.json`, `decision-audit.json`, `source-map.md`, `qualification-report.md`,
+  `artifact-hashes.json`, `adjudication-result.json`, `tool/{adjudicate,hashes}.ts`
+
+**Principal disposition: `PASS_OBSERVED_TRIGGER_CAUSALITY`.** The actual production decision
+contract and the authoritative dogfood trace jointly explain the observed trigger. This
+qualifies the OBSERVED EVENT ONLY — one automatic compaction, one session — and does not
+qualify every possible compaction scenario.
+
+**Recon only. No production repair was authorized and none was made.** No estimator, policy,
+coefficient, Strata configuration, protocol field or telemetry field was changed. No RED test
+was manufactured for an unreproduced defect.
+
+## Source identity and authoritative input
+
+- Repository `s1onique/clinemm`, branch `main`, **ENTRY_HEAD `5d75a7e635a77d8e55eb9771d33f509c8bd75565`**
+  (discovered with `git rev-parse HEAD`, not a predicted SHA). The eight regenerated RC-01
+  holdout artifacts were already committed at that HEAD; the working tree was clean at entry,
+  so neither `HALT_PENDING_RC01_PACKAGING` nor `HALT_UNEXPECTED_TRACKED_DIRT` applies.
+- Authoritative trace `~/Downloads/roundc-latency-trace(8).json`, SHA-256
+  `b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1`, schema
+  `cline.roundc-latency-trace.v1`, profile `dogfood`, session `1794892591345_7em4g`, requested
+  model `qwen3.8-flash-next-iq3_s`, extension `4.1.16-5a1c485cb`, bundle SHA-256
+  `b8b63baaebf9b5a12e2a636004695fc4eccbde0fb2bf13b55ccf7107cf83263e`, 418 events, no
+  truncation, zero reported integrity failures, 18 completed model requests, 1 compaction.
+  The bundle is an **installed-runtime identity**, NOT proof that this repository HEAD produced
+  it (the trace's own `sourceHead` is `UNAVAILABLE_FROM_TRACE`). The raw trace was not
+  committed and no private message, prompt or tool payload entered the evidence.
+
+## Live causal discriminator — all 18 decisions reconstructed
+
+Every decision was joined by `sessionId`, `decisionId`, `decisionOrdinal`,
+`preparationRequestId` and boundary identity; every join authority is `AUTHORITATIVE`. The
+exact census, with identities preserved, is in `decision-audit.json`.
+
+| Check | Expected | Observed |
+|---|---|---|
+| Decision #12 arithmetic | 97,741 + 5,695 = **103,436** | **EXACT** |
+| Decision #12 threshold | **103,680** | **EXACT** |
+| Decision #12 outcome | `shouldCompact=false` | **EXACT** (`compactionInitiated=false`) |
+| Decision #13 arithmetic | 102,585 + 5,695 = **108,280** | **EXACT** |
+| Decision #13 threshold | **103,680** | **EXACT** |
+| Decision #13 outcome | `shouldCompact=true`, `compactionInitiated=true` | **EXACT** |
+| Actual preceding provider input | **83,984** | **EXACT** |
+| Compaction duration | ≈ **64,564 ms** | **64,564.481 ms** |
+
+**Hypothesis A (the current request's projected input crossing the configured trigger) is
+CONFIRMED.** **Hypothesis B (previous provider usage / stale context authority / different
+budget / other mechanism) is REFUTED** on four independent grounds: the previous provider
+usage did not scale the budget (`underestimateFactor = 1` at every one of the 18 decisions,
+trigger constant at 103,680); the budget was the model's own (`inputBudgetSource =
+contextWindow`, `effectiveMaxInputTokens = 115200`); the decision preceded the compaction
+span by zero interval rather than being attributed to a later boundary; and a direct control
+in the disposable probe showed that the previous usage alone does not flip the decision.
+`productionBranchInconsistencyCount = 0` across all 18 decisions.
+
+The production seam **predicts** these decisions: the real
+`createContextCompactionPrepareTurn` driven with the captured configuration reproduced
+`rawMaxInputTokens = 115200`, `requestTriggerTokens = 103680`, the last non-trigger
+classification and the first-trigger classification exactly, including a Hypothesis B control.
+
+## Representation boundaries preserved
+
+The triggered pre-compaction candidate was **never submitted**. The request carrying
+`req_wdW3TYdm` was prepared at monotonic `615004.3` — AFTER the compaction span closed at
+`614891.7` — with the 6-message post-compaction representation, and the provider reported
+**15,607** input tokens for it. The 34-message candidate's **108,280** tokens are a production
+ESTIMATE and are recorded as **`UNLABELLED`**. The 15,607-token provider response is never
+used as the token count of the unsubmitted 108,280-token projection. The **17 dropped**
+working-context evidence references (20 → 3) are recorded as an **observation only**.
+
+## Gates
+
+Offline adjudicator: identity complete, 18/18 census, decisive checks passed, representation
+checks passed, `productionBranchInconsistencyCount = 0`. Production compaction suites:
+**6 files, 69 passed / 1 skipped (70)**. Disposable offline probe against the real production
+seam: **4 passed (4)**, then deleted. `git diff --name-only HEAD` over `sdk/`, `apps/`, `src/`:
+**empty** — production source unchanged and the frozen RC-01 calibration evidence is
+byte-identical. No raw trace in Git; no new branch, worktree, push, PR, reset, stash pop or
+force operation.
+
+## Board update
+
+| Stage | Status |
+|---|---|
+| RC-01 independent calibration | **Remains replicated** — no production deployment; no coefficient refit; production estimator unchanged |
+| RC-02 observed trigger causality | **QUALIFIED, explicit scope** — the one observed event in session `1794892591345_7em4g` is explained by the production `>=` contract at the configured trigger (103,680). The production branch agrees with the trace at all 18 decisions. This does not qualify every possible compaction scenario. |
+| RC-04 canonical evidence continuity | **REMAINS OPEN** — the 17 dropped working-context references are recorded as an observation only; whether the corresponding canonical evidence survived is out of scope for this ACT |
+
+RC-03 and RC-05 through RC-08 are unchanged by this ACT.
+

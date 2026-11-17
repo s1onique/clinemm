@@ -1,0 +1,42 @@
+{
+  "schema": "cline.ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01.artifact-hashes.v1",
+  "act": "ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01",
+  "sourceHead": "5d75a7e635a77d8e55eb9771d33f509c8bd75565",
+  "hashes": [
+    {
+      "name": "adjudication-result.json",
+      "sha256": "5c02e5768c6864fa3c368682d67ee70ce40fb5a79fafd302f581d9f45a993d06",
+      "bytes": 492
+    },
+    {
+      "name": "decision-audit.json",
+      "sha256": "a2c48cad4eabad1415896631ec085ff621b4c94a45de93850d1909baebcae401",
+      "bytes": 34981
+    },
+    {
+      "name": "identity.json",
+      "sha256": "8d5f4c0675f3c640b46db719d47ef9c4f1f65fa411aefc30adee4103449a1cf5",
+      "bytes": 1945
+    },
+    {
+      "name": "qualification-report.md",
+      "sha256": "a894265482c438c2b600db353addbd04f2af2d0605e62b736b1a4713f7f638cf",
+      "bytes": 17549
+    },
+    {
+      "name": "source-map.md",
+      "sha256": "890cfc4834aafec899426d548ba6de4d0717a4f4f211295b66e35b3880fd44af",
+      "bytes": 14217
+    },
+    {
+      "name": "tool/adjudicate.ts",
+      "sha256": "ccc12eee65a09b2f8bc52e5bd28c91bb0795538676c5f1c806e34ecb9ca0a54e",
+      "bytes": 23021
+    },
+    {
+      "name": "tool/hashes.ts",
+      "sha256": "14259e04c38a2880b6f177aea92e5596e32c789807cc4a8e1765c1fd41ed306d",
+      "bytes": 2118
+    }
+  ]
+}

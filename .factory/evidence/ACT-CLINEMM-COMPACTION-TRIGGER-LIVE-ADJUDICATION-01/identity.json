@@ -1,0 +1,47 @@
+{
+  "schema": "cline.ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01.identity.v1",
+  "act": "ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01",
+  "generatedBy": "tool/adjudicate.ts",
+  "source": {
+    "repository": "s1onique/clinemm",
+    "branch": "main",
+    "entryHead": "5d75a7e635a77d8e55eb9771d33f509c8bd75565",
+    "note": "ENTRY_HEAD is the repository commit inspected. The installed extension bundle below is an INSTALLED-RUNTIME identity recorded by the capture; it is NOT proof that this repository HEAD produced the bundle (trace identity.sourceHead is UNAVAILABLE_FROM_TRACE)."
+  },
+  "installedExtension": {
+    "extensionVersion": "4.1.16-5a1c485cb",
+    "extensionBundleSha256": "b8b63baaebf9b5a12e2a636004695fc4eccbde0fb2bf13b55ccf7107cf83263e",
+    "sourceHead": "UNAVAILABLE_FROM_TRACE",
+    "authority": "INSTALLED_RUNTIME_IDENTITY_ONLY — not evidence that the current repository HEAD produced this bundle"
+  },
+  "sourceTrace": {
+    "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace(8).json",
+    "bytes": 350052,
+    "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+    "schema": "cline.roundc-latency-trace.v1",
+    "sessionId": "1794892591345_7em4g",
+    "captureProfile": "dogfood",
+    "requestedModelId": "qwen3.8-flash-next-iq3_s",
+    "exportedAtIso": "2026-11-17T05:32:59.438Z"
+  },
+  "checks": {
+    "sha256Matches": "MATCH",
+    "sessionIdMatches": "MATCH",
+    "schemaMatches": "MATCH",
+    "captureProfileMatches": "MATCH",
+    "requestedModelIdMatches": "MATCH",
+    "extensionVersionMatches": "MATCH",
+    "extensionBundleSha256Matches": "MATCH",
+    "eventCountMatches": "MATCH",
+    "actualEventCount": 418,
+    "truncation": "NONE",
+    "droppedEventCount": 0,
+    "integrityFailureCount": 0,
+    "unavailableCount": 13,
+    "unavailableBoundaries": [
+      "provider_first_text"
+    ]
+  },
+  "complete": true,
+  "rawTraceCommitted": false
+}
