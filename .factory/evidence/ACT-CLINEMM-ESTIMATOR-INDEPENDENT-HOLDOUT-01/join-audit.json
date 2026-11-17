@@ -2,15 +2,28 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.join-audit.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde",
+  "sourceHead": "1f1670b2779ae3b00542000340d99deea0fec684",
   "authority": "AUTHORITATIVE_EXACT_IDENTITY",
   "joinKeys": [
     "sessionId",
     "preparationRequestId",
     "modelRequestId"
   ],
-  "eligibleAttempts": 0,
+  "eligibleAttempts": 18,
   "excludedAttempts": [],
-  "perSource": [],
+  "perSource": [
+    {
+      "sourcePath": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/user-data/User/globalStorage/s1onique.clinemm/roundc-latency-trace.json",
+      "sessionId": "1794892591345_7em4g",
+      "observed": {
+        "decisions": 18,
+        "completionEvents": 18,
+        "uniqueAttempts": 18,
+        "ambiguousPreparations": 0,
+        "excludedAmbiguousRows": 0
+      },
+      "eligibleAttempts": 18
+    }
+  ],
   "notes": "The prior analyzer retains the FIRST provider attempt when a preparation has more than one attempt. This ACT's strict qualification pass removes such ambiguous preparations entirely (AMBIGUOUS_RETRY_PREPARATION_EXCLUDED) so that no arbitrary attempt is used as an authoritative label."
 }

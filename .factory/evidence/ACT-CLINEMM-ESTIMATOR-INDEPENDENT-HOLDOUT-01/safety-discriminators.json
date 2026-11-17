@@ -2,8 +2,8 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.safety-discriminators.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde",
-  "evaluatedRequests": 0,
+  "sourceHead": "1f1670b2779ae3b00542000340d99deea0fec684",
+  "evaluatedRequests": 18,
   "primaryCandidateId": "CONSTANT_MODEL_SCOPED",
   "perCandidate": [
     {
@@ -11,7 +11,7 @@
       "isPrimary": false,
       "safety": {
         "candidateId": "BASELINE",
-        "evaluatedRequests": 0,
+        "evaluatedRequests": 18,
         "underestimatingRequests": 0,
         "underestimationFrequency": 0,
         "maximumUnderestimationTokens": 0,
@@ -31,11 +31,11 @@
       "isPrimary": false,
       "safety": {
         "candidateId": "CONSTANT",
-        "evaluatedRequests": 0,
-        "underestimatingRequests": 0,
-        "underestimationFrequency": 0,
-        "maximumUnderestimationTokens": 0,
-        "maximumUnderestimationFractionOfActual": 0,
+        "evaluatedRequests": 18,
+        "underestimatingRequests": 9,
+        "underestimationFrequency": 0.5,
+        "maximumUnderestimationTokens": 5458,
+        "maximumUnderestimationFractionOfActual": 0.12468585789353438,
         "falseSafeTriggerCount": 0,
         "falseSafeCeilingCount": 0,
         "nearTriggerCount": 0,
@@ -51,11 +51,11 @@
       "isPrimary": true,
       "safety": {
         "candidateId": "CONSTANT_MODEL_SCOPED",
-        "evaluatedRequests": 0,
-        "underestimatingRequests": 0,
-        "underestimationFrequency": 0,
-        "maximumUnderestimationTokens": 0,
-        "maximumUnderestimationFractionOfActual": 0,
+        "evaluatedRequests": 18,
+        "underestimatingRequests": 9,
+        "underestimationFrequency": 0.5,
+        "maximumUnderestimationTokens": 5458,
+        "maximumUnderestimationFractionOfActual": 0.12468585789353438,
         "falseSafeTriggerCount": 0,
         "falseSafeCeilingCount": 0,
         "nearTriggerCount": 0,
@@ -71,11 +71,11 @@
       "isPrimary": false,
       "safety": {
         "candidateId": "AFFINE",
-        "evaluatedRequests": 0,
-        "underestimatingRequests": 0,
-        "underestimationFrequency": 0,
-        "maximumUnderestimationTokens": 0,
-        "maximumUnderestimationFractionOfActual": 0,
+        "evaluatedRequests": 18,
+        "underestimatingRequests": 9,
+        "underestimationFrequency": 0.5,
+        "maximumUnderestimationTokens": 5424,
+        "maximumUnderestimationFractionOfActual": 0.13259652730180488,
         "falseSafeTriggerCount": 0,
         "falseSafeCeilingCount": 0,
         "nearTriggerCount": 0,
@@ -88,12 +88,10 @@
     }
   ],
   "productionSuitability": {
-    "status": "NOT_EVALUATED",
-    "productionProposalSuitable": false,
-    "reasons": [
-      "NO_QUALIFIED_OBSERVATIONS"
-    ],
-    "evaluatedRequests": 0,
+    "status": "EVALUATED",
+    "productionProposalSuitable": true,
+    "reasons": [],
+    "evaluatedRequests": 18,
     "primaryCandidateId": "CONSTANT_MODEL_SCOPED",
     "perCandidate": [
       {

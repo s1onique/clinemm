@@ -2,11 +2,13 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.holdout-manifest.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde",
+  "sourceHead": "1f1670b2779ae3b00542000340d99deea0fec684",
   "independence": {
-    "independent": false,
-    "reasonCode": "DUPLICATE_EXPORT_SAME_SESSION",
-    "holdoutSessionIds": [],
+    "independent": true,
+    "reasonCode": "INDEPENDENT_SESSION_CONFIRMED",
+    "holdoutSessionIds": [
+      "1794892591345_7em4g"
+    ],
     "trainingSessionIds": [
       "1794881611778_557z3"
     ]
@@ -14,44 +16,63 @@
   "discoveredTraces": [
     {
       "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/user-data/User/globalStorage/s1onique.clinemm/roundc-latency-trace.json",
-      "sha256": "601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed",
-      "bytes": 647103,
-      "sessionId": "1794881611778_557z3",
+      "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+      "bytes": 350052,
+      "sessionId": "1794892591345_7em4g",
       "schema": "cline.roundc-latency-trace.v1",
-      "eventCount": 782,
+      "eventCount": 418,
       "truncated": false,
       "droppedEventCount": 0,
       "integrityFailureCount": 0,
-      "role": "TRAINING_SOURCE",
-      "decision": "EXCLUDE_FROM_HOLDOUT"
+      "role": "HOLDOUT_CANDIDATE",
+      "decision": "INCLUDE"
     },
     {
-      "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace.json",
-      "sha256": "601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed",
-      "bytes": 647103,
-      "sessionId": "1794881611778_557z3",
+      "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace(8).json",
+      "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+      "bytes": 350052,
+      "sessionId": "1794892591345_7em4g",
       "schema": "cline.roundc-latency-trace.v1",
-      "eventCount": 782,
+      "eventCount": 418,
       "truncated": false,
       "droppedEventCount": 0,
       "integrityFailureCount": 0,
-      "role": "TRAINING_SOURCE",
-      "decision": "EXCLUDE_FROM_HOLDOUT"
+      "role": "HOLDOUT_CANDIDATE",
+      "decision": "INCLUDE"
     }
   ],
   "distinctSessionIds": [
-    "1794881611778_557z3"
+    "1794892591345_7em4g"
   ],
   "duplicateExportsOfSameSession": 1,
   "exportDeduplication": {
     "policy": "Holdout exports are de-duplicated by session identity BEFORE dataset construction. Byte-identical re-exports collapse to one. Exports of one session that disagree are a conflict and the whole session is rejected.",
-    "acceptedExports": [],
-    "duplicateExports": [],
+    "acceptedExports": [
+      {
+        "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/user-data/User/globalStorage/s1onique.clinemm/roundc-latency-trace.json",
+        "sessionId": "1794892591345_7em4g",
+        "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+        "bytes": 350052
+      }
+    ],
+    "duplicateExports": [
+      {
+        "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace(8).json",
+        "sessionId": "1794892591345_7em4g",
+        "sha256": "b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1",
+        "reason": "IDENTICAL_DUPLICATE_EXPORT"
+      }
+    ],
     "conflictingExports": [],
     "contributingRowsFromDuplicates": 0,
     "contributingRowsFromConflicts": 0
   },
-  "loadErrors": [],
+  "loadErrors": [
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace.json",
+      "reason": "ENOENT: no such file or directory, open '/Volumes/UserData/Users/chistyakov/Downloads/roundc-latency-trace.json'"
+    }
+  ],
   "trainingSource": {
     "sessionId": "1794881611778_557z3",
     "traceSha256": "601450acb83dad00a84451147b194ed01010190763b9442d6ed8693900eef5ed"

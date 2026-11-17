@@ -2,7 +2,7 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.test-receipt.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde",
+  "sourceHead": "1f1670b2779ae3b00542000340d99deea0fec684",
   "toolSha256": "f74263b19fc49723f4281e0e5732f242ce54df75a9edee63476e6a2753c920bb",
   "commands": [],
   "historicalTestEvidence": [
@@ -62,9 +62,9 @@
     "kind": "FRESH_EVALUATION",
     "note": "This run evaluated traces; it executed NO test suite. `commands` is therefore empty. The test evidence below belongs to earlier runs and is labelled as historical.",
     "tracesDiscovered": 2,
-    "tracesAcceptedAsHoldout": 0,
-    "eligibleAttempts": 0,
-    "verdict": "AWAITING_INDEPENDENT_DOGFOOD_SESSION",
+    "tracesAcceptedAsHoldout": 1,
+    "eligibleAttempts": 18,
+    "verdict": "CALIBRATION_REPLICATED_NOT_PRODUCTION_QUALIFIED",
     "testsExecutedByThisRun": 0
   }
 }

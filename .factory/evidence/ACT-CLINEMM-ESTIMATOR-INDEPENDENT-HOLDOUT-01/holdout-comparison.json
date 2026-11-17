@@ -2,20 +2,34 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.holdout-comparison.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde",
-  "independentSessions": 0,
-  "eligibleRequests": 0,
+  "sourceHead": "1f1670b2779ae3b00542000340d99deea0fec684",
+  "independentSessions": 1,
+  "eligibleRequests": 18,
   "observationTarget": 10,
-  "evaluationPerformed": false,
+  "evaluationPerformed": true,
   "comparison": [
     {
       "candidateId": "BASELINE",
       "statistics": {
-        "count": 0,
+        "count": 18,
+        "min": 1.095014,
+        "median": 1.271057,
+        "mean": 1.259543,
+        "max": 1.495628,
+        "p10": 1.128342,
+        "p50": 1.271057,
+        "p90": 1.368299,
+        "p95": 1.396219,
+        "p99": 1.475746,
+        "medianAbsoluteError": 6636.5,
+        "p95AbsoluteError": 17495.4,
+        "maxAbsoluteError": 18325,
+        "underestimationFrequency": 0,
         "maximumUnderestimation": 0
       },
       "accuracyImprovementVsBaseline": {
         "medianAbsoluteErrorDelta": 0,
+        "medianAbsoluteErrorRatio": 1,
         "p95AbsoluteErrorDelta": 0,
         "interpretation": "UNCHANGED"
       }
@@ -23,40 +37,163 @@
     {
       "candidateId": "CONSTANT",
       "statistics": {
-        "count": 0,
-        "maximumUnderestimation": 0
+        "count": 18,
+        "min": 0.875314,
+        "median": 1.01604,
+        "mean": 1.006846,
+        "max": 1.195677,
+        "p10": 0.901952,
+        "p50": 1.01604,
+        "p90": 1.093762,
+        "p95": 1.116111,
+        "p99": 1.179764,
+        "medianAbsoluteError": 1596.5,
+        "p95AbsoluteError": 5354.3,
+        "maxAbsoluteError": 5458,
+        "underestimationFrequency": 0.5,
+        "maximumUnderestimation": 5458
       },
       "accuracyImprovementVsBaseline": {
-        "medianAbsoluteErrorDelta": 0,
-        "p95AbsoluteErrorDelta": 0,
-        "interpretation": "UNCHANGED"
+        "medianAbsoluteErrorDelta": -5040,
+        "medianAbsoluteErrorRatio": 0.2405635500640398,
+        "p95AbsoluteErrorDelta": -12141.100000000002,
+        "interpretation": "MATERIALLY_LOWER_ERROR"
       }
     },
     {
       "candidateId": "CONSTANT_MODEL_SCOPED",
       "statistics": {
-        "count": 0,
-        "maximumUnderestimation": 0
+        "count": 18,
+        "min": 0.875314,
+        "median": 1.01604,
+        "mean": 1.006846,
+        "max": 1.195677,
+        "p10": 0.901952,
+        "p50": 1.01604,
+        "p90": 1.093762,
+        "p95": 1.116111,
+        "p99": 1.179764,
+        "medianAbsoluteError": 1596.5,
+        "p95AbsoluteError": 5354.3,
+        "maxAbsoluteError": 5458,
+        "underestimationFrequency": 0.5,
+        "maximumUnderestimation": 5458
       },
       "accuracyImprovementVsBaseline": {
-        "medianAbsoluteErrorDelta": 0,
-        "p95AbsoluteErrorDelta": 0,
-        "interpretation": "UNCHANGED"
+        "medianAbsoluteErrorDelta": -5040,
+        "medianAbsoluteErrorRatio": 0.2405635500640398,
+        "p95AbsoluteErrorDelta": -12141.100000000002,
+        "interpretation": "MATERIALLY_LOWER_ERROR"
       }
     },
     {
       "candidateId": "AFFINE",
       "statistics": {
-        "count": 0,
-        "maximumUnderestimation": 0
+        "count": 18,
+        "min": 0.867403,
+        "median": 0.995621,
+        "mean": 0.987091,
+        "max": 1.109058,
+        "p10": 0.898672,
+        "p50": 0.995621,
+        "p90": 1.070081,
+        "p95": 1.080298,
+        "p99": 1.103306,
+        "medianAbsoluteError": 1570.5,
+        "p95AbsoluteError": 5394.25,
+        "maxAbsoluteError": 5424,
+        "underestimationFrequency": 0.5,
+        "maximumUnderestimation": 5424
       },
       "accuracyImprovementVsBaseline": {
-        "medianAbsoluteErrorDelta": 0,
-        "p95AbsoluteErrorDelta": 0,
-        "interpretation": "UNCHANGED"
+        "medianAbsoluteErrorDelta": -5066,
+        "medianAbsoluteErrorRatio": 0.23664582234611617,
+        "p95AbsoluteErrorDelta": -12101.150000000001,
+        "interpretation": "MATERIALLY_LOWER_ERROR"
       }
     }
   ],
-  "temporalGroups": {},
+  "temporalGroups": {
+    "PRE_COMPACTION_EQUIVALENT": {
+      "count": 0
+    },
+    "COMPACTION_INITIATED": {
+      "count": 1,
+      "baseline": {
+        "count": 1,
+        "min": 1.378676,
+        "median": 1.378676,
+        "mean": 1.378676,
+        "max": 1.378676,
+        "p10": 1.378676,
+        "p50": 1.378676,
+        "p90": 1.378676,
+        "p95": 1.378676,
+        "p99": 1.378676,
+        "medianAbsoluteError": 5910,
+        "p95AbsoluteError": 5910,
+        "maxAbsoluteError": 5910,
+        "underestimationFrequency": 0,
+        "maximumUnderestimation": 0
+      },
+      "constant": {
+        "count": 1,
+        "min": 1.10207,
+        "median": 1.10207,
+        "mean": 1.10207,
+        "max": 1.10207,
+        "p10": 1.10207,
+        "p50": 1.10207,
+        "p90": 1.10207,
+        "p95": 1.10207,
+        "p99": 1.10207,
+        "medianAbsoluteError": 1593,
+        "p95AbsoluteError": 1593,
+        "maxAbsoluteError": 1593,
+        "underestimationFrequency": 0,
+        "maximumUnderestimation": 0
+      }
+    },
+    "POST_COMPACTION_TRANSFORMED": {
+      "count": 17,
+      "baseline": {
+        "count": 17,
+        "min": 1.095014,
+        "median": 1.218196,
+        "mean": 1.252536,
+        "max": 1.495628,
+        "p10": 1.127888,
+        "p50": 1.218196,
+        "p90": 1.362786,
+        "p95": 1.390207,
+        "p99": 1.474544,
+        "medianAbsoluteError": 6693,
+        "p95AbsoluteError": 17544.2,
+        "maxAbsoluteError": 18325,
+        "underestimationFrequency": 0,
+        "maximumUnderestimation": 0
+      },
+      "constant": {
+        "count": 17,
+        "min": 0.875314,
+        "median": 0.973769,
+        "mean": 1.001244,
+        "max": 1.195677,
+        "p10": 0.901589,
+        "p50": 0.973769,
+        "p90": 1.089402,
+        "p95": 1.111297,
+        "p99": 1.178801,
+        "medianAbsoluteError": 1600,
+        "p95AbsoluteError": 5360.4,
+        "maxAbsoluteError": 5458,
+        "underestimationFrequency": 0.5294117647058824,
+        "maximumUnderestimation": 5458
+      }
+    },
+    "UNKNOWN": {
+      "count": 0
+    }
+  },
   "temporalNote": "The temporal grouping uses ONLY request-recorded observables (compactionInitiated and decision-estimate/submission equivalence). The prior analyzer's ordinal-derived `epoch` field is NOT used as evidence of compaction timing."
 }

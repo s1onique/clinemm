@@ -1,32 +1,32 @@
 {
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.artifact-hashes.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
-  "sourceHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde",
+  "sourceHead": "1f1670b2779ae3b00542000340d99deea0fec684",
   "hashes": [
     {
       "name": "frozen-candidates.json",
-      "sha256": "95d435b4b011f33d9835be1a68aac86fcbbcdd67c4c8649b18ad7a2c1495784e",
+      "sha256": "fcba4b766b149272bb93d5fbf4425360c9fc13dcf8650cdc50a446bc012a07ae",
       "bytes": 1410
     },
     {
       "name": "holdout-comparison.json",
-      "sha256": "329e1718e803c335a84f1f3ff0b8140be0f4336e6e47ee19e97edcf2cb62c3d2",
-      "bytes": 1855
+      "sha256": "83e1b995dae9e63f03c695f1cb0e550bddca6b33148b8a320a24a7ad2c8e8b1d",
+      "bytes": 5763
     },
     {
       "name": "holdout-manifest.json",
-      "sha256": "30eed6399c6400e2b0a25cc4d7d4e63ca6be5fe2a7fee2960e0434a0f04ee5fb",
-      "bytes": 2973
+      "sha256": "8ebd5ad2935f7547d43bd15512e8224728b30d49bba626f6332df80d7dacfa8d",
+      "bytes": 3826
     },
     {
       "name": "identity.json",
-      "sha256": "b61140ea890da8548cbea6e9d9753a74b6abf253dec4b7a3bd061677859a55e7",
-      "bytes": 1340
+      "sha256": "56bc22a4893a68340086e2a810a905efa86dda42cf6cc2d134cacfcd4ffd0ecc",
+      "bytes": 1351
     },
     {
       "name": "join-audit.json",
-      "sha256": "1367f21d909f936302c391c6ace2a91f82e5ab0578c13f803e1fcc654d51f43e",
-      "bytes": 754
+      "sha256": "fe0029176fc6f9b892a612dc89f5ace0b3c003f0c68ea2a8424c90c15368ca91",
+      "bytes": 1172
     },
     {
       "name": "qualification-report.md",
@@ -35,13 +35,13 @@
     },
     {
       "name": "safety-discriminators.json",
-      "sha256": "37818bcc957d1fd311efaaf9dd683295ffe307f47cdf3e921ad59befd20ebb4d",
-      "bytes": 4898
+      "sha256": "ea44117a04da554a8093b191a8208ea1c3a529094afee89252e50123589a0c3a",
+      "bytes": 4929
     },
     {
       "name": "test-receipt.json",
-      "sha256": "0a22e9d73ed805fa4816b74ffe73a8792c5a5e62bcfd6e314b7a8fadf4afbb5d",
-      "bytes": 3537
+      "sha256": "358bd9e5219bcd55f624f7c0d55d4315ffcb455aced28266a7f186edef1c5cc7",
+      "bytes": 3549
     },
     {
       "name": "tool/artifacts.ts",

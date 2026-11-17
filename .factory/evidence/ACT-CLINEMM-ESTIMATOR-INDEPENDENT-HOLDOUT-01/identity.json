@@ -2,12 +2,12 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.identity.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde",
+  "sourceHead": "1f1670b2779ae3b00542000340d99deea0fec684",
   "repository": {
     "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
     "remote": "git@github.com:s1onique/clinemm.git",
     "branch": "main",
-    "entryHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde"
+    "entryHead": "1f1670b2779ae3b00542000340d99deea0fec684"
   },
   "tool": {
     "path": ".factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.ts",
@@ -21,7 +21,7 @@
       "modifiedByThisAct": false
     }
   },
-  "verdict": "AWAITING_INDEPENDENT_DOGFOOD_SESSION",
+  "verdict": "CALIBRATION_REPLICATED_NOT_PRODUCTION_QUALIFIED",
   "productionDeploymentAuthorized": false,
   "estimatorImplementationChanged": false,
   "compactionPolicyChanged": false,
