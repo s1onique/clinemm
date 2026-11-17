@@ -235,11 +235,11 @@ test("nested object -> FORBIDDEN_SHAPE", async () => {
 })
 
 test("oversize -> OVERSIZE", async () => {
-  // PROBE01: MAX_FRAME was bumped from 4096 to 8192 so the C helper
-  // can carry a full testbed envelope (40-hex head + 64-hex SHA +
-  // absolute path). The frame-cap test must use a request_id that
-  // exceeds MAX_FRAME, so we pad with a 9000-char string.
-  const big = "x".repeat(9000)
+  // DOGFOOD01: MAX_FRAME was bumped from 8192 to 65536 so the C
+  // helper can carry a full testbed envelope (~32 KiB of spec
+  // JSON). The frame-cap test must use a request_id that
+  // exceeds MAX_FRAME (65536), so we pad with a 70 KiB string.
+  const big = "x".repeat(70000)
   const resp = parseResp(await send(`{"version":1,"request_id":"${big}","method":"health"}`))
   expect(resp.ok).toBe(false)
   expect(resp.error).toBe("OVERSIZE")

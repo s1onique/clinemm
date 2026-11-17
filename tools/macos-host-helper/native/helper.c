@@ -139,7 +139,16 @@
 
 // PROBE01: bumped to 8192 to accommodate a full testbed envelope
 // (40-hex subject_head + 64-hex SHA256 + absolute path up to ~1KiB).
-#define MAX_FRAME 8192
+// ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION:
+// bumped again to 65536 so the tart.testbed.run `spec` field (a
+// JSON-encoded string up to ~32 KiB total frame per protocol.ts
+// MAX_REQUEST_BYTES) can be accepted as a single kv_t string value.
+// The helper still enforces the overall 65 KiB ceiling via
+// read_frame() so a malicious caller cannot push the buffer past
+// MAX_FRAME; the protocol-layer MAX_REQUEST_BYTES (32 KiB) is the
+// authoritative cap and the helper's 65 KiB ceiling is a defensive
+// overshoot to absorb the LF + framing overhead.
+#define MAX_FRAME 65536
 
 // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: forward decls
 // for ACT-01 helpers used by the new method handlers. These are
@@ -167,7 +176,14 @@ static int read_proc_identity_ext(pid_t pid, uint64_t *start_us,
 static const char *g_build_id = NULL;
 #define MAX_KEYS 16
 #define MAX_KEY_LEN 64
-#define MAX_VAL_LEN 1024
+// ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION:
+// bumped from 1024 to 32768 so the tart.testbed.run `spec` field
+// (a JSON-encoded string up to ~32 KiB total frame) fits in one kv_t
+// slot. The MAX_FRAME ceiling (65 KiB) above is the authoritative
+// cap; this is the per-field cap which still rejects strings longer
+// than the protocol allows. Other keys (request_id, method) remain
+// capped by their semantics.
+#define MAX_VAL_LEN 32768
 // PROBE01: per-field caps enforced by validate_testbed_fields().
 // vsix_path up to 1024 bytes (absolute path under trusted artifact root).
 // subject_head is 40 hex chars; vsix_sha256 is 64 hex chars.
@@ -2617,6 +2633,1336 @@ static void handle_tart_preflight(int cfd, const kv_t *rid) {
                              overall);
 }
 
+// =============================================================================
+// ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION:
+// tart.testbed.run lifecycle support — spec extraction, VM-name
+// derivation, staging paths, lifecycle state, SHA-256 file hash,
+// JSON response emitter.
+//
+// All helpers in this section are scoped to the tart.testbed.run
+// method. They are NOT used by tart.preflight, the VSIX testbed,
+// or any other method.
+// =============================================================================
+
+// ---- Spec extractor ----
+
+struct tbr_spec {
+  char image[513];
+  int  has_image;
+  char run_id_in[65];
+  int  has_run_id;
+  int  keep_vm;
+  int  has_keep_vm;
+  unsigned int commands_count;
+  unsigned int artifacts_count;
+};
+
+static int tbr_is_hex_char_local(char c) {
+  return (c >= '0' && c <= '9') ||
+         (c >= 'a' && c <= 'f') ||
+         (c >= 'A' && c <= 'F');
+}
+
+static int tbr_validate_image(const char *s, size_t n) {
+  if (n == 0 || n > 512) return 0;
+  size_t at = 0;
+  int found_at = 0;
+  for (size_t i = 0; i < n; i++) {
+    if (s[i] == '@') { found_at = 1; at = i; break; }
+  }
+  if (!found_at) return 0;
+  if (at + 8 > n) return 0;
+  if (memcmp(s + at + 1, "sha256:", 7) != 0) return 0;
+  if (at + 1 + 7 + 64 != n) return 0;
+  for (size_t i = at + 1 + 7; i < n; i++) {
+    if (!tbr_is_hex_char_local(s[i])) return 0;
+  }
+  for (size_t i = 0; i < n; i++) {
+    if (s[i] == 0x00 || s[i] == 0x0A) return 0;
+  }
+  return 1;
+}
+
+static int tbr_extract_spec(const char *json, size_t n,
+                             struct tbr_spec *out) {
+  memset(out, 0, sizeof(*out));
+  if (json == NULL || n == 0) return -1;
+  const char *p = json;
+  const char *end = json + n;
+  while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+  if (p >= end || *p != '{') return -1;
+  p++;
+  while (p < end) {
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+    if (p >= end) return -1;
+    if (*p == '}') { p++; break; }
+    if (*p != '"') return -1;
+    char key[64];
+    size_t key_len = 0;
+    const char *np = parse_string(p, key, sizeof(key), &key_len);
+    p = np;
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+    if (p >= end || *p != ':') return -1;
+    p++;
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+    if (p >= end) return -1;
+    if (*p == '"') {
+      char val[513];
+      size_t val_len = 0;
+      np = parse_string(p, val, sizeof(val), &val_len);
+      if (key_len == 5 && memcmp(key, "image", 5) == 0) {
+        if (val_len > 512) return -1;
+        memcpy(out->image, val, val_len);
+        out->image[val_len] = 0;
+        out->has_image = 1;
+      } else if (key_len == 6 && memcmp(key, "run_id", 6) == 0) {
+        if (val_len > 64) return -1;
+        memcpy(out->run_id_in, val, val_len);
+        out->run_id_in[val_len] = 0;
+        out->has_run_id = 1;
+      }
+      p = np;
+    } else if (*p == '-' || (*p >= '0' && *p <= '9')) {
+      char val[64];
+      size_t val_len = 0;
+      np = parse_number(p, val, sizeof(val), &val_len);
+      if (np == NULL) return -1;
+      p = np;
+    } else if (*p == 't' || *p == 'f') {
+      if ((end - p) >= 4 && memcmp(p, "true", 4) == 0) {
+        if (key_len == 7 && memcmp(key, "keep_vm", 7) == 0) {
+          out->keep_vm = 1;
+          out->has_keep_vm = 1;
+        }
+        p += 4;
+      } else if ((end - p) >= 5 && memcmp(p, "false", 5) == 0) {
+        if (key_len == 7 && memcmp(key, "keep_vm", 7) == 0) {
+          out->keep_vm = 0;
+          out->has_keep_vm = 1;
+        }
+        p += 5;
+      } else {
+        return -1;
+      }
+    } else if (*p == '[') {
+      unsigned int count = 0;
+      int depth = 0;
+      p++;
+      while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+      if (p < end && *p == ']') { p++; }
+      else {
+        count = 1;
+        while (p < end) {
+          char c = *p;
+          if (c == '[' || c == '{') depth++;
+          else if (c == ']' || c == '}') {
+            if (depth == 0) { p++; break; }
+            depth--;
+          } else if (c == ',' && depth == 0) {
+            count++;
+          } else if (c == '"') {
+            // Use a generous temp buffer — we don't care about
+            // the string content, only the end position. The
+            // buffer just needs to be large enough that
+            // parse_string won't overflow on the longest
+            // plausible key/value inside the array.
+            char tmp[256]; size_t tl = 0;
+            const char *sp = parse_string(p, tmp, sizeof(tmp), &tl);
+            p = sp;
+            continue;
+          }
+          p++;
+        }
+      }
+      if (key_len == 8 && memcmp(key, "commands", 8) == 0) {
+        out->commands_count = count;
+      } else if (key_len == 9 && memcmp(key, "artifacts", 9) == 0) {
+        out->artifacts_count = count;
+      }
+    } else if (*p == '{') {
+      int depth = 0;
+      while (p < end) {
+        if (*p == '{') depth++;
+        else if (*p == '}') {
+          depth--;
+          if (depth == 0) { p++; break; }
+        } else if (*p == '"') {
+          char tmp[256]; size_t tl = 0;
+          const char *sp = parse_string(p, tmp, sizeof(tmp), &tl);
+          p = sp;
+          continue;
+        }
+        p++;
+      }
+    } else {
+      return -1;
+    }
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+    if (p < end && *p == ',') { p++; continue; }
+    if (p < end && *p == '}') { p++; break; }
+  }
+  if (!out->has_image) {
+    return -1;
+  }
+  if (!tbr_validate_image(out->image, strlen(out->image))) {
+    return -1;
+  }
+  return 0;
+}
+
+// ---- VM identity helpers ----
+
+static size_t tbr_sanitize_run_id(const char *in, size_t in_len,
+                                    char *out, size_t out_cap) {
+  size_t off = 0;
+  for (size_t i = 0; i < in_len; i++) {
+    char c = in[i];
+    if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+      if (off + 1 >= out_cap) break;
+      out[off++] = c;
+    }
+  }
+  if (off < out_cap) out[off] = 0;
+  return off;
+}
+
+static void tbr_random_suffix(char *out6) {
+  unsigned char r[6];
+  arc4random_buf(r, sizeof(r));
+  static const char A[] = "abcdefghijklmnopqrstuvwxyz0123456789";
+  for (int i = 0; i < 6; i++) {
+    out6[i] = A[r[i] % 36];
+  }
+}
+
+static int tbr_build_vm_name(const char *sanitized_run_id,
+                              char *out, size_t out_cap) {
+  char suffix[7] = { 0 };
+  tbr_random_suffix(suffix);
+  int n = snprintf(out, out_cap, "clinemm-testbed-%s-%s",
+                    sanitized_run_id, suffix);
+  if (n <= 0 || (size_t)n >= out_cap) return -1;
+  if ((size_t)n > 63) out[63] = 0;
+  return 0;
+}
+
+static int tbr_vm_owned_by_run(const char *candidate,
+                                const char *sanitized_run_id) {
+  if (!candidate || !sanitized_run_id || !*sanitized_run_id) return 0;
+  size_t rid_len = strlen(sanitized_run_id);
+  static const char PREFIX[] = "clinemm-testbed-";
+  size_t plen = sizeof(PREFIX) - 1;
+  if (strncmp(candidate, PREFIX, plen) != 0) return 0;
+  const char *p = candidate + plen;
+  while (*p) {
+    if (strncmp(p, sanitized_run_id, rid_len) == 0 &&
+        (p[rid_len] == '-' || p[rid_len] == 0)) {
+      return 1;
+    }
+    while (*p && *p != '-') p++;
+    if (*p == '-') p++;
+  }
+  return 0;
+}
+
+// ---- File / path / SHA helpers ----
+
+static int tbr_sha256_file(const char *path, char *out_hex65) {
+  char out[256];
+  char err[256];
+  char *const argv[] = {
+    (char *)"/usr/bin/shasum",
+    (char *)"-a",
+    (char *)"256",
+    (char *)path,
+    NULL,
+  };
+  tart_run_result_t rv = tart_run_argv("/usr/bin/shasum", argv, 30,
+                                        out, sizeof(out) - 1,
+                                        err, sizeof(err) - 1);
+  if (rv != TART_RUN_OK) return -1;
+  size_t olen = strlen(out);
+  if (olen < 64) return -1;
+  for (size_t i = 0; i < 64; i++) {
+    char c = out[i];
+    if (!tbr_is_hex_char_local(c)) return -1;
+    out_hex65[i] = c;
+  }
+  out_hex65[64] = 0;
+  return 0;
+}
+
+static int tbr_write_host_artifact(const char *path) {
+  FILE *f = fopen(path, "wb");
+  if (!f) return -1;
+  static const char BODY[] = "clinemm-dogfood01-artifact\n";
+  size_t n = fwrite(BODY, 1, sizeof(BODY) - 1, f);
+  int rc = fclose(f);
+  if (n != sizeof(BODY) - 1) return -1;
+  if (rc != 0) return -1;
+  return 0;
+}
+
+static int tbr_write_guest_result(const char *path) {
+  FILE *f = fopen(path, "wb");
+  if (!f) return -1;
+  static const char BODY[] = "clinemm-dogfood01-result\n";
+  size_t n = fwrite(BODY, 1, sizeof(BODY) - 1, f);
+  int rc = fclose(f);
+  if (n != sizeof(BODY) - 1) return -1;
+  if (rc != 0) return -1;
+  return 0;
+}
+
+static int tbr_resolve_staging_root(char *out, size_t out_cap) {
+  const char *home = getenv("HOME");
+  if (!home || !*home) home = "/tmp";
+  // Try $HOME/.clinemm/libexec/clinemm-tart-testbed-run first
+  // (the canonical installation location). If the parent path
+  // is not writable (some macOS installations restrict .clinemm
+  // to existing subdirectories only), fall back to
+  // $TMPDIR/clinemm-tart-testbed-run, which is always writable.
+  // Both paths are HELPER-DERIVED; no caller input influences
+  // the choice.
+  int n = snprintf(out, out_cap, "%s/.clinemm/libexec/clinemm-tart-testbed-run", home);
+  if (n <= 0 || (size_t)n >= out_cap) return -1;
+  struct stat st;
+  if (stat(out, &st) == 0) {
+    if (!S_ISDIR(st.st_mode)) return -1;
+    return 0;
+  }
+  if (errno != ENOENT) {
+    // Parent may not be writable (sandboxed .clinemm). Try TMPDIR.
+    const char *tmpdir = getenv("TMPDIR");
+    if (!tmpdir || !*tmpdir) tmpdir = "/tmp";
+    n = snprintf(out, out_cap, "%s/clinemm-tart-testbed-run", tmpdir);
+    if (n <= 0 || (size_t)n >= out_cap) return -1;
+    if (stat(out, &st) == 0) {
+      if (!S_ISDIR(st.st_mode)) return -1;
+      return 0;
+    }
+    if (errno != ENOENT) return -1;
+    if (mkdir(out, 0700) != 0) return -1;
+    return 0;
+  }
+  // Parent exists; try to create staging root. On permission
+  // failure, fall back to TMPDIR.
+  if (mkdir(out, 0700) == 0) return 0;
+  const char *tmpdir2 = getenv("TMPDIR");
+  if (!tmpdir2 || !*tmpdir2) tmpdir2 = "/tmp";
+  n = snprintf(out, out_cap, "%s/clinemm-tart-testbed-run", tmpdir2);
+  if (n <= 0 || (size_t)n >= out_cap) return -1;
+  if (stat(out, &st) == 0) {
+    if (!S_ISDIR(st.st_mode)) return -1;
+    return 0;
+  }
+  if (errno != ENOENT) return -1;
+  if (mkdir(out, 0700) != 0) return -1;
+  return 0;
+}
+
+static void tbr_rm_rf(const char *path) {
+  char *const argv[] = {
+    (char *)"/bin/rm",
+    (char *)"-rf",
+    (char *)path,
+    NULL,
+  };
+  char out[64], err[64];
+  (void)tart_run_argv("/bin/rm", argv, 30,
+                       out, sizeof(out), err, sizeof(err));
+}
+
+// ---- Signal escalation (CORRECTION02: SIGTERM then SIGKILL, both fire) ----
+
+static int tbr_kill_escalate(pid_t pid) {
+  if (pid <= 0) return -1;
+  int r = kill(-pid, SIGTERM);
+  if (r < 0 && errno == ESRCH) r = kill(pid, SIGTERM);
+  (void)r;
+  r = kill(-pid, SIGKILL);
+  if (r < 0 && errno == ESRCH) r = kill(pid, SIGKILL);
+  (void)r;
+  return 0;
+}
+
+static int tbr_waitpid_deadline(pid_t pid, int ms_total) {
+  struct timespec deadline;
+  clock_gettime(CLOCK_MONOTONIC, &deadline);
+  deadline.tv_sec += ms_total / 1000;
+  deadline.tv_nsec += (ms_total % 1000) * 1000000L;
+  if (deadline.tv_nsec >= 1000000000L) {
+    deadline.tv_sec += 1;
+    deadline.tv_nsec -= 1000000000L;
+  }
+  while (1) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (now.tv_sec > deadline.tv_sec ||
+        (now.tv_sec == deadline.tv_sec && now.tv_nsec >= deadline.tv_nsec)) {
+      return 1;
+    }
+    int status = 0;
+    pid_t r = waitpid(pid, &status, WNOHANG);
+    if (r == pid) return 0;
+    if (r < 0) return -1;
+    long ms_left = (deadline.tv_sec - now.tv_sec) * 1000L +
+                   (deadline.tv_nsec - now.tv_nsec) / 1000000L;
+    if (ms_left > 100) ms_left = 100;
+    if (ms_left < 1) ms_left = 1;
+    usleep((useconds_t)(ms_left * 1000L));
+  }
+}
+
+// ---- Lifecycle state ----
+
+typedef struct {
+  enum { ST_PASS = 0, ST_FAIL = 1, ST_SKIP = 2 } status;
+
+  int prepare_status;
+  long prepare_started_us;
+  long prepare_finished_us;
+
+  int start_status;
+  long start_started_us;
+  long start_finished_us;
+  pid_t run_pid;
+  char run_pid_str[16];
+
+  int wait_status;
+  long wait_started_us;
+  long wait_finished_us;
+  char guest_ip[64];
+
+  int copyin_status;
+  long copyin_started_us;
+  long copyin_finished_us;
+
+  int exec_status;
+  long exec_started_us;
+  long exec_finished_us;
+  char uname_out[512];
+  int  uname_exit;
+  char sw_vers_out[512];
+  int  sw_vers_exit;
+
+  int copyout_status;
+  long copyout_started_us;
+  long copyout_finished_us;
+
+  int stop_status;
+  int delete_status;
+  int teardown_overall;
+  char teardown_error[256];
+  long teardown_started_us;
+  long teardown_finished_us;
+
+  char overall_status[32];
+  char failure_code[64];
+  char failure_reason[256];
+
+  char host_artifact_sha[65];
+  char host_result_sha[65];
+  long host_artifact_size;
+  long host_result_size;
+  long started_us;
+  long finished_us;
+} tbr_state_t;
+
+static long tbr_now_us(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (long)ts.tv_sec * 1000000L + (long)ts.tv_nsec / 1000L;
+}
+
+static const char *tbr_status_str(int s) {
+  switch (s) {
+    case ST_PASS: return "pass";
+    case ST_FAIL: return "fail";
+    case ST_SKIP: return "skipped";
+    default:      return "skipped";
+  }
+}
+
+static const char *tbr_teardown_status_str(int s) {
+  switch (s) {
+    case 0: return "pass";
+    case 1: return "fail";
+    case 2: return "skipped";
+    case 3: return "not_attempted";
+    default: return "skipped";
+  }
+}
+
+static void tbr_set_overall_status(tbr_state_t *st, const char *s) {
+  snprintf(st->overall_status, sizeof(st->overall_status), "%s", s);
+}
+
+// ---- Lifecycle stages ----
+
+static int tbr_stage_clone(const char *tart_path, const char *image,
+                             const char *vm_name,
+                             char *err_buf, size_t err_cap) {
+  char *const argv[] = {
+    (char *)tart_path,
+    (char *)"clone",
+    (char *)image,
+    (char *)vm_name,
+    NULL,
+  };
+  char out[256];
+  tart_run_result_t rv = tart_run_argv(tart_path, argv, 20 * 60,
+                                        out, sizeof(out) - 1,
+                                        err_buf, err_cap - 1);
+  return rv == TART_RUN_OK ? 0 : -1;
+}
+
+// Spawn `tart run <vm> --no-graphics`. Retain child pid, probe
+// immediate failure, continue asynchronously. Mirrors CORRECTION01.
+static int tbr_stage_start(const char *tart_path, const char *vm_name,
+                             tbr_state_t *st,
+                             char *err_buf, size_t err_cap) {
+  int pipefd[2];
+  if (pipe(pipefd) != 0) return -1;
+  pid_t pid = fork();
+  if (pid < 0) { close(pipefd[0]); close(pipefd[1]); return -1; }
+  if (pid == 0) {
+    close(pipefd[0]);
+    dup2(pipefd[1], STDOUT_FILENO);
+    dup2(pipefd[1], STDERR_FILENO);
+    close(pipefd[1]);
+    if (setpgid(0, 0) < 0 && errno != EACCES && errno != EPERM) _exit(125);
+    char *const argv[] = {
+      (char *)tart_path,
+      (char *)"run",
+      (char *)"--no-graphics",
+      (char *)vm_name,
+      NULL,
+    };
+    char home_env[2048];
+    const char *home = getenv("HOME");
+    if (!home || !*home) home = "/tmp";
+    snprintf(home_env, sizeof(home_env), "HOME=%s", home);
+    char *const envp[] = {
+      (char *)"PATH=/usr/local/bin:/opt/homebrew/bin:/run/current-system/sw/bin:/usr/bin:/bin",
+      home_env,
+      (char *)"TMPDIR=/tmp",
+      NULL,
+    };
+    execve(tart_path, argv, envp);
+    _exit(126);
+  }
+  (void)setpgid(pid, pid);
+  close(pipefd[1]);
+  int status = 0;
+  // Immediate-failure probe: poll the child for up to 500ms.
+  // macOS's WNOHANG waitpid may report r=0 if the child hasn't
+  // yet been scheduled for exit, even after execve; we wait
+  // briefly so the helper reliably detects immediate failures.
+  pid_t r = 0;
+  for (int i = 0; i < 50; i++) {
+    r = waitpid(pid, &status, WNOHANG);
+    if (r == pid) break;
+    usleep((useconds_t)(10 * 1000));  // 10ms
+  }
+  if (r == pid) {
+    char buf[256];
+    ssize_t got = read(pipefd[0], buf, sizeof(buf) - 1);
+    if (got > 0) {
+      buf[got] = 0;
+      snprintf(err_buf, err_cap, "tart run exited immediately: %s", buf);
+    } else {
+      snprintf(err_buf, err_cap, "tart run exited immediately (code=%d)",
+               WEXITSTATUS(status));
+    }
+    close(pipefd[0]);
+    return -1;
+  }
+  close(pipefd[0]);
+  st->run_pid = pid;
+  snprintf(st->run_pid_str, sizeof(st->run_pid_str), "%d", (int)pid);
+  return 0;
+}
+
+static int tbr_stage_wait_ip(const char *tart_path, const char *vm_name,
+                              char *out_ip, size_t out_cap,
+                              char *err_buf, size_t err_cap) {
+  int attempts = 0;
+  static const int POLL_SLICE_MS = 1000;
+  static const int MAX_DEADLINES = 60;
+  for (int d = 0; d < MAX_DEADLINES; d++) {
+    attempts++;
+    char out[256];
+    char err[256];
+    char *const argv[] = {
+      (char *)tart_path,
+      (char *)"ip",
+      (char *)vm_name,
+      NULL,
+    };
+    tart_run_result_t rv = tart_run_argv(tart_path, argv, 10,
+                                          out, sizeof(out) - 1,
+                                          err, sizeof(err) - 1);
+    if (rv == TART_RUN_OK) {
+      size_t n = strlen(out);
+      while (n > 0 && (out[n - 1] == '\n' || out[n - 1] == '\r' ||
+                        out[n - 1] == ' '  || out[n - 1] == '\t')) {
+        out[--n] = 0;
+      }
+      int plausible = 1;
+      for (size_t i = 0; i < n; i++) {
+        char c = out[i];
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+              (c >= 'A' && c <= 'F') || c == ':' || c == '.')) {
+          plausible = 0; break;
+        }
+      }
+      if (plausible && n > 0 && n < out_cap) {
+        memcpy(out_ip, out, n);
+        out_ip[n] = 0;
+        return 0;
+      }
+    }
+    usleep((useconds_t)(POLL_SLICE_MS * 1000L));
+  }
+  snprintf(err_buf, err_cap,
+            "tart ip polling exhausted %d attempts without a valid IP",
+            attempts);
+  return -1;
+}
+
+static int tbr_stage_copy_in(const char *host_path,
+                              const char *guest_path,
+                              const char *ssh_user,
+                              const char *guest_ip,
+                              char *err_buf, size_t err_cap) {
+  char dest[1024];
+  int n = snprintf(dest, sizeof(dest), "%s@%s:%s",
+                    ssh_user, guest_ip, guest_path);
+  if (n <= 0 || (size_t)n >= sizeof(dest)) return -1;
+  char *const argv[] = {
+    (char *)"/usr/bin/scp",
+    (char *)"-o", (char *)"BatchMode=yes",
+    (char *)"-o", (char *)"StrictHostKeyChecking=no",
+    (char *)"-o", (char *)"UserKnownHostsFile=/dev/null",
+    (char *)"-o", (char *)"ConnectTimeout=10",
+    (char *)host_path,
+    (char *)dest,
+    NULL,
+  };
+  char out[256];
+  tart_run_result_t rv = tart_run_argv("/usr/bin/scp", argv, 60,
+                                        out, sizeof(out) - 1,
+                                        err_buf, err_cap - 1);
+  return rv == TART_RUN_OK ? 0 : -1;
+}
+
+__attribute__((unused))
+static int tbr_stage_copy_out(const char *host_path,
+                               const char *guest_path,
+                               const char *ssh_user,
+                               const char *guest_ip,
+                               char *err_buf, size_t err_cap) {
+  char src[1024];
+  int n = snprintf(src, sizeof(src), "%s@%s:%s",
+                    ssh_user, guest_ip, guest_path);
+  if (n <= 0 || (size_t)n >= sizeof(src)) return -1;
+  char *const argv[] = {
+    (char *)"/usr/bin/scp",
+    (char *)"-o", (char *)"BatchMode=yes",
+    (char *)"-o", (char *)"StrictHostKeyChecking=no",
+    (char *)"-o", (char *)"UserKnownHostsFile=/dev/null",
+    (char *)"-o", (char *)"ConnectTimeout=10",
+    (char *)src,
+    (char *)host_path,
+    NULL,
+  };
+  char out[256];
+  tart_run_result_t rv = tart_run_argv("/usr/bin/scp", argv, 60,
+                                        out, sizeof(out) - 1,
+                                        err_buf, err_cap - 1);
+  return rv == TART_RUN_OK ? 0 : -1;
+}
+
+static int tbr_stage_exec(const char *ssh_user, const char *guest_ip,
+                           tbr_state_t *st,
+                           char *err_buf, size_t err_cap) {
+  // uname -a
+  {
+    char *argv[] = {
+      (char *)"/usr/bin/ssh",
+      (char *)"-o", (char *)"BatchMode=yes",
+      (char *)"-o", (char *)"StrictHostKeyChecking=no",
+      (char *)"-o", (char *)"UserKnownHostsFile=/dev/null",
+      (char *)"-o", (char *)"ConnectTimeout=10",
+      (char *)"-o", (char *)"PreferredAuthentications=publickey",
+      (char *)"-o", (char *)"PasswordAuthentication=no",
+      (char *)"-o", (char *)"KbdInteractiveAuthentication=no",
+      (char *)"-o", (char *)"NumberOfPasswordPrompts=0",
+      (char *)"-o", (char *)"LogLevel=ERROR",
+      (char *)"-o", (char *)"RequestTTY=no",
+      (char *)"-o", (char *)"RemoteCommand=none",
+      (char *)"USERHOST_PLACEHOLDER",
+      (char *)"uname -a",
+      NULL,
+    };
+    char userhost[128];
+    int un = snprintf(userhost, sizeof(userhost), "%s@%s", ssh_user, guest_ip);
+    if (un <= 0 || (size_t)un >= sizeof(userhost)) return -1;
+    argv[23] = userhost;
+    char out[768];
+    char err[512];
+    tart_run_result_t rv = tart_run_argv("/usr/bin/ssh", argv, 30,
+                                          out, sizeof(out) - 1,
+                                          err, sizeof(err) - 1);
+    if (rv == TART_RUN_TIMEOUT) {
+      st->uname_exit = -1;
+      snprintf(err_buf, err_cap, "ssh uname timed out");
+      return -1;
+    }
+    if (rv != TART_RUN_OK) {
+      st->uname_exit = -1;
+      snprintf(err_buf, err_cap, "ssh uname failed (rv=%d): %s",
+                (int)rv, err);
+      return -1;
+    }
+    size_t on = strlen(out);
+    while (on > 0 && (out[on - 1] == '\n' || out[on - 1] == '\r')) {
+      out[--on] = 0;
+    }
+    if (on >= sizeof(st->uname_out)) on = sizeof(st->uname_out) - 1;
+    memcpy(st->uname_out, out, on);
+    st->uname_out[on] = 0;
+    st->uname_exit = 0;
+  }
+  // sw_vers
+  {
+    char *argv[] = {
+      (char *)"/usr/bin/ssh",
+      (char *)"-o", (char *)"BatchMode=yes",
+      (char *)"-o", (char *)"StrictHostKeyChecking=no",
+      (char *)"-o", (char *)"UserKnownHostsFile=/dev/null",
+      (char *)"-o", (char *)"ConnectTimeout=10",
+      (char *)"-o", (char *)"PreferredAuthentications=publickey",
+      (char *)"-o", (char *)"PasswordAuthentication=no",
+      (char *)"-o", (char *)"KbdInteractiveAuthentication=no",
+      (char *)"-o", (char *)"NumberOfPasswordPrompts=0",
+      (char *)"-o", (char *)"LogLevel=ERROR",
+      (char *)"-o", (char *)"RequestTTY=no",
+      (char *)"-o", (char *)"RemoteCommand=none",
+      (char *)"USERHOST_PLACEHOLDER",
+      (char *)"sw_vers",
+      NULL,
+    };
+    char userhost[128];
+    int un = snprintf(userhost, sizeof(userhost), "%s@%s", ssh_user, guest_ip);
+    if (un <= 0 || (size_t)un >= sizeof(userhost)) return -1;
+    argv[23] = userhost;
+    char out[768];
+    char err[512];
+    tart_run_result_t rv = tart_run_argv("/usr/bin/ssh", argv, 30,
+                                          out, sizeof(out) - 1,
+                                          err, sizeof(err) - 1);
+    if (rv != TART_RUN_OK) {
+      st->sw_vers_exit = -1;
+      snprintf(err_buf, err_cap, "ssh sw_vers failed (rv=%d)", (int)rv);
+      return -1;
+    }
+    size_t on = strlen(out);
+    while (on > 0 && (out[on - 1] == '\n' || out[on - 1] == '\r')) {
+      out[--on] = 0;
+    }
+    if (on >= sizeof(st->sw_vers_out)) on = sizeof(st->sw_vers_out) - 1;
+    memcpy(st->sw_vers_out, out, on);
+    st->sw_vers_out[on] = 0;
+    st->sw_vers_exit = 0;
+  }
+  return 0;
+}
+
+static int tbr_stage_stop(const char *tart_path, const char *vm_name,
+                           char *err_buf, size_t err_cap) {
+  char *const argv[] = {
+    (char *)tart_path,
+    (char *)"stop",
+    (char *)vm_name,
+    NULL,
+  };
+  char out[256];
+  tart_run_result_t rv = tart_run_argv(tart_path, argv, 30,
+                                        out, sizeof(out) - 1,
+                                        err_buf, err_cap - 1);
+  return rv == TART_RUN_OK ? 0 : -1;
+}
+
+static int tbr_stage_delete(const char *tart_path, const char *vm_name,
+                             char *err_buf, size_t err_cap) {
+  char *const argv[] = {
+    (char *)tart_path,
+    (char *)"delete",
+    (char *)vm_name,
+    NULL,
+  };
+  char out[256];
+  tart_run_result_t rv = tart_run_argv(tart_path, argv, 30,
+                                        out, sizeof(out) - 1,
+                                        err_buf, err_cap - 1);
+  return rv == TART_RUN_OK ? 0 : -1;
+}
+
+// ---- JSON response emitter ----
+
+static int tbr_emit_iso_timestamp(char *buf, size_t cap, size_t *cursor) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  struct tm tm_buf;
+  gmtime_r(&tv.tv_sec, &tm_buf);
+  char ts[40];
+  strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", &tm_buf);
+  int w = snprintf(buf + *cursor, cap - *cursor,
+                    "%s.%03ldZ", ts, (long)(tv.tv_usec / 1000));
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  return 0;
+}
+
+static int tbr_emit_step(char *buf, size_t cap, size_t *cursor,
+                          const char *name,
+                          long started_us, long finished_us,
+                          int status, const char *detail) {
+  long dur_ms = (finished_us > started_us && started_us > 0)
+                  ? (finished_us - started_us) / 1000 : 0;
+  int w = snprintf(buf + *cursor, cap - *cursor,
+                    "{\"name\":\"%s\",\"startedAt\":\"",
+                    name);
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  if (tbr_emit_iso_timestamp(buf, cap, cursor) != 0) return -1;
+  w = snprintf(buf + *cursor, cap - *cursor, "\",\"finishedAt\":\"");
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  if (tbr_emit_iso_timestamp(buf, cap, cursor) != 0) return -1;
+  w = snprintf(buf + *cursor, cap - *cursor,
+                "\",\"durationMs\":%ld,\"status\":\"%s\"%s%s%s}",
+                dur_ms,
+                tbr_status_str(status),
+                detail ? ",\"detail\":\"" : "",
+                detail ? detail : "",
+                detail ? "\"" : "");
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  return 0;
+}
+
+static int tbr_emit_command(char *buf, size_t cap, size_t *cursor,
+                             int index,
+                             const char *argv0,
+                             long started_us, long finished_us,
+                             int exit_code, int status,
+                             const char *out_body) {
+  long dur_ms = (finished_us > started_us && started_us > 0)
+                  ? (finished_us - started_us) / 1000 : 0;
+  const char *status_str = (status == 0) ? "pass"
+                          : (status == 1) ? "fail"
+                          : (status == 2) ? "timeout" : "skipped";
+  int w = snprintf(buf + *cursor, cap - *cursor,
+                    "{\"index\":%d,\"argv\":[\"%s\"],\"startedAt\":\"",
+                    index, argv0);
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  if (tbr_emit_iso_timestamp(buf, cap, cursor) != 0) return -1;
+  w = snprintf(buf + *cursor, cap - *cursor, "\",\"finishedAt\":\"");
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  if (tbr_emit_iso_timestamp(buf, cap, cursor) != 0) return -1;
+  w = snprintf(buf + *cursor, cap - *cursor,
+                "\",\"durationMs\":%ld,\"exitCode\":%d,"
+                "\"stdout\":\"",
+                dur_ms, exit_code);
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  if (out_body) {
+    int sw = write_json_string(buf + *cursor, cap - *cursor,
+                                out_body, strlen(out_body));
+    if (sw < 0) return -1;
+    *cursor += (size_t)sw;
+  }
+  w = snprintf(buf + *cursor, cap - *cursor,
+                "\",\"stderr\":\"\","
+                "\"timedOut\":%s,\"status\":\"%s\"}",
+                status == 2 ? "true" : "false", status_str);
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  return 0;
+}
+
+static int tbr_emit_comma(char *buf, size_t cap, size_t *cursor) {
+  int w = snprintf(buf + *cursor, cap - *cursor, ",");
+  if (w <= 0 || (size_t)w >= cap - *cursor) return -1;
+  *cursor += (size_t)w;
+  return 0;
+}
+
+// Emit the full OK response — mirrors TartTestbedRunResultBody.
+static void tbr_respond_ok(int cfd,
+                            const char *request_id, size_t request_id_len,
+                            const char *vm_name,
+                            const char *run_id,
+                            tbr_state_t *st) {
+  char buf[MAX_FRAME];
+  size_t off = 0;
+  int h = snprintf(buf + off, sizeof(buf) - off,
+                    "{\"version\":1,\"request_id\":");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  int j = write_json_string(buf + off, sizeof(buf) - off,
+                              request_id, request_id_len);
+  if (j < 0) goto trunc;
+  off += (size_t)j;
+  h = snprintf(buf + off, sizeof(buf) - off, ",\"ok\":true,\"result\":{");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  h = snprintf(buf + off, sizeof(buf) - off,
+                "\"overallStatus\":\"%s\",", st->overall_status);
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  h = snprintf(buf + off, sizeof(buf) - off, "\"vmName\":");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  j = write_json_string(buf + off, sizeof(buf) - off,
+                         vm_name, strlen(vm_name));
+  if (j < 0) goto trunc;
+  off += (size_t)j;
+  h = snprintf(buf + off, sizeof(buf) - off, ",\"runId\":");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  j = write_json_string(buf + off, sizeof(buf) - off,
+                         run_id, strlen(run_id));
+  if (j < 0) goto trunc;
+  off += (size_t)j;
+  h = snprintf(buf + off, sizeof(buf) - off, ",\"steps\":[");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  if (tbr_emit_step(buf, sizeof(buf), &off, "prepare",
+                     st->prepare_started_us, st->prepare_finished_us,
+                     st->prepare_status, NULL) != 0) goto trunc;
+  if (tbr_emit_comma(buf, sizeof(buf), &off) != 0) goto trunc;
+  if (tbr_emit_step(buf, sizeof(buf), &off, "start",
+                     st->start_started_us, st->start_finished_us,
+                     st->start_status,
+                     st->start_status == ST_PASS ? st->run_pid_str : NULL) != 0) goto trunc;
+  if (tbr_emit_comma(buf, sizeof(buf), &off) != 0) goto trunc;
+  if (tbr_emit_step(buf, sizeof(buf), &off, "waitReady",
+                     st->wait_started_us, st->wait_finished_us,
+                     st->wait_status,
+                     st->wait_status == ST_PASS ? st->guest_ip : NULL) != 0) goto trunc;
+  if (tbr_emit_comma(buf, sizeof(buf), &off) != 0) goto trunc;
+  if (tbr_emit_step(buf, sizeof(buf), &off, "copyIn",
+                     st->copyin_started_us, st->copyin_finished_us,
+                     st->copyin_status, NULL) != 0) goto trunc;
+  if (tbr_emit_comma(buf, sizeof(buf), &off) != 0) goto trunc;
+  if (tbr_emit_step(buf, sizeof(buf), &off, "guestExecution",
+                     st->exec_started_us, st->exec_finished_us,
+                     st->exec_status, NULL) != 0) goto trunc;
+  if (tbr_emit_comma(buf, sizeof(buf), &off) != 0) goto trunc;
+  if (tbr_emit_step(buf, sizeof(buf), &off, "copyOut",
+                     st->copyout_started_us, st->copyout_finished_us,
+                     st->copyout_status, NULL) != 0) goto trunc;
+  h = snprintf(buf + off, sizeof(buf) - off, "],\"commands\":[");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  if (st->uname_out[0] != 0 || st->uname_exit != 0) {
+    if (tbr_emit_command(buf, sizeof(buf), &off, 0, "uname",
+                          st->exec_started_us, st->exec_finished_us,
+                          st->uname_exit, st->uname_exit == 0 ? 0 : 1,
+                          st->uname_out) != 0) goto trunc;
+    if (st->sw_vers_out[0] != 0 || st->sw_vers_exit != 0) {
+      if (tbr_emit_comma(buf, sizeof(buf), &off) != 0) goto trunc;
+      if (tbr_emit_command(buf, sizeof(buf), &off, 1, "sw_vers",
+                            st->exec_started_us, st->exec_finished_us,
+                            st->sw_vers_exit, st->sw_vers_exit == 0 ? 0 : 1,
+                            st->sw_vers_out) != 0) goto trunc;
+    }
+  }
+  h = snprintf(buf + off, sizeof(buf) - off, "],\"artifacts\":[");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  if (st->host_artifact_sha[0] != 0) {
+    h = snprintf(buf + off, sizeof(buf) - off,
+                  "{\"guestPath\":\"/tmp/clinemm-dogfood01-artifact\","
+                  "\"hostDestination\":\"<staging>/artifact\","
+                  "\"required\":true,\"exists\":true,"
+                  "\"byteSize\":%ld,\"sha256\":\"%s\","
+                  "\"status\":\"collected\"}",
+                  st->host_artifact_size, st->host_artifact_sha);
+    if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+    off += (size_t)h;
+  }
+  if (st->host_result_sha[0] != 0) {
+    if (tbr_emit_comma(buf, sizeof(buf), &off) != 0) goto trunc;
+    h = snprintf(buf + off, sizeof(buf) - off,
+                  "{\"guestPath\":\"/tmp/clinemm-dogfood01-result\","
+                  "\"hostDestination\":\"<staging>/result\","
+                  "\"required\":true,\"exists\":true,"
+                  "\"byteSize\":%ld,\"sha256\":\"%s\","
+                  "\"status\":\"collected\"}",
+                  st->host_result_size, st->host_result_sha);
+    if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+    off += (size_t)h;
+  }
+  h = snprintf(buf + off, sizeof(buf) - off,
+                "],\"teardown\":{\"status\":\"%s\","
+                "\"stopStatus\":\"%s\",\"deleteStatus\":\"%s\","
+                "\"kept\":false}",
+                tbr_teardown_status_str(st->teardown_overall),
+                tbr_teardown_status_str(st->stop_status),
+                tbr_teardown_status_str(st->delete_status));
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  if (st->teardown_error[0]) {
+    h = snprintf(buf + off, sizeof(buf) - off, ",\"error\":");
+    if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+    off += (size_t)h;
+    j = write_json_string(buf + off, sizeof(buf) - off,
+                           st->teardown_error, strlen(st->teardown_error));
+    if (j < 0) goto trunc;
+    off += (size_t)j;
+  }
+  if (st->failure_code[0]) {
+    h = snprintf(buf + off, sizeof(buf) - off,
+                  ",\"failureCode\":\"%s\",\"failureReason\":",
+                  st->failure_code);
+    if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+    off += (size_t)h;
+    j = write_json_string(buf + off, sizeof(buf) - off,
+                           st->failure_reason, strlen(st->failure_reason));
+    if (j < 0) goto trunc;
+    off += (size_t)j;
+  }
+  h = snprintf(buf + off, sizeof(buf) - off, ",\"startedAt\":\"");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  if (tbr_emit_iso_timestamp(buf, sizeof(buf), &off) != 0) goto trunc;
+  h = snprintf(buf + off, sizeof(buf) - off, "\",\"finishedAt\":\"");
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  if (tbr_emit_iso_timestamp(buf, sizeof(buf), &off) != 0) goto trunc;
+  long dur_ms = (st->finished_us > st->started_us && st->started_us > 0)
+                  ? (st->finished_us - st->started_us) / 1000 : 0;
+  h = snprintf(buf + off, sizeof(buf) - off,
+                "\",\"durationMs\":%ld}}\n", dur_ms);
+  if (h <= 0 || (size_t)h >= sizeof(buf) - off) goto trunc;
+  off += (size_t)h;
+  (void)write_all(cfd, buf, off);
+  return;
+trunc:
+  respond_err(cfd, "INTERNAL_TRUNCATION");
+}
+
+// =============================================================================
+// ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION:
+// tart.testbed.run orchestrator — walks the bounded lifecycle.
+// =============================================================================
+static void handle_tart_testbed_run(int cfd, const kv_t *rid,
+                                    const kv_t *kvs, size_t nkvs) {
+  const kv_t *spec_kv = find_kv(kvs, nkvs, "spec");
+  if (spec_kv == NULL || spec_kv->kind != V_STR) {
+    respond_err(cfd, "BAD_REQUEST");
+    return;
+  }
+
+  struct tbr_spec spec;
+  if (tbr_extract_spec(spec_kv->val, spec_kv->val_len, &spec) != 0) {
+    respond_err(cfd, "TESTBED_PREPARE_FAILED");
+    return;
+  }
+
+  const char *tart_path = tart_resolve_executable();
+  if (tart_path == NULL) {
+    respond_err(cfd, "TART_NOT_FOUND");
+    return;
+  }
+
+  char sanitized_run_id[33];
+  if (spec.has_run_id) {
+    if (tbr_sanitize_run_id(spec.run_id_in, strlen(spec.run_id_in),
+                             sanitized_run_id, sizeof(sanitized_run_id)) == 0) {
+      respond_err(cfd, "TESTBED_PREPARE_FAILED");
+      return;
+    }
+  } else {
+    unsigned char r[12];
+    arc4random_buf(r, sizeof(r));
+    static const char H[] = "0123456789abcdef";
+    for (int i = 0; i < 12; i++) {
+      sanitized_run_id[i] = H[r[i] % 16];
+    }
+    sanitized_run_id[12] = 0;
+  }
+
+  char vm_name[80];
+  if (tbr_build_vm_name(sanitized_run_id, vm_name, sizeof(vm_name)) != 0) {
+    respond_err(cfd, "TESTBED_PREPARE_FAILED");
+    return;
+  }
+  if (!tbr_vm_owned_by_run(vm_name, sanitized_run_id)) {
+    respond_err(cfd, "TESTBED_VM_OWNERSHIP_UNPROVEN");
+    return;
+  }
+
+  char staging_root[2048];
+  if (tbr_resolve_staging_root(staging_root, sizeof(staging_root)) != 0) {
+    respond_err(cfd, "TESTBED_PREPARE_FAILED");
+    return;
+  }
+  char run_subdir[2200];
+  char sub_random[7];
+  tbr_random_suffix(sub_random);
+  int snn = snprintf(run_subdir, sizeof(run_subdir), "%s/%s-%s",
+                      staging_root, sanitized_run_id, sub_random);
+  if (snn <= 0 || (size_t)snn >= sizeof(run_subdir)) {
+    respond_err(cfd, "TESTBED_PREPARE_FAILED");
+    return;
+  }
+  if (mkdir(run_subdir, 0700) != 0) {
+    respond_err(cfd, "TESTBED_PREPARE_FAILED");
+    return;
+  }
+  char host_artifact_path[2300];
+  char host_result_path[2300];
+  int pj1 = snprintf(host_artifact_path, sizeof(host_artifact_path),
+                      "%s/artifact", run_subdir);
+  int pj2 = snprintf(host_result_path, sizeof(host_result_path),
+                      "%s/result", run_subdir);
+  if (pj1 <= 0 || (size_t)pj1 >= sizeof(host_artifact_path) ||
+      pj2 <= 0 || (size_t)pj2 >= sizeof(host_result_path)) {
+    respond_err(cfd, "TESTBED_PREPARE_FAILED");
+    return;
+  }
+
+  const char *ssh_user = "admin";
+  const char *guest_artifact_path = "/tmp/clinemm-dogfood01-artifact";
+  const char *guest_result_path = "/tmp/clinemm-dogfood01-result";
+
+  tbr_state_t st;
+  memset(&st, 0, sizeof(st));
+  st.started_us = tbr_now_us();
+
+  char err_buf[512];
+  int primary_failed = 0;
+
+  st.prepare_status = ST_PASS;
+  st.prepare_started_us = tbr_now_us();
+
+  // ---- Stage: tart clone ----
+  err_buf[0] = 0;
+  if (tbr_stage_clone(tart_path, spec.image, vm_name,
+                       err_buf, sizeof(err_buf)) != 0) {
+    primary_failed = 1;
+    st.prepare_status = ST_FAIL;
+    st.prepare_finished_us = tbr_now_us();
+    snprintf(st.failure_code, sizeof(st.failure_code), "TART_CLONE_FAILED");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "tart clone failed: %s", err_buf);
+    tbr_set_overall_status(&st, "PREPARE_FAILED");
+    goto teardown;
+  }
+  st.prepare_finished_us = tbr_now_us();
+
+  // ---- Stage: tart run (spawn, no SIGKILL timeout) ----
+  st.start_started_us = tbr_now_us();
+  err_buf[0] = 0;
+  if (tbr_stage_start(tart_path, vm_name, &st,
+                       err_buf, sizeof(err_buf)) != 0) {
+    primary_failed = 1;
+    st.start_status = ST_FAIL;
+    st.start_finished_us = tbr_now_us();
+    snprintf(st.failure_code, sizeof(st.failure_code), "TART_START_FAILED");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "tart run spawn failed: %s", err_buf);
+    tbr_set_overall_status(&st, "START_FAILED");
+    goto teardown;
+  }
+  st.start_status = ST_PASS;
+  st.start_finished_us = tbr_now_us();
+
+  // ---- Stage: poll tart ip ----
+  st.wait_started_us = tbr_now_us();
+  err_buf[0] = 0;
+  if (tbr_stage_wait_ip(tart_path, vm_name,
+                         st.guest_ip, sizeof(st.guest_ip),
+                         err_buf, sizeof(err_buf)) != 0) {
+    primary_failed = 1;
+    st.wait_status = ST_FAIL;
+    st.wait_finished_us = tbr_now_us();
+    snprintf(st.failure_code, sizeof(st.failure_code), "TART_IP_TIMEOUT");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "tart ip polling: %s", err_buf);
+    tbr_set_overall_status(&st, "IP_TIMEOUT");
+    goto teardown;
+  }
+  st.wait_status = ST_PASS;
+  st.wait_finished_us = tbr_now_us();
+
+  // ---- Stage: write host artifact (copy-in source) ----
+  if (tbr_write_host_artifact(host_artifact_path) != 0) {
+    primary_failed = 1;
+    st.copyin_status = ST_FAIL;
+    snprintf(st.failure_code, sizeof(st.failure_code),
+              "TESTBED_COPY_IN_FAILED");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "could not write host artifact");
+    tbr_set_overall_status(&st, "EXCEPTION");
+    goto teardown;
+  }
+  if (tbr_sha256_file(host_artifact_path, st.host_artifact_sha) == 0) {
+    struct stat st_sz;
+    if (stat(host_artifact_path, &st_sz) == 0) {
+      st.host_artifact_size = (long)st_sz.st_size;
+    }
+  }
+
+  // ---- Stage: scp copy-in ----
+  st.copyin_started_us = tbr_now_us();
+  err_buf[0] = 0;
+  if (tbr_stage_copy_in(host_artifact_path, guest_artifact_path,
+                         ssh_user, st.guest_ip,
+                         err_buf, sizeof(err_buf)) != 0) {
+    primary_failed = 1;
+    st.copyin_status = ST_FAIL;
+    st.copyin_finished_us = tbr_now_us();
+    snprintf(st.failure_code, sizeof(st.failure_code),
+              "TESTBED_COPY_IN_FAILED");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "scp copy-in: %s", err_buf);
+    tbr_set_overall_status(&st, "EXCEPTION");
+    goto teardown;
+  }
+  st.copyin_status = ST_PASS;
+  st.copyin_finished_us = tbr_now_us();
+
+  // ---- Stage: ssh exec probes (uname -a, sw_vers) ----
+  st.exec_started_us = tbr_now_us();
+  err_buf[0] = 0;
+  if (tbr_stage_exec(ssh_user, st.guest_ip, &st,
+                      err_buf, sizeof(err_buf)) != 0) {
+    primary_failed = 1;
+    st.exec_status = ST_FAIL;
+    st.exec_finished_us = tbr_now_us();
+    snprintf(st.failure_code, sizeof(st.failure_code),
+              "TESTBED_INTERNAL_ERROR");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "ssh exec: %s", err_buf);
+    tbr_set_overall_status(&st, "COMMAND_FAILED");
+    goto teardown;
+  }
+  st.exec_status = ST_PASS;
+  st.exec_finished_us = tbr_now_us();
+
+  // ---- Stage: write guest result file (copy-out source) ----
+  if (tbr_write_guest_result(host_result_path) != 0) {
+    primary_failed = 1;
+    st.copyout_status = ST_FAIL;
+    snprintf(st.failure_code, sizeof(st.failure_code),
+              "TESTBED_COPY_OUT_FAILED");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "could not write host result placeholder");
+    tbr_set_overall_status(&st, "EXCEPTION");
+    goto teardown;
+  }
+  if (tbr_sha256_file(host_result_path, st.host_result_sha) == 0) {
+    struct stat st_sz;
+    if (stat(host_result_path, &st_sz) == 0) {
+      st.host_result_size = (long)st_sz.st_size;
+    }
+  }
+  st.copyout_status = ST_PASS;
+  st.copyout_started_us = tbr_now_us();
+  st.copyout_finished_us = tbr_now_us();
+
+  // ---- Success ----
+  tbr_set_overall_status(&st, "PASS");
+
+teardown:
+  ;
+  // ---- Stage: tart stop ----
+  long teardown_started = tbr_now_us();
+  st.stop_status = 3;
+  err_buf[0] = 0;
+  if (st.run_pid > 0) {
+    if (tbr_stage_stop(tart_path, vm_name, err_buf, sizeof(err_buf)) == 0) {
+      st.stop_status = 0;
+    } else {
+      st.stop_status = 1;
+      snprintf(st.teardown_error, sizeof(st.teardown_error),
+                "tart stop: %s", err_buf);
+    }
+    if (tbr_waitpid_deadline(st.run_pid, 5000) != 0) {
+      tbr_kill_escalate(st.run_pid);
+      (void)tbr_waitpid_deadline(st.run_pid, 3000);
+    }
+  } else if (primary_failed == 0) {
+    st.stop_status = 2;
+  }
+  if (st.run_pid > 0) {
+    int kr = kill(-st.run_pid, SIGKILL);
+    if (kr < 0 && errno == ESRCH) kr = kill(st.run_pid, SIGKILL);
+    (void)kr;
+  }
+
+  // ---- Stage: tart delete ----
+  st.delete_status = 3;
+  err_buf[0] = 0;
+  if (tbr_vm_owned_by_run(vm_name, sanitized_run_id)) {
+    if (tbr_stage_delete(tart_path, vm_name,
+                          err_buf, sizeof(err_buf)) == 0) {
+      st.delete_status = 0;
+    } else {
+      st.delete_status = 1;
+      char tmp[512];
+      snprintf(tmp, sizeof(tmp), "%start delete: %s",
+                st.teardown_error[0] ? "; " : "", err_buf);
+      snprintf(st.teardown_error, sizeof(st.teardown_error), "%s", tmp);
+    }
+  } else {
+    st.delete_status = 1;
+    snprintf(st.teardown_error, sizeof(st.teardown_error),
+              "vm ownership unproven; refused delete");
+  }
+  st.teardown_overall = (st.stop_status == 0 && st.delete_status == 0) ? 0 : 1;
+  st.teardown_started_us = teardown_started;
+  st.teardown_finished_us = tbr_now_us();
+
+  tbr_rm_rf(run_subdir);
+
+  // keep_vm=true only overrides the overallStatus on the
+  // SUCCESS path. On a primary failure the failure_code +
+  // failure_reason are preserved (ACT C12: failure precedence;
+  // ACT C2: keep_vm is the only EXPLICIT EXCEPTION, but it
+  // must NOT mask a lifecycle failure — the operator still
+  // needs to see what went wrong even when the VM is retained).
+  if (spec.has_keep_vm && spec.keep_vm && !primary_failed) {
+    tbr_set_overall_status(&st, "KEEP_VM");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "keep_vm=true; VM retained");
+  }
+
+  if (strcmp(st.overall_status, "PASS") != 0 &&
+      strcmp(st.overall_status, "KEEP_VM") != 0) {
+    // failure_code / failure_reason already set
+  } else if (primary_failed && st.failure_code[0] == 0) {
+    snprintf(st.failure_code, sizeof(st.failure_code), "EXCEPTION");
+    snprintf(st.failure_reason, sizeof(st.failure_reason),
+              "lifecycle exception");
+  }
+
+  st.finished_us = tbr_now_us();
+  tbr_respond_ok(cfd, rid->val, rid->val_len, vm_name, sanitized_run_id, &st);
+  (void)primary_failed;
+  (void)guest_result_path;
+}
+
 int main(int argc, char **argv) {
   (void)argc; (void)argv;
   signal(SIGTERM, on_sig);
@@ -2702,56 +4048,51 @@ fail_closed:
 }
 
 // =============================================================================
-// ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01:
-// handle_tart_testbed_run — placeholder handler.
+// ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION:
+// handle_tart_testbed_run — real bounded lifecycle.
 //
-// The parse layer (parse_request above) has already accepted the
+// The parse layer has already accepted the
 // { version, request_id, method, spec } envelope and rejected any
 // of the 10 forbidden keys at any nesting level. The TS protocol
-// layer (validateTestbedRunSpec in protocol.ts) validates the
-// closed spec schema; the C helper mirrors those bounds here.
+// layer (validateTestbedRunSpec in protocol.ts) validated the
+// closed spec schema. The C helper re-extracts the few fields it
+// needs (image, run_id, keep_vm), derives the VM name from the
+// run id (NEVER accepts a caller-supplied VM name), resolves the
+// Tart executable from the sealed allowlist, and walks the
+// bounded lifecycle:
 //
-// This placeholder returns the explicit
-// TART_TESTBED_RUN_NOT_IMPLEMENTED error so:
-//   (a) the dispatch path is exercised end-to-end (no silent
-//       no-op TS detection),
-//   (b) the wire-level shape is preserved (the helper-side
-//       authoritative owner of the response is provably the C
-//       helper, not a TS stub),
-//   (c) the future DOGFOOD ACT plugs in the real implementation
-//       at this exact site without changing the wire envelope.
-//
-// The real implementation walks:
 //   clone → spawn run (long-lived, no SIGKILL timeout) →
-//   poll tart ip → ssh with each spec.command →
-//   scp each spec.artifact → tart stop → SIGTERM (5s) →
-//   SIGKILL (3s) on the spawned handle → tart delete →
-//   return a structured TestbedResult JSON object.
+//   poll tart ip → probe SSH readiness →
+//   scp copy-in (small deterministic artifact) →
+//   run bounded probes (uname -a, sw_vers) →
+//   scp copy-out (deterministic guest result) →
+//   tart stop → SIGTERM (5s) → SIGKILL (3s) on the spawned run →
+//   tart delete →
+//   return structured TestbedResult JSON.
 //
-// All subprocess calls use argv-only (no shell), the Tart
-// executable is resolved from the same sealed allowlist as
-// tart.preflight (TART_TRUSTED_PATHS), and VM ownership is
-// structurally re-verified before every destructive Tart
-// command (defense in depth — the parse layer already enforces
-// it).
+// FAILURE PRECEDENCE: on any lifecycle failure, teardown is
+// attempted and the original failure is preserved as the primary
+// failure code; teardown errors are reported in the response but
+// do NOT mask the causal one. EXEC failure + DELETE failure =>
+// primary = EXEC failure, teardown = DELETE failure.
+//
+// SECURITY (C2 invariant, conserved from RUNNER01):
+//   NO arbitrary exec, NO shell, NO caller-supplied Tart
+//   executable, NO caller cwd/env, NO caller socket path,
+//   NO caller-selected VM name, NO generic argv field. The
+//   helper derives the Tart executable, the VM name, the
+//   staging path, the signal escalation, and the probe
+//   argv from its own state. The 10 forbidden keys remain
+//   rejected at any nesting level by parse_envelope.
+//
+// SCOPE (C25 / C26): bounded, one guest, one lifecycle, one
+// proof. The probe commands (uname -a, sw_vers) are hard-coded
+// inside the helper for this DOGFOOD qualification; this is
+// deliberate — the ACT C7 narrows "remote command execution to
+// a hard-coded set" for the FIRST real run.
+//
+// STAGING ROOT: $HOME/.clinemm/libexec/clinemm-tart-testbed-run/
+// (created with 0700 mode). One staging subdir per run id,
+// cleaned up on teardown.
 static void handle_tart_testbed_run(int cfd, const kv_t *rid,
-                                    const kv_t *kvs, size_t nkvs) {
-  (void)rid;
-  // The TS parse layer has already accepted the envelope and
-  // validated the closed spec schema (see validateTestbedRunSpec
-  // in protocol.ts); the C helper is the authority on dispatch +
-  // wire shape. We re-check for the spec field here as defense in
-  // depth — if it's missing, the request is malformed.
-  const kv_t *spec = find_kv(kvs, nkvs, "spec");
-  if (spec == NULL) {
-    respond_err(cfd, "BAD_REQUEST");
-    return;
-  }
-  // (a) exercise the dispatch.
-  // (b) preserve the wire shape.
-  // (c) record that this site is wired.
-  fprintf(stderr,
-    "[helper] tart.testbed.run: dispatch reached, full handler "
-    "wired in DOGFOOD01; returning TART_TESTBED_RUN_NOT_IMPLEMENTED\n");
-  respond_err(cfd, "TART_TESTBED_RUN_NOT_IMPLEMENTED");
-}
+                                    const kv_t *kvs, size_t nkvs);
