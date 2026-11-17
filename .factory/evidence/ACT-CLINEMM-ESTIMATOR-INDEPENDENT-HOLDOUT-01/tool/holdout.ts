@@ -547,16 +547,29 @@ export function compareCandidates(rows: readonly EligibleRow[]): CandidateCompar
  * CORRECTION01: `NOT_EVALUATED` is a first-class state. It means the gate
  * could not be evaluated at all because no qualified observation exists. It
  * is NOT a positive result and NOT a pass.
+ *
+ * CORRECTION02: the gate is scoped to the PRIMARY candidate only. The
+ * exploratory candidates are reported separately and never contribute to the
+ * primary's suitability.
  */
 export interface ProductionSuitability {
 	readonly status: "NOT_EVALUATED" | "EVALUATED" | "EVALUATED_WITH_FAILURES";
 	readonly productionProposalSuitable: boolean;
 	readonly reasons: readonly string[];
+	/** The number of DISTINCT qualified requests the gate was evaluated on. */
 	readonly evaluatedRequests: number;
+	/** The candidate the gate is scoped to. */
+	readonly primaryCandidateId: string;
+	/** Per-candidate reasons, so no candidate's diagnostics are lost. */
+	readonly perCandidate: readonly {
+		readonly candidateId: string;
+		readonly isPrimary: boolean;
+		readonly reasons: readonly string[];
+	}[];
 }
 
 /**
- * The pre-registered safety gate.
+ * The pre-registered safety gate, scoped to ONE candidate.
  *
  * The frozen factor is NOT suitable for a production proposal if the holdout
  * demonstrates a false-safe ceiling crossing, unsupported request accounting,
@@ -576,19 +589,36 @@ export interface ProductionSuitability {
  *   - `EVALUATED` — observations exist and no pre-registered failure fired.
  *   - `EVALUATED_WITH_FAILURES` — observations exist and at least one
  *     pre-registered failure fired.
+ *
+ * ## CORRECTION02 — the gate is scoped to the PRIMARY candidate
+ *
+ * The previous implementation aggregated the failures of ALL FOUR candidates
+ * into one verdict, and `classifyVerdict()` read that aggregate to decide
+ * whether the PRIMARY calibration had replicated. An EXPLORATORY candidate
+ * that failed therefore misclassified the primary candidate.
+ *
+ * Concretely: with baseline estimate 2000, actual provider input 1510 and an
+ * effective ceiling of 1600, the primary constant candidate estimates 1599 and
+ * does NOT underestimate; only the exploratory affine candidate (1014)
+ * underestimates by ~33% near the ceiling. The aggregate gate failed on the
+ * affine candidate and the primary was reported as not replicated.
+ *
+ * The gate is now evaluated for the PRIMARY candidate ALONE. The exploratory
+ * candidates keep their own diagnostics in `perCandidate` and in
+ * `safety-discriminators.json`, but they can no longer fail the primary.
  */
-export function productionSuitability(comparisons: readonly CandidateComparison[]): ProductionSuitability {
-	const evaluatedRequests = comparisons.reduce((total, comparison) => total + comparison.safety.evaluatedRequests, 0);
-	if (evaluatedRequests === 0) {
-		return {
-			status: "NOT_EVALUATED",
-			productionProposalSuitable: false,
-			reasons: ["NO_QUALIFIED_OBSERVATIONS"],
-			evaluatedRequests: 0,
-		};
-	}
-	const reasons: string[] = [];
-	for (const comparison of comparisons) {
+export function productionSuitability(
+	comparisons: readonly CandidateComparison[],
+	primaryCandidateId: string = PRIMARY_CANDIDATE_ID,
+): ProductionSuitability {
+	// The distinct qualified request count. Every candidate is evaluated over
+	// the SAME qualified rows, so the count is taken from the first
+	// comparison rather than SUMMED across candidates (which previously
+	// reported 4 evaluations for 1 real request).
+	const evaluatedRequests = comparisons[0]?.safety.evaluatedRequests ?? 0;
+
+	const reasonsFor = (comparison: CandidateComparison): string[] => {
+		const reasons: string[] = [];
 		if (comparison.safety.falseSafeCeilingCount > 0) {
 			reasons.push(`${comparison.candidateId}:FALSE_SAFE_CEILING_CROSSING`);
 		}
@@ -599,14 +629,48 @@ export function productionSuitability(comparisons: readonly CandidateComparison[
 		) {
 			reasons.push(`${comparison.candidateId}:SIGNIFICANT_UNDERESTIMATE_NEAR_EFFECTIVE_LIMIT`);
 		}
+		return reasons;
+	};
+
+	const perCandidate = comparisons.map((comparison) => ({
+		candidateId: comparison.candidateId,
+		isPrimary: comparison.candidateId === primaryCandidateId,
+		reasons: reasonsFor(comparison),
+	}));
+
+	if (evaluatedRequests === 0) {
+		return {
+			status: "NOT_EVALUATED",
+			productionProposalSuitable: false,
+			reasons: ["NO_QUALIFIED_OBSERVATIONS"],
+			evaluatedRequests: 0,
+			primaryCandidateId,
+			perCandidate,
+		};
 	}
+
+	const primary = perCandidate.find((entry) => entry.isPrimary);
+	if (!primary) {
+		return {
+			status: "EVALUATED_WITH_FAILURES",
+			productionProposalSuitable: false,
+			reasons: [`MISSING_PRIMARY_CANDIDATE:${primaryCandidateId}`],
+			evaluatedRequests,
+			primaryCandidateId,
+			perCandidate,
+		};
+	}
+
 	return {
-		status: reasons.length === 0 ? "EVALUATED" : "EVALUATED_WITH_FAILURES",
-		productionProposalSuitable: reasons.length === 0,
-		reasons,
+		status: primary.reasons.length === 0 ? "EVALUATED" : "EVALUATED_WITH_FAILURES",
+		productionProposalSuitable: primary.reasons.length === 0,
+		reasons: primary.reasons,
 		evaluatedRequests,
+		primaryCandidateId,
+		perCandidate,
 	};
 }
+
 
 
 /**
@@ -632,7 +696,11 @@ export function classifyVerdict(
 	}
 	const materiallyLower =
 		(primary.statistics.medianAbsoluteError ?? Infinity) < (baseline.statistics.medianAbsoluteError ?? Infinity);
-	const safety = productionSuitability(comparisons);
+	// CORRECTION02: the safety gate is scoped to the PRIMARY candidate. The
+	// exploratory candidates' failures are recorded in `perCandidate` and in
+	// the safety artifact, but they must NOT decide whether the primary
+	// calibration replicated.
+	const safety = productionSuitability(comparisons, PRIMARY_CANDIDATE_ID);
 	const criticalFailure =
 		safety.reasons.some((r) => r.includes("FALSE_SAFE_CEILING_CROSSING")) ||
 		safety.reasons.some((r) => r.includes("SIGNIFICANT_UNDERESTIMATE_NEAR_EFFECTIVE_LIMIT"));

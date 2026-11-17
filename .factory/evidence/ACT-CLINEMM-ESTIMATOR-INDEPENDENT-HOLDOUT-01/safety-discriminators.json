@@ -2,11 +2,13 @@
   "schema": "cline.ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01.safety-discriminators.v1",
   "act": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
   "toolVersion": "offline-independent-holdout.v1",
-  "sourceHead": "2d5f8c00ccc050f8105af65787d265cbe1ba5069",
+  "sourceHead": "4e36bd40b357071fcb49e43e4d2aca73d57eddde",
   "evaluatedRequests": 0,
+  "primaryCandidateId": "CONSTANT_MODEL_SCOPED",
   "perCandidate": [
     {
       "candidateId": "BASELINE",
+      "isPrimary": false,
       "safety": {
         "candidateId": "BASELINE",
         "evaluatedRequests": 0,
@@ -21,10 +23,12 @@
         "nearLimitCoverage": "NEAR_LIMIT_SAFETY_UNOBSERVED",
         "actualOverLimitRequests": 0,
         "actualAtOrAboveTriggerRequests": 0
-      }
+      },
+      "gateReasons": []
     },
     {
       "candidateId": "CONSTANT",
+      "isPrimary": false,
       "safety": {
         "candidateId": "CONSTANT",
         "evaluatedRequests": 0,
@@ -39,10 +43,12 @@
         "nearLimitCoverage": "NEAR_LIMIT_SAFETY_UNOBSERVED",
         "actualOverLimitRequests": 0,
         "actualAtOrAboveTriggerRequests": 0
-      }
+      },
+      "gateReasons": []
     },
     {
       "candidateId": "CONSTANT_MODEL_SCOPED",
+      "isPrimary": true,
       "safety": {
         "candidateId": "CONSTANT_MODEL_SCOPED",
         "evaluatedRequests": 0,
@@ -57,10 +63,12 @@
         "nearLimitCoverage": "NEAR_LIMIT_SAFETY_UNOBSERVED",
         "actualOverLimitRequests": 0,
         "actualAtOrAboveTriggerRequests": 0
-      }
+      },
+      "gateReasons": []
     },
     {
       "candidateId": "AFFINE",
+      "isPrimary": false,
       "safety": {
         "candidateId": "AFFINE",
         "evaluatedRequests": 0,
@@ -75,7 +83,8 @@
         "nearLimitCoverage": "NEAR_LIMIT_SAFETY_UNOBSERVED",
         "actualOverLimitRequests": 0,
         "actualAtOrAboveTriggerRequests": 0
-      }
+      },
+      "gateReasons": []
     }
   ],
   "productionSuitability": {
@@ -84,8 +93,32 @@
     "reasons": [
       "NO_QUALIFIED_OBSERVATIONS"
     ],
-    "evaluatedRequests": 0
+    "evaluatedRequests": 0,
+    "primaryCandidateId": "CONSTANT_MODEL_SCOPED",
+    "perCandidate": [
+      {
+        "candidateId": "BASELINE",
+        "isPrimary": false,
+        "reasons": []
+      },
+      {
+        "candidateId": "CONSTANT",
+        "isPrimary": false,
+        "reasons": []
+      },
+      {
+        "candidateId": "CONSTANT_MODEL_SCOPED",
+        "isPrimary": true,
+        "reasons": []
+      },
+      {
+        "candidateId": "AFFINE",
+        "isPrimary": false,
+        "reasons": []
+      }
+    ]
   },
+  "productionSuitabilityScope": "CORRECTION02: the production-suitability gate is scoped to the PRIMARY candidate only. Exploratory candidates are reported under perCandidate with their own gateReasons and CANNOT fail the primary candidate's suitability or the holdout verdict.",
   "preRegisteredInterpretation": "The frozen factor is NOT suitable for a production proposal if the holdout demonstrates a false-safe ceiling crossing, unsupported request accounting, or a significant unmitigated underestimate near the effective limit. Even with no failure observed, production deployment remains out of scope.",
   "selectionBias": "The current budget guard may prevent some unsafe requests from ever reaching the provider. Completed-request samples therefore do not cover all possible overflow cases. Unsubmitted or rejected requests remain UNLABELLED because no actual provider token usage exists for them.",
   "unsubmittedCompactionCounterfactual": {

@@ -19,6 +19,53 @@ The RED→GREEN witnesses for all four defects live in `tool/guards.test.ts` (11
 exercise the **real** analysis functions — the holdout adapter, the receipt builder and the
 verdict selector — not re-implementations.
 
+## Correction notice (CORRECTION02) — primary-candidate suitability isolation
+
+A second review of CORRECTION01 raised one further **P0** in the suitability contract. It would
+have corrupted the interpretation of the first real holdout. It is corrected here, in the offline
+adapter only.
+
+| Defect | Correction |
+|---|---|
+| **P0 — the primary candidate's suitability was conflated with the exploratory candidates.** `productionSuitability()` evaluated **all four** candidates and `classifyVerdict()` read that aggregate to decide whether the **primary** calibration had replicated. An **exploratory** candidate that failed therefore misclassified the primary. | The gate is now scoped to the **primary candidate alone** (`CONSTANT_MODEL_SCOPED`). Every candidate keeps its own diagnostics in `perCandidate` and in `safety-discriminators.json`, but an exploratory candidate can no longer fail the primary's suitability or the holdout verdict. |
+| **P0 — `evaluatedRequests` summed across all four candidate evaluations.** A holdout with 10 real requests was reported as 40 evaluations. | `evaluatedRequests` is now the number of **distinct qualified requests** the gate was evaluated on. Every candidate is evaluated over the same rows, so the count is taken once, not summed. |
+
+### The reviewer's counterexample, reproduced and corrected
+
+| Measure | Tokens |
+|---|---:|
+| Baseline estimate `E` | 2,000 |
+| Actual provider input | 1,510 |
+| Effective ceiling | 1,600 |
+| Primary constant estimate (`ceil(0.79935 × 2000)`) | 1,599 |
+| Exploratory affine estimate (`ceil(0.8078297287430471 × 2000 − 601.9734484558503)`) | 1,014 |
+
+The **primary candidate does not underestimate** (1,599 > 1,510) and has **no false-safe ceiling**
+crossing (1,510 does not exceed 1,600). Only the **exploratory affine** candidate underestimates —
+by 496 tokens, 32.9% of actual — and it does so **near the effective ceiling**
+(`1,510 ≥ 0.9 × 1,600`).
+
+Pre-correction, the aggregate gate failed with
+`AFFINE:SIGNIFICANT_UNDERESTIMATE_NEAR_EFFECTIVE_LIMIT` and the primary calibration was reported
+as `CALIBRATION_NOT_REPLICATED`. Post-correction the primary's gate is `EVALUATED` and the
+exploratory candidate's failure remains **visible and correctly attributed** under
+`perCandidate`.
+
+The isolation does **not** weaken the gate: a dedicated witness proves that when the **primary**
+candidate itself crosses the effective ceiling falsely (`actual > maxInputTokens` while its
+estimate stays at or below it), the gate still yields `EVALUATED_WITH_FAILURES` with
+`CONSTANT_MODEL_SCOPED:FALSE_SAFE_CEILING_CROSSING`.
+
+### Verification
+
+- **6** new CORRECTION02 witnesses in `tool/guards.test.ts` (17 total in that file, 70 expect() calls) — PASS.
+- **45/45** across the three suites (16 T1–T16 + 12 V1–V12 + 17 guards, 170 expect() calls) — PASS.
+- Strict `tsc --noEmit` clean on the five adapter modules and `guards.test.ts`.
+- **End to end in the real runner** with a session-identity-renamed probe: `evaluatedRequests: 32`
+  for 32 real requests (the pre-correction aggregate would have reported 128), `perCandidate`
+  populated for all four candidates, and the verdict driven by the primary.
+
+
 ## Verdict
 
 **AWAITING_INDEPENDENT_DOGFOOD_SESSION**
@@ -211,7 +258,7 @@ false-safe ceiling crossing, unsupported request accounting, or a significant un
 underestimate near the effective limit. This ACT produced no holdout, so the criterion was not
 exercised. **Production deployment remains out of scope regardless.**
 
-## Production-suitability gate (CORRECTION01)
+## Production-suitability gate (CORRECTION01 + CORRECTION02)
 
 The gate is **explicitly not evaluated** in the absence of observations. It is NOT a pass and NOT
 a positive safety claim:
@@ -221,12 +268,26 @@ a positive safety claim:
   "status": "NOT_EVALUATED",
   "productionProposalSuitable": false,
   "reasons": ["NO_QUALIFIED_OBSERVATIONS"],
-  "evaluatedRequests": 0
+  "evaluatedRequests": 0,
+  "primaryCandidateId": "CONSTANT_MODEL_SCOPED",
+  "perCandidate": [
+    { "candidateId": "BASELINE",            "isPrimary": false, "reasons": [] },
+    { "candidateId": "CONSTANT",            "isPrimary": false, "reasons": [] },
+    { "candidateId": "CONSTANT_MODEL_SCOPED", "isPrimary": true,  "reasons": [] },
+    { "candidateId": "AFFINE",              "isPrimary": false, "reasons": [] }
+  ]
 }
 ```
 
 The pre-correction artifact asserted `productionProposalSuitable: true` with an empty `reasons`
 array on an empty dataset. That was an evidence-integrity defect (P0-1) and has been corrected.
+
+**CORRECTION02:** the gate is scoped to the **primary candidate** (`CONSTANT_MODEL_SCOPED`).
+`reasons` holds the primary's own failures only. Every candidate's own gate reasons are
+preserved under `perCandidate`, so an exploratory candidate's failure is never lost — it simply
+cannot fail the primary. `evaluatedRequests` is the count of **distinct qualified requests**, not
+a sum of per-candidate evaluations.
+
 
 ## Executable gates
 
@@ -261,6 +322,18 @@ array on an empty dataset. That was an evidence-integrity defect (P0-1) and has 
 | P1 | No independent session at all is `AWAITING_INDEPENDENT_DOGFOOD_SESSION` | PASS |
 | P1 | The populated-dataset verdict authority is unchanged | PASS |
 
+### CORRECTION02 guard witnesses (`tool/guards.test.ts`)
+
+| Witness | Assertion | Result |
+|---|---|---|
+| P0 | The primary candidate's suitability ignores the exploratory affine candidate's failure | PASS |
+| P0 | The verdict is decided by the PRIMARY candidate's own safety, not an aggregate | PASS |
+| P0 | `evaluatedRequests` reports DISTINCT qualified requests, not the candidate sum | PASS |
+| P0 | Per-candidate diagnostics are preserved for every candidate | PASS |
+| P0 | The gate's `perCandidate` reasons attribute each failure to the right candidate | PASS |
+| P0 | The PRIMARY candidate's OWN critical failure still fails the gate (isolation does not weaken it) | PASS |
+
+
 ### Finding raised by witness V4
 
 The prior analyzer's `buildDataset` reports `MULTIPLE_ATTEMPTS_FOR_ONE_PREPARATION` when a
@@ -277,15 +350,18 @@ regress.
 
 | Command | Result | Observed |
 |---|---|---|
-| `bun test ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/guards.test.ts` | PASS | 11 pass, 0 fail, 40 expect() calls (P0-1 ×2, P0-2 ×4, P0-3 ×2, P1 ×3) |
-| `bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/guards.test.ts` | PASS | 39 pass, 0 fail, 140 expect() calls across 3 files (16 T1–T16 + 12 V1–V12 + 11 CORRECTION01) |
-| `ENTRY_HEAD=$(git rev-parse HEAD) TOOL_SHA256=$(shasum -a 256 …/tool/holdout.ts) bun …/tool/run.ts` | PASS | 2 exports, both training; `DUPLICATE_EXPORT_SAME_SESSION`; 0 eligible attempts; verdict `AWAITING_INDEPENDENT_DOGFOOD_SESSION`; suitability `NOT_EVALUATED` |
+| `bun test ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/guards.test.ts` | PASS | 17 pass, 0 fail, 70 expect() calls (CORRECTION01 P0-1 ×2, P0-2 ×4, P0-3 ×2, P1 ×3; CORRECTION02 P0 ×6) |
+| `bun test ./.factory/evidence/ACT-CLINEMM-COMPACTION-ESTIMATOR-OFFLINE-CALIBRATION01/tool/analyze.test.ts ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/holdout.test.ts ./.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/tool/guards.test.ts` | PASS | 45 pass, 0 fail, 170 expect() calls across 3 files (16 T1–T16 + 12 V1–V12 + 17 guards) |
+| `tsc --noEmit --strict` over the five adapter modules and `guards.test.ts` | PASS | no diagnostics |
+| `ENTRY_HEAD=$(git rev-parse HEAD) TOOL_SHA256=$(shasum -a 256 …/tool/holdout.ts) bun …/tool/run.ts` | PASS | 2 exports, both training; `DUPLICATE_EXPORT_SAME_SESSION`; 0 eligible attempts; verdict `AWAITING_INDEPENDENT_DOGFOOD_SESSION`; suitability `NOT_EVALUATED` / `NO_QUALIFIED_OBSERVATIONS`; `evaluatedRequests: 0` |
+| `ENTRY_HEAD=… bun …/tool/run.ts --trace <probe> --trace <identical copy>` (CORRECTION02 end-to-end probe) | PASS | 32 distinct rows (duplicates collapsed); `evaluatedRequests: 32` not 128; `perCandidate` populated for all four candidates; verdict driven by the primary |
 
 The **historical** test evidence from the evidence-discovery run (`2d5f8c00c`) is preserved in
 `test-receipt.json` under `historicalTestEvidence`, each entry explicitly labelled
 `HISTORICAL_TEST_EVIDENCE` with the commit it belongs to. The current run's `commands` list is
 empty because the runner executed no test suite — it evaluated traces. That separation is the
 P0-3 correction.
+
 
 The prior ACT's tool hashes were re-verified against its committed manifest:
 `analyze.ts` = `ddbb74e9…b471`, `analyze.test.ts` = `73051cfd…d231`,

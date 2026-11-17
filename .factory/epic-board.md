@@ -34924,7 +34924,7 @@ matrix, correlate `sessionId` + `taskState.phase` + `stateVersion`/`epoch` from 
 delivered in `.factory/evidence/ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01/06-artifact-and-live-qualification.md`.
 The existing CPR01 installed qualification remains a separate ACT and is coordinated, not superseded.
 
-# ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01 — AWAITING_INDEPENDENT_DOGFOOD_SESSION (CORRECTION01) — 2026-11-17
+# ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01 — AWAITING_INDEPENDENT_DOGFOOD_SESSION (CORRECTION01, CORRECTION02) — 2026-11-17
 
 EVIDENCE: `.factory/evidence/ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01/`
   `identity.json`, `holdout-manifest.json`, `join-audit.json`, `frozen-candidates.json`,
@@ -34992,4 +34992,49 @@ through `codium-clinemm` with the installed dogfood profile and the same
 `cline.debug.dumpRoundcLatencyTrace`, and IMMEDIATELY copy the export to a unique filename
 outside Git (the canonical path is overwritten by later sessions). Then evaluate with the EXISTING
 `--trace <path>` option — no source edit to `KNOWN_TRACE_LOCATIONS` is necessary.
+
+**CORRECTION02 (bounded offline correction — primary-candidate suitability isolation).** The review
+of CORRECTION01 raised one further P0 in the suitability contract. It would have corrupted the
+interpretation of the FIRST REAL holdout, so it was corrected before any operator collection.
+Offline adapter only; no production change of any kind.
+
+- **P0 — the primary candidate's suitability was conflated with the exploratory candidates.**
+  `productionSuitability()` evaluated ALL FOUR candidates and `classifyVerdict()` read that
+  AGGREGATE to decide whether the PRIMARY calibration had replicated. An EXPLORATORY candidate
+  that failed therefore misclassified the primary. The review's counterexample: baseline estimate
+  2,000, actual provider input 1,510, effective ceiling 1,600 → the primary constant candidate
+  estimates 1,599 and does NOT underestimate, while the exploratory affine candidate estimates
+  1,014 and underestimates by 496 tokens (32.9% of actual) NEAR the effective ceiling. The
+  aggregate gate failed with `AFFINE:SIGNIFICANT_UNDERESTIMATE_NEAR_EFFECTIVE_LIMIT` and the
+  primary was reported as `CALIBRATION_NOT_REPLICATED`. The gate is now scoped to the PRIMARY
+  candidate alone (`CONSTANT_MODEL_SCOPED`); every candidate keeps its own diagnostics under
+  `perCandidate` and in `safety-discriminators.json`, but an exploratory candidate can no longer
+  fail the primary's suitability or the holdout verdict.
+- **P0 — `evaluatedRequests` summed across all four candidate evaluations.** A holdout with 10
+  real requests was reported as 40 evaluations. It is now the count of DISTINCT qualified requests
+  the gate was evaluated on.
+
+The isolation does NOT weaken the gate: a dedicated witness proves that when the PRIMARY candidate
+itself crosses the effective ceiling falsely, the gate still yields `EVALUATED_WITH_FAILURES` with
+`CONSTANT_MODEL_SCOPED:FALSE_SAFE_CEILING_CROSSING`.
+
+Gates: 6/6 new CORRECTION02 guard witnesses PASS (17 total in `tool/guards.test.ts`, 70 expect()
+calls); 45/45 across the three suites (16 T1–T16 + 12 V1–V12 + 17 guards, 170 expect() calls)
+PASS; strict `tsc --noEmit` clean on the five adapter modules and `guards.test.ts`; verified END
+TO END in the real runner with a session-identity-renamed probe — 32 distinct rows, `evaluatedRequests:
+32` (not the pre-correction 128), `perCandidate` populated for all four candidates, and the verdict
+driven by the primary.
+
+## RC-01 board update
+
+| Stage | Status |
+|---|---|
+| Evidence discovery | PASS |
+| Original P0/P1 corrections (CORRECTION01) | PASS, reported execution |
+| Primary suitability aggregation (CORRECTION02) | PASS, reported execution |
+| Independent session | AWAITING |
+| Frozen calibration | Preserved |
+| Production estimator | Unchanged |
+
+RC-02 through RC-08 are unchanged by this correction.
 

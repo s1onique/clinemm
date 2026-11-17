@@ -245,12 +245,24 @@ export function writeEvidenceArtifacts(input: EvidenceInput): {
 		act: ACT,
 		toolVersion: "offline-independent-holdout.v1",
 		sourceHead,
+		// CORRECTION02: the number of DISTINCT qualified requests. Every
+		// candidate is evaluated over the SAME rows, so this is the request
+		// count — NOT a sum of per-candidate evaluations.
 		evaluatedRequests: allRows.length,
+		primaryCandidateId: PRIMARY_CANDIDATE_ID,
 		perCandidate: comparisons.map((c) => ({
 			candidateId: c.candidateId,
+			isPrimary: c.candidateId === PRIMARY_CANDIDATE_ID,
 			safety: c.safety,
+			// CORRECTION02: the candidate's OWN gate reasons are preserved, so
+			// an exploratory candidate's failure stays visible and attributed
+			// even though it cannot fail the primary candidate.
+			gateReasons:
+				input.suitability.perCandidate.find((entry) => entry.candidateId === c.candidateId)?.reasons ?? [],
 		})),
 		productionSuitability: input.suitability,
+		productionSuitabilityScope:
+			"CORRECTION02: the production-suitability gate is scoped to the PRIMARY candidate only. Exploratory candidates are reported under perCandidate with their own gateReasons and CANNOT fail the primary candidate's suitability or the holdout verdict.",
 		preRegisteredInterpretation:
 			"The frozen factor is NOT suitable for a production proposal if the holdout demonstrates a false-safe ceiling crossing, unsupported request accounting, or a significant unmitigated underestimate near the effective limit. Even with no failure observed, production deployment remains out of scope.",
 		selectionBias:
