@@ -104,5 +104,45 @@
     "reproduce_command": "bun .factory/evidence/ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01/tool/qualify.ts > .factory/evidence/ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01/analysis.json",
     "output": "analysis.json",
     "reduction": "command texts, prompts, API keys and provider payloads are reduced to SHAPES, COUNTS and tool-call ids; no raw payload is copied into the committed output"
+  },
+  "correction": {
+    "act": "ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01 \u2014 CORRECTION01",
+    "type": "P0 evidence-integrity correction of the offline analyzer (NO production repair)",
+    "entry_head": "86d8a691d03f39c745774c48b564176f8349673a",
+    "entry_head_matches_expected": true,
+    "production_modifications": false,
+    "new_diagnostic_side_effects": false,
+    "new_public_api_fields": false,
+    "schema_relaxation": false,
+    "normalizer_changes": false,
+    "new_model_runs": false,
+    "raw_artifacts_committed": false,
+    "defects_repaired": [
+      {
+        "id": "A",
+        "defect": "the trace start/end id maps were both built from phase===\"start\", making executionStartEndIdsMatch / deliveryStartEndIdsMatch tautological and the reported end counts the start counts",
+        "repair": "start and end are selected independently; cardinality, id sets, ordering (an end must not precede its start) and matching tool names are compared; unmatched ids are reported"
+      },
+      {
+        "id": "B",
+        "defect": "the provider-capture loop stopped at the first capture of each session, so a later capture with a different run_commands schema hash was invisible",
+        "repair": "every capture is inspected; per-session distinct schema hashes, the consistency flag and the set of inconsistent sessions are reported"
+      },
+      {
+        "id": "C",
+        "defect": "strictJsonSchema ?? null collapsed an ABSENT field to null, indistinguishable from a recorded false",
+        "repair": "the field is read verbatim with an explicit hasOwnProperty check; a missing value yields the finding UNKNOWN and is counted in capturesMissingStrictJsonSchemaField"
+      }
+    ],
+    "red_receipt": "gate-06-red-analyzer.txt \u2014 4/23 checks passed against the ORIGINAL analyzer (exit 1)",
+    "green_receipt": "gate-07-green-analyzer.txt \u2014 23/23 checks passed against the CORRECTED analyzer (exit 0)",
+    "witness": "tool/witness.ts \u2014 drives the analyzer as a subprocess against the adversarial fixtures and the preserved real artifacts",
+    "fixture_builder": "tool/make-fixtures.ts \u2014 the fixtures are portable (synthetic tool-call ids and tool names only)",
+    "path_seam": "CLINE_QUALIFY_PROFILE / CLINE_QUALIFY_SESSIONS / CLINE_QUALIFY_CAPTURES / CLINE_QUALIFY_TRACE \u2014 the analyzer previously hard-coded every artifact path, which made it impossible to drive against a fixture",
+    "report_corrections": [
+      "the five \"trace-only\" tool ids were an apples-to-oranges comparison artifact; the corrected LIKE-FOR-LIKE comparison is 26 vs 26 with 26 shared and nothing on either side",
+      "the \"strictJsonSchema = false in every captured request\" claim was an overclaim; the field is ABSENT in 496 of 622 captures, so the corpus-wide finding is MIXED",
+      "the Flint build-identity attribution is a SOURCE-based inference (both sessions capture the same clientVersion), not a capture-based observation; the discriminator is restated as the runtime handling of the argument shape"
+    ]
   }
 }

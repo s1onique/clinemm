@@ -1,0 +1,73 @@
+# RED reproduction — the ORIGINAL (pre-correction) analyzer against the adversarial fixtures
+#
+# The analyzer under test is the one committed at 86d8a691d, with ONLY the path seam
+# added (CLINE_QUALIFY_TRACE / CLINE_QUALIFY_CAPTURES) so it can be driven against
+# a fixture. NO logic was changed: the defective idMap/phase===start selection, the
+# first-capture-only capture loop, the strictJsonSchema ?? null collapse and the
+# run_commands-only correlation are all intact.
+#
+# Reproduce: bun tool/witness.ts   (exit 1 = RED)
+
+FAIL  A0  the REAL trace passes the start/end identity checks (the control)
+      expected: all true; starts == ends
+      observed: {"executionStartEndIdsMatch":true,"deliveryStartEndIdsMatch":true,"toolExecutionStarts":26,"toolExecutionEnds":26,"toolResultDeliveredStarts":26,"toolResultDeliveredEnds":26}
+FAIL  A1  a MISSING tool_execution END event fails the execution identity check
+      expected: executionStartEndIdsMatch === false
+      observed: {"executionStartEndIdsMatch":true,"toolExecutionStarts":26,"toolExecutionEnds":26}
+FAIL  A2  a MISSING tool_execution END event makes the execution pairs NOT well formed
+      expected: false
+      observed: undefined
+FAIL  A3  a MISSING tool_execution END event is reported as a cardinality difference
+      expected: starts !== ends
+      observed: {"starts":26,"ends":26}
+FAIL  A4  a MISSING tool_result_delivered END event fails the delivery identity check
+      expected: deliveryStartEndIdsMatch === false
+      observed: {"deliveryStartEndIdsMatch":true,"toolResultDeliveredStarts":26,"toolResultDeliveredEnds":26}
+FAIL  A5  a MISSING tool_result_delivered END event makes the delivery pairs NOT well formed
+      expected: false
+      observed: undefined
+PASS  A6  a tool-name mismatch between execution and delivery is DETECTED
+PASS  A7  reordering the event list does not change the boundary counts
+FAIL  B1  two captures in ONE session with DIFFERENT schema hashes are detected
+      expected: false
+      observed: undefined
+FAIL  B2  the session with the drifting schema is NAMED
+      expected: contains 1794593797996_r48lj
+      observed: undefined
+FAIL  B3  the per-session consistency flag is false for the drifting session
+      expected: runCommandsSchemaConsistent === false
+      observed: {"strictJsonSchema":false,"runCommandsSchemaHash":"b13a0c8e3f02dec9299bd42775d7720b213d113038c16f5833729fda372ca282","captures":2}
+PASS  B4  BOTH captures of the drifting session were inspected
+FAIL  B5  the parsed/invalid/missing-field counts are reported explicitly
+      expected: all three counts present as numbers
+      observed: {}
+FAIL  C1  a capture with NO strictJsonSchema field yields the finding UNKNOWN
+      expected: UNKNOWN
+      observed: undefined
+FAIL  C2  the missing field is COUNTED, not silently defaulted
+      expected: 1
+      observed: undefined
+FAIL  C3  the per-session finding is UNKNOWN (never false) when the field is absent
+      expected: UNKNOWN
+      observed: {"strictJsonSchema":null,"runCommandsSchemaHash":"2897dd0ea8ea8a84d2d0ae6ed3d48b83d83e73f7d6a27abdce9870079985e0b3","captures":1}
+FAIL  C4  the REAL capture set's strictness is MIXED (FALSE + UNKNOWN) — the field is ABSENT in 496 of 622 captures
+      expected: MIXED, with FALSE and UNKNOWN both present and 496 missing fields
+      observed: {}
+FAIL  C4b  the sessions this ACT RELIES ON (both Flint sessions) record strictJsonSchema=false in EVERY capture
+      expected: every capture of BOTH Flint sessions records false, with none missing
+      observed: {"preFix":{"strictJsonSchema":false,"runCommandsSchemaHash":"d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4","captures":23},"postFix":{"strictJsonSchema":false,"runCommandsSchemaHash":"d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4","captures":23}}
+FAIL  C5  the REAL capture set's all-captures-consistent claim is DERIVED, not assumed
+      expected: true with exactly one distinct hash
+      observed: {}
+FAIL  C6  the REAL capture set's every capture was inspected (parsed == total)
+      expected: parsedCaptures === captureFiles
+      observed: {"captureFiles":622}
+FAIL  E1  the transcript's ALL tool-call ids correlate 1:1 with the trace's ALL tool_execution ids
+      expected: equal counts, all shared, nothing on either side
+      observed: {"transcriptToolCallIds":21,"traceToolCallIds":26,"sharedToolCallIds":21,"transcriptOnly":[],"traceOnly":["call_2ce7a82da69e47e383036a65","call_6fc172f7b6004b41b0a7575c","call_946d8f190df34f399ce4d2d3","call_dcc05ffbe087471a98beecf2","call_e7aba9c0dda94ea69edc0d2b"]}
+PASS  E2  the tool names agree on every shared id
+FAIL  E3  the comparison is explicitly LIKE-FOR-LIKE over ALL tool calls
+      expected: LIKE_FOR_LIKE_ALL_TOOL_CALLS
+      observed: undefined
+
+4/23 checks passed

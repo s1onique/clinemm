@@ -1,17 +1,29 @@
-# Artifact hashes — sanitized evidence package
+# Artifact hashes — sanitized evidence package (after CORRECTION01)
 
 ## Committed artifacts (this directory):
-e3a9e192b66b85337d0f524b7f064aebc17ddec3d7835b33e0164e6ec4bdf887  00-identity-record.json  5837 bytes
-302125554b0e2acbc0c6ff4af6aabd7a5f516e28959ccecc4e019d43cafe7e79  01-model-provider-matrix.json  7975 bytes
-bfc85bb231f6f33d64749c4e44e85a1c33a7f3681b633c5c92729baa4471002d  analysis.json  20356 bytes
-a744a447d35e480f3c33266099e5475b08afc5cfd9238c77d60671ffc31d1e5b  source-map.md  6871 bytes
-48c1920d4d7006dfa5229c9b07d5315f544ba398025cd1e2f7929dbc8331de39  qualification-report.md  15556 bytes
-ad63fbaf5ceb5bbb935bfd0f3907e5c6edb649f65b9072cdf9516b7786303473  gate-01-normalization-suites.txt  954 bytes
-da7eb555f6a209efb26b2fbde6056492bbb3d145fd0dedc908d5de8deeb7e09b  gate-02-tools-tree.txt  13128 bytes
-e3e6c7faec390955ea23defda2e334c16bad6a29defa77e4c3c1dec5da9936f6  gate-03-flint-witness-live.txt  1103 bytes
-be59f7e212c412ac8f99b95f796f424bb78d998c924af1f50a32c577f3a5f208  gate-04-preexisting-failures.txt  1671 bytes
+6167550ecf861bdf205bbf069cfd281b235c34cafc5f79aa96c5a89fcca5c749  00-identity-record.json  8909 bytes
+7dcc37fd59baf52f8fe6db1e5991c35d153fc5b568c8c90f6fc663fa52bcfbc5  01-model-provider-matrix.json  10104 bytes
+761a5916b2521a24c36d0f2826e359dd77aa9c9450fe9660c12fe751a9fc6df4  02-sanitization-audit.txt  1240 bytes
+3db0d5581881c49dc9ea8b3d1b626cb189288f00f49ced57abac30bdb616aff7  analysis.json  108823 bytes
+fedc82a66d9e8e07b3cacffbc9a8a139a5d749a0d4d7c1882dae172679c76fbb  gate-01-normalization-suites.txt  954 bytes
+71546e56a67e5818691db561affb6e0e60cf34fcf694daa41a38e57f031fb8f1  gate-02-tools-tree.txt  13296 bytes
+a72eaf1638ea4c6d7cb7f6d2506336fa96ef9f1a54680a03b806e0d2ec7eb0c0  gate-03-flint-witness-live.txt  1103 bytes
+71562d0d0a0ed24c6093b04f8b4c3071fa4fa9f7a8f3cc076324939e8eb28af2  gate-04-preexisting-failures.txt  930 bytes
 65e8a2252a12aa40846decaf2b7b18fa0527b6a8e7b4744ea5b11feb042e2fb1  gate-05-typecheck.txt  426 bytes
-d07e1d0c6aa87aeb8d8c97ced1d66a5295d704670063482def6001653823bc38  tool/qualify.ts  11472 bytes
+df0c9dfba544699c1c4761d00d3b31e64f2f781d7967c44e3087d29da0a70ded  gate-06-red-analyzer.txt  4828 bytes
+514d077a6c10faa2274dc5b45f549de2905f26beaef008593a5808d733649906  gate-07-green-analyzer.txt  2044 bytes
+72f7da27dbb86706d65aa28497b91a60d0a66f539a28f75a2909ae8f99c0eb84  qualification-report.md  25459 bytes
+d7f2c759d77c2f3a986a5bd31c32ef5927c88abad917feb132f877bec0bc97fd  source-map.md  7351 bytes
+80e7964116da69baa11dbce3bfdf3b2d432b2604bc8e851db9d80f2f0c1aa67a  tool/fixtures/captures-missing-strict/cap_run_FIXTURE_1_a.provider-request.json  559 bytes
+9c68ebc68e69df67f1d4df885c912d2582f704a8de478ce701a25055f0e16a4f  tool/fixtures/captures-schema-drift/cap_run_FIXTURE_1_a.provider-request.json  583 bytes
+c3c2c4edfcc4c451b204a864befda5b755fff7c30ad81a3bebc749b5aa6eb4d1  tool/fixtures/captures-schema-drift/cap_run_FIXTURE_2_b.provider-request.json  582 bytes
+64a797e8c6392db405134318c40be2c92d11b6f9c1d12b49a57ced127a48e402  tool/fixtures/trace-mismatched-names/roundc-latency-trace(8).json  34746 bytes
+a8555ef69de3bd39f6d18065733e8d4f942bf3e220c7c93df5fb3215fbf19861  tool/fixtures/trace-missing-delivery-end/roundc-latency-trace(8).json  34517 bytes
+eba474b2fee2bae1a7c6c6d3d4144ddc8060420ae8b69fe6f37d291928cf733e  tool/fixtures/trace-missing-exec-end/roundc-latency-trace(8).json  34460 bytes
+6025e49a0e691c1fe1918a9bb89aabad527f1aae95854c3b3c0a502387baa3f5  tool/fixtures/trace-reordered/roundc-latency-trace(8).json  34748 bytes
+41ae471c922dc8f3c5741b609e516f50916c082b2c60afb0099a9bfb9e137503  tool/make-fixtures.ts  7232 bytes
+cfe37746bacd41d67b57006ed1cf976f085710497c73bd54d8296588e83999b3  tool/qualify.ts  23081 bytes
+c0417b29dc809cf40564054659dfe2170f14d9a2c3d85514821e5cab3352d8a7  tool/witness.ts  15355 bytes
 
 ## Referenced PRIVATE artifacts (NOT committed, NOT in Git):
 b84ee4a83f3819b4a849e2d05f95c044443e3d3fb036818aef98f9b7fe96b5e1  /Users/chistyakov/Downloads/roundc-latency-trace(8).json

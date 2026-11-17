@@ -1,0 +1,1390 @@
+{
+  "schema": "cline.roundc-latency-trace.v1",
+  "sessionId": "1794892591345_7em4g",
+  "correlationId": "1794892591345_7em4g",
+  "captureProfile": "dogfood",
+  "identity": {
+    "runtimeProfile": "dogfood",
+    "extensionVersion": "FIXTURE"
+  },
+  "eventCount": 146,
+  "stageCount": 0,
+  "unavailableCount": 0,
+  "integrityFailureCount": 0,
+  "wallClockMs": 0,
+  "overlapping": true,
+  "truncation": {
+    "truncated": false
+  },
+  "events": [
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 921099.606542,
+      "metadata": {
+        "toolCallId": "call_946d8f190df34f399ce4d2d3",
+        "toolName": "submit_and_exit"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 921099.6037089999,
+      "metadata": {
+        "toolCallId": "call_946d8f190df34f399ce4d2d3",
+        "toolName": "submit_and_exit"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 921099.582292,
+      "metadata": {
+        "toolCallId": "call_946d8f190df34f399ce4d2d3",
+        "toolName": "submit_and_exit",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 921099.0236249999,
+      "metadata": {
+        "toolCallId": "call_946d8f190df34f399ce4d2d3",
+        "toolName": "submit_and_exit"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 750815.49475,
+      "metadata": {
+        "toolCallId": "call_c66406c4a42047848750cbd8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 750815.49075,
+      "metadata": {
+        "toolCallId": "call_c66406c4a42047848750cbd8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 750815.463625,
+      "metadata": {
+        "toolCallId": "call_c66406c4a42047848750cbd8",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 750719.915959,
+      "metadata": {
+        "toolCallId": "call_c66406c4a42047848750cbd8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 750710.0904999999,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 750710.073792,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 709327.735334,
+      "metadata": {
+        "toolCallId": "call_bd9782e4326d416998017e0a",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 709327.7306669999,
+      "metadata": {
+        "toolCallId": "call_bd9782e4326d416998017e0a",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 709327.7050419999,
+      "metadata": {
+        "toolCallId": "call_bd9782e4326d416998017e0a",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 709201.1605,
+      "metadata": {
+        "toolCallId": "call_bd9782e4326d416998017e0a",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 709192.270959,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 709192.2594999999,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 686685.8072919999,
+      "metadata": {
+        "toolCallId": "call_231717bc7f904f6db8b206f8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 686685.8032089999,
+      "metadata": {
+        "toolCallId": "call_231717bc7f904f6db8b206f8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 686685.774042,
+      "metadata": {
+        "toolCallId": "call_231717bc7f904f6db8b206f8",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 686609.557959,
+      "metadata": {
+        "toolCallId": "call_231717bc7f904f6db8b206f8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 686592.420542,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 686592.404875,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 665809.33575,
+      "metadata": {
+        "toolCallId": "call_776e68ba7fa049edba75f44c",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 665809.324792,
+      "metadata": {
+        "toolCallId": "call_776e68ba7fa049edba75f44c",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 665809.1845,
+      "metadata": {
+        "toolCallId": "call_776e68ba7fa049edba75f44c",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 663797.37975,
+      "metadata": {
+        "toolCallId": "call_776e68ba7fa049edba75f44c",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 663780.714792,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 663780.703875,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 645335.024792,
+      "metadata": {
+        "toolCallId": "call_32ebb6511aae41f0905e9813",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 645335.013584,
+      "metadata": {
+        "toolCallId": "call_32ebb6511aae41f0905e9813",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 645334.93525,
+      "metadata": {
+        "toolCallId": "call_32ebb6511aae41f0905e9813",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 643323.478459,
+      "metadata": {
+        "toolCallId": "call_32ebb6511aae41f0905e9813",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 643305.7784589999,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 643305.7710419999,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 550321.4247089999,
+      "metadata": {
+        "toolCallId": "call_e6534afb478a47a58b9a659c",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 550321.4222919999,
+      "metadata": {
+        "toolCallId": "call_e6534afb478a47a58b9a659c",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 550321.356084,
+      "metadata": {
+        "toolCallId": "call_8315c8450e5948978bfca8c8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 550321.3511249999,
+      "metadata": {
+        "toolCallId": "call_8315c8450e5948978bfca8c8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 550321.314667,
+      "metadata": {
+        "toolCallId": "call_e6534afb478a47a58b9a659c",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 550295.575709,
+      "metadata": {
+        "toolCallId": "call_e6534afb478a47a58b9a659c",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 550295.254542,
+      "metadata": {
+        "toolCallId": "call_8315c8450e5948978bfca8c8",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 550233.7925,
+      "metadata": {
+        "toolCallId": "call_8315c8450e5948978bfca8c8",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 550228.339834,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 550228.3336669999,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 550217.401709,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 550217.3889169999,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 518452.77350000007,
+      "metadata": {
+        "toolCallId": "call_ac3c763e6185485bb116d573",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 518452.76437499997,
+      "metadata": {
+        "toolCallId": "call_ac3c763e6185485bb116d573",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 518452.673917,
+      "metadata": {
+        "toolCallId": "call_ac3c763e6185485bb116d573",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 514439.111542,
+      "metadata": {
+        "toolCallId": "call_ac3c763e6185485bb116d573",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 514425.938834,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 514425.92766700004,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 464394.716459,
+      "metadata": {
+        "toolCallId": "call_2ce7a82da69e47e383036a65",
+        "toolName": "fetch_web_content"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 464394.70587500004,
+      "metadata": {
+        "toolCallId": "call_2ce7a82da69e47e383036a65",
+        "toolName": "fetch_web_content"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 464394.358375,
+      "metadata": {
+        "toolCallId": "call_e76201ef3cbf407c8ae16aef",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 464394.347084,
+      "metadata": {
+        "toolCallId": "call_e76201ef3cbf407c8ae16aef",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 464394.275959,
+      "metadata": {
+        "toolCallId": "call_2ce7a82da69e47e383036a65",
+        "toolName": "fetch_web_content",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 463971.94975,
+      "metadata": {
+        "toolCallId": "call_2ce7a82da69e47e383036a65",
+        "toolName": "fetch_web_content"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 463971.49708400003,
+      "metadata": {
+        "toolCallId": "call_e76201ef3cbf407c8ae16aef",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 463598.18825,
+      "metadata": {
+        "toolCallId": "call_e76201ef3cbf407c8ae16aef",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 463572.047792,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 463572.041209,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 427101.255,
+      "metadata": {
+        "toolCallId": "call_750d8cef04fb41df834250b7",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 427101.23979200004,
+      "metadata": {
+        "toolCallId": "call_750d8cef04fb41df834250b7",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 427101.142584,
+      "metadata": {
+        "toolCallId": "call_750d8cef04fb41df834250b7",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 422083.456834,
+      "metadata": {
+        "toolCallId": "call_750d8cef04fb41df834250b7",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 422054.389084,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 422054.37987500004,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 320051.287917,
+      "metadata": {
+        "toolCallId": "call_087e10709269481c9afcebb1",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 320051.285542,
+      "metadata": {
+        "toolCallId": "call_087e10709269481c9afcebb1",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 320051.218125,
+      "metadata": {
+        "toolCallId": "call_b673b379a99346c7a2d5de11",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 320051.21158400003,
+      "metadata": {
+        "toolCallId": "call_b673b379a99346c7a2d5de11",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 320051.172084,
+      "metadata": {
+        "toolCallId": "call_087e10709269481c9afcebb1",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 320034.51975000004,
+      "metadata": {
+        "toolCallId": "call_087e10709269481c9afcebb1",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 320034.23175000004,
+      "metadata": {
+        "toolCallId": "call_b673b379a99346c7a2d5de11",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 320007.620834,
+      "metadata": {
+        "toolCallId": "call_b673b379a99346c7a2d5de11",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 319996.106917,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 319996.10025,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 319987.27862500004,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 319987.272542,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 284364.023875,
+      "metadata": {
+        "toolCallId": "call_b70e638e535d43bb9d00dbc1",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 284364.014459,
+      "metadata": {
+        "toolCallId": "call_b70e638e535d43bb9d00dbc1",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 284363.827959,
+      "metadata": {
+        "toolCallId": "call_8a2fd562ff654df88d7cfa58",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 284363.812542,
+      "metadata": {
+        "toolCallId": "call_8a2fd562ff654df88d7cfa58",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 284363.6975,
+      "metadata": {
+        "toolCallId": "call_b70e638e535d43bb9d00dbc1",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 283366.568584,
+      "metadata": {
+        "toolCallId": "call_b70e638e535d43bb9d00dbc1",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 283363.96925,
+      "metadata": {
+        "toolCallId": "call_8a2fd562ff654df88d7cfa58",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 278295.103459,
+      "metadata": {
+        "toolCallId": "call_8a2fd562ff654df88d7cfa58",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 278288.784334,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 278288.777125,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 278270.058625,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 278270.050459,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 194711.589125,
+      "metadata": {
+        "toolCallId": "call_a9de8d4ce59f47b8b883edce",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 194711.578792,
+      "metadata": {
+        "toolCallId": "call_a9de8d4ce59f47b8b883edce",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 194711.387417,
+      "metadata": {
+        "toolCallId": "call_dcc05ffbe087471a98beecf2",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 194711.37491699998,
+      "metadata": {
+        "toolCallId": "call_dcc05ffbe087471a98beecf2",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 194711.16587499998,
+      "metadata": {
+        "toolCallId": "call_a9de8d4ce59f47b8b883edce",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 190688.967334,
+      "metadata": {
+        "toolCallId": "call_a9de8d4ce59f47b8b883edce",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 190688.523834,
+      "metadata": {
+        "toolCallId": "call_dcc05ffbe087471a98beecf2",
+        "toolName": "read_files",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 190687.145959,
+      "metadata": {
+        "toolCallId": "call_dcc05ffbe087471a98beecf2",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 190674.39575,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 190674.38770899997,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 159724.67887499998,
+      "metadata": {
+        "toolCallId": "call_2f78c5bb009844c68d3d6dc2",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 159724.67424999998,
+      "metadata": {
+        "toolCallId": "call_2f78c5bb009844c68d3d6dc2",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 159724.563834,
+      "metadata": {
+        "toolCallId": "call_c5f8395e7af8449e849bd8ae",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 159724.553292,
+      "metadata": {
+        "toolCallId": "call_c5f8395e7af8449e849bd8ae",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 159724.416875,
+      "metadata": {
+        "toolCallId": "call_2f78c5bb009844c68d3d6dc2",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 155710.219625,
+      "metadata": {
+        "toolCallId": "call_2f78c5bb009844c68d3d6dc2",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 155709.283834,
+      "metadata": {
+        "toolCallId": "call_c5f8395e7af8449e849bd8ae",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 151660.353667,
+      "metadata": {
+        "toolCallId": "call_c5f8395e7af8449e849bd8ae",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 151654.483334,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 151654.476,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 151629.535917,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 151629.530959,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 93817.60312500001,
+      "metadata": {
+        "toolCallId": "call_e7aba9c0dda94ea69edc0d2b",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 93817.599875,
+      "metadata": {
+        "toolCallId": "call_e7aba9c0dda94ea69edc0d2b",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 93817.495125,
+      "metadata": {
+        "toolCallId": "call_68ba32fa8c4a4cc8b5e3fe1f",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 93817.490792,
+      "metadata": {
+        "toolCallId": "call_68ba32fa8c4a4cc8b5e3fe1f",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 93817.44725,
+      "metadata": {
+        "toolCallId": "call_e7aba9c0dda94ea69edc0d2b",
+        "toolName": "read_files",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 93814.81075,
+      "metadata": {
+        "toolCallId": "call_e7aba9c0dda94ea69edc0d2b",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 93813.855584,
+      "metadata": {
+        "toolCallId": "call_68ba32fa8c4a4cc8b5e3fe1f",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 89793.28395900001,
+      "metadata": {
+        "toolCallId": "call_68ba32fa8c4a4cc8b5e3fe1f",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 89776.9995,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 89776.983209,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 40466.356292000004,
+      "metadata": {
+        "toolCallId": "call_6fc172f7b6004b41b0a7575c",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 40466.352792000005,
+      "metadata": {
+        "toolCallId": "call_6fc172f7b6004b41b0a7575c",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 40466.146834,
+      "metadata": {
+        "toolCallId": "call_1d306f44bde84d43b1144f53",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 40466.134834000004,
+      "metadata": {
+        "toolCallId": "call_1d306f44bde84d43b1144f53",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 40466.030834000005,
+      "metadata": {
+        "toolCallId": "call_6fc172f7b6004b41b0a7575c",
+        "toolName": "read_files",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 40459.833084000005,
+      "metadata": {
+        "toolCallId": "call_6fc172f7b6004b41b0a7575c",
+        "toolName": "read_files"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 40458.531334,
+      "metadata": {
+        "toolCallId": "call_1d306f44bde84d43b1144f53",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 38444.467375,
+      "metadata": {
+        "toolCallId": "call_1d306f44bde84d43b1144f53",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 38433.118459000005,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 38433.106167000005,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 29235.921542000004,
+      "metadata": {
+        "toolCallId": "call_750fc45d51d7461cbfe85cde",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 29235.910792000002,
+      "metadata": {
+        "toolCallId": "call_750fc45d51d7461cbfe85cde",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 29235.773959,
+      "metadata": {
+        "toolCallId": "call_750fc45d51d7461cbfe85cde",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 25207.02175,
+      "metadata": {
+        "toolCallId": "call_750fc45d51d7461cbfe85cde",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 25015.095834,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 25015.088834000002,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "end",
+      "monotonicMs": 11033.107958999999,
+      "metadata": {
+        "toolCallId": "call_49d69844f70c4a3ca63305f5",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_result_delivered",
+      "phase": "start",
+      "monotonicMs": 11033.088042000001,
+      "metadata": {
+        "toolCallId": "call_49d69844f70c4a3ca63305f5",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "end",
+      "monotonicMs": 11032.792625,
+      "metadata": {
+        "toolCallId": "call_49d69844f70c4a3ca63305f5",
+        "toolName": "run_commands",
+        "outcome": "success",
+        "executionInvoked": true
+      }
+    },
+    {
+      "boundary": "tool_execution",
+      "phase": "start",
+      "monotonicMs": 9011.484041999998,
+      "metadata": {
+        "toolCallId": "call_49d69844f70c4a3ca63305f5",
+        "toolName": "run_commands"
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "end",
+      "monotonicMs": 8665.490791999999,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    },
+    {
+      "boundary": "schema_validation",
+      "phase": "start",
+      "monotonicMs": 8665.480125,
+      "metadata": {
+        "toolName": "run_commands",
+        "schemaValid": true
+      }
+    }
+  ],
+  "stages": [],
+  "unavailable": [],
+  "integrityFailures": []
+}

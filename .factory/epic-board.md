@@ -35573,3 +35573,89 @@ shapes and is production-seam qualified, but it is **not** live-witnessed.
 
 RC-01, RC-02, RC-03 and RC-04 are **not** reopened. No production source was
 modified by this ACT.
+
+# ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01 — CORRECTION01 — PASS_LIVE_NORMALIZATION_QUALIFIED (RETAINED) — 2026-11-17
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01/`
+  `00-identity-record.json`, `01-model-provider-matrix.json`, `analysis.json`,
+  `source-map.md`, `qualification-report.md`, `artifact-hashes.txt`,
+  `02-sanitization-audit.txt`, `gate-01-normalization-suites.txt`,
+  `gate-02-tools-tree.txt`, `gate-03-flint-witness-live.txt`,
+  `gate-04-preexisting-failures.txt`, `gate-05-typecheck.txt`,
+  `gate-06-red-analyzer.txt`, `gate-07-green-analyzer.txt`,
+  `tool/{qualify,witness,make-fixtures}.ts`, `tool/fixtures/`
+
+ENTRY_HEAD: `86d8a691d03f39c745774c48b564176f8349673a` (verified, branch `main`,
+clean tracked tree). **NO production modification.** No normalizer change, no
+schema relaxation, no new diagnostic, no new public API field, no new model run,
+no raw artifact committed. All worktrees and stashes preserved.
+
+## What was wrong
+
+The prior ACT committed an offline analyzer (`tool/qualify.ts`) that was
+**never machine-verified** — it had no test and no witness. This correction
+repairs three P0 evidence-integrity defects in it, each reproduced RED against
+the analyzer committed at `86d8a691d` (with ONLY a path seam added so it could
+be driven against a fixture; no logic changed).
+
+| Defect | The defect | RED reproduction |
+|---|---|---|
+| **A** | `idMap` filtered on `phase === "start"`, so the "end" maps were COPIES of the "start" maps. `executionStartEndIdsMatch` / `deliveryStartEndIdsMatch` were TRUE by construction and the reported end counts were the START counts. | With one `tool_execution` END event removed, the original still reported `executionStartEndIdsMatch: true`, `toolExecutionEnds: 26`. |
+| **B** | The capture loop stopped at the FIRST capture of each session, so a later capture with a DIFFERENT `run_commands` schema hash was invisible and the "all captures identical" claim was unfalsifiable. | With two captures in one session carrying different schema hashes, the original reported only the first capture's hash and no consistency flag. |
+| **C** | `strictJsonSchema ?? null` collapsed an ABSENT field to `null`, indistinguishable from a recorded `false`. | With a capture carrying no `strictJsonSchema` field, the original reported `strictJsonSchema: null`. |
+
+## The repair
+
+- Start and end events are selected **independently**; **cardinality**, the
+  **ID sets**, the **ordering** (an end must not precede its start) and the
+  **matching tool names** are compared, and unmatched ids are reported.
+- **Every** provider capture is inspected; `parsedCaptures`, `invalidCaptures`,
+  `capturesMissingCorrelation`, `capturesMissingToolSchema` and
+  `capturesMissingStrictJsonSchemaField` are reported explicitly.
+- Schema consistency and the strictness finding (`FALSE` / `TRUE` / `UNKNOWN` /
+  `MIXED`) are **derived from the observed values**. A missing
+  `strictJsonSchema` yields `UNKNOWN`, never `false`.
+- The transcript↔trace correlation is **LIKE-FOR-LIKE over ALL tool calls**.
+
+## The report corrections this forced
+
+1. **The five "trace-only" tool IDs were an artifact.** The prior report
+   compared the transcript's `run_commands`-ONLY ids against the trace's ALL
+   tool ids. The 5 ids were `3 × read_files`, `1 × fetch_web_content`,
+   `1 × submit_and_exit` — **all present in the transcript**. The corrected
+   comparison is **26 vs 26, 26 shared, 0 on either side, 0 tool-name
+   mismatches**: a STRONGER result than the prior claim.
+2. **The `strictJsonSchema` claim was an overclaim.** "false in every captured
+   request" is wrong: the field is **ABSENT in 496 of 622** captures (all 496
+   in session `1794524499963_op3ld`), so the corpus-wide finding is **MIXED**.
+   The narrower claim the ACT relies on holds and is now machine-verified:
+   **both Flint sessions record `false` in every one of their 23 captures**.
+3. **The Flint build-identity attribution is a SOURCE-based inference.** Both
+   Flint sessions capture the SAME `clientVersion` (`4.1.16-5a1c485cb`); the
+   `0b6ec51af` attribution comes from the production docstring, not from a
+   capture. The discriminator is restated as **the runtime's handling of the
+   argument shape** — the normalizer is the only production seam that can
+   admit it.
+
+## Gates
+
+| Gate | Result |
+|---|---|
+| **G6 — RED against the ORIGINAL analyzer** | **4 / 23 passed** → exit 1 (`gate-06-red-analyzer.txt`) |
+| **G7 — GREEN against the CORRECTED analyzer** | **23 / 23 passed** → exit 0 (`gate-07-green-analyzer.txt`) |
+| G1 — the nine normalization suites | **230 / 230 passed**, 9 / 9 files |
+| G2 — the whole `src/extensions/tools/` tree | 679 passed, 6 failed (**pre-existing**, environment-caused), 105 skipped |
+| G3 — the LIVE Flint witness verifier | **4 / 4 EXECUTED (not skipped)** |
+| G5 — typecheck | 43 = the pre-existing baseline; **0** in the normalization source files |
+| G8 — determinism | the analyzer and the witness are byte-identical on re-run |
+| G9 — sanitization | no keys, private paths, command text, internal hosts or prompts |
+
+## Board update (RC-05)
+
+| Stage | Status |
+|---|---|
+| RC-01 … RC-04 | **Unchanged** — RC-01 replicated; RC-02 QUALIFIED (explicit scope); RC-03 NOT_REPRODUCED; RC-04 QUALIFIED (`PASS_CANONICAL_CONTINUITY_LIVE`) |
+| **RC-05 tool-call normalization** | **QUALIFIED — `PASS_LIVE_NORMALIZATION_QUALIFIED` (RETAINED after CORRECTION01)** — the verdict survives the corrected gates: the production normalizer accepts every live-observed `run_commands` shape, conserves ordering, conserves sibling fields by failing closed, rejects malformed input before approval and before execution, and conserves tool-call identity exactly through result delivery (26/26 execution↔delivery ids; **26/26 transcript↔trace ids** under the corrected like-for-like comparison). The same-shape live RED→GREEN pair remains the causal discriminator, with the discriminator restated as the runtime's handling of the argument shape. **No production change is warranted** — a successor repair ACT would need a NEW real failure against the current build, and none exists. Sub-classifications unchanged: fresh live Flint = `LIVE_UNOBSERVABLE`; the HARNESS-03 encoded-object-array shape is production-seam qualified but not live-witnessed. |
+| RC-06 … RC-08 | **Unchanged** |
+
+RC-01 through RC-04 are **not** reopened. No production source was modified.

@@ -4,15 +4,15 @@
  ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts (4 tests) 17ms
  ✓ src/extensions/tools/roundc-toolcall-normalization.boundary.test.ts (9 tests) 3ms
  ✓ src/extensions/tools/helpers.run-commands.test.ts (4 tests) 5ms
- ✓ src/extensions/tools/roundc-toolcall-normalization.test.ts (30 tests) 8ms
- ✓ src/extensions/tools/roundc-toolcall-json-object-array.test.ts (28 tests) 15ms
- ✓ src/extensions/tools/roundc-toolcall-runtime.test.ts (13 tests) 18ms
- ✓ src/extensions/tools/flint-toolcall-red01.test.ts (20 tests) 19ms
- ✓ src/extensions/tools/flint-toolcall-red01-correction01.test.ts (35 tests) 23ms
- ✓ src/extensions/tools/definitions.test.ts (87 tests) 43ms
+ ✓ src/extensions/tools/roundc-toolcall-normalization.test.ts (30 tests) 7ms
+ ✓ src/extensions/tools/roundc-toolcall-json-object-array.test.ts (28 tests) 23ms
+ ✓ src/extensions/tools/roundc-toolcall-runtime.test.ts (13 tests) 28ms
+ ✓ src/extensions/tools/flint-toolcall-red01.test.ts (20 tests) 27ms
+ ✓ src/extensions/tools/flint-toolcall-red01-correction01.test.ts (35 tests) 29ms
+ ✓ src/extensions/tools/definitions.test.ts (87 tests) 56ms
 
  Test Files  9 passed (9)
       Tests  230 passed (230)
-   Start at  11:36:30
-   Duration  1.69s (transform 7.79s, setup 0ms, import 11.16s, tests 151ms, environment 1ms)
+   Start at  11:49:40
+   Duration  1.86s (transform 7.58s, setup 0ms, import 12.16s, tests 196ms, environment 1ms)
 

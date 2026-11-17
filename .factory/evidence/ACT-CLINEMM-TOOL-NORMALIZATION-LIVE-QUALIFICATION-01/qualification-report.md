@@ -33,9 +33,9 @@ if(!s.every(c=>typeof c==="string")){if(n!=="commands")return t;
 | 2 | The previously observed `run_commands` object-array normalization shapes | **QUALIFIED (live)** | The live Round C session `1794702518894_gui73` emitted **193** `run_commands` calls, including exactly the 4 shell-quoted JSON-array-string shapes and the 4 object-list shapes the fixtures claim — at the documented message indices (21, 27, 27, 285 / 63, 99, 107, 111) and the documented tool-call ids. |
 | 3 | Conservation of sibling fields and command ordering | **QUALIFIED** | Ordering is conserved across all three normalization branches (object-list, encoded object-array, canonical); duplicates are not collapsed; the serialized JSON text is never forwarded as a command. Sibling fields are **conserved by failing closed**: every branch requires a single-key object, so a payload carrying any sibling — including a DECLARED one such as `notifyOnCompletion` — is returned UNCHANGED and rejected by the strict schema rather than being silently dropped. |
 | 4 | Malformed / unsupported arguments must fail closed | **QUALIFIED (live RED + live GREEN)** | The live Flint session `1794587196390_xn030` recorded **12** rejections, all `Invalid input for tool run_commands` (application-side validation, B4). The live session `1794593797996_r48lj`, running the repaired build, **accepted** the same `{command: "<JSON array string>"}` shape that was rejected 11/11 in the earlier session. |
-| 5 | Tool-call identity and correlation through execution and result delivery | **QUALIFIED (live, exact)** | The live trace records 26 `tool_execution` and 26 `tool_result_delivered` boundaries with **identical tool-call id sets** and **zero tool-name mismatches**. The transcript's 21 `run_commands` tool-call ids are a **strict subset** of the trace's 26 ids (21/21 shared, 0 transcript-only, 0 trace-only). Every shared id has a transcript `tool_result`. |
+| 5 | Tool-call identity and correlation through execution and result delivery | **QUALIFIED (live, exact)** | The live trace records 26 `tool_execution` and 26 `tool_result_delivered` boundaries with **identical tool-call id sets** and **zero tool-name mismatches**; the start/end event pairs are well formed for both boundaries. **CORRECTION01:** the transcript↔trace correlation is now **LIKE-FOR-LIKE over ALL tool calls** — 26 transcript ids vs 26 trace ids, **26 shared, 0 on either side**, 0 tool-name mismatches. (The pre-correction report claimed "21 ⊂ 26 with 5 trace-only"; that was an apples-to-oranges comparison — see §9.2.) |
 
-## 3. The decisive discriminator: build, not payload shape
+## 3. The decisive discriminator: the runtime's handling of the argument shape
 
 The most important finding of this ACT is a **causal** one.
 
@@ -43,16 +43,22 @@ The shape `{command: "<JSON array string>"}` appears in BOTH live Flint
 sessions. In the earlier session it was rejected **11 out of 11** times; in the
 later session the identical shape was **accepted**. The payload is byte-class
 identical (valid JSON array of strings) in both. The discriminator is therefore
-**the build**, not the payload:
+**the runtime's handling of the shape**, not the payload, not the schema, not
+the provider and not the model:
 
-| Live session | Build | `{command: "<JSON array string>"}` |
+| Live session | `clientVersion` (captured) | `{command: "<JSON array string>"}` |
 |---|---|---|
-| `1794587196390_xn030` | `4.1.16-5a1c485cb` (pre-`0b6ec51af`) | **REJECTED ×11** (`✖ Unrecognized key: "command"`) |
-| `1794593797996_r48lj` | `4.1.16-5a1c485cb-0b6ec51af` (per the production docstring, `helpers.ts:326-329`) | **ACCEPTED ×4** (+2 with no recorded result) |
+| `1794587196390_xn030` | `4.1.16-5a1c485cb` | **REJECTED ×11** (`✖ Unrecognized key: "command"`) |
+| `1794593797996_r48lj` | `4.1.16-5a1c485cb` | **ACCEPTED ×4** (+2 with no recorded result) |
 
-This is a live, two-sided, same-shape RED→GREEN observation of the production
-normalizer. It is the strongest available evidence that the normalizer — not
-the schema, not the provider, not the model — is the discriminating boundary.
+This is a live, two-sided, same-shape RED→GREEN observation. The only
+production seam that can admit this shape is `normalizeRunCommandsToolInput` —
+the normalizer — so the normalizer is the discriminating boundary.
+
+**CORRECTION01 scope note:** both sessions report the SAME captured
+`clientVersion`. The specific build identity (`0b6ec51af` for the later
+session) is a **source-based attribution** from the production docstring, not
+a capture-based observation. See §4.2 for the exact identity scope.
 
 ## 4. The Flint boundary: what the failures actually were
 
@@ -68,10 +74,18 @@ The live evidence answers this unambiguously:
    `type: "tool_use"` with `id`, `name: "run_commands"` and an `input` object.
    Only the *argument shape* inside `input` was wrong.
 3. **NOT the model-facing schema.** The schema was **advertised but not
-   provider-enforced**: all 622 live provider-request captures carry
-   `providerOptions.openaiCompatible.strictJsonSchema = false`, and all carry a
-   byte-identical `run_commands` schema (hash
-   `d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4`).
+   provider-enforced**. **CORRECTION01 — the pre-correction wording here was an
+   OVERCLAIM and is corrected:** it said "`strictJsonSchema = false` in every
+   captured request". The corrected analyzer inspects **every** capture and
+   finds the field **ABSENT in 496 of 622** captures (all 496 belong to session
+   `1794524499963_op3ld`), so the overall finding is **MIXED**
+   (`FALSE` + `UNKNOWN`), not uniformly `false`. The claim that survives is the
+   one this ACT actually relies on: **both Flint sessions — the two sessions
+   the boundary argument depends on — record `strictJsonSchema = false` in
+   EVERY one of their 23 captures** (witness check C4b). Independently of
+   strictness, **all 622 captures carry a byte-identical `run_commands`
+   schema** (exactly ONE distinct hash), so the schema advertised to the
+   provider was constant across the whole capture set.
 4. **THE MODEL'S ARGUMENT CONSTRUCTION, handled by the ClineMM normalizer.** The
    model emitted the singular key `command` (or `commands`) with a STRING value
    where the schema requires an ARRAY. The malformed argument shape is the
@@ -105,6 +119,54 @@ establish the required boundary (items 4 and 5 above), so the ACT's
 "a new model run is permitted **only if** existing evidence cannot establish
 the required boundary" condition was not met.
 
+#### 4.2 CORRECTION01 — the Flint identity scope, stated exactly
+
+The pre-correction report attached the two Flint sessions to a build identity
+in a way that could be read as stronger than the evidence allows. The precise,
+preserved facts are:
+
+| Live session | Model | Provider | Build identity | Provenance of the identity |
+|---|---|---|---|---|
+| `1794587196390_xn030` | `flint:16gb` | `openai-compatible` | `4.1.16-5a1c485cb` | the session's own `origin.version` **and** the `clientVersion` in all 23 of its provider-request captures |
+| `1794593797996_r48lj` | `flint:16gb` | `openai-compatible` | `4.1.16-5a1c485cb` | the session's own `origin.version` **and** the `clientVersion` in all 23 of its provider-request captures |
+| `1794702518894_gui73` (Round C) | `qwen3.8-flash-next-iq3_s` | `openai-compatible` | `4.1.16-5a1c485cb` | the session's own `origin.version` |
+| `1794892591345_7em4g` (Qwen baseline) | `qwen3.8-flash-next-iq3_s` | `openai-compatible` | `4.1.16-5a1c485cb` | the session's own `origin.version` **and** the trace's `identity.extensionVersion` |
+
+**Both Flint sessions report the SAME client version string**
+(`4.1.16-5a1c485cb`). The pre-correction report attributed the RED→GREEN
+difference to the build `4.1.16-5a1c485cb-0b6ec51af` on the strength of the
+production docstring in `helpers.ts` (lines 326–329), which NAMES that build
+for session `1794593797996_r48lj`. **That attribution is a SOURCE-BASED
+inference, not a capture-based observation**: the version string in the
+transcripts and in all 46 provider-request captures is the base
+`4.1.16-5a1c485cb` for BOTH sessions.
+
+**What is observed, and is not in doubt:**
+
+- The **payload shape is byte-class identical** between the two sessions: the
+  same `{command: "<JSON array string>"}` form with a valid JSON array of
+  strings.
+- It was **REJECTED 11/11** in `1794587196390_xn030` and **ACCEPTED 4/4** in
+  `1794593797996_r48lj` (plus 2 with no recorded result).
+- The two sessions' `clientVersion` strings are identical, and both were
+  captured against the same provider with the same `run_commands` schema.
+
+**What is inferred:** that the difference is the source build. The
+`0b6ec51af` commit is precisely "canonicalize the confirmed Flint JSON-array
+`command` payload", and it is an ancestor of HEAD, so the causal story is
+consistent — but the sessions do not carry a capture that distinguishes the
+builds. **The discriminator is therefore established as "something changed in
+the runtime between the two sessions that admits this shape", and the
+normalizer is the only seam in the production path that can do so** — but the
+specific build identity is a source-based attribution.
+
+**This weakens the claim, and the claim is restated accordingly.** The
+pre-correction report said the discriminator is "the BUILD". The corrected
+statement is: the discriminator is **the production runtime's handling of the
+argument shape**, and the only production seam that changes that handling is
+`normalizeRunCommandsToolInput` — the normalizer. The build-identity
+attribution is retained as a source-based corroboration, not as an observation.
+
 ## 5. Coverage assessment — was an adversarial witness needed?
 
 The ACT says: *"Use existing real-production-seam tests. Add a focused
@@ -119,7 +181,7 @@ against the five items and found sufficient:
 | 2 — object-array normalization shapes | HARNESS-01 `…normalization.test.ts` (30 tests) against the LIVE Round C fixtures; the fixtures were re-verified against the live transcript on disk (message indices and tool-call ids match exactly) | none |
 | 3 — sibling conservation + ordering | HARNESS-02 `…normalization.boundary.test.ts` (9 tests) covers the sibling-key boundary; ordering/conservation is asserted in HARNESS-03 (*"preserves every command, in order, with nothing dropped"*, *"produces the SAME canonical form as the object-list shape"*) | none |
 | 4 — malformed / unsupported → fail closed | HARNESS-03 fail-closed block (9 cases) + FLINT-RED-01 rejection matrix (20 tests) + FLINT-CORR-01 (35 tests) + the **live** RED/GREEN pair in §3 | none |
-| 5 — identity + correlation | The live trace itself (26/26 execution↔delivery ids, 21/21 transcript↔trace ids); the runtime seam test asserts the approved input equals the executed commands | none |
+| 5 — identity + correlation | The live trace itself (26/26 execution↔delivery ids; **CORRECTION01: 26/26 transcript↔trace ids, LIKE-FOR-LIKE over all tool calls**); the runtime seam test asserts the approved input equals the executed commands | none |
 
 A probe was run to look for a gap in item 3 — sibling-field conservation on
 the *non-canonical* branches. It found **no defect**: the single-key rule makes
@@ -206,14 +268,18 @@ The installed-runtime behaviour establishes the bounded contract:
 
 - The model-facing schema is strict and was verified byte-identical in the
   provider requests actually dispatched.
-- The provider does NOT enforce that schema (`strictJsonSchema: false`), so
-  the application-side boundary is the authoritative one — and it is.
+- The provider does NOT enforce that schema (`strictJsonSchema: false` in
+  every capture of BOTH Flint sessions — the sessions the boundary argument
+  depends on; the field is ABSENT in 496 of 622 captures overall, so the
+  corpus-wide finding is MIXED), so the application-side boundary is the
+  authoritative one — and it is.
 - The production normalizer accepts every live-observed shape, conserves
   ordering, conserves sibling fields by failing closed, and rejects malformed
   input before approval and before execution.
 - Tool-call identity is conserved exactly from the model's structured call
   through normalization, validation, approval, execution and result delivery
-  (26/26 execution↔delivery ids; 21/21 transcript↔trace ids).
+  (26/26 execution↔delivery ids; **26/26 transcript↔trace ids** under the
+  corrected like-for-like comparison).
 - The same-shape live RED→GREEN pair isolates the normalizer as the causal
   discriminator.
 
@@ -227,3 +293,87 @@ The installed-runtime behaviour establishes the bounded contract:
   but **not live-witnessed** (0 occurrences in 201 scanned live sessions).
 - **No production change is warranted.** A successor repair ACT would need a
   NEW real failure against the current build; none exists.
+
+## 9. CORRECTION01 — what was repaired in the offline analyzer
+
+The prior ACT committed an offline analyzer (`tool/qualify.ts`) that was
+**never machine-verified** — it had no test and no witness. This correction
+repairs three P0 evidence-integrity defects in it. **Production source is
+unchanged**; the analyzer is an evidence tool, not product code.
+
+### 9.1 The three defects, each reproduced RED
+
+| Defect | The defect | RED evidence |
+|---|---|---|
+| **A** — tautological end-event checks | `idMap` filtered on `phase === "start"`, so the "end" maps were **copies of the "start" maps**. `executionStartEndIdsMatch` / `deliveryStartEndIdsMatch` were therefore TRUE by construction, and the reported `toolExecutionEnds` / `toolResultDeliveredEnds` were the START counts. | With one `tool_execution` END event removed, the original still reported `executionStartEndIdsMatch: true` and `toolExecutionEnds: 26`. |
+| **B** — first-capture-only capture inspection | The capture loop `continue`d on every capture after the first of a session, so a later capture with a DIFFERENT `run_commands` schema hash was invisible and the "all captures identical" claim was unfalsifiable. | With two captures in one session carrying different schema hashes, the original reported only the FIRST capture's hash and no consistency flag. |
+| **C** — missing `strictJsonSchema` collapsed to a value | `strictJsonSchema ?? null` collapsed an ABSENT field to `null`, indistinguishable from a recorded `false` in a boolean reading. | With a capture carrying no `strictJsonSchema` field, the original reported `strictJsonSchema: null`. |
+
+**RED receipt:** `gate-06-red-analyzer.txt` — **4 / 23 checks passed** against
+the original analyzer (the version committed at `86d8a691d`, with ONLY the path
+seam added so it could be driven against a fixture; no logic changed).
+
+### 9.2 What the corrected analyzer does
+
+- Selects `start` and `end` **independently** and compares **cardinality**, the
+  **ID sets**, the **ordering** (an end must not precede its start) and the
+  **matching tool names**. It reports the unmatched ids explicitly.
+- Inspects **every** provider capture and reports `parsedCaptures`,
+  `invalidCaptures`, `capturesMissingCorrelation`, `capturesMissingToolSchema`
+  and `capturesMissingStrictJsonSchemaField` explicitly.
+- **Derives** schema consistency (`runCommandsSchemaConsistent`,
+  `allCapturesShareOneRunCommandsSchema`, the set of distinct hashes) and the
+  strictness finding (`FALSE` / `TRUE` / `UNKNOWN` / `MIXED`) from the observed
+  values. A missing `strictJsonSchema` yields `UNKNOWN`, never `false`.
+- Compares the transcript and the trace **like-for-like over ALL tool calls**.
+
+### 9.3 The report corrections this forced
+
+Two of the prior report's claims did not survive the corrected analysis and are
+restated here.
+
+**9.3.1 The five "trace-only" tool IDs were an artifact.** The prior report
+said the transcript's 21 `run_commands` ids were "a strict subset" of the
+trace's 26, listing 5 trace-only ids. The transcript list held only
+`run_commands` calls while the trace list held **all** tool calls — an
+apples-to-oranges comparison. The 5 ids were `3 × read_files`,
+`1 × fetch_web_content` and `1 × submit_and_exit`, and **all 5 ARE in the
+transcript**. The corrected like-for-like comparison is **26 vs 26, 26 shared,
+0 on either side, 0 tool-name mismatches** — a *stronger* result than the
+prior claim, not a weaker one.
+
+**9.3.2 The `strictJsonSchema` claim was an overclaim.** The prior report said
+"`strictJsonSchema = false` in every captured request". The field is **ABSENT
+in 496 of 622** captures (all 496 belong to session `1794524499963_op3ld`), so
+the corpus-wide finding is **MIXED**. The narrower claim the ACT actually
+relies on holds and is now machine-verified: **both Flint sessions record
+`false` in every one of their 23 captures** (witness check C4b).
+
+### 9.4 The corrected gates
+
+| Gate | Result |
+|---|---|
+| **G6** — RED against the original analyzer | **4 / 23 passed** → exit 1 (`gate-06-red-analyzer.txt`) |
+| **G7** — GREEN against the corrected analyzer | **23 / 23 passed** → exit 0 (`gate-07-green-analyzer.txt`) |
+
+The witness (`tool/witness.ts`) drives the analyzer as a **subprocess** against
+the adversarial fixtures (`tool/fixtures/`, built by `tool/make-fixtures.ts`)
+and against the **preserved real artifacts**. It is deliberately tolerant of a
+missing field: the ABSENCE of a field the analyzer ought to emit is itself a
+reported FAIL, never a crash.
+
+### 9.5 The verdict after correction
+
+**`PASS_LIVE_NORMALIZATION_QUALIFIED` is retained**, on the corrected gates:
+
+- The five qualification items are unchanged in substance, and item 5 is now
+  stronger (26/26 like-for-like rather than 21/26).
+- The boundary attribution (application-side validation, not provider-side) is
+  unchanged and rests on the rejection-message text, not on the analyzer.
+- The RED→GREEN pair for the argument shape is unchanged as an OBSERVATION; only
+  the *attribution* of the discriminator is narrowed (§3, §4.2).
+- The strictness conclusion is narrowed to what the captures actually support,
+  and the boundary it supports is unaffected.
+
+**No production change is warranted.** A successor repair ACT would still need
+a NEW real failure against the current build; none exists.

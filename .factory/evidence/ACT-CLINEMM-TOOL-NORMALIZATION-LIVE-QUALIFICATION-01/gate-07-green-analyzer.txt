@@ -1,0 +1,30 @@
+# GREEN verification — the CORRECTED analyzer against the SAME adversarial fixtures
+# and the preserved REAL artifacts.
+#
+# Reproduce: bun tool/witness.ts   (exit 0 = GREEN)
+
+PASS  A0  the REAL trace passes the start/end identity checks (the control)
+PASS  A1  a MISSING tool_execution END event fails the execution identity check
+PASS  A2  a MISSING tool_execution END event makes the execution pairs NOT well formed
+PASS  A3  a MISSING tool_execution END event is reported as a cardinality difference
+PASS  A4  a MISSING tool_result_delivered END event fails the delivery identity check
+PASS  A5  a MISSING tool_result_delivered END event makes the delivery pairs NOT well formed
+PASS  A6  a tool-name mismatch between execution and delivery is DETECTED
+PASS  A7  reordering the event list does not change the boundary counts
+PASS  B1  two captures in ONE session with DIFFERENT schema hashes are detected
+PASS  B2  the session with the drifting schema is NAMED
+PASS  B3  the per-session consistency flag is false for the drifting session
+PASS  B4  BOTH captures of the drifting session were inspected
+PASS  B5  the parsed/invalid/missing-field counts are reported explicitly
+PASS  C1  a capture with NO strictJsonSchema field yields the finding UNKNOWN
+PASS  C2  the missing field is COUNTED, not silently defaulted
+PASS  C3  the per-session finding is UNKNOWN (never false) when the field is absent
+PASS  C4  the REAL capture set's strictness is MIXED (FALSE + UNKNOWN) — the field is ABSENT in 496 of 622 captures
+PASS  C4b  the sessions this ACT RELIES ON (both Flint sessions) record strictJsonSchema=false in EVERY capture
+PASS  C5  the REAL capture set's all-captures-consistent claim is DERIVED, not assumed
+PASS  C6  the REAL capture set's every capture was inspected (parsed == total)
+PASS  E1  the transcript's ALL tool-call ids correlate 1:1 with the trace's ALL tool_execution ids
+PASS  E2  the tool names agree on every shared id
+PASS  E3  the comparison is explicitly LIKE-FOR-LIKE over ALL tool calls
+
+23/23 checks passed

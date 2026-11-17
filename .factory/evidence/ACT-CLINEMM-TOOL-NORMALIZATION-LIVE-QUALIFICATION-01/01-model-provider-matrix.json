@@ -34,10 +34,10 @@
           "call_e7aba9c0dda94ea69edc0d2b"
         ]
       },
-      "providerStrictJsonSchema": null,
+      "providerStrictJsonSchema": "NOT_CAPTURED",
       "boundaryAttribution": "B4 passed for every call (schemaValid=true x21). No normalization branch was exercised (the model emitted the canonical shape exclusively).",
       "verdict": "PASS_STRICT_SHAPE_ONLY",
-      "providerCaptureNote": "NO provider-request capture exists for this session. The capture directory covers 2026-11-13/14 only (newest file 2026-11-14T01:07); this session ran 2026-11-17. The model-facing schema was nevertheless confirmed for the Round C session from the SAME provider id and the SAME tool factory, and the schema hash is identical across all 622 captured requests."
+      "providerStrictJsonSchemaNote": "This session has NO provider-request capture. The capture directory covers 2026-11-13/14 only (newest file 2026-11-14T01:07); this session ran 2026-11-17. The model-facing schema was confirmed for the OTHER sessions of the same provider and the run_commands schema hash is identical across all 622 captured requests."
     },
     {
       "modelId": "qwen3.8-flash-next-iq3_s",
@@ -69,10 +69,10 @@
         "keys[commands] array[object]": "3",
         "keys[commands] array[object,object,object]": "1"
       },
-      "providerStrictJsonSchema": false,
+      "providerStrictJsonSchema": "NOT_CAPTURED",
       "boundaryAttribution": "B4 \u2014 application-side strict Zod validation ('expected array, received string' / 'expected string, received object'). The provider DELIVERED well-formed structured tool_use blocks (type/id/name/input); only the ARGUMENT SHAPE was wrong. B1 was not enforcing.",
       "verdict": "LIVE_SHAPES_OBSERVED_AND_REPRODUCED",
-      "providerCaptureNote": "Round C session id is also not present in the capture directory; strictJsonSchema=false is observed for the OTHER openai-compatible sessions of the same era (including both Flint sessions)."
+      "providerStrictJsonSchemaNote": "This session has NO provider-request capture. The capture directory covers 2026-11-13/14 only (newest file 2026-11-14T01:07). strictJsonSchema=false is observed for the OTHER openai-compatible sessions of the same era, including both Flint sessions this ACT relies on."
     },
     {
       "modelId": "flint:16gb",
@@ -93,9 +93,36 @@
         "\u2716 Invalid input: expected array, received string",
         "\u2716 Unrecognized key:"
       ],
-      "providerStrictJsonSchema": false,
+      "providerStrictJsonSchema": "FALSE",
       "boundaryAttribution": "B4 \u2014 application-side validation. 11 of the 12 rejections are the {command: '<JSON array string>'} shape; 1 is {commands: '<shell text>'}. The provider delivered structured tool calls; the ARGUMENT SHAPE was malformed.",
-      "verdict": "LIVE_RED_OBSERVED"
+      "verdict": "LIVE_RED_OBSERVED",
+      "providerStrictJsonSchemaValues": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "providerCaptureCount": 23,
+      "providerRunCommandsSchemaConsistent": true
     },
     {
       "modelId": "flint:16gb",
@@ -118,9 +145,36 @@
         "\u2716 Invalid input: expected array, received string",
         "\u2716 Unrecognized key:"
       ],
-      "providerStrictJsonSchema": false,
+      "providerStrictJsonSchema": "FALSE",
       "boundaryAttribution": "B4 \u2014 application-side validation. The SAME {command: '<JSON array string>'} shape that was rejected 11/11 in the pre-fix session is ACCEPTED here (4 accepted, 2 with no recorded result). The discriminator is the BUILD, not the payload shape.",
-      "verdict": "LIVE_GREEN_OBSERVED_FOR_THE_SAME_SHAPE"
+      "verdict": "LIVE_GREEN_OBSERVED_FOR_THE_SAME_SHAPE",
+      "providerStrictJsonSchemaValues": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "providerCaptureCount": 23,
+      "providerRunCommandsSchemaConsistent": true
     }
   ],
   "flintAvailability": {
@@ -136,28 +190,40 @@
   },
   "providerRequestCaptureCoverage": {
     "captureFiles": 622,
+    "parsedCaptures": 622,
+    "invalidCaptures": 0,
+    "capturesMissingStrictJsonSchemaField": 496,
     "newestCapture": "2026-11-14T01:07",
-    "sessionsCovered": [
-      "1794524499963_op3ld",
-      "1794560033090_1sqng",
-      "1794587196390_xn030",
-      "1794593797996_r48lj",
-      "1794599235421_7adcr",
-      "1794606517194_x1js5"
+    "strictJsonSchemaFinding": "MIXED",
+    "strictJsonSchemaFindingsAcrossSessions": [
+      "FALSE",
+      "UNKNOWN"
     ],
-    "sessionsNotCovered": [
-      "1794702518894_gui73 (Round C)",
-      "1794892591345_7em4g (Qwen baseline)"
-    ],
-    "strictJsonSchemaBySession": {
-      "1794587196390_xn030": false,
-      "1794593797996_r48lj": false,
-      "1794599235421_7adcr": false,
-      "1794606517194_x1js5": false,
-      "1794560033090_1sqng": false,
-      "1794524499963_op3ld": null
+    "runCommandsSchemaConsistency": {
+      "allCapturesShareOneRunCommandsSchema": true,
+      "distinctRunCommandsSchemaHashesAcrossAllCaptures": [
+        "d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4"
+      ],
+      "sessionsWithInconsistentRunCommandsSchema": []
     },
-    "runCommandsSchemaHash": "d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4 (identical across ALL 622 captures and all sessions)",
-    "conclusion": "The model-facing run_commands schema is byte-identical in every captured request, and strictJsonSchema=false wherever a value was recorded. The schema is advertised, not provider-enforced."
+    "CORRECTION01_note": "The pre-correction report claimed strictJsonSchema=false \"in every captured request\". The corrected analyzer shows that claim was an OVERCLAIM: the field is ABSENT in 496 of 622 captures (all 496 belong to session 1794524499963_op3ld). The overall finding is MIXED (FALSE + UNKNOWN). The sessions this ACT RELIES ON (both Flint sessions) do record false in EVERY one of their captures \u2014 verified by witness check C4b."
+  },
+  "traceIdentity": {
+    "comparison": "LIKE_FOR_LIKE_ALL_TOOL_CALLS",
+    "transcriptToolCallIds": 26,
+    "traceToolCallIds": 26,
+    "sharedToolCallIds": 26,
+    "transcriptOnly": [],
+    "traceOnly": [],
+    "toolNameMismatchesOnSharedIds": [],
+    "CORRECTION01_note": "The pre-correction report stated \"the transcript 21 run_commands ids are a strict subset of the trace 26 ids\" and listed 5 \"trace-only\" ids. That was an apples-to-oranges comparison: the transcript list held only run_commands calls while the trace list held ALL tool calls. The 5 ids were 3 x read_files, 1 x fetch_web_content and 1 x submit_and_exit \u2014 all present in the transcript. The corrected LIKE-FOR-LIKE comparison is 26 vs 26 with 26 shared and NOTHING on either side.",
+    "toolExecutionStarts": 26,
+    "toolExecutionEnds": 26,
+    "toolResultDeliveredStarts": 26,
+    "toolResultDeliveredEnds": 26,
+    "executionStartEndIdsMatch": true,
+    "deliveryStartEndIdsMatch": true,
+    "executionPairsWellFormed": true,
+    "deliveryPairsWellFormed": true
   }
 }

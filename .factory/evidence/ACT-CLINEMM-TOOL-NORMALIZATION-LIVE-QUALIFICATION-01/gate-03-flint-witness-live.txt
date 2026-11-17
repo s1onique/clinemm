@@ -2,12 +2,12 @@
  RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
 
  ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 — live witness fidelity > THE_TRANSCRIPT_PRESENTS_THE_EXPECTED_CALL_LAYOUT 9ms
- ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 — live witness fidelity > THE_REJECTED_CALLS_KEYED_BY_COMMANDS_MATCH_THE_LIVE_PAYLOADS_BYTE_FOR_BYTE 5ms
+ ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 — live witness fidelity > THE_REJECTED_CALLS_KEYED_BY_COMMANDS_MATCH_THE_LIVE_PAYLOADS_BYTE_FOR_BYTE 6ms
  ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 — live witness fidelity > THE_REJECTED_CALLS_KEYED_BY_COMMAND_MATCH_THE_LIVE_PAYLOADS_BYTE_FOR_BYTE 2ms
  ✓ src/extensions/tools/flint-toolcall-red01-witness.test.ts > ACT-CLINEMM-FLINT-TOOLCALL-RED-01-CORRECTION01 — live witness fidelity > THE_ACCEPTED_JSON_ARRAY_PAYLOAD_MATCHES_THE_LIVE_PAYLOAD_BYTE_FOR_BYTE 1ms
 
  Test Files  1 passed (1)
       Tests  4 passed (4)
-   Start at  11:36:36
-   Duration  228ms (transform 22ms, setup 0ms, import 30ms, tests 19ms, environment 0ms)
+   Start at  11:49:40
+   Duration  169ms (transform 23ms, setup 0ms, import 35ms, tests 18ms, environment 0ms)
 

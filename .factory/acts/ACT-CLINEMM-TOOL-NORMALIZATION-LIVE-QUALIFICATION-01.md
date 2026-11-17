@@ -72,3 +72,72 @@ qualified, but it is NOT live-witnessed.
 ## See also
 
 `.factory/evidence/ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01/qualification-report.md`
+
+---
+
+# CORRECTION01 — 2026-11-17
+
+```text
+ACT_ID: ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01 — CORRECTION01
+TYPE: P0 evidence-integrity correction of the offline analyzer
+ENTRY_HEAD: 86d8a691d03f39c745774c48b564176f8349673a
+VERDICT: PASS_LIVE_NORMALIZATION_QUALIFIED (RETAINED)
+```
+
+## What was wrong
+
+The analyzer committed by the prior ACT (`tool/qualify.ts`) was **never
+machine-verified**. Three P0 evidence-integrity defects, each reproduced RED:
+
+- **A** — the trace start/end id maps were both built from `phase === "start"`,
+  so the end-event identity checks were tautological and the reported end
+  counts were the start counts.
+- **B** — the provider-capture loop stopped at the first capture of each
+  session, so a later capture with a different schema hash was invisible and
+  the "all captures identical" claim was unfalsifiable.
+- **C** — `strictJsonSchema ?? null` collapsed an ABSENT field to a value
+  indistinguishable from a recorded `false`.
+
+## What was repaired
+
+The analyzer now selects start and end independently (cardinality, id sets,
+ordering, matching tool names), inspects **every** provider capture with
+explicit parsed/invalid/missing-field counts, and **derives** schema
+consistency and strictness from the observed values. A missing
+`strictJsonSchema` yields `UNKNOWN`, never `false`. The transcript↔trace
+correlation is now LIKE-FOR-LIKE over all tool calls.
+
+A new adversarial witness (`tool/witness.ts`) drives the analyzer as a
+subprocess against portable fixtures (`tool/make-fixtures.ts`) and the preserved
+real artifacts.
+
+## The report corrections this forced
+
+1. The five "trace-only" tool ids were an apples-to-oranges artifact — the
+   corrected comparison is **26 vs 26, 26 shared, 0 on either side**.
+2. "`strictJsonSchema = false` in every captured request" was an overclaim —
+   the field is **absent in 496 of 622** captures; the corpus-wide finding is
+   MIXED. Both Flint sessions do record `false` in every capture.
+3. The Flint build-identity attribution is a **source-based inference**, not a
+   capture-based observation — both sessions capture the same `clientVersion`.
+   The discriminator is restated as the runtime's handling of the argument
+   shape.
+
+## Gates
+
+| Gate | Result |
+|---|---|
+| RED against the ORIGINAL analyzer | **4 / 23 passed** (exit 1) |
+| GREEN against the CORRECTED analyzer | **23 / 23 passed** (exit 0) |
+| Nine normalization suites | 230 / 230 passed |
+| LIVE Flint witness verifier | 4 / 4 executed (not skipped) |
+| Typecheck | 43 = pre-existing baseline; 0 in the normalization sources |
+| Determinism | analyzer and witness byte-identical on re-run |
+| Sanitization | clean |
+
+## Verdict
+
+**`PASS_LIVE_NORMALIZATION_QUALIFIED` is RETAINED.** The corrected gates
+substantiate it, and two of the corrections make the underlying result
+*stronger* (the 26/26 identity correlation) or *narrower but accurate* (the
+strictness and build-identity claims). **No production modification.**

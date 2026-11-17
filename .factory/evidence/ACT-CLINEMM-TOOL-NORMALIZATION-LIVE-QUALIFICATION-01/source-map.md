@@ -47,13 +47,20 @@ observed on the wire in the live provider-request captures:
 ```
 
 All 622 live provider-request captures carry a byte-identical
-`run_commands` schema (schema hash
-`d1607d2461dd66a5e2441ec463ca086e3535c5befdb0f6fb6177800c43cc20d4`).
+`run_commands` schema (exactly ONE distinct schema hash across the whole
+capture set).
 
-**B1 is NOT enforced at the provider.** Every captured request from the
-sessions under study carried `providerOptions.openaiCompatible.strictJsonSchema
-= false`. The schema was ADVERTISED but not provider-enforced — which is exactly
-why a malformed argument shape could reach the application at all.
+**B1 is NOT enforced at the provider.** The schema was ADVERTISED but not
+provider-enforced. **CORRECTION01 precision:** the pre-correction wording
+("`strictJsonSchema = false` in every captured request") was an OVERCLAIM. The
+corrected analyzer inspects EVERY capture and finds the field **ABSENT in 496
+of 622** captures (all 496 belong to session `1794524499963_op3ld`), so the
+corpus-wide strictness finding is **MIXED** (`FALSE` + `UNKNOWN`). The claim
+this ACT actually relies on is narrower and holds: **both Flint sessions record
+`strictJsonSchema = false` in every one of their 23 captures** (witness check
+C4b). The schema was not provider-enforced in the sessions that produced the
+observed failures — which is exactly why a malformed argument shape could reach
+the application at all.
 
 ## The normalizer's accepted shapes (production source, `helpers.ts` 420–582)
 
