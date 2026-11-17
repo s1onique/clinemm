@@ -36037,3 +36037,96 @@ action**. No ClineMM extension is installed on the code-execution host, and the
 code-execution environment does not install it. Exact build / install /
 mutation-opt-in steps and the 8-step pilot procedure are in
 `.factory/evidence/ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01/09-live-qualification.md`.
+
+# ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01 — PASS_STRUCTURAL_ONLY — 2026-11-17
+
+**Status:** the bounded correction of the MCP execution-control concurrency
+contract is implemented and verified against the REAL production seams. All
+five reported defects are corrected and each correction is proven
+load-bearing. The mutation grant is **still not enabled** in the regular
+`codium-clinemm` profile: the operator must rebuild from the exact final
+implementation HEAD, install, and run the live pilot first.
+
+```text
+ACT_ID: ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01
+TYPE: bounded production correction of the control layer + executable qualification
+EPIC: EPIC-CLINEMM-TRACE-AND-ACCEPTANCE-EVIDENCE
+WORKSTREAM: W01 (successor of ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01)
+VERDICT: PASS_STRUCTURAL_ONLY
+ENTRY_HEAD: 9c9506f0c6fd779ca5c75499df88ab7623846eca
+ENTRY_TREE: 6fd3e8ffb2d0b378fcbbe1853f45f5fecf7be870
+SUBJECT_HEAD: 3f4a5e72ece56c18ff8055870f2eccc8e5ccbebc
+SUBJECT_TREE: bc4c7de1f976025f4941ac6682c14fd8f6498543
+BRANCH: main (no ACT branch created)
+PUSHED: NO   RELEASED: NO   PUBLISHED: NO   BRANCH_CREATED: NO   NEW_DEPENDENCIES: 0
+PROTO_CHANGES: 0   NEW_MCP_OPERATIONS: 0   PROTOCOL_VERSION: 1 (unchanged)
+BEHAVIORAL RED: 6 failed | 8 passed (14) against the UNMODIFIED production code
+BEHAVIORAL GREEN: 15 passed (15)
+EXISTING V1 SUITE: 31/31 PASS
+FOCUSED GATE: 46/46 PASS
+EXISTING CONTROL-SEAM: 2 failed | 139 passed (141) - the 2 are the PRE-EXISTING
+                   owner-exclusivity.cor02 failures the predecessor recorded,
+                   reproduced IDENTICALLY at the pristine baseline
+SRC/SDK SWEEP - BASELINE: 64 failed files | 175 failed / 5642 passed
+SRC/SDK SWEEP - CORRECTED: 64 failed files | 170 failed / 5647 passed
+REGRESSION DELTA: -5 failures, +5 passes, IDENTICAL failing-file count. NO new failure.
+NECESSITY ABLATIONS: 5/5 - each production revert reproduces exactly its defect
+TYPECHECK: bun run check-types EXIT 0 (0 diagnostics)
+LINT: biome EXIT 0 (4 scoped files)   FORMAT: clean
+BUILD: rm -rf dist && bun esbuild.mjs - extension bundle finished
+BUNDLE SHA256: a8e07a5e5d21575d5b2208bf4ca4fc1caa64d92dd04edc316b71e6cdfa9beb29
+ARTIFACT BINDING: exact-head - clean rebuild from 3f4a5e72e; the C2/C4 markers
+                   are VERIFIED PRESENT in the built bundle
+ACT_OWNED_DIAGNOSTICS: NONE
+INSTALLED QUALIFICATION: NOT EXECUTED / PENDING. No LIVE claim is made.
+EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01/
+```
+
+## The five corrected defects
+
+| ID | Severity | Defect | Correction | RED → GREEN | Ablation |
+|---|---|---|---|---|---|
+| C1 | P0 | request replay returned the wrong outcome — the active-owner check ran BEFORE the idempotency ledger | the ledger lookup moves AHEAD of the active-owner check | `C1-1` FAIL → PASS | A → `C1-1` FAIL |
+| C2 | P0 | two DIFFERENT request ids could both reach the lifecycle while neither start had finished | a single-slot in-flight start reservation, taken synchronously, released in `finally` | `C2-1` FAIL → PASS | B → `C2-1` FAIL |
+| C3 | P0 | `clinemm_read_events` was scoped to the CURRENTLY ACTIVE session, so a write credential could read a task it never started | the fence is the session THIS client started | `C3-1` FAIL → PASS | C → `C3-1` FAIL |
+| C4 | P1 | the 64-entry ledger evicted the OLDEST entry unconditionally, including an IN-FLIGHT one | an IN-FLIGHT entry is NEVER evicted; the bound applies to the COMPLETED entries; `complete()` carries the fingerprint | `C4-1`, `C4-3` FAIL → PASS | D → 3 FAIL |
+| C5 | P1 | async responses could arrive OUT OF ORDER on one socket while the client matches replies through a FIFO pending queue | per-socket sequence numbers; responses are flushed in REQUEST order | `C5-1` FAIL → PASS | E → `C5-1` FAIL |
+
+## Conservation (proven, not asserted)
+
+The controller lifecycle, the authorization model, the two MCP operations and the
+read-only view are **UNCHANGED**. `SdkController.ts`,
+`control-seam-authority.ts`, `control-seam-runtime.ts`, `control-seam-mutation.ts`,
+`control-seam-client.ts`, `control-seam-proxy.ts` and
+`control-seam-protocol.ts` all have an **EMPTY DIFF**. No approval bypass, no
+cancel, no feedback, no shell shortcut, no editor-tool bypass, no hidden
+approval, no settings modification. No new runtime, no second
+`ClineCore` / `LocalRuntimeHost` / `SessionRuntime`, no second execution loop,
+no new event bus.
+
+## Artifact identity correction
+
+The predecessor ACT bound its bundle to `ae802ca980ae…` — the
+PRE-IMPLEMENTATION entry HEAD — which is not a valid exact-head build
+attribution. This ACT performs a **clean rebuild** from the exact final
+implementation HEAD `3f4a5e72ece56c18ff8055870f2eccc8e5ccbebc` and asserts the
+corrected binding. The corrected code is verified **present in the built
+bundle**.
+
+## Pending
+
+The live pilot against a running installed extension is **PENDING operator
+action**. No ClineMM extension is installed on the code-execution host, and the
+code-execution environment does not install one. The operator's exact build /
+install / opt-in steps, the predecessor's 8-step pilot procedure and the **5
+ADDED steps** that exercise the corrected contract are in
+`.factory/evidence/ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01/06-live-qualification.md`.
+
+## Decision inherited from the review
+
+`HALT_MUTATION_CONCURRENCY_CONTRACT` is now **SATISFIED for the bounded
+correction**. The read-only MCP integration stays enabled. After the operator's
+exact-head rebuild and the live pilot, proceed directly to the disposable
+Codex → ClineMM live pilot. **No broad re-review** of C9/C10, Elm, or the
+upstream integration is warranted — the diff surface is bounded to the control
+layer and every conserved surface is provably untouched.

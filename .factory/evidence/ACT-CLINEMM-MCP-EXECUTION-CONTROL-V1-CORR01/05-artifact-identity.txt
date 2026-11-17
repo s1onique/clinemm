@@ -1,0 +1,64 @@
+# C5 - Exact artifact identity (clean rebuild from the FINAL implementation HEAD)
+
+SOURCE_HEAD: 3f4a5e72ece56c18ff8055870f2eccc8e5ccbebc
+SOURCE_TREE: bc4c7de1f976025f4941ac6682c14fd8f6498543
+BRANCH: main
+VERSION: 4.1.26
+PREDECESSOR: 9c9506f0c6fd779ca5c75499df88ab7623846eca (ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01)
+
+## Correction of the predecessor's artifact identity
+
+The predecessor ACT's `06-artifact-identity.txt` bound its bundle to
+`ae802ca980ae116a3d4c5d35411f4e6628681ac2` - the PRE-IMPLEMENTATION entry HEAD,
+not the implementation HEAD (`9c9506f0c6fd`). That was not a valid exact-head
+build attribution.
+
+This ACT performs a CLEAN rebuild (`rm -rf dist && bun esbuild.mjs`) from the
+EXACT final implementation HEAD of the correction itself
+(`3f4a5e72ece56c18ff8055870f2eccc8e5ccbebc`). The binding below is therefore
+exact.
+
+## Extension bundle (repo-local build product)
+
+PATH: apps/vscode/dist/extension.js
+BYTES: 57772457
+SHA256: a8e07a5e5d21575d5b2208bf4ca4fc1caa64d92dd04edc316b71e6cdfa9beb29
+BUILD: rm -rf dist && bun esbuild.mjs  ->  [watch] build finished
+BUILT_AT: 2026-11-17T23:13 local
+
+## The corrected production code is PRESENT IN THE BUILT BUNDLE
+
+The three markers that exist ONLY in the corrected implementation were
+verified present in the built artifact:
+
+    $ grep -c "start-already-in-flight"    apps/vscode/dist/extension.js  -> 2
+    $ grep -c "active-task-owner-exists"   apps/vscode/dist/extension.js  -> 2
+    $ grep -c "request-id-conflict"        apps/vscode/dist/extension.js  -> 3
+    $ grep -o "completedEntryCount"         apps/vscode/dist/extension.js  -> completedEntryCount
+                                            (twice - the method and its call site)
+
+`start-already-in-flight` is the C2 in-flight reservation reason and exists in
+NO predecessor source. `completedEntryCount` is the C4 ledger bound and exists
+in NO predecessor source. Their presence proves the bundle carries the
+CORRECTION, not the predecessor.
+
+## Webview bundle
+
+UNCHANGED by this ACT - the correction touches no webview source.
+(The predecessor's webview artifact identity is not re-asserted here because
+the webview bundle was not rebuilt by this ACT and therefore carries no
+new attribution claim.)
+
+## Installed ClineMM extension on this host
+
+ABSENT (no ClineMM extension installed).
+
+## VSIX packaging
+
+NOT produced. The code-execution environment does not install the extension.
+
+## Operator build / install steps
+
+See `06-live-qualification.md`. The operator MUST rebuild and install from
+the exact final implementation HEAD `3f4a5e72ece56c18ff8055870f2eccc8e5ccbebc`
+before the mutation grant is enabled in the regular `codium-clinemm` profile.
